@@ -596,7 +596,7 @@ WHERE n.nspname = $1 AND c.relname = $2`, dialect.EngineSchema, table)
 // standing in for them, and they run through the production Open with a separate owner
 // DSN so the reads happen as the role that would have done the migrating.
 
-// TestAccessEvidencePostgresLegacyProfileMustNotSilentlyExpand is review finding F1 on the
+// TestAccessEvidencePostgresLegacyProfileMustNotSilentlyExpand is review finding finding 1 on the
 // engine where the module census also has an ACL consequence.
 func TestAccessEvidencePostgresLegacyProfileMustNotSilentlyExpand(t *testing.T) {
 	for _, addModule := range []bool{false, true} {
@@ -658,7 +658,7 @@ func TestAccessEvidencePostgresLegacyProfileMustNotSilentlyExpand(t *testing.T) 
 	}
 }
 
-// TestAccessEvidencePostgresStartShapeRefusesDamageBeforeAnyMigration is review finding F2
+// TestAccessEvidencePostgresStartShapeRefusesDamageBeforeAnyMigration is review finding finding 2
 // on PostgreSQL, where "the exact contract" is a catalog projection rather than stored text.
 //
 // The damage is the append-only guard this engine actually installs — one

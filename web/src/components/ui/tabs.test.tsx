@@ -401,7 +401,7 @@ describe('Tabs — the focused and the selected tab stay visible', () => {
 })
 
 // ---------------------------------------------------------------------------
-// Geometry changes (independent review F1, 2026-09-06): a resize, a sidebar rail, a
+// Geometry changes (independent review finding 1, 2026-09-06): a resize, a sidebar rail, a
 // font landing or a label changing language moves the boxes without any selection
 // or focus event. jsdom's ResizeObserver stub (src/test/setup.ts) never calls back,
 // so these tests install a controllable one and fire it themselves, after moving the

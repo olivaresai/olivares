@@ -54,7 +54,7 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-コンソールは **76 ルート**を公開します。以下の表に、必要な権限と、製品内
+コンソールは **80 ルート**を公開します。以下の表に、必要な権限と、製品内
 ヘルプリンクが開くリファレンスページとともに、すべて掲載されています。
 
 ### 運用
@@ -62,7 +62,8 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | 画面 | パス | 内容 | 必要な権限 | リファレンス |
 |---|---|---|---|---|
 | 概要 | `/` | 環境全体の概要と健全性を一覧表示 | any signed-in user | [ドキュメントホーム](/ja/) |
-| Claude Code | `/agentops` | SSH を使わず Claude Code セッションを作成、接続、統制 | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/ja/how-to/run-claude-code-with-olivares/) |
+| エージェントツール | `/agent-tools` | このホスト上のエージェントツールを検出・インストール・更新し、各インストールの状況を確認します（デプロイ管理者のみ） | `system:admin` | [how-to/add-a-provider](/ja/how-to/add-a-provider/) |
+| セッションを運用 | `/agentops` | Claude Code セッションを作成・接続・統制します（SSH 不要）。「セッションを観測」と画面を共有します | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/ja/how-to/run-claude-code-with-olivares/) |
 | バックアップ | `/backups` | バックアップの実行、スケジュール、ダウンロード、リストア。破壊的経路では 2 回目の確認を行う。 | `system:admin` | [how-to/backup-and-restore](/ja/how-to/backup-and-restore/) |
 | コミュニケーション | `/communications` | 選択中ワークスペースのチャネル、ダイレクト通知、個人受信箱 | `sessions:channel:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | チャネル管理 | `/communications/administration` | チャネルを管理：設定と付与履歴、各操作はチャネルの現在の ETag のもとで | `sessions:channel:admin` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
@@ -73,11 +74,12 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | キルスイッチ | `/killswitch` | 緊急停止、二重統制による復旧、guardian containment | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/ja/how-to/cookbook/kill-switch-drill/) |
 | ログ | `/logs` | レベルやモジュールで絞り込み、検索、一時停止ができるエンジンのライブログストリーム。 | `system:admin` | [how-to/troubleshooting](/ja/how-to/troubleshooting/) |
 | オブザーバビリティ | `/observability` | 標準別の取り込み健全性とトレースのドリルダウン | `health:status:read` | [reference/modules/observability](/ja/reference/modules/observability/) |
+| プロバイダーアカウント | `/provider-accounts` | 名前付きのプロバイダーアカウントを一覧し、既存のプロバイダープロファイルをアカウントとして採用する | `sessions:account:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | ソースバインディング | `/provider-bindings` | 構成済みのソースを、このノードが適用したリビジョンのまま、プロバイダープロファイルに専用で割り当てる | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | プロバイダープロファイル | `/provider-profiles` | セッションの起動元となるプロバイダーのホームを登録、管理し、その設定を必要に応じて読み取る | `sessions:profile:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | プロバイダー | `/providers` | セッションの起動に使う API キーとエンドポイントを登録し、テスト・交換・失効を行う | `sessions:provider:read` | [how-to/add-a-provider](/ja/how-to/add-a-provider/) |
 | サンドボックス | `/sandbox` | 隔離されたエージェントのテストとリプレイ | `sandbox:run:read` | [reference/modules/xvii-sandbox](/ja/reference/modules/xvii-sandbox/) |
-| セッション | `/sessions` | エージェントのライブ運用とタイムライン | `sessions:live:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
+| セッションを観測 | `/sessions` | ライブおよび検出されたセッションとそのタイムラインを観測します。「セッションを運用」と画面を共有します | `sessions:live:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | テナント | `/tenants` | テナントのサービスを停止または復旧 | `system:admin` | [how-to/troubleshooting](/ja/how-to/troubleshooting/) |
 | 音声 | `/voice` | 音声およびリアルタイムセッション | `voice:session:read` | [reference/modules/xvi-voice](/ja/reference/modules/xvi-voice/) |
 | 作業 | `/work` | セッションをまたぐ永続的なバックログ: 項目、依存関係、受け入れ、決定 | `sessions:work:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
@@ -102,7 +104,8 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | カタログ | `/catalog` | キュレーションされ承認されたエージェントと capability | `catalog:entry:read` | [reference/modules/xiv-catalog](/ja/reference/modules/xiv-catalog/) |
 | プロトコルバインディング | `/communications/protocol-bindings` | 統制された A2A と MCP のバインディングを構成し reconcile | `sessions:protocol-binding:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | デプロイメント | `/deploy` | エージェントをインフラへプロビジョニングして接続 | `deploy:deployment:read` | [reference/modules/vii-deploy](/ja/reference/modules/vii-deploy/) |
-| インベントリ | `/inventory` | すべてのエージェント、MCP、モデルを発見してカタログ化 | `inventory:catalog:read` | [reference/modules/i-inventory](/ja/reference/modules/i-inventory/) |
+| Git 公開 | `/git-publication` | 承認済みの Git ターゲットを通じてコミットのプッシュ、プルリクエストの作成、マージを行う | `gitpublish:target:read` | [reference/modules/gitpublish](/ja/reference/modules/gitpublish/) |
+| インベントリ | `/inventory` | コネクタが観察したエージェント、MCP サーバー、モデルを検出してカタログ化 | `inventory:catalog:read` | [reference/modules/i-inventory](/ja/reference/modules/i-inventory/) |
 | ナレッジ | `/knowledge` | ナレッジベース、RAG、データリネージ | `knowledge:kb:read` | [reference/modules/viii-knowledge](/ja/reference/modules/viii-knowledge/) |
 | モデル運用 | `/model-operations` | 所有モデル、admission、デプロイメント | `models:registry:read` | [reference/modules/xxiii-model-operations](/ja/reference/modules/xxiii-model-operations/) |
 | モデル | `/models` | モデル、ルーティング、プロバイダー鍵 | `models:catalog:read` | [reference/modules/x-models](/ja/reference/modules/x-models/) |
@@ -114,9 +117,10 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | 画面 | パス | 内容 | 必要な権限 | リファレンス |
 |---|---|---|---|---|
 | アクセスマップ | `/access-map` | 各エージェントが読み書きするもの（R/RW） | `accessmap:graph:read` | [reference/modules/iii-access-map](/ja/reference/modules/iii-access-map/) |
-| AgentCore エクスポート | `/agentcore-export` | AWS AgentCore への Cedar ポリシーエクスポートを計画、適用し、実行前に変更内容を確認。 | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/ja/reference/modules/vi-governance/) |
+| AgentCore エクスポート | `/agentcore-export` | このテナントのガバナンスルールを Cedar ポリシーとして AWS AgentCore へ投影する計画・確認・適用。計画では何も書き込みません | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/ja/reference/modules/vi-governance/) |
 | Claude Code ガバナンス | `/claude-policy` | 管理ポリシー、フック、MCP、サンドボックス、policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/ja/how-to/connectors/claude-code-hooks-pep/) |
-| コントロールコンソール | `/console` | ユーザーのオンボード、SSO/IdP の接続、ワークスペースとエージェントグループの構成。 | `tenant:admin` | [reference/modules/xx-multi-tenancy](/ja/reference/modules/xx-multi-tenancy/) |
+| 管理 | `/console` | ユーザー、SSO/IdP、ワークスペース、エージェントグループ、ロール、シークレット、コネクター、API キー、このインストールのライセンス | `tenant:admin` | [reference/modules/xx-multi-tenancy](/ja/reference/modules/xx-multi-tenancy/) |
+| ソースの差分 | `/console/sources/diff` | 接続された Git リポジトリのベースリビジョンとヘッドリビジョンをファイルごとに比較します | `system:admin` | [reference/console](/ja/reference/console/) |
 | アイデンティティと NHI | `/identity` | SSO、SCIM、NHI 一覧、WIF グラフ | `governance:identity:read` | [reference/modules/vi-governance](/ja/reference/modules/vi-governance/) |
 | 推論プロキシ | `/inference-proxy` | プロキシゲート、エグレス DLP ルール、デバイス承認 | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/ja/reference/modules/inferenceproxy/) |
 | 権限 | `/permissions` | アイデンティティ、ロール、承認 | `governance:identity:read` | [reference/modules/vi-governance](/ja/reference/modules/vi-governance/) |

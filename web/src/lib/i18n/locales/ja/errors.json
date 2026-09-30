@@ -40,5 +40,9 @@
     "setup_complete": "セットアップはすでに完了しています。",
     "cross_tenant_admin_pool_not_configured": "このデプロイメントにはテナント横断の管理用データベースプールがありません。`olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` で NOSUPERUSER BYPASSRLS ロールをプロビジョニングし (deploy/postgres/README.md を参照)、そのロールを指す --admin-dsn を指定してサーバーを再起動してください。",
     "internal": "内部エラーが発生しました。"
+  },
+  "tenantAdmission": {
+    "title": "組織への承認が必要です",
+    "description": "組織に承認されたディレクトリ ID でサインインしてください。グローバルな bootstrap 権限ではワークスペースの通信を操作できません。"
   }
 }

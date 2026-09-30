@@ -44,6 +44,9 @@ section is dated only then.
 
 - Release tags no longer start with `v`. Update any script or pin that expected the prefix:
   pin tags in the form `26.10.<patch>`.
+- An installation of 26.9 or earlier updates by naming the release once:
+  `olivares upgrade --endpoint https://github.com/olivaresai/olivares/releases/tag/26.10.0`. From
+  26.10 on, plain `olivares upgrade` finds new releases by itself.
 - The engine now listens on every network interface by default: `--listen` defaults to
   `:8443` and `--grpc-listen` to `:8444`. To keep it on the local host only, start it with
   `--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444`; in Docker Compose set
@@ -72,6 +75,10 @@ section is dated only then.
   invalid values are refused by name) and `OLIVARES_SESSIONS_AGENT_LINK_LISTEN` (accepted by
   `config validate`; not used by this build).
 - The binary is built with Go 1.26.8.
+- The enrolled disaster-recovery restore control works on PostgreSQL 15, 16, 17 and 18; before,
+  it accepted PostgreSQL 16 only. Its format is unchanged. On PostgreSQL 17 and 18 only the owner
+  holds the new MAINTAIN privilege on it, and a control that any other role could maintain is
+  refused.
 
 ### Console
 
@@ -90,6 +97,16 @@ section is dated only then.
 - Command-line output goes through one renderer, so the same fact reads the same everywhere;
   some command output that was formatted by hand in 26.9.0 may look different now, and the
   plain text is the stable form.
+- Signing in again in the same browser can no longer be undone by a late answer from the earlier
+  sign-in: an older login's result never replaces or logs out the newer one.
+
+- Long names, identifiers and descriptions no longer vanish behind an ellipsis: they wrap, or
+  shorten in the middle with the full text on hover and for screen readers. The API Playground
+  stacks its panels on phones, the access map spaces its nodes to fit their labels, and the
+  session list names each session by its goal or latest action.
+- A session recording that does not exist shows a not-found message instead of an error.
+- On a fresh installation with a single workspace, the console lets you open it directly;
+  before, the workspace overview asked you to pick a workspace it did not offer.
 
 ### Sessions and providers
 
@@ -102,6 +119,19 @@ section is dated only then.
   `olivares agent tool install`. The Grok download is verified end to end; the Codex origin
   cannot be verified automatically today, so the installer labels it unverified instead of
   claiming a check it cannot make.
+- System administrators can install and update agent tools from the console: the new Agent tools
+  page detects the tools on the host, shows the official release it would install and follows the
+  install as a job. OpenCode and Ollama join Claude Code, Codex and Grok; their downloads are
+  checked against the SHA-256 in the official release metadata, which proves the origin but is not
+  a publisher signature. Installing requires a deployment administrator signed in at AAL3.
+- Ollama can be registered as a local model provider without credentials: the Providers page tests
+  the endpoint, lists its models and binds them to Codex profiles. Plain HTTP is accepted only for
+  localhost, loopback and private addresses.
+- Agent profiles can carry operator-owned orchestration grants for a workspace, and an agent
+  identity can be launched from the console. Sessions hand work to each other through MCP tools
+  that use the same governed offer, respond and acknowledge paths as the REST API.
+- Inside a session, `olivares work` and the message commands use the session's own credential;
+  they never fall back to a human login.
 - A session that names no workspace now starts in its own empty private directory, which is
   removed when the session is released (files are kept if a workspace was registered under
   it).
@@ -143,6 +173,23 @@ section is dated only then.
   global record to the deployment's own erasure process; the receipt says so.
 - An invitation response no longer contains the redemption token or its link: the link reaches
   only the invitee's mailbox.
+- Groups show where they come from (`provisioned_by`). A group owned by a provisioner such as
+  SCIM or a directory cannot be rewritten, moved or deleted by another source in a way that
+  changes the membership it grants: those SCIM and operator changes are refused with the existing
+  403, and attribute-only SCIM updates still succeed. Groups created before this release keep their
+  earlier behavior.
+- Local accounts can add a TOTP second factor from the console (RFC 6238, any authenticator app)
+  and receive single-use recovery codes. After the password, sign-in asks for a code; a wrong code
+  can be retried, and repeated failures are throttled per account and per address. A deployment
+  administrator can require a second factor for administrators (`olivares auth totp-policy set`),
+  and `olivares users totp` and `olivares users totp-reset` show and reset an account's factor.
+  TOTP adds a factor to a password sign-in: passkeys and PIV remain the only ways to reach AAL3,
+  and a sign-in through an identity provider relies on that provider's own MFA.
+- An organization administrator can see and reset the second factor only of accounts that belong
+  to that organization; a shared account, or one held by another organization, is reset by a
+  deployment administrator at AAL3.
+- A sign-in that is waiting for its code is held in memory on the node that started it; after a
+  restart, the user signs in again.
 
 ### Governance and audit
 
@@ -164,6 +211,19 @@ section is dated only then.
 
 ### Connectors and MCP
 
+- Tenant administrators manage MCP gateways from the console's MCP tab and the API
+  (`/v1/console/mcp-gateway`): add, edit, test and remove upstream servers, and choose which tools
+  each session gets. New servers and session tools start disabled. A test initializes the server
+  and lists its tools; it never runs one. Changes and tests require AAL3. Upstream secrets are
+  references to the organization's Secrets store (`store:mcp/<name>`), and the client's own bearer
+  is never forwarded upstream.
+- Without `OLIVARES_AGENT_GATEWAY_CONFIG`, the gateway configuration lives in the store and is
+  managed from the console. A configuration file stays in charge, and read-only in the console,
+  unless it selects `mcp_source: store`; a file and store declarations that conflict stop startup
+  instead of merging.
+- Gateway forwarding has fixed limits (128 contexts, 8 MiB replies, 60 seconds per client call; a
+  test lists at most 128 tools over eight pages in 10 seconds), and a call whose outcome is unknown
+  is never retried.
 - The MCP client no longer follows a redirect from a Streamable HTTP server: a 301/302/303/307/
   308 with a `Location` fails the request instead of sending anything to the redirected
   address. Configure each server with its final endpoint URL.
@@ -172,16 +232,9 @@ section is dated only then.
 
 ### Appliance
 
-- The Fedora 44 appliance ships in two editions built from one recipe: the server edition
-  without a desktop, and a desktop edition with GNOME (GNOME Shell with GDM on the graphical
-  target, Firefox, the Ptyxis terminal, the Nautilus file browser, and SSH with SFTP enabled).
-  Both come as an installer ISO, a qcow2 disk and an OVA, both keep SELinux enforcing, and the
-  desktop edition needs a graphical console and at least 2 vCPU with 4 GiB of memory.
-- Release images are built from a published release's own bytes and checked against its signed
-  checksums before they are published. Files up to 2 GiB are attached to the release itself;
-  larger files are published at a versioned location with an index, and every earlier version
-  stays available.
-- Each image ships with its checksums, its SBOM and a source bundle, all signed.
+- The Fedora 44 appliance images (server and desktop editions) are not published with this
+  release. They follow in a 26.10 patch release, once their build and first boot pass in release
+  CI.
 
 ### Security
 
@@ -216,14 +269,31 @@ section is dated only then.
 - Every operation on a single agent run — detail, events, live output, input, interrupt, stop,
   resume, cleanup and delete — is authorized against the run's stored workspace. A caller
   confined to another workspace receives not found, and the events endpoint no longer reveals
-  that such a run exists.
+  that such a run exists. A caller who can read the run but may not act on it receives 403, so
+  the console can show the action as denied; a run the caller cannot read still answers not found,
+  in the same time.
 - The console and the documentation site take the patched undici (8.10.2 and, inside
   miniflare, 7.29.1) for [GHSA-rfgv-xxqx-mfg5](https://github.com/advisories/GHSA-rfgv-xxqx-mfg5)
   and [GHSA-w293-vg96-wgc3](https://github.com/advisories/GHSA-w293-vg96-wgc3). Neither is part of
   the engine binary.
+- A secret manager that returns the credential used to call it can no longer turn it into a new
+  secret: a Vault rotation whose result equals or contains the authenticating token is refused,
+  and every credential the connector sent is removed from error text before it is stored or
+  logged.
+- Diagnostics and status output no longer show a user name or password written into a configured
+  URL, such as a threat-feed or JWKS address.
+- Audit archive anchors accept only well-formed object ETags and version IDs (up to 64 and 1,024
+  bytes); a value containing URL query separators, spaces or control characters is refused, so a
+  storage endpoint cannot place a token in audit metadata.
 
 ### Fixed
 
+- The engine starts and upgrades on PostgreSQL 18. PostgreSQL 18 names generated NOT NULL
+  constraints differently, so the schema check now matches them by table, columns and definition
+  instead of by name; a dropped NOT NULL or a renamed primary key is still refused.
+- A reader confined to one workspace can read the event history of the agent runs it is allowed
+  to read; before, the events endpoint answered 403. Runs it cannot read still answer not found,
+  in the same time as runs that do not exist.
 - The installer and the HTTPS bootstrap no longer stop with `cosign is required` on a host
   without cosign: they fetch cosign v2.6.4, accept it only when its SHA-256 matches the digest
   pinned in the script, verify the release and clean up afterwards. `--install-cosign` keeps
@@ -239,6 +309,7 @@ section is dated only then.
   restoring late-bound report data.
 - The Spanish console and documentation describe evidence and routine schedules accurately
   (making alteration detectable; a minimum interval).
+- `olivares release manifest` help examples name 26.10.0.
 
 ## [26.9.0] - 2026-09-16
 
@@ -983,5 +1054,6 @@ shadow mode and final work authority (design only); a general message bus for ar
   [`SECURITY.md`](SECURITY.md).
 
 [Unreleased]: #unreleased
+[26.10.0]: https://github.com/olivaresai/olivares/releases/tag/26.10.0
 [26.9.0]: https://github.com/olivaresai/olivares/releases/tag/v26.9.0
 [26.8.0]: https://github.com/olivaresai/olivares/releases/tag/v26.8.0

@@ -21,6 +21,19 @@ import (
 // error.data and Unicode escapes) in both JSON and SSE. It does not infer
 // arbitrary encodings or combine separate JSON strings into a credential.
 func doMCPForwardRequest(client *http.Client, req *http.Request) (*http.Response, error) {
+	return doMCPCredentialRequest(client.Do, req)
+}
+
+// Inspection uses the same guard below the connector's HTTP client so every
+// initialize, notification and catalog page is checked before its consumer.
+// Delegate once to the existing transport, retaining its egress policy.
+type mcpCredentialTransport struct{ inner http.RoundTripper }
+
+func (t mcpCredentialTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return doMCPCredentialRequest(t.inner.RoundTrip, req)
+}
+
+func doMCPCredentialRequest(send func(*http.Request) (*http.Response, error), req *http.Request) (*http.Response, error) {
 	if req.Header.Get("Authorization") == "" && req.URL.User != nil {
 		// net/http otherwise adds this Basic header inside Do, after the guard
 		// observes the request. Materialize the same header and protect its
@@ -32,7 +45,7 @@ func doMCPForwardRequest(client *http.Client, req *http.Request) (*http.Response
 	if err != nil {
 		return nil, err
 	}
-	resp, err := client.Do(req)
+	resp, err := send(req)
 	if err != nil {
 		for _, pattern := range patterns {
 			if strings.Contains(err.Error(), pattern) {

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/cmd/olivares/internal/agenttoolsapi"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/githostdiff"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/api"
@@ -491,6 +492,8 @@ func makePrivateConnectorScratch(root, pattern string) (string, error) {
 
 // engine bundles the wired subsystems and tears them down in order on Close.
 type engine struct {
+	agentTools       *agenttoolsapi.Module
+	gatewayConfig    *agentGatewayConfig
 	editionResources []io.Closer
 	store            store.Store
 	rt               *runtime.Runtime
@@ -1334,6 +1337,14 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	}
 	authr := auth.NewAuthenticator(st, nil)
 	authr.SetTrustedLoginProxies(*loginProxies)
+	// the TOTP seed sealer. A key failure leaves the factor unwired:
+	// enrolment refuses (503 totp_unavailable) and a stored factor's challenges
+	// fail closed — loud, never a boot abort, and never a cleartext seed.
+	if sealer, serr := newTOTPSeedSealer(cfg.DataDir, osGetenv); serr != nil {
+		log.Error("totp: seed sealer unavailable; TOTP enrolment and verification are disabled until fixed", "err", serr)
+	} else {
+		authr.WithTOTPSeedSealer(sealer)
+	}
 	// The guards above hide the store's census, so the authenticator is handed
 	// the one read at open for the retirement's absence proof.
 	if census != nil {
@@ -1361,8 +1372,9 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 			sessionWorkCredentialSource{authenticator: recoveryAuthr},
 			sessionCommunicationCredentialSource{authenticator: recoveryAuthr},
 		)
+		set.sessions.UseOrchestrationWorkScopeSource(sessionOrchestrationWorkScope{st: st, module: set.sessions})
 		set.sessions.UseWorkSessionCredentialSource(
-			sessionWorkCredentialSource{authenticator: authr},
+			sessionWorkCredentialSource{authenticator: authr, module: set.sessions},
 		)
 		set.sessions.UseCommunicationSessionCredentialSource(
 			sessionCommunicationCredentialSource{authenticator: authr},
@@ -1830,9 +1842,10 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 	// request authorizer and secret resolver exist, before api.New mounts routes.
 	editionResources, err := editionBindModuleDependencies(ctx, editionConfigFrom(cfg), set.all,
 		EditionDependencies{
-			Store: st, Sessions: set.sessions,
+			Store: st, Sessions: set.sessions, RuntimeLaunches: set.sessions,
 			Rows: api.NewReadRowAuthorizationPort(authz, authr), Mutations: authz,
 			Principals: authr, Governance: set.gov, Secrets: secretResolver,
+			Authenticator: authr, FederationService: fedSvc, SecretStore: secretStore,
 		}, log)
 	if err != nil {
 		_ = st.Close()
@@ -2123,6 +2136,24 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		sealerCustodyInfo("secret-store", osGetenv(secretStoreKeyEnv), secretStoreSealerPresent),
 	}}
 
+	agentTools, err := agenttoolsapi.New(ctx, toolInstallEngine(ctx), filepath.Join(absOrSame(cfg.DataDir), "tools"), cfg.ReadOnly)
+	if err != nil {
+		return nil, fmt.Errorf("agent tools API: %w", err)
+	}
+	defer func() {
+		if !bootOK {
+			agentTools.Close()
+		}
+	}()
+	set.all = append(set.all, agentTools)
+	gatewayCfg, err := loadAgentGatewayConfig(log)
+	if err != nil {
+		return nil, err
+	}
+	gatewayManagement, err := newMCPManagement(st, secretStore, gatewayCfg, os.Getenv("OLIVARES_AGENT_GATEWAY_CONFIG") != "")
+	if err != nil {
+		return nil, err
+	}
 	apiSrv, err := api.New(api.Options{
 		Store: st, Authenticator: authr, Authorizer: authz, Signer: signer, Standing: standing,
 		// Invitations are mailed only through the deployment's own destination,
@@ -2166,6 +2197,7 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		// (/v1/console/secrets). Superadmin + AAL3 gated; secrets are sealed at rest
 		// and only a non-secret hint is ever returned.
 		SecretStore: secretStore,
+		MCPGateway:  gatewayManagement, MCPGatewayRuntime: gatewayManagement,
 		// the live source-reconfiguration surface backs the console/CLI source
 		// CRUD and POST /v1/console/runtime/reload — add/remove/rotate connectors in
 		// the running engine without a restart. Superadmin + AAL3 gated.
@@ -2609,10 +2641,10 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		go retirement.run(retirementCtx, st.Leader().Active)
 	}
 
-	return &engine{
+	runtimeEngine := &engine{
 		store: st, rt: rt, signer: signer, authr: authr, authz: authz,
 		editionResources: editionResources,
-		setupTok:         setupTok, api: apiSrv, tracer: tracer, dataDir: cfg.DataDir, log: log,
+		agentTools:       agentTools, setupTok: setupTok, api: apiSrv, tracer: tracer, dataDir: cfg.DataDir, log: log,
 		webAuthn:   webAuthn,
 		logBroker:  logBroker,
 		demoTenant: demoTenant, connectorDir: connectorDir, vectorIndex: set.vectorIndex, knowledgeMod: set.knowledge, sessionsMod: set.sessions, communicationPump: communicationPump,
@@ -2630,7 +2662,10 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		haPublisher: haPublisher, haStop: haStop, haGate: haCfg.Gate,
 		census: census, declared: declared, retirementPump: retirement, retirementStop: retirementStop,
 		standing: standing,
-	}, nil
+	}
+	gatewayManagement.eng = runtimeEngine
+	runtimeEngine.gatewayConfig = &gatewayCfg
+	return runtimeEngine, nil
 }
 
 func warnUnsupportedProductionPosture(log *slog.Logger, eng store.Engine, effectiveRLSAttested bool) {
@@ -2704,6 +2739,9 @@ func seedSourceRosterIfEmpty(ctx context.Context, store *auth.SourceStore, cfg s
 // Close stops the runtime and closes the store (called after the HTTP/gRPC
 // servers have drained). It also removes the extracted plugin binaries.
 func (e *engine) Close() error {
+	if e.agentTools != nil {
+		e.agentTools.Close()
+	}
 	stopCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	// Stage-2: stop the HA label resync loop and hand the leader role back

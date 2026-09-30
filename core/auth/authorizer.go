@@ -104,9 +104,10 @@ func ResourceFor(perm Permission) ResourceAttrs {
 	return ResourceAttrs{Kind: perm.Resource()}
 }
 
-// PolicyEvaluator is the ABAC seam. It runs AFTER RBAC and may only FURTHER
-// RESTRICT an RBAC grant — it can never widen one (the Authorizer intersects the
-// two). An OPA-backed evaluator slots in here without any other change. The
+// PolicyEvaluator is the ABAC seam. Ordinary Authorize runs it AFTER RBAC; the
+// disclosure check also runs it when the base denies, to equalize policy work.
+// It may only further restrict a base grant — it can never widen one (the
+// Authorizer intersects the two). An OPA-backed evaluator slots in here without any other change. The
 // default (DenyNothing) returns Allow=true, meaning "the RBAC decision stands".
 type PolicyEvaluator interface {
 	// Evaluate returns whether the request is permitted by attribute/context
@@ -302,6 +303,34 @@ func (az *Authorizer) Authorize(ctx context.Context, req Request) Decision {
 		return Decision{Allow: false, Reason: "policy: " + dec.Reason, Class: dec.Class}
 	}
 	return Decision{Allow: true, Reason: baseReason(granted)}
+}
+
+// AuthorizeDisclosure makes the same authorization decision as Authorize, but
+// evaluates the deny-overlay once even when tenant, credential, scoped or RBAC
+// checks deny. A caller deciding whether to disclose a denied action must use
+// this for both present and absent references: neither absence nor a row-level
+// forbid may skip a remote read-policy request. This changes evaluation work,
+// never authority; the action still needs its own independent authorization.
+func (az *Authorizer) AuthorizeDisclosure(ctx context.Context, req Request) Decision {
+	// Copy the immutable configuration, retaining every base restriction while
+	// separating policy evaluation from Authorize's ordinary short circuit.
+	base := *az
+	base.eval = nil
+	decision := base.Authorize(ctx, req)
+	if az.eval == nil {
+		return decision
+	}
+	policy, err := az.evalSafe(ctx, req)
+	if !decision.Allow {
+		return decision
+	}
+	if err != nil {
+		return Decision{Allow: false, Reason: "policy: evaluation error"}
+	}
+	if !policy.Allow {
+		return Decision{Allow: false, Reason: "policy: " + policy.Reason, Class: policy.Class}
+	}
+	return decision
 }
 
 // baseReason labels an allow by which base authorization carried it (a positive

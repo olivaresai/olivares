@@ -133,7 +133,16 @@ func newCommunicationDirectoryReads(
 			return readDirectoryWorkspaceMembers(ctx, st, tenant, workspace)
 		},
 		session: func(ctx context.Context, tenant model.TenantID, workspace model.ID, sid string) (sessions.CommunicationSessionRecipientWitness, error) {
-			return sm.CommunicationSessionRecipient(ctx, tenant, workspace, sid)
+			var out sessions.CommunicationSessionRecipientWitness
+			err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+				var err error
+				out, err = sm.CommunicationSessionRecipientWithin(ctx, sc, workspace, sid)
+				return err
+			})
+			if err != nil {
+				return sessions.CommunicationSessionRecipientWitness{}, err
+			}
+			return out, nil
 		},
 	}
 }

@@ -22,6 +22,7 @@ export type PrincipalKind = 'user' | 'token'
 export type ApiErrorCode =
   | 'unauthenticated'
   | 'forbidden'
+  | 'tenant_admission_required'
   // The actor may administer the thing but cannot grant a rank above their own
   // — distinct from 'forbidden' so the console says which of the two it is.
   | 'role_ceiling'
@@ -74,6 +75,22 @@ export interface LoginResponse {
   session_id: string
   expires_at: string
 }
+
+/**
+ * The second-factor challenge a password login returns instead of a session
+ * : the pending credential is single-use and short-lived, and the caller
+ * completes the login at /v1/auth/totp/challenge — or, when the policy demands
+ * the account's FIRST factor, enrols and activates through it.
+ */
+export interface LoginChallenge {
+  mfa_required: true
+  mfa_token: string
+  enrolment_required: boolean
+  pending_expires_in_s: number
+}
+
+/** A login attempt answers with a session or with its pending challenge. */
+export type LoginResult = LoginResponse | LoginChallenge
 
 /** One tenant grant in the calling principal's identity. */
 export interface Grant {

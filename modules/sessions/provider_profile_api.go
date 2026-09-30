@@ -5,6 +5,7 @@
 package sessions
 
 import (
+	"encoding/json"
 	"net/http"
 	"strings"
 
@@ -120,10 +121,11 @@ type providerProfileDTO struct {
 	SessionTools         []string `json:"session_tools,omitempty"`
 	SessionToolsDeclared bool     `json:"session_tools_declared"`
 	// SessionPermissionMode is the declared permission mode ("" = none declared).
-	SessionPermissionMode string `json:"session_permission_mode,omitempty"`
-	CreatedAt             string `json:"created_at,omitempty"`
-	UpdatedAt             string `json:"updated_at,omitempty"`
-	RetiredAt             string `json:"retired_at,omitempty"`
+	SessionPermissionMode string            `json:"session_permission_mode,omitempty"`
+	SessionWorkGrant      *SessionWorkGrant `json:"session_work_grant,omitempty"`
+	CreatedAt             string            `json:"created_at,omitempty"`
+	UpdatedAt             string            `json:"updated_at,omitempty"`
+	RetiredAt             string            `json:"retired_at,omitempty"`
 }
 
 // providerProfileConfigurationDTO is the authorized configuration read: the
@@ -156,7 +158,8 @@ type createProfileRequest struct {
 	// tools out loud. The pointer is what keeps those two apart over JSON.
 	SessionTools *[]string `json:"session_tools"`
 	// SessionPermissionMode declares the permission mode those sessions run under.
-	SessionPermissionMode string `json:"session_permission_mode"`
+	SessionPermissionMode string          `json:"session_permission_mode"`
+	SessionWorkGrant      json.RawMessage `json:"session_work_grant"`
 }
 
 // patchProfileRequest is the only post-creation mutation: a label and/or an
@@ -177,7 +180,8 @@ type patchProfileRequest struct {
 	// withdraws the declaration and returns the profile to deny-closed.
 	SessionTools *[]string `json:"session_tools"`
 	// SessionPermissionMode re-declares the permission mode; "" withdraws it.
-	SessionPermissionMode *string `json:"session_permission_mode"`
+	SessionPermissionMode *string         `json:"session_permission_mode"`
+	SessionWorkGrant      json.RawMessage `json:"session_work_grant"`
 }
 
 type providerBindingDTO struct {
@@ -202,6 +206,7 @@ type createBindingRequest struct {
 
 func (m *Module) toProfileDTO(p ProviderProfile) providerProfileDTO {
 	local := m.rt.environmentRef != "" && p.EnvironmentRef == m.rt.environmentRef
+	grant, _ := decodeProfileWorkGrant(p.SessionWorkGrant)
 	return providerProfileDTO{
 		ProfileRef: p.Ref, Driver: p.Driver, EnvironmentRef: p.EnvironmentRef,
 		DisplayName: p.DisplayName, Accent: p.Accent, State: p.State, AuthSource: p.AuthSource,
@@ -209,6 +214,7 @@ func (m *Module) toProfileDTO(p ProviderProfile) providerProfileDTO {
 		SessionTools:          p.SessionTools,
 		SessionToolsDeclared:  p.SessionToolsDeclared,
 		SessionPermissionMode: p.SessionPermissionMode,
+		SessionWorkGrant:      grant,
 		LocalEnvironment:      local,
 		Operable: local && p.State == ProfileActive && m.driverOperable(p.Driver) &&
 			requireAuthSourceForDriver(p.Driver, p.AuthSource) == nil,
@@ -254,6 +260,7 @@ func (m *Module) handleCreateProfile(w http.ResponseWriter, r *http.Request, mc 
 		SessionTools:          derefTools(body.SessionTools),
 		SessionToolsDeclared:  body.SessionTools != nil,
 		SessionPermissionMode: body.SessionPermissionMode,
+		SessionWorkGrant:      body.SessionWorkGrant, WorkGrantActor: mc.Principal,
 	})
 	if err != nil {
 		writeRunErr(w, err)
@@ -279,9 +286,9 @@ func (m *Module) handlePatchProfile(w http.ResponseWriter, r *http.Request, mc a
 		return
 	}
 	if body.DisplayName == nil && body.State == nil && body.AuthSource == nil &&
-		body.ProviderRecordRef == nil && body.SessionTools == nil && body.SessionPermissionMode == nil {
+		body.ProviderRecordRef == nil && body.SessionTools == nil && body.SessionPermissionMode == nil && len(body.SessionWorkGrant) == 0 {
 		writeJSON(w, http.StatusBadRequest, errorBody(
-			"nothing to change: provide display_name, state, auth_source, provider_record_ref, session_tools and/or session_permission_mode"))
+			"nothing to change: provide display_name, state, auth_source, provider_record_ref, session_tools, session_permission_mode and/or session_work_grant"))
 		return
 	}
 	if body.State != nil {
@@ -300,6 +307,7 @@ func (m *Module) handlePatchProfile(w http.ResponseWriter, r *http.Request, mc a
 		ProviderRecordRef:     body.ProviderRecordRef,
 		SessionTools:          body.SessionTools,
 		SessionPermissionMode: body.SessionPermissionMode,
+		SessionWorkGrant:      body.SessionWorkGrant, WorkGrantActor: mc.Principal,
 	})
 	if err != nil {
 		writeRunErr(w, err)

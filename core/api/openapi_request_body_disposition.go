@@ -31,6 +31,17 @@ func moduleRouteIsMutation(r moduleRoute) bool {
 // value therefore remains unclassified until it receives a deliberate mapping.
 // In particular, the adapter never infers a schema from requestBody presence.
 func moduleRequestBodyDispositionFor(r moduleRoute) moduleRequestBodyDisposition {
+	if r.documentation != nil {
+		switch r.documentation.BodyKind {
+		case ModuleOperationJSONBody:
+			if r.documentation.RequestBody != nil {
+				return moduleRequestBodySchemaPublished
+			}
+		case ModuleOperationBodyless:
+			return moduleRequestBodyBodyless
+		}
+		return moduleRequestBodyUnclassified
+	}
 	if _, raw := moduleRouteRawRequestBody(r); raw {
 		return moduleRequestBodySchemaPublished
 	}

@@ -274,6 +274,6 @@ describe('P3 — la celda FINDING puede truncar de verdad', () => {
     expect(
       src,
       'la celda `source` perdió su `max-w`: crecerá con el dato y ACTIONS se saldrá de la tarjeta',
-    ).toMatch(/block max-w-\[\d+px\] truncate font-mono/)
+    ).toMatch(/block max-w-\[\d+px\] whitespace-normal font-mono/)
   })
 })

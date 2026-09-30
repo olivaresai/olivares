@@ -53,7 +53,7 @@ identity, Deployment, Observability & evidence, then System & settings.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-The console publishes **79 routes**. Every one of them is in the tables below, with the
+The console publishes **80 routes**. Every one of them is in the tables below, with the
 permission it requires and the reference page its in-product help link opens.
 
 ### Operate
@@ -61,6 +61,7 @@ permission it requires and the reference page its in-product help link opens.
 | Screen | Path | What it is | Requires | Reference |
 |---|---|---|---|---|
 | Overview | `/` | Estate overview and health at a glance | any signed-in user | [docs home](/) |
+| Agent tools | `/agent-tools` | Detect, install and update the agent tools on this host and follow each install; deployment administrators only | `system:admin` | [how-to/add-a-provider](/how-to/add-a-provider/) |
 | Operate sessions | `/agentops` | Create, attach to and govern Claude Code sessions — no SSH; shares its screen with Observe sessions | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/how-to/run-claude-code-with-olivares/) |
 | Backups | `/backups` | Encrypted disaster-recovery snapshots of the control plane: create, schedule, download and restore | `system:admin` | [how-to/backup-and-restore](/how-to/backup-and-restore/) |
 | Communications | `/communications` | Channels, direct notices and the personal inbox of the selected workspace | `sessions:channel:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |

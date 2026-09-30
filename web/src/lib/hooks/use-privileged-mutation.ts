@@ -53,6 +53,16 @@ export function useFailedActionReporter(
           return
         }
       }
+      if (
+        err instanceof ApiError &&
+        err.isForbidden &&
+        err.code === 'tenant_admission_required'
+      ) {
+        toast.warning(t('errors:tenantAdmission.title'), {
+          description: t('errors:tenantAdmission.description'),
+        })
+        return
+      }
       if (err instanceof ApiError && err.isForbidden) {
         toast.warning(t('common:privileged.notAuthorizedToast'))
         return
@@ -177,7 +187,8 @@ export function usePrivilegedMutation<TVars = void, TData = unknown>(
           err instanceof ApiError &&
           (err.isForbidden || err.isUnauthenticated)
         ) {
-          toast.warning(t('common:privileged.notAuthorizedToast'))
+          if (err.isForbidden) report(err, undefined, context.owner)
+          else toast.warning(t('common:privileged.notAuthorizedToast'))
           return
         }
         if (!isStepUp && opts.onError?.(err, vars)) return

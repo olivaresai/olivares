@@ -250,7 +250,7 @@ describe('AuditView — first work row', () => {
       })
       expect(h1.textContent).toBe('Audit ledger')
       expect(h1.className.split(/\s+/)).toEqual(
-        expect.arrayContaining(['shrink-0', 'whitespace-nowrap']),
+        expect.arrayContaining(['min-w-0', 'break-words']),
       )
       expect(h1.className.split(/\s+/)).not.toContain('truncate')
       expect(

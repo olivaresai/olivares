@@ -116,7 +116,7 @@ func (e errNIS2Rejected) Unwrap() error { return e.err }
 // perfectly fine, and the commercial boundary never appeared anywhere.
 //
 // The 403 check therefore runs FIRST and matches through the wrapper (errNIS2Rejected has
-// Unwrap). Found by the Codex sol max contrast of (F2); addonrefusal_test.go claimed the
+// Unwrap). Found by the Codex sol max contrast of (finding 2); addonrefusal_test.go claimed the
 // module's 403 mapping was covered "once here … for every handler in the module", and that was
 // false for exactly the two writers that intercept before writeStoreError — this one and
 // writeRegisterError.

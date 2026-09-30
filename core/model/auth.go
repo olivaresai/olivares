@@ -184,6 +184,16 @@ type UserGroup struct {
 	// principal. Otherwise the IdP, not the tenant operator, would decide who is
 	// an owner.
 	MappedRole string
+	// ProvisionedBy records who provisions this group's existence and
+	// membership — the one boundary every writer respects (the group-origin
+	// contract): "" (NULL) is today's SCIM/IdP-managed row, writable by SCIM
+	// and by the operator console exactly as before; "operator" is a local
+	// group managed from the console, writable by the console only; any other
+	// value is the slug of the provisioner that owns the group, writable by
+	// that provisioner only and read-only membership for everyone else. No
+	// writer may adopt a group out of a claimed origin into another. Nullable
+	// and appended LAST for the additive reconcile.
+	ProvisionedBy string
 	// ParentGroupID OPTIONALLY nests this group under another group of the SAME
 	// TargetTenantID (S256 group hierarchy); zero is the historical un-nested
 	// group. A member of this group is then ALSO a member of the parent for
@@ -280,6 +290,63 @@ type WebAuthnCredential struct {
 	// record; storing its canonical JSON keeps the engine schema-stable across
 	// library versions (it migrates its own serialization).
 	Credential []byte
+}
+
+// TOTPCredential is a local account's RFC 6238 time-based second factor. It
+// stores the SEED sealed at rest — a "v1:" envelope opened only by the TOTP
+// seed sealer at verification time, exactly the doctrine of the federation
+// secrets, so the database never holds raw key material. SeedHint is the
+// non-secret display fingerprint. At most one row per account: enrolment
+// replaces any prior row, activation stamps ConfirmedAt, and an admin reset
+// deletes the row together with its recovery codes.
+type TOTPCredential struct {
+	BaseFields
+	// AccountID is the local user this factor belongs to.
+	AccountID ID
+	// SeedSealed is the sealed TOTP shared secret (never the seed itself).
+	SeedSealed string
+	// SeedHint is the non-secret fingerprint of the seed, for display only.
+	SeedHint string
+	// Algorithm is the HMAC hash: "SHA1", "SHA256" or "SHA512".
+	Algorithm string
+	// Digits is the code length (6 or 8).
+	Digits int
+	// Period is the time step in seconds (30 by default).
+	Period int
+	// ConfirmedAt is set when the user proved possession of the seed; nil while
+	// the enrolment is pending and the factor does not yet gate login.
+	ConfirmedAt *Timestamp
+	// LastUsedStep is the highest verified time step (unix/period). A code from
+	// a step at or below it is refused: a captured code must not verify twice
+	// (RFC 6238 §5.2). Zero means nothing verified yet.
+	LastUsedStep int64
+}
+
+// TOTPRecoveryCode is one single-use recovery code of an account's TOTP factor,
+// minted at activation and shown exactly once. Only SHA-256 of the code is
+// stored — the same hashed-credential doctrine as sessions and API tokens —
+// so a database read yields nothing replayable. UsedAt is nil until spent.
+type TOTPRecoveryCode struct {
+	BaseFields
+	// AccountID is the local user whose factor this code recovers.
+	AccountID ID
+	// CodeHash is SHA-256 of the plaintext code; compared in constant time.
+	CodeHash []byte
+	// UsedAt is set when the code is spent; a used code never verifies again.
+	UsedAt *Timestamp
+}
+
+// AuthPolicy is the deployment's local-account security policy singleton: one
+// row in the system tenant, created on first write. An absent row is the
+// default posture (no policy set). Unlike the SSO posture knobs — stored
+// openly, enforced by the closed engine — the TOTP policy is enforced by the
+// open engine itself: basic account security is Community scope.
+type AuthPolicy struct {
+	BaseFields
+	// RequireTOTPAdmins requires administrators (superadmins, and admins/owners
+	// of any tenant) to hold a confirmed TOTP factor: a password login without
+	// one must enrol before it completes.
+	RequireTOTPAdmins bool
 }
 
 // APIToken is a programmatic credential (CLI, Terraform provider, MCP). Like a

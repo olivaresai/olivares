@@ -119,7 +119,21 @@
     "profileHint": "Sélectionnez le profil fournisseur de cette session. Un profil est obligatoire. Les exigences locales sont lues pour la sélection actuelle après l’aperçu du modèle.",
     "profileNotOperable": "non activé dans cet environnement",
     "profilesNotRead": "Les profils de fournisseur n’ont pas pu être lus ; le lancement reste possible sans profil.",
-    "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME et GROK_HOME appartiennent au profil : un lancement qui transmet l’une d’elles est refusé ici. Les autres noms restent soumis à la validation du serveur."
+    "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME et GROK_HOME appartiennent au profil : un lancement qui transmet l’une d’elles est refusé ici. Les autres noms restent soumis à la validation du serveur.",
+    "identity": {
+      "title": "Identité de lancement",
+      "hint": "Choisissez un agent admis agissant pour son sponsor humain. L’accès humain seul ne donne aucune autorité d’agent.",
+      "human": "Opérateur humain actuel",
+      "agent": "Agent admis (pour le sponsor)",
+      "required": "Un profil d’orchestration exige une identité d’agent authentifiée séparément.",
+      "choose": "Identité de l’agent",
+      "sponsorHint": "Le serveur valide l’agent, son état et votre rôle de sponsor avant le lancement.",
+      "placeholder": "Choisir un agent admis",
+      "readRequired": "La permission de lecture NHI est requise.",
+      "loading": "Chargement des identités…",
+      "loadFailed": "Liste des identités indisponible.",
+      "loadMore": "Charger plus d’identités"
+    }
   },
   "detail": {
     "live": "En direct",
@@ -545,6 +559,50 @@
       "loadMoreProfiles": "Charger plus de profils",
       "loadedProfiles": "{{n}} profils actifs chargés ; il y en a d’autres.",
       "loadingProfiles": "Chargement des profils…"
+    },
+    "workGrant": {
+      "title": "Autorité d’orchestration",
+      "hint": "Accordez des actions dans un espace de travail. Les sessions d’orchestration doivent être lancées comme un agent authentifié.",
+      "readPending": "L’autorité attend une lecture vérifiée du profil.",
+      "none": "Aucune autorisation d’orchestration",
+      "workspace": "ID de l’espace de travail",
+      "actions": "Actions autorisées",
+      "edit": "Modifier l’autorisation d’orchestration",
+      "revoke": "Révoquer l’autorisation d’orchestration",
+      "replaceHint": "Enregistrer ou révoquer remplace l’autorisation et retire immédiatement l’autorité précédente des sessions. Reprenez les sessions pour utiliser une nouvelle autorisation.",
+      "revokeConfirm": "Révoquer l’autorisation",
+      "save": "Enregistrer l’autorisation",
+      "saved": "Autorisation d’orchestration enregistrée",
+      "revoked": "Autorisation d’orchestration révoquée",
+      "invalidWorkspace": "Saisissez un ID d’espace de travail UUIDv7 canonique.",
+      "capabilities": {
+        "work_read": "Lire le travail",
+        "work_create": "Créer du travail",
+        "work_assign": "Attribuer le travail",
+        "work_review": "Examiner les résultats",
+        "decision_read": "Lire les décisions",
+        "decision_write": "Publier des décisions"
+      }
+    },
+    "authentication": {
+      "title": "Authentification du fournisseur",
+      "source": "Source d’authentification",
+      "hint": "Choisissez l’autorité des prochains lancements. Aucune source n’est autorisée par défaut.",
+      "none": "Aucune autorisée",
+      "accountHome": "Connexion enregistrée dans le profil",
+      "managed": "Identifiant fournisseur géré",
+      "provider": "Fournisseur",
+      "providerHint": "Seuls les fournisseurs actifs compatibles sont proposés. Le serveur vérifie à nouveau au lancement.",
+      "chooseProvider": "Choisir un fournisseur",
+      "readRequired": "La permission de lecture des fournisseurs est requise.",
+      "loadFailed": "Liste des fournisseurs indisponible.",
+      "retry": "Réessayer",
+      "loading": "Chargement des fournisseurs…",
+      "loadMore": "Charger plus de fournisseurs",
+      "edit": "Modifier l’authentification",
+      "launchHint": "Les modifications concernent les prochains lancements. Le processus actif conserve son authentification.",
+      "save": "Enregistrer l’authentification",
+      "saved": "Authentification enregistrée"
     }
   },
   "accounts": {

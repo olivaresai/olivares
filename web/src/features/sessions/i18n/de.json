@@ -323,7 +323,19 @@
     "wireEmpty": "Wählen Sie eine Zeile in der Unterhaltung, um ihren Rohrahmen zu sehen.",
     "thisNode": "Dieser Knoten",
     "noWorkspace": "Kein Arbeitsbereich",
-    "cwdWarning": "Diese Sitzung hat keinen Arbeitsbereich. Der Treiber hat sein Arbeitsverzeichnis als {{cwd}} gemeldet."
+    "cwdWarning": "Diese Sitzung hat keinen Arbeitsbereich. Der Treiber hat sein Arbeitsverzeichnis als {{cwd}} gemeldet.",
+    "workTitle": "Arbeitsberechtigung der Sitzung",
+    "workHint": "Für den letzten Start aufgezeichnet. Jede Aktion prüft die aktuelle Berechtigung.",
+    "processState": "Prozesszustand",
+    "activityState": "Aktivität",
+    "workRole": "Erteilte Rolle",
+    "workWorkspace": "Arbeitsbereich",
+    "workActions": "Erteilte Aktionen",
+    "notRecorded": "Nicht aufgezeichnet",
+    "workRoles": {
+      "worker": "Worker",
+      "orchestrator": "Orchestrator"
+    }
   },
   "conversation": {
     "log": "Unterhaltung",

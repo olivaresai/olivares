@@ -96,7 +96,7 @@ Set `OLIVARES_OTEL_PROVIDER_BAGGAGE_ALLOWLIST` to a JSON array of rules with `or
 
 ### Complete variable reference
 
-The table below is generated from the product's own sources: 298 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
+The table below is generated from the product's own sources: 299 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
 
 **Required** means the feature that reads the variable does not start without it; most variables are optional and the engine runs with none of them set.
 
@@ -152,7 +152,7 @@ The table below is generated from the product's own sources: 298 variables and 1
 | `OLIVARES_COMMUNICATION_ACTIVATION` | No | — | REQUESTED K3 communication activation (`on` or `off`; default off), parsed at boot by cmd/olivares/communicationcomposition.go. `on` binds the local outbox pump witness and enables the dual runtime credential posture before the first leadership election; whether a communication credential can actually be minted is decided per launch from the EFFECTIVE readiness conjunction (store proof, sealer, directory resolver, permissions, pump), never from this flag alone. `on` needs both keyring files below; when either is not declared, cannot be opened or does not load, boot continues with K3 OFF and the cause visible (composition log, pump lane verdict `custody_unavailable`, non-effective readiness) while core, K1 and K2 serve. Only an unrecognized value is a configuration error. |
 | `OLIVARES_COMMUNICATION_CONTENT_KEYRING_FILE` | Yes | — | Path to the JSON keyring the communication content sealer loads at boot (cmd/olivares/boot.go). Secret-bearing, so it is a file rather than a value: sealed message bodies are verified against the keys it carries, and an engine started without it cannot open content sealed by a peer that had one. |
 | `OLIVARES_COMMUNICATION_CURSOR_KEYRING_FILE` | Yes | — | Path to the JSON keyring (`olivares.communication-cursor-keyring.v1`) that signs and verifies inbox cursor navigation tokens, loaded at boot through the same custody mechanism as the content keyring (cmd/olivares/communicationcursorkeyring.go). Secret-bearing, so it is a file rather than a value; a rotated-out key marked `retired_at` keeps verifying for the token retention window and is dropped afterwards, and a restart never mints a fresh key. |
-| `OLIVARES_COMMUNICATION_TOKEN` | Yes | — | NOT an operator setting, and documented here precisely so nobody sets it. The engine MINTS this bearer and injects it into a conducted session's child process exactly once (modules/sessions/runtime_bridge.go); its tuple travels inside the authenticated principal. It is RESERVED on the launch path: validateLaunchInjectedEnv (modules/sessions/runtime.go) refuses any launch whose injected environment carries it, so a caller-supplied value is rejected rather than honoured. It appears in the roster because that reserved-name check mentions it, not because the engine reads it. |
+| `OLIVARES_COMMUNICATION_TOKEN` | Yes | — | The session's own communication credential, injected by the session launcher and read by message commands. Reserved on the launch path; operators must not supply it. Its value is always redacted. |
 | `OLIVARES_COMPUTER_USE_CONFIG` | No | — | Path to the JSON policy file of the computer-use gate. Read only by builds compiled with the `enterprise` and `addon_airs` tags. Unset leaves the gate off; a file that cannot be read or parsed makes it deny all computer use until the file is fixed and the engine is restarted. |
 | `OLIVARES_CONFIG_STRICT` | No | — | Set to `1` to make `olivares config effective` and `config validate` reject any unrecognized `OLIVARES_*` key. |
 | `OLIVARES_CONTENT_FIREWALL_CONFIG` | No | — | Path to the JSON policy file of the content firewall that inspects inference traffic in the inline proxy. Read only by builds compiled with the `enterprise` and `addon_airs` tags. Unset leaves that inspection off; a file that cannot be read or parsed makes the firewall deny every request it inspects until the file is fixed and the engine is restarted. |
@@ -378,6 +378,7 @@ The table below is generated from the product's own sources: 298 variables and 1
 | `OLIVARES_THREATINTEL_SIGNING_KEY` | No | — | Signing key for threat-intelligence bundles the engine publishes. |
 | `OLIVARES_TOKEN` | No | — | API token the CLI authenticates with, when `--token` is not given. |
 | `OLIVARES_TOOL_PIN_CONFIG` | No | — | Path to the optional JSON configuration (`require_pin_approval`) of the MCP tool-pin store, which builds compiled with the `enterprise` tag run whether or not this is set. Read when the engine starts. Unset keeps trust on first use; a file that cannot be read or parsed requires operator approval for unknown tools until the file is fixed and the engine is restarted. |
+| `OLIVARES_TOTP_SEED_KEY` | No | — | Base64-encoded 32-byte key that seals TOTP seeds at rest. Set the same key on HA nodes; when unset, the engine creates a private totp-seed.key in its data directory. |
 | `OLIVARES_UPDATE_CHANNEL` | No | — | Release channel the update check asks for, such as `stable`. |
 | `OLIVARES_UPDATE_ENDPOINT` | No | — | Base URL the update check queries. Unset leaves the update check off. |
 | `OLIVARES_UPGRADE_TOKEN` | No | — | Download token `olivares upgrade` presents when fetching a build from a credentialed repository. |
@@ -399,7 +400,7 @@ The table below is generated from the product's own sources: 298 variables and 1
 | `OLIVARES_WORK_OUTBOX_INTERVAL` | No | — | How often the work-kernel outbox is drained, as a Go duration. `0` disables the pump. |
 | `OLIVARES_WORK_RUN_REF` | No | — | Run reference the engine passes to a launched work session. Set by the engine per run, not by the operator. |
 | `OLIVARES_WORK_SESSION_ID` | No | — | Session reference the engine passes to a launched work session. Set by the engine per run, not by the operator. |
-| `OLIVARES_WORK_TOKEN` | No | — | Scoped token the engine passes to a launched work session. Set by the engine per run, not by the operator. |
+| `OLIVARES_WORK_TOKEN` | No | — | The session's own scoped work credential, injected by the session launcher and read by work commands. Operators must not supply it. Its value is always redacted. |
 
 ### Variable families
 

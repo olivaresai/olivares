@@ -58,7 +58,11 @@ func buildCoreMigrations(
 		if credentialBindingRelation(d.Kind) {
 			continue
 		}
-		d = beforeConsentCustody(beforeAuthenticationFreshness(d))
+		// v18 owns the TOTP second-factor relations; the reconcile creates them.
+		if totpRelation(d.Kind) {
+			continue
+		}
+		d = beforeGroupOrigin(beforeConsentCustody(beforeAuthenticationFreshness(d)))
 		entity = append(entity, dia.CreateTableStmts(d)...)
 	}
 	migrations := []migrate.Migration{
@@ -142,6 +146,7 @@ func buildCoreMigrationPlan(
 		coreConsentCustodyMigration(),
 		coreCredentialBindingMigration(),
 		coreAuthenticationFreshnessMigration(),
+		coreTOTPMigration(),
 	)
 }
 

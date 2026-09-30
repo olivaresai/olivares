@@ -22,7 +22,11 @@ vi.mock('@tanstack/react-router', () => ({
 
 const auth = vi.hoisted(() => ({
   status: 'anonymous' as 'anonymous' | 'authenticated',
-  login: vi.fn(async () => undefined),
+  login: vi.fn(
+    async () =>
+      ({ token: 't', session_id: 's', expires_at: 'soon' }) as const,
+  ),
+  adoptSession: vi.fn(async () => undefined),
   can: (_permission: string): boolean => true,
 }))
 vi.mock('@/lib/auth/context', () => ({
@@ -44,7 +48,9 @@ beforeEach(() => {
   auth.status = 'anonymous'
   auth.can = () => true
   auth.login.mockReset()
-  auth.login.mockResolvedValue(undefined)
+  auth.adoptSession.mockReset()
+  auth.adoptSession.mockResolvedValue(undefined)
+  auth.login.mockResolvedValue({ token: 't', session_id: 's', expires_at: 'soon' })
   localStorage.clear()
   useClientSettings.setState({
     startPage: 'home',
@@ -125,6 +131,7 @@ describe('sign-in opens the stored start page', () => {
           },
         ],
       } satisfies Whoami)
+      return { token: 't', session_id: 's', expires_at: 'soon' } as const
     })
     await signIn()
     expect(navigateMock).toHaveBeenCalledWith({ to: '/sessions' })

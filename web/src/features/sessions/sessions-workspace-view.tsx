@@ -109,7 +109,7 @@ function esRechazo(error: unknown): boolean {
 /**
  * THE STANDING REFUSALS — one mark per (context, half), written from the read itself.
  *
- * ⛔ WHY A HISTORY AND NOT THE LAST ERROR (independent review R1, 2026-09-08). React
+ * ⛔ WHY A HISTORY AND NOT THE LAST ERROR (independent review finding 1, 2026-09-08). React
  *    Query keeps ONE error per query, and a successful `data` survives every later
  *    failure. So `success → 500 → 403 → 500` ends with the 500 as the whole of the
  *    query's error state, and a rule that reads only that error re-admits the
@@ -598,7 +598,7 @@ function Inner({
    * `esRechazo`). And neither state says anything about the other half, or about
    * `sessions:run:write`, which is its own grant and stays where it is.
    *
-   * ⛔ AND A REFUSAL OUTLIVES THE ERROR THAT REPORTED IT (review R1). Reading only the
+   * ⛔ AND A REFUSAL OUTLIVES THE ERROR THAT REPORTED IT (review finding 1). Reading only the
    *    CURRENT error made `success → 500 → 403 → 500` end admitted, because by the last
    *    step the 403 was no longer the query's error and the pre-refusal page was still
    *    in the cache. The standing mark is therefore consulted as well, and it is lifted

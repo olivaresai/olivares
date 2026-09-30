@@ -202,6 +202,12 @@ func (a *Authenticator) SCIMReplaceGroup(ctx context.Context, actor Principal, t
 		if err != nil {
 			return err
 		}
+		// Group-origin boundary: SCIM writes IdP-managed (NULL-origin) rows
+		// only. A console-managed or provisioner-owned group is read-only
+		// membership for the IdP — replace, like delete, is refused.
+		if !mayWriteGroupOrigin(g.ProvisionedBy, "") {
+			return ErrGroupOriginReadOnly
+		}
 		if expectVersion != 0 && g.Version != expectVersion {
 			return ErrGroupVersionChanged
 		}
@@ -241,6 +247,24 @@ func (a *Authenticator) SCIMReplaceGroup(ctx context.Context, actor Principal, t
 			keep[uid] = true
 			if _, ok := current[uid]; !ok {
 				adds = append(adds, uid)
+			}
+		}
+		membershipChanges := len(adds) > 0
+		for uid := range current {
+			if !keep[uid] {
+				membershipChanges = true
+				break
+			}
+		}
+		if membershipChanges {
+			// A NULL-origin child may predate an ancestor's claim. Its roster
+			// cannot change membership inherited from another writer's group.
+			claims, err := readOnlyGroupAncestors(ctx, as, tenant, g.ParentGroupID, "")
+			if err != nil {
+				return err
+			}
+			if len(claims) > 0 {
+				return ErrGroupOriginReadOnly
 			}
 		}
 		// The ceiling, before any write: a net-new member of a role-mapped group
@@ -294,6 +318,21 @@ func (a *Authenticator) SCIMDeleteGroup(ctx context.Context, actor Principal, te
 		if err != nil {
 			return err
 		}
+		// Same source boundary as replace: the IdP cannot delete a group it
+		// does not provision.
+		if !mayWriteGroupOrigin(g.ProvisionedBy, "") {
+			return ErrGroupOriginReadOnly
+		}
+		// Deleting an intermediate node also cuts its descendants off from
+		// every ancestor. Protect that inherited membership even when this
+		// node has no direct members of its own.
+		claims, err := readOnlyGroupAncestors(ctx, as, tenant, g.ParentGroupID, "")
+		if err != nil {
+			return err
+		}
+		if len(claims) > 0 {
+			return ErrGroupOriginReadOnly
+		}
 		rows, err := groupMemberRows(ctx, as, g.ID)
 		if err != nil {
 			return err
@@ -323,6 +362,11 @@ func (a *Authenticator) ConfigureGroupRole(ctx context.Context, actor Principal,
 		g, err := groupInTenant(ctx, as, tenant, groupID)
 		if err != nil {
 			return err
+		}
+		// Group-origin boundary: the console writes NULL-origin and its own
+		// "operator" groups; a provisioner-owned group is read-only to it.
+		if !mayWriteGroupOrigin(g.ProvisionedBy, GroupProvisionerOperator) {
+			return ErrGroupOriginReadOnly
 		}
 		if role != "" {
 			if !IsRole(role) {
@@ -379,9 +423,11 @@ func (a *Authenticator) ConfigureGroupParent(ctx context.Context, actor Principa
 		if err := checkRoleCeiling(actor, g.TargetTenantID, RoleOwner); err != nil {
 			return err
 		}
-		if parentID.IsZero() {
-			g.ParentGroupID = model.ID("")
-		} else {
+		// Group-origin boundary, same as the role mapping.
+		if !mayWriteGroupOrigin(g.ProvisionedBy, GroupProvisionerOperator) {
+			return ErrGroupOriginReadOnly
+		}
+		if !parentID.IsZero() {
 			parent, err := groupInTenant(ctx, as, g.TargetTenantID, parentID)
 			if err != nil {
 				return err
@@ -391,8 +437,28 @@ func (a *Authenticator) ConfigureGroupParent(ctx context.Context, actor Principa
 			} else if cyclic {
 				return ErrGroupCycle
 			}
-			g.ParentGroupID = parent.ID
 		}
+		// Members carry every ancestor as a subject. Compare both complete
+		// chains before changing an edge, including an intermediate edge: the
+		// operator may reshape its own groups but cannot add or remove a
+		// named provisioner's group from that inherited membership.
+		oldClaims, err := readOnlyGroupAncestors(ctx, as, tenant, g.ParentGroupID, GroupProvisionerOperator)
+		if err != nil {
+			return err
+		}
+		newClaims, err := readOnlyGroupAncestors(ctx, as, tenant, parentID, GroupProvisionerOperator)
+		if err != nil {
+			return err
+		}
+		if len(oldClaims) != len(newClaims) {
+			return ErrGroupOriginReadOnly
+		}
+		for id := range oldClaims {
+			if !newClaims[id] {
+				return ErrGroupOriginReadOnly
+			}
+		}
+		g.ParentGroupID = parentID
 		if g, err = as.Groups().Update(ctx, g); err != nil {
 			return err
 		}
@@ -404,6 +470,32 @@ func (a *Authenticator) ConfigureGroupParent(ctx context.Context, actor Principa
 		return model.UserGroup{}, err
 	}
 	return out, nil
+}
+
+// readOnlyGroupAncestors follows the same tenant, dangling-edge and cycle
+// boundaries as loadGroupClosure and collects origins this writer cannot change.
+// The operator can write NULL/operator ancestry; SCIM can write NULL ancestry.
+func readOnlyGroupAncestors(ctx context.Context, as store.AuthScope, tenant model.TenantID, parentID model.ID, writer string) (map[model.ID]bool, error) {
+	claims := map[model.ID]bool{}
+	seen := map[model.ID]bool{}
+	for !parentID.IsZero() && !seen[parentID] {
+		seen[parentID] = true
+		g, err := as.Groups().Get(ctx, parentID)
+		if errors.Is(err, store.ErrNotFound) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if g.TargetTenantID != tenant {
+			break
+		}
+		if !mayWriteGroupOrigin(g.ProvisionedBy, writer) {
+			claims[g.ID] = true
+		}
+		parentID = g.ParentGroupID
+	}
+	return claims, nil
 }
 
 // nestingWouldCycle reports whether making `child` a descendant of `parent`

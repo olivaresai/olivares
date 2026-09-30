@@ -167,7 +167,7 @@
 # the battery refused was measured printing OK over 367 documents with the classifier missing.
 # Selftest: `walk:`, `read_surface:`, `regular_file:`, the wiring witness, and `run:`.
 #
-# And the ROOT ENTRIES (R1-TOP, same review, one round later): the three helpers refuse what
+# And the ROOT ENTRIES (finding 1-TOP, same review, one round later): the three helpers refuse what
 # reaches them, but README.md, CHANGELOG.md and INSTALL.md were admitted to surface_files() by
 # os.path.isfile(), and every top-level census entry to scan_pins() by isfile()/isdir() — both
 # answer False to a permission error and to a dangling link, so a README that was THERE, as a link
@@ -2018,7 +2018,7 @@ def selftest():
     expect("the pin census reads through the refusing reader (no private open() that could skip a file)",
            any(q.startswith("packaging/") for q in opened))
     # ── root entries: PRESENT-but-unexaminable refuses, genuinely ABSENT keeps its semantics ──
-    # R1-TOP (independent review, 2026-09-06): the reviewed staging is README.md as a link whose
+    # finding 1-TOP (independent review, 2026-09-06): the reviewed staging is README.md as a link whose
     # target sits behind a directory at mode 000, or is gone. These cases run the REAL surfaces —
     # surface_files() and scan_pins() — from a staged working directory, so a private isfile()
     # creeping back into either admission fails here, not only in a helper test.

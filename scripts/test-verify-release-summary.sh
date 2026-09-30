@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# Battery for the SLSA half of scripts/verify-release.sh (R1 contrast P2-04). The
+# Battery for the SLSA half of scripts/verify-release.sh (independent review P2-04). The
 # prov_checked fix was correct and UNPROTECTED: no gate consumed verify-release.sh at
 # all (check-verifier-truth.sh walks Go files only), so restoring the old summary
 # condition — "+ SLSA provenance" printed with ZERO archives verified — left every

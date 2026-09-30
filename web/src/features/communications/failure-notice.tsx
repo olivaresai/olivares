@@ -21,7 +21,9 @@ export function FailureNotice({
   title?: string
   className?: string
 }) {
-  const { t } = useTranslation('communications')
+  const { t } = useTranslation(['communications', 'errors'])
+  const admission =
+    failure.kind === 'forbidden' && failure.code === 'tenant_admission_required'
   const calm =
     failure.kind === 'forbidden' ||
     failure.kind === 'unavailable' ||
@@ -48,8 +50,16 @@ export function FailureNotice({
         className,
       )}
     >
-      {title ? <p className="font-medium">{title}</p> : null}
-      <p>{t(`failure.${failure.kind}`)}</p>
+      {admission || title ? (
+        <p className="font-medium">
+          {admission ? t('errors:tenantAdmission.title') : title}
+        </p>
+      ) : null}
+      <p>
+        {admission
+          ? t('errors:tenantAdmission.description')
+          : t(`failure.${failure.kind}`)}
+      </p>
       <dl className="flex flex-wrap gap-x-3 gap-y-0.5 text-caption">
         {failure.code ? (
           <div className="flex gap-1">
@@ -75,7 +85,7 @@ export function FailureNotice({
             </dd>
           </div>
         ) : null}
-        {failure.message && failure.kind !== 'ambiguous' ? (
+        {failure.message && failure.kind !== 'ambiguous' && !admission ? (
           <div className="flex gap-1">
             <dt>{t('failure.message')}</dt>
             <dd className="break-words">{failure.message}</dd>

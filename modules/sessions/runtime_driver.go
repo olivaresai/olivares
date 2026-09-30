@@ -56,6 +56,9 @@ const providerDriverCodex = "codex"
 // is resolved separately (runtime_provider_auth.go) and only the child's
 // environment ever carries material.
 type DriverLaunch struct {
+	// LocalModelEndpoint is a non-secret server-resolved endpoint. Drivers
+	// compile their own provider configuration; callers cannot supply it.
+	LocalModelEndpoint string
 	// WorkDir is the resolved, governed workspace cwd ("" ⇒ the process cwd).
 	WorkDir string
 	// ConfigHome / UserHome are the profile's canonical homes. A driver uses them

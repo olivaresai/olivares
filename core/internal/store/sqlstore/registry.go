@@ -83,6 +83,9 @@ func (r *registry) registerCore(d model.EntityDescriptor) error {
 	if err := validateWorkspaceLineage(d); err != nil {
 		return fmt.Errorf("core kind %q: %v", d.Kind, err)
 	}
+	if err := r.validateInheritedWorkspaceRead(d); err != nil {
+		return fmt.Errorf("core kind %q: %v", d.Kind, err)
+	}
 	if err := validateAuthorizationFact(d); err != nil {
 		return fmt.Errorf("core kind %q: %v", d.Kind, err)
 	}
@@ -347,10 +350,20 @@ func (r *registry) validateModule(d model.EntityDescriptor) error {
 	if err := validateWorkspaceLineage(d); err != nil {
 		return err
 	}
+	if err := r.validateInheritedWorkspaceRead(d); err != nil {
+		return err
+	}
 	if err := validateAuthorizationFact(d); err != nil {
 		return err
 	}
 	return r.validateIndexes(d)
+}
+
+func (r *registry) validateInheritedWorkspaceRead(d model.EntityDescriptor) error {
+	if !d.WorkspaceInheritedRead.Declared() {
+		return nil
+	}
+	return model.ValidateInheritedWorkspaceRead(d, r.byKind[d.WorkspaceInheritedRead.ParentKind])
 }
 
 func validateAuthorizationFact(d model.EntityDescriptor) error {

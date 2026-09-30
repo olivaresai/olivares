@@ -154,7 +154,7 @@ __olivares_gate_obs_diag() {
 # ── THE PROTOCOL READER, AND IT IS BOUNDED BEFORE BASH STORES ANYTHING ──────────────
 #
 # ⛔ COMMAND SUBSTITUTION CANNOT READ THIS PROTOCOL, AND THE FIRST REVISION USED IT.
-# `$(recorder)` was returned by independent review as O1-F2, and the four losses are
+# `$(recorder)` was returned by independent review as O1-finding 2, and the four losses are
 # measured, not argued (revision2 probes/bounded-read.out, bash 5.2.15):
 #
 #   · it allocates the recorder's ENTIRE stdout before any validation runs — a 5001-byte

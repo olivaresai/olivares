@@ -2374,7 +2374,7 @@ tasks:
       - bash scripts/hub-leg.sh lint:release-publish-destinations scripts/test-release-publish-destinations.sh
       - bash scripts/test-resolve-bare-manifest-digest.sh
       - bash scripts/test-cosign-verified-mode.sh
-      # R1 contrast additions: format-preserving digest-asserted latest* aliasing
+      # independent review additions: format-preserving digest-asserted latest* aliasing
       # (P1-01), the §C.4 authorization wiring of both release workflows (P1-02/P2-02/
       # P3-02), and the verifier-summary honesty regression (P2-04).
       - bash scripts/test-alias-image-digest.sh

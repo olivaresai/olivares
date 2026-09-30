@@ -47,7 +47,7 @@ angerufen. Konfigurieren Sie den Listener mit den `OLIVARES_*`-Variablen aus der
 
 <!-- BEGIN GENERATED olivares-grpc-reference — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-Engine und Plugin-Host registrieren **28 rpc** über **7 Services**. Die folgenden
+Engine und Plugin-Host registrieren **29 rpc** über **7 Services**. Die folgenden
 Tabellen werden aus den generierten Registrierungstabellen gelesen, die die Server an
 gRPC übergeben. Eine hier aufgeführte Methode kann daher von einem Client aufgerufen
 werden.
@@ -120,13 +120,14 @@ Definiert in `olivaresv1/v1.proto`; 4 rpc.
 
 ### `olivares.sdk.v1.SourceService`
 
-Definiert in `olivaresv1/v1.proto`; 4 rpc.
+Definiert in `olivaresv1/v1.proto`; 5 rpc.
 
 | Methode | Vollständige Methode | Art | Request | Response | Funktion |
 |---|---|---|---|---|---|
 | `Close` | `/olivares.sdk.v1.SourceService/Close` | unary | `Empty` | `Empty` | Beendet die von Open geöffnete Session und gibt frei, was der Connector dafür hielt. |
 | `Describe` | `/olivares.sdk.v1.SourceService/Describe` | unary | `Empty` | `DescribeResponse` | Gibt den Descriptor des Connectors zurück: Identität, Konfigurationsfelder und angekündigte Capabilities. |
 | `Gather` | `/olivares.sdk.v1.SourceService/Gather` | server-streaming | `Empty` | `Observation` (stream) | Streamt Beobachtungen an den Host, der jede auf den Event-Bus hebt. Der Stream endet nach einem Batch-Lauf oder wenn der Host ihn abbricht. |
+| `GatherInventory` | `/olivares.sdk.v1.SourceService/GatherInventory` | server-streaming | `GatherInventoryRequest` | `Observation` (stream) | Überträgt die Inventarbeobachtungen des Konnektors nur für die ausgehandelte Fähigkeit inventory-coverage-v1 als Stream; jede andere Fähigkeit wird abgelehnt, und ein abgebrochener Stream meldet niemals Erfolg. |
 | `Open` | `/olivares.sdk.v1.SourceService/Open` | unary | `OpenRequest` | `Empty` | Startet vor dem Sammeln einer Beobachtung eine Session mit der vom Host bereitgestellten Konfiguration. |
 
 <!-- END GENERATED olivares-grpc-reference -->

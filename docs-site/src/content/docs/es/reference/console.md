@@ -58,7 +58,7 @@ Seguridad e identidad, Despliegue, Observabilidad y evidencias, y Sistema y ajus
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-La consola publica **76 rutas**. Todas figuran en las tablas siguientes, con el permiso que
+La consola publica **80 rutas**. Todas figuran en las tablas siguientes, con el permiso que
 requieren y la página de referencia que abre su enlace de ayuda dentro del producto.
 
 ### Operar
@@ -66,7 +66,8 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Pantalla | Ruta | Qué es | Requiere | Referencia |
 |---|---|---|---|---|
 | Resumen | `/` | Visión general del estado y la salud del estate | cualquier usuario autenticado | [inicio de la documentación](/es/) |
-| Claude Code | `/agentops` | Crea, adjunta y gobierna sesiones de Claude Code — sin SSH | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/es/how-to/run-claude-code-with-olivares/) |
+| Herramientas de agentes | `/agent-tools` | Detecta, instala y actualiza las herramientas de agentes en este host y sigue cada instalación; solo para administradores del despliegue | `system:admin` | [how-to/add-a-provider](/es/how-to/add-a-provider/) |
+| Operar sesiones | `/agentops` | Crea, adjunta y gobierna sesiones de Claude Code — sin SSH; comparte pantalla con Observar sesiones | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/es/how-to/run-claude-code-with-olivares/) |
 | Copias de seguridad | `/backups` | Inicia, programa, descarga y restaura copias de seguridad, con una segunda confirmación en la vía destructiva. | `system:admin` | [how-to/backup-and-restore](/es/how-to/backup-and-restore/) |
 | Comunicaciones | `/communications` | Canales, avisos directos y bandeja personal del workspace seleccionado | `sessions:channel:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Administración de canales | `/communications/administration` | Administra canales: configuración e historial de concesiones, cada acto bajo el ETag actual del canal | `sessions:channel:admin` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
@@ -77,11 +78,12 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Kill switch | `/killswitch` | Parada de emergencia, recuperación con doble control y contención guardiana | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/es/how-to/cookbook/kill-switch-drill/) |
 | Registros | `/logs` | Flujo en vivo del log del motor, filtrado por nivel y módulo, con búsqueda y pausa. | `system:admin` | [how-to/troubleshooting](/es/how-to/troubleshooting/) |
 | Observabilidad | `/observability` | Salud de la ingesta por estándar y exploración de trazas | `health:status:read` | [reference/modules/observability](/es/reference/modules/observability/) |
+| Cuentas de proveedor | `/provider-accounts` | Lista las cuentas de proveedor con nombre y adopta un perfil de proveedor existente como cuenta | `sessions:account:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Vínculos de fuentes | `/provider-bindings` | Dedica fuentes configuradas, en la revisión que aplicó este nodo, a perfiles de proveedor | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Perfiles de proveedor | `/provider-profiles` | Registra y administra los directorios de proveedor bajo los que se lanzan las sesiones, y lee su configuración bajo demanda | `sessions:profile:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Proveedores | `/providers` | Registra las claves de API y los endpoints con los que arrancan las sesiones; pruébalos, rótalos y revócalos | `sessions:provider:read` | [how-to/add-a-provider](/es/how-to/add-a-provider/) |
 | Sandbox | `/sandbox` | Pruebas aisladas de agentes y replay | `sandbox:run:read` | [reference/modules/xvii-sandbox](/es/reference/modules/xvii-sandbox/) |
-| Sesiones | `/sessions` | Operación viva de agentes y cronologías | `sessions:live:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
+| Observar sesiones | `/sessions` | Observa sesiones vivas y descubiertas con sus cronologías; comparte pantalla con Operar sesiones | `sessions:live:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Tenants | `/tenants` | Retira o restaura el servicio de un tenant | `system:admin` | [how-to/troubleshooting](/es/how-to/troubleshooting/) |
 | Voz | `/voice` | Sesiones de voz y tiempo real | `voice:session:read` | [reference/modules/xvi-voice](/es/reference/modules/xvi-voice/) |
 | Trabajo | `/work` | El backlog duradero entre sesiones: elementos, dependencias, aceptación y decisiones | `sessions:work:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
@@ -106,7 +108,8 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Catálogo | `/catalog` | Agentes y capacidades aprobados y curados | `catalog:entry:read` | [reference/modules/xiv-catalog](/es/reference/modules/xiv-catalog/) |
 | Enlaces de protocolo | `/communications/protocol-bindings` | Compón y reconcilia enlaces gobernados A2A y MCP | `sessions:protocol-binding:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Despliegue | `/deploy` | Aprovisiona y conecta agentes a la infraestructura | `deploy:deployment:read` | [reference/modules/vii-deploy](/es/reference/modules/vii-deploy/) |
-| Inventario | `/inventory` | Descubre y cataloga cada agente, MCP y modelo | `inventory:catalog:read` | [reference/modules/i-inventory](/es/reference/modules/i-inventory/) |
+| Publicación Git | `/git-publication` | Publicar commits, abrir pull requests y fusionar mediante destinos Git aprobados | `gitpublish:target:read` | [reference/modules/gitpublish](/es/reference/modules/gitpublish/) |
+| Inventario | `/inventory` | Descubre y cataloga los agentes, servidores MCP y modelos que los conectores observaron. | `inventory:catalog:read` | [reference/modules/i-inventory](/es/reference/modules/i-inventory/) |
 | Conocimiento | `/knowledge` | Bases de conocimiento, RAG y linaje de datos | `knowledge:kb:read` | [reference/modules/viii-knowledge](/es/reference/modules/viii-knowledge/) |
 | Operaciones de modelos | `/model-operations` | Modelos propios, admisión y despliegues | `models:registry:read` | [reference/modules/xxiii-model-operations](/es/reference/modules/xxiii-model-operations/) |
 | Modelos | `/models` | Modelos, enrutado y claves de proveedor | `models:catalog:read` | [reference/modules/x-models](/es/reference/modules/x-models/) |
@@ -118,9 +121,10 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Pantalla | Ruta | Qué es | Requiere | Referencia |
 |---|---|---|---|---|
 | Mapa de acceso | `/access-map` | Qué lee y escribe cada agente (R/RW) | `accessmap:graph:read` | [reference/modules/iii-access-map](/es/reference/modules/iii-access-map/) |
-| Exportación a AgentCore | `/agentcore-export` | Planifica y aplica la exportación de policy Cedar a AWS AgentCore y revisa los cambios antes de que se produzcan. | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/es/reference/modules/vi-governance/) |
+| Exportación a AgentCore | `/agentcore-export` | Planifica, revisa y aplica la proyección de las reglas de gobierno de este tenant sobre AWS AgentCore como políticas Cedar; planificar no escribe nada | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/es/reference/modules/vi-governance/) |
 | Gobierno de Claude Code | `/claude-policy` | Policy gestionada, hooks, MCP, sandbox y policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/es/how-to/connectors/claude-code-hooks-pep/) |
-| Consola de control | `/console` | Da de alta usuarios, conecta SSO/IdP y gestiona workspaces y grupos de agentes. | `tenant:admin` | [reference/modules/xx-multi-tenancy](/es/reference/modules/xx-multi-tenancy/) |
+| Administración | `/console` | Usuarios, SSO/IdP, workspaces, grupos de agentes, roles, secretos, conectores, claves API y la licencia de esta instalación | `tenant:admin` | [reference/modules/xx-multi-tenancy](/es/reference/modules/xx-multi-tenancy/) |
+| Diferencia de origen | `/console/sources/diff` | Compara una revisión base y una revisión head de un repositorio Git conectado, archivo por archivo | `system:admin` | [reference/console](/es/reference/console/) |
 | Identidad y NHI | `/identity` | SSO, SCIM, el inventario NHI y el grafo WIF | `governance:identity:read` | [reference/modules/vi-governance](/es/reference/modules/vi-governance/) |
 | Proxy de inferencia | `/inference-proxy` | Compuertas del proxy, reglas DLP de egreso y aprobaciones de dispositivos | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/es/reference/modules/inferenceproxy/) |
 | Permisos | `/permissions` | Identidad, roles y aprobaciones | `governance:identity:read` | [reference/modules/vi-governance](/es/reference/modules/vi-governance/) |

@@ -8,7 +8,8 @@
     "mcp": "MCP auth",
     "wif": "WIF graph",
     "posture": "Key & residency posture",
-    "login": "Privileged login"
+    "login": "Privileged login",
+    "totp": "TOTP factor"
   },
   "seam": {
     "badge": "Backend pending",
@@ -542,7 +543,7 @@
     "methodsUnknown": "Not reported",
     "targetStandardsNote": "AAL3 (NIST SP 800-63B-4) and PIV/CAC (FIPS 201-3) are the target standards for privileged login. The panel reflects what the backend enforces; it claims no certification.",
     "passkeyTitle": "Register a passkey",
-    "passkeyDescription": "Enrol a hardware security key or platform authenticator (WebAuthn / FIDO2) for phishing-resistant privileged login.",
+    "passkeyDescription": "Enroll a hardware security key or platform authenticator (WebAuthn / FIDO2) for phishing-resistant privileged login.",
     "registerPasskey": "Register a passkey",
     "registering": "Follow your authenticator…",
     "passkeySeamWhat": "WebAuthn passkey registration",
@@ -608,5 +609,40 @@
       "title": "No human or non-human identities yet",
       "description": "After a directory source is configured, resync the identity roster to populate human and non-human identities with their external IDs."
     }
+  },
+  "totp": {
+    "title": "TOTP second factor",
+    "description": "A time-based one-time password (RFC 6238) as an additional factor on your local account. It adds to — never replaces — your passkeys and PIV.",
+    "state": "Factor",
+    "enrolled": "Enrolled",
+    "notEnrolled": "Not enrolled",
+    "algorithm": "Parameters",
+    "everySeconds": "{{period}} s codes",
+    "activatedAt": "Activated",
+    "recoveryRemaining": "Recovery codes",
+    "recoveryCount": "{{count}} remaining",
+    "enrol": "Enroll a factor",
+    "replace": "Replace factor",
+    "remove": "Remove factor",
+    "confirmRemove": "Really remove?",
+    "activate": "Activate",
+    "scanPrompt": "Scan the QR with your authenticator app, or enter the secret manually, then enter the code it shows.",
+    "qrAlt": "QR code with the TOTP provisioning URI",
+    "manualEntry": "Manual entry secret",
+    "codeLabel": "Code from your app",
+    "recoveryWarning": "These recovery codes are shown only once. Store them now — each can be used a single time if you lose your device.",
+    "savedCodes": "I saved the codes",
+    "stepUpRequired": "This action needs a fresh AAL3 session. Complete a passkey or PIV step-up first.",
+    "sealerUnavailable": "The TOTP seed sealer is not available on this deployment; enrollment is disabled until an operator fixes it.",
+    "loadFailed": "The factor status could not be loaded.",
+    "policyTitle": "Require TOTP for administrators",
+    "policyDescription": "When on, administrators (superadmins and any tenant admin or owner) must enroll a factor before their password login completes.",
+    "policyState": "Policy",
+    "policyOn": "Required",
+    "policyOff": "Off",
+    "policyEnable": "Require for administrators",
+    "policyConfirmOn": "Confirm: require",
+    "policyDisable": "Turn off",
+    "policyAal3Note": "Changing this policy needs an AAL3 session. Accounts without a factor are sent to enrollment at their next login — never locked out."
   }
 }

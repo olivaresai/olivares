@@ -1,0 +1,46 @@
+{
+  "title": "エージェントツール",
+  "description": "コントロールプレーンのホスト上のツールを管理します。",
+  "refresh": "更新",
+  "adminOnly": "ホストのツールを管理するにはシステム管理者のセッションが必要です。",
+  "readOnly": "このコントロールプレーンは読み取り専用です。インストールは無効です。",
+  "notInstalled": "管理されたインストールなし",
+  "version": "{{name}} のバージョン",
+  "review": "インストールを確認",
+  "reviewName": "{{name}} のインストールを確認",
+  "detect": "{{name}} を検出",
+  "detecting": "ホストのツールを確認中…",
+  "notDetected": "ホスト上の実行ファイルが検出されませんでした。",
+  "versionUnknown": "バージョン不明",
+  "planning": "選択したバージョンを検証中…",
+  "approval": "インストールを確認",
+  "installHint": "インストールにはハードウェア検証による追加認証が必要です。エージェントやモデルサーバーは起動しません。",
+  "install": "承認したバージョンをインストール",
+  "starting": "開始中…",
+  "started": "インストールを開始しました",
+  "cancel": "キャンセル",
+  "job": "最近のインストール",
+  "leftovers": "未完了の一時ディレクトリが {{count}} 件あります。再試行する前にインベントリを確認してください。",
+  "state": {
+    "running": "インストール中…",
+    "succeeded": "インストール完了",
+    "failed": "インストール失敗",
+    "interrupted": "インストール中断"
+  },
+  "installedState": {
+    "installed": "インストール済み",
+    "damaged": "破損",
+    "unverified": "未検証"
+  },
+  "verification": {
+    "openpgp": "発行元が署名したバージョン（OpenPGP）。",
+    "sigstore-cosign": "パッケージのハッシュと発行元の署名を検証済み。",
+    "none-origin-only": "公式 HTTPS 配布元。発行元の署名はありません。",
+    "github-release-sha256": "公式リリースのメタデータから固定した SHA-256。発行元の署名はありません。",
+    "unknown": "未検証"
+  },
+  "probe": "バージョンを確認",
+  "probeName": "{{path}} のバージョンを確認",
+  "probeHint": "ハードウェア認証後、この実行ファイルの --version コマンドを実行します。",
+  "probeComplete": "バージョン確認が完了しました。"
+}

@@ -45,15 +45,17 @@ const (
 	moduleBetaNotice = "beta, may change; not covered by the 24-month stable window of the core REST contract"
 
 	// moduleDocDescription is the human banner rendered at the top of the beta
-	// reference. It is deliberately honest: a beta surface, identical auth/tenancy
-	// to the core contract, generic JSON bodies unless declared otherwise.
+	// reference. It states tenant and deployment scope separately and describes
+	// generic JSON bodies unless an operation declares its owned schema.
 	moduleDocDescription = "The BETA REST surface of Olivares AI: the module routes under " +
 		"/v1/m/<namespace>/ (finops, compliance, governance, identity, sessions, accessmap, " +
 		"models, knowledge, …) that make up the product. This is a BETA contract — shapes may " +
 		"change with notice and these routes are NOT covered by the 24-month stable window of the " +
-		"core contract served at /openapi.json. Authentication and tenancy are identical to the " +
-		"core contract: an opaque bearer token (session olvs_… or API key olvk_…), with the tenant " +
-		"resolved from a bound token or the X-Olivares-Tenant header; each operation also declares " +
+		"core contract served at /openapi.json. Tenant-scoped operations authenticate with an opaque " +
+		"bearer token (session olvs_… or API key olvk_…), resolving the tenant from a bound token or " +
+		"the X-Olivares-Tenant header. Operations marked x-olivares-scope: system require deployment " +
+		"authority and ignore caller-selected tenants; their handlers may require a human principal " +
+		"and elevated assurance. Each operation also declares " +
 		"the permission it requires (x-required-permission). Response bodies are the product's generic " +
 		"JSON envelope unless an operation declares otherwise (a few routes stream Server-Sent Events or " +
 		"export a non-JSON format). Every mutation declares its handler-reviewed request-body disposition " +
@@ -66,10 +68,14 @@ const (
 // seam (method, the module-relative chi pattern, the permission it requires) plus
 // the owning namespace.
 type moduleRoute struct {
+	system  bool // Deployment scope; no caller-selected tenant.
 	ns      string
 	method  string
 	pattern string // module-relative chi pattern, e.g. "/spend" or "/{id}"
 	perm    auth.Permission
+	// deniedReadPermission is the entity route's explicit visibility declaration.
+	// The mount check requires it to be in the module's permission catalog too.
+	deniedReadPermission auth.Permission
 	// governed says the route came through HandlePolicy/HandleSealed. It is RECORDED and not
 	// derived: a governed route may carry zero metadata, so deriving it would make emptying a
 	// route's policy a silent downgrade.
@@ -81,7 +87,8 @@ type moduleRoute struct {
 	// ni su acción, ni su suelo de AAL, ni si exige grant. Con eso, ni el documento publicado puede
 	// describir la superficie que se monta, ni el arranque puede comprobar que la acción sea del
 	// módulo — que es justo la comprobación que este replay hace ahora.
-	meta RouteMetadata
+	meta          RouteMetadata
+	documentation *ModuleOperationDocumentation
 	// cedarAction is meta's action, kept flat because that is what the boot check compares.
 	cedarAction string
 }
@@ -105,8 +112,11 @@ func (r recordingRegistrar) Handle(method, pattern string, perm auth.Permission,
 // HandleEntity records an entity route exactly like a collection one: the published
 // document describes the HTTP surface, and opting into stored-lineage authorization does
 // not change the request or the response.
-func (r recordingRegistrar) HandleEntity(method, pattern string, perm auth.Permission, _ EntityRef, h ModuleHandler) {
-	r.Handle(method, pattern, perm, h)
+func (r recordingRegistrar) HandleEntity(method, pattern string, perm auth.Permission, ref EntityRef, _ ModuleHandler) {
+	*r.out = append(*r.out, moduleRoute{
+		ns: r.ns, method: strings.ToUpper(method), pattern: pattern, perm: perm,
+		deniedReadPermission: ref.DeniedReadPermission,
+	})
 }
 
 // HandleNoStore and HandleEntityNoStore record a route that declared response
@@ -184,7 +194,15 @@ func (r recordingRegistrar) WithCollectionScope(CollectionScopeRef) RouteRegistr
 func collectModuleRoutes(modules []Module) []moduleRoute {
 	var routes []moduleRoute
 	for _, m := range modules {
+		start := len(routes)
 		m.APIRoutes(recordingRegistrar{ns: m.APINamespace(), out: &routes})
+		if documenter, ok := m.(ModuleOperationDocumenter); ok {
+			for i := start; i < len(routes); i++ {
+				if declaration, ok := documenter.OperationDocumentation(routes[i].method, routes[i].pattern); ok {
+					routes[i].documentation = &declaration
+				}
+			}
+		}
 	}
 	sort.Slice(routes, func(i, j int) bool {
 		a, b := routes[i], routes[j]
@@ -298,6 +316,13 @@ func oaBearer() []any { return []any{oaObj("bearerAuth", []any{})} }
 // envelope plus a 200 that is JSON (the default) or the raw content type the route
 // actually returns (SSE / export).
 func moduleResponses(r moduleRoute) map[string]any {
+	if r.documentation != nil && len(r.documentation.SuccessResponses) > 0 {
+		responses := oaObj("400", oaJSONResp("bad request"), "401", oaJSONResp("unauthenticated"), "403", oaJSONResp("forbidden / step-up required"), "404", oaJSONResp("not found"), "409", oaJSONResp("conflict"), "503", oaJSONResp("required evidence or store unavailable"))
+		for status, response := range r.documentation.SuccessResponses {
+			responses[status] = response
+		}
+		return responses
+	}
 	if sessionsLaunchReadinessRoute(r) {
 		// A typed contract, not the generic envelope: this route's whole value is
 		// that a console can render causes and pending checks without re-deriving
@@ -502,6 +527,9 @@ func moduleOperation(r moduleRoute) map[string]any {
 		"security", oaBearer(),
 		"responses", moduleResponses(r),
 	)
+	if r.documentation != nil && r.documentation.RequiredAssurance > 0 {
+		o["x-required-assurance"] = r.documentation.RequiredAssurance
+	}
 	if r.perm != "" {
 		o["x-required-permission"] = string(r.perm)
 	}
@@ -517,7 +545,17 @@ func moduleOperation(r moduleRoute) map[string]any {
 	} else if body, ok := moduleRequestBody(r); ok {
 		o["requestBody"] = body
 	}
-	params := []any{oaTenantParam()}
+	params := []any{}
+	if r.documentation != nil {
+		for _, parameter := range r.documentation.Parameters {
+			params = append(params, parameter)
+		}
+	}
+	if r.system {
+		o["x-olivares-scope"] = "system"
+	} else {
+		params = append(params, oaTenantParam())
+	}
 	for _, p := range pathParamNames(r.pattern) {
 		schema := oaObj("type", "string")
 		description := "Path parameter " + p + "."
@@ -1071,6 +1109,9 @@ func protocolBindingPlanHashBodySchema(description string) map[string]any {
 // eventing fields come from the engine catalog; sessions work/runtime fields are
 // the narrow command envelopes enforced by their registered handlers.
 func moduleRequestBody(r moduleRoute) (map[string]any, bool) {
+	if r.documentation != nil && r.documentation.BodyKind == ModuleOperationJSONBody && r.documentation.RequestBody != nil {
+		return r.documentation.RequestBody, true
+	}
 	if body, ok := claudeAgentsRequestBody(r); ok {
 		return body, true
 	}

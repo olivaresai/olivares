@@ -271,6 +271,10 @@ func (r ResolvedIdP) AllowsEmail(email string) bool {
 type FederationConfigInput struct {
 	Protocol string
 	Enabled  bool
+	// External provider metadata contains only an opaque immutable revision.
+	ExternalConnectorRef        string
+	ExternalConnectorGeneration int64
+	ExternalIssuer              string
 
 	OIDCIssuer       string
 	OIDCClientID     string
@@ -317,9 +321,12 @@ type FederationConfigView struct {
 	ProviderAvailable bool
 	// Alias is the IdP's scope-unique identifier (U4); "default" is the scope's
 	// primary IdP. The console lists a scope's IdPs by alias and edits one at a time.
-	Alias    string
-	Protocol string
-	Status   string
+	Alias                       string
+	Protocol                    string
+	Status                      string
+	ExternalConnectorRef        string
+	ExternalConnectorGeneration int64
+	ExternalIssuer              string
 
 	OIDCIssuer           string
 	OIDCClientID         string
@@ -375,6 +382,8 @@ type FederationService struct {
 	// (single-IdP cap enforced; login resolves only the global config), non-nil
 	// under -tags enterprise (per-tenant multi-IdP, cap lifted). See MultiIDP.
 	multiIDP MultiIDP
+	// Installed once before serving. Absence keeps external providers unavailable.
+	externalBuilder ExternalProviderBuilder
 
 	mu sync.Mutex
 	// cache is keyed by the config's own ID (U4), NOT its scope: several IdPs can
@@ -460,30 +469,33 @@ func (s *FederationService) viewOf(cfg model.FederationConfig) FederationConfigV
 		// A row with no protocol is a deleted/tombstoned config — report it as
 		// unconfigured (DeleteConfig clears the DEFAULT row rather than removing it, so the
 		// "off" state authoritatively overrides any env-configured fallback at login).
-		Configured:           cfg.Protocol != "",
-		ProviderAvailable:    s.builder != nil,
-		Alias:                model.NormalizeFederationAlias(cfg.Alias),
-		Protocol:             cfg.Protocol,
-		Status:               string(cfg.Status),
-		OIDCIssuer:           cfg.OIDCIssuer,
-		OIDCClientID:         cfg.OIDCClientID,
-		OIDCClientSecretHint: cfg.OIDCClientSecretHint,
-		SAMLMetadataURL:      cfg.SAMLMetadataURL,
-		SAMLEntityID:         cfg.SAMLEntityID,
-		SAMLACSURL:           cfg.SAMLACSURL,
-		SAMLIDPSSOURL:        cfg.SAMLIDPSSOURL,
-		SAMLEmailAttr:        cfg.SAMLEmailAttr,
-		SAMLSPCertPEM:        cfg.SAMLSPCertPEM,
-		SAMLSPKeyHint:        cfg.SAMLSPKeyHint,
-		SAMLSPSignCertPEM:    cfg.SAMLSPSignCertPEM,
-		SAMLSPSignKeyHint:    cfg.SAMLSPSignKeyHint,
-		RequireSSO:           cfg.RequireSSO,
-		NetworkAllowCIDRs:    cfg.NetworkAllowCIDRs,
-		OIDCGroupsClaim:      cfg.OIDCGroupsClaim,
-		SAMLGroupsAttr:       cfg.SAMLGroupsAttr,
-		SCIMAuthoritative:    cfg.SCIMAuthoritative,
-		ClaimedDomains:       cfg.ClaimedDomains,
-		UpdatedAt:            cfg.UpdatedAt,
+		Configured:                  cfg.Protocol != "",
+		ProviderAvailable:           s.providerAvailable(cfg.Protocol),
+		Alias:                       model.NormalizeFederationAlias(cfg.Alias),
+		Protocol:                    cfg.Protocol,
+		Status:                      string(cfg.Status),
+		ExternalConnectorRef:        cfg.ExternalConnectorRef,
+		ExternalConnectorGeneration: cfg.ExternalConnectorGeneration,
+		ExternalIssuer:              cfg.ExternalIssuer,
+		OIDCIssuer:                  cfg.OIDCIssuer,
+		OIDCClientID:                cfg.OIDCClientID,
+		OIDCClientSecretHint:        cfg.OIDCClientSecretHint,
+		SAMLMetadataURL:             cfg.SAMLMetadataURL,
+		SAMLEntityID:                cfg.SAMLEntityID,
+		SAMLACSURL:                  cfg.SAMLACSURL,
+		SAMLIDPSSOURL:               cfg.SAMLIDPSSOURL,
+		SAMLEmailAttr:               cfg.SAMLEmailAttr,
+		SAMLSPCertPEM:               cfg.SAMLSPCertPEM,
+		SAMLSPKeyHint:               cfg.SAMLSPKeyHint,
+		SAMLSPSignCertPEM:           cfg.SAMLSPSignCertPEM,
+		SAMLSPSignKeyHint:           cfg.SAMLSPSignKeyHint,
+		RequireSSO:                  cfg.RequireSSO,
+		NetworkAllowCIDRs:           cfg.NetworkAllowCIDRs,
+		OIDCGroupsClaim:             cfg.OIDCGroupsClaim,
+		SAMLGroupsAttr:              cfg.SAMLGroupsAttr,
+		SCIMAuthoritative:           cfg.SCIMAuthoritative,
+		ClaimedDomains:              cfg.ClaimedDomains,
+		UpdatedAt:                   cfg.UpdatedAt,
 	}
 }
 
@@ -564,11 +576,18 @@ func (s *FederationService) PutConfig(ctx context.Context, actor Principal, scop
 // cleartext); a malformed alias is refused. It enforces two activation caps atomically
 // inside the write transaction (see the cap block below).
 func (s *FederationService) PutConfigIdP(ctx context.Context, actor Principal, scope model.TenantID, alias string, in FederationConfigInput) (FederationConfigView, error) {
+	return s.putConfigIdP(ctx, actor, scope, alias, in, nil)
+}
+
+func (s *FederationService) putConfigIdP(ctx context.Context, actor Principal, scope model.TenantID, alias string, in FederationConfigInput, authority *configurationAuthority) (FederationConfigView, error) {
 	if err := validateFederationAlias(alias); err != nil {
 		return FederationConfigView{}, err
 	}
 	if err := validateFederationInput(in); err != nil {
 		return FederationConfigView{}, err
+	}
+	if in.Protocol == ProtocolExternal && !isTenantScope(scope) {
+		return FederationConfigView{}, fmt.Errorf("%w: an external provider requires an organization scope", ErrBadFederationConfig)
 	}
 	alias = model.NormalizeFederationAlias(alias)
 	// The global scope's login resolves the single "default" IdP (multi-global-IdP by
@@ -586,6 +605,9 @@ func (s *FederationService) PutConfigIdP(ctx context.Context, actor Principal, s
 	next.TargetTenantID = scope
 	next.Alias = alias
 	next.Protocol = in.Protocol
+	next.ExternalConnectorRef = in.ExternalConnectorRef
+	next.ExternalConnectorGeneration = in.ExternalConnectorGeneration
+	next.ExternalIssuer = in.ExternalIssuer
 	if in.Enabled {
 		next.Status = model.StatusActive
 	} else {
@@ -663,24 +685,47 @@ func (s *FederationService) PutConfigIdP(ctx context.Context, actor Principal, s
 	// can never be stored active yet fail to build") and did not perform for key material —
 	// it validated only the four SAML URLs. Refusing here is a 400 the operator can act on,
 	// instead of a row that saves cleanly and takes SSO down at the next resolve.
+	if next.Protocol == ProtocolExternal {
+		clearExternalProtocolSettings(&next)
+	}
 	if err := validateResolvedSPKeypairs(next); err != nil {
 		return FederationConfigView{}, err
 	}
+	var external ExternalProvider
+	if next.Protocol == ProtocolExternal {
+		if next.Status == model.StatusActive {
+			external, err = s.buildExternal(ctx, externalSlot(next))
+			if err != nil {
+				return FederationConfigView{}, err
+			}
+		}
+	}
 
+	var committed model.FederationConfig
 	err = s.st.AuthMutate(ctx, func(as store.AuthScope) error {
 		// R5: the capability lock comes first for every writer. An absent component
 		// refuses to configure the global/default posture over a recorded observation.
 		if err := s.guardConfigWrite(ctx, as, &next); err != nil {
 			return err
 		}
-		// One drain of every config (tiny set) backs both invariants below. Atomicity note:
-		// on SQLite the single writer serializes AuthMutate, so drain-then-write is atomic;
-		// on Postgres (READ COMMITTED) it is best-effort. For the activation CAP that is
-		// acceptable (a product boundary; the open login only resolves the global IdP). For
-		// DOMAIN uniqueness it is the strongest guard the index framework allows today (no
-		// partial-unique index), and the login SELECTION is deny-closed on a duplicate
-		// domain (SelectActive refuses an ambiguous claim), so a racing breach fails safe
-		// rather than steering a login to the wrong tenant.
+		if authority != nil {
+			if err := authority.pin(ctx, as); err != nil {
+				return err
+			}
+			if err := authority.compareOwnerVersion(ctx, as, alias); err != nil {
+				return err
+			}
+		}
+		// The builder resolved an immutable revision before SQL. This final check
+		// may inspect retained authority only; it must not open a nested transaction.
+		if external != nil {
+			if err := external.ValidateAdmission(ctx); err != nil {
+				return err
+			}
+		}
+		// The capability lock serializes compliant configuration writers on both
+		// engines. One drain backs the activation count and domain checks; the
+		// unique derived domain index also enforces ownership at commit.
 		others, lerr := drainList(ctx, as.FederationConfigs().List, model.Query{})
 		if lerr != nil {
 			return lerr
@@ -770,12 +815,19 @@ func (s *FederationService) PutConfigIdP(ctx context.Context, actor Principal, s
 		if err := writeDomainClaims(ctx, as, saved.ID, scope, next.ClaimedDomains); err != nil {
 			return err
 		}
+		committed = saved
+		if authority != nil {
+			return authority.auditAndFinalize(ctx, as, "federation.config.update", "core.federation_config", saved.ID)
+		}
 		return auditAct(ctx, as, actor, "federation.config.update", "core.federation_config", saved.ID)
 	})
 	if err != nil {
 		return FederationConfigView{}, err
 	}
 	s.invalidateAll()
+	if authority != nil {
+		return s.viewOf(committed), nil
+	}
 	return s.GetConfigIdP(ctx, scope, alias)
 }
 
@@ -858,6 +910,21 @@ func (s *FederationService) TestConfigIdP(ctx context.Context, scope model.Tenan
 	}
 	if err := validateFederationInput(in); err != nil {
 		return err
+	}
+	if in.Protocol == ProtocolExternal {
+		existing, _, err := s.loadConfigByAlias(ctx, scope, alias)
+		if err != nil {
+			return err
+		}
+		slot := ExternalProviderSlot{ConfigID: existing.ID, ConfigVersion: existing.Version,
+			TenantID: scope, Alias: model.NormalizeFederationAlias(alias),
+			ConnectorRef: in.ExternalConnectorRef, ConnectorGeneration: in.ExternalConnectorGeneration,
+			Issuer: in.ExternalIssuer, ClaimedDomains: normalizeDomains(in.ClaimedDomains), AllowJIT: !in.SCIMAuthoritative}
+		provider, err := s.buildExternal(ctx, slot)
+		if err != nil {
+			return err
+		}
+		return provider.ValidateAdmission(ctx)
 	}
 	if s.builder == nil {
 		return ErrFederationBuilderUnavailable
@@ -1253,6 +1320,10 @@ func (s *FederationService) buildCached(ctx context.Context, cfg model.Federatio
 
 // build constructs a provider from a stored config, opening its sealed secrets.
 func (s *FederationService) build(ctx context.Context, cfg model.FederationConfig) (Federation, error) {
+	// External providers have no browser assertion/redirect implementation here.
+	if cfg.Protocol == ProtocolExternal {
+		return nil, ErrExternalProviderUnavailable
+	}
 	params := FederationParams{
 		Protocol: cfg.Protocol, OIDCIssuer: cfg.OIDCIssuer, OIDCClientID: cfg.OIDCClientID,
 		OIDCGroupsClaim: cfg.OIDCGroupsClaim,
@@ -1376,6 +1447,9 @@ var ErrBadFederationConfig = errors.New("auth: invalid SSO configuration")
 // to choose between a bad rule and allow-all at login (it still fails closed if it
 // somehow sees one — defense in depth).
 func validateFederationInput(in FederationConfigInput) error {
+	if in.Protocol != ProtocolExternal && (in.ExternalConnectorRef != "" || in.ExternalConnectorGeneration != 0 || in.ExternalIssuer != "") {
+		return fmt.Errorf("%w: external metadata requires an external provider", ErrBadFederationConfig)
+	}
 	for _, c := range in.NetworkAllowCIDRs {
 		c = strings.TrimSpace(c)
 		if c == "" {
@@ -1398,6 +1472,8 @@ func validateFederationInput(in FederationConfigInput) error {
 		}
 	}
 	switch in.Protocol {
+	case ProtocolExternal:
+		return validateExternalInput(in)
 	case ProtocolOIDC:
 		if in.OIDCIssuer == "" || in.OIDCClientID == "" {
 			return fmt.Errorf("%w: oidc requires issuer and client_id", ErrBadFederationConfig)
@@ -1412,7 +1488,7 @@ func validateFederationInput(in FederationConfigInput) error {
 			return fmt.Errorf("%w: saml requires entity_id, metadata_url, acs_url and idp_sso_url", ErrBadFederationConfig)
 		}
 	default:
-		return fmt.Errorf("%w: protocol must be oidc or saml", ErrBadFederationConfig)
+		return fmt.Errorf("%w: protocol must be oidc, saml or external", ErrBadFederationConfig)
 	}
 	return nil
 }

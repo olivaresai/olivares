@@ -361,3 +361,5 @@ func destinationFor(root, driver, version, vendorPlatform, binary string) Destin
 func (c *Claude) String() string {
 	return fmt.Sprintf("claude (%s, key %s)", c.base, c.fingerprint)
 }
+
+func (c *Claude) VerificationLevel() string { return "openpgp" }

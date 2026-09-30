@@ -27,7 +27,7 @@
     }
   },
   "info": {
-    "description": "The BETA REST surface of Olivares AI: the module routes under /v1/m/\u003cnamespace\u003e/ (finops, compliance, governance, identity, sessions, accessmap, models, knowledge, …) that make up the product. This is a BETA contract — shapes may change with notice and these routes are NOT covered by the 24-month stable window of the core contract served at /openapi.json. Authentication and tenancy are identical to the core contract: an opaque bearer token (session olvs_… or API key olvk_…), with the tenant resolved from a bound token or the X-Olivares-Tenant header; each operation also declares the permission it requires (x-required-permission). Response bodies are the product's generic JSON envelope unless an operation declares otherwise (a few routes stream Server-Sent Events or export a non-JSON format). Every mutation declares its handler-reviewed request-body disposition in x-olivares-request-body-disposition; bodies that are not ordinary JSON DTOs publish their exact media type without inventing fields. See info.x-stability-policy for the policy.",
+    "description": "The BETA REST surface of Olivares AI: the module routes under /v1/m/\u003cnamespace\u003e/ (finops, compliance, governance, identity, sessions, accessmap, models, knowledge, …) that make up the product. This is a BETA contract — shapes may change with notice and these routes are NOT covered by the 24-month stable window of the core contract served at /openapi.json. Tenant-scoped operations authenticate with an opaque bearer token (session olvs_… or API key olvk_…), resolving the tenant from a bound token or the X-Olivares-Tenant header. Operations marked x-olivares-scope: system require deployment authority and ignore caller-selected tenants; their handlers may require a human principal and elevated assurance. Each operation also declares the permission it requires (x-required-permission). Response bodies are the product's generic JSON envelope unless an operation declares otherwise (a few routes stream Server-Sent Events or export a non-JSON format). Every mutation declares its handler-reviewed request-body disposition in x-olivares-request-body-disposition; bodies that are not ordinary JSON DTOs publish their exact media type without inventing fields. See info.x-stability-policy for the policy.",
     "license": {
       "name": "AGPL-3.0-only"
     },
@@ -1199,6 +1199,659 @@
         ],
         "summary": "Returns a per-day series for ONE lens (default analytics).",
         "x-required-permission": "adoption:metrics:read",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/agenttools/detect": {
+      "get": {
+        "description": "Discovers host executables without reading provider credential homes.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "driver",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "description": "Exact detected path selected for a bounded --version execution; requires AAL3 and a writable control plane.",
+            "in": "query",
+            "name": "probe_path",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Discovers host executables without reading provider credential homes.",
+        "x-olivares-scope": "system",
+        "x-required-permission": "system:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/agenttools/installs": {
+      "post": {
+        "description": "Starts one audited host installation from an approved plan at AAL3.",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "plan_digest": {
+                    "type": "string"
+                  },
+                  "request_id": {
+                    "format": "uuid",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "plan_digest",
+                  "request_id"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "audit_error": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "driver": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "plan_digest": {
+                      "type": "string"
+                    },
+                    "progress": {
+                      "type": "string"
+                    },
+                    "receipt": {},
+                    "state": {
+                      "enum": [
+                        "running",
+                        "succeeded",
+                        "failed",
+                        "interrupted"
+                      ],
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "plan_digest",
+                    "driver",
+                    "version",
+                    "state",
+                    "progress",
+                    "created_at",
+                    "updated_at"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Installation job accepted or identical request replayed"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden / step-up required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "required evidence or store unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Starts one audited host installation from an approved plan at AAL3.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-olivares-scope": "system",
+        "x-required-assurance": 3,
+        "x-required-permission": "system:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/agenttools/inventory": {
+      "get": {
+        "description": "Lists managed host tools, release integrity, verification policies and the five most recently updated installation jobs.",
+        "parameters": [],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Lists managed host tools, release integrity, verification policies and the five most recently updated installation jobs.",
+        "x-olivares-scope": "system",
+        "x-required-permission": "system:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/agenttools/jobs/{id}": {
+      "get": {
+        "description": "Returns bounded installation progress, state, errors and the verified receipt to a system administrator.",
+        "parameters": [
+          {
+            "description": "Path parameter id.",
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "audit_error": {
+                      "type": "string"
+                    },
+                    "created_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "driver": {
+                      "type": "string"
+                    },
+                    "error": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "plan_digest": {
+                      "type": "string"
+                    },
+                    "progress": {
+                      "type": "string"
+                    },
+                    "receipt": {},
+                    "state": {
+                      "enum": [
+                        "running",
+                        "succeeded",
+                        "failed",
+                        "interrupted"
+                      ],
+                      "type": "string"
+                    },
+                    "updated_at": {
+                      "format": "date-time",
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "plan_digest",
+                    "driver",
+                    "version",
+                    "state",
+                    "progress",
+                    "created_at",
+                    "updated_at"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Persisted installation job"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden / step-up required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "required evidence or store unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Returns bounded installation progress, state, errors and the verified receipt to a system administrator.",
+        "x-olivares-scope": "system",
+        "x-required-permission": "system:admin",
+        "x-stability": "beta"
+      }
+    },
+    "/v1/m/agenttools/plans": {
+      "post": {
+        "description": "Resolves an official release and returns the digest-bound version, verification policy and destination for system administrator review before install.",
+        "parameters": [],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "additionalProperties": false,
+                "properties": {
+                  "driver": {
+                    "enum": [
+                      "claude",
+                      "codex",
+                      "grok",
+                      "opencode",
+                      "ollama"
+                    ],
+                    "type": "string"
+                  },
+                  "version": {
+                    "maxLength": 128,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "driver",
+                  "version"
+                ],
+                "type": "object"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "digest": {
+                      "type": "string"
+                    },
+                    "document": {
+                      "type": "object"
+                    },
+                    "driver": {
+                      "type": "string"
+                    },
+                    "executable": {
+                      "type": "string"
+                    },
+                    "verification": {
+                      "type": "string"
+                    },
+                    "version": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "driver",
+                    "version",
+                    "digest",
+                    "verification",
+                    "executable",
+                    "document"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Official release selected for administrator review"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "forbidden / step-up required"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "conflict"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            },
+            "description": "required evidence or store unavailable"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Resolves an official release and returns the digest-bound version, verification policy and destination for system administrator review before install.",
+        "x-olivares-request-body-disposition": "schema-published",
+        "x-olivares-scope": "system",
+        "x-required-permission": "system:admin",
         "x-stability": "beta"
       }
     },
@@ -92612,6 +93265,7 @@
     },
     "/v1/m/sessions/provider-accounts": {
       "get": {
+        "description": "Lists the tenant's named provider accounts, optionally narrowed by environment, driver and state; a profile nobody has named is never listed.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -92701,11 +93355,12 @@
             "bearerAuth": []
           }
         ],
-        "summary": "sessions module route (requires sessions:account:read)",
+        "summary": "Lists the tenant's named provider accounts, optionally narrowed by environment, driver and state; a profile nobody has named is never listed.",
         "x-required-permission": "sessions:account:read",
         "x-stability": "beta"
       },
       "post": {
+        "description": "Creates a provider account: the server builds its home on this node in two phases and registers the account that owns it, under the given name or a generated one.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -92858,7 +93513,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "sessions module route (requires sessions:account:write)",
+        "summary": "Creates a provider account: the server builds its home on this node in two phases and registers the account that owns it, under the given name or a generated one.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "sessions:account:write",
         "x-stability": "beta"
@@ -92866,6 +93521,7 @@
     },
     "/v1/m/sessions/provider-accounts/{ref}": {
       "get": {
+        "description": "Returns one provider account by its reference, without its paths; a profile nobody has named is not an account and answers not found.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -92964,11 +93620,12 @@
             "bearerAuth": []
           }
         ],
-        "summary": "sessions module route (requires sessions:account:read)",
+        "summary": "Returns one provider account by its reference, without its paths; a profile nobody has named is not an account and answers not found.",
         "x-required-permission": "sessions:account:read",
         "x-stability": "beta"
       },
       "patch": {
+        "description": "Edits the display name and/or color without changing the account's stable name, reference, home or launch configuration; an empty string clears that field.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -93097,7 +93754,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "sessions module route (requires sessions:account:write)",
+        "summary": "Edits the display name and/or color without changing the account's stable name, reference, home or launch configuration; an empty string clears that field.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "sessions:account:write",
         "x-stability": "beta"
@@ -93105,6 +93762,7 @@
     },
     "/v1/m/sessions/provider-accounts/{ref}/adopt": {
       "post": {
+        "description": "Names an existing provider profile as an account, under the given name or a generated one; the database decides whether the name is free, and the home is recorded as shared isolation.",
         "parameters": [
           {
             "description": "Target tenant id; required when the principal can act in more than one tenant.",
@@ -93227,7 +93885,7 @@
             "bearerAuth": []
           }
         ],
-        "summary": "sessions module route (requires sessions:account:write)",
+        "summary": "Names an existing provider profile as an account, under the given name or a generated one; the database decides whether the name is free, and the home is recorded as shared isolation.",
         "x-olivares-request-body-disposition": "schema-published",
         "x-required-permission": "sessions:account:write",
         "x-stability": "beta"
@@ -93402,6 +94060,52 @@
                       {
                         "description": "Optional: the registered provider whose credential this profile's managed launches use. Empty leaves the host's own credential variables in charge, which is every profile's behaviour before v26.10. The engine refuses a credential whose kind this driver cannot read.",
                         "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "session_work_grant": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "capabilities": {
+                            "items": {
+                              "enum": [
+                                "work.read",
+                                "work.create",
+                                "work.assign",
+                                "work.review",
+                                "decision.read",
+                                "decision.write"
+                              ],
+                              "type": "string"
+                            },
+                            "maxItems": 6,
+                            "minItems": 1,
+                            "type": "array",
+                            "uniqueItems": true
+                          },
+                          "role": {
+                            "enum": [
+                              "orchestrator"
+                            ],
+                            "type": "string"
+                          },
+                          "workspace_id": {
+                            "description": "One active tenant workspace; UUIDv7.",
+                            "format": "uuid",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "role",
+                          "workspace_id",
+                          "capabilities"
+                        ],
+                        "type": "object"
                       },
                       {
                         "type": "null"
@@ -93674,6 +94378,52 @@
                       {
                         "description": "Binds (or, with the empty string, unbinds) the registered provider this profile's managed launches use. Like auth_source it is an authorization and not identity, and it does not reach a live child: a running session keeps the provider its own launch resolved.",
                         "type": "string"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "session_work_grant": {
+                    "anyOf": [
+                      {
+                        "additionalProperties": false,
+                        "properties": {
+                          "capabilities": {
+                            "items": {
+                              "enum": [
+                                "work.read",
+                                "work.create",
+                                "work.assign",
+                                "work.review",
+                                "decision.read",
+                                "decision.write"
+                              ],
+                              "type": "string"
+                            },
+                            "maxItems": 6,
+                            "minItems": 1,
+                            "type": "array",
+                            "uniqueItems": true
+                          },
+                          "role": {
+                            "enum": [
+                              "orchestrator"
+                            ],
+                            "type": "string"
+                          },
+                          "workspace_id": {
+                            "description": "One active tenant workspace; UUIDv7.",
+                            "format": "uuid",
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "role",
+                          "workspace_id",
+                          "capabilities"
+                        ],
+                        "type": "object"
                       },
                       {
                         "type": "null"

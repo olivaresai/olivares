@@ -460,3 +460,5 @@ func (c *Codex) ObserveAuth(home string) AuthObservation {
 }
 
 var _ PackageProviderV2 = (*Codex)(nil)
+
+func (c *Codex) VerificationLevel() string { return VerificationSigstoreCosign }

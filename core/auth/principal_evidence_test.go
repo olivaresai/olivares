@@ -1768,7 +1768,7 @@ func TestResolvePrincipalScopeRefusesGlobalAndRecoversPurposeTokenBindings(t *te
 	}); err != nil {
 		t.Fatalf("mark session user superadmin: %v", err)
 	}
-	if _, err := f.a.ResolvePrincipalScope(f.deadline(time.Minute), sessionRef, f.tenant); !errors.Is(err, ErrPrincipalEvidenceUnavailable) {
+	if _, err := f.a.ResolvePrincipalScope(f.deadline(time.Minute), sessionRef, f.tenant); !errors.Is(err, ErrPrincipalEvidenceUnavailable) || !errors.Is(err, ErrPrincipalScopeAdmissionRequired) {
 		t.Fatalf("global session scope error = %v, want ErrPrincipalEvidenceUnavailable", err)
 	}
 
@@ -1794,7 +1794,7 @@ func TestResolvePrincipalScopeRefusesGlobalAndRecoversPurposeTokenBindings(t *te
 	if !ok || globalRef.credentialID != global.ID {
 		t.Fatalf("global token ref = %+v / %t", globalRef, ok)
 	}
-	if _, err := f.a.ResolvePrincipalScope(f.deadline(time.Minute), globalRef, f.tenant); !errors.Is(err, ErrPrincipalEvidenceUnavailable) {
+	if _, err := f.a.ResolvePrincipalScope(f.deadline(time.Minute), globalRef, f.tenant); !errors.Is(err, ErrPrincipalEvidenceUnavailable) || !errors.Is(err, ErrPrincipalScopeAdmissionRequired) {
 		t.Fatalf("global token scope error = %v, want ErrPrincipalEvidenceUnavailable", err)
 	}
 

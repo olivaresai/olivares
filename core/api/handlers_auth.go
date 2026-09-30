@@ -243,14 +243,16 @@ func orgSlugFrom(name string) string {
 	return slug
 }
 
-// handleLogin validates email/password and returns a session token.
+// handleLogin validates email/password and returns a session token — or, when
+// the account's second factor gates the login, the pending challenge the
+// caller completes at /v1/auth/totp/challenge (or enrols through first).
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var in loginInput
 	if err := decodeJSON(w, r, &in); err != nil {
 		s.badRequest(w, r, "invalid JSON body")
 		return
 	}
-	token, sess, err := s.authr.LoginFrom(r.Context(), in.Email, in.Password, clientIP(r), r.Header.Values("X-Forwarded-For"))
+	res, err := s.authr.LoginFrom(r.Context(), in.Email, in.Password, clientIP(r), r.Header.Values("X-Forwarded-For"))
 	switch {
 	case err == nil:
 		s.mLogin.Inc(loginOutcomeSuccess)
@@ -265,10 +267,19 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
+	if res.RequiresMFA() {
+		writeJSON(w, http.StatusOK, map[string]any{
+			"mfa_required":         true,
+			"mfa_token":            res.MFAToken,
+			"enrolment_required":   res.MFAEnrolmentRequired,
+			"pending_expires_in_s": int(auth.TOTPPendingTTL.Seconds()),
+		})
+		return
+	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"token":      token,
-		"session_id": sess.ID.String(),
-		"expires_at": sess.ExpiresAt.String(),
+		"token":      res.Token,
+		"session_id": res.Session.ID.String(),
+		"expires_at": res.Session.ExpiresAt.String(),
 	})
 }
 

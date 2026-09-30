@@ -347,7 +347,7 @@ export interface paths {
     put?: never
     /**
      * Exchange email/password for a session token
-     * @description Exchanges an email and password for a session token.
+     * @description Verifies an email and password. Returns a completed session or a pending second-factor challenge without a session token.
      */
     post: operations['login']
     delete?: never
@@ -390,6 +390,130 @@ export interface paths {
      * @description Rotates the calling session credential and extends its expiry, returning a fresh token; the old one stops working. It applies to session principals only, and an API token is reissued rather than refreshed.
      */
     post: operations['refreshToken']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/auth/totp': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    post?: never
+    /**
+     * Remove the calling account's factor with AAL3
+     * @description Removes the calling account's factor and recovery codes. Requires an authenticated AAL3 session.
+     */
+    delete: operations['removeTOTP']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/auth/totp/activate': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Prove possession and reveal recovery codes once
+     * @description Activates the pending factor after verifying its code and reveals ten recovery codes once. A policy-forced enrolment also returns the completed login session.
+     */
+    post: operations['activateTOTP']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/auth/totp/challenge': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Complete a pending login with a code or recovery code
+     * @description Completes a primary-verified pending login with an authenticator code or a single-use recovery code. Wrong codes are throttled; successful proof and session issuance are transactional.
+     */
+    post: operations['completeTOTPLogin']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/auth/totp/enrol': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Start a TOTP enrolment with a session or a pending login
+     * @description Starts enrolment from an authenticated session or a primary-verified pending login. Returns the secret and QR once; replacing a factor requires AAL3.
+     */
+    post: operations['enrolTOTP']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/auth/totp/policy': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the administrator factor policy
+     * @description Returns whether administrators must enrol a factor. Requires system administration authority.
+     */
+    get: operations['getTOTPPolicy']
+    /**
+     * Set the administrator factor policy with AAL3
+     * @description Sets whether administrators must enrol a factor before completing password login. Requires system administration authority and AAL3.
+     */
+    put: operations['setTOTPPolicy']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/auth/totp/status': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read the calling account's factor status
+     * @description Returns the authenticated account's factor status and remaining recovery-code count without seed material.
+     */
+    get: operations['getTOTPStatus']
+    put?: never
+    post?: never
     delete?: never
     options?: never
     head?: never
@@ -592,7 +716,7 @@ export interface paths {
     patch?: never
     trace?: never
   }
-  '/v1/console/secrets': {
+  '/v1/console/mcp-gateway': {
     parameters: {
       query?: never
       header?: never
@@ -600,19 +724,135 @@ export interface paths {
       cookie?: never
     }
     /**
+     * Read the effective MCP gateway configuration and governance.
+     * @description Returns the authenticated tenant's effective MCP configuration, source ownership and actual governance without credential values. Requires tenant admin; workspace-confined credentials are refused.
+     */
+    get: operations['getMCPGateway']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/console/mcp-gateway/servers': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Add a disabled upstream using tenant secret references (AAL3).
+     * @description Adds a disabled Streamable HTTP server using own-tenant sealed references and version compare-and-swap. Requires tenant admin and AAL3; file-owned mode is read-only.
+     */
+    post: operations['addMCPGatewayServer']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/console/mcp-gateway/servers/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Server identifier in this tenant. */
+        id: string
+      }
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Update or explicitly enable a tested upstream (AAL3).
+     * @description Updates an own-tenant server using version compare-and-swap. Enabling requires a successful current probe, resource and issuer trust and explicit tool scopes. Requires tenant admin and AAL3.
+     */
+    put: operations['updateMCPGatewayServer']
+    post?: never
+    /**
+     * Remove an upstream from the tenant gateway (AAL3).
+     * @description Removes a server and blocks subsequent dispatch without deleting its sealed credential. Requires tenant admin, AAL3 and the current configuration version.
+     */
+    delete: operations['removeMCPGatewayServer']
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/console/mcp-gateway/servers/{id}/test': {
+    parameters: {
+      query?: never
+      header?: never
+      path: {
+        /** @description Server identifier in this tenant. */
+        id: string
+      }
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Initialize and list tools without calling them; record a bounded verdict (AAL3).
+     * @description Initializes the exact admitted HTTPS endpoint and inventories tools without calling them. Records a bounded verdict and audit using version compare-and-swap. Requires tenant admin and AAL3.
+     */
+    post: operations['testMCPGatewayServer']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/console/mcp-gateway/session-tools': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    /**
+     * Set the default-off session MCP switch for this tenant (AAL3).
+     * @description Changes the default-off session MCP switch for this tenant without granting agent authority. Requires tenant admin, AAL3 and the current configuration version.
+     */
+    put: operations['setMCPGatewaySessionTools']
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/console/secrets': {
+    parameters: {
+      query?: {
+        /** @description Omit for superadmin global secrets; tenant selects own tenant mcp/ handles and requires tenant admin. Writes require AAL3 in either scope. */
+        scope?: 'tenant'
+      }
+      header?: {
+        /** @description Target tenant in explicit tenant mode. */
+        'X-Olivares-Tenant'?: string
+      }
+      path?: never
+      cookie?: never
+    }
+    /**
      * List sealed secrets (names and hints, never values)
-     * @description Lists the sealed secrets by name with a non-secret hint for each. A stored value is never returned.
+     * @description Lists secret names and non-secret hints, never values. Omitted scope requires global superadmin; explicit scope=tenant requires unconfined tenant admin and returns only that tenant's mcp/ handles.
      */
     get: operations['listSecrets']
     /**
      * Create or update a sealed secret
-     * @description Creates or replaces one sealed secret; the name travels in the body, so it may contain a slash.
+     * @description Creates or rotates a sealed secret using its name in the body. Omitted scope requires global superadmin; explicit scope=tenant requires unconfined tenant admin and restricts names to mcp/. Writes require AAL3.
      */
     put: operations['putSecret']
     post?: never
     /**
      * Delete a sealed secret
-     * @description Deletes one sealed secret by the name carried in the body.
+     * @description Deletes one sealed secret by the name carried in the body. Omitted scope requires global superadmin; explicit scope=tenant requires unconfined tenant admin and restricts names to mcp/. Writes require AAL3.
      */
     delete: operations['deleteSecret']
     options?: never
@@ -1102,6 +1342,46 @@ export interface paths {
      * @description Enables one previously disabled superadmin account.
      */
     post: operations['enableSuperadmin']
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/users/{id}/totp': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Read a member's factor status in the selected tenant
+     * @description Returns a member's factor status in the selected tenant. Foreign accounts return not found. Requires membership read authority.
+     */
+    get: operations['getUserTOTPStatus']
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/users/{id}/totp/reset': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Reset a tenant-governed member's factor with AAL3
+     * @description Resets a selected tenant member's factor and recovery codes. Tenant administrators cannot reset shared or holder-controlled accounts. Requires membership write authority and AAL3; a deployment superadmin retains global recovery authority.
+     */
+    post: operations['resetUserTOTP']
     delete?: never
     options?: never
     head?: never
@@ -2302,6 +2582,533 @@ export interface paths {
     }
     put?: never
     post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/agenttools/detect': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Discovers host executables without reading provider credential homes.
+     * @description Discovers host executables without reading provider credential homes.
+     */
+    get: {
+      parameters: {
+        query: {
+          driver: string
+          /** @description Exact detected path selected for a bounded --version execution; requires AAL3 and a writable control plane. */
+          probe_path?: string
+        }
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/agenttools/installs': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Starts one audited host installation from an approved plan at AAL3.
+     * @description Starts one audited host installation from an approved plan at AAL3.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            plan_digest: string
+            /** Format: uuid */
+            request_id: string
+          }
+        }
+      }
+      responses: {
+        /** @description Installation job accepted or identical request replayed */
+        202: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              audit_error?: string
+              /** Format: date-time */
+              created_at: string
+              driver: string
+              error?: string
+              /** Format: uuid */
+              id: string
+              plan_digest: string
+              progress: string
+              receipt?: unknown
+              /** @enum {string} */
+              state: 'running' | 'succeeded' | 'failed' | 'interrupted'
+              /** Format: date-time */
+              updated_at: string
+              version: string
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden / step-up required */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description required evidence or store unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/agenttools/inventory': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Lists managed host tools, release integrity, verification policies and the five most recently updated installation jobs.
+     * @description Lists managed host tools, release integrity, verification policies and the five most recently updated installation jobs.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description OK */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict / setup required */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description rate limited */
+        429: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/agenttools/jobs/{id}': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    /**
+     * Returns bounded installation progress, state, errors and the verified receipt to a system administrator.
+     * @description Returns bounded installation progress, state, errors and the verified receipt to a system administrator.
+     */
+    get: {
+      parameters: {
+        query?: never
+        header?: never
+        path: {
+          /** @description Path parameter id. */
+          id: string
+        }
+        cookie?: never
+      }
+      requestBody?: never
+      responses: {
+        /** @description Persisted installation job */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              audit_error?: string
+              /** Format: date-time */
+              created_at: string
+              driver: string
+              error?: string
+              /** Format: uuid */
+              id: string
+              plan_digest: string
+              progress: string
+              receipt?: unknown
+              /** @enum {string} */
+              state: 'running' | 'succeeded' | 'failed' | 'interrupted'
+              /** Format: date-time */
+              updated_at: string
+              version: string
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden / step-up required */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description required evidence or store unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
+    put?: never
+    post?: never
+    delete?: never
+    options?: never
+    head?: never
+    patch?: never
+    trace?: never
+  }
+  '/v1/m/agenttools/plans': {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    get?: never
+    put?: never
+    /**
+     * Resolves an official release and returns the digest-bound version, verification policy and destination for system administrator review before install.
+     * @description Resolves an official release and returns the digest-bound version, verification policy and destination for system administrator review before install.
+     */
+    post: {
+      parameters: {
+        query?: never
+        header?: never
+        path?: never
+        cookie?: never
+      }
+      requestBody: {
+        content: {
+          'application/json': {
+            /** @enum {string} */
+            driver: 'claude' | 'codex' | 'grok' | 'opencode' | 'ollama'
+            version: string
+          }
+        }
+      }
+      responses: {
+        /** @description Official release selected for administrator review */
+        200: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': {
+              digest: string
+              document: Record<string, never>
+              driver: string
+              executable: string
+              verification: string
+              version: string
+            }
+          }
+        }
+        /** @description bad request */
+        400: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description unauthenticated */
+        401: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description forbidden / step-up required */
+        403: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description not found */
+        404: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description conflict */
+        409: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+        /** @description required evidence or store unavailable */
+        503: {
+          headers: {
+            [name: string]: unknown
+          }
+          content: {
+            'application/json': Record<string, never>
+          }
+        }
+      }
+    }
     delete?: never
     options?: never
     head?: never
@@ -69504,7 +70311,10 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    /** sessions module route (requires sessions:account:read) */
+    /**
+     * Lists the tenant's named provider accounts, optionally narrowed by environment, driver and state; a profile nobody has named is never listed.
+     * @description Lists the tenant's named provider accounts, optionally narrowed by environment, driver and state; a profile nobody has named is never listed.
+     */
     get: {
       parameters: {
         query?: never
@@ -69583,7 +70393,10 @@ export interface paths {
       }
     }
     put?: never
-    /** sessions module route (requires sessions:account:write) */
+    /**
+     * Creates a provider account: the server builds its home on this node in two phases and registers the account that owns it, under the given name or a generated one.
+     * @description Creates a provider account: the server builds its home on this node in two phases and registers the account that owns it, under the given name or a generated one.
+     */
     post: {
       parameters: {
         query?: never
@@ -69701,7 +70514,10 @@ export interface paths {
       path?: never
       cookie?: never
     }
-    /** sessions module route (requires sessions:account:read) */
+    /**
+     * Returns one provider account by its reference, without its paths; a profile nobody has named is not an account and answers not found.
+     * @description Returns one provider account by its reference, without its paths; a profile nobody has named is not an account and answers not found.
+     */
     get: {
       parameters: {
         query?: never
@@ -69787,7 +70603,10 @@ export interface paths {
     delete?: never
     options?: never
     head?: never
-    /** sessions module route (requires sessions:account:write) */
+    /**
+     * Edits the display name and/or color without changing the account's stable name, reference, home or launch configuration; an empty string clears that field.
+     * @description Edits the display name and/or color without changing the account's stable name, reference, home or launch configuration; an empty string clears that field.
+     */
     patch: {
       parameters: {
         query?: never
@@ -69891,7 +70710,10 @@ export interface paths {
     }
     get?: never
     put?: never
-    /** sessions module route (requires sessions:account:write) */
+    /**
+     * Names an existing provider profile as an account, under the given name or a generated one; the database decides whether the name is free, and the home is recorded as shared isolation.
+     * @description Names an existing provider profile as an account, under the given name or a generated one; the database decides whether the name is free, and the home is recorded as shared isolation.
+     */
     post: {
       parameters: {
         query?: never
@@ -70099,6 +70921,23 @@ export interface paths {
             driver: string
             environment_ref?: string | null
             provider_record_ref?: string | null
+            session_work_grant?: {
+              capabilities: (
+                | 'work.read'
+                | 'work.create'
+                | 'work.assign'
+                | 'work.review'
+                | 'decision.read'
+                | 'decision.write'
+              )[]
+              /** @enum {string} */
+              role: 'orchestrator'
+              /**
+               * Format: uuid
+               * @description One active tenant workspace; UUIDv7.
+               */
+              workspace_id: string
+            } | null
             /** @description Absolute path used as HOME for the launched process; validated like config_home. */
             user_home: string
           }
@@ -70296,6 +71135,23 @@ export interface paths {
               ('' | 'provider_account_home' | 'managed_injection') | null
             display_name?: string | null
             provider_record_ref?: string | null
+            session_work_grant?: {
+              capabilities: (
+                | 'work.read'
+                | 'work.create'
+                | 'work.assign'
+                | 'work.review'
+                | 'decision.read'
+                | 'decision.write'
+              )[]
+              /** @enum {string} */
+              role: 'orchestrator'
+              /**
+               * Format: uuid
+               * @description One active tenant workspace; UUIDv7.
+               */
+              workspace_id: string
+            } | null
             state?: ('active' | 'disabled') | null
           }
         }
@@ -81923,6 +82779,86 @@ export interface components {
       /** @description Opaque session token (olvs_…) */
       token: string
     }
+    MCPGatewayServer: {
+      allowed_tools: components['schemas']['MCPGatewayToolPolicy'][]
+      /** @description Own tenant store:mcp/<name> reference; empty means no upstream authentication. Never a value or global fallback. */
+      credential_ref?: string
+      egress_cidrs: string[]
+      enabled: boolean
+      id: string
+      name: string
+      probe: {
+        state: string
+        tested_at?: string
+        tools: {
+          fingerprint: string
+          name: string
+        }[]
+      }
+      /** @enum {string} */
+      transport: 'streamable_http'
+      trust: components['schemas']['MCPGatewayTrust']
+      /**
+       * Format: uri
+       * @description Exact HTTPS endpoint without credentials, query or fragment.
+       */
+      url: string
+    }
+    MCPGatewayServerInput: {
+      allowed_tools?: components['schemas']['MCPGatewayToolPolicy'][]
+      /** @description Own tenant store:mcp/<name> reference; empty means no upstream authentication. Never a value or global fallback. */
+      credential_ref?: string
+      egress_cidrs?: string[]
+      enabled: boolean
+      name: string
+      /** @enum {string} */
+      transport: 'streamable_http'
+      trust: components['schemas']['MCPGatewayTrust']
+      /**
+       * Format: uri
+       * @description Exact HTTPS endpoint without credentials, query or fragment.
+       */
+      url: string
+    }
+    MCPGatewayServerWrite: {
+      server: components['schemas']['MCPGatewayServerInput']
+      /** @description Current tenant configuration version; stale writes return 409. */
+      version: number
+    }
+    MCPGatewaySessionWrite: {
+      enabled: boolean
+      /** @description Current tenant configuration version; stale writes return 409. */
+      version: number
+    }
+    MCPGatewaySnapshot: {
+      governance: {
+        [key: string]: string
+      }
+      read_only: boolean
+      servers: components['schemas']['MCPGatewayServer'][]
+      session_endpoint: string
+      session_tools: boolean
+      /** @enum {string} */
+      source: 'file' | 'store'
+      /** @description Current tenant configuration version; stale writes return 409. */
+      version: number
+    }
+    MCPGatewayToolPolicy: {
+      destructive: boolean
+      name: string
+      required_scope: string
+    }
+    MCPGatewayTrust: {
+      issuer: string
+      /** @description Public asymmetric JWKS only; private keys are rejected. */
+      jwks?: Record<string, never>
+      jwks_url?: string
+      resource: string
+    }
+    MCPGatewayVersion: {
+      /** @description Current tenant configuration version; stale writes return 409. */
+      version: number
+    }
     Org: {
       /** Format: date-time */
       created_at: string
@@ -82176,6 +83112,62 @@ export interface components {
       name: string
       poll_seconds?: number
       tenant: string
+    }
+    TOTPActivateInput: {
+      code: string
+      mfa_token?: string
+    }
+    TOTPActivationResponse: {
+      /** Format: date-time */
+      expires_at?: string
+      /** @description Single-use recovery codes, revealed only in this response. */
+      recovery_codes: string[]
+      /** Format: uuid */
+      session_id?: string
+      token?: string
+    }
+    TOTPChallengeInput:
+      | {
+          code?: string
+          mfa_token: string
+          recovery_code?: string
+        }
+      | unknown
+      | unknown
+    TOTPEnrolInput: {
+      mfa_token?: string
+    }
+    TOTPEnrolment: {
+      algorithm: string
+      digits: number
+      period: number
+      qr_png_base64: string
+      secret: string
+      uri: string
+    }
+    TOTPLoginChallenge: {
+      enrolment_required: boolean
+      /** @constant */
+      mfa_required: true
+      mfa_token: string
+      pending_expires_in_s: number
+    }
+    TOTPOK: {
+      /** @constant */
+      ok: true
+    }
+    TOTPPolicy: {
+      require_for_admins: boolean
+    }
+    TOTPStatus: {
+      /** Format: date-time */
+      activated_at?: string
+      algorithm?: string
+      digits?: number
+      enrolled: boolean
+      period?: number
+      recovery_codes_remaining: number
+      seed_hint?: string
     }
     Token: {
       bound_tenant_id?: string
@@ -83856,13 +84848,15 @@ export interface operations {
       }
     }
     responses: {
-      /** @description OK */
+      /** @description Completed session or pending second-factor challenge */
       200: {
         headers: {
           [name: string]: unknown
         }
         content: {
-          'application/json': components['schemas']['LoginResponse']
+          'application/json':
+            | components['schemas']['LoginResponse']
+            | components['schemas']['TOTPLoginChallenge']
         }
       }
       /** @description Bad request */
@@ -84058,6 +85052,603 @@ export interface operations {
       }
       /** @description Rate limited */
       429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  removeTOTP: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TOTPOK']
+        }
+      }
+      /** @description Request refused */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  activateTOTP: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TOTPActivateInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TOTPActivationResponse']
+        }
+      }
+      /** @description Request refused */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  completeTOTPLogin: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TOTPChallengeInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['LoginResponse']
+        }
+      }
+      /** @description Request refused */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  enrolTOTP: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TOTPEnrolInput']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TOTPEnrolment']
+        }
+      }
+      /** @description Request refused */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  getTOTPPolicy: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TOTPPolicy']
+        }
+      }
+      /** @description Request refused */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  setTOTPPolicy: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['TOTPPolicy']
+      }
+    }
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TOTPPolicy']
+        }
+      }
+      /** @description Request refused */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  getTOTPStatus: {
+    parameters: {
+      query?: never
+      header?: never
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TOTPStatus']
+        }
+      }
+      /** @description Request refused */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      503: {
         headers: {
           [name: string]: unknown
         }
@@ -85055,10 +86646,507 @@ export interface operations {
       }
     }
   }
-  listSecrets: {
+  getMCPGateway: {
     parameters: {
       query?: never
-      header?: never
+      header?: {
+        /** @description Authenticated target tenant; workspace-confined credentials are refused. */
+        'X-Olivares-Tenant'?: string
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description Current reference-only configuration */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['MCPGatewaySnapshot']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  addMCPGatewayServer: {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description Authenticated target tenant; workspace-confined credentials are refused. */
+        'X-Olivares-Tenant'?: string
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MCPGatewayServerWrite']
+      }
+    }
+    responses: {
+      /** @description Disabled server added */
+      201: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['MCPGatewaySnapshot']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  updateMCPGatewayServer: {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description Authenticated target tenant; workspace-confined credentials are refused. */
+        'X-Olivares-Tenant'?: string
+      }
+      path: {
+        /** @description Server identifier in this tenant. */
+        id: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MCPGatewayServerWrite']
+      }
+    }
+    responses: {
+      /** @description Current reference-only configuration */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['MCPGatewaySnapshot']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  removeMCPGatewayServer: {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description Authenticated target tenant; workspace-confined credentials are refused. */
+        'X-Olivares-Tenant'?: string
+      }
+      path: {
+        /** @description Server identifier in this tenant. */
+        id: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MCPGatewayVersion']
+      }
+    }
+    responses: {
+      /** @description Current reference-only configuration */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['MCPGatewaySnapshot']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  testMCPGatewayServer: {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description Authenticated target tenant; workspace-confined credentials are refused. */
+        'X-Olivares-Tenant'?: string
+      }
+      path: {
+        /** @description Server identifier in this tenant. */
+        id: string
+      }
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MCPGatewayVersion']
+      }
+    }
+    responses: {
+      /** @description Current reference-only configuration */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['MCPGatewaySnapshot']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  setMCPGatewaySessionTools: {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description Authenticated target tenant; workspace-confined credentials are refused. */
+        'X-Olivares-Tenant'?: string
+      }
+      path?: never
+      cookie?: never
+    }
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['MCPGatewaySessionWrite']
+      }
+    }
+    responses: {
+      /** @description Current reference-only configuration */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['MCPGatewaySnapshot']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Admission, source ownership, version or availability refusal */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  listSecrets: {
+    parameters: {
+      query?: {
+        /** @description Omit for superadmin global secrets; tenant selects own tenant mcp/ handles and requires tenant admin. Writes require AAL3 in either scope. */
+        scope?: 'tenant'
+      }
+      header?: {
+        /** @description Target tenant in explicit tenant mode. */
+        'X-Olivares-Tenant'?: string
+      }
       path?: never
       cookie?: never
     }
@@ -85131,8 +87219,14 @@ export interface operations {
   }
   putSecret: {
     parameters: {
-      query?: never
-      header?: never
+      query?: {
+        /** @description Omit for superadmin global secrets; tenant selects own tenant mcp/ handles and requires tenant admin. Writes require AAL3 in either scope. */
+        scope?: 'tenant'
+      }
+      header?: {
+        /** @description Target tenant in explicit tenant mode. */
+        'X-Olivares-Tenant'?: string
+      }
       path?: never
       cookie?: never
     }
@@ -85212,8 +87306,14 @@ export interface operations {
   }
   deleteSecret: {
     parameters: {
-      query?: never
-      header?: never
+      query?: {
+        /** @description Omit for superadmin global secrets; tenant selects own tenant mcp/ handles and requires tenant admin. Writes require AAL3 in either scope. */
+        scope?: 'tenant'
+      }
+      header?: {
+        /** @description Target tenant in explicit tenant mode. */
+        'X-Olivares-Tenant'?: string
+      }
       path?: never
       cookie?: never
     }
@@ -87616,6 +89716,182 @@ export interface operations {
       }
       /** @description Rate limited */
       429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  getUserTOTPStatus: {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description Target tenant id; required when the principal can act in more than one tenant. */
+        'X-Olivares-Tenant'?: string
+      }
+      path: {
+        id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TOTPStatus']
+        }
+      }
+      /** @description Request refused */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      503: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+    }
+  }
+  resetUserTOTP: {
+    parameters: {
+      query?: never
+      header?: {
+        /** @description Target tenant id; required when the principal can act in more than one tenant. */
+        'X-Olivares-Tenant'?: string
+      }
+      path: {
+        id: string
+      }
+      cookie?: never
+    }
+    requestBody?: never
+    responses: {
+      /** @description OK */
+      200: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['TOTPOK']
+        }
+      }
+      /** @description Request refused */
+      400: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      401: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      403: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      404: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      409: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      429: {
+        headers: {
+          [name: string]: unknown
+        }
+        content: {
+          'application/json': components['schemas']['Error']
+        }
+      }
+      /** @description Request refused */
+      503: {
         headers: {
           [name: string]: unknown
         }

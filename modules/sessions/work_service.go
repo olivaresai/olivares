@@ -1850,10 +1850,7 @@ func (m *Module) applyWithData(
 				Actor: principal.Actor, ActorKind: principal.ActorKind,
 				Action:     "sessions.work." + cmd.Command,
 				TargetKind: workCommandKind, TargetID: commandID, PayloadHash: planHash,
-				Meta: map[string]any{
-					"workspace_id": cmd.WorkspaceID.String(), "work_item_id": cmd.WorkItemID.String(),
-					"command_scope": scope,
-				},
+				Meta: workAuditMetadata(principal, cmd, scope),
 			})
 			if err != nil {
 				return err
@@ -2103,4 +2100,17 @@ func nullableID(id model.ID) any {
 		return nil
 	}
 	return id.String()
+}
+
+// Runtime work attribution retains the independently authenticated agent and
+// the exact session generation beside it. Ordinary operator metadata is stable.
+func workAuditMetadata(principal WorkPrincipal, cmd WorkCommand, scope string) map[string]any {
+	meta := map[string]any{"workspace_id": cmd.WorkspaceID.String(), "work_item_id": cmd.WorkItemID.String(), "command_scope": scope}
+	if principal.SessionID != "" {
+		meta["sid"], meta["run_ref"] = principal.SessionID, principal.SessionRunRef
+		if principal.ActorKind == model.ActorAgent {
+			meta["agent_ref"] = principal.ActorRef
+		}
+	}
+	return meta
 }

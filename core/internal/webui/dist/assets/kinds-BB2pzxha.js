@@ -1,0 +1,1 @@
+var e=[`anthropic`,`openai`,`xai`,`openai_compatible`,`ollama`],t={ollama:[`codex`],anthropic:[`claude`,`opencode`],openai:[`codex`,`opencode`],xai:[`grok`,`opencode`],openai_compatible:[`claude`,`codex`,`grok`,`opencode`]};export{e as n,t};

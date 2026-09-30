@@ -16,6 +16,7 @@ import {
   MetricStat,
   StatGrid,
 } from '@/features/_intel'
+import { consoleApi, consoleKeys } from '@/features/console/api'
 import { useAuth } from '@/lib/auth/context'
 import { formatInt } from '@/lib/format'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -24,26 +25,12 @@ import { workspaceDashboardApi, workspaceDashboardKeys } from './api'
 import './i18n'
 
 export function WorkspaceDashboardView() {
-  const { t } = useTranslation(['workspaceDashboard', 'common'])
+  const { t } = useTranslation(['workspaceDashboard', 'nav', 'common'])
   const { activeTenant } = useAuth()
   const { activeWorkspace, activeWorkspaceName } = useWorkspaceStore()
 
   if (!activeWorkspace) {
-    return (
-      <IntelPage icon={Layers} title={t('workspaceDashboard:title')}>
-        <EmptyState
-          title={t('workspaceDashboard:selectTitle')}
-          description={t('workspaceDashboard:selectPrompt')}
-          action={
-            <Button asChild size="sm">
-              <Link to={'/inventory' as never}>
-                {t('workspaceDashboard:viewInventory')}
-              </Link>
-            </Button>
-          }
-        />
-      </IntelPage>
-    )
+    return <WorkspaceSelection tenant={activeTenant} t={t} />
   }
 
   return (
@@ -53,6 +40,53 @@ export function WorkspaceDashboardView() {
       tenant={activeTenant}
       t={t}
     />
+  )
+}
+
+function WorkspaceSelection({
+  tenant,
+  t,
+}: {
+  tenant: string | null
+  t: ReturnType<typeof useTranslation>['t']
+}) {
+  const { setActiveWorkspace } = useWorkspaceStore()
+  const { data } = useQuery({
+    queryKey: consoleKeys.workspaces(tenant, { limit: 1000 }),
+    queryFn: () => consoleApi.listWorkspaces({ limit: 1000 }),
+    enabled: !!tenant,
+    staleTime: 60_000,
+  })
+  const only = data?.items.length === 1 ? data.items[0] : undefined
+  const selectable = only?.status === 'active' ? only : undefined
+  const inventoryAction = (
+    <Button asChild size="sm" variant={selectable ? 'secondary' : 'primary'}>
+      <Link to={'/inventory' as never}>
+        {t('workspaceDashboard:viewInventory')}
+      </Link>
+    </Button>
+  )
+
+  return (
+    <IntelPage icon={Layers} title={t('workspaceDashboard:title')}>
+      <EmptyState
+        title={t('workspaceDashboard:selectTitle')}
+        description={t('workspaceDashboard:selectPrompt')}
+        action={
+          selectable ? (
+            <Button
+              size="sm"
+              onClick={() => setActiveWorkspace(selectable.id, selectable.name)}
+            >
+              {t('nav:workspace.open', { workspace: selectable.name })}
+            </Button>
+          ) : (
+            inventoryAction
+          )
+        }
+        secondaryAction={selectable ? inventoryAction : undefined}
+      />
+    </IntelPage>
   )
 }
 

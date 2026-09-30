@@ -14,7 +14,7 @@ más estrechos que su uso en la industria, y la estrechez es justo el punto.
 El grafo del módulo III de **orígenes** (agentes, identidades, sesiones) y los
 **recursos** que tocan, cada arista clasificada por [modo](#modo) y etiquetada
 con su [signal source](#signal-source), [atribución](#atribución-confianza)
-y [nivel de cobertura](#nivel-de-cobertura). Una capacidad clave diferenciada — uno de los 30
+y [nivel de cobertura](#nivel-de-cobertura). Una capacidad clave diferenciada — uno de los 31
 módulos, no el producto entero. Ver [¿Qué es Olivares AI?](/es/start/what-is-olivares-ai/).
 
 ### Estados de actuación: `v1` / `on-demand` / `seam`

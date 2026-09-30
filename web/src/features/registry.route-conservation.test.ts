@@ -31,6 +31,7 @@ import { routeTree } from '@/app/routes'
 import census from './route-census.json'
 import { auditRouteCensus } from './route-census'
 import { ROUTE_ALIASES } from './registry'
+import { ANONYMOUS_EXTENSION_ROUTES, EXTENSION_ROUTES } from './extensions'
 
 /**
  * Every path the router actually serves. `routesById` keys carry the pathless shell's
@@ -41,13 +42,19 @@ function mountedPaths(): string[] {
   const router = createRouter({ routeTree })
   return Object.keys(router.routesById)
     .filter((id) => id !== '__root__' && id !== '/app')
-    .map((id) => (id === '/app/' ? '/' : id.startsWith('/app/') ? id.slice(4) : id))
+    .map((id) =>
+      id === '/app/' ? '/' : id.startsWith('/app/') ? id.slice(4) : id,
+    )
     .sort()
 }
 
 const live = mountedPaths()
 const report = auditRouteCensus({
-  census: census.paths,
+  census: [
+    ...census.paths,
+    ...EXTENSION_ROUTES.map(({ path }) => path),
+    ...ANONYMOUS_EXTENSION_ROUTES.map(({ path }) => path),
+  ],
   live,
   aliases: ROUTE_ALIASES,
 })
@@ -122,6 +129,9 @@ describe('route conservation', () => {
 
   it('keeps the census free of duplicates', () => {
     const dupes = census.paths.filter((p, i) => census.paths.indexOf(p) !== i)
-    expect(dupes, `route-census.json lists these twice: ${dupes.join(', ')}`).toEqual([])
+    expect(
+      dupes,
+      `route-census.json lists these twice: ${dupes.join(', ')}`,
+    ).toEqual([])
   })
 })

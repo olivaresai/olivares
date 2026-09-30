@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { sessionNameLadder } from '@/features/home/work-line'
 //
 // THE SESSION RAIL, AS DATA: three groups in a fixed order, grouped by what each row needs
 // from the operator. Pure, so the grouping is tested without a network or a router.
@@ -78,7 +79,7 @@ function sessionRow(live: LiveDTO, now: number): RailRow {
     key,
     kind: 'session',
     state,
-    title: live.goal?.trim() || live.summary?.trim() || null,
+    title: sessionNameLadder(null, live, '').text || null,
     reference: live.session_ref,
     meta: meta || null,
     minutes: minutesSince(

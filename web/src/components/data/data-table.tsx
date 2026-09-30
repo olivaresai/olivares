@@ -1034,6 +1034,18 @@ function TableError({
   if (error instanceof ApiError && error.isStepUpRequired) {
     return <StepUpRequiredState action="generic" onElevated={onRetry} />
   }
+  if (
+    error instanceof ApiError &&
+    error.isForbidden &&
+    error.code === 'tenant_admission_required'
+  ) {
+    return (
+      <ForbiddenState
+        title={t('tenantAdmission.title')}
+        description={t('tenantAdmission.description')}
+      />
+    )
+  }
   // A 403 is NOT a failure — it's a permission boundary. Render it calmly, never red.
   if (error instanceof ApiError && error.isForbidden) {
     return (

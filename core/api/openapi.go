@@ -1268,6 +1268,8 @@ func buildOpenAPI() map[string]any {
 		), "required", arr("protocol")),
 	)
 
+	addMCPGatewayContracts(paths, schemas)
+	addTOTPContract(paths, schemas)
 	stampCorePermissions(paths)
 	applyOperationDescriptions(paths)
 

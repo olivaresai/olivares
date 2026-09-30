@@ -99,7 +99,7 @@ func TestDRClosedLocalRecordReachesOpenAndBootAdmission(t *testing.T) {
 		// the JSON document. It used to say so by opening the destination directly and
 		// requiring success — which stopped being available when a direct Open of a
 		// COMPLETED local control began demanding the custody that control authorized
-		// (independent review F2). Success is therefore asserted where it is still
+		// (independent review finding 2). Success is therefore asserted where it is still
 		// expressible: the direct Open must fail for CUSTODY rather than for a parse
 		// reason, and the same whitespace-suffixed record must then publish through the
 		// admission that supplies the authorized observation. Together those prove the

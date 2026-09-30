@@ -54,7 +54,8 @@
     "forbiddenHint": "你的角色可以查看图谱，但无法查看已许可 vs 已观测的差异（accessmap:drift:read）。",
     "partial": "部分结果：引擎是在被截断的偏移窗口上完成本次比对的，因此这些计数并非整个环境；此处缺失的边可能只是超出了上限。",
     "emptyWindowTitle": "在已扫描的窗口内未发现问题",
-    "emptyWindowHint": "扫描在其分页上限处停止，因此这并不是对整个环境的判断。"
+    "emptyWindowHint": "扫描在其分页上限处停止，因此这并不是对整个环境的判断。",
+    "scopeHint": "漂移列表涵盖整个组织，地图筛选条件不适用于该列表"
   },
   "detail": {
     "edgeTitle": "访问连接",

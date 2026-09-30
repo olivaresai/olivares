@@ -473,7 +473,7 @@ export function buildNavSearchIndex(t: TFunction): NavSearchEntry[] {
  * The index narrowed to what THIS principal may open: a view by its own permission, an area
  * by the union of its leaves, the Settings utility always. The sidebar filter and the ⌘K
  * palette both project through here and then rank through `rankNavMatches`, so the two
- * surfaces can never disagree on membership or on order (independent review F1).
+ * surfaces can never disagree on membership or on order (independent review finding 1).
  */
 export function authorizedEntries(
   entries: readonly NavSearchEntry[],

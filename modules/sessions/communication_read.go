@@ -2032,7 +2032,7 @@ func evaluateDirectNoticeLockedRead(
 		Entity: preflight.Core.Entity, ChannelID: channel.ID,
 		MessageID: message.ID, DeliveryID: delivery.ID,
 	}
-	currentAudience, err := buildDirectNoticeCurrentAudience(
+	currentAudience, err := buildDirectNoticeReadCurrentAudience(
 		preflight, message, delivery, audiences, contributions, dbNow,
 	)
 	if err != nil {
@@ -2078,8 +2078,7 @@ func evaluateDirectNoticeLockedRead(
 			"direct notice read gate has no verdict", nil,
 		)
 	}
-	if !communicationClaimsEqualSnapshot(decision.RequiredClaims,
-		CommunicationClaimAuthoritySnapshot{facts: claimFacts}) ||
+	if !directNoticeReadClaimsMatch(preflight, contributions[0], decision.RequiredClaims, claimFacts) ||
 		len(decision.SurvivingContributionIDs) != 1 ||
 		decision.SurvivingContributionIDs[0] != contributions[0].ID ||
 		!equalDirectNoticeAuthorityFacts(preflight.Facts, decision.Facts) {
@@ -2347,6 +2346,14 @@ func buildDirectNoticeCurrentAudience(
 		causalWitness.ObservedSessionSID = contribution.ObservedSessionSID
 		causalWitness.ObservedClaimFence = contribution.ObservedClaimFence
 		causalWitness.Evidence = clean("session_claim_current", "resolver:direct_notice_session_claim")
+		if preflight.Principal.SessionID != contribution.ObservedSessionSID ||
+			preflight.Principal.SessionFence != contribution.ObservedClaimFence {
+			// The immutable carrier names a known different Claim generation.
+			// It is hidden, rather than poisoning an otherwise current inbox as
+			// UNKNOWN. Malformed provenance still fails the locked graph checks.
+			causalWitness.Evidence.Verdict = VerdictBroken
+			causalWitness.Evidence.Code = "session_claim_generation_changed"
+		}
 	}
 	return CurrentAudienceEvidence{
 		TenantID: preflight.Scope.TenantID, WorkspaceID: preflight.Scope.WorkspaceID,

@@ -97,6 +97,30 @@ const announcer = () =>
     .filter((el) => el.classList.contains('sr-only'))
 
 describe('DataTable — los dos 403 no son el mismo, y esta tabla los ve por 45 sitios', () => {
+  it('names tenant admission and hides old rows without offering a retry', () => {
+    render(
+      <DataTable
+        columns={columns}
+        data={[{ id: 'old', name: 'old channel' }]}
+        error={
+          new ApiError(403, 'tenant_admission_required', 'admission required')
+        }
+        onRetry={vi.fn()}
+        empty={EMPTY}
+      />,
+    )
+    expect(screen.getByText('Tenant admission required')).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Sign in with a tenant-admitted directory identity. Global bootstrap authority cannot operate workspace communications.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('old channel')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /retry/i }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText('step-up ceremony')).not.toBeInTheDocument()
+  })
   it('ofrece la CEREMONIA cuando el motor refusa por aseguramiento', async () => {
     render(
       <DataTable columns={columns} data={[]} error={stepUp()} empty={EMPTY} />,

@@ -812,7 +812,7 @@ func capabilitySameShape(
 // discriminants raised by the INDEPENDENT REVIEW of the first G1-A candidate
 // (`an internal design note (not shipped)`,
 // SHA-256 2e9875c2dcace018b43aea349dbbe82271deb9c730d04c3a40ed738878cf1ffa, findings
-// R1–R5). The cases are the reviewer's; this file adopts them so the defects cannot
+// finding 1–R5). The cases are the reviewer's; this file adopts them so the defects cannot
 // return, and each one carries the finding it belongs to.
 //
 // Every one of them FAILED on commit f3fbe5b34ca55b80496b475c3c98df576372b9e5 while all

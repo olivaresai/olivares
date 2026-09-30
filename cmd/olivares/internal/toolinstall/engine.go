@@ -648,3 +648,26 @@ func orOfficial(source string) string {
 	}
 	return source
 }
+
+// VerificationLevels describes each adapter's fixed verification policy. An
+// adapter without a declared policy is reported as unknown, never upgraded.
+func (e *Engine) VerificationLevels() map[string]string {
+	levels := map[string]string{}
+	for _, driver := range e.DriverKeys() {
+		var adapter any
+		capability, err := e.Capability(driver)
+		if err != nil {
+			continue
+		}
+		if capability == ProviderCapabilityV1 {
+			adapter, err = e.v1Provider(driver)
+		} else {
+			adapter, err = e.v2Provider(driver)
+		}
+		levels[driver] = "unknown"
+		if source, ok := adapter.(interface{ VerificationLevel() string }); err == nil && ok {
+			levels[driver] = source.VerificationLevel()
+		}
+	}
+	return levels
+}

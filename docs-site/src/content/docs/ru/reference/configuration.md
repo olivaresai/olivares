@@ -94,13 +94,13 @@ Policy decision point авторизации выбирается в composition
 
 <!-- BEGIN GENERATED olivares-env-reference — regenerate with `bash scripts/check-config-env-docs.sh --write`; do not edit by hand -->
 
-### Полный справочник переменных
+### Complete variable reference
 
-Таблица ниже генерируется из собственных исходников продукта: 296 переменных и 17 семейств, создаваемых во время выполнения, охватывают движок, CLI, оператор Kubernetes, провайдер Terraform и коннекторы. При каждом изменении она заново генерируется из этих источников и сверяется с ними, поэтому не отстаёт от бинарного файла.
+The table below is generated from the product's own sources: 299 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
 
-**Обязательно** означает, что читающая переменную функция без неё не запускается; большинство переменных необязательны, и движок работает, даже если ни одна из них не задана.
+**Required** means the feature that reads the variable does not start without it; most variables are optional and the engine runs with none of them set.
 
-| Переменная | Обязательно | По умолчанию | Что настраивает |
+| Variable | Required | Default | What it configures |
 | --- | --- | --- | --- |
 | `OLIVARES_ACTOR` | No | — | Default `--actor` for the decision-bearing eventing verbs, so a scripted change still records who made it. |
 | `OLIVARES_ADMIN_DSN` | No | — | Privileged connection string the Kubernetes operator uses for schema migration, separate from the least-privilege runtime role. |
@@ -152,7 +152,7 @@ Policy decision point авторизации выбирается в composition
 | `OLIVARES_COMMUNICATION_ACTIVATION` | No | — | REQUESTED K3 communication activation (`on` or `off`; default off), parsed at boot by cmd/olivares/communicationcomposition.go. `on` binds the local outbox pump witness and enables the dual runtime credential posture before the first leadership election; whether a communication credential can actually be minted is decided per launch from the EFFECTIVE readiness conjunction (store proof, sealer, directory resolver, permissions, pump), never from this flag alone. `on` needs both keyring files below; when either is not declared, cannot be opened or does not load, boot continues with K3 OFF and the cause visible (composition log, pump lane verdict `custody_unavailable`, non-effective readiness) while core, K1 and K2 serve. Only an unrecognized value is a configuration error. |
 | `OLIVARES_COMMUNICATION_CONTENT_KEYRING_FILE` | Yes | — | Path to the JSON keyring the communication content sealer loads at boot (cmd/olivares/boot.go). Secret-bearing, so it is a file rather than a value: sealed message bodies are verified against the keys it carries, and an engine started without it cannot open content sealed by a peer that had one. |
 | `OLIVARES_COMMUNICATION_CURSOR_KEYRING_FILE` | Yes | — | Path to the JSON keyring (`olivares.communication-cursor-keyring.v1`) that signs and verifies inbox cursor navigation tokens, loaded at boot through the same custody mechanism as the content keyring (cmd/olivares/communicationcursorkeyring.go). Secret-bearing, so it is a file rather than a value; a rotated-out key marked `retired_at` keeps verifying for the token retention window and is dropped afterwards, and a restart never mints a fresh key. |
-| `OLIVARES_COMMUNICATION_TOKEN` | Yes | — | NOT an operator setting, and documented here precisely so nobody sets it. The engine MINTS this bearer and injects it into a conducted session's child process exactly once (modules/sessions/runtime_bridge.go); its tuple travels inside the authenticated principal. It is RESERVED on the launch path: validateLaunchInjectedEnv (modules/sessions/runtime.go) refuses any launch whose injected environment carries it, so a caller-supplied value is rejected rather than honoured. It appears in the roster because that reserved-name check mentions it, not because the engine reads it. |
+| `OLIVARES_COMMUNICATION_TOKEN` | Yes | — | Собственные учётные данные сессии для связи, внедряемые механизмом запуска сессий и читаемые командами сообщений. Зарезервированы на пути запуска; операторы не должны их передавать. Их значение всегда скрывается. |
 | `OLIVARES_COMPUTER_USE_CONFIG` | No | — | Путь к JSON-файлу политик шлюза computer use. Читается только сборками, скомпилированными с тегами `enterprise` и `addon_airs`. Если переменная не задана, шлюз остаётся выключенным; файл, который не удаётся прочитать или разобрать, заставляет шлюз запрещать весь computer use, пока файл не будет исправлен, а движок перезапущен. |
 | `OLIVARES_CONFIG_STRICT` | No | — | Set to `1` to make `olivares config effective` and `config validate` reject any unrecognized `OLIVARES_*` key. |
 | `OLIVARES_CONTENT_FIREWALL_CONFIG` | No | — | Путь к JSON-файлу политик content firewall, который проверяет трафик инференса во встроенном (inline) прокси. Читается только сборками, скомпилированными с тегами `enterprise` и `addon_airs`. Если переменная не задана, эта проверка остаётся выключенной; файл, который не удаётся прочитать или разобрать, заставляет firewall отклонять каждый проверяемый им запрос, пока файл не будет исправлен, а движок перезапущен. |
@@ -213,6 +213,7 @@ Policy decision point авторизации выбирается в composition
 | `OLIVARES_EXECUTION_ENVIRONMENT_ID` | No | — | Explicit execution-environment reference for this node, read at boot by cmd/olivares/providerprofiles.go. Unset, the engine generates one identity once into `execution-environment-id` in the data directory (0600, atomic exclusive create) and reuses it; set, the value must be 1..256 printable bytes with no whitespace, colon or vertical bar, and a malformed value refuses boot instead of degrading in silence. It is REQUIRED on a topology with only shared state and no node-local data directory: there, without it, profiled session launches stay deny-closed. |
 | `OLIVARES_EXTRA_ARGS` | No | — | Extra `serve` arguments appended by the packaged service unit, for operators who configure the daemon through an environment file. |
 | `OLIVARES_FINOPS_ADMISSION_LEGACY_WRITERS_STOPPED_AT` | No | — | Instant every writer of the earlier FinOps admission build stopped, as an RFC 3339 time in UTC ending in `Z`. Read once at startup. Recovery retires a claim those writers left, but only once five minutes have passed since this instant and only while no row they left is dated later; empty, the default, or text that is not such an instant retires none. |
+| `OLIVARES_GITPUBLISH_SWEEP_INTERVAL` | No | `1m` | Интервал, заданный как длительность Go, с которым фоновый обход публикаций Git завершает устаревшие отправки и повторно наблюдает публикации с неопределённым состоянием. `0` отключает его. |
 | `OLIVARES_GROK_HOOK_ACCOUNT` | No | — | Account the Grok Build hook client reports. |
 | `OLIVARES_GROK_HOOK_AGENT` | No | — | Agent identity the Grok Build hook client reports. |
 | `OLIVARES_GROK_HOOK_ORG` | No | — | Organization the Grok Build hook client reports. |
@@ -377,6 +378,7 @@ Policy decision point авторизации выбирается в composition
 | `OLIVARES_THREATINTEL_SIGNING_KEY` | No | — | Signing key for threat-intelligence bundles the engine publishes. |
 | `OLIVARES_TOKEN` | No | — | API token the CLI authenticates with, when `--token` is not given. |
 | `OLIVARES_TOOL_PIN_CONFIG` | No | — | Путь к необязательной JSON-конфигурации (`require_pin_approval`) хранилища закреплений инструментов MCP, которое сборки, скомпилированные с тегом `enterprise`, запускают независимо от того, задана ли эта переменная. Читается при запуске движка. Если переменная не задана, сохраняется доверие при первом использовании (trust on first use); файл, который не удаётся прочитать или разобрать, требует одобрения оператора для неизвестных инструментов, пока файл не будет исправлен, а движок перезапущен. |
+| `OLIVARES_TOTP_SEED_KEY` | No | — | 32-байтный ключ в кодировке Base64, который запечатывает хранимые секреты TOTP. Задайте один и тот же ключ на узлах HA; если он не задан, движок создаёт закрытый файл totp-seed.key в своём каталоге данных. |
 | `OLIVARES_UPDATE_CHANNEL` | No | — | Release channel the update check asks for, such as `stable`. |
 | `OLIVARES_UPDATE_ENDPOINT` | No | — | Base URL the update check queries. Unset leaves the update check off. |
 | `OLIVARES_UPGRADE_TOKEN` | No | — | Download token `olivares upgrade` presents when fetching a build from a credentialed repository. |
@@ -398,7 +400,7 @@ Policy decision point авторизации выбирается в composition
 | `OLIVARES_WORK_OUTBOX_INTERVAL` | No | — | How often the work-kernel outbox is drained, as a Go duration. `0` disables the pump. |
 | `OLIVARES_WORK_RUN_REF` | No | — | Run reference the engine passes to a launched work session. Set by the engine per run, not by the operator. |
 | `OLIVARES_WORK_SESSION_ID` | No | — | Session reference the engine passes to a launched work session. Set by the engine per run, not by the operator. |
-| `OLIVARES_WORK_TOKEN` | No | — | Scoped token the engine passes to a launched work session. Set by the engine per run, not by the operator. |
+| `OLIVARES_WORK_TOKEN` | No | — | Собственные учётные данные сессии с ограниченной областью действия для работы, внедряемые механизмом запуска сессий и читаемые командами work. Операторы не должны их передавать. Их значение всегда скрывается. |
 
 ### Variable families
 

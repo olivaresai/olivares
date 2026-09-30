@@ -319,7 +319,19 @@
     "wireEmpty": "在对话中选择一行以查看其原始帧。",
     "thisNode": "本节点",
     "noWorkspace": "无工作区",
-    "cwdWarning": "此会话没有工作区。驱动程序将其工作目录报告为 {{cwd}}。"
+    "cwdWarning": "此会话没有工作区。驱动程序将其工作目录报告为 {{cwd}}。",
+    "workTitle": "会话工作权限",
+    "workHint": "记录于上次启动。每项操作都会检查当前授权。",
+    "processState": "进程状态",
+    "activityState": "活动",
+    "workRole": "授予的角色",
+    "workWorkspace": "工作空间",
+    "workActions": "授予的操作",
+    "notRecorded": "未记录",
+    "workRoles": {
+      "worker": "工作代理",
+      "orchestrator": "编排代理"
+    }
   },
   "conversation": {
     "log": "对话",

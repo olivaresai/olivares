@@ -14,6 +14,7 @@ import {
   exigirMarcadores,
 } from './capture-target'
 import { esperarExportacionDePostura } from './posture-export-terminal'
+import { EXTENSION_ROUTES } from '../src/features/extensions'
 
 /**
  * — real console captures for the public docs ("what you'll see in the
@@ -344,6 +345,11 @@ const VIEWS: {
     page: import('@playwright/test').Page,
   ) => Promise<{ x: number; y: number; width: number; height: number }>
 }[] = [
+  ...EXTENSION_ROUTES.map(({ id, path, heading }) => ({
+    id,
+    path,
+    heading: new RegExp(`^${heading.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`),
+  })),
   // ═══ LAS SEIS TOMAS QUE ENSEÑAN EL ESTADO INTERNO (R8-V3, criterio de VITRINA) ═══════════
   //
   // ⛔ EL CRITERIO ES «SI NO SE VE, NO CUENTA». Una toma de la RUTA no vale: los seis contratos de
@@ -1053,6 +1059,7 @@ const VIEWS: {
   // The provider plane: the credential a session launches with. On a clean install
   // this capture is the EMPTY state, which is the point — it is the first screen a
   // new operator sees here, so it is the one that has to name the next action.
+  { id: 'agent-tools', path: '/agent-tools', heading: /^Agent tools$/ },
   {
     id: 'providers',
     path: '/providers',

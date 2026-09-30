@@ -70,7 +70,7 @@ type FederationConfig struct {
 	// (tenant_id, target_tenant_id, alias); appended LAST so the additive reconcile
 	// ALTERs an existing DB and v2 regenerates it on a fresh one.
 	Alias string
-	// Protocol is "oidc" or "saml" (empty = unconfigured).
+	// Protocol is "oidc", "saml" or "external" (empty = unconfigured).
 	Protocol string
 	// Status is active (enabled) or inactive (disabled but retained). A disabled
 	// config makes SSO login answer 501 even though the row exists.
@@ -146,6 +146,16 @@ type FederationConfig struct {
 	// enterprise (the base build stores domains but never selects by them — single global
 	// IdP); domain selection is the MultiIDP capability.
 	ClaimedDomains []string
+
+	// ExternalConnectorRef names an opaque connector owned by an installed provider.
+	// Its immutable revision is selected by ExternalConnectorGeneration. These are
+	// non-secret references, never connection settings or credentials. Nullable
+	// additive storage keeps existing OIDC/SAML rows unchanged.
+	ExternalConnectorRef        string
+	ExternalConnectorGeneration int64
+	// ExternalIssuer is the exact canonical issuer the installed verifier must
+	// return with an immutable subject. The native account key qualifies both.
+	ExternalIssuer string
 }
 
 // FederationDomainClaim is the DERIVED, unique-constrained home-realm routing index

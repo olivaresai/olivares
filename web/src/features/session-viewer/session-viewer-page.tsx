@@ -337,6 +337,14 @@ export function SessionViewerPage() {
   if (unifiedQuery.error) {
     if (
       unifiedQuery.error instanceof ApiError &&
+      unifiedQuery.error.isNotFound
+    ) {
+      return (
+        <EmptyState title={t('notFound')} description={t('notFoundHint')} />
+      )
+    }
+    if (
+      unifiedQuery.error instanceof ApiError &&
       unifiedQuery.error.isStepUpRequired
     ) {
       // ⛔ ASEGURAMIENTO ANTES QUE ROL: `isForbidden` es SÓLO el status 403

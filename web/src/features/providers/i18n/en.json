@@ -1,11 +1,11 @@
 {
   "title": "Providers",
-  "subtitle": "The credential a session launches with. Register it once; the engine seals it and hands it to the agent at launch.",
+  "subtitle": "A cloud provider credential or a local model endpoint, selected through a provider profile.",
   "nav": "Providers",
   "add": "Add provider",
   "empty": {
     "title": "No provider registered yet",
-    "description": "A session cannot launch without a credential. Add the API key of Anthropic, OpenAI or xAI — or any OpenAI-compatible endpoint — and the engine seals it and uses it at launch. The key is never shown again.",
+    "description": "Connect Anthropic, OpenAI or xAI with an API key, or add a local Ollama endpoint without a key. Test the connection, then bind it to a profile.",
     "action": "Add your first provider"
   },
   "emptyFiltered": {
@@ -28,13 +28,15 @@
     "anthropic": "Anthropic",
     "openai": "OpenAI",
     "xai": "xAI",
-    "openai_compatible": "OpenAI-compatible"
+    "openai_compatible": "OpenAI-compatible",
+    "ollama": "Ollama"
   },
   "kindHints": {
     "anthropic": "Claude Code. Injects ANTHROPIC_API_KEY.",
     "openai": "Codex. Injects OPENAI_API_KEY.",
     "xai": "Grok. Injects XAI_API_KEY.",
-    "openai_compatible": "Any OpenAI-shaped endpoint. Injects OPENAI_API_KEY and OPENAI_BASE_URL; the endpoint is required."
+    "openai_compatible": "Any OpenAI-shaped endpoint. Injects OPENAI_API_KEY and OPENAI_BASE_URL; the endpoint is required.",
+    "ollama": "Local models for Codex. No API key. Use the native Ollama endpoint; the test reads model metadata."
   },
   "states": {
     "active": "Active",
@@ -51,7 +53,13 @@
     "unreachableHint": "The endpoint did not answer. This says nothing about the credential.",
     "models": "{{n}} models",
     "latency": "{{ms}} ms",
-    "at": "Tested {{when}}"
+    "at": "Tested {{when}}",
+    "local": {
+      "neverHint": "This endpoint has not been tested. Registration is not evidence that it works.",
+      "okHint": "The local endpoint answered and listed its models.",
+      "refusedHint": "The endpoint refused the metadata request. Check its access settings.",
+      "unreachableHint": "The local endpoint did not answer. Check its address and availability."
+    }
   },
   "actions": {
     "test": "Test connection",
@@ -78,7 +86,9 @@
     "submitting": "Sealing…",
     "cancel": "Cancel",
     "success": "Provider registered. Test the connection to confirm it works.",
-    "testNext": "Test connection now"
+    "testNext": "Test connection now",
+    "registering": "Registering…",
+    "localNameHint": "Your label for this endpoint. It is what a picker shows."
   },
   "rotate": {
     "title": "Rotate this provider's key",
@@ -93,7 +103,9 @@
     "description": "This destroys the sealed credential. It cannot be undone for this reference.",
     "consequence": "Every provider profile bound to it will refuse to launch, naming this provider. The credential is not revoked at the provider itself: do that in their own console.",
     "confirm": "Revoke",
-    "success": "Provider revoked and its sealed credential destroyed."
+    "success": "Provider revoked and its sealed credential destroyed.",
+    "localDescription": "This revokes the endpoint registration. Bound profiles will refuse new launches. The Ollama service and its models remain on the host.",
+    "localSuccess": "Endpoint registration revoked."
   },
   "detail": {
     "title": "Provider",
@@ -112,11 +124,22 @@
   },
   "next": {
     "title": "Next: deploy an agent",
-    "description": "A credential on its own does not launch anything. Bind it to a provider profile, and a session launched under that profile uses it.",
+    "description": "A registered provider launches nothing on its own. Bind it to a provider profile so new sessions use it.",
     "action": "Go to provider profiles"
   },
   "truncation": {
     "label": "Showing {{n}} providers; there are more",
     "hint": "This list is one page. Narrow it, or use `olivares provider ls` for the full set."
+  },
+  "bind": {
+    "title": "Bind profile",
+    "description": "Next launches from the selected profile use {{name}}. Existing sessions keep their current provider.",
+    "profile": "Profile",
+    "choose": "Choose a compatible profile",
+    "empty": "No compatible active profile. Create one on Provider profiles.",
+    "more": "Load more profiles",
+    "unavailable": "Profile permissions or a compatible active profile are unavailable.",
+    "loadError": "Profiles could not be loaded.",
+    "success": "Provider bound to the profile."
   }
 }

@@ -389,7 +389,7 @@ type publicationInputs struct {
 //     runs a closed callback and returns no Store. Demanding an observation from them
 //     was not a stricter reading of the contract, it was a requirement no caller could
 //     ever satisfy — `migrate apply` on a restored destination applied its schema and
-//     then refused, on every attempt, forever (independent review F1).
+//     then refused, on every attempt, forever (independent review finding 1).
 //
 // It is emphatically NOT permission to skip the final decision. The custody LEG is what
 // this gates; `observeHeld`, the control re-verification and reconcileRequirement run
@@ -516,7 +516,7 @@ func acquireLocalPublicationFence(target opgate.SQLiteTarget, admission *LocalAd
 	// keyset is the only statement of the custody that operation published. Without
 	// this, a direct Open of a completed SQLite target published a store having consulted
 	// nothing about custody at all, while the same call on PostgreSQL refused
-	// (independent review F2). The contract is engine-neutral: "SQLite uses its resolved
+	// (independent review finding 2). The contract is engine-neutral: "SQLite uses its resolved
 	// local control under the same lease".
 	//
 	// It is derived from the record already read UNDER THE LEASE, not from a second read

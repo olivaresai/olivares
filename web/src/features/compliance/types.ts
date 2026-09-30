@@ -963,7 +963,7 @@ export function isKnownNis2Phase(phase: string): phase is Nis2Phase {
  *
  *  ⛔ AN UNKNOWN PHASE OFFERS NOTHING. The first version returned the whole
  *  vocabulary, reasoning that the engine rejects a bad move anyway. The Codex sol
- *  max contrast refuted that on both halves (F4/F6/F8):
+ *  max contrast refuted that on both halves (finding 4/F6/F8):
  *
  *    - If the stored value comes from a NEWER vocabulary, every phase this build
  *      knows is BEHIND it, so the menu offered was guaranteed-409 from top to
@@ -1165,7 +1165,7 @@ export interface CcmSnapshot {
  *  `from_status`, `to_status` and `note`; the engine has always sent `framework_id`,
  *  `prev_status`, `curr_status` and `detail`. Nothing failed and nothing 404'd — the
  *  fields were simply `undefined`, so the panel drew its placeholders over a
- *  well-formed answer. Raised by the the model contrast of (F1); the mismatch
+ *  well-formed answer. Raised by the the model contrast of (finding 1); the mismatch
  *  predates it (`a0be33de9c`) and stayed invisible because every drift fixture in the
  *  suite was an EMPTY list, which is the wider lesson: an empty-collection fixture
  *  cannot see a field-name mismatch.

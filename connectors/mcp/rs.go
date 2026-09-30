@@ -4026,6 +4026,7 @@ func (rs *ResourceServer) upstreamReq(r *http.Request, method string, params []b
 		Method:      method,
 		Params:      params,
 		Subject:     tok.Subject,
+		ClientID:    tok.ClientID,
 		Scopes:      scopes,
 		TraceParent: requestTraceParent(r, params),
 	}

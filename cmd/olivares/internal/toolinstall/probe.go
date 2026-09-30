@@ -104,3 +104,16 @@ func newProbeCmd(ctx context.Context, spec probeSpec, out *cappedBuffer) *exec.C
 	cmd.Stdin = nil
 	return cmd
 }
+
+// probeVersion identifies the client version in the vendor's bounded output.
+// Ollama can print a daemon version first, followed by a differing client.
+func probeVersion(driver, output string) string {
+	if driver == DriverOllama {
+		for _, line := range strings.Split(output, "\n") {
+			if strings.HasPrefix(strings.TrimSpace(line), "Warning: client version is ") {
+				return firstVersionToken(strings.TrimPrefix(strings.TrimSpace(line), "Warning: client version is "))
+			}
+		}
+	}
+	return firstVersionToken(output)
+}

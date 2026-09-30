@@ -19,7 +19,7 @@ description: "情報指向のリファレンス: REST API、イベントバス�
 
 | 領域 | 何を文書化するか | 真実の源 |
 |---|---|---|
-| **[REST API](/reference/api/)** | control-plane HTTP API: auth、setup、テナンシー、エージェント、R/RW access map、トークン、監査台帳。 | 本製品の **OpenAPI 3.1** 契約（54 のコアパス）。実ファイルからビルド時にレンダリングされる —— コピーではない。 |
+| **[REST API](/reference/api/)** | control-plane HTTP API: auth、setup、テナンシー、エージェント、R/RW access map、トークン、監査台帳。 | 本製品の **OpenAPI 3.1** 契約（67 のコアパス）。実ファイルからビルド時にレンダリングされる —— コピーではない。 |
 | **[モジュールルート（beta）](/reference/api-beta/)** | 製品のモジュールルート（`/v1/m/<ns>/…`）—— FinOps、compliance、governance、sessions、models、knowledge、… —— を独立した **beta** OpenAPI ドキュメントとして公開する。 | 同じ OpenAPI 3.1 契約。モジュールが登録するルートからビルド時に反映される。 |
 | **[安定性ポリシー](/ja/reference/api-stability/)** | バージョニング、安定性階層、非推奨/サンセットのシグナリング、そして API・プロバイダ・クライアント SDK の最小サポートウィンドウ。 | コード内の非推奨テーブルと、ビルドを失敗させるウィンドウテスト。 |
 | **[gRPC](/ja/reference/grpc/)** | エンジンの gRPC ミラーと、すべてのプロセス外コネクタおよびモジュールが使用するバージョン管理された plugin wire 契約。 | サーバーが gRPC に渡す `grpc.ServiceDesc` 登録テーブル。 |
@@ -40,7 +40,7 @@ description: "情報指向のリファレンス: REST API、イベントバス�
 （`GET /v1/access-edges`。その reconcile された least-privilege *drift* はコア面ではなく access-map
 モジュールが提供する）、トークン管理、監査台帳をカバーする。
 
-契約は **54 のコアパス**を記述する。これは意図的である: それは control plane の安定したバージョン管理
+契約は **67 のコアパス**を記述する。これは意図的である: それは control plane の安定したバージョン管理
 された面であって、エンジンが応答できるすべてのルートではない。「stable」が約束するもの —— バージョニング、
 非推奨シグナリング、最小サポートウィンドウ —— は [API 安定性ポリシー](/ja/reference/api-stability/) である。
 

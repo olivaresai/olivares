@@ -168,7 +168,7 @@ sur une page.
   frontier brokés ne le peuvent pas.
 - **Les routes de module sont un contrat séparé, en bêta.** Les endpoints de
   module (par exemple le graphe d'access map et la dérive) ne font pas partie du
-  contrat de cœur stable (54 chemins de cœur) ; ils sont publiés comme un document
+  contrat de cœur stable (67 chemins de cœur) ; ils sont publiés comme un document
   **bêta** séparé — la
   [référence des routes de module](/reference/api-beta/) (servie sur
   `/openapi.beta.json`). Bêta signifie que les formes peuvent changer avec

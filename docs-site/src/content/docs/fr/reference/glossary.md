@@ -17,7 +17,8 @@ Le graphe du module III des **origines** (agents, identités, sessions) et des
 **ressources** qu'elles touchent, chaque arête classée par [mode](#mode) et étiquetée
 avec sa [signal source](#signal-source), son [attribution](#attribution-confiance)
 et son [niveau de couverture](#niveau-de-couverture). Une capacité différenciante clé — l'un
-des 31 modules, pas l'ensemble du produit. Voir [Qu'est-ce qu'Olivares AI ?](/fr/start/what-is-olivares-ai/).
+des 31 modules, pas l'ensemble du produit.
+Voir [Qu'est-ce qu'Olivares AI ?](/fr/start/what-is-olivares-ai/).
 
 ### États d'actuation : `v1` / `on-demand` / `seam`
 

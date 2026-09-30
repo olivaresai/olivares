@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -196,6 +197,21 @@ func TestMCPForwarderRefusesCredentialResultsAndErrors(t *testing.T) {
 		f := &mcpUpstreamForwarder{url: "https://fixture.test/mcp", credProv: &staticCredentialProvider{authHeader: auth}, client: &http.Client{Transport: credentialFixtureTransport{body: body, authorization: auth}}}
 		if res, err := f.Forward(t.Context(), mcpc.UpstreamRequest{Method: "tools/list"}); err != nil || res.State != mcpc.DispatchCompleted {
 			t.Fatal("non-disclosing response changed")
+		}
+	}
+}
+
+func TestManagedMCPRefusesEscapedCredentialSSE(t *testing.T) {
+	for _, body := range []string{
+		`data: {"jsonrpc":"2.0","id":1,"result":{"echo":"\u0066ixture-cut-secret"}}` + "\n\n",
+		`data: {"jsonrpc":"2.0","id":1,"error":{"code":-32603,"message":"refused","data":"\u0066ixture-cut-secret"}}` + "\n\n",
+		`data: {"jsonrpc":"2.0","method":"notifications/progress","params":{"echo":"\u0066ixture-cut-secret"}}` + "\n\n",
+	} {
+		f := &mcpUpstreamForwarder{url: "https://fixture.test/mcp", credProv: &staticCredentialProvider{authHeader: "Bearer fixture-cut-secret"}, client: &http.Client{Transport: credentialFixtureTransport{body: body, authorization: "Bearer fixture-cut-secret", contentType: "text/event-stream"}}}
+		enableManagedMCPForwarding(f)
+		res, err := f.Forward(t.Context(), mcpc.UpstreamRequest{Method: "initialize", Subject: "agent:fixture"})
+		if res.State != mcpc.DispatchUnknown || len(res.Result) != 0 || !errors.Is(err, mcpc.ErrUpstreamCredentialDisclosure) {
+			t.Fatal("managed SSE credential refusal lost its classification")
 		}
 	}
 }

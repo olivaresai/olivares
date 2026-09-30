@@ -1,0 +1,46 @@
+{
+  "title": "Outils des agents",
+  "description": "Gérez les outils sur le serveur du plan de contrôle.",
+  "refresh": "Actualiser",
+  "adminOnly": "Une session administrateur système est requise pour gérer les outils du serveur.",
+  "readOnly": "Ce plan de contrôle est en lecture seule. L’installation est désactivée.",
+  "notInstalled": "Aucune installation gérée",
+  "version": "Version de {{name}}",
+  "review": "Vérifier l’installation",
+  "reviewName": "Vérifier l’installation de {{name}}",
+  "detect": "Détecter {{name}}",
+  "detecting": "Vérification des outils…",
+  "notDetected": "Aucun exécutable détecté sur le serveur.",
+  "versionUnknown": "Version inconnue",
+  "planning": "Vérification de la version sélectionnée…",
+  "approval": "Vérifier l’installation",
+  "installHint": "L’installation exige une authentification matérielle renforcée. Elle ne démarre aucun agent ni serveur de modèles.",
+  "install": "Installer la version approuvée",
+  "starting": "Démarrage…",
+  "started": "Installation démarrée",
+  "cancel": "Annuler",
+  "job": "Dernière installation",
+  "leftovers": "{{count}} répertoires temporaires inachevés subsistent. Vérifiez l’inventaire avant de réessayer.",
+  "state": {
+    "running": "Installation en cours…",
+    "succeeded": "Installation terminée",
+    "failed": "Échec de l’installation",
+    "interrupted": "Installation interrompue"
+  },
+  "installedState": {
+    "installed": "Installé",
+    "damaged": "Endommagé",
+    "unverified": "Non vérifié"
+  },
+  "verification": {
+    "openpgp": "Version signée par l’éditeur (OpenPGP).",
+    "sigstore-cosign": "Empreinte du paquet et signatures de l’éditeur vérifiées.",
+    "none-origin-only": "Origine HTTPS officielle ; aucune signature de l’éditeur.",
+    "github-release-sha256": "SHA-256 fixé depuis les métadonnées officielles ; aucune signature de l’éditeur.",
+    "unknown": "Non vérifié"
+  },
+  "probe": "Vérifier la version",
+  "probeName": "Vérifier la version à {{path}}",
+  "probeHint": "La vérification exécute --version sur ce fichier précis après une authentification matérielle.",
+  "probeComplete": "Vérification de version terminée."
+}

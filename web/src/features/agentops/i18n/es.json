@@ -119,7 +119,21 @@
     "profileHint": "Selecciona el perfil de proveedor para esta sesión. Es obligatorio. Los requisitos locales se comprueban para la selección actual después de la vista previa de la plantilla.",
     "profileNotOperable": "no habilitado en este entorno",
     "profilesNotRead": "No se pudieron leer los perfiles de proveedor; el lanzamiento puede seguir sin perfil.",
-    "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME y GROK_HOME pertenecen al perfil: aquí se rechaza un lanzamiento que reenvíe cualquiera de ellas. Los demás nombres siguen sujetos a la validación del servidor."
+    "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME y GROK_HOME pertenecen al perfil: aquí se rechaza un lanzamiento que reenvíe cualquiera de ellas. Los demás nombres siguen sujetos a la validación del servidor.",
+    "identity": {
+      "title": "Identidad de lanzamiento",
+      "hint": "Elige un agente admitido para actuar en nombre de su sponsor humano. El acceso humano por sí solo no otorga autoridad de agente.",
+      "human": "Operador humano actual",
+      "agent": "Agente admitido (en nombre del sponsor)",
+      "required": "Un perfil de orquestación requiere una identidad de agente autenticada de forma independiente.",
+      "choose": "Identidad del agente",
+      "sponsorHint": "El servidor valida el agente, su estado y tu patrocinio antes del lanzamiento.",
+      "placeholder": "Elige un agente admitido",
+      "readRequired": "Se requiere permiso de lectura de NHI.",
+      "loading": "Cargando identidades de agente…",
+      "loadFailed": "Lista de identidades no disponible.",
+      "loadMore": "Cargar más identidades"
+    }
   },
   "detail": {
     "live": "En vivo",
@@ -545,6 +559,50 @@
       "loadMoreProfiles": "Cargar más perfiles",
       "loadedProfiles": "Cargados {{n}} perfiles activos; hay más.",
       "loadingProfiles": "Cargando perfiles…"
+    },
+    "workGrant": {
+      "title": "Autoridad de orquestación",
+      "hint": "Concede acciones en un workspace. Las sesiones orquestadoras deben lanzarse como un agente autenticado.",
+      "readPending": "La autoridad espera una lectura verificada del perfil.",
+      "none": "Sin concesión de orquestación",
+      "workspace": "ID del workspace",
+      "actions": "Acciones permitidas",
+      "edit": "Editar concesión de orquestación",
+      "revoke": "Revocar concesión de orquestación",
+      "replaceHint": "Guardar o revocar sustituye la concesión y retira de inmediato su autoridad de sesión anterior. Reanuda las sesiones para usar una nueva concesión.",
+      "revokeConfirm": "Revocar concesión",
+      "save": "Guardar concesión",
+      "saved": "Concesión de orquestación guardada",
+      "revoked": "Concesión de orquestación revocada",
+      "invalidWorkspace": "Introduce un ID de workspace UUIDv7 canónico.",
+      "capabilities": {
+        "work_read": "Leer trabajo",
+        "work_create": "Crear trabajo",
+        "work_assign": "Asignar trabajo",
+        "work_review": "Revisar resultados",
+        "decision_read": "Leer decisiones",
+        "decision_write": "Publicar decisiones"
+      }
+    },
+    "authentication": {
+      "title": "Autenticación del proveedor",
+      "source": "Fuente de autenticación",
+      "hint": "Elige la autoridad para futuros lanzamientos. Por defecto no se autoriza ninguna.",
+      "none": "Ninguna autorizada",
+      "accountHome": "Inicio de sesión guardado en el perfil",
+      "managed": "Credencial de proveedor gestionada",
+      "provider": "Proveedor",
+      "providerHint": "Solo se ofrecen proveedores activos compatibles. El servidor vuelve a comprobarlos al lanzar.",
+      "chooseProvider": "Elige un proveedor",
+      "readRequired": "Se requiere permiso de lectura de proveedores.",
+      "loadFailed": "Lista de proveedores no disponible.",
+      "retry": "Reintentar",
+      "loading": "Cargando proveedores…",
+      "loadMore": "Cargar más proveedores",
+      "edit": "Editar autenticación del proveedor",
+      "launchHint": "Los cambios se aplican a futuros lanzamientos. El proceso activo conserva su autenticación.",
+      "save": "Guardar autenticación",
+      "saved": "Autenticación guardada"
     }
   },
   "accounts": {

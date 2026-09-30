@@ -37,6 +37,7 @@ var (
 	ErrCommunicationEvidenceUnknown   = errors.New("communication evidence unavailable")
 	ErrCommunicationSnapshotStale     = errors.New("communication authority snapshot stale")
 	ErrCommunicationForbidden         = errors.New("communication authority denied")
+	ErrCommunicationAdmissionRequired = fmt.Errorf("%w: tenant admission required", ErrCommunicationForbidden)
 	ErrCommunicationNotFound          = errors.New("communication principal not found")
 	// ErrCommunicationPlanChanged is the optimistic apply precondition. It is
 	// deliberately distinct from store.ErrConflict: a stale semantic plan maps to

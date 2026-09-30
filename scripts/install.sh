@@ -40,9 +40,24 @@ say() { printf '%s\n' "$*"; }
 err() { printf 'error: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
+# Explicit versions use v<version> before 26.10 and bare tags from 26.10 on.
+# API tag_name is already the release's identity and is never normalized.
+release_tag() {
+  release_version="${1#v}"
+  printf '%s\n' "$release_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' ||
+    err "invalid release version: $1"
+  release_major="${release_version%%.*}"
+  release_minor="${release_version#*.}"; release_minor="${release_minor%%.*}"
+  if [ "$release_major" -lt 26 ] || { [ "$release_major" -eq 26 ] && [ "$release_minor" -lt 10 ]; }; then
+    printf 'v%s' "$release_version"
+  else
+    printf '%s' "$release_version"
+  fi
+}
+
 usage() {
   cat <<'EOF'
-Usage: olivares-install-<version>.sh [--version vYY.M.PATCH] [--bindir DIR]
+Usage: olivares-install-<version>.sh [--version YY.M.PATCH] [--bindir DIR]
        [--user|--system] [--init auto|systemd|openrc|launchd]
        [--data-dir PATH] [--config PATH] [--start] [--install-cosign] [--dry-run]
        olivares-install-<version>.sh --uninstall (--plan|--preserve|--purge)
@@ -132,7 +147,7 @@ fi
 case "$EMBEDDED_VERSION" in
   SNAPSHOT) err "snapshot installers are not installable; use a tagged release asset" ;;
   @*) pinned="" ;;
-  *) pinned="v$EMBEDDED_VERSION" ;;
+  *) pinned="$(release_tag "$EMBEDDED_VERSION")" ;;
 esac
 if [ -n "$pinned" ]; then
   if [ -n "$requested" ] && [ "${requested#v}" != "${pinned#v}" ]; then
@@ -141,6 +156,7 @@ if [ -n "$pinned" ]; then
   tag="$pinned"
 else
   tag="$requested"
+  [ -z "$tag" ] || tag="$(release_tag "$tag")"
 fi
 
 dl() { # dl <url> <destination>
@@ -194,10 +210,9 @@ if [ -z "$tag" ]; then
   say "==> resolving the latest release of $REPO"
   tag="$(dl_stdout "$API/repos/$REPO/releases/latest" |
     sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n '1p')"
-  [ -n "$tag" ] || err "could not resolve a release; pass --version vYY.M.PATCH"
+  [ -n "$tag" ] || err "could not resolve a release; pass --version YY.M.PATCH"
 fi
-case "$tag" in v*) ;; *) tag="v$tag" ;; esac
-printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' ||
+printf '%s\n' "$tag" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+$' ||
   err "invalid release version: $tag"
 
 os="${OLIVARES_OS:-$(uname -s | tr '[:upper:]' '[:lower:]')}"

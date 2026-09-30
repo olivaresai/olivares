@@ -23,7 +23,7 @@
 #   - that artifact MUST carry the pushed digest in extra.Digest. The pinned GoReleaser
 #     v2.17.0 always records it after `manifest push` (internal/pipe/docker/
 #     manifest.go:134-162), so its ABSENCE means the artifact list did not come from the
-#     pinned engine — refuse, never adopt the live registry answer alone (R1 contrast
+#     pinned engine — refuse, never adopt the live registry answer alone (independent review
 #     P2-01);
 #   - the digest is re-resolved from the live registry and must EQUAL extra.Digest — a
 #     mismatch means the tag moved between push and resolution, and nothing may attest

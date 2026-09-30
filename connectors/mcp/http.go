@@ -162,7 +162,9 @@ func (t *httpTransport) notify(ctx context.Context, method string, params any) e
 		return err
 	}
 	defer resp.Body.Close()
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, maxHTTPBody))
+	if _, err := io.Copy(io.Discard, io.LimitReader(resp.Body, maxHTTPBody)); err != nil {
+		return fmt.Errorf("mcp: read notification acknowledgment: %w", err)
+	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return fmt.Errorf("mcp: http %s", resp.Status)
 	}

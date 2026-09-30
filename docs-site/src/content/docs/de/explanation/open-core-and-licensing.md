@@ -58,7 +58,7 @@ Die Dokumentationsseite, die Sie gerade lesen, ist Teil des AGPL-Produkts.
 | Edition | Preis | Umfang |
 | --- | --- | --- |
 | Community | Kostenlos, AGPL-3.0-only | Unbegrenzte Benutzer; ein aktiver Identitätsanbieter (IdP). |
-| Business | USD 129/Monat oder USD 1,290/Jahr | Unbegrenzte Benutzer; eine juristische Person; bis zu zwei Produktionsdeployments mit je einem Staging-Deployment; insgesamt bis zu fünf aktive IdPs. |
+| Business | 129 USD/Monat oder 1.290 USD/Jahr | Unbegrenzte Benutzer; eine juristische Person; bis zu zwei Produktionsdeployments mit je einem Staging-Deployment; insgesamt bis zu fünf aktive IdPs. |
 | Enterprise | Kontaktieren Sie uns | Mehrere juristische Personen, weitere Deployments oder IdPs, Air-Gap-Mirrors, individuelles LTS und andere vereinbarte Anforderungen. |
 
 Business enthält **Regulated Operations**, **AI Runtime Security**,

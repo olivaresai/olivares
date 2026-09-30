@@ -54,7 +54,8 @@
     "forbiddenHint": "Ihre Rolle kann den Graphen sehen, aber nicht den Abgleich gestattet vs. beobachtet (accessmap:drift:read).",
     "partial": "Teilergebnis: Die Engine hat diesen Abgleich über ein abgeschnittenes Drift-Fenster durchgeführt. Diese Zahlen umfassen daher nicht die gesamte Umgebung, und eine hier fehlende Kante kann schlicht jenseits der Grenze liegen.",
     "emptyWindowTitle": "Keine Befunde im gescannten Fenster",
-    "emptyWindowHint": "Der Scan endete an seiner Seitengrenze; dies ist daher keine Aussage über die gesamte Umgebung."
+    "emptyWindowHint": "Der Scan endete an seiner Seitengrenze; dies ist daher keine Aussage über die gesamte Umgebung.",
+    "scopeHint": "Die Abweichungsliste umfasst die gesamte Organisation; die Kartenfilter gelten nicht für diese Liste"
   },
   "detail": {
     "edgeTitle": "Zugriffskante",

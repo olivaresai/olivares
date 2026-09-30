@@ -190,6 +190,79 @@ for (const stmt of registry.statements) {
 }
 if (!viewsArray) die(`${REGISTRY_REL} declares no FEATURE_VIEWS, so no console route was enumerated`)
 
+// Resolve only a named value import of an exported, module-level frozen literal.
+// Never execute imported code or treat an unreadable spread as an empty extension.
+function importedArray(spread) {
+  const location = where(spread, registry)
+  const refuse = (cause) =>
+    die(
+      `a FEATURE_VIEWS element at ${location} is not an object literal or a supported imported frozen array: ${cause}`,
+    )
+  if (!ts.isIdentifier(spread.expression))
+    refuse('the spread is not a named import')
+  const name = spread.expression.text
+  const imports = []
+  for (const stmt of registry.statements) {
+    if (!ts.isImportDeclaration(stmt) || stmt.importClause?.isTypeOnly) continue
+    const bindings = stmt.importClause?.namedBindings
+    if (!bindings || !ts.isNamedImports(bindings)) continue
+    for (const binding of bindings.elements) {
+      if (binding.name.text === name && !binding.isTypeOnly)
+        imports.push({ stmt, binding })
+    }
+  }
+  if (imports.length !== 1)
+    refuse(`spread "${name}" has no unique named value import`)
+  const { stmt, binding } = imports[0]
+  if (
+    !ts.isStringLiteral(stmt.moduleSpecifier) ||
+    !stmt.moduleSpecifier.text.startsWith('.')
+  ) {
+    refuse(`spread "${name}" does not import a relative source file`)
+  }
+  const importedPath = path.resolve(
+    path.dirname(registry.fileName),
+    stmt.moduleSpecifier.text,
+  )
+  if (!importedPath.startsWith(ROOT + path.sep))
+    refuse(`spread "${name}" imports outside the source tree`)
+  const candidates = path.extname(importedPath)
+    ? [importedPath]
+    : [importedPath + '.ts', importedPath + '.tsx']
+  const files = candidates.filter(existsSync)
+  if (files.length !== 1)
+    refuse(
+      `spread "${name}" has no unique source file at ${stmt.moduleSpecifier.text}`,
+    )
+  const source = parseFile(path.relative(ROOT, files[0]))
+  const exportedName = binding.propertyName?.text ?? binding.name.text
+  const declarations = []
+  for (const statement of source.statements) {
+    if (!ts.isVariableStatement(statement)) continue
+    if (!(statement.declarationList.flags & ts.NodeFlags.Const)) continue
+    if (
+      !statement.modifiers?.some((m) => m.kind === ts.SyntaxKind.ExportKeyword)
+    )
+      continue
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        ts.isIdentifier(declaration.name) &&
+        declaration.name.text === exportedName
+      )
+        declarations.push(declaration)
+    }
+  }
+  if (declarations.length !== 1)
+    refuse(`"${exportedName}" is not a unique module-level exported const`)
+  const array = freezeArgument(declarations[0].initializer)
+  if (!array || !ts.isArrayLiteralExpression(array)) {
+    refuse(
+      `"${exportedName}" is not Object.freeze([...]) with an array literal`,
+    )
+  }
+  return { array, source }
+}
+
 // HUB_ORDER is the console's own section order ("run it → let it run → plug it in → rule
 // it → show it"). It is carried through rather than restated in the renderer: a fixed
 // order written twice is an order that will disagree with itself the first time a hub is
@@ -213,22 +286,31 @@ if (!hubOrder || hubOrder.length === 0) {
 }
 
 const views = []
+const entries = []
 for (const el of viewsArray.elements) {
+  if (ts.isSpreadElement(el)) {
+    const { array, source } = importedArray(el)
+    for (const entry of array.elements) entries.push({ el: entry, source })
+  } else {
+    entries.push({ el, source: registry })
+  }
+}
+for (const { el, source } of entries) {
   if (!ts.isObjectLiteralExpression(el)) {
-    die(`a FEATURE_VIEWS element at ${where(el, registry)} is not an object literal; refusing to dump a partial roster`)
+    die(`a FEATURE_VIEWS element at ${where(el, source)} is not an object literal; refusing to dump a partial roster`)
   }
   const id = literal(el, 'id')
   const routePath = literal(el, 'path')
-  if (typeof id !== 'string' || id === '') die(`a FEATURE_VIEWS entry at ${where(el, registry)} has no literal id`)
+  if (typeof id !== 'string' || id === '') die(`a FEATURE_VIEWS entry at ${where(el, source)} has no literal id`)
   if (typeof routePath !== 'string' || routePath === '') {
-    die(`FEATURE_VIEWS entry "${id}" at ${where(el, registry)} has no literal path`)
+    die(`FEATURE_VIEWS entry "${id}" at ${where(el, source)} has no literal path`)
   }
   // A property that EXISTS but is not a literal is a finding, never a silent absence:
   // "this view needs no permission" and "this view's permission was computed and I
   // could not read it" are opposite facts and must not collapse into the same dump.
   for (const field of ['permission', 'helpHref', 'hub']) {
     if (hasProp(el, field) && literal(el, field) === undefined) {
-      die(`FEATURE_VIEWS entry "${id}" at ${where(el, registry)} writes ${field} as a non-literal expression, which this dump cannot read`)
+      die(`FEATURE_VIEWS entry "${id}" at ${where(el, source)} writes ${field} as a non-literal expression, which this dump cannot read`)
     }
   }
   views.push({
@@ -238,7 +320,7 @@ for (const el of viewsArray.elements) {
     permission: literal(el, 'permission') ?? '',
     helpHref: literal(el, 'helpHref') ?? '',
     hideInNav: literal(el, 'hideInNav') === true,
-    where: where(el, registry),
+    where: where(el, source),
   })
 }
 if (views.length < MIN_VIEWS) {

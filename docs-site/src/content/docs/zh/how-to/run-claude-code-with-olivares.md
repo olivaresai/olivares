@@ -64,7 +64,7 @@ description: "在一台 Linux 主机上联合部署 Olivares 控制平面与 Cla
 ```sh
 # verify the engine image you build FROM (it is cosign-signed)
 cosign verify docker.io/olivaresai/olivares:26.10.0 \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 docker build -f Dockerfile.agentops \

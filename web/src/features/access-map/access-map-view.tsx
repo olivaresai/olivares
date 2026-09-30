@@ -112,6 +112,11 @@ export function AccessMapView() {
     return focus ? { ...base, search: focus } : base
   })
   const [overlay, setOverlay] = useState(false)
+  const hasMapFilter =
+    filter.search !== '' ||
+    filter.modes.size > 0 ||
+    filter.confidence !== 'all' ||
+    filter.signalSource !== null
   const [listOpen, setListOpen] = useState(false)
   const [selection, setSelection] = useState<Selection>(null)
   const [extra, setExtra] = useState<GraphResponse | null>(null)
@@ -461,6 +466,7 @@ export function AccessMapView() {
               ) : (
                 <GraphCanvas
                   fitMinZoom={LEGIBLE_FIT_MIN_ZOOM}
+                  verticalNodeGap={16}
                   nodes={built.nodes}
                   edges={built.edges}
                   nodeTypes={accessNodeTypes}
@@ -480,7 +486,10 @@ export function AccessMapView() {
                   }
                   fitKey={`${filter.search}|${[...filter.modes].join(',')}|${filter.confidence}|${filter.signalSource}|${overlay}|${built.nodes.length}`}
                 >
-                  <Panel position="bottom-left">
+                  <Panel
+                    position="top-left"
+                    className="max-w-[calc(100%-2rem)]"
+                  >
                     <AccessLegend overlay={overlay && canDrift} />
                   </Panel>
                 </GraphCanvas>
@@ -568,6 +577,11 @@ export function AccessMapView() {
                 <Eye className="size-4" />
                 {t('drift.title')}
               </h2>
+              {hasMapFilter && (
+                <p className="mb-3 text-caption text-muted-foreground">
+                  {t('drift.scopeHint')}
+                </p>
+              )}
               {!canDrift ? (
                 <ForbiddenState
                   title={t('drift.forbiddenTitle')}

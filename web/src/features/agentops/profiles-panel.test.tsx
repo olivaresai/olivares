@@ -157,6 +157,120 @@ async function openSheet(name: RegExp) {
 
 const page = (items: ProviderProfileDTO[]) => ({ items, has_more: false })
 
+describe('Profile orchestration authority', () => {
+  const workspace = '01a0ef7c-f25c-72f1-9cf8-3b5b2c8d6ab0'
+  const workGrant = {
+    role: 'orchestrator' as const,
+    workspace_id: workspace,
+    capabilities: ['work.read' as const],
+    grant_id: '01a0efd0-7609-7abf-bc24-4e3b534d88ab',
+  }
+
+  it('returns keyboard focus to the editor control after Escape', async () => {
+    const { user } = await openSheet(/Home A/)
+    const trigger = await screen.findByRole('button', {
+      name: 'Edit orchestration grant',
+    })
+    trigger.focus()
+    await user.keyboard('{Enter}')
+    expect(
+      screen.getByRole('dialog', { name: 'Edit orchestration grant' }),
+    ).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(trigger).toHaveFocus())
+  })
+
+  it('shows the server grant while withholding its editor without profile admin', async () => {
+    grant(READ, WRITE)
+    api.getProfile.mockResolvedValue({
+      ...homeA,
+      session_work_grant: workGrant,
+    })
+    await openSheet(/Home A/)
+    expect(
+      await screen.findByText('Orchestration authority'),
+    ).toBeInTheDocument()
+    expect(screen.getByText(workspace)).toBeInTheDocument()
+    expect(screen.getByText('Read work')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Edit orchestration grant' }),
+    ).toBeNull()
+    expect(api.patchProfile).not.toHaveBeenCalled()
+  })
+
+  it('submits only explicitly selected workspace/actions, without server-owned generation', async () => {
+    const { user } = await openSheet(/Home A/)
+    await user.click(
+      await screen.findByRole('button', { name: 'Edit orchestration grant' }),
+    )
+    const dialog = screen.getByRole('dialog', {
+      name: 'Edit orchestration grant',
+    })
+    const save = within(dialog).getByRole('button', { name: 'Save grant' })
+    expect(save).toBeDisabled()
+    for (const box of within(dialog).getAllByRole('checkbox'))
+      expect(box).not.toBeChecked()
+    await user.type(
+      within(dialog).getByRole('textbox', { name: /Workspace ID/ }),
+      workspace,
+    )
+    await user.click(
+      within(dialog).getByRole('checkbox', { name: 'Read work' }),
+    )
+    await user.click(save)
+    await waitFor(() =>
+      expect(api.patchProfile).toHaveBeenCalledWith('ppf_a', {
+        session_work_grant: {
+          role: 'orchestrator',
+          workspace_id: workspace,
+          capabilities: ['work.read'],
+        },
+      }),
+    )
+    expect(
+      screen.queryByRole('dialog', { name: 'Edit orchestration grant' }),
+    ).toBeNull()
+  })
+
+  it('revokes through explicit null and closes a draft when administration leaves', async () => {
+    api.getProfile.mockResolvedValue({
+      ...homeA,
+      session_work_grant: workGrant,
+    })
+    const { user, rerender, qc } = await openSheet(/Home A/)
+    await user.click(
+      await screen.findByRole('button', { name: 'Revoke orchestration grant' }),
+    )
+    const dialog = screen.getByRole('dialog', {
+      name: 'Revoke orchestration grant',
+    })
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Revoke grant' }),
+    )
+    await waitFor(() =>
+      expect(api.patchProfile).toHaveBeenCalledWith('ppf_a', {
+        session_work_grant: null,
+      }),
+    )
+    await user.click(
+      screen.getByRole('button', { name: 'Edit orchestration grant' }),
+    )
+    grant(READ, WRITE)
+    rerender(
+      <QueryClientProvider client={qc}>
+        <ProfilesPanel />
+      </QueryClientProvider>,
+    )
+    expect(
+      screen.queryByRole('dialog', { name: 'Edit orchestration grant' }),
+    ).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: 'Edit orchestration grant' }),
+    ).toBeNull()
+    expect(api.patchProfile).toHaveBeenCalledTimes(1)
+  })
+})
+
 beforeEach(() => {
   vi.clearAllMocks()
   auth.activeTenant = 't1'

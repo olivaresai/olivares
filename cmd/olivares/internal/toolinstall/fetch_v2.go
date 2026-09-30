@@ -44,8 +44,8 @@ func (f fetcher) confine(policy RedirectPolicyV2, allowed []string) fetcher {
 }
 
 func (f fetcher) bounded(ctx context.Context, u string, max int64, w io.Writer) (FetchedObjectObserved, error) {
-	if max <= 0 || max > maxV2FetchedBytes {
-		return FetchedObjectObserved{}, refuse(KindInvalidRequest, "fetched object max_size %d is outside 1..%d", max, maxV2FetchedBytes)
+	if max <= 0 || max > maxReleaseArchiveBytes {
+		return FetchedObjectObserved{}, refuse(KindInvalidRequest, "fetched object max_size %d is outside 1..%d", max, maxReleaseArchiveBytes)
 	}
 	resp, err := f.get(ctx, u)
 	if err != nil {

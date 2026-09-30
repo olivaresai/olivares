@@ -1010,9 +1010,12 @@ func (inv pgEvidenceInventory) classify(cal evidenceStateCalibration) (string, e
 				return "", inventoryRefusal("more than one state CHECK")
 			}
 			state = &inv.constraints[i]
-		case c.typ == "n" && c.name == table+"_"+c.columns+"_not_null" && c.validated:
-			// PostgreSQL 18 catalogs NOT NULL as constraints; only the exact
-			// generated NOT NULL columns are accepted (not exercised on PG16).
+		case c.typ == "n" && c.validated:
+			// PostgreSQL 18 catalogs NOT NULL as constraints. This inventory is
+			// bound to the relation; generated names do not identify its columns.
+			if notNull[c.columns] {
+				return "", inventoryRefusal("more than one NOT NULL constraint on %s", c.columns)
+			}
 			notNull[c.columns] = true
 		default:
 			return "", inventoryRefusal("unexpected constraint %s (%s)", c.name, c.typ)

@@ -139,7 +139,7 @@ export function TemplateCard({ template, onEdit, onApply }: TemplateCardProps) {
             )}
             <CardTitle
               as="h2"
-              className="min-w-0 truncate text-body font-semibold"
+              className="min-w-0 break-words text-body font-semibold"
             >
               {template.name}
             </CardTitle>
@@ -198,7 +198,7 @@ export function TemplateCard({ template, onEdit, onApply }: TemplateCardProps) {
 
         <CardContent className="flex-1">
           {template.description ? (
-            <CardDescription className="line-clamp-2 text-caption">
+            <CardDescription className="whitespace-normal text-caption [overflow-wrap:anywhere]">
               {template.description}
             </CardDescription>
           ) : (
@@ -218,7 +218,7 @@ export function TemplateCard({ template, onEdit, onApply }: TemplateCardProps) {
           {isArchived && (
             <Badge variant="neutral">{t('catalog.archived')}</Badge>
           )}
-          <span className="ml-auto truncate text-caption text-muted-foreground">
+          <span className="ml-auto min-w-0 break-words text-caption text-muted-foreground">
             {t('catalog.author', { author: template.author })}
           </span>
         </CardFooter>

@@ -38,7 +38,7 @@ Olivares AI 在两个位置使用 gRPC，方向彼此相反：
 
 <!-- BEGIN GENERATED olivares-grpc-reference — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-引擎和插件宿主在 **7 个服务**中注册 **28 个 RPC**。下表读取自服务器交给 gRPC 的
+引擎和插件宿主在 **7 个服务**中注册 **29 个 RPC**。下表读取自服务器交给 gRPC 的
 生成注册表，因此这里列出的方法就是客户端能够调用的方法。
 
 ### `olivares.api.v1.ControlPlane`
@@ -109,13 +109,14 @@ Olivares AI 在两个位置使用 gRPC，方向彼此相反：
 
 ### `olivares.sdk.v1.SourceService`
 
-定义于 `olivaresv1/v1.proto`；4 个 RPC。
+定义于 `olivaresv1/v1.proto`；5 个 RPC。
 
 | 方法 | 完整方法 | 类型 | 请求 | 响应 | 用途 |
 |---|---|---|---|---|---|
 | `Close` | `/olivares.sdk.v1.SourceService/Close` | unary | `Empty` | `Empty` | 结束由 `Open` 打开的会话，并释放连接器为该会话持有的所有内容。 |
 | `Describe` | `/olivares.sdk.v1.SourceService/Describe` | unary | `Empty` | `DescribeResponse` | 返回连接器描述符：身份、配置字段和声明的能力。 |
 | `Gather` | `/olivares.sdk.v1.SourceService/Gather` | server-streaming | `Empty` | `Observation` (stream) | 将观测流式传给宿主，由宿主把每一项提升到事件总线。批处理运行完成或宿主取消时，流会结束。 |
+| `GatherInventory` | `/olivares.sdk.v1.SourceService/GatherInventory` | server-streaming | `GatherInventoryRequest` | `Observation` (stream) | 仅针对已协商的 inventory-coverage-v1 能力，流式传输连接器的清单观测；其他任何能力都会被拒绝，已取消的流绝不会报告成功。 |
 | `Open` | `/olivares.sdk.v1.SourceService/Open` | unary | `OpenRequest` | `Empty` | 在采集任何观测前，使用宿主提供的配置启动会话。 |
 
 <!-- END GENERATED olivares-grpc-reference -->

@@ -113,6 +113,13 @@ export function GroupHierarchySection({ canAdmin }: { canAdmin: boolean }) {
                 <tr key={g.id}>
                   <td className="font-mono text-caption text-foreground">
                     {g.display_name || g.id}
+                    {g.provisioned_by && g.provisioned_by !== 'operator' ? (
+                      <span className="mt-1 block font-sans text-muted-foreground">
+                        {t('console:granular.groupSubjects.managedBy', {
+                          provisioner: g.provisioned_by,
+                        })}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="text-foreground">
                     {g.parent_group_id
@@ -132,34 +139,36 @@ export function GroupHierarchySection({ canAdmin }: { canAdmin: boolean }) {
                   </td>
                   {canAdmin && (
                     <td className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setMapping(g)}
-                        >
-                          {g.mapped_role
-                            ? t('console:granular.groupSubjects.changeRole')
-                            : t('console:granular.groupSubjects.mapRole')}
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditing(g)}
-                        >
-                          {t('console:granular.groupSubjects.setParent')}
-                        </Button>
-                        {g.parent_group_id && (
+                      {!g.provisioned_by || g.provisioned_by === 'operator' ? (
+                        <div className="flex justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => setClearing(g)}
+                            onClick={() => setMapping(g)}
                           >
-                            <Trash2 />
-                            {t('console:granular.groupSubjects.clearParent')}
+                            {g.mapped_role
+                              ? t('console:granular.groupSubjects.changeRole')
+                              : t('console:granular.groupSubjects.mapRole')}
                           </Button>
-                        )}
-                      </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditing(g)}
+                          >
+                            {t('console:granular.groupSubjects.setParent')}
+                          </Button>
+                          {g.parent_group_id && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => setClearing(g)}
+                            >
+                              <Trash2 />
+                              {t('console:granular.groupSubjects.clearParent')}
+                            </Button>
+                          )}
+                        </div>
+                      ) : null}
                     </td>
                   )}
                 </tr>

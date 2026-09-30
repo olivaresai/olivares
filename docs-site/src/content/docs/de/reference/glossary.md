@@ -14,7 +14,7 @@ enger als ihre Branchenverwendung, und die Enge ist der Punkt.
 Modul IIIs Graph von **Origins** (Agents, Identities, Sessions) und den
 **Resources**, die sie berühren, jede Kante klassifiziert nach [Modus](#mode) und getaggt
 mit ihrer [Signalquelle](#signal-source), [Attribution](#attribution-konfidenz)
-und [Coverage-Stufe](#coverage-stufe). Eine zentrale differenzierte Fähigkeit — eines der 30
+und [Coverage-Stufe](#coverage-stufe). Eine zentrale differenzierte Fähigkeit — eines der 31
 Module, nicht das ganze Produkt. Siehe [Was ist Olivares AI?](/de/start/what-is-olivares-ai/).
 
 ### Aktuierungszustände: `v1` / `on-demand` / `seam`

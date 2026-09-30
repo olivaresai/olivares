@@ -70,6 +70,10 @@ func (s *Server) writeSCIMGroupError(w http.ResponseWriter, r *http.Request, err
 		// The PATCH retry budget ran out against sustained concurrent writes: the
 		// IdP's own retry re-reads fresh state.
 		writeSCIMError(w, scim.NewError(http.StatusConflict, "", "the group changed concurrently; retry the request"))
+	case errors.Is(err, auth.ErrGroupOriginReadOnly):
+		writeSCIMError(w, scim.NewError(http.StatusForbidden, scim.TypeMutability, "group is managed by another provisioner"))
+	case errors.Is(err, auth.ErrGroupOriginAdopted):
+		writeSCIMError(w, scim.NewError(http.StatusForbidden, scim.TypeMutability, "group cannot change provisioner"))
 	case errors.Is(err, auth.ErrInvalidScimGroup):
 		writeSCIMError(w, scim.NewError(http.StatusBadRequest, scim.TypeInvalidValue, "displayName is required"))
 	case errors.Is(err, auth.ErrRoleCeiling):
@@ -285,6 +289,7 @@ func (s *Server) handleListGroups(w http.ResponseWriter, r *http.Request) {
 			"id":              g.Group.ID.String(),
 			"display_name":    g.Group.DisplayName,
 			"external_id":     g.Group.ExternalID,
+			"provisioned_by":  g.Group.ProvisionedBy,
 			"mapped_role":     g.Group.MappedRole,
 			"parent_group_id": g.Group.ParentGroupID.String(),
 			"members":         len(g.Members),

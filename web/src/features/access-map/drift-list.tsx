@@ -189,7 +189,7 @@ function DriftRow({
         type="button"
         onClick={() => onSelect(entry)}
         className={cn(
-          'flex w-full items-center gap-2 rounded-md border px-2.5 py-1.5 text-left text-caption transition-colors outline-none',
+          'grid w-full min-w-0 grid-cols-[12px_minmax(0,1fr)_auto] items-start gap-x-2 gap-y-1 rounded-md border px-2.5 py-1.5 text-left text-caption transition-colors outline-none',
           'focus-visible:ring-2 focus-visible:ring-ring',
           tone === 'danger'
             ? 'border-danger-line bg-danger-soft/50 hover:bg-danger-soft'
@@ -199,19 +199,22 @@ function DriftRow({
         )}
       >
         <span
-          className="min-w-0 flex-1 truncate font-mono"
+          className="col-span-2 min-w-0 whitespace-normal font-mono [overflow-wrap:anywhere]"
           title={e.origin_ref}
         >
           {e.origin_ref || e.origin_kind}
         </span>
-        <ArrowRight className="size-3 shrink-0 text-muted-foreground" />
+        <ArrowRight className="col-start-1 row-start-2 size-3 shrink-0 text-muted-foreground" />
         <span
-          className="min-w-0 flex-1 truncate font-mono"
+          className="col-start-2 row-start-2 min-w-0 whitespace-normal font-mono [overflow-wrap:anywhere]"
           title={e.resource_ref}
         >
           {e.resource_ref || e.resource_kind}
         </span>
-        <AccessModeBadge mode={e.mode} className="shrink-0" />
+        <AccessModeBadge
+          mode={e.mode}
+          className="col-start-3 row-span-2 row-start-1 shrink-0"
+        />
       </button>
     </li>
   )

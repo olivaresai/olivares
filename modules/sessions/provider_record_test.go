@@ -168,12 +168,12 @@ func TestProviderRecord_Lifecycle(t *testing.T) {
 	if err != nil || after.KeyHint != "…WXYZ" {
 		t.Fatalf("rotate = %+v, %v", after, err)
 	}
-	opened, err := vault.Open(ctx, tenant, providerVaultName(rec.Ref))
+	opened, err := vault.Open(ctx, tenant, after.SecretRef)
 	if err != nil || string(opened) != rotated {
 		t.Fatalf("after rotation the vault holds %q, %v", string(opened), err)
 	}
 	if vault.count() != 1 {
-		t.Fatalf("rotation left %d sealed values, want 1 (it reseals in place)", vault.count())
+		t.Fatalf("rotation left %d sealed values, want 1 (it withdraws the superseded locator)", vault.count())
 	}
 
 	revoked, err := m.RevokeProviderRecord(ctx, testActor(), tenant, rec.Ref)

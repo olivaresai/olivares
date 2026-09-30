@@ -463,6 +463,27 @@ func selfCases() []selfCase {
 			})
 		}},
 		// ---- the governed doors a module reaches by type assertion -------------
+		{name: "system-route-door", want: exitClean, mutate: func(root string) error {
+			return edit(root, "modules/demo/demo.go", func(s string) string {
+				return strings.Replace(s, `reg.Handle("GET", "/things", "demo:thing:read", m.handleListThings)`, `door, ok := reg.(SystemRouteRegistrar)
+if !ok { return }
+door.HandleSystem("GET", "/things", m.handleListThings)`, 1)
+			})
+		}},
+		{name: "composition-root-module-routes", want: exitClean, mutate: func(root string) error {
+			body, err := os.ReadFile(filepath.Join(root, "modules/demo/demo.go"))
+			if err != nil {
+				return err
+			}
+			if err := os.MkdirAll(filepath.Join(root, "cmd/demo"), 0755); err != nil {
+				return err
+			}
+			if err := os.WriteFile(filepath.Join(root, "cmd/demo/demo.go"), body, 0644); err != nil {
+				return err
+			}
+			return os.WriteFile(filepath.Join(root, "modules/demo/demo.go"), []byte("package demo\n"), 0644)
+		}},
+
 		// core/api's recording registrar answers HandleSealed and HandlePolicy, so the
 		// beta document publishes a route mounted through either. A gate that reads
 		// only Handle and HandleEntity would never see it, and would stop at the

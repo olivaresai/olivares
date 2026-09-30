@@ -49,6 +49,9 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	reg.HandleEntity("GET", "/runs/{ref}", permRunRead, runEntity, m.handleGetRun)
 	reg.HandleEntity("GET", "/runs/{ref}/events", permRunRead, runEntity, m.handleRunEvents)
 	reg.HandleEntity("GET", "/runs/{ref}/attach", permRunRead, runEntity, m.handleAttachRun)
+	// A caller who can read this run may learn that an action is forbidden.
+	// Other workspaces and absent runs retain the same concealed 404.
+	runEntity.DeniedReadPermission = permRunRead
 	reg.HandleEntity("POST", "/runs/{ref}/input", permRunWrite, runEntity, m.handleRunInput)
 	reg.HandleEntity("POST", "/runs/{ref}/interrupt", permRunWrite, runEntity, m.handleInterruptRun)
 	reg.HandleEntity("POST", "/runs/{ref}/stop", permRunWrite, runEntity, m.handleStopRun)
@@ -215,16 +218,11 @@ func (m *Module) handleRunEvents(w http.ResponseWriter, r *http.Request, mc api.
 		return
 	}
 	q := listQuery(r)
-	q.Filters = append(q.Filters, eq(colEvRunRef, ref))
 	q.Cursor = ""
 	q.Sort = []model.Sort{{Column: colEvSeq, Desc: false}}
 	out := listResponse[runEventDTO]{Items: []runEventDTO{}}
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		repo, err := sc.Ext(runEventKind)
-		if err != nil {
-			return err
-		}
-		recs, page, err := repo.List(r.Context(), q)
+		recs, page, err := store.ListInheritedExtension(r.Context(), sc, runEventKind, model.ID(mc.Resource.ID), q)
 		if err != nil {
 			return err
 		}
@@ -235,6 +233,10 @@ func (m *Module) handleRunEvents(w http.ResponseWriter, r *http.Request, mc api.
 		return nil
 	})
 	if err != nil {
+		if errors.Is(err, store.ErrLineageUnavailable) {
+			writeJSON(w, http.StatusServiceUnavailable, errorBody("event lineage unavailable"))
+			return
+		}
 		writeStoreError(w, err)
 		return
 	}

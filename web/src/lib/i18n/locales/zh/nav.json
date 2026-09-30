@@ -95,9 +95,11 @@
     "providers": "提供方",
     "providerProfiles": "提供商配置文件",
     "providerBindings": "来源绑定",
-    "providerAccounts": "提供商账户"
+    "providerAccounts": "提供商账户",
+    "agent-tools": "智能体工具"
   },
   "workspace": {
+    "open": "打开 {{workspace}}",
     "switch": "切换工作区",
     "all": "所有工作区",
     "allHint": "无工作区筛选",
@@ -171,7 +173,8 @@
     "team-costs": "按团队的成本归属：会话、令牌和支出，含每日趋势以及按项目和模型的明细",
     "backups": "控制平面的加密灾难恢复快照：创建、计划、下载和恢复",
     "logs": "引擎实时日志流，支持按级别和模块筛选、搜索和暂停",
-    "sourceDiff": "逐个文件比较已连接 Git 仓库的基准修订与 head 修订"
+    "sourceDiff": "逐个文件比较已连接 Git 仓库的基准修订与 head 修订",
+    "agent-tools": "检测、安装和更新此主机上的智能体工具，并跟踪每次安装；仅限部署管理员"
   },
   "commandActions": {
     "eventing": {

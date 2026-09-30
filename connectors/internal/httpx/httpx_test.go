@@ -6,6 +6,7 @@ package httpx
 import (
 	"context"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -74,6 +75,159 @@ func TestGetJSONErrorCarriesStatusNotCredential(t *testing.T) {
 	}
 	if se.Status != 403 || se.Path != "/x" || !strings.Contains(se.Excerpt, "insufficient_scope") {
 		t.Errorf("StatusError fields wrong: %+v", se)
+	}
+}
+
+// errorDoer is a Doer that always fails with the injected error, the way
+// http.Client.Do surfaces a transport failure as a *url.Error embedding the full
+// request URL.
+type errorDoer struct{ err error }
+
+func (d errorDoer) Do(*http.Request) (*http.Response, error) { return nil, d.err }
+
+// TestGetTransportErrorStripsURLUserinfo is the H-05 regression test (26.10.x
+// security backlog): an operator-supplied base URL (e.g. the SSF receiver's
+// jwks_url) may carry userinfo credentials, and a transport failure must never
+// render them in diagnostics. Before the fix the *url.Error text — which embeds
+// the complete URL — propagated verbatim.
+func TestGetTransportErrorStripsURLUserinfo(t *testing.T) {
+	const rawURL = "https://feed-operator:s3cret-pass@example.test/jwks.json"
+	c := New(rawURL, errorDoer{err: &url.Error{Op: "Get", URL: rawURL, Err: errors.New("connection refused")}}, nil, nil)
+	err := c.GetJSON(context.Background(), "", nil, nil)
+	if err == nil {
+		t.Fatal("expected the transport error")
+	}
+	if strings.Contains(err.Error(), "s3cret-pass") || strings.Contains(err.Error(), "feed-operator") {
+		t.Errorf("transport error must not render URL userinfo: %v", err)
+	}
+	if !strings.Contains(err.Error(), "https://example.test/jwks.json") {
+		t.Errorf("the userinfo-free URL must stay in the diagnostic: %v", err)
+	}
+	// The chain keeps a typed *url.Error with the same cause, so callers'
+	// errors.Is/As discrimination is unchanged.
+	var uerr *url.Error
+	if !errors.As(err, &uerr) {
+		t.Fatalf("error chain must keep a *url.Error, got %T", err)
+	}
+}
+
+// TestGetTransportErrorWithoutUserinfoUnchanged pins the no-behavior-change
+// rule: a userinfo-free URL renders exactly as before the H-05 fix.
+func TestGetTransportErrorWithoutUserinfoUnchanged(t *testing.T) {
+	const rawURL = "https://example.test/jwks.json"
+	cause := errors.New("connection refused")
+	c := New(rawURL, errorDoer{err: &url.Error{Op: "Get", URL: rawURL, Err: cause}}, nil, nil)
+	err := c.GetJSON(context.Background(), "", nil, nil)
+	if err == nil {
+		t.Fatal("expected the transport error")
+	}
+	want := `httpx: GET : Get "https://example.test/jwks.json": connection refused`
+	if err.Error() != want {
+		t.Errorf("userinfo-free rendering must be byte-identical: got %q want %q", err.Error(), want)
+	}
+}
+
+// TestGetAbsoluteURLDiagnosticOmitsUserinfo is the H-05 follow-up regression
+// test (independent security finding 3, independent reviewer's scenario credited): a same-origin absolute
+// request target may itself carry userinfo, and the outer "httpx: GET %s"
+// prefix must not print it either — the transport branch before the fix did.
+func TestGetAbsoluteURLDiagnosticOmitsUserinfo(t *testing.T) {
+	const path = "https://feed-operator:s3cret-pass@directory.test/users"
+	cause := errors.New("connection refused")
+	c := New("https://directory.test", errorDoer{err: &url.Error{Op: "Get", URL: path, Err: cause}}, nil, nil)
+	err := c.GetJSON(context.Background(), path, nil, nil)
+	if err == nil {
+		t.Fatal("expected the transport error")
+	}
+	if strings.Contains(err.Error(), "s3cret-pass") || strings.Contains(err.Error(), "feed-operator") {
+		t.Errorf("absolute-URL diagnostic must not render userinfo: %v", err)
+	}
+	if !strings.Contains(err.Error(), "https://directory.test/users") {
+		t.Errorf("the userinfo-free target must stay in the diagnostic: %v", err)
+	}
+	if !errors.Is(err, cause) {
+		t.Errorf("the redaction must keep the transport cause: %v", err)
+	}
+}
+
+// staticDoer answers every request with the same response (no network).
+type staticDoer struct{ resp *http.Response }
+
+func (d staticDoer) Do(*http.Request) (*http.Response, error) { return d.resp, nil }
+
+// TestGetStatusErrorOmitsAbsoluteURLUserinfo covers the non-2xx branch: the
+// typed StatusError Path gets the same sanitized display form, so the
+// credential never rides the status diagnostic.
+func TestGetStatusErrorOmitsAbsoluteURLUserinfo(t *testing.T) {
+	const path = "https://feed-operator:s3cret-pass@directory.test/users"
+	resp := &http.Response{StatusCode: http.StatusForbidden, Body: io.NopCloser(strings.NewReader("denied")), Header: make(http.Header)}
+	c := New("https://directory.test", staticDoer{resp: resp}, nil, nil)
+	err := c.GetJSON(context.Background(), path, nil, nil)
+	if err == nil {
+		t.Fatal("expected the status error")
+	}
+	if strings.Contains(err.Error(), "s3cret-pass") || strings.Contains(err.Error(), "feed-operator") {
+		t.Errorf("status diagnostic must not render userinfo: %v", err)
+	}
+	var se *StatusError
+	if !errors.As(err, &se) {
+		t.Fatalf("expected a *StatusError, got %T", err)
+	}
+	if se.Status != http.StatusForbidden || strings.Contains(se.Path, "@") {
+		t.Errorf("StatusError = %+v, want status 403 and a userinfo-free path", se)
+	}
+}
+
+// TestBuildRequestErrorOmitsUnparsableURL covers the request-build branch on a
+// base-less client: an unparsable target cannot be proven credential-free, so
+// neither the prefix nor the wrapped parse error renders it.
+func TestBuildRequestErrorOmitsUnparsableURL(t *testing.T) {
+	const path = "https://feed-operator:s3cret-pass@exa mple/x"
+	c := New("", errorDoer{err: errors.New("unreachable")}, nil, nil)
+	err := c.GetJSON(context.Background(), path, nil, nil)
+	if err == nil {
+		t.Fatal("expected the build error")
+	}
+	if strings.Contains(err.Error(), "s3cret-pass") || strings.Contains(err.Error(), "feed-operator") {
+		t.Errorf("build diagnostic must not render the unparsable value: %v", err)
+	}
+	if !strings.Contains(err.Error(), "[unparsable URL not shown]") {
+		t.Errorf("the fixed marker must stand in for the value: %v", err)
+	}
+}
+
+// TestGetNestedURLErrorStripsUserinfoEverywhere pins the recursive strip: a
+// Doer may itself return a *url.Error, and http.Client.Do then wraps it in
+// another — every level must lose its userinfo, and the cause must survive.
+func TestGetNestedURLErrorStripsUserinfoEverywhere(t *testing.T) {
+	const rawURL = "https://feed-operator:s3cret-pass@example.test/jwks.json"
+	cause := errors.New("connection refused")
+	inner := &url.Error{Op: "Get", URL: rawURL, Err: cause}
+	outer := &url.Error{Op: "Get", URL: rawURL, Err: inner}
+	c := New(rawURL, errorDoer{err: outer}, nil, nil)
+	err := c.GetJSON(context.Background(), "", nil, nil)
+	if err == nil {
+		t.Fatal("expected the transport error")
+	}
+	if strings.Contains(err.Error(), "s3cret-pass") || strings.Contains(err.Error(), "feed-operator") {
+		t.Errorf("no level of the error chain may render userinfo: %v", err)
+	}
+	if !errors.Is(err, cause) {
+		t.Errorf("the recursive redaction must keep the cause: %v", err)
+	}
+}
+
+// TestDisplayPathKeepsCleanTargets pins the no-behavior-change rule for the
+// display form itself: relative paths and userinfo-free absolute URLs render
+// byte-identical.
+func TestDisplayPathKeepsCleanTargets(t *testing.T) {
+	for _, path := range []string{"/users", "", "https://directory.test/users?q=1"} {
+		if got := displayPath(path); got != path {
+			t.Errorf("displayPath(%q) = %q, want byte-identical", path, got)
+		}
+	}
+	if got := displayPath("https://u:p@directory.test/users"); got != "https://directory.test/users" {
+		t.Errorf("displayPath with userinfo = %q", got)
 	}
 }
 

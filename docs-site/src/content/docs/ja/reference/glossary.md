@@ -13,7 +13,8 @@ description: >-
 モジュール III が持つ、**origin**（エージェント、アイデンティティ、セッション）と、それらが触れる
 **リソース**のグラフ。すべてのエッジは [mode](#mode) によって分類され、その [signal source](#signal-sourceシグナルソース)、
 [attribution](#attributionconfidence)、[coverage tier](#coverage-tierカバレッジ階層) でタグ付けされる。差別化された
-鍵となる能力の 1 つ —— 31 モジュールのうちの 1 つであって、製品全体ではない。
+鍵となる能力の 1 つ ——
+31 モジュールのうちの 1 つであって、製品全体ではない。
 [Olivares AI とは？](/ja/start/what-is-olivares-ai/) を参照。
 
 ### Actuation states: `v1` / `on-demand` / `seam`

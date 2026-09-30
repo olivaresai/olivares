@@ -123,18 +123,12 @@ export function ReportingView() {
                   {reports.map((r) => (
                     <tr key={r.type}>
                       <td>
-                        {/* ONE LINE, name › detail. The catalogue row stacked the
-                            report's title over its description and measured 51 px
-                            against the 36 px table budget, while the other two
-                            columns held a badge and a button. The title never gives
-                            way; the description truncates before it and keeps its
-                            full text on `title`. */}
-                        <div className="flex min-w-0 items-center gap-2">
-                          <span className="shrink-0 font-medium text-foreground">
+                        <div className="flex min-w-0 flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-2">
+                          <span className="min-w-0 break-words font-medium text-foreground">
                             {r.title}
                           </span>
                           <span
-                            className="min-w-0 truncate text-caption text-muted-foreground"
+                            className="min-w-0 whitespace-normal text-caption text-muted-foreground [overflow-wrap:anywhere]"
                             title={r.description}
                           >
                             {r.description}

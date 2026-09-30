@@ -78,6 +78,8 @@ import {
   type LaunchReadinessTransport,
 } from './launch-readiness'
 import { ProfileCreateDialog } from './profile-create-dialog'
+import { ProfileWorkGrant } from './profile-work-grant'
+import { ProfileAuthentication } from './profile-authentication'
 import type { PatchProfileRequest, ProviderProfileDTO } from './types'
 import { useFreshRead } from './use-fresh-read'
 import './i18n'
@@ -786,6 +788,16 @@ function ProfileSheetBody({ initial }: { initial: ProviderProfileDTO }) {
           </KvRow>
         )}
       </KvList>
+
+      <ProfileAuthentication
+        profile={profile}
+        readReady={!detail.isPlaceholderData && !detail.isError}
+      />
+
+      <ProfileWorkGrant
+        profile={profile}
+        readReady={!detail.isPlaceholderData && !detail.isError}
+      />
 
       <div className="flex flex-col gap-2">
         <Field label={t('readiness.transport')}>

@@ -44,6 +44,9 @@ const (
 	// CoreKindSession is core/model.Session — the row the session cockpit
 	// authorizes on (COCKPIT-01: the SID is never the Cedar resource id).
 	CoreKindSession
+	// CoreKindWorkspace is core/model.Workspace. Its workspace lineage is the
+	// stored row's own ID, so a route can authorize within that exact workspace.
+	CoreKindWorkspace
 )
 
 // String renders the kind for errors and evidence.
@@ -51,6 +54,8 @@ func (k CoreKind) String() string {
 	switch k {
 	case CoreKindSession:
 		return "core.session"
+	case CoreKindWorkspace:
+		return "core.workspace"
 	default:
 		return "core.unknown"
 	}
@@ -58,7 +63,7 @@ func (k CoreKind) String() string {
 
 // valid reports whether k is a registered kind. CoreKindNone is NOT valid here: it
 // means "no core entity declared", which callers check separately.
-func (k CoreKind) valid() bool { return k == CoreKindSession }
+func (k CoreKind) valid() bool { return k == CoreKindSession || k == CoreKindWorkspace }
 
 // CoreEntityFacts is EVERYTHING the resolver returns about a core row.
 //
@@ -104,6 +109,14 @@ type CoreEntityAuthorizationResolver interface {
 // failed in flight would serve requests until somebody touched that path — which is
 // the same as not checking.
 func validateCoreEntityRef(ref EntityRef, resolver CoreEntityAuthorizationResolver) error {
+	if ref.DeniedReadPermission != "" {
+		if !ref.ConcealDeniedAsNotFound || (ref.Kind == "" && ref.CoreKind == CoreKindNone) {
+			return fmt.Errorf("api: a denial read permission requires a concealed stored entity")
+		}
+		if ref.DeniedReadPermission.Verb() != auth.VerbRead {
+			return fmt.Errorf("api: a denial read permission must name a read verb")
+		}
+	}
 	if ref.LookupColumn != "" && (ref.Kind == "" || ref.CoreKind != CoreKindNone) {
 		return fmt.Errorf("api: an alternate entity locator requires only a module Kind")
 	}

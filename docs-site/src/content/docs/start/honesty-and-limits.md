@@ -137,7 +137,7 @@ Treat module-level depth as **work in progress** unless a page states otherwise.
   Models you genuinely self-host (e.g. via vLLM/Ollama under module XXIII) can run
   air-gapped; brokered frontier models cannot.
 - **Module routes are a separate, beta contract.** The module endpoints (for
-  example the access-map graph and drift) are not part of the 54-path stable core
+  example the access-map graph and drift) are not part of the 67-path stable core
   contract; they are published as a separate **beta** document — the
   [module-route reference](/reference/api-beta/) (served at `/openapi.beta.json`).
   Beta means the shapes may change with notice, and field-level detail still lives

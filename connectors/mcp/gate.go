@@ -121,6 +121,7 @@ func (denyApprovalGate) Authorize(_ context.Context, req ToolApprovalRequest) (G
 type UpstreamRequest struct {
 	Method      string
 	Params      []byte   // the JSON-RPC params (canonical governed bytes on enforced methods)
+	ClientID    string   // validated OAuth client identity, never a bearer
 	Subject     string   // validated token subject (for the upstream adapter's attribution)
 	Scopes      []string // validated granted scopes
 	TraceParent string   // W3C trace context to propagate upstream (never a credential)

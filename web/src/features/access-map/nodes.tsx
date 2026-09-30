@@ -118,7 +118,7 @@ export function OriginNode({
             node labelled by its reference. The reference is on `title` either way. */}
         <div
           className={cn(
-            'max-w-[170px] truncate text-caption text-foreground',
+            'max-w-[170px] whitespace-normal text-caption [overflow-wrap:anywhere] text-foreground',
             !sessionName && 'font-mono',
           )}
           title={data.label}
@@ -175,7 +175,7 @@ export function ResourceNode({
       </span>
       <div className="min-w-0">
         <div
-          className="max-w-[190px] truncate font-mono text-caption text-foreground"
+          className="max-w-[190px] whitespace-normal font-mono text-caption [overflow-wrap:anywhere] text-foreground"
           title={data.label}
         >
           {data.label}

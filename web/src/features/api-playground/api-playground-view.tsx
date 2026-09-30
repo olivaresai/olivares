@@ -152,9 +152,9 @@ export function ApiPlaygroundView() {
         }
       />
 
-      <div className="flex min-h-0 flex-1 divide-x border-t">
+      <div className="flex min-h-0 flex-1 flex-col divide-y border-t lg:flex-row lg:divide-x lg:divide-y-0">
         {/* Left panel: endpoint tree */}
-        <div className="w-72 shrink-0 overflow-hidden">
+        <div className="h-64 w-full shrink-0 overflow-hidden lg:h-auto lg:w-72">
           <EndpointTree
             groups={groups}
             selected={visibleSelectedEndpoint}
@@ -163,7 +163,7 @@ export function ApiPlaygroundView() {
         </div>
 
         {/* Center panel: request editor */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-64 min-w-0 flex-1 flex-col overflow-hidden lg:min-h-0">
           {visibleSelectedEndpoint ? (
             <RequestPanel endpoint={visibleSelectedEndpoint} />
           ) : (
@@ -174,7 +174,7 @@ export function ApiPlaygroundView() {
         </div>
 
         {/* Right panel: response + history */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+        <div className="flex min-h-64 min-w-0 flex-1 flex-col overflow-hidden lg:min-h-0">
           <Tabs
             value={rightTab}
             onValueChange={(v) => setRightTab(v as 'response' | 'history')}

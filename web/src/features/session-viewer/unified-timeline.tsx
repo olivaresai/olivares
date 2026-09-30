@@ -240,7 +240,7 @@ function ActivityRow({
             {t(`timeline.${entry.kind}`, { defaultValue: entry.kind })}
           </Badge>
           <span
-            className="truncate text-caption font-medium text-foreground"
+            className="min-w-0 whitespace-normal text-caption font-medium text-foreground [overflow-wrap:anywhere]"
             title={label}
           >
             {label}
@@ -294,7 +294,7 @@ function EvidenceRow({
           <span className="font-mono text-[10px] text-muted-foreground">
             #{frame.idx}
           </span>
-          <span className="truncate text-caption font-medium text-foreground">
+          <span className="min-w-0 whitespace-normal text-caption font-medium text-foreground [overflow-wrap:anywhere]">
             {frame.method} {frame.namespace}
             {frame.pattern}
           </span>

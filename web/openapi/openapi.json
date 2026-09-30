@@ -1265,6 +1265,287 @@
         ],
         "type": "object"
       },
+      "MCPGatewayServer": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_tools": {
+            "items": {
+              "$ref": "#/components/schemas/MCPGatewayToolPolicy"
+            },
+            "type": "array"
+          },
+          "credential_ref": {
+            "description": "Own tenant store:mcp/\u003cname\u003e reference; empty means no upstream authentication. Never a value or global fallback.",
+            "type": "string"
+          },
+          "egress_cidrs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "probe": {
+            "additionalProperties": false,
+            "properties": {
+              "state": {
+                "type": "string"
+              },
+              "tested_at": {
+                "type": "string"
+              },
+              "tools": {
+                "items": {
+                  "additionalProperties": false,
+                  "properties": {
+                    "fingerprint": {
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "fingerprint"
+                  ],
+                  "type": "object"
+                },
+                "type": "array"
+              }
+            },
+            "required": [
+              "state",
+              "tools"
+            ],
+            "type": "object"
+          },
+          "transport": {
+            "enum": [
+              "streamable_http"
+            ],
+            "type": "string"
+          },
+          "trust": {
+            "$ref": "#/components/schemas/MCPGatewayTrust"
+          },
+          "url": {
+            "description": "Exact HTTPS endpoint without credentials, query or fragment.",
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "transport",
+          "url",
+          "trust",
+          "enabled",
+          "probe",
+          "egress_cidrs",
+          "allowed_tools"
+        ],
+        "type": "object"
+      },
+      "MCPGatewayServerInput": {
+        "additionalProperties": false,
+        "properties": {
+          "allowed_tools": {
+            "items": {
+              "$ref": "#/components/schemas/MCPGatewayToolPolicy"
+            },
+            "type": "array"
+          },
+          "credential_ref": {
+            "description": "Own tenant store:mcp/\u003cname\u003e reference; empty means no upstream authentication. Never a value or global fallback.",
+            "type": "string"
+          },
+          "egress_cidrs": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "enabled": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "transport": {
+            "enum": [
+              "streamable_http"
+            ],
+            "type": "string"
+          },
+          "trust": {
+            "$ref": "#/components/schemas/MCPGatewayTrust"
+          },
+          "url": {
+            "description": "Exact HTTPS endpoint without credentials, query or fragment.",
+            "format": "uri",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "transport",
+          "url",
+          "trust",
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "MCPGatewayServerWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "server": {
+            "$ref": "#/components/schemas/MCPGatewayServerInput"
+          },
+          "version": {
+            "description": "Current tenant configuration version; stale writes return 409.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "server"
+        ],
+        "type": "object"
+      },
+      "MCPGatewaySessionWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "version": {
+            "description": "Current tenant configuration version; stale writes return 409.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "enabled"
+        ],
+        "type": "object"
+      },
+      "MCPGatewaySnapshot": {
+        "additionalProperties": false,
+        "properties": {
+          "governance": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "read_only": {
+            "type": "boolean"
+          },
+          "servers": {
+            "items": {
+              "$ref": "#/components/schemas/MCPGatewayServer"
+            },
+            "type": "array"
+          },
+          "session_endpoint": {
+            "type": "string"
+          },
+          "session_tools": {
+            "type": "boolean"
+          },
+          "source": {
+            "enum": [
+              "file",
+              "store"
+            ],
+            "type": "string"
+          },
+          "version": {
+            "description": "Current tenant configuration version; stale writes return 409.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version",
+          "source",
+          "read_only",
+          "session_tools",
+          "session_endpoint",
+          "servers",
+          "governance"
+        ],
+        "type": "object"
+      },
+      "MCPGatewayToolPolicy": {
+        "additionalProperties": false,
+        "properties": {
+          "destructive": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "required_scope": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "required_scope",
+          "destructive"
+        ],
+        "type": "object"
+      },
+      "MCPGatewayTrust": {
+        "additionalProperties": false,
+        "properties": {
+          "issuer": {
+            "type": "string"
+          },
+          "jwks": {
+            "description": "Public asymmetric JWKS only; private keys are rejected.",
+            "type": "object"
+          },
+          "jwks_url": {
+            "type": "string"
+          },
+          "resource": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "resource",
+          "issuer"
+        ],
+        "type": "object"
+      },
+      "MCPGatewayVersion": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "description": "Current tenant configuration version; stale writes return 409.",
+            "minimum": 0,
+            "type": "integer"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "type": "object"
+      },
       "Org": {
         "properties": {
           "created_at": {
@@ -2057,6 +2338,193 @@
         "required": [
           "name",
           "tenant"
+        ],
+        "type": "object"
+      },
+      "TOTPActivateInput": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "mfa_token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code"
+        ],
+        "type": "object"
+      },
+      "TOTPActivationResponse": {
+        "properties": {
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "recovery_codes": {
+            "description": "Single-use recovery codes, revealed only in this response.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "session_id": {
+            "format": "uuid",
+            "type": "string"
+          },
+          "token": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "recovery_codes"
+        ],
+        "type": "object"
+      },
+      "TOTPChallengeInput": {
+        "anyOf": [
+          {
+            "required": [
+              "code"
+            ]
+          },
+          {
+            "required": [
+              "recovery_code"
+            ]
+          }
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "mfa_token": {
+            "type": "string"
+          },
+          "recovery_code": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "mfa_token"
+        ],
+        "type": "object"
+      },
+      "TOTPEnrolInput": {
+        "properties": {
+          "mfa_token": {
+            "type": "string"
+          }
+        },
+        "type": "object"
+      },
+      "TOTPEnrolment": {
+        "properties": {
+          "algorithm": {
+            "type": "string"
+          },
+          "digits": {
+            "type": "integer"
+          },
+          "period": {
+            "type": "integer"
+          },
+          "qr_png_base64": {
+            "contentEncoding": "base64",
+            "type": "string"
+          },
+          "secret": {
+            "type": "string"
+          },
+          "uri": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "secret",
+          "uri",
+          "algorithm",
+          "digits",
+          "period",
+          "qr_png_base64"
+        ],
+        "type": "object"
+      },
+      "TOTPLoginChallenge": {
+        "properties": {
+          "enrolment_required": {
+            "type": "boolean"
+          },
+          "mfa_required": {
+            "const": true,
+            "type": "boolean"
+          },
+          "mfa_token": {
+            "type": "string"
+          },
+          "pending_expires_in_s": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "mfa_required",
+          "mfa_token",
+          "enrolment_required",
+          "pending_expires_in_s"
+        ],
+        "type": "object"
+      },
+      "TOTPOK": {
+        "properties": {
+          "ok": {
+            "const": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "type": "object"
+      },
+      "TOTPPolicy": {
+        "properties": {
+          "require_for_admins": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "require_for_admins"
+        ],
+        "type": "object"
+      },
+      "TOTPStatus": {
+        "properties": {
+          "activated_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "algorithm": {
+            "type": "string"
+          },
+          "digits": {
+            "type": "integer"
+          },
+          "enrolled": {
+            "type": "boolean"
+          },
+          "period": {
+            "type": "integer"
+          },
+          "recovery_codes_remaining": {
+            "type": "integer"
+          },
+          "seed_hint": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "enrolled",
+          "recovery_codes_remaining"
         ],
         "type": "object"
       },
@@ -4536,7 +5004,7 @@
     },
     "/v1/auth/login": {
       "post": {
-        "description": "Exchanges an email and password for a session token.",
+        "description": "Verifies an email and password. Returns a completed session or a pending second-factor challenge without a session token.",
         "operationId": "login",
         "requestBody": {
           "content": {
@@ -4553,11 +5021,18 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LoginResponse"
+                  "oneOf": [
+                    {
+                      "$ref": "#/components/schemas/LoginResponse"
+                    },
+                    {
+                      "$ref": "#/components/schemas/TOTPLoginChallenge"
+                    }
+                  ]
                 }
               }
             },
-            "description": "OK"
+            "description": "Completed session or pending second-factor challenge"
           },
           "400": {
             "content": {
@@ -4793,6 +5268,732 @@
           }
         ],
         "summary": "Renew the calling session token (rotates the credential, extends expiry)",
+        "tags": [
+          "auth"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/v1/auth/totp": {
+      "delete": {
+        "description": "Removes the calling account's factor and recovery codes. Requires an authenticated AAL3 session.",
+        "operationId": "removeTOTP",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TOTPOK"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Remove the calling account's factor with AAL3",
+        "tags": [
+          "auth"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/v1/auth/totp/activate": {
+      "post": {
+        "description": "Activates the pending factor after verifying its code and reveals ten recovery codes once. A policy-forced enrolment also returns the completed login session.",
+        "operationId": "activateTOTP",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TOTPActivateInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TOTPActivationResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
+        "summary": "Prove possession and reveal recovery codes once",
+        "tags": [
+          "auth"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/v1/auth/totp/challenge": {
+      "post": {
+        "description": "Completes a primary-verified pending login with an authenticator code or a single-use recovery code. Wrong codes are throttled; successful proof and session issuance are transactional.",
+        "operationId": "completeTOTPLogin",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TOTPChallengeInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LoginResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          }
+        },
+        "security": [
+          {}
+        ],
+        "summary": "Complete a pending login with a code or recovery code",
+        "tags": [
+          "auth"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/v1/auth/totp/enrol": {
+      "post": {
+        "description": "Starts enrolment from an authenticated session or a primary-verified pending login. Returns the secret and QR once; replacing a factor requires AAL3.",
+        "operationId": "enrolTOTP",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TOTPEnrolInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TOTPEnrolment"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {}
+        ],
+        "summary": "Start a TOTP enrolment with a session or a pending login",
+        "tags": [
+          "auth"
+        ],
+        "x-stability": "stable"
+      }
+    },
+    "/v1/auth/totp/policy": {
+      "get": {
+        "description": "Returns whether administrators must enrol a factor. Requires system administration authority.",
+        "operationId": "getTOTPPolicy",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TOTPPolicy"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Read the administrator factor policy",
+        "tags": [
+          "auth"
+        ],
+        "x-required-permission": "system:admin",
+        "x-stability": "stable"
+      },
+      "put": {
+        "description": "Sets whether administrators must enrol a factor before completing password login. Requires system administration authority and AAL3.",
+        "operationId": "setTOTPPolicy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TOTPPolicy"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TOTPPolicy"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Set the administrator factor policy with AAL3",
+        "tags": [
+          "auth"
+        ],
+        "x-required-permission": "system:admin",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/auth/totp/status": {
+      "get": {
+        "description": "Returns the authenticated account's factor status and remaining recovery-code count without seed material.",
+        "operationId": "getTOTPStatus",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TOTPStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Read the calling account's factor status",
         "tags": [
           "auth"
         ],
@@ -6017,9 +7218,692 @@
         "x-stability": "stable"
       }
     },
+    "/v1/console/mcp-gateway": {
+      "get": {
+        "description": "Returns the authenticated tenant's effective MCP configuration, source ownership and actual governance without credential values. Requires tenant admin; workspace-confined credentials are refused.",
+        "operationId": "getMCPGateway",
+        "parameters": [
+          {
+            "description": "Authenticated target tenant; workspace-confined credentials are refused.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPGatewaySnapshot"
+                }
+              }
+            },
+            "description": "Current reference-only configuration"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Read the effective MCP gateway configuration and governance.",
+        "tags": [
+          "console"
+        ],
+        "x-required-permission": "tenant:admin",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/console/mcp-gateway/servers": {
+      "post": {
+        "description": "Adds a disabled Streamable HTTP server using own-tenant sealed references and version compare-and-swap. Requires tenant admin and AAL3; file-owned mode is read-only.",
+        "operationId": "addMCPGatewayServer",
+        "parameters": [
+          {
+            "description": "Authenticated target tenant; workspace-confined credentials are refused.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPGatewayServerWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPGatewaySnapshot"
+                }
+              }
+            },
+            "description": "Disabled server added"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Add a disabled upstream using tenant secret references (AAL3).",
+        "tags": [
+          "console"
+        ],
+        "x-required-aal": 3,
+        "x-required-permission": "tenant:admin",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/console/mcp-gateway/servers/{id}": {
+      "delete": {
+        "description": "Removes a server and blocks subsequent dispatch without deleting its sealed credential. Requires tenant admin, AAL3 and the current configuration version.",
+        "operationId": "removeMCPGatewayServer",
+        "parameters": [
+          {
+            "description": "Authenticated target tenant; workspace-confined credentials are refused.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPGatewayVersion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPGatewaySnapshot"
+                }
+              }
+            },
+            "description": "Current reference-only configuration"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Remove an upstream from the tenant gateway (AAL3).",
+        "tags": [
+          "console"
+        ],
+        "x-required-aal": 3,
+        "x-required-permission": "tenant:admin",
+        "x-stability": "stable"
+      },
+      "parameters": [
+        {
+          "description": "Server identifier in this tenant.",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "format": "uuid",
+            "type": "string"
+          }
+        }
+      ],
+      "put": {
+        "description": "Updates an own-tenant server using version compare-and-swap. Enabling requires a successful current probe, resource and issuer trust and explicit tool scopes. Requires tenant admin and AAL3.",
+        "operationId": "updateMCPGatewayServer",
+        "parameters": [
+          {
+            "description": "Authenticated target tenant; workspace-confined credentials are refused.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPGatewayServerWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPGatewaySnapshot"
+                }
+              }
+            },
+            "description": "Current reference-only configuration"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Update or explicitly enable a tested upstream (AAL3).",
+        "tags": [
+          "console"
+        ],
+        "x-required-aal": 3,
+        "x-required-permission": "tenant:admin",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/console/mcp-gateway/servers/{id}/test": {
+      "parameters": [
+        {
+          "description": "Server identifier in this tenant.",
+          "in": "path",
+          "name": "id",
+          "required": true,
+          "schema": {
+            "format": "uuid",
+            "type": "string"
+          }
+        }
+      ],
+      "post": {
+        "description": "Initializes the exact admitted HTTPS endpoint and inventories tools without calling them. Records a bounded verdict and audit using version compare-and-swap. Requires tenant admin and AAL3.",
+        "operationId": "testMCPGatewayServer",
+        "parameters": [
+          {
+            "description": "Authenticated target tenant; workspace-confined credentials are refused.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPGatewayVersion"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPGatewaySnapshot"
+                }
+              }
+            },
+            "description": "Current reference-only configuration"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Initialize and list tools without calling them; record a bounded verdict (AAL3).",
+        "tags": [
+          "console"
+        ],
+        "x-required-aal": 3,
+        "x-required-permission": "tenant:admin",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/console/mcp-gateway/session-tools": {
+      "put": {
+        "description": "Changes the default-off session MCP switch for this tenant without granting agent authority. Requires tenant admin, AAL3 and the current configuration version.",
+        "operationId": "setMCPGatewaySessionTools",
+        "parameters": [
+          {
+            "description": "Authenticated target tenant; workspace-confined credentials are refused.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MCPGatewaySessionWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MCPGatewaySnapshot"
+                }
+              }
+            },
+            "description": "Current reference-only configuration"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Admission, source ownership, version or availability refusal"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Set the default-off session MCP switch for this tenant (AAL3).",
+        "tags": [
+          "console"
+        ],
+        "x-required-aal": 3,
+        "x-required-permission": "tenant:admin",
+        "x-stability": "stable"
+      }
+    },
     "/v1/console/secrets": {
       "delete": {
-        "description": "Deletes one sealed secret by the name carried in the body.",
+        "description": "Deletes one sealed secret by the name carried in the body. Omitted scope requires global superadmin; explicit scope=tenant requires unconfined tenant admin and restricts names to mcp/. Writes require AAL3.",
         "operationId": "deleteSecret",
         "responses": {
           "204": {
@@ -6099,7 +7983,7 @@
         "x-stability": "stable"
       },
       "get": {
-        "description": "Lists the sealed secrets by name with a non-secret hint for each. A stored value is never returned.",
+        "description": "Lists secret names and non-secret hints, never values. Omitted scope requires global superadmin; explicit scope=tenant requires unconfined tenant admin and returns only that tenant's mcp/ handles.",
         "operationId": "listSecrets",
         "responses": {
           "200": {
@@ -6185,8 +8069,32 @@
         "x-required-permission": "system:admin",
         "x-stability": "stable"
       },
+      "parameters": [
+        {
+          "description": "Omit for superadmin global secrets; tenant selects own tenant mcp/ handles and requires tenant admin. Writes require AAL3 in either scope.",
+          "in": "query",
+          "name": "scope",
+          "required": false,
+          "schema": {
+            "enum": [
+              "tenant"
+            ],
+            "type": "string"
+          }
+        },
+        {
+          "description": "Target tenant in explicit tenant mode.",
+          "in": "header",
+          "name": "X-Olivares-Tenant",
+          "required": false,
+          "schema": {
+            "format": "uuid",
+            "type": "string"
+          }
+        }
+      ],
       "put": {
-        "description": "Creates or replaces one sealed secret; the name travels in the body, so it may contain a slash.",
+        "description": "Creates or rotates a sealed secret using its name in the body. Omitted scope requires global superadmin; explicit scope=tenant requires unconfined tenant admin and restricts names to mcp/. Writes require AAL3.",
         "operationId": "putSecret",
         "requestBody": {
           "content": {
@@ -9318,6 +11226,246 @@
           "users"
         ],
         "x-required-permission": "user:write",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/users/{id}/totp": {
+      "get": {
+        "description": "Returns a member's factor status in the selected tenant. Foreign accounts return not found. Requires membership read authority.",
+        "operationId": "getUserTOTPStatus",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TOTPStatus"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Read a member's factor status in the selected tenant",
+        "tags": [
+          "auth"
+        ],
+        "x-required-permission": "membership:read",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/users/{id}/totp/reset": {
+      "post": {
+        "description": "Resets a selected tenant member's factor and recovery codes. Tenant administrators cannot reset shared or holder-controlled accounts. Requires membership write authority and AAL3; a deployment superadmin retains global recovery authority.",
+        "operationId": "resetUserTOTP",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TOTPOK"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ],
+        "summary": "Reset a tenant-governed member's factor with AAL3",
+        "tags": [
+          "auth"
+        ],
+        "x-required-permission": "membership:write",
         "x-stability": "stable"
       }
     },

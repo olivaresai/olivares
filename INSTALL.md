@@ -297,7 +297,7 @@ switch the host to `ghcr.io`, if a CI node or a large fleet hits the ceiling. Ta
 are multi-arch (amd64/arm64); `-fips`/`-stig` are amd64-only. **For production, pin by digest**
 (`docker.io/olivaresai/olivares@sha256:…`); the mutable tags above are for evaluation only. Verify
 the image: `cosign verify docker.io/olivaresai/olivares:26.10.0 --certificate-identity-regexp
-'^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$'
+'^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$'
 --certificate-oidc-issuer
 https://token.actions.githubusercontent.com` (the same verification works identically against the
 `ghcr.io/olivaresai/olivares:26.10.0` fallback — same digest, signatures and attestations).

@@ -115,10 +115,8 @@ describe('PageHeader', () => {
     expect(screen.getByRole('heading', { level: 1 })).toHaveClass('text-title')
   })
 
-  it('keeps the description in the document, on the title line', () => {
-    // The description is not deleted and not hidden — it moves onto the
-    // heading's own line as one truncating element. A screen-reader user reads exactly
-    // what they read before. This is the check that says so.
+  it('keeps the description in the document, below the title line', () => {
+    // The full sentence stays visible below the title, with the same reading order.
     render(
       <PageHeader
         title="Sessions"
@@ -128,7 +126,10 @@ describe('PageHeader', () => {
     const h1 = screen.getByRole('heading', { level: 1 })
     const description = screen.getByText('Every agent session on this plane.')
     expect(description).toBeInTheDocument()
-    expect(h1.parentElement?.contains(description)).toBe(true)
+    expect(h1.parentElement?.contains(description)).toBe(false)
+    expect(description.closest('[data-slot="page-header"]')).toContainElement(
+      h1,
+    )
   })
 
   it('carries the whole description on `title`, string or node', () => {
@@ -210,7 +211,7 @@ describe('PageHeader', () => {
     const row = titleRow(container)
     const classes = row.className.split(/\s+/)
     expect(classes).toContain('flex')
-    expect(classes).toContain('items-center')
+    expect(classes).toContain('items-start')
     // The two forms that reintroduce the second row, named rather than implied: a
     // column at every width, and a column that becomes a row only at `sm`.
     expect(classes).not.toContain('flex-col')
@@ -218,11 +219,10 @@ describe('PageHeader', () => {
     // Two children and no more: the title group and the control group. A third would be
     // something laid out beside them with nothing deciding which gives way.
     expect(row.children).toHaveLength(2)
-    // The title group holds the heading and the description on ONE baseline, and the
-    // heading is the one that does not give way.
+    // The title can reflow beside its controls; the description has its own full-width row.
     const titleGroup = row.children[0] as HTMLElement
-    expect(titleGroup.className).toContain('items-baseline')
-    expect(titleGroup.querySelector('h1')!.className).toContain('shrink-0')
+    expect(titleGroup.className).toContain('min-w-0')
+    expect(titleGroup.querySelector('h1')!.className).toContain('break-words')
   })
 
   it('the controls give way before the screen name does', () => {
@@ -239,12 +239,12 @@ describe('PageHeader', () => {
       name: 'Audit ledger',
     })
     expect(h1.className.split(/\s+/)).toEqual(
-      expect.arrayContaining(['shrink-0', 'whitespace-nowrap']),
+      expect.arrayContaining(['min-w-0', 'break-words']),
     )
     expect(h1.className.split(/\s+/)).not.toContain('truncate')
     const titleGroup = h1.parentElement as HTMLElement
     expect(titleGroup.className.split(/\s+/)).not.toContain('overflow-hidden')
-    expect(titleGroup.className.split(/\s+/)).not.toContain('min-w-0')
+    expect(titleGroup.className.split(/\s+/)).toContain('min-w-0')
     const actions = container.querySelector('[data-slot="page-actions"]')!
       .parentElement as HTMLElement
     expect(actions.className.split(/\s+/)).toContain('min-w-0')
@@ -349,11 +349,11 @@ describe('PageHeader — below sm the controls collapse, and nothing leaves', ()
     )
     const row = titleRow(container)
     const titleGroup = row.children[0] as HTMLElement
-    // The name is not clipped here; the description still truncates on its own.
+    // Both the title and the description remain available without clipping.
     expect(titleGroup.className.split(/\s+/)).not.toContain('overflow-hidden')
-    expect(titleGroup.querySelector('p')!.className.split(/\s+/)).toContain(
-      'truncate',
-    )
+    expect(
+      container.querySelector('[data-slot="page-header"] p'),
+    ).not.toHaveClass('truncate')
     await user.click(screen.getByTestId('page-actions-toggle'))
     const panel = container.querySelector(
       '[data-slot="page-actions"]',
@@ -377,7 +377,7 @@ describe('PageHeader — below sm the controls collapse, and nothing leaves', ()
 // control over another control, no strip scrolling while the description still holds
 // room, at 1440 and 1180) is a browser instrument, because only a browser can see it.
 describe('PageHeader on a row shared with a tab strip', () => {
-  it('the description asks for no width of its own and takes what is left', () => {
+  it('the description wraps below the title and controls', () => {
     render(
       <PageHeader
         title="Agents"
@@ -387,7 +387,11 @@ describe('PageHeader on a row shared with a tab strip', () => {
     const sentence = screen.getByText('A long sentence about this screen.')
     const classes = sentence.className.split(/\s+/)
     expect(classes).toEqual(
-      expect.arrayContaining(['w-0', 'min-w-0', 'flex-1', 'truncate']),
+      expect.arrayContaining([
+        'min-w-0',
+        'whitespace-normal',
+        '[overflow-wrap:anywhere]',
+      ]),
     )
     // …and it still owes the reader the whole sentence.
     expect(sentence).toHaveAttribute(
@@ -396,24 +400,23 @@ describe('PageHeader on a row shared with a tab strip', () => {
     )
   })
 
-  it('the name does not wrap, so the smallest the header can be is the whole name', () => {
+  it('the name can wrap at narrow widths without being clipped', () => {
     render(<PageHeader title="Control console" description="Who gets in." />)
     const name = screen.getByRole('heading', {
       level: 1,
       name: 'Control console',
     })
     expect(name.className.split(/\s+/)).toEqual(
-      expect.arrayContaining(['shrink-0', 'whitespace-nowrap']),
+      expect.arrayContaining(['min-w-0', 'break-words']),
     )
   })
 
-  it('the shared row never lets the header fall below its name', () => {
+  it('the shared row permits text height and phone reflow', () => {
     const classes = WORK_CHROME_ROW.split(/\s+/)
     expect(classes).toContain('grid')
-    expect(classes).toContain(
-      'grid-cols-[minmax(min-content,1fr)_minmax(0,auto)]',
-    )
-    expect(classes).toContain('h-9')
+    expect(classes).toContain('sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]')
+    expect(classes).toContain('min-h-9')
+    expect(classes).toContain('grid-cols-1')
   })
 
   // WHERE A PHONE'S PANEL OF COLLAPSED CONTROLS HANGS FROM. Beside a tab strip the header is

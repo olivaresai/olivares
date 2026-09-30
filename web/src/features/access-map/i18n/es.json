@@ -54,7 +54,8 @@
     "forbiddenHint": "Tu rol puede ver el grafo pero no el diff permitido-vs-observado (accessmap:drift:read).",
     "partial": "Resultado parcial: el motor reconcilió esta diferencia sobre una ventana de deriva truncada, así que estos recuentos no son todo el entorno y una arista que falte aquí puede estar simplemente más allá del límite.",
     "emptyWindowTitle": "Sin hallazgos en la ventana analizada",
-    "emptyWindowHint": "El análisis se detuvo en su límite de página, así que esto no dice nada sobre todo el entorno."
+    "emptyWindowHint": "El análisis se detuvo en su límite de página, así que esto no dice nada sobre todo el entorno.",
+    "scopeHint": "La lista de desviaciones abarca toda la organización; los filtros del mapa no se aplican a ella"
   },
   "detail": {
     "edgeTitle": "Arista de acceso",

@@ -6,12 +6,14 @@ package sessions
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -152,6 +154,7 @@ type ProviderProfile struct {
 	SessionTools          []string
 	SessionToolsDeclared  bool
 	SessionPermissionMode string
+	SessionWorkGrant      string
 	Version               int64
 	CreatedAt             string
 	UpdatedAt             string
@@ -186,6 +189,7 @@ type ProviderHomeSnapshot struct {
 	// that DOES carry a record digests it — and a second dispatch of the same key
 	// under another record is a conflict rather than a replay.
 	ProviderRecordRef string `json:"provider_record_ref,omitempty"`
+	SessionWorkGrant  string `json:"session_work_grant,omitempty"`
 }
 
 // CreateProfileInput is the validated create request.
@@ -213,6 +217,8 @@ type CreateProfileInput struct {
 	// SessionPermissionMode declares the permission mode those sessions run under.
 	// Empty declares none and leaves the launch's own validated mode in place.
 	SessionPermissionMode string
+	SessionWorkGrant      json.RawMessage
+	WorkGrantActor        auth.Principal
 }
 
 // registerProviderProfileSchema declares the three B1 entities: the profile, the
@@ -253,6 +259,7 @@ func (m *Module) registerProviderProfileSchema(reg store.ExtensionRegistry) erro
 			// predates the columns therefore reads as undeclared, which is what it is.
 			{Name: colPPSessionTools, Kind: model.KindText, Nullable: true, Principal: pdeclProfileSessionTools},
 			{Name: colPPSessionPermissionMode, Kind: model.KindText, Nullable: true, Principal: pdeclNonePermissionMode},
+			{Name: colPPSessionWorkGrant, Kind: model.KindText, Nullable: true, Principal: model.None("operator-delegated non-human session capability and workspace, validated in provider_profile_work_grant.go")},
 			// Account metadata does not enter ProviderHomeSnapshot. A NULL name keeps
 			// every existing row an unnamed profile; account identity reuses its ref.
 			{Name: colPPAccountName, Kind: model.KindText, Nullable: true, Principal: model.None("a provider account label, read for display and name allocation without human identity resolution: provider_account.go:166, provider_account.go:472, provider_account_api.go:127")},
@@ -459,6 +466,7 @@ func profileFromRecord(rec model.Record) ProviderProfile {
 		SessionTools:          policy.Tools,
 		SessionToolsDeclared:  policy.ToolsDeclared,
 		SessionPermissionMode: policy.PermissionMode,
+		SessionWorkGrant:      rec.String(colPPSessionWorkGrant),
 		Version:               rec.Int(model.ColVersion),
 		CreatedAt:             rec.String(model.ColCreatedAt),
 		UpdatedAt:             rec.String(model.ColUpdatedAt),
@@ -561,6 +569,13 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 	if err != nil {
 		return ProviderProfile{}, err
 	}
+	if err := m.authorizeProfileWorkGrant(ctx, in.WorkGrantActor, tenant, in.SessionWorkGrant); err != nil {
+		return ProviderProfile{}, err
+	}
+	grant, err := normalizeProfileWorkGrant(in.SessionWorkGrant)
+	if err != nil {
+		return ProviderProfile{}, err
+	}
 	ref := newProfileRef()
 	var out ProviderProfile
 	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
@@ -573,6 +588,11 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 		}
 		if err := validateRecordBinding(ctx, sc, driver, recordRef); err != nil {
 			return err
+		}
+		if grant != nil {
+			if workspace, err := sc.Workspaces().Get(ctx, grant.WorkspaceID); err != nil || workspace.Status != model.StatusActive {
+				return badRequest("session work grant workspace is unavailable")
+			}
 		}
 		rec := model.Record{
 			colPPRef:         ref,
@@ -590,6 +610,7 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 		// The declaration is written only when there IS one: an absent column is the
 		// deny-closed "nothing was declared", and writing "" would make the two
 		// indistinguishable.
+		setIf(rec, colPPSessionWorkGrant, encodeProfileWorkGrant(grant))
 		setIf(rec, colPPSessionTools, policyTools)
 		setIf(rec, colPPSessionPermissionMode, policyMode)
 		created, err := repo.Create(ctx, rec)
@@ -597,6 +618,9 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 			return err
 		}
 		out = profileFromRecord(created)
+		if len(in.SessionWorkGrant) != 0 {
+			return appendProfileWorkGrantAudit(ctx, sc, in.WorkGrantActor, out.ID, grant)
+		}
 		return nil
 	})
 	if errors.Is(err, store.ErrConflict) {
@@ -681,6 +705,8 @@ type ProfilePatch struct {
 	SessionTools *[]string
 	// SessionPermissionMode re-declares the permission mode; "" withdraws it.
 	SessionPermissionMode *string
+	SessionWorkGrant      json.RawMessage
+	WorkGrantActor        auth.Principal
 }
 
 // PatchProfile renames and/or transitions a profile in ONE validated transaction.
@@ -726,10 +752,20 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 			return ProviderProfile{}, badRequest("invalid permission_mode in the profile's session policy")
 		}
 	}
+	if err := m.authorizeProfileWorkGrant(ctx, p.WorkGrantActor, tenant, p.SessionWorkGrant); err != nil {
+		return ProviderProfile{}, err
+	}
+	grant, grantErr := normalizeProfileWorkGrant(p.SessionWorkGrant)
+	if grantErr != nil {
+		return ProviderProfile{}, grantErr
+	}
 	var out ProviderProfile
 	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, _, err := accountHomeAdmission(ctx, sc, tenant)
 		if err != nil {
+			return err
+		}
+		if err := lockOrchestrationProfile(ctx, sc, ref); err != nil {
 			return err
 		}
 		rec, err := findProfileRec(ctx, sc, ref)
@@ -740,6 +776,14 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 			// A retired id accepts nothing, not even a rename: the history it
 			// explains must keep reading as it was.
 			return ErrProfileRetired
+		}
+		if len(p.SessionWorkGrant) != 0 {
+			if grant != nil {
+				if workspace, err := sc.Workspaces().Get(ctx, grant.WorkspaceID); err != nil || workspace.Status != model.StatusActive {
+					return badRequest("session work grant workspace is unavailable")
+				}
+			}
+			setOrNull(rec, colPPSessionWorkGrant, encodeProfileWorkGrant(grant))
 		}
 		if p.DisplayName != nil {
 			rec[colPPDisplayName] = name
@@ -785,6 +829,9 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 			return err
 		}
 		out = profileFromRecord(updated)
+		if len(p.SessionWorkGrant) != 0 {
+			return appendProfileWorkGrantAudit(ctx, sc, p.WorkGrantActor, out.ID, grant)
+		}
 		return nil
 	})
 	if err != nil {
@@ -852,10 +899,14 @@ func (m *Module) snapshotForLaunch(prof ProviderProfile, env string) (ProviderHo
 		// what is missing instead of failing later inside a handshake.
 		return ProviderHomeSnapshot{}, err
 	}
+	if _, err := decodeProfileWorkGrant(prof.SessionWorkGrant); err != nil {
+		return ProviderHomeSnapshot{}, err
+	}
 	return ProviderHomeSnapshot{
 		ProfileID: prof.Ref, Driver: prof.Driver, EnvironmentRef: prof.EnvironmentRef,
 		ConfigHome: prof.ConfigHome, UserHome: prof.UserHome, AuthSource: prof.AuthSource,
 		ProviderRecordRef: prof.ProviderRecordRef,
+		SessionWorkGrant:  prof.SessionWorkGrant,
 	}, nil
 }
 

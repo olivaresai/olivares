@@ -65,6 +65,14 @@ func isAPIPath(p string) bool {
 	if strings.HasPrefix(p, api.AuthZenPathPrefix) {
 		return true
 	}
+	// Managed MCP is served on this listener. Its protocol handler, including
+	// default-off and exact audience/session checks, must receive the request.
+	// Routing this tree to the API grants no authentication exception: the API
+	// delegates only its canonical protocol leaves and rejects neighboring paths.
+	if p == "/session/mcp" || strings.HasPrefix(p, "/mcp/gateway/") ||
+		strings.HasPrefix(p, "/.well-known/oauth-protected-resource/mcp/gateway/") {
+		return true
+	}
 	return slices.Contains(api.RootEnginePaths, p)
 }
 

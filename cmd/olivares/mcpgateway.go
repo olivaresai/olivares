@@ -17,10 +17,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	a2a "github.com/olivaresai/olivares/connectors/a2a"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -53,15 +55,22 @@ func loadAgentGatewayConfig(_ *slog.Logger) (agentGatewayConfig, error) {
 	if err := loadOperatorJSONConfig("OLIVARES_AGENT_GATEWAY_CONFIG", path, &cfg); err != nil {
 		return agentGatewayConfig{}, err
 	}
+	if err := validateAgentGatewaySource(cfg); err != nil {
+		return agentGatewayConfig{}, err
+	}
 	return cfg, nil
 }
 
 // agentGatewayConfig is the operator provisioning for the inbound agent surface.
 type agentGatewayConfig struct {
-	Listen     string            `json:"listen"`
-	MCP        *mcpGatewayConfig `json:"mcp"`
-	A2APush    *a2aPushConfig    `json:"a2a_push"`
-	A2AInbound *a2aInboundConfig `json:"a2a_inbound"`
+	Listen string `json:"listen"`
+	// MCPSource selects exactly one owner. Existing files default to file; no file defaults to store.
+	MCPSource string `json:"mcp_source"`
+	// SessionTools enables the product's private session MCP tools. Default off.
+	SessionTools bool              `json:"session_tools"`
+	MCP          *mcpGatewayConfig `json:"mcp"`
+	A2APush      *a2aPushConfig    `json:"a2a_push"`
+	A2AInbound   *a2aInboundConfig `json:"a2a_inbound"`
 	// MCPRegistry provisions the embedded PRIVATE MCP sub-registry: the
 	// generic registry OpenAPI /v0.1 served per tenant under /mcp-registry/
 	// (tenant paths /mcp-registry/t/{tenant}/v0.1/..., default tenant on the bare
@@ -74,23 +83,89 @@ type agentGatewayConfig struct {
 	MCPRegistry *mcpc.SubRegistryConfig `json:"mcp_registry"`
 }
 
+// Source ownership cannot be resolved by last-key-wins JSON semantics. Legacy
+// operator fields retain their decoding contract; an explicit source is strict.
+func (cfg *agentGatewayConfig) UnmarshalJSON(raw []byte) error {
+	type plain agentGatewayConfig
+	var decoded plain
+	if err := json.Unmarshal(raw, &decoded); err != nil {
+		return err
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	tok, err := dec.Token()
+	if err != nil || tok != json.Delim('{') {
+		return errors.New("agent-gateway: expected configuration object")
+	}
+	seen := false
+	fileMCPDeclared, fileSessionEnabled := false, false
+	for dec.More() {
+		key, err := dec.Token()
+		if err != nil {
+			return err
+		}
+		var value json.RawMessage
+		if err := dec.Decode(&value); err != nil {
+			return err
+		}
+		if strings.EqualFold(key.(string), "mcp") && !bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+			fileMCPDeclared = true
+		}
+		if strings.EqualFold(key.(string), "session_tools") {
+			var on bool
+			if json.Unmarshal(value, &on) == nil && on {
+				fileSessionEnabled = true
+			}
+		}
+		if strings.EqualFold(key.(string), "mcp_source") {
+			var source string
+			if seen || json.Unmarshal(value, &source) != nil || (source != "file" && source != "store") {
+				return errors.New("agent-gateway: mcp_source must be one explicit file or store declaration")
+			}
+			seen = true
+			decoded.MCPSource = source
+		}
+	}
+	if decoded.MCPSource == "store" && (fileMCPDeclared || fileSessionEnabled) {
+		return errors.New("agent-gateway: store source conflicts with file MCP declarations")
+	}
+	*cfg = agentGatewayConfig(decoded)
+	return validateAgentGatewaySource(*cfg)
+}
+
+func validateAgentGatewaySource(cfg agentGatewayConfig) error {
+	switch cfg.MCPSource {
+	case "", "file":
+		return nil
+	case "store":
+		if cfg.MCP != nil || cfg.SessionTools {
+			return errors.New("agent-gateway: mcp_source store conflicts with file-owned mcp or session_tools; remove those declarations explicitly")
+		}
+		return nil
+	default:
+		return errors.New("agent-gateway: mcp_source must be file or store")
+	}
+}
+
 // mcpGatewayConfig provisions the inline MCP Resource-Server PEP. Token trust is
 // ISSUER-KEYED: `issuers` is the multi-issuer form; the legacy single-issuer
 // fields remain accepted and are folded in by the connector. `issuer` is REQUIRED
 // when any legacy anchor field is set — an RS that cannot validate the iss claim of
 // every token (RFC 9068 §4) refuses to mount instead of skipping the check.
 type mcpGatewayConfig struct {
-	Resource             string            `json:"resource"`
-	AuthorizationServers []string          `json:"authorization_servers"`
-	ScopesSupported      []string          `json:"scopes_supported"`
-	Issuers              []mcpIssuerTrust  `json:"issuers"`
-	Issuer               string            `json:"issuer"`
-	IssuerJWKS           json.RawMessage   `json:"issuer_jwks"`
-	JWKSURL              string            `json:"jwks_url"`
-	IntrospectionURL     string            `json:"introspection_url"`
-	IntrospectionAuth    string            `json:"introspection_auth"` // secret: the RS's OWN introspection credential
-	Tenant               string            `json:"tenant"`
-	Tools                []mcpc.ToolPolicy `json:"tools"`
+	// Store-owned forwarding is injected by the governed composition, never JSON.
+	managedUpstream           mcpc.Upstream
+	managedUpstreamDescriptor string
+	Resource                  string            `json:"resource"`
+	AuthorizationServers      []string          `json:"authorization_servers"`
+	ScopesSupported           []string          `json:"scopes_supported"`
+	Issuers                   []mcpIssuerTrust  `json:"issuers"`
+	Issuer                    string            `json:"issuer"`
+	IssuerJWKS                json.RawMessage   `json:"issuer_jwks"`
+	JWKSURL                   string            `json:"jwks_url"`
+	IntrospectionURL          string            `json:"introspection_url"`
+	IntrospectionAuth         string            `json:"introspection_auth"` // secret: the RS's OWN introspection credential
+	Tenant                    string            `json:"tenant"`
+	Tools                     []mcpc.ToolPolicy `json:"tools"`
 	// RoleClaim is the token claim the per-role tool allowlist (E1) reads roles from
 	// (default "roles"); per-tool AllowedRoles ride inside each Tools entry.
 	RoleClaim      string   `json:"role_claim"`
@@ -267,7 +342,7 @@ func scanMCPRevisionControls(data []byte) ([]mcpRevisionControl, error) {
 // "the operator never mentioned it" are the same value, and the contradiction
 // rule cannot be stated, let alone tested.
 //
-// R1 (independent review, 2026-09-08) — PRESENCE AND VALUE COME FROM THE SAME
+// Independent review ( 2026-09-08) — PRESENCE AND VALUE COME FROM THE SAME
 // OCCURRENCE. This method used to read the value through the struct alias, where
 // encoding/json matches member names WITHOUT distinguishing case, and the
 // presence through a map lookup of two lowercase names. The two readings
@@ -619,14 +694,32 @@ const envMCPTaskKillSwitchSweep = "OLIVARES_MCP_TASK_KILLSWITCH_SWEEP"
 // tools/call HITL gate bridges to the SAME approval bridge the rest of Phase K
 // uses; the upstream forwarder uses a SEPARATE credential (no token passthrough).
 func buildAgentGatewayServer(eng *engine, log *slog.Logger) (*http.Server, error) {
-	cfg, err := loadAgentGatewayConfig(log)
-	if err != nil {
-		return nil, fmt.Errorf("load agent gateway operator config: %w", err)
+	var cfg agentGatewayConfig
+	if eng != nil && eng.gatewayConfig != nil {
+		cfg = *eng.gatewayConfig
+	} else {
+		var err error
+		cfg, err = loadAgentGatewayConfig(log)
+		if err != nil {
+			return nil, fmt.Errorf("load agent gateway operator config: %w", err)
+		}
 	}
 	mux := http.NewServeMux()
 	mounted := false
 	var mcpRS *mcpc.ResourceServer
 	var mcpTenant model.TenantID
+	if cfg.SessionTools {
+		if eng == nil || eng.authr == nil || eng.api == nil || eng.sessionsMod == nil {
+			return nil, errors.New("agent-gateway: session_tools requires the session authority and API")
+		}
+		scope := sessionOrchestrationWorkScope{st: eng.store, module: eng.sessionsMod}
+		mux.Handle("/session/mcp", &sessionMCPHandler{authr: eng.authr, api: eng.api.Handler(),
+			checkOrchestration: func(ctx context.Context, p auth.Principal, tenant model.TenantID) error {
+				return scope.WithScope(ctx, p, tenant, false, func(store.Scope) error { return nil })
+			}})
+		mounted = true
+		log.Info("agent-gateway: private session MCP tools mounted", "path", "/session/mcp")
+	}
 
 	if cfg.MCP != nil && strings.TrimSpace(cfg.MCP.Resource) != "" {
 		rs, rsTenant, err := buildMCPResourceServer(eng, cfg.MCP, log)
@@ -768,7 +861,7 @@ func buildMCPResourceServerWithDurableTaskStore(
 	if eng.approvalBridge != nil && !rsTenant.IsZero() {
 		gate = mcpToolGate{bridge: eng.approvalBridge, tenant: rsTenant, guard: eng.killSwitch, rec: eng.stopDeny}
 	}
-	var upstream mcpc.Upstream // nil ⇒ deny-closed (admitted/gated but not actuated)
+	upstream := cfg.managedUpstream // nil ⇒ deny-closed (admitted/gated but not actuated)
 	var subscriptionUpstream mcpc.SubscriptionUpstream
 	// upstreamDescriptor is the STABLE upstream/credential-profile identity bound
 	// into every tools/call EffectDigest (round-2): the identity fields the
@@ -776,7 +869,7 @@ func buildMCPResourceServerWithDurableTaskStore(
 	// Go type (build-dependent: static in community, token-exchange minter in
 	// enterprise) — NEVER the secret itself. A re-pointed backend therefore
 	// changes the effect identity: a keyed retry rebinds instead of replaying.
-	upstreamDescriptor := ""
+	upstreamDescriptor := cfg.managedUpstreamDescriptor
 
 	// wire the in-process governed retrieval upstream when enabled.
 	if cfg.Retrieval != nil && cfg.Retrieval.Enabled && eng.knowledgeMod != nil && !rsTenant.IsZero() {
@@ -1587,6 +1680,9 @@ type mcpUpstreamForwarder struct {
 	url      string
 	credProv UpstreamCredentialProvider // resolves the SEPARATE upstream credential; NEVER the inbound token
 	client   *http.Client
+	managed  bool
+	mu       sync.Mutex
+	sessions map[string]*managedMCPSession
 }
 
 var _ mcpc.SubscriptionUpstream = (*mcpUpstreamForwarder)(nil)
@@ -1606,11 +1702,35 @@ const mcpForwardMaxResponse = 8 << 20
 // uncorrelated body — is `unknown`: the request may have been transmitted and
 // nothing observed can confirm the outcome.
 func (f *mcpUpstreamForwarder) Forward(ctx context.Context, req mcpc.UpstreamRequest) (mcpc.UpstreamResult, error) {
+	if f.managed {
+		f.mu.Lock()
+		defer f.mu.Unlock()
+		key := managedMCPSessionKey(req)
+		session := f.sessions[key]
+		if req.Method == "initialize" {
+			if session == nil && len(f.sessions) >= 128 {
+				return mcpc.UpstreamResult{State: mcpc.DispatchNotSent}, errors.New("mcp gateway: session capacity reached")
+			}
+			session = &managedMCPSession{}
+			f.sessions[key] = session
+		} else if session == nil || session.version == "" {
+			return mcpc.UpstreamResult{State: mcpc.DispatchNotSent}, errors.New("mcp gateway: initialize required for this client")
+		}
+		return f.forward(ctx, req, session)
+	}
+	return f.forward(ctx, req, nil)
+}
+
+func (f *mcpUpstreamForwarder) forward(ctx context.Context, req mcpc.UpstreamRequest, session *managedMCPSession) (mcpc.UpstreamResult, error) {
 	notSent := mcpc.UpstreamResult{State: mcpc.DispatchNotSent}
 	unknown := mcpc.UpstreamResult{State: mcpc.DispatchUnknown}
 	// sentID correlates the response: the SAME constant is sent and validated.
 	sentID := int64(1)
 	env := map[string]any{"jsonrpc": "2.0", "id": sentID, "method": req.Method}
+	notification := session != nil && strings.HasPrefix(req.Method, "notifications/")
+	if notification {
+		delete(env, "id")
+	}
 	if len(req.Params) > 0 {
 		env["params"] = json.RawMessage(req.Params)
 	}
@@ -1624,6 +1744,14 @@ func (f *mcpUpstreamForwarder) Forward(ctx context.Context, req mcpc.UpstreamReq
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json, text/event-stream")
+	if session != nil {
+		if session.id != "" {
+			httpReq.Header.Set("Mcp-Session-Id", session.id)
+		}
+		if session.version != "" {
+			httpReq.Header.Set("MCP-Protocol-Version", session.version)
+		}
+	}
 	if f.credProv != nil {
 		authHdr, cerr := f.credProv.Credential(ctx, f.url)
 		if cerr != nil {
@@ -1679,6 +1807,50 @@ func (f *mcpUpstreamForwarder) Forward(ctx context.Context, req mcpc.UpstreamReq
 		return unknown, fmt.Errorf("mcp gateway: upstream forward: %w", err)
 	}
 	defer resp.Body.Close()
+	if session != nil {
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return unknown, errors.New("mcp gateway: upstream HTTP refusal (outcome unknown)")
+		}
+		if notification {
+			if resp.StatusCode != http.StatusAccepted {
+				return unknown, errors.New("mcp gateway: invalid notification acknowledgment")
+			}
+			raw, err := io.ReadAll(io.LimitReader(resp.Body, mcpForwardMaxResponse+1))
+			if errors.Is(err, mcpc.ErrUpstreamCredentialDisclosure) {
+				return unknown, err
+			}
+			if err != nil || len(raw) != 0 {
+				return unknown, errors.New("mcp gateway: notification acknowledgment has a body")
+			}
+			return mcpc.UpstreamResult{State: mcpc.DispatchCompleted}, nil
+		}
+		raw, err := readManagedMCPResponse(resp, sentID)
+		if err != nil {
+			return unknown, err
+		}
+		result, rpcErr, err := mcpc.ParseStrictJSONRPCResponse(raw, sentID)
+		if err != nil {
+			return unknown, errors.New("mcp gateway: upstream response failed strict validation")
+		}
+		if rpcErr != nil {
+			return mcpc.UpstreamResult{State: mcpc.DispatchCompleted}, errors.New("mcp gateway: upstream RPC refusal")
+		}
+		if req.Method == "initialize" {
+			var init struct {
+				ProtocolVersion string `json:"protocolVersion"`
+			}
+			if json.Unmarshal(result, &init) != nil || init.ProtocolVersion != "2025-11-25" {
+				return mcpc.UpstreamResult{State: mcpc.DispatchCompleted}, errors.New("mcp gateway: unsupported negotiated protocol")
+			}
+			sid := resp.Header.Get("Mcp-Session-Id")
+			if !validManagedMCPSessionID(sid) {
+				return mcpc.UpstreamResult{State: mcpc.DispatchCompleted}, errors.New("mcp gateway: invalid upstream session identifier")
+			}
+			session.id = sid
+			session.version = init.ProtocolVersion
+		}
+		return mcpc.UpstreamResult{Result: result, State: mcpc.DispatchCompleted}, nil
+	}
 	// limit+1: an over-limit body is DETECTED, never silently truncated — a valid
 	// prefix followed by overflow data must not be validated as a response.
 	raw, rerr := io.ReadAll(io.LimitReader(resp.Body, mcpForwardMaxResponse+1))

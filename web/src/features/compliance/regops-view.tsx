@@ -2077,7 +2077,7 @@ function TakeSnapshotDialog({
  *  (`findPredecessor`, depthhandlers.go:1525-1535, which returns nil for `i == 0`),
  *  so pinning the first snapshot is unsatisfiable by construction — the engine now
  *  answers 422 for it rather than 500, but the console should not offer a target it
- *  can prove is impossible. Raised by the the model contrast of (F3), which
+ *  can prove is impossible. Raised by the the model contrast of (finding 3), which
  *  also caught why the suite never saw it: the fixture had ONE snapshot and the stub
  *  answered 201, accepting what production refuses. */
 function DetectDriftDialog({

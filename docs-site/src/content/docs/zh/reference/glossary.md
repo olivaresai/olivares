@@ -11,7 +11,8 @@ description: >-
 
 模块 III 的图，包含**发起方**（agent、identity、session）与它们所触及的 **resource**，每条 edge
 都按 [mode](#mode) 分类，并标注其[signal source](#signal-source信号源)、[归因](#attribution归因置信度)
-与[覆盖层级](#coverage-tier覆盖层级)。一项关键的差异化能力——31 个模块之一，而非整个产品。见
+与[覆盖层级](#coverage-tier覆盖层级)。一项关键的差异化能力——31
+个模块之一，而非整个产品。见
 [什么是 Olivares AI？](/zh/start/what-is-olivares-ai/)。
 
 ### 作动状态：`v1` / `on-demand` / `seam`

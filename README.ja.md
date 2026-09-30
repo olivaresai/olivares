@@ -1,58 +1,53 @@
 <div align="center">
 
-<a href="https://olivares.ai"><img src=".github/assets/olivares-banner.png" alt="Olivares AI — エンタープライズ AI のグラウンドトゥルース" width="720"></a>
+<a href="https://olivares.ai"><img src=".github/assets/olivares-banner.png" alt="Olivares AI — Ground truth for enterprise AI" width="720"></a>
 
 **言語:** [English](./README.md) · [Español](./README.es.md) · [简体中文](./README.zh.md) · [Русский](./README.ru.md) · **日本語** · [Deutsch](./README.de.md) · [Français](./README.fr.md)
 
-**すでに使っている AI を、自分のインフラ上で実行し、統治する。**
+**チームがすでに使っている AI を、他のインフラと同じように管理しながら実行できます。**
 
-[Olivares AI とは](#olivares-ai-とは) · [できること](#できること) · [インストール](#インストール) · [クイックスタート](#クイックスタート) · [コンソール](#コンソールの内部) · [エディション](#エディションと価格) · [ドキュメント](#ドキュメント) · [セキュリティ](#セキュリティ) · [olivares.ai](https://olivares.ai)
+[できること](#できること) · [インストール](#インストール) · [コンソール](#コンソールの内部) · [エディション](#エディションと価格) · [ドキュメント](#ドキュメント) · [コミュニティ](#コミュニティ) · [olivares.ai](https://olivares.ai)
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md)
-[![Release: 26.10.0](https://img.shields.io/badge/release-26.10.0-28282B)](https://github.com/olivaresai/olivares/releases/tag/26.10.0)
+[![Release: 26.10](https://img.shields.io/badge/release-26.10-28282B)](https://github.com/olivaresai/olivares/releases/tag/26.10.0)
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
 </div>
 
-> **ベータ版。** 26.10.0 は署名付きアーカイブ、ネイティブパッケージ、コンテナイメージで提供されます。[正直さと限界](docs-site/src/content/docs/start/honesty-and-limits.md)に、現在動作するもの、オンデマンドで動作するもの、まだ設計段階のものを記載しています。
+開発者は Claude Code や Codex で作業しています。エージェントは MCP サーバー、モデル、社内 API を呼び出し、スケジュールされたジョブは自動で動きます。それぞれが別々のログと権限を持つため、単純な疑問にもすぐには答えられません。このファイルを変更したエージェントはどれか、誰が承認したのか、今月の AI 費用はいくらだったのか。
 
-## Olivares AI とは
+Olivares AI は、その答えを一か所にまとめます。すでに使っているエージェントやツールに接続し、それぞれの動きを表示し、実行前にルールを適用して、すべての署名付き記録を残します。自社のサーバーで動く単一のプログラムで、製品全体を無料のオープンソースとして利用できます。
 
-Olivares AI は AI エージェント向けのセルフホスト型コントロールプレーンです。コンソールを内蔵した単一の Go バイナリで動作します。エージェントにはコンテキスト、リソースへのアクセス、管理されたセッションを与え、あなたには権限、ポリシー、予算、証跡を与えます。必須のテレメトリはなく、エアギャップ環境へのインストールにも対応します。
-
-Claude Code は `PreToolUse`/`PostToolUse` フック、管理設定、コンソールからの起動と停止で接続します。公式の Codex CLI と Grok CLI は管理セッションとして動作します。gemini-cli、Cursor、opencode、goose、cline、OpenHands、OpenClaw、Hermes、Ollama などのセルフホスト型エンドポイントはコネクタであり、それぞれが強制できることと観測のみのことを明示します。
+<div align="center">
+<img src=".github/assets/motion-access-map.gif" width="840" alt="Motion diagram of the read/write access map: agents, sessions and identities on the left, the resources they reach on the right, reads in blue, writes in orange, one observed write that was never permitted flagged as a drift finding.">
+<br><sub><b>アクセスマップ</b> — 各エージェントが何を読み書きするか、そして誰も許可していない書き込み。</sub>
+</div>
 
 ## できること
 
-<div align="center">
-<img src=".github/assets/motion-access-map.gif" width="840" alt="読み書きアクセスマップのモーション図: 左にエージェント・セッション・アイデンティティ、右に到達するリソース、読み取りは青、書き込みはオレンジ、許可されたことのない観察された書き込みがドリフト所見として旗付けされる。">
-<br><sub><b>アクセスマップ</b> — 各エージェントが estate 全体で何を読み書きするか。許可対観察。</sub>
-</div>
+- **何が動いているかを把握する。** すべてのエージェント、セッション、モデル、MCP サーバー、ツールを一つのインベントリにまとめます。アクセスマップはそれぞれの読み書きを表示し、どのルールも許可していないアクセスを示します。
+- **被害が出る前に操作を止める。** Olivares AI の **4 つの deny-closed エンフォースメントポイント**が、実行前に各操作を確認します。確認する場所は Claude Code 内、モデルプロキシ、各 MCP ツール呼び出し、エージェント間です。リスクのある操作は二人目の確認を待ち、禁止された操作は実行されません。一つのスイッチですべてのエージェントを同時に停止できます。確認で判断できない場合も、操作は実行されません。
+- **AI の支出を管理する。** チーム、エージェント、モデルごとの予算で、請求書が届く前に警告し、支出のペースを落とすか、支出を止めます。
+- **社内の知識を安全にエージェントへ渡す。** SharePoint、Confluence、Google Drive、Notion、Salesforce、Snowflake、S3、PostgreSQL に接続します。各エージェントが閲覧できるのは、それを使う人に閲覧権限がある情報だけです。
+- **セッションをまたいで作業を続ける。** セッションが終わっても、タスク、担当者、決定は残ります。SSH を使わずに、ブラウザーから Claude Code、Codex、Grok のセッションを開始し、参加し、停止できます。
+- **求められたときに証拠を示す。** すべての決定は、後から変更できない署名付きログに記録されます。セキュリティチームや監査担当者はその記録からレポートを取得でき、証拠は 26 フレームワークカタログに対応付けられています。
 
-- **見る。** コネクタが観測したエージェント、セッション、モデル、MCP サーバー、ツール、アイデンティティのインベントリ。許可と観測の**ドリフト**を示す読み書きの**アクセスマップ**。ライブセッション、オーケストレーショングラフ、ヘルス、SLA。分類できないアクセスは `unknown` と表示します。
-- **作業を動かす。** 担当者、依存関係、受け入れ基準、決定を持つ作業項目。2 つのエージェントが同じ項目を同時に持てないようにするフェンス付きリース。コンソールから起動、アタッチ、中断、停止する Claude Code、Codex、Grok のセッション。A2A による許可済みピアへの委任。
-- **統治し、強制する。** Cedar 認可エンジンと **4 つの deny-closed エンフォースメントポイント**：Claude Code フック、インラインの `/v1/messages` 推論プロキシ、MCP の `tools/call` ゲート、A2A 委任ゲート。許可されていない操作は、実行前にブロックされるか、2 人の承認待ちで保留されるか、書き換えられます。予算は支出を拒否または制限し、ブレークグラスには 2 人が必要で、**キルスイッチ**はフェイルクローズします。
-- **統治されたデータを与える。** SharePoint、Confluence、Google Drive、Notion、Salesforce、Snowflake、S3、Azure AI Search、SAP OData、PostgreSQL、ルートに閉じたファイルシステムが統治された検索にデータを供給し、アクセス資格は検索時に確認されます。
-- **証明する。** ハッシュチェーンで連結され Ed25519 で署名された監査台帳。**26 のフレームワークカタログ**（EU AI Act、NIST AI RMF、ISO 42001、SOC 2、ISO 27001、GDPR など）に対応付けた封印済みの証跡（自己評価の管理策ファミリーであり、認証ではありません）。SIEM と ITSM への送信（CEF、LEEF、syslog、OTLP、OCSF）。WebAuthn/FIDO2、PIV/CAC、SSO、SCIM、BYOK/CMEK、検証済みの消去権。いずれもデプロイごとに設定します。
-
-**31 モジュール**、1 つのコンソール、**159 のインテグレーション**。数は [`scripts/check-public-counts.sh`](scripts/check-public-counts.sh) がコードから数えています。内訳は [`connectors/README.md`](connectors/README.md)、各モジュールの成熟度は[モジュールカタログ](docs-site/src/content/docs/reference/modules/overview.md)にあります。
+Claude Code、Codex、Grok、Cursor、gemini-cli、opencode、OpenHands、Ollama 経由のローカルモデルなど、既存のツールと連携します。**31 のモジュール**と **159 件の統合**を、すべて無料エディションで利用できます。[全モジュール](docs-site/src/content/docs/reference/modules/overview.md) · [全コネクター](connectors/README.md)。
 
 ## インストール
 
-方法を 1 つ選んでください。その後、`olivares quickstart` がコンソールの URL と 1 回限りのセットアップトークンを表示します。リリースは cosign で署名され、SLSA 来歴と SBOM が付きます。以下のどの方法もインストール前に検証し、手動ダウンロードは `scripts/verify-release.sh` で確認できます（cosign と SHA-256、[手順](INSTALL.md#verifying-a-release)）。エンジンは HTTPS で起動し、既定の認証情報はなく、1 回限りのセットアップトークンを使います。
+方法を一つ選び、そのコードブロックをコピーしてください。最後に `olivares quickstart` がコンソールのアドレスと、最初の管理者を作成するための一回限りのトークンを表示します。すべてのリリースに署名が付いており、どの方法でもダウンロードしたものを検証してからインストールします（[ダウンロードを自分で検証する](INSTALL.md#verifying-a-release)）。
 
-**1 · 1 つのコマンド（Linux と macOS）。** インストーラーは OS とアーキテクチャを検出し、署名付きチェックサムとアーカイブの SHA-256 を検証し、バイナリのみをインストールし、`sudo` は実行しません。
+**Linux と macOS、コマンド一つで。** システムを検出し、リリースを検証して、バイナリだけをインストールします。`sudo` は使いません。
 
 ```sh
 curl -fsSL https://olivares.ai/olivares/install.sh | sh
-olivares quickstart        # prints the console URL and the one-time setup token
+olivares quickstart
 ```
 
-ユーザーサービス（systemd ユーザーユニットまたは LaunchAgent）には `--user` を付けます。システムサービスには、特権シェルから `--system --start` を付けてスクリプトを実行します。手動の方法と OS ごとのマトリクス：[`INSTALL.md`](INSTALL.md)。
-
-**2 · Docker。** マルチアーキテクチャ、distroless、非 root。ポートはホストのすべてのインターフェースで公開されます。ローカルに限定するには `-p` の指定の前に `127.0.0.1:` を付けます。
+**Docker。** マルチアーキテクチャ、distroless、非 root。 ホストのすべてのインターフェースで待ち受けます。ローカルに限定するには、各 `-p` の前に `127.0.0.1:` を付けてください。
 
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
@@ -61,106 +56,126 @@ docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 
-`ghcr.io/olivaresai/olivares` は同じイメージです。本番ではダイジェストで固定してください。FIPS と STIG のバリアント：[`INSTALL.md`](INSTALL.md#docker)。
-
-**3 · Docker Compose。** 強化されたスタック：1 ノードの SQLite に、オプションで Postgres とバックアップ。
+**Docker Compose。** 単一ノードで SQLite を使用し、Postgres とバックアップは任意で追加できます。
 
 ```sh
 git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 ```
 
-**4 · Kubernetes。** このリポジトリの Helm チャート、または Helm を使わないフラットなマニフェスト。チャートはまだ OCI で公開されていません（`publication-unverified`）。
+**Kubernetes。** このリポジトリの Helm chart を使用します（chart はまだ OCI リリースとして公開されていません：`publication-unverified`）。
 
 ```sh
+git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
-# or, Helm-free
+```
+
+Helm を使わない場合：
+
+```sh
+git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 kubectl create namespace olivares-system && kubectl apply -n olivares-system -f deploy/manifests/install.yaml
 ```
 
-**5 · Linux パッケージ。** [リリースページ](https://github.com/olivaresai/olivares/releases/tag/26.10.0)の `.deb`、`.rpm`、`.apk`：バイナリ、env ファイルの例、ログイン不可の `olivares` ユーザー、強化されたユニット。インストール時にサービスは起動しません。
+**Debian と Ubuntu。** パッケージはログインできない `olivares` ユーザーと、セキュリティ設定を強化したサービスを追加します。サービスは自分で起動します。
 
 ```sh
-sudo dpkg -i olivares_*_linux_amd64.deb        # Debian / Ubuntu   (sudo rpm -i … on RHEL / Fedora / SUSE; sudo apk add --allow-untrusted … on Alpine)
-sudo systemctl enable --now olivares           # OpenRC hosts: sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.deb
+sudo dpkg -i olivares_26.10.0_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 
-**6 · Homebrew。** macOS と Linux。署名付きチェックサムで確認します。
+**RHEL、Fedora、SUSE。**
+
+```sh
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.rpm
+sudo rpm -i olivares_26.10.0_linux_amd64.rpm && sudo systemctl enable --now olivares
+```
+
+**Alpine。**
+
+```sh
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_26.10.0_linux_amd64.apk && sudo rc-service olivares start
+```
+
+ARM サーバーでは `amd64` の代わりに `arm64` を使ってください。リリースの全ファイルは[リリースページ](https://github.com/olivaresai/olivares/releases/tag/26.10.0)にあります。
+
+**Homebrew。** macOS と Linux。
 
 ```sh
 brew install olivaresai/tap/olivares && olivares quickstart
 ```
 
-**7 · ソースから。** Go 1.26 以降、[Task](https://taskfile.dev)、pnpm。
+**ソースから。** Go 1.26 以降、[Task](https://taskfile.dev)、pnpm。
 
 ```sh
+git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 task build && ./bin/olivares quickstart
 ```
 
-**エアギャップ：** 署名済みのイメージ、チャート、検証資材をまとめ、`scripts/verify-release.sh --key … --offline` でオフライン検証します（[手順](docs-site/src/content/docs/how-to/air-gap-install.md)）。**Windows** にはまだネイティブビルドがありません。Linux コンテナか WSL2 を使ってください（[計画](INSTALL.md#windows)）。アップグレードとロールバック：[手順](docs-site/src/content/docs/how-to/upgrade-and-rollback.md)。
+**オフラインのネットワーク：** 署名付きイメージ、chart、検証用の資料をまとめ、[隔離環境にインストール](docs-site/src/content/docs/how-to/air-gap-install.md)してください。**Windows** 向けのネイティブビルドはまだありません。Docker イメージか WSL2 を使ってください。アップグレードとロールバックは[手順](docs-site/src/content/docs/how-to/upgrade-and-rollback.md)を、各方法の詳細は [`INSTALL.md`](INSTALL.md) を参照してください。
 
-## クイックスタート
+**まずはデモデータで試せます。** 自分のマシンだけで実行してください（デモのパスワードは公開されています）：
 
 ```sh
-# a deterministic demo estate — loopback-only (the demo password is public), no real data
 olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.0.0.1:8902 --data-dir "$(mktemp -d)"
-# open http://127.0.0.1:8901 — inventory, work, orchestration, access map + drift, policies, FinOps
-
-# the real thing — TLS on, reachable from your network; create the first administrator with the printed token
-olivares quickstart
 ```
 
-デモのパスワードは公開されています。実データでデモを使わないでください。[完全なクイックスタート](docs-site/src/content/docs/start/quickstart.md)では実際の pgAudit ソースを接続します。
+その後、http://127.0.0.1:8901 を開いてください。
 
 ## コンソールの内部
 
 | | |
 |---|---|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-dark.png"><img src="docs-site/public/console/access-map-light.png" alt="アクセスマップ: 各エージェントが estate 全体で何を読み書きするか。左に起点、右にリソース。"></picture><br><sub><b>アクセスマップ</b> — 左に起点、右にリソース、読み取りと書き込みを色分け。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-drift-dark.png"><img src="docs-site/public/console/access-map-drift-light.png" alt="最小権限ドリフト: アクセスマップ上に重ねた予期しないアクセスと未使用グラント。"></picture><br><sub><b>最小権限ドリフト</b> — 観察されたが許可されていないもの、誰も使わないグラント。</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/agentops-dark.png"><img src="docs-site/public/console/agentops-light.png" alt="コンソールから作成、接続、統治される Claude Code セッション。"></picture><br><sub><b>セッション</b> — SSH なしで、コンソールからセッションを作成、接続、統治。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/work-dark.png"><img src="docs-site/public/console/work-light.png" alt="作業: 作業項目と意思決定の、セッションをまたぐ永続バックログ。"></picture><br><sub><b>作業</b> — セッションをまたぐ永続バックログ: 項目、所有権、受け入れ、意思決定。</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/security-dark.png"><img src="docs-site/public/console/security-light.png" alt="セキュリティとフォレンジック: ガードレール所見、異常キュー、改ざん検知可能なフォレンジック。"></picture><br><sub><b>セキュリティとフォレンジック</b> — ガードレール所見、異常、改ざん検知可能なフォレンジック。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/finops-dark.png"><img src="docs-site/public/console/finops-light.png" alt="FinOps: モデル支出、トークン使用量、予算、ランレート予測。"></picture><br><sub><b>FinOps</b> — モデルとエージェント別の支出、拒否またはスロットルする予算、ランレート。</sub> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-dark.png"><img src="docs-site/public/console/access-map-light.png" alt="Access map: what each agent reads and writes across your estate, origins on the left, resources on the right."></picture><br><sub><b>アクセスマップ</b> — 誰が何を読み書きするか。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-drift-dark.png"><img src="docs-site/public/console/access-map-drift-light.png" alt="Least-privilege drift: unexpected accesses and unused grants overlaid on the access map."></picture><br><sub><b>Drift</b> — 誰も許可していないアクセスと、誰も使っていない権限。</sub> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/agentops-dark.png"><img src="docs-site/public/console/agentops-light.png" alt="Claude Code sessions created, attached to and governed from the console."></picture><br><sub><b>セッション</b> — ブラウザーからエージェントのセッションを開始、参加、停止。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/work-dark.png"><img src="docs-site/public/console/work-light.png" alt="Work: the durable cross-session backlog of work items and decisions."></picture><br><sub><b>作業</b> — セッション終了後も残るタスク、担当者、決定。</sub> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/security-dark.png"><img src="docs-site/public/console/security-light.png" alt="Security and forensics: guardrail findings, the anomaly queue and tamper-evident forensics."></picture><br><sub><b>セキュリティ</b> — ブロックされた操作、異常、改変できない記録。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/finops-dark.png"><img src="docs-site/public/console/finops-light.png" alt="FinOps: model spend, token usage, budgets and a run-rate projection."></picture><br><sub><b>支出</b> — モデル・エージェント別の費用、予算、予測。</sub> |
 
-画面は、実行中のバイナリ上のデモから取得しています。すべての画面：[コンソールリファレンス](docs-site/src/content/docs/reference/console.md)。
+全画面の説明は[コンソールリファレンス](docs-site/src/content/docs/reference/console.md)を参照してください。
 
 ## エディションと価格
 
-Community は AGPL-3.0 の完全な製品で、ユーザー数は無制限、4 つの deny-closed エンフォースメントポイントをすべて含みます。Business と Enterprise は `-tags enterprise` でのみビルドされる商用コードを追加します。Community から削除または制限されるものはありません。
+Community は製品全体を無料のオープンソースとして提供します。Business は企業が本番運用に必要とする機能を追加します。Enterprise は、規模の大きいインフラや規制対象のインフラを持つ企業グループ向けです。
 
-| エディション | 価格 | 含まれるもの |
-|---|---|---|
-| **Community** | 無料、AGPL-3.0 | セルフホストの完全な製品。ユーザー数無制限、アクティブなアイデンティティプロバイダー 1 つ。 |
-| **Business** | 月額 129 USD または年額 1,290 USD | 商用ライセンス、署名付きリリースチャネル、営業時間内のメールサポート、そして **Regulated Operations**、**AI Runtime Security**、**Compliance Packs**、**Identity & Scale**。ユーザー数無制限、法人 1 社、本番デプロイ最大 2 つ（それぞれにステージング 1 つ）、アクティブなアイデンティティプロバイダー最大 5 つ。 |
-| **Enterprise** | 契約 | 追加の法人、デプロイ、アイデンティティプロバイダー、エアギャップミラー、カスタム LTS とサポート条件。年間注文書による契約。 |
+| | **Community** | **Business** | **Enterprise** |
+|---|---|---|---|
+| **料金** | 無料、AGPL-3.0 | 月額 129 USD または年額 1,290 USD | 年間契約 |
+| **提供内容** | 製品全体：ユーザー数無制限、すべての 4 つの deny-closed エンフォースメントポイント | Community のすべてに加え、Regulated Operations、AI Runtime Security、Compliance Packs、Identity & Scale、商用ライセンス、署名付きアップデート、メールサポート | Business のすべてに加え、企業・デプロイ・ID プロバイダー数の拡大、オフラインミラー、個別に合意したサポート条件 |
+| **利用範囲** | 有効な ID プロバイダー一つ | 一つの企業、本番デプロイ二つ（それぞれにステージング一つ）、ID プロバイダー五つ | 契約で合意 |
 
-購入条件：[olivares.ai/pricing](https://olivares.ai/pricing)。オープンなものと商用のもの：[`LICENSING.md`](LICENSING.md)。
+**Regulated Operations** は、法的保全と変更できないアーカイブにより、法律が求める期間だけ記録を保持します。**AI Runtime Security** はエージェントが送信、受信、実行するものをフィルタリングします。**Compliance Packs** は ISO 42001、DORA、NIS 2 向けの証拠を用意します。**Identity & Scale** は複数の ID プロバイダーを同時に接続し、より大きなデプロイに対応します。
+
+[olivares.ai/pricing](https://olivares.ai/pricing) · [オープンソースと商用の範囲](LICENSING.md)
 
 ## アーキテクチャ
 
-単一の静的 Go バイナリがコンソールを内蔵し、4 つのインターフェースを提供します：REST API、安定コアの gRPC ミラー、`olivares` CLI、Terraform プロバイダー。コレクターはあなたのインフラ内で動作します。ストアは行レベルセキュリティ付きの SQLite または Postgres で、ストア API と Postgres の両方で強制されます。作業プレーンを含む詳細：[`ARCHITECTURE.md`](ARCHITECTURE.md)。
+コンソールを内蔵した単一の Go バイナリです。REST API、gRPC API、`olivares` コマンドライン、Terraform プロバイダーを提供します。コレクターはネットワーク内で動き、データは自社のサーバー上の SQLite または PostgreSQL に保存されます。[全体の構成](ARCHITECTURE.md)。
 
 ## ドキュメント
 
-[docs.olivares.ai](https://docs.olivares.ai) — テスト済みインストールチュートリアル（シングルノード、Docker Compose、Kubernetes/Helm、エアギャップ）、実際のコンソールキャプチャ付きコネクタガイド、クックブック（deny-closed ポリシー、予算、承認、kill-switch 訓練、SIEM プッシュ）、API リファレンス、用語集。[Olivares AI とは](docs-site/src/content/docs/start/what-is-olivares-ai.md)から始めてください。サイト上: [製品](https://olivares.ai/product) · [ソリューション](https://olivares.ai/solutions) · [仕組み](https://olivares.ai/how-it-works) · [アーキテクチャ](https://olivares.ai/architecture) · [セキュリティ](https://olivares.ai/security) · [信頼](https://olivares.ai/trust) · [比較](https://olivares.ai/compare) · [デモ](https://olivares.ai/demo) · [changelog](https://olivares.ai/changelog) · [ステータス](https://olivares.ai/status) · [ロードマップ](https://olivares.ai/roadmap) · [ブランド](https://olivares.ai/brand) · [プレス](https://olivares.ai/press)。リリース: [GitHub](https://github.com/olivaresai/olivares/releases) · [`CHANGELOG.md`](CHANGELOG.md)。
+[docs.olivares.ai](https://docs.olivares.ai) には、インストールガイド、各コネクターのガイド、よく使うポリシーのレシピ、API リファレンスがあります。[Olivares AI とは](docs-site/src/content/docs/start/what-is-olivares-ai.md)から始めてください。現在動く機能と今後の予定は[正直さと限界](docs-site/src/content/docs/start/honesty-and-limits.md)に記載しています。リリース：[GitHub](https://github.com/olivaresai/olivares/releases) · [`CHANGELOG.md`](CHANGELOG.md)。
+
+ウェブサイト：[製品](https://olivares.ai/product) · [ソリューション](https://olivares.ai/solutions) · [仕組み](https://olivares.ai/how-it-works) · [アーキテクチャ](https://olivares.ai/architecture) · [セキュリティ](https://olivares.ai/security) · [信頼](https://olivares.ai/trust) · [比較](https://olivares.ai/compare) · [デモ](https://olivares.ai/demo) · [changelog](https://olivares.ai/changelog) · [ステータス](https://olivares.ai/status) · [ロードマップ](https://olivares.ai/roadmap) · [ブランド](https://olivares.ai/brand) · [プレス](https://olivares.ai/press)。
 
 ## セキュリティ
 
-脆弱性は公開 issue ではなく、[`SECURITY.md`](SECURITY.md) から非公開で報告してください。アクセスマップはペイロードではなくエッジを保存し、開くと監査されます。ライセンス検証はオフラインで行われ、AGPL コアはライセンスの呼び出しを行いません。アドバイザリ：[`docs/security-advisories.md`](docs/security-advisories.md)、サプライチェーンの証跡：[`docs/openssf-badge.md`](docs/openssf-badge.md)。
+脆弱性を見つけた場合は、[`SECURITY.md`](SECURITY.md) の手順で非公開で報告してください。Olivares AI は、どのエージェントがどのリソースにアクセスしたかを記録し、内容は記録しません。その記録の閲覧自体もログに残します。ライセンスはオフラインで検証され、オープンソースのコアが私たちに通信することはありません。
 
 ## コミュニティ
 
-[`CONTRIBUTING.md`](CONTRIBUTING.md)（セットアップ、DCO/CLA、SPDX、コネクタ境界） · [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) · [`SUPPORT.md`](SUPPORT.md) · [`GOVERNANCE.md`](GOVERNANCE.md) · [`CHANGELOG.md`](CHANGELOG.md)（Keep a Changelog、CalVer `YY.M.PATCH`）。
-
-## ライセンス
-
-`core/`、`modules/`、`web/` は **AGPL-3.0-only**、`sdk/`、`connectors/`、`clients/` は **Apache-2.0** で、コネクタがエンジンを import することはありません。商用コードは `-tags enterprise` でのみビルドされ、このリポジトリにはありません。商用ライセンス：`enterprise@olivares.ai` — [`LICENSING.md`](LICENSING.md)。コントリビューションには DCO の sign-off（`git commit -s`）と [CLA](CLA.md) が必要です。
-
-> **無保証。** 本ソフトウェアは**現状のまま**提供され、**いかなる保証もなく**、**データ損失、業務中断、逸失利益について責任を負いません**。AGPL-3.0-only 第 15–16 条、Apache-2.0 第 7–8 条、および本プロジェクトの補足条項が適用されます — [`DISCLAIMER.md`](DISCLAIMER.md)。
+貢献を歓迎します。[`CONTRIBUTING.md`](CONTRIBUTING.md) で、環境の準備、サインオフ、コネクターの構成を説明しています。[行動規範](CODE_OF_CONDUCT.md) · [サポート](SUPPORT.md) · [ガバナンス](GOVERNANCE.md) · [変更履歴](CHANGELOG.md)。
 
 ## プロジェクトを支援する
 
-GitHub Sponsors — [github.com/sponsors/olivaresai](https://github.com/sponsors/olivaresai) または [github.com/sponsors/fran-olivares](https://github.com/sponsors/fran-olivares) — または Ko-fi での単発の支援で、プロジェクトを支援できます。スポンサーはサポート契約ではありません（[`SUPPORT.md`](SUPPORT.md)）。名前の掲載を希望したスポンサーは [`SUPPORTERS.md`](SUPPORTERS.md) に掲載します。
+Olivares AI は公開で開発しています。役に立ったら、GitHub Sponsors の [olivaresai](https://github.com/sponsors/olivaresai) または [fran-olivares](https://github.com/sponsors/fran-olivares) で開発を支援するか、Ko-fi でコーヒーをおごってください。名前の掲載を希望するスポンサーは [`SUPPORTERS.md`](SUPPORTERS.md) に記載します。スポンサーはサポート契約ではありません（[`SUPPORT.md`](SUPPORT.md)）。
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Z1R625SAD2)
+
+## ライセンス
+
+エンジン、モジュール、コンソールは **AGPL-3.0-only**、SDK、コネクター、クライアントは **Apache-2.0** です。商用コードは別途ビルドされ、このリポジトリには含まれません。商用ライセンスの問い合わせ先：`enterprise@olivares.ai`。コントリビューションには DCO の sign-off（`git commit -s`）と [CLA](CLA.md) が必要です。
+
+> **現状のまま**提供され、いかなる保証もなく、データ損失、業務中断、逸失利益について責任を負いません。[`DISCLAIMER.md`](DISCLAIMER.md) を参照してください。
 
 ---
 

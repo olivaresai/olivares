@@ -8,7 +8,8 @@
     "mcp": "MCP-Auth",
     "wif": "WIF-Graph",
     "posture": "Schlüssel- & Residenz-Sicherheitslage",
-    "login": "Privilegierte Anmeldung"
+    "login": "Privilegierte Anmeldung",
+    "totp": "TOTP-Faktor"
   },
   "seam": {
     "badge": "Backend ausstehend",
@@ -608,5 +609,40 @@
       "title": "Keine menschlichen oder nicht-menschlichen Identitäten",
       "description": "Gleichen Sie nach dem Konfigurieren einer Verzeichnisquelle das Identitätsinventar erneut ab, um menschliche und nicht-menschliche Identitäten samt External IDs zu erfassen."
     }
+  },
+  "totp": {
+    "title": "TOTP-Zweitfaktor",
+    "description": "Ein zeitbasierter Einmalcode (RFC 6238) als zusätzlicher Faktor Ihres lokalen Kontos. Er ergänzt Passkeys und PIV — er ersetzt sie nie.",
+    "state": "Faktor",
+    "enrolled": "Registriert",
+    "notEnrolled": "Nicht registriert",
+    "algorithm": "Parameter",
+    "everySeconds": "Codes alle {{period}} s",
+    "activatedAt": "Aktiviert",
+    "recoveryRemaining": "Wiederherstellungscodes",
+    "recoveryCount": "{{count}} übrig",
+    "enrol": "Faktor registrieren",
+    "replace": "Faktor ersetzen",
+    "remove": "Faktor entfernen",
+    "confirmRemove": "Wirklich entfernen?",
+    "activate": "Aktivieren",
+    "scanPrompt": "Scannen Sie den QR-Code mit Ihrer Authenticator-App oder geben Sie das Secret manuell ein, und dann den angezeigten Code.",
+    "qrAlt": "QR-Code mit der TOTP-Bereitstellungs-URI",
+    "manualEntry": "Secret für manuelle Eingabe",
+    "codeLabel": "Code aus Ihrer App",
+    "recoveryWarning": "Diese Wiederherstellungscodes werden genau einmal angezeigt. Speichern Sie sie jetzt — jeder ist bei Verlust des Geräts einmalig nutzbar.",
+    "savedCodes": "Codes gespeichert",
+    "stepUpRequired": "Diese Aktion erfordert eine neue AAL3-Sitzung. Absolvieren Sie zuerst einen Passkey- oder PIV-Step-up.",
+    "sealerUnavailable": "Der TOTP-Seed-Sealer steht auf dieser Bereitstellung nicht zur Verfügung; die Registrierung bleibt deaktiviert, bis eine Bedienperson es behebt.",
+    "loadFailed": "Der Faktorstatus konnte nicht geladen werden.",
+    "policyTitle": "TOTP für Administratoren verpflichtend",
+    "policyDescription": "Wenn aktiv, müssen Administratoren (Superadmins sowie Admins/Owner beliebiger Tenants) einen Faktor registrieren, bevor ihre Passwort-Anmeldung abgeschlossen wird.",
+    "policyState": "Richtlinie",
+    "policyOn": "Pflicht",
+    "policyOff": "Aus",
+    "policyEnable": "Für Administratoren verpflichten",
+    "policyConfirmOn": "Bestätigen: verpflichten",
+    "policyDisable": "Deaktivieren",
+    "policyAal3Note": "Das Ändern dieser Richtlinie erfordert eine AAL3-Sitzung. Konten ohne Faktor werden bei der nächsten Anmeldung zur Registrierung geführt — nie ausgesperrt."
   }
 }

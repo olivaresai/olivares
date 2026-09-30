@@ -1,0 +1,46 @@
+{
+  "title": "Herramientas de agentes",
+  "description": "Administra herramientas en el servidor del plano de control.",
+  "refresh": "Actualizar",
+  "adminOnly": "Se requiere una sesión de administrador del sistema para administrar las herramientas del servidor.",
+  "readOnly": "Este plano de control es de solo lectura. La instalación está deshabilitada.",
+  "notInstalled": "Sin instalación administrada",
+  "version": "Versión de {{name}}",
+  "review": "Revisar instalación",
+  "reviewName": "Revisar instalación de {{name}}",
+  "detect": "Detectar {{name}}",
+  "detecting": "Comprobando herramientas…",
+  "notDetected": "No se detectó un ejecutable en el servidor.",
+  "versionUnknown": "Versión desconocida",
+  "planning": "Verificando la versión seleccionada…",
+  "approval": "Revisar instalación",
+  "installHint": "La instalación requiere verificación con hardware. No inicia un agente ni un servidor de modelos.",
+  "install": "Instalar versión aprobada",
+  "starting": "Iniciando…",
+  "started": "Instalación iniciada",
+  "cancel": "Cancelar",
+  "job": "Última instalación",
+  "leftovers": "Quedan {{count}} directorios temporales sin terminar. Revisa el inventario antes de reintentar.",
+  "state": {
+    "running": "Instalando…",
+    "succeeded": "Instalación completada",
+    "failed": "Instalación fallida",
+    "interrupted": "Instalación interrumpida"
+  },
+  "installedState": {
+    "installed": "Instalado",
+    "damaged": "Dañado",
+    "unverified": "Sin verificar"
+  },
+  "verification": {
+    "openpgp": "Versión firmada por el editor (OpenPGP).",
+    "sigstore-cosign": "Resumen del paquete y firmas del editor verificados.",
+    "none-origin-only": "Origen HTTPS oficial; sin firma del editor.",
+    "github-release-sha256": "SHA-256 fijado desde los metadatos oficiales; sin firma del editor.",
+    "unknown": "Sin verificar"
+  },
+  "probe": "Consultar versión",
+  "probeName": "Consultar versión en {{path}}",
+  "probeHint": "La consulta ejecuta --version en este ejecutable exacto tras verificarte con hardware.",
+  "probeComplete": "Consulta de versión terminada."
+}

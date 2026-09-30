@@ -38,7 +38,7 @@ var toolInstallEngine = func(ctx context.Context) *toolinstall.Engine {
 	claude := toolinstall.NewClaude(toolinstall.ClaudeOptions{Verifier: verifier})
 	codex := toolinstall.NewCodex(toolinstall.CodexOptions{})
 	grok := toolinstall.NewGrok(toolinstall.GrokOptions{})
-	cat, err := toolinstall.NewCapabilityCatalog(toolinstall.NewCatalog(claude), codex, grok)
+	cat, err := toolinstall.NewCapabilityCatalog(toolinstall.NewCatalog(claude), codex, grok, toolinstall.NewOpenCode(toolinstall.ReleaseArchiveOptions{}), toolinstall.NewOllama(toolinstall.ReleaseArchiveOptions{}))
 	if err != nil {
 		return toolinstall.NewEngine(toolinstall.NewCatalog(claude), toolinstall.EngineOptions{InstallerVersion: version})
 	}
@@ -57,7 +57,8 @@ func newAgentToolCmd() *cobra.Command {
 			"Verification class is per driver and is recorded on the receipt: Claude is publisher-signed\n" +
 			"OpenPGP; Codex is mixed-assurance (exact package digest plus publisher-signed subjects) and\n" +
 			"origin-install refuses when a subject verifier is unavailable; Grok is origin-only HTTPS\n" +
-			"plus a bounded probe, which is not a publisher signature.\n\n" +
+			"plus a bounded probe, which is not a publisher signature. OpenCode and Ollama compare\n" +
+			"SHA-256 from their pinned official GitHub release metadata before archive placement.\n\n" +
 			"Channel names belong to the vendor, not to Olivares: the Grok origin publishes stable and\n" +
 			"answers 404 for latest, so --version stable is the pointer to ask for. A pointer the origin\n" +
 			"does not publish is reported as version_unknown with the URL and the status.\n\n" +
@@ -84,7 +85,7 @@ type agentToolTarget struct {
 
 func (t *agentToolTarget) addFlags(cmd *cobra.Command) {
 	t.cmd = cmd
-	cmd.Flags().StringVar(&t.driver, "driver", "claude", "provider tool to install: claude, codex or grok")
+	cmd.Flags().StringVar(&t.driver, "driver", "claude", "provider tool to install: claude, codex, grok, opencode or ollama")
 	cmd.Flags().StringVar(&t.version, "version", "latest", "exact version (X.Y.Z) or the vendor pointer latest or stable")
 	cmd.Flags().StringVar(&t.platform, "platform", "", "target platform key: linux-x64, linux-arm64, linux-x64-musl, linux-arm64-musl (default: this host)")
 	addAgentToolRootFlag(cmd, &t.root)
@@ -311,7 +312,7 @@ func newAgentToolInstallCmd() *cobra.Command {
 					return runAgentToolInstallV2(cmd, eng, &target, planFile, yes)
 				}
 			}
-			if target.driver == toolinstall.DriverCodex || target.driver == toolinstall.DriverGrok {
+			if capability, err := eng.Capability(target.driver); err == nil && capability == toolinstall.ProviderCapabilityV2 {
 				return runAgentToolInstallV2(cmd, eng, &target, planFile, yes)
 			}
 			var approved *toolinstall.Plan

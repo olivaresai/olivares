@@ -132,6 +132,20 @@ func (a *authScope) WebAuthnCredentials() store.Repository[model.WebAuthnCredent
 	return webAuthnAuthorityRepo(a.ts, inner)
 }
 
+func (a *authScope) TOTPCredentials() store.Repository[model.TOTPCredential] {
+	inner := newTypedRepo(a.ts.repo(totpCredentialDescriptor), totpCredentialCodec)
+	return totpCredentialAuthorityRepo(a.ts, inner)
+}
+
+func (a *authScope) TOTPRecoveryCodes() store.Repository[model.TOTPRecoveryCode] {
+	inner := newTypedRepo(a.ts.repo(totpRecoveryCodeDescriptor), totpRecoveryCodeCodec)
+	return totpRecoveryCodeAuthorityRepo(a.ts, inner)
+}
+
+func (a *authScope) AuthPolicy() store.Repository[model.AuthPolicy] {
+	return newTypedRepo(a.ts.repo(authPolicyDescriptor), authPolicyCodec)
+}
+
 func (a *authScope) Invites() store.Repository[model.UserInvite] {
 	return newTypedRepo(a.ts.repo(userInviteDescriptor), userInviteCodec)
 }

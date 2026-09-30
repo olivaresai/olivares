@@ -223,7 +223,7 @@ func (s *SelectionV2) validate() error {
 	if s == nil {
 		return refuse(KindInvalidRequest, "v2 selection is missing")
 	}
-	if err := closedToken(s.Driver, "driver", DriverCodex, DriverGrok); err != nil {
+	if err := closedToken(s.Driver, "driver", DriverCodex, DriverGrok, DriverOpenCode, DriverOllama); err != nil {
 		return err
 	}
 	if err := closedToken(s.Channel, "channel", ChannelExact, ChannelLatest, ChannelStable); err != nil {
@@ -250,13 +250,17 @@ func (s *SelectionV2) validate() error {
 	if !vendorPlatformV2Re.MatchString(s.VendorPlatform) {
 		return refuse(KindInvalidRequest, "vendor_platform %q is not a bounded vendor key", s.VendorPlatform)
 	}
-	if err := closedToken(s.PackagePolicyID, "package_policy_id", PackagePolicyCodexMixedV1, PackagePolicyOriginOnlyV1); err != nil {
+	if err := closedToken(s.PackagePolicyID, "package_policy_id", PackagePolicyCodexMixedV1, PackagePolicyOriginOnlyV1, PackagePolicyReleaseArchiveV1); err != nil {
 		return err
 	}
 	if err := s.Source.validate(); err != nil {
 		return err
 	}
-	if err := s.FetchedObject.validate(); err != nil {
+	if s.Driver == DriverOllama {
+		if err := validateOllamaFetched(s.FetchedObject); err != nil {
+			return err
+		}
+	} else if err := s.FetchedObject.validate(); err != nil {
 		return err
 	}
 	if err := s.Layout.validate(); err != nil {
@@ -299,11 +303,11 @@ func (p PlatformV2) validate(driver string) error {
 		return refuse(KindInvalidRequest, "platform arch %q is outside this increment", p.Arch)
 	}
 	switch driver {
-	case DriverCodex:
+	case DriverCodex, DriverOpenCode:
 		if p.Libc != "musl" {
 			return refuse(KindInvalidRequest, "codex platform libc must be musl, got %q", p.Libc)
 		}
-	case DriverGrok:
+	case DriverGrok, DriverOllama:
 		if p.Libc != "" {
 			return refuse(KindInvalidRequest, "grok platform libc must be empty, got %q", p.Libc)
 		}
@@ -426,6 +430,9 @@ func (f FetchedObjectExpectation) validate() error {
 }
 
 func (l ExpectedLayout) validate() error {
+	if releaseArchiveLayoutID(l.ID) {
+		return validateReleaseArchiveLayout(l)
+	}
 	if err := closedToken(l.ID, "layout.id", LayoutIDCodexPackageV1, LayoutIDGrokBinV1); err != nil {
 		return err
 	}
@@ -562,7 +569,7 @@ func (s SubjectExpectation) validate() error {
 }
 
 func (v VerificationProfileV2) validate() error {
-	if err := closedToken(v.Kind, "verification.kind", VerificationSigstoreCosign, VerificationNoneOriginOnly); err != nil {
+	if err := closedToken(v.Kind, "verification.kind", VerificationSigstoreCosign, VerificationNoneOriginOnly, VerificationGitHubReleaseSHA256); err != nil {
 		return err
 	}
 	switch v.Kind {
@@ -571,7 +578,7 @@ func (v VerificationProfileV2) validate() error {
 			return refuse(KindInvalidRequest, "verification.cosign is required for %s", v.Kind)
 		}
 		return v.Cosign.validate()
-	case VerificationNoneOriginOnly:
+	case VerificationNoneOriginOnly, VerificationGitHubReleaseSHA256:
 		if v.Cosign != nil {
 			return refuse(KindInvalidRequest, "verification.cosign must be null for %s", v.Kind)
 		}
@@ -621,6 +628,9 @@ func (c *CosignProfileV2) validate() error {
 }
 
 func (s SelectionV2) validateClosedCombination() error {
+	if s.Driver == DriverOpenCode || s.Driver == DriverOllama {
+		return s.validateReleaseArchiveSelection()
+	}
 	switch s.Driver {
 	case DriverCodex:
 		if s.PackagePolicyID != PackagePolicyCodexMixedV1 {

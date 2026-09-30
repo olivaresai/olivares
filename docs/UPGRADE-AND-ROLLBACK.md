@@ -63,7 +63,7 @@ digest** — a tag is mutable, a digest is exactly what you verified:
 
 ```sh
 cosign verify docker.io/olivaresai/olivares:26.10.0 \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 # then resolve and use the digest you verified (same value on either registry):
 crane digest docker.io/olivaresai/olivares:26.10.0   # -> sha256:<…>

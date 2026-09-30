@@ -168,6 +168,13 @@ type EntityRef struct {
 	// The option requires Kind so the engine can establish whether the row exists.
 	// It is deliberately per-route; ordinary entity routes retain their 403 denial.
 	ConcealDeniedAsNotFound bool
+	// DeniedReadPermission optionally permits disclosure of an existing row when
+	// the action is denied. The engine evaluates this read permission against the
+	// SAME stored resource through the ordinary HandleEntity authorizer. A reader
+	// receives 403 for the denied action; an unreadable or absent row remains 404.
+	// This changes only denial presentation and never grants the action. It requires
+	// ConcealDeniedAsNotFound; blank preserves unconditional concealment.
+	DeniedReadPermission auth.Permission
 }
 
 // ModuleHandler is a module route handler. It receives the authorized principal,

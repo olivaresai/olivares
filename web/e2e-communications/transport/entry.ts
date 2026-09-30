@@ -6,7 +6,7 @@
 // the UNMODIFIED product modules (`@/lib/api/client`, `@/features/communications`,
 // `@/stores/session`, React Query) and served by probe.mjs to a real Chromium with a
 // loopback HTTP receiver that counts the POSTs it actually reads. It is the shape of
-// the independent review's witness of d8c5ad3e9e (F1), kept here so the causal
+// the independent review's witness of d8c5ad3e9e (finding 1), kept here so the causal
 // controls can be re-run on any later source: the four refresh controls, the queued
 // mutation with and without a same-turn rotation, and — through build.mjs --mutant —
 // the same cases with the transport's dispatch guard removed.

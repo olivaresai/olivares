@@ -289,3 +289,5 @@ func (g *Grok) ObserveAuth(home string) AuthObservation {
 }
 
 var _ PackageProviderV2 = (*Grok)(nil)
+
+func (g *Grok) VerificationLevel() string { return VerificationNoneOriginOnly }

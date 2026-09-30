@@ -27,6 +27,7 @@ import type { TFunction } from 'i18next'
 import { resolveBinding } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
+import { refTail } from '@/features/shared/entity-names'
 import {
   type RailGroup,
   type RailRow,
@@ -78,13 +79,13 @@ function RailRowLink({ row }: { row: RailRow }) {
   const { t } = useTranslation('nav')
   // A row the engine gave no title is named by its identifier: the localized word, then the
   // identifier in mono, so an id never reads as prose (a work item id; a session id cut to
-  // eight characters, the full one in the title).
+  // its distinguishing tail, the full one in the title).
   const named =
     row.kind === 'handoff'
       ? { label: t('shell.rail.workItem'), id: row.reference }
       : row.title
         ? null
-        : { label: t('shell.rail.session'), id: row.reference.slice(0, 8) }
+        : { label: t('shell.rail.session'), id: refTail(row.reference) }
   const title = named
     ? `${named.label} ${row.kind === 'handoff' ? named.id : row.reference}`
     : (row.title ?? '')
@@ -100,6 +101,14 @@ function RailRowLink({ row }: { row: RailRow }) {
       // promotes exactly one.
       tabIndex={-1}
       data-rail-row={row.kind}
+      aria-label={[
+        t(`shell.rail.state.${row.state}`),
+        title,
+        elapsed(t, row.minutes),
+        meta,
+      ]
+        .filter(Boolean)
+        .join(' · ')}
       className={cn(
         'relative grid grid-cols-[18px_minmax(0,1fr)_auto] gap-x-2 gap-y-0.5 rounded-ctl px-2.5 py-[7px] outline-none',
         'hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus',
@@ -108,7 +117,10 @@ function RailRowLink({ row }: { row: RailRow }) {
       <span className="row-span-2 flex h-5 items-center justify-center">
         <RailGlyph state={row.state} />
       </span>
-      <span className="truncate text-body font-medium text-text" title={title}>
+      <span
+        className="min-w-0 whitespace-normal text-body font-medium text-text [overflow-wrap:anywhere]"
+        title={title}
+      >
         {named ? (
           <>
             {named.label}{' '}
@@ -130,7 +142,7 @@ function RailRowLink({ row }: { row: RailRow }) {
       </span>
       {meta ? (
         <span
-          className="col-span-2 col-start-2 truncate text-caption text-text-3"
+          className="col-span-2 col-start-2 min-w-0 whitespace-normal text-caption [overflow-wrap:anywhere] text-text-3"
           title={meta}
         >
           {meta}

@@ -44,7 +44,7 @@ Bearer token がないリクエストは拒否されず匿名のままですが�
 
 <!-- BEGIN GENERATED olivares-grpc-reference — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-エンジンとプラグインホストは、**7 サービス**にわたり **28 rpc** を登録します。以下の表は、
+エンジンとプラグインホストは、**7 サービス**にわたり **29 rpc** を登録します。以下の表は、
 サーバーが gRPC に渡す生成済み登録テーブルから読み取られます。ここに掲載されたメソッドは、
 クライアントが呼び出せるメソッドです。
 
@@ -116,13 +116,14 @@ Bearer token がないリクエストは拒否されず匿名のままですが�
 
 ### `olivares.sdk.v1.SourceService`
 
-`olivaresv1/v1.proto` で定義。4 rpc。
+`olivaresv1/v1.proto` で定義。5 rpc。
 
 | メソッド | 完全なメソッド | 種類 | リクエスト | レスポンス | 動作 |
 |---|---|---|---|---|---|
 | `Close` | `/olivares.sdk.v1.SourceService/Close` | unary | `Empty` | `Empty` | Open が開始したセッションを終了し、コネクタがそのために保持していたものを解放します。 |
 | `Describe` | `/olivares.sdk.v1.SourceService/Describe` | unary | `Empty` | `DescribeResponse` | コネクタの descriptor（identity、設定フィールド、広告する capability）を返します。 |
 | `Gather` | `/olivares.sdk.v1.SourceService/Gather` | server-streaming | `Empty` | `Observation` (stream) | observation をホストへストリームし、ホストがそれぞれをイベントバスへ載せます。バッチ実行の完了時、またはホストによるキャンセル時にストリームは終了します。 |
+| `GatherInventory` | `/olivares.sdk.v1.SourceService/GatherInventory` | server-streaming | `GatherInventoryRequest` | `Observation` (stream) | ネゴシエートした inventory-coverage-v1 機能に限り、コネクタのインベントリ観測をストリームで送信します。それ以外の機能は拒否され、キャンセルされたストリームが成功を報告することはありません。 |
 | `Open` | `/olivares.sdk.v1.SourceService/Open` | unary | `OpenRequest` | `Empty` | observation を収集する前に、ホストが渡す設定でセッションを開始します。 |
 
 <!-- END GENERATED olivares-grpc-reference -->

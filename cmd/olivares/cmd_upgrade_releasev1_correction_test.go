@@ -26,7 +26,7 @@ import (
 	"github.com/olivaresai/olivares/core/release"
 )
 
-// THE 2026-09-05 CORRECTION OF THE RELEASE-V1 CLIENT (independent review R1, R5, R7, R8), against
+// THE 2026-09-05 CORRECTION OF THE RELEASE-V1 CLIENT (independent review finding 1, R5, R7, R8), against
 // an OWNED loopback gateway that speaks the protocol the way the worker does: the marker on every
 // response, the worker's error NAMES in Olivares-Download-Error, tuple corroboration on the
 // signature and artifact requests, and injectable conflicts and header mutations. Dummy bearers

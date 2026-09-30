@@ -111,7 +111,7 @@ func TestFirstBootWithoutAdminPoolTellsTheOperatorWhatToProvision(t *testing.T) 
 	}
 }
 
-// THE SECOND REST PATH, END TO END (F4 from the external contrast). The
+// THE SECOND REST PATH, END TO END (finding 4 from the external contrast). The
 // unit tests pin statusFor and writeError, and TestDeliberateRefusalsAreNotCacheable
 // puts this URL on a synthetic request — but it calls writeError directly, so it
 // would pass even if handleListOrgs swallowed the error or answered 200.

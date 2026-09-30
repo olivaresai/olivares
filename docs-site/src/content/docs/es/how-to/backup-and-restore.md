@@ -22,7 +22,7 @@ Argon2id (`--passphrase-file`) o una clave en bruto de 32 bytes de tu KMS
 (`--kek-key-file`); se requiere exactamente una. Las claves de firma de auditoría y de
 catálogo viajan **selladas** dentro del bundle.
 
-**El control de restauración de DR registrado solo admite PostgreSQL 16 en 26.10.** Las demás versiones principales se rechazan con `DR restore control contract: PostgreSQL major <major> is unsupported (verified contract: 16)`, donde `<major>` es la versión principal detectada del servidor.
+**El control de restauración de DR registrado admite PostgreSQL 15, 16, 17 y 18 en 26.10** (medido en 15.19, 16.15, 17.11 y 18.6). Las demás versiones principales se rechazan con `DR restore control contract: PostgreSQL major <major> is unsupported (verified contracts: 15, 16, 17, 18)`, donde `<major>` es la versión principal detectada del servidor. Un control nunca se repara: tras actualizar la instalación existente a una nueva versión principal, se rechaza un control que no coincida con el catálogo y los permisos de esa versión.
 
 ## Hacer la copia de seguridad
 

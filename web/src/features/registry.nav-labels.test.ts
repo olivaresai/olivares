@@ -33,7 +33,8 @@
 import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { LANGUAGE_CODES } from '@/lib/i18n'
+import i18n, { LANGUAGE_CODES } from '@/lib/i18n'
+import { EXTENSION_ROUTES } from './extensions'
 import { FEATURE_VIEWS } from './registry'
 
 const LOCALES_ROOT = resolve(__dirname, '../lib/i18n/locales')
@@ -65,7 +66,11 @@ function navItems(lng: string): Record<string, unknown> {
   const parsed = JSON.parse(
     readFileSync(join(LOCALES_ROOT, lng, 'nav.json'), 'utf8'),
   ) as { items?: Record<string, unknown> }
-  return parsed.items ?? {}
+  const items = parsed.items ?? {}
+  for (const { id } of EXTENSION_ROUTES) {
+    items[id] = i18n.getResource(lng, 'nav', `items.${id}`)
+  }
+  return items
 }
 
 /** A label that is present but unusable is the same defect as an absent one. */

@@ -629,7 +629,7 @@ func TestAccessEvidenceCompletedV9DamageIsReportedNotRepaired(t *testing.T) {
 // is gone, and the generic reconciler is strictly additive — so a boot that did not compare
 // the COMPLETE contract would put the trigger back and serve.
 //
-// WHERE THE REFUSAL COMES FROM MOVED, and the move is the correction of review finding F2.
+// WHERE THE REFUSAL COMES FROM MOVED, and the move is the correction of review finding finding 2.
 // It used to be the pre-reconcile verification, after six schema versions had committed on
 // a damaged pre-v6 checkpoint. It is now the read-only boot classifier, before any
 // migration: `v9-complete`'s row says the four relations are `all exact`, and this is what
@@ -1409,7 +1409,7 @@ func accessEvidenceAssertDurableCensusUnchanged(
 	}
 }
 
-// TestAccessEvidenceLegacyProfileMustNotSilentlyExpand is the review's F1, kept.
+// TestAccessEvidenceLegacyProfileMustNotSilentlyExpand is the review's finding 1, kept.
 //
 // The same allowlisted <=v5 seed is opened twice: once with the ratified core-only
 // registrar, and once with one additional append-only module descriptor the source never
@@ -1474,7 +1474,7 @@ func TestAccessEvidenceLegacyProfileMustNotSilentlyExpand(t *testing.T) {
 	}
 }
 
-// TestAccessEvidenceFreshPreV2RequiresBothFamiliesAbsent is the review's F2 v1 subcase.
+// TestAccessEvidenceFreshPreV2RequiresBothFamiliesAbsent is the review's finding 2 v1 subcase.
 //
 // `fresh-pre-v2`'s row requires the directory AND access-evidence families absent. A v1
 // checkpoint with the four access-evidence relations precreated used to be admitted as
@@ -1538,7 +1538,7 @@ func TestAccessEvidenceFreshPreV2RequiresBothFamiliesAbsent(t *testing.T) {
 	}
 }
 
-// TestAccessEvidenceFreshV2DamageRefusesBeforeAnyMigration is the review's F2 v2 subcase,
+// TestAccessEvidenceFreshV2DamageRefusesBeforeAnyMigration is the review's finding 2 v2 subcase,
 // and the one whose failure was measured in committed schema versions.
 //
 // Current migrations are applied to v2 and one append-only guard leg is removed. The

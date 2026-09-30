@@ -16,7 +16,13 @@ import {
   ReactFlowProvider,
   useReactFlow,
 } from '@xyflow/react'
-import { type ReactNode, useCallback, useEffect, useState } from 'react'
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
 import { useTranslation } from 'react-i18next'
 import '@xyflow/react/dist/style.css'
 import { cn } from '@/lib/utils'
@@ -50,6 +56,9 @@ export interface GraphCanvasProps {
    * `LEGIBLE_FIT_MIN_ZOOM` es el valor calibrado para las etiquetas `text-xs`.
    */
   fitMinZoom?: number
+  /** Minimum clearance between measured nodes in each existing column. Opt in
+   * when labels wrap; the original layout remains the minimum row spacing. */
+  verticalNodeGap?: number
   /** Accessible name for the graph region (a textual alternative — WCAG 1.1.1).
    *  Set it and the wrapper becomes a labelled group for assistive tech. */
   ariaLabel?: string
@@ -106,6 +115,33 @@ function useMeasurableNodes(nodes: Node[]) {
   return { rfNodes, onNodesChange }
 }
 
+/** Preserve column/order and expand only rows whose measured labels need room.
+ * Derived from the original positions so a shorter label can reclaim its space. */
+function spaceMeasuredNodes(nodes: Node[], gap: number): Node[] {
+  const columns = new Map<number, Node[]>()
+  for (const node of nodes) {
+    const column = columns.get(node.position.x) ?? []
+    column.push(node)
+    columns.set(node.position.x, column)
+  }
+  const positions = new Map<string, number>()
+  for (const column of columns.values()) {
+    column.sort((a, b) => a.position.y - b.position.y)
+    let bottom = -Infinity
+    for (const node of column) {
+      const y = Math.max(node.position.y, bottom + gap)
+      positions.set(node.id, y)
+      bottom = y + (node.measured?.height ?? 0)
+    }
+  }
+  return nodes.map((node) => {
+    const y = positions.get(node.id)!
+    return y === node.position.y
+      ? node
+      : { ...node, position: { ...node.position, y } }
+  })
+}
+
 /**
  * Suelo de zoom del AJUSTE automático, **por llamante**.
  *
@@ -152,6 +188,7 @@ export function GraphCanvas({
   minimapColor,
   fitKey,
   fitMinZoom,
+  verticalNodeGap,
   ariaLabel,
   children,
   className,
@@ -159,6 +196,17 @@ export function GraphCanvas({
   const isDark = useIsDark()
   const { t } = useTranslation('common')
   const { rfNodes, onNodesChange } = useMeasurableNodes(nodes)
+  const renderedNodes = useMemo(
+    () =>
+      verticalNodeGap === undefined
+        ? rfNodes
+        : spaceMeasuredNodes(rfNodes, verticalNodeGap),
+    [rfNodes, verticalNodeGap],
+  )
+  const measuredFitKey =
+    verticalNodeGap === undefined
+      ? fitKey
+      : `${fitKey ?? ''}|${renderedNodes.map((node) => `${node.id}:${node.position.y}:${node.measured?.height ?? 0}`).join('|')}`
   return (
     <div
       role={ariaLabel ? 'group' : undefined}
@@ -170,7 +218,7 @@ export function GraphCanvas({
     >
       <ReactFlowProvider>
         <ReactFlow
-          nodes={rfNodes}
+          nodes={renderedNodes}
           onNodesChange={onNodesChange}
           edges={edges}
           nodeTypes={nodeTypes}
@@ -231,7 +279,7 @@ export function GraphCanvas({
             maskColor="color-mix(in oklab, var(--overlay) 40%, transparent)"
             className="!bg-elevated"
           />
-          <FitOnChange dep={fitKey} minZoom={fitMinZoom} />
+          <FitOnChange dep={measuredFitKey} minZoom={fitMinZoom} />
           {children}
         </ReactFlow>
       </ReactFlowProvider>

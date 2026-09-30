@@ -40,5 +40,9 @@
     "setup_complete": "Die Einrichtung ist bereits abgeschlossen.",
     "cross_tenant_admin_pool_not_configured": "Diese Bereitstellung hat keinen mandantenübergreifenden Admin-Datenbankpool. Stellen Sie eine NOSUPERUSER BYPASSRLS-Rolle mit `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` bereit (siehe deploy/postgres/README.md) und starten Sie den Server mit --admin-dsn neu, das auf diese Rolle zeigt.",
     "internal": "Ein interner Fehler ist aufgetreten."
+  },
+  "tenantAdmission": {
+    "title": "Zulassung zur Organisation erforderlich",
+    "description": "Melden Sie sich mit einer für die Organisation zugelassenen Verzeichnisidentität an. Globale Bootstrap-Berechtigungen erlauben keine Workspace-Kommunikation."
   }
 }

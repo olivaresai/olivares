@@ -59,6 +59,23 @@ func drExec(t *testing.T, db *sql.DB, stmt string, args ...any) {
 	}
 }
 
+// PG15 membership always permits SET and uses the member role's INHERIT flag;
+// it has no per-edge INHERIT/SET options. Keep 16+ options exact, and express the
+// legacy live-membership/admin premises with actual PG15 syntax.
+func drGrantFixtureMembership(t *testing.T, db *sql.DB, granted, member, options string) {
+	t.Helper()
+	if drMeasuredMajor(t, db) < 16 {
+		if strings.Contains(options, "ADMIN TRUE") {
+			options = " WITH ADMIN OPTION"
+		} else {
+			options = ""
+		}
+	} else if options != "" {
+		options = " WITH " + options
+	}
+	drExec(t, db, "GRANT "+quoteIdent(granted)+" TO "+quoteIdent(member)+options)
+}
+
 // ── R63 C3: mutating the CLUSTER-GLOBAL application role, and giving it back ──
 //
 // THE DEFECT THIS CLOSES, measured on candidate 330a77b8b8. One fixture below
@@ -442,26 +459,27 @@ func TestDRControlCatalogAndPrivilegeDriftRefusesWithoutRepair(t *testing.T) {
 			}
 		}, "column ACL"},
 		{"inherited_owner", func(t *testing.T, db *sql.DB, r restoreControlRoles) {
-			drExec(t, db, `GRANT `+quoteIdent(r.owner)+` TO `+quoteIdent(r.app)+` WITH INHERIT TRUE, SET FALSE`)
+			drGrantFixtureMembership(t, db, r.owner, r.app, "INHERIT TRUE, SET FALSE")
 		}, "role-membership"},
 		{"set_owner", func(t *testing.T, db *sql.DB, r restoreControlRoles) {
-			drExec(t, db, `GRANT `+quoteIdent(r.owner)+` TO `+quoteIdent(r.app)+` WITH INHERIT FALSE, SET TRUE`)
+			drGrantFixtureMembership(t, db, r.owner, r.app, "INHERIT FALSE, SET TRUE")
 		}, "role-membership"},
 		{"global_read_membership", func(t *testing.T, db *sql.DB, r restoreControlRoles) {
 			drNewRole(t, db, "dr_global_reader")
-			drExec(t, db, `GRANT pg_read_all_data TO dr_global_reader WITH INHERIT TRUE`)
+			drGrantFixtureMembership(t, db, "pg_read_all_data", "dr_global_reader", "INHERIT TRUE")
 		}, "role-membership"},
 		{"admin_intermediate", func(t *testing.T, db *sql.DB, r restoreControlRoles) {
 			drNewRole(t, db, "dr_mid")
-			drExec(t, db, `GRANT `+quoteIdent(r.owner)+` TO dr_mid WITH SET TRUE; GRANT dr_mid TO `+quoteIdent(r.app)+` WITH SET FALSE, INHERIT FALSE, ADMIN TRUE`)
+			drGrantFixtureMembership(t, db, r.owner, "dr_mid", "SET TRUE")
+			drGrantFixtureMembership(t, db, "dr_mid", r.app, "SET FALSE, INHERIT FALSE, ADMIN TRUE")
 		}, "role-membership"},
 		{"extra_inherited_select", func(t *testing.T, db *sql.DB, r restoreControlRoles) {
 			drNewRole(t, db, "dr_extra_role")
-			drExec(t, db, `GRANT `+quoteIdent(r.app)+` TO dr_extra_role WITH INHERIT TRUE`)
+			drGrantFixtureMembership(t, db, r.app, "dr_extra_role", "INHERIT TRUE")
 		}, "role-membership"},
 		{"inventory_inherited_select", func(t *testing.T, db *sql.DB, r restoreControlRoles) {
 			drSharedInventoryOwner(t, db)
-			drExec(t, db, `GRANT `+quoteIdent(r.app)+` TO `+quoteIdent(directoryInventoryOwner)+` WITH INHERIT TRUE`)
+			drGrantFixtureMembership(t, db, r.app, directoryInventoryOwner, "INHERIT TRUE")
 		}, "role-membership"},
 		{"inventory_column_select", func(t *testing.T, db *sql.DB, r restoreControlRoles) {
 			drSharedInventoryOwner(t, db)
@@ -632,7 +650,17 @@ func TestDRControlInertMembershipAndDestinationBinding(t *testing.T) {
 	super := drOpenSuper(t, pg.Superuser)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	drExec(t, super, `GRANT `+quoteIdent(roles.owner)+` TO `+quoteIdent(roles.app)+` WITH SET FALSE, INHERIT FALSE, ADMIN FALSE`)
+	if drMeasuredMajor(t, super) < 16 {
+		// There is no inert membership edge on PG15. Prove that plain membership
+		// is live and refuses, then revoke it and continue every binding assertion.
+		drGrantFixtureMembership(t, super, roles.owner, roles.app, "")
+		if g := verifyDRRestoreControl(ctx, super, dest, roles); g.Verdict != drGateMalformed || !strings.Contains(fmt.Sprint(g.Cause), "role-membership") {
+			t.Fatalf("PG15 plain owner membership did not refuse: %s %v", g.Verdict, g.Cause)
+		}
+		drExec(t, super, "REVOKE "+quoteIdent(roles.owner)+" FROM "+quoteIdent(roles.app))
+	} else {
+		drGrantFixtureMembership(t, super, roles.owner, roles.app, "SET FALSE, INHERIT FALSE, ADMIN FALSE")
+	}
 	if g := verifyDRRestoreControl(ctx, super, dest, roles); g.Verdict != drGateComplete {
 		t.Fatalf("inert membership rejected: %s %v", g.Verdict, g.Cause)
 	}
@@ -673,7 +701,7 @@ func TestDRControlNewObjectRollsBackOnEffectivePrivilegeRefusal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	drExec(t, super, `GRANT `+quoteIdent(roles.owner)+` TO `+quoteIdent(roles.app)+` WITH SET TRUE, INHERIT FALSE`)
+	drGrantFixtureMembership(t, super, roles.owner, roles.app, "SET TRUE, INHERIT FALSE")
 	before := drRelationNames(t, super)
 	_, err = InstallPendingRestoreControl(ctx, cfg, PendingRestoreSpec{OpID: drTestOpA, PlanSHA256: drTestPlanA})
 	if err == nil || !strings.Contains(err.Error(), "role-membership") {
@@ -753,15 +781,18 @@ func TestDRControlConfiguredSuperuserIsNotExemptFromSplitClosure(t *testing.T) {
 }
 
 func TestDRControlCompiledMajorSupportIsExplicit(t *testing.T) {
-	for _, major := range []int{0, 14, 15, 16, 17, 18} {
+	for _, major := range []int{0, 14, 15, 16, 17, 18, 19} {
 		t.Run(fmt.Sprint(major), func(t *testing.T) {
 			c, err := dialect.DRRestoreControlContract(major)
-			if major == 16 {
+			if major >= 15 && major <= 18 {
 				if err != nil || c.Major != major || c.DDL() == "" {
 					t.Fatalf("compiled contract: %v", err)
 				}
-			} else if err == nil || !strings.Contains(err.Error(), "unsupported") {
-				t.Fatalf("unsupported major accepted: %v", err)
+			} else {
+				want := fmt.Sprintf("DR restore control contract: PostgreSQL major %d is unsupported (verified contracts: 15, 16, 17, 18)", major)
+				if err == nil || err.Error() != want {
+					t.Fatalf("unsupported major refusal: %v; want %s", err, want)
+				}
 			}
 		})
 	}

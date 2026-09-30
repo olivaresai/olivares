@@ -139,7 +139,7 @@ Trata la profundidad a nivel de módulo como **trabajo en curso** salvo que una 
   air-gapped; los modelos frontier brokered no.
 - **Las rutas de módulo son un contrato beta separado.** Los endpoints de módulo (por
   ejemplo, el grafo del access map y el drift) no forman parte del contrato estable de
-  54 rutas del núcleo; se publican como un documento **beta** separado: la
+  67 rutas del núcleo; se publican como un documento **beta** separado: la
   [referencia de rutas de módulo](/reference/api-beta/) (servida en
   `/openapi.beta.json`). Beta significa que las formas pueden cambiar con aviso, y el
   detalle de cada campo sigue viviendo en las interfaces tipadas del producto. La

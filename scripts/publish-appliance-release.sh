@@ -74,10 +74,11 @@ done
 # because a literal satisfied by another repository's run would verify nothing about ours.
 # shellcheck disable=SC2016 # The sed pattern needs literal regex metacharacters.
 repo_rx="$(printf '%s' "$GITHUB_REPOSITORY" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+# shellcheck disable=SC2016 # The ref uses the same literal regex metacharacters.
 ref_rx="$(printf '%s' "$GITHUB_REF" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
 cert_identity="^https://github\.com/${repo_rx}/\.github/workflows/appliance-image\.yml@${ref_rx}\$"
 "$cosign_bin" verify-blob \
-	--certificate "$dir/SHA256SUMS.pem" --signature "$dir/SHA256SUMS.sig" \
+	--certificate "$dir/$sums.pem" --signature "$dir/$sums.sig" \
 	--certificate-identity-regexp "$cert_identity" \
 	--certificate-oidc-issuer https://token.actions.githubusercontent.com \
 	--certificate-github-workflow-repository "$GITHUB_REPOSITORY" \

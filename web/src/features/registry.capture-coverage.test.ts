@@ -35,7 +35,9 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { FEATURE_VIEWS } from './registry'
+import { ANONYMOUS_VIEWS } from './anonymous-registry'
 import censo from './route-census.json'
+import { ANONYMOUS_EXTENSION_ROUTES, EXTENSION_ROUTES } from './extensions'
 
 const SPEC = resolve(__dirname, '../../e2e/docs-captures.spec.ts')
 
@@ -44,6 +46,7 @@ const SPEC = resolve(__dirname, '../../e2e/docs-captures.spec.ts')
  *  Se unen a propósito: ninguna de las dos puede quedarse corta sola. */
 const RUTAS_MONTADAS: { id: string; path: string }[] = [
   ...FEATURE_VIEWS.map((v) => ({ id: v.id, path: v.path })),
+  ...ANONYMOUS_VIEWS.map((v) => ({ id: v.id, path: v.path })),
   ...(censo.paths as string[])
     .filter((p) => !FEATURE_VIEWS.some((v) => v.path === p))
     .map((p) => ({ id: `censo${p}`, path: p })),
@@ -134,6 +137,9 @@ describe('cobertura del arnés de capturas', () => {
     const faltan = RUTAS_MONTADAS.filter(
       (v) =>
         !(v.path in SIN_CAPTURA) &&
+        ![...EXTENSION_ROUTES, ...ANONYMOUS_EXTENSION_ROUTES].some(
+          (route) => route.path === v.path && route.heading.trim() !== '',
+        ) &&
         !new RegExp(`(^|[^A-Za-z])path:\\s*'${escapaRegex(v.path)}'`, 'm').test(
           spec,
         ),

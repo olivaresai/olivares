@@ -378,12 +378,21 @@ func (r workIdentityResolver) ValidateAgentWorkAuthorityInScope(
 }
 
 func (r workIdentityResolver) resolveSession(ctx context.Context, tenant model.TenantID, workspace model.ID, ref string) (sessions.Participant, error) {
-	if r.sessions == nil {
+	if r.sessions == nil || r.st == nil {
 		// Deny-closed, and it names itself: an unwired plane is "I could not look",
 		// never "this session is not eligible".
 		return sessions.Participant{}, fmt.Errorf("session identity plane is not wired")
 	}
-	return r.sessions.SessionWorkParticipant(ctx, tenant, workspace, ref)
+	var out sessions.Participant
+	err := r.st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		var err error
+		out, err = r.sessions.SessionWorkParticipantWithin(ctx, sc, workspace, ref)
+		return err
+	})
+	if err != nil {
+		return sessions.Participant{}, err
+	}
+	return out, nil
 }
 
 func (r workIdentityResolver) SessionActsForAgent(

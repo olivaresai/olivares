@@ -327,7 +327,19 @@
     "wireEmpty": "Selecciona una línea de la conversación para ver su marco en bruto.",
     "thisNode": "Este nodo",
     "noWorkspace": "Sin espacio de trabajo",
-    "cwdWarning": "Esta sesión no tiene espacio de trabajo. El controlador ha informado de su directorio de trabajo como {{cwd}}."
+    "cwdWarning": "Esta sesión no tiene espacio de trabajo. El controlador ha informado de su directorio de trabajo como {{cwd}}.",
+    "workTitle": "Autoridad de trabajo de la sesión",
+    "workHint": "Registrada para el último lanzamiento. Cada acción comprueba la autorización actual.",
+    "processState": "Estado del proceso",
+    "activityState": "Actividad",
+    "workRole": "Rol concedido",
+    "workWorkspace": "Workspace de trabajo",
+    "workActions": "Acciones concedidas",
+    "notRecorded": "No registrado",
+    "workRoles": {
+      "worker": "Trabajador",
+      "orchestrator": "Orquestador"
+    }
   },
   "conversation": {
     "log": "Conversación",

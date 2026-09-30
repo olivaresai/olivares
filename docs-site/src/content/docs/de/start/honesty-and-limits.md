@@ -153,7 +153,7 @@ Progress**, sofern eine Seite nichts anderes angibt.
   vermittelte Frontier-Modelle können das nicht.
 - **Modul-Routen sind ein separater, Beta-Vertrag.** Die Modul-Endpunkte (zum
   Beispiel der Access-Map-Graph und der Drift) sind nicht Teil des stabilen
-  54-Pfad-Core-Vertrags; sie werden als separates **Beta**-Dokument veröffentlicht —
+  67-Pfad-Core-Vertrags; sie werden als separates **Beta**-Dokument veröffentlicht —
   die [Modul-Routen-Referenz](/reference/api-beta/) (ausgeliefert unter
   `/openapi.beta.json`). Beta bedeutet, dass sich die Formen mit Vorankündigung
   ändern können, und der Detailgrad auf Feldebene lebt weiterhin in den typisierten

@@ -28,6 +28,7 @@ import type {
   ListResponse,
   LoginRequest,
   LoginResponse,
+  LoginResult,
   OrgDTO,
   ServerInfo,
   SetupRequest,
@@ -67,9 +68,11 @@ export const authApi = {
    * tenant id the console selects so the operator lands on a usable panel. */
   setup: (req: SetupRequest) =>
     http.post<SetupResponse>('/v1/setup', req, { anonymous: true }),
-  /** Exchange email/password for an opaque session token. */
+  /** Exchange email/password for an opaque session token — or, when the
+   * account's second factor gates the login, for the pending challenge the
+   * caller completes through features/identity's totpApi . */
   login: (req: LoginRequest) =>
-    http.post<LoginResponse>('/v1/auth/login', req, { anonymous: true }),
+    http.post<LoginResult>('/v1/auth/login', req, { anonymous: true }),
   /** Redeem a single-use onboarding invite: sets the password and activates the
    * account. Anonymous — the invitee has no session; the token is the gate.*/
   acceptInvite: (req: AcceptInviteRequest) =>

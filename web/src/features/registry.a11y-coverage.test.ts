@@ -14,10 +14,12 @@ import { describe, expect, it } from 'vitest'
 import { routeTree } from '@/app/routes'
 import {
   AUTH_ROUTES,
+  PUBLIC_ROUTES,
   ROUTES,
   SESSION_VIEWER_ROUTE,
 } from '../../e2e-visual/routes'
 import { FEATURE_VIEWS, ROUTE_ALIASES } from './registry'
+import { ANONYMOUS_VIEWS } from './anonymous-registry'
 
 function concretePath(path: string): string {
   if (path === '/session-viewer/$id') return SESSION_VIEWER_ROUTE
@@ -89,5 +91,29 @@ describe('FEATURE_VIEWS accessibility route coverage', () => {
       orphaned,
       `ROUTES (Playwright deep-interaction subset) references paths absent from AUTH_ROUTES:\n${orphaned.join('\n')}`,
     ).toEqual([])
+  })
+})
+
+describe('anonymous accessibility route coverage', () => {
+  const mounted = new Set(
+    Object.keys(createRouter({ routeTree }).routesById).filter(
+      (id) => id !== '__root__' && id !== '/app' && !id.startsWith('/app/'),
+    ),
+  )
+
+  it('scans every mounted public route in an anonymous browser context', () => {
+    expect(
+      [...mounted].filter((path) => !PUBLIC_ROUTES.includes(path)),
+    ).toEqual([])
+    expect(PUBLIC_ROUTES.filter((path) => !mounted.has(path))).toEqual([])
+  })
+
+  it('keeps anonymous views out of the authenticated gate inventory', () => {
+    expect(
+      ANONYMOUS_VIEWS.filter(({ path }) => AUTH_ROUTES.includes(path)),
+    ).toEqual([])
+    expect(PUBLIC_ROUTES.filter((path) => AUTH_ROUTES.includes(path))).toEqual(
+      [],
+    )
   })
 })

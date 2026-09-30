@@ -37,9 +37,24 @@ cosign_digest() { # cosign_digest <os> <arch> -> pinned SHA-256 of cosign-<os>-<
 say() { printf '%s\n' "$*"; }
 err() { printf 'error: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
+
+# Explicit versions use v<version> before 26.10 and bare tags from 26.10 on.
+# API tag_name is already the release's identity and is never normalized.
+release_tag() {
+  release_version="${1#v}"
+  printf '%s\n' "$release_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' ||
+    err "invalid release version: $1"
+  release_major="${release_version%%.*}"
+  release_minor="${release_version#*.}"; release_minor="${release_minor%%.*}"
+  if [ "$release_major" -lt 26 ] || { [ "$release_major" -eq 26 ] && [ "$release_minor" -lt 10 ]; }; then
+    printf 'v%s' "$release_version"
+  else
+    printf '%s' "$release_version"
+  fi
+}
 usage() {
   cat <<'EOF'
-Usage: install.sh --version vYY.M.PATCH [--bindir DIR]
+Usage: install.sh --version YY.M.PATCH [--bindir DIR]
        [--user|--system] [--init auto|systemd|openrc|launchd]
        [--data-dir PATH] [--config PATH] [--start] [--install-cosign] [--dry-run]
        install.sh --uninstall (--plan|--preserve|--purge)
@@ -127,7 +142,7 @@ case "${CI:-}" in 1|true|TRUE) noninteractive=1 ;; esac
 [ "${OLIVARES_NONINTERACTIVE:-0}" = 1 ] && noninteractive=1
 [ -t 0 ] || noninteractive=1
 if [ -z "$tag" ] && [ "$noninteractive" -eq 1 ]; then
-  err "non-interactive installation must pin --version vYY.M.PATCH"
+  err "non-interactive installation must pin --version YY.M.PATCH"
 fi
 
 dl() {
@@ -180,9 +195,10 @@ resolve_cosign() {
 if [ -z "$tag" ]; then
   tag="$(dl_stdout "$API/repos/$REPO/releases/latest" |
     sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n '1p')"
+else
+  tag="$(release_tag "$tag")"
 fi
-case "$tag" in v*) ;; *) tag="v$tag" ;; esac
-printf '%s\n' "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+$' ||
+printf '%s\n' "$tag" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+$' ||
   err "invalid or unresolved release version: $tag"
 
 os="${OLIVARES_OS:-$(uname -s | tr '[:upper:]' '[:lower:]')}"

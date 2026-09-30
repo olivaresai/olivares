@@ -350,7 +350,7 @@ type chatErrorObjectDTO struct {
 // that withheld the output ALSO dropped the counters the gateway had already reported and
 // the target the attempt was made against: a caller could not tell 11/7 known tokens from
 // nothing observed. That is the "an error erases the observation" failure the contract
-// forbids, and it is what R1 of the independent review returned.
+// forbids, and it is what finding 1 of the independent review returned.
 //
 // Every field is content-free:
 //

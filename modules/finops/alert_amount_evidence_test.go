@@ -736,7 +736,7 @@ func TestStrictCostReaderAgainstTheRealReadModel(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// A4-R1/R2/R3 — the three defects the independent review returned, as permanent
+// A4-finding 1/R2/R3 — the three defects the independent review returned, as permanent
 // cases. The staging is the reviewer's finite probe (`review_a4_contract_test.go`,
 // preserved unchanged beside their report), adapted here so the corrections carry
 // their own regression proof. Each case keeps its healthy control beside it: the

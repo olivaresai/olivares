@@ -8,7 +8,8 @@
     "mcp": "MCP 认证",
     "wif": "WIF 图谱",
     "posture": "密钥与驻留态势",
-    "login": "特权登录"
+    "login": "特权登录",
+    "totp": "TOTP 因子"
   },
   "seam": {
     "badge": "后端待接入",
@@ -607,5 +608,40 @@
       "title": "尚无人类或非人类身份",
       "description": "配置目录来源后，重新同步身份名册，以填充人类与非人类身份及其 External ID。"
     }
+  },
+  "totp": {
+    "title": "TOTP 第二因子",
+    "description": "基于时间的一次性密码（RFC 6238），作为本地账户的附加因子。它与通行密钥和 PIV 并存，绝不取代它们。",
+    "state": "因子",
+    "enrolled": "已注册",
+    "notEnrolled": "未注册",
+    "algorithm": "参数",
+    "everySeconds": "{{period}} 秒一码",
+    "activatedAt": "激活时间",
+    "recoveryRemaining": "恢复代码",
+    "recoveryCount": "剩余 {{count}} 个",
+    "enrol": "注册因子",
+    "replace": "更换因子",
+    "remove": "移除因子",
+    "confirmRemove": "确认移除？",
+    "activate": "激活",
+    "scanPrompt": "用验证器应用扫描二维码，或手动输入密钥，然后输入其显示的代码。",
+    "qrAlt": "包含 TOTP 配置 URI 的二维码",
+    "manualEntry": "手动输入密钥",
+    "codeLabel": "应用显示的代码",
+    "recoveryWarning": "这些恢复代码仅显示一次。请立即保存——丢失设备时每个代码只能使用一次。",
+    "savedCodes": "我已保存这些代码",
+    "stepUpRequired": "此操作需要新的 AAL3 会话。请先完成通行密钥或 PIV 步进验证。",
+    "sealerUnavailable": "此部署上的 TOTP 种子封印器不可用；在操作员修复之前，注册保持禁用。",
+    "loadFailed": "无法加载因子状态。",
+    "policyTitle": "要求管理员使用 TOTP",
+    "policyDescription": "开启后，管理员（超级管理员及任何租户的 admin 或 owner）必须先注册因子，密码登录才能完成。",
+    "policyState": "策略",
+    "policyOn": "已要求",
+    "policyOff": "关闭",
+    "policyEnable": "对管理员启用",
+    "policyConfirmOn": "确认：启用",
+    "policyDisable": "关闭",
+    "policyAal3Note": "更改此策略需要 AAL3 会话。没有因子的账户会在下次登录时进入注册流程——不会被锁定。"
   }
 }

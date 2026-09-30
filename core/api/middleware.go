@@ -118,6 +118,10 @@ func (s *Server) authenticate(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if s.isMCPProtocolRequest(r) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		if r.URL.Path == "/metrics" && s.metricsGate != nil {
 			next.ServeHTTP(w, r)
 			return
@@ -447,6 +451,14 @@ func (s *Server) authzTenantResourcePolicy(
 		s.writeError(w, r, err)
 		return auth.Principal{}, "", none, false
 	}
+	// Dedicated orchestration collection authority is the immutable credential
+	// workspace. The work service checks its live profile and confines every row.
+	if p.IsOrchestrationSessionCredential() && res.ID == "" && res.WorkspaceID.IsZero() {
+		switch perm {
+		case "sessions:work:read", "sessions:work:write", "sessions:decision:read", "sessions:decision:write":
+			res.WorkspaceID = p.SessionWorkspaceID
+		}
+	}
 	if meta.RequiresStepUp(p.AAL) {
 		s.writeError(w, r, auth.ErrStepUpRequired)
 		return auth.Principal{}, "", none, false
@@ -463,7 +475,15 @@ func (s *Server) authzTenantResourcePolicy(
 	// la GRAMATICA DE REGISTRO (invariante IV), que es donde no puede derivar a cero sola, y por
 	// eso viaja como parametro con tipo propio en vez de deducirse de un valor.
 	if !governed {
-		if dec := s.authz.Authorize(r.Context(), auth.Request{
+		authorize := s.authz.Authorize
+		if errors.Is(denial, store.ErrNotFound) && perm.Verb() == auth.VerbRead {
+			// A concealed read must do the same policy work for missing,
+			// foreign and policy-hidden rows. Preserve every native deny while
+			// evaluating the overlay once; ordinary reads and action gates
+			// retain their authorization path, as does governed evidence below.
+			authorize = s.authz.AuthorizeDisclosure
+		}
+		if dec := authorize(r.Context(), auth.Request{
 			Principal: p, Permission: perm, Tenant: tenant, Resource: res, Route: meta,
 		}); !dec.Allow {
 			s.writeError(w, r, denial)

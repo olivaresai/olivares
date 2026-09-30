@@ -109,6 +109,12 @@ func (r entityReachRecorder) HandleSealed(method, pattern string, perm auth.Perm
 // Git publication keeps target reads inside their stored workspace. The console
 // entry still consumes a flat permission set: a workspace-only grant may hide it.
 // Preserve confinement rather than widening that read to tenant-wide authority.
+// RUN OPERATIONS DECISION. The nine point routes resolve the run's stored workspace,
+// so read, write and admin are intended additions to workspace-scoped grant reach.
+// A caller who can read the run but lacks an action's authority receives 403, allowing
+// the console to show that action as denied. Missing or unreadable runs remain concealed
+// as 404. Reading a run never grants authority to act on it, and the flat whoami set still
+// cannot express the workspace boundary of a grant.
 var moduleScopeTreeReach = []string{
 	"gitpublish:target:read",
 	"sessions:channel:admin",
@@ -126,6 +132,9 @@ var moduleScopeTreeReach = []string{
 	"sessions:protocol-binding:admin",
 	"sessions:protocol-binding:read",
 	"sessions:protocol-binding:write",
+	"sessions:run:admin",
+	"sessions:run:read",
+	"sessions:run:write",
 	"sessions:work:admin",
 	"sessions:work:read",
 	"sessions:work:write",

@@ -51,11 +51,14 @@ func TestAuthenticationFreshnessSchemaAndAuthority(t *testing.T) {
 				t.Fatal(err)
 			}
 			// Reconstruct both halves of the exact v15 predecessor: nullable
-			// column absent AND its later tracking record absent. No backfill.
+			// column absent AND its later tracking records absent. No backfill.
+			// Every version above v15 goes, not just v17: the plan now continues
+			// past it (v18 TOTP), and a surviving later row would leave a gapped
+			// history the boot classification refuses.
 			if _, err := db.ExecContext(ctx, "ALTER TABLE auth_sessions DROP COLUMN aal_authenticated_at"); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := db.ExecContext(ctx, s.dia.Rebind("DELETE FROM "+coreTrackingTable+" WHERE version = ?"), 17); err != nil {
+			if _, err := db.ExecContext(ctx, s.dia.Rebind("DELETE FROM "+coreTrackingTable+" WHERE version > ?"), 15); err != nil {
 				t.Fatal(err)
 			}
 			if err := db.Close(); err != nil {
@@ -137,7 +140,7 @@ func TestAuthenticationFreshnessMigrationPreservesPermanentGapAndHistoricalRende
 	for _, engine := range store.SupportedEngines() {
 		dia, _ := dialect.New(engine)
 		versions, err := CompiledCoreMigrationVersions(engine)
-		if err != nil || !slices.Equal(versions, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 17}) {
+		if err != nil || !slices.Equal(versions, []int{1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 14, 15, 17, 18}) {
 			t.Fatalf("plan: %v, %v", versions, err)
 		}
 		// The old descriptor is independent of the historical-render helper:

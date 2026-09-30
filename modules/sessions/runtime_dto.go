@@ -35,22 +35,24 @@ type runDTO struct {
 	// 2026-09-18 could only answer "where is this session working" by reading the
 	// child's own init frame — and the answer then was the engine's own directory.
 	// Empty on a run that predates the column, which reads as "not recorded".
-	WorkspacePath   string `json:"workspace_path,omitempty"`
-	TemplateID      string `json:"template_id,omitempty"`
-	TemplateVersion int64  `json:"template_version,omitempty"`
-	MaxDurationSecs int64  `json:"max_duration_secs,omitempty"`
-	Isolation       string `json:"isolation"`
-	State           string `json:"state"`
-	ClaudeSessionID string `json:"claude_session_id,omitempty"`
-	PID             *int64 `json:"pid,omitempty"`
-	CredentialID    string `json:"credential_id,omitempty"`
-	ExitCode        *int64 `json:"exit_code,omitempty"`
-	Reason          string `json:"reason,omitempty"`
-	LastEventSeq    int64  `json:"last_event_seq"`
-	CreatedAt       string `json:"created_at,omitempty"`
-	StartedAt       string `json:"started_at,omitempty"`
-	LastActivityAt  string `json:"last_activity_at,omitempty"`
-	StoppedAt       string `json:"stopped_at,omitempty"`
+	WorkspacePath   string           `json:"workspace_path,omitempty"`
+	TemplateID      string           `json:"template_id,omitempty"`
+	TemplateVersion int64            `json:"template_version,omitempty"`
+	MaxDurationSecs int64            `json:"max_duration_secs,omitempty"`
+	Isolation       string           `json:"isolation"`
+	State           string           `json:"state"`
+	ProcessState    string           `json:"process_state"`
+	WorkScope       *runWorkScopeDTO `json:"work_scope,omitempty"`
+	ClaudeSessionID string           `json:"claude_session_id,omitempty"`
+	PID             *int64           `json:"pid,omitempty"`
+	CredentialID    string           `json:"credential_id,omitempty"`
+	ExitCode        *int64           `json:"exit_code,omitempty"`
+	Reason          string           `json:"reason,omitempty"`
+	LastEventSeq    int64            `json:"last_event_seq"`
+	CreatedAt       string           `json:"created_at,omitempty"`
+	StartedAt       string           `json:"started_at,omitempty"`
+	LastActivityAt  string           `json:"last_activity_at,omitempty"`
+	StoppedAt       string           `json:"stopped_at,omitempty"`
 
 	// Governance posture, the non-sensitive launch-decision facts the portal
 	// renders per session. AgentRef lets the client query the kill-switch/budget scoped on
@@ -130,6 +132,8 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 		MaxDurationSecs:        rec.Int(colTemplateCeiling),
 		Isolation:              rec.String(colIsolation),
 		State:                  m.deriveRunState(rec),
+		ProcessState:           rec.String(colState),
+		WorkScope:              runWorkScope(rec),
 		ClaudeSessionID:        rec.String(colClaudeSessionID),
 		PID:                    intPtr(rec, colPID),
 		CredentialID:           rec.String(colCredentialID),

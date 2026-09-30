@@ -947,7 +947,7 @@ func TestScanReservationsSeparatesAFinishedScanFromAStoppedOne(t *testing.T) {
 			wantRows:       2,
 		},
 		{
-			// R1 of the independent review's paging finding: the cycle need not be
+			// finding 1 of the independent review's paging finding: the cycle need not be
 			// adjacent. A -> B -> A returns to a page already read, so the rows after
 			// it are duplicates of rows already summed — and comparing only against
 			// the PREVIOUS cursor cannot see it. A cycle that later says "no more"

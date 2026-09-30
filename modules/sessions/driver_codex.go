@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -179,7 +180,15 @@ func (codexDriver) LaunchTerms() DriverLaunchTerms {
 // requires (r3): a driver that kept its own copy would let the declaration and
 // the launch drift apart without a test going red.
 func (codexDriver) LaunchArgs(l DriverLaunch) []string {
-	return cliruntime.CodexArgs(l.cliRuntimeRequest())
+	args := cliruntime.CodexArgs(l.cliRuntimeRequest())
+	if l.LocalModelEndpoint == "" {
+		return args
+	}
+	// Use an owned provider id: Codex ignores overrides to its built-in Ollama
+	// provider. Fixed direct-argv config overrides the authorized home without
+	// modifying it, and requires no OpenAI credential or cloud fallback.
+	provider := `{name="Ollama",base_url=` + strconv.Quote(l.LocalModelEndpoint) + `,wire_api="responses",requires_openai_auth=false}`
+	return append([]string{"-c", `model_provider="olivares_ollama"`, "-c", "model_providers.olivares_ollama=" + provider}, args...)
 }
 
 func (d codexDriver) OpenSession(cfg DriverSessionConfig) DriverSession {

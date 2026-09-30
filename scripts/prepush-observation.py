@@ -117,7 +117,7 @@ UNAVAILABLE = "unavailable"
 #
 # The first revision rejected a list of network types and enabled everything else,
 # including `unavailable` — the value this file returns when /proc/self/mountinfo cannot
-# be read or no mount matches. Independent review returned that as O1-F3: inability to
+# be read or no mount matches. Independent review returned that as O1-finding 3: inability to
 # prove the target local is not permission to enable timing and locking on it. The
 # contract qualifies the enabled path for a local filesystem, so only a positively
 # identified local type qualifies and everything else — unknown, malformed, network, or
@@ -191,7 +191,7 @@ class ObservationError(Exception):
 #
 # ⛔ KNOWN FIELD NAMES ARE NOT A SCHEMA, and the first revision proved it. It checked
 # that a record was an owned, bounded JSON object and then trusted its contents:
-# independent review (O1-F1) showed that an attempt carrying an unknown field, an
+# independent review (O1-finding 1) showed that an attempt carrying an unknown field, an
 # invalid derivation or a nonsense source context still reached
 # `full_fast_sequence_observed`, that an occurrence could carry an arbitrary JSON value
 # as its elapsed duration and still count as complete, and that a receipt with

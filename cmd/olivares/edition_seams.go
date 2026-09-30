@@ -148,17 +148,31 @@ type EditionGovernancePosture interface {
 	LockKillSwitchState(context.Context, store.Scope) (governance.KillSwitchSnapshot, error)
 }
 
+// EditionRuntimeLaunchObserverRegistration exposes optional custody of original
+// native launch completions. Registration supplies no runtime authority.
+type EditionRuntimeLaunchObserverRegistration interface {
+	UseRuntimeLaunchObserver(sessions.RuntimeLaunchObserver) (func(), error)
+}
+
 // EditionDependencies contains existing engine capabilities, never a private engine
 // or a second configuration source. Boot binds these after store/auth composition.
 type EditionDependencies struct {
 	Store    store.Store
 	Sessions sessions.SessionIdentityReader
-	Rows     api.RowAuthorizationPort
+	// RuntimeLaunches registers bounded in-memory completion custody. Absence
+	// means the edition cannot retain new launches through this optional seam.
+	RuntimeLaunches EditionRuntimeLaunchObserverRegistration
+	Rows            api.RowAuthorizationPort
 	// Mutations is required by mutation consumers; absence must refuse, never use Rows.
 	Mutations EditionMutationAuthorizer
 	// These are the live engine producers; nil does not supply a fallback.
 	Principals EditionPrincipalResolver
 	Governance EditionGovernancePosture
+	// Optional identity composition uses these same boot producers. Nil never
+	// authorizes constructing a second authenticator or a permissive provider.
+	Authenticator     *auth.Authenticator
+	FederationService *auth.FederationService
+	SecretStore       *auth.SecretStore
 	// Secrets is the same configured resolver boot gives to its other consumers.
 	// Absence is unavailable; callers must not construct a permissive replacement.
 	Secrets *secret.Resolver

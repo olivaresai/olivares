@@ -153,6 +153,17 @@ func verifyDRControlConstraints(ctx context.Context, q rowQuerier, oid int64, c 
 		want[dialect.DRRestoreControlTable+"_"+check.Suffix] = check
 	}
 	want[dialect.DRRestoreControlTable+"_pkey"] = dialect.DRControlCheck{Suffix: "pkey", Definition: "PRIMARY KEY (control_key)", Columns: "1"}
+	if c.Major == 18 {
+		// The query already binds every row to this exact relation. PG18 names
+		// its NOT NULL constraints automatically; only their column identity may
+		// replace the name. Deparse, flags and multiplicity remain exact.
+		for _, col := range c.Columns {
+			if col.NotNull {
+				cols := fmt.Sprint(col.Position)
+				want["not-null:"+cols] = dialect.DRControlCheck{Suffix: "not_null", Definition: "NOT NULL " + col.Name, Columns: cols}
+			}
+		}
+	}
 	for rows.Next() {
 		var name, typ, def, cols string
 		var good bool
@@ -160,11 +171,17 @@ func verifyDRControlConstraints(ctx context.Context, q rowQuerier, oid int64, c 
 			_ = rows.Close()
 			return err
 		}
-		w, ok := want[name]
-		delete(want, name)
+		identity := name
+		if c.Major == 18 && typ == "n" {
+			identity = "not-null:" + cols
+		}
+		w, ok := want[identity]
+		delete(want, identity)
 		expectedType := "c"
 		if w.Suffix == "pkey" {
 			expectedType = "p"
+		} else if w.Suffix == "not_null" {
+			expectedType = "n"
 		}
 		if !ok || typ != expectedType || !good || def != w.Definition || cols != w.Columns {
 			_ = rows.Close()
@@ -260,6 +277,9 @@ func verifyDRControlACL(ctx context.Context, q rowQuerier, oid int64, roles rest
 		privs := []string{"SELECT"}
 		if id == roles.ownerOID {
 			privs = []string{"SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"}
+			if major >= 17 {
+				privs = append(privs, "MAINTAIN")
+			}
 		}
 		for _, priv := range privs {
 			key := fmt.Sprintf("%d/%s", id, priv)
@@ -303,13 +323,22 @@ func verifyDRControlACL(ctx context.Context, q rowQuerier, oid int64, roles rest
 	if err := closeCoreDirectoryRows(rows); err != nil {
 		return err
 	}
+	writePrivileges := "INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER"
+	grantPrivileges := "SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION,DELETE WITH GRANT OPTION,TRUNCATE WITH GRANT OPTION,REFERENCES WITH GRANT OPTION,TRIGGER WITH GRANT OPTION"
+	if major >= 17 {
+		// Maintenance does not imply SELECT or the older write privileges. Audit
+		// it through the same effective SET/INHERIT/ADMIN closure, including
+		// user roles reaching pg_maintain; inert edges still convey no authority.
+		writePrivileges += ",MAINTAIN"
+		grantPrivileges += ",MAINTAIN WITH GRANT OPTION"
+	}
 	for _, root := range roots {
 		// Reuse the same SET/INHERIT/ADMIN transitive closure as the guard and
 		// directory inventory. An inert membership edge cannot create a refusal.
 		query := guardReachableCTE(major) + `SELECT r.oid::pg_catalog.int8,r.rolname,r.rolsuper,
    pg_catalog.has_table_privilege(r.oid,$1::pg_catalog.oid,'SELECT'),
-   pg_catalog.has_table_privilege(r.oid,$1::pg_catalog.oid,'INSERT,UPDATE,DELETE,TRUNCATE,REFERENCES,TRIGGER'),
-   pg_catalog.has_table_privilege(r.oid,$1::pg_catalog.oid,'SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION,DELETE WITH GRANT OPTION,TRUNCATE WITH GRANT OPTION,REFERENCES WITH GRANT OPTION,TRIGGER WITH GRANT OPTION'),
+   pg_catalog.has_table_privilege(r.oid,$1::pg_catalog.oid,'` + writePrivileges + `'),
+   pg_catalog.has_table_privilege(r.oid,$1::pg_catalog.oid,'` + grantPrivileges + `'),
    EXISTS (SELECT 1 FROM pg_catalog.pg_attribute a WHERE a.attrelid=$1 AND a.attnum>0 AND NOT a.attisdropped AND pg_catalog.has_column_privilege(r.oid,$1::pg_catalog.oid,a.attnum,'SELECT')),
    EXISTS (SELECT 1 FROM pg_catalog.pg_attribute a WHERE a.attrelid=$1 AND a.attnum>0 AND NOT a.attisdropped AND pg_catalog.has_column_privilege(r.oid,$1::pg_catalog.oid,a.attnum,'INSERT,UPDATE,REFERENCES,SELECT WITH GRANT OPTION,INSERT WITH GRANT OPTION,UPDATE WITH GRANT OPTION,REFERENCES WITH GRANT OPTION'))
    FROM pg_catalog.pg_roles r WHERE r.rolname=$2 OR ` + guardRoleReachability(major)

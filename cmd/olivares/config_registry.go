@@ -93,6 +93,7 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_COMMUNICATION_ACTIVATION",
 	"OLIVARES_COMMUNICATION_CONTENT_KEYRING_FILE",
 	"OLIVARES_COMMUNICATION_CURSOR_KEYRING_FILE",
+	"OLIVARES_COMMUNICATION_TOKEN",
 	// T9 (2026-09-11): the enterprise addon_airs constructors read this key and the four
 	// marked below (cmd-overlay/olivares/wire_enterprise_addon_airs.go), just as they read
 	// OLIVARES_HOOK_FIREWALL_CONFIG. Unregistered, a boot that enforced the content firewall
@@ -314,6 +315,7 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_THREATINTEL_SIGNING_KEY",
 	"OLIVARES_TOKEN",
 	"OLIVARES_TOOL_PIN_CONFIG", // private operator input, see OLIVARES_AUDIT_LEGALHOLD_RECONCILE
+	"OLIVARES_TOTP_SEED_KEY",
 	"OLIVARES_UPDATE_CHANNEL",
 	"OLIVARES_UPDATE_ENDPOINT",
 	"OLIVARES_UPGRADE_TOKEN",
@@ -333,6 +335,7 @@ var exactConfigEnvKeys = []string{
 	"OLIVARES_WIF_SPIFFE_SOCKET",
 	"OLIVARES_WIF_TRUST_DOMAIN",
 	"OLIVARES_WORK_OUTBOX_INTERVAL",
+	"OLIVARES_WORK_TOKEN",
 }
 
 // prefixConfigEnvKeys covers families whose members are constructed at runtime or

@@ -12,6 +12,7 @@ import { AppLayout } from '@/components/layout/app-layout'
 import { RequirePermission } from '@/components/layout/require-permission'
 import { Spinner } from '@/components/ui/spinner'
 import { FEATURE_VIEWS, ROUTE_ALIASES, type AreaId } from '@/features/registry'
+import { ANONYMOUS_VIEWS } from '@/features/anonymous-registry'
 import { AcceptInvitePage } from './pages/accept-invite'
 import { LoginPage } from './pages/login'
 import { NotFoundPage } from './pages/not-found'
@@ -194,6 +195,14 @@ const featureRoutes = FEATURE_VIEWS.map((view) =>
   }),
 )
 
+const anonymousFeatureRoutes = ANONYMOUS_VIEWS.map((view) =>
+  createRoute({
+    getParentRoute: () => rootRoute,
+    path: view.path,
+    component: () => view.element(),
+  }),
+)
+
 /**
  * — retired paths keep resolving. Each ROUTE_ALIASES entry mounts a real route that
  * redirects instead of falling through to NotFoundPage, so an operator's bookmark and a
@@ -223,6 +232,7 @@ export const routeTree = rootRoute.addChildren([
   setupRoute,
   acceptInviteRoute,
   statusPageRoute,
+  ...anonymousFeatureRoutes,
   appRoute.addChildren([
     settingsRoute,
     ...areaRoutes,

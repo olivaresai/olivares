@@ -56,7 +56,7 @@ description: >-
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-Консоль публикует **76 маршрутов**. Каждый из них приведён в таблицах ниже вместе с требуемым
+Консоль публикует **80 маршрутов**. Каждый из них приведён в таблицах ниже вместе с требуемым
 разрешением и справочной страницей, которую открывает встроенная ссылка помощи.
 
 ### Эксплуатация
@@ -64,7 +64,8 @@ description: >-
 | Экран | Путь | Назначение | Требуется | Справка |
 |---|---|---|---|---|
 | Обзор | `/` | Обзор инфраструктуры и её здоровья | любой вошедший пользователь | [главная документации](/ru/) |
-| Claude Code | `/agentops` | Создание, подключение и управление сессиями Claude Code без SSH | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/ru/how-to/run-claude-code-with-olivares/) |
+| Инструменты агентов | `/agent-tools` | Находите, устанавливайте и обновляйте инструменты агентов на этом хосте и отслеживайте каждую установку; только для администраторов развёртывания | `system:admin` | [how-to/add-a-provider](/ru/how-to/add-a-provider/) |
+| Управление сессиями | `/agentops` | Создание, подключение и управление сессиями Claude Code — без SSH; экран общий с «Наблюдение за сессиями» | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/ru/how-to/run-claude-code-with-olivares/) |
 | Резервные копии | `/backups` | Запуск, планирование, загрузка и восстановление резервных копий со вторым подтверждением разрушающего действия. | `system:admin` | [how-to/backup-and-restore](/ru/how-to/backup-and-restore/) |
 | Коммуникации | `/communications` | Каналы, прямые уведомления и личный ящик выбранного рабочего пространства | `sessions:channel:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Администрирование каналов | `/communications/administration` | Администрирование каналов: конфигурация и история выдач, каждое действие под текущим ETag канала | `sessions:channel:admin` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
@@ -75,11 +76,12 @@ description: >-
 | Аварийный выключатель | `/killswitch` | Экстренная остановка, восстановление с двойным контролем и локализация guardian | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/ru/how-to/cookbook/kill-switch-drill/) |
 | Журналы | `/logs` | Поток журнала движка в реальном времени с фильтрацией по уровню и модулю, поиском и паузой. | `system:admin` | [how-to/troubleshooting](/ru/how-to/troubleshooting/) |
 | Наблюдаемость | `/observability` | Здоровье приёма по стандартам и детализация трассировок | `health:status:read` | [reference/modules/observability](/ru/reference/modules/observability/) |
+| Аккаунты провайдеров | `/provider-accounts` | Список именованных аккаунтов провайдеров и принятие существующего профиля провайдера как аккаунта | `sessions:account:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Привязки источников | `/provider-bindings` | Выделение настроенных источников, в применённой этим узлом ревизии, профилям провайдеров | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Профили провайдеров | `/provider-profiles` | Регистрация и администрирование домашних каталогов провайдеров, под которыми запускаются сессии, и чтение их конфигурации по запросу | `sessions:profile:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Провайдеры | `/providers` | Регистрация API-ключей и конечных точек, с которыми запускаются сессии; их проверка, замена и отзыв | `sessions:provider:read` | [how-to/add-a-provider](/ru/how-to/add-a-provider/) |
 | Песочница | `/sandbox` | Изолированное тестирование и воспроизведение агентов | `sandbox:run:read` | [reference/modules/xvii-sandbox](/ru/reference/modules/xvii-sandbox/) |
-| Сессии | `/sessions` | Текущая работа агентов и временные шкалы | `sessions:live:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
+| Наблюдение за сессиями | `/sessions` | Наблюдение за живыми и обнаруженными сессиями и их хронологией; экран общий с «Управление сессиями» | `sessions:live:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Арендаторы | `/tenants` | Приостановка и восстановление обслуживания арендатора | `system:admin` | [how-to/troubleshooting](/ru/how-to/troubleshooting/) |
 | Голос | `/voice` | Голосовые сессии и сессии реального времени | `voice:session:read` | [reference/modules/xvi-voice](/ru/reference/modules/xvi-voice/) |
 | Работа | `/work` | Долговечный межсессионный backlog: элементы, зависимости, приёмка и решения | `sessions:work:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
@@ -104,7 +106,8 @@ description: >-
 | Каталог | `/catalog` | Курируемые и одобренные агенты и возможности | `catalog:entry:read` | [reference/modules/xiv-catalog](/ru/reference/modules/xiv-catalog/) |
 | Привязки протоколов | `/communications/protocol-bindings` | Компоновка и сверка управляемых привязок A2A и MCP | `sessions:protocol-binding:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Развёртывание | `/deploy` | Подготовка агентов и их подключение к инфраструктуре | `deploy:deployment:read` | [reference/modules/vii-deploy](/ru/reference/modules/vii-deploy/) |
-| Инвентарь | `/inventory` | Обнаружение и каталогизация каждого агента, MCP и модели | `inventory:catalog:read` | [reference/modules/i-inventory](/ru/reference/modules/i-inventory/) |
+| Публикация в Git | `/git-publication` | Отправка коммитов, открытие pull request и слияние через одобренные цели Git | `gitpublish:target:read` | [reference/modules/gitpublish](/ru/reference/modules/gitpublish/) |
+| Инвентаризация | `/inventory` | Обнаружение и каталогизация агентов, MCP-серверов и моделей, которые наблюдали коннекторы. | `inventory:catalog:read` | [reference/modules/i-inventory](/ru/reference/modules/i-inventory/) |
 | Знания | `/knowledge` | Базы знаний, RAG и родословная данных | `knowledge:kb:read` | [reference/modules/viii-knowledge](/ru/reference/modules/viii-knowledge/) |
 | Операции с моделями | `/model-operations` | Собственные модели, допуск и развёртывания | `models:registry:read` | [reference/modules/xxiii-model-operations](/ru/reference/modules/xxiii-model-operations/) |
 | Модели | `/models` | Модели, маршрутизация и ключи провайдеров | `models:catalog:read` | [reference/modules/x-models](/ru/reference/modules/x-models/) |
@@ -116,9 +119,10 @@ description: >-
 | Экран | Путь | Назначение | Требуется | Справка |
 |---|---|---|---|---|
 | Карта доступа | `/access-map` | Что каждый агент читает и записывает (R/RW) | `accessmap:graph:read` | [reference/modules/iii-access-map](/ru/reference/modules/iii-access-map/) |
-| Экспорт AgentCore | `/agentcore-export` | Планирование и применение экспорта политики Cedar в AWS AgentCore с проверкой будущих изменений до их применения. | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/ru/reference/modules/vi-governance/) |
+| Экспорт в AgentCore | `/agentcore-export` | Планирование, проверка и применение проекции правил управления этого тенанта на AWS AgentCore в виде политик Cedar; планирование ничего не записывает | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/ru/reference/modules/vi-governance/) |
 | Управление Claude Code | `/claude-policy` | Управляемая политика, hooks, MCP, песочница и policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/ru/how-to/connectors/claude-code-hooks-pep/) |
-| Консоль управления | `/console` | Подключение пользователей, SSO/IdP и формирование рабочих пространств и групп агентов. | `tenant:admin` | [reference/modules/xx-multi-tenancy](/ru/reference/modules/xx-multi-tenancy/) |
+| Администрирование | `/console` | Пользователи, SSO/IdP, рабочие пространства, группы агентов, роли, секреты, коннекторы, API-ключи и лицензия этой установки | `tenant:admin` | [reference/modules/xx-multi-tenancy](/ru/reference/modules/xx-multi-tenancy/) |
+| Сравнение источника | `/console/sources/diff` | Сравнение базовой и head-ревизии подключённого Git-репозитория, файл за файлом | `system:admin` | [reference/console](/ru/reference/console/) |
 | Идентичности и NHI | `/identity` | SSO, SCIM, реестр NHI и граф WIF | `governance:identity:read` | [reference/modules/vi-governance](/ru/reference/modules/vi-governance/) |
 | Прокси инференса | `/inference-proxy` | Шлюзы прокси, правила DLP исходящего трафика и одобрения устройств | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/ru/reference/modules/inferenceproxy/) |
 | Разрешения | `/permissions` | Идентичности, роли и одобрения | `governance:identity:read` | [reference/modules/vi-governance](/ru/reference/modules/vi-governance/) |

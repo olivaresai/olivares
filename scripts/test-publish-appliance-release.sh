@@ -112,12 +112,25 @@ echo "gh stub: unmodelled call: $*" >&2
 exit 2
 GHSTUB
 chmod +x "$WORK/bin/gh"
-# cosign stub: verify-blob records the identity and answers from $COSIGN_RC; sign paths unused here.
+# cosign stub: record every argument and require the actual certificate/signature files.
 cat >"$WORK/bin/cosign" <<'COSIGNSTUB'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >>"${COSIGN_LOG:?}"
-[ "$1" = "verify-blob" ] && exit "${COSIGN_RC:-0}"
-exit 2
+printf '%s\n' "$@" >>"${COSIGN_ARGV_LOG:?}"
+[ "$1" = "verify-blob" ] || exit 2
+shift
+certificate="" signature=""
+while [ "$#" -gt 0 ]; do
+	case "$1" in
+	--certificate) certificate="${2:?}" ; shift 2 ;;
+	--signature) signature="${2:?}" ; shift 2 ;;
+	*) shift ;;
+	esac
+done
+for required in "$certificate" "$signature"; do
+	[ -f "$required" ] || { printf 'cosign stub: missing file: %s\n' "$required" >&2; exit 1; }
+done
+exit "${COSIGN_RC:-0}"
 COSIGNSTUB
 chmod +x "$WORK/bin/cosign"
 # curl stub: serves $WORK/pub/<name> for any URL ending in that name.
@@ -153,6 +166,7 @@ run_pub() { # run_pub [VAR=VAL…] -- <script arguments…>
 				GH_TOKEN=stub GITHUB_REPOSITORY=olivaresai/olivares GITHUB_REF=refs/heads/main \
 				OLIVARES_COSIGN_BIN="$WORK/bin/cosign" TMPDIR="$WORK" \
 				GH_STATE="$WORK/assets.state" GH_LOG="$WORK/gh.log" COSIGN_LOG="$WORK/cosign.log" \
+				COSIGN_ARGV_LOG="$WORK/cosign-argv.log" \
 				R2_LOG="$WORK/r2.log" SERVE_DIR="$WORK/pub" \
 				OLIVARES_APPLIANCE_ORIGIN=https://appliance.olivares.ai \
 				"${vars[@]}" bash "$TREE/scripts/publish-appliance-release.sh" "$@"
@@ -171,11 +185,11 @@ echo "publish-appliance-release — bindings, signature gate and both routes (st
 
 # --- could-not-run gates -------------------------------------------------------------------
 run_pub --version v26.10.0 --dir "$WORK/pub"
-[ "$?" -eq 2 ]
-check "a v-prefixed version is a refusal to run" "X.Y.Z" $?
+rc=$?
+check "a v-prefixed version is a refusal to run" "X.Y.Z" "$((rc != 2))"
 run_pub --version 26.10.0 --dir "$WORK/absent"
-[ "$?" -eq 2 ]
-check "a missing directory is a refusal to run" "usage" $?
+rc=$?
+check "a missing directory is a refusal to run" "usage" "$((rc != 2))"
 (
 	cd "$TREE" && env -i PATH="$WORK/bin:/usr/bin:/bin" HOME="$WORK" \
 		GH_TOKEN=stub GITHUB_REPOSITORY=olivaresai/olivares GITHUB_REF=refs/heads/main TMPDIR="$WORK" \
@@ -208,32 +222,37 @@ check "a draft release is refused; the ceremony publishes first" "phase order" $
 : >"$WORK/assets.state"; : >"$WORK/gh.log"; : >"$WORK/cosign.log"
 run_pub --version 26.10.0 --dir "$WORK/pub"
 rc=$?
-[ "$rc" -eq 0 ]
-check "a complete set publishes to the release and reads back" "exit 0" $?
+check "a complete set publishes to the release and reads back" "exit 0" "$rc"
 
 # --- the edition-named table: --sums drives every binding, as two editions on one release need
-mv "$WORK/pub/SHA256SUMS" "$WORK/pub/SHA256SUMS-desktop"
-printf 'desk sig\n' >"$WORK/pub/SHA256SUMS-desktop.sig"
-printf 'desk pem\n' >"$WORK/pub/SHA256SUMS-desktop.pem"
 rm -f "$WORK/pub/SHA256SUMS.sig" "$WORK/pub/SHA256SUMS.pem"
-: >"$WORK/assets.state"; : >"$WORK/cosign.log"
-run_pub --version 26.10.0 --sums SHA256SUMS-desktop --dir "$WORK/pub"
-rc=$?
-[ "$rc" -eq 0 ]
-check "an edition-named table publishes under its own name" "--sums" $?
-grep -qF -- 'SHA256SUMS-desktop' "$WORK/cosign.log"
-check "the signature gate verified the edition's table" "per-edition binding" $?
-mv "$WORK/pub/SHA256SUMS-desktop" "$WORK/pub/SHA256SUMS"
+for edition in server desktop; do
+	edition_sums="SHA256SUMS-$edition"
+	mv "$WORK/pub/SHA256SUMS" "$WORK/pub/$edition_sums"
+	printf 'edition sig\n' >"$WORK/pub/$edition_sums.sig"
+	printf 'edition pem\n' >"$WORK/pub/$edition_sums.pem"
+	: >"$WORK/assets.state"; : >"$WORK/cosign.log"; : >"$WORK/cosign-argv.log"
+	run_pub --version 26.10.0 --sums "$edition_sums" --dir "$WORK/pub"
+	rc=$?
+	check "the $edition edition publishes under its own table name" "--sums" "$rc"
+	grep -qxF -- "$WORK/pub/$edition_sums.pem" "$WORK/cosign-argv.log"
+	check "the $edition edition verifies its own certificate" "per-edition certificate" $?
+	grep -qxF -- "$WORK/pub/$edition_sums.sig" "$WORK/cosign-argv.log"
+	check "the $edition edition verifies its own signature" "per-edition signature" $?
+	mv "$WORK/pub/$edition_sums" "$WORK/pub/SHA256SUMS"
+	rm -f "$WORK/pub/$edition_sums.sig" "$WORK/pub/$edition_sums.pem"
+done
 printf 'sig\n' >"$WORK/pub/SHA256SUMS.sig"
 printf 'pem\n' >"$WORK/pub/SHA256SUMS.pem"
-rm -f "$WORK/pub/SHA256SUMS-desktop.sig" "$WORK/pub/SHA256SUMS-desktop.pem"
 printf '%s\n' "release upload 26.10.0 olivares-appliance-server-amd64.iso olivares-appliance-server-amd64.iso.manifest.json SHA256SUMS SHA256SUMS.pem SHA256SUMS.sig" >"$WORK/want-upload"
 command grep -q '^release upload 26.10.0 ' "$WORK/gh.log"
 check "the upload names the whole small-file set, create-only" "gh argv" $?
-command grep -q -- '--clobber' "$WORK/gh.log" && false || true
-check "no clobber flag is ever passed" "delivered bytes stay" $?
-[ ! -e "$WORK/r2.log" ] || [ ! -s "$WORK/r2.log" ]
-check "nothing small is routed to R2" "GitHub first" $?
+clobber_status=0
+if command grep -q -- '--clobber' "$WORK/gh.log"; then clobber_status=1; fi
+check "no clobber flag is ever passed" "delivered bytes stay" "$clobber_status"
+small_r2_status=0
+if [ -s "$WORK/r2.log" ]; then small_r2_status=1; fi
+check "nothing small is routed to R2" "GitHub first" "$small_r2_status"
 
 # --- create-only refusal over an existing asset --------------------------------------------
 : >"$WORK/assets.state"

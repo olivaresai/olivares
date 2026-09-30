@@ -1,0 +1,46 @@
+{
+  "title": "Agent tools",
+  "description": "Manage tools on the control-plane host.",
+  "refresh": "Refresh",
+  "adminOnly": "A system administrator session is required to manage host tools.",
+  "readOnly": "This control plane is read-only. Installation is disabled.",
+  "notInstalled": "No managed installation",
+  "version": "Version for {{name}}",
+  "review": "Review install",
+  "reviewName": "Review {{name}} install",
+  "detect": "Detect {{name}}",
+  "detecting": "Checking host tools…",
+  "notDetected": "No host executable detected.",
+  "versionUnknown": "Version unknown",
+  "planning": "Verifying release selection…",
+  "approval": "Review installation",
+  "installHint": "Installation requires a hardware-verified step-up. It does not start an agent or a model server.",
+  "install": "Install approved version",
+  "starting": "Starting…",
+  "started": "Installation started",
+  "cancel": "Cancel",
+  "job": "Latest installation",
+  "leftovers": "{{count}} unfinished staging directories remain. Review inventory before retrying.",
+  "state": {
+    "running": "Installing…",
+    "succeeded": "Installation complete",
+    "failed": "Installation failed",
+    "interrupted": "Installation interrupted"
+  },
+  "installedState": {
+    "installed": "Installed",
+    "damaged": "Damaged",
+    "unverified": "Unverified"
+  },
+  "verification": {
+    "openpgp": "Publisher-signed release (OpenPGP).",
+    "sigstore-cosign": "Package digest and publisher signatures verified.",
+    "none-origin-only": "Official HTTPS origin; no publisher signature.",
+    "github-release-sha256": "Pinned SHA-256 from the official release metadata; no publisher signature.",
+    "unknown": "Unverified"
+  },
+  "probe": "Probe version",
+  "probeName": "Probe version at {{path}}",
+  "probeHint": "Probing runs this exact executable’s --version command after a hardware-verified step-up.",
+  "probeComplete": "Version probe finished."
+}

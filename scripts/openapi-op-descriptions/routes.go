@@ -81,6 +81,7 @@ func (r moduleRoute) where() string {
 // are always the first two arguments.
 var registrationShapes = map[string]struct{ args, handler int }{
 	"Handle":       {args: 4, handler: 3},
+	"HandleSystem": {args: 3, handler: 2},
 	"HandleEntity": {args: 5, handler: 4},
 	"HandlePolicy": {args: 5, handler: 4},
 	"HandleSealed": {args: 5, handler: 4},
@@ -89,7 +90,7 @@ var registrationShapes = map[string]struct{ args, handler int }{
 // governedDoors are the doors a module finds by type assertion. Their names mean a
 // route registration and nothing else, so a call to one that no APIRoutes registrar
 // reaches is refused rather than skipped.
-var governedDoors = map[string]bool{"HandlePolicy": true, "HandleSealed": true}
+var governedDoors = map[string]bool{"HandlePolicy": true, "HandleSealed": true, "HandleSystem": true}
 
 // enumerateModuleRoutes reads every module package under dir and returns the routes
 // its APIRoutes methods register.
@@ -105,6 +106,18 @@ func enumerateModuleRoutes(root string) ([]moduleRoute, error) {
 	}
 	if len(dirs) == 0 {
 		return nil, blind("%s contains no Go package", dir)
+	}
+	// Composition-root modules can own deployment-wide routes while retaining
+	// the same API module seam. Discover their packages without naming features.
+	cmdDir := filepath.Join(root, "cmd")
+	if info, err := os.Stat(cmdDir); err == nil && info.IsDir() {
+		additional, err := packageDirs(cmdDir)
+		if err != nil {
+			return nil, err
+		}
+		dirs = append(dirs, additional...)
+	} else if err != nil && !os.IsNotExist(err) {
+		return nil, blind("listing composition-root packages: %v", err)
 	}
 	var out []moduleRoute
 	for _, d := range dirs {

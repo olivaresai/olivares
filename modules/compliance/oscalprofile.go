@@ -490,7 +490,7 @@ func filterResultsBySelection(results []controlResultDTO, selected []string) []c
 // minimal-data anchor, handed to the packager, and persisted. A parser that accepts one JSON
 // value followed by EOF sees a COMPLETE document, so nothing anywhere reports a problem — the
 // operator gets a 201 and an anchor over bytes that are not what they sent, with the tail
-// gone. Found by the Codex sol max contrast of (F1).
+// gone. Found by the Codex sol max contrast of (finding 1).
 //
 // This is the same rule the module already applies to identity strings one file over: "IDENTITY
 // fields must be REJECTED when over-length, never clamped" (helpers.go tooLong) — for the same

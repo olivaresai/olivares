@@ -1,0 +1,46 @@
+{
+  "title": "Agentenwerkzeuge",
+  "description": "Verwalten Sie Werkzeuge auf dem Server der Steuerungsebene.",
+  "refresh": "Aktualisieren",
+  "adminOnly": "Zum Verwalten der Serverwerkzeuge ist eine Sitzung als Systemadministrator erforderlich.",
+  "readOnly": "Diese Steuerungsebene ist schreibgeschützt. Die Installation ist deaktiviert.",
+  "notInstalled": "Keine verwaltete Installation",
+  "version": "Version für {{name}}",
+  "review": "Installation prüfen",
+  "reviewName": "Installation von {{name}} prüfen",
+  "detect": "{{name}} erkennen",
+  "detecting": "Serverwerkzeuge werden geprüft…",
+  "notDetected": "Keine ausführbare Datei auf dem Server erkannt.",
+  "versionUnknown": "Version unbekannt",
+  "planning": "Ausgewählte Version wird überprüft…",
+  "approval": "Installation prüfen",
+  "installHint": "Die Installation erfordert eine hardwaregestützte Authentifizierung. Sie startet keinen Agenten oder Modellserver.",
+  "install": "Genehmigte Version installieren",
+  "starting": "Wird gestartet…",
+  "started": "Installation gestartet",
+  "cancel": "Abbrechen",
+  "job": "Letzte Installation",
+  "leftovers": "{{count}} unvollständige temporäre Verzeichnisse verbleiben. Prüfen Sie vor einem erneuten Versuch das Inventar.",
+  "state": {
+    "running": "Installation läuft…",
+    "succeeded": "Installation abgeschlossen",
+    "failed": "Installation fehlgeschlagen",
+    "interrupted": "Installation unterbrochen"
+  },
+  "installedState": {
+    "installed": "Installiert",
+    "damaged": "Beschädigt",
+    "unverified": "Nicht verifiziert"
+  },
+  "verification": {
+    "openpgp": "Vom Herausgeber signierte Version (OpenPGP).",
+    "sigstore-cosign": "Paketprüfsumme und Herausgebersignaturen verifiziert.",
+    "none-origin-only": "Offizieller HTTPS-Ursprung; keine Herausgebersignatur.",
+    "github-release-sha256": "Festgelegte SHA-256-Prüfsumme aus offiziellen Metadaten; keine Herausgebersignatur.",
+    "unknown": "Nicht verifiziert"
+  },
+  "probe": "Version prüfen",
+  "probeName": "Version unter {{path}} prüfen",
+  "probeHint": "Die Prüfung führt --version für genau diese Datei nach einer Hardware-Verifizierung aus.",
+  "probeComplete": "Versionsprüfung abgeschlossen."
+}

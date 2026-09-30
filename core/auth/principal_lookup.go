@@ -255,7 +255,7 @@ func (a *Authenticator) principalFromToken(ctx context.Context, as store.AuthSco
 			if workSessionCredentialExpired(*t.ExpiresAt, now) {
 				return Principal{}, false, nil
 			}
-		case CommunicationSessionCredentialPurpose:
+		case CommunicationSessionCredentialPurpose, OrchestrationSessionCredentialPurpose:
 			if communicationSessionCredentialExpired(*t.ExpiresAt, now) {
 				return Principal{}, false, nil
 			}
@@ -271,6 +271,9 @@ func (a *Authenticator) principalFromToken(ctx context.Context, as store.AuthSco
 	switch t.Purpose {
 	case WorkSessionCredentialPurpose:
 		p, ok := workSessionPrincipal(t)
+		return p, ok, nil
+	case OrchestrationSessionCredentialPurpose:
+		p, ok := orchestrationSessionPrincipal(t)
 		return p, ok, nil
 	case CommunicationSessionCredentialPurpose:
 		p, ok := communicationSessionPrincipal(t)

@@ -14,7 +14,7 @@ narrower than their industry usage, and the narrowness is the point.
 Module III's graph of **origins** (agents, identities, sessions) and the
 **resources** they touch, every edge classified by [mode](#mode) and tagged
 with its [signal source](#signal-source), [attribution](#attribution-confidence)
-and [coverage tier](#coverage-tier). A key differentiated capability — one of the 30
+and [coverage tier](#coverage-tier). A key differentiated capability — one of the 31
 modules, not the whole product. See [What is Olivares AI?](/start/what-is-olivares-ai/).
 
 ### Actuation states: `v1` / `on-demand` / `seam`

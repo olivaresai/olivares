@@ -134,7 +134,8 @@ func validPrincipalAuthorityShape(p Principal) bool {
 				validSealedAgentOBOTokenPrincipal(p, role)
 		}
 		return validSealedWorkSessionPrincipal(p, role) ||
-			validSealedCommunicationSessionPrincipal(p, role)
+			validSealedCommunicationSessionPrincipal(p, role) ||
+			validSealedOrchestrationSessionPrincipal(p, role)
 	default:
 		return false
 	}
@@ -470,4 +471,16 @@ func (w *principalAuthoritySealWriter) sum() [sha256.Size]byte {
 	var out [sha256.Size]byte
 	copy(out[:], w.h.Sum(nil))
 	return out
+}
+
+func validSealedOrchestrationSessionPrincipal(p Principal, role string) bool {
+	binding, ok := p.OrchestrationSessionGrant()
+	if !ok || !p.UserID.IsZero() || role != orchestrationSessionRole || p.AAL != 0 || len(p.AMR) != 0 ||
+		!validCommunicationSessionRef(p.SessionIdentity) || !validCommunicationSessionWorkspaceID(p.SessionWorkspaceID) ||
+		!validCommunicationSessionRunRef(p.SessionRunRef) || p.SessionFence < 1 ||
+		len(p.groups) != 0 || len(p.audiences) != 0 || !p.actAs.IsZero() || !validRuntimeAgentIdentity(p.AgentIdentity) ||
+		!validSealedConfinement(p.confined, p.evidence.tenant, p.SessionWorkspaceID, true) {
+		return false
+	}
+	return exactRestrictedPermissionSet(p.restricted, p.evidence.tenant, orchestrationGrantPermissions(binding.Capabilities)...)
 }

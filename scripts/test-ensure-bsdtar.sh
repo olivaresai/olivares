@@ -615,7 +615,7 @@ else
 	bad "producer failure: rc=$rc stderr='$rc_err'"
 fi
 # --- 13. a scratch that cannot be created stops before anything is touched -----
-# R1, found in independent review on 2026-09-08. Until then the scratch guard sat inside an
+# finding 1, found in independent review on 2026-09-08. Until then the scratch guard sat inside an
 # `if` CONDITION LIST — the `if` opened at the helper-presence guard and its `then` did not
 # arrive until an assertion three hundred lines later — so `mktemp` failing did not fire
 # errexit. $scratch stayed empty and the very next assignment, `fx="$scratch/fixtures"`,

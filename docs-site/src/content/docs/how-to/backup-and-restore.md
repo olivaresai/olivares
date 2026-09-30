@@ -21,7 +21,7 @@ passphrase (`--passphrase-file`) or a raw 32-byte key from your KMS
 (`--kek-key-file`); exactly one is required. The audit and catalog signing
 keys travel **sealed** inside the bundle.
 
-**Enrolled DR restore control supports PostgreSQL 16 only in 26.10.** Other majors refuse with `DR restore control contract: PostgreSQL major <major> is unsupported (verified contract: 16)`, where `<major>` is the detected server major.
+**The enrolled DR restore control supports PostgreSQL 15, 16, 17 and 18 in 26.10** (measured on 15.19, 16.15, 17.11 and 18.6). Other majors refuse with `DR restore control contract: PostgreSQL major <major> is unsupported (verified contracts: 15, 16, 17, 18)`, where `<major>` is the detected server major. A control is never repaired: after an in-place major upgrade, a control that does not match the new major's catalog and permissions is refused.
 
 ## Back up
 

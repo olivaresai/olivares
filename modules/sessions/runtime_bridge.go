@@ -223,9 +223,9 @@ func (m *Module) bindProviderSession(ctx context.Context, lr *liveRun, sessionID
 // (claim.go defaultLeaseTTL) would lapse mid-session with the child still running,
 // the fence stamped on the run row would stop matching, and the session would drift
 // into being freely takeable while it was still being driven. Liveness is asserted
-// by renewal, never assumed. Legacy work-only launches renew from I/O on the same
-// throttle as activity writes; K3 dual-authority launches additionally run an
-// independent timer so a silent process cannot outlive its Claim.
+// by renewal, never assumed. All claimed launches run an independent timer so a
+// silent process cannot outlive its Claim. Output also renews on the same throttle
+// as activity writes.
 //
 // Best-effort and quiet on the ordinary loss: a lease this fails to renew lapses,
 // and the next governed write refuses. That refusal is the control working, not an
@@ -528,7 +528,7 @@ func (m *Module) buildLaunchSpec(
 		// protocol, and the correlated root response is the only thing allowed to
 		// nominate the conversation.
 		program = m.driverProgram(drv)
-		driverLaunch = DriverLaunch{WorkDir: dir, Model: p.Model, Effort: p.Effort}
+		driverLaunch = DriverLaunch{WorkDir: dir, Model: p.Model, Effort: p.Effort, LocalModelEndpoint: cred.localModelEndpoint}
 		if p.ProviderHome != nil {
 			driverLaunch.ConfigHome = p.ProviderHome.ConfigHome
 			driverLaunch.UserHome = p.ProviderHome.UserHome

@@ -33,6 +33,7 @@ func authDescriptors() []model.EntityDescriptor {
 		setSeenJTIDescriptor,
 		pepServiceDescriptor, pepServiceCredentialDescriptor, delegationHandleDescriptor, pdpDecisionClaimDescriptor,
 		tenantExclusionDescriptor, accountOfferDescriptor, credentialBindingDescriptor,
+		totpCredentialDescriptor, totpRecoveryCodeDescriptor, authPolicyDescriptor,
 	}
 }
 
@@ -228,6 +229,12 @@ var userGroupDescriptor = model.EntityDescriptor{
 		// discipline as the assurance columns on auth_sessions.
 		pdecl(field("parent_group_id", model.KindUUID, true),
 			model.None("the parent group row of the same tenant: core/model/auth.go:187")),
+		// Group-origin contract : who provisions this row. NULL = today's
+		// SCIM/IdP-managed group; "operator" = console-managed; a slug = the
+		// provisioner that owns it. Nullable and appended LAST (additive
+		// reconcile); NULL and "" read alike.
+		pdecl(field("provisioned_by", model.KindText, true),
+			model.None("the provisioner slug that owns the group, empty for IdP-managed: core/model/auth.go:199")),
 	},
 	// external_id IS unique per granted tenant: it is the IdP's correlation key,
 	// and the application-level probe alone is a non-atomic check-then-insert
@@ -251,12 +258,14 @@ var userGroupCodec = model.Codec[model.UserGroup]{
 		return model.Record{
 			"target_tenant_id": encTenant(g.TargetTenantID), "display_name": g.DisplayName,
 			"external_id": ext, "mapped_role": g.MappedRole, "parent_group_id": encOptID(g.ParentGroupID),
+			"provisioned_by": encOptStr(g.ProvisionedBy),
 		}, nil
 	},
 	Decode: func(b model.BaseFields, r model.Record) (model.UserGroup, error) {
 		return model.UserGroup{BaseFields: b, TargetTenantID: decTenant(r, "target_tenant_id"),
 			DisplayName: r.String("display_name"), ExternalID: r.String("external_id"),
-			MappedRole: r.String("mapped_role"), ParentGroupID: decID(r, "parent_group_id")}, nil
+			MappedRole: r.String("mapped_role"), ParentGroupID: decID(r, "parent_group_id"),
+			ProvisionedBy: r.String("provisioned_by")}, nil
 	},
 }
 
@@ -395,6 +404,112 @@ var webauthnCredentialCodec = model.Codec[model.WebAuthnCredential]{
 	Decode: func(b model.BaseFields, r model.Record) (model.WebAuthnCredential, error) {
 		return model.WebAuthnCredential{BaseFields: b, UserID: decID(r, "user_id"), Name: r.String("name"),
 			CredentialID: r.String("credential_id"), Credential: []byte(r.String("credential"))}, nil
+	},
+}
+
+// --- TOTPCredential / TOTPRecoveryCode ---------------------------------------
+
+// totpCredentialDescriptor stores each local account's RFC 6238 second factor
+// . The seed column holds the SEALED envelope only ("v1:...", opened by the
+// TOTP seed sealer at verification), never raw key material; seed_hint is the
+// non-secret display fingerprint. One row per account (unique index), in the
+// system tenant next to the other credential rows.
+var totpCredentialDescriptor = model.EntityDescriptor{
+	Kind:  "core.totp_credential",
+	Table: "totp_credentials",
+	Fields: []model.FieldSpec{
+		pdecl(indexedField("account_id", model.KindUUID, false),
+			model.Ref(model.EncodeUserID, model.ClassAuthority)),
+		pdecl(field("seed_sealed", model.KindText, false),
+			model.None("a sealed TOTP seed envelope, opened only to verify a code: core/model/auth.go:290")),
+		pdecl(field("seed_hint", model.KindText, false),
+			model.None("a fingerprint prefix of a sealed seed, for display: core/model/auth.go:292")),
+		field("algorithm", model.KindText, false),
+		field("digits", model.KindInt, false),
+		field("period", model.KindInt, false),
+		pdecl(field("confirmed_at", model.KindTimestamp, true),
+			model.None("when possession of the seed was proven: core/model/auth.go:303")),
+		field("last_used_step", model.KindInt, false),
+	},
+	Indexes: []model.IndexSpec{
+		{Name: "totp_credentials_account_uniq", Columns: []string{"tenant_id", "account_id"}, Unique: true},
+	},
+}
+
+var totpCredentialCodec = model.Codec[model.TOTPCredential]{
+	Base: func(c *model.TOTPCredential) *model.BaseFields { return &c.BaseFields },
+	Encode: func(c model.TOTPCredential) (model.Record, error) {
+		return model.Record{
+			"account_id": c.AccountID.String(), "seed_sealed": c.SeedSealed, "seed_hint": c.SeedHint,
+			"algorithm": c.Algorithm, "digits": int64(c.Digits), "period": int64(c.Period),
+			"confirmed_at": encOptTS(c.ConfirmedAt), "last_used_step": c.LastUsedStep,
+		}, nil
+	},
+	Decode: func(b model.BaseFields, r model.Record) (model.TOTPCredential, error) {
+		confirmed, err := decOptTS(r, "confirmed_at")
+		if err != nil {
+			return model.TOTPCredential{}, err
+		}
+		return model.TOTPCredential{BaseFields: b, AccountID: decID(r, "account_id"),
+			SeedSealed: r.String("seed_sealed"), SeedHint: r.String("seed_hint"),
+			Algorithm: r.String("algorithm"), Digits: int(r.Int("digits")), Period: int(r.Int("period")),
+			ConfirmedAt: confirmed, LastUsedStep: r.Int("last_used_step")}, nil
+	},
+}
+
+// totpRecoveryCodeDescriptor stores the single-use recovery codes of an
+// account's TOTP factor: SHA-256 hashes only, never the codes. Indexed on
+// account_id (an account's codes are enumerated at verification and regenerated
+// wholesale at (re)activation).
+var totpRecoveryCodeDescriptor = model.EntityDescriptor{
+	Kind:  "core.totp_recovery_code",
+	Table: "totp_recovery_codes",
+	Fields: []model.FieldSpec{
+		pdecl(indexedField("account_id", model.KindUUID, false),
+			model.Ref(model.EncodeUserID, model.ClassAuthority)),
+		pdecl(field("code_hash", model.KindBytes, false), pdeclNoneAuthSecretHash),
+		pdecl(field("used_at", model.KindTimestamp, true),
+			model.None("when the code was spent: core/model/auth.go:325")),
+	},
+}
+
+var totpRecoveryCodeCodec = model.Codec[model.TOTPRecoveryCode]{
+	Base: func(c *model.TOTPRecoveryCode) *model.BaseFields { return &c.BaseFields },
+	Encode: func(c model.TOTPRecoveryCode) (model.Record, error) {
+		return model.Record{
+			"account_id": c.AccountID.String(), "code_hash": encBytes(c.CodeHash),
+			"used_at": encOptTS(c.UsedAt),
+		}, nil
+	},
+	Decode: func(b model.BaseFields, r model.Record) (model.TOTPRecoveryCode, error) {
+		used, err := decOptTS(r, "used_at")
+		if err != nil {
+			return model.TOTPRecoveryCode{}, err
+		}
+		return model.TOTPRecoveryCode{BaseFields: b, AccountID: decID(r, "account_id"),
+			CodeHash: r.Bytes("code_hash"), UsedAt: used}, nil
+	},
+}
+
+// authPolicyDescriptor stores the deployment's local-account security policy
+// singleton : one row in the system tenant, created on first write. An
+// absent row is the default posture (no policy set) — the reader must treat
+// "no row" and "row, false" alike.
+var authPolicyDescriptor = model.EntityDescriptor{
+	Kind:  "core.auth_policy",
+	Table: "auth_policy",
+	Fields: []model.FieldSpec{
+		field("require_totp_admins", model.KindBool, false),
+	},
+}
+
+var authPolicyCodec = model.Codec[model.AuthPolicy]{
+	Base: func(p *model.AuthPolicy) *model.BaseFields { return &p.BaseFields },
+	Encode: func(p model.AuthPolicy) (model.Record, error) {
+		return model.Record{"require_totp_admins": p.RequireTOTPAdmins}, nil
+	},
+	Decode: func(b model.BaseFields, r model.Record) (model.AuthPolicy, error) {
+		return model.AuthPolicy{BaseFields: b, RequireTOTPAdmins: r.Bool("require_totp_admins")}, nil
 	},
 }
 
@@ -559,7 +674,7 @@ var federationConfigDescriptor = model.EntityDescriptor{
 		pdecl(indexedField("target_tenant_id", model.KindUUID, false),
 			model.None("the scope the IdP configuration governs: core/model/federation.go:58")),
 		pdecl(field("protocol", model.KindText, true),
-			model.None("oidc or saml: core/model/federation.go:73")),
+			model.None("the configured provider kind: core/model/federation.go:73")),
 		pdecl(field("status", model.KindText, false), pdeclNoneLifecycle),
 		pdecl(field("oidc_issuer", model.KindText, true), pdeclNoneFedEndpoint),
 		pdecl(field("oidc_client_id", model.KindText, true),
@@ -601,6 +716,13 @@ var federationConfigDescriptor = model.EntityDescriptor{
 		// enforced in the service). Non-secret JSON list, appended LAST — additive reconcile.
 		pdecl(field("claimed_domains", model.KindJSON, true),
 			pdeclStrings("email domains used only as a routing key: core/model/federation.go:138")),
+		// Nullable additions are reconciled on both existing and fresh stores.
+		pdecl(field("external_connector_ref", model.KindText, true),
+			model.None("an opaque connector reference, never credentials: core/model/federation.go:154")),
+		pdecl(field("external_connector_generation", model.KindInt, true),
+			model.None("the immutable connector revision selected by this slot: core/model/federation.go:155")),
+		pdecl(field("external_issuer", model.KindText, true),
+			model.None("the configured issuer namespace: core/model/federation.go:158")),
 	},
 	// U4: one config per (scope, alias) — the first-class IdP entity key that lets
 	// multiple IdPs coexist under a TargetTenantID. RELAXED from the pre-U4
@@ -646,6 +768,9 @@ var federationConfigCodec = model.Codec[model.FederationConfig]{
 			"require_sso":           c.RequireSSO, "network_allow_cidrs": cidrs,
 			"oidc_groups_claim": c.OIDCGroupsClaim, "saml_groups_attr": c.SAMLGroupsAttr,
 			"scim_authoritative": c.SCIMAuthoritative, "claimed_domains": domains,
+			"external_connector_ref":        encOptStr(c.ExternalConnectorRef),
+			"external_connector_generation": encOptInt(c.ExternalConnectorGeneration),
+			"external_issuer":               encOptStr(c.ExternalIssuer),
 		}, nil
 	},
 	Decode: func(b model.BaseFields, r model.Record) (model.FederationConfig, error) {
@@ -670,7 +795,10 @@ var federationConfigCodec = model.Codec[model.FederationConfig]{
 			SAMLSPSignKeyHint: r.String("saml_sp_sign_key_hint"),
 			RequireSSO:        r.Bool("require_sso"), NetworkAllowCIDRs: cidrs,
 			OIDCGroupsClaim: r.String("oidc_groups_claim"), SAMLGroupsAttr: r.String("saml_groups_attr"),
-			SCIMAuthoritative: r.Bool("scim_authoritative"), ClaimedDomains: domains}, nil
+			SCIMAuthoritative: r.Bool("scim_authoritative"), ClaimedDomains: domains,
+			ExternalConnectorRef:        r.String("external_connector_ref"),
+			ExternalConnectorGeneration: r.Int("external_connector_generation"),
+			ExternalIssuer:              r.String("external_issuer")}, nil
 	},
 }
 
@@ -688,11 +816,11 @@ var federationDomainClaimDescriptor = model.EntityDescriptor{
 	Table: "federation_domain_claims",
 	Fields: []model.FieldSpec{
 		pdecl(indexedField("target_tenant_id", model.KindUUID, false),
-			model.None("the scope of the config that claims the domain: core/model/federation.go:168")),
+			model.None("the scope of the config that claims the domain: core/model/federation.go:180")),
 		pdecl(indexedField("config_id", model.KindUUID, false),
-			model.None("the federation config row the claim derives from: core/model/federation.go:171")),
+			model.None("the federation config row the claim derives from: core/model/federation.go:182")),
 		pdecl(field("domain", model.KindText, false),
-			model.None("a normalized claimed email domain: core/model/federation.go:173")),
+			model.None("a normalized claimed email domain: core/model/federation.go:185")),
 	},
 	Indexes: []model.IndexSpec{
 		{Name: "federation_domain_claims_domain_uniq", Columns: []string{"tenant_id", "domain"}, Unique: true},

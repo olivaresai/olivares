@@ -33,6 +33,7 @@ import { primaryRun } from './provenance'
 import { RefChip } from './ref-chip'
 import type { SessionResolution } from './use-session-resolution'
 import './i18n'
+import '@/features/agentops/i18n'
 
 function Row({
   label,
@@ -56,12 +57,12 @@ export function SessionContextPane({
   resolution: SessionResolution
   inspected?: ConversationItem | null
 }) {
-  const { t } = useTranslation('sessions')
+  const { t } = useTranslation(['sessions', 'agentops'])
   const { activeTenant, can } = useAuth()
   const boundary = useAuthBoundary()
   const org = useTenantLabel()
   const { target, session, live } = resolution
-  const run = primaryRun(session.runs)
+  const run = can('sessions:run:read') ? primaryRun(session.runs) : undefined
   const canReadWorkspaces = can('sessions:workspace:read')
   const canReadProfiles = can('sessions:profile:read')
   const workspacesQuery = useQuery({
@@ -154,6 +155,59 @@ export function SessionContextPane({
               <span className="text-caption text-muted-foreground">{none}</span>
             )}
           </Row>
+        </dl>
+      </section>
+
+      <section data-testid="context-work-scope">
+        <h3 className="text-caption font-medium text-foreground">
+          {t('context.workTitle')}
+        </h3>
+        <p className="text-caption text-muted-foreground">
+          {t('context.workHint')}
+        </p>
+        <dl className="mt-1 divide-y divide-border">
+          <Row label={t('context.processState')}>
+            <span data-testid="context-process-state" className="text-caption">
+              {run?.process_state
+                ? t(`agentops:state.${run.process_state}`, {
+                    defaultValue: run.process_state,
+                  })
+                : t('context.notRecorded')}
+            </span>
+          </Row>
+          <Row label={t('context.activityState')}>
+            <span data-testid="context-activity-state" className="text-caption">
+              {run?.state
+                ? t(`agentops:state.${run.state}`, { defaultValue: run.state })
+                : t('context.notRecorded')}
+            </span>
+          </Row>
+          <Row label={t('context.workRole')}>
+            <span className="text-caption">
+              {run?.work_scope
+                ? t(`context.workRoles.${run.work_scope.role}`)
+                : t('context.notRecorded')}
+            </span>
+          </Row>
+          <Row label={t('context.workWorkspace')}>
+            <RefChip
+              value={run?.work_scope?.workspace_id}
+              absent={t('context.notRecorded')}
+            />
+          </Row>
+          {run?.work_scope?.capabilities?.length ? (
+            <Row label={t('context.workActions')}>
+              <ul className="text-caption">
+                {run.work_scope.capabilities.map((action) => (
+                  <li key={action}>
+                    {t(
+                      `agentops:profiles.workGrant.capabilities.${action.replace('.', '_')}`,
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </Row>
+          ) : null}
         </dl>
       </section>
 
