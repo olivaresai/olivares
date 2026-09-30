@@ -8,16 +8,14 @@ description: >-
   et les auteurs de connecteurs.
 ---
 
-Olivares AI est un **open core**. Le **produit complet** est publié sous la GNU
-Affero General Public License, et la build AGPL est la plateforme de gouvernance
-tout entière — jamais bridée de l'intérieur pour vous pousser vers une édition
-payante. Par-dessus vient un petit ensemble d'add-ons commerciaux **additifs** dans
-`enterprise/`, construits uniquement avec `-tags enterprise` et absents du binaire
-public. Une licence commerciale fournit l'exception légale au copyleft ; les
-capacités `enterprise/` sont licenciées comme des **add-ons séparés et optionnels** —
-si bien que les éditions ouverte et commerciale ne sont
-**pas** identiques, sans que rien de publié en open ne soit jamais déplacé derrière
-le mur (le modèle `ee/` de GitLab, pas un péage de fonctionnalités sur le cœur).
+Olivares AI est **open core**. Le produit Community complet est publié sous la GNU
+Affero General Public License. Sa build AGPL constitue toute la plateforme de
+gouvernance, avec des utilisateurs illimités et un fournisseur d'identité (IdP)
+actif. Le volet commercial `enterprise/` ajoute du code nouveau, construit
+uniquement avec `-tags enterprise` et absent du binaire public. Business comprend
+quatre familles de capacités dans un abonnement. Enterprise couvre un périmètre
+négocié. Une licence commerciale fournit l'exception légale au copyleft ; rien
+de publié en open source ne passe derrière un péage.
 
 ## La frontière de licence
 
@@ -32,7 +30,7 @@ moteur) :
 | `web/` | **AGPL-3.0-only** | l'interface React |
 | `sdk/` | **Apache-2.0** | les interfaces connecteur/module, le contrat gRPC et les types partagés |
 | `connectors/` | **Apache-2.0** | les connecteurs (Claude, OpenAI, pgAudit, eBPF, cloud, Slack, SIEM, …) |
-| `enterprise/` | **commercial** | modules complémentaires additifs, gardés par tag de build, jamais dans le binaire public : fédération multi-IdP, pare-feu de contenu/DLP, durcissement des hooks, catalogue compilé de renseignement sur les menaces, contrôle de l'egress des outils serveur, CyberArk Conjur, bouclage des incidents (`LicenseRef-Olivares-Commercial`) |
+| `enterprise/` | **commercial** | modules additifs, gardés par tag de build, jamais dans le binaire public : fédération multi-IdP, pare-feu de contenu/DLP, durcissement des hooks, catalogue compilé de renseignement sur les menaces, contrôle de l'egress des outils serveur, CyberArk Conjur, bouclage des incidents (`LicenseRef-Olivares-Commercial`) |
 
 Le site de documentation que vous lisez fait partie du produit AGPL.
 
@@ -50,11 +48,35 @@ Le site de documentation que vous lisez fait partie du produit AGPL.
   architecturale qui rend cela sûr est appliquée : un connecteur Apache-2.0
   **n'importe jamais le moteur AGPL** ; il ne dépend que du SDK. Cela maintient
   l'écosystème de connecteurs libre de toute friction copyleft.
-- **Une licence commerciale.** Les organisations qui doivent éviter les obligations
-  de l'AGPL (par exemple, intégrer le produit dans une offre propriétaire) peuvent
-  obtenir une licence commerciale — contact : **enterprise@olivares.ai** (tarifs
-  sur demande). Les modules complémentaires additifs `enterprise/` ci-dessus sont
-  licenciés séparément, chacun comme un droit optionnel.
+- **Une licence commerciale.** Les organisations qui ont besoin d'une exception
+  aux obligations de l'AGPL peuvent contacter **enterprise@olivares.ai**.
+  Business comprend les quatre familles de capacités ci-dessous dans un
+  abonnement. Les conditions Enterprise sont négociées ; les familles ne sont pas vendues séparément.
+
+## Éditions et tarifs
+
+| Édition | Prix | Périmètre |
+| --- | --- | --- |
+| Community | Gratuit, AGPL-3.0-only | Utilisateurs illimités ; un fournisseur d'identité (IdP) actif. |
+| Business | USD 129/mois ou USD 1,290/an | Utilisateurs illimités ; une entité juridique ; jusqu'à deux déploiements de production, chacun avec un déploiement de staging ; jusqu'à cinq IdP actifs au total. |
+| Enterprise | Nous contacter | Plusieurs entités, davantage de déploiements ou d'IdP, miroirs air-gap, LTS personnalisé et autres exigences négociées. |
+
+Business comprend **Regulated Operations**, **AI Runtime Security**,
+**Compliance Packs** et **Identity & Scale**. Chaque famille conserve son code et
+sa frontière d'octroi de licence. Vous pouvez activer ou désactiver chaque famille ;
+aucune n'est vendue séparément. L'implémentation privée est distribuée sous forme
+de binaires commerciaux, en dehors du dépôt public.
+
+### Puis-je acheter une famille de capacités séparément ?
+
+Non. Les quatre familles nommées sont incluses dans l'abonnement Business.
+Choisissez la facturation mensuelle ou annuelle sur [Tarifs](https://olivares.ai/pricing).
+
+### Et si j'ai besoin de davantage de déploiements ou de fournisseurs d'identité ?
+
+Contactez **enterprise@olivares.ai** pour un périmètre Enterprise. Business permet
+jusqu'à deux déploiements de production et cinq IdP actifs au total, pas cinq par déploiement.
+
 
 ## Ce qui est ouvert et ce qui est entreprise
 
@@ -87,13 +109,13 @@ module, ni le démarrage sur une vérification de licence, et il fonctionne **ho
 ligne** (une signature Ed25519, sans serveur de licence), c'est pourquoi le produit
 ouvert fonctionne en environnement isolé (air-gapped). Le seul endroit où la licence
 est *consommée* plutôt qu'affichée est la build entreprise fermée, et uniquement pour
-donner droit aux add-ons couverts par l'accord commercial, évalués add-on par
-add-on — une décision locale dans
+donner droit aux modules couverts par l'accord commercial, évalués module par
+module — une décision locale dans
 l'édition commerciale, jamais une vérification dans le binaire ouvert. Elle ne
 plafonne jamais les utilisateurs : les comptes sont illimités dans toutes les
 éditions. La build ouverte est donc réellement
 complète et non plafonnée par licence ; ce qui diffère dans l'édition commerciale, ce
-sont les modules complémentaires additifs `enterprise/`, pas une clé de licence qui
+sont les modules additifs `enterprise/`, pas une clé de licence qui
 activerait des fonctionnalités à l'intérieur du même binaire.
 
 ## Pourquoi ce modèle

@@ -104,6 +104,9 @@ type CoreEntityAuthorizationResolver interface {
 // failed in flight would serve requests until somebody touched that path — which is
 // the same as not checking.
 func validateCoreEntityRef(ref EntityRef, resolver CoreEntityAuthorizationResolver) error {
+	if ref.LookupColumn != "" && (ref.Kind == "" || ref.CoreKind != CoreKindNone) {
+		return fmt.Errorf("api: an alternate entity locator requires only a module Kind")
+	}
 	if ref.CoreKind == CoreKindNone {
 		return nil
 	}

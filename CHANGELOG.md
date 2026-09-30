@@ -6,7 +6,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [CalVer](https://calver.org/) — `vYY.M.PATCH` (two-digit year,
 month, release-of-month).
 
-> **Status: beta.** The latest published release is **v26.9.0**; its dated section below is the
+> **Status: beta.** The latest published release is **26.10.0**; its dated section below is the
 > record of what it shipped. The next release is **v26.10**, pending: its changes are recorded
 > under **[Unreleased]**, with no release date until it is published. The
 > [releases page](https://github.com/olivaresai/olivares/releases) lists every published release.
@@ -35,7 +35,10 @@ month, release-of-month).
 
 ## [Unreleased]
 
-Pending for 26.10. Nothing below is published until that release is.
+Pending for the next release. Nothing below is published until that release is, and the
+section is dated only then.
+
+## [26.10.0] - 2026-10-01
 
 ### Install and upgrade
 
@@ -182,6 +185,9 @@ Pending for 26.10. Nothing below is published until that release is.
 
 ### Security
 
+- MCP gateways refuse upstream replies and subscription events that echo their authentication
+  credential, including JSON-escaped values. The refusal is audited without the credential.
+  Upstream authentication secrets shorter than 8 bytes are refused before contacting the server.
 - An organization can no longer join an existing account without its holder's consent, act on
   an account beyond its own membership, or keep authority over a member it removed; the exact
   new behavior is under *Identity*.
@@ -200,6 +206,21 @@ Pending for 26.10. Nothing below is published until that release is.
   `adm-zip` 0.6.1 ([GHSA-7q85-xj36-vmfc](https://github.com/advisories/GHSA-7q85-xj36-vmfc))
   and `colord` 2.9.4 ([GHSA-2wm5-q62r-hmrv](https://github.com/advisories/GHSA-2wm5-q62r-hmrv)).
   Neither package is part of the engine binary.
+- Single sign-on no longer signs anyone into an existing account by email when that account is
+  already bound to an identity-provider subject, and an OpenID Connect address is used to match
+  an existing account only when the provider marks it verified (`email_verified: true`). A match
+  on the exact provider subject is unchanged. After upgrading, an OpenID Connect provider that
+  omits `email_verified` no longer links an existing unbound account by email: the user gets a
+  new account where just-in-time provisioning is on, or is refused; bind the account first to
+  keep it.
+- Every operation on a single agent run — detail, events, live output, input, interrupt, stop,
+  resume, cleanup and delete — is authorized against the run's stored workspace. A caller
+  confined to another workspace receives not found, and the events endpoint no longer reveals
+  that such a run exists.
+- The console and the documentation site take the patched undici (8.10.2 and, inside
+  miniflare, 7.29.1) for [GHSA-rfgv-xxqx-mfg5](https://github.com/advisories/GHSA-rfgv-xxqx-mfg5)
+  and [GHSA-w293-vg96-wgc3](https://github.com/advisories/GHSA-w293-vg96-wgc3). Neither is part of
+  the engine binary.
 
 ### Fixed
 

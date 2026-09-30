@@ -10,7 +10,7 @@
 # its sha256 from that release's signed checksums.txt.
 
 pkgname=olivares-bin
-pkgver=26.9.0
+pkgver=26.10.0
 pkgrel=1
 pkgdesc='Open, self-hosted AI governance control plane (release binary)'
 arch=('x86_64')
@@ -23,7 +23,7 @@ source=('olivares-sysusers.conf'
         'olivares-tmpfiles.conf')
 sha256sums=('764f423d1407aed39273615f494133b1572be792013a7e7961fc096a1a20f3de'
             '6195db3366a4e196dd81262c260c5f36cd0c57f90e745018c003e198c7aca038')
-source_x86_64=("https://github.com/olivaresai/olivares/releases/download/v${pkgver}/olivares_${pkgver}_linux_amd64.tar.gz")
+source_x86_64=("https://github.com/olivaresai/olivares/releases/download/${pkgver}/olivares_${pkgver}_linux_amd64.tar.gz")
 sha256sums_x86_64=('9246de50ab22a1a02c7f56b2ec5c360c16f1266528be03867f582efdadf735f2')
 
 package() {

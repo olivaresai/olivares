@@ -21,6 +21,20 @@
 #     (downloads the tarball). Needs an Arch Linux host and a non-root user.
 # Exit 0 when every check holds, 1 on a finding, 2 when it could not look.
 set -euo pipefail
+
+# Release tags by era (the tag-name correction of 2026-09-29): v<version> before 26.10, bare
+# from 26.10 on. core/release/channelurl.go derives the same.
+release_tag() {
+	local v="${1:?}"
+	local major="${v%%.*}"
+	local rest="${v#*.}"
+	local minor="${rest%%.*}"
+	if [ "$major" -lt 26 ] || { [ "$major" -eq 26 ] && [ "$minor" -lt 10 ]; }; then
+		printf 'v%s' "$v"
+	else
+		printf '%s' "$v"
+	fi
+}
 LC_ALL=C
 export LC_ALL
 
@@ -113,7 +127,7 @@ pkgver="$(value pkgver)"
 [[ "$(value replaces)" == unset ]] || finding 'replaces is for renames only (AUR submission guidelines)'
 [[ "$(value install)" == unset ]] || finding 'no install scriptlet: sysusers.d and tmpfiles.d create the account and data dir'
 [[ "$(value tarball_count)" == 1 && "$(value tarball_sums_count)" == 1 ]] || finding 'exactly one x86_64 source and sum'
-published="https://github.com/olivaresai/olivares/releases/download/v${pkgver}/olivares_${pkgver}_linux_amd64.tar.gz"
+published="https://github.com/olivaresai/olivares/releases/download/$(release_tag "${pkgver}")/olivares_${pkgver}_linux_amd64.tar.gz"
 [[ "$(value tarball)" == "$published" ]] || finding "x86_64 source is not the published release URL for $pkgver"
 tarball_sha="$(value tarball_sha256)"
 [[ "$tarball_sha" =~ ^[0-9a-f]{64}$ ]] || finding 'x86_64 sha256 is not a lowercase SHA-256'
@@ -145,7 +159,10 @@ rm -f -- "$printed"
 # verify_checksums FILE: FILE's cosign signature pair for this release's identity. The
 # test verifier is honored only under the explicit test-only latch.
 verify_checksums() {
-	local sums=$1 identity="https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/v${pkgver}"
+	local sums=$1
+	# The signing identity names the tag by era: v<pkgver> before 26.10, bare from 26.10 on
+	# (the tag-name correction of 2026-09-29).
+	local identity="https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/$(release_tag "${pkgver}")"
 	local issuer=https://token.actions.githubusercontent.com
 	[[ -f "$sums.sig" && -f "$sums.pem" ]] ||
 		could_not_look "cannot verify $sums: its signature pair $sums.sig and $sums.pem is absent"

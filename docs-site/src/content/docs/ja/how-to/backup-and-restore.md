@@ -16,6 +16,8 @@ description: >-
 KMS からの生の 32 バイト鍵（`--kek-key-file`）—— の下で暗号化されます。ちょうど一つが必須です。
 監査署名鍵とカタログ署名鍵は、バンドル内に**封緘されて**移動します。
 
+**登録済みの DR 復元制御は、26.10 では PostgreSQL 16 のみをサポートします。** その他のメジャーバージョンは `DR restore control contract: PostgreSQL major <major> is unsupported (verified contract: 16)` というエラーで拒否されます。`<major>` は検出されたサーバーのメジャーバージョンです。
+
 ## バックアップ
 
 **SQLite**（シングルノード）—— `serve` の実行中でも安全です（スナップショットは

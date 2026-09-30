@@ -94,7 +94,7 @@ telemetría obligatoria ni egreso del plano de control de forma predeterminada. 
 tu perímetro lo que **tú** configuras para que lo cruce — llamadas a tus API de modelos,
 las salidas SIEM/webhook que conectas y un proveedor externo de embeddings si aprovisionas
 uno. Olivares AI no está en esa lista: el proveedor nunca está en la ruta de datos. Solo se
-le llega cuando le pides algo — `olivares upgrade`, o una descarga por suscripción de add-ons
+le llega cuando le pides algo — `olivares upgrade`, o una descarga por suscripción de módulos
 comerciales y sus actualizaciones — nunca como efecto de ejecutar. Y `olivares upgrade --endpoint` apunta incluso eso a tu propio mirror. Es un argumento
 sólido para la residencia de datos, el RGPD y los entornos air-gapped.
 

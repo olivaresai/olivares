@@ -38,17 +38,23 @@ func runtimePermissions() []auth.Permission {
 
 // runtimeRoutes mounts the operate endpoints under /v1/m/sessions/.
 func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
+	// run_ref is a tenant-unique public reference, not the run row's primary ID.
+	// Every point route authorizes its stored core workspace before runtime access.
+	runEntity := api.EntityRef{
+		Kind: runKind, IDParam: "ref", LookupColumn: colRunRef,
+		WorkspaceColumn: colRunAuthzWorkspaceID, ConcealDeniedAsNotFound: true,
+	}
 	reg.Handle("POST", "/runs", permRunWrite, m.handleCreateRun)
 	reg.Handle("GET", "/runs", permRunRead, m.handleListRuns)
-	reg.Handle("GET", "/runs/{ref}", permRunRead, m.handleGetRun)
-	reg.Handle("GET", "/runs/{ref}/events", permRunRead, m.handleRunEvents)
-	reg.Handle("GET", "/runs/{ref}/attach", permRunRead, m.handleAttachRun)
-	reg.Handle("POST", "/runs/{ref}/input", permRunWrite, m.handleRunInput)
-	reg.Handle("POST", "/runs/{ref}/interrupt", permRunWrite, m.handleInterruptRun)
-	reg.Handle("POST", "/runs/{ref}/stop", permRunWrite, m.handleStopRun)
-	reg.Handle("POST", "/runs/{ref}/resume", permRunWrite, m.handleResumeRun)
-	reg.Handle("POST", "/runs/{ref}/cleanup", permRunAdmin, m.handleCleanupRun)
-	reg.Handle("DELETE", "/runs/{ref}", permRunAdmin, m.handleDeleteRun)
+	reg.HandleEntity("GET", "/runs/{ref}", permRunRead, runEntity, m.handleGetRun)
+	reg.HandleEntity("GET", "/runs/{ref}/events", permRunRead, runEntity, m.handleRunEvents)
+	reg.HandleEntity("GET", "/runs/{ref}/attach", permRunRead, runEntity, m.handleAttachRun)
+	reg.HandleEntity("POST", "/runs/{ref}/input", permRunWrite, runEntity, m.handleRunInput)
+	reg.HandleEntity("POST", "/runs/{ref}/interrupt", permRunWrite, runEntity, m.handleInterruptRun)
+	reg.HandleEntity("POST", "/runs/{ref}/stop", permRunWrite, runEntity, m.handleStopRun)
+	reg.HandleEntity("POST", "/runs/{ref}/resume", permRunWrite, runEntity, m.handleResumeRun)
+	reg.HandleEntity("POST", "/runs/{ref}/cleanup", permRunAdmin, runEntity, m.handleCleanupRun)
+	reg.HandleEntity("DELETE", "/runs/{ref}", permRunAdmin, runEntity, m.handleDeleteRun)
 }
 
 func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {

@@ -1703,7 +1703,7 @@ func (cr chiRegistrar) entityResource(
 	if ref.CoreKind != CoreKindNone {
 		return cr.coreEntityResource(r, res, ref, model.ID(id))
 	}
-	if ref.Kind == "" || (ref.WorkspaceColumn == "" && !ref.ConcealDeniedAsNotFound) {
+	if ref.Kind == "" || (ref.WorkspaceColumn == "" && ref.LookupColumn == "" && !ref.ConcealDeniedAsNotFound) {
 		return res, "", true, nil, nil
 	}
 	p, ok := principalFrom(r.Context())
@@ -1744,7 +1744,27 @@ func (s *Server) storedEntityLineage(
 		if e != nil {
 			return e
 		}
-		rec, e := repo.Get(ctx, model.ID(id))
+		var rec model.Record
+		if ref.LookupColumn == "" {
+			rec, e = repo.Get(ctx, model.ID(id))
+		} else {
+			var rows []model.Record
+			rows, _, e = repo.List(ctx, model.Query{
+				Filters: []model.Filter{{Column: ref.LookupColumn, Op: model.OpEq, Value: id}},
+				Limit:   2,
+			})
+			if e == nil {
+				switch len(rows) {
+				case 0:
+					return nil
+				case 1:
+					rec = rows[0]
+					res.ID = rec.String(model.ColID)
+				default:
+					return errors.New("api: stored entity reference is not unique")
+				}
+			}
+		}
 		if errors.Is(e, store.ErrNotFound) {
 			return nil // no row: stay at collection level, the handler answers 404
 		}

@@ -292,7 +292,9 @@ func (rs *ResourceServer) auditSubscriptionRelayFailure(
 	err error,
 ) {
 	reason := "subscriptions/listen relay failed; durable cursor retained"
-	if errors.Is(err, ErrSubscriptionRelayTruncated) {
+	if errors.Is(err, ErrUpstreamCredentialDisclosure) {
+		reason = upstreamCredentialRefusalReason(err)
+	} else if errors.Is(err, ErrSubscriptionRelayTruncated) {
 		reason = "subscriptions/listen upstream truncated; durable cursor retained for catch-up"
 	}
 	rs.auditTraced(ctx, tok, methodSubscriptionsListen, strings.Join(requiredScopes, " "), false,

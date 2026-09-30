@@ -58,7 +58,7 @@
     "description": "Live compliance posture, the executive risk summary, and the signed audit evidence bundle.",
     "request": "Request",
     "done": "Report downloaded",
-    "seam": "This report lives in an add-on that is not linked to this deployment. Nothing is broken.",
+    "seam": "This report lives in a module that is not linked to this deployment. Nothing is broken.",
     "posture": {
       "title": "Compliance posture",
       "description": "Status by framework and control, computed live."

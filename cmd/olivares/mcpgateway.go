@@ -1670,8 +1670,11 @@ func (f *mcpUpstreamForwarder) Forward(ctx context.Context, req mcpc.UpstreamReq
 	if req.FenceToken != "" {
 		httpReq.Header.Set("Olivares-Fence-Token", req.FenceToken)
 	}
-	resp, err := f.client.Do(httpReq)
+	resp, err := doMCPForwardRequest(f.client, httpReq)
 	if err != nil {
+		if errors.Is(err, mcpc.ErrUpstreamCredentialTooShort) || errors.Is(err, mcpc.ErrUpstreamCredentialInvalid) {
+			return notSent, err
+		}
 		// After invoking Do the request may have reached the wire: unknown.
 		return unknown, fmt.Errorf("mcp gateway: upstream forward: %w", err)
 	}
@@ -1752,8 +1755,11 @@ func (f *mcpUpstreamForwarder) Listen(
 		streamClient.Timeout = 0
 		client = &streamClient
 	}
-	resp, err := client.Do(httpReq)
+	resp, err := doMCPForwardRequest(client, httpReq)
 	if err != nil {
+		if errors.Is(err, mcpc.ErrUpstreamCredentialTooShort) || errors.Is(err, mcpc.ErrUpstreamCredentialInvalid) {
+			return err
+		}
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
@@ -1765,7 +1771,7 @@ func (f *mcpUpstreamForwarder) Listen(
 		return fmt.Errorf("mcp gateway: upstream listen http %d", resp.StatusCode)
 	}
 	if !strings.HasPrefix(resp.Header.Get("Content-Type"), "text/event-stream") {
-		return fmt.Errorf("mcp gateway: upstream listen is not an event stream (%q)", resp.Header.Get("Content-Type"))
+		return fmt.Errorf("mcp gateway: upstream listen is not an event stream")
 	}
 	err = mcpc.ConsumeSubscriptionUpstreamStream(resp.Body, requestID, emit)
 	if ctx.Err() != nil {

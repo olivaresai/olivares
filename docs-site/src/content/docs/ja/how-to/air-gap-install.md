@@ -30,17 +30,17 @@ Olivares AI は **セルフホストファーストかつエアギャップ対�
 
 ```bash
 scripts/airgap-bundle.sh \
-  --version v26.9.0 \
-  --image ghcr.io/olivaresai/olivares:26.9.0-amd64 \
+  --version 26.10.0 \
+  --image ghcr.io/olivaresai/olivares:26.10.0-amd64 \
   --chart deploy/helm/olivares \
   --cosign-key cosign.key \
   [--collector-image <ref>] [--out dist/airgap] [--gpg-key <id>]
 ```
 
-アーキテクチャ別タグ（`26.9.0-amd64`）は、リリースがビルドと署名を行う `ghcr.io/olivaresai/olivares`
+アーキテクチャ別タグ（`26.10.0-amd64`）は、リリースがビルドと署名を行う `ghcr.io/olivaresai/olivares`
 で公開されています。Docker Hub（`docker.io/olivaresai/olivares`、公式のプル先）はマルチアーキテクチャと
-堅牢化タグをダイジェストで同一に持ちますが、`26.9.0-amd64` は持ちません
-（`docs/releases/v26.9.0-install-surfaces.json`）。ghcr.io は公開イメージの匿名プルにレート制限を
+堅牢化タグをダイジェストで同一に持ちますが、`26.10.0-amd64` は持ちません
+（`docs/releases/26.10.0-install-surfaces.json`）。ghcr.io は公開イメージの匿名プルにレート制限を
 課さないため、認証していないビルドホストでも有用です。
 
 :::caution[SBOM/VEX/プロベナンスは生成ではなく供給される]
@@ -99,7 +99,7 @@ cosign verify-blob --key cosign.pub --insecure-ignore-tlog \
 
 ```bash
 scripts/airgap-mirror.sh \
-  --bundle olivares-airgap-v26.9.0.tar.gz \
+  --bundle olivares-airgap-26.10.0.tar.gz \
   --registry registry.internal:5000 [--insecure]
 ```
 
@@ -128,7 +128,7 @@ helm install olivares \
 無効化すべきテレメトリホームのデフォルトは存在しません。
 
 外部と通信するのは**オンライン側**であり、これは設計どおりです。バンドルのビルドでリリースを
-ダウンロードし、商用環境ではサブスクリプションが、アドオンとその更新プログラムおよび修正
+ダウンロードし、商用環境ではサブスクリプションが、モジュールとその更新プログラムおよび修正
 プログラムを取得するための資格情報になります。これが SUSE/Novell モデルです —— エアギャップ
 環境は、同じ資格を持つローカルミラーから配信されます。
 [セルフホスティング](/ja/how-to/self-hosting/) を参照してください。

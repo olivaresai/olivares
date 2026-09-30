@@ -23,6 +23,8 @@ votre KMS (`--kek-key-file`) ; l'une des deux exactement est requise. Les clés 
 signature de l'audit et du catalogue voyagent **scellées** à l'intérieur du
 bundle.
 
+**Le contrôle de restauration DR enregistré prend uniquement en charge PostgreSQL 16 dans 26.10.** Les autres versions majeures sont refusées avec `DR restore control contract: PostgreSQL major <major> is unsupported (verified contract: 16)`, où `<major>` est la version majeure détectée du serveur.
+
 ## Sauvegarder
 
 **SQLite** (nœud unique) — sûr pendant que `serve` tourne (l'instantané utilise

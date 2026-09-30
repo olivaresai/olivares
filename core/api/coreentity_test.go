@@ -215,3 +215,17 @@ func TestValidateCoreEntityRefRejectsAKindWithNoLocator(t *testing.T) {
 		}
 	}
 }
+
+func TestAlternateEntityLocatorRequiresModuleKind(t *testing.T) {
+	for _, ref := range []EntityRef{
+		{IDParam: "id", LookupColumn: "reference"},
+		{CoreKind: CoreKindSession, IDParam: "id", LookupColumn: "reference"},
+	} {
+		if err := validateCoreEntityRef(ref, &fakeCoreResolver{}); err == nil {
+			t.Fatal("alternate locator accepted outside a module kind")
+		}
+	}
+	if err := validateCoreEntityRef(EntityRef{Kind: "sessions.run", IDParam: "ref", LookupColumn: "run_ref"}, nil); err != nil {
+		t.Fatal(err)
+	}
+}

@@ -19,7 +19,7 @@ J01–J08 as tests.
 | Edition | What it does | What it does not do |
 |---|---|---|
 | **Community (this page)** | Owned local child: launch, stdin/stdout/stderr, attach with cursor, resume of the exact conversation, reconnect of a live stream, stop with observed exit status. Session rows and evidence stay in module II. | Multi-pane Identity & Scale engine, mTLS agent listener, commercial input sessions, xterm UI chunk |
-| **Identity & Scale overlay** | Commercial session-cockpit engine (listener, panes, recording ledger). Routes live under `/v1/m/session-cockpit/` when the add-on is present. | It does not replace `/v1/m/sessions/runs` |
+| **Identity & Scale overlay** | Commercial session-cockpit engine (listener, panes, recording ledger). Routes live under `/v1/m/session-cockpit/` when the module is present. | It does not replace `/v1/m/sessions/runs` |
 
 A Community build answers the overlay namespace by **absence** (404). It does
 not mount a 501 stub.

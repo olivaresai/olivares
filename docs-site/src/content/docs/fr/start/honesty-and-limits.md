@@ -42,7 +42,7 @@ dit plutôt que de laisser entendre le contraire.
 - **Les versions sont signées et vérifiables hors ligne.** La signature, la
   provenance SLSA, le SBOM et l'OpenVEX peuvent tous être
   [vérifiés sans accès réseau](/fr/how-to/verify-a-release/), et le produit livre
-  un [bundle air-gap](/fr/how-to/air-gap-install/). La dernière version taguée, **v26.9.0**, est publiée avec des archives signées, des paquets natifs et des images de conteneur ; les API, les schémas et la surface des modules peuvent encore changer avant la 1.0.
+  un [bundle air-gap](/fr/how-to/air-gap-install/). La dernière version taguée, **26.10.0**, est publiée avec des archives signées, des paquets natifs et des images de conteneur ; les API, les schémas et la surface des modules peuvent encore changer avant la 1.0.
 
 ## Open core — ce qui est ouvert vs entreprise
 
@@ -62,17 +62,17 @@ feindre :
   `multi_idp_requires_enterprise` — une limite produit explicite, jamais un faux
   501.
 - **Il n'y a aucun plafond d'utilisateurs — les comptes sont illimités dans toutes les
-  éditions.** Community, Business, les modules complémentaires et Enterprise
+  éditions.** Community, Business et Enterprise
   auto-hébergé admettent tous un nombre illimité de comptes utilisateurs, quel que soit
   l'état de la licence : valide, expirée ou absente. Le plafond de trois comptes actifs
   antérieur au 2026-07-27 a été supprimé (la couture de sièges reste dans le code, en
   no-op de compatibilité qui ne refuse rien), et l'expiration d'une licence ne
   plafonne, ne désactive ni ne supprime jamais un compte. Le modèle commercial est un
-  droit à durée déterminée sur les add-ons, jamais une facturation par siège.
+  droit à durée déterminée sur les modules, jamais une facturation par siège.
 - **Le reste de la plateforme est ouvert.** La boucle de gouvernance complète —
   inventaire, carte d'accès R/RW, politique RBAC/ABAC/Cedar, l'audit ledger
   scellé, FinOps, conformité, egress SIEM, MCP, HA/distribué — tourne dans le
-  binaire ouvert sans aucune vérification de licence. Les add-ons `enterprise/`
+  binaire ouvert sans aucune vérification de licence. Les modules `enterprise/`
   additifs (fédération multi-IdP, content firewall/DLP, durcissement des hooks,
   le catalogue compilé de threat-intel, l'egress des server-tools, le connecteur CyberArk
   Conjur et le close-loop d'incident) sont du nouveau

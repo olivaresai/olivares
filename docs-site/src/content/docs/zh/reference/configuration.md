@@ -307,6 +307,7 @@ TLS 默认开启。在未提供 `--tls-cert`/`--tls-key` 时，引擎会在任�
 | `OLIVARES_POLICY_SIGNING_KEY` | No | — | Policy bundle signing key, inline. Prefer the file form. |
 | `OLIVARES_POLICY_SIGNING_KEY_FILE` | No | — | Path to the policy bundle signing key. |
 | `OLIVARES_POLICY_SIGNING_KEY_WRAPPED_FILE` | No | — | Path to the policy signing key wrapped by a key management service. |
+| `OLIVARES_PORTAL_TLS_DIRECTORY` | No | — | 运维人员存放 Appliance Console TLS 证书和密钥的目录；服务单元指定该目录，并将这对文件作为凭据传给控制台。 |
 | `OLIVARES_PQC_POSTURE_CONFIG` | No | — | 后量子态势评估器的 JSON 配置路径。由使用 `enterprise` 构建标签编译的构建在每次运行 `olivares enterprise pqc-posture` 时读取，而不是在引擎启动时读取。`{}` 选择 CNSA 2.0，目标年份为 2033。未设置，或文件无法读取或解析时，该命令会报告 PQC 态势未配置。 |
 | `OLIVARES_PUBLIC_URL` | No | — | The address a browser reaches this console at, as scheme://host[:port]. It is what the startup panel prints and what the WebAuthn relying party is derived from, and it is independent of the listen address. The --public-url flag wins over this variable, and passing that flag empty clears it. Read at start-up only: a change takes a restart. Refused values are reported by field and failure class and are never echoed, and support bundles keep this value redacted. |
 | `OLIVARES_RATELIMIT_CONFIG` | No | — | Path to the JSON rate-limit policy the engine applies to its own endpoints. |

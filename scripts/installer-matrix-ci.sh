@@ -232,17 +232,30 @@ trap cleanup_live EXIT
 
 # A missing network is not a false green: execute the promised dry-run, then return
 # the explicit third answer because no real release bytes were measured.
-release_base="https://github.com/olivaresai/olivares/releases/download/v$release_version"
+# Release tags by era (the tag-name correction of 2026-09-29): v<version> before 26.10, bare
+# from 26.10 on. core/release/channelurl.go derives the same.
+release_tag() {
+	local v="${1:?}" major minor
+	major="${v%%.*}"
+	minor="${v#*.}"; minor="${minor%%.*}"
+	if [ "$major" -lt 26 ] || { [ "$major" -eq 26 ] && [ "$minor" -lt 10 ]; }; then
+		printf 'v%s' "$v"
+	else
+		printf '%s' "$v"
+	fi
+}
+
+release_base="https://github.com/olivaresai/olivares/releases/download/$(release_tag "$release_version")"
 if ! curl -fsSL --range 0-0 "$release_base/checksums.txt" -o /dev/null; then
 	env OLIVARES_OS="$os_name" /bin/sh "$root/scripts/install.sh" \
-		--version "v$release_version" --bindir "$HOME/.local/bin" --dry-run >>"$all_log" 2>&1
+		--version "$(release_tag "$release_version")" --bindir "$HOME/.local/bin" --dry-run >>"$all_log" 2>&1
 	printf 'installer-matrix: NO HE PODIDO MIRAR — public release network path unavailable; dry-run only\n' >&2
 	exit 2
 fi
 
 # Real public release: current installer, real Fulcio/Rekor identity, signed checksums
 # and the published archive. No service flag is passed in this phase.
-env OLIVARES_OS="$os_name" /bin/sh "$root/scripts/install.sh" --version "v$release_version" \
+env OLIVARES_OS="$os_name" /bin/sh "$root/scripts/install.sh" --version "$(release_tag "$release_version")" \
 	--bindir "$HOME/.local/bin" >>"$all_log" 2>&1
 # The user-mode service adapter accepts exactly one binary route, $HOME/.local/bin/olivares
 # (install-service.sh, the release-index install_layout). The matrix used to install into

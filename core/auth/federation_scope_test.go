@@ -523,6 +523,7 @@ func TestCompleteSSOStillRefusesASuperadmin(t *testing.T) {
 	for _, scope := range []model.TenantID{auth.GlobalFederationScope, f.tA} {
 		seq := auditHead(t, ctx, f.st)
 		if _, _, err := f.a.CompleteSSO(ctx, auth.FederatedIdentity{
+			Protocol: auth.ProtocolOIDC, EmailVerified: true,
 			Issuer: "https://idp.a.test", Subject: "root-1", Email: "root@example.com",
 		}, scopeIP, scope, false); !errors.Is(err, auth.ErrUnauthenticated) {
 			t.Fatalf("scope %q: superadmin sign-in err = %v, want ErrUnauthenticated", scope, err)

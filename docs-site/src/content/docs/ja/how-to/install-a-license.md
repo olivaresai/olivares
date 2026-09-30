@@ -31,7 +31,7 @@ description: >-
 | 購入したもの | 届くもの | その扱い |
 |---|---|---|
 | Community | インストールするものはありません | すでに稼働中です。このページの手順は該当しません |
-| Business / Business Max、セルフホスト | **ライセンスファイル**と**ダウンロードトークン** | ライセンスをインストールしてからエンタープライズバイナリへ切り替えます |
+| Business / Enterprise、セルフホスト | **ライセンスファイル**と**ダウンロードトークン** | ライセンスをインストールしてからエンタープライズバイナリへ切り替えます |
 | Cloud | ホストされたテナントの認証情報 | 自分のホストにインストールするものはありません |
 
 ライセンスは単一の署名済み blob です。`customer.license` など任意の名前でファイルに
@@ -112,6 +112,13 @@ olivares license status --data-dir /var/lib/olivares
 
 ## 3 · Community → Business、インプレース
 
+:::note[Business と商用アーティファクトチャネル]
+`--enterprise` フラグは商用アーティファクトチャネルを示し、エディション名ではありません。
+エディションは Community、Business、Enterprise です。Business は Regulated Operations、
+AI Runtime Security、Compliance Packs、Identity & Scale を 1 つのサブスクリプションに含みます。
+各ファミリーは有効または無効にできます。個別販売はありません。
+:::
+
 ライセンスをインストールすると、エンタープライズバイナリをダウンロードできます。
 再インストールは不要で、データも移動しません。
 
@@ -128,14 +135,14 @@ olivares upgrade --enterprise --token <TOKEN>
 olivares upgrade --enterprise --token <TOKEN> --check
 ```
 
-サービスを再起動してから、アドオンを有効にします。
+サービスを再起動してから、モジュールを有効にします。
 
 ```sh
 olivares enterprise enable <preset>     # starter | regulated | full
 ```
 
 有効化は管理され、監査されます。最初に diff を表示し、シークレットやレビューが必要な
-アドオンは半端に有効化せず、準備状態に置きます。`olivares enterprise status` は有効な
+モジュールは半端に有効化せず、準備状態に置きます。`olivares enterprise status` は有効な
 ものを報告します。これらのコマンドは**エンタープライズバイナリにのみ存在します**。
 `olivares enterprise` がコマンドとして存在しない場合、まだ Community ビルドが稼働して
 おり、上記の切り替えは完了していません。

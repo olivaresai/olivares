@@ -8,16 +8,13 @@ description: >-
   conectores.
 ---
 
-Olivares AI es **open core**. El **producto completo** se publica bajo la GNU
-Affero General Public License, y el binario AGPL es la plataforma de gobierno al
-completo — nunca mutilado desde dentro para empujarte hacia una edición de pago.
-Encima de él se asienta un pequeño conjunto de add-ons comerciales **aditivos** en
-`enterprise/`, compilados solo con `-tags enterprise` y ausentes del binario
-público. Una licencia comercial proporciona la excepción legal al copyleft; las
-capacidades de `enterprise/` se licencian como **add-ons separados y opcionales** —
-de modo que las ediciones abierta y comercial **no** son idénticas,
-mientras que nada de lo publicado en abierto se traslada jamás detrás del muro (el
-modelo `ee/` de GitLab, no un muro de pago sobre funciones en el núcleo).
+Olivares AI es **open core**. El producto Community completo se publica bajo la GNU
+Affero General Public License. Su binario AGPL es toda la plataforma de gobierno,
+con usuarios ilimitados y un proveedor de identidad (IdP) activo. La línea comercial
+`enterprise/` añade código nuevo, compilado solo con `-tags enterprise` y ausente
+del binario público. Business incluye cuatro familias de capacidades en una
+suscripción. Enterprise cubre el alcance negociado. Una licencia comercial ofrece
+la excepción legal al copyleft; nada publicado en abierto pasa detrás de un muro de pago.
 
 ## La frontera de licencia
 
@@ -31,7 +28,7 @@ frontera se aplica en CI (un conector nunca puede importar el motor):
 | `web/` | **AGPL-3.0-only** | la interfaz React |
 | `sdk/` | **Apache-2.0** | las interfaces de conector/módulo, el contrato gRPC y los tipos compartidos |
 | `connectors/` | **Apache-2.0** | los conectores (Claude, OpenAI, pgAudit, eBPF, cloud, Slack, SIEM, …) |
-| `enterprise/` | **comercial** | add-ons aditivos, protegidos por build-tag, nunca en el binario público: federación multi-IdP, content firewall/DLP, hook hardening, catálogo compilado de threat-intel, egress de server-tools, CyberArk Conjur, cierre de incidentes (close-loop) (`LicenseRef-Olivares-Commercial`) |
+| `enterprise/` | **comercial** | módulos aditivos, protegidos por build-tag, nunca en el binario público: federación multi-IdP, content firewall/DLP, hook hardening, catálogo compilado de threat-intel, egress de server-tools, CyberArk Conjur, cierre de incidentes (close-loop) (`LicenseRef-Olivares-Commercial`) |
 
 El sitio de documentación que estás leyendo forma parte del producto AGPL.
 
@@ -48,11 +45,35 @@ El sitio de documentación que estás leyendo forma parte del producto AGPL.
   distribuirlo como quieras. La frontera arquitectónica que hace esto seguro está
   aplicada: un conector Apache-2.0 **nunca importa el motor AGPL**; depende únicamente
   del SDK. Eso mantiene el ecosistema de conectores libre de la fricción del copyleft.
-- **Una licencia comercial.** Las organizaciones que necesitan evitar las obligaciones
-  de la AGPL (por ejemplo, integrando el producto en una oferta propietaria) pueden
-  obtener una licencia comercial — contacto: **enterprise@olivares.ai** (precios
-  bajo consulta). Los add-ons aditivos de `enterprise/` indicados arriba se
-  licencian por separado, cada uno como un derecho opcional.
+- **Una licencia comercial.** Las organizaciones que necesitan una excepción a
+  las obligaciones de la AGPL pueden contactar con **enterprise@olivares.ai**.
+  Business incluye las cuatro familias de capacidades indicadas abajo en una
+  suscripción. Las condiciones de Enterprise se negocian; las familias no se venden por separado.
+
+## Ediciones y precios
+
+| Edición | Precio | Alcance |
+| --- | --- | --- |
+| Community | Gratis, AGPL-3.0-only | Usuarios ilimitados; un proveedor de identidad (IdP) activo. |
+| Business | USD 129/mes o USD 1,290/año | Usuarios ilimitados; una entidad jurídica; hasta dos despliegues de producción, cada uno con un despliegue de staging; hasta cinco IdP activos en total. |
+| Enterprise | Contacta con nosotros | Varias entidades, más despliegues o IdP, mirrors air-gap, LTS personalizado y otros requisitos negociados. |
+
+Business incluye **Regulated Operations**, **AI Runtime Security**,
+**Compliance Packs** e **Identity & Scale**. Cada familia conserva su código y su
+frontera de concesión de licencia. Puedes activar o desactivar cada familia;
+ninguna se vende por separado. La implementación privada se distribuye como
+binarios comerciales, fuera del repositorio público.
+
+### ¿Puedo comprar una familia de capacidades por separado?
+
+No. Las cuatro familias nombradas están incluidas en la suscripción Business.
+Elige facturación mensual o anual en [Precios](https://olivares.ai/pricing).
+
+### ¿Y si necesito más despliegues o proveedores de identidad?
+
+Contacta con **enterprise@olivares.ai** para un alcance Enterprise. Business permite
+hasta dos despliegues de producción y cinco IdP activos en total, no cinco por despliegue.
+
 
 ## Qué es abierto y qué es enterprise
 
@@ -84,12 +105,12 @@ estado; **nunca deshabilita, degrada ni bloquea** ninguna petición, ningún mó
 el arranque por una comprobación de licencia, y funciona **offline** (una firma
 Ed25519, sin servidor de licencias), motivo por el cual el producto abierto funciona
 air-gapped. El único punto donde la licencia se *consume* en lugar de mostrarse es el
-binario enterprise cerrado, y solo para dar derecho a los add-ons que cubre el
-acuerdo comercial, evaluados add-on por add-on — una
+binario enterprise cerrado, y solo para dar derecho a los módulos que cubre el
+acuerdo comercial, evaluados módulo por módulo — una
 decisión local de la edición comercial, nunca una comprobación en el binario abierto.
 Nunca limita usuarios: las cuentas son ilimitadas en todas las ediciones. Así que
 el binario abierto es genuinamente íntegro y sin tope por licencia; lo que difiere en
-la edición comercial son los add-ons aditivos de `enterprise/`, no una clave de
+la edición comercial son los módulos aditivos de `enterprise/`, no una clave de
 licencia que active funciones dentro del mismo binario.
 
 ## Por qué este modelo

@@ -96,7 +96,7 @@ Set `OLIVARES_OTEL_PROVIDER_BAGGAGE_ALLOWLIST` to a JSON array of rules with `or
 
 ### Complete variable reference
 
-The table below is generated from the product's own sources: 297 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
+The table below is generated from the product's own sources: 298 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
 
 **Required** means the feature that reads the variable does not start without it; most variables are optional and the engine runs with none of them set.
 
@@ -308,6 +308,7 @@ The table below is generated from the product's own sources: 297 variables and 1
 | `OLIVARES_POLICY_SIGNING_KEY` | No | — | Policy bundle signing key, inline. Prefer the file form. |
 | `OLIVARES_POLICY_SIGNING_KEY_FILE` | No | — | Path to the policy bundle signing key. |
 | `OLIVARES_POLICY_SIGNING_KEY_WRAPPED_FILE` | No | — | Path to the policy signing key wrapped by a key management service. |
+| `OLIVARES_PORTAL_TLS_DIRECTORY` | No | — | Directory in which the operator keeps the Appliance Console's TLS certificate and key; the service unit names it and passes the pair to the console as credentials. |
 | `OLIVARES_PQC_POSTURE_CONFIG` | No | — | Path to the JSON configuration of the post-quantum posture assessor. Read by builds compiled with the `enterprise` tag each time `olivares enterprise pqc-posture` runs, not when the engine starts. `{}` selects CNSA 2.0 with a 2033 target year. Unset, or a file that cannot be read or parsed, makes that command report that PQC posture is not configured. |
 | `OLIVARES_PUBLIC_URL` | No | — | The address a browser reaches this console at, as scheme://host[:port]. It is what the startup panel prints and what the WebAuthn relying party is derived from, and it is independent of the listen address. The --public-url flag wins over this variable, and passing that flag empty clears it. Read at start-up only: a change takes a restart. Refused values are reported by field and failure class and are never echoed, and support bundles keep this value redacted. |
 | `OLIVARES_RATELIMIT_CONFIG` | No | — | Path to the JSON rate-limit policy the engine applies to its own endpoints. |

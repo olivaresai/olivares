@@ -179,12 +179,12 @@ strengen Dateiberechtigungen auf dem Datenverzeichnis.
 
 Die kommerzielle Lizenz wird **offline** mit einer Ed25519-Signatur verifiziert, und im
 **offenen (AGPL-)Kern** ist sie eine **Attestierung, kein Feature-Gate**: Nichts im offenen
-Produkt schaltet sich je aufgrund einer Lizenzprüfung ab. Kommerzielle Add-ons werden für
+Produkt schaltet sich je aufgrund einer Lizenzprüfung ab. Kommerzielle Module werden für
 eine bezahlte Laufzeit lizenziert — ein Recht, das mit der Laufzeit endet — doch jede
 Konsequenz daraus ist eine lokale, offline getroffene Entscheidung im kommerziellen Build;
 es gibt keinen Remote-Kill-Switch, und die Prüfung der Lizenz nimmt keinen Kontakt zu uns
 auf. Der Bezug dessen, wofür bezahlt wurde, sehr wohl: Das Abonnement ist der
-Zugangsnachweis, mit dem die kommerziellen Add-ons, ihre Updates und ihre Patches bezogen
+Zugangsnachweis, mit dem die kommerziellen Module, ihre Updates und ihre Patches bezogen
 werden — das SUSE/Novell-Modell, beschrieben unter
 [Self-Hosting](/de/how-to/self-hosting/). Das zählt besonders für
 den Air-Gapped-Fall: Das Produkt muss seine Sicherheitsaufgabe weiter erfüllen — beobachten,
@@ -204,7 +204,7 @@ bereitstellt. Olivares AI läuft auf den eigenen Hosts des Kunden; die Data
 Plane (die Collectoren) läuft **immer** auf Kundeninfrastruktur; und es gibt **kein
 Telemetry-Home** — im laufenden Betrieb wird nichts als Nebeneffekt an Olivares AI gesendet.
 Der Anbieter wird nur erreicht, wenn der Kunde etwas von ihm anfordert — `olivares upgrade`
-oder ein Abo-Download kommerzieller Add-ons und ihrer Updates — und er sieht die Access Map des
+oder ein Abo-Download kommerzieller Module und ihrer Updates — und er sieht die Access Map des
 Kunden nicht.
 
 Das ist eine direkte, vertretbare Antwort auf **DSGVO- und Datenresidenz**-Anforderungen: Die

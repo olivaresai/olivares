@@ -60,7 +60,7 @@ func newSSOCompletionFixture(t *testing.T, st store.Store) *ssoCompletionFixture
 }
 
 func (f *ssoCompletionFixture) identity(issuer, subject string) auth.FederatedIdentity {
-	return auth.FederatedIdentity{Issuer: issuer, Subject: subject, Email: ssoCompletionEmail, Groups: []string{"grp-eng"}}
+	return auth.FederatedIdentity{Protocol: auth.ProtocolOIDC, EmailVerified: true, Issuer: issuer, Subject: subject, Email: ssoCompletionEmail, Groups: []string{"grp-eng"}}
 }
 
 type ssoCompletionState struct {
@@ -139,10 +139,14 @@ func runSSOCompletionAfterIssuance(t *testing.T, open func(*testing.T) store.Sto
 		before := f.state(t)
 		f.assertAdmittedCompletion(t, before)
 
-		// A second issuer matching the same email is admitted but never overwrites the binding.
+		// A second issuer matching the same email cannot use another subject's account.
+		admitted := f.state(t)
 		tok, _, err := f.a.CompleteSSO(ctx, f.identity("https://idp-other.test", "other-sub"), ssoCompletionIP, f.tenant, false)
-		if err != nil || tok == "" {
-			t.Fatalf("second-issuer CompleteSSO = %v (token empty %t)", err, tok == "")
+		if !errors.Is(err, auth.ErrUnauthenticated) || tok != "" {
+			t.Fatalf("second-issuer email adoption = %v (token empty %t)", err, tok == "")
+		}
+		if after := f.state(t); after != admitted {
+			t.Fatal("refused second issuer changed session, group, binding or audit")
 		}
 		if got, want := f.state(t).subject, (auth.FederatedIdentity{Issuer: ssoCompletionIssuer, Subject: "eng-sub"}).QualifiedSubject(); got != want {
 			t.Fatalf("binding after a second issuer = %q, want %q (never overwrite)", got, want)

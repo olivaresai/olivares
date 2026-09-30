@@ -31,17 +31,17 @@ SBOM/OpenVEX/происхождение и выдаёт единый tarball с 
 
 ```bash
 scripts/airgap-bundle.sh \
-  --version v26.9.0 \
-  --image ghcr.io/olivaresai/olivares:26.9.0-amd64 \
+  --version 26.10.0 \
+  --image ghcr.io/olivaresai/olivares:26.10.0-amd64 \
   --chart deploy/helm/olivares \
   --cosign-key cosign.key \
   [--collector-image <ref>] [--out dist/airgap] [--gpg-key <id>]
 ```
 
-Тег архитектуры (`26.9.0-amd64`) опубликован в `ghcr.io/olivaresai/olivares`, где релиз
+Тег архитектуры (`26.10.0-amd64`) опубликован в `ghcr.io/olivaresai/olivares`, где релиз
 собирается и подписывается. Docker Hub (`docker.io/olivaresai/olivares`, официальный пул) несёт
-мультиархитектурные и укреплённые теги, идентичные по digest, но не `26.9.0-amd64`
-(`docs/releases/v26.9.0-install-surfaces.json`). ghcr.io не ограничивает частоту анонимных пулов
+мультиархитектурные и укреплённые теги, идентичные по digest, но не `26.10.0-amd64`
+(`docs/releases/26.10.0-install-surfaces.json`). ghcr.io не ограничивает частоту анонимных пулов
 публичных образов, что помогает и на неаутентифицированном хосте сборки.
 
 :::caution[SBOM/VEX/происхождение поставляются, а не генерируются]
@@ -100,7 +100,7 @@ cosign verify-blob --key cosign.pub --insecure-ignore-tlog \
 
 ```bash
 scripts/airgap-mirror.sh \
-  --bundle olivares-airgap-v26.9.0.tar.gz \
+  --bundle olivares-airgap-26.10.0.tar.gz \
   --registry registry.internal:5000 [--insecure]
 ```
 
@@ -131,7 +131,7 @@ digest неизменяем и это именно то, что вы прове�
 
 К поставщику обращается **онлайн**-сторона, и это сделано намеренно: сборка комплекта
 скачивает релиз, а в коммерческом парке подписка — это учётные данные, с которыми
-получают надстройки, их обновления и исправления. Это модель SUSE/Novell: изолированный
+получают модули, их обновления и исправления. Это модель SUSE/Novell: изолированный
 парк обслуживается из локального зеркала, которое по-прежнему несёт то же право. См.
 [самостоятельное размещение](/ru/how-to/self-hosting/).
 

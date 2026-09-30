@@ -379,7 +379,7 @@
     "sensitiveInput": "计算机使用输入的文本包含敏感内容（检测到DLP类别）",
     "responseBlocked": "响应被保留：计算机使用输入的文本包含敏感内容",
     "honesty": "执行仅在代理处经过验证部署。自定义ANTHROPIC_BASE_URL会绕过它。计算机使用工具是客户端的：模型提议，客户端执行。",
-    "enterpriseRequired": "深度截图分析（OCR + DLP）和时间线记录需要企业版附加组件。"
+    "enterpriseRequired": "深度截图分析（OCR + DLP）和时间线记录需要企业版模块。"
   },
   "projects": {
     "title": "Claude项目治理",

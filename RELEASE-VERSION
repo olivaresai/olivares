@@ -8,18 +8,15 @@
 # requires it to contain v<this value> (its supported-release row), and binds this value to its
 # dated witness, docs/releases/<this value>-install-surfaces.json.
 #
-# THE VALUE NAMES A PUBLISHED RELEASE, NOT A PLAN. It is v26.9.0: public tag v26.9.0, GitHub
-# release 390836255, published 2026-09-17T16:33:50Z. Its install surfaces were read on
-# 2026-09-23 and are recorded in its witness: seven observed published, and the Helm OCI chart
-# publication-unverified (the registry refused both reads that could settle it). Both
-# published releases, v26.8.0 and v26.9.0, keep their own CHANGELOG.md sections
-# unchanged.
+# THE VALUE NAMES A PUBLISHED RELEASE, NOT A PLAN. v26.9.0 was: public tag v26.9.0, GitHub
+# release 390836255, published 2026-09-17T16:33:50Z; its install surfaces were read on
+# 2026-09-23 and are recorded in its witness. Both published releases, v26.8.0 and v26.9.0,
+# keep their own CHANGELOG.md sections unchanged.
 #
-# THE NEXT RELEASE IS v26.10, AND IT IS PENDING. Its tag-shaped target is v26.10.0, a target and
-# not a released fact. The owner's direction of 2026-09-22 names it: there is no v26.9.1, and no
-# release has been published after v26.9.0. Pending changes are recorded under [Unreleased] in
-# CHANGELOG.md with no release date. This value moves only once the next release is published
-# and its witness is observed; it never names a cut ahead of its tag, or a cut nobody made.
+# THIS IS THE 26.10.0 CUT, PREPARED TO APPLY AT RELEASE TIME: the canon, the dated changelog
+# section and every bound surface in their 26.10.0 state. Its witness,
+# docs/releases/26.10.0-install-surfaces.json, is a STAND-IN, marked so in its $comment: the
+# real witness is observed from the published surfaces at publication time and replaces it.
 #
 # HOW A NUMBER IS DERIVED: CalVer takes it from the date of the cut. YY is the two-digit year,
 # M the month with no leading zero, and PATCH the release number within that month. The
@@ -31,4 +28,4 @@
 # refused before any
 # surface is read, and scripts/check-install-docs.sh binds the current install surfaces to
 # the value below through its dated witness.
-v26.9.0
+26.10.0

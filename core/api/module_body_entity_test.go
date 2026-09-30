@@ -83,6 +83,60 @@ func (m *bodyEntityTestModule) APIRoutes(reg api.RouteRegistrar) {
 	reg.HandleEntity("POST", "/body", bodyEntityPermission, bodyRef, m.handle)
 	reg.HandleEntity("POST", "/path/{id}", bodyEntityPermission, pathRef, m.handle)
 	reg.HandleEntity("POST", "/unknown/{id}", bodyEntityPermission, unknownRef, m.handle)
+	pathRef.LookupColumn = bodyEntityLabel
+	reg.HandleEntity("POST", "/reference/{id}", bodyEntityPermission, pathRef, m.handle)
+	pathRef.WorkspaceColumn = ""
+	pathRef.ConcealDeniedAsNotFound = false
+	reg.HandleEntity("POST", "/reference-only/{id}", bodyEntityPermission, pathRef, m.handle)
+}
+
+func TestReferenceEntityRouteUsesCanonicalStoredLineage(t *testing.T) {
+	f := newBodyEntityFixture(t)
+	for _, tc := range []struct {
+		ref  string
+		code int
+	}{
+		{"A", http.StatusOK},
+		{"B", http.StatusNotFound},
+		{"missing", http.StatusNotFound},
+		{f.idA.String(), http.StatusNotFound},
+	} {
+		t.Run(tc.ref, func(t *testing.T) {
+			before := len(f.module.snapshot())
+			r := f.rawRequest("POST", "/v1/m/bodyentity/reference/"+tc.ref, f.viewer, "")
+			if r.code != tc.code {
+				t.Fatalf("reference = %d %s, want %d", r.code, r.raw, tc.code)
+			}
+			if tc.code == http.StatusOK {
+				if r.body["resource_id"] != f.idA.String() || r.body["resource_workspace"] != f.wsA.String() {
+					t.Fatalf("authorization did not use canonical stored facts: %s", r.raw)
+				}
+			} else if len(f.module.snapshot()) != before {
+				t.Fatal("denied reference entered the handler")
+			}
+		})
+	}
+	f.gate.configure("", false)
+	r := f.rawRequest("POST", "/v1/m/bodyentity/reference-only/A", f.viewer, "")
+	if r.code != http.StatusOK || r.body["resource_id"] != f.idA.String() {
+		t.Fatalf("reference without workspace column lost canonical row lookup: %d %s", r.code, r.raw)
+	}
+	f.gate.configure(f.wsA, false)
+	if err := f.st.Mutate(context.Background(), f.tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(bodyEntityKind)
+		if err != nil {
+			return err
+		}
+		_, err = repo.Create(context.Background(), model.Record{bodyEntityWorkspace: f.wsA.String(), bodyEntityLabel: "A"})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before := len(f.module.snapshot())
+	r = f.rawRequest("POST", "/v1/m/bodyentity/reference/A", f.viewer, "")
+	if r.code != http.StatusServiceUnavailable || len(f.module.snapshot()) != before {
+		t.Fatalf("ambiguous stored reference must fail closed before handler: %d %s", r.code, r.raw)
+	}
 }
 
 func (m *bodyEntityTestModule) handle(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {

@@ -175,11 +175,11 @@ permissions on the data directory.
 
 The commercial license is verified **offline** with an Ed25519 signature, and in the
 **open (AGPL) core** it is an **attestation, not a feature gate**: nothing in the open
-product switches off on a license check, ever. Commercial add-ons are licensed for a
+product switches off on a license check, ever. Commercial modules are licensed for a
 paid term — a right that ends with the term — but any consequence of that is a local,
 offline decision in the commercial build; there is no remote kill switch, and verifying
 the license never calls us. Downloading what you paid for does: the subscription is the
-credential with which the commercial add-ons, their updates and their patches are fetched
+credential with which the commercial modules, their updates and their patches are fetched
 — the SUSE/Novell model, described in [self-hosting](/how-to/self-hosting/). This matters for the air-gapped
 case especially: the product must keep doing its security job — observing, recording,
 auditing — regardless of license state, because a security control that quietly
@@ -196,7 +196,7 @@ one. Olivares AI runs on the customer's own hosts; the
 data plane (the collectors) **always** runs on customer infrastructure; and there is
 **no telemetry-home** — nothing is sent back to Olivares AI as a side effect of running.
 The vendor is reached only when the customer asks it for something — `olivares upgrade`, or
-a subscription download of commercial add-ons and their updates — and the vendor does not see
+a subscription download of commercial modules and their updates — and the vendor does not see
 the customer's access map.
 
 That is a direct, defensible answer to **GDPR and data-residency** requirements: every

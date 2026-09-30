@@ -385,7 +385,7 @@
     "sensitiveInput": "El texto tecleado por computer-use contiene contenido sensible (clases DLP detectadas)",
     "responseBlocked": "Respuesta retenida: el texto tecleado por computer-use contiene contenido sensible",
     "honesty": "La aplicación es verified-deployed solo en el proxy. Un ANTHROPIC_BASE_URL personalizado lo elude. Las herramientas computer-use son del lado del cliente: el modelo propone, el cliente ejecuta.",
-    "enterpriseRequired": "El análisis profundo de capturas de pantalla (OCR + DLP) y la grabación de línea temporal requieren el complemento enterprise."
+    "enterpriseRequired": "El análisis profundo de capturas de pantalla (OCR + DLP) y la grabación de línea temporal requieren el módulo comercial."
   },
   "projects": {
     "title": "Gobernanza de Proyectos Claude",

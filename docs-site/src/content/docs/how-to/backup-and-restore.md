@@ -21,6 +21,8 @@ passphrase (`--passphrase-file`) or a raw 32-byte key from your KMS
 (`--kek-key-file`); exactly one is required. The audit and catalog signing
 keys travel **sealed** inside the bundle.
 
+**Enrolled DR restore control supports PostgreSQL 16 only in 26.10.** Other majors refuse with `DR restore control contract: PostgreSQL major <major> is unsupported (verified contract: 16)`, where `<major>` is the detected server major.
+
 ## Back up
 
 **SQLite** (single node) — safe while `serve` is running (the snapshot uses

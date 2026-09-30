@@ -8,16 +8,14 @@ description: >-
   Connector-Autoren bedeutet.
 ---
 
-Olivares AI ist **Open Core**. Das **vollständige Produkt** wird unter der GNU
-Affero General Public License veröffentlicht, und der AGPL-Build ist die gesamte
-Governance-Plattform — niemals von innen beschnitten, um Sie zu einer
-kostenpflichtigen Edition zu drängen. Darauf sitzt ein kleiner Satz **additiver**
-kommerzieller Add-ons in `enterprise/`, die nur mit `-tags enterprise` gebaut werden
-und im öffentlichen Binary fehlen. Eine kommerzielle Lizenz bietet die rechtliche
-Ausnahme zum Copyleft; die `enterprise/`-Fähigkeiten werden als **separate,
-optionale Add-ons** lizenziert — so sind die offene und die kommerzielle Edition
-**nicht** identisch, während nichts offen Veröffentlichtes jemals hinter die Mauer
-verschoben wird (das GitLab-`ee/`-Modell, keine Funktions-Paywall auf dem Core).
+Olivares AI ist **Open Core**. Das vollständige Community-Produkt wird unter der GNU
+Affero General Public License veröffentlicht. Der AGPL-Build ist die gesamte
+Governance-Plattform mit unbegrenzten Benutzern und einem aktiven Identitätsanbieter
+(IdP). Die kommerzielle `enterprise/`-Linie ergänzt neuen Code, der nur mit
+`-tags enterprise` gebaut wird und im öffentlichen Binary fehlt. Business enthält
+vier Funktionsfamilien in einem Abonnement. Enterprise deckt vertraglich vereinbarten
+Umfang ab. Eine kommerzielle Lizenz bietet die rechtliche Ausnahme vom Copyleft;
+öffentlich veröffentlichte Funktionen werden nicht hinter eine Bezahlschranke verschoben.
 
 ## Die Lizenzgrenze
 
@@ -31,7 +29,7 @@ Grenze wird in CI durchgesetzt (ein Connector darf niemals die Engine importiere
 | `web/` | **AGPL-3.0-only** | die React-Oberfläche |
 | `sdk/` | **Apache-2.0** | die Connector-/Modul-Schnittstellen, der gRPC-Kontrakt und die gemeinsamen Typen |
 | `connectors/` | **Apache-2.0** | die Connectors (Claude, OpenAI, pgAudit, eBPF, Cloud, Slack, SIEM, …) |
-| `enterprise/` | **kommerziell** | additive Add-ons, per Build-Tag gated, niemals im öffentlichen Binary: Multi-IdP-Federation, Content-Firewall/DLP, Hook-Hardening, kompilierter Threat-Intel-Katalog, Server-Tool-Egress, CyberArk Conjur, Incident-Close-Loop (`LicenseRef-Olivares-Commercial`) |
+| `enterprise/` | **kommerziell** | additive Module, per Build-Tag gated, niemals im öffentlichen Binary: Multi-IdP-Federation, Content-Firewall/DLP, Hook-Hardening, kompilierter Threat-Intel-Katalog, Server-Tool-Egress, CyberArk Conjur, Incident-Close-Loop (`LicenseRef-Olivares-Commercial`) |
 
 Die Dokumentationsseite, die Sie gerade lesen, ist Teil des AGPL-Produkts.
 
@@ -50,12 +48,35 @@ Die Dokumentationsseite, die Sie gerade lesen, ist Teil des AGPL-Produkts.
   Grenze, die dies sicher macht, wird durchgesetzt: ein Apache-2.0-Connector
   **importiert niemals die AGPL-Engine**; er hängt nur vom SDK ab. Das hält das
   Connector-Ökosystem frei von Copyleft-Reibung.
-- **Eine kommerzielle Lizenz.** Organisationen, die die Verpflichtungen der AGPL
-  vermeiden müssen (zum Beispiel beim Einbetten des Produkts in ein proprietäres
-  Angebot), können eine kommerzielle Lizenz erwerben — Kontakt:
-  **enterprise@olivares.ai** (Preise auf Anfrage). Die additiven
-  `enterprise/`-Add-ons oben werden separat lizenziert, jedes als optionale
-  Berechtigung.
+- **Eine kommerzielle Lizenz.** Organisationen, die eine Ausnahme von den
+  AGPL-Pflichten benötigen, können **enterprise@olivares.ai** kontaktieren.
+  Business enthält die vier unten genannten Funktionsfamilien in einem Abonnement.
+  Enterprise-Bedingungen werden vereinbart; die Familien werden nicht separat verkauft.
+
+## Editionen und Preise
+
+| Edition | Preis | Umfang |
+| --- | --- | --- |
+| Community | Kostenlos, AGPL-3.0-only | Unbegrenzte Benutzer; ein aktiver Identitätsanbieter (IdP). |
+| Business | USD 129/Monat oder USD 1,290/Jahr | Unbegrenzte Benutzer; eine juristische Person; bis zu zwei Produktionsdeployments mit je einem Staging-Deployment; insgesamt bis zu fünf aktive IdPs. |
+| Enterprise | Kontaktieren Sie uns | Mehrere juristische Personen, weitere Deployments oder IdPs, Air-Gap-Mirrors, individuelles LTS und andere vereinbarte Anforderungen. |
+
+Business enthält **Regulated Operations**, **AI Runtime Security**,
+**Compliance Packs** und **Identity & Scale**. Jede Familie behält ihren eigenen Code
+und ihre Lizenzberechtigungsgrenze. Sie können jede Familie aktivieren oder deaktivieren;
+keine wird separat verkauft. Die private Implementierung wird als kommerzielles
+Binary außerhalb des öffentlichen Repositorys verteilt.
+
+### Kann ich eine Funktionsfamilie separat kaufen?
+
+Nein. Die vier genannten Familien sind im Business-Abonnement enthalten.
+Wählen Sie monatliche oder jährliche Abrechnung unter [Preise](https://olivares.ai/pricing).
+
+### Was gilt, wenn ich mehr Deployments oder Identitätsanbieter benötige?
+
+Kontaktieren Sie **enterprise@olivares.ai** für Enterprise. Business erlaubt bis zu
+zwei Produktionsdeployments und insgesamt fünf aktive IdPs, nicht fünf pro Deployment.
+
 
 ## Was offen ist gegenüber Enterprise
 
@@ -87,12 +108,12 @@ eine Anfrage, ein Modul oder den Boot-Vorgang aufgrund einer Lizenzprüfung, und
 läuft **offline** (eine Ed25519-Signatur, kein Lizenzserver), weshalb das offene
 Produkt air-gapped (vom Netz getrennt) funktioniert. Die einzige Stelle, an der die
 Lizenz *konsumiert* statt nur angezeigt wird, ist der geschlossene Enterprise-Build,
-und nur um die von der kommerziellen Vereinbarung abgedeckten Add-ons zu
-berechtigen, ausgewertet pro Add-on — eine lokale Entscheidung in der
+und nur um die von der kommerziellen Vereinbarung abgedeckten Module zu
+berechtigen, ausgewertet pro Modul — eine lokale Entscheidung in der
 kommerziellen Edition, niemals eine Prüfung im offenen Binary. Benutzer werden nie
 gedeckelt: Konten sind in jeder Edition unbegrenzt. So ist der offene Build wirklich
 vollständig und nicht per Lizenz gedeckelt; was sich in der kommerziellen Edition
-unterscheidet, sind die additiven `enterprise/`-Add-ons, nicht ein Lizenzschlüssel,
+unterscheidet, sind die additiven `enterprise/`-Module, nicht ein Lizenzschlüssel,
 der Funktionen innerhalb desselben Binary umlegt.
 
 ## Warum dieses Modell

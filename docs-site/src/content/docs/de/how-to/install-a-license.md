@@ -31,7 +31,7 @@ vorhandenen Binary umgelegt wird — und deshalb wäre die Aussage „sie sperrt
 | Ihr Kauf | Was Sie erhalten | Was Sie damit tun |
 |---|---|---|
 | Community | nichts zu installieren | läuft bereits — nichts auf dieser Seite ist anwendbar |
-| Business / Business Max, selbst gehostet | eine **Lizenzdatei** und ein **Download-Token** | Lizenz installieren, dann zum Enterprise-Binary wechseln |
+| Business / Enterprise, selbst gehostet | eine **Lizenzdatei** und ein **Download-Token** | Lizenz installieren, dann zum Enterprise-Binary wechseln |
 | Cloud | Zugangsdaten für einen gehosteten Tenant | auf einem eigenen Host ist nichts zu installieren |
 
 Die Lizenz ist ein einzelner signierter Blob. Speichern Sie ihn als Datei —
@@ -117,6 +117,13 @@ Führen Sie ihn nach jeder Installation und nach dem Entfernen eines Overrides a
 
 ## 3 · Community → Business, in-place
 
+:::note[Business und der kommerzielle Artefaktkanal]
+Das Flag `--enterprise` bezeichnet den kommerziellen Artefaktkanal, nicht die Edition.
+Die Editionen sind Community, Business und Enterprise. Business enthält Regulated Operations,
+AI Runtime Security, Compliance Packs und Identity & Scale in einem Abonnement.
+Jede Familie kann aktiviert oder deaktiviert werden; keine wird separat verkauft.
+:::
+
 Mit installierter Lizenz ist das Enterprise-Binary nur noch einen Download entfernt. Nichts
 wird neu installiert, und keine Daten werden verschoben:
 
@@ -134,13 +141,13 @@ ohne ihn auszuführen:
 olivares upgrade --enterprise --token <TOKEN> --check
 ```
 
-Starten Sie den Dienst neu und schalten Sie anschließend die Add-ons ein:
+Starten Sie den Dienst neu und schalten Sie anschließend die Module ein:
 
 ```sh
 olivares enterprise enable <preset>     # starter | regulated | full
 ```
 
-Die Aktivierung wird gesteuert und auditiert: Sie sehen zuerst einen Diff, und jedes Add-on,
+Die Aktivierung wird gesteuert und auditiert: Sie sehen zuerst einen Diff, und jedes Modul,
 das ein Secret oder eine Prüfung benötigt, wird bereitgestellt statt nur teilweise aktiviert.
 `olivares enterprise status` meldet, was aktiv ist. Diese Befehle gibt es **nur im
 Enterprise-Binary** — wenn `olivares enterprise` kein Befehl ist, führen Sie noch den

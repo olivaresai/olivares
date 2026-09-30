@@ -24,6 +24,8 @@ Argon2id-abgeleiteten Passphrase (`--passphrase-file`) oder einem rohen 32-Byte-
 Schlüssel aus Ihrem KMS (`--kek-key-file`); genau einer ist erforderlich. Die
 Audit- und Katalog-Signierschlüssel reisen **versiegelt** innerhalb des Bundles.
 
+**Die registrierte DR-Wiederherstellungssteuerung unterstützt in 26.10 ausschließlich PostgreSQL 16.** Andere Hauptversionen werden mit `DR restore control contract: PostgreSQL major <major> is unsupported (verified contract: 16)` abgewiesen; `<major>` ist die erkannte Hauptversion des Servers.
+
 ## Sichern
 
 **SQLite** (Single-Node) — sicher, während `serve` läuft (der Snapshot verwendet

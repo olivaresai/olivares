@@ -382,7 +382,7 @@
     "sensitiveInput": "Computer-Use-Eingabetext enthält sensible Inhalte (DLP-Klassen erkannt)",
     "responseBlocked": "Antwort zurückgehalten: Computer-Use-Eingabetext enthält sensible Inhalte",
     "honesty": "Durchsetzung ist nur am Proxy verified-deployed. Eine benutzerdefinierte ANTHROPIC_BASE_URL umgeht dies. Computer-Use-Tools sind clientseitig: das Modell schlägt vor, der Client führt aus.",
-    "enterpriseRequired": "Tiefe Screenshot-Analyse (OCR + DLP) und Timeline-Aufzeichnung erfordern das Enterprise-Add-on."
+    "enterpriseRequired": "Tiefe Screenshot-Analyse (OCR + DLP) und Timeline-Aufzeichnung erfordern das Enterprise-Modul."
   },
   "projects": {
     "title": "Claude-Projekte-Governance",

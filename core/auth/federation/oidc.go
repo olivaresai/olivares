@@ -174,6 +174,12 @@ func (o *oidcProvider) validate(ctx context.Context, a auth.Assertion) (auth.Fed
 			// email came from the id_token still succeeds, while one that DEPENDED on the
 			// discarded UserInfo email fails cleanly at the "no email claim" check below.
 			if ui.Subject == idToken.Subject {
+				// Verification of the token's email cannot verify a different
+				// address supplied by UserInfo without its own explicit claim.
+				var uiClaims idClaims
+				if ui.Claims(&uiClaims) != nil || uiClaims.Email != "" && uiClaims.Email != claims.Email {
+					claims.EmailVerified = nil
+				}
 				_ = ui.Claims(&claims)
 				var uraw map[string]any
 				if ui.Claims(&uraw) == nil {
@@ -189,8 +195,8 @@ func (o *oidcProvider) validate(ctx context.Context, a auth.Assertion) (auth.Fed
 	if claims.Email == "" {
 		return auth.FederatedIdentity{}, fmt.Errorf("oidc: no email claim")
 	}
-	// Trust the email unless the IdP explicitly marks it unverified. (Many
-	// enterprise IdPs omit email_verified; an explicit false is rejected.)
+	// An explicit false still rejects the assertion. An omitted claim can serve
+	// an exact subject match, but cannot bootstrap an existing account by email.
 	if claims.EmailVerified != nil && !*claims.EmailVerified {
 		return auth.FederatedIdentity{}, fmt.Errorf("oidc: email is not verified")
 	}
@@ -202,7 +208,7 @@ func (o *oidcProvider) validate(ctx context.Context, a auth.Assertion) (auth.Fed
 	// idToken.Issuer is the verified `iss`: the verifier enforced it equal to the
 	// discovery-bound issuer (SkipIssuerCheck is never set), so it is a trustworthy
 	// qualifier for the subject, not a self-asserted claim (U3).
-	id := auth.FederatedIdentity{Subject: subject, Issuer: idToken.Issuer, Email: claims.Email, DisplayName: claims.Name}
+	id := auth.FederatedIdentity{Protocol: auth.ProtocolOIDC, Subject: subject, Issuer: idToken.Issuer, Email: claims.Email, EmailVerified: claims.EmailVerified != nil && *claims.EmailVerified, DisplayName: claims.Name}
 	if o.groupsClaim != "" {
 		id.Groups = claimStrings(raw[o.groupsClaim])
 	}

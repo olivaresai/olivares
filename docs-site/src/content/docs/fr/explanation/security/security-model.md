@@ -194,12 +194,12 @@ sur le répertoire de données.
 
 La licence commerciale est vérifiée **hors ligne** avec une signature Ed25519, et dans le
 **cœur ouvert (AGPL)** c'est une **attestation, non un verrou de fonctionnalité** : rien
-dans le produit ouvert ne se désactive jamais sur une vérification de licence. Les add-ons
+dans le produit ouvert ne se désactive jamais sur une vérification de licence. Les modules
 commerciaux sont licenciés pour un terme payé — un droit qui prend fin avec le terme —
 mais toute conséquence en est une décision locale et hors ligne de la build commerciale ;
 il n'y a pas de kill switch distant, et vérifier la licence ne nous contacte jamais.
 Télécharger ce que vous avez payé, si : l'abonnement est le justificatif d'accès avec lequel
-les add-ons commerciaux, leurs mises à jour et leurs correctifs sont récupérés — le modèle
+les modules commerciaux, leurs mises à jour et leurs correctifs sont récupérés — le modèle
 SUSE/Novell, décrit dans [auto-hébergement](/fr/how-to/self-hosting/).
 Cela importe particulièrement pour le cas
 air-gapped : le produit doit continuer
@@ -220,7 +220,7 @@ fournisseur externe d'embeddings. Olivares AI s'exécute sur les propres
 hôtes du client ; le plan de données (les collecteurs) s'exécute **toujours** sur
 l'infrastructure du client ; et il n'y a **aucun retour de télémétrie** — rien n'est envoyé à
 Olivares AI comme effet de bord de l'exécution. L'éditeur n'est contacté que lorsque le client
-lui demande quelque chose — `olivares upgrade`, ou un téléchargement par abonnement des add-ons
+lui demande quelque chose — `olivares upgrade`, ou un téléchargement par abonnement des modules
 commerciaux et de leurs mises à jour — et il ne voit pas la carte d'accès du client.
 
 C'est une réponse directe et défendable aux exigences de **RGPD et de résidence des

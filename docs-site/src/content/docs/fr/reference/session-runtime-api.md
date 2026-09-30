@@ -19,7 +19,7 @@ comme tests.
 | Édition | Ce qu’elle fait | Ce qu’elle ne fait pas |
 |---|---|---|
 | **Community (cette page)** | Enfant local possédé : lancement, stdin/stdout/stderr, attach avec curseur, reprise de la conversation exacte, reconnexion d’un flux vivant, arrêt avec code de sortie observé. Les lignes de session et les preuves restent dans le module II. | Moteur Identity & Scale multi-panneaux, listener mTLS, sessions d’entrée commerciales, chunk xterm |
-| **Overlay Identity & Scale** | Moteur commercial session-cockpit (listener, panneaux, ledger). Routes sous `/v1/m/session-cockpit/` lorsque l’add-on est présent. | Ne remplace pas `/v1/m/sessions/runs` |
+| **Overlay Identity & Scale** | Moteur commercial session-cockpit (listener, panneaux, ledger). Routes sous `/v1/m/session-cockpit/` lorsque l’module est présent. | Ne remplace pas `/v1/m/sessions/runs` |
 
 Une build Community répond à l’espace de noms de l’overlay par **absence**
 (404). Elle ne monte pas un stub 501.

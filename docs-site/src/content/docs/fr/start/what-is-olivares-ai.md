@@ -99,7 +99,7 @@ périmètre que ce que **vous** configurez à cette fin — les appels à vos AP
 sorties SIEM/webhook que vous raccordez et, si vous en provisionnez un, un fournisseur
 externe d'embeddings. Olivares AI n'est pas sur cette liste : l'éditeur n'est jamais dans le
 chemin des données. Il n'est contacté que lorsque vous lui demandez quelque chose —
-`olivares upgrade`, ou un téléchargement par abonnement des add-ons commerciaux et de leurs
+`olivares upgrade`, ou un téléchargement par abonnement des modules commerciaux et de leurs
 mises à jour — jamais comme effet de bord de l'exécution. Et `olivares upgrade --endpoint` dirige même cela vers votre propre miroir.
 C'est un argument solide pour la résidence des données, le RGPD et les environnements air-gapped.
 

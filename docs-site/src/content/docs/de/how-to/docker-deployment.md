@@ -15,9 +15,9 @@ wenn Sie sie brauchen. Jeder Pfad behält dieselben sicheren Standardwerte: kein
 ein einmaliges Setup-Token und TLS standardmäßig aktiv. Der Host-Port wird auf allen
 Schnittstellen veröffentlicht, denn dies ist ein Server — beschränken Sie ihn bewusst, wie unten.
 
-:::note[Beta — Images für 26.9.0 veröffentlicht]
-Olivares AI ist **Beta**. Die Image-Koordinaten unten lösen sich auf: Release `26.9.0` hat sie auf
-Docker Hub und `ghcr.io` veröffentlicht (Install-Surface-Zeuge `docs/releases/v26.9.0-install-surfaces.json`).
+:::note[Beta — Images für 26.10.0 veröffentlicht]
+Olivares AI ist **Beta**. Die Image-Koordinaten unten lösen sich auf: Release `26.10.0` hat sie auf
+Docker Hub und `ghcr.io` veröffentlicht (Install-Surface-Zeuge `docs/releases/26.10.0-install-surfaces.json`).
 Behandeln Sie dies als die Deployment-Form, die Sie verwenden werden, nicht als produktionsreife Garantie.
 :::
 
@@ -31,7 +31,7 @@ den Kubernetes/Helm-Pfad unten.
 Der primäre Container-Pull ist **Docker Hub**:
 
 ```bash
-docker pull docker.io/olivaresai/olivares:26.9.0
+docker pull docker.io/olivaresai/olivares:26.10.0
 ```
 
 Derselbe Inhalt wird auch auf `ghcr.io/olivaresai/olivares` veröffentlicht — identisch per
@@ -39,7 +39,7 @@ Digest, verwendet als Backup und als Build-Registry. Docker Hub begrenzt die Rat
 Pulls; ghcr.io begrenzt anonyme Pulls öffentlicher Images nicht — `docker login` oder die
 ghcr.io-Koordinate ist daher der Ausweg, wenn ein CI-Knoten oder eine große Flotte an die
 Grenze stößt. Tags tragen **kein führendes `v`**:
-`:26.9.0` pinnt ein Release, `:latest` floatet, und `:26.9.0-fips` / `:26.9.0-stig` sind
+`:26.10.0` pinnt ein Release, `:latest` floatet, und `:26.10.0-fips` / `:26.10.0-stig` sind
 die gehärteten Varianten. Die Basis- und `:latest`-Tags sind multi-arch
 (`linux/amd64`, `linux/arm64`); `fips`/`stig` sind ausschließlich `amd64`.
 
@@ -50,7 +50,7 @@ identisch gegen beide Registries — die Signaturen und Attestierungen werden pe
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.9.0")"
+DIGEST="$(crane digest "$IMAGE:26.10.0")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
@@ -85,7 +85,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:26.9.0 \
+  docker.io/olivaresai/olivares:26.10.0 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -297,7 +297,7 @@ Image erneut, bevor Sie es neu erstellen.
 
 ## 8. Für die Produktion per Digest pinnen
 
-Veränderbare Tags (`:26.9.0`, `:latest`) sind für die Evaluierung. In Produktion pinnen Sie den
+Veränderbare Tags (`:26.10.0`, `:latest`) sind für die Evaluierung. In Produktion pinnen Sie den
 **Digest**, den Sie verifiziert haben — ein Digest ist unveränderlich und ist genau das, was Sie abgesegnet haben:
 
 ```bash

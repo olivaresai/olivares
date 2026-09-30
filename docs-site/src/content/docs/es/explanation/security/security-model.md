@@ -184,11 +184,11 @@ nivel de producto, con permisos de fichero estrictos sobre el directorio de dato
 
 La licencia comercial se verifica **offline** con una firma Ed25519, y en el
 **núcleo abierto (AGPL)** es una **atestación, no un gate de funciones**: nada del
-producto abierto se apaga jamás por una comprobación de licencia. Los add-ons
+producto abierto se apaga jamás por una comprobación de licencia. Los módulos
 comerciales se licencian por término pagado — un derecho que termina con el término —
 pero cualquier consecuencia de ello es una decisión local y offline del build
 comercial; no hay kill switch remoto, y verificar la licencia nunca nos llama. Descargar
-lo que has pagado sí: la suscripción es la credencial con la que se obtienen los add-ons
+lo que has pagado sí: la suscripción es la credencial con la que se obtienen los módulos
 comerciales, sus actualizaciones y sus parches — el modelo SUSE/Novell, descrito en
 [autoalojamiento](/es/how-to/self-hosting/). Esto importa
 especialmente para el caso air-gapped: el producto debe seguir haciendo su trabajo de
@@ -209,7 +209,7 @@ Olivares AI corre en los propios hosts del cliente; el
 plano de datos (los colectores) **siempre** corre en infraestructura del cliente; y
 **no hay telemetría-a-casa** — no se envía nada a Olivares AI como efecto de ejecutar. Al
 proveedor solo se le llega cuando el cliente le pide algo — `olivares upgrade`, o una descarga
-por suscripción de add-ons comerciales y sus actualizaciones — y el proveedor no ve el
+por suscripción de módulos comerciales y sus actualizaciones — y el proveedor no ve el
 access map del cliente.
 
 Esa es una respuesta directa y defendible a los requisitos de **RGPD y residencia de

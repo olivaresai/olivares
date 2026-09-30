@@ -261,6 +261,11 @@ func (a *Authenticator) findOrProvision(ctx context.Context, id FederatedIdentit
 		}
 		if len(byMail) > 0 {
 			out = byMail[0]
+			// Email may bootstrap only an unbound account. A failed exact subject
+			// lookup cannot select an account already owned by any other subject.
+			if out.SsoSubject != "" || id.Protocol == ProtocolOIDC && !id.EmailVerified {
+				return ErrUnauthenticated
+			}
 			return admitToScope(ctx, as, out, scope, claimed)
 		}
 		// D4 — a SCIM-authoritative scope never provisions from a login.

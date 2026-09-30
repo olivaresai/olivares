@@ -33,6 +33,8 @@ real="$root/packaging/aur/olivares-bin"
 # shellcheck source=/dev/null
 source <(sed -n '/^print_srcinfo() {/,/^}/p' "$check")
 declare -F print_srcinfo >/dev/null || could_not_look 'cannot load the .SRCINFO printer from the check'
+source <(sed -n '/^release_tag() {/,/^}/p' "$check")
+declare -F release_tag >/dev/null || could_not_look 'cannot load the era tag helper from the check'
 
 pkgver="$(bash -c '. "$1"; printf %s "$pkgver"' _ "$real/PKGBUILD")"
 tarball_sha="$(bash -c '. "$1"; printf %s "${sha256sums_x86_64[0]}"' _ "$real/PKGBUILD")"
@@ -41,7 +43,7 @@ printf '%s  olivares_%s_linux_amd64.tar.gz\n' "$tarball_sha" "$pkgver" >"$scratc
 # verifier stands in for cosign: it accepts a .sig whose text is the SHA-256 of the file it
 # signs and a .pem naming the identity the check passes, and nothing else.
 sha256sum "$scratch/checksums.txt" | cut -d' ' -f1 >"$scratch/checksums.txt.sig"
-printf 'https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/v%s\n' "$pkgver" >"$scratch/checksums.txt.pem"
+printf 'https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/%s\n' "$(release_tag "$pkgver")" >"$scratch/checksums.txt.pem"
 cat >"$scratch/verify-blob" <<'VERIFY'
 #!/usr/bin/env bash
 # verify-blob CHECKSUMS SIG PEM IDENTITY ISSUER

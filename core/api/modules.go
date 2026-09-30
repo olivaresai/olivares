@@ -145,6 +145,11 @@ type EntityRef struct {
 	// it restores the request body byte-for-byte for the module's own strict decoder.
 	// Exactly one of IDParam and BodyIDField must be set.
 	BodyIDField string
+	// LookupColumn declares a tenant-unique stored reference when the route locator
+	// is not the row's primary ID (for example sessions.run.run_ref). Blank retains
+	// primary-key lookup. Only module Kind routes may use it. The resolved row's
+	// primary ID and workspace, never the caller's selector, authorize the request.
+	LookupColumn string
 	// WorkspaceColumn is the column holding the RESOLVED workspace model.ID for this
 	// entity. It must be the workspace the row BELONGS to — not the workspace of
 	// whoever created it, and not a billing dimension. Blank means the entity carries

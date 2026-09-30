@@ -41,7 +41,7 @@ evidence.
 - **Self-hosted = no vendor in the data path.** There is no mandatory telemetry and no
   control-plane egress by default, and Olivares AI is never in the data path. The vendor is
   reached only when you ask it for something — `olivares upgrade`, or a subscription download
-  of commercial add-ons and their updates — never as a side effect of running, and
+  of commercial modules and their updates — never as a side effect of running, and
   `olivares upgrade --endpoint` points even that at a mirror the customer runs. What crosses the
   customer's perimeter is what the customer configures to cross it — calls to their model
   APIs, the SIEM/webhook outputs they wire, an external embedding provider if they

@@ -228,6 +228,7 @@ OLIVARES_POLICY_MAX_STALENESS	no		How stale a cached policy decision may be befo
 OLIVARES_POLICY_SIGNING_KEY	no		Policy bundle signing key, inline. Prefer the file form.
 OLIVARES_POLICY_SIGNING_KEY_FILE	no		Path to the policy bundle signing key.
 OLIVARES_POLICY_SIGNING_KEY_WRAPPED_FILE	no		Path to the policy signing key wrapped by a key management service.
+OLIVARES_PORTAL_TLS_DIRECTORY	no		Directory in which the operator keeps the Appliance Console's TLS certificate and key; the service unit names it and passes the pair to the console as credentials.
 OLIVARES_PQC_POSTURE_CONFIG	no		Path to the JSON configuration of the post-quantum posture assessor. Read by builds compiled with the `enterprise` tag each time `olivares enterprise pqc-posture` runs, not when the engine starts. `{}` selects CNSA 2.0 with a 2033 target year. Unset, or a file that cannot be read or parsed, makes that command report that PQC posture is not configured.
 OLIVARES_PUBLIC_URL	no		The address a browser reaches this console at, as scheme://host[:port]. It is what the startup panel prints and what the WebAuthn relying party is derived from, and it is independent of the listen address. The --public-url flag wins over this variable, and passing that flag empty clears it. Read at start-up only: a change takes a restart. Refused values are reported by field and failure class and are never echoed, and support bundles keep this value redacted.
 OLIVARES_RATELIMIT_CONFIG	no		Path to the JSON rate-limit policy the engine applies to its own endpoints.

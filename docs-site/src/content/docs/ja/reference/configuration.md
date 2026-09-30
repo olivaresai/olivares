@@ -307,6 +307,7 @@ The table below is generated from the product's own sources: 296 variables and 1
 | `OLIVARES_POLICY_SIGNING_KEY` | No | — | Policy bundle signing key, inline. Prefer the file form. |
 | `OLIVARES_POLICY_SIGNING_KEY_FILE` | No | — | Path to the policy bundle signing key. |
 | `OLIVARES_POLICY_SIGNING_KEY_WRAPPED_FILE` | No | — | Path to the policy signing key wrapped by a key management service. |
+| `OLIVARES_PORTAL_TLS_DIRECTORY` | No | — | オペレーターが Appliance Console の TLS 証明書と鍵を置くディレクトリ。サービスユニットがこれを指定し、その組をクレデンシャルとしてコンソールに渡します。 |
 | `OLIVARES_PQC_POSTURE_CONFIG` | No | — | ポスト量子ポスチャアセッサーの JSON 設定へのパス。`enterprise` のビルドタグ付きでコンパイルされたビルドが、`olivares enterprise pqc-posture` を実行するたびに読み取ります。エンジンの起動時には読み取りません。`{}` は CNSA 2.0 と目標年 2033 を選択します。未設定の場合、またはファイルを読み取れない場合や解析できない場合、このコマンドは PQC ポスチャが構成されていないと報告します。 |
 | `OLIVARES_PUBLIC_URL` | No | — | The address a browser reaches this console at, as scheme://host[:port]. It is what the startup panel prints and what the WebAuthn relying party is derived from, and it is independent of the listen address. The --public-url flag wins over this variable, and passing that flag empty clears it. Read at start-up only: a change takes a restart. Refused values are reported by field and failure class and are never echoed, and support bundles keep this value redacted. |
 | `OLIVARES_RATELIMIT_CONFIG` | No | — | Path to the JSON rate-limit policy the engine applies to its own endpoints. |

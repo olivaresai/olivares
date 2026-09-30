@@ -321,9 +321,10 @@ jobs:
           [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::release_commit must be a full 40-hex OID" >&2; exit 2; }
           tag_oid="$(git rev-parse --verify "refs/tags/${RELEASE_TAG}^{commit}")"
           head_oid="$(git rev-parse --verify "HEAD^{commit}")"
-          [ "$tag_oid" = "$RELEASE_COMMIT" ] && [ "$head_oid" = "$RELEASE_COMMIT" ] || {
+          if [ "$tag_oid" != "$RELEASE_COMMIT" ] || [ "$head_oid" != "$RELEASE_COMMIT" ]; then
             echo "::error::the tag resolves to $tag_oid and the checkout is $head_oid; the dispatch named $RELEASE_COMMIT" >&2
-            exit 2; }
+            exit 2
+          fi
           version="${RELEASE_TAG}"
           state="$(gh release view "$RELEASE_TAG" --json isDraft,tagName)"
           [ "$(jq -r '.tagName' <<<"$state")" = "$RELEASE_TAG" ] || { echo "::error::the release found reports another tag" >&2; exit 2; }
@@ -334,7 +335,9 @@ jobs:
           mkdir -m 0700 "$rel"
           gh release download "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --dir "$rel" \
             --pattern checksums.txt --pattern checksums.txt.sig --pattern checksums.txt.pem --pattern release-commit.txt
+          # shellcheck disable=SC2016 # the single quotes are the point: a literal sed class, nothing expands
           repo_rx="$(printf '%s' "$GITHUB_REPOSITORY" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
+          # shellcheck disable=SC2016 # same literal class for the tag
           tag_rx="$(printf '%s' "$RELEASE_TAG" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
           bash scripts/cosign-verified.sh verify-blob \
             --certificate "$rel/checksums.txt.pem" --signature "$rel/checksums.txt.sig" \
