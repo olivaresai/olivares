@@ -664,8 +664,8 @@ agreeing() {
   # These answers declare none of the console's fields, so first boot publishes no selection.
   check no_selection_without_the_console_fields is "$d/selection.stat" absent
   control no_selection_without_the_console_fields is "$(counterfeit_text 'root:root 644 regular file')" absent
-  # The setup-token seam refuses first, so this shows the product is not started while a seam
-  # refuses; that the firewall stage precedes the start is asserted by the Go tests only.
+  # The firewall stage refuses in this container, so this shows the product is not started while a
+  # seam refuses; that the firewall stage precedes the start is asserted by the Go tests only.
   check product_not_started_while_a_seam_refuses is_not "$d/product.active" active
   control product_not_started_while_a_seam_refuses is_not "$(counterfeit_text active)" active
   # Reached only where initialize-storage completed; a record without it measures nothing here.
@@ -731,9 +731,10 @@ portal_selection() {
   }
   expected="$d/selection.expected"
   published_selection > "$expected"
-  check console_fields_stop_at_the_token_seam record_is "$d/state.json" refused prepare-setup-delivery
-  control console_fields_stop_at_the_token_seam record_is \
-    "$(counterfeit "$d/state.json" '.stage = "validate"')" refused prepare-setup-delivery
+  # The setup delivery completes here too; the stop is the firewall this container cannot load.
+  check console_fields_stop_at_the_firewall record_is "$d/state.json" refused verify-firewall
+  control console_fields_stop_at_the_firewall record_is \
+    "$(counterfeit "$d/state.json" '.stage = "validate"')" refused verify-firewall
   check selection_published_from_the_validated_answers same "$d/selection.json" "$expected"
   control selection_published_from_the_validated_answers same \
     "$(counterfeit_text '{"schema_version": "olivares-portal-selection/v1", "portal": {"listen": "local"}}')" "$expected"
@@ -754,9 +755,9 @@ restart_and_change() {
     unable "restart: cloud-init did not apply the NoCloud seed; cloud-init errors: $(cloud_init_errors "$d/first")"
     return
   }
-  check single_carrier_stops_at_the_token_seam record_is "$d/first/state.json" refused prepare-setup-delivery
-  control single_carrier_stops_at_the_token_seam record_is \
-    "$(counterfeit "$d/first/state.json" '.state = "ready"')" refused prepare-setup-delivery
+  check single_carrier_stops_at_the_firewall record_is "$d/first/state.json" refused verify-firewall
+  control single_carrier_stops_at_the_firewall record_is \
+    "$(counterfeit "$d/first/state.json" '.state = "ready"')" refused verify-firewall
 
   local initial=0
   configuration_applied "$d/first/state.json" "$d/first/journal.txt" || initial=$?
@@ -797,11 +798,11 @@ restart_and_change() {
     jq '.completed' "$d/changed/state.json" > "$d/changed/completed.json"
     check changed_answers_refuse_at_validate record_is "$d/changed/state.json" refused validate
     control changed_answers_refuse_at_validate record_is "$(counterfeit "$d/changed/state.json" '.stage = "prepare-setup-delivery"')" refused validate
-    check changed_answers_name_the_last_completed_stage reason_names "$d/changed/state.json" initialize-storage
+    check changed_answers_name_the_last_completed_stage reason_names "$d/changed/state.json" prepare-setup-delivery
     control changed_answers_name_the_last_completed_stage reason_names \
-      "$(counterfeit "$d/changed/state.json" '.reason = "the answers changed"')" initialize-storage
+      "$(counterfeit "$d/changed/state.json" '.reason = "the answers changed"')" prepare-setup-delivery
     check changed_answers_apply_nothing same "$d/first/completed.json" "$d/changed/completed.json"
-    control changed_answers_apply_nothing same "$d/first/completed.json" "$(counterfeit "$d/changed/completed.json" '. + [{"stage": "prepare-setup-delivery"}]')"
+    control changed_answers_apply_nothing same "$d/first/completed.json" "$(counterfeit "$d/changed/completed.json" '. + [{"stage": "verify-firewall"}]')"
     journal_is_clean restart "$d/changed"
   fi
 

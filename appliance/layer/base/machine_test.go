@@ -326,3 +326,55 @@ func (s sinkDelivery) Apply(context.Context, Input) (Effect, error) {
 }
 
 func (s sinkDelivery) Verify(context.Context, Input, Effect) error { return nil }
+
+// firewallRefusal stands in for a host whose firewall cannot load, the stop the container
+// fixtures measure after the setup delivery.
+type firewallRefusal struct{ host *fakeHost }
+
+func (f firewallRefusal) Apply(context.Context, Input) (Effect, error) {
+	f.host.applies[StageFirewall]++
+	return "", Refuse("the firewall cannot load here")
+}
+
+func (f firewallRefusal) Verify(context.Context, Input, Effect) error { return nil }
+
+func TestStageMachine_ItsOwnSetupTokenIsNotAPreviousInstallation(t *testing.T) {
+	in := answersFixture(t, "olivares.example.test")
+	for _, tc := range []struct {
+		name      string
+		delivered bool
+		found     []string
+		refuse    bool
+		named     string
+	}{
+		{"the token its recorded delivery minted", true, []string{"setup.token"}, false, ""},
+		{"a token no recorded delivery accounts for", false, []string{"setup.token"}, true, "(setup.token)"},
+		{"another identity beside its own token", true, []string{"olivares.db", "setup.token"}, true, "(olivares.db)"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir, h := t.TempDir(), newFakeHost()
+			seams := h.seams()
+			seams.Firewall = firewallRefusal{h}
+			if !tc.delivered {
+				seams.SetupDelivery = firewallRefusal{h}
+			}
+			first := newMachine(dir, h, &in, seams)
+			if rec, _ := first.Run(context.Background()); rec.State != Refused {
+				t.Fatalf("first run: %+v", rec)
+			}
+			again := newMachine(dir, h, &in, seams)
+			again.Identities = func() ([]string, error) { return tc.found, nil }
+			rec, _ := again.Run(context.Background())
+			atValidate := rec.State == Refused && rec.Stage == StageValidate
+			if atValidate != tc.refuse {
+				t.Fatalf("second run with %v: %+v, want a validate refusal %v", tc.found, rec, tc.refuse)
+			}
+			if tc.refuse && !strings.Contains(rec.Reason, tc.named) {
+				t.Fatalf("the refusal must name exactly the unaccounted identities %s: %q", tc.named, rec.Reason)
+			}
+			if !tc.refuse && (rec.Stage != StageFirewall || h.verifies[StageSetupDelivery] == 0) {
+				t.Fatalf("the run must verify the recorded delivery and stop where the host stops: %+v", rec)
+			}
+		})
+	}
+}

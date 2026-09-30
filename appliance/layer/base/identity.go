@@ -21,8 +21,12 @@ const ProductDataDir = "/var/lib/olivares"
 var productIdentityFiles = []string{
 	"olivares.db", "audit-signing.key", "catalog-signing.key", "policy-signing.key",
 	"tls.key", "secret-store.key", "eventing-secret.key", "sso-secret.key",
-	"setup.token", "license.key", "install-id",
+	setupTokenIdentity, "license.key", "install-id",
 }
+
+// setupTokenIdentity is the one product identity first boot creates itself: prepare-setup-delivery
+// mints it through the product's token owner before the product's first start.
+const setupTokenIdentity = "setup.token"
 
 // ProductIdentities lists the product identity files present under root.
 func ProductIdentities(root string) ([]string, error) {
