@@ -71,7 +71,9 @@ describe('TOTP factor tab', () => {
     const user = userEvent.setup()
     renderTab()
 
-    await user.click(await screen.findByRole('button', { name: 'Enroll a factor' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Enroll a factor' }),
+    )
     // The provisioning material is shown once: QR + manual-entry secret.
     expect(await screen.findByAltText(/QR code/i)).toBeInTheDocument()
     expect(screen.getByText('JBSWY3DPEHPK3PXP')).toBeInTheDocument()
@@ -86,7 +88,9 @@ describe('TOTP factor tab', () => {
 
     await user.click(screen.getByRole('button', { name: /I saved the codes/i }))
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Enroll a factor' })).toBeInTheDocument(),
+      expect(
+        screen.getByRole('button', { name: 'Enroll a factor' }),
+      ).toBeInTheDocument(),
     )
   })
 
@@ -99,26 +103,30 @@ describe('TOTP factor tab', () => {
     )
     const user = userEvent.setup()
     renderTab()
-    await user.click(await screen.findByRole('button', { name: 'Enroll a factor' }))
+    await user.click(
+      await screen.findByRole('button', { name: 'Enroll a factor' }),
+    )
     await user.type(screen.getByLabelText(/Code from your app/i), '000000')
     await user.click(screen.getByRole('button', { name: 'Activate' }))
-    expect(await screen.findByRole('alert')).toHaveTextContent(/TOTP verification failed/i)
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /TOTP verification failed/i,
+    )
   })
 
   it('renders the deployment policy for system administrators', async () => {
     api.policy.mockResolvedValue({ require_for_admins: true })
     renderTab()
     expect(await screen.findByText('Required')).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: 'Turn off' }),
-    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Turn off' })).toBeInTheDocument()
   })
 
   it('hides the policy section from non-system-admin principals', async () => {
     auth.can = () => false
     renderTab()
     await screen.findByText('Not enrolled')
-    expect(screen.queryByText(/Require TOTP for administrators/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/Require TOTP for administrators/i),
+    ).not.toBeInTheDocument()
     expect(api.policy).not.toHaveBeenCalled()
   })
 })

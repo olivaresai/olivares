@@ -71,17 +71,15 @@ it('uses the exchanged agent credential once, audience-bound and down-scoped, wi
   expect(unauthorized).not.toHaveBeenCalled()
 })
 it('does not launch or retry when the exchange refuses the selected agent', async () => {
-  fetcher
-    .mockReset()
-    .mockResolvedValue(
-      response(
-        {
-          error: 'agent_blocked',
-          error_description: 'Agent is blocked or sponsor does not match.',
-        },
-        403,
-      ),
-    )
+  fetcher.mockReset().mockResolvedValue(
+    response(
+      {
+        error: 'agent_blocked',
+        error_description: 'Agent is blocked or sponsor does not match.',
+      },
+      403,
+    ),
+  )
   await expect(
     launchRunAsAgent(body, 'agent-fixture', 'tenant-selected', {
       dispatchGuard: guard,

@@ -369,7 +369,6 @@ export const identityKeys = {
   totpPolicy: (t: string | null) => ['identity', t, 'totp', 'policy'] as const,
 }
 
-
 // --- TOTP second factor  -------------------------------------------------
 //
 // The three completion endpoints take the pending credential a factor-gated
@@ -398,7 +397,9 @@ export interface TOTPStatusDTO {
 
 type TOTPActivationResponse =
   | { recovery_codes: string[]; token?: undefined }
-  | ({ token: string; session_id: string; expires_at: string } & { recovery_codes?: string[] })
+  | ({ token: string; session_id: string; expires_at: string } & {
+      recovery_codes?: string[]
+    })
 
 export const totpApi = {
   /** Start an enrolment: self-service (session) or a pending login (mfa_token). */
@@ -413,8 +414,14 @@ export const totpApi = {
       anonymous: req.mfa_token !== undefined,
     }),
   /** Complete a factor-gated login with a code or a recovery code. */
-  challenge: (req: { mfa_token: string; code?: string; recovery_code?: string }) =>
-    http.post<LoginResponse>('/v1/auth/totp/challenge', req, { anonymous: true }),
+  challenge: (req: {
+    mfa_token: string
+    code?: string
+    recovery_code?: string
+  }) =>
+    http.post<LoginResponse>('/v1/auth/totp/challenge', req, {
+      anonymous: true,
+    }),
   /** The calling account's factor (non-secret). */
   status: () => http.get<TOTPStatusDTO>('/v1/auth/totp/status'),
   /** Remove the calling account's own factor (AAL3-gated by the engine). */

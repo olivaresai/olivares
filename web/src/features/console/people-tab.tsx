@@ -119,17 +119,17 @@ export function PeopleTab() {
 
   // the lost-device reset of a member's TOTP factor. The confirm dialog is
   // the guard the row's one-click label alone cannot be.
-  const [totpResetTarget, setTotpResetTarget] = useState<RosterMemberDTO | null>(
-    null,
-  )
-  const memberTOTPResetMutation = usePrivilegedMutation<RosterMemberDTO, unknown>(
-    {
-      mutationFn: (member) => consoleApi.resetMemberTOTP(member.user_id),
-      invalidateKeys: () => [consoleKeys.members(activeTenant)],
-      successMessage: t('console:members.totpResetDone'),
-      onDone: () => setTotpResetTarget(null),
-    },
-  )
+  const [totpResetTarget, setTotpResetTarget] =
+    useState<RosterMemberDTO | null>(null)
+  const memberTOTPResetMutation = usePrivilegedMutation<
+    RosterMemberDTO,
+    unknown
+  >({
+    mutationFn: (member) => consoleApi.resetMemberTOTP(member.user_id),
+    invalidateKeys: () => [consoleKeys.members(activeTenant)],
+    successMessage: t('console:members.totpResetDone'),
+    onDone: () => setTotpResetTarget(null),
+  })
 
   // Flip a superadmin: an active account is disabled, an inactive one re-enabled.
   const toggleMutation = usePrivilegedMutation<OnboardedUser, OnboardedUser>({
@@ -570,47 +570,47 @@ function RosterMemberRow({
       </td>
       <td className="text-right">
         <div className="flex items-center justify-end gap-2">
-        {canManage && !member.sso_only ? (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => onResetTOTP(member)}
-            aria-label={t('console:members.totpResetLabel', {
-              email: member.email,
-            })}
-          >
-            {t('console:members.totpReset')}
-          </Button>
-        ) : null}
-        {canManage && active ? (
-          <Switch
-            checked
-            onCheckedChange={() => onToggle(member)}
-            aria-label={t('console:members.toggleDisableLabel', {
-              email: member.email,
-            })}
-          />
-        ) : canManage ? (
-          // An account the deployment suspended cannot be re-activated by an
-          // organization; removing it is the one thing this organization can do.
-          <div className="flex items-center justify-end gap-2">
-            <span className="text-caption text-muted-foreground">
-              {t('console:members.suspendedHint')}
-            </span>
+          {canManage && !member.sso_only ? (
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => onToggle(member)}
-              aria-label={t('console:members.toggleDisableLabel', {
+              onClick={() => onResetTOTP(member)}
+              aria-label={t('console:members.totpResetLabel', {
                 email: member.email,
               })}
             >
-              {t('console:members.disable')}
+              {t('console:members.totpReset')}
             </Button>
-          </div>
-        ) : (
-          <span className="text-muted-foreground">-</span>
-        )}
+          ) : null}
+          {canManage && active ? (
+            <Switch
+              checked
+              onCheckedChange={() => onToggle(member)}
+              aria-label={t('console:members.toggleDisableLabel', {
+                email: member.email,
+              })}
+            />
+          ) : canManage ? (
+            // An account the deployment suspended cannot be re-activated by an
+            // organization; removing it is the one thing this organization can do.
+            <div className="flex items-center justify-end gap-2">
+              <span className="text-caption text-muted-foreground">
+                {t('console:members.suspendedHint')}
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onToggle(member)}
+                aria-label={t('console:members.toggleDisableLabel', {
+                  email: member.email,
+                })}
+              >
+                {t('console:members.disable')}
+              </Button>
+            </div>
+          ) : (
+            <span className="text-muted-foreground">-</span>
+          )}
         </div>
       </td>
     </tr>
