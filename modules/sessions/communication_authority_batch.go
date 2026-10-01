@@ -154,6 +154,9 @@ func (m *Module) bindCurrentCommunicationIdentity(
 	}
 	resolved, err := sources.resolver.ResolvePrincipalScope(ctx, ref, scope.TenantID)
 	if err != nil {
+		if errors.Is(err, auth.ErrPrincipalScopeAdmissionRequired) {
+			return communicationIdentityBinding{}, ErrCommunicationAdmissionRequired
+		}
 		if errors.Is(err, auth.ErrUnauthenticated) {
 			return communicationIdentityBinding{}, newCommunicationIdentityError(
 				communicationIdentityCredentialStale,

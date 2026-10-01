@@ -462,7 +462,7 @@ describe('Inventory point: the detail sheet', () => {
   })
 
   it('REPRODUCES A DEFECT: nothing displayable — omitted detail OR present-but-unprintable — gets one neutral sentence, while printable false/0 still render', async () => {
-    // INV-R1 (independent review, 2026-09-08): the empty branch is reached by an
+    // INV-Independent review ( 2026-09-08): the empty branch is reached by an
     // OMITTED `detail` and by a PRESENT one whose values are all empty strings, null
     // or structured, so the sentence must not claim the engine returned nothing.
     // The base rendered nothing at all in the first two cases.

@@ -105,6 +105,12 @@ var stableContractPaths = []string{
 	"/v1/audit/pubkey",
 	"/v1/audit/system",
 	"/v1/audit/verify",
+	"/v1/auth/totp",
+	"/v1/auth/totp/enrol",
+	"/v1/auth/totp/activate",
+	"/v1/auth/totp/challenge",
+	"/v1/auth/totp/status",
+	"/v1/auth/totp/policy",
 	"/v1/auth/login",
 	"/v1/auth/logout",
 	"/v1/auth/refresh",
@@ -118,6 +124,11 @@ var stableContractPaths = []string{
 	"/v1/console/health-summary",
 	"/v1/console/keys",
 	"/v1/console/license",
+	"/v1/console/mcp-gateway",
+	"/v1/console/mcp-gateway/servers",
+	"/v1/console/mcp-gateway/servers/{id}",
+	"/v1/console/mcp-gateway/servers/{id}/test",
+	"/v1/console/mcp-gateway/session-tools",
 	"/v1/console/secrets",
 	"/v1/console/setup-status",
 	"/v1/console/sources",
@@ -142,6 +153,8 @@ var stableContractPaths = []string{
 	"/v1/users/superadmins",
 	"/v1/users/{id}/disable",
 	"/v1/users/{id}/enable",
+	"/v1/users/{id}/totp",
+	"/v1/users/{id}/totp/reset",
 	"/v1/workspaces",
 	"/v1/workspaces/{id}",
 }
@@ -195,6 +208,11 @@ func TestStableOpenAPIHasNoModuleRoutes(t *testing.T) {
 			t.Errorf("stable contract leaked a module route: %q", p)
 		}
 		for method, raw := range item.(map[string]any) {
+			switch method {
+			case "get", "put", "post", "delete", "options", "head", "patch", "trace":
+			default:
+				continue // Path-item metadata, including parameters, is not an operation.
+			}
 			op := raw.(map[string]any)
 			if got := op["x-stability"]; got != "stable" {
 				t.Errorf("%s %s: stable doc op x-stability = %v, want stable", method, p, got)
@@ -708,8 +726,21 @@ func TestServedBetaOpenAPIEndpoint(t *testing.T) {
 	}
 
 	stable := decodeDoc(t, rawGet(h, "/openapi.json", "", nil))
-	if n := len(stable["paths"].(map[string]any)); n != 54 {
-		t.Errorf("/openapi.json = %d paths, want 54 (stable contract incl. the wave-2 routes, /pod-readyz and the self capability projection)", n)
+	stablePaths := stable["paths"].(map[string]any)
+	want := make(map[string]bool, len(stableContractPaths))
+	for _, path := range stableContractPaths {
+		want[path] = true
+		if _, present := stablePaths[path]; !present {
+			t.Errorf("/openapi.json is missing pinned stable path %q", path)
+		}
+	}
+	for path := range stablePaths {
+		if !want[path] {
+			t.Errorf("/openapi.json carries unpinned stable path %q", path)
+		}
+	}
+	if len(stablePaths) != len(want) {
+		t.Errorf("/openapi.json has %d paths, pinned set has %d", len(stablePaths), len(want))
 	}
 }
 

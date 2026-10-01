@@ -19,6 +19,7 @@ package httpx
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -158,14 +159,14 @@ func (c *Client) GetJSON(ctx context.Context, path string, query url.Values, out
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrBody))
-		return &StatusError{Path: path, Status: resp.StatusCode, Excerpt: strings.TrimSpace(string(excerpt))}
+		return &StatusError{Path: displayPath(path), Status: resp.StatusCode, Excerpt: strings.TrimSpace(string(excerpt))}
 	}
 	if out == nil {
 		_, _ = io.Copy(io.Discard, resp.Body)
 		return nil
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, c.maxBody)).Decode(out); err != nil {
-		return fmt.Errorf("httpx: decode %s: %w", path, err)
+		return fmt.Errorf("httpx: decode %s: %w", displayPath(path), err)
 	}
 	return nil
 }
@@ -182,7 +183,7 @@ func (c *Client) GetRaw(ctx context.Context, path string, query url.Values) (*ht
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrBody))
 		_ = resp.Body.Close()
-		return resp, &StatusError{Path: path, Status: resp.StatusCode, Excerpt: strings.TrimSpace(string(excerpt))}
+		return resp, &StatusError{Path: displayPath(path), Status: resp.StatusCode, Excerpt: strings.TrimSpace(string(excerpt))}
 	}
 	return resp, nil
 }
@@ -203,7 +204,7 @@ func (c *Client) get(ctx context.Context, path string, query url.Values) (*http.
 	issue := func() (*http.Response, error) {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 		if err != nil {
-			return nil, fmt.Errorf("httpx: build request %s: %w", path, err)
+			return nil, fmt.Errorf("httpx: build request %s: %w", displayPath(path), stripURLUserinfo(err))
 		}
 		req.Header.Set("Accept", "application/json")
 		for k, v := range c.headers {
@@ -214,7 +215,7 @@ func (c *Client) get(ctx context.Context, path string, query url.Values) (*http.
 		}
 		resp, err := c.doer.Do(req)
 		if err != nil {
-			return nil, fmt.Errorf("httpx: GET %s: %w", path, err)
+			return nil, fmt.Errorf("httpx: GET %s: %w", displayPath(path), stripURLUserinfo(err))
 		}
 		return resp, nil
 	}
@@ -235,12 +236,70 @@ func (c *Client) get(ctx context.Context, path string, query url.Values) (*http.
 		_ = resp.Body.Close()
 		select {
 		case <-ctx.Done():
-			return nil, fmt.Errorf("httpx: GET %s: %w", path, ctx.Err())
+			return nil, fmt.Errorf("httpx: GET %s: %w", displayPath(path), ctx.Err())
 		case <-time.After(wait):
 		}
 		return issue()
 	}
 	return resp, nil
+}
+
+// stripURLUserinfo rewrites a transport *url.Error so the URL it renders
+// carries no userinfo: the base is operator-supplied and userinfo can carry a
+// credential (Basic-auth user:password or an opaque token), which must never
+// ride a diagnostic (H-05 of the 26.10.x security backlog; the SSF receiver's
+// jwks_url is one such operator URL). The returned error keeps the same Op and
+// cause, so errors.Is/As behavior is unchanged; an error that is not a
+// userinfo-bearing *url.Error is returned untouched, byte-identical rendering
+// included. A *url.Error whose URL payload does not parse at all (a request
+// BUILD failure, where the payload can be arbitrary text) is replaced by a
+// fixed marker: an unparseable value cannot be proven credential-free. The
+// cause chain is processed recursively: http.Client.Do wraps the transport's
+// own error in a *url.Error, and a custom Doer may itself return a *url.Error,
+// so one level is not enough.
+func stripURLUserinfo(err error) error {
+	var uerr *url.Error
+	if !errors.As(err, &uerr) {
+		return err
+	}
+	redacted := *uerr
+	redacted.Err = stripURLUserinfo(uerr.Err)
+	u, perr := url.Parse(uerr.URL)
+	if perr != nil {
+		redacted.URL = "[unparsable URL not shown]"
+		return &redacted
+	}
+	if u.User == nil {
+		redacted.URL = uerr.URL
+		return &redacted
+	}
+	u.User = nil
+	redacted.URL = u.String()
+	return &redacted
+}
+
+// displayPath is the ONLY form of a request target that may ride a diagnostic
+// (H-05; independent security review): the wire request keeps the original target, but what an
+// error renders is sanitized. A relative path is returned verbatim; an
+// absolute URL — a same-origin pagination link or a caller-chosen URL on a
+// base-less client — is rendered without userinfo, because an operator- or
+// server-supplied URL can carry credentials; an unparsable value becomes a
+// fixed marker. Every diagnostic site in this package (the GET prefix, the
+// typed StatusError, the decode, build and cancellation errors) renders this
+// form, so there is exactly one rule.
+func displayPath(path string) string {
+	if !strings.Contains(path, "://") {
+		return path
+	}
+	u, err := url.Parse(path)
+	if err != nil {
+		return "[unparsable URL not shown]"
+	}
+	if u.User == nil {
+		return path
+	}
+	u.User = nil
+	return u.String()
 }
 
 // retryAfter extracts a 429 response's advertised wait: Retry-After in seconds or

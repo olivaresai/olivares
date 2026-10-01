@@ -22,9 +22,10 @@ import (
 // stay in this short-lived value only until Runner.Launch copies the environment;
 // the run row receives the handles, deadlines, and exact binding, never Token.
 type runtimeCredentials struct {
-	work          WorkSessionCredential
-	communication CommunicationSessionCredential
-	launchID      model.ID
+	orchestrationGrant string
+	work               WorkSessionCredential
+	communication      CommunicationSessionCredential
+	launchID           model.ID
 }
 
 type runtimeCredentialRecoveryContextKey struct{}
@@ -134,9 +135,13 @@ func (m *Module) mintRuntimeCredentials(
 	runRef, agentRef string,
 	lease Lease,
 ) (runtimeCredentials, error) {
+	var grant string
+	if snapshot, ok := ctx.Value(orchestrationLaunchProfileKey{}).(orchestrationLaunchProfile); ok {
+		grant = snapshot.SessionWorkGrant
+	}
 	if !m.rt.communicationCredentialsEnabled {
 		work, err := m.maybeMintWorkSession(ctx, tenant, runRef, agentRef, lease)
-		return runtimeCredentials{work: work}, err
+		return runtimeCredentials{work: work, orchestrationGrant: grant}, err
 	}
 	if err := m.ensureRuntimeCredentialWiring(); err != nil {
 		return runtimeCredentials{}, err
@@ -154,7 +159,7 @@ func (m *Module) mintRuntimeCredentials(
 	}
 	work, workErr := m.maybeMintWorkSession(ctx, tenant, runRef, agentRef, lease)
 	if workErr == nil && !work.NotAfter.After(m.now().Add(maxRuntimeSessionCredentialTTL)) {
-		return runtimeCredentials{work: work, communication: communication}, nil
+		return runtimeCredentials{work: work, communication: communication, orchestrationGrant: grant}, nil
 	}
 	if workErr == nil {
 		workErr = forbiddenErr("work-session credential lifetime exceeds 30 minutes (fail-closed)")
@@ -819,6 +824,9 @@ func (m *Module) persistResumeRuntimeCredentials(
 		setClaimStamp(record, lease)
 		setOrNull(record, colRunAgentRef, agentRef)
 		setRuntimeCredentialStamp(record, lease, credentials)
+		if err := setRunWorkScope(record, credentials); err != nil {
+			return err
+		}
 		_, err = repo.Update(ctx, record)
 		return err
 	})
@@ -922,7 +930,7 @@ func (m *Module) persistRenewedRuntimeCredentialExpiries(
 }
 
 func (m *Module) startRuntimeCredentialHeartbeat(lr *liveRun) {
-	if !m.rt.communicationCredentialsEnabled || m.rt.credentialHeartbeatInterval <= 0 {
+	if lr.claim.SID == "" || m.rt.credentialHeartbeatInterval <= 0 {
 		return
 	}
 	ctx, cancel := context.WithCancel(context.Background())
@@ -942,6 +950,15 @@ func (m *Module) startRuntimeCredentialHeartbeat(lr *liveRun) {
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
+				// Work-only launches also wait silently for input. Their Claim
+				// must remain live without stdout; a lost generation cannot be
+				// renewed or left as an apparently usable supervised child.
+				if !m.rt.communicationCredentialsEnabled {
+					if err := m.assertRunAuthority(ctx, lr); err != nil {
+						m.terminateForRuntimeCredentialFailure(lr, "runtime Claim heartbeat failed")
+						return
+					}
+				}
 				m.renewLaunchClaim(ctx, lr)
 			}
 		}

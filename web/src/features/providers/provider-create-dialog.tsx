@@ -81,7 +81,7 @@ export function ProviderCreateDialog({
       const body: CreateProviderRequest = {
         kind: kind as ProviderKind,
         display_name: displayName.trim(),
-        api_key: apiKey,
+        ...(kind === 'ollama' ? {} : { api_key: apiKey }),
         ...(baseURL.trim() ? { base_url: baseURL.trim() } : {}),
       }
       return providersApi.create(body)
@@ -98,11 +98,11 @@ export function ProviderCreateDialog({
 
   // openai_compatible has no official endpoint to assume, so the engine requires
   // one. The form says so before the request rather than after the refusal.
-  const endpointRequired = kind === 'openai_compatible'
+  const endpointRequired = kind === 'openai_compatible' || kind === 'ollama'
   const ready =
     kind !== '' &&
     displayName.trim() !== '' &&
-    apiKey.trim() !== '' &&
+    (kind === 'ollama' || apiKey.trim() !== '') &&
     (!endpointRequired || baseURL.trim() !== '')
 
   const onSubmit = (e: FormEvent) => {
@@ -118,7 +118,11 @@ export function ProviderCreateDialog({
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('create.title')}</DialogTitle>
-          <DialogDescription>{t('create.description')}</DialogDescription>
+          <DialogDescription>
+            {kind === 'ollama'
+              ? t('kindHints.ollama')
+              : t('create.description')}
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
           <Field
@@ -127,7 +131,15 @@ export function ProviderCreateDialog({
           >
             <Select
               value={kind}
-              onValueChange={(v) => setKind(v as ProviderKind)}
+              onValueChange={(v) => {
+                setKind(v as ProviderKind)
+                if (v === 'ollama') {
+                  setBaseURL('http://127.0.0.1:11434')
+                  setApiKey('')
+                } else if (kind === 'ollama') {
+                  setBaseURL('')
+                }
+              }}
             >
               <SelectTrigger>
                 <SelectValue placeholder={t('create.kindPlaceholder')} />
@@ -141,7 +153,12 @@ export function ProviderCreateDialog({
               </SelectContent>
             </Select>
           </Field>
-          <Field label={t('create.name')} description={t('create.nameHint')}>
+          <Field
+            label={t('create.name')}
+            description={t(
+              kind === 'ollama' ? 'create.localNameHint' : 'create.nameHint',
+            )}
+          >
             <Input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
@@ -151,7 +168,11 @@ export function ProviderCreateDialog({
           </Field>
           <Field
             label={t('create.baseURL')}
-            description={t('create.baseURLHint')}
+            description={
+              kind === 'ollama'
+                ? t('kindHints.ollama')
+                : t('create.baseURLHint')
+            }
           >
             <Input
               value={baseURL}
@@ -161,22 +182,24 @@ export function ProviderCreateDialog({
               mono
             />
           </Field>
-          <Field
-            label={t('create.apiKey')}
-            description={t('create.apiKeyHint')}
-          >
-            <Input
-              type="password"
-              value={apiKey}
-              onChange={(e) => setApiKey(e.target.value)}
-              placeholder={t('create.apiKeyPlaceholder')}
-              // A credential must not reach the browser's own stores: no
-              // autocomplete entry, no spellcheck dictionary, no autocapitalise.
-              autoComplete="off"
-              spellCheck={false}
-              mono
-            />
-          </Field>
+          {kind !== 'ollama' && (
+            <Field
+              label={t('create.apiKey')}
+              description={t('create.apiKeyHint')}
+            >
+              <Input
+                type="password"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                placeholder={t('create.apiKeyPlaceholder')}
+                // A credential must not reach the browser's own stores: no
+                // autocomplete entry, no spellcheck dictionary, no autocapitalise.
+                autoComplete="off"
+                spellCheck={false}
+                mono
+              />
+            </Field>
+          )}
           <DialogFooter>
             <Button
               type="button"
@@ -192,7 +215,7 @@ export function ProviderCreateDialog({
               disabled={!ready || create.isPending}
             >
               {create.isPending && <Spinner className="size-3.5" />}
-              {create.isPending ? t('create.submitting') : t('create.submit')}
+              {create.isPending ? t('create.registering') : t('create.submit')}
             </Button>
           </DialogFooter>
         </form>

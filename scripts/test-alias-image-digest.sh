@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# Battery for scripts/alias-image-digest.sh (R1 contrast P1-01). Models the manifest
+# Battery for scripts/alias-image-digest.sh (independent review P1-01). Models the manifest
 # source and the index source SEPARATELY, because the defect was format-dependent:
 # `imagetools create` with a single-manifest source and default `--prefer-index=true`
 # mints a NEW index with a NEW digest, so `latest-amd64`/`latest-arm64` stopped being

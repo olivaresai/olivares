@@ -24,12 +24,13 @@ import (
 // processes (the durable state of record is the sessions_run table; this map is
 // the live handles keyed by tenant|run_ref).
 type runtimeState struct {
-	runner     Runner
-	creds      CredentialSource
-	launchGate LaunchGate
-	stopGate   StopGate
-	recorder   Recorder
-	classifier Classifier // DLP classifier for governed file reads (nil = no labels / deny-mode fails closed)
+	launchObserver runtimeLaunchObserverState
+	runner         Runner
+	creds          CredentialSource
+	launchGate     LaunchGate
+	stopGate       StopGate
+	recorder       Recorder
+	classifier     Classifier // DLP classifier for governed file reads (nil = no labels / deny-mode fails closed)
 	// costSink posts what a governed turn cost to the tenant's spend ledger
 	// (runtime_usage.go). nil is a NAMED gap, warned once per run: there is no
 	// no-op sink, because "nothing reached the ledger" is the defect this port
@@ -575,6 +576,7 @@ type CreateRunParams struct {
 	// the same dispatch key with another home is a conflict rather than a replay.
 	ProviderProfileRef string                `json:"ProviderProfileRef,omitempty"`
 	ProviderHome       *ProviderHomeSnapshot `json:"ProviderHome,omitempty"`
+	orchestrationGrant string
 }
 
 // launchIntentFor builds the references-only launch intent the governance gates
@@ -636,7 +638,8 @@ func (m *Module) admit(ctx context.Context, tenant model.TenantID, runRef, holde
 }
 
 // admitInWorkspace is K4's first-sight form of admission. A normal HTTP launch
-// has no authoritative core workspace and calls admit above; a work launch gets
+// has no authoritative core workspace unless its operator-owned orchestration
+// profile declares one. A work launch gets
 // its workspace only from the stored WorkItem and binds it to the canonical SID
 // before Claim or either runtime credential is issued.
 func (m *Module) admitInWorkspace(
@@ -841,6 +844,16 @@ func (m *Module) createRunInternal(
 	if err := m.resolveLaunchProfileInto(ctx, tenant, &p); err != nil {
 		return runDTO{}, err
 	}
+	var orchestrationGrant *SessionWorkGrant
+	if p.ProviderHome != nil {
+		orchestrationGrant, err = decodeProfileWorkGrant(p.orchestrationGrant)
+		if err != nil {
+			return runDTO{}, err
+		}
+		if orchestrationGrant != nil && p.AgentRef == "" {
+			return runDTO{}, forbiddenErr("orchestration requires an authenticated agent")
+		}
+	}
 	if work != nil {
 		reservation, existing, replayed, err := m.prepareWorkLaunch(
 			ctx, tenant, work.spec, &p,
@@ -913,6 +926,12 @@ func (m *Module) createRunInternal(
 		}()
 	}
 	var identityWorkspace model.ID
+	if orchestrationGrant != nil {
+		identityWorkspace = orchestrationGrant.WorkspaceID
+		if work != nil && work.reservation.workspaceID != identityWorkspace {
+			return runDTO{}, forbiddenErr("orchestration grant does not cover the work workspace")
+		}
+	}
 	claimHolder := p.Actor
 	if work != nil {
 		identityWorkspace = work.reservation.workspaceID
@@ -946,7 +965,7 @@ func (m *Module) createRunInternal(
 		m.releaseLaunchClaim(ctx, tenant, lease)
 		return runDTO{}, err
 	}
-	runtimeCreds, err := m.mintRuntimeCredentials(ctx, tenant, runRef, intent.AgentRef, lease)
+	runtimeCreds, err := m.mintRuntimeCredentials(withOrchestrationLaunchProfile(ctx, p.ProviderHome, p.orchestrationGrant), tenant, runRef, intent.AgentRef, lease)
 	if err != nil {
 		m.releaseLaunchClaim(ctx, tenant, lease)
 		return runDTO{}, err
@@ -1157,6 +1176,7 @@ func (m *Module) createRunInternal(
 	completion := runtimeLaunchCompletion(tenant, runRef, runtimeCreds.launchID, rec)
 	dto := m.toRunDTO(m.settleDriverLaunch(wctx, lr, rec))
 	dto.Completion = completion
+	m.observeRuntimeLaunch(wctx, completion)
 	return dto, nil
 }
 
@@ -1247,6 +1267,7 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 		p.ProviderProfileRef = profile.ProfileID
 		snap := profile
 		p.ProviderHome = &snap
+		p.orchestrationGrant = storedPolicy.workGrant
 		// The session policy is re-applied from the CURRENT profile, for the same
 		// reason the template is re-resolved and the gates are re-run: a tightened
 		// policy governs the relaunch rather than the one the run was born under.
@@ -1358,7 +1379,7 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 	if err != nil {
 		return abortReservation(err, lease)
 	}
-	runtimeCreds, err := m.mintRuntimeCredentials(ctx, tenant, runRef, intent.AgentRef, lease)
+	runtimeCreds, err := m.mintRuntimeCredentials(withOrchestrationLaunchProfile(ctx, p.ProviderHome, p.orchestrationGrant), tenant, runRef, intent.AgentRef, lease)
 	if err != nil {
 		return abortReservation(err, lease)
 	}
@@ -1519,6 +1540,7 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 	completion := runtimeLaunchCompletion(tenant, runRef, launchID, updated)
 	dto := m.toRunDTO(m.settleDriverLaunch(wctx, lr, updated))
 	dto.Completion = completion
+	m.observeRuntimeLaunch(wctx, completion)
 	return dto, nil
 }
 
@@ -1731,6 +1753,12 @@ func (m *Module) interruptRunLoaded(
 	runRef, actor, actorKind string,
 	rec model.Record,
 ) (runDTO, bool, error) {
+	return m.interruptRunLoadedWithReason(ctx, tenant, runRef, actor, actorKind, "", rec)
+}
+
+func (m *Module) interruptRunLoadedWithReason(ctx context.Context, tenant model.TenantID,
+	runRef, actor, actorKind, reason string, rec model.Record,
+) (runDTO, bool, error) {
 	if rec.String(colState) != stateRunning {
 		return runDTO{}, false, conflictErr("session is not running (state=" + rec.String(colState) + ")")
 	}
@@ -1754,7 +1782,7 @@ func (m *Module) interruptRunLoaded(
 	// the frame crosses to the child.
 	if _, err := m.transition(ctx, tenant, runRef, transitionInput{
 		event: "interrupting", actor: actor, actorKind: actorKind,
-		detail: "provider turn interruption requested",
+		detail: interruptionDetail("provider turn interruption requested", reason),
 		lease:  lr.claim, guard: guardRuntimeLaunch(lr.launchID),
 	}); err != nil {
 		return runDTO{}, false, err
@@ -1765,7 +1793,7 @@ func (m *Module) interruptRunLoaded(
 	}
 	if _, err := m.transition(ctx, tenant, runRef, transitionInput{
 		event: "interrupted", actor: actor, actorKind: actorKind,
-		detail: "provider turn interrupted; the owned process stays live",
+		detail: interruptionDetail("provider turn interrupted; the owned process stays live", reason),
 		lease:  lr.claim, guard: guardRuntimeLaunch(lr.launchID),
 	}); err != nil {
 		return runDTO{}, true, err
@@ -2267,9 +2295,15 @@ func (m *Module) maybeMintWorkSession(
 	lease Lease,
 ) (WorkSessionCredential, error) {
 	if m.rt.workSessionCreds == nil || lease.SID == "" {
+		if _, required := ctx.Value(orchestrationLaunchProfileKey{}).(orchestrationLaunchProfile); required {
+			return WorkSessionCredential{}, forbiddenErr("orchestration credential issuer or live Claim is unavailable")
+		}
 		return WorkSessionCredential{}, nil
 	}
 	req := workSessionCredentialRequest(tenant, runRef, agentRef, lease)
+	if snap, ok := ctx.Value(orchestrationLaunchProfileKey{}).(orchestrationLaunchProfile); ok && snap.SessionWorkGrant != "" {
+		req.OrchestrationProfileRef, req.OrchestrationGrant = snap.ProfileID, snap.SessionWorkGrant
+	}
 	cred, err := m.rt.workSessionCreds.Mint(ctx, req)
 	if err != nil {
 		revokeErr := m.revokeWorkSessionCredential(ctx, cred.ID, req)
@@ -2464,6 +2498,9 @@ func (m *Module) persistCreateWithWork(
 		}
 		if len(runtimeCredentialSet) > 0 {
 			setRuntimeCredentialStamp(row, lease, credentials)
+			if err := setRunWorkScope(row, credentials); err != nil {
+				return err
+			}
 		}
 		created, err := repo.Create(ctx, row)
 		if err != nil {

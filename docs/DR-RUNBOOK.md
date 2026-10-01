@@ -14,6 +14,8 @@ mechanism, see §9 Honest limits).
 > the restore must **prove** that it did (`/v1/audit/verify` green post-restore).
 > This runbook is the procedure; the tool is `olivares dr`.
 
+**The enrolled DR restore control supports PostgreSQL 15, 16, 17 and 18 in 26.10** (measured on 15.19, 16.15, 17.11 and 18.6). Other majors refuse with `DR restore control contract: PostgreSQL major <major> is unsupported (verified contracts: 15, 16, 17, 18)`, where `<major>` is the detected server major. A control is never repaired: after an in-place major upgrade, a control that does not match the new major's catalog and permissions is refused.
+
 ---
 
 ## 1. Why a signed ledger needs more than a dump

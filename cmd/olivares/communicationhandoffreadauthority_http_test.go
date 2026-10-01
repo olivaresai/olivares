@@ -161,7 +161,7 @@ func revokeIncomingHandoffGrant(
 }
 
 // TestCommunicationIncomingHandoffPageIsOneAuthorityInstant is the permanent
-// regression for the defect the independent review reproduced as F1
+// regression for the defect the independent review reproduced as finding 1
 // (an internal design note (not shipped)):
 // a page assembled from SEVERAL closes could publish an offer authorized by an
 // early close even though the SAME request's later close had already observed

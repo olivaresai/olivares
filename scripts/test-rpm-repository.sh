@@ -769,9 +769,9 @@ PY
 	paths_repo=$(scratch_dir)
 	write_stub_tools "$tools"
 	write_stub_key "$keys"
-	write_fixture_rpm "$paths_repo/olivares-26.9.0-1.x86_64.rpm"
+	write_fixture_rpm "$paths_repo/olivares-26.10.0-1.x86_64.rpm"
 	rc=0
-	run_with_stubs "$tools" "$keys" python3 "$signer" --rpm "$paths_repo/olivares-26.9.0-1.x86_64.rpm" \
+	run_with_stubs "$tools" "$keys" python3 "$signer" --rpm "$paths_repo/olivares-26.10.0-1.x86_64.rpm" \
 		>/dev/null 2>"$tools/sign.err" || rc=$?
 	[[ "$rc" -eq 0 ]] || { cat "$tools/sign.err" >&2; fail "signer with stub tools exited ${rc}, want 0"; }
 	stub_called "$tools/calls.jsonl" rpmsign --addsign --key-id "$STUB_FINGERPRINT" ||
@@ -898,10 +898,10 @@ PY
 	# The signer's own invariant: rpmsign may change only the signature header.
 	local tampered_rpm
 	tampered_rpm=$(scratch_dir)
-	write_fixture_rpm "$tampered_rpm/olivares-26.9.0-1.x86_64.rpm"
+	write_fixture_rpm "$tampered_rpm/olivares-26.10.0-1.x86_64.rpm"
 	rc=0
 	STUB_RPMSIGN_TAMPER=1 run_with_stubs "$tools" "$keys" python3 "$signer" \
-		--rpm "$tampered_rpm/olivares-26.9.0-1.x86_64.rpm" >/dev/null 2>"$tampered_rpm/sign.err" || rc=$?
+		--rpm "$tampered_rpm/olivares-26.10.0-1.x86_64.rpm" >/dev/null 2>"$tampered_rpm/sign.err" || rc=$?
 	check_rc "rpmsign that changes the payload" 1 "$rc" "$tampered_rpm/sign.err"
 	grep -q 'outside its signature header' "$tampered_rpm/sign.err" || fail "the payload change was not named"
 	printf 'test-rpm-repository: a payload changed by rpmsign is refused\n'
@@ -934,7 +934,7 @@ PY
 	ln -s "$(command -v python3)" "$lockedbin/python3"
 	local locked_case want reason
 	for locked_case in passphrase wrong-passphrase none; do
-		write_fixture_rpm "$locked/olivares-26.9.0-1.x86_64.rpm"
+		write_fixture_rpm "$locked/olivares-26.10.0-1.x86_64.rpm"
 		want=2
 		reason='cannot sign unattended'
 		[[ "$locked_case" == passphrase ]] && want=0
@@ -944,7 +944,7 @@ PY
 				OLIVARES_PACKAGE_REPO_KEY_DESCRIPTOR_FILE="$locked-descriptor/descriptor.json" \
 				OLIVARES_PACKAGE_REPO_OPENPGP_SECRET_KEY_FILE="$locked/openpgp-secret.asc"
 			[[ "$locked_case" == none ]] || export OLIVARES_PACKAGE_REPO_OPENPGP_PASSPHRASE_FILE="$locked/$locked_case"
-			python3 "$signer" --rpm "$locked/olivares-26.9.0-1.x86_64.rpm"
+			python3 "$signer" --rpm "$locked/olivares-26.10.0-1.x86_64.rpm"
 		) >/dev/null 2>"$locked/$locked_case.err" || rc=$?
 		[[ "$rc" -eq "$want" ]] || { cat "$locked/$locked_case.err" >&2; fail "locked key with ${locked_case} exited ${rc}, want ${want}"; }
 		[[ "$want" -eq 0 ]] || grep -q "$reason" "$locked/$locked_case.err" || fail "locked key with ${locked_case} did not name: ${reason}"
@@ -958,7 +958,7 @@ PY
 	delivery=$(scratch_dir)
 	good="$delivery/appliance"
 	mkdir -p "$good"
-	printf 'stub olivares\n' >"$good/olivares-26.9.0-1.x86_64.rpm"
+	printf 'stub olivares\n' >"$good/olivares-26.10.0-1.x86_64.rpm"
 	printf 'stub appliance base\n' >"$good/olivares-appliance-base-26.9.0-1.noarch.rpm"
 	local appliance=(--expect-package olivares --expect-package olivares-appliance-base)
 	rc=0
@@ -971,7 +971,7 @@ import sys
 
 document = json.load(open(sys.argv[1], encoding="utf-8"))
 want_packages = [
-    ["olivares", "olivares-26.9.0-1.x86_64", "x86_64", "olivares-26.9.0-1.x86_64.rpm"],
+    ["olivares", "olivares-26.10.0-1.x86_64", "x86_64", "olivares-26.10.0-1.x86_64.rpm"],
     ["olivares-appliance-base", "olivares-appliance-base-26.9.0-1.noarch", "noarch",
      "olivares-appliance-base-26.9.0-1.noarch.rpm"],
 ]
@@ -997,7 +997,7 @@ PY
 	expect_delivery one-expected 1 'package set is not exactly' "$good" "$delivery/one" --expect-package olivares
 	local solo="$delivery/solo"
 	mkdir -p "$solo"
-	printf 'stub olivares\n' >"$solo/olivares-26.9.0-1.x86_64.rpm"
+	printf 'stub olivares\n' >"$solo/olivares-26.10.0-1.x86_64.rpm"
 	rc=0
 	run_with_stubs "$tools" "$keys" python3 "$renderer" render --repo "$solo" "${appliance[@]}" \
 		>/dev/null 2>"$delivery/solo.err" || rc=$?
@@ -1005,7 +1005,7 @@ PY
 	grep -q 'package set is not exactly' "$delivery/solo.err" || fail "the appliance package set refusal was not named"
 	local other="$delivery/other-signer"
 	mkdir -p "$other"
-	printf 'stub olivares\n' >"$other/olivares-26.9.0-1.x86_64.rpm"
+	printf 'stub olivares\n' >"$other/olivares-26.10.0-1.x86_64.rpm"
 	rc=0
 	STUB_GPG_SIGN_AS="$(printf 'F%.0s' {1..40})" run_with_stubs "$tools" "$keys" \
 		python3 "$renderer" render --repo "$other" >/dev/null 2>"$delivery/other.err" || rc=$?
@@ -1021,7 +1021,7 @@ PY
 	ln -s "$(command -v gpg)" "$realbin/gpg"
 	ln -s "$(command -v python3)" "$realbin/python3"
 	mkdir -p "$real"
-	printf 'stub olivares\n' >"$real/olivares-26.9.0-1.x86_64.rpm"
+	printf 'stub olivares\n' >"$real/olivares-26.10.0-1.x86_64.rpm"
 	printf 'stub appliance base\n' >"$real/olivares-appliance-base-26.9.0-1.noarch.rpm"
 	rc=0
 	STUB_LOG="$tools/calls.jsonl" PATH="$realbin" OLIVARES_PACKAGE_REPO_TEST_ONLY=1 \

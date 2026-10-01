@@ -1,9 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { KeyRound, Pencil, Plus, ShieldAlert, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,6 +22,7 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
+import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
@@ -44,30 +45,70 @@ const NAME_RE = /^[A-Za-z0-9._/-]{1,128}$/
  * to-reconfigure of the file. The store NEVER returns a value: each secret surfaces
  * only a non-secret `hint` (a short fingerprint) so an admin can tell a secret is
  * set / changed without ever seeing it. By construction the value input is blank on
- * edit (blank = keep the stored value). Like the SSO panel it is deployment-wide,
- * superadmin-only, and every write is step-up-protected (AAL3) and self-audited.
+ * edit (blank = keep the stored value). The default is deployment-wide and
+ * superadmin-only; explicit tenant mode is restricted to that tenant's mcp/
+ * handles and tenant admins. Every write requires AAL3 and is audited.
  */
-export function SecretsTab() {
+export function SecretsTab({ scope }: { scope?: 'tenant' } = {}) {
+  const boundary = useAuthBoundary()
+  return <SecretsBody key={scope ? boundary.key : 'global'} scope={scope} />
+}
+function SecretsBody({ scope }: { scope?: 'tenant' }) {
   const { t } = useTranslation(['console', 'common'])
-  const { isSuperadmin } = useAuth()
+  const { isSuperadmin, can } = useAuth()
+  const boundary = useAuthBoundary()
+  const qc = useQueryClient()
+  const queryKey = useMemo(
+    () =>
+      scope
+        ? [...consoleKeys.secrets(scope), boundary.tenant, boundary.epoch]
+        : consoleKeys.secrets(),
+    [scope, boundary.tenant, boundary.epoch],
+  )
+  useEffect(
+    () => () => {
+      if (scope) {
+        void qc.cancelQueries({ queryKey })
+        qc.removeQueries({ queryKey })
+      }
+    },
+    [qc, scope, queryKey],
+  )
+  const admitted =
+    scope === 'tenant'
+      ? !!boundary.tenant && can?.('tenant:admin')
+      : isSuperadmin
   const [editing, setEditing] = useState<SecretDTO | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [del, setDel] = useState<SecretDTO | null>(null)
 
   const query = useQuery({
-    queryKey: consoleKeys.secrets(),
-    queryFn: () => consoleApi.listSecrets(),
-    enabled: isSuperadmin,
+    queryKey,
+    queryFn: ({ signal }) =>
+      scope
+        ? consoleApi.listSecrets(scope, {
+            signal,
+            tenant: boundary.tenant ?? undefined,
+          })
+        : consoleApi.listSecrets(),
+    enabled: admitted,
   })
 
   const deleteMutation = usePrivilegedMutation<string, void>({
-    mutationFn: (name) => consoleApi.deleteSecret(name),
-    invalidateKeys: () => [consoleKeys.secrets()],
+    mutationKey: queryKey,
+    mutationFn: (name, authority) =>
+      scope
+        ? consoleApi.deleteSecret(name, scope, {
+            ...authority,
+            tenant: boundary.tenant ?? undefined,
+          })
+        : consoleApi.deleteSecret(name),
+    invalidateKeys: () => [queryKey],
     successMessage: t('console:secrets.deleted'),
     onDone: () => setDel(null),
   })
 
-  if (!isSuperadmin) {
+  if (!admitted) {
     return (
       <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-muted-foreground">
         <ShieldAlert
@@ -90,7 +131,9 @@ export function SecretsTab() {
             {t('console:secrets.title')}
           </h2>
           <p className="max-w-2xl text-body text-muted-foreground">
-            {t('console:secrets.caption')}
+            {scope
+              ? t('console:mcpGateway.credentialCaption')
+              : t('console:secrets.caption')}
           </p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
@@ -181,7 +224,11 @@ export function SecretsTab() {
         <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
           {createOpen && (
             <RequireAssurance minAal={AAL.HARDWARE} action="console">
-              <SecretForm onClose={() => setCreateOpen(false)} />
+              <SecretForm
+                queryKey={queryKey}
+                scope={scope}
+                onClose={() => setCreateOpen(false)}
+              />
             </RequireAssurance>
           )}
         </DialogContent>
@@ -194,7 +241,12 @@ export function SecretsTab() {
         <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
           {editing && (
             <RequireAssurance minAal={AAL.HARDWARE} action="console">
-              <SecretForm existing={editing} onClose={() => setEditing(null)} />
+              <SecretForm
+                queryKey={queryKey}
+                scope={scope}
+                existing={editing}
+                onClose={() => setEditing(null)}
+              />
             </RequireAssurance>
           )}
         </DialogContent>
@@ -215,37 +267,52 @@ export function SecretsTab() {
 }
 
 function SecretForm({
+  queryKey,
+  scope,
   existing,
   onClose,
 }: {
   existing?: SecretDTO
+  scope?: 'tenant'
+  queryKey: readonly unknown[]
   onClose: () => void
 }) {
   const { t } = useTranslation(['console', 'common'])
+  const boundary = useAuthBoundary()
   const isEdit = !!existing
-  const [name, setName] = useState(existing?.name ?? '')
+  const [name, setName] = useState(existing?.name ?? (scope ? 'mcp/' : ''))
   // The value input is ALWAYS blank on open — we never receive the stored value, and
   // on edit a blank value means "keep the stored secret" (description-only edit).
   const [value, setValue] = useState('')
   const [description, setDescription] = useState(existing?.description ?? '')
 
-  const mutation = usePrivilegedMutation<void, SecretDTO>({
-    mutationFn: () => {
-      const body: SecretInput = {
-        name: name.trim(),
-        value,
-        description: description.trim(),
-      }
-      return consoleApi.putSecret(body)
+  const qc = useQueryClient()
+  useEffect(
+    () => () => {
+      const cache = qc.getMutationCache()
+      for (const m of cache.findAll({ mutationKey: queryKey })) cache.remove(m)
     },
-    invalidateKeys: () => [consoleKeys.secrets()],
+    [qc, queryKey],
+  )
+  const mutation = usePrivilegedMutation<SecretInput, SecretDTO>({
+    mutationKey: queryKey,
+    mutationFn: (body, authority) =>
+      scope
+        ? consoleApi.putSecret(body, scope, {
+            ...authority,
+            tenant: boundary.tenant ?? undefined,
+          })
+        : consoleApi.putSecret(body),
+    invalidateKeys: () => [queryKey],
     successMessage: isEdit
       ? t('console:secrets.rotated')
       : t('console:secrets.created'),
     onDone: onClose,
   })
 
-  const nameValid = isEdit || NAME_RE.test(name.trim())
+  const nameValid =
+    isEdit ||
+    (NAME_RE.test(name.trim()) && (!scope || name.trim().startsWith('mcp/')))
   // A new secret requires a value; an existing one may be edited with a blank value
   // (keeps the stored secret).
   const valid = nameValid && (isEdit || value !== '')
@@ -258,7 +325,11 @@ function SecretForm({
             ? t('console:secrets.editTitle')
             : t('console:secrets.createTitle')}
         </DialogTitle>
-        <DialogDescription>{t('console:secrets.caption')}</DialogDescription>
+        <DialogDescription>
+          {scope
+            ? t('console:mcpGateway.credentialCaption')
+            : t('console:secrets.caption')}
+        </DialogDescription>
       </DialogHeader>
 
       <div className="flex flex-col gap-4">
@@ -316,7 +387,13 @@ function SecretForm({
         </Button>
         <Button
           variant="primary"
-          onClick={() => mutation.mutate()}
+          onClick={() =>
+            mutation.mutate({
+              name: name.trim(),
+              value,
+              description: description.trim(),
+            })
+          }
           disabled={!valid || mutation.isPending}
         >
           {mutation.isPending && <Spinner size="sm" aria-hidden />}

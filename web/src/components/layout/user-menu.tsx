@@ -32,7 +32,7 @@ export function UserMenu() {
   const name = principal?.display_name || principal?.actor || ''
 
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"

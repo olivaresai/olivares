@@ -57,6 +57,22 @@ func statusFor(err error) (int, string) {
 	case errors.Is(err, auth.ErrNoFederationSealer):
 		// deny-closed — a secret cannot be sealed/opened with no sealer wired.
 		return http.StatusServiceUnavailable, "sso_unavailable"
+	case errors.Is(err, auth.ErrTOTPRequired), errors.Is(err, auth.ErrTOTPEnrolmentRequired):
+		// the legacy single-call login surface (CLI/tests). The HTTP login
+		// answers 200 with the pending challenge instead; these codes exist so
+		// the wrapper's refusal still reads as what it is.
+		return http.StatusUnauthorized, "totp_required"
+	case errors.Is(err, auth.ErrTOTPVerification):
+		// coarse by design — wrong code, unknown pending token and absent
+		// factor are indistinguishable, exactly like a wrong password.
+		return http.StatusUnauthorized, "unauthenticated"
+	case errors.Is(err, auth.ErrTOTPNotEnrolled):
+		// an operation that needs the account's factor found none.
+		return http.StatusConflict, "totp_not_enrolled"
+	case errors.Is(err, auth.ErrNoTOTPSealer):
+		// deny-closed — a seed cannot be sealed/opened with no sealer
+		// wired. 503, like the SSO and secret-store sealers.
+		return http.StatusServiceUnavailable, "totp_unavailable"
 	case errors.Is(err, errSecretStoreUnavailable):
 		// the runtime secret store is not wired on this deployment (an
 		// embedder/test that did not opt in). 501 honest-seam, like SSO.
@@ -68,6 +84,12 @@ func statusFor(err error) (int, string) {
 		return http.StatusNotFound, "not_found"
 	case errors.Is(err, auth.ErrBadSecretName), errors.Is(err, auth.ErrEmptySecretValue):
 		return http.StatusBadRequest, "bad_request"
+	case errors.Is(err, auth.ErrMCPGatewayInvalid):
+		return http.StatusBadRequest, "mcp_gateway_invalid"
+	case errors.Is(err, auth.ErrMCPGatewayFileOwned):
+		return http.StatusConflict, "mcp_gateway_file_owned"
+	case errors.Is(err, auth.ErrMCPGatewayUnavailable):
+		return http.StatusServiceUnavailable, "mcp_gateway_unavailable"
 	case errors.Is(err, errSourceRosterUnavailable):
 		// the live source-reconfiguration surface is not wired on this
 		// deployment (an embedder/test that did not opt in). 501 honest-seam.
@@ -221,6 +243,10 @@ func statusFor(err error) (int, string) {
 		// (conflicts with the acyclic-forest invariant); distinct code so the console
 		// explains the chosen parent is already a descendant.
 		return http.StatusConflict, "group_cycle"
+	case errors.Is(err, auth.ErrGroupOriginReadOnly):
+		return http.StatusForbidden, "group_origin_read_only"
+	case errors.Is(err, auth.ErrGroupOriginAdopted):
+		return http.StatusForbidden, "group_origin_adopted"
 	case errors.Is(err, ErrRecordingConsentRequired):
 		// the operator has not acknowledged the recording notice for this
 		// privileged surface. Distinct code so the console can show the consent
@@ -508,6 +534,10 @@ func (s *Server) writeError(w http.ResponseWriter, r *http.Request, err error) {
 	status, code := statusFor(err)
 	msg := err.Error()
 	switch {
+	case errors.Is(err, auth.ErrGroupOriginReadOnly):
+		msg = "group is managed by another provisioner"
+	case errors.Is(err, auth.ErrGroupOriginAdopted):
+		msg = "group cannot change provisioner"
 	case status == http.StatusInternalServerError:
 		s.log.Error("api: request failed", "err", err, "path", r.URL.Path, "request_id", requestID(r.Context()))
 		msg = "internal error"

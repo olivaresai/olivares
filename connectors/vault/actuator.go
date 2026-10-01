@@ -182,7 +182,7 @@ func (a *Actuator) setEntityDisabled(ctx context.Context, op identitysource.Life
 		return identitysource.ActuationReceipt{}, fmt.Errorf("vault: actuator: %s: %w", op, err)
 	}
 	if status < 200 || status >= 300 {
-		return identitysource.ActuationReceipt{}, actuationError(op, status, raw)
+		return identitysource.ActuationReceipt{}, a.actuationError(op, status, raw)
 	}
 	return a.receipt(op, req.Ref, detail), nil
 }
@@ -223,7 +223,7 @@ func (a *Actuator) Rotate(ctx context.Context, req identitysource.ActuationReque
 		return identitysource.RotatedCredential{}, fmt.Errorf("vault: actuator: rotate: %w", err)
 	}
 	if status < 200 || status >= 300 {
-		return identitysource.RotatedCredential{}, actuationError(identitysource.OpRotate, status, raw)
+		return identitysource.RotatedCredential{}, a.actuationError(identitysource.OpRotate, status, raw)
 	}
 	var out secretIDResponse
 	if err := json.Unmarshal(raw, &out); err != nil {
@@ -231,6 +231,11 @@ func (a *Actuator) Rotate(ctx context.Context, req identitysource.ActuationReque
 	}
 	if out.Data.SecretID == "" || out.Data.SecretIDAccessor == "" {
 		return identitysource.RotatedCredential{}, errors.New("vault: actuator: rotate: response carried no secret_id/accessor")
+	}
+	// H-01: a broken/hostile authority can answer the mint with the credential
+	// that authenticated it; refuse before the echo reaches the rotation caller.
+	if err := identitysource.RejectEchoedSecret(out.Data.SecretID, a.token); err != nil {
+		return identitysource.RotatedCredential{}, fmt.Errorf("vault: actuator: rotate: %w", err)
 	}
 
 	// (3) Return-once. ExpiresAt derives from secret_id_ttl when the role sets
@@ -276,7 +281,7 @@ func (a *Actuator) Retire(ctx context.Context, req identitysource.ActuationReque
 			return identitysource.ActuationReceipt{}, fmt.Errorf("vault: actuator: retire: destroyed %d of %d; accessor %d (%s): %w", i, len(req.CredentialRefs), i+1, acc, err)
 		}
 		if status < 200 || status >= 300 {
-			return identitysource.ActuationReceipt{}, fmt.Errorf("vault: actuator: retire: destroyed %d of %d; accessor %d (%s): %w", i, len(req.CredentialRefs), i+1, acc, actuationError(identitysource.OpRetire, status, raw))
+			return identitysource.ActuationReceipt{}, fmt.Errorf("vault: actuator: retire: destroyed %d of %d; accessor %d (%s): %w", i, len(req.CredentialRefs), i+1, acc, a.actuationError(identitysource.OpRetire, status, raw))
 		}
 	}
 	return a.receipt(identitysource.OpRetire, req.Ref, fmt.Sprintf("destroyed %d AppRole secret-id(s) of role %q by accessor", len(req.CredentialRefs), role)), nil
@@ -296,7 +301,7 @@ func (a *Actuator) listAccessors(ctx context.Context, basePath string) ([]string
 		return nil, nil
 	}
 	if status < 200 || status >= 300 {
-		return nil, actuationError(identitysource.OpRotate, status, raw)
+		return nil, a.actuationError(identitysource.OpRotate, status, raw)
 	}
 	var resp listResponse
 	if err := json.Unmarshal(raw, &resp); err != nil {
@@ -370,9 +375,11 @@ func (a *Actuator) doJSON(ctx context.Context, method, path string, body any) (i
 
 // actuationError builds a non-sensitive error from a failed write: the op, the
 // HTTP status and Vault's own error strings ({"errors":[...]}) when present,
-// else a bounded excerpt of the response body. It never echoes the token or
-// any request body (the only place secret material could ride).
-func actuationError(op identitysource.LifecycleOp, status int, raw []byte) error {
+// else a bounded excerpt of the response body. The sent token is scrubbed from
+// the excerpt BEFORE truncation (H-02): a broken/hostile Vault can reflect the
+// request credential in its error body, and the excerpt is persisted in the NHI
+// failure trail. It never echoes the token or any request body.
+func (a *Actuator) actuationError(op identitysource.LifecycleOp, status int, raw []byte) error {
 	var parsed struct {
 		Errors []string `json:"errors"`
 	}
@@ -381,6 +388,7 @@ func actuationError(op identitysource.LifecycleOp, status int, raw []byte) error
 	if detail == "" {
 		detail = strings.TrimSpace(string(raw))
 	}
+	detail, _ = identitysource.ScrubCredentials(detail, a.token)
 	if len(detail) > maxErrExcerpt {
 		detail = detail[:maxErrExcerpt] + "…"
 	}

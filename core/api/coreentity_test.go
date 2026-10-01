@@ -86,7 +86,9 @@ func TestValidateCoreEntityRefAcceptsAWellFormedRoute(t *testing.T) {
 // fails until somebody states here that the new kind is meant to be reachable — which is
 // the point: widening what a module may authorize against is a decision, not a constant.
 func TestCoreKindValidIsClosed(t *testing.T) {
-	valid := map[CoreKind]bool{CoreKindSession: true}
+	// Workspace is an explicitly registered stored core entity. It carries its
+	// own ID as workspace lineage; the facts surface stays unchanged.
+	valid := map[CoreKind]bool{CoreKindSession: true, CoreKindWorkspace: true}
 	for k := CoreKind(0); k < 32; k++ {
 		if got, want := k.valid(), valid[k]; got != want {
 			t.Errorf("CoreKind(%d).valid() = %v, want %v — if a kind was added, add it to this map "+
@@ -209,9 +211,43 @@ func TestValidateCoreEntityRefRejectsAKindWithNoLocator(t *testing.T) {
 	for _, ref := range []EntityRef{
 		{CoreKind: CoreKindSession, IDParam: "core_session_id"},
 		{CoreKind: CoreKindSession, BodyIDField: "session_id"},
+		{CoreKind: CoreKindWorkspace, IDParam: "workspace_id"},
+		{CoreKind: CoreKindWorkspace, BodyIDField: "workspace_id"},
 	} {
 		if err := validateCoreEntityRef(ref, &fakeCoreResolver{}); err != nil {
 			t.Errorf("a route with exactly one locator was refused: %v", err)
 		}
+	}
+}
+
+func TestAlternateEntityLocatorRequiresModuleKind(t *testing.T) {
+	for _, ref := range []EntityRef{
+		{IDParam: "id", LookupColumn: "reference"},
+		{CoreKind: CoreKindSession, IDParam: "id", LookupColumn: "reference"},
+	} {
+		if err := validateCoreEntityRef(ref, &fakeCoreResolver{}); err == nil {
+			t.Fatal("alternate locator accepted outside a module kind")
+		}
+	}
+	if err := validateCoreEntityRef(EntityRef{Kind: "sessions.run", IDParam: "ref", LookupColumn: "run_ref"}, nil); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestDenialReadPermissionRequiresConcealedStoredEntity(t *testing.T) {
+	for _, ref := range []EntityRef{
+		{Kind: "sessions.run", IDParam: "ref", DeniedReadPermission: "sessions:run:read"},
+		{IDParam: "ref", ConcealDeniedAsNotFound: true, DeniedReadPermission: "sessions:run:read"},
+		{Kind: "sessions.run", IDParam: "ref", ConcealDeniedAsNotFound: true, DeniedReadPermission: "sessions:run:write"},
+	} {
+		if err := validateCoreEntityRef(ref, nil); err == nil {
+			t.Fatal("invalid denial read declaration accepted")
+		}
+	}
+	if err := validateCoreEntityRef(EntityRef{
+		Kind: "sessions.run", IDParam: "ref", ConcealDeniedAsNotFound: true,
+		DeniedReadPermission: "sessions:run:read",
+	}, nil); err != nil {
+		t.Fatal(err)
 	}
 }

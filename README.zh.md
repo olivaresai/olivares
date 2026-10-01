@@ -1,60 +1,53 @@
 <div align="center">
 
-<a href="https://olivares.ai"><img src=".github/assets/olivares-banner.png" alt="Olivares AI — 企业 AI 的唯一可信事实源" width="720"></a>
+<a href="https://olivares.ai"><img src=".github/assets/olivares-banner.png" alt="Olivares AI — Ground truth for enterprise AI" width="720"></a>
 
 **语言:** [English](./README.md) · [Español](./README.es.md) · **简体中文** · [Русский](./README.ru.md) · [日本語](./README.ja.md) · [Deutsch](./README.de.md) · [Français](./README.fr.md)
 
-**运行并治理你已经在用的 AI——在你自己的基础设施上，只有一个可信事实源。**
+**运行团队已经在用的 AI，像管理其他基础设施一样掌握它。**
 
-[它是什么](#它是什么) · [它做什么](#它做什么) · [安装](#安装) · [快速上手](#快速上手) · [控制台](#控制台一览) · [版本](#版本与定价) · [文档](#文档) · [安全](#安全) · [olivares.ai](https://olivares.ai)
+[它做什么](#它做什么) · [安装](#安装) · [控制台](#控制台一览) · [版本](#版本与定价) · [文档](#文档) · [社区](#社区) · [olivares.ai](https://olivares.ai)
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md)
-[![Release: v26.9.0](https://img.shields.io/badge/release-v26.9.0-28282B)](https://github.com/olivaresai/olivares/releases/tag/v26.9.0)
+[![Release: 26.10](https://img.shields.io/badge/release-26.10-28282B)](https://github.com/olivaresai/olivares/releases/tag/26.10.0)
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
 </div>
 
-> **Beta**，处于活跃开发中。**v26.9.0** 随附签名归档、原生软件包和容器镜像。哪些能力今天可运行、哪些按需提供、哪些仍处于设计阶段，见[诚实与边界](docs-site/src/content/docs/start/honesty-and-limits.md)。
+开发者用 Claude Code 和 Codex 工作。agent 调用 MCP 服务器、模型和内部 API，定时任务自行运行。每个组件都有自己的日志和权限，所以连简单的问题也难以快速回答：哪个 agent 改了这个文件，谁批准的，这个月 AI 花了多少钱？
 
-## 它是什么
+Olivares AI 把答案汇集在一处。它连接你已经在用的 agent 和工具，展示每个工具的行为，在操作执行前应用你的规则，并为一切保留签名记录。它是一个运行在你自己服务器上的程序，完整产品免费且开源。
 
-你今天的 AI estate 是编程 agent、MCP 服务器、模型端点、服务账户和计划任务，分散在从未成为同一系统的机器上。没有人能从同一个地方说出：什么在运行、谁启动了它、它触及了什么、花了多少、谁同意了。
-
-Olivares AI 是**一个自托管 Go 二进制文件，控制台包含在内**，把这座 estate 收拢在一起：它给 AI 工作所需（上下文、资源访问、受管会话），并给你权限、策略、预算和证据来运营它。自托管，无强制遥测，支持 air-gapped 安装。
-
-Claude Code 在最深一层集成（`PreToolUse`/`PostToolUse` 钩子、受管设置、从控制台启动和停止）；官方 Codex 和 Grok CLI 是一等会话驱动；gemini-cli、Cursor、opencode、goose、cline、OpenHands、OpenClaw、Hermes 以及 Ollama 等自托管端点是连接器，各自声明能强制什么、只能观察什么。AGPL 构建就是完整产品，从不从内部做功能封顶；任何套餐都不按用户计数。
+<div align="center">
+<img src=".github/assets/motion-access-map.gif" width="840" alt="Motion diagram of the read/write access map: agents, sessions and identities on the left, the resources they reach on the right, reads in blue, writes in orange, one observed write that was never permitted flagged as a drift finding.">
+<br><sub><b>访问图</b> — 每个 agent 读取和写入了什么，以及那次无人授权的写入。</sub>
+</div>
 
 ## 它做什么
 
-<div align="center">
-<img src=".github/assets/motion-access-map.gif" width="840" alt="读写访问图的动态示意：左侧是 agent、会话和身份，右侧是它们到达的资源，读取为蓝色，写入为橙色，一次从未被允许的已观察写入被标为漂移发现。">
-<br><sub><b>访问图</b> — 每个 agent 在整个 estate 中读写什么，允许对照观察。</sub>
-</div>
+- **知道什么在运行。** 在一份清单中查看所有 agent、会话、模型、MCP 服务器和工具。读写访问图展示每个对象读取和写入的内容，并标出没有任何规则允许的访问。
+- **在操作造成损害之前拦住它。** Olivares AI 有**四个 deny-closed 执行点**，在每次操作执行前进行检查：Claude Code 内部、模型代理、每次 MCP 工具调用，以及 agent 之间。有风险的操作等待第二个人确认，被禁止的操作不会执行，一个开关就能同时停止所有 agent。检查无法作出判断时，操作也不会执行。
+- **控制 AI 支出。** 按团队、agent 或模型设置预算，在账单到来之前发出警告、减缓或停止支出。
+- **安全地让 agent 使用公司知识。** 连接 SharePoint、Confluence、Google Drive、Notion、Salesforce、Snowflake、S3 和 PostgreSQL。每个 agent 只能看到使用它的人有权看到的内容。
+- **跨会话继续工作。** 会话结束后，任务、负责人和决策仍然保留。无需 SSH，就能从浏览器启动、加入和停止 Claude Code、Codex 和 Grok 会话。
+- **需要时提供证据。** 每项决策都写入签名日志，事后的任何篡改都可被检测到。安全团队和审计人员从这些记录生成报告，证据对应 26 个框架目录。
 
-- **看见它。** 清点连接器观察到的 agent、会话、模型、MCP 服务器、工具和身份；一张读写**访问图**，带 Permitted-vs-Observed **漂移**视图；实时会话、编排图、健康状况和 SLA。它无法分类的访问会标记为 `unknown`，绝不猜测。没有任何连接器观察到的资源不会出现，而这种缺失并不能证明该资源不存在。
-- **运行工作。** 带有所有权、依赖关系、验收标准和决策的持久工作项；围栏租约确保两个 agent 无法同时持有同一项工作；从控制台启动、附加、中断和停止 Claude Code、Codex 和 Grok 会话；通过 A2A 向获授权对等方委派。
-- **治理并执行它。** 一个 Cedar 授权引擎，以及**四个 deny-closed 执行点**——Claude Code 钩子、内联 `/v1/messages` 推理代理、MCP `tools/call` 关卡和 A2A 委派关卡——使未授权操作在运行前被阻断、挂起等待双人审批，或被改写。预算可以拒绝或限制支出，破玻璃机制实行双人控制，还有一个失败即关闭的 estate **kill-switch**。
-- **受治理地供给它。** 内容源（SharePoint、Confluence、Google Drive、Notion、Salesforce、Snowflake、S3、Azure AI Search、SAP OData、PostgreSQL，以及限定根目录的文件系统）进入受治理检索，检索时以 deny-closed 强制许可级别。
-- **证明它。** 一份哈希链、Ed25519 签名的审计台账；映射到 **26 个框架目录**（EU AI Act、NIST AI RMF、ISO 42001、SOC 2、ISO 27001、GDPR……）的封存证据——自行评估的控制族，并非认证；SIEM/ITSM 推送（CEF/LEEF/syslog/OTLP/OCSF）；WebAuthn/FIDO2、PIV/CAC、SSO、SCIM、BYOK/CMEK 以及经验证的被遗忘权，均按部署配置。
-
-**31 个模块**、一个控制台、**159 项集成**——计数从代码推导，并由 [`scripts/check-public-counts.sh`](scripts/check-public-counts.sh) 在每次推送时强制校验；明细见 [`connectors/README.md`](connectors/README.md)，每个模块及其成熟度见[模块目录](docs-site/src/content/docs/reference/modules/overview.md)。
+支持你已有的工具：Claude Code、Codex、Grok、Cursor、gemini-cli、opencode、OpenHands，以及通过 Ollama 运行的本地模型。**31 个模块**和 **159 项集成**全部包含在免费版本中：[所有模块](docs-site/src/content/docs/reference/modules/overview.md) · [所有连接器](connectors/README.md)。
 
 ## 安装
 
-选一种方法：一条命令完成安装，然后 `olivares quickstart` 打印控制台 URL 和一次性设置令牌。每个发布版本均经 cosign 签名，带 SLSA 来源和 SBOM；下列每条路径都会在安装前校验，`scripts/verify-release.sh` 检查手动下载（cosign + SHA-256，[方法](INSTALL.md#verifying-a-release)）。引擎**默认即安全**：绑定 loopback、首次启动即 HTTPS、没有默认凭据、首次启动时打印一次性设置令牌。
+选择一种方法，复制对应的代码块。完成后，`olivares quickstart` 会输出控制台地址和用于创建首位管理员的一次性令牌。每个发布版本都有签名，每种方法都会在安装前验证下载内容（[自行验证下载](INSTALL.md#verifying-a-release)）。
 
-**1 · 一条命令，Linux 和 macOS** — 经验证的安装器：检测操作系统和架构，校验已签名校验和与归档 SHA-256，只安装二进制文件，从不运行 `sudo`。
+**Linux 和 macOS，一条命令。** 检测系统、验证发布版本，仅安装二进制文件，从不使用 `sudo`。
 
 ```sh
 curl -fsSL https://olivares.ai/olivares/install.sh | sh
-olivares quickstart        # prints the console URL and the one-time setup token
+olivares quickstart
 ```
 
-用户服务（systemd 用户单元或 LaunchAgent）加 `--user`；系统服务则从特权 shell 运行已验证脚本并加上 `--system --start`。更想先下载、校验再亲手运行？手动二进制路径和按操作系统的矩阵：[`INSTALL.md`](INSTALL.md)。
-
-**2 · Docker** — 多架构、distroless、非 root；发布在主机的所有接口上（如需仅限本机，请在 `-p` 映射前加上 `127.0.0.1:`）。
+**Docker。** 多架构、distroless、非 root。它监听主机的所有网络接口；在每个 `-p` 前加上 `127.0.0.1:`，即可限制为本机访问。
 
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
@@ -63,107 +56,126 @@ docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 
-`ghcr.io/olivaresai/olivares` 是 digest 相同的镜像；生产环境请按 digest 固定。FIPS 和 STIG 镜像变体：[`INSTALL.md`](INSTALL.md#docker)。
-
-**3 · Docker Compose** — 加固堆栈，SQLite 单节点，可选 Postgres 和备份。
+**Docker Compose。** 单节点 SQLite，可选 Postgres 和备份。
 
 ```sh
 git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 ```
 
-**4 · Kubernetes** — 树中的 Helm chart，或一份不含 Helm 的扁平清单；chart 的 OCI 发布未经验证（`publication-unverified`：本仓库从未运行其 chart 发布流程，没有 chart 标签，也没有发布中的 chart 资产，registry 一侧无法观测）。
+**Kubernetes。** 使用本仓库中的 Helm chart（chart 尚无 OCI 发布版本：`publication-unverified`）。
 
 ```sh
+git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
-# or, Helm-free
+```
+
+不使用 Helm：
+
+```sh
+git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 kubectl create namespace olivares-system && kubectl apply -n olivares-system -f deploy/manifests/install.yaml
 ```
 
-**5 · Linux 软件包** — 来自[发布页面](https://github.com/olivaresai/olivares/releases/tag/v26.9.0)的 `.deb`、`.rpm`、`.apk`：二进制、示例 env 文件、无登录的 `olivares` 用户和加固单元；服务不会替你启动。
+**Debian 和 Ubuntu。** 软件包添加一个无法登录的 `olivares` 用户和一个经过安全加固的服务；服务由你启动。
 
 ```sh
-sudo dpkg -i olivares_*_linux_amd64.deb        # Debian / Ubuntu   (sudo rpm -i … on RHEL / Fedora / SUSE; sudo apk add --allow-untrusted … on Alpine)
-sudo systemctl enable --now olivares           # OpenRC hosts: sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.deb
+sudo dpkg -i olivares_26.10.0_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 
-**6 · Homebrew** — macOS 和 Linux，对照已签名校验和检查。
+**RHEL、Fedora 和 SUSE。**
+
+```sh
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.rpm
+sudo rpm -i olivares_26.10.0_linux_amd64.rpm && sudo systemctl enable --now olivares
+```
+
+**Alpine。**
+
+```sh
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_26.10.0_linux_amd64.apk && sudo rc-service olivares start
+```
+
+ARM 服务器请用 `arm64` 替换 `amd64`。全部发布文件见[发布页面](https://github.com/olivaresai/olivares/releases/tag/26.10.0)。
+
+**Homebrew。** macOS 和 Linux。
 
 ```sh
 brew install olivaresai/tap/olivares && olivares quickstart
 ```
 
-**7 · 从源码构建** — Go 1.26+、[Task](https://taskfile.dev)、pnpm。
+**从源码构建。** Go 1.26+、[Task](https://taskfile.dev) 和 pnpm。
 
 ```sh
+git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 task build && ./bin/olivares quickstart
 ```
 
-**Air-gapped**：打包已签名镜像、chart 和校验材料，并用 `scripts/verify-release.sh --key … --offline` 离线校验（[指南](docs-site/src/content/docs/how-to/air-gap-install.md)）。**Windows** 尚未构建：运行 Linux 容器或 WSL2（[计划](INSTALL.md#windows)）。升级与回滚：[指南](docs-site/src/content/docs/how-to/upgrade-and-rollback.md)。
+**离线网络：** 打包签名镜像、chart 和验证材料，然后[在隔离环境中安装](docs-site/src/content/docs/how-to/air-gap-install.md)。**Windows** 尚无原生构建，请使用 Docker 镜像或 WSL2。升级和回滚见[操作指南](docs-site/src/content/docs/how-to/upgrade-and-rollback.md)。所有选项详见 [`INSTALL.md`](INSTALL.md)。
 
-## 快速上手
+**先用演示数据试用**，仅在自己的机器上运行（演示密码是公开的）：
 
 ```sh
-# a deterministic demo estate — loopback-only (the demo password is public), no real data
 olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.0.0.1:8902 --data-dir "$(mktemp -d)"
-# open http://127.0.0.1:8901 — inventory, work, orchestration, access map + drift, policies, FinOps
-
-# the real thing — TLS on, reachable from your network; create the first administrator with the printed token
-olivares quickstart
 ```
 
-演示种子仅供学习（源码树中的公开密码）：切勿指向真实数据。CI 用 `task smoke:quickstart` 走同一路径，并断言访问图与漂移计数（20 个节点 / 13 条边，8 次意外访问和 2 项未使用授权）。[完整快速上手](docs-site/src/content/docs/start/quickstart.md) 会接入真实的 pgAudit 连接器。
+然后打开 http://127.0.0.1:8901。
 
 ## 控制台一览
 
 | | |
 |---|---|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-dark.png"><img src="docs-site/public/console/access-map-light.png" alt="访问图：每个 agent 在整个 estate 中读写什么，左侧是来源，右侧是资源。"></picture><br><sub><b>访问图</b> — 左侧来源，右侧资源，按颜色区分读写。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-drift-dark.png"><img src="docs-site/public/console/access-map-drift-light.png" alt="最小权限漂移：叠加在访问图上的意外访问和未使用授权。"></picture><br><sub><b>最小权限漂移</b> — 已观察但未允许，以及无人使用的授权。</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/agentops-dark.png"><img src="docs-site/public/console/agentops-light.png" alt="从控制台创建、附加并治理的 Claude Code 会话。"></picture><br><sub><b>会话</b> — 从控制台创建、附加并治理会话，无需 SSH。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/work-dark.png"><img src="docs-site/public/console/work-light.png" alt="工作：跨会话的持久工作项与决策待办。"></picture><br><sub><b>工作</b> — 跨会话的持久待办：工作项、所有权、验收、决策。</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/security-dark.png"><img src="docs-site/public/console/security-light.png" alt="安全与取证：护栏发现、异常队列和可检测篡改的取证。"></picture><br><sub><b>安全与取证</b> — 护栏发现、异常、可检测篡改的取证。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/finops-dark.png"><img src="docs-site/public/console/finops-light.png" alt="FinOps：模型支出、令牌用量、预算和 run-rate 预测。"></picture><br><sub><b>FinOps</b> — 按模型和 agent 的支出、拒绝或限制的预算、run-rate。</sub> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-dark.png"><img src="docs-site/public/console/access-map-light.png" alt="Access map: what each agent reads and writes across your estate, origins on the left, resources on the right."></picture><br><sub><b>访问图</b> — 谁读取和写入了什么。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-drift-dark.png"><img src="docs-site/public/console/access-map-drift-light.png" alt="Least-privilege drift: unexpected accesses and unused grants overlaid on the access map."></picture><br><sub><b>Drift</b> — 无人授权的访问，以及无人使用的权限。</sub> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/agentops-dark.png"><img src="docs-site/public/console/agentops-light.png" alt="Claude Code sessions created, attached to and governed from the console."></picture><br><sub><b>会话</b> — 从浏览器启动、加入和停止 agent 会话。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/work-dark.png"><img src="docs-site/public/console/work-light.png" alt="Work: the durable cross-session backlog of work items and decisions."></picture><br><sub><b>工作</b> — 会话结束后仍保留的任务、负责人和决策。</sub> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/security-dark.png"><img src="docs-site/public/console/security-light.png" alt="Security and forensics: guardrail findings, the anomaly queue and tamper-evident forensics."></picture><br><sub><b>安全</b> — 被拦截的操作、异常和可检测篡改的记录。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/finops-dark.png"><img src="docs-site/public/console/finops-light.png" alt="FinOps: model spend, token usage, budgets and a run-rate projection."></picture><br><sub><b>支出</b> — 按模型和 agent 查看费用、预算和预测。</sub> |
 
-每张静帧都是正在运行的二进制所提供的已播种演示 estate 的截图。完整屏幕图：[控制台参考](docs-site/src/content/docs/reference/console.md)。
+全部页面见[控制台参考](docs-site/src/content/docs/reference/console.md)。
 
 ## 版本与定价
 
-AGPL 构建就是整个平台，从不从内部做功能封顶。商业 add-on 是叠加上去的附加代码，从来不是被拿掉的功能；订阅是下载已签名模块包的凭证。自托管引擎中的用户账户不受限，全部**四个 deny-closed 执行点**均开放。
+Community 是完整产品，免费且开源。Business 增加企业在生产环境中运行所需的能力。Enterprise 面向基础设施规模更大或受监管的企业集团。
 
-| 版本 | 面向谁 | 增加什么 |
-|---|---|---|
-| **Community** | 任何人。免费，AGPL-3.0，用户数不限。 | 完整产品，自托管。核心没有许可证闸门。 |
-| **Business** | 正在采用它的组织。按部署计价，从不按席位。 | 服务和可选包，不是核心功能：商业许可证、受维护的签名发布通道、工作时间邮件支持，以及四个可选 add-on：**Regulated Operations**、**Compliance Packs**、**AI Runtime Security** 和 **Identity & Scale**（含官方工具的会话驾驶舱）。四个合在一起即 **Business Max**。 |
-| **Cloud** | 希望同一平面由他人代为运行的团队，预付费，共享基础设施。 | 带已公布上限的托管控制平面。没有 Cloud 试用；免费选项仍是自托管 Community。 |
-| **Enterprise** | 受监管、多实体、大规模 estate。 | 一份合同，通过邮件约定，并在年度订单上签署。 |
+| | **Community** | **Business** | **Enterprise** |
+|---|---|---|---|
+| **价格** | 免费，AGPL-3.0 | 每月 129 美元或每年 1,290 美元 | 年度合同 |
+| **包含内容** | 完整产品：不限用户数量，包含全部四个 deny-closed 执行点 | Community 的全部内容，加上 Regulated Operations、AI Runtime Security、Compliance Packs、Identity & Scale、商业许可证、签名更新和邮件支持 | Business 的全部内容，加上更多公司、部署和身份提供商、离线镜像，以及与你约定的支持条款 |
+| **使用范围** | 一个活跃身份提供商 | 一家公司，两个生产部署，每个各配一个 staging 环境，五个身份提供商 | 按合同约定 |
 
-价格、add-on 矩阵和购买条款：[olivares.ai/pricing](https://olivares.ai/pricing)。开放/商业/规划矩阵：[`LICENSING.md`](LICENSING.md)。
+**Regulated Operations** 按法律要求的期限保留记录，支持法律保全和不可更改的归档。**AI Runtime Security** 过滤 agent 发送、接收和执行的内容。**Compliance Packs** 为 ISO 42001、DORA 和 NIS 2 提供可直接使用的证据。**Identity & Scale** 同时连接多个身份提供商，并支持更大规模的部署。
+
+[olivares.ai/pricing](https://olivares.ai/pricing) · [开源与商业范围](LICENSING.md)
 
 ## 架构
 
-一个静态 Go 二进制嵌入控制台，并暴露四个界面：REST API（主）、稳定核心的聚焦 gRPC 镜像、`olivares` CLI 和 Terraform provider。采集器在你的基础设施内运行；存储为 SQLite 或带行级安全的 Postgres，先在存储 API 强制一次，再由 Postgres 强制一次。全貌（含工作平面）：[`ARCHITECTURE.md`](ARCHITECTURE.md)。
+一个内置控制台的 Go 二进制程序，提供 REST API、gRPC API、`olivares` 命令行和 Terraform provider。采集器在你的网络内运行，数据保留在你服务器上的 SQLite 或 PostgreSQL 中。[整体架构](ARCHITECTURE.md)。
 
 ## 文档
 
-[docs.olivares.ai](https://docs.olivares.ai) — 经过测试的安装教程（单节点、Docker Compose、Kubernetes/Helm、air-gapped）、带真实控制台截图的连接器指南、手册（deny-closed 策略、预算、审批、kill-switch 演练、SIEM 推送）、API 参考和术语表。从[什么是 Olivares AI](docs-site/src/content/docs/start/what-is-olivares-ai.md)开始。站点上：[产品](https://olivares.ai/product) · [方案](https://olivares.ai/solutions) · [工作原理](https://olivares.ai/how-it-works) · [架构](https://olivares.ai/architecture) · [安全](https://olivares.ai/security) · [信任](https://olivares.ai/trust) · [对比](https://olivares.ai/compare) · [演示](https://olivares.ai/demo) · [changelog](https://olivares.ai/changelog) · [状态](https://olivares.ai/status) · [路线图](https://olivares.ai/roadmap) · [品牌](https://olivares.ai/brand) · [新闻](https://olivares.ai/press)。发布：[GitHub](https://github.com/olivaresai/olivares/releases) · [`CHANGELOG.md`](CHANGELOG.md)。
+[docs.olivares.ai](https://docs.olivares.ai) 提供安装指南、每个连接器的指南、常见策略的配置示例和 API 参考。先阅读[什么是 Olivares AI](docs-site/src/content/docs/start/what-is-olivares-ai.md)。当前可用功能与后续计划见[诚实与限制](docs-site/src/content/docs/start/honesty-and-limits.md)。发布版本：[GitHub](https://github.com/olivaresai/olivares/releases) · [`CHANGELOG.md`](CHANGELOG.md)。
+
+网站：[产品](https://olivares.ai/product) · [方案](https://olivares.ai/solutions) · [工作原理](https://olivares.ai/how-it-works) · [架构](https://olivares.ai/architecture) · [安全](https://olivares.ai/security) · [信任](https://olivares.ai/trust) · [对比](https://olivares.ai/compare) · [演示](https://olivares.ai/demo) · [changelog](https://olivares.ai/changelog) · [状态](https://olivares.ai/status) · [路线图](https://olivares.ai/roadmap) · [品牌](https://olivares.ai/brand) · [新闻](https://olivares.ai/press)。
 
 ## 安全
 
-通过 [`SECURITY.md`](SECURITY.md) 私下报告漏洞，切勿作为公开 issue。引擎以读为先、数据最小化：访问图存储边而非载荷，打开它是一次被记录的操作。校验许可证从不呼叫我们；AGPL 核心不做任何许可证调用。公告流程：[`docs/security-advisories.md`](docs/security-advisories.md)；供应链证据：[`docs/openssf-badge.md`](docs/openssf-badge.md)。
+发现漏洞？请按 [`SECURITY.md`](SECURITY.md) 私下报告。Olivares AI 记录哪个 agent 访问了哪个资源，不记录内容；查看这些记录的行为本身也会被记录。许可证离线验证；开源核心从不联系我们。
 
 ## 社区
 
-[`CONTRIBUTING.md`](CONTRIBUTING.md)（设置、DCO/CLA、SPDX、连接器边界） · [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) · [`SUPPORT.md`](SUPPORT.md) · [`GOVERNANCE.md`](GOVERNANCE.md) · [`CHANGELOG.md`](CHANGELOG.md)（Keep a Changelog，CalVer `vYY.M.PATCH`）。
-
-## 许可证
-
-`core/`、`modules/` 和 `web/` 为 **AGPL-3.0-only**；`sdk/`、`connectors/` 和 `clients/` 为 **Apache-2.0**，连接器从不导入引擎。商业 add-on 独立、可选且闭源——仅以 `-tags enterprise` 构建，从不出现在本仓库；商业许可：`enterprise@olivares.ai` — [`LICENSING.md`](LICENSING.md)。贡献需要 DCO 签署（`git commit -s`）和 [CLA](CLA.md)。
-
-> **无担保，无责任。** 软件按**现状**提供，**不提供任何形式的担保**，**不对数据丢失、业务中断或利润损失承担责任**。在控制平面上这不是套话：一次错误配置可能阻断正当工作，或放行你本想拦住的东西。适用 AGPL-3.0-only §§15–16、Apache-2.0 §§7–8 以及本项目的补充条款 — [`DISCLAIMER.md`](DISCLAIMER.md)。
+欢迎贡献。[`CONTRIBUTING.md`](CONTRIBUTING.md) 介绍环境设置、签署确认和连接器如何接入。[行为准则](CODE_OF_CONDUCT.md) · [支持](SUPPORT.md) · [治理](GOVERNANCE.md) · [更新日志](CHANGELOG.md)。
 
 ## 支持本项目
 
-核心免费，并将保持免费；让每次发布都经过签名、校验并保持最新，是持续的工作。通过 GitHub Sponsors 赞助 — [github.com/sponsors/olivaresai](https://github.com/sponsors/olivaresai) 或 [github.com/sponsors/fran-olivares](https://github.com/sponsors/fran-olivares) — 或在 Ko-fi 一次性支持。赞助不是支持合同（[`SUPPORT.md`](SUPPORT.md)）；希望具名的赞助者列于 [`SUPPORTERS.md`](SUPPORTERS.md)。
+Olivares AI 公开开发。如果它对你有帮助，可以在 GitHub Sponsors 上赞助 [olivaresai](https://github.com/sponsors/olivaresai) 或 [fran-olivares](https://github.com/sponsors/fran-olivares)，也可以在 Ko-fi 请我们喝杯咖啡。愿意公开署名的赞助者会列在 [`SUPPORTERS.md`](SUPPORTERS.md) 中。赞助不是支持合同（[`SUPPORT.md`](SUPPORT.md)）。
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Z1R625SAD2)
+
+## 许可证
+
+引擎、模块和控制台采用 **AGPL-3.0-only**；SDK、连接器和客户端采用 **Apache-2.0**。商业代码单独构建，不包含在本仓库中；商业许可请联系 `enterprise@olivares.ai`。贡献需要 DCO 签署（`git commit -s`）和 [CLA](CLA.md)。
+
+> **按原样**提供，不提供任何形式的担保，也不对数据丢失、业务中断或利润损失承担责任。参见 [`DISCLAIMER.md`](DISCLAIMER.md)。
 
 ---
 

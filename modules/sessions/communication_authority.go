@@ -358,6 +358,9 @@ func bindCommunicationRequestAuthority(
 
 	resolved, err := resolver.ResolvePrincipalScope(ctx, ref, question.entity.TenantID)
 	if err != nil {
+		if errors.Is(err, auth.ErrPrincipalScopeAdmissionRequired) {
+			return communicationRequestAuthority{}, ErrCommunicationAdmissionRequired
+		}
 		if errors.Is(err, auth.ErrUnauthenticated) {
 			return communicationRequestAuthority{}, fmt.Errorf(
 				"%w: %w", ErrCommunicationEvidenceUnknown, errCommunicationCredentialNotCurrent,

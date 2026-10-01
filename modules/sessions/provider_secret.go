@@ -30,10 +30,9 @@ import (
 // ProviderSecretVault seals a provider credential outside this module's partition
 // and hands back a NON-SECRET locator.
 //
-// `name` is a stable, caller-chosen handle derived from the record's own ref, so a
-// rotation can reseal in place: Seal with an existing name REPLACES the value and
-// returns the same locator. That is what makes a rotation invisible to every
-// binding that already names the record.
+// `name` is a caller-chosen handle derived from the record's own ref. A rotation
+// seals under a fresh handle, publishes its locator under the stable provider ref,
+// then withdraws the superseded value. Bindings never name the private locator.
 type ProviderSecretVault interface {
 	// Seal stores value under name for this tenant and returns the locator to Open
 	// it with. Calling it twice with the same name replaces the value.

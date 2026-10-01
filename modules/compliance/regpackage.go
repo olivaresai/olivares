@@ -572,7 +572,7 @@ type errStr string
 func (e errStr) Error() string { return string(e) }
 
 // writeRegisterError maps a DORA register/incident failure. Same ordered contract as
-// writeNIS2Error, and the same defect it fixes (Codex contrast F2): every packager error
+// writeNIS2Error, and the same defect it fixes (Codex contrast finding 2): every packager error
 // is wrapped in errRegisterRejected (:275, doraincident.go:119), so an entitlement refusal came
 // out as 422 "DORA register rejected" instead of the 403 that names the add-on. An operator
 // reading that would edit a document that was never the problem.

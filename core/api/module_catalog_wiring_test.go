@@ -51,6 +51,18 @@ func (undeclaredRouteModule) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("PUT", "/things/{id}", "undecl:thing:admin", noop) // never declared
 }
 
+type emptyRoutePermissionModule struct{ catalogModule }
+
+func (emptyRoutePermissionModule) APIRoutes(reg api.RouteRegistrar) {
+	reg.Handle(http.MethodGet, "/things", "", func(http.ResponseWriter, *http.Request, api.ModuleContext) {})
+}
+
+func TestMountStillRejectsEmptyRoutePermission(t *testing.T) {
+	if _, err := newServerWith(t, emptyRoutePermissionModule{}); err == nil || !strings.Contains(err.Error(), "undeclared permissions") {
+		t.Fatalf("empty route permission must still refuse the mount: %v", err)
+	}
+}
+
 // coreDeclaringModule tries to declare a CORE permission, which would let a module widen
 // the code-defined core catalog.
 type coreDeclaringModule struct{}
@@ -58,6 +70,33 @@ type coreDeclaringModule struct{}
 func (coreDeclaringModule) APINamespace() string           { return "coredecl" }
 func (coreDeclaringModule) Permissions() []auth.Permission { return []auth.Permission{"agent:read"} }
 func (coreDeclaringModule) APIRoutes(api.RouteRegistrar)   {}
+
+type denialReadCatalogModule struct{ declareRead bool }
+
+func (denialReadCatalogModule) APINamespace() string { return "denialread" }
+func (m denialReadCatalogModule) Permissions() []auth.Permission {
+	permissions := []auth.Permission{"denialread:thing:write"}
+	if m.declareRead {
+		permissions = append(permissions, "denialread:thing:read")
+	}
+	return permissions
+}
+func (denialReadCatalogModule) APIRoutes(reg api.RouteRegistrar) {
+	reg.HandleEntity(http.MethodPost, "/things/{id}", "denialread:thing:write", api.EntityRef{
+		Kind: "denialread.thing", IDParam: "id", ConcealDeniedAsNotFound: true,
+		DeniedReadPermission: "denialread:thing:read",
+	}, func(http.ResponseWriter, *http.Request, api.ModuleContext) {})
+}
+
+func TestMountRequiresDenialReadPermissionInModuleCatalog(t *testing.T) {
+	_, err := newServerWith(t, denialReadCatalogModule{})
+	if err == nil || !strings.Contains(err.Error(), "denialread:thing:read") {
+		t.Fatalf("undeclared denial read permission must refuse the mount: %v", err)
+	}
+	if _, err := newServerWith(t, denialReadCatalogModule{declareRead: true}); err != nil {
+		t.Fatalf("declared denial read permission refused: %v", err)
+	}
+}
 
 func newServerWith(t *testing.T, mods ...api.Module) (*api.Server, error) {
 	t.Helper()

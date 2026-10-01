@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactElement, ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -63,6 +63,41 @@ beforeEach(() => {
 })
 
 describe('group role mapping', () => {
+  it('keeps a named provisioner group read-only even for an admin', async () => {
+    api.listGroups.mockResolvedValue({
+      groups: [
+        {
+          ...engineering,
+          provisioned_by: 'directory-a',
+          parent_group_id: 'g-parent',
+        },
+      ],
+    })
+    wrap(<GroupHierarchySection canAdmin />)
+    const row = (await screen.findByText('Engineering')).closest('tr')!
+    expect(
+      within(row).getByText('Managed by directory-a · read-only'),
+    ).toBeInTheDocument()
+    expect(within(row).queryByRole('button')).not.toBeInTheDocument()
+    expect(api.setGroupRole).not.toHaveBeenCalled()
+    expect(api.setGroupParent).not.toHaveBeenCalled()
+  })
+
+  it.each(['', 'operator'])(
+    'preserves console controls for origin %j',
+    async (origin) => {
+      api.listGroups.mockResolvedValue({
+        groups: [{ ...engineering, provisioned_by: origin }],
+      })
+      wrap(<GroupHierarchySection canAdmin />)
+      expect(
+        await screen.findByRole('button', { name: 'Map role' }),
+      ).toBeEnabled()
+      expect(screen.getByRole('button', { name: 'Set parent' })).toBeEnabled()
+      expect(screen.queryByText(/read-only/)).not.toBeInTheDocument()
+    },
+  )
+
   it('states the blast radius before the operator commits', async () => {
     const user = userEvent.setup()
     wrap(<GroupHierarchySection canAdmin />)

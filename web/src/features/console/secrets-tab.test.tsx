@@ -19,7 +19,7 @@ const { api, authState } = vi.hoisted(() => ({
     activeRole: 'owner' as string | null,
     isSuperadmin: true,
     principal: { aal: 3 } as { aal?: number } | null,
-    can: (_p: string) => true,
+    can: (_p: string): boolean => true,
   },
 }))
 
@@ -57,10 +57,75 @@ const oneSecret = {
 beforeEach(() => {
   vi.clearAllMocks()
   authState.isSuperadmin = true
+  authState.activeTenant = 't1'
+  authState.can = () => true
   api.listSecrets.mockResolvedValue({ secrets: [], sealer_available: true })
 })
 
 describe('SecretsTab', () => {
+  it('admits tenant admins without global authority and reads the captured tenant', async () => {
+    authState.isSuperadmin = false
+    wrap(<SecretsTab scope="tenant" />)
+    await screen.findByRole('button', { name: /new secret/i })
+    expect(api.listSecrets).toHaveBeenCalledWith(
+      'tenant',
+      expect.objectContaining({
+        tenant: 't1',
+        signal: expect.any(AbortSignal),
+      }),
+    )
+  })
+
+  it('does not read tenant secrets for a viewer or without an active tenant', async () => {
+    authState.can = () => false
+    const view = wrap(<SecretsTab scope="tenant" />)
+    expect(api.listSecrets).not.toHaveBeenCalled()
+    view.unmount()
+    authState.can = () => true
+    authState.activeTenant = null
+    wrap(<SecretsTab scope="tenant" />)
+    expect(api.listSecrets).not.toHaveBeenCalled()
+  })
+
+  it('restricts tenant names and drops credential mutation variables when its form closes', async () => {
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    api.putSecret.mockResolvedValue({
+      name: 'mcp/upstream',
+      hint: 'fixture-hint',
+    })
+    render(
+      <QueryClientProvider client={qc}>
+        <SecretsTab scope="tenant" />
+      </QueryClientProvider>,
+    )
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: /new secret/i }))
+    const form = screen.getByRole('dialog')
+    const name = within(form).getByLabelText(/^name/i)
+    expect(name).toHaveValue('mcp/')
+    await user.clear(name)
+    await user.type(name, 'provider/foreign')
+    await user.type(within(form).getByLabelText(/^value/i), 'fixture-value')
+    expect(
+      within(form).getByRole('button', { name: /save secret/i }),
+    ).toBeDisabled()
+    await user.clear(name)
+    await user.type(name, 'mcp/upstream')
+    await user.click(within(form).getByRole('button', { name: /save secret/i }))
+    await waitFor(() => expect(form).not.toBeInTheDocument())
+    expect(api.putSecret).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'mcp/upstream', value: 'fixture-value' }),
+      'tenant',
+      expect.objectContaining({
+        tenant: 't1',
+        dispatchGuard: expect.any(Function),
+      }),
+    )
+    expect(qc.getMutationCache().getAll()).toHaveLength(0)
+  })
+
   it('is superadmin-only', async () => {
     authState.isSuperadmin = false
     wrap(<SecretsTab />)

@@ -43,7 +43,7 @@ description: >-
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-控制台发布 **76 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
+控制台发布 **80 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
 打开的参考页面。
 
 ### 运维
@@ -51,7 +51,8 @@ description: >-
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
 | 概览 | `/` | 基础设施总览和健康情况 | 任何已登录用户 | [文档主页](/zh/) |
-| Claude Code | `/agentops` | 创建、接入并治理 Claude Code 会话——无需 SSH | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/zh/how-to/run-claude-code-with-olivares/) |
+| 智能体工具 | `/agent-tools` | 检测、安装和更新此主机上的智能体工具，并跟踪每次安装；仅限部署管理员 | `system:admin` | [how-to/add-a-provider](/zh/how-to/add-a-provider/) |
+| 运营会话 | `/agentops` | 创建、附加并治理 Claude Code 会话 — 无需 SSH；与“观测会话”共用同一界面 | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/zh/how-to/run-claude-code-with-olivares/) |
 | 备份 | `/backups` | 触发、计划、下载和恢复备份，并在破坏性路径上进行第二次确认。 | `system:admin` | [how-to/backup-and-restore](/zh/how-to/backup-and-restore/) |
 | 通信 | `/communications` | 所选工作区的频道、直接通知与个人收件箱 | `sessions:channel:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 频道管理 | `/communications/administration` | 管理频道：配置与授权历史，每次操作都在频道当前 ETag 下 | `sessions:channel:admin` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
@@ -62,11 +63,12 @@ description: >-
 | 紧急开关 | `/killswitch` | 紧急停止、双人控制恢复和 guardian 遏制 | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/zh/how-to/cookbook/kill-switch-drill/) |
 | 日志 | `/logs` | 实时引擎日志流，可按级别和模块过滤，并支持搜索和暂停。 | `system:admin` | [how-to/troubleshooting](/zh/how-to/troubleshooting/) |
 | 可观测性 | `/observability` | 按标准查看摄取健康状况和追踪下钻 | `health:status:read` | [reference/modules/observability](/zh/reference/modules/observability/) |
+| 提供商账户 | `/provider-accounts` | 列出已命名的提供商账户，并将现有提供商配置文件采纳为账户 | `sessions:account:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 来源绑定 | `/provider-bindings` | 将已配置的来源，以本节点应用的修订版本，专用于提供商配置文件 | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 提供商配置文件 | `/provider-profiles` | 登记并管理会话启动所依据的提供商主目录，并按需读取其配置 | `sessions:profile:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 提供商 | `/providers` | 注册会话启动时使用的 API 密钥与端点；可测试、更换和吊销 | `sessions:provider:read` | [how-to/add-a-provider](/zh/how-to/add-a-provider/) |
 | 沙箱 | `/sandbox` | 隔离的 Agent 测试与重放 | `sandbox:run:read` | [reference/modules/xvii-sandbox](/zh/reference/modules/xvii-sandbox/) |
-| 会话 | `/sessions` | 实时 Agent 操作和时间线 | `sessions:live:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
+| 观测会话 | `/sessions` | 观测实时和已发现的会话及其时间线；与“运营会话”共用同一界面 | `sessions:live:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 租户 | `/tenants` | 撤销或恢复租户服务 | `system:admin` | [how-to/troubleshooting](/zh/how-to/troubleshooting/) |
 | 语音 | `/voice` | 语音和实时会话 | `voice:session:read` | [reference/modules/xvi-voice](/zh/reference/modules/xvi-voice/) |
 | 工作 | `/work` | 跨会话持久 backlog：项目、依赖、验收和决定 | `sessions:work:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
@@ -91,7 +93,8 @@ description: >-
 | 目录 | `/catalog` | 策展并获批准的 Agent 和能力 | `catalog:entry:read` | [reference/modules/xiv-catalog](/zh/reference/modules/xiv-catalog/) |
 | 协议绑定 | `/communications/protocol-bindings` | 组合并协调受治理的 A2A 和 MCP 绑定 | `sessions:protocol-binding:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 部署 | `/deploy` | 配置 Agent 并将其接入基础设施 | `deploy:deployment:read` | [reference/modules/vii-deploy](/zh/reference/modules/vii-deploy/) |
-| 清单 | `/inventory` | 发现并编目每个 Agent、MCP 和模型 | `inventory:catalog:read` | [reference/modules/i-inventory](/zh/reference/modules/i-inventory/) |
+| Git 发布 | `/git-publication` | 通过已批准的 Git 目标推送提交、创建拉取请求并合并 | `gitpublish:target:read` | [reference/modules/gitpublish](/zh/reference/modules/gitpublish/) |
+| 清单 | `/inventory` | 发现并编目连接器观察到的智能体、MCP 服务器与模型。 | `inventory:catalog:read` | [reference/modules/i-inventory](/zh/reference/modules/i-inventory/) |
 | 知识 | `/knowledge` | 知识库、RAG 和数据沿袭 | `knowledge:kb:read` | [reference/modules/viii-knowledge](/zh/reference/modules/viii-knowledge/) |
 | 模型运维 | `/model-operations` | 自有模型、准入和部署 | `models:registry:read` | [reference/modules/xxiii-model-operations](/zh/reference/modules/xxiii-model-operations/) |
 | 模型 | `/models` | 模型、路由和提供商密钥 | `models:catalog:read` | [reference/modules/x-models](/zh/reference/modules/x-models/) |
@@ -103,9 +106,10 @@ description: >-
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
 | 访问图 | `/access-map` | 每个 Agent 读取和写入的内容（R/RW） | `accessmap:graph:read` | [reference/modules/iii-access-map](/zh/reference/modules/iii-access-map/) |
-| AgentCore 导出 | `/agentcore-export` | 规划并应用到 AWS AgentCore 的 Cedar 策略导出，在执行前审查将发生的变化。 | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
+| AgentCore 导出 | `/agentcore-export` | 规划、审阅并应用将本租户治理规则投射为 AWS AgentCore Cedar 策略；规划不写入任何内容 | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
 | Claude Code 治理 | `/claude-policy` | 托管策略、hook、MCP、沙箱和策略即代码 | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/zh/how-to/connectors/claude-code-hooks-pep/) |
-| 控制台 | `/console` | 引导用户、连接 SSO/IdP，并塑造工作区和 Agent 组。 | `tenant:admin` | [reference/modules/xx-multi-tenancy](/zh/reference/modules/xx-multi-tenancy/) |
+| 管理 | `/console` | 用户、SSO/IdP、工作区、代理组、角色、密钥、连接器、API 密钥以及此安装的许可证 | `tenant:admin` | [reference/modules/xx-multi-tenancy](/zh/reference/modules/xx-multi-tenancy/) |
+| 源差异 | `/console/sources/diff` | 逐个文件比较已连接 Git 仓库的基准修订与 head 修订 | `system:admin` | [reference/console](/zh/reference/console/) |
 | 身份与 NHI | `/identity` | SSO、SCIM、NHI 名册和 WIF 图 | `governance:identity:read` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |
 | 推理代理 | `/inference-proxy` | 代理门禁、出站 DLP 规则和设备批准 | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/zh/reference/modules/inferenceproxy/) |
 | 权限 | `/permissions` | 身份、角色和批准 | `governance:identity:read` | [reference/modules/vi-governance](/zh/reference/modules/vi-governance/) |

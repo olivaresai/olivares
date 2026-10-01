@@ -22,8 +22,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 const WORKSPACE_PAGE = 1000
 
 /** The workspace card of the sidebar (redesign §3.2): the initial on an accent tile, the
- * name, and the slug beneath it. It is shown even with one workspace, as a plain card,
- * because it names the scope every journey below it operates on. */
+ * name, and the slug beneath it. Every available workspace is selectable, including
+ * the sole workspace. All workspaces remains an explicit scope choice. */
 function WorkspaceCardFace({ name, detail }: { name: string; detail: string }) {
   return (
     <>
@@ -75,7 +75,7 @@ export function WorkspaceSwitcher({
   })
 
   const workspaces = data?.items ?? []
-  if (workspaces.length <= 1) {
+  if (workspaces.length === 0) {
     if (variant !== 'card') return null
     const only = workspaces[0]
     return (

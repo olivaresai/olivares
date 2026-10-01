@@ -95,9 +95,11 @@
     "providers": "Anbieter",
     "providerProfiles": "Anbieterprofile",
     "providerBindings": "Quellenbindungen",
-    "providerAccounts": "Anbieterkonten"
+    "providerAccounts": "Anbieterkonten",
+    "agent-tools": "Agentenwerkzeuge"
   },
   "workspace": {
+    "open": "{{workspace}} öffnen",
     "switch": "Arbeitsbereich wechseln",
     "all": "Alle Arbeitsbereiche",
     "allHint": "Kein Arbeitsbereich-Filter",
@@ -171,7 +173,8 @@
     "team-costs": "Kostenzuordnung nach Team: Sitzungen, Token und Ausgaben, mit Tagesverlauf und Aufschlüsselung nach Projekt und Modell",
     "backups": "Verschlüsselte Disaster-Recovery-Schnappschüsse der Steuerungsebene: erstellen, planen, herunterladen und wiederherstellen",
     "logs": "Der Live-Protokollstrom der Engine mit Filtern nach Stufe und Modul, Suche und Pause",
-    "sourceDiff": "Vergleichen Sie eine Basis- und eine Head-Revision eines verbundenen Git-Repositorys, Datei für Datei"
+    "sourceDiff": "Vergleichen Sie eine Basis- und eine Head-Revision eines verbundenen Git-Repositorys, Datei für Datei",
+    "agent-tools": "Erkennen, installieren und aktualisieren Sie die Agentenwerkzeuge auf diesem Host und verfolgen Sie jede Installation; nur für Deployment-Administratoren"
   },
   "commandActions": {
     "eventing": {

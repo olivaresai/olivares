@@ -3,7 +3,7 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# Battery for the AUTHORIZATION WIRING of the two release workflows (R1 contrast P1-02 /
+# Battery for the AUTHORIZATION WIRING of the two release workflows (independent review P1-02 /
 # P2-02 / P3-02). The §C.4 contract is structural — "the preflight is a read-only job
 # that runs first, and every mutating job depends on it and consumes its outputs" — so a
 # script-level battery cannot see it drift: the preflight script stayed green while the

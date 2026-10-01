@@ -117,6 +117,35 @@ describe('usePrivilegedMutation (confirm → mutate → invalidate → toast →
     expect(toast.success).not.toHaveBeenCalled()
   })
 
+  it('names tenant admission instead of suggesting a permission retry', async () => {
+    const qc = new QueryClient()
+    const request = vi.fn(async () => {
+      throw new ApiError(
+        403,
+        'tenant_admission_required',
+        'requires tenant admission',
+      )
+    })
+    const { result } = renderHook(
+      () =>
+        usePrivilegedMutation({
+          mutationFn: request,
+          successMessage: 'unused',
+        }),
+      { wrapper: makeWrapper(qc) },
+    )
+    result.current.mutate(undefined)
+    await waitFor(() =>
+      expect(toast.warning).toHaveBeenCalledWith('Tenant admission required', {
+        description:
+          'Sign in with a tenant-admitted directory identity. Global bootstrap authority cannot operate workspace communications.',
+      }),
+    )
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(useStepUpStore.getState().request).toBeNull()
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
   // THE defect this suite exists for: the engine answers 403 with TWO different
   // codes and the hook branched on the STATUS, so an assurance demand was reported
   // as "your role can't perform this action" — an accusation against an operator

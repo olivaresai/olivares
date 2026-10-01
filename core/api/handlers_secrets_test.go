@@ -123,3 +123,48 @@ func TestSecretsConsoleUnavailableWithoutService(t *testing.T) {
 		t.Fatalf("get secrets with no store = %d, want 501", r.code)
 	}
 }
+
+func TestSecretsTenantScopeDoesNotGrantGlobalAuthority(t *testing.T) {
+	h := newSecretsHarness(t)
+	root := h.adminLogin()
+	tenant := h.createOrg(root, "mcp-secrets")
+	foreign := h.createOrg(root, "mcp-secrets-foreign")
+	admin := h.mkMember(root, "mcp-secret-admin@test.io", "fixturepass1", auth.RoleAdmin, tenant)
+	viewer := h.mkMember(root, "mcp-secret-viewer@test.io", "fixturepass1", auth.RoleViewer, tenant)
+	path := "/v1/console/secrets?scope=tenant"
+	body := map[string]any{"name": "mcp/example", "value": "Bearer fixture-tenant-only"}
+	if got := h.do("PUT", path, admin, body, tenantHdr(tenant)); got.code != 403 {
+		t.Fatalf("AAL1 write=%d", got.code)
+	}
+	h.elevate(admin)
+	if got := h.do("PUT", path, viewer, body, tenantHdr(tenant)); got.code != 403 {
+		t.Fatal("viewer write admitted")
+	}
+	if got := h.do("PUT", path, admin, body, tenantHdr(foreign)); got.code != 403 {
+		t.Fatalf("foreign tenant write=%d", got.code)
+	}
+	if got := h.do("PUT", "/v1/console/secrets", admin, body, tenantHdr(tenant)); got.code != 403 {
+		t.Fatal("tenant admin gained global write")
+	}
+	if got := h.do("PUT", path, admin, body, tenantHdr(tenant)); got.code != 200 {
+		t.Fatalf("own tenant put=%d %s", got.code, got.raw)
+	}
+	own := h.do("GET", path, admin, nil, tenantHdr(tenant))
+	if own.code != 200 || len(own.body["secrets"].([]any)) != 1 {
+		t.Fatalf("tenant refs=%d %s", own.code, own.raw)
+	}
+	global := h.do("GET", "/v1/console/secrets", root, nil, nil)
+	if global.code != 200 || len(global.body["secrets"].([]any)) != 0 {
+		t.Fatal("tenant secret entered global scope")
+	}
+	other := h.do("GET", path, root, nil, tenantHdr(foreign))
+	if other.code != 200 || len(other.body["secrets"].([]any)) != 0 {
+		t.Fatal("tenant secret crossed scopes")
+	}
+	if _, leaked := own.body["secrets"].([]any)[0].(map[string]any)["value"]; leaked {
+		t.Fatal("secret value returned")
+	}
+	if got := h.do("GET", "/v1/console/secrets?scope=unknown", admin, nil, tenantHdr(tenant)); got.code != 400 {
+		t.Fatalf("unknown scope=%d", got.code)
+	}
+}

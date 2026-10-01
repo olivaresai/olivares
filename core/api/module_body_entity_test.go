@@ -27,11 +27,12 @@ import (
 )
 
 const (
-	bodyEntityKind       model.Kind      = "bodyentity.thing"
-	bodyEntityPermission auth.Permission = "bodyentity:thing:write"
-	bodyEntityIDField                    = "thing_id"
-	bodyEntityWorkspace                  = "workspace_id"
-	bodyEntityLabel                      = "label"
+	bodyEntityKind           model.Kind      = "bodyentity.thing"
+	bodyEntityPermission     auth.Permission = "bodyentity:thing:write"
+	bodyEntityReadPermission auth.Permission = "bodyentity:thing:read"
+	bodyEntityIDField                        = "thing_id"
+	bodyEntityWorkspace                      = "workspace_id"
+	bodyEntityLabel                          = "label"
 )
 
 func registerBodyEntityTestDescriptor(reg store.ExtensionRegistry) error {
@@ -62,7 +63,7 @@ type bodyEntityTestModule struct {
 func (*bodyEntityTestModule) APINamespace() string { return "bodyentity" }
 
 func (*bodyEntityTestModule) Permissions() []auth.Permission {
-	return []auth.Permission{bodyEntityPermission}
+	return []auth.Permission{bodyEntityPermission, bodyEntityReadPermission}
 }
 
 func (m *bodyEntityTestModule) APIRoutes(reg api.RouteRegistrar) {
@@ -83,6 +84,63 @@ func (m *bodyEntityTestModule) APIRoutes(reg api.RouteRegistrar) {
 	reg.HandleEntity("POST", "/body", bodyEntityPermission, bodyRef, m.handle)
 	reg.HandleEntity("POST", "/path/{id}", bodyEntityPermission, pathRef, m.handle)
 	reg.HandleEntity("POST", "/unknown/{id}", bodyEntityPermission, unknownRef, m.handle)
+	readVisibleRef := pathRef
+	readVisibleRef.DeniedReadPermission = bodyEntityReadPermission
+	reg.HandleEntity("POST", "/read-visible/{id}", bodyEntityPermission, readVisibleRef, m.handle)
+	pathRef.LookupColumn = bodyEntityLabel
+	reg.HandleEntity("POST", "/reference/{id}", bodyEntityPermission, pathRef, m.handle)
+	pathRef.WorkspaceColumn = ""
+	pathRef.ConcealDeniedAsNotFound = false
+	reg.HandleEntity("POST", "/reference-only/{id}", bodyEntityPermission, pathRef, m.handle)
+}
+
+func TestReferenceEntityRouteUsesCanonicalStoredLineage(t *testing.T) {
+	f := newBodyEntityFixture(t)
+	for _, tc := range []struct {
+		ref  string
+		code int
+	}{
+		{"A", http.StatusOK},
+		{"B", http.StatusNotFound},
+		{"missing", http.StatusNotFound},
+		{f.idA.String(), http.StatusNotFound},
+	} {
+		t.Run(tc.ref, func(t *testing.T) {
+			before := len(f.module.snapshot())
+			r := f.rawRequest("POST", "/v1/m/bodyentity/reference/"+tc.ref, f.viewer, "")
+			if r.code != tc.code {
+				t.Fatalf("reference = %d %s, want %d", r.code, r.raw, tc.code)
+			}
+			if tc.code == http.StatusOK {
+				if r.body["resource_id"] != f.idA.String() || r.body["resource_workspace"] != f.wsA.String() {
+					t.Fatalf("authorization did not use canonical stored facts: %s", r.raw)
+				}
+			} else if len(f.module.snapshot()) != before {
+				t.Fatal("denied reference entered the handler")
+			}
+		})
+	}
+	f.gate.configure("", false)
+	r := f.rawRequest("POST", "/v1/m/bodyentity/reference-only/A", f.viewer, "")
+	if r.code != http.StatusOK || r.body["resource_id"] != f.idA.String() {
+		t.Fatalf("reference without workspace column lost canonical row lookup: %d %s", r.code, r.raw)
+	}
+	f.gate.configure(f.wsA, false)
+	if err := f.st.Mutate(context.Background(), f.tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(bodyEntityKind)
+		if err != nil {
+			return err
+		}
+		_, err = repo.Create(context.Background(), model.Record{bodyEntityWorkspace: f.wsA.String(), bodyEntityLabel: "A"})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	before := len(f.module.snapshot())
+	r = f.rawRequest("POST", "/v1/m/bodyentity/reference/A", f.viewer, "")
+	if r.code != http.StatusServiceUnavailable || len(f.module.snapshot()) != before {
+		t.Fatalf("ambiguous stored reference must fail closed before handler: %d %s", r.code, r.raw)
+	}
 }
 
 func (m *bodyEntityTestModule) handle(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -118,6 +176,7 @@ type bodyEntityScopedGate struct {
 	allowedWorkspace model.ID
 	allowCollection  bool
 	requests         []auth.Request
+	deniedReadID     string
 }
 
 func (g *bodyEntityScopedGate) configure(workspace model.ID, allowCollection bool) {
@@ -140,6 +199,14 @@ func (g *bodyEntityScopedGate) snapshotRequests() []auth.Request {
 }
 
 func (g *bodyEntityScopedGate) Scoped(_ context.Context, req auth.Request) (auth.ScopedDecision, error) {
+	if req.Permission == bodyEntityReadPermission {
+		g.mu.Lock()
+		defer g.mu.Unlock()
+		if req.Resource.ID == g.deniedReadID {
+			return auth.ScopedDecision{Effect: auth.EffectForbid, Reason: "test row read forbid", Class: auth.ClassPolicy}, nil
+		}
+		return auth.ScopedDecision{Effect: auth.EffectAbstain}, nil
+	}
 	if req.Permission != bodyEntityPermission {
 		return auth.ScopedDecision{Effect: auth.EffectAbstain}, nil
 	}
@@ -159,6 +226,42 @@ func (g *bodyEntityScopedGate) Scoped(_ context.Context, req auth.Request) (auth
 		Effect: auth.EffectForbid, Reason: "test foreign workspace",
 		Class: auth.ClassInvariant,
 	}, nil
+}
+
+func TestConcealedActionDisclosesDenialOnlyToRowReaders(t *testing.T) {
+	f := newBodyEntityFixture(t)
+	// Refuse writes to every stored workspace. Viewer RBAC can read, but the
+	// scoped read forbid below proves visibility must use the full authorizer.
+	f.gate.configure(model.NewID(), false)
+	f.gate.mu.Lock()
+	f.gate.deniedReadID = f.idB.String()
+	f.gate.mu.Unlock()
+	for _, tc := range []struct {
+		name, ref, code string
+		status          int
+	}{
+		{"readable action denied", f.idA.String(), "forbidden", http.StatusForbidden},
+		{"read forbidden despite viewer role", f.idB.String(), "not_found", http.StatusNotFound},
+		{"missing with viewer role", model.NewID().String(), "not_found", http.StatusNotFound},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := len(f.module.snapshot())
+			r := f.rawRequest(http.MethodPost, "/v1/m/bodyentity/read-visible/"+tc.ref, f.viewer, "")
+			if r.code != tc.status {
+				t.Fatalf("status=%d body=%s, want %d", r.code, r.raw, tc.status)
+			}
+			errorObject, _ := r.body["error"].(map[string]any)
+			if errorObject["code"] != tc.code || len(f.module.snapshot()) != before {
+				t.Fatalf("denial must keep its envelope and never invoke the action: %s", r.raw)
+			}
+		})
+	}
+	// Scoped authority for the action still admits it independently of read
+	// permission: the new field chooses denial presentation, never authority.
+	f.gate.configure(f.wsB, false)
+	if r := f.rawRequest(http.MethodPost, "/v1/m/bodyentity/read-visible/"+f.idB.String(), f.viewer, ""); r.code != http.StatusOK {
+		t.Fatalf("existing scoped action authority changed: %d %s", r.code, r.raw)
+	}
 }
 
 type bodyEntityFixture struct {

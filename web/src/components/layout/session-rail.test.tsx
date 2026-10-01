@@ -72,6 +72,34 @@ const HANDOFF = {
 } as unknown as HandoffInboxItem
 
 describe('railGroups', () => {
+  it('uses the shared naming ladder and the observed action when no title exists', () => {
+    const rows = railGroups(
+      {
+        live: [
+          live({
+            session_ref: 'action',
+            current_action: 'create_issue',
+            current_resource: 'github/create_issue',
+          }),
+          live({
+            session_ref: 'summary',
+            summary: 'Review ready',
+            goal: 'Review changes',
+          }),
+          live({ session_ref: 'empty', model_ref: 'model-a' }),
+        ],
+        handoffs: [],
+      },
+      NOW,
+    )[1].rows
+    expect(rows.map((row) => row.title)).toEqual([
+      'create_issue · github/create_issue',
+      'Review ready',
+      null,
+    ])
+    expect(rows[2].reference).toBe('empty')
+  })
+
   it('puts a handoff offered to the operator in Needs you, above the sessions that ask', () => {
     const groups = railGroups(
       {
@@ -213,10 +241,16 @@ describe('identifiers in the rail', () => {
     )
     expect(ids).toEqual([
       ['wi_calibrate_dome_3', true],
-      ['sess-9f2', true],
+      ['9f2a41c7', true],
     ])
     expect(
       screen.getByRole('link', { name: /Work item wi_calibrate_dome_3/ }),
     ).toBeInTheDocument()
+    expect(
+      screen.getByRole('link', { name: /Session sess-9f2a41c7/ }),
+    ).toHaveAttribute('href', '/sessions?session=sess%3Asess-9f2a41c7')
+    expect(screen.getByTitle('Session sess-9f2a41c7')).toHaveTextContent(
+      'Session 9f2a41c7',
+    )
   })
 })

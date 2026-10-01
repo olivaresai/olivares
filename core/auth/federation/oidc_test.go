@@ -212,6 +212,39 @@ func TestOIDC_UnverifiedEmailRejected(t *testing.T) {
 	}
 }
 
+func TestOIDC_EmailFallbackVerificationProvenance(t *testing.T) {
+	for _, mode := range []string{"token verified", "token omitted", "userinfo verified", "userinfo omitted", "changed userinfo omitted", "same userinfo omitted"} {
+		t.Run(mode, func(t *testing.T) {
+			idp := newOIDCTestIDP(t)
+			p := idp.provider(t)
+			claims := idp.baseClaims("n-1")
+			want := mode == "token verified" || mode == "userinfo verified" || mode == "same userinfo omitted"
+			switch mode {
+			case "token omitted":
+				delete(claims, "email_verified")
+			case "userinfo verified", "userinfo omitted":
+				delete(claims, "email")
+				idp.userinfo = map[string]any{"sub": "user-123", "email": "userinfo@corp.example"}
+				if mode == "userinfo verified" {
+					idp.userinfo["email_verified"] = true
+				}
+			case "changed userinfo omitted", "same userinfo omitted":
+				p.oidc.groupsClaim = "groups"
+				email := "changed@corp.example"
+				if mode == "same userinfo omitted" {
+					email = claims["email"].(string)
+				}
+				idp.userinfo = map[string]any{"sub": "user-123", "email": email, "groups": []string{"operators"}}
+			}
+			idp.idToken = idp.signRS256(claims)
+			id, err := validateWith(t, p, "n-1")
+			if err != nil || id.Protocol != auth.ProtocolOIDC || id.EmailVerified != want || id.Subject != "user-123" || id.Issuer != idp.srv.URL {
+				t.Fatalf("email verification provenance changed: verified=%t want=%t protocol=%s err=%v", id.EmailVerified, want, id.Protocol, err)
+			}
+		})
+	}
+}
+
 func TestOIDC_ExpiredTokenRejected(t *testing.T) {
 	idp := newOIDCTestIDP(t)
 	p := idp.provider(t)

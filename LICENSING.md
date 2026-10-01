@@ -6,7 +6,7 @@ build is the whole governance platform, never crippled from within to push you
 toward a paid edition. On top of it sits a small, **additive** commercial line in
 `enterprise/` (built only with `-tags enterprise`, never in the public binary):
 multi-IdP federation, content firewall/DLP, hook hardening, the threat-intel
-add-on (a base catalog compiled into the binary, plus optional signed, versioned
+module (a base catalog compiled into the binary, plus optional signed, versioned
 feed artifacts the operator pins a key for and applies — Olivares operates no
 curated feed distribution and publishes no release cadence), server-tool egress
 control, the CyberArk Conjur connector, the incident close-loop, long-horizon WORM
@@ -19,37 +19,45 @@ pack, and a durable JetStream event-bus backend that lifts cross-node delivery o
 the enforcement-event class to at-least-once with dedup. It never caps your
 users: self-hosted user accounts are unlimited in every edition.
 
-Those are the **families**, and this is how they are **sold**. Four self-hosted business
-add-ons, each a paid term on top of the commercial base — these are the names that appear on
-your invoice, so this is where to look up what you bought:
+The self-hosted editions are **Community**, **Business** and **Enterprise**.
+Community is free under AGPL-3.0-only, with unlimited users and one active identity
+provider (IdP). Business costs **USD 129/month or USD 1,290/year**, with unlimited
+users, one legal entity, up to two production deployments with one staging deployment
+each, and up to five active IdPs in total. Enterprise covers negotiated scope:
+additional entities, deployments or IdPs, air-gap mirrors, custom LTS and other
+contract requirements. Contact **enterprise@olivares.ai** for Enterprise.
 
-| Add-on | What it groups |
+Business includes four capability families in one subscription. You can enable or
+disable each family; none is sold separately. The families retain separate code,
+repository and license-grant boundaries:
+
+| Included Business family | What it groups |
 |---|---|
 | **Regulated Operations** | Long-horizon WORM archive, named regulatory retention floors, legal-hold reconciliation, right-to-be-forgotten depth, and the incident close-loop. |
 | **AI Runtime Security** | The content firewall, hook firewall, computer-use gate, elicitation mediator, render inspector, retrieval scanning, server-tool egress control, the circuit breaker and CAEP transmit. |
 | **Compliance Packs** | The DORA Register of Information, OSCAL ingest, the ISO/IEC 42001 AIMS pack, and compliance depth. |
 | **Identity & Scale** | Multi-IdP federation, group mapping, login enforcement, the CyberArk Conjur connector, and the durable JetStream event-bus backend. |
 
-The grouping above is derived from the commercial canon, not hand-copied: `commerce-lint`
-refuses a release in which any of those four names is missing from every public surface, and
-the module membership of each add-on is derived by the same tool rather than transcribed.
+The four included families above describe Business packaging. The capability
+matrix below states what ships in the open product, what the commercial code adds,
+and what is planned.
 
-That is the catalogue by NAME. The per-capability split — what the
-AGPL build does and what each add-on adds, side by side — is the edition matrix in
+That is the catalog by NAME. The per-capability split — what the
+AGPL build does and what each family adds, side by side — is the edition matrix in
 [the edition matrix below](#what-is-open-what-is-commercial-what-is-planned-by-area), and the
 reasoning behind each cut is
 [Open core & licensing](docs-site/src/content/docs/explanation/open-core-and-licensing.md)
 (*What is open vs enterprise* and *Why this model*). Read those before quoting this
 paragraph as a complete list: this file has been the short one before. In every
-case the open substrate stays open and the add-on is new code layered on top — the
+case the open substrate stays open and the module is new code layered on top — the
 open build answers honestly instead of degrading (an absent subcommand, an unknown
-sink kind, or a `501` that names the add-on).
+sink kind, or a `501` that names the module).
 
 We offer a **commercial license** that provides a private *exception* to the
 AGPL's obligations (for organizations that cannot comply with them). The
-`enterprise/` capabilities are offered as **separate, optional add-ons** under
-their own commercial terms — packaging and pricing on request. So the open and
-commercial editions are **not** identical — the add-ons are new code that was
+`enterprise/` capabilities are included in Business as the four families above,
+under commercial terms. Enterprise scope is negotiated. The open and
+commercial editions are **not** identical — the modules are new code that was
 never in the open build (the GitLab `ee/` model) — but nothing is taken away
 from what ships open: no published feature is moved behind the wall. The
 AGPL/Apache split itself is the classic dual-licensing frontier (MySQL, Qt,
@@ -57,9 +65,9 @@ MinIO, Grafana).
 
 ## What is open, what is commercial, what is planned — by area
 
-This table maps each capability area to where it ships — the open (AGPL) build, or one of the separate, optional commercial add-ons — and what is planned; maturity per capability is stated honestly in [Honesty & limits](docs-site/src/content/docs/start/honesty-and-limits.md). The full list of reserved seams is declared in the public tree itself ([`cmd/olivares/wire_noenterprise.go`](cmd/olivares/wire_noenterprise.go)): a capability the open binary reserves answers `501` or no-ops, and its comment says so — nothing is hidden and nothing open is removed.
+This table maps each capability area to where it ships — the open (AGPL) build, or one of the included Business capability families — and what is planned; maturity per capability is stated honestly in [Honesty & limits](docs-site/src/content/docs/start/honesty-and-limits.md). The full list of reserved seams is declared in the public tree itself ([`cmd/olivares/wire_noenterprise.go`](cmd/olivares/wire_noenterprise.go)): a capability the open binary reserves answers `501` or no-ops, and its comment says so — nothing is hidden and nothing open is removed.
 
-| Area | Open (AGPL) | Commercial add-ons | Planned |
+| Area | Open (AGPL) | Included Business capabilities | Planned |
 |---|---|---|---|
 | Work & orchestration | durable work items (brief, dependencies, acceptance, decisions, events), fenced leases with takeover and revoke, orchestrated launch of sessions against a work item, with work-fenced input and stop in the sessions API, A2A delegation to authorized peers with durable receipts, workflow-scoped messages/acks/handoffs, console Work and Orchestration views | — | shadow dual-report and the authority switch that makes this plane the system of record |
 | Visibility | inventory of agents/sessions/models/MCP servers/tools/identities, read/write access map with Permitted-vs-Observed drift, live sessions, orchestration graph, health/SLA | — | — |
@@ -72,7 +80,7 @@ This table maps each capability area to where it ships — the open (AGPL) build
 | Operations | FinOps budgets that deny or throttle spend, calibrated LLM-judge evals with blocking CI gate (on-demand: judge credential required, else `SKIPPED`), OS-isolated red-team sandboxes (gVisor/Firecracker; unprovisioned runs report `DEGRADED`), connector-health dashboard with public status page, console-managed backups and restore, open attack-path queries | compiled threat-intel catalog, incident close-loop | — |
 | Platform & deploy | single static binary with embedded console, SQLite or Postgres with row-level security, Docker/Kubernetes/Helm/air-gapped, Terraform provider, generated client SDKs (Go, Java, Python, TypeScript), open in-proc bus + Core-NATS bridge | durable JetStream bus (at-least-once + dedup) | Windows packages (today: Linux container or build from source), model fine-tuning post-v1, voice telemetry probe (declared deny-closed seam today) |
 
-The AGPL build is the whole platform and is never feature-capped from within. The commercial add-ons are additive new code, never features removed from the open product. A subscription is the credential you download signed module packs with — a distribution-style model of signed module packs — not a key that unlocks code already sitting on your disk. User accounts are unlimited in the self-hosted engine: no edition of it enforces a seat cap, and the binary's seat seam is an unconditional no-op. The hosted Cloud tier is the one exception — its control plane admits seats per tenant, which is a property of that service and not of this binary.
+The AGPL build is the whole platform and is never feature-capped from within. The commercial modules are additive new code, never features removed from the open product. A subscription is the credential you download signed module packs with — a distribution-style model of signed module packs — not a key that unlocks code already sitting on your disk. User accounts are unlimited in the self-hosted engine: no edition of it enforces a seat cap, and the binary's seat seam is an unconditional no-op. The hosted Cloud tier is the one exception — its control plane admits seats per tenant, which is a property of that service and not of this binary.
 
 ## License by directory (the frontier)
 
@@ -163,11 +171,11 @@ licenses' own disclaimers or any right you hold under them.
 You need the commercial license if you cannot or do not want to meet
 the AGPL obligations — e.g. an internal policy that forbids AGPL, embedding in a
 closed-source product, or running a modified network service without publishing
-your changes. Using any of the `enterprise/` add-ons also requires the
-corresponding add-on entitlement, independently of AGPL compliance. Otherwise,
+your changes. Using any of the `enterprise/` modules also requires the
+corresponding family entitlement included in Business, independently of AGPL compliance. Otherwise,
 use the free AGPL build.
 
-- **Commercial license, add-ons, custom terms, support — dedicated contact:**
+- **Commercial license, modules, custom terms, support — dedicated contact:**
   **enterprise@olivares.ai**
 
 The support tiers and first-response model — best-effort response targets, not
@@ -177,7 +185,7 @@ The **Enterprise** relationship also covers commercial/legal terms — data-resi
 contractual, never features of the binary (residency itself ships in the open product;
 indemnification terms are pending a legal decision). None of these contractual terms
 is a feature of the binary or gated by the license key. The **AGPL core** is never
-gated by any license key; the terms that govern commercial add-ons are those of the
+gated by any license key; the terms that govern commercial modules are those of the
 commercial agreement.
 
 See `LICENSES/LicenseRef-Olivares-Commercial.txt` for the commercial terms summary.
@@ -195,7 +203,7 @@ licence never calls anyone. Downloading what you paid for does.**
 
 That is the shape of a subscription that grants access to the enterprise repositories — the model
 this line was designed against — and not a licence that checks in on you while you work. What you
-buy is the right to fetch and keep receiving the add-ons you paid for; what you run answers to
+buy is the right to fetch and keep receiving the modules included in your subscription; what you run answers to
 nobody at runtime.
 
 ## Trademarks

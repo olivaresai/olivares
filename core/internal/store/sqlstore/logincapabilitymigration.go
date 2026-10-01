@@ -281,7 +281,9 @@ WHERE a.attrelid = $1::pg_catalog.oid AND a.attnum > 0 AND NOT a.attisdropped OR
 	}
 	// WHOLE constraint semantics: the server's own deparse of the compiled body, taken from
 	// a TEMP probe in a rolled-back savepoint (the pgCanonicalStateCheckDef mechanism), must
-	// equal the relation's constraint set exactly — name, type, validation and definition.
+	// equal the relation's constraint set exactly — identity, type, validation and definition.
+	// Explicit constraint names remain identities. PostgreSQL 18's generated NOT NULL
+	// identities use the bound relation's column set rather than the TEMP probe's name.
 	wantConstraints, err := calibrateLoginCapabilityConstraints(ctx, tx)
 	if err != nil {
 		return fail("calibrate constraints: %w", err)
@@ -359,8 +361,15 @@ type loginCapabilityConstraint struct {
 }
 
 func readLoginCapabilityConstraints(ctx context.Context, tx *sql.Tx, oid int64) ([]loginCapabilityConstraint, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT conname::pg_catalog.text, contype::pg_catalog.text, convalidated, pg_catalog.pg_get_constraintdef(oid)
-FROM pg_catalog.pg_constraint WHERE conrelid = $1::pg_catalog.oid ORDER BY conname`, oid)
+	rows, err := tx.QueryContext(ctx, `SELECT CASE WHEN c.contype = 'n' THEN
+  'NOT NULL:' || (SELECT pg_catalog.string_agg(a.attname::pg_catalog.text, ',' ORDER BY k.ord)
+                 FROM pg_catalog.unnest(c.conkey) WITH ORDINALITY AS k(attnum, ord)
+                 JOIN pg_catalog.pg_attribute a
+                   ON a.attrelid = c.conrelid AND a.attnum = k.attnum)
+  ELSE c.conname::pg_catalog.text END AS constraint_key,
+  c.contype::pg_catalog.text, c.convalidated, pg_catalog.pg_get_constraintdef(c.oid)
+FROM pg_catalog.pg_constraint c
+WHERE c.conrelid = $1::pg_catalog.oid ORDER BY constraint_key`, oid)
 	if err != nil {
 		return nil, err
 	}

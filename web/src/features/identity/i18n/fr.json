@@ -8,7 +8,8 @@
     "mcp": "Auth MCP",
     "wif": "Graphe WIF",
     "posture": "Posture des clés et de la résidence",
-    "login": "Connexion privilégiée"
+    "login": "Connexion privilégiée",
+    "totp": "Facteur TOTP"
   },
   "seam": {
     "badge": "Backend en attente",
@@ -609,5 +610,40 @@
       "title": "Aucune identité, humaine ou non humaine",
       "description": "Une fois une source d’annuaire configurée, resynchronisez le registre d’identités pour y charger les identités humaines et non humaines avec leurs identifiants externes."
     }
+  },
+  "totp": {
+    "title": "Second facteur TOTP",
+    "description": "Un mot de passe à usage unique temporisé (RFC 6238) comme facteur additionnel de votre compte local. Il s'ajoute à vos passkeys et PIV — il ne les remplace jamais.",
+    "state": "Facteur",
+    "enrolled": "Enregistré",
+    "notEnrolled": "Non enregistré",
+    "algorithm": "Paramètres",
+    "everySeconds": "codes toutes les {{period}} s",
+    "activatedAt": "Activé",
+    "recoveryRemaining": "Codes de récupération",
+    "recoveryCount": "{{count}} restants",
+    "enrol": "Enregistrer un facteur",
+    "replace": "Remplacer le facteur",
+    "remove": "Retirer le facteur",
+    "confirmRemove": "Vraiment retirer ?",
+    "activate": "Activer",
+    "scanPrompt": "Scannez le QR avec votre application d'authentification ou saisissez le secret à la main, puis entrez le code affiché.",
+    "qrAlt": "QR code contenant l'URI de provisioning TOTP",
+    "manualEntry": "Secret pour saisie manuelle",
+    "codeLabel": "Code de votre application",
+    "recoveryWarning": "Ces codes de récupération ne sont affichés qu'une seule fois. Conservez-les maintenant — chacun sert une seule fois si vous perdez votre appareil.",
+    "savedCodes": "Codes enregistrés",
+    "stepUpRequired": "Cette action exige une session AAL3 récente. Effectuez d'abord une élévation passkey ou PIV.",
+    "sealerUnavailable": "Le scelleur de graines TOTP n'est pas disponible sur ce déploiement ; l'enregistrement reste désactivé jusqu'à sa réparation par un opérateur.",
+    "loadFailed": "Impossible de charger l'état du facteur.",
+    "policyTitle": "Exiger TOTP pour les administrateurs",
+    "policyDescription": "Si activée, les administrateurs (superadmins et tout admin/owner de tenant) doivent enregistrer un facteur avant que leur connexion par mot de passe ne se termine.",
+    "policyState": "Politique",
+    "policyOn": "Exigée",
+    "policyOff": "Désactivée",
+    "policyEnable": "Exiger des administrateurs",
+    "policyConfirmOn": "Confirmer : exiger",
+    "policyDisable": "Désactiver",
+    "policyAal3Note": "Modifier cette politique exige une session AAL3. Les comptes sans facteur sont orientés vers l'enregistrement à leur prochaine connexion — jamais verrouillés."
   }
 }

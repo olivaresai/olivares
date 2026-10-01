@@ -30,17 +30,17 @@ and emits a single tarball with a `VERIFY.md`:
 
 ```bash
 scripts/airgap-bundle.sh \
-  --version v26.9.0 \
-  --image ghcr.io/olivaresai/olivares:26.9.0-amd64 \
+  --version 26.10.0 \
+  --image ghcr.io/olivaresai/olivares:26.10.0-amd64 \
   --chart deploy/helm/olivares \
   --cosign-key cosign.key \
   [--collector-image <ref>] [--out dist/airgap] [--gpg-key <id>]
 ```
 
-The per-architecture tag (`26.9.0-amd64`) is published on `ghcr.io/olivaresai/olivares`, where
+The per-architecture tag (`26.10.0-amd64`) is published on `ghcr.io/olivaresai/olivares`, where
 the release builds and signs. Docker Hub (`docker.io/olivaresai/olivares`, the official pull)
-carries the multi-arch and hardened tags, identical by digest, but not `26.9.0-amd64`
-(`docs/releases/v26.9.0-install-surfaces.json`). ghcr.io does not rate-limit anonymous pulls of
+carries the multi-arch and hardened tags, identical by digest, but not `26.10.0-amd64`
+(`docs/releases/26.10.0-install-surfaces.json`). ghcr.io does not rate-limit anonymous pulls of
 public images, which also helps when the build host is unauthenticated.
 
 :::caution[The SBOM/VEX/provenance are supplied, not generated]
@@ -99,7 +99,7 @@ and `cosign load` — **not** `oras`):
 
 ```bash
 scripts/airgap-mirror.sh \
-  --bundle olivares-airgap-v26.9.0.tar.gz \
+  --bundle olivares-airgap-26.10.0.tar.gz \
   --registry registry.internal:5000 [--insecure]
 ```
 
@@ -129,7 +129,7 @@ is across the gap. There is no telemetry-home default to disable.
 
 The vendor is reached on the **online** side, and that is by design: building the
 bundle downloads the release, and for a commercial estate the subscription is the
-credential with which the add-ons, their updates and their patches are fetched. That
+credential with which the modules, their updates and their patches are fetched. That
 is the SUSE/Novell model — an air-gapped estate is served from a local mirror that
 still carries the entitlement. See [self-hosting](/how-to/self-hosting/).
 

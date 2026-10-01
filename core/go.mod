@@ -84,6 +84,8 @@ require (
 	golang.org/x/oauth2 v0.37.0
 )
 
+require github.com/boombuler/barcode v1.1.0
+
 replace github.com/olivaresai/olivares/sdk => ../sdk
 
 // sdk/plugin is a separate module (the gRPC/go-plugin transport); the engine is

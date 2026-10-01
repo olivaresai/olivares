@@ -29,7 +29,7 @@ func cardIssuerKeys(t *testing.T, kid string) (jose.JSONWebKey, *jose.JSONWebKey
 // A card richer than the AgentCard struct: iconUrl, documentationUrl,
 // defaultInputModes/defaultOutputModes and per-skill tags/description are NOT all
 // modeled by the typed struct, so a typed re-marshal would drop them. Signing the raw
-// bytes MUST preserve and bind them (review finding F1).
+// bytes MUST preserve and bind them (review finding finding 1).
 const richCardJSON = `{
   "name": "olivares-governed-agent",
   "description": "An agent whose card Olivares signs.",

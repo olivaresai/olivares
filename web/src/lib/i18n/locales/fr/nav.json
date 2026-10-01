@@ -95,9 +95,11 @@
     "providers": "Fournisseurs",
     "providerProfiles": "Profils de fournisseur",
     "providerBindings": "Liaisons de sources",
-    "providerAccounts": "Comptes de fournisseur"
+    "providerAccounts": "Comptes de fournisseur",
+    "agent-tools": "Outils des agents"
   },
   "workspace": {
+    "open": "Ouvrir {{workspace}}",
     "switch": "Changer d’espace de travail",
     "all": "Tous les espaces",
     "allHint": "Pas de filtre d’espace",
@@ -171,7 +173,8 @@
     "team-costs": "Attribution des coûts par équipe : sessions, jetons et dépenses, avec tendance quotidienne et ventilation par projet et par modèle",
     "backups": "Instantanés chiffrés de reprise après sinistre du plan de contrôle : créer, planifier, télécharger et restaurer",
     "logs": "Le flux de journaux du moteur en direct, avec filtres par niveau et module, recherche et pause",
-    "sourceDiff": "Comparez une révision de base et une révision head d'un dépôt Git connecté, fichier par fichier"
+    "sourceDiff": "Comparez une révision de base et une révision head d'un dépôt Git connecté, fichier par fichier",
+    "agent-tools": "Détectez, installez et mettez à jour les outils des agents sur cet hôte et suivez chaque installation ; réservé aux administrateurs du déploiement"
   },
   "commandActions": {
     "eventing": {

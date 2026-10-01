@@ -169,6 +169,17 @@ type workPlanArtifact struct {
 	ExpectedETag string          `json:"expected_etag,omitempty"`
 }
 
+// resolveWorkClientConfig selects the runtime's work-only bearer before a general
+// operator environment or saved context. An explicit --token, including an empty
+// value, remains authoritative. A rejected session token is never retried with
+// operator credentials; all requests retain the server's purpose ceiling.
+func resolveWorkClientConfig(cfg *agentClientConfig) error {
+	if !cfg.changed("token") && cfg.token == "" {
+		cfg.token = os.Getenv("OLIVARES_WORK_TOKEN")
+	}
+	return cfg.resolve()
+}
+
 func newWorkCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "work",
@@ -223,7 +234,7 @@ func newWorkReplayCmd() *cobra.Command {
 			if err != nil || eventID.IsZero() {
 				return workUsagef("event-id must be a valid UUID")
 			}
-			if err := cfg.resolve(); err != nil {
+			if err := resolveWorkClientConfig(&cfg); err != nil {
 				return err
 			}
 			if mode != "validate" && mode != "plan" && mode != "apply" {
@@ -411,7 +422,7 @@ func runWorkMutation(cmd *cobra.Command, cfg *agentClientConfig, mode, command s
 		doc["plan_hash"] = planHash
 	}
 
-	if err := cfg.resolve(); err != nil {
+	if err := resolveWorkClientConfig(cfg); err != nil {
 		return err
 	}
 	headers := make(http.Header)
@@ -962,7 +973,7 @@ func newWorkGetCmd() *cobra.Command {
 		},
 		ValidArgsFunction: completeWorkGetArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := cfg.resolve(); err != nil {
+			if err := resolveWorkClientConfig(&cfg); err != nil {
 				return err
 			}
 			var path string
@@ -1125,7 +1136,7 @@ func runWorkList(cmd *cobra.Command, cfg *agentClientConfig, noun string, opts w
 		}
 		query.Set(apiKey, strings.TrimSpace(value))
 	}
-	if err := cfg.resolve(); err != nil {
+	if err := resolveWorkClientConfig(cfg); err != nil {
 		return err
 	}
 	resp, err := workDo(cmd.Context(), cfg, http.MethodGet, workAPIBase+path+"?"+query.Encode(), nil, nil, false)
@@ -1234,7 +1245,7 @@ func runWorkWatch(cmd *cobra.Command, cfg *agentClientConfig, opts workWatchOpti
 	if opts.cursor != "" {
 		query.Set("cursor", opts.cursor)
 	}
-	if err := cfg.resolve(); err != nil {
+	if err := resolveWorkClientConfig(cfg); err != nil {
 		return err
 	}
 	path := workAPIBase + "/work-stream"

@@ -116,7 +116,7 @@ describe('los tres informes enterprise', () => {
       await within(fila).findByRole('button', { name: /Request/i }),
     )
     expect(
-      await screen.findByText(/lives in an add-on that is not linked/i),
+      await screen.findByText(/lives in a module that is not linked/i),
     ).toBeInTheDocument()
     expect(toastSpy.error).not.toHaveBeenCalled()
   })
@@ -139,7 +139,7 @@ describe('los tres informes enterprise', () => {
     )
     await waitFor(() => expect(toastSpy.error).toHaveBeenCalled())
     expect(
-      screen.queryByText(/lives in an add-on that is not linked/i),
+      screen.queryByText(/lives in a module that is not linked/i),
     ).toBeNull()
   })
 })

@@ -278,6 +278,9 @@ func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, auth.ErrUnauthenticated)
 		return
 	}
+	// Protocol comes from the exact provider selected by this single-use flow,
+	// never from an asserted claim or an optional provider result field.
+	identity.Protocol = proto
 	// U5 domain boundary: an IdP that claims domains may only vouch for identities
 	// whose email is in those domains, so it cannot assert an out-of-domain address to
 	// seize another account via the email-fallback path. A tenant's IdP with no claimed

@@ -27,6 +27,7 @@ import (
 var workItemEntity = api.EntityRef{Kind: workItemKind, IDParam: "id", WorkspaceColumn: colWorkWorkspaceID}
 
 func (m *Module) workRoutes(reg api.RouteRegistrar) {
+	reg = orchestrationWorkRegistrar{RouteRegistrar: reg, module: m}
 	reg.Handle("POST", "/work-items", permWorkWrite, m.handleWorkCreate)
 	reg.Handle("GET", "/work-items", permWorkRead, m.handleWorkList)
 	reg.HandleEntity("GET", "/work-items/{id}", permWorkRead, workItemEntity, m.handleWorkGet)
@@ -391,6 +392,10 @@ func (m *Module) dispatchWorkMutation(w http.ResponseWriter, r *http.Request, mc
 		writeWorkError(w, broken(http.StatusForbidden, "forbidden"))
 		return
 	}
+	if mc.Principal.IsOrchestrationSessionCredential() && !orchestrationHasCapability(mc.Principal, orchestrationCommandCapability(cmd.Command)) {
+		writeWorkError(w, broken(http.StatusForbidden, "forbidden"))
+		return
+	}
 	cmd.HTTPMethod, cmd.CommandScope = r.Method, canonicalWorkCommandScope(r.Method, r.URL.Path, cmd)
 	if v, present, err := parseWorkETag(r.Header.Get("If-Match")); err != nil {
 		writeWorkError(w, err)
@@ -577,17 +582,20 @@ func workPrincipalFromAuth(p auth.Principal, tenant model.TenantID) (WorkPrincip
 	}
 	role, _ := p.RoleIn(tenant)
 	admin := p.Superadmin || auth.RoleRank(role) >= auth.RoleRank(auth.RoleAdmin)
+	if p.IsOrchestrationSessionCredential() {
+		admin = orchestrationHasCapability(p, "work.review")
+	}
 	if p.AgentIdentity != "" {
 		return WorkPrincipal{ActorKind: model.ActorAgent, ActorRef: p.AgentIdentity, Actor: actor,
 			Admin: admin, SessionID: p.SessionIdentity, SessionRunRef: p.SessionRunRef,
 			SessionFence:      p.SessionFence,
-			PurposeRestricted: p.IsPurposeRestricted()}, nil
+			PurposeRestricted: p.IsWorkSessionCredential()}, nil
 	}
 	if !p.UserID.IsZero() {
 		return WorkPrincipal{ActorKind: model.ActorUser, ActorRef: p.UserID.String(), Actor: actor,
 			Admin: admin, SessionID: p.SessionIdentity, SessionRunRef: p.SessionRunRef,
 			SessionFence:      p.SessionFence,
-			PurposeRestricted: p.IsPurposeRestricted()}, nil
+			PurposeRestricted: p.IsWorkSessionCredential()}, nil
 	}
 	if p.SessionIdentity != "" {
 		// ⛔ UNA SESION CONDUCIDA SE ATRIBUYE COMO SESION, y sin esto NO PUEDE ESCRIBIR.
@@ -625,12 +633,12 @@ func workPrincipalFromAuth(p auth.Principal, tenant model.TenantID) (WorkPrincip
 		return WorkPrincipal{ActorKind: string(ActorSession), ActorRef: p.SessionIdentity, Actor: actor,
 			Admin: admin, SessionID: p.SessionIdentity, SessionRunRef: p.SessionRunRef,
 			SessionFence:      p.SessionFence,
-			PurposeRestricted: p.IsPurposeRestricted()}, nil
+			PurposeRestricted: p.IsWorkSessionCredential()}, nil
 	}
 	return WorkPrincipal{ActorKind: p.ActorKind(), ActorRef: p.CredID.String(), Actor: actor,
 		Admin: admin, SessionID: p.SessionIdentity, SessionRunRef: p.SessionRunRef,
 		SessionFence:      p.SessionFence,
-		PurposeRestricted: p.IsPurposeRestricted()}, nil
+		PurposeRestricted: p.IsWorkSessionCredential()}, nil
 }
 
 // writeWorkError answers on the WORK vocabulary, not the module one: a verdict and

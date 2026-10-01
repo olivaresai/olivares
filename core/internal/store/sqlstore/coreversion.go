@@ -51,7 +51,10 @@ var ErrCoreSchemaVersionAhead = errors.New("sqlstore: the database records a cor
 // introducing it after v17 would invalidate the ordered prefix of deployed histories.
 // E12 must use an ordinal greater than the greatest registered version when it lands.
 // The plan and preflight use registered versions, not every integer below this ceiling.
-const coreSupportedMigrationVersion = coreAuthenticationFreshnessMigrationVersion
+//
+// It advances to v18 with the TOTP second-factor relations (totpmigration.go),
+// so a v17 binary refuses a store that holds them.
+const coreSupportedMigrationVersion = coreTOTPMigrationVersion
 
 // ErrCoreSchemaVersionUnrecognized is returned before any boot DDL when the database
 // records a version at or below the supported ceiling that this binary's compiled plan
@@ -70,7 +73,7 @@ func compiledCoreMigrationVersions(dia dialect.Dialect) map[int64]struct{} {
 }
 
 // compiledCoreMigrationVersionOrder is the compiled plan's versions in ascending order
-// (1..11, 13, 14, 15, 17). A legitimate tracked history is an ordered prefix of it.
+// (1..11, 13, 14, 15, 17, 18). A legitimate tracked history is an ordered prefix of it.
 func compiledCoreMigrationVersionOrder(dia dialect.Dialect) []int64 {
 	set := compiledCoreMigrationVersions(dia)
 	out := make([]int64, 0, len(set))

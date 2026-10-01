@@ -17,10 +17,12 @@ import { Spinner } from '@/components/ui/spinner'
 import { ListTruncationBadge } from '@/features/_intel'
 import { useAuth } from '@/lib/auth/context'
 import { formatDateTime } from '@/lib/format'
+import { useIsPhone } from '@/lib/hooks/use-is-phone'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { providerKeys, providersApi } from './api'
 import { useProviderBoundary } from './auth-boundary'
 import { ProviderCreateDialog } from './provider-create-dialog'
+import { ProviderBindDialog } from './provider-bind-dialog'
 import { ProviderRotateDialog } from './provider-rotate-dialog'
 import type { ProbeState, ProviderRecordDTO } from './types'
 import './i18n'
@@ -49,15 +51,26 @@ export function ProvidersView() {
   return <Inner key={boundary.key} />
 }
 
+function probeHintKey(record: ProviderRecordDTO) {
+  const state = ['ok', 'refused', 'unreachable'].includes(
+    record.probe_state ?? '',
+  )
+    ? record.probe_state
+    : 'never'
+  return `probe.${record.kind === 'ollama' ? 'local.' : ''}${state}Hint`
+}
+
 function Inner() {
   const { t, i18n } = useTranslation('providers')
   const { activeTenant, can } = useAuth()
+  const phone = useIsPhone()
   const boundary = useProviderBoundary()
   const canRead = can('sessions:provider:read')
   const canWrite = can('sessions:provider:write')
   const canAdmin = can('sessions:provider:admin')
 
   const [createOpen, setCreateOpen] = useState(false)
+  const [binding, setBinding] = useState<ProviderRecordDTO | null>(null)
   const [rotating, setRotating] = useState<ProviderRecordDTO | null>(null)
   const [revoking, setRevoking] = useState<ProviderRecordDTO | null>(null)
   const [testing, setTesting] = useState<string | null>(null)
@@ -83,12 +96,7 @@ function Inner() {
     // the provider and was refused is a successful test with a negative answer, and
     // telling the operator "tested" without the answer is the report this screen exists
     // to remove.
-    successMessage: (record) =>
-      record.probe_state === 'ok'
-        ? t('probe.okHint')
-        : record.probe_state === 'refused'
-          ? t('probe.refusedHint')
-          : t('probe.unreachableHint'),
+    successMessage: (record) => t(probeHintKey(record)),
     onDone: () => setTesting(null),
     onError: () => {
       setTesting(null)
@@ -102,7 +110,8 @@ function Inner() {
     mutationFn: (ref) => providersApi.revoke(ref),
     invalidateKeys: () => [providerKeys.list(activeTenant, boundary.epoch)],
     stepUpAction: 'providers',
-    successMessage: t('revoke.success'),
+    successMessage: (record) =>
+      t(record.kind === 'ollama' ? 'revoke.localSuccess' : 'revoke.success'),
     onDone: () => setRevoking(null),
   })
 
@@ -179,56 +188,64 @@ function Inner() {
     {
       id: 'actions',
       header: '',
-      cell: ({ row }) => {
-        const record = row.original
-        if (record.state !== 'active') return null
-        return (
-          <div className="flex items-center justify-end gap-1">
-            {canWrite && (
-              <Button
-                variant="ghost"
-                size="sm"
-                disabled={test.isPending && testing === record.provider_ref}
-                onClick={() => {
-                  setTesting(record.provider_ref)
-                  test.mutate(record.provider_ref)
-                }}
-              >
-                {test.isPending && testing === record.provider_ref ? (
-                  <Spinner className="size-3.5" />
-                ) : (
-                  <PlugZap className="size-3.5" />
-                )}
-                {test.isPending && testing === record.provider_ref
-                  ? t('actions.testing')
-                  : t('actions.test')}
-              </Button>
-            )}
-            {canWrite && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setRotating(record)}
-              >
-                <RefreshCw className="size-3.5" />
-                {t('actions.rotate')}
-              </Button>
-            )}
-            {canAdmin && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setRevoking(record)}
-              >
-                <Trash2 className="size-3.5" />
-                {t('actions.revoke')}
-              </Button>
-            )}
-          </div>
-        )
-      },
+      cell: ({ row }) => actionsFor(row.original),
     },
   ]
+
+  function actionsFor(record: ProviderRecordDTO) {
+    if (record.state !== 'active') return null
+    return (
+      <div className="flex flex-wrap items-center gap-1 sm:justify-end">
+        {canWrite && (
+          <Button
+            variant="ghost"
+            size="sm"
+            disabled={test.isPending && testing === record.provider_ref}
+            onClick={() => {
+              setTesting(record.provider_ref)
+              test.mutate(record.provider_ref)
+            }}
+          >
+            {test.isPending && testing === record.provider_ref ? (
+              <Spinner className="size-3.5" />
+            ) : (
+              <PlugZap className="size-3.5" />
+            )}
+            {test.isPending && testing === record.provider_ref
+              ? t('actions.testing')
+              : t('actions.test')}
+          </Button>
+        )}
+        {record.state === 'active' &&
+          can('sessions:profile:read') &&
+          can('sessions:profile:write') && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setBinding(record)}
+            >
+              {t('bind.title')}
+            </Button>
+          )}
+        {canWrite && record.kind !== 'ollama' && (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setRotating(record)}
+          >
+            <RefreshCw className="size-3.5" />
+            {t('actions.rotate')}
+          </Button>
+        )}
+        {canAdmin && (
+          <Button variant="ghost" size="sm" onClick={() => setRevoking(record)}>
+            <Trash2 className="size-3.5" />
+            {t('actions.revoke')}
+          </Button>
+        )}
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-full flex-col gap-4">
@@ -261,30 +278,98 @@ function Inner() {
         className="px-0 pt-0"
       />
 
-      <DataTable
-        columns={columns}
-        data={rows}
-        isLoading={listQ.isLoading}
-        error={listQ.error}
-        onRetry={() => void listQ.refetch()}
-        label={t('title')}
-        getRowId={(r) => r.provider_ref}
-        empty={
-          <EmptyState
-            icon={<KeyRound />}
-            title={t('empty.title')}
-            description={t('empty.description')}
-            action={
-              canWrite ? (
-                <Button variant="primary" onClick={() => setCreateOpen(true)}>
-                  <Plus className="size-4" />
-                  {t('empty.action')}
-                </Button>
-              ) : undefined
-            }
-          />
-        }
-      />
+      {phone && !listQ.isLoading && !listQ.error && rows.length > 0 ? (
+        <ul aria-label={t('title')} className="flex min-w-0 flex-col gap-3">
+          {rows.map((record) => (
+            <li key={record.provider_ref}>
+              <article
+                aria-label={record.display_name}
+                data-testid="provider-card"
+                className="flex min-w-0 flex-col gap-3 rounded-lg border border-border p-3"
+              >
+                <div className="min-w-0">
+                  <h2 className="break-words text-sm font-medium">
+                    {record.display_name}
+                  </h2>
+                  <p className="break-all font-mono text-xs text-muted-foreground">
+                    {record.provider_ref}
+                  </p>
+                </div>
+                <dl className="grid min-w-0 grid-cols-2 gap-3 text-xs">
+                  <div>
+                    <dt className="mb-1 text-muted-foreground">
+                      {t('columns.state')}
+                    </dt>
+                    <dd>
+                      <Badge
+                        variant={
+                          record.state === 'active' ? 'success' : 'neutral'
+                        }
+                      >
+                        {t(`states.${record.state}`)}
+                      </Badge>
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="mb-1 text-muted-foreground">
+                      {t('columns.connection')}
+                    </dt>
+                    <dd>
+                      <ConnectionCell record={record} />
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="mb-1 text-muted-foreground">
+                      {t('columns.kind')}
+                    </dt>
+                    <dd>{t(`kinds.${record.kind}`)}</dd>
+                  </div>
+                  <div>
+                    <dt className="mb-1 text-muted-foreground">
+                      {t('columns.key')}
+                    </dt>
+                    <dd className="font-mono">{record.key_hint ?? '—'}</dd>
+                  </div>
+                  <div className="col-span-2 min-w-0">
+                    <dt className="mb-1 text-muted-foreground">
+                      {t('detail.endpoint')}
+                    </dt>
+                    <dd className="break-all">
+                      {record.base_url || t('detail.officialEndpoint')}
+                    </dd>
+                  </div>
+                </dl>
+                {actionsFor(record)}
+              </article>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={rows}
+          isLoading={listQ.isLoading}
+          error={listQ.error}
+          onRetry={() => void listQ.refetch()}
+          label={t('title')}
+          getRowId={(r) => r.provider_ref}
+          empty={
+            <EmptyState
+              icon={<KeyRound />}
+              title={t('empty.title')}
+              description={t('empty.description')}
+              action={
+                canWrite ? (
+                  <Button variant="primary" onClick={() => setCreateOpen(true)}>
+                    <Plus className="size-4" />
+                    {t('empty.action')}
+                  </Button>
+                ) : undefined
+              }
+            />
+          }
+        />
+      )}
 
       {rows.some((r) => r.state === 'active' && r.probe_state === 'ok') ? (
         <NextStep />
@@ -304,6 +389,15 @@ function Inner() {
         />
       )}
 
+      {binding && (
+        <ProviderBindDialog
+          record={binding}
+          open
+          onOpenChange={(open) => {
+            if (!open) setBinding(null)
+          }}
+        />
+      )}
       {canWrite && rotating && (
         <ProviderRotateDialog
           record={rotating}
@@ -317,7 +411,11 @@ function Inner() {
           open
           onOpenChange={(o) => (o ? undefined : setRevoking(null))}
           title={t('revoke.title')}
-          description={`${t('revoke.description')} ${t('revoke.consequence')}`}
+          description={
+            revoking.kind === 'ollama'
+              ? t('revoke.localDescription')
+              : `${t('revoke.description')} ${t('revoke.consequence')}`
+          }
           confirmLabel={t('revoke.confirm')}
           tone="danger"
           pending={revoke.isPending}
@@ -337,14 +435,7 @@ function Inner() {
           : state === 'unreachable'
             ? t('probe.unreachable')
             : t('probe.never')
-    const hint =
-      state === 'ok'
-        ? t('probe.okHint')
-        : state === 'refused'
-          ? t('probe.refusedHint')
-          : state === 'unreachable'
-            ? t('probe.unreachableHint')
-            : t('probe.neverHint')
+    const hint = t(probeHintKey(record))
     // `refused` is a WARNING and not an error: the call worked, the provider
     // answered, and the answer was no. `unreachable` is neutral for the same
     // reason in reverse — it is not a verdict about the credential at all.
@@ -374,7 +465,7 @@ function Inner() {
     )
   }
 
-  /** The action after a working credential. A provider on its own launches nothing;
+  /** The action after provider registration. A provider on its own launches nothing;
    * the profile it is bound to is what launches. */
   function NextStep() {
     return (

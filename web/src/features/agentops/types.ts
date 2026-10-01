@@ -75,6 +75,15 @@ export interface RunDTO {
   template_id?: string
   isolation: Isolation
   state: RunState
+  /** Stored process lifecycle, separate from output-derived activity. Absent on older servers. */
+  process_state?: string
+  /** References-only authority snapshot of the last admitted launch; not a live verdict. */
+  work_scope?: {
+    role: 'worker' | 'orchestrator'
+    workspace_id: string
+    capabilities?: SessionWorkCapability[]
+    grant_id?: string
+  }
   claude_session_id?: string
   pid?: number
   credential_id?: string
@@ -164,9 +173,29 @@ export interface ProviderProfileDTO {
    * variables decide — exactly the behaviour every profile had before v26.10. It is a
    * reference: no key, no hint, no endpoint travels with it. */
   provider_record_ref?: string
+  session_work_grant?: SessionWorkGrantDTO | null
   created_at?: string
   updated_at?: string
   retired_at?: string
+}
+
+export type SessionWorkCapability =
+  | 'work.read'
+  | 'work.create'
+  | 'work.assign'
+  | 'work.review'
+  | 'decision.read'
+  | 'decision.write'
+
+export interface SessionWorkGrantRequest {
+  role: 'orchestrator'
+  workspace_id: string
+  capabilities: SessionWorkCapability[]
+}
+
+export interface SessionWorkGrantDTO extends SessionWorkGrantRequest {
+  /** Output-only generation; clients must omit it when replacing the grant. */
+  grant_id: string
 }
 
 /** The AUTHORIZED configuration read of one profile (GET
@@ -200,6 +229,7 @@ export interface CreateProfileRequest {
   /** Bind a registered provider in the same authorized call, so deploying an
    * agent is one step rather than a checklist. */
   provider_record_ref?: string
+  session_work_grant?: SessionWorkGrantRequest | null
 }
 
 /** PATCH /provider-profiles/{ref} body — the ONLY post-creation mutation: a label
@@ -213,6 +243,8 @@ export interface PatchProfileRequest {
   /** Bind (or unbind, with "") the registered provider this profile's managed
    * launches use. A LIVE child keeps the one its own launch resolved. */
   provider_record_ref?: string
+  /** Omitted preserves the grant; explicit null revokes its session authority. */
+  session_work_grant?: SessionWorkGrantRequest | null
 }
 
 /** One source→profile binding (GET /provider-source-bindings): ONE configured source,

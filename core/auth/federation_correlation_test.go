@@ -139,11 +139,11 @@ func TestSSOSubjectBinding_StampedOnEmailMatchNeverOverwritten(t *testing.T) {
 		t.Fatalf("binding not stamped: got %q want %q", got[0].SsoSubject, bindA)
 	}
 
-	// A DIFFERENT issuer asserts the same email: matches by email, must NOT overwrite.
+	// A different issuer asserting the same email cannot select a bound account.
 	if _, _, err := a.CompleteSSO(ctx, auth.FederatedIdentity{
 		Issuer: "https://idp-b.test", Subject: "sub-B", Email: "bob@acme.com",
-	}, "10.0.0.1", "", false); err != nil {
-		t.Fatalf("second-issuer login: %v", err)
+	}, "10.0.0.1", "", false); !errors.Is(err, auth.ErrUnauthenticated) {
+		t.Fatalf("second-issuer email adoption: %v", err)
 	}
 	got := usersWithEmail(t, ctx, st, "bob@acme.com")
 	if len(got) != 1 || got[0].ID != u.ID {

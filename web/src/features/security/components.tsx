@@ -75,7 +75,7 @@ export function SafetyPostureSurfaces({
           className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4"
         >
           <div className="flex items-center justify-between gap-2">
-            <h3 className="truncate font-mono text-body text-foreground">
+            <h3 className="min-w-0 whitespace-normal font-mono text-body [overflow-wrap:anywhere] text-foreground">
               {p.subject_kind}
             </h3>
             <Badge variant="neutral">{formatInt(p.total)}</Badge>
@@ -169,7 +169,7 @@ export function FindingsTable({
         size: 148,
         cell: ({ row }) => (
           <span
-            className="block max-w-[124px] truncate font-mono text-caption text-muted-foreground"
+            className="block max-w-[124px] whitespace-normal font-mono [overflow-wrap:anywhere] text-caption text-muted-foreground"
             title={row.original.source}
           >
             {row.original.source}
@@ -179,33 +179,17 @@ export function FindingsTable({
       {
         accessorKey: 'title',
         header: t('findings.columns.title'),
-        // ⛔ LA ELIPSIS YA ESTABA Y NO PODÍA DISPARARSE. Medido en Chrome sobre el
-        // `dist`: los dos `<p>` llevan `truncate` —`getComputedStyle` confirma
-        // `text-overflow: ellipsis`, `overflow: hidden`, `white-space: nowrap`— pero
-        // NADA acotaba su ancho, así que con un título largo el `<p>` crecía a
-        // 1136 px, `scrollWidth == clientWidth` y **no había desbordamiento que
-        // truncar**. La columna estiraba la tabla a 1189 px dentro de un contenedor
-        // de 1116, y el corte que se ve en la captura lo hacía el BORDE de la tabla,
-        // no la celda: por eso salía sin puntos suspensivos.
-        //
-        // `truncate` sólo produce elipsis cuando algo limita la anchura. Esto la
-        // limita, y con eso la maquinaria que ya existía empieza a funcionar.
+        // Findings keep both the title and subject readable in a bounded column.
         size: 420,
-        // ⛔ Y UNA LÍNEA, NO DOS. Medido a 1440 sobre el motor sembrado: la fila de
-        // hallazgos salía a 49 px contra el presupuesto de 36, y las otras cinco
-        // columnas llevaban una palabra cada una — el desbordamiento entero era este
-        // par de `<p>` apilados. La jerarquía del listón es nombre › detalle › meta
-        // EN LA MISMA LÍNEA: el título es el elemento que no cede (`flex-1 min-w-0`)
-        // y el sujeto y la fecha se recortan antes que él.
         cell: ({ row }) => (
-          <div className="flex min-w-0 max-w-[420px] items-baseline gap-2">
+          <div className="flex min-w-0 max-w-[420px] flex-col gap-1 whitespace-normal [overflow-wrap:anywhere]">
             <p
-              className="min-w-0 flex-1 truncate text-body text-foreground"
+              className="min-w-0 whitespace-normal text-body text-foreground"
               title={row.original.title}
             >
               {row.original.title}
             </p>
-            <p className="min-w-0 shrink truncate text-caption text-muted-foreground">
+            <p className="min-w-0 whitespace-normal text-caption text-muted-foreground">
               {/*the subject KIND is painted, not dumped. A connector may report
                   a posture about something the raw identifier does not explain: the
                   local connector emits `local.residency` per model held in memory

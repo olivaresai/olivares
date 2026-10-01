@@ -615,7 +615,7 @@ $body$`, quoteLiteral(targetDDL), quoteLiteral(targetRelation))); err != nil {
 // THE RATIFIED <=v5 PROFILE IS core-only, `register == nil`, and these fixtures open
 // with it because that is what they claim to reproduce. They used to pass registerWidget
 // over a core-only v5 seed, which is a module the source never had — the exact shape the
-// independent review reproduced as F1, and which the boot classifier now refuses before
+// independent review reproduced as finding 1, and which the boot classifier now refuses before
 // any write. Nothing about v7's direct path is lost: the widget descriptor is not
 // append-only, so the guard census and every digest below are unchanged.
 func TestCoreV7DirectUpgradeFromV5BothTrackingShapes(t *testing.T) {

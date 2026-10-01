@@ -35,7 +35,7 @@
 import { http } from '@/lib/api'
 import type { RequestOptions } from '@/lib/api/client'
 import { ApiError } from '@/lib/api/errors'
-import type { ListResponse } from '@/lib/api/types'
+import type { ListResponse, LoginResponse } from '@/lib/api/types'
 import type {
   AuditEntry,
   CryptoInventoryItem,
@@ -152,9 +152,13 @@ export const identityApi = {
     }),
 
   // --- REAL: NHI lifecycle ---------------------------------------------------
-  nhiLifecycle: (params?: NhiLifecycleParams) =>
+  nhiLifecycle: (
+    params?: NhiLifecycleParams,
+    opts?: Pick<RequestOptions, 'signal'>,
+  ) =>
     http.get<ListResponse<NhiLifecycleDTO>>(`${GOVERNANCE}/nhi`, {
       query: { ...params },
+      signal: opts?.signal,
     }),
   nhiPosture: () => http.get<NhiPostureDTO>(`${GOVERNANCE}/nhi/posture`),
   nhiDetail: (ref: string) => http.get<NhiLifecycleDTO>(nhiPath(ref)),
@@ -361,4 +365,74 @@ export const identityKeys = {
   piv: (t: string | null) => ['identity', t, 'piv'] as const,
   webauthnCredentials: (t: string | null) =>
     ['identity', t, 'webauthn', 'credentials'] as const,
+  totp: (t: string | null) => ['identity', t, 'totp'] as const,
+  totpPolicy: (t: string | null) => ['identity', t, 'totp', 'policy'] as const,
+}
+
+
+// --- TOTP second factor  -------------------------------------------------
+//
+// The three completion endpoints take the pending credential a factor-gated
+// password login returned (no session exists yet); the management endpoints
+// carry the acting session. The enrolment material (secret + otpauth URI + QR
+// PNG) is shown once; every later response is the non-secret status shape.
+
+export interface TOTPEnrolmentDTO {
+  secret: string
+  uri: string
+  algorithm: string
+  digits: number
+  period: number
+  qr_png_base64: string
+}
+
+export interface TOTPStatusDTO {
+  enrolled: boolean
+  algorithm?: string
+  digits?: number
+  period?: number
+  seed_hint?: string
+  activated_at?: string
+  recovery_codes_remaining: number
+}
+
+type TOTPActivationResponse =
+  | { recovery_codes: string[]; token?: undefined }
+  | ({ token: string; session_id: string; expires_at: string } & { recovery_codes?: string[] })
+
+export const totpApi = {
+  /** Start an enrolment: self-service (session) or a pending login (mfa_token). */
+  enrol: (req: { mfa_token?: string }) =>
+    http.post<TOTPEnrolmentDTO>('/v1/auth/totp/enrol', req, {
+      anonymous: req.mfa_token !== undefined,
+    }),
+  /** Confirm with the app's code. Self-service returns the recovery codes; a
+   * pending login's activation completes the login (session + codes). */
+  activate: (req: { code: string; mfa_token?: string }) =>
+    http.post<TOTPActivationResponse>('/v1/auth/totp/activate', req, {
+      anonymous: req.mfa_token !== undefined,
+    }),
+  /** Complete a factor-gated login with a code or a recovery code. */
+  challenge: (req: { mfa_token: string; code?: string; recovery_code?: string }) =>
+    http.post<LoginResponse>('/v1/auth/totp/challenge', req, { anonymous: true }),
+  /** The calling account's factor (non-secret). */
+  status: () => http.get<TOTPStatusDTO>('/v1/auth/totp/status'),
+  /** Remove the calling account's own factor (AAL3-gated by the engine). */
+  remove: () => http.delete<void>('/v1/auth/totp'),
+  /** The deployment policy. */
+  policy: () =>
+    http.get<{ require_for_admins: boolean }>('/v1/auth/totp/policy'),
+  setPolicy: (requireForAdmins: boolean) =>
+    http.put<{ require_for_admins: boolean }>('/v1/auth/totp/policy', {
+      require_for_admins: requireForAdmins,
+    }),
+  /** An administrator's view of another account's factor. */
+  userStatus: (userID: string) =>
+    http.get<TOTPStatusDTO>(`/v1/users/${encodeURIComponent(userID)}/totp`),
+  /** An administrator's reset of another account's factor. */
+  userReset: (userID: string) =>
+    http.post<{ ok: boolean }>(
+      `/v1/users/${encodeURIComponent(userID)}/totp/reset`,
+      {},
+    ),
 }

@@ -184,4 +184,10 @@ type sessionLoginMethod string
 const (
 	passwordLogin  sessionLoginMethod = "pwd"
 	federatedLogin sessionLoginMethod = "sso"
+	// externalLogin names a primary login whose FIRST factor an installed
+	// external verifier proved outside the password and federation paths (the
+	// generic continuation seam, core/auth/totp.go). It is PRIMARY like the
+	// other two — the password-policy questions (require-SSO) do not apply to
+	// it, exactly as they do not apply to a federation completion.
+	externalLogin sessionLoginMethod = "external"
 )

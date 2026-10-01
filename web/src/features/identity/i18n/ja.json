@@ -8,7 +8,8 @@
     "mcp": "MCP 認可",
     "wif": "WIF グラフ",
     "posture": "鍵とレジデンシーの態勢",
-    "login": "特権ログイン"
+    "login": "特権ログイン",
+    "totp": "TOTP 要素"
   },
   "seam": {
     "badge": "バックエンド未提供",
@@ -607,5 +608,40 @@
       "title": "人間および非人間アイデンティティはまだありません",
       "description": "ディレクトリソースを設定した後にアイデンティティ名簿を再同期すると、人間および非人間アイデンティティが External ID とともに登録されます。"
     }
+  },
+  "totp": {
+    "title": "TOTP 第二要素",
+    "description": "時間ベースのワンタイムパスワード（RFC 6238）をローカルアカウントの追加要素として設定します。パスキーや PIV を置き換えるものではなく、それらに加わるものです。",
+    "state": "要素",
+    "enrolled": "登録済み",
+    "notEnrolled": "未登録",
+    "algorithm": "パラメータ",
+    "everySeconds": "{{period}} 秒ごと",
+    "activatedAt": "有効化日時",
+    "recoveryRemaining": "リカバリーコード",
+    "recoveryCount": "残り {{count}} 件",
+    "enrol": "要素を登録",
+    "replace": "要素を置き換え",
+    "remove": "要素を削除",
+    "confirmRemove": "本当に削除しますか？",
+    "activate": "有効化",
+    "scanPrompt": "認証アプリで QR コードをスキャンするか、シークレットを手動入力し、表示されたコードを入力してください。",
+    "qrAlt": "TOTP プロビジョニング URI の QR コード",
+    "manualEntry": "手動入力用シークレット",
+    "codeLabel": "アプリのコード",
+    "recoveryWarning": "これらのリカバリーコードは一度だけ表示されます。今すぐ保存してください。端末を失くした際、各コードは 1 回だけ使用できます。",
+    "savedCodes": "保存しました",
+    "stepUpRequired": "この操作には新しい AAL3 セッションが必要です。先にパスキーまたは PIV のステップアップを完了してください。",
+    "sealerUnavailable": "このデプロイでは TOTP シードシーラーが利用できないため、運用者が修復するまで登録は無効です。",
+    "loadFailed": "要素の状態を読み込めませんでした。",
+    "policyTitle": "管理者に TOTP を必須化",
+    "policyDescription": "有効にすると、管理者（スーパー管理者および各テナントの admin / owner）は因子を登録しない限りパスワードログインを完了できません。",
+    "policyState": "ポリシー",
+    "policyOn": "必須",
+    "policyOff": "オフ",
+    "policyEnable": "管理者に必須化",
+    "policyConfirmOn": "確認：必須化",
+    "policyDisable": "オフにする",
+    "policyAal3Note": "このポリシーの変更には AAL3 セッションが必要です。因子のないアカウントは次回ログイン時に登録へ案内され、締め出されることはありません。"
   }
 }

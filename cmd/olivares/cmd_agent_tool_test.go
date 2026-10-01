@@ -786,7 +786,7 @@ func TestAgentToolProductionWiringTrustsOnlyTheEmbeddedKey(t *testing.T) {
 		t.Fatalf("v1 catalog %v", keys)
 	}
 	got := strings.Join(eng.DriverKeys(), ",")
-	if got != "claude,codex,grok" {
+	if got != "claude,codex,grok,ollama,opencode" {
 		t.Fatalf("driver keys %q", got)
 	}
 	if bytes.Contains(src, []byte("HashMatchingVerifier")) {

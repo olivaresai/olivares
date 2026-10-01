@@ -8,13 +8,22 @@ import {
   useEffect,
   useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { authApi } from '@/lib/api/endpoints'
+import { notifyUnauthorized } from '@/lib/api/client'
+import { ApiError } from '@/lib/api/errors'
 import { queryKeys } from '@/lib/api/query'
-import type { Grant, LoginRequest, Whoami } from '@/lib/api/types'
+import type {
+  Grant,
+  LoginRequest,
+  LoginResponse,
+  LoginResult,
+  Whoami,
+} from '@/lib/api/types'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import { observeStepUpContext } from '@/stores/step-up'
@@ -49,8 +58,12 @@ export interface AuthContextValue {
   /** Membership of the effective permission set the ENGINE computed for this
    *  principal in the target tenant. Hides/disables actions; it never grants. */
   can: (permission: string, opts?: { tenant?: string | null }) => boolean
-  /** Exchange credentials for a session and load the principal. */
-  login: (req: LoginRequest) => Promise<void>
+  /** Exchange credentials for a session and load the principal — or return
+   *  the pending second-factor challenge the login must complete . */
+  login: (req: LoginRequest) => Promise<LoginResult>
+  /** Adopt an already-verified session envelope (the second-factor completion
+   *  paths): store it and load the principal, exactly like login's session leg. */
+  adoptSession: (res: LoginResponse) => Promise<void>
   /** Revoke the session (best-effort) and clear all client state. */
   logout: () => Promise<void>
   /** Select the active tenant (org switcher). */
@@ -79,6 +92,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // competing fetchQuery) aborts it — console-walk records
   // GET /v1/auth/whoami net::ERR_ABORTED on the login step.
   const [loginInFlight, setLoginInFlight] = useState(false)
+  const adoptionSequence = useRef(0)
 
   // Load the principal whenever a token is present. A 401 here means the token was
   // revoked/expired — the client's onUnauthorized hook clears the session, so the
@@ -210,9 +224,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, [token, expiresAt, setSession])
 
-  const login = useCallback(
-    async (req: LoginRequest) => {
-      const res = await authApi.login(req)
+  // The session leg every credential path shares: password, and the two
+  // second-factor completions (code / recovery code / first-factor activation)
+  // that hand back the same envelope.
+  const adoptSession = useCallback(
+    async (res: LoginResponse) => {
+      const sequence = ++adoptionSequence.current
       // Disable the observer first so setSession cannot start a second GET.
       setLoginInFlight(true)
       setSession({
@@ -220,14 +237,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         sessionId: res.session_id,
         expiresAt: res.expires_at,
       })
+      const generation = useSessionStore.getState().credentialGeneration
+      const isCurrent = () =>
+        adoptionSequence.current === sequence &&
+        useSessionStore.getState().credentialGeneration === generation
       try {
-        const principal = await authApi.whoami()
+        // This response belongs to the installed credential. The shared
+        // client's refresh and 401 effects cannot act on a later credential.
+        const principal = await authApi.whoami({
+          sessionEffects: 'none',
+          dispatchGuard: () => {
+            if (!isCurrent())
+              throw new DOMException('Session adoption ended.', 'AbortError')
+          },
+        })
+        if (!isCurrent()) return
         queryClient.setQueryData(queryKeys.whoami, principal)
+      } catch (error) {
+        if (!isCurrent()) return
+        if (error instanceof ApiError && error.isUnauthenticated)
+          notifyUnauthorized()
+        throw error
       } finally {
-        setLoginInFlight(false)
+        // An earlier adoption must not enable the observer while the newer
+        // adoption still owns its first whoami request.
+        if (adoptionSequence.current === sequence) setLoginInFlight(false)
       }
     },
     [setSession, queryClient],
+  )
+
+  const login = useCallback(
+    async (req: LoginRequest): Promise<LoginResult> => {
+      const res = await authApi.login(req)
+      if ('token' in res && res.token) {
+        await adoptSession(res)
+        return res
+      }
+      return res
+    },
+    [adoptSession],
   )
 
   const logout = useCallback(async () => {
@@ -269,6 +318,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       isAuthenticated: !!principal,
       can,
       login,
+      adoptSession,
       logout,
       setActiveTenant: setActiveTenantStore,
     }),
@@ -279,6 +329,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       activeTenant,
       can,
       login,
+      adoptSession,
       logout,
       setActiveTenantStore,
     ],

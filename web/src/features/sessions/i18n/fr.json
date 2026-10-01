@@ -327,7 +327,19 @@
     "wireEmpty": "Sélectionnez une ligne de la conversation pour voir son cadre brut.",
     "thisNode": "Ce nœud",
     "noWorkspace": "Aucun espace de travail",
-    "cwdWarning": "Cette session n’a pas d’espace de travail. Le pilote a déclaré son répertoire de travail comme {{cwd}}."
+    "cwdWarning": "Cette session n’a pas d’espace de travail. Le pilote a déclaré son répertoire de travail comme {{cwd}}.",
+    "workTitle": "Autorité de travail de la session",
+    "workHint": "Enregistrée pour le dernier lancement. Chaque action vérifie l’autorisation actuelle.",
+    "processState": "État du processus",
+    "activityState": "Activité",
+    "workRole": "Rôle accordé",
+    "workWorkspace": "Espace de travail autorisé",
+    "workActions": "Actions accordées",
+    "notRecorded": "Non enregistré",
+    "workRoles": {
+      "worker": "Exécutant",
+      "orchestrator": "Orchestrateur"
+    }
   },
   "conversation": {
     "log": "Conversation",

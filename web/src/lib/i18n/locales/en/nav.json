@@ -95,9 +95,11 @@
     "providers": "Providers",
     "providerProfiles": "Provider profiles",
     "providerBindings": "Source bindings",
-    "providerAccounts": "Provider accounts"
+    "providerAccounts": "Provider accounts",
+    "agent-tools": "Agent tools"
   },
   "workspace": {
+    "open": "Open {{workspace}}",
     "switch": "Switch workspace",
     "all": "All workspaces",
     "allHint": "No workspace filter",
@@ -133,6 +135,7 @@
     "agentops": "Create, attach to and govern Claude Code sessions — no SSH; shares its screen with Observe sessions",
     "agentArtifacts": "Skills, MCP extensions and instruction files — registry, posture and supply-chain BOM",
     "models": "Models, routing and provider keys",
+    "agent-tools": "Detect, install and update the agent tools on this host and follow each install; deployment administrators only",
     "modelOps": "Owned models, admission and deployments",
     "finops": "Token cost, budgets and spend",
     "adoption": "Productivity, acceptance & model mix",

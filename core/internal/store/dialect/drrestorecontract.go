@@ -26,12 +26,24 @@ type DRControlCheck struct {
 	Columns    string
 }
 
-// DRRestoreControlContract currently admits major 16. Other majors are explicitly
-// unsupported for an enrolled control until a compiled contract and actual major
-// acceptance are supplied. This does not classify an absent control as damage.
+// DRRestoreControlContract admits the explicitly qualified majors with their
+// compiled catalog representations. This does not classify an absent control as
+// damage, and no target catalog calibrates the contract.
 func DRRestoreControlContract(serverMajor int) (DRControlContract, error) {
-	if serverMajor != 16 {
-		return DRControlContract{}, fmt.Errorf("DR restore control contract: PostgreSQL major %d is unsupported (verified contract: 16)", serverMajor)
+	switch serverMajor {
+	case 15, 16, 17, 18:
+	default:
+		return DRControlContract{}, fmt.Errorf("DR restore control contract: PostgreSQL major %d is unsupported (verified contracts: 15, 16, 17, 18)", serverMajor)
+	}
+	statisticsDefault, statisticsNonDefault := "=-1", "<>-1"
+	if serverMajor >= 17 {
+		// PG17 changed the default statistics target from -1 to NULL. A custom
+		// target, including the old representation on these majors, is drift.
+		statisticsDefault, statisticsNonDefault = " IS NULL", " IS NOT NULL"
+	}
+	constraintFlags := ""
+	if serverMajor == 18 {
+		constraintFlags = " AND con.conenforced AND NOT con.conperiod"
 	}
 	return DRControlContract{Major: serverMajor, Columns: DRRestoreControlColumns(), RelationSQL: `SELECT c.oid::pg_catalog.int8,c.relowner::pg_catalog.int8,r.rolname,
  pg_catalog.current_setting('server_version_num')::pg_catalog.int4 / 10000,
@@ -54,7 +66,7 @@ func DRRestoreControlContract(serverMajor int) (DRControlContract, error) {
  AND NOT a.atthasdef AND NOT a.atthasmissing AND a.attmissingval IS NULL
  AND a.attidentity='' AND a.attgenerated='' AND a.attcompression=''
  AND a.attstorage=t.typstorage AND a.attlen=t.typlen AND a.attbyval=t.typbyval AND a.attalign=t.typalign
- AND a.attndims=0 AND a.attstattarget=-1 AND a.attoptions IS NULL AND a.attfdwoptions IS NULL
+ AND a.attndims=0 AND a.attstattarget` + statisticsDefault + ` AND a.attoptions IS NULL AND a.attfdwoptions IS NULL
  AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_attrdef d WHERE d.adrelid=a.attrelid AND d.adnum=a.attnum)
  AND CASE WHEN t.typname='text' THEN a.attcollation='pg_catalog."C"'::pg_catalog.regcollation ELSE a.attcollation=0 END
  FROM pg_catalog.pg_attribute a
@@ -65,7 +77,7 @@ func DRRestoreControlContract(serverMajor int) (DRControlContract, error) {
  con.convalidated AND NOT con.condeferrable AND NOT con.condeferred AND con.conislocal
  AND con.coninhcount=0 AND con.conparentid=0 AND con.connoinherit=(con.contype='p')
  AND con.connamespace=(SELECT relnamespace FROM pg_catalog.pg_class WHERE oid=$1)
- AND con.contypid=0 AND con.confrelid=0
+ AND con.contypid=0 AND con.confrelid=0` + constraintFlags + `
  AND CASE WHEN con.contype='p' THEN con.conindid=(SELECT oid FROM pg_catalog.pg_class WHERE relnamespace=con.connamespace AND relname=$2) ELSE con.conindid=0 END
  AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_depend d
   WHERE d.classid='pg_catalog.pg_constraint'::pg_catalog.regclass AND d.objid=con.oid AND
@@ -83,7 +95,7 @@ func DRRestoreControlContract(serverMajor int) (DRControlContract, error) {
   AND a.attname='control_key' AND a.atttypid='pg_catalog.text'::pg_catalog.regtype
   AND a.atttypmod=-1 AND a.attcollation='pg_catalog."C"'::pg_catalog.regcollation
   AND NOT a.attisdropped AND NOT a.atthasdef AND NOT a.atthasmissing AND NOT a.attnotnull
-  AND a.attidentity='' AND a.attgenerated='' AND a.attstattarget=-1 AND a.attoptions IS NULL
+  AND a.attidentity='' AND a.attgenerated='' AND a.attstattarget` + statisticsDefault + ` AND a.attoptions IS NULL
   AND a.attfdwoptions IS NULL AND a.attacl IS NULL)
  AND i.indisunique AND i.indisprimary AND NOT i.indisexclusion AND i.indimmediate
  AND NOT i.indisclustered AND i.indisvalid AND NOT i.indcheckxmin AND i.indisready AND i.indislive
@@ -143,7 +155,7 @@ func DRRestoreControlContract(serverMajor int) (DRControlContract, error) {
    OR x.attbyval<>(expected.num<>3)
    OR NOT x.attislocal OR x.attinhcount<>0 OR x.atthasdef OR x.atthasmissing
    OR x.attmissingval IS NOT NULL OR x.attidentity<>'' OR x.attgenerated<>''
-   OR x.attcompression<>'' OR x.attstorage<>'p' OR x.attndims<>0 OR x.attstattarget<>-1
+   OR x.attcompression<>'' OR x.attstorage<>'p' OR x.attndims<>0 OR x.attstattarget` + statisticsNonDefault + `
    OR x.attacl IS NOT NULL OR x.attoptions IS NOT NULL OR x.attfdwoptions IS NOT NULL)
  AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_trigger WHERE tgrelid=toast.oid)
  AND NOT EXISTS (SELECT 1 FROM pg_catalog.pg_rewrite WHERE ev_class=toast.oid)

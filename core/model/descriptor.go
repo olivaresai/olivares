@@ -257,6 +257,11 @@ type EntityDescriptor struct {
 	// declared": the entity stays fully usable for the engine and for a
 	// tenant-wide principal, and is refused to a workspace-confined one.
 	WorkspaceLineage WorkspaceLineageSpec
+	// WorkspaceInheritedRead declares an append-only child's read relationship
+	// to a directly workspace-bound parent registered before it. It does not
+	// make Scope.Ext writable or readable under confinement; only the store's
+	// rows-only inherited reader may use this one-level relationship.
+	WorkspaceInheritedRead WorkspaceInheritedReadSpec
 	// WorkspaceConfinedReadOnly opts an entity with a declared WorkspaceLineage
 	// into READ-ONLY exposure through a workspace-confined Scope.Ext: filtered
 	// Get/List (and DistinctProjector when the raw repository has it), while

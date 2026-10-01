@@ -10,7 +10,7 @@ description: >-
 Die Community-Binärdatei registriert einen Verfügbarkeitsdeskriptor für den
 API-Namensraum `session-cockpit`. Dieser Namensraum hat derzeit **keine Handler**
 und **kein interaktives Cockpit**. Anfragen unter `/v1/m/session-cockpit`
-erhalten **404 durch Abwesenheit**. Der Deskriptor ist keines der 30
+erhalten **404 durch Abwesenheit**. Der Deskriptor ist keines der 31
 Produktmodule im Katalog.
 
 ## Aktuelle Verfügbarkeit

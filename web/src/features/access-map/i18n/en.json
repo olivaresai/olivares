@@ -54,7 +54,8 @@
     "forbiddenHint": "Your role can see the graph but not the permitted-vs-observed diff (accessmap:drift:read).",
     "partial": "Partial result: the engine reconciled this diff over a truncated drift window, so these counts are not the whole estate and an edge missing here may simply be past the bound.",
     "emptyWindowTitle": "No findings in the scanned window",
-    "emptyWindowHint": "The scan stopped at its page bound, so this is not a statement about the whole estate."
+    "emptyWindowHint": "The scan stopped at its page bound, so this is not a statement about the whole estate.",
+    "scopeHint": "The drift list covers the whole organization; map filters do not apply to it"
   },
   "detail": {
     "edgeTitle": "Access edge",

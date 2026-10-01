@@ -20,6 +20,7 @@ func TestCoreOpenAPIPermissionAnnotations(t *testing.T) {
 	// The exempt set mirrored from openapi_permissions.go — duplicated here on
 	// purpose: growing it must be a conscious two-file change.
 	exempt := map[string]bool{
+		"enrolTOTP": true, "activateTOTP": true, "getTOTPStatus": true, "removeTOTP": true,
 		"logout":           true,
 		"refreshToken":     true,
 		"whoami":           true,

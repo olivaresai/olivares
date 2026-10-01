@@ -341,12 +341,6 @@ func (m *Module) mintFromProviderRecord(
 	tenant model.TenantID,
 	driver, ref string,
 ) (Credential, []EnvVar, error) {
-	if m.rt.providerVault == nil {
-		return Credential{}, nil, &runErr{
-			http.StatusServiceUnavailable,
-			"this provider profile names a registered provider, and no sealed credential vault is wired on this node to open it (the launch is denied; it does not fall back to a host credential)",
-		}
-	}
 	rec, err := m.GetProviderRecord(ctx, tenant, ref)
 	if err != nil {
 		return Credential{}, nil, err
@@ -386,10 +380,19 @@ func (m *Module) mintFromProviderRecord(
 			"this launch has two endpoints: the deployment inference gateway and the bound provider's own base_url; clear one of them",
 		}
 	}
+	if rec.Kind == ProviderKindOllama {
+		return Credential{localModelEndpoint: strings.TrimRight(rec.BaseURL, "/") + "/v1"}, nil, nil
+	}
+
+	if m.rt.providerVault == nil {
+		return Credential{}, nil, &runErr{http.StatusServiceUnavailable,
+			"this provider profile names a registered provider, and no sealed credential vault is wired on this node to open it (the launch is denied; it does not fall back to a host credential)"}
+	}
 	key, err := m.rt.providerVault.Open(ctx, tenant, rec.SecretRef)
 	if err != nil {
 		return Credential{}, nil, openFailure(err)
 	}
+
 	env := providerRecordEnv(rec.Kind, rec.BaseURL, string(key))
 	if len(env) == 0 {
 		return Credential{}, nil, &runErr{

@@ -169,6 +169,10 @@ func (s *SecretStore) List(ctx context.Context, scope model.TenantID) ([]SecretV
 // never forces re-entering the secret); an empty value on a NEW secret is refused.
 // Deny-closed: a write with no sealer wired is refused (never cleartext).
 func (s *SecretStore) Put(ctx context.Context, actor Principal, scope model.TenantID, name, value, description string) (SecretView, error) {
+	return s.put(ctx, actor, scope, name, value, description, nil)
+}
+
+func (s *SecretStore) put(ctx context.Context, actor Principal, scope model.TenantID, name, value, description string, authority *configurationAuthority) (SecretView, error) {
 	name = strings.TrimSpace(name)
 	if msg := ValidateSecretName(name); msg != "" {
 		return SecretView{}, fmt.Errorf("%w: %s", ErrBadSecretName, msg)
@@ -194,7 +198,13 @@ func (s *SecretStore) Put(ctx context.Context, actor Principal, scope model.Tena
 		return SecretView{}, ErrEmptySecretValue
 	}
 
+	var committed model.SecretEntry
 	err = s.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		if authority != nil {
+			if err := authority.pin(ctx, as); err != nil {
+				return err
+			}
+		}
 		var (
 			saved model.SecretEntry
 			werr  error
@@ -207,10 +217,17 @@ func (s *SecretStore) Put(ctx context.Context, actor Principal, scope model.Tena
 		if werr != nil {
 			return werr
 		}
+		committed = saved
+		if authority != nil {
+			return authority.auditAndFinalize(ctx, as, "secret.put", secretEntryKind, saved.ID)
+		}
 		return auditAct(ctx, as, actor, "secret.put", secretEntryKind, saved.ID)
 	})
 	if err != nil {
 		return SecretView{}, err
+	}
+	if authority != nil {
+		return toSecretView(committed), nil
 	}
 	view, _, err := s.Get(ctx, scope, name)
 	return view, err

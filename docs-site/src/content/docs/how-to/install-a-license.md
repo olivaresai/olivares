@@ -30,7 +30,7 @@ wrong thing to tell you.
 | You bought | What arrives | What you do with it |
 |---|---|---|
 | Community | nothing to install | already running — nothing on this page applies |
-| Business / Business Max, self-hosted | a **license file** and a **download token** | install the license, then swap to the enterprise binary |
+| Business / Enterprise, self-hosted | a **license file** and a **download token** | install the license, then swap to the enterprise binary |
 | Cloud | credentials for a hosted tenant | nothing to install on a host of yours |
 
 The license is a single signed blob. Save it as a file — `customer.license`, any name — and
@@ -116,12 +116,11 @@ reinstalled and no data moves:
 olivares upgrade --enterprise --token <TOKEN>
 ```
 
-:::note[Why the flag says `--enterprise` when the edition is Business]
-The flag names the **artifact channel** — the gated download — not the edition you bought.
-It is `--enterprise` in the binary you already have (`cmd/olivares/cmd_upgrade.go`), so this
-page prints it exactly as you must type it. The editions themselves are Community and
-Business, with the four business add-ons named in [`LICENSING.md`](https://olivares.ai/pricing):
-Regulated Operations, AI Runtime Security, Compliance Packs, and Identity & Scale.
+:::note[Business and the commercial artifact channel]
+The `--enterprise` flag names the commercial artifact channel, not the edition.
+The editions are Community, Business and Enterprise. Business includes Regulated Operations,
+AI Runtime Security, Compliance Packs, and Identity & Scale in one subscription.
+Each family can be enabled or disabled; none is sold separately.
 :::
 
 It fetches the signed commercial build for your platform, **verifies the signature
@@ -133,13 +132,13 @@ see the plan without taking it:
 olivares upgrade --enterprise --token <TOKEN> --check
 ```
 
-Restart the service, and then turn the add-ons on:
+Restart the service, and then turn the modules on:
 
 ```sh
 olivares enterprise enable <preset>     # starter | regulated | full
 ```
 
-Activation is governed and audited: it shows you a diff first, and stages any add-on that
+Activation is governed and audited: it shows you a diff first, and stages any module that
 needs a secret or a review rather than half-enabling it. `olivares enterprise status` reports
 what is active. These commands exist **only in the commercial binary** — if
 `olivares enterprise` is not a command, you are still running the Community build and the

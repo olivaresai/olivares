@@ -278,6 +278,7 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 			// Nullable for the same expand-contract reason as the stamp above: an
 			// existing sessions_run gains it on the next boot (reconcileColumns),
 			// and a row that predates it carries no lawful lineage.
+			{Name: colRunWorkScope, Kind: model.KindText, Nullable: true, Principal: model.None("references-only work authority snapshot for the current launch; never a bearer or live authorization verdict: modules/sessions/runtime_work_scope.go:57")},
 			{Name: colRunAuthzWorkspaceID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the core workspace id of the run's authorization lineage, never an account: runtime_schema.go:319-323, identity_read.go:158")},
 			{Name: colCommunicationWorkspaceID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the core workspace id a communication credential was bound to: runtime_communication_credential.go:325, runtime_communication_credential.go:511")},
 			{Name: colWorkCredentialID, Kind: model.KindUUID, Nullable: true, Principal: pdeclNoneRuntimeCredentialHandle},
@@ -340,6 +341,9 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 		Kind:       runEventKind,
 		Table:      runEventTable,
 		AppendOnly: true, // immutability: no UPDATE/DELETE (engine triggers/grants)
+		WorkspaceInheritedRead: model.WorkspaceInheritedReadSpec{
+			ParentKind: runKind, ParentColumn: colRunRef, Column: colEvRunRef,
+		},
 		Fields: []model.FieldSpec{
 			{Name: colEvRunRef, Kind: model.KindText, Indexed: true, Principal: pdeclNoneRunRef},
 			{Name: colEvSeq, Kind: model.KindInt},

@@ -1,11 +1,11 @@
 {
   "title": "Proveedores",
-  "subtitle": "La credencial con la que arranca una sesión. Regístrala una vez; el motor la sella y se la entrega al agente en el lanzamiento.",
+  "subtitle": "Una credencial de proveedor en la nube o un endpoint de modelos locales, seleccionado mediante un perfil.",
   "nav": "Proveedores",
   "add": "Añadir proveedor",
   "empty": {
     "title": "Todavía no hay ningún proveedor registrado",
-    "description": "Una sesión no puede arrancar sin credencial. Añade la clave de API de Anthropic, OpenAI o xAI —o de cualquier endpoint compatible con OpenAI— y el motor la sella y la usa en el lanzamiento. La clave no se vuelve a mostrar.",
+    "description": "Conecta Anthropic, OpenAI o xAI con una clave API, o añade un endpoint local de Ollama sin clave. Prueba la conexión y vincúlalo a un perfil.",
     "action": "Añade tu primer proveedor"
   },
   "emptyFiltered": {
@@ -28,13 +28,15 @@
     "anthropic": "Anthropic",
     "openai": "OpenAI",
     "xai": "xAI",
-    "openai_compatible": "Compatible con OpenAI"
+    "openai_compatible": "Compatible con OpenAI",
+    "ollama": "Ollama"
   },
   "kindHints": {
     "anthropic": "Claude Code. Inyecta ANTHROPIC_API_KEY.",
     "openai": "Codex. Inyecta OPENAI_API_KEY.",
     "xai": "Grok. Inyecta XAI_API_KEY.",
-    "openai_compatible": "Cualquier endpoint con forma de OpenAI. Inyecta OPENAI_API_KEY y OPENAI_BASE_URL; el endpoint es obligatorio."
+    "openai_compatible": "Cualquier endpoint con forma de OpenAI. Inyecta OPENAI_API_KEY y OPENAI_BASE_URL; el endpoint es obligatorio.",
+    "ollama": "Modelos locales para Codex. Sin clave API. Usa el endpoint nativo de Ollama; la prueba lee los metadatos de modelos."
   },
   "states": {
     "active": "Activo",
@@ -51,7 +53,13 @@
     "unreachableHint": "El endpoint no contestó. Esto no dice nada sobre la credencial.",
     "models": "{{n}} modelos",
     "latency": "{{ms}} ms",
-    "at": "Probada {{when}}"
+    "at": "Probada {{when}}",
+    "local": {
+      "neverHint": "Este endpoint no se ha probado. Registrarlo no demuestra que funcione.",
+      "okHint": "El endpoint local respondió y enumeró sus modelos.",
+      "refusedHint": "El endpoint rechazó la solicitud de metadatos. Revisa su configuración de acceso.",
+      "unreachableHint": "El endpoint local no respondió. Revisa su dirección y disponibilidad."
+    }
   },
   "actions": {
     "test": "Probar conexión",
@@ -78,7 +86,9 @@
     "submitting": "Sellando…",
     "cancel": "Cancelar",
     "success": "Proveedor registrado. Prueba la conexión para confirmar que funciona.",
-    "testNext": "Probar la conexión ahora"
+    "testNext": "Probar la conexión ahora",
+    "registering": "Registrando…",
+    "localNameHint": "Tu nombre para este endpoint. Es el que se muestra en el selector."
   },
   "rotate": {
     "title": "Rotar la clave de este proveedor",
@@ -93,7 +103,9 @@
     "description": "Esto destruye la credencial sellada. No se puede deshacer para esta referencia.",
     "consequence": "Todos los perfiles de proveedor vinculados se negarán a lanzar, nombrando a este proveedor. La credencial no se revoca en el proveedor: eso se hace en su propia consola.",
     "confirm": "Revocar",
-    "success": "Proveedor revocado y su credencial sellada destruida."
+    "success": "Proveedor revocado y su credencial sellada destruida.",
+    "localDescription": "Esto revoca el registro del endpoint. Los perfiles vinculados rechazarán nuevos lanzamientos. El servicio Ollama y sus modelos permanecen en el host.",
+    "localSuccess": "Registro del endpoint revocado."
   },
   "detail": {
     "title": "Proveedor",
@@ -112,11 +124,22 @@
   },
   "next": {
     "title": "Siguiente: despliega un agente",
-    "description": "Una credencial por sí sola no lanza nada. Vincúlala a un perfil de proveedor y una sesión lanzada bajo ese perfil la usará.",
+    "description": "Un proveedor registrado no inicia sesiones por sí solo. Vincúlalo a un perfil de proveedor para que las nuevas sesiones lo usen.",
     "action": "Ir a los perfiles de proveedor"
   },
   "truncation": {
     "label": "Se muestran {{n}} proveedores; hay más",
     "hint": "Esta lista es una página. Acótala, o usa `olivares provider ls` para el conjunto completo."
+  },
+  "bind": {
+    "title": "Vincular perfil",
+    "description": "Los próximos lanzamientos del perfil elegido usan {{name}}. Las sesiones actuales conservan su proveedor.",
+    "profile": "Perfil",
+    "choose": "Elige un perfil compatible",
+    "empty": "No hay perfiles activos compatibles. Crea uno en Perfiles de proveedor.",
+    "more": "Cargar más perfiles",
+    "unavailable": "Faltan permisos de perfiles o un perfil activo compatible.",
+    "loadError": "No se pudieron cargar los perfiles.",
+    "success": "Proveedor vinculado al perfil."
   }
 }

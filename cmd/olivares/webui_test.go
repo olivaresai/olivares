@@ -56,6 +56,25 @@ func do(h http.Handler, method, target string) *httptest.ResponseRecorder {
 	return rr
 }
 
+func TestSPA_ManagedMCPRoutesReachProtocolAdmission(t *testing.T) {
+	h := newSPAHandler(sentinelAPI(), testWebFS())
+	for _, path := range []string{
+		"/session/mcp",
+		"/mcp/gateway/01a0ef7c-f25a-7f2b-a336-aed3df18206f/01a0efcd-5fac-7e22-8520-78b506cfc2e0",
+		"/.well-known/oauth-protected-resource/mcp/gateway/01a0ef7c-f25a-7f2b-a336-aed3df18206f/01a0efcd-5fac-7e22-8520-78b506cfc2e0",
+	} {
+		for _, method := range []string{http.MethodPost, http.MethodGet} {
+			rr := do(h, method, path)
+			if rr.Header().Get("X-Handler") != "api" {
+				t.Errorf("%s %s reached SPA with status %d; protocol admission must decide", method, path, rr.Code)
+			}
+		}
+	}
+	if rr := do(h, http.MethodGet, "/console?tab=mcpGateway"); rr.Header().Get("X-Handler") == "api" {
+		t.Fatal("console must remain a browser route")
+	}
+}
+
 var nonceRe = regexp.MustCompile(`script-src 'nonce-([^']+)' 'strict-dynamic'`)
 
 func cspNonce(csp string) string {

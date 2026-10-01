@@ -40,7 +40,7 @@ guarantee**.
 
 ## Capability summary
 
-| Theme | Open (AGPL) highlights | Commercial add-on highlights |
+| Theme | Open (AGPL) highlights | Commercial module highlights |
 |---|---|---|
 | **Identity and access** | Single-IdP SSO, WebAuthn/FIDO2, NHI lifecycle, agent-identity federation, SCIM, unlimited users | Multi-IdP federation, SSO enforcement, CyberArk Conjur |
 | **Content and data security** | PII/injection/jailbreak guardrails, DLP egress, BYOK/CMEK, session recording, post-quantum TLS | Content firewall (deep inspection), hook DLP, computer-use gate, RTBF coordinator |
@@ -49,7 +49,7 @@ guarantee**.
 | **Operations and resilience** | S3 WORM archival, backup/DR with chain verification, FinOps budgets, on-demand reports | WORM retention governor + regulatory floors, Azure/GCS WORM sinks, durable event bus, scheduled branded reports |
 | **Integration** | CAEP receiver, Terraform provider, SDKs (Go/Java/Python/TS), typed webhooks | CAEP transmitter, token-exchange (RFC 8693), tool-pin verifier, MCP elicitation mediator |
 
-The full matrix of the commercial add-ons is in
+The full matrix of the commercial modules is in
 [feature-matrix.md](./feature-matrix.md).
 
 ---
@@ -87,7 +87,7 @@ run for a real estate). Run the full proof-of-value in 10 business days — see
 [evaluation-guide.md](./evaluation-guide.md).
 
 Status disclosure: the product is beta, pre-1.0. The latest tagged release,
-`v26.9.0`, is published: evaluations can use the signed release
+`26.10.0`, is published: evaluations can use the signed release
 artifacts (cosign, SLSA provenance, SBOM, OpenVEX), which verify against the
 published tag, or build from source.
 
@@ -103,8 +103,15 @@ Pricing on request — enterprise@olivares.ai
 
 Olivares.AI, Spain (EU). License: AGPL-3.0-only (core, modules, web console);
 Apache-2.0 (SDK, connectors); LicenseRef-Olivares-Commercial (enterprise
-add-ons). Full terms in [LICENSING.md](../../LICENSING.md).
+modules). Full terms in [LICENSING.md](../../LICENSING.md).
 
 ---
 
 Contact: enterprise@olivares.ai
+
+
+Business includes Regulated Operations, AI Runtime Security, Compliance Packs, and Identity & Scale
+for USD 129/month or USD 1,290/year. Each family can be enabled or disabled; none is sold separately.
+Business permits unlimited users, one legal entity, up to two production deployments with one staging
+deployment each, and up to five active identity providers (IdPs) in total. Enterprise scope is
+negotiated through enterprise@olivares.ai. Community remains free, with unlimited users and one active IdP.

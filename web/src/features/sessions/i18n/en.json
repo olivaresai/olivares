@@ -323,7 +323,19 @@
     "wireEmpty": "Select a line in the conversation to see its raw frame.",
     "thisNode": "This node",
     "noWorkspace": "No workspace",
-    "cwdWarning": "This session has no workspace. The driver reported its working directory as {{cwd}}."
+    "cwdWarning": "This session has no workspace. The driver reported its working directory as {{cwd}}.",
+    "workTitle": "Session work authority",
+    "workHint": "Recorded for the last launch. Every action checks current authorization.",
+    "processState": "Process state",
+    "activityState": "Activity",
+    "workRole": "Granted role",
+    "workWorkspace": "Work workspace",
+    "workActions": "Granted actions",
+    "notRecorded": "Not recorded",
+    "workRoles": {
+      "worker": "Worker",
+      "orchestrator": "Orchestrator"
+    }
   },
   "conversation": {
     "log": "Conversation",

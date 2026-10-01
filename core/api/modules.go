@@ -145,6 +145,11 @@ type EntityRef struct {
 	// it restores the request body byte-for-byte for the module's own strict decoder.
 	// Exactly one of IDParam and BodyIDField must be set.
 	BodyIDField string
+	// LookupColumn declares a tenant-unique stored reference when the route locator
+	// is not the row's primary ID (for example sessions.run.run_ref). Blank retains
+	// primary-key lookup. Only module Kind routes may use it. The resolved row's
+	// primary ID and workspace, never the caller's selector, authorize the request.
+	LookupColumn string
 	// WorkspaceColumn is the column holding the RESOLVED workspace model.ID for this
 	// entity. It must be the workspace the row BELONGS to — not the workspace of
 	// whoever created it, and not a billing dimension. Blank means the entity carries
@@ -163,6 +168,13 @@ type EntityRef struct {
 	// The option requires Kind so the engine can establish whether the row exists.
 	// It is deliberately per-route; ordinary entity routes retain their 403 denial.
 	ConcealDeniedAsNotFound bool
+	// DeniedReadPermission optionally permits disclosure of an existing row when
+	// the action is denied. The engine evaluates this read permission against the
+	// SAME stored resource through the ordinary HandleEntity authorizer. A reader
+	// receives 403 for the denied action; an unreadable or absent row remains 404.
+	// This changes only denial presentation and never grants the action. It requires
+	// ConcealDeniedAsNotFound; blank preserves unconditional concealment.
+	DeniedReadPermission auth.Permission
 }
 
 // ModuleHandler is a module route handler. It receives the authorized principal,

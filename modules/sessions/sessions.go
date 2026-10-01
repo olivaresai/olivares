@@ -52,10 +52,11 @@ type Module struct {
 	// K1 work-kernel ports are late-bound by the composition root. Nil is a
 	// meaningful deny-closed state: identity/content cannot be asserted and an
 	// outbox event cannot be called published.
-	workIdentity  WorkIdentityResolver
-	workContent   WorkContentGuard
-	workEventSink WorkEventSink
-	workAuthz     WorkAuthorizer
+	workIdentity        WorkIdentityResolver
+	workContent         WorkContentGuard
+	workEventSink       WorkEventSink
+	workAuthz           WorkAuthorizer
+	orchestrationScopes OrchestrationWorkScopeSource
 	// workOutboxAuthority is the composition root's mandatory claim/effect
 	// authority for the outbox families that are not K1/K2 work facts
 	// (work_outbox_policy.go). Every drain entry point composes it; nil on a

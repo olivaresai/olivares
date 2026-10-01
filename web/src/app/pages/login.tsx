@@ -7,6 +7,7 @@ import {
   useQueryClient,
   type QueryClient,
 } from '@tanstack/react-query'
+import { useState } from 'react'
 import { Link, Navigate, useNavigate } from '@tanstack/react-router'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
@@ -23,7 +24,10 @@ import { useAuth } from '@/lib/auth/context'
 import { can as rbacCan } from '@/lib/auth/rbac'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
 import { PasskeyAddressNotice } from '@/features/identity/passkey-address'
+import { SecondFactorPanel } from '@/features/identity/totp-login'
+import type { LoginChallenge } from '@/lib/api/types'
 import { viewById } from '@/features/navigation/model'
+import { ANONYMOUS_VIEWS } from '@/features/anonymous-registry'
 import {
   START_PAGE_IDS,
   useClientSettings,
@@ -79,7 +83,7 @@ type LoginValues = z.infer<typeof schema>
 
 export function LoginPage() {
   const { t } = useTranslation(['auth', 'common', 'errors'])
-  const { status, login, can } = useAuth()
+  const { status, login, adoptSession, can } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
   const serverInfo = useServerInfo()
@@ -88,11 +92,30 @@ export function LoginPage() {
     defaultValues: { email: '', password: '' },
   })
 
+  // The second-factor challenge a verified password returned: the form swaps
+  // for the code/enrolment leg, and nothing is stored until a code (or a
+  // first-factor activation) completes the login.
+  const [challenge, setChallenge] = useState<LoginChallenge | null>(null)
+
   const mutation = useMutation({
     mutationFn: (values: LoginValues) => login(values),
-    onSuccess: () =>
-      navigate({ to: startPath(permitsNow(queryClient, can)) as '/' }),
+    onSuccess: (res) => {
+      if ('mfa_required' in res && res.mfa_required) {
+        setChallenge(res)
+        return
+      }
+      navigate({ to: startPath(permitsNow(queryClient, can)) as '/' })
+    },
   })
+
+  const finishSecondFactor = async (session: {
+    token: string
+    session_id: string
+    expires_at: string
+  }) => {
+    await adoptSession(session)
+    navigate({ to: startPath(permitsNow(queryClient, can)) as '/' })
+  }
 
   // First-boot has no users yet → the setup flow takes precedence.
   if (serverInfo.data?.setup_required) return <Navigate to="/setup" />
@@ -124,62 +147,87 @@ export function LoginPage() {
             {t('login.subtitle')}
           </p>
         </div>
-        <form
-          onSubmit={form.handleSubmit((v) => mutation.mutate(v))}
-          className="flex flex-col gap-4"
-          noValidate
-        >
-          <Field
-            label={t('login.email')}
-            htmlFor="email"
-            error={
-              form.formState.errors.email
-                ? t('common:validation.email')
-                : undefined
-            }
+        {challenge ? (
+          <SecondFactorPanel
+            challenge={challenge}
+            onDone={(session) => void finishSecondFactor(session)}
+            onRestart={() => {
+              setChallenge(null)
+              mutation.reset()
+            }}
+          />
+        ) : (
+          <form
+            onSubmit={form.handleSubmit((v) => mutation.mutate(v))}
+            className="flex flex-col gap-4"
+            noValidate
           >
-            <Input
-              id="email"
-              type="email"
-              autoComplete="username"
-              placeholder={t('login.emailPlaceholder')}
-              aria-invalid={!!form.formState.errors.email}
-              {...form.register('email')}
-            />
-          </Field>
-          <Field
-            label={t('login.password')}
-            htmlFor="password"
-            error={
-              form.formState.errors.password
-                ? t('common:validation.required')
-                : undefined
-            }
-          >
-            <Input
-              id="password"
-              type="password"
-              autoComplete="current-password"
-              aria-invalid={!!form.formState.errors.password}
-              {...form.register('password')}
-            />
-          </Field>
+            <Field
+              label={t('login.email')}
+              htmlFor="email"
+              error={
+                form.formState.errors.email
+                  ? t('common:validation.email')
+                  : undefined
+              }
+            >
+              <Input
+                id="email"
+                type="email"
+                autoComplete="username"
+                placeholder={t('login.emailPlaceholder')}
+                aria-invalid={!!form.formState.errors.email}
+                {...form.register('email')}
+              />
+            </Field>
+            <Field
+              label={t('login.password')}
+              htmlFor="password"
+              error={
+                form.formState.errors.password
+                  ? t('common:validation.required')
+                  : undefined
+              }
+            >
+              <Input
+                id="password"
+                type="password"
+                autoComplete="current-password"
+                aria-invalid={!!form.formState.errors.password}
+                {...form.register('password')}
+              />
+            </Field>
 
-          {submitError && (
-            <p className="text-body text-danger" role="alert">
-              {submitError}
-            </p>
-          )}
+            {submitError && (
+              <p className="text-body text-danger" role="alert">
+                {submitError}
+              </p>
+            )}
 
-          <Button
-            type="submit"
-            variant="primary"
-            disabled={mutation.isPending}
-            className="w-full"
-          >
-            {mutation.isPending ? t('login.signingIn') : t('login.submit')}
-          </Button>
-        </form>
+            <Button
+              type="submit"
+              variant="primary"
+              disabled={mutation.isPending}
+              className="w-full"
+            >
+              {mutation.isPending ? t('login.signingIn') : t('login.submit')}
+            </Button>
+          </form>
+        )}
+        {ANONYMOUS_VIEWS.some((view) => view.loginLabel) && (
+          <div className="mt-4 flex flex-col gap-2">
+            {ANONYMOUS_VIEWS.filter((view) => view.loginLabel).map((view) => (
+              <Button
+                key={view.id}
+                asChild
+                variant="secondary"
+                className="h-auto min-h-11 w-full whitespace-normal py-2"
+              >
+                <Link to={view.path as '/'}>{view.loginLabel?.()}</Link>
+              </Button>
+            ))}
+          </div>
+        )}
       </Card>
       {/* ⛔ THE FOOTNOTES ARE GROUPED AND QUIET, AND THAT IS THE FIX. Both of
           these were already here and both still are — nothing is hidden. What changed

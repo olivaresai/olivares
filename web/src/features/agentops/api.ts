@@ -220,8 +220,11 @@ export const agentOpsApi = {
     }),
   createProfile: (body: CreateProfileRequest) =>
     http.post<ProviderProfileDTO>(PROFILES, body),
-  patchProfile: (r: string, body: PatchProfileRequest) =>
-    http.patch<ProviderProfileDTO>(`${PROFILES}/${ref(r)}`, body),
+  patchProfile: (
+    r: string,
+    body: PatchProfileRequest,
+    opts?: Pick<RequestOptions, 'signal' | 'dispatchGuard'>,
+  ) => http.patch<ProviderProfileDTO>(`${PROFILES}/${ref(r)}`, body, opts),
   retireProfile: (r: string) =>
     http.post<ProviderProfileDTO>(`${PROFILES}/${ref(r)}/retire`),
   /** The authorized configuration read. It takes an AbortSignal because its caller is

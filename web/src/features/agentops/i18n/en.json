@@ -118,7 +118,21 @@
     "profileHint": "Select the provider profile for this session. A profile is required. Local requirements are checked for the current selection after the template preview.",
     "profileNotOperable": "not enabled in this environment",
     "profilesNotRead": "Provider profiles could not be read; the launch can still go ahead without one.",
-    "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME and GROK_HOME belong to the profile: a launch that forwards any of them is refused here. Other names are still subject to the server's own validation."
+    "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME and GROK_HOME belong to the profile: a launch that forwards any of them is refused here. Other names are still subject to the server's own validation.",
+    "identity": {
+      "title": "Launch identity",
+      "hint": "Choose an admitted agent to act on behalf of its human sponsor. Human access alone grants no agent authority.",
+      "human": "Current human operator",
+      "agent": "Admitted agent (on behalf of sponsor)",
+      "required": "An orchestration profile requires an independently authenticated agent identity.",
+      "choose": "Agent identity",
+      "sponsorHint": "The server validates the selected agent, its lifecycle and your sponsorship before launch.",
+      "placeholder": "Choose an admitted agent",
+      "readRequired": "NHI read permission is required to select an agent.",
+      "loading": "Loading agent identities…",
+      "loadFailed": "Agent identity list unavailable.",
+      "loadMore": "Load more identities"
+    }
   },
   "detail": {
     "live": "Live",
@@ -544,6 +558,50 @@
       "loadMoreProfiles": "Load more profiles",
       "loadedProfiles": "Loaded {{n}} active profiles; there are more.",
       "loadingProfiles": "Loading profiles…"
+    },
+    "workGrant": {
+      "title": "Orchestration authority",
+      "hint": "Grant actions in one workspace. Orchestrator sessions must launch as an authenticated agent.",
+      "readPending": "Authority is awaiting a verified profile read.",
+      "none": "No orchestration grant",
+      "workspace": "Workspace ID",
+      "actions": "Allowed actions",
+      "edit": "Edit orchestration grant",
+      "revoke": "Revoke orchestration grant",
+      "replaceHint": "Saving or revoking replaces the grant and immediately removes its previous session authority. Resume sessions to use a new grant.",
+      "revokeConfirm": "Revoke grant",
+      "save": "Save grant",
+      "saved": "Orchestration grant saved",
+      "revoked": "Orchestration grant revoked",
+      "invalidWorkspace": "Enter a canonical UUIDv7 workspace ID.",
+      "capabilities": {
+        "work_read": "Read work",
+        "work_create": "Create work",
+        "work_assign": "Assign work",
+        "work_review": "Review results",
+        "decision_read": "Read decisions",
+        "decision_write": "Post decisions"
+      }
+    },
+    "authentication": {
+      "title": "Provider authentication",
+      "source": "Authentication source",
+      "hint": "Choose the authority used for future launches. No source is authorized by default.",
+      "none": "None authorized",
+      "accountHome": "Saved account login in profile homes",
+      "managed": "Managed provider credential",
+      "provider": "Provider",
+      "providerHint": "Only active providers compatible with this driver are offered. The server checks again at launch.",
+      "chooseProvider": "Choose a provider",
+      "readRequired": "Provider read permission is required to select a credential.",
+      "loadFailed": "Provider list unavailable.",
+      "retry": "Retry",
+      "loading": "Loading providers…",
+      "loadMore": "Load more providers",
+      "edit": "Edit provider authentication",
+      "launchHint": "Changes apply to future launches. A running process keeps its existing authentication.",
+      "save": "Save authentication",
+      "saved": "Provider authentication saved"
     }
   },
   "accounts": {

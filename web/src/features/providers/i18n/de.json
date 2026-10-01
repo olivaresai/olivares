@@ -1,11 +1,11 @@
 {
   "title": "Anbieter",
-  "subtitle": "Die Zugangsdaten, mit denen eine Sitzung startet. Einmal registrieren; die Engine versiegelt sie und übergibt sie dem Agenten beim Start.",
+  "subtitle": "Ein Cloud-Zugangsschlüssel oder ein lokaler Modell-Endpunkt, ausgewählt über ein Anbieterprofil.",
   "nav": "Anbieter",
   "add": "Anbieter hinzufügen",
   "empty": {
     "title": "Noch kein Anbieter registriert",
-    "description": "Ohne Zugangsdaten kann keine Sitzung starten. Fügen Sie den API-Schlüssel von Anthropic, OpenAI oder xAI hinzu — oder von einem beliebigen OpenAI-kompatiblen Endpunkt — und die Engine versiegelt ihn und verwendet ihn beim Start. Der Schlüssel wird nie wieder angezeigt.",
+    "description": "Verbinden Sie Anthropic, OpenAI oder xAI mit einem API-Schlüssel oder fügen Sie Ollama lokal ohne Schlüssel hinzu. Testen Sie die Verbindung und binden Sie sie an ein Profil.",
     "action": "Ersten Anbieter hinzufügen"
   },
   "emptyFiltered": {
@@ -28,13 +28,15 @@
     "anthropic": "Anthropic",
     "openai": "OpenAI",
     "xai": "xAI",
-    "openai_compatible": "OpenAI-kompatibel"
+    "openai_compatible": "OpenAI-kompatibel",
+    "ollama": "Ollama"
   },
   "kindHints": {
     "anthropic": "Claude Code. Setzt ANTHROPIC_API_KEY.",
     "openai": "Codex. Setzt OPENAI_API_KEY.",
     "xai": "Grok. Setzt XAI_API_KEY.",
-    "openai_compatible": "Jeder Endpunkt in OpenAI-Form. Setzt OPENAI_API_KEY und OPENAI_BASE_URL; der Endpunkt ist erforderlich."
+    "openai_compatible": "Jeder Endpunkt in OpenAI-Form. Setzt OPENAI_API_KEY und OPENAI_BASE_URL; der Endpunkt ist erforderlich.",
+    "ollama": "Lokale Modelle für Codex. Kein API-Schlüssel. Verwenden Sie den nativen Ollama-Endpunkt; der Test liest Modellmetadaten."
   },
   "states": {
     "active": "Aktiv",
@@ -51,7 +53,13 @@
     "unreachableHint": "Der Endpunkt hat nicht geantwortet. Das sagt nichts über die Zugangsdaten aus.",
     "models": "{{n}} Modelle",
     "latency": "{{ms}} ms",
-    "at": "Getestet {{when}}"
+    "at": "Getestet {{when}}",
+    "local": {
+      "neverHint": "Dieser Endpunkt wurde noch nicht getestet. Die Registrierung belegt nicht seine Funktion.",
+      "okHint": "Der lokale Endpunkt hat geantwortet und seine Modelle aufgelistet.",
+      "refusedHint": "Der Endpunkt hat die Metadatenanfrage abgelehnt. Prüfen Sie seine Zugriffseinstellungen.",
+      "unreachableHint": "Der lokale Endpunkt hat nicht geantwortet. Prüfen Sie Adresse und Verfügbarkeit."
+    }
   },
   "actions": {
     "test": "Verbindung testen",
@@ -78,7 +86,9 @@
     "submitting": "Wird versiegelt…",
     "cancel": "Abbrechen",
     "success": "Anbieter registriert. Testen Sie die Verbindung, um zu bestätigen, dass er funktioniert.",
-    "testNext": "Verbindung jetzt testen"
+    "testNext": "Verbindung jetzt testen",
+    "registering": "Wird registriert…",
+    "localNameHint": "Ihre Bezeichnung für diesen Endpunkt. Sie erscheint in der Auswahl."
   },
   "rotate": {
     "title": "Schlüssel dieses Anbieters wechseln",
@@ -93,7 +103,9 @@
     "description": "Das zerstört die versiegelten Zugangsdaten. Für diese Referenz ist es nicht rückgängig zu machen.",
     "consequence": "Jedes daran gebundene Anbieterprofil verweigert den Start und nennt diesen Anbieter. Beim Anbieter selbst werden die Zugangsdaten nicht widerrufen: das tun Sie in dessen eigener Konsole.",
     "confirm": "Widerrufen",
-    "success": "Anbieter widerrufen und seine versiegelten Zugangsdaten zerstört."
+    "success": "Anbieter widerrufen und seine versiegelten Zugangsdaten zerstört.",
+    "localDescription": "Dies widerruft die Endpunktregistrierung. Gebundene Profile verweigern neue Starts. Der Ollama-Dienst und seine Modelle bleiben auf dem Host.",
+    "localSuccess": "Endpunktregistrierung widerrufen."
   },
   "detail": {
     "title": "Anbieter",
@@ -112,11 +124,22 @@
   },
   "next": {
     "title": "Als Nächstes: einen Agenten bereitstellen",
-    "description": "Zugangsdaten allein starten nichts. Binden Sie sie an ein Anbieterprofil, dann verwendet sie eine unter diesem Profil gestartete Sitzung.",
+    "description": "Ein registrierter Anbieter startet von sich aus keine Sitzung. Binden Sie ihn an ein Anbieterprofil, damit neue Sitzungen ihn verwenden.",
     "action": "Zu den Anbieterprofilen"
   },
   "truncation": {
     "label": "{{n}} Anbieter angezeigt; es gibt mehr",
     "hint": "Diese Liste ist eine Seite. Grenzen Sie sie ein, oder nutzen Sie `olivares provider ls` für den vollständigen Satz."
+  },
+  "bind": {
+    "title": "Profil binden",
+    "description": "Neue Starts des gewählten Profils verwenden {{name}}. Laufende Sitzungen behalten ihren Anbieter.",
+    "profile": "Profil",
+    "choose": "Kompatibles Profil wählen",
+    "empty": "Kein kompatibles aktives Profil. Erstellen Sie eines unter Anbieterprofile.",
+    "more": "Weitere Profile laden",
+    "unavailable": "Profilrechte oder ein kompatibles aktives Profil fehlen.",
+    "loadError": "Profile konnten nicht geladen werden.",
+    "success": "Anbieter an das Profil gebunden."
   }
 }

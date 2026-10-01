@@ -25,6 +25,12 @@ import (
 // treated as an authentication result.
 var ErrPrincipalEvidenceUnavailable = errors.New("auth: principal evidence unavailable")
 
+// ErrPrincipalScopeAdmissionRequired identifies an established refusal to
+// reconstruct tenant-local authority from a global credential. It still carries
+// ErrPrincipalEvidenceUnavailable for existing evidence consumers; it never
+// supplies a Principal, a grant or a scoped credential.
+var ErrPrincipalScopeAdmissionRequired = errors.New("auth: tenant scope admission required")
+
 // principalEvidenceProvenance binds a successful reconstruction to the exact
 // credential reference, business tenant, directory generation, finite
 // database-time window, and canonical authority seal. AuthorizeEvidence may
@@ -278,7 +284,7 @@ func resolveSessionEvidenceMaterial(
 		return principalEvidenceMaterial{}, ErrUnauthenticated
 	}
 	if user.IsSuperadmin {
-		return principalEvidenceMaterial{}, principalEvidenceUnavailable("global superadmin session cannot be scoped", nil)
+		return principalEvidenceMaterial{}, fmt.Errorf("%w: %w", ErrPrincipalEvidenceUnavailable, ErrPrincipalScopeAdmissionRequired)
 	}
 	grants, groups, confined, err := loadPrincipalEvidenceGrants(ctx, as, user.ID, tenant)
 	if err != nil {
@@ -346,7 +352,7 @@ func resolveTokenEvidenceMaterial(
 		return principalEvidenceMaterial{}, ErrUnauthenticated
 	}
 	if token.IsSuperadmin {
-		return principalEvidenceMaterial{}, principalEvidenceUnavailable("global superadmin token cannot be scoped", nil)
+		return principalEvidenceMaterial{}, fmt.Errorf("%w: %w", ErrPrincipalEvidenceUnavailable, ErrPrincipalScopeAdmissionRequired)
 	}
 	if !token.UserID.IsZero() && !validPrincipalEvidenceID(token.UserID) {
 		return principalEvidenceMaterial{}, principalEvidenceUnavailable("API token owner id is malformed", nil)
@@ -392,6 +398,15 @@ func resolveTokenEvidenceMaterial(
 		principal, ok = workSessionPrincipal(token)
 		if !ok {
 			return principalEvidenceMaterial{}, principalEvidenceUnavailable("work-session token binding is malformed", nil)
+		}
+	case OrchestrationSessionCredentialPurpose:
+		if token.BoundTenantID != tenant {
+			return principalEvidenceMaterial{}, principalEvidenceUnavailable("orchestration-session token is out of scope", nil)
+		}
+		var ok bool
+		principal, ok = orchestrationSessionPrincipal(token)
+		if !ok {
+			return principalEvidenceMaterial{}, principalEvidenceUnavailable("orchestration-session token binding is malformed", nil)
 		}
 	case CommunicationSessionCredentialPurpose:
 		if token.BoundTenantID != tenant {

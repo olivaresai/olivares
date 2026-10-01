@@ -75,5 +75,7 @@ runs. Otherwise boot fails with `ErrEvidenceRefusedTrackedStale`.
 - **Logical restore.** The PostgreSQL logical-restore privilege closure accepts the exact active
   prefix of this binary's compiled plan through the supported version (v11). It refuses future,
   missing, misnamed or reverted history and runs no migration or object repair.
-- **PostgreSQL 18.** NOT NULL constraint rows are accepted only as the exact generated set. Only
-  PostgreSQL 16 was exercised.
+- **PostgreSQL 18.** NOT NULL constraint rows are matched by table, columns, validation and
+  definition, not by their generated names: a renamed NOT NULL constraint passes and a dropped one
+  refuses. Explicit CHECK and primary-key names stay exact. The named regression runs on
+  PostgreSQL 15, 16, 17 and 18.

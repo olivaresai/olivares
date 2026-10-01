@@ -47,6 +47,7 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   providerProfiles: ['ai', 'environments'],
   providerBindings: ['ai', 'environments'],
   providerAccounts: ['ai', 'environments'],
+  'agent-tools': ['ai', 'environments'],
   'workspace-templates': ['ai', 'environments'],
   models: ['ai', 'models'],
   modelOps: ['ai', 'models'],
@@ -189,7 +190,7 @@ describe('route map — every route sits where root ratified it', () => {
   })
 })
 
-describe('directory descriptions (review F3)', () => {
+describe('directory descriptions (regression)', () => {
   // Every listed view has a description in EVERY published language; for the seven the
   // review found empty, the translation must also differ from the English sentence. That
   // is a presence-and-difference check — it does not certify the translation's quality.

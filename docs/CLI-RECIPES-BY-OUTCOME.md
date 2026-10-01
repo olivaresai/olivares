@@ -162,7 +162,7 @@ The engine enables profiled launches unconditionally (`cmd/olivares/boot.go`
 `EnableProfiledLaunches`), and `resolveLaunchProfileInto` answers **400 `select a
 provider profile before launching a session`** to a create with no profile. The old
 four-line form could not have worked on any shipped v26.9 server. Steps 1 and 3 are
-new in v26.10, which is pending. Before it, in the published v26.9.0, the credential lived in a host environment variable
+new in v26.10, which is pending. Before it, in the published 26.10.0, the credential lived in a host environment variable
 and there was no CLI verb for a profile at all.
 
 **The ordering that no single command's help states:** `rm` refuses a stopped session

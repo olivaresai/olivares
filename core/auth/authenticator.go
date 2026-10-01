@@ -65,6 +65,18 @@ type Authenticator struct {
 	ceremonyOnce    sync.Once
 	ceremonyPending *ceremonyStore
 
+	// totpSealer seals the RFC 6238 second-factor seeds at rest (totp.go),
+	// set once at boot via WithTOTPSeedSealer. nil means enrolment and
+	// verification fail closed with ErrNoTOTPSealer — never a silent skip.
+	totpSealer TOTPSeedSealer
+	// totpThrottle is the factor's own verification budget, separate from the
+	// password throttle so neither can exhaust the other's window.
+	totpThrottle *throttle
+	// totpPending holds the in-flight TOTP login challenges and enrolment
+	// ceremonies (totp.go), built lazily like the WebAuthn ceremonies.
+	totpOnce    sync.Once
+	totpPending *totpPendingStore
+
 	// seatPolicy is the retained seat seam (seatcap.go), set once at boot via
 	// WithSeatPolicy. Since B10 it is DISPLAY-ONLY: account creation is unlimited
 	// in every self-hosted tier whatever is wired here (nil included), and the
@@ -117,11 +129,12 @@ func NewAuthenticator(st store.Store, clock model.Clock) *Authenticator {
 		clock = model.SystemClock{}
 	}
 	return &Authenticator{
-		st:         st,
-		clock:      clock,
-		throttle:   newThrottle(5, 15*time.Minute, func() time.Time { return clock.Now().Time() }),
-		sessionTTL: DefaultSessionTTL,
-		log:        slog.Default(),
+		st:           st,
+		clock:        clock,
+		throttle:     newThrottle(5, 15*time.Minute, func() time.Time { return clock.Now().Time() }),
+		totpThrottle: newThrottle(totpThrottleFails, totpThrottleWindow, func() time.Time { return clock.Now().Time() }),
+		sessionTTL:   DefaultSessionTTL,
+		log:          slog.Default(),
 	}
 }
 
@@ -222,7 +235,7 @@ func (a *Authenticator) authToken(ctx context.Context, selector, secret string) 
 				if workSessionCredentialExpired(*t.ExpiresAt, now) {
 					return ErrUnauthenticated
 				}
-			case CommunicationSessionCredentialPurpose:
+			case CommunicationSessionCredentialPurpose, OrchestrationSessionCredentialPurpose:
 				if communicationSessionCredentialExpired(*t.ExpiresAt, now) {
 					return ErrUnauthenticated
 				}
@@ -239,6 +252,12 @@ func (a *Authenticator) authToken(ctx context.Context, selector, secret string) 
 		case WorkSessionCredentialPurpose:
 			var ok bool
 			p, ok = workSessionPrincipal(t)
+			if !ok {
+				return ErrUnauthenticated
+			}
+		case OrchestrationSessionCredentialPurpose:
+			var ok bool
+			p, ok = orchestrationSessionPrincipal(t)
 			if !ok {
 				return ErrUnauthenticated
 			}
@@ -564,13 +583,23 @@ func loadGroupClosure(ctx context.Context, as store.AuthScope, cache map[model.I
 // A caller that abandons the request while the throttle is holding the attempt
 // gets the context's error back, so the attempt can be reported rather than lost.
 func (a *Authenticator) Login(ctx context.Context, emailRaw, password, ip string) (string, model.AuthSession, error) {
-	return a.LoginFrom(ctx, emailRaw, password, ip, nil)
+	res, err := a.LoginFrom(ctx, emailRaw, password, ip, nil)
+	if err != nil {
+		return "", model.AuthSession{}, err
+	}
+	if res.RequiresMFA() {
+		if res.MFAEnrolmentRequired {
+			return "", model.AuthSession{}, ErrTOTPEnrolmentRequired
+		}
+		return "", model.AuthSession{}, ErrTOTPRequired
+	}
+	return res.Token, res.Session, nil
 }
 
 // LoginFrom performs Login with all X-Forwarded-For values in received order.
 // A configured trusted peer may supply the throttle address; ip remains the
 // transport peer for network policy, session provenance and audit.
-func (a *Authenticator) LoginFrom(ctx context.Context, emailRaw, password, ip string, forwarded []string) (string, model.AuthSession, error) {
+func (a *Authenticator) LoginFrom(ctx context.Context, emailRaw, password, ip string, forwarded []string) (LoginResult, error) {
 	email := normalizeEmail(emailRaw)
 	accountKey, addressKey := "email:"+email, "ip:"+a.trustedLoginProxies.clientAddress(ip, forwarded)
 
@@ -580,7 +609,7 @@ func (a *Authenticator) LoginFrom(ctx context.Context, emailRaw, password, ip st
 	// here needs it.
 	verdict, wait := a.throttle.decide(accountKey, addressKey)
 	if verdict == loginRefuse {
-		return "", model.AuthSession{}, ErrLockedOut
+		return LoginResult{}, ErrLockedOut
 	}
 	// And one outcome, reported exactly once however this attempt ends. Abandoned is
 	// the honest default for every return that reaches no VERDICT on the password:
@@ -598,7 +627,7 @@ func (a *Authenticator) LoginFrom(ctx context.Context, emailRaw, password, ip st
 	// before the delay so a peer that may not log in at all never waits for one.
 	attempt, err := a.beginLogin(ctx, ip)
 	if err != nil {
-		return "", model.AuthSession{}, err
+		return LoginResult{}, err
 	}
 
 	// A tripped address makes an unproven attempt expensive instead of impossible.
@@ -607,7 +636,7 @@ func (a *Authenticator) LoginFrom(ctx context.Context, emailRaw, password, ip st
 	// a caller nothing about which accounts exist.
 	if verdict == loginDelay {
 		if err := a.throttle.waitOut(ctx, wait); err != nil {
-			return "", model.AuthSession{}, err
+			return LoginResult{}, err
 		}
 	}
 
@@ -627,7 +656,7 @@ func (a *Authenticator) LoginFrom(ctx context.Context, emailRaw, password, ip st
 		}
 		return nil
 	}); err != nil {
-		return "", model.AuthSession{}, err
+		return LoginResult{}, err
 	}
 
 	// Phase 2 — verify with NO transaction held. Always spend argon2 time (a dummy
@@ -653,15 +682,40 @@ func (a *Authenticator) LoginFrom(ctx context.Context, emailRaw, password, ip st
 			a.log.Error("auth: recording failed login", "err", aerr)
 		}
 		outcome = loginFailed
-		return "", model.AuthSession{}, ErrInvalidCredentials
+		return LoginResult{}, ErrInvalidCredentials
 	}
 
-	token, sess, err := a.mintSession(ctx, attempt, user, user.CustodyScope(), "auth.login", passwordLogin, nil)
+	// the second-factor gate. A password that matched owes either a code
+	// challenge (a confirmed factor) or a forced enrolment (the policy requires
+	// administrators to hold one and this account has none). Neither mints a
+	// session: both return a single-use pending credential the caller must
+	// satisfy. The require-SSO refusal is checked FIRST (mirroring mintSession's
+	// own order) so an SSO-mandated account never reveals it also carries a
+	// factor. The throttle outcome stays loginSucceeded — the PASSWORD was
+	// correct, and the factor keeps its own verification budget.
+	if err := a.enforceRequireSSO(ctx, user); err != nil {
+		a.auditLoginBlocked(ctx, "user:"+user.ID.String(), attempt.ip, "sso_required")
+		return LoginResult{}, err
+	}
+	challenge, enrol, err := a.totpGate(ctx, user)
 	if err != nil {
-		return "", model.AuthSession{}, err
+		return LoginResult{}, err
+	}
+	if challenge {
+		pending, err := a.mintTOTPPending(user.ID, attempt.ip, user.CustodyScope(), nil)
+		if err != nil {
+			return LoginResult{}, err
+		}
+		outcome = loginSucceeded
+		return LoginResult{MFAToken: pending, MFAEnrolmentRequired: enrol}, nil
+	}
+
+	token, sess, err := a.mintSession(ctx, attempt, user, user.CustodyScope(), "auth.login", passwordLogin, nil, nil, nil)
+	if err != nil {
+		return LoginResult{}, err
 	}
 	outcome = loginSucceeded
-	return token, sess, nil
+	return LoginResult{Token: token, Session: sess}, nil
 }
 
 // mintSession creates an opaque server-side session for an already-authenticated
@@ -675,20 +729,19 @@ func (a *Authenticator) LoginFrom(ctx context.Context, emailRaw, password, ip st
 // scope confines the session to one tenant: an account a tenant holds signs in
 // scoped to it, and so does every sign-in through a tenant's identity provider.
 // The zero scope is an account-scope session.
-func (a *Authenticator) mintSession(ctx context.Context, attempt *loginAttempt, user model.User, scope model.TenantID, action string, method sessionLoginMethod, activate func(store.AuthScope) error) (string, model.AuthSession, error) {
-	if attempt == nil || (method != passwordLogin && method != federatedLogin) {
+func (a *Authenticator) mintSession(ctx context.Context, attempt *loginAttempt, user model.User, scope model.TenantID, action string, method sessionLoginMethod, amrExtra []string, activate func(store.AuthScope) error, txVerify func(store.AuthScope) error) (string, model.AuthSession, error) {
+	if attempt == nil || (method != passwordLogin && method != federatedLogin && method != externalLogin) {
 		return "", model.AuthSession{}, ErrInvalidCredentials
 	}
-	// Credential verification has finished. Policy reads and refusal auditing run
-	// outside the mutation: a policy may itself read the store. An invitation's
-	// activation callback runs only after this same password-policy decision.
-	if method == passwordLogin {
-		if err := a.enforceRequireSSO(ctx, user); err != nil {
-			a.auditLoginBlocked(ctx, "user:"+user.ID.String(), attempt.ip, "sso_required")
-			return "", model.AuthSession{}, err
-		}
-	}
+	// Credential verification has finished. The password-policy decision
+	// (require-SSO) now lives in the PASSWORD callers themselves — LoginFrom and
+	// AcceptInvite — so each consults the wired policy exactly once and the TOTP
+	// gate in LoginFrom can order itself after it without a second consult (a
+	// factor-gated SSO-mandated account must refuse on the SSO reason alone,
+	// never reveal that a factor also exists). The SSO completion path never
+	// consulted it and still does not.
 	ip, amr := attempt.ip, []string{string(method)}
+	amr = append(amr, amrExtra...)
 	var (
 		tok  string
 		sess model.AuthSession
@@ -699,14 +752,33 @@ func (a *Authenticator) mintSession(ctx context.Context, attempt *loginAttempt, 
 		if err := a.guardNewLoginSession(ctx, as); err != nil {
 			return err
 		}
+		// The optional transactional revalidation (a continuation's
+		// SessionTxRevalidator): checked BEFORE any factor activation or
+		// credential creation writes, and again AFTER the session and audit
+		// writes — both inside THIS transaction, so a withdrawal or expiry
+		// that lands between them rolls the whole issuance back. Callers
+		// that pass nil (every local, OIDC and SAML path) are unchanged.
+		if txVerify != nil {
+			if err := txVerify(as); err != nil {
+				return err
+			}
+		}
 		if activate != nil {
 			if err := activate(as); err != nil {
 				return err
 			}
 		}
 		t, s, err := a.mintSessionTx(ctx, as, user, scope, ip, action, amr)
+		if err != nil {
+			return err
+		}
+		if txVerify != nil {
+			if err := txVerify(as); err != nil {
+				return err
+			}
+		}
 		tok, sess = t, s
-		return err
+		return nil
 	}); err != nil {
 		return "", model.AuthSession{}, err
 	}
@@ -714,8 +786,8 @@ func (a *Authenticator) mintSession(ctx context.Context, attempt *loginAttempt, 
 }
 
 // mintSessionTx mints a fresh opaque session for user and audits it INSIDE the
-// caller's auth transaction. Only mintSession calls it, after policy admission and
-// any atomic account activation. A fresh session is always AAL1; assurance
+// caller's auth transaction. Native login producers call it only after policy
+// admission and any atomic account activation. A fresh session is always AAL1; assurance
 // is only ever raised by a verified step-up ceremony (ElevateSession).
 func (a *Authenticator) mintSessionTx(ctx context.Context, as store.AuthScope, user model.User, scope model.TenantID, ip, action string, amr []string) (string, model.AuthSession, error) {
 	// R5 defense at the create seam: the guard is idempotent, so a caller that already

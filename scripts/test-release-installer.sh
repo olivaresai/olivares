@@ -47,6 +47,120 @@ if grep -Fq '@OLIVARES_INSTALLER_VERSION@' "$rendered"; then
 fi
 case_ok "rendered asset has the exact pin and no marker"
 
+# Resolve real installer inputs against a closed release fixture. A wrong tag is
+# a missing download, even if its asset basename happens to match another era.
+expect_rc 0 "latest, requested and rendered versions download the tag of their era" \
+  python3 - "$root" "$scratch" <<'PYERA'
+import hashlib
+import json
+import os
+import pathlib
+import pty
+import subprocess
+import sys
+import tarfile
+
+root, scratch = map(pathlib.Path, sys.argv[1:])
+era = scratch / "era"
+fixture = era / "release"
+fakebin = era / "bin"
+fixture.mkdir(parents=True)
+fakebin.mkdir()
+for version in ("26.9.0", "26.10.0"):
+    payload = era / version
+    payload.mkdir()
+    binary = payload / "olivares"
+    binary.write_text(f"#!/bin/sh\nprintf 'Olivares AI {version}\\n'\n")
+    binary.chmod(0o755)
+    archive = fixture / f"olivares_{version}_linux_amd64.tar.gz"
+    with tarfile.open(archive, "w:gz") as handle:
+        handle.add(binary, arcname="olivares")
+    stage = fixture / f"olivares-install-{version}.sh"
+    subprocess.run(["bash", str(root / "scripts/render-release-installer.sh"),
+                    version, str(stage)], check=True, capture_output=True, timeout=20)
+rows = []
+for asset in fixture.iterdir():
+    rows.append(f"{hashlib.sha256(asset.read_bytes()).hexdigest()}  {asset.name}")
+(fixture / "checksums.txt").write_text("\n".join(rows) + "\n")
+(fixture / "checksums.txt.sig").write_text("test signature\n")
+(fixture / "checksums.txt.pem").write_text("test certificate\n")
+(fakebin / "curl").write_text(r"""#!/usr/bin/env python3
+import json, os, pathlib, sys
+args = sys.argv[1:]
+url = next(arg for arg in args if arg.startswith('https://'))
+with open(os.environ['ERA_URL_LOG'], 'a') as log:
+    log.write(url + '\n')
+if url == 'https://api.fixture.invalid/repos/olivaresai/olivares/releases/latest':
+    print(json.dumps({'tag_name': os.environ['ERA_LATEST']}))
+else:
+    prefix = 'https://fixture.invalid/olivaresai/olivares/releases/download/' + os.environ['ERA_EXPECT_TAG'] + '/'
+    if not url.startswith(prefix) or '/' in url[len(prefix):]:
+        sys.exit('unexpected release download: ' + url)
+    data = (pathlib.Path(os.environ['ERA_FIXTURE']) / url[len(prefix):]).read_bytes()
+    pathlib.Path(args[args.index('-o') + 1]).write_bytes(data)
+""")
+(fakebin / "cosign").write_text("#!/bin/sh\nexit 0\n")
+for tool in fakebin.iterdir():
+    tool.chmod(0o755)
+
+install = root / "scripts/install.sh"
+bootstrap = root / "scripts/install-bootstrap.sh"
+rendered = fixture / "olivares-install-26.10.0.sh"
+# These expectations are literal; neither the fixture nor the oracle derives tags.
+cases = [
+    ("latest bare 26.10.0", install, "", "26.10.0", "26.10.0"),
+    ("latest historical v26.9.0", install, "", "v26.9.0", "v26.9.0"),
+    ("latest tag is verbatim even when noncanonical", install, "", "v26.10.0", "v26.10.0"),
+    ("interactive bootstrap latest bare 26.10.0", bootstrap, "", "26.10.0", "26.10.0"),
+    ("install --version 26.10.0", install, "26.10.0", "", "26.10.0"),
+    ("install --version v26.10.0", install, "v26.10.0", "", "26.10.0"),
+    ("install --version 26.9.0", install, "26.9.0", "", "v26.9.0"),
+    ("install --version v26.9.0", install, "v26.9.0", "", "v26.9.0"),
+    ("bootstrap --version 26.10.0", bootstrap, "26.10.0", "", "26.10.0"),
+    ("bootstrap --version v26.10.0", bootstrap, "v26.10.0", "", "26.10.0"),
+    ("bootstrap --version 26.9.0", bootstrap, "26.9.0", "", "v26.9.0"),
+    ("bootstrap --version v26.9.0", bootstrap, "v26.9.0", "", "v26.9.0"),
+    ("rendered 26.10.0 default pin", rendered, "", "", "26.10.0"),
+    ("rendered 26.10.0 bare input", rendered, "26.10.0", "", "26.10.0"),
+    ("rendered 26.10.0 prefixed input", rendered, "v26.10.0", "", "26.10.0"),
+]
+failures = []
+for index, (label, script, requested, latest, tag) in enumerate(cases):
+    url_log = era / f"urls-{index}"
+    destination = era / f"installed-{index}"
+    env = dict(os.environ, PATH=f"{fakebin}:/usr/bin:/bin", CI="0",
+               OLIVARES_NONINTERACTIVE="0", OLIVARES_VERSION="", OLIVARES_COSIGN="",
+               OLIVARES_OS="linux", OLIVARES_ARCH="amd64",
+               OLIVARES_GITHUB_URL="https://fixture.invalid",
+               OLIVARES_GITHUB_API_URL="https://api.fixture.invalid",
+               ERA_FIXTURE=str(fixture), ERA_URL_LOG=str(url_log),
+               ERA_LATEST=latest, ERA_EXPECT_TAG=tag)
+    args = ["/bin/sh", str(script), "--bindir", str(destination)]
+    if requested:
+        args += ["--version", requested]
+    master, slave = pty.openpty()
+    try:
+        result = subprocess.run(args, env=env, stdin=slave, capture_output=True,
+                                text=True, timeout=20)
+    finally:
+        os.close(slave)
+        os.close(master)
+    urls = url_log.read_text().splitlines() if url_log.exists() else []
+    version = tag.removeprefix("v")
+    archive_url = f"https://fixture.invalid/olivaresai/olivares/releases/download/{tag}/olivares_{version}_linux_amd64.tar.gz"
+    installed = destination / "olivares"
+    if result.returncode != 0 or archive_url not in urls or not os.access(installed, os.X_OK):
+        failures.append(label)
+        print(f"not ok - {label}: rc={result.returncode}; URLs={urls}", file=sys.stderr)
+        print(result.stderr, file=sys.stderr)
+    else:
+        assert installed.read_bytes() == (era / version / "olivares").read_bytes(), label
+        if script == rendered:
+            assert not any('/releases/latest' in url for url in urls), label
+        print(f"ok - {label}")
+assert not failures, failures
+PYERA
+
 expect_rc 0 "concurrent renders publish identical complete bytes independently of TMPDIR" \
   python3 - "$root" "$scratch" "$rendered" <<'PY'
 import concurrent.futures

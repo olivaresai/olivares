@@ -367,11 +367,15 @@ func (rs *ResourceServer) dispatch(ctx context.Context, w http.ResponseWriter, r
 	res, err := rs.upstream.Forward(ctx, rs.upstreamReq(r, req.Method, req.Params, tok))
 	result := res.Result
 	if err != nil {
+		credentialRefusal := errors.Is(err, ErrUpstreamCredentialDisclosure)
+		if credentialRefusal {
+			rs.auditTraced(ctx, tok, req.Method, requiredScope, false, upstreamCredentialRefusalReason(err), "", "MCP07", trace)
+		}
 		if req.isNotification() {
 			w.WriteHeader(http.StatusAccepted)
 			return
 		}
-		if requiredScope != "" {
+		if requiredScope != "" && !credentialRefusal {
 			rs.auditTraced(ctx, tok, req.Method, requiredScope, true, "authorized; upstream forward failed", "", "MCP07", trace)
 		}
 		rs.writeRPCError(w, http.StatusBadGateway, req.ID, rpcUpstreamError, "upstream forward failed")
@@ -4022,6 +4026,7 @@ func (rs *ResourceServer) upstreamReq(r *http.Request, method string, params []b
 		Method:      method,
 		Params:      params,
 		Subject:     tok.Subject,
+		ClientID:    tok.ClientID,
 		Scopes:      scopes,
 		TraceParent: requestTraceParent(r, params),
 	}

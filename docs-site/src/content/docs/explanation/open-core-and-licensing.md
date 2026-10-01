@@ -7,15 +7,13 @@ description: >-
   What that means for self-hosters and connector authors.
 ---
 
-Olivares AI is **open core**. The **complete product** is released under the GNU
-Affero General Public License, and the AGPL build is the whole governance
-platform — never crippled from within to push you toward a paid edition. On top of
-it sits a small set of **additive** commercial add-ons in `enterprise/`, built only
-with `-tags enterprise` and absent from the public binary. A commercial license
-provides the legal exception to copyleft; the `enterprise/` capabilities are
-licensed as **separate, optional add-ons** — so the open and commercial editions
-are **not** identical, while nothing published open is ever moved behind the wall
-(the GitLab `ee/` model, not a feature paywall on the core).
+Olivares AI is **open core**. The complete Community product is released under the GNU
+Affero General Public License. Its AGPL build is the whole governance platform,
+with unlimited users and one active identity provider (IdP). The commercial
+`enterprise/` line adds new code, built only with `-tags enterprise` and absent
+from the public binary. Business includes four capability families in one
+subscription. Enterprise covers negotiated scope. A commercial license provides
+the legal exception to copyleft; nothing published open moves behind a paywall.
 
 ## The license boundary
 
@@ -29,7 +27,7 @@ boundary is enforced in CI (a connector may never import the engine):
 | `web/` | **AGPL-3.0-only** | the React UI |
 | `sdk/` | **Apache-2.0** | the connector/module interfaces, the gRPC contract and the shared types |
 | `connectors/` | **Apache-2.0** | the connectors (Claude, OpenAI, pgAudit, eBPF, cloud, Slack, SIEM, …) |
-| `enterprise/` | **commercial** | additive add-ons, build-tag gated, never in the public binary: multi-IdP federation, content firewall/DLP, hook hardening, compiled threat-intel catalog, server-tool egress, CyberArk Conjur, incident close-loop (`LicenseRef-Olivares-Commercial`) |
+| `enterprise/` | **commercial** | additive modules, build-tag gated, never in the public binary: multi-IdP federation, content firewall/DLP, hook hardening, compiled threat-intel catalog, server-tool egress, CyberArk Conjur, incident close-loop (`LicenseRef-Olivares-Commercial`) |
 
 The documentation site you are reading is part of the AGPL product.
 
@@ -46,11 +44,34 @@ The documentation site you are reading is part of the AGPL product.
   it however you like. The architectural boundary that makes this safe is enforced:
   an Apache-2.0 connector **never imports the AGPL engine**; it depends only on the
   SDK. That keeps the connector ecosystem free of copyleft friction.
-- **A commercial license.** Organizations that need to avoid the AGPL's obligations
-  (for example, embedding the product in a proprietary offering) can obtain a
-  commercial license — contact **enterprise@olivares.ai** (pricing on request).
-  The additive `enterprise/` add-ons above are licensed separately, each as an
-  optional entitlement.
+- **A commercial license.** Organizations that need an exception to the AGPL
+  obligations can contact **enterprise@olivares.ai** for a commercial agreement.
+  Business includes the four capability families below in one subscription.
+  Enterprise terms are negotiated; families are not sold separately.
+
+## Editions and pricing
+
+| Edition | Price | Scope |
+| --- | --- | --- |
+| Community | Free, AGPL-3.0-only | Unlimited users; one active identity provider (IdP). |
+| Business | USD 129/month or USD 1,290/year | Unlimited users; one legal entity; up to two production deployments, each with one staging deployment; up to five active IdPs in total. |
+| Enterprise | Contact us | Multi-entity scope, additional deployments or IdPs, air-gap mirrors, custom LTS and other negotiated requirements. |
+
+Business includes **Regulated Operations**, **AI Runtime Security**,
+**Compliance Packs**, and **Identity & Scale**. Each family keeps its own code and
+license-grant boundary. You can enable or disable each family; none is sold separately.
+Private implementation is distributed as commercial binaries, outside the public repository.
+
+### Can I buy a capability family separately?
+
+No. The four named families are included in the Business subscription. Choose
+monthly or annual billing at [Pricing](https://olivares.ai/pricing).
+
+### What if I need more deployments or identity providers?
+
+Contact **enterprise@olivares.ai** for Enterprise scope. Business permits up to
+two production deployments and five active IdPs in total, not five per deployment.
+
 
 ## What is open vs enterprise
 
@@ -80,10 +101,10 @@ This is important and deliberate: in the open (AGPL) binary, license validation 
 license check, and it runs **offline** (an Ed25519 signature, no license server),
 which is why the open product works air-gapped. The one place the license is
 *consumed* rather than displayed is the closed enterprise build, and only to entitle
-the add-ons the commercial agreement covers, evaluated per add-on — a local decision
+the modules the commercial agreement covers, evaluated per module — a local decision
 in the commercial edition, never a check in the open binary. It never caps users: accounts are unlimited in every edition. So the open
 build is genuinely whole and uncapped-by-license; what differs in the commercial
-edition is the additive `enterprise/` add-ons, not a license key flipping features
+edition is the additive `enterprise/` modules, not a license key flipping features
 on inside the same binary.
 
 ## Why this model

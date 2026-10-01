@@ -1,1 +1,0 @@
-import{d as e,p as t}from"./page-header-DQ9WzT6w.js";var n=t()(e(e=>({activeWorkspace:null,activeWorkspaceName:null,setActiveWorkspace:(t,n)=>e({activeWorkspace:t,activeWorkspaceName:n??null}),clear:()=>e({activeWorkspace:null,activeWorkspaceName:null})}),{name:`olivares.workspace`}));export{n as t};

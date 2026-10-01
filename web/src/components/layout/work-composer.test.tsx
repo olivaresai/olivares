@@ -434,13 +434,14 @@ describe('WorkComposer — 64 px in both states', () => {
     expect(screen.getByTestId('launcher-start')).not.toHaveAttribute('title')
   })
 
-  it('a blocked sentence gives way at its end instead of growing the box', async () => {
+  it('a blocked sentence wraps so the complete recovery reason stays visible', async () => {
     // The box states its height, so a sentence that wraps is not a taller composer: it
     // is a sentence CLIPPED by the pane. `readFailed` is 108 characters in German.
     api.listProfiles.mockRejectedValue(new Error('boom'))
     renderIntel(<WorkComposer />)
     const blocked = await screen.findByTestId('launcher-blocked')
-    expect(blocked.className).toMatch(/\btruncate\b/)
+    expect(blocked).not.toHaveClass('truncate')
+    expect(blocked).toHaveClass('whitespace-normal')
     expect(blocked.getAttribute('title')).toBe(blocked.textContent)
   })
 

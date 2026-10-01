@@ -76,12 +76,16 @@ assert workflow.count("bash scripts/installer-matrix-ci.sh") == 2
 assert "cosign-release: 'v2.6.4'" in workflow
 
 for token in (
-    'scripts/install.sh" --version "v$release_version"',
+    # The version is passed by era (v before 26.10, bare from 26.10): the helper and the call.
+    'release_tag()',
+    'scripts/install.sh" --version "$(release_tag "$release_version")"',
     '"$installed" version', ' doctor ', ' -o json', '--start',
     'bash "$lib" binary', 'bash "$lib" doctor', 'bash "$lib" redacted',
     'bash "$lib" no-sudo', 'NO HE PODIDO MIRAR',
 ):
     assert token in ci
+# The era rule itself: v before 26.10, bare from 26.10 on.
+assert '"$minor" -lt 10' in ci and 'release_tag "$release_version"' in ci
 for mutant in range(1, 7):
     roman = ("i", "ii", "iii", "iv", "v", "vi")[mutant - 1]
     assert f"mutant {roman}:" in test

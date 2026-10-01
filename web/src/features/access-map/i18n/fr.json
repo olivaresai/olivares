@@ -54,7 +54,8 @@
     "forbiddenHint": "Votre rôle peut voir le graphe mais pas la différence permis-vs-observé (accessmap:drift:read).",
     "partial": "Résultat partiel : le moteur a réconcilié cet écart sur une fenêtre de dérive tronquée ; ces totaux ne couvrent donc pas tout le parc et une arête absente ici peut simplement se situer au-delà de la limite.",
     "emptyWindowTitle": "Aucun constat dans la fenêtre analysée",
-    "emptyWindowHint": "L'analyse s'est arrêtée à sa limite de page : ceci ne dit rien de l'ensemble du parc."
+    "emptyWindowHint": "L'analyse s'est arrêtée à sa limite de page : ceci ne dit rien de l'ensemble du parc.",
+    "scopeHint": "La liste des écarts couvre toute l’organisation ; les filtres de la carte ne s’y appliquent pas"
   },
   "detail": {
     "edgeTitle": "Arête d’accès",

@@ -44,7 +44,7 @@ le listener avec les variables `OLIVARES_*` de la
 
 <!-- BEGIN GENERATED olivares-grpc-reference — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-Le moteur et l'hôte de plugins enregistrent **28 rpc** dans **7 services**. Les tableaux
+Le moteur et l'hôte de plugins enregistrent **29 rpc** dans **7 services**. Les tableaux
 ci-dessous sont lus dans les tables d'enregistrement générées que les serveurs remettent à
 gRPC ; une méthode listée ici est donc une méthode qu'un client peut appeler.
 
@@ -116,13 +116,14 @@ Défini dans `olivaresv1/v1.proto` ; 4 rpc.
 
 ### `olivares.sdk.v1.SourceService`
 
-Défini dans `olivaresv1/v1.proto` ; 4 rpc.
+Défini dans `olivaresv1/v1.proto` ; 5 rpc.
 
 | Méthode | Méthode complète | Type | Requête | Réponse | Fonction |
 |---|---|---|---|---|---|
 | `Close` | `/olivares.sdk.v1.SourceService/Close` | unary | `Empty` | `Empty` | Termine la session ouverte par Open et libère ce que le connector conservait pour elle. |
 | `Describe` | `/olivares.sdk.v1.SourceService/Describe` | unary | `Empty` | `DescribeResponse` | Renvoie le descripteur du connector : son identité, ses champs de configuration et les capacités qu'il annonce. |
 | `Gather` | `/olivares.sdk.v1.SourceService/Gather` | server-streaming | `Empty` | `Observation` (stream) | Diffuse les observations vers l'hôte, qui élève chacune sur le bus d'événements. Le stream se termine à la fin d'une exécution par lot ou lorsque l'hôte l'annule. |
+| `GatherInventory` | `/olivares.sdk.v1.SourceService/GatherInventory` | server-streaming | `GatherInventoryRequest` | `Observation` (stream) | Diffuse les observations d'inventaire du connecteur uniquement pour la capacité inventory-coverage-v1 négociée ; toute autre capacité est refusée, et un flux annulé ne signale jamais de réussite. |
 | `Open` | `/olivares.sdk.v1.SourceService/Open` | unary | `OpenRequest` | `Empty` | Démarre une session avec la configuration fournie par l'hôte, avant la collecte de toute observation. |
 
 <!-- END GENERATED olivares-grpc-reference -->

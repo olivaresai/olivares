@@ -109,6 +109,26 @@ func TestConfigEffectiveRedactsSecrets(t *testing.T) {
 	}
 }
 
+func TestConfigEffectiveRedactsSessionCredentials(t *testing.T) {
+	clearOlivaresEnv(t)
+	const fixture = "synthetic-session-credential"
+	for _, key := range []string{"OLIVARES_COMMUNICATION_TOKEN", "OLIVARES_WORK_TOKEN"} {
+		t.Setenv(key, fixture)
+	}
+	out, err := executeConfigCommand("effective", "--strict")
+	if err != nil {
+		t.Fatalf("session credential configuration refused: %v", err)
+	}
+	if strings.Contains(out, fixture) {
+		t.Fatal("config effective disclosed a session credential")
+	}
+	for _, key := range []string{"OLIVARES_COMMUNICATION_TOKEN", "OLIVARES_WORK_TOKEN"} {
+		if !strings.Contains(out, key+"="+redactedConfigValue) {
+			t.Errorf("session credential %s was not redacted", key)
+		}
+	}
+}
+
 func TestConfigEffectiveRedactsCredentialDSN(t *testing.T) {
 	if got := redactEffectiveConfigValue("OLIVARES_VECTOR_DSN", "postgres://app:secret@db/olivares"); got != redactedConfigValue {
 		t.Fatalf("credential DSN = %q, want %q", got, redactedConfigValue)

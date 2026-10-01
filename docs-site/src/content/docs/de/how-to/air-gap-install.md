@@ -33,17 +33,17 @@ aus:
 
 ```bash
 scripts/airgap-bundle.sh \
-  --version v26.9.0 \
-  --image ghcr.io/olivaresai/olivares:26.9.0-amd64 \
+  --version 26.10.0 \
+  --image ghcr.io/olivaresai/olivares:26.10.0-amd64 \
   --chart deploy/helm/olivares \
   --cosign-key cosign.key \
   [--collector-image <ref>] [--out dist/airgap] [--gpg-key <id>]
 ```
 
-Der Architektur-Tag (`26.9.0-amd64`) ist auf `ghcr.io/olivaresai/olivares` veröffentlicht, wo der
+Der Architektur-Tag (`26.10.0-amd64`) ist auf `ghcr.io/olivaresai/olivares` veröffentlicht, wo der
 Release baut und signiert. Docker Hub (`docker.io/olivaresai/olivares`, der offizielle Pull) führt
-die Multi-Arch- und gehärteten Tags, per Digest identisch, aber nicht `26.9.0-amd64`
-(`docs/releases/v26.9.0-install-surfaces.json`). ghcr.io begrenzt anonyme Pulls öffentlicher
+die Multi-Arch- und gehärteten Tags, per Digest identisch, aber nicht `26.10.0-amd64`
+(`docs/releases/26.10.0-install-surfaces.json`). ghcr.io begrenzt anonyme Pulls öffentlicher
 Images nicht, was auch auf einem nicht authentifizierten Build-Host hilft.
 
 :::caution[SBOM/VEX/Provenance werden bereitgestellt, nicht generiert]
@@ -104,7 +104,7 @@ Spiegelung überstanden hat (es verwendet `crane` und `cosign load` — **nicht*
 
 ```bash
 scripts/airgap-mirror.sh \
-  --bundle olivares-airgap-v26.9.0.tar.gz \
+  --bundle olivares-airgap-26.10.0.tar.gz \
   --registry registry.internal:5000 [--insecure]
 ```
 
@@ -137,7 +137,7 @@ Telemetrie-Home-Standard zum Deaktivieren.
 
 Erreicht wird der Anbieter auf der **Online**-Seite, und das ist so gewollt: Beim Bauen
 des Bundles wird das Release heruntergeladen, und in einer kommerziellen Umgebung ist
-das Abonnement der Zugangsnachweis, mit dem die Add-ons, ihre Updates und ihre Patches
+das Abonnement der Zugangsnachweis, mit dem die Module, ihre Updates und ihre Patches
 bezogen werden. Das ist das SUSE/Novell-Modell — eine Air-Gapped-Umgebung wird aus
 einem lokalen Mirror bedient, der dasselbe Recht weiterhin trägt. Siehe
 [Self-Hosting](/de/how-to/self-hosting/).

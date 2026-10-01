@@ -67,7 +67,7 @@ func newUsersCmd() *cobra.Command {
 	flags.addPersistent(root)
 	client := bootstrapClient{flags: flags, surface: "users"}
 	root.AddCommand(usersListCmd(client), usersCreateCmd(client), usersSuperadminsCmd(client),
-		usersDisableCmd(client), usersEnableCmd(client))
+		usersDisableCmd(client), usersEnableCmd(client), usersTOTPCmd(client), usersTOTPResetCmd(client))
 	return root
 }
 

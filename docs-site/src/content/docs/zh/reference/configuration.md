@@ -94,13 +94,13 @@ TLS 默认开启。在未提供 `--tls-cert`/`--tls-key` 时，引擎会在任�
 
 <!-- BEGIN GENERATED olivares-env-reference — regenerate with `bash scripts/check-config-env-docs.sh --write`; do not edit by hand -->
 
-### 完整变量参考
+### Complete variable reference
 
-下表由产品自身源码生成：296 个变量与 17 个运行时构造的 family，覆盖 engine、CLI、Kubernetes operator、Terraform provider 与 connector。每次变更都会从这些源码重新生成并校验，因此不会落后于二进制文件。
+The table below is generated from the product's own sources: 299 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
 
-**必需**表示读取该变量的功能没有它就无法启动；大多数变量是可选的，即使一个也未设置，引擎仍会运行。
+**Required** means the feature that reads the variable does not start without it; most variables are optional and the engine runs with none of them set.
 
-| 变量 | 必需 | 默认值 | 配置内容 |
+| Variable | Required | Default | What it configures |
 | --- | --- | --- | --- |
 | `OLIVARES_ACTOR` | No | — | Default `--actor` for the decision-bearing eventing verbs, so a scripted change still records who made it. |
 | `OLIVARES_ADMIN_DSN` | No | — | Privileged connection string the Kubernetes operator uses for schema migration, separate from the least-privilege runtime role. |
@@ -152,7 +152,7 @@ TLS 默认开启。在未提供 `--tls-cert`/`--tls-key` 时，引擎会在任�
 | `OLIVARES_COMMUNICATION_ACTIVATION` | No | — | REQUESTED K3 communication activation (`on` or `off`; default off), parsed at boot by cmd/olivares/communicationcomposition.go. `on` binds the local outbox pump witness and enables the dual runtime credential posture before the first leadership election; whether a communication credential can actually be minted is decided per launch from the EFFECTIVE readiness conjunction (store proof, sealer, directory resolver, permissions, pump), never from this flag alone. `on` needs both keyring files below; when either is not declared, cannot be opened or does not load, boot continues with K3 OFF and the cause visible (composition log, pump lane verdict `custody_unavailable`, non-effective readiness) while core, K1 and K2 serve. Only an unrecognized value is a configuration error. |
 | `OLIVARES_COMMUNICATION_CONTENT_KEYRING_FILE` | Yes | — | Path to the JSON keyring the communication content sealer loads at boot (cmd/olivares/boot.go). Secret-bearing, so it is a file rather than a value: sealed message bodies are verified against the keys it carries, and an engine started without it cannot open content sealed by a peer that had one. |
 | `OLIVARES_COMMUNICATION_CURSOR_KEYRING_FILE` | Yes | — | Path to the JSON keyring (`olivares.communication-cursor-keyring.v1`) that signs and verifies inbox cursor navigation tokens, loaded at boot through the same custody mechanism as the content keyring (cmd/olivares/communicationcursorkeyring.go). Secret-bearing, so it is a file rather than a value; a rotated-out key marked `retired_at` keeps verifying for the token retention window and is dropped afterwards, and a restart never mints a fresh key. |
-| `OLIVARES_COMMUNICATION_TOKEN` | Yes | — | NOT an operator setting, and documented here precisely so nobody sets it. The engine MINTS this bearer and injects it into a conducted session's child process exactly once (modules/sessions/runtime_bridge.go); its tuple travels inside the authenticated principal. It is RESERVED on the launch path: validateLaunchInjectedEnv (modules/sessions/runtime.go) refuses any launch whose injected environment carries it, so a caller-supplied value is rejected rather than honoured. It appears in the roster because that reserved-name check mentions it, not because the engine reads it. |
+| `OLIVARES_COMMUNICATION_TOKEN` | Yes | — | 会话自身的通信凭据，由会话启动器注入并由消息命令读取。在启动路径上保留；操作人员不得提供。其值始终被遮蔽。 |
 | `OLIVARES_COMPUTER_USE_CONFIG` | No | — | computer-use 门控的 JSON 策略文件路径。仅由使用 `enterprise` 和 `addon_airs` 构建标签编译的构建读取。未设置时门控保持关闭；文件无法读取或解析时，门控会拒绝所有 computer use，直到修复该文件并重启引擎为止。 |
 | `OLIVARES_CONFIG_STRICT` | No | — | Set to `1` to make `olivares config effective` and `config validate` reject any unrecognized `OLIVARES_*` key. |
 | `OLIVARES_CONTENT_FIREWALL_CONFIG` | No | — | 内容防火墙的 JSON 策略文件路径，该防火墙检查内联代理中的推理流量。仅由使用 `enterprise` 和 `addon_airs` 构建标签编译的构建读取。未设置时该检查保持关闭；文件无法读取或解析时，防火墙会拒绝其检查的每个请求，直到修复该文件并重启引擎为止。 |
@@ -213,6 +213,7 @@ TLS 默认开启。在未提供 `--tls-cert`/`--tls-key` 时，引擎会在任�
 | `OLIVARES_EXECUTION_ENVIRONMENT_ID` | No | — | Explicit execution-environment reference for this node, read at boot by cmd/olivares/providerprofiles.go. Unset, the engine generates one identity once into `execution-environment-id` in the data directory (0600, atomic exclusive create) and reuses it; set, the value must be 1..256 printable bytes with no whitespace, colon or vertical bar, and a malformed value refuses boot instead of degrading in silence. It is REQUIRED on a topology with only shared state and no node-local data directory: there, without it, profiled session launches stay deny-closed. |
 | `OLIVARES_EXTRA_ARGS` | No | — | Extra `serve` arguments appended by the packaged service unit, for operators who configure the daemon through an environment file. |
 | `OLIVARES_FINOPS_ADMISSION_LEGACY_WRITERS_STOPPED_AT` | No | — | Instant every writer of the earlier FinOps admission build stopped, as an RFC 3339 time in UTC ending in `Z`. Read once at startup. Recovery retires a claim those writers left, but only once five minutes have passed since this instant and only while no row they left is dated later; empty, the default, or text that is not such an instant retires none. |
+| `OLIVARES_GITPUBLISH_SWEEP_INTERVAL` | No | `1m` | Git 发布扫描处理过期调度并重新观测状态不确定的发布的间隔，以 Go 时长表示。`0` 禁用扫描。 |
 | `OLIVARES_GROK_HOOK_ACCOUNT` | No | — | Account the Grok Build hook client reports. |
 | `OLIVARES_GROK_HOOK_AGENT` | No | — | Agent identity the Grok Build hook client reports. |
 | `OLIVARES_GROK_HOOK_ORG` | No | — | Organization the Grok Build hook client reports. |
@@ -307,6 +308,7 @@ TLS 默认开启。在未提供 `--tls-cert`/`--tls-key` 时，引擎会在任�
 | `OLIVARES_POLICY_SIGNING_KEY` | No | — | Policy bundle signing key, inline. Prefer the file form. |
 | `OLIVARES_POLICY_SIGNING_KEY_FILE` | No | — | Path to the policy bundle signing key. |
 | `OLIVARES_POLICY_SIGNING_KEY_WRAPPED_FILE` | No | — | Path to the policy signing key wrapped by a key management service. |
+| `OLIVARES_PORTAL_TLS_DIRECTORY` | No | — | 运维人员存放 Appliance Console TLS 证书和密钥的目录；服务单元指定该目录，并将这对文件作为凭据传给控制台。 |
 | `OLIVARES_PQC_POSTURE_CONFIG` | No | — | 后量子态势评估器的 JSON 配置路径。由使用 `enterprise` 构建标签编译的构建在每次运行 `olivares enterprise pqc-posture` 时读取，而不是在引擎启动时读取。`{}` 选择 CNSA 2.0，目标年份为 2033。未设置，或文件无法读取或解析时，该命令会报告 PQC 态势未配置。 |
 | `OLIVARES_PUBLIC_URL` | No | — | The address a browser reaches this console at, as scheme://host[:port]. It is what the startup panel prints and what the WebAuthn relying party is derived from, and it is independent of the listen address. The --public-url flag wins over this variable, and passing that flag empty clears it. Read at start-up only: a change takes a restart. Refused values are reported by field and failure class and are never echoed, and support bundles keep this value redacted. |
 | `OLIVARES_RATELIMIT_CONFIG` | No | — | Path to the JSON rate-limit policy the engine applies to its own endpoints. |
@@ -376,6 +378,7 @@ TLS 默认开启。在未提供 `--tls-cert`/`--tls-key` 时，引擎会在任�
 | `OLIVARES_THREATINTEL_SIGNING_KEY` | No | — | Signing key for threat-intelligence bundles the engine publishes. |
 | `OLIVARES_TOKEN` | No | — | API token the CLI authenticates with, when `--token` is not given. |
 | `OLIVARES_TOOL_PIN_CONFIG` | No | — | MCP 工具固定（tool-pin）存储的可选 JSON 配置（`require_pin_approval`）路径；无论是否设置此变量，使用 `enterprise` 构建标签编译的构建都会运行该存储。在引擎启动时读取。未设置时保持首次使用即信任（trust on first use）；文件无法读取或解析时，未知工具需要运营方批准，直到修复该文件并重启引擎为止。 |
+| `OLIVARES_TOTP_SEED_KEY` | No | — | 以 Base64 编码的 32 字节密钥，用于封存静态存储的 TOTP 种子。HA 节点须设置相同的密钥；未设置时，引擎会在其数据目录中创建私有的 totp-seed.key。 |
 | `OLIVARES_UPDATE_CHANNEL` | No | — | Release channel the update check asks for, such as `stable`. |
 | `OLIVARES_UPDATE_ENDPOINT` | No | — | Base URL the update check queries. Unset leaves the update check off. |
 | `OLIVARES_UPGRADE_TOKEN` | No | — | Download token `olivares upgrade` presents when fetching a build from a credentialed repository. |
@@ -397,7 +400,7 @@ TLS 默认开启。在未提供 `--tls-cert`/`--tls-key` 时，引擎会在任�
 | `OLIVARES_WORK_OUTBOX_INTERVAL` | No | — | How often the work-kernel outbox is drained, as a Go duration. `0` disables the pump. |
 | `OLIVARES_WORK_RUN_REF` | No | — | Run reference the engine passes to a launched work session. Set by the engine per run, not by the operator. |
 | `OLIVARES_WORK_SESSION_ID` | No | — | Session reference the engine passes to a launched work session. Set by the engine per run, not by the operator. |
-| `OLIVARES_WORK_TOKEN` | No | — | Scoped token the engine passes to a launched work session. Set by the engine per run, not by the operator. |
+| `OLIVARES_WORK_TOKEN` | No | — | 会话自身的工作凭据，作用域受限，由会话启动器注入并由工作命令读取。操作人员不得提供。其值始终被遮蔽。 |
 
 ### Variable families
 

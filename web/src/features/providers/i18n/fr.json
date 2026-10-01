@@ -1,11 +1,11 @@
 {
   "title": "Fournisseurs",
-  "subtitle": "L'identifiant avec lequel une session démarre. Enregistrez-le une fois ; le moteur le scelle et le remet à l'agent au lancement.",
+  "subtitle": "Une clé de fournisseur cloud ou un point de terminaison de modèles locaux, choisi via un profil.",
   "nav": "Fournisseurs",
   "add": "Ajouter un fournisseur",
   "empty": {
     "title": "Aucun fournisseur enregistré pour l'instant",
-    "description": "Une session ne peut pas démarrer sans identifiant. Ajoutez la clé d'API d'Anthropic, d'OpenAI ou de xAI — ou de tout point de terminaison compatible OpenAI — et le moteur la scelle et l'utilise au lancement. La clé n'est plus jamais affichée.",
+    "description": "Connectez Anthropic, OpenAI ou xAI avec une clé API, ou ajoutez Ollama local sans clé. Testez la connexion, puis associez le fournisseur à un profil.",
     "action": "Ajoutez votre premier fournisseur"
   },
   "emptyFiltered": {
@@ -28,13 +28,15 @@
     "anthropic": "Anthropic",
     "openai": "OpenAI",
     "xai": "xAI",
-    "openai_compatible": "Compatible OpenAI"
+    "openai_compatible": "Compatible OpenAI",
+    "ollama": "Ollama"
   },
   "kindHints": {
     "anthropic": "Claude Code. Injecte ANTHROPIC_API_KEY.",
     "openai": "Codex. Injecte OPENAI_API_KEY.",
     "xai": "Grok. Injecte XAI_API_KEY.",
-    "openai_compatible": "Tout point de terminaison de forme OpenAI. Injecte OPENAI_API_KEY et OPENAI_BASE_URL ; le point de terminaison est obligatoire."
+    "openai_compatible": "Tout point de terminaison de forme OpenAI. Injecte OPENAI_API_KEY et OPENAI_BASE_URL ; le point de terminaison est obligatoire.",
+    "ollama": "Modèles locaux pour Codex. Sans clé API. Utilisez le point de terminaison natif Ollama ; le test lit les métadonnées des modèles."
   },
   "states": {
     "active": "Actif",
@@ -51,7 +53,13 @@
     "unreachableHint": "Le point de terminaison n'a pas répondu. Cela ne dit rien sur l'identifiant.",
     "models": "{{n}} modèles",
     "latency": "{{ms}} ms",
-    "at": "Testé {{when}}"
+    "at": "Testé {{when}}",
+    "local": {
+      "neverHint": "Ce point de terminaison n’a pas été testé. Son enregistrement ne prouve pas qu’il fonctionne.",
+      "okHint": "Le point de terminaison local a répondu et listé ses modèles.",
+      "refusedHint": "Le point de terminaison a refusé la demande de métadonnées. Vérifiez ses paramètres d’accès.",
+      "unreachableHint": "Le point de terminaison local n’a pas répondu. Vérifiez son adresse et sa disponibilité."
+    }
   },
   "actions": {
     "test": "Tester la connexion",
@@ -78,7 +86,9 @@
     "submitting": "Scellement…",
     "cancel": "Annuler",
     "success": "Fournisseur enregistré. Testez la connexion pour confirmer qu'il fonctionne.",
-    "testNext": "Tester la connexion maintenant"
+    "testNext": "Tester la connexion maintenant",
+    "registering": "Enregistrement…",
+    "localNameHint": "Votre nom pour ce point de terminaison. Il apparaît dans le sélecteur."
   },
   "rotate": {
     "title": "Changer la clé de ce fournisseur",
@@ -93,7 +103,9 @@
     "description": "Cela détruit l'identifiant scellé. C'est irréversible pour cette référence.",
     "consequence": "Tous les profils de fournisseur liés refuseront de lancer, en nommant ce fournisseur. L'identifiant n'est pas révoqué chez le fournisseur : faites-le dans sa propre console.",
     "confirm": "Révoquer",
-    "success": "Fournisseur révoqué et son identifiant scellé détruit."
+    "success": "Fournisseur révoqué et son identifiant scellé détruit.",
+    "localDescription": "Cela révoque l’enregistrement du point de terminaison. Les profils liés refuseront les nouveaux lancements. Le service Ollama et ses modèles restent sur l’hôte.",
+    "localSuccess": "Enregistrement du point de terminaison révoqué."
   },
   "detail": {
     "title": "Fournisseur",
@@ -112,11 +124,22 @@
   },
   "next": {
     "title": "Ensuite : déployez un agent",
-    "description": "Un identifiant seul ne lance rien. Liez-le à un profil de fournisseur, et une session lancée sous ce profil l'utilisera.",
+    "description": "Un fournisseur enregistré ne lance aucune session à lui seul. Liez-le à un profil de fournisseur pour que les nouvelles sessions l’utilisent.",
     "action": "Aller aux profils de fournisseur"
   },
   "truncation": {
     "label": "{{n}} fournisseurs affichés ; il y en a d’autres",
     "hint": "Cette liste est une page. Affinez-la, ou utilisez `olivares provider ls` pour l’ensemble complet."
+  },
+  "bind": {
+    "title": "Associer un profil",
+    "description": "Les prochains lancements du profil choisi utilisent {{name}}. Les sessions en cours conservent leur fournisseur.",
+    "profile": "Profil",
+    "choose": "Choisir un profil compatible",
+    "empty": "Aucun profil actif compatible. Créez-en un dans Profils fournisseur.",
+    "more": "Charger plus de profils",
+    "unavailable": "Les autorisations ou un profil actif compatible sont indisponibles.",
+    "loadError": "Impossible de charger les profils.",
+    "success": "Fournisseur associé au profil."
   }
 }

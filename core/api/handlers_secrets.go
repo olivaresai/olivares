@@ -6,7 +6,9 @@ package api
 
 import (
 	"errors"
+	"github.com/olivaresai/olivares/core/model"
 	"net/http"
+	"strings"
 
 	"github.com/olivaresai/olivares/core/auth"
 )
@@ -69,28 +71,63 @@ func (s *Server) secretSvc(w http.ResponseWriter, r *http.Request) (*auth.Secret
 	return s.secretStore, true
 }
 
+// The explicit tenant scope serves only MCP credential handles. It cannot
+// inventory or replace provider, federation, or deployment-wide secrets.
+func (s *Server) secretScope(w http.ResponseWriter, r *http.Request) (auth.Principal, model.TenantID, bool) {
+	values, present := r.URL.Query()["scope"]
+	if !present {
+		p, ok := s.authzSystem(w, r, "system:admin")
+		return p, auth.GlobalSecretScope, ok
+	}
+	if len(values) != 1 || values[0] != "tenant" {
+		s.badRequest(w, r, "scope must be tenant or omitted for the global store")
+		return auth.Principal{}, model.TenantID(""), false
+	}
+	p, tenant, ok := s.authzTenant(w, r, "tenant:admin")
+	if ok {
+		if _, confined := p.ConfinedWorkspaceIn(tenant); confined {
+			s.writeError(w, r, errForbidden)
+			ok = false
+		}
+	}
+	return p, tenant, ok
+}
+
+func (s *Server) secretNameInScope(w http.ResponseWriter, r *http.Request, scope model.TenantID, name string) bool {
+	if scope != auth.GlobalSecretScope && !strings.HasPrefix(name, "mcp/") {
+		s.badRequest(w, r, "tenant secret names must begin with mcp/")
+		return false
+	}
+	return true
+}
+
 func (s *Server) handleListSecrets(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
+	_, scope, ok := s.secretScope(w, r)
+	if !ok {
 		return
 	}
 	svc, ok := s.secretSvc(w, r)
 	if !ok {
 		return
 	}
-	views, err := svc.List(r.Context(), auth.GlobalSecretScope)
+	views, err := svc.List(r.Context(), scope)
 	if err != nil {
 		s.writeError(w, r, err)
 		return
 	}
 	out := secretsListDTO{Secrets: make([]secretDTO, 0, len(views)), SealerAvailable: svc.SealerWired()}
 	for _, v := range views {
+		if scope != auth.GlobalSecretScope && !strings.HasPrefix(v.Name, "mcp/") {
+			continue
+		}
 		out.Secrets = append(out.Secrets, toSecretDTO(v))
 	}
+	w.Header().Set("Cache-Control", "no-store")
 	writeJSON(w, http.StatusOK, out)
 }
 
 func (s *Server) handlePutSecret(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
+	p, scope, ok := s.secretScope(w, r)
 	if !ok {
 		return
 	}
@@ -106,7 +143,10 @@ func (s *Server) handlePutSecret(w http.ResponseWriter, r *http.Request) {
 		s.badRequest(w, r, "invalid JSON body")
 		return
 	}
-	view, err := svc.Put(r.Context(), p, auth.GlobalSecretScope, in.Name, in.Value, in.Description)
+	if !s.secretNameInScope(w, r, scope, in.Name) {
+		return
+	}
+	view, err := svc.Put(r.Context(), p, scope, in.Name, in.Value, in.Description)
 	if err != nil {
 		s.writeError(w, r, err)
 		return
@@ -115,7 +155,7 @@ func (s *Server) handlePutSecret(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleDeleteSecret(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
+	p, scope, ok := s.secretScope(w, r)
 	if !ok {
 		return
 	}
@@ -131,7 +171,10 @@ func (s *Server) handleDeleteSecret(w http.ResponseWriter, r *http.Request) {
 		s.badRequest(w, r, "invalid JSON body")
 		return
 	}
-	if err := svc.Delete(r.Context(), p, auth.GlobalSecretScope, in.Name); err != nil {
+	if !s.secretNameInScope(w, r, scope, in.Name) {
+		return
+	}
+	if err := svc.Delete(r.Context(), p, scope, in.Name); err != nil {
 		s.writeError(w, r, err)
 		return
 	}

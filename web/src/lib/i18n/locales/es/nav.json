@@ -95,9 +95,11 @@
     "providers": "Proveedores",
     "providerProfiles": "Perfiles de proveedor",
     "providerBindings": "Vínculos de fuentes",
-    "providerAccounts": "Cuentas de proveedor"
+    "providerAccounts": "Cuentas de proveedor",
+    "agent-tools": "Herramientas de agentes"
   },
   "workspace": {
+    "open": "Abrir {{workspace}}",
     "switch": "Cambiar espacio de trabajo",
     "all": "Todos los espacios",
     "allHint": "Sin filtro de espacio",
@@ -171,7 +173,8 @@
     "team-costs": "Atribución de costes por equipo: sesiones, tokens y gasto, con tendencia diaria y desglose por proyecto y por modelo",
     "backups": "Instantáneas cifradas de recuperación ante desastres del control plane: crear, programar, descargar y restaurar",
     "logs": "El flujo de registros del motor en vivo, con filtros por nivel y módulo, búsqueda y pausa",
-    "sourceDiff": "Compara una revisión base y una revisión head de un repositorio Git conectado, archivo por archivo"
+    "sourceDiff": "Compara una revisión base y una revisión head de un repositorio Git conectado, archivo por archivo",
+    "agent-tools": "Detecta, instala y actualiza las herramientas de agentes en este host y sigue cada instalación; solo para administradores del despliegue"
   },
   "commandActions": {
     "eventing": {

@@ -319,7 +319,19 @@
     "wireEmpty": "会話の行を選ぶと、その生フレームが表示されます。",
     "thisNode": "このノード",
     "noWorkspace": "ワークスペースなし",
-    "cwdWarning": "このセッションにはワークスペースがありません。ドライバーは作業ディレクトリを {{cwd}} と報告しました。"
+    "cwdWarning": "このセッションにはワークスペースがありません。ドライバーは作業ディレクトリを {{cwd}} と報告しました。",
+    "workTitle": "セッションの作業権限",
+    "workHint": "最後の起動時の記録です。各操作は現在の権限を確認します。",
+    "processState": "プロセスの状態",
+    "activityState": "アクティビティ",
+    "workRole": "付与された役割",
+    "workWorkspace": "作業ワークスペース",
+    "workActions": "許可された操作",
+    "notRecorded": "未記録",
+    "workRoles": {
+      "worker": "ワーカー",
+      "orchestrator": "オーケストレーター"
+    }
   },
   "conversation": {
     "log": "会話",

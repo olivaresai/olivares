@@ -379,7 +379,7 @@
     "sensitiveInput": "computer-useの入力テキストに機密コンテンツが含まれています（DLPクラス検出）",
     "responseBlocked": "レスポンス保留：computer-useの入力テキストに機密コンテンツが含まれています",
     "honesty": "実施はプロキシでのみverified-deployedです。カスタムANTHROPIC_BASE_URLはこれを回避します。computer-useツールはクライアント側です：モデルが提案し、クライアントが実行します。",
-    "enterpriseRequired": "深層スクリーンショット分析（OCR + DLP）とタイムライン記録にはエンタープライズアドオンが必要です。"
+    "enterpriseRequired": "深層スクリーンショット分析（OCR + DLP）とタイムライン記録にはエンタープライズモジュールが必要です。"
   },
   "projects": {
     "title": "Claudeプロジェクトガバナンス",

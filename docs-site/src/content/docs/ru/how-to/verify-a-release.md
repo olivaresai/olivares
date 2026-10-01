@@ -39,7 +39,7 @@ CycloneDX) и аттестация OpenVEX — все ссылаются **по 
 scripts/verify-release.sh
 
 # Pin the SLSA provenance to a specific source tag.
-scripts/verify-release.sh --source-tag v26.9.0
+scripts/verify-release.sh --source-tag 26.10.0
 
 # Key-based: only for files signed with a private key you control.
 # Releases are signed keyless and do not publish a public key.
@@ -68,7 +68,7 @@ OpenVEX корень доверия нужен даже с `--key`, а шаг SL
    cosign verify-blob \
      --certificate checksums.txt.pem \
      --signature checksums.txt.sig \
-     --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
+     --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
      --certificate-oidc-issuer https://token.actions.githubusercontent.com \
      checksums.txt
    ```
@@ -115,13 +115,13 @@ DIGEST="$(crane digest "$IMAGE:<version>")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type spdxjson \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type openvex \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 slsa-verifier verify-image "$REF" \
   --source-uri github.com/olivaresai/olivares --source-tag <version>

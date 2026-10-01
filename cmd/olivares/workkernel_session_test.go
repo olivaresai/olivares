@@ -10,11 +10,75 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
 )
+
+func TestSessionAuthorityProjectionsUnderWorkspaceRequest(t *testing.T) {
+	resolver, mod, st, tenant, workspace := newSessionResolverFixture(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	a := auth.NewAuthenticator(st, nil)
+	if _, err := a.BootstrapSuperadmin(ctx, "authority-admin@fixture.test", "authority-fixture-password"); err != nil {
+		t.Fatal(err)
+	}
+	token, _, err := a.Login(ctx, "authority-admin@fixture.test", "authority-fixture-password", "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	admin, err := a.Authenticate(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.CreateUser(ctx, admin, auth.NewUser{Email: "authority-reader@fixture.test", Password: "authority-fixture-password", Tenant: tenant, Role: auth.RoleEditor, WorkspaceID: workspace}); err != nil {
+		t.Fatal(err)
+	}
+	token, _, err = a.Login(ctx, "authority-reader@fixture.test", "authority-fixture-password", "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	principal, err := a.Authenticate(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	marked, _, err := api.NewReadRowAuthorizationPort(auth.NewAuthorizer(nil), a).RefreshReadPrincipal(ctx, principal, tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sid, err := mod.ResolveSession(ctx, tenant, sessions.SessionBinding{Provider: "claude", ExternalID: "confined-witness", Origin: sessions.OriginObserved, At: time.Now().UTC()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := mod.Claim(ctx, tenant, sid, "fixture:owned", 0); err != nil {
+		t.Fatal(err)
+	}
+	t.Run("work", func(t *testing.T) {
+		got, err := resolver.ResolveParticipant(marked, tenant, workspace, "session", sid)
+		if err != nil || !got.Active || !got.WorkspaceEligible {
+			t.Fatalf("confined work witness: %+v, %v", got, err)
+		}
+	})
+	t.Run("communication", func(t *testing.T) {
+		got, err := newCommunicationDirectoryReads(st, mod, nil).session(marked, tenant, workspace, sid)
+		if err != nil || !got.Active || !got.WorkspaceEligible {
+			t.Fatalf("confined communication witness: %+v, %v", got, err)
+		}
+	})
+	t.Run("crossed workspace", func(t *testing.T) {
+		other := model.NewID()
+		got, err := resolver.ResolveParticipant(marked, tenant, other, "session", sid)
+		if err != nil || got.Active || got.WorkspaceEligible || got.CanonicalRef != "" {
+			t.Fatalf("crossed work witness leaked authority: %+v, %v", got, err)
+		}
+		witness, err := newCommunicationDirectoryReads(st, mod, nil).session(marked, tenant, other, sid)
+		if err != nil || witness.Found || witness.Active || witness.Fence != 0 || witness.RunRef != "" || witness.AgentRef != "" {
+			t.Fatalf("crossed communication witness leaked a private tuple: %+v, %v", witness, err)
+		}
+	})
+}
 
 // This file exists because every other test of the K2 session identity seam
 // substitutes the resolver. The module suite injects a test WorkIdentityResolver

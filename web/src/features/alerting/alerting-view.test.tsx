@@ -685,7 +685,7 @@ describe('AlertingView · dead letters', () => {
     expect(screen.queryByText(/already in flight/i)).not.toBeInTheDocument()
   })
 
-  // CONTRAST FINDING F2. Reading only the STATUS collapsed every 403 into "you need the
+  // CONTRAST FINDING finding 2. Reading only the STATUS collapsed every 403 into "you need the
   // notify route admin permission". The engine mints a distinct code for the recording
   // consent boundary precisely so a console can route to the acknowledgement instead
   // (core/api/errors.go:211-215), and telling an admin to obtain a permission they
@@ -760,7 +760,7 @@ describe('AlertingView · dead letters', () => {
     expect(loud.closest('[role="alert"]')).not.toBeNull()
   })
 
-  // The other half of contrast finding F2: naming the consent 403 correctly is useless
+  // The other half of contrast finding finding 2: naming the consent 403 correctly is useless
   // if the operator has no way to answer it. AlertingView now mounts RecordingNotice,
   // whose blocking dialog is how the acknowledgement is given — without it the engine
   // stays deny-closed and the screen offers no exit.

@@ -21,6 +21,7 @@ import { PeopleTab } from './people-tab'
 import { RolesTab } from './roles-tab'
 import { SSOTab } from './sso-tab'
 import { ScopesTab } from './scopes-tab'
+import { MCPGatewayTab } from './mcp-gateway-tab'
 import { SecretsTab } from './secrets-tab'
 import { WorkspaceConnectorsTab } from './workspace-connectors-tab'
 
@@ -55,6 +56,7 @@ const TAB_VALUES = [
   'roles',
   'bindings',
   'secrets',
+  'mcpGateway',
   'connectors',
   'wsConnectors',
   'apiKeys',
@@ -124,6 +126,9 @@ export default function ConsoleView() {
           <TabsTrigger value="bindings">
             {t('console:tabs.bindings')}
           </TabsTrigger>
+          <TabsTrigger value="mcpGateway">
+            {t('console:tabs.mcpGateway')}
+          </TabsTrigger>
           <TabsTrigger value="secrets">{t('console:tabs.secrets')}</TabsTrigger>
           <TabsTrigger value="connectors">
             {t('console:tabs.connectors')}
@@ -152,6 +157,9 @@ export default function ConsoleView() {
       </TabsContent>
       <TabsContent value="bindings" className="pt-0">
         <BindingsTab />
+      </TabsContent>
+      <TabsContent value="mcpGateway" className="pt-0">
+        <MCPGatewayTab />
       </TabsContent>
       <TabsContent value="secrets" className="pt-0">
         <SecretsTab />

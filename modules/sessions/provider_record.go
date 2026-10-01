@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"net/netip"
+	"net/url"
 	"strings"
 	"time"
 
@@ -96,6 +98,7 @@ const (
 	ProviderKindAnthropic        = "anthropic"
 	ProviderKindOpenAI           = "openai"
 	ProviderKindXAI              = "xai"
+	ProviderKindOllama           = "ollama"
 	ProviderKindOpenAICompatible = "openai_compatible"
 )
 
@@ -143,6 +146,8 @@ var (
 	ErrProviderNameTaken = &runErr{http.StatusConflict, "another active provider of this kind already uses this name"}
 	// ErrProviderRecordRevoked refuses any use of a revoked record.
 	ErrProviderRecordRevoked = &runErr{http.StatusConflict, "this provider is revoked; register another one and bind it"}
+	// ErrProviderRecordChanged rejects publication after another record write.
+	ErrProviderRecordChanged = &runErr{http.StatusConflict, "the provider changed during this operation; read it again before retrying"}
 	// ErrNoProviderVault is the deny-closed answer when no sealing port is wired:
 	// the engine cannot store a credential, and it says so instead of storing one
 	// in the clear.
@@ -201,8 +206,8 @@ type CreateProviderRecordInput struct {
 type ProviderRecordPatch struct {
 	DisplayName *string
 	BaseURL     *string
-	// APIKey rotates the value in place. The locator does not change, so every
-	// binding keeps working and the next launch uses the new value.
+	// APIKey rotates the private locator. The provider reference stays stable, so
+	// every binding keeps working and the next launch uses the new value.
 	APIKey *string
 	// Actor is the authenticated caller, for the same reason it is on the create
 	// input: a rotation is a sealed write and a sealed write is attributed.
@@ -246,6 +251,8 @@ func (m *Module) registerProviderRecordSchema(reg store.ExtensionRegistry) error
 // normalizeProviderKind validates the credential kind against the CLOSED set.
 func normalizeProviderKind(s string) (string, error) {
 	switch strings.ToLower(strings.TrimSpace(s)) {
+	case ProviderKindOllama:
+		return ProviderKindOllama, nil
 	case ProviderKindAnthropic:
 		return ProviderKindAnthropic, nil
 	case ProviderKindOpenAI:
@@ -255,9 +262,9 @@ func normalizeProviderKind(s string) (string, error) {
 	case ProviderKindOpenAICompatible:
 		return ProviderKindOpenAICompatible, nil
 	case "":
-		return "", badRequest("kind is required (anthropic, openai, xai or openai_compatible)")
+		return "", badRequest("kind is required (anthropic, openai, xai, openai_compatible or ollama)")
 	}
-	return "", badRequest("kind must be anthropic, openai, xai or openai_compatible")
+	return "", badRequest("kind must be anthropic, openai, xai, openai_compatible or ollama")
 }
 
 // validProviderName bounds the operator's own label. It is required, unlike a
@@ -285,6 +292,9 @@ func validProviderName(s string) (string, error) {
 // every read, and accepting it would leak one through a door marked "endpoint".
 func validProviderBaseURL(kind, s string) (string, error) {
 	s = strings.TrimSpace(s)
+	if kind == ProviderKindOllama {
+		return validOllamaBaseURL(s)
+	}
 	if s == "" {
 		if kind == ProviderKindOpenAICompatible {
 			return "", badRequest("base_url is required for an openai_compatible provider: there is no official endpoint to assume")
@@ -317,6 +327,29 @@ func validProviderBaseURL(kind, s string) (string, error) {
 	return strings.TrimRight(s, "/"), nil
 }
 
+// validOllamaBaseURL accepts native endpoints without embedding credentials.
+// Plain HTTP is limited to loopback and literal private addresses; HTTPS can
+// address a protected remote Ollama endpoint. No key is sent by this kind.
+func validOllamaBaseURL(s string) (string, error) {
+	if len(s) == 0 || len(s) > maxProviderBaseURL {
+		return "", badRequest("an Ollama base_url is required and must be bounded")
+	}
+	u, err := url.Parse(s)
+	if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" || u.ForceQuery {
+		return "", badRequest("Ollama base_url must be an endpoint without credentials, query or fragment")
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return "", badRequest("Ollama base_url must use http or https")
+	}
+	if u.Scheme == "http" {
+		ip, err := netip.ParseAddr(u.Hostname())
+		if u.Hostname() != "localhost" && (err != nil || (!ip.IsLoopback() && !ip.IsPrivate())) {
+			return "", badRequest("plain HTTP Ollama endpoints must be loopback or a private IP address")
+		}
+	}
+	return strings.TrimRight(u.String(), "/"), nil
+}
+
 // validProviderKey bounds the credential itself. It checks LENGTH and control
 // characters and nothing else: a shape check against somebody else's credential
 // format is a guess that expires the day they change it, and the failure mode of a
@@ -345,6 +378,9 @@ func validProviderKey(s string) (string, error) {
 // tells two keys apart and it is useless on its own — and a value shorter than
 // twelve characters gets no hint at all rather than a hint that is most of it.
 func providerKeyHint(key string) string {
+	if key == "" {
+		return ""
+	}
 	if len(key) < 12 {
 		return ""
 	}
@@ -379,6 +415,9 @@ func validProviderRecordRef(ref string) bool {
 // has heard of. An unknown driver therefore accepts ONLY openai_compatible, which
 // is the one kind that says what it injects in its own name.
 func recordServesDriver(kind, driver string) bool {
+	if kind == ProviderKindOllama {
+		return driver == providerDriverCodex
+	}
 	if kind == ProviderKindOpenAICompatible {
 		return true
 	}
@@ -401,6 +440,8 @@ func recordServesDriver(kind, driver string) bool {
 // two cannot drift apart without somebody noticing.
 func providerRecordEnv(kind, baseURL, key string) []EnvVar {
 	switch kind {
+	case ProviderKindOllama:
+		return nil // Local transport uses typed endpoint authority, never credential env.
 	case ProviderKindAnthropic:
 		out := []EnvVar{{Name: "ANTHROPIC_API_KEY", Value: key}}
 		if baseURL != "" {
@@ -488,9 +529,6 @@ func (m *Module) CreateProviderRecord(ctx context.Context, tenant model.TenantID
 	if m.data == nil {
 		return ProviderRecord{}, errNoData
 	}
-	if m.rt.providerVault == nil {
-		return ProviderRecord{}, ErrNoProviderVault
-	}
 	kind, err := normalizeProviderKind(in.Kind)
 	if err != nil {
 		return ProviderRecord{}, err
@@ -503,14 +541,24 @@ func (m *Module) CreateProviderRecord(ctx context.Context, tenant model.TenantID
 	if err != nil {
 		return ProviderRecord{}, err
 	}
-	key, err := validProviderKey(in.APIKey)
-	if err != nil {
-		return ProviderRecord{}, err
-	}
+	var key, secretRef string
 	ref := newProviderRecordRef()
-	secretRef, err := m.rt.providerVault.Seal(ctx, in.Actor, tenant, providerVaultName(ref), []byte(key))
-	if err != nil {
-		return ProviderRecord{}, sealFailure(err)
+	if kind == ProviderKindOllama {
+		if in.APIKey != "" {
+			return ProviderRecord{}, badRequest("Ollama endpoints do not accept a stored API key")
+		}
+	} else {
+		if m.rt.providerVault == nil {
+			return ProviderRecord{}, ErrNoProviderVault
+		}
+		key, err = validProviderKey(in.APIKey)
+		if err != nil {
+			return ProviderRecord{}, err
+		}
+		secretRef, err = m.rt.providerVault.Seal(ctx, in.Actor, tenant, providerVaultName(ref), []byte(key))
+		if err != nil {
+			return ProviderRecord{}, sealFailure(err)
+		}
 	}
 	var out ProviderRecord
 	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
@@ -539,9 +587,11 @@ func (m *Module) CreateProviderRecord(ctx context.Context, tenant model.TenantID
 		// The row did not land, so the sealed value has no owner. Removing it is
 		// compensation, not cleanup: a sealed blob nobody can reach is exactly the
 		// kind of residue a rotation policy later cannot see.
-		if rerr := m.rt.providerVault.Revoke(ctx, in.Actor, tenant, secretRef); rerr != nil && m.log != nil {
-			m.log.Warn("sessions: could not withdraw the sealed provider credential of a record that failed to persist",
-				"provider_ref", ref)
+		if secretRef != "" {
+			if rerr := m.rt.providerVault.Revoke(ctx, in.Actor, tenant, secretRef); rerr != nil && m.log != nil {
+				m.log.Warn("sessions: could not withdraw the sealed provider credential of a record that failed to persist",
+					"provider_ref", ref)
+			}
 		}
 		if errors.Is(err, store.ErrConflict) {
 			return ProviderRecord{}, ErrProviderNameTaken
@@ -607,14 +657,23 @@ func (m *Module) ListProviderRecords(ctx context.Context, tenant model.TenantID,
 }
 
 // PatchProviderRecord renames, re-endpoints and/or ROTATES one record. Rotation
-// reseals under the SAME locator, so every binding keeps working and the next
-// launch — not the live one — uses the new value.
+// publishes a new private locator under the same provider reference, so every
+// binding keeps working and the next launch uses the new value.
 func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID, ref string, p ProviderRecordPatch) (ProviderRecord, error) {
 	if m.data == nil {
 		return ProviderRecord{}, errNoData
 	}
 	if !validProviderRecordRef(ref) {
 		return ProviderRecord{}, ErrProviderRecordNotFound
+	}
+	if p.APIKey != nil {
+		rec, err := m.GetProviderRecord(ctx, tenant, ref)
+		if err != nil {
+			return ProviderRecord{}, err
+		}
+		if rec.Kind == ProviderKindOllama {
+			return ProviderRecord{}, badRequest("Ollama endpoints do not accept a stored API key")
+		}
 	}
 	if p.APIKey != nil && m.rt.providerVault == nil {
 		return ProviderRecord{}, ErrNoProviderVault
@@ -635,10 +694,33 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 		}
 		name = n
 	}
-	// The rotation is performed BEFORE the transaction and the transaction is what
-	// records it. The order matters in exactly one direction: a sealed value whose
-	// row never landed is invisible residue, while a row that names a value that was
-	// never sealed would authorize a launch that then cannot start.
+	// Vault writes own a separate transaction. Prepare a new immutable value before
+	// the record write; overwriting the live locator here would change the key even
+	// when publication fails. The observed version prevents a concurrent revoke or
+	// rotation from publishing a stale credential tuple.
+	var rotation ProviderRecord
+	var nextLocator string
+	if p.APIKey != nil {
+		current, err := m.GetProviderRecord(ctx, tenant, ref)
+		if err != nil {
+			return ProviderRecord{}, err
+		}
+		if current.State != ProviderRecordActive {
+			return ProviderRecord{}, ErrProviderRecordRevoked
+		}
+		if p.BaseURL != nil {
+			if _, err := validProviderBaseURL(current.Kind, *p.BaseURL); err != nil {
+				return ProviderRecord{}, err
+			}
+		}
+		rotation = current
+		locator, err := m.rt.providerVault.Seal(ctx, p.Actor, tenant,
+			providerVaultName(ref)+"/"+model.NewID().String(), []byte(key))
+		if err != nil {
+			return ProviderRecord{}, sealFailure(err)
+		}
+		nextLocator = locator
+	}
 	var out ProviderRecord
 	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, rerr := sc.Ext(providerRecordKind)
@@ -652,11 +734,16 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 		if rec.String(colPRState) == ProviderRecordRevoked {
 			return ErrProviderRecordRevoked
 		}
+		if p.APIKey != nil && rec.Int(model.ColVersion) != rotation.Version {
+			return ErrProviderRecordChanged
+		}
+		resetProbe := p.APIKey != nil
 		if p.BaseURL != nil {
 			b, verr := validProviderBaseURL(rec.String(colPRKind), *p.BaseURL)
 			if verr != nil {
 				return verr
 			}
+			resetProbe = resetProbe || b != rec.String(colPRBaseURL)
 			rec[colPRBaseURL] = b
 		}
 		if p.DisplayName != nil {
@@ -664,16 +751,16 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 			rec[colPRNameSlot] = activeProviderNameSlot(rec.String(colPRKind), name)
 		}
 		if p.APIKey != nil {
-			if _, serr := m.rt.providerVault.Seal(ctx, p.Actor, tenant, providerVaultName(ref), []byte(key)); serr != nil {
-				return sealFailure(serr)
-			}
+			rec[colPRSecretRef] = nextLocator
 			rec[colPRKeyHint] = providerKeyHint(key)
-			// A rotated credential has not been tested. Keeping the previous verdict
-			// would report a green connection that was measured on another value.
+		}
+		if resetProbe {
+			// A changed credential or endpoint has not been tested.
 			rec[colPRProbeState] = ProbeNever
 			rec[colPRProbeDetail] = ""
 			rec[colPRProbeLatency] = int64(0)
 			rec[colPRModels] = ""
+			rec[colPRProbedAt] = ""
 		}
 		updated, rerr := repo.Update(ctx, rec)
 		if rerr != nil {
@@ -682,6 +769,13 @@ func (m *Module) PatchProviderRecord(ctx context.Context, tenant model.TenantID,
 		out = providerRecordFromRecord(updated)
 		return nil
 	})
+	if nextLocator != "" {
+		retired := rotation.SecretRef
+		if err != nil {
+			retired = nextLocator
+		}
+		m.withdrawProviderCredential(ctx, p.Actor, tenant, ref, retired)
+	}
 	if errors.Is(err, store.ErrConflict) {
 		return ProviderRecord{}, ErrProviderNameTaken
 	}
@@ -762,9 +856,6 @@ func (m *Module) TestProviderRecord(ctx context.Context, tenant model.TenantID, 
 	if m.rt.providerProbe == nil {
 		return ProviderRecord{}, ErrNoProviderProbe
 	}
-	if m.rt.providerVault == nil {
-		return ProviderRecord{}, ErrNoProviderVault
-	}
 	rec, err := m.GetProviderRecord(ctx, tenant, ref)
 	if err != nil {
 		return ProviderRecord{}, err
@@ -772,9 +863,15 @@ func (m *Module) TestProviderRecord(ctx context.Context, tenant model.TenantID, 
 	if rec.State != ProviderRecordActive {
 		return ProviderRecord{}, ErrProviderRecordRevoked
 	}
-	key, err := m.rt.providerVault.Open(ctx, tenant, rec.SecretRef)
-	if err != nil {
-		return ProviderRecord{}, openFailure(err)
+	var key []byte
+	if rec.Kind != ProviderKindOllama {
+		if m.rt.providerVault == nil {
+			return ProviderRecord{}, ErrNoProviderVault
+		}
+		key, err = m.rt.providerVault.Open(ctx, tenant, rec.SecretRef)
+		if err != nil {
+			return ProviderRecord{}, openFailure(err)
+		}
 	}
 	started := m.now()
 	res, probeErr := m.rt.providerProbe.Probe(ctx, ProviderProbeRequest{
@@ -785,7 +882,7 @@ func (m *Module) TestProviderRecord(ctx context.Context, tenant model.TenantID, 
 		elapsed = 0
 	}
 	state, detail, models := classifyProbe(res, probeErr)
-	return m.recordProbeOutcome(ctx, tenant, ref, state, detail, models, elapsed)
+	return m.recordProbeOutcome(ctx, tenant, rec, state, detail, models, elapsed)
 }
 
 // classifyProbe turns a probe answer into the three-valued outcome. The split is
@@ -824,7 +921,8 @@ func boundProbeDetail(s string) string {
 func (m *Module) recordProbeOutcome(
 	ctx context.Context,
 	tenant model.TenantID,
-	ref, state, detail string,
+	expected ProviderRecord,
+	state, detail string,
 	models []string,
 	elapsed time.Duration,
 ) (ProviderRecord, error) {
@@ -840,9 +938,16 @@ func (m *Module) recordProbeOutcome(
 		if rerr != nil {
 			return rerr
 		}
-		rec, rerr := findProviderRecordRec(ctx, sc, ref)
+		rec, rerr := findProviderRecordRec(ctx, sc, expected.Ref)
 		if rerr != nil {
 			return rerr
+		}
+		// A verdict belongs to the credential and endpoint actually tested. A
+		// concurrent rotation/re-endpoint/revoke cannot inherit the old green.
+		if rec.String(colPRState) != ProviderRecordActive ||
+			rec.String(colPRSecretRef) != expected.SecretRef ||
+			rec.String(colPRBaseURL) != expected.BaseURL {
+			return ErrProviderRecordChanged
 		}
 		rec[colPRProbeState] = state
 		rec[colPRProbeDetail] = detail

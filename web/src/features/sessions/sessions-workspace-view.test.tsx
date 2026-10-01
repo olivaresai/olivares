@@ -642,7 +642,7 @@ describe('SessionsWorkspaceView — two homes, one provider session id', () => {
  * asserted is the address bar an operator would copy, and not a prop.
  */
 describe('SessionsWorkspaceView — chrome above the work', () => {
-  it('folds the counts AND the tab strip onto the title line', async () => {
+  it('keeps the counts and tab strip in the chrome above the work', async () => {
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false, gcTime: 0 } },
     })
@@ -653,7 +653,9 @@ describe('SessionsWorkspaceView — chrome above the work', () => {
     )
     const heading = await screen.findByRole('heading', { name: 'Sessions' })
     const summary = await screen.findByTestId('sessions-summary')
-    expect(heading.parentElement).toContainElement(summary)
+    expect(heading.closest('[data-slot="page-header"]')).toContainElement(
+      summary,
+    )
     const panes = screen.getByTestId('sessions-panes')
     // The strip used to be the pane header, one 36 px band under the title. It is on
     // the title line now, so the panes begin with the work itself.

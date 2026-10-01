@@ -116,6 +116,7 @@ var topLevelNextCommands = map[string]string{
 	"license":         "olivares license status",
 	"mcp":             "olivares mcp pins ls",
 	"members":         "olivares members ls",
+	"message":         "olivares message inbox --workspace-id <workspace-id>",
 	"migrate":         "olivares migrate status",
 	"models":          "olivares models ls",
 	"notify":          "olivares notify destinations",

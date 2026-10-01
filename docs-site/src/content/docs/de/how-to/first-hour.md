@@ -87,8 +87,7 @@ nie in der Prozessliste erscheint:
 
 ```bash
 # füge das olst_… Token ein, das die Engine beim Start ausgegeben hat
-olivares auth bootstrap --server https://127.0.0.1:8443 \
-  --ca-cert <data-dir>/tls.crt \
+./bin/olivares auth bootstrap --server http://127.0.0.1:8443 \
   --setup-token-file - \
   --email admin@local --password-file ./admin.pw \
   --organization "First hour" --save-context

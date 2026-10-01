@@ -216,7 +216,7 @@ func TestDecidedDenialKeepsBlockOverThrottleWhenALaterReadFails(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------------
-// R1, remaining branch (second independent review): A GROUP'S FAIL-CLOSED REFUSAL
+// finding 1, remaining branch (second independent review): A GROUP'S FAIL-CLOSED REFUSAL
 // IS A REFUSAL LIKE ANY OTHER — it does not get to overwrite a stronger one, and
 // it does not get to end the evaluation early.
 //

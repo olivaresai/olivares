@@ -8,7 +8,7 @@ package main
 
 // license_connect_dirsync_test.go: a key transition whose completion record is visible after a
 // failed directory sync must not destroy a key until the record is published again with every sync
-// succeeding (Root review R1 of correction-1).
+// succeeding (Root review finding 1 of correction-1).
 //
 // The failure comes from the KERNEL. The command runs in a child process that installs a seccomp
 // user-notification filter on fsync(2); a supervisor goroutine in that child answers an fsync with

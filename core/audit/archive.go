@@ -501,6 +501,72 @@ func ExportSegments(ctx context.Context, st store.Store, tenant model.TenantID, 
 	return rep, nil
 }
 
+// Per-field object-identifier limits, derived from the documented forms of
+// every substrate this anchor can attest (H-04; independent security review — the shared 128
+// byte cap refused lawful S3 VersionIDs and was not any provider's contract):
+//
+//   - archive.etag: DirSink stores the segment's 64-hex SHA-256
+//     (core/audit/dirsink.go). S3 forwards its ETag header: a 32-hex MD5, plus
+//     "-<part count>" for multipart uploads (≤ 10000 parts), which with quotes
+//     and the W/ weak prefix tops out at 42 bytes
+//     (docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html);
+//     S3-compatible stores (MinIO, Ceph RGW) follow the same S3 form
+//     (pkg.go.dev/minio/pkg/etag). Azure answers a quoted "0x<16 hex>",
+//     optionally "W/"-weak (≤ 23; learn.microsoft.com/en-us/rest/api/
+//     storageservices/put-blob response headers). GCS answers a short base64
+//     etag (cloud.google.com/storage/docs/json_api/v1/objects#resource). No
+//     documented form exceeds 42 bytes; DirSink's own 64 is the largest and is
+//     the limit.
+//   - archive.version_id: AWS documents "Version IDs are Unicode, UTF-8
+//     encoded, URL-ready, opaque strings that are no more than 1,024 bytes
+//     long" (docs.aws.amazon.com/AmazonS3/latest/userguide/versioning-workflows.html).
+//     Azure's x-ms-version-id is a DateTime and GCS's generation a decimal
+//     int64 — far shorter. The AWS 1,024-byte contract is the limit.
+const (
+	maxAnchorETagLen      = 64
+	maxAnchorVersionIDLen = 1024
+)
+
+// validateAnchorObjectID enforces the format contract of an upstream-supplied
+// object identifier BEFORE it is stored in anchor metadata readable by tenant
+// audit:read callers (H-04 of the 26.10.x security backlog): printable,
+// non-space ASCII, bounded by the field's documented limit (above), and WITHOUT
+// the query/escape separators a credential needs but no documented identifier
+// alphabet uses. A broken or hostile archive substrate/proxy can answer with an
+// echoed credential instead of an ETag/VersionID, and a functional SAS query or
+// URL-carried bearer needs '?', '&' or '%' (or whitespace) to exist as one.
+//
+// Per-field documented-alphabet analysis (independent security finding 2; Root's 2026-09-30
+// ruling: refuse only what the documentation proves unused):
+//
+//   - archive.etag: S3 multipart/quoted/W/-weak forms are hex plus '-', '"',
+//     'W', '/' (docs.aws.amazon.com/AmazonS3/latest/API/API_CompleteMultipartUpload.html);
+//     Azure is quoted "0x<hex>"; GCS is standard base64 ('+', '/', '='); DirSink
+//     is lowercase hex. None uses '?', '&', '%' or whitespace.
+//   - archive.version_id: AWS contracts "URL-ready" opaque strings whose
+//     documented examples use letters, digits, '_', '.', '+', '/'; Azure uses a
+//     DateTime; GCS uses decimal digits. URL-ready excludes the query
+//     separators '?', '&', the escape marker '%' and whitespace — those four
+//     are the complete refusal set, and '_', '.', '+', '/', '=' stay because
+//     documented forms use them.
+//
+// This is a format gate, not a credential detector: a separator-free opaque
+// token (e.g. a bare base64url blob) is indistinguishable from a lawful S3
+// version ID and is stored — the gate removes the shapes a working SAS/bearer
+// echo must take. The error names the field and the rule, NEVER the value.
+func validateAnchorObjectID(field, value string, maxLen int) error {
+	if len(value) > maxLen {
+		return fmt.Errorf("audit: refusing archive anchor: %s from the sink exceeds the %d-byte documented object-identifier limit; the archive substrate returned a value that is not an object identifier", field, maxLen)
+	}
+	for i := 0; i < len(value); i++ {
+		b := value[i]
+		if b < 0x21 || b > 0x7e || b == '?' || b == '&' || b == '%' {
+			return fmt.Errorf("audit: refusing archive anchor: %s from the sink carries bytes no documented object identifier uses (whitespace, control, non-ASCII, or the '?', '&', '%%' separators a credential needs); the archive substrate returned a value that is not an object identifier", field)
+		}
+	}
+	return nil
+}
+
 // SegmentAnchorDraft builds the audit.archive.segment anchor draft for a
 // durably written segment. It is split from AnchorSegment so a
 // caller can append the anchor INSIDE its own Mutate tx, atomically with its
@@ -509,7 +575,18 @@ func ExportSegments(ctx context.Context, st store.Store, tenant model.TenantID, 
 // itself moves the head). The meta carries only identifiers, counts and hashes
 // (docs/SECURITY-HARDENING.md) — the range, the events object's key and digest, and the sink
 // receipt's non-secret lock attestation.
-func SegmentAnchorDraft(res SegmentResult) model.AuditDraft {
+//
+// The sink-supplied ETag/VersionID are validated (charset, length) before they
+// are stored; a value that is not a well-formed object identifier REFUSES the
+// draft, because persisting it would hand an echoed credential to every
+// audit:read reader of the anchor (H-04).
+func SegmentAnchorDraft(res SegmentResult) (model.AuditDraft, error) {
+	if err := validateAnchorObjectID("archive.etag", res.EventsReceipt.ETag, maxAnchorETagLen); err != nil {
+		return model.AuditDraft{}, err
+	}
+	if err := validateAnchorObjectID("archive.version_id", res.EventsReceipt.VersionID, maxAnchorVersionIDLen); err != nil {
+		return model.AuditDraft{}, err
+	}
 	meta := map[string]any{
 		"archive.from_seq":      res.Manifest.FromSeq,
 		"archive.to_seq":        res.Manifest.ToSeq,
@@ -537,7 +614,7 @@ func SegmentAnchorDraft(res SegmentResult) model.AuditDraft {
 		Actor: model.ActorSystem, ActorKind: model.ActorSystem,
 		Action: ActionArchiveSegment, TargetKind: "core.audit_archive_segment",
 		Meta: meta,
-	}
+	}, nil
 }
 
 // AnchorSegment appends the audit.archive.segment anchor event for a durably
@@ -546,10 +623,14 @@ func SegmentAnchorDraft(res SegmentResult) model.AuditDraft {
 // resume bookkeeping should instead append SegmentAnchorDraft inside the SAME
 // Mutate tx as its bookkeeping write (the §8.5 loop does).
 func AnchorSegment(ctx context.Context, st store.Store, tenant model.TenantID, res SegmentResult) (model.AuditEvent, error) {
+	draft, err := SegmentAnchorDraft(res)
+	if err != nil {
+		return model.AuditEvent{}, err
+	}
 	var ev model.AuditEvent
-	err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err = st.Mutate(ctx, tenant, func(sc store.Scope) error {
 		var err error
-		ev, err = sc.Audit().Append(ctx, SegmentAnchorDraft(res))
+		ev, err = sc.Audit().Append(ctx, draft)
 		return err
 	})
 	if err != nil {

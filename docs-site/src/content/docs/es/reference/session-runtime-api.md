@@ -18,7 +18,7 @@ el contrato de driver, un runner PTY local y los recorridos J01–J08 como tests
 | Edición | Qué hace | Qué no hace |
 |---|---|---|
 | **Community (esta página)** | Hijo local propio: lanzar, stdin/stdout/stderr, attach con cursor, reanudar la conversación exacta, reconectar un stream vivo, detener con código de salida observado. Las filas de sesión y la evidencia siguen en el módulo II. | Motor Identity & Scale de varios paneles, listener mTLS, sesiones de entrada comerciales, chunk xterm |
-| **Overlay Identity & Scale** | Motor comercial session-cockpit (listener, paneles, ledger). Las rutas viven bajo `/v1/m/session-cockpit/` cuando el add-on está presente. | No sustituye `/v1/m/sessions/runs` |
+| **Overlay Identity & Scale** | Motor comercial session-cockpit (listener, paneles, ledger). Las rutas viven bajo `/v1/m/session-cockpit/` cuando el módulo está presente. | No sustituye `/v1/m/sessions/runs` |
 
 Una build Community responde el namespace del overlay por **ausencia** (404).
 No monta un stub 501.

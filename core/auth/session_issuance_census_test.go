@@ -40,6 +40,12 @@ func TestSessionIssuanceCensus(t *testing.T) {
 		// (docs/LOGIN-ENFORCEMENT-OPERATIONS.md, Existing sessions are unaffected).
 		"auth/authenticator.go:RefreshSession->NewCredential(PrefixSession)":       {"TestLoginComponentAbsent_ExistingSessionsKeepRefreshAndRevoke"},
 		"auth/authenticator.go:RefreshSession->NewCredential(PrefixScopedSession)": {"TestAScopedSessionRefreshKeepsItsScope"},
+		// the TOTP completions mint after the password already verified and
+		// the factor challenge consumed its pending credential; their refusal
+		// controls are the wrong-code/lockout/enrolment-required paths.
+		"auth/totp.go:CompleteTOTPLogin->mintSession":           {"TestTOTPLoginJourney", "TestTOTPThrottleLocksOut", "TestTOTPPolicyRequiresAdministrators"},
+		"auth/totp.go:CompleteExternalLogin->mintSession":       {"TestTOTPContinuationDirectMintWithoutFactor", "TestTOTPContinuationRefusesWithdrawnSource"},
+		"auth/totp.go:FinishTOTPEnrolmentForLogin->mintSession": {"TestTOTPPolicyRequiresAdministrators"},
 		// Store decoding constructs the typed value of an already persisted row.
 		"internal/store/sqlstore/authcatalog.go:authSessionCodec->AuthSession": {"TestInviteLoginPolicyAllowedAndNil"},
 	}

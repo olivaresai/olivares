@@ -25,7 +25,7 @@ import (
 // both engines over a sparse estate, through the statement the engine really
 // renders, with the keys it really seeded. It exists because the first plan
 // fixture explained literal keys that matched no row and, on PostgreSQL, a scan
-// node that never executed (independent review F1). The correctness oracle is
+// node that never executed (independent review finding 1). The correctness oracle is
 // computed in Go from the seed; the engine plan is evidence of COST, never the
 // sole correctness assertion.
 //

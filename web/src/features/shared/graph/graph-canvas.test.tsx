@@ -16,7 +16,7 @@
 // jsdom no hace layout, así que esta celda NO mide píxeles: mide el CONTRATO que hace posible la
 // medición — que el canvas acepte los cambios de dimensión y devuelva el nodo YA medido. Es lo
 // único que jsdom puede afirmar de verdad, y es exactamente lo que estaba roto.
-import { render, waitFor } from '@testing-library/react'
+import { act, render, waitFor } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
 
@@ -95,6 +95,85 @@ const NODES = [
 ]
 
 describe('GraphCanvas y las dimensiones que el minimapa necesita', () => {
+  it('keeps wrapped nodes apart and reflows after their labels resize', async () => {
+    const nodes = [
+      { id: 'A1', position: { x: 0, y: 0 }, data: {} },
+      { id: 'A2', position: { x: 0, y: 76 }, data: {} },
+      { id: 'R1', position: { x: 360, y: 0 }, data: {} },
+      { id: 'R2', position: { x: 360, y: 76 }, data: {} },
+    ]
+    const { rerender } = render(
+      <GraphCanvas nodes={nodes} edges={[]} verticalNodeGap={16} />,
+    )
+    const positions = () => capturado.nodes as typeof nodes
+    act(() =>
+      capturado.onNodesChange?.([
+        {
+          id: 'A1',
+          type: 'dimensions',
+          dimensions: { width: 230, height: 140 },
+        },
+        {
+          id: 'R1',
+          type: 'dimensions',
+          dimensions: { width: 270, height: 110 },
+        },
+      ]),
+    )
+    await waitFor(() => {
+      expect(positions().find((n) => n.id === 'A2')?.position).toEqual({
+        x: 0,
+        y: 156,
+      })
+      expect(positions().find((n) => n.id === 'R2')?.position).toEqual({
+        x: 360,
+        y: 126,
+      })
+    })
+    rerender(
+      <GraphCanvas
+        nodes={nodes.map((n) => ({ ...n }))}
+        edges={[]}
+        verticalNodeGap={16}
+      />,
+    )
+    await waitFor(() =>
+      expect(positions().find((n) => n.id === 'A2')?.position.y).toBe(156),
+    )
+    act(() =>
+      capturado.onNodesChange?.([
+        {
+          id: 'A1',
+          type: 'dimensions',
+          dimensions: { width: 230, height: 40 },
+        },
+        {
+          id: 'R1',
+          type: 'dimensions',
+          dimensions: { width: 270, height: 40 },
+        },
+      ]),
+    )
+    await waitFor(() => {
+      expect(positions().find((n) => n.id === 'A2')?.position.y).toBe(76)
+      expect(positions().find((n) => n.id === 'R2')?.position.y).toBe(76)
+    })
+    rerender(<GraphCanvas nodes={nodes} edges={[]} />)
+    act(() =>
+      capturado.onNodesChange?.([
+        {
+          id: 'A1',
+          type: 'dimensions',
+          dimensions: { width: 230, height: 140 },
+        },
+      ]),
+    )
+    await waitFor(() =>
+      expect(positions().map((n) => n.position)).toEqual(
+        nodes.map((n) => n.position),
+      ),
+    )
+  })
   /**
    * EL CONTROL: el canvas acepta `onNodesChange`. Sin él, React Flow v12 no tiene por dónde
    * devolver las medidas y el minimapa se queda vacío — que es el defecto que esta celda cierra.

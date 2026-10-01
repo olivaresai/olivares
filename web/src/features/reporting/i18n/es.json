@@ -58,7 +58,7 @@
     "description": "Postura de cumplimiento en vivo, el resumen ejecutivo de riesgo y el paquete de evidencia de auditoría firmado.",
     "request": "Pedir",
     "done": "Informe descargado",
-    "seam": "Este informe vive en un complemento que no está enlazado a este despliegue. No hay nada roto.",
+    "seam": "Este informe vive en un módulo que no está enlazado a este despliegue. No hay nada roto.",
     "posture": {
       "title": "Postura de cumplimiento",
       "description": "Estado por marco y control, calculado en vivo."

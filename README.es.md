@@ -1,60 +1,53 @@
 <div align="center">
 
-<a href="https://olivares.ai"><img src=".github/assets/olivares-banner.png" alt="Olivares AI — Ground truth para la IA empresarial" width="720"></a>
+<a href="https://olivares.ai"><img src=".github/assets/olivares-banner.png" alt="Olivares AI — Ground truth for enterprise AI" width="720"></a>
 
 **Idiomas:** [English](./README.md) · **Español** · [简体中文](./README.zh.md) · [Русский](./README.ru.md) · [日本語](./README.ja.md) · [Deutsch](./README.de.md) · [Français](./README.fr.md)
 
-**Ejecuta y gobierna la IA que ya usas — en tu propia infraestructura, con una sola ground truth.**
+**Ejecuta la IA que tu equipo ya usa, con el mismo control que tienes sobre el resto de tu infraestructura.**
 
-[Qué es](#qué-es) · [Qué hace](#qué-hace) · [Instalación](#instalación) · [Inicio rápido](#inicio-rápido) · [Consola](#un-vistazo-a-la-consola) · [Ediciones](#ediciones-y-precios) · [Documentación](#documentación) · [Seguridad](#seguridad) · [olivares.ai](https://olivares.ai)
+[Qué hace](#qué-hace) · [Instalación](#instalación) · [Consola](#un-vistazo-a-la-consola) · [Ediciones](#ediciones-y-precios) · [Documentación](#documentación) · [Comunidad](#comunidad) · [olivares.ai](https://olivares.ai)
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md)
-[![Release: v26.9.0](https://img.shields.io/badge/release-v26.9.0-28282B)](https://github.com/olivaresai/olivares/releases/tag/v26.9.0)
+[![Release: 26.10](https://img.shields.io/badge/release-26.10-28282B)](https://github.com/olivaresai/olivares/releases/tag/26.10.0)
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
 </div>
 
-> **Beta**, en desarrollo activo. **v26.9.0** se entrega con archivos firmados, paquetes nativos e imágenes de contenedor. Qué funciona hoy, qué está bajo demanda y qué se encuentra en fase de diseño se indica en [Honestidad y límites](docs-site/src/content/docs/start/honesty-and-limits.md).
+Tus desarrolladores trabajan con Claude Code y Codex. Los agentes llaman a servidores MCP, modelos y API internas, y las tareas programadas se ejecutan por su cuenta. Cada componente tiene sus propios registros y permisos, así que no es fácil responder a preguntas sencillas: ¿qué agente cambió este archivo?, ¿quién lo aprobó?, ¿cuánto nos costó la IA este mes?
 
-## Qué es
+Olivares AI reúne las respuestas en un solo lugar. Se conecta a los agentes y herramientas que ya usas, muestra qué hace cada uno, aplica tus reglas antes de ejecutar una acción y mantiene un registro firmado de todo. Es un único programa que se ejecuta en tus propios servidores, y el producto completo es gratuito y de código abierto.
 
-El estate de IA que tienes hoy son agentes de programación, servidores MCP, endpoints de modelos, cuentas de servicio y trabajos programados, repartidos por máquinas que nunca formaron un único sistema. Nadie puede decir, desde un solo lugar, qué se está ejecutando, quién lo puso en marcha, a qué llegó, cuánto costó y quién dio su conformidad.
-
-Olivares AI es **un único binario de Go autoalojado, con la consola incluida**, que mantiene ese estate unido: da a la IA lo que necesita para trabajar (contexto, acceso a recursos, sesiones gestionadas) y te da a ti los permisos, las políticas, los presupuestos y la evidencia para operarlo. Autoalojado, sin telemetría obligatoria, con instalaciones air-gapped admitidas.
-
-Claude Code se integra al nivel más profundo (el hook `PreToolUse`/`PostToolUse`, los ajustes gestionados, el inicio y la detención desde la consola); las CLI oficiales de Codex y Grok son drivers de sesión de primera clase; gemini-cli, Cursor, opencode, goose, cline, OpenHands, OpenClaw, Hermes y endpoints autoalojados como Ollama son conectores, cada uno indicando qué puede aplicar y qué solo puede observar. La build AGPL es todo el producto, nunca limitado por funcionalidades desde dentro; ningún plan cuenta usuarios.
+<div align="center">
+<img src=".github/assets/motion-access-map.gif" width="840" alt="Motion diagram of the read/write access map: agents, sessions and identities on the left, the resources they reach on the right, reads in blue, writes in orange, one observed write that was never permitted flagged as a drift finding.">
+<br><sub><b>El mapa de acceso</b> — lo que cada agente lee y escribe, y la escritura que nadie autorizó.</sub>
+</div>
 
 ## Qué hace
 
-<div align="center">
-<img src=".github/assets/motion-access-map.gif" width="840" alt="Diagrama en movimiento del mapa de acceso de lectura/escritura: agentes, sesiones e identidades a la izquierda, los recursos a los que llegan a la derecha, lecturas en azul, escrituras en naranja, una escritura observada que nunca fue permitida marcada como hallazgo de drift.">
-<br><sub><b>El mapa de acceso</b> — lo que lee y escribe cada agente en tu estate, lo permitido frente a lo observado.</sub>
-</div>
+- **Saber qué se está ejecutando.** Todos los agentes, sesiones, modelos, servidores MCP y herramientas en un inventario. El mapa de acceso muestra qué lee y escribe cada uno, y señala los accesos que ninguna regla permite.
+- **Detener una acción antes de que cause daños.** Olivares AI tiene **cuatro puntos de aplicación deny-closed** que comprueban cada acción antes de ejecutarla: dentro de Claude Code, en el proxy de modelos, en cada llamada a una herramienta MCP y entre agentes. Una acción de riesgo espera a una segunda persona; una acción prohibida no se ejecuta. Un solo interruptor detiene todos los agentes a la vez. Si una comprobación no puede decidir, la acción no se ejecuta.
+- **Controlar el gasto en IA.** Los presupuestos por equipo, agente o modelo avisan, frenan o detienen el gasto antes de que llegue la factura.
+- **Dar a los agentes acceso seguro al conocimiento de tu empresa.** Conecta SharePoint, Confluence, Google Drive, Notion, Salesforce, Snowflake, S3 y PostgreSQL. Cada agente ve solo lo que la persona que lo usa tiene permiso para ver.
+- **Continuar el trabajo entre sesiones.** Las tareas, los responsables y las decisiones se conservan cuando termina una sesión. Inicia, únete y detén sesiones de Claude Code, Codex y Grok desde el navegador, sin SSH.
+- **Aportar pruebas cuando te las pidan.** Cada decisión se guarda en un registro firmado que hace detectable cualquier modificación posterior. Tu equipo de seguridad y tus auditores obtienen sus informes de ese registro, con evidencias vinculadas a 26 catálogos de marcos.
 
-- **Véelo.** Inventario de los agentes, sesiones, modelos, servidores MCP, herramientas e identidades que los conectores observaron; un **mapa de acceso** de lectura/escritura con una vista de **drift** de Permitido frente a Observado; sesiones en vivo, el grafo de orquestación, salud y SLA. El acceso que no puede clasificar se marca como `unknown`, nunca se adivina. Un recurso que ningún conector observó no aparece, y esa ausencia no prueba que el recurso no exista.
-- **Ejecuta el trabajo.** Elementos de trabajo duraderos con titularidad, dependencias, criterios de aceptación y decisiones; leases vallados, para que dos agentes no puedan ser titulares del mismo trabajo a la vez; sesiones de Claude Code, Codex y Grok iniciadas, conectadas, interrumpidas y detenidas desde la consola; delegación a pares autorizados mediante A2A.
-- **Gobiérnalo y aplícalo.** Un motor de autorización Cedar y **cuatro puntos de aplicación deny-closed** — el hook de Claude Code, un proxy de inferencia `/v1/messages` en línea, una puerta MCP `tools/call` y una puerta de delegación A2A — para que una acción no autorizada se bloquee, quede retenida a la espera de la aprobación de dos personas o se reescriba antes de ejecutarse. Presupuestos que deniegan o limitan el gasto, break-glass con control dual y un **kill-switch** del estate que falla cerrado.
-- **Aliméntalo, con gobierno.** Fuentes de contenido (SharePoint, Confluence, Google Drive, Notion, Salesforce, Snowflake, S3, Azure AI Search, SAP OData, PostgreSQL, un sistema de ficheros confinado a su raíz) hacia una recuperación gobernada, con la habilitación aplicada deny-closed en el momento de la recuperación.
-- **Demuéstralo.** Un audit ledger encadenado mediante hashes y firmado con Ed25519; evidencia sellada mapeada a **26 catálogos de marcos** (EU AI Act, NIST AI RMF, ISO 42001, SOC 2, ISO 27001, GDPR…) — familias de controles autoevaluadas, no certificaciones; envío a SIEM/ITSM (CEF/LEEF/syslog/OTLP/OCSF); WebAuthn/FIDO2, PIV/CAC, SSO, SCIM, BYOK/CMEK y derecho al olvido verificado, configurados por despliegue.
-
-**31 módulos**, una consola, **159 integraciones** — recuentos derivados del código y aplicados en cada push por [`scripts/check-public-counts.sh`](scripts/check-public-counts.sh); el desglose está en [`connectors/README.md`](connectors/README.md), cada módulo con su madurez en el [catálogo de módulos](docs-site/src/content/docs/reference/modules/overview.md).
+Funciona con las herramientas que ya tienes: Claude Code, Codex, Grok, Cursor, gemini-cli, opencode, OpenHands y modelos locales mediante Ollama. **31 módulos** y **159 integraciones**, todos en la edición gratuita: [todos los módulos](docs-site/src/content/docs/reference/modules/overview.md) · [todos los conectores](connectors/README.md).
 
 ## Instalación
 
-Elige un método: un comando instala, y después `olivares quickstart` imprime la URL de la consola y el token de configuración de un solo uso. Cada versión está firmada con cosign, con procedencia SLSA y SBOM; cada vía de abajo verifica antes de instalar, y `scripts/verify-release.sh` comprueba una descarga manual (cosign + SHA-256, [cómo](INSTALL.md#verifying-a-release)). El motor es **seguro por defecto**: enlace a loopback, HTTPS en el primer arranque, sin credenciales predeterminadas, un token de configuración de un solo uso impreso al primer inicio.
+Elige un método y copia su bloque. Al terminar, `olivares quickstart` muestra la dirección de la consola y un token de un solo uso para crear el primer administrador. Todas las versiones están firmadas, y cada método verifica lo que descarga antes de instalarlo ([verificar una descarga por tu cuenta](INSTALL.md#verifying-a-release)).
 
-**1 · Un comando, Linux y macOS** — el instalador verificado: detecta el sistema operativo y la arquitectura, verifica los checksums firmados y el SHA-256 del archivo, instala solo el binario, nunca ejecuta `sudo`.
+**Linux y macOS, un comando.** Detecta tu sistema, verifica la versión, instala solo el binario y nunca usa `sudo`.
 
 ```sh
 curl -fsSL https://olivares.ai/olivares/install.sh | sh
-olivares quickstart        # prints the console URL and the one-time setup token
+olivares quickstart
 ```
 
-Añade `--user` para un servicio de usuario (unidad systemd de usuario o LaunchAgent), o ejecuta el script verificado desde un shell privilegiado con `--system --start` para un servicio de sistema. ¿Prefieres descargar, verificar y ejecutar a mano? La vía del binario manual y la matriz por sistema operativo: [`INSTALL.md`](INSTALL.md).
-
-**2 · Docker** — multi-arquitectura, distroless, sin root; se publica en todas las interfaces del host (antepón `127.0.0.1:` a los mapeos `-p` para mantenerlo local).
+**Docker.** Multi-arquitectura, distroless, sin root. Escucha en todas las interfaces del host; añade `127.0.0.1:` antes de cada `-p` para limitarlo al equipo local.
 
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
@@ -63,107 +56,126 @@ docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 
-`ghcr.io/olivaresai/olivares` es la misma imagen por digest; en producción, fija por digest. Variantes de imagen FIPS y STIG: [`INSTALL.md`](INSTALL.md#docker).
-
-**3 · Docker Compose** — una pila endurecida, SQLite de un solo nodo con Postgres y copia de seguridad opcionales.
+**Docker Compose.** SQLite en un solo nodo, con Postgres y copias de seguridad opcionales.
 
 ```sh
 git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 ```
 
-**4 · Kubernetes** — el chart de Helm del árbol, o un manifiesto plano sin Helm; la publicación OCI del chart no está verificada (`publication-unverified`: este repositorio nunca ejecutó su publicador de charts y no tiene etiqueta de chart ni asset de chart en una release, y el lado del registro no es observable).
+**Kubernetes.** El chart de Helm de este repositorio (el chart aún no tiene una versión publicada en OCI: `publication-unverified`).
 
 ```sh
+git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
-# or, Helm-free
+```
+
+Sin Helm:
+
+```sh
+git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 kubectl create namespace olivares-system && kubectl apply -n olivares-system -f deploy/manifests/install.yaml
 ```
 
-**5 · Paquetes Linux** — `.deb`, `.rpm`, `.apk` desde la [página de la versión](https://github.com/olivaresai/olivares/releases/tag/v26.9.0): el binario, un fichero env de ejemplo, un usuario `olivares` sin login y una unidad endurecida; el servicio no se arranca por ti.
+**Debian y Ubuntu.** El paquete añade un usuario `olivares` sin inicio de sesión y un servicio reforzado; tú lo inicias.
 
 ```sh
-sudo dpkg -i olivares_*_linux_amd64.deb        # Debian / Ubuntu   (sudo rpm -i … on RHEL / Fedora / SUSE; sudo apk add --allow-untrusted … on Alpine)
-sudo systemctl enable --now olivares           # OpenRC hosts: sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.deb
+sudo dpkg -i olivares_26.10.0_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 
-**6 · Homebrew** — macOS y Linux, comprobado contra los checksums firmados.
+**RHEL, Fedora y SUSE.**
+
+```sh
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.rpm
+sudo rpm -i olivares_26.10.0_linux_amd64.rpm && sudo systemctl enable --now olivares
+```
+
+**Alpine.**
+
+```sh
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_26.10.0_linux_amd64.apk && sudo rc-service olivares start
+```
+
+En servidores ARM, usa `arm64` en lugar de `amd64`. Todos los archivos de la versión: [página de la versión](https://github.com/olivaresai/olivares/releases/tag/26.10.0).
+
+**Homebrew.** macOS y Linux.
 
 ```sh
 brew install olivaresai/tap/olivares && olivares quickstart
 ```
 
-**7 · Desde el código fuente** — Go 1.26+, [Task](https://taskfile.dev), pnpm.
+**Desde el código fuente.** Go 1.26+, [Task](https://taskfile.dev) y pnpm.
 
 ```sh
+git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
 task build && ./bin/olivares quickstart
 ```
 
-**Air-gapped**: empaqueta la imagen firmada, el chart y el material de verificación y verifica sin red con `scripts/verify-release.sh --key … --offline` ([guía](docs-site/src/content/docs/how-to/air-gap-install.md)). **Windows** aún no se construye: ejecuta el contenedor Linux o WSL2 ([plan](INSTALL.md#windows)). Actualizaciones y rollback: [guía](docs-site/src/content/docs/how-to/upgrade-and-rollback.md).
+**Redes sin conexión:** reúne la imagen firmada, el chart y el material de verificación; después, [instala en un entorno aislado](docs-site/src/content/docs/how-to/air-gap-install.md). **Windows** aún no tiene un binario nativo: usa la imagen de Docker o WSL2. Actualizaciones y vuelta a una versión anterior: [guía](docs-site/src/content/docs/how-to/upgrade-and-rollback.md). Todas las opciones en detalle: [`INSTALL.md`](INSTALL.md).
 
-## Inicio rápido
+**Pruébalo primero con datos de demostración**, solo en tu equipo (la contraseña de la demo es pública):
 
 ```sh
-# a deterministic demo estate — loopback-only (the demo password is public), no real data
 olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.0.0.1:8902 --data-dir "$(mktemp -d)"
-# open http://127.0.0.1:8901 — inventory, work, orchestration, access map + drift, policies, FinOps
-
-# the real thing — TLS on, reachable from your network; create the first administrator with the printed token
-olivares quickstart
 ```
 
-La semilla de demostración es solo para aprender (contraseña pública en el árbol de fuentes): nunca la apuntes a datos reales. La CI recorre la misma ruta con `task smoke:quickstart` y comprueba los recuentos del mapa de acceso y el drift (20 nodos / 13 aristas, con 8 accesos inesperados y 2 concesiones sin uso). El [inicio rápido completo](docs-site/src/content/docs/start/quickstart.md) conecta un conector pgAudit real.
+Después, abre http://127.0.0.1:8901.
 
 ## Un vistazo a la consola
 
 | | |
 |---|---|
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-dark.png"><img src="docs-site/public/console/access-map-light.png" alt="Mapa de acceso: lo que lee y escribe cada agente en tu estate; orígenes a la izquierda, recursos a la derecha."></picture><br><sub><b>Mapa de acceso</b> — orígenes a la izquierda, recursos a la derecha, lectura y escritura por color.</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-drift-dark.png"><img src="docs-site/public/console/access-map-drift-light.png" alt="Drift de mínimo privilegio: accesos inesperados y concesiones sin uso superpuestos al mapa de acceso."></picture><br><sub><b>Drift de mínimo privilegio</b> — observado pero no permitido, y concesiones que nadie usa.</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/agentops-dark.png"><img src="docs-site/public/console/agentops-light.png" alt="Sesiones de Claude Code creadas, conectadas y gobernadas desde la consola."></picture><br><sub><b>Sesiones</b> — crea, conéctate y gobierna sesiones desde la consola, sin SSH.</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/work-dark.png"><img src="docs-site/public/console/work-light.png" alt="Trabajo: el backlog duradero entre sesiones de elementos de trabajo y decisiones."></picture><br><sub><b>Trabajo</b> — el backlog duradero entre sesiones: elementos, titularidad, aceptación, decisiones.</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/security-dark.png"><img src="docs-site/public/console/security-light.png" alt="Seguridad y forense: hallazgos de guardrails, la cola de anomalías y análisis forense a prueba de manipulación."></picture><br><sub><b>Seguridad y forense</b> — hallazgos de guardrails, anomalías, análisis forense a prueba de manipulación.</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/finops-dark.png"><img src="docs-site/public/console/finops-light.png" alt="FinOps: gasto por modelo, uso de tokens, presupuestos y una proyección de run-rate."></picture><br><sub><b>FinOps</b> — gasto por modelo y agente, presupuestos que deniegan o limitan, run-rate.</sub> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-dark.png"><img src="docs-site/public/console/access-map-light.png" alt="Access map: what each agent reads and writes across your estate, origins on the left, resources on the right."></picture><br><sub><b>Mapa de acceso</b> — quién lee y escribe qué.</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-drift-dark.png"><img src="docs-site/public/console/access-map-drift-light.png" alt="Least-privilege drift: unexpected accesses and unused grants overlaid on the access map."></picture><br><sub><b>Drift</b> — accesos que nadie autorizó y permisos que nadie usa.</sub> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/agentops-dark.png"><img src="docs-site/public/console/agentops-light.png" alt="Claude Code sessions created, attached to and governed from the console."></picture><br><sub><b>Sesiones</b> — inicia, únete y detén sesiones de agentes desde el navegador.</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/work-dark.png"><img src="docs-site/public/console/work-light.png" alt="Work: the durable cross-session backlog of work items and decisions."></picture><br><sub><b>Trabajo</b> — tareas, responsables y decisiones que perduran tras una sesión.</sub> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/security-dark.png"><img src="docs-site/public/console/security-light.png" alt="Security and forensics: guardrail findings, the anomaly queue and tamper-evident forensics."></picture><br><sub><b>Seguridad</b> — acciones bloqueadas, anomalías y un registro en el que cualquier alteración se detecta.</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/finops-dark.png"><img src="docs-site/public/console/finops-light.png" alt="FinOps: model spend, token usage, budgets and a run-rate projection."></picture><br><sub><b>Gasto</b> — coste por modelo y agente, presupuestos y previsiones.</sub> |
 
-Cada imagen fija es una captura del estate de demostración sembrado que sirve el binario en ejecución. El mapa completo de pantallas: la [referencia de la consola](docs-site/src/content/docs/reference/console.md).
+Todas las pantallas: [referencia de la consola](docs-site/src/content/docs/reference/console.md).
 
 ## Ediciones y precios
 
-La build AGPL es toda la plataforma, nunca limitada por funcionalidades desde dentro. Los add-ons comerciales son código aditivo encima, nunca funcionalidades retiradas; una suscripción es la credencial para descargar packs de módulos firmados. Las cuentas de usuario son ilimitadas en el motor autoalojado, y los **cuatro puntos de aplicación deny-closed** están abiertos.
+Community es el producto completo, gratuito y de código abierto. Business añade lo que una empresa necesita para usarlo en producción. Enterprise está pensado para grupos con infraestructuras más grandes o sujetas a regulación.
 
-| Edición | Para quién | Qué añade |
-|---|---|---|
-| **Community** | Cualquiera. Gratis, AGPL-3.0, usuarios ilimitados. | El producto completo, autoalojado. Sin puerta de licencia sobre el núcleo. |
-| **Business** | Una organización que lo adopta. Precio por despliegue, nunca por puesto. | Servicios y packs opcionales, no funciones del núcleo: la licencia comercial, un canal de versiones firmadas y mantenido, soporte por correo en horario laboral, y cuatro add-ons opcionales: **Regulated Operations**, **Compliance Packs**, **AI Runtime Security** e **Identity & Scale** (que incluye el cockpit de sesiones de las herramientas oficiales). Los cuatro juntos son **Business Max**. |
-| **Cloud** | Equipos que quieren el mismo plano operado por nosotros, prepago, sobre infraestructura compartida. | Un plano de control gestionado con topes publicados. No hay periodo de prueba de Cloud; la opción gratuita sigue siendo Community autoalojado. |
-| **Enterprise** | Estates regulados, multi-entidad y a gran escala. | Un contrato, acordado por correo y firmado en un pedido anual. |
+| | **Community** | **Business** | **Enterprise** |
+|---|---|---|---|
+| **Precio** | Gratis, AGPL-3.0 | 129 USD/mes o 1.290 USD/año | Contrato anual |
+| **Qué incluye** | El producto completo: usuarios ilimitados y los cuatro puntos de aplicación deny-closed | Todo lo de Community, más Regulated Operations, AI Runtime Security, Compliance Packs e Identity & Scale, la licencia comercial, actualizaciones firmadas y soporte por correo | Todo lo de Business, más empresas, despliegues y proveedores de identidad, réplicas sin conexión y condiciones de soporte acordadas contigo |
+| **Alcance** | Un proveedor de identidad activo | Una empresa, dos despliegues de producción con un entorno de staging cada uno, cinco proveedores de identidad | Según el contrato |
 
-Precios, la matriz de add-ons y las condiciones de compra: [olivares.ai/pricing](https://olivares.ai/pricing). La matriz de abierto/comercial/previsto: [`LICENSING.md`](LICENSING.md).
+**Regulated Operations** conserva los registros durante el plazo que exige la ley, con retención legal y archivos que nadie puede modificar. **AI Runtime Security** filtra lo que los agentes envían, reciben y ejecutan. **Compliance Packs** genera evidencias listas para ISO 42001, DORA y NIS 2. **Identity & Scale** conecta varios proveedores de identidad a la vez y permite crecer con despliegues más grandes.
+
+[olivares.ai/pricing](https://olivares.ai/pricing) · [Qué es abierto y qué es comercial](LICENSING.md)
 
 ## Arquitectura
 
-Un único binario estático de Go embebe la consola y expone cuatro superficies: la API REST (principal), un espejo gRPC acotado del núcleo estable, la CLI `olivares` y un proveedor de Terraform. Los collectors se ejecutan dentro de tu infraestructura; el almacén es SQLite o Postgres con seguridad a nivel de fila, aplicada una vez en la API del almacén y de nuevo por Postgres. El cuadro completo, incluido el plano de trabajo: [`ARCHITECTURE.md`](ARCHITECTURE.md).
+Un único binario de Go con la consola integrada. Ofrece una API REST, una API gRPC, la línea de comandos `olivares` y un proveedor de Terraform. Los colectores se ejecutan dentro de tu red, y los datos permanecen en SQLite o PostgreSQL en tus servidores. [Cómo encaja todo](ARCHITECTURE.md).
 
 ## Documentación
 
-[docs.olivares.ai](https://docs.olivares.ai) — tutoriales de instalación probados (nodo único, Docker Compose, Kubernetes/Helm, air-gapped), guías de conectores con capturas reales de la consola, un recetario (políticas deny-closed, presupuestos, aprobaciones, ejercicios de kill-switch, envío a SIEM), referencia de API y un glosario. Empieza por [Qué es Olivares AI](docs-site/src/content/docs/start/what-is-olivares-ai.md). En el sitio: [producto](https://olivares.ai/product) · [soluciones](https://olivares.ai/solutions) · [cómo funciona](https://olivares.ai/how-it-works) · [arquitectura](https://olivares.ai/architecture) · [seguridad](https://olivares.ai/security) · [confianza](https://olivares.ai/trust) · [comparar](https://olivares.ai/compare) · [demo](https://olivares.ai/demo) · [changelog](https://olivares.ai/changelog) · [estado](https://olivares.ai/status) · [hoja de ruta](https://olivares.ai/roadmap) · [marca](https://olivares.ai/brand) · [prensa](https://olivares.ai/press). Versiones: [GitHub](https://github.com/olivaresai/olivares/releases) · [`CHANGELOG.md`](CHANGELOG.md).
+[docs.olivares.ai](https://docs.olivares.ai) contiene guías de instalación, una guía para cada conector, recetas para políticas habituales y la referencia de la API. Empieza por [Qué es Olivares AI](docs-site/src/content/docs/start/what-is-olivares-ai.md). Lo que funciona hoy y lo que sigue previsto: [Honestidad y límites](docs-site/src/content/docs/start/honesty-and-limits.md). Versiones: [GitHub](https://github.com/olivaresai/olivares/releases) · [`CHANGELOG.md`](CHANGELOG.md).
+
+En la web: [producto](https://olivares.ai/product) · [soluciones](https://olivares.ai/solutions) · [cómo funciona](https://olivares.ai/how-it-works) · [arquitectura](https://olivares.ai/architecture) · [seguridad](https://olivares.ai/security) · [confianza](https://olivares.ai/trust) · [comparar](https://olivares.ai/compare) · [demo](https://olivares.ai/demo) · [changelog](https://olivares.ai/changelog) · [estado](https://olivares.ai/status) · [hoja de ruta](https://olivares.ai/roadmap) · [marca](https://olivares.ai/brand) · [prensa](https://olivares.ai/press).
 
 ## Seguridad
 
-Comunica una vulnerabilidad de forma privada mediante [`SECURITY.md`](SECURITY.md), nunca como una issue pública. El motor es de lectura primero y opera con datos mínimos: el mapa de acceso almacena aristas, no payloads, y abrirlo es una acción registrada. Verificar una licencia nunca nos llama; el núcleo AGPL no hace ninguna llamada de licencia. Flujo de avisos: [`docs/security-advisories.md`](docs/security-advisories.md); evidencia de la cadena de suministro: [`docs/openssf-badge.md`](docs/openssf-badge.md).
+¿Has encontrado una vulnerabilidad? Comunícala en privado siguiendo [`SECURITY.md`](SECURITY.md). Olivares AI registra qué agente accedió a qué recurso, no el contenido, y la consulta de ese registro también queda registrada. Las licencias se comprueban sin conexión; el núcleo de código abierto nunca se comunica con nosotros.
 
 ## Comunidad
 
-[`CONTRIBUTING.md`](CONTRIBUTING.md) (configuración, DCO/CLA, SPDX, la frontera de conectores) · [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) · [`SUPPORT.md`](SUPPORT.md) · [`GOVERNANCE.md`](GOVERNANCE.md) · [`CHANGELOG.md`](CHANGELOG.md) (Keep a Changelog, CalVer `vYY.M.PATCH`).
-
-## Licencia
-
-`core/`, `modules/` y `web/` son **AGPL-3.0-only**; `sdk/`, `connectors/` y `clients/` son **Apache-2.0**, y un conector nunca importa el motor. Los add-ons comerciales son independientes, opcionales y de código cerrado — se construyen solo con `-tags enterprise`, nunca en este repositorio; licencias comerciales: `enterprise@olivares.ai` — [`LICENSING.md`](LICENSING.md). Las contribuciones requieren un sign-off DCO (`git commit -s`) y el [CLA](CLA.md).
-
-> **Sin garantía, sin responsabilidad.** El software se proporciona **tal cual**, **sin garantía de ningún tipo** y **sin responsabilidad por pérdida de datos, interrupción del negocio o lucro cesante**. En un plano de control no es una formalidad: una mala configuración puede bloquear trabajo legítimo o dejar pasar exactamente lo que pretendías detener. Se aplican AGPL-3.0-only §§15–16, Apache-2.0 §§7–8 y el término suplementario de este proyecto — [`DISCLAIMER.md`](DISCLAIMER.md).
+Las contribuciones son bienvenidas. [`CONTRIBUTING.md`](CONTRIBUTING.md) explica la preparación del entorno, el sign-off y cómo encajan los conectores. [Código de conducta](CODE_OF_CONDUCT.md) · [Soporte](SUPPORT.md) · [Gobernanza](GOVERNANCE.md) · [Registro de cambios](CHANGELOG.md).
 
 ## Apoya el proyecto
 
-El núcleo es libre y seguirá siéndolo; mantener cada versión firmada, verificada y al día es un trabajo sostenido. Patrocínalo mediante GitHub Sponsors — [github.com/sponsors/olivaresai](https://github.com/sponsors/olivaresai) o [github.com/sponsors/fran-olivares](https://github.com/sponsors/fran-olivares) — o con una aportación puntual en Ko-fi. El patrocinio no es un contrato de soporte ([`SUPPORT.md`](SUPPORT.md)); quienes pidan figurar aparecen en [`SUPPORTERS.md`](SUPPORTERS.md).
+Olivares AI se desarrolla de forma abierta. Si te resulta útil, patrocina su desarrollo en GitHub Sponsors — [olivaresai](https://github.com/sponsors/olivaresai) o [fran-olivares](https://github.com/sponsors/fran-olivares) — o invítanos a un café en Ko-fi. Los patrocinadores que quieran aparecer figuran en [`SUPPORTERS.md`](SUPPORTERS.md). El patrocinio no es un contrato de soporte ([`SUPPORT.md`](SUPPORT.md)).
 
 [![ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/Z1R625SAD2)
+
+## Licencia
+
+El motor, los módulos y la consola son **AGPL-3.0-only**; el SDK, los conectores y los clientes son **Apache-2.0**. El código comercial se compila por separado y no está en este repositorio; licencias comerciales: `enterprise@olivares.ai`. Las contribuciones necesitan un sign-off DCO (`git commit -s`) y el [CLA](CLA.md).
+
+> Se proporciona **tal cual**, sin garantía de ningún tipo ni responsabilidad por pérdida de datos, interrupción del negocio o lucro cesante. Consulta [`DISCLAIMER.md`](DISCLAIMER.md).
 
 ---
 

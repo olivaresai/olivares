@@ -1,6 +1,6 @@
 {
   "_": [
-    "ROUTE CENSUS \u2014 every path the application MOUNTS. APPEND-ONLY.",
+    "ROUTE CENSUS — every path the application MOUNTS. APPEND-ONLY.",
     "Not just the feature registry: the public legs (/login, /setup, /accept-invite,",
     "/status-page) and /settings are routes too, and deleting one is the same loss.",
     "Adding a route? Append its path. Retiring one? Do NOT delete the line: declare a",
@@ -15,6 +15,7 @@
     "/access-map",
     "/adoption",
     "/agent-artifacts",
+    "/agent-tools",
     "/agentcore-export",
     "/agentops",
     "/alerting",
@@ -43,11 +44,13 @@
     "/communications/protocol-bindings",
     "/compliance",
     "/console",
+    "/console/sources/diff",
     "/dashboards",
     "/deploy",
     "/evals",
     "/eventing",
     "/finops",
+    "/git-publication",
     "/health",
     "/identity",
     "/inference-proxy",
@@ -86,8 +89,6 @@
     "/voice",
     "/work",
     "/workspace",
-    "/workspace-templates",
-    "/console/sources/diff",
-    "/git-publication"
+    "/workspace-templates"
   ]
 }

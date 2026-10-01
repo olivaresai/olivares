@@ -247,10 +247,13 @@ type CredentialRequest struct {
 // (injected as ANTHROPIC_AUTH_TOKEN, used, discarded — NEVER persisted/logged);
 // ID and Scheme are non-sensitive and the only parts that reach the ledger.
 type Credential struct {
-	ID       string
-	Token    string
-	Scheme   string
-	NotAfter time.Time
+	// localModelEndpoint is non-secret first-party endpoint authority. Only a
+	// validated Ollama record sets it; it is never persisted or read from env.
+	localModelEndpoint string
+	ID                 string
+	Token              string
+	Scheme             string
+	NotAfter           time.Time
 }
 
 // Expired reports whether the credential is past its lifetime (a zero NotAfter is
@@ -287,11 +290,15 @@ func (f CredentialSourceFunc) Mint(ctx context.Context, req CredentialRequest) (
 // mint an Olivares API bearer for the exact canonical SID. The module calls this
 // only after admission acquired the live Claim.
 type WorkSessionCredentialRequest struct {
-	Tenant     model.TenantID
-	SessionRef string
-	RunRef     string
-	AgentRef   string
-	ClaimFence int64
+	// Only Mint receives the server-resolved grant snapshot. Cleanup and renewal
+	// re-prove the stored runtime binding and never accept a launch override.
+	OrchestrationProfileRef string
+	OrchestrationGrant      string
+	Tenant                  model.TenantID
+	SessionRef              string
+	RunRef                  string
+	AgentRef                string
+	ClaimFence              int64
 }
 
 // WorkSessionCredential is a short-lived, purpose-restricted kernel bearer.

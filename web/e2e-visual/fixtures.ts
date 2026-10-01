@@ -2418,6 +2418,20 @@ export function frameworkStatusFor(id: string) {
 }
 
 export function fixtureFor(pathname: string): unknown | null {
+  if (pathname === '/v1/m/agenttools/inventory')
+    return {
+      drivers: ['claude', 'codex', 'grok', 'opencode', 'ollama'],
+      verification_levels: {
+        claude: 'openpgp',
+        codex: 'sigstore-cosign',
+        grok: 'none-origin-only',
+        opencode: 'github-release-sha256',
+        ollama: 'github-release-sha256',
+      },
+      inventory: { installed: [], leftovers: [] },
+      read_only: false,
+      jobs: [],
+    }
   if (pathname.endsWith('/v1/m/adoption/discrepancy'))
     return adoptionDiscrepancy
   if (pathname.endsWith('/v1/m/adoption/developers')) return adoptionDevelopers

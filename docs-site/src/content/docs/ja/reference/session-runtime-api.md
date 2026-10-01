@@ -18,7 +18,7 @@ description: >-
 | エディション | 行うこと | 行わないこと |
 |---|---|---|
 | **Community（本ページ）** | 所有するローカル子プロセス：起動、stdin/stdout/stderr、カーソル付き attach、正確な会話の resume、生きているストリームの reconnect、観測した終了ステータスでの stop。セッション行と証拠はモジュール II に残る。 | Identity & Scale の複数ペインエンジン、mTLS リスナー、商用入力セッション、xterm UI チャンク |
-| **Identity & Scale オーバーレイ** | 商用 session-cockpit エンジン（リスナー、ペイン、台帳）。アドオンがあるとき `/v1/m/session-cockpit/` 下に載る。 | `/v1/m/sessions/runs` を置き換えない |
+| **Identity & Scale オーバーレイ** | 商用 session-cockpit エンジン（リスナー、ペイン、台帳）。モジュールがあるとき `/v1/m/session-cockpit/` 下に載る。 | `/v1/m/sessions/runs` を置き換えない |
 
 Community ビルドはオーバーレイ名前空間に **不在**（404）で答える。501 スタブは
 載せない。

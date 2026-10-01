@@ -45,6 +45,18 @@ type AuthScope interface {
 	//: public verifier material per user, looked up by
 	// user_id (a user's authenticators) or credential_id (assertion lookup).
 	WebAuthnCredentials() Repository[model.WebAuthnCredential]
+	// TOTPCredentials is the RFC 6238 second-factor repository : at most one
+	// sealed-seed credential per local account, looked up by account_id. The
+	// seed is sealed at rest; only the verification path opens it.
+	TOTPCredentials() Repository[model.TOTPCredential]
+	// TOTPRecoveryCodes is the single-use recovery-code repository of the TOTP
+	// factor: SHA-256 hashes only, enumerated by account_id and regenerated
+	// wholesale at (re)activation.
+	TOTPRecoveryCodes() Repository[model.TOTPRecoveryCode]
+	// AuthPolicy is the deployment's local-account security policy singleton
+	// : at most one row; an absent row is the default posture. The reader,
+	// not the store, treats "no row" and "row, false" alike.
+	AuthPolicy() Repository[model.AuthPolicy]
 	// Invites is the pending-onboarding-invitation repository (FASE X):
 	// single-use tokens (selector + secret hash) to activate a non-federated
 	// account, looked up by selector (the accept leg) or filtered by

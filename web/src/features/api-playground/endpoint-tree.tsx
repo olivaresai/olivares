@@ -127,7 +127,7 @@ export function EndpointTree({
                         aria-current={isSelected ? 'true' : undefined}
                       >
                         <MethodBadge method={ep.method} />
-                        <span className="min-w-0 flex-1 truncate font-mono text-foreground">
+                        <span className="min-w-0 flex-1 whitespace-normal font-mono [overflow-wrap:anywhere] text-foreground">
                           {ep.path}
                         </span>
                       </button>

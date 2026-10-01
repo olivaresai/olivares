@@ -5,7 +5,7 @@
 // C15-P3 — the last of the 53 console features with no test at all.
 //
 // The two properties worth pinning are not "it renders": they are the two ways this screen can
-// LIE. Without a workspace selected it must ask no question of the engine, and without a summary
+// LIE. Without a workspace selected it must request no workspace content, and without a summary
 // it must say it does not know instead of printing a zero.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
@@ -33,6 +33,17 @@ vi.mock('@/stores/workspace', () => ({
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ activeTenant: 't1' }),
 }))
+
+vi.mock('@/features/console/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/console/api')>()
+  return {
+    ...actual,
+    consoleApi: {
+      ...actual.consoleApi,
+      listWorkspaces: () => Promise.resolve({ items: [], has_more: false }),
+    },
+  }
+})
 
 const summaryMock = vi.fn()
 const agentsMock = vi.fn()
@@ -79,7 +90,8 @@ beforeEach(() => {
 
 describe('WorkspaceDashboardView', () => {
   /**
-   * THE CONTROL: with NO workspace selected the view asks the engine nothing.
+   * THE CONTROL: with NO workspace selected the view reads no workspace content.
+   * The authorized workspace catalog is still available for explicit selection.
    *
    * THE MUTATION: move the guard below the queries — the screen still renders, and the three
    * reads go out with an empty workspace id. That is a request the engine answers 400 for, on
@@ -88,7 +100,7 @@ describe('WorkspaceDashboardView', () => {
    * THE NON-FIRING DIRECTION is the next case: with a workspace the reads MUST happen, so a
    * view that never queried would satisfy this one and fail that.
    */
-  it('asks the engine nothing until a workspace is chosen', async () => {
+  it('does not read workspace content until a workspace is chosen', async () => {
     show()
     expect(
       await screen.findByText(/Select a workspace in the navigation rail/i),

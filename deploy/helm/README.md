@@ -6,7 +6,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 The Kubernetes distribution channel for the engine (SCP-05). The chart source ships
 in this repository; its publication to the public OCI registry is **unverified** as of the
-v26.9.0 engine release. It is not published to the public OCI registry from this repository:
+26.10.0 engine release. It is not published to the public OCI registry from this repository:
 no independent `chart-v*` tag has exercised the chart workflow, and REL-87, the publication
 act, has not completed. Whether the registry holds the chart is not established, because it
 refuses an anonymous read. Install from the source tree today. Do not present the OCI

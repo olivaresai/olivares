@@ -117,7 +117,21 @@
     "profileHint": "请选择此会话的提供方配置档案。必须选择档案。本地要求在模板预览之后按当前选择读取。",
     "profileNotOperable": "在此环境未启用",
     "profilesNotRead": "无法读取提供商配置档案；仍可在没有配置档案的情况下启动。",
-    "profileEnvConflict": "HOME、CLAUDE_CONFIG_DIR、CODEX_HOME 和 GROK_HOME 属于配置档案：此处会拒绝转发其中任一变量的启动。其他名称仍需通过服务端自身的校验。"
+    "profileEnvConflict": "HOME、CLAUDE_CONFIG_DIR、CODEX_HOME 和 GROK_HOME 属于配置档案：此处会拒绝转发其中任一变量的启动。其他名称仍需通过服务端自身的校验。",
+    "identity": {
+      "title": "启动身份",
+      "hint": "选择代表人类赞助者的已准入代理。仅有人类访问权限不会授予代理权限。",
+      "human": "当前人类操作员",
+      "agent": "已准入代理（代表赞助者）",
+      "required": "编排配置需要独立验证的代理身份。",
+      "choose": "代理身份",
+      "sponsorHint": "启动前服务器验证代理、生命周期和赞助关系。",
+      "placeholder": "选择已准入代理",
+      "readRequired": "需要NHI读取权限。",
+      "loading": "正在加载代理身份…",
+      "loadFailed": "身份列表不可用。",
+      "loadMore": "加载更多身份"
+    }
   },
   "detail": {
     "live": "实时",
@@ -543,6 +557,50 @@
       "loadMoreProfiles": "加载更多配置文件",
       "loadedProfiles": "已加载 {{n}} 个活跃配置文件；还有更多。",
       "loadingProfiles": "正在加载配置文件…"
+    },
+    "workGrant": {
+      "title": "编排权限",
+      "hint": "在一个工作区中授予操作权限。编排会话必须以已认证的代理身份启动。",
+      "readPending": "正在等待已验证的配置档案读取以确认权限。",
+      "none": "未授予编排权限",
+      "workspace": "工作区 ID",
+      "actions": "允许的操作",
+      "edit": "编辑编排授权",
+      "revoke": "撤销编排授权",
+      "replaceHint": "保存或撤销会替换授权，并立即移除此前的会话权限。恢复会话以使用新授权。",
+      "revokeConfirm": "撤销授权",
+      "save": "保存授权",
+      "saved": "编排授权已保存",
+      "revoked": "编排授权已撤销",
+      "invalidWorkspace": "请输入规范的 UUIDv7 工作区 ID。",
+      "capabilities": {
+        "work_read": "读取工作",
+        "work_create": "创建工作",
+        "work_assign": "分配工作",
+        "work_review": "审核结果",
+        "decision_read": "读取决策",
+        "decision_write": "发布决策"
+      }
+    },
+    "authentication": {
+      "title": "提供商身份验证",
+      "source": "身份验证来源",
+      "hint": "选择今后启动使用的权限。默认不授权任何来源。",
+      "none": "未授权",
+      "accountHome": "保存在配置目录中的登录",
+      "managed": "受管理的提供商凭据",
+      "provider": "提供商",
+      "providerHint": "仅显示兼容的活动提供商。服务器将在启动时再次检查。",
+      "chooseProvider": "选择提供商",
+      "readRequired": "需要提供商读取权限。",
+      "loadFailed": "提供商列表不可用。",
+      "retry": "重试",
+      "loading": "正在加载提供商…",
+      "loadMore": "加载更多提供商",
+      "edit": "编辑提供商身份验证",
+      "launchHint": "更改适用于今后的启动。运行中的进程保留现有身份验证。",
+      "save": "保存身份验证",
+      "saved": "身份验证已保存"
     }
   },
   "accounts": {

@@ -30,7 +30,7 @@ eso decirte que «no bloquea nada» sería incorrecto.
 | Has comprado | Qué recibes | Qué haces con ello |
 |---|---|---|
 | Community | nada que instalar | ya está en ejecución; nada de esta página se aplica |
-| Business / Business Max, autoalojado | un **fichero de licencia** y un **token de descarga** | instala la licencia y cambia al binario enterprise |
+| Business / Enterprise, autoalojado | un **fichero de licencia** y un **token de descarga** | instala la licencia y cambia al binario enterprise |
 | Cloud | credenciales para un tenant alojado | nada que instalar en un host tuyo |
 
 La licencia es un único blob firmado. Guárdalo como fichero —`customer.license`, o con
@@ -114,6 +114,13 @@ Ejecútalo después de cada instalación y después de retirar un override.
 
 ## 3 · Community → Business, in-place
 
+:::note[Business y el canal de artefactos comerciales]
+La opción `--enterprise` nombra el canal de artefactos comerciales, no la edición.
+Las ediciones son Community, Business y Enterprise. Business incluye Regulated Operations,
+AI Runtime Security, Compliance Packs e Identity & Scale en una suscripción.
+Cada familia se puede activar o desactivar; ninguna se vende por separado.
+:::
+
 Con una licencia instalada, el binario enterprise está a una descarga de distancia. No se
 reinstala nada ni se mueve ningún dato:
 
@@ -130,14 +137,14 @@ anterior. Usa primero `--check` si quieres ver el plan sin aplicarlo:
 olivares upgrade --enterprise --token <TOKEN> --check
 ```
 
-Reinicia el servicio y activa después los add-ons:
+Reinicia el servicio y activa después los módulos:
 
 ```sh
 olivares enterprise enable <preset>     # starter | regulated | full
 ```
 
 La activación está gobernada y auditada: primero muestra un diff y deja en preparación
-cualquier add-on que necesite un secreto o una revisión, en lugar de activarlo a medias.
+cualquier módulo que necesite un secreto o una revisión, en lugar de activarlo a medias.
 `olivares enterprise status` informa de qué está activo. Estos comandos existen **solo en el
 binario enterprise**: si `olivares enterprise` no es un comando, todavía ejecutas la
 compilación Community y el cambio anterior aún no se ha producido.

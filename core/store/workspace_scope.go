@@ -1112,3 +1112,6 @@ func (s *workspaceConfinedScope) Ext(kind model.Kind) (GenericRepo, error) {
 }
 
 func (s *workspaceConfinedScope) authorityReadScope() Scope { return s.raw }
+
+// Sealed to store; ListInheritedExtension returns rows, never this scope.
+func (s *workspaceConfinedScope) inheritedReadScope() Scope { return s.raw }

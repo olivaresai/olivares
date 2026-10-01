@@ -138,7 +138,7 @@ function CommNode({ data }: NodeProps<Node<CommNodeData>>) {
             is worse than one labelled by its reference. */}
         <div
           className={cn(
-            'max-w-[170px] truncate text-caption text-foreground',
+            'max-w-[170px] whitespace-normal text-caption [overflow-wrap:anywhere] text-foreground',
             !sessionName && 'font-mono',
           )}
           title={data.ref}

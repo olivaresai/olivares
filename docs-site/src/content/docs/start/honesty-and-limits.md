@@ -33,9 +33,9 @@ cover something, the page says so rather than implying it does.
   is rendered from the product's own OpenAPI 3.1 contract. The audit ledger is
   append-only and hash-chained with Ed25519-signed checkpoints, and can be exported
   in several SIEM formats.
-- **Releases are signed and verifiable offline.** Signature, SLSA provenance, SBOM
-  and OpenVEX can all be [verified without network access](/how-to/verify-a-release/),
-  and the product ships an [air-gap bundle](/how-to/air-gap-install/). The latest tagged release, **v26.9.0**, is published with signed archives, native packages and container images; APIs, schemas and the module surface may still change before 1.0.
+- **Releases are signed and verifiable.** Signatures, SLSA provenance, SBOM and OpenVEX can all be
+  [verified](/how-to/verify-a-release/). Verification is not yet fully network-free: keyless checks need Sigstore trusted-root
+  material and the SLSA step has no offline mode. The product ships an [air-gap bundle](/how-to/air-gap-install/). The latest tagged release, **26.10.0**, is published with signed archives, native packages and container images; APIs, schemas and the module surface may still change before 1.0.
 
 ## Open core — what is open vs enterprise
 
@@ -53,16 +53,16 @@ rather than faking them:
   IdP returns `multi_idp_requires_enterprise` — an explicit product limit, never a
   fake 501.
 - **There is no user cap — accounts are unlimited in every edition.** Community,
-  Business, the add-ons and Enterprise self-hosted all admit an unlimited number of
+  Business and Enterprise self-hosted all admit an unlimited number of
   user accounts, whatever the license state: valid, expired, or none at all. The cap of
   three active accounts that shipped before 2026-07-27 was removed outright (the seat
   seam is still in the code, as a compatibility no-op that refuses nothing), and a
   license lapse never caps, disables or deletes an account. The commercial model is a
-  term-based entitlement to the add-ons, never a per-seat charge.
+  term-based entitlement to the modules, never a per-seat charge.
 - **The rest of the platform is open.** The full governance loop — inventory, the
   R/RW access map, RBAC/ABAC/Cedar policy, the sealed audit ledger, FinOps,
   compliance, SIEM egress, MCP, HA/distributed — runs in the open binary with no
-  license check. The additive `enterprise/` add-ons (multi-IdP federation, content
+  license check. The additive `enterprise/` modules (multi-IdP federation, content
   firewall/DLP, hook hardening, the compiled threat-intel catalog, server-tool egress, the
   CyberArk Conjur connector, and the incident close-loop) are
   new code that was never in the open product, not features removed from it. License
@@ -137,7 +137,7 @@ Treat module-level depth as **work in progress** unless a page states otherwise.
   Models you genuinely self-host (e.g. via vLLM/Ollama under module XXIII) can run
   air-gapped; brokered frontier models cannot.
 - **Module routes are a separate, beta contract.** The module endpoints (for
-  example the access-map graph and drift) are not part of the 54-path stable core
+  example the access-map graph and drift) are not part of the 67-path stable core
   contract; they are published as a separate **beta** document — the
   [module-route reference](/reference/api-beta/) (served at `/openapi.beta.json`).
   Beta means the shapes may change with notice, and field-level detail still lives

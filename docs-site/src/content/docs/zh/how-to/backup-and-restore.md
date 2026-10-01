@@ -17,6 +17,8 @@ description: >-
 （`--kek-key-file`）；二者必须且只能提供其一。审计与目录签名密钥以**密封**
 形式随捆绑包一同传输。
 
+**26.10 中已登记的 DR 恢复控制支持 PostgreSQL 15、16、17 和 18**（在 15.19、16.15、17.11 和 18.6 上测量）。其他主版本会被拒绝，并返回 `DR restore control contract: PostgreSQL major <major> is unsupported (verified contracts: 15, 16, 17, 18)`，其中 `<major>` 是检测到的服务器主版本。控制绝不会被修复：在原地升级主版本后，若控制与新主版本的系统目录和权限不匹配，就会被拒绝。
+
 ## 备份
 
 **SQLite**（单节点）—— 在 `serve` 运行时也可安全执行（快照使用

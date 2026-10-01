@@ -442,6 +442,30 @@ describe('SessionViewerPage', () => {
     wrap(<SessionViewerPage />)
     expect(screen.getByText('Recording session not found')).toBeInTheDocument()
   })
+
+  it('shows not-found when the recording read returns 404', async () => {
+    api.unified.mockRejectedValue(new ApiError(404, 'not_found', 'not found'))
+    wrap(<SessionViewerPage />)
+    expect(
+      await screen.findByText('Recording session not found'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Retry' }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('keeps a failed recording read distinct from not-found', async () => {
+    api.unified.mockRejectedValue(new ApiError(500, 'internal', 'read failed'))
+    wrap(<SessionViewerPage />)
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Something went wrong',
+    )
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(
+      screen.queryByText('Recording session not found'),
+    ).not.toBeInTheDocument()
+  })
 })
 
 describe('UnifiedTimeline', () => {

@@ -16,51 +16,10 @@ import { cn } from '@/lib/utils'
 import { PagePrimaryActionSlot, PageSecondaryActionsSlot } from './page-actions'
 
 /**
- * PageHeader — the ONE title line of a management view: the page `<h1>`, its
- * description beside it, a row of secondary controls and, last and rightmost, THE
- * PRIMARY ACTION.
- *
- * ⛔ IT IS ONE LINE NOW, AND IT USED TO BE THREE. Measured on
- *    `192-review-home-1440-light.png` at scale 1: a 36 px icon chip, a 24 px `h1` and a
- *    22–44 px description block — about 82 px before any content, on 77 routes, under a
- *    48 px header, and on fourteen of them under a further 36 px notice. The capture
- *    review put that at *"the top 190 px"*; the owner put it as *"igual de fea y
- *    antigua"*. In 23 captures of the product named as the standard, the number of
- *    screens with a description paragraph under a heading is ZERO.
- *
- * ⇒ WHAT CHANGED, AND WHAT DID NOT:
- *    · the icon chip is gone — the rail row and the breadcrumb already name the screen,
- *      and a third copy of its glyph cost 36 px of every viewport;
- *    · the `h1` steps down the SAME ladder, from `text-display` to `text-title`;
- *    · the description stays in the DOM, on the title line, as ONE truncating line with
- *      the full text as its `title`. It is not deleted and it is not hidden: a
- *      screen-reader user reads exactly what they read before, and a sighted user reads
- *      it in 28 px instead of 82.
- *
- *    The `icon` prop is kept and ignored on purpose: 33 views pass it, and a required
- *    change at 33 call sites to remove 36 px would be a merge conflict with every lane
- *    in flight for no behaviour. It is deprecated in place — see the prop.
- *
- * ⛔ WHY `primaryAction` IS ITS OWN SLOT AND NOT "the first child of `actions`".
- *    A review of the console recorded the defect this closes: the front door offered
- *    "six read-only cards, no action anywhere on the page". A single `actions` bag cannot be measured — a header with a range
- *    picker in it looks, to any test and to any census, exactly like a header with a
- *    "New policy" button in it. A named slot can: `page-header.test.tsx` asserts that
- *    the primary action is the LAST control in the header, and a screen that offers
- *    nothing says so by leaving the slot empty rather than by hiding it among filters.
- *
- *    A TABBED screen fills this slot from inside its active tab, through
- *    `PagePrimaryAction` — see page-actions.tsx for why that is a slot and not a prop.
- *
- * ⛔ AND WHY THE HEADING NO LONGER SPELLS ITS OWN TYPE. It used to be
- *    `font-display text-xl font-semibold tracking-tight` written by hand — four
- *    decisions, repeated in six places with three different sizes (measured 2026-09-17:
- *    `text-xl` here and in IntelPage, `text-lg` in login/setup/accept-invite/tenant-gate,
- *    `text-2xl` in settings and the status page). `text-title` is one token that
- *    carries size, leading, tracking and weight together (web/tokens/console/primitives.tokens.json,
- *    the `type` group), so the ladder moves in one place or not at all — which is
- *    exactly what the work-first pass then used to step the heading DOWN one rung,
- *    in one edit, for all 77 routes. A hand-written stack would have been 77 edits, or (more likely) six.
+ * Shared page chrome: title and controls, then the complete description and notices.
+ * Titles and descriptions may wrap; action slots and phone disclosure retain their
+ * existing keyboard and permission behavior. The 26.10.1 layout audit supersedes the
+ * earlier one-line description budget because it hid counts, scope and recovery text.
  */
 export interface PageHeaderProps {
   title: ReactNode
@@ -176,20 +135,9 @@ export function plainText(node: ReactNode): string | undefined {
   return undefined
 }
 
-/**
- * The 36 px row a tabbed screen shares between its header and its tab strip.
- *
- * WHO GIVES WAY, IN ORDER: the description first (it asks for no width of its own), then
- * the tab strip (it scrolls under its own buttons), then the header's controls (they
- * shrink and may scroll), and never the screen's name — `min-content` is the whole name
- * because the name does not wrap and the controls no longer set that floor. The strip's
- * track is `auto`: it takes its natural width when the row has it, and when its tabs are
- * wider than the row can give it scrolls under its own buttons — a screen with many tabs
- * needs that affordance at any width. `relative`: the row is what a phone's panel of
- * collapsed controls hangs from.
- */
+/** Shared title/tab chrome reflows instead of imposing a fixed line height. */
 export const WORK_CHROME_ROW =
-  'relative grid h-9 min-w-0 grid-cols-[minmax(min-content,1fr)_minmax(0,auto)] items-center gap-3'
+  'relative grid min-h-9 min-w-0 grid-cols-1 items-start gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-3'
 
 export function PageHeader({
   title,
@@ -217,53 +165,11 @@ export function PageHeader({
       data-slot="page-header"
       className={cn('flex flex-col gap-2', className)}
     >
-      {/* ⛔ ONE ROW AT EVERY WIDTH, AND IT USED TO STACK BELOW `sm`. Measured in the
-          browser at 390 px: `flex-col` put the controls UNDER the title and the header
-          block went from 28 px to 55 — on a 844 px phone, a fifth of what is left after
-          the shell header, spent on a second row of chrome. The budget is 40.
-          Stacking is the obvious answer to "it does not fit" and it is the wrong one
-          here: a phone has less vertical room than a desktop, not more. */}
-      <Tag className="flex items-center justify-between gap-2 sm:gap-4">
-        {/* THE TITLE LINE. The heading is `shrink-0` and the group is `min-w-min`: a
-            screen's NAME is never the thing that gives way. The description still
-            truncates (`w-0 flex-1`), so its own text cannot set a floor. The clip that
-            used to live on this group cut the name when the controls refused to shrink.
-
-            ⛔ AND THE CLIP IS NOT ON THIS GROUP, because a phone disclosure opens a
-               panel `absolute top-full` beside it. Four screens wrapped this header in a
-               36 px `overflow-hidden` row, and a click aimed at Launch, Refresh,
-               Register or Export landed on the table underneath. A sentence that
-               overruns is still cut — on the description, which is the line that
-               truncates. */}
-        <div className="flex min-w-min flex-1 items-baseline gap-2">
-          {/* `whitespace-nowrap`: the name's smallest width is the WHOLE name. Left to
-              wrap, its smallest width is its longest word, the shared row's floor was set
-              from that, and a two-word name was painted cut after its first word. */}
-          <h1 className="shrink-0 whitespace-nowrap font-display text-title text-foreground">
+      <Tag className="flex min-w-0 items-start justify-between gap-2 sm:gap-4">
+        <div className="min-w-0 flex-1">
+          <h1 className="min-w-0 break-words font-display text-title text-foreground">
             {title}
           </h1>
-          {description != null && (
-            <p
-              // `w-0 flex-1`: the sentence takes the room that is LEFT and asks for none.
-              // With an intrinsic width it set the floor of the whole header, and on a
-              // row shared with a tab strip it took the strip's room: measured at 1440,
-              // five tabs were crushed to a sliver between two scroll buttons and the
-              // end button sat on the primary action.
-              className="w-0 min-w-0 flex-1 truncate text-caption text-muted-foreground"
-              // The full sentence, for a reader whose viewport cut it. `title` takes a
-              // string, so a description written as a NODE is read out of the node
-              // itself (`plainText`) — and left off entirely when part of it comes from
-              // a component this cannot see through, because half a sentence presented
-              // as the whole of one is worse than none.
-              title={
-                typeof description === 'string'
-                  ? description
-                  : plainText(description)
-              }
-            >
-              {description}
-            </p>
-          )}
         </div>
         <div
           className={cn(
@@ -334,6 +240,18 @@ export function PageHeader({
           </div>
         </div>
       </Tag>
+      {description != null && (
+        <p
+          className="min-w-0 whitespace-normal text-caption text-muted-foreground [overflow-wrap:anywhere]"
+          title={
+            typeof description === 'string'
+              ? description
+              : plainText(description)
+          }
+        >
+          {description}
+        </p>
+      )}
       {notices != null && <div className="flex flex-col gap-2">{notices}</div>}
     </div>
   )

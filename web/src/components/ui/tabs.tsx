@@ -42,7 +42,7 @@ import { cn } from '@/lib/utils'
  *   (measured in the browser evidence of console-ui-layout-density). Only the pointer
  *   scroll buttons animate, through `scrollTo({ behavior: 'smooth' })`, and they
  *   respect `prefers-reduced-motion` by falling back to an instant jump.
- * - GEOMETRY CHANGES reveal too (independent review F1, 2026-09-06): the first
+ * - GEOMETRY CHANGES reveal too (independent review finding 1, 2026-09-06): the first
  *   version only re-measured overflow when the strip or a tab changed size, so a
  *   window resized from 1440 to 390 px left the selected AND focused "Edition &
  *   license" tab at 1033–1168 px beside a 16–374 px strip. Now every size change the

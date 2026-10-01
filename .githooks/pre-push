@@ -949,7 +949,7 @@ OLIVARES_NETWORK_ADVISORY=1 task lint:session-numbers
 	# private address print CLEAN. Measured here 2026-08-15 against main, with a real commit
 	# authored with the private consumer-mail address this gate forbids (the literal is
 	# deliberately NOT written here: it ships in .githooks/, so a comment naming it puts it
-	# in the public tree — measured on 2026-08-29 by the R1 dry-run export) and a real
+	# in the public tree — measured on 2026-08-29 by the dry-run export) and a real
 	# push-refs file:
 	#
 	#   OLIVARES_IDENTITY_CUTOFF='2027-01-01 00:00'  ->  CLEAN, 0 commit(s) examined

@@ -282,7 +282,7 @@ GET	/v1/audit/pubkey	Returns the Ed25519 checkpoint verification key in PEM form
 GET	/v1/audit/system	Reads the system-tenant evidence ledger, which records the cross-tenant operations. Superadmin only.
 GET	/v1/audit/verify	Verifies the ledger chain structurally and verifies every signed checkpoint against the engine key. The verification is not itself recorded, so it does not grow the chain it inspects.
 POST	/v1/auth/capabilities	Projects the CALLING credential's authority over registered operations, up to 32 independent questions per batch. A surface question asks whether one registered collection may be loaded in the named workspace; an operation question asks whether one exact operation on one exact resource is authorized right now. It never executes the operation, so asking writes no row, no audit event and no expiry. UNKNOWN means the decision could not be established, never that a role is insufficient. A positive carries refresh_after_ms, the remaining evidence window capped at 30s: an observation budget, not a lease. The handler re-authorizes every real act.
-POST	/v1/auth/login	Exchanges an email and password for a session token.
+POST	/v1/auth/login	Verifies an email and password. Returns a completed session or a pending second-factor challenge without a session token.
 POST	/v1/auth/logout	Revokes the calling session. It applies to session principals only, never to an API token.
 POST	/v1/auth/refresh	Rotates the calling session credential and extends its expiry, returning a fresh token; the old one stops working. It applies to session principals only, and an API token is reissued rather than refreshed.
 GET	/v1/auth/whoami	Returns the calling principal, its tenant grants, and the effective permission set it holds in each of them.
@@ -298,9 +298,9 @@ GET	/v1/console/keys	Returns the non-secret custody inventory of the signing key
 DELETE	/v1/console/license	Removes the installed license and reverts the deployment to the community build.
 GET	/v1/console/license	Returns the current license status and the entitlements it grants.
 POST	/v1/console/license	Installs a commercial license from the posted document.
-DELETE	/v1/console/secrets	Deletes one sealed secret by the name carried in the body.
-GET	/v1/console/secrets	Lists the sealed secrets by name with a non-secret hint for each. A stored value is never returned.
-PUT	/v1/console/secrets	Creates or replaces one sealed secret; the name travels in the body, so it may contain a slash.
+DELETE	/v1/console/secrets	Deletes one sealed secret by the name carried in the body. Omitted scope requires global superadmin; explicit scope=tenant requires unconfined tenant admin and restricts names to mcp/. Writes require AAL3.
+GET	/v1/console/secrets	Lists secret names and non-secret hints, never values. Omitted scope requires global superadmin; explicit scope=tenant requires unconfined tenant admin and returns only that tenant's mcp/ handles.
+PUT	/v1/console/secrets	Creates or rotates a sealed secret using its name in the body. Omitted scope requires global superadmin; explicit scope=tenant requires unconfined tenant admin and restricts names to mcp/. Writes require AAL3.
 GET	/v1/console/setup-status	Returns which first-run setup steps the deployment has completed, so the console wizard can resume onboarding at the right step.
 DELETE	/v1/console/sources	Removes one configured source connector.
 GET	/v1/console/sources	Lists the configured source connectors with the live status of each.
@@ -335,3 +335,19 @@ GET	/v1/workspaces	Lists the workspaces of the resolved tenant.
 POST	/v1/workspaces	Creates one workspace. Beyond the tenant admin permission the caller must be the tenant owner or a superadmin, because a workspace admin administers within a workspace and does not mint them.
 GET	/v1/workspaces/{id}	Returns one workspace of the resolved tenant by id.
 PATCH	/v1/workspaces/{id}	Renames a workspace, edits its settings or archives it. The slug is immutable, and the default workspace cannot be archived because it is the resolution target for an unset workspace.
+
+GET	/v1/console/mcp-gateway	Returns the authenticated tenant's effective MCP configuration, source ownership and actual governance without credential values. Requires tenant admin; workspace-confined credentials are refused.
+POST	/v1/console/mcp-gateway/servers	Adds a disabled Streamable HTTP server using own-tenant sealed references and version compare-and-swap. Requires tenant admin and AAL3; file-owned mode is read-only.
+PUT	/v1/console/mcp-gateway/servers/{id}	Updates an own-tenant server using version compare-and-swap. Enabling requires a successful current probe, resource and issuer trust and explicit tool scopes. Requires tenant admin and AAL3.
+DELETE	/v1/console/mcp-gateway/servers/{id}	Removes a server and blocks subsequent dispatch without deleting its sealed credential. Requires tenant admin, AAL3 and the current configuration version.
+POST	/v1/console/mcp-gateway/servers/{id}/test	Initializes the exact admitted HTTPS endpoint and inventories tools without calling them. Records a bounded verdict and audit using version compare-and-swap. Requires tenant admin and AAL3.
+PUT	/v1/console/mcp-gateway/session-tools	Changes the default-off session MCP switch for this tenant without granting agent authority. Requires tenant admin, AAL3 and the current configuration version.
+POST	/v1/auth/totp/enrol	Starts enrolment from an authenticated session or a primary-verified pending login. Returns the secret and QR once; replacing a factor requires AAL3.
+POST	/v1/auth/totp/activate	Activates the pending factor after verifying its code and reveals ten recovery codes once. A policy-forced enrolment also returns the completed login session.
+POST	/v1/auth/totp/challenge	Completes a primary-verified pending login with an authenticator code or a single-use recovery code. Wrong codes are throttled; successful proof and session issuance are transactional.
+GET	/v1/auth/totp/status	Returns the authenticated account's factor status and remaining recovery-code count without seed material.
+DELETE	/v1/auth/totp	Removes the calling account's factor and recovery codes. Requires an authenticated AAL3 session.
+GET	/v1/auth/totp/policy	Returns whether administrators must enrol a factor. Requires system administration authority.
+PUT	/v1/auth/totp/policy	Sets whether administrators must enrol a factor before completing password login. Requires system administration authority and AAL3.
+GET	/v1/users/{id}/totp	Returns a member's factor status in the selected tenant. Foreign accounts return not found. Requires membership read authority.
+POST	/v1/users/{id}/totp/reset	Resets a selected tenant member's factor and recovery codes. Tenant administrators cannot reset shared or holder-controlled accounts. Requires membership write authority and AAL3; a deployment superadmin retains global recovery authority.

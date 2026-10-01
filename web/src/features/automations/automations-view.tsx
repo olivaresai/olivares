@@ -268,7 +268,7 @@ export function AutomationsView() {
                           </td>
                           <td className="text-muted-foreground">
                             <span
-                              className="block max-w-[52ch] truncate"
+                              className="block max-w-[52ch] whitespace-normal [overflow-wrap:anywhere]"
                               title={et.description}
                             >
                               {et.description}

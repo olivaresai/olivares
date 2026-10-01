@@ -72,6 +72,9 @@ type Assertion struct {
 // FederatedIdentity is the result of validating an Assertion: the external
 // subject and the email it maps to a local user by.
 type FederatedIdentity struct {
+	// Protocol is the verifier's protocol, also pinned by the callback to the
+	// selected provider. OIDC email bootstrap requires explicit verification.
+	Protocol string
 	// Subject is the IdP's stable subject identifier.
 	Subject string
 	// Issuer is the VERIFIED issuing IdP identity (U3): the OIDC `iss` the
@@ -80,8 +83,11 @@ type FederatedIdentity struct {
 	// never select the wrong account across IdPs. Empty only for a provider that does
 	// not surface one (then correlation falls back to email, the pre-U3 behavior).
 	Issuer string
-	// Email is the verified email used to find/provision the local user.
+	// Email is the provider-asserted address used to find/provision the local user.
 	Email string
+	// EmailVerified carries an explicit true OIDC email_verified claim for this
+	// address. Omission is false; it never affects an exact qualified-subject match.
+	EmailVerified bool
 	// DisplayName is a human label, when the IdP provides one.
 	DisplayName string
 	// Groups are the directory group identifiers the IdP asserted for this

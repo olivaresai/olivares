@@ -17,7 +17,7 @@ description: >-
 | 版本 | 做什么 | 不做什么 |
 |---|---|---|
 | **Community（本页）** | 自有本地子进程：启动、stdin/stdout/stderr、带游标的 attach、恢复确切对话、重连活流、以观察到的退出状态停止。会话行与证据留在模块 II。 | Identity & Scale 多窗格引擎、mTLS 监听器、商业输入会话、xterm UI 块 |
-| **Identity & Scale 叠加** | 商业 session-cockpit 引擎（监听器、窗格、账本）。有附加组件时路由在 `/v1/m/session-cockpit/` 下。 | 不替换 `/v1/m/sessions/runs` |
+| **Identity & Scale 叠加** | 商业 session-cockpit 引擎（监听器、窗格、账本）。有模块时路由在 `/v1/m/session-cockpit/` 下。 | 不替换 `/v1/m/sessions/runs` |
 
 Community 构建以 **缺席**（404）回答叠加命名空间。它不挂载 501 存根。
 

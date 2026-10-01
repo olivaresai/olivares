@@ -19,7 +19,7 @@ Driver-Vertrag, einen lokalen PTY-Runner und die Journeys J01–J08 als Tests.
 | Edition | Was sie tut | Was sie nicht tut |
 |---|---|---|
 | **Community (diese Seite)** | Eigenes lokales Kind: Start, stdin/stdout/stderr, Attach mit Cursor, Resume der exakten Konversation, Reconnect eines lebenden Streams, Stop mit beobachtetem Exit-Status. Sitzungszeilen und Evidenz bleiben in Modul II. | Identity-&-Scale-Engine mit mehreren Panes, mTLS-Listener, kommerzielle Input-Sessions, xterm-UI-Chunk |
-| **Identity-&-Scale-Overlay** | Kommerzielle session-cockpit-Engine (Listener, Panes, Ledger). Routen unter `/v1/m/session-cockpit/`, wenn das Add-on vorliegt. | Ersetzt `/v1/m/sessions/runs` nicht |
+| **Identity-&-Scale-Overlay** | Kommerzielle session-cockpit-Engine (Listener, Panes, Ledger). Routen unter `/v1/m/session-cockpit/`, wenn das Modul vorliegt. | Ersetzt `/v1/m/sessions/runs` nicht |
 
 Ein Community-Build beantwortet den Overlay-Namespace durch **Abwesenheit**
 (404). Es gibt keinen 501-Stub.

@@ -493,7 +493,7 @@ export function permittedDispatchGuard(
  * useIntentGuard — what a SURFACE knows about whether a dispatch may still go, and
  * the cancellation that reaches requests already in flight.
  *
- * R2 (independent review F1 of d8c5ad3e9e): the first version kept the permission
+ * R2 (independent review finding 1 of d8c5ad3e9e): the first version kept the permission
  * and the boundary in refs that `useEffect` updated, and aborted in effects too. A
  * mutation queued by React Query and resumed after the session store had already
  * rotated — same session id, new credential — found refs that still said the old

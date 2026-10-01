@@ -308,7 +308,7 @@ describe('the area directory search (P2-12, N1 index)', () => {
     expect(areaPanel('security-identity')).toHaveClass('hidden')
   })
 
-  // ⛔ THE REVIEW'S F1 CONTROL. "admin": Administration (System & settings, a label-prefix
+  // ⛔ THE REVIEW'S finding 1 CONTROL. "admin": Administration (System & settings, a label-prefix
   // hit) must come BEFORE Provider profiles (AI, a description hit) — the earlier build
   // walked the areas in canonical order and put the weak early hit first. The sidebar's
   // order must be the palette's: the shared ranking over the shared authorized projection.
@@ -437,7 +437,7 @@ describe('the area directory search (P2-12, N1 index)', () => {
 })
 
 describe('AreasSheet', () => {
-  // ⛔ THE REVIEW'S F2 CONTROL. Two directories can be mounted at once (the bare tree and
+  // ⛔ THE REVIEW'S finding 2 CONTROL. Two directories can be mounted at once (the bare tree and
   // the sheet): every aria-controls in the sheet must resolve to exactly one element,
   // INSIDE the sheet, and every group label to a heading inside its own group — under
   // normal id resolution, not by counting classes.

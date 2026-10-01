@@ -202,7 +202,13 @@ func threatIntelStatusCmd() *cobra.Command {
 
 // --- small IO helpers (output to cmd streams; errors returned, never printed) ---
 
-func printFeedStatus(cmd *cobra.Command, st threatfeed.FeedStatus) error { return printJSON(cmd, st) }
+// printFeedStatus renders the status through Redacted first: FeedURL is
+// operator-supplied and may embed userinfo credentials, which never belong in
+// diagnostics (H-05; the producer-side contract comment alone cannot keep them
+// out — the strip at this public render funnel can).
+func printFeedStatus(cmd *cobra.Command, st threatfeed.FeedStatus) error {
+	return printJSON(cmd, st.Redacted())
+}
 
 // printJSON is now format-aware despite the name it kept: it renders through
 // renderStatusOut (E2), so `-o text` produces a readable report instead of

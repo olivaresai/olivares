@@ -96,7 +96,7 @@ deny-by-default モデル、アクセスグラフの閲覧が持つ特権的な�
 
 ### Complete variable reference
 
-The table below is generated from the product's own sources: 296 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
+The table below is generated from the product's own sources: 299 variables and 17 runtime-constructed families, covering the engine, the CLI, the Kubernetes operator, the Terraform provider and the connectors. It is regenerated and checked against those sources on every change, so it does not fall behind the binary.
 
 **Required** means the feature that reads the variable does not start without it; most variables are optional and the engine runs with none of them set.
 
@@ -152,7 +152,7 @@ The table below is generated from the product's own sources: 296 variables and 1
 | `OLIVARES_COMMUNICATION_ACTIVATION` | No | — | REQUESTED K3 communication activation (`on` or `off`; default off), parsed at boot by cmd/olivares/communicationcomposition.go. `on` binds the local outbox pump witness and enables the dual runtime credential posture before the first leadership election; whether a communication credential can actually be minted is decided per launch from the EFFECTIVE readiness conjunction (store proof, sealer, directory resolver, permissions, pump), never from this flag alone. `on` needs both keyring files below; when either is not declared, cannot be opened or does not load, boot continues with K3 OFF and the cause visible (composition log, pump lane verdict `custody_unavailable`, non-effective readiness) while core, K1 and K2 serve. Only an unrecognized value is a configuration error. |
 | `OLIVARES_COMMUNICATION_CONTENT_KEYRING_FILE` | Yes | — | Path to the JSON keyring the communication content sealer loads at boot (cmd/olivares/boot.go). Secret-bearing, so it is a file rather than a value: sealed message bodies are verified against the keys it carries, and an engine started without it cannot open content sealed by a peer that had one. |
 | `OLIVARES_COMMUNICATION_CURSOR_KEYRING_FILE` | Yes | — | Path to the JSON keyring (`olivares.communication-cursor-keyring.v1`) that signs and verifies inbox cursor navigation tokens, loaded at boot through the same custody mechanism as the content keyring (cmd/olivares/communicationcursorkeyring.go). Secret-bearing, so it is a file rather than a value; a rotated-out key marked `retired_at` keeps verifying for the token retention window and is dropped afterwards, and a restart never mints a fresh key. |
-| `OLIVARES_COMMUNICATION_TOKEN` | Yes | — | NOT an operator setting, and documented here precisely so nobody sets it. The engine MINTS this bearer and injects it into a conducted session's child process exactly once (modules/sessions/runtime_bridge.go); its tuple travels inside the authenticated principal. It is RESERVED on the launch path: validateLaunchInjectedEnv (modules/sessions/runtime.go) refuses any launch whose injected environment carries it, so a caller-supplied value is rejected rather than honoured. It appears in the roster because that reserved-name check mentions it, not because the engine reads it. |
+| `OLIVARES_COMMUNICATION_TOKEN` | Yes | — | セッション自身の通信認証情報。セッションランチャーが注入し、メッセージコマンドが読み取ります。起動経路で予約されているため、運用担当者が指定してはいけません。値は常にマスクされます。 |
 | `OLIVARES_COMPUTER_USE_CONFIG` | No | — | computer-use ゲートの JSON ポリシーファイルへのパス。`enterprise` と `addon_airs` のビルドタグ付きでコンパイルされたビルドだけが読み取ります。未設定の場合、ゲートは無効のままです。ファイルを読み取れない場合や解析できない場合は、ファイルを修正してエンジンを再起動するまで、すべての computer use を拒否します。 |
 | `OLIVARES_CONFIG_STRICT` | No | — | Set to `1` to make `olivares config effective` and `config validate` reject any unrecognized `OLIVARES_*` key. |
 | `OLIVARES_CONTENT_FIREWALL_CONFIG` | No | — | インラインプロキシ内の推論トラフィックを検査するコンテンツファイアウォールの JSON ポリシーファイルへのパス。`enterprise` と `addon_airs` のビルドタグ付きでコンパイルされたビルドだけが読み取ります。未設定の場合、その検査は無効のままです。ファイルを読み取れない場合や解析できない場合は、ファイルを修正してエンジンを再起動するまで、ファイアウォールが検査するすべてのリクエストを拒否します。 |
@@ -213,6 +213,7 @@ The table below is generated from the product's own sources: 296 variables and 1
 | `OLIVARES_EXECUTION_ENVIRONMENT_ID` | No | — | Explicit execution-environment reference for this node, read at boot by cmd/olivares/providerprofiles.go. Unset, the engine generates one identity once into `execution-environment-id` in the data directory (0600, atomic exclusive create) and reuses it; set, the value must be 1..256 printable bytes with no whitespace, colon or vertical bar, and a malformed value refuses boot instead of degrading in silence. It is REQUIRED on a topology with only shared state and no node-local data directory: there, without it, profiled session launches stay deny-closed. |
 | `OLIVARES_EXTRA_ARGS` | No | — | Extra `serve` arguments appended by the packaged service unit, for operators who configure the daemon through an environment file. |
 | `OLIVARES_FINOPS_ADMISSION_LEGACY_WRITERS_STOPPED_AT` | No | — | Instant every writer of the earlier FinOps admission build stopped, as an RFC 3339 time in UTC ending in `Z`. Read once at startup. Recovery retires a claim those writers left, but only once five minutes have passed since this instant and only while no row they left is dated later; empty, the default, or text that is not such an instant retires none. |
+| `OLIVARES_GITPUBLISH_SWEEP_INTERVAL` | No | `1m` | Git 公開のスイープが古くなったディスパッチを解決し、不確定な公開を再観測する間隔。Go の duration で指定します。`0` で無効化します。 |
 | `OLIVARES_GROK_HOOK_ACCOUNT` | No | — | Account the Grok Build hook client reports. |
 | `OLIVARES_GROK_HOOK_AGENT` | No | — | Agent identity the Grok Build hook client reports. |
 | `OLIVARES_GROK_HOOK_ORG` | No | — | Organization the Grok Build hook client reports. |
@@ -307,6 +308,7 @@ The table below is generated from the product's own sources: 296 variables and 1
 | `OLIVARES_POLICY_SIGNING_KEY` | No | — | Policy bundle signing key, inline. Prefer the file form. |
 | `OLIVARES_POLICY_SIGNING_KEY_FILE` | No | — | Path to the policy bundle signing key. |
 | `OLIVARES_POLICY_SIGNING_KEY_WRAPPED_FILE` | No | — | Path to the policy signing key wrapped by a key management service. |
+| `OLIVARES_PORTAL_TLS_DIRECTORY` | No | — | オペレーターが Appliance Console の TLS 証明書と鍵を置くディレクトリ。サービスユニットがこれを指定し、その組をクレデンシャルとしてコンソールに渡します。 |
 | `OLIVARES_PQC_POSTURE_CONFIG` | No | — | ポスト量子ポスチャアセッサーの JSON 設定へのパス。`enterprise` のビルドタグ付きでコンパイルされたビルドが、`olivares enterprise pqc-posture` を実行するたびに読み取ります。エンジンの起動時には読み取りません。`{}` は CNSA 2.0 と目標年 2033 を選択します。未設定の場合、またはファイルを読み取れない場合や解析できない場合、このコマンドは PQC ポスチャが構成されていないと報告します。 |
 | `OLIVARES_PUBLIC_URL` | No | — | The address a browser reaches this console at, as scheme://host[:port]. It is what the startup panel prints and what the WebAuthn relying party is derived from, and it is independent of the listen address. The --public-url flag wins over this variable, and passing that flag empty clears it. Read at start-up only: a change takes a restart. Refused values are reported by field and failure class and are never echoed, and support bundles keep this value redacted. |
 | `OLIVARES_RATELIMIT_CONFIG` | No | — | Path to the JSON rate-limit policy the engine applies to its own endpoints. |
@@ -376,6 +378,7 @@ The table below is generated from the product's own sources: 296 variables and 1
 | `OLIVARES_THREATINTEL_SIGNING_KEY` | No | — | Signing key for threat-intelligence bundles the engine publishes. |
 | `OLIVARES_TOKEN` | No | — | API token the CLI authenticates with, when `--token` is not given. |
 | `OLIVARES_TOOL_PIN_CONFIG` | No | — | MCP ツールピンストアの任意の JSON 設定（`require_pin_approval`）へのパス。このストアは、この変数が設定されているかどうかに関係なく、`enterprise` のビルドタグ付きでコンパイルされたビルドで動作します。エンジンの起動時に読み取ります。未設定の場合は初回使用時の信頼（trust on first use）を維持します。ファイルを読み取れない場合や解析できない場合は、ファイルを修正してエンジンを再起動するまで、未知のツールにオペレーターの承認を必須にします。 |
+| `OLIVARES_TOTP_SEED_KEY` | No | — | 保存時の TOTP シードを封印する、Base64 エンコードされた 32 バイト鍵。HA ノードでは同じ鍵を設定します。未設定の場合、エンジンはデータディレクトリ内に非公開の totp-seed.key を作成します。 |
 | `OLIVARES_UPDATE_CHANNEL` | No | — | Release channel the update check asks for, such as `stable`. |
 | `OLIVARES_UPDATE_ENDPOINT` | No | — | Base URL the update check queries. Unset leaves the update check off. |
 | `OLIVARES_UPGRADE_TOKEN` | No | — | Download token `olivares upgrade` presents when fetching a build from a credentialed repository. |
@@ -397,7 +400,7 @@ The table below is generated from the product's own sources: 296 variables and 1
 | `OLIVARES_WORK_OUTBOX_INTERVAL` | No | — | How often the work-kernel outbox is drained, as a Go duration. `0` disables the pump. |
 | `OLIVARES_WORK_RUN_REF` | No | — | Run reference the engine passes to a launched work session. Set by the engine per run, not by the operator. |
 | `OLIVARES_WORK_SESSION_ID` | No | — | Session reference the engine passes to a launched work session. Set by the engine per run, not by the operator. |
-| `OLIVARES_WORK_TOKEN` | No | — | Scoped token the engine passes to a launched work session. Set by the engine per run, not by the operator. |
+| `OLIVARES_WORK_TOKEN` | No | — | セッション自身の、スコープが限定された作業用認証情報。セッションランチャーが注入し、作業コマンドが読み取ります。運用担当者が指定してはいけません。値は常にマスクされます。 |
 
 ### Variable families
 

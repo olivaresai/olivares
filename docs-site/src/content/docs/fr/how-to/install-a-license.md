@@ -32,7 +32,7 @@ celui que vous possédez — et pourquoi vous dire qu'« elle ne verrouille rien
 | Votre achat | Ce qui arrive | Ce que vous en faites |
 |---|---|---|
 | Community | rien à installer | déjà en cours d'exécution — rien sur cette page ne s'applique |
-| Business / Business Max, auto-hébergé | un **fichier de licence** et un **jeton de téléchargement** | installez la licence, puis passez au binaire Enterprise |
+| Business / Enterprise, auto-hébergé | un **fichier de licence** et un **jeton de téléchargement** | installez la licence, puis passez au binaire Enterprise |
 | Cloud | les identifiants d'un tenant hébergé | rien à installer sur l'un de vos hôtes |
 
 La licence est un blob signé unique. Enregistrez-le dans un fichier — `customer.license`, ou
@@ -116,6 +116,13 @@ Exécutez-le après chaque installation et après le retrait d'un override.
 
 ## 3 · Community → Business, sur place
 
+:::note[Business et le canal des artefacts commerciaux]
+L'option `--enterprise` désigne le canal des artefacts commerciaux, pas l'édition.
+Les éditions sont Community, Business et Enterprise. Business comprend Regulated Operations,
+AI Runtime Security, Compliance Packs et Identity & Scale dans un abonnement.
+Chaque famille peut être activée ou désactivée ; aucune n'est vendue séparément.
+:::
+
 Avec une licence installée, le binaire Enterprise n'est plus qu'à un téléchargement. Rien
 n'est réinstallé et aucune donnée n'est déplacée :
 
@@ -132,14 +139,14 @@ Utilisez d'abord `--check` si vous souhaitez voir le plan sans l'appliquer :
 olivares upgrade --enterprise --token <TOKEN> --check
 ```
 
-Redémarrez le service, puis activez les add-ons :
+Redémarrez le service, puis activez les modules :
 
 ```sh
 olivares enterprise enable <preset>     # starter | regulated | full
 ```
 
 L'activation est encadrée et auditée : elle vous montre d'abord un diff et place en attente
-tout add-on nécessitant un secret ou une revue au lieu de l'activer à moitié.
+tout module nécessitant un secret ou une revue au lieu de l'activer à moitié.
 `olivares enterprise status` indique ce qui est actif. Ces commandes existent **uniquement
 dans le binaire Enterprise** — si `olivares enterprise` n'est pas une commande, vous utilisez
 encore le build Community et le remplacement ci-dessus n'a pas encore eu lieu.

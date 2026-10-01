@@ -49,12 +49,12 @@ function EntryRow({ entry }: { entry: DirectoryEntry }) {
   const Icon = entry.icon
   return (
     <li className="min-w-0">
-      <div className="flex min-h-10 items-center gap-3 border-b border-border px-1 hover:bg-surface focus-within:bg-surface">
+      <div className="flex min-h-10 flex-wrap items-baseline gap-x-3 gap-y-1 py-2 border-b border-border px-1 hover:bg-surface focus-within:bg-surface">
         <Icon
           aria-hidden="true"
           className="size-4 shrink-0 text-muted-foreground"
         />
-        <h3 className="shrink-0 text-body font-medium">
+        <h3 className="min-w-0 break-words text-body font-medium">
           <Link
             to={entry.path as never}
             className="rounded-sm text-foreground outline-none hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
@@ -64,7 +64,7 @@ function EntryRow({ entry }: { entry: DirectoryEntry }) {
         </h3>
         {entry.description ? (
           <p
-            className="min-w-0 truncate text-caption text-muted-foreground"
+            className="min-w-0 basis-full whitespace-normal text-caption text-muted-foreground [overflow-wrap:anywhere] sm:flex-1 sm:basis-auto"
             title={entry.description}
           >
             {entry.description}

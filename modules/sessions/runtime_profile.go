@@ -174,6 +174,7 @@ func (m *Module) configHomeEnvForDriver(driver string) string {
 // that no longer resolves, and an env_allow that names a variable the profile
 // owns — resolving that by order would be exactly the accident this refuses.
 func (m *Module) resolveLaunchProfileInto(ctx context.Context, tenant model.TenantID, p *CreateRunParams) error {
+	p.orchestrationGrant = "" // never trusted from the caller
 	p.ProviderProfileRef = strings.TrimSpace(p.ProviderProfileRef)
 	if p.ProviderProfileRef == "" {
 		p.ProviderHome = nil // never trusted from the caller
@@ -214,6 +215,7 @@ func (m *Module) resolveLaunchProfileInto(ctx context.Context, tenant model.Tena
 		}
 	}
 	p.ProviderHome = &snap
+	p.orchestrationGrant = policy.workGrant
 	return nil
 }
 

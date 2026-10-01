@@ -255,6 +255,7 @@ func sessionsMoveFileSchema() map[string]any {
 // environment — and never created as a fallback. No credential value is accepted.
 func sessionsCreateProviderProfileSchema() map[string]any {
 	return sessionsClosureClosedObject(oaObj(
+		"session_work_grant", sessionsProfileWorkGrantSchema(),
 		"driver", oaObj("type", "string", "minLength", 1, "description", "Provider driver key, lower-cased ([a-z0-9][a-z0-9._-]*). Open set; only drivers with an operated runner on this node are launchable."),
 		"config_home", oaObj("type", "string", "minLength", 1, "description", "Absolute path of the provider configuration directory on this node; symlinks are resolved and the canonical path is stored."),
 		"user_home", oaObj("type", "string", "minLength", 1, "description", "Absolute path used as HOME for the launched process; validated like config_home."),
@@ -270,6 +271,7 @@ func sessionsCreateProviderProfileSchema() map[string]any {
 // and homes are immutable and are not keys of this body.
 func sessionsPatchProviderProfileSchema() map[string]any {
 	return sessionsClosureClosedObject(oaObj(
+		"session_work_grant", sessionsProfileWorkGrantSchema(),
 		"display_name", sessionsClosureOptionalString("An explicit string replaces the stored label; null/omission preserves it."),
 		"state", sessionsClosureNullable(oaObj("type", "string", "enum", oaEnum("active", "disabled"), "description", "Reversible lifecycle transition; retired is refused here.")),
 		"auth_source", sessionsClosureNullable(oaObj("type", "string", "enum", oaEnum("", "provider_account_home", "managed_injection"), "description", "Re-authorizes (or, with the empty string, withdraws) the authentication source. It is not identity, so it does not create a new profile id; a live child keeps the source its own launch was authorized under.")),
@@ -466,4 +468,13 @@ func sessionsHandoffResponseSchema() map[string]any {
 		"transition", oaObj("type", "string", "enum", oaEnum("accept", "reject")),
 		"reason", sessionsClosureNullable(sessionsReasonSchema()),
 	), "transition")
+}
+
+// A grant is an operator-owned declaration; the server alone issues grant_id.
+func sessionsProfileWorkGrantSchema() map[string]any {
+	return sessionsClosureNullable(sessionsClosureClosedObject(oaObj(
+		"role", oaObj("type", "string", "enum", oaEnum("orchestrator")),
+		"workspace_id", oaObj("type", "string", "format", "uuid", "description", "One active tenant workspace; UUIDv7."),
+		"capabilities", oaObj("type", "array", "minItems", 1, "maxItems", 6, "uniqueItems", true, "items", oaObj("type", "string", "enum", oaEnum("work.read", "work.create", "work.assign", "work.review", "decision.read", "decision.write"))),
+	), "role", "workspace_id", "capabilities"))
 }

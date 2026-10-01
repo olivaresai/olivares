@@ -22,7 +22,7 @@
 // Expansion: arriving inside an area opens it; the operator may hold several open, open or
 // fold them all, or fold the active one without leaving it (stores/preferences.ts navAreas).
 //
-// FILTERING IS A RANKED PROJECTION (R2, independent review F1). With a query the grouped
+// FILTERING IS A RANKED PROJECTION (R2, independent review finding 1). With a query the grouped
 // tree is replaced by ONE flat list of the authorized matches in the order `rankNavMatches`
 // returns them — the same index, the same ranking and the same authorization projection the
 // ⌘K palette renders — each entry carrying its `Area › Section` context. The earlier build
@@ -31,7 +31,7 @@
 // "admin" (Provider profiles before Administration). Without a query the canonical grouped
 // order returns untouched, and the fold preference is neither read nor written by a query.
 //
-// IDS ARE INSTANCE-SCOPED (R2, independent review F2). More than one directory can be
+// IDS ARE INSTANCE-SCOPED (R2, independent review finding 2). More than one directory can be
 // mounted at once (a test mounts the bare tree beside the sheet). Every `aria-controls` /
 // `aria-labelledby` target therefore carries this instance's `useId()` prefix, so each
 // control names the panel or heading it actually renders.

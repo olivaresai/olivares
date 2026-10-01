@@ -16,6 +16,66 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
+func TestRuntimeSilentWorkOnlySessionKeepsClaimAlive(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	runner := &fakeRunner{}
+	m, _, tenant, clk := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()), WithRuntimeCredentialHeartbeatInterval(5*time.Millisecond))
+	created, err := m.createRun(ctx, tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "test:silent-worker", ActorKind: model.ActorUser})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = m.stopRun(ctx, tenant, created.RunRef, "test", "user") })
+	lr, ok := m.rt.getLive(tenant, created.RunRef)
+	if !ok {
+		t.Fatal("silent child is not registered")
+	}
+	claim, ok, err := m.ActiveClaim(ctx, tenant, lr.claim.SID)
+	if err != nil || !ok {
+		t.Fatal("launch claim is missing")
+	}
+	clk.set(clk.get().Add(4 * time.Minute))
+	deadline := time.Now().Add(300 * time.Millisecond)
+	for {
+		current, live, err := m.ActiveClaim(ctx, tenant, lr.claim.SID)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if live && current.ExpiresAt.After(claim.ExpiresAt) {
+			if current.Fence != claim.Fence {
+				t.Fatal("heartbeat changed the claim generation")
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("silent work-only child lost its claim without an independent heartbeat")
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	runner.mu.Lock()
+	proc := runner.procs[0]
+	runner.mu.Unlock()
+	if proc.sentCount() != 0 {
+		t.Fatal("claim renewal sent input to the provider")
+	}
+	if err := m.Release(ctx, tenant, claim.SID, claim.Holder, claim.Fence); err != nil {
+		t.Fatal(err)
+	}
+	successor, err := m.Claim(ctx, tenant, claim.SID, "test:successor", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-proc.stopped:
+	case <-time.After(time.Second):
+		t.Fatal("silent child remained running after losing its claim")
+	}
+	current, live, err := m.ActiveClaim(ctx, tenant, claim.SID)
+	if err != nil || !live || current.Fence != successor.Fence || current.Holder != successor.Holder {
+		t.Fatal("old heartbeat changed the successor's authority")
+	}
+}
+
 type workSessionCredentialSpy struct {
 	mu sync.Mutex
 

@@ -24,6 +24,8 @@ Argon2id-abgeleiteten Passphrase (`--passphrase-file`) oder einem rohen 32-Byte-
 Schlüssel aus Ihrem KMS (`--kek-key-file`); genau einer ist erforderlich. Die
 Audit- und Katalog-Signierschlüssel reisen **versiegelt** innerhalb des Bundles.
 
+**Die registrierte DR-Wiederherstellungssteuerung unterstützt in 26.10 PostgreSQL 15, 16, 17 und 18** (gemessen mit 15.19, 16.15, 17.11 und 18.6). Andere Hauptversionen werden mit `DR restore control contract: PostgreSQL major <major> is unsupported (verified contracts: 15, 16, 17, 18)` abgewiesen; `<major>` ist die erkannte Hauptversion des Servers. Eine Steuerung wird niemals repariert: Nach einem Upgrade der bestehenden Installation auf eine neue Hauptversion wird eine Steuerung abgewiesen, deren Katalog und Berechtigungen nicht zur neuen Hauptversion passen.
+
 ## Sichern
 
 **SQLite** (Single-Node) — sicher, während `serve` läuft (der Snapshot verwendet

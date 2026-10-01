@@ -113,7 +113,7 @@ func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, i
 	if isTenantScope(tenant) {
 		scope = tenant
 	}
-	token, sess, err := a.mintSession(ctx, attempt, user, scope, "sso.login", federatedLogin, nil)
+	token, sess, err := a.mintSession(ctx, attempt, user, scope, "sso.login", federatedLogin, nil, nil, nil)
 	if err != nil {
 		return "", model.AuthSession{}, err
 	}
@@ -261,6 +261,11 @@ func (a *Authenticator) findOrProvision(ctx context.Context, id FederatedIdentit
 		}
 		if len(byMail) > 0 {
 			out = byMail[0]
+			// Email may bootstrap only an unbound account. A failed exact subject
+			// lookup cannot select an account already owned by any other subject.
+			if out.SsoSubject != "" || id.Protocol == ProtocolOIDC && !id.EmailVerified {
+				return ErrUnauthenticated
+			}
 			return admitToScope(ctx, as, out, scope, claimed)
 		}
 		// D4 — a SCIM-authoritative scope never provisions from a login.
@@ -477,6 +482,32 @@ func (a *Authenticator) reconcileAssertedGroups(ctx context.Context, userID mode
 		if len(want) == 0 {
 			return nil
 		}
+		// Group-origin boundary: an asserted membership confers the IdP's
+		// vouching, so it may only land on a group the IdP provisions
+		// (NULL-origin). Console-managed and provisioner-owned groups keep
+		// membership to whoever owns the origin — the assertion is skipped,
+		// never an error (the login itself is not the IdP's to fail).
+		origin := make(map[model.ID]bool, len(groups))
+		for _, g := range groups {
+			origin[g.ID] = g.ProvisionedBy == ""
+		}
+		kept := want[:0]
+		for _, gid := range want {
+			if origin[gid] {
+				g, err := groupInTenant(ctx, as, tenant, gid)
+				if err != nil {
+					return err
+				}
+				claims, err := readOnlyGroupAncestors(ctx, as, tenant, g.ParentGroupID, "")
+				if err != nil {
+					return err
+				}
+				if len(claims) == 0 {
+					kept = append(kept, gid)
+				}
+			}
+		}
+		want = kept
 		// Add only the memberships the user does not already hold (idempotent, and it
 		// keeps the unique (group,user) index from rejecting a duplicate).
 		existing, err := drainList(ctx, as.GroupMembers().List, byEq("user_id", userID.String(), 0))

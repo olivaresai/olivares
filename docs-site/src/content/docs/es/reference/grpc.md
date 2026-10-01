@@ -44,7 +44,7 @@ Configura el listener mediante las variables `OLIVARES_*` de la
 
 <!-- BEGIN GENERATED olivares-grpc-reference — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-El motor y el host de plugins registran **28 rpc** repartidos en **7 servicios**. Las tablas
+El motor y el host de plugins registran **29 rpc** repartidos en **7 servicios**. Las tablas
 siguientes se leen de las tablas de registro generadas que los servidores entregan a gRPC;
 si un método aparece aquí, un cliente puede llamarlo.
 
@@ -116,13 +116,14 @@ Definido en `olivaresv1/v1.proto`; 4 rpc.
 
 ### `olivares.sdk.v1.SourceService`
 
-Definido en `olivaresv1/v1.proto`; 4 rpc.
+Definido en `olivaresv1/v1.proto`; 5 rpc.
 
 | Método | Método completo | Tipo | Petición | Respuesta | Qué hace |
 |---|---|---|---|---|---|
 | `Close` | `/olivares.sdk.v1.SourceService/Close` | unary | `Empty` | `Empty` | Finaliza la sesión abierta por Open y libera lo que el connector retuviera para ella. |
 | `Describe` | `/olivares.sdk.v1.SourceService/Describe` | unary | `Empty` | `DescribeResponse` | Devuelve el descriptor del connector: su identidad, sus campos de configuración y las capacidades que anuncia. |
 | `Gather` | `/olivares.sdk.v1.SourceService/Gather` | server-streaming | `Empty` | `Observation` (stream) | Transmite observaciones al host, que eleva cada una al bus de eventos. El stream termina cuando finaliza una ejecución por lotes o cuando el host la cancela. |
+| `GatherInventory` | `/olivares.sdk.v1.SourceService/GatherInventory` | server-streaming | `GatherInventoryRequest` | `Observation` (stream) | Transmite las observaciones de inventario del conector solo para la capacidad inventory-coverage-v1 negociada; se rechaza cualquier otra capacidad, y un flujo cancelado nunca informa de éxito. |
 | `Open` | `/olivares.sdk.v1.SourceService/Open` | unary | `OpenRequest` | `Empty` | Inicia una sesión con la configuración proporcionada por el host, antes de recopilar ninguna observación. |
 
 <!-- END GENERATED olivares-grpc-reference -->

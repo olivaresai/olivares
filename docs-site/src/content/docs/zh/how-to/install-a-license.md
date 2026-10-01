@@ -26,7 +26,7 @@ description: >-
 | 你购买的套餐 | 收到的内容 | 如何处理 |
 |---|---|---|
 | Community | 无需安装任何内容 | 已在运行——本页内容均不适用 |
-| Business / Business Max，自托管 | 一个**许可证文件**和一个**下载令牌** | 安装许可证，然后切换到企业版二进制文件 |
+| Business / Enterprise，自托管 | 一个**许可证文件**和一个**下载令牌** | 安装许可证，然后切换到企业版二进制文件 |
 | Cloud | 托管 tenant 的凭据 | 无需在自己的主机上安装任何内容 |
 
 许可证是一个签名 blob。请将其保存为文件——`customer.license` 或任意其他名称——并保留
@@ -99,6 +99,13 @@ olivares license status --data-dir /var/lib/olivares
 
 ## 3 · Community → Business，原地切换
 
+:::note[Business 与商业制品渠道]
+`--enterprise` 参数表示商业制品渠道，并非版本名称。
+版本为 Community、Business 和 Enterprise。Business 在一份订阅中包含 Regulated Operations、
+AI Runtime Security、Compliance Packs 和 Identity & Scale。
+各系列均可启用或停用；它们不单独销售。
+:::
+
 安装许可证后，下载企业版二进制文件即可。无需重新安装任何内容，也不会移动任何数据：
 
 ```sh
@@ -113,13 +120,13 @@ olivares upgrade --enterprise --token <TOKEN>
 olivares upgrade --enterprise --token <TOKEN> --check
 ```
 
-重启服务，然后启用附加组件：
+重启服务，然后启用模块：
 
 ```sh
 olivares enterprise enable <preset>     # starter | regulated | full
 ```
 
-启用过程受到治理并会被审计：它会先显示 diff；任何需要机密或审查的附加组件都会进入
+启用过程受到治理并会被审计：它会先显示 diff；任何需要机密或审查的模块都会进入
 暂存状态，而不是只启用一部分。`olivares enterprise status` 会报告哪些内容处于活动状态。
 这些命令**仅存在于企业版二进制文件中**——如果 `olivares enterprise` 不是一个命令，
 说明你仍在运行 Community 构建，上述切换尚未发生。

@@ -58,7 +58,7 @@
     "description": "Posture de conformité en direct, la synthèse des risques pour la direction et le pack de preuves d'audit signé.",
     "request": "Demander",
     "done": "Rapport téléchargé",
-    "seam": "Ce rapport réside dans un module non relié à ce déploiement. Rien n'est cassé.",
+    "seam": "Ce rapport réside dans un module qui n’est pas lié à ce déploiement. Rien n'est cassé.",
     "posture": {
       "title": "Posture de conformité",
       "description": "État par référentiel et par contrôle, calculé en direct."

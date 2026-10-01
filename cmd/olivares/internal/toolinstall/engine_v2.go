@@ -166,7 +166,11 @@ func (e *Engine) InstallV2(ctx context.Context, req RequestV2, approved *PlanV2,
 	if err := p.VerifyPayload(ctx, access, inv, policy); err != nil {
 		return nil, plan, err
 	}
-	if err := applyFinalModes(root, staging, plan.Selection.Layout); err != nil {
+	if releaseArchiveLayoutID(plan.Selection.Layout.ID) {
+		if err := applyReleaseArchiveModes(root, staging, inv); err != nil {
+			return nil, plan, err
+		}
+	} else if err := applyFinalModes(root, staging, plan.Selection.Layout); err != nil {
 		return nil, plan, err
 	}
 	scratch := filepath.Join(staging, ".probe")
@@ -206,6 +210,9 @@ func (e *Engine) InstallV2(ctx context.Context, req RequestV2, approved *PlanV2,
 	recJSON, err := json.MarshalIndent(rec, "", "  ")
 	if err != nil {
 		return nil, plan, err
+	}
+	if len(recJSON) > maxReceiptBytes {
+		return nil, plan, refuse(KindResponseTooLarge, "receipt inventory exceeds its bounded document size")
 	}
 	if err := writeFileExcl(root, filepath.Join(staging, ReceiptFile), recJSON, 0o644); err != nil {
 		return nil, plan, err
@@ -249,6 +256,14 @@ func (e *Engine) revalidateV2(ctx context.Context, root *os.Root, p PackageProvi
 	}
 	if rec.PlanDigest != plan.Digest {
 		return nil, refuse(KindDamaged, "%s receipt plan digest %s does not match the current plan %s", plan.Selection.Destination.ReleaseDir, short(rec.PlanDigest), short(plan.Digest))
+	}
+	if rec.VerificationKind == VerificationGitHubReleaseSHA256 {
+		if rec.FetchedObject.SHA256 != plan.Selection.FetchedObject.SHA256 || rec.FetchedObject.Size != plan.Selection.FetchedObject.Size {
+			return nil, refuse(KindDamaged, "archive receipt differs from the approved official checksum")
+		}
+		if err := verifyReleaseArchiveReceipt(ctx, root, relRelease, rec); err != nil {
+			return nil, err
+		}
 	}
 	entry := filepath.Join(relRelease, filepath.FromSlash(plan.Selection.Layout.EntryPoint))
 	sum, size, err := fileSHA256Root(root, entry)

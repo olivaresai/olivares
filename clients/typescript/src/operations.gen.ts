@@ -746,6 +746,69 @@ export class Client extends ClientCore {
   }
 
   /**
+   * DELETE /v1/auth/totp — Remove the calling account's factor with AAL3.
+   *
+   * Stability: stable.
+   */
+  deleteV1AuthTotp(opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/auth/totp", "/v1/auth/totp", undefined, opts);
+  }
+
+  /**
+   * POST /v1/auth/totp/activate — Prove possession and reveal recovery codes once.
+   *
+   * Stability: stable.
+   */
+  postV1AuthTotpActivate(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/auth/totp/activate", "/v1/auth/totp/activate", body, opts);
+  }
+
+  /**
+   * POST /v1/auth/totp/challenge — Complete a pending login with a code or recovery code.
+   *
+   * Stability: stable.
+   */
+  postV1AuthTotpChallenge(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/auth/totp/challenge", "/v1/auth/totp/challenge", body, opts);
+  }
+
+  /**
+   * POST /v1/auth/totp/enrol — Start a TOTP enrolment with a session or a pending login.
+   *
+   * Stability: stable.
+   */
+  postV1AuthTotpEnrol(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/auth/totp/enrol", "/v1/auth/totp/enrol", body, opts);
+  }
+
+  /**
+   * GET /v1/auth/totp/policy — Read the administrator factor policy.
+   *
+   * Stability: stable.
+   */
+  getV1AuthTotpPolicy(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/auth/totp/policy", "/v1/auth/totp/policy", undefined, opts);
+  }
+
+  /**
+   * PUT /v1/auth/totp/policy — Set the administrator factor policy with AAL3.
+   *
+   * Stability: stable.
+   */
+  putV1AuthTotpPolicy(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PUT", "/v1/auth/totp/policy", "/v1/auth/totp/policy", body, opts);
+  }
+
+  /**
+   * GET /v1/auth/totp/status — Read the calling account's factor status.
+   *
+   * Stability: stable.
+   */
+  getV1AuthTotpStatus(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/auth/totp/status", "/v1/auth/totp/status", undefined, opts);
+  }
+
+  /**
    * GET /v1/auth/whoami — The calling principal and its tenant grants.
    *
    * Stability: stable.
@@ -860,6 +923,60 @@ export class Client extends ClientCore {
    */
   deleteV1ConsoleLicense(opts?: RequestOptions): Promise<Json> {
     return this.do("DELETE", "/v1/console/license", "/v1/console/license", undefined, opts);
+  }
+
+  /**
+   * GET /v1/console/mcp-gateway — Read the effective MCP gateway configuration and governance.
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleMcpGateway(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/console/mcp-gateway", "/v1/console/mcp-gateway", undefined, opts);
+  }
+
+  /**
+   * POST /v1/console/mcp-gateway/servers — Add a disabled upstream using tenant secret references (AAL3).
+   *
+   * Stability: stable.
+   */
+  postV1ConsoleMcpGatewayServers(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/console/mcp-gateway/servers", "/v1/console/mcp-gateway/servers", body, opts);
+  }
+
+  /**
+   * PUT /v1/console/mcp-gateway/servers/{id} — Update or explicitly enable a tested upstream (AAL3).
+   *
+   * Stability: stable.
+   */
+  putV1ConsoleMcpGatewayServersById(id: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PUT", "/v1/console/mcp-gateway/servers/{id}", `/v1/console/mcp-gateway/servers/${encodeURIComponent(id)}`, body, opts);
+  }
+
+  /**
+   * DELETE /v1/console/mcp-gateway/servers/{id} — Remove an upstream from the tenant gateway (AAL3).
+   *
+   * Stability: stable.
+   */
+  deleteV1ConsoleMcpGatewayServersById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/console/mcp-gateway/servers/{id}", `/v1/console/mcp-gateway/servers/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/console/mcp-gateway/servers/{id}/test — Initialize and list tools without calling them; record a bounded verdict (AAL3).
+   *
+   * Stability: stable.
+   */
+  postV1ConsoleMcpGatewayServersByIdTest(id: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/console/mcp-gateway/servers/{id}/test", `/v1/console/mcp-gateway/servers/${encodeURIComponent(id)}/test`, body, opts);
+  }
+
+  /**
+   * PUT /v1/console/mcp-gateway/session-tools — Set the default-off session MCP switch for this tenant (AAL3).
+   *
+   * Stability: stable.
+   */
+  putV1ConsoleMcpGatewaySessionTools(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PUT", "/v1/console/mcp-gateway/session-tools", "/v1/console/mcp-gateway/session-tools", body, opts);
   }
 
   /**
@@ -1160,6 +1277,24 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/users/{id}/totp — Read a member's factor status in the selected tenant.
+   *
+   * Stability: stable.
+   */
+  getV1UsersByIdTotp(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/users/{id}/totp", `/v1/users/${encodeURIComponent(id)}/totp`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/users/{id}/totp/reset — Reset a tenant-governed member's factor with AAL3.
+   *
+   * Stability: stable.
+   */
+  postV1UsersByIdTotpReset(id: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/users/{id}/totp/reset", `/v1/users/${encodeURIComponent(id)}/totp/reset`, body, opts);
+  }
+
+  /**
    * GET /v1/workspaces — List workspaces in the resolved tenant.
    *
    * Stability: stable.
@@ -1301,6 +1436,51 @@ export class Client extends ClientCore {
    */
   getV1MAdoptionTrend(opts?: RequestOptions): Promise<Json> {
     return this.do("GET", "/v1/m/adoption/trend", "/v1/m/adoption/trend", undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/agenttools/detect — Discovers host executables without reading provider credential homes.
+   *
+   * Stability: beta.
+   */
+  getV1MAgenttoolsDetect(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/agenttools/detect", "/v1/m/agenttools/detect", undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/agenttools/installs — Starts one audited host installation from an approved plan at AAL3.
+   *
+   * Stability: beta.
+   */
+  postV1MAgenttoolsInstalls(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/agenttools/installs", "/v1/m/agenttools/installs", body, opts);
+  }
+
+  /**
+   * GET /v1/m/agenttools/inventory — Lists managed host tools, release integrity, verification policies and the five most recently updated installation jobs.
+   *
+   * Stability: beta.
+   */
+  getV1MAgenttoolsInventory(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/agenttools/inventory", "/v1/m/agenttools/inventory", undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/agenttools/jobs/{id} — Returns bounded installation progress, state, errors and the verified receipt to a system administrator.
+   *
+   * Stability: beta.
+   */
+  getV1MAgenttoolsJobsById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/agenttools/jobs/{id}", `/v1/m/agenttools/jobs/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/agenttools/plans — Resolves an official release and returns the digest-bound version, verification policy and destination for system administrator review before install.
+   *
+   * Stability: beta.
+   */
+  postV1MAgenttoolsPlans(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/agenttools/plans", "/v1/m/agenttools/plans", body, opts);
   }
 
   /**
@@ -7163,7 +7343,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/sessions/provider-accounts — sessions module route (requires sessions:account:read)
+   * GET /v1/m/sessions/provider-accounts — Lists the tenant's named provider accounts, optionally narrowed by environment, driver and state; a profile nobody has named is never listed.
    *
    * Stability: beta.
    */
@@ -7172,7 +7352,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/sessions/provider-accounts — sessions module route (requires sessions:account:write)
+   * POST /v1/m/sessions/provider-accounts — Creates a provider account: the server builds its home on this node in two phases and registers the account that owns it, under the given name or a generated one.
    *
    * Stability: beta.
    */
@@ -7181,7 +7361,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/sessions/provider-accounts/{ref} — sessions module route (requires sessions:account:read)
+   * GET /v1/m/sessions/provider-accounts/{ref} — Returns one provider account by its reference, without its paths; a profile nobody has named is not an account and answers not found.
    *
    * Stability: beta.
    */
@@ -7190,7 +7370,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * PATCH /v1/m/sessions/provider-accounts/{ref} — sessions module route (requires sessions:account:write)
+   * PATCH /v1/m/sessions/provider-accounts/{ref} — Edits the display name and/or color without changing the account's stable name, reference, home or launch configuration; an empty string clears that field.
    *
    * Stability: beta.
    */
@@ -7199,7 +7379,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/sessions/provider-accounts/{ref}/adopt — sessions module route (requires sessions:account:write)
+   * POST /v1/m/sessions/provider-accounts/{ref}/adopt — Names an existing provider profile as an account, under the given name or a generated one; the database decides whether the name is free, and the home is recorded as shared isolation.
    *
    * Stability: beta.
    */

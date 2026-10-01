@@ -86,8 +86,7 @@ process table:
 
 ```bash
 # paste the olst_… token the engine printed when it started
-olivares auth bootstrap --server https://127.0.0.1:8443 \
-  --ca-cert <data-dir>/tls.crt \
+./bin/olivares auth bootstrap --server http://127.0.0.1:8443 \
   --setup-token-file - \
   --email admin@local --password-file ./admin.pw \
   --organization "First hour" --save-context

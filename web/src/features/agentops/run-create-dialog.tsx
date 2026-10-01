@@ -4,7 +4,7 @@
 import { ProviderAccent } from './provider-accent'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { AlertTriangle } from 'lucide-react'
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import {
@@ -32,6 +32,9 @@ import { ListTruncationBadge } from '@/features/_intel'
 import { agentOpsApi, agentOpsKeys } from './api'
 import { profileOwnedEnvNames } from './provider-contract'
 import { useAuthBoundary } from './auth-boundary'
+import { useStepUpOwner, type StepUpAttempt } from '@/stores/step-up'
+import { launchRunAsAgent } from './launch-agent-api'
+import { LaunchIdentityFields, useLaunchIdentities } from './launch-identity'
 import {
   LaunchReadinessPanel,
   useProfileLaunchReadiness,
@@ -95,6 +98,21 @@ export function RunCreateDialog({
   )
   // The engine requires an explicit profile selection before creating a session.
   const [profileRef, setProfileRef] = useState<string>(NONE)
+  const [agentRef, setAgentRef] = useState('')
+  const identities = useLaunchIdentities(open && agentRef !== '')
+  const captureOwner = useStepUpOwner()
+  const liveAuthority = useRef({
+    key: boundary.key,
+    canRunWrite,
+    agentRef,
+    profileRef,
+  })
+  liveAuthority.current = {
+    key: boundary.key,
+    canRunWrite,
+    agentRef,
+    profileRef,
+  }
 
   // Adjust the draft when the parent opens another template. This is a guarded
   // update of this component during render, so no effect can overwrite a choice.
@@ -131,6 +149,7 @@ export function RunCreateDialog({
   if (seenBoundary !== boundary.key) {
     setSeenBoundary(boundary.key)
     setProfileRef(NONE)
+    setAgentRef('')
   }
 
   const canReadProfiles = can('sessions:profile:read')
@@ -149,6 +168,12 @@ export function RunCreateDialog({
     [profilesQuery.data],
   )
   const selectedProfile = profiles.find((p) => p.profile_ref === profileRef)
+  const requiresAgent =
+    selectedProfile?.session_work_grant?.role === 'orchestrator'
+  const agentReady =
+    agentRef === ''
+      ? !requiresAgent
+      : identities.agents.some((a) => a.identity_ref === agentRef)
   // The server refuses an env_allow that names a variable the profile owns; say so
   // before the 400 rather than after it. The list is the server's WHOLE owned family
   // (providerHomeEnvName), not the current driver's two: the engine refuses another
@@ -217,6 +242,7 @@ export function RunCreateDialog({
   const requestPermission = launchRequestPermission(currentReadiness)
   const readinessBlocksRequest =
     profileRef === NONE ||
+    !agentReady ||
     !previewReady ||
     !currentReadiness ||
     requestPermission === 'block' ||
@@ -244,33 +270,70 @@ export function RunCreateDialog({
     setEnvAllow('')
     setTemplateId(NONE)
     setProfileRef(NONE)
+    setAgentRef('')
   }
 
+  const requestBody = (): CreateRunRequest => ({
+    name: name.trim(),
+    transport,
+    permission_mode: permissionMode,
+    effort: effort === DEFAULT_EFFORT ? '' : effort,
+    model: model.trim(),
+    workspace_ref: workspaceRef === NONE ? '' : workspaceRef,
+    isolation: 'native',
+    env_allow: envAllow
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean),
+    ...(templateId === NONE ? {} : { template_id: templateId }),
+    // Only the REFERENCE leaves the browser: the server resolves the homes.
+    ...(profileRef === NONE ? {} : { provider_profile_ref: profileRef }),
+  })
+
   const create = useMutation({
-    mutationFn: () => {
-      if (profileRef === NONE || !canRunWrite || readinessBlocksRequest) {
+    mutationFn: ({
+      body,
+      actor,
+      tenant,
+      boundaryKey,
+      attempt,
+    }: {
+      body: CreateRunRequest
+      actor: string
+      tenant: string | null
+      boundaryKey: string
+      attempt: StepUpAttempt
+    }) => {
+      if (
+        profileRef === NONE ||
+        body.provider_profile_ref !== profileRef ||
+        actor !== agentRef ||
+        !canRunWrite ||
+        readinessBlocksRequest
+      ) {
         throw new Error(t('create.profileHint'))
       }
-      const body: CreateRunRequest = {
-        name: name.trim(),
-        transport,
-        permission_mode: permissionMode,
-        effort: effort === DEFAULT_EFFORT ? '' : effort,
-        model: model.trim(),
-        workspace_ref: workspaceRef === NONE ? '' : workspaceRef,
-        isolation: 'native',
-        env_allow: envAllow
-          .split(',')
-          .map((s) => s.trim())
-          .filter(Boolean),
-        ...(templateId === NONE ? {} : { template_id: templateId }),
-        // Only the REFERENCE leaves the browser: the server resolves the homes.
-        ...(profileRef === NONE ? {} : { provider_profile_ref: profileRef }),
+      const dispatchGuard = () => {
+        attempt.dispatchGuard()
+        if (
+          liveAuthority.current.key !== boundaryKey ||
+          !liveAuthority.current.canRunWrite ||
+          liveAuthority.current.agentRef !== actor ||
+          liveAuthority.current.profileRef !== body.provider_profile_ref
+        )
+          throw new Error(t('profiles.authority.lost'))
       }
-      return agentOpsApi.createRun(body)
+      dispatchGuard()
+      return actor
+        ? launchRunAsAgent(body, actor, tenant, {
+            signal: attempt.signal,
+            dispatchGuard,
+          })
+        : agentOpsApi.createRun(body)
     },
     retry: false,
-    onSuccess: () => {
+    onSuccess: (_data, intent) => {
+      if (!intent.attempt.current()) return
       void qc.invalidateQueries({ queryKey: agentOpsKeys.all(activeTenant) })
       toast.success(t('create.success'))
       reset()
@@ -280,7 +343,14 @@ export function RunCreateDialog({
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
-    if (!create.isPending) create.mutate()
+    if (!create.isPending && agentReady)
+      create.mutate({
+        body: requestBody(),
+        actor: agentRef,
+        tenant: activeTenant,
+        boundaryKey: boundary.key,
+        attempt: captureOwner().begin(),
+      })
   }
 
   return (
@@ -310,6 +380,13 @@ export function RunCreateDialog({
           {/* min-h-0 lets this shrink inside the flex column; the negative margin
               with matching padding keeps focus rings from clipping at the edge. */}
           <div className="-mx-1 flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto px-1">
+            <LaunchIdentityFields
+              value={agentRef}
+              onChange={setAgentRef}
+              identities={identities}
+              requiresAgent={requiresAgent}
+              pending={create.isPending}
+            />
             <Field label={t('create.name')}>
               <Input
                 value={name}

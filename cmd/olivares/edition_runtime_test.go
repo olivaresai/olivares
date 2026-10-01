@@ -223,6 +223,9 @@ func TestBootBindsEditionRuntimeCapabilities(t *testing.T) {
 	if err := checkEditionRuntimeBindings(src); err != nil {
 		t.Fatal(err)
 	}
+	// The same producer names also appear in api.Options; target the edition
+	// literal as a group so each mutation alters only the actual edition bind.
+	const identityBindings = "Authenticator: authr, FederationService: fedSvc, SecretStore: secretStore,"
 	for _, tc := range []struct{ name, from, to string }{
 		{"missing resolver", "Principals: authr,", ""},
 		{"nil resolver", "Principals: authr", "Principals: nil"},
@@ -234,6 +237,15 @@ func TestBootBindsEditionRuntimeCapabilities(t *testing.T) {
 		{"nil secrets", "Governance: set.gov, Secrets: secretResolver", "Governance: set.gov, Secrets: nil"},
 		{"wrong secrets", "Governance: set.gov, Secrets: secretResolver", "Governance: set.gov, Secrets: otherResolver"},
 		{"second resolver", "Governance: set.gov, Secrets: secretResolver", "Governance: set.gov, Secrets: newSecretResolver(secretStore, osGetenv, log)"},
+		{"missing authenticator", identityBindings, "FederationService: fedSvc, SecretStore: secretStore,"},
+		{"nil authenticator", identityBindings, "Authenticator: nil, FederationService: fedSvc, SecretStore: secretStore,"},
+		{"second authenticator", identityBindings, "Authenticator: auth.NewAuthenticator(st, nil), FederationService: fedSvc, SecretStore: secretStore,"},
+		{"missing federation service", identityBindings, "Authenticator: authr, SecretStore: secretStore,"},
+		{"nil federation service", identityBindings, "Authenticator: authr, FederationService: nil, SecretStore: secretStore,"},
+		{"second federation service", identityBindings, "Authenticator: authr, FederationService: auth.NewFederationService(st, fedSealer, nil, nil, nil), SecretStore: secretStore,"},
+		{"missing secret store", identityBindings, "Authenticator: authr, FederationService: fedSvc,"},
+		{"nil secret store", identityBindings, "Authenticator: authr, FederationService: fedSvc, SecretStore: nil,"},
+		{"second secret store", identityBindings, "Authenticator: authr, FederationService: fedSvc, SecretStore: auth.NewSecretStore(st, secretSealer),"},
 		{"missing binding", "editionBindModuleDependencies(", "unrelatedBinding("},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -311,7 +323,8 @@ func checkEditionRuntimeBindings(src []byte) error {
 	}
 	want := map[string]string{"Store": "st", "Sessions": "set.sessions",
 		"Rows": "api.NewReadRowAuthorizationPort(authz, authr)", "Mutations": "authz",
-		"Principals": "authr", "Governance": "set.gov", "Secrets": "secretResolver"}
+		"Principals": "authr", "Governance": "set.gov", "Secrets": "secretResolver",
+		"Authenticator": "authr", "FederationService": "fedSvc", "SecretStore": "secretStore"}
 	for _, elt := range deps.Elts {
 		pair, ok := elt.(*ast.KeyValueExpr)
 		if !ok {

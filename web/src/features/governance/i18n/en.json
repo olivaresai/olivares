@@ -382,7 +382,7 @@
     "sensitiveInput": "Computer-use typed text contains sensitive content (DLP classes detected)",
     "responseBlocked": "Response withheld: computer-use typed text contains sensitive content",
     "honesty": "Enforcement is verified-deployed at the proxy only. A custom ANTHROPIC_BASE_URL evades it. Computer-use tools are client-side: the model proposes, the client executes.",
-    "enterpriseRequired": "Deep screenshot analysis (OCR + DLP) and timeline recording require the enterprise add-on."
+    "enterpriseRequired": "Deep screenshot analysis (OCR + DLP) and timeline recording require the enterprise module."
   },
   "projects": {
     "title": "Claude Projects governance",

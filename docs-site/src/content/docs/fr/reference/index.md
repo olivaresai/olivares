@@ -23,7 +23,7 @@ limites](/fr/start/honesty-and-limits/) pour le contrat global.
 
 | Domaine | Ce qu'il documente | Source de vérité |
 |---|---|---|
-| **[API REST](/reference/api/)** | L'API HTTP du control plane : auth, setup, tenancy, agents, l'access map R/RW, tokens et l'audit ledger. | Le contrat **OpenAPI 3.1** du produit (54 chemins de cœur), rendu au build à partir du fichier réel — pas une copie. |
+| **[API REST](/reference/api/)** | L'API HTTP du control plane : auth, setup, tenancy, agents, l'access map R/RW, tokens et l'audit ledger. | Le contrat **OpenAPI 3.1** du produit (67 chemins de cœur), rendu au build à partir du fichier réel — pas une copie. |
 | **[Routes de module (bêta)](/reference/api-beta/)** | Les routes de module du produit (`/v1/m/<ns>/…`) — FinOps, conformité, gouvernance, sessions, modèles, knowledge, … — dans un document OpenAPI **bêta** distinct. | Le même contrat OpenAPI 3.1, reflété au build à partir des routes enregistrées par les modules. |
 | **[Politique de stabilité](/fr/reference/api-stability/)** | Versioning, niveaux de stabilité, signalement dépréciation/sunset et fenêtres de support minimales pour l'API, le provider et les SDK clients. | La table de dépréciation in-code et ses tests de fenêtre qui font échouer le build. |
 | **[gRPC](/fr/reference/grpc/)** | Le miroir gRPC du moteur et le contrat wire versionné des plugins utilisé par chaque connecteur et module hors processus. | Les tables d'enregistrement `grpc.ServiceDesc` que les serveurs transmettent à gRPC. |
@@ -45,7 +45,7 @@ agents, l'access map lecture/écriture (`GET /v1/access-edges` ; son *drift* lea
 réconcilié est servi par le module access-map plutôt que par la surface de cœur), la
 gestion des tokens et l'audit ledger.
 
-Le contrat décrit **54 chemins de cœur**. C'est délibéré : c'est la surface stable et
+Le contrat décrit **67 chemins de cœur**. C'est délibéré : c'est la surface stable et
 versionnée du control plane, pas chaque route à laquelle le moteur peut répondre. Ce à quoi
 « stable » s'engage — versioning, signalement de dépréciation et fenêtres de support
 minimales — est la [politique de stabilité de l'API](/fr/reference/api-stability/).

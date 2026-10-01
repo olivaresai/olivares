@@ -117,6 +117,20 @@ export function PeopleTab() {
     onDone: () => setMemberToggle(null),
   })
 
+  // the lost-device reset of a member's TOTP factor. The confirm dialog is
+  // the guard the row's one-click label alone cannot be.
+  const [totpResetTarget, setTotpResetTarget] = useState<RosterMemberDTO | null>(
+    null,
+  )
+  const memberTOTPResetMutation = usePrivilegedMutation<RosterMemberDTO, unknown>(
+    {
+      mutationFn: (member) => consoleApi.resetMemberTOTP(member.user_id),
+      invalidateKeys: () => [consoleKeys.members(activeTenant)],
+      successMessage: t('console:members.totpResetDone'),
+      onDone: () => setTotpResetTarget(null),
+    },
+  )
+
   // Flip a superadmin: an active account is disabled, an inactive one re-enabled.
   const toggleMutation = usePrivilegedMutation<OnboardedUser, OnboardedUser>({
     mutationFn: (u) =>
@@ -216,6 +230,7 @@ export function PeopleTab() {
                       member={member}
                       canManage={canManageMembers}
                       onToggle={setMemberToggle}
+                      onResetTOTP={setTotpResetTarget}
                     />
                   ))}
                 </tbody>
@@ -432,6 +447,23 @@ export function PeopleTab() {
         </RequireAssurance>
       ) : null}
 
+      {totpResetTarget ? (
+        <RequireAssurance minAal={AAL.HARDWARE} action="console">
+          <ConfirmDialog
+            open
+            onOpenChange={(open) => !open && setTotpResetTarget(null)}
+            title={t('console:members.totpResetTitle')}
+            description={t('console:members.totpResetBody', {
+              email: totpResetTarget.email,
+            })}
+            confirmLabel={t('console:members.totpReset')}
+            tone="danger"
+            pending={memberTOTPResetMutation.isPending}
+            onConfirm={() => memberTOTPResetMutation.mutate(totpResetTarget)}
+          />
+        </RequireAssurance>
+      ) : null}
+
       <Dialog
         open={toggle !== null}
         onOpenChange={(o) => !o && setToggle(null)}
@@ -470,10 +502,12 @@ function RosterMemberRow({
   member,
   canManage,
   onToggle,
+  onResetTOTP,
 }: {
   member: RosterMemberDTO
   canManage: boolean
   onToggle: (member: RosterMemberDTO) => void
+  onResetTOTP: (member: RosterMemberDTO) => void
 }) {
   const { t } = useTranslation(['console', 'common'])
   const active = member.status === 'active'
@@ -535,6 +569,19 @@ function RosterMemberRow({
         </Badge>
       </td>
       <td className="text-right">
+        <div className="flex items-center justify-end gap-2">
+        {canManage && !member.sso_only ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => onResetTOTP(member)}
+            aria-label={t('console:members.totpResetLabel', {
+              email: member.email,
+            })}
+          >
+            {t('console:members.totpReset')}
+          </Button>
+        ) : null}
         {canManage && active ? (
           <Switch
             checked
@@ -564,6 +611,7 @@ function RosterMemberRow({
         ) : (
           <span className="text-muted-foreground">-</span>
         )}
+        </div>
       </td>
     </tr>
   )

@@ -29,6 +29,7 @@ import { NhiLifecycleTab } from './nhi-lifecycle'
 import { NhiRosterTab } from './nhi-roster'
 import { PostureTab } from './posture'
 import { PrivilegedLoginTab } from './privileged-login'
+import { TOTPTab } from './totp'
 import { WifGraphTab } from './wif/wif-graph'
 import './i18n'
 
@@ -40,6 +41,7 @@ type TabKey =
   | 'wif'
   | 'posture'
   | 'login'
+  | 'totp'
 
 const TABS: TabKey[] = [
   'federation',
@@ -49,6 +51,7 @@ const TABS: TabKey[] = [
   'wif',
   'posture',
   'login',
+  'totp',
 ]
 
 /**
@@ -134,6 +137,9 @@ export default function IdentityView() {
         </TabsContent>
         <TabsContent value="login">
           <PrivilegedLoginTab />
+        </TabsContent>
+        <TabsContent value="totp">
+          <TOTPTab />
         </TabsContent>
       </Tabs>
     </div>

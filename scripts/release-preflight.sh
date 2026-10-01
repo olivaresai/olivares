@@ -83,7 +83,7 @@ req() {
 PROD_REPO="olivaresai/olivares"
 PROD_OCI="ghcr.io/olivaresai/olivares"
 PROD_SOURCE="https://github.com/olivaresai/olivares"
-# PRERELEASE POLICY, PINNED DENY-CLOSED (R1 contrast P2-03). This grammar rejects
+# PRERELEASE POLICY, PINNED DENY-CLOSED (independent review P2-03). This grammar rejects
 # 26.10.0-rc.N/-beta.N on purpose: the production cosign certificate identity — the
 # default regexp in this workflow's OTA verification, in scripts/verify-release.sh and
 # in the reviewed release profile (§C.2) — only matches clean MAJOR.MINOR.PATCH tag refs, so a prerelease tag

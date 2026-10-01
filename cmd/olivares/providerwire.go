@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -15,9 +16,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/connectors/local"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/sdk"
 )
 
 // providerwire.go is the composition-root half of the provider records.
@@ -129,6 +132,7 @@ const anthropicVersionHeader = "2023-06-01"
 // providerProbe asks a provider which models it serves.
 //
 // ⛔ IT NEVER SENDS A COMPLETION. The whole surface is one GET of a model list.
+// Ollama uses the local connector's model list and read-only show metadata.
 // A test that generated a token would spend the operator's money, on a model
 // nobody chose, to answer a question the list already answers: can this endpoint
 // be reached, and does it accept this credential. The HTTP client below has no
@@ -212,6 +216,25 @@ func authHeaders(req *http.Request, kind, key string) {
 // the provider documents — is reported as unreachable, because none of them is
 // evidence about the key.
 func (p providerProbe) Probe(ctx context.Context, req sessions.ProviderProbeRequest) (sessions.ProviderProbeResult, error) {
+	if req.Kind == sessions.ProviderKindOllama {
+		ctx, cancel := context.WithTimeout(ctx, providerProbeTimeout)
+		defer cancel()
+		source := local.NewWithClient(providerMetadataClient{p.client})
+		if err := source.Open(ctx, sdk.Config{Settings: map[string]string{"ollama_url": req.BaseURL, "vllm_url": ""}}); err != nil {
+			return sessions.ProviderProbeResult{}, err
+		}
+		defer source.Close(ctx)
+		catalog, err := source.Snapshot(ctx)
+		if err != nil {
+			return sessions.ProviderProbeResult{}, fmt.Errorf("the local model endpoint could not be read")
+		}
+		models := make([]string, 0, len(catalog.Models))
+		for _, model := range catalog.Models {
+			models = append(models, model.Ref)
+		}
+		sort.Strings(models)
+		return sessions.ProviderProbeResult{Models: models, Detail: fmt.Sprintf("%d local models listed", len(models))}, nil
+	}
 	url, err := modelsURL(req.Kind, req.BaseURL)
 	if err != nil {
 		return sessions.ProviderProbeResult{}, err
@@ -279,4 +302,25 @@ func parseModelList(body []byte) []string {
 	}
 	sort.Strings(out)
 	return out
+}
+
+// providerMetadataClient bounds a native metadata response before the connector
+// decodes it. It retains the same timeout, host/redirect policy and auth behavior.
+type providerMetadataClient struct{ client *http.Client }
+
+func (c providerMetadataClient) Do(req *http.Request) (*http.Response, error) {
+	response, err := c.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer response.Body.Close()
+	body, err := io.ReadAll(io.LimitReader(response.Body, providerProbeBodyCap+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > providerProbeBodyCap {
+		return nil, errors.New("native metadata response exceeds its bound")
+	}
+	response.Body = io.NopCloser(bytes.NewReader(body))
+	return response, nil
 }

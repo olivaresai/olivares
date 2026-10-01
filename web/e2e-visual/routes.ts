@@ -4,10 +4,15 @@
 //
 // Side-effect-free route inventories shared by the standalone AT gate, the
 // Playwright axe checks, and the FEATURE_VIEWS coverage guard.
+import {
+  ANONYMOUS_EXTENSION_ROUTES,
+  EXTENSION_ROUTES,
+} from '../src/features/extensions.ts'
 
 export const SESSION_VIEWER_ROUTE = '/session-viewer/sess-a11y'
 
 export const AUTH_ROUTES = [
+  ...EXTENSION_ROUTES.map(({ path }) => path),
   '/',
   '/onboarding',
   '/workspace',
@@ -43,6 +48,7 @@ export const AUTH_ROUTES = [
   '/work',
   '/agentops',
   '/providers',
+  '/agent-tools',
   '/provider-profiles',
   '/provider-bindings',
   '/provider-accounts',
@@ -96,6 +102,7 @@ export const AUTH_ROUTES = [
 //    una persona invitada, así que no visitarla dejaba sin medir el arranque de todo cliente nuevo
 //    que no sea el que instala. Renderiza sin sesión y sin token: es un estado válido y capturable.
 export const PUBLIC_ROUTES = [
+  ...ANONYMOUS_EXTENSION_ROUTES.map(({ path }) => path),
   '/login',
   '/setup',
   '/accept-invite',

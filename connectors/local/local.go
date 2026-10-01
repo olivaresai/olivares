@@ -17,6 +17,7 @@ package local
 
 import (
 	"context"
+	"fmt"
 	"strconv"
 	"sync"
 	"time"
@@ -33,6 +34,9 @@ const Name = "olivares.local"
 // subjectResidency is the subject kind for "this model is loaded right now", which
 // is a different assertion from the catalog's "this model is installed".
 const subjectResidency = "local.residency"
+
+// maxOllamaCatalogModels bounds metadata allocation and per-model show fan-out.
+const maxOllamaCatalogModels = 512
 
 const defaultOllamaURL = "http://localhost:11434"
 
@@ -60,6 +64,14 @@ var (
 // disabled until configured.
 func New() *Source {
 	return &Source{ollamaURL: defaultOllamaURL}
+}
+
+// NewWithClient uses the composition root's bounded HTTP transport for all
+// metadata reads. A nil client retains New's default behavior.
+func NewWithClient(client modelprovider.Doer) *Source {
+	s := New()
+	s.doer = client
+	return s
 }
 
 // Descriptor returns the connector's self-description and declared configuration.
@@ -272,6 +284,9 @@ func (s *Source) ollamaModels(ctx context.Context) ([]modelprovider.Model, error
 	latency, err := s.timedGetJSON(ctx, s.ollamaClient, "/api/tags", &resp)
 	if err != nil {
 		return nil, err
+	}
+	if len(resp.Models) > maxOllamaCatalogModels {
+		return nil, fmt.Errorf("ollama catalog exceeds %d models", maxOllamaCatalogModels)
 	}
 	out := make([]modelprovider.Model, len(resp.Models))
 	sem := make(chan struct{}, ollamaShowConcurrency)

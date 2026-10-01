@@ -292,7 +292,7 @@ func WithStopWaitDelay(d time.Duration) Option {
 	}
 }
 
-// WithRuntimeCredentialHeartbeatInterval overrides the independent K3 liveness
+// WithRuntimeCredentialHeartbeatInterval overrides the independent runtime liveness
 // heartbeat. Production defaults below half the Claim TTL; tests use a short
 // interval to prove a silent process is fenced without emitting stdout.
 func WithRuntimeCredentialHeartbeatInterval(d time.Duration) Option {

@@ -6,7 +6,7 @@
 # alias-image-digest.sh — create a mutable alias tag for an already-verified digest and
 # PROVE the alias still resolves to that exact digest before declaring success.
 #
-# WHY (R1 contrast P1-01, measured against Docker's primary documentation). The naive
+# WHY (independent review P1-01, measured against Docker's primary documentation). The naive
 # `docker buildx imagetools create --tag REPO:alias REPO@sha256:D` is NOT an aliasing
 # operation for every source: with a single source that is not already a manifest
 # list/index, imagetools defaults to `--prefer-index=true` and WRAPS the manifest in a

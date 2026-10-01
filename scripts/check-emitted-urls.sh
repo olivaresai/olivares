@@ -219,8 +219,23 @@ MAX_RECORD_AGE_DAYS=45
 #
 #   package-repository-awaits-authorized-publish
 #       The canonical package origin exists in DNS but answered 404 in five of five probes on
-#       2026-09-02. F2 prepares the guarded publisher; only the separately authorized publication
+#       2026-09-02. The guarded publisher is prepared; only the separately authorized publication
 #       act can populate the bucket and make this endpoint answer.
+#
+#   public-release-26.10.0-pending
+#       README.md names the 26.10.0 release page and its three Linux package downloads. They exist
+#       only after the 26.10.0 release is published; before that they answer 404. The rows move to
+#       200, and lose this owner, when the published release answers.
+#
+#   appliance-origin-unpublished
+#       .github/workflows/appliance-image.yml names https://appliance.olivares.ai as the origin of
+#       appliance files larger than 2 GiB. No appliance image is published with 26.10.0 and the name
+#       does not resolve (000). The row changes when an appliance publication binds that origin.
+#
+#   credential-audience-not-a-location
+#       core/license/aptrefresh and core/license/dnfrefresh compare these two URLs as the exact
+#       audience of a package-repository credential. They are identities, not pages: a plain GET
+#       answers 400 and must keep doing so for the audience to stay exact.
 #
 # ⚠⚠ AND RE-PROBING EN MASSE ALMOST DESTROYED THAT DECISION (2026-08-18). Regenerating the whole
 # record from one `--probe` run overwrote the docs.* lines with `000` — «I could not reach it» —
@@ -258,7 +273,12 @@ MAX_RECORD_AGE_DAYS=45
 # CODE_OF_CONDUCT and honesty-and-limits blob links, Discussions, the v26.8.0 tag page, the raw
 # honesty-and-limits link and the raw install.sh one-liner. Only docs/launch/ files emit them. The
 # gate now refuses such a row inline, so the public tree never reads one as emitted by nothing.
+# 2026-09-30 · 26.10.0 prepared. README.md names the 26.10.0 tag page and three package downloads;
+# they answer 404 until the release is published (public-release-26.10.0-pending). The v26.9.0 tag
+# page row left the record: nothing emits it any more. The appliance origin and the two credential
+# audiences were added with their owners above.
 EMITTED_RECORD="https://alma.olivares.ai 200 2026-09-24
+https://appliance.olivares.ai 000 2026-09-30 appliance-origin-unpublished
 https://docs.olivares.ai 200 2026-09-24
 https://docs.olivares.ai/cli 200 2026-09-24
 https://docs.olivares.ai/reference/api-stability/ 200 2026-09-24
@@ -274,10 +294,15 @@ https://github.com/olivaresai/olivares/blob/main/SUPPORT.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/docs/RELEASE-VERIFICATION.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/scripts/smoke-agentops.sh 200 2026-09-24
 https://github.com/olivaresai/olivares/releases 200 2026-09-24
-https://github.com/olivaresai/olivares/releases/tag/v26.9.0 200 2026-09-24
+https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.apk 404 2026-09-30 public-release-26.10.0-pending
+https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.deb 404 2026-09-30 public-release-26.10.0-pending
+https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.rpm 404 2026-09-30 public-release-26.10.0-pending
+https://github.com/olivaresai/olivares/releases/tag/26.10.0 404 2026-09-30 public-release-26.10.0-pending
 https://github.com/olivaresai/olivares/security/advisories/OLIVARES-DRILL-0001 404 2026-09-24 drill-fixture-not-a-location
 https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code 200 2026-09-24
 https://licenses.olivares.ai 200 2026-09-24
+https://licenses.olivares.ai/apt/v1/ 400 2026-09-30 credential-audience-not-a-location
+https://licenses.olivares.ai/dnf/v1/ 400 2026-09-30 credential-audience-not-a-location
 https://olivares.ai 200 2026-09-24
 https://olivares.ai/compliance/assessment-plan/ 200 2026-09-24
 https://olivares.ai/compliance/capabilities 200 2026-09-24

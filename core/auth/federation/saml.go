@@ -358,7 +358,7 @@ func (s *samlProvider) validate(_ context.Context, a auth.Assertion) (auth.Feder
 	// rejected any assertion whose Issuer != the trusted IDPMetadata.EntityID, so by
 	// here it is the verified issuing IdP identity, safe to qualify the subject with
 	// (U3). It is a value (not a pointer), so no nil-guard is needed.
-	id := auth.FederatedIdentity{Subject: nameID, Issuer: assertion.Issuer.Value, Email: email, DisplayName: name}
+	id := auth.FederatedIdentity{Protocol: auth.ProtocolSAML, Subject: nameID, Issuer: assertion.Issuer.Value, Email: email, DisplayName: name}
 	if s.groupsAttr != "" {
 		id.Groups = s.extractGroups(assertion)
 	}

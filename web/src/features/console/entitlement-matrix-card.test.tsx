@@ -57,9 +57,9 @@ describe('EntitlementMatrixCard — labelled consumer states', () => {
     api.getActivation.mockReturnValue(new Promise(() => {}))
     renderIntel(<EntitlementMatrixCard />)
     expect(
-      await screen.findByText(/loading the add-on catalog/i),
+      await screen.findByText(/loading the module catalog/i),
     ).toBeInTheDocument()
-    expect(screen.queryByText(/empty add-on catalog/i)).toBeNull()
+    expect(screen.queryByText(/empty module catalog/i)).toBeNull()
   })
 
   it('labelled community 501: unavailable copy, known license facts, not empty', async () => {
@@ -70,7 +70,7 @@ describe('EntitlementMatrixCard — labelled consumer states', () => {
     ).toBeInTheDocument()
     expect(screen.getByText(/License status:/i)).toBeInTheDocument()
     expect(screen.getByText(/Edition: Community/i)).toBeInTheDocument()
-    expect(screen.queryByText(/empty add-on catalog/i)).toBeNull()
+    expect(screen.queryByText(/empty module catalog/i)).toBeNull()
     expect(screen.queryByText('addon_airs')).toBeNull()
     const help = document.querySelector(
       '[data-slot="entitlement-source-help"]',
@@ -105,7 +105,7 @@ describe('EntitlementMatrixCard — labelled consumer states', () => {
     const user = userEvent.setup()
     renderIntel(<EntitlementMatrixCard />)
     expect(await screen.findByText(/could not be loaded/i)).toBeInTheDocument()
-    expect(screen.queryByText(/empty add-on catalog/i)).toBeNull()
+    expect(screen.queryByText(/empty module catalog/i)).toBeNull()
     expect(api.getActivation).toHaveBeenCalledTimes(1)
     const licenseCalls = api.getLicense.mock.calls.length
     await user.click(screen.getByRole('button', { name: /^retry$/i }))
@@ -122,7 +122,7 @@ describe('EntitlementMatrixCard — labelled consumer states', () => {
       presets: [],
     })
     renderIntel(<EntitlementMatrixCard />)
-    expect(await screen.findByText(/empty add-on catalog/i)).toBeInTheDocument()
+    expect(await screen.findByText(/empty module catalog/i)).toBeInTheDocument()
     expect(screen.queryByText(/unavailable in this build/i)).toBeNull()
     expect(screen.queryByText(/HTTP 501/i)).toBeNull()
   })
@@ -167,7 +167,7 @@ describe('EntitlementMatrixCard — labelled consumer states', () => {
   })
 })
 
-describe('EntitlementMatrixCard — LQ-F1 license read freshness', () => {
+describe('EntitlementMatrixCard — license read freshness', () => {
   const validLicense = {
     ...communityLicense,
     status: 'valid',
@@ -218,7 +218,7 @@ describe('EntitlementMatrixCard — LQ-F1 license read freshness', () => {
     expect(screen.queryByText('addon_airs')).toBeNull()
     expect(
       screen.getByText(
-        /Previously loaded add-on information is no longer current/i,
+        /Previously loaded module information is no longer current/i,
       ),
     ).toBeInTheDocument()
     expect(
@@ -366,7 +366,7 @@ describe('EntitlementMatrixCard — LQ-F1 license read freshness', () => {
     expect(screen.getByText(/could not be loaded/i)).toBeInTheDocument()
     expect(
       screen.getByText(
-        /Previously loaded add-on information is no longer current/i,
+        /Previously loaded module information is no longer current/i,
       ),
     ).toBeInTheDocument()
     expect(screen.getByText(/could not be refreshed/i)).toBeInTheDocument()

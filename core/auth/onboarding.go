@@ -239,7 +239,13 @@ func (a *Authenticator) AcceptInvite(ctx context.Context, token, password, ip st
 	if err != nil {
 		return "", model.AuthSession{}, err
 	}
-	return a.mintSession(ctx, attempt, user, user.CustodyScope(), "user.invite.accept", passwordLogin, func(as store.AuthScope) error {
+	// The password-login policy decision runs here, once, before the mint (the
+	// SSO-mandated account refuses on that reason alone).
+	if err := a.enforceRequireSSO(ctx, user); err != nil {
+		a.auditLoginBlocked(ctx, "user:"+user.ID.String(), attempt.ip, "sso_required")
+		return "", model.AuthSession{}, err
+	}
+	return a.mintSession(ctx, attempt, user, user.CustodyScope(), "user.invite.accept", passwordLogin, nil, func(as store.AuthScope) error {
 		inv, u, err := a.pendingInvite(ctx, as, selector, secret)
 		if err != nil {
 			return err
@@ -267,7 +273,7 @@ func (a *Authenticator) AcceptInvite(ctx context.Context, token, password, ip st
 			Action: "user.invite.accept", TargetKind: "core.user_invite", TargetID: inv.ID,
 		})
 		return err
-	})
+	}, nil)
 }
 
 // inviteStillOwnsAccount refuses an invitation whose account is no longer

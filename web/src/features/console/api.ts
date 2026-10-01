@@ -668,6 +668,7 @@ export interface GroupDTO {
   id: string
   display_name: string
   external_id: string
+  provisioned_by?: string
   mapped_role: string
   parent_group_id: string
   members: number
@@ -1194,6 +1195,14 @@ export const consoleApi = {
     http.get<ListResponse<RosterMemberDTO>>('/v1/members', {
       query: { limit: EVIDENCE_PAGE },
     }),
+  /** reset a member's TOTP second factor — the lost-device path. The
+   * factor and its recovery codes are deleted; the account enroles again at
+   * next login (the policy's enrolment gate, never a lockout). */
+  resetMemberTOTP: (userId: string) =>
+    http.post<{ ok: boolean }>(
+      `/v1/users/${encodeURIComponent(userId)}/totp/reset`,
+      {},
+    ),
   setMemberActive: (userId: string, active: boolean) =>
     http.patch<unknown>(`/v1/scim/v2/Users/${encodeURIComponent(userId)}`, {
       schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
@@ -1285,13 +1294,35 @@ export const consoleApi = {
   testSSO: (input: SSOConfigInput, scope?: string, alias?: string) =>
     http.post<{ ok: boolean }>(`${ssoConfigPath(scope, alias)}/test`, input),
 
-  // Sealed runtime secret store (global, superadmin-gated). Values are never
+  // Sealed secret store: global superadmin or explicit tenant MCP scope. Values are never
   // returned; PUT is used for both create and rotate (rotate = set a new value).
-  listSecrets: () => http.get<SecretsListDTO>('/v1/console/secrets'),
-  putSecret: (input: SecretInput) =>
-    http.put<SecretDTO>('/v1/console/secrets', input),
-  deleteSecret: (name: string) =>
-    http.delete<void>('/v1/console/secrets', { name }),
+  listSecrets: (
+    scope?: 'tenant',
+    opts?: Omit<RequestOptions, 'method' | 'body'>,
+  ) =>
+    http.get<SecretsListDTO>('/v1/console/secrets', {
+      ...opts,
+      query: scope ? { scope } : undefined,
+    }),
+  putSecret: (
+    input: SecretInput,
+    scope?: 'tenant',
+    opts?: Omit<RequestOptions, 'method' | 'body'>,
+  ) =>
+    http.put<SecretDTO>('/v1/console/secrets', input, {
+      ...opts,
+      query: scope ? { scope } : undefined,
+    }),
+  deleteSecret: (
+    name: string,
+    scope?: 'tenant',
+    opts?: Omit<RequestOptions, 'method' | 'body'>,
+  ) =>
+    http.delete<void>(
+      '/v1/console/secrets',
+      { name },
+      { ...opts, query: scope ? { scope } : undefined },
+    ),
 
   // Connector onboarding (global, superadmin-gated). The catalog feeds the
   // descriptor-driven form; putConnector seals inline credentials + applies live.
@@ -1684,7 +1715,10 @@ export const consoleKeys = {
   ssoIdps: (scope?: string) =>
     ['console', 'sso-idps', scope ?? 'global'] as const,
   // The sealed secret store is deployment-global, not tenant-scoped.
-  secrets: () => ['console', 'secrets'] as const,
+  secrets: (scope?: 'tenant') =>
+    scope
+      ? (['console', 'secrets', scope] as const)
+      : (['console', 'secrets'] as const),
   // Connector onboarding: catalog + configured sources, deployment-global.
   connectors: () => ['console', 'connectors'] as const,
   sources: () => ['console', 'sources'] as const,

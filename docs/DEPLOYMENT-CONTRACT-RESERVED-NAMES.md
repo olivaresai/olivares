@@ -6,8 +6,8 @@
 This page exists because a protection that costs the operator something must say so **before** the
 operator meets it in production, not in a source comment they will never read.
 
-Everything here is measured on PostgreSQL **15.18, 16.14, 17.10 and 18.4**, the four certified
-majors, and re-measured whenever the rule changes.
+Everything here is measured on PostgreSQL **15.18, 16.14, 17.10 and 18.4**, and re-measured whenever
+the rule changes. The 26.10 engine starts and upgrades on PostgreSQL 15, 16, 17 and 18. The enrolled disaster-recovery restore control is verified on PostgreSQL 15, 16, 17 and 18.
 
 ## 1. The reservation
 

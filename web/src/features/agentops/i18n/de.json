@@ -118,7 +118,21 @@
     "profileHint": "Wählen Sie das Anbieterprofil für diese Sitzung. Ein Profil ist erforderlich. Lokale Anforderungen werden nach der Vorlagenvorschau für die aktuelle Auswahl gelesen.",
     "profileNotOperable": "in dieser Umgebung nicht aktiviert",
     "profilesNotRead": "Die Provider-Profile konnten nicht gelesen werden; der Start ist ohne Profil weiterhin möglich.",
-    "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME und GROK_HOME gehören dem Profil: ein Start, der eine davon weiterreicht, wird hier abgelehnt. Andere Namen unterliegen weiterhin der Prüfung durch den Server."
+    "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME und GROK_HOME gehören dem Profil: ein Start, der eine davon weiterreicht, wird hier abgelehnt. Andere Namen unterliegen weiterhin der Prüfung durch den Server.",
+    "identity": {
+      "title": "Startidentität",
+      "hint": "Wählen Sie einen zugelassenen Agenten für seinen menschlichen Sponsor. Menschlicher Zugriff allein erteilt keine Agentenberechtigung.",
+      "human": "Aktueller menschlicher Operator",
+      "agent": "Zugelassener Agent (für den Sponsor)",
+      "required": "Ein Orchestrierungsprofil erfordert eine separat authentifizierte Agentenidentität.",
+      "choose": "Agentenidentität",
+      "sponsorHint": "Der Server prüft Agent, Lebenszyklus und Ihre Sponsorzuordnung vor dem Start.",
+      "placeholder": "Zugelassenen Agenten auswählen",
+      "readRequired": "Die NHI-Leseberechtigung ist erforderlich.",
+      "loading": "Agentenidentitäten werden geladen…",
+      "loadFailed": "Identitätsliste nicht verfügbar.",
+      "loadMore": "Weitere Identitäten laden"
+    }
   },
   "detail": {
     "live": "Live",
@@ -544,6 +558,50 @@
       "loadMoreProfiles": "Weitere Profile laden",
       "loadedProfiles": "{{n}} aktive Profile geladen; es gibt weitere.",
       "loadingProfiles": "Profile werden geladen…"
+    },
+    "workGrant": {
+      "title": "Orchestrierungsberechtigung",
+      "hint": "Erteilen Sie Aktionen für einen Arbeitsbereich. Orchestrierungssitzungen müssen als authentifizierter Agent gestartet werden.",
+      "readPending": "Die Berechtigung wartet auf ein bestätigtes Lesen des Profils.",
+      "none": "Keine Orchestrierungsberechtigung",
+      "workspace": "Arbeitsbereich-ID",
+      "actions": "Erlaubte Aktionen",
+      "edit": "Orchestrierungsberechtigung bearbeiten",
+      "revoke": "Orchestrierungsberechtigung widerrufen",
+      "replaceHint": "Speichern oder Widerrufen ersetzt die Berechtigung und entzieht sofort die bisherige Sitzungsberechtigung. Setzen Sie Sitzungen fort, um eine neue Berechtigung zu verwenden.",
+      "revokeConfirm": "Berechtigung widerrufen",
+      "save": "Berechtigung speichern",
+      "saved": "Orchestrierungsberechtigung gespeichert",
+      "revoked": "Orchestrierungsberechtigung widerrufen",
+      "invalidWorkspace": "Geben Sie eine kanonische UUIDv7-Arbeitsbereich-ID ein.",
+      "capabilities": {
+        "work_read": "Arbeit lesen",
+        "work_create": "Arbeit erstellen",
+        "work_assign": "Arbeit zuweisen",
+        "work_review": "Ergebnisse prüfen",
+        "decision_read": "Entscheidungen lesen",
+        "decision_write": "Entscheidungen veröffentlichen"
+      }
+    },
+    "authentication": {
+      "title": "Anbieterauthentifizierung",
+      "source": "Authentifizierungsquelle",
+      "hint": "Wählen Sie die Berechtigung für künftige Starts. Standardmäßig ist keine Quelle zugelassen.",
+      "none": "Keine zugelassen",
+      "accountHome": "Gespeicherte Anmeldung im Profil",
+      "managed": "Verwaltete Anbieter-Zugangsdaten",
+      "provider": "Anbieter",
+      "providerHint": "Nur aktive kompatible Anbieter werden angeboten. Der Server prüft beim Start erneut.",
+      "chooseProvider": "Anbieter auswählen",
+      "readRequired": "Die Leseberechtigung für Anbieter ist erforderlich.",
+      "loadFailed": "Anbieterliste nicht verfügbar.",
+      "retry": "Erneut versuchen",
+      "loading": "Anbieter werden geladen…",
+      "loadMore": "Weitere Anbieter laden",
+      "edit": "Authentifizierung bearbeiten",
+      "launchHint": "Änderungen gelten für künftige Starts. Der laufende Prozess behält seine Authentifizierung.",
+      "save": "Authentifizierung speichern",
+      "saved": "Authentifizierung gespeichert"
     }
   },
   "accounts": {

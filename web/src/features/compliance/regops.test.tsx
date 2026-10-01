@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 //
-// the twelve regulatory-operations writes, tested against the CONTRACT THE
+// The twelve regulatory-operations writes, tested against the CONTRACT THE
 // ENGINE ACTUALLY ENFORCES and, separately, against the SCREEN THAT INVOKES THEM.
 //
 // WHY BOTH HALVES EXIST, because each is blind to what the other catches.
@@ -15,8 +15,8 @@
 //   tool-pinning writes answer 400 in production.
 //
 //   The screen half mounts from the CONTAINER (`ComplianceView`), opens the tab and
-//   presses the button. This is the half that catches the defect this session came
-//   to fix: twelve perfectly correct client functions with no caller. A wire test
+//   presses the button. This catches twelve correct client functions with no
+//   caller. A wire test
 //   calling `complianceApi.*` directly is green on a tab with no buttons at all,
 //   which is exactly the state of the base branch. And it starts at the container
 //   rather than at `RegOpsTab` because rendering the child directly cannot see a
@@ -25,9 +25,9 @@
 //
 //   ⚠ AND "PRESSED" MEANS ALL TWELVE, which it did not in the first version of this
 //   file. Five were pressed and the other seven rested on a direct client test plus
-//   a "the button exists" assertion — so the the model contrast rewired the OSCAL
+//   a "the button exists" assertion — so a wrong-route mutation rewired the OSCAL
 //   button to `generateUsLawPack`, a button that creates the WRONG regulatory
-//   artefact, and it compiled with all 40 cells green (F4). The GENERATORS and
+//   artefact, and it compiled with all 40 cells green. The GENERATORS and
 //   DELETES tables below press every one and assert the ROUTE each must reach,
 //   which is the assertion a wrong-route mutant cannot satisfy.
 //
@@ -35,7 +35,7 @@
 // RequestInit, not the bytes on the socket and not the bytes Go reads. No browser
 // encodes the body here and no handler parses it. What is proved is exact
 // forwarding from React state to `fetch`. End-to-end byte identity needs a composed
-// binary and a browser; this session ran neither.
+// binary and a browser; this test runs neither.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import bundleComplianceDe from './i18n/de.json'
 import bundleComplianceEn from './i18n/en.json'
@@ -205,7 +205,7 @@ const AIMS_PACK = {
 /** TWO snapshots, and that is not padding. Drift compares against the PREDECESSOR
  *  (depthhandlers.go:1525-1535), so a one-snapshot fixture that answers 201 accepts
  *  a request production refuses — the exact "green because the double cannot
- *  reproduce what production can" failure the the model contrast caught (F3).*/
+ *  reproduce what production can" failure caught by a rejecting fixture. */
 const SNAPSHOT = {
   id: 'cs-0',
   snapshot_at: '2026-08-04T14:00:00Z',
@@ -531,7 +531,7 @@ describe('detectCcmDrift — the filter the engine reads, and where from', () =>
 
     await complianceApi.detectCcmDrift('cs-1')
 
-    // This is the defect came to fix, and it is the assertion that fails if
+    // This assertion fails if
     // anyone restores `http.post(path, { snapshot_id })`. A body here is NOT a
     // 400 and NOT a network fault: the request succeeds with 201 and the engine
     // computes drift over its default pair of snapshots instead of the one the
@@ -919,10 +919,9 @@ describe('RegOps writes — reachable from the container, by pressing', () => {
   })
 })
 
-// --- F4: EVERY caller pressed, not five of twelve ----------------------------
+// --- EVERY caller pressed, not five of twelve ----------------------------
 
-/** THE GAP THIS TABLE CLOSES, and it was proved, not guessed. The the model
- *  contrast of replaced the OSCAL call site with `generateUsLawPack(document,
+/** A wrong-route mutation replaced the OSCAL call site with `generateUsLawPack(document,
  *  scopeNote)` — a button that creates the WRONG regulatory artefact — and it
  *  compiled and left all 40 cells green, because OSCAL was covered by a direct
  *  client test plus a "the button exists" assertion. A wire test proves the client
@@ -1100,7 +1099,7 @@ describe('every delete is PRESSED, and removes its own artefact', () => {
   )
 })
 
-// --- F1: a real drift finding, in the engine's own field names ----------------
+// --- A real drift finding, in the engine's own field names ----------------
 
 describe('CCM drift findings render the values the engine sent', () => {
   it('shows framework, control, statuses and detail — not "? → ?"', async () => {
@@ -1267,7 +1266,7 @@ describe('RegOps permissions — the verb is gated separately from the read', ()
   /** One row per plane, each with the verbs it MUST show and the verbs it must not.
    *  The engine requires a different permission per plane
    *  (compliance.go:480-534), so a single `canAdmin` threaded to every panel — the
-   *  easy mistake, and the state this tab was in before — passes a
+   *  easy mistake, and the former state of this tab — passes a
    *  "reader sees nothing" test and fails every row here. */
   const PLANES: Array<{ plane: string; admin: string; shows: RegExp[] }> = [
     {
@@ -1357,7 +1356,7 @@ describe('RegOps failure tones — a boundary is not a fault', () => {
 
     // Explained where the operator is standing...
     expect(
-      await within(dialog).findByText(/enterprise add-on that is not linked/i),
+      await within(dialog).findByText(/enterprise module that is not linked/i),
     ).toBeInTheDocument()
     // ...with no red error toast contradicting it...
     expect(toastSpy.error).not.toHaveBeenCalled()
@@ -1394,7 +1393,7 @@ describe('RegOps failure tones — a boundary is not a fault', () => {
       within(dialog).getByRole('button', { name: /^Generate register$/i }),
     )
 
-    // A 403 here is a purchase boundary, measured on this module by. Telling
+    // A 403 here is a purchase boundary. Telling
     // the operator "not authorized" sends them to ask for a permission nobody can
     // grant them.
     await waitFor(() => expect(toastSpy.warning).toHaveBeenCalled())
@@ -1426,7 +1425,7 @@ describe('RegOps failure tones — a boundary is not a fault', () => {
 
     await waitFor(() => expect(toastSpy.error).toHaveBeenCalled())
     expect(
-      within(dialog).queryByText(/enterprise add-on that is not linked/i),
+      within(dialog).queryByText(/enterprise module that is not linked/i),
     ).toBeNull()
   })
 

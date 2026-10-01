@@ -506,6 +506,58 @@ func webAuthnAuthorityRepo(
 	)
 }
 
+// totpAuthorityRepo guards TOTP credential and recovery-code writes with the
+// same directory-authority rule as the WebAuthn credentials: the referenced
+// account must be canonical, so a factor can never attach to a retired or
+// dangling user.
+func totpCredentialAuthorityRepo(
+	ts *tenantScope,
+	inner store.Repository[model.TOTPCredential],
+) store.Repository[model.TOTPCredential] {
+	validate := func(ctx context.Context, credential model.TOTPCredential) error {
+		return validateAuthorityUsers(ctx, ts, credential.AccountID)
+	}
+	return newAuthorityGuardedRepo(
+		inner,
+		ts.directoryWriter,
+		validate,
+		func(ctx context.Context, credential model.TOTPCredential) error {
+			old, err := inner.Get(ctx, credential.ID)
+			if err != nil {
+				return err
+			}
+			if err := validate(ctx, old); err != nil {
+				return err
+			}
+			return validate(ctx, credential)
+		},
+	)
+}
+
+func totpRecoveryCodeAuthorityRepo(
+	ts *tenantScope,
+	inner store.Repository[model.TOTPRecoveryCode],
+) store.Repository[model.TOTPRecoveryCode] {
+	validate := func(ctx context.Context, code model.TOTPRecoveryCode) error {
+		return validateAuthorityUsers(ctx, ts, code.AccountID)
+	}
+	return newAuthorityGuardedRepo(
+		inner,
+		ts.directoryWriter,
+		validate,
+		func(ctx context.Context, code model.TOTPRecoveryCode) error {
+			old, err := inner.Get(ctx, code.ID)
+			if err != nil {
+				return err
+			}
+			if err := validate(ctx, old); err != nil {
+				return err
+			}
+			return validate(ctx, code)
+		},
+	)
+}
+
 func delegationHandleAuthorityRepo(
 	ts *tenantScope,
 	inner store.Repository[model.DelegationHandle],

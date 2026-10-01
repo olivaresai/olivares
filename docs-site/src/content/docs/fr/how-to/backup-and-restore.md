@@ -23,6 +23,8 @@ votre KMS (`--kek-key-file`) ; l'une des deux exactement est requise. Les clés 
 signature de l'audit et du catalogue voyagent **scellées** à l'intérieur du
 bundle.
 
+**Le contrôle de restauration DR enregistré prend en charge PostgreSQL 15, 16, 17 et 18 dans 26.10** (mesuré sur 15.19, 16.15, 17.11 et 18.6). Les autres versions majeures sont refusées avec `DR restore control contract: PostgreSQL major <major> is unsupported (verified contracts: 15, 16, 17, 18)`, où `<major>` est la version majeure détectée du serveur. Un contrôle n'est jamais réparé : après une mise à niveau majeure de l'installation existante, un contrôle qui ne correspond pas au catalogue et aux permissions de la nouvelle version est refusé.
+
 ## Sauvegarder
 
 **SQLite** (nœud unique) — sûr pendant que `serve` tourne (l'instantané utilise

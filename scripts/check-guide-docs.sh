@@ -86,6 +86,8 @@ noexec_hint() {
 
 # --self-test needs no tree: it plants its own fixtures.
 if [ "$MODE" = "--self-test" ]; then
+	# Exercise imported-array resolution through the actual stage-1 script as well.
+	node --test "$SRC/console-dump.test.mjs" || exit "$?"
 	"$BIN" --self-test -stage1 "$ROOT/scripts/guide-docs/console-dump.mjs"
 	rc=$?
 	if [ "$rc" -eq 126 ] || [ "$rc" -eq 127 ]; then noexec_hint "$rc"; fi

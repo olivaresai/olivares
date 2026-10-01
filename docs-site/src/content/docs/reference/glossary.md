@@ -14,7 +14,7 @@ narrower than their industry usage, and the narrowness is the point.
 Module III's graph of **origins** (agents, identities, sessions) and the
 **resources** they touch, every edge classified by [mode](#mode) and tagged
 with its [signal source](#signal-source), [attribution](#attribution-confidence)
-and [coverage tier](#coverage-tier). A key differentiated capability — one of the 30
+and [coverage tier](#coverage-tier). A key differentiated capability — one of the 31
 modules, not the whole product. See [What is Olivares AI?](/start/what-is-olivares-ai/).
 
 ### Actuation states: `v1` / `on-demand` / `seam`
@@ -187,7 +187,7 @@ process to an agent. See [eBPF/Tetragon](/how-to/connectors/ebpf-tetragon/).
 
 ### live_ref
 
-The server-assigned identity of **one** live session row. v26.9.0 keys
+The server-assigned identity of **one** live session row. 26.10.0 keys
 observation by `(observation scope, external id)` so two provider homes that
 announce the same session id stay two rows. Console and API reads that mean
 “this row” use `live_ref`, not the bare provider id. Bare external-id routes

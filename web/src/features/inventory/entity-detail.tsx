@@ -252,7 +252,7 @@ function EntityDetailBody({
  * value is null, empty or structured, which `renderValue` does not print. The sheet
  * cannot tell those apart, so the copy states only what it knows: nothing additional
  * is available to display here, and that establishes nothing about relations.
- * (INV-R1, independent review of 2026-09-08.)
+ * (INV-finding 1, independent review of 2026-09-08.)
  *
  * 404 is handled before the generic mapping: the entry was listed a moment ago, so
  * "not found" on the point means the catalog no longer holds it (swept or retired),

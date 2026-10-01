@@ -40,5 +40,9 @@
     "setup_complete": "Настройка уже завершена.",
     "cross_tenant_admin_pool_not_configured": "В этой инсталляции нет межтенантного административного пула базы данных. Создайте роль NOSUPERUSER BYPASSRLS командой `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (см. deploy/postgres/README.md) и перезапустите сервер с --admin-dsn, указывающим на эту роль.",
     "internal": "Произошла внутренняя ошибка."
+  },
+  "tenantAdmission": {
+    "title": "Требуется допуск в организацию",
+    "description": "Войдите с учётной записью каталога, допущенной в организацию. Глобальные права bootstrap не разрешают операции связи в рабочем пространстве."
   }
 }

@@ -1458,7 +1458,7 @@ func evaluateIncomingHandoffReadGate(
 		Entity: entity, ChannelID: carrier.channel.ID,
 		MessageID: carrier.message.ID, DeliveryID: carrier.delivery.ID,
 	}
-	currentAudience, err := buildDirectNoticeCurrentAudience(
+	currentAudience, err := buildDirectNoticeReadCurrentAudience(
 		preflight, carrier.message, carrier.delivery, carrier.audiences,
 		carrier.contributions, dbNow,
 	)
@@ -1501,8 +1501,7 @@ func evaluateIncomingHandoffReadGate(
 	default:
 		return directNoticeReadUnknown("incoming handoff read gate has no verdict", nil)
 	}
-	if !communicationClaimsEqualSnapshot(decision.RequiredClaims,
-		CommunicationClaimAuthoritySnapshot{facts: tx.claimAuthorityFacts}) ||
+	if !directNoticeReadClaimsMatch(preflight, carrier.contributions[0], decision.RequiredClaims, tx.claimAuthorityFacts) ||
 		len(decision.SurvivingContributionIDs) != 1 ||
 		decision.SurvivingContributionIDs[0] != carrier.contributions[0].ID ||
 		!equalDirectNoticeAuthorityFacts(preflight.Facts, decision.Facts) {

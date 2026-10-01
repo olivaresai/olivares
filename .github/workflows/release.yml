@@ -110,7 +110,7 @@ env:
   IMAGE_REPO: ghcr.io/olivaresai/olivares
 
 jobs:
-  # --- §C.4: the AUTHORIZATION ROOT of the production tag path (R1 contrast P1-02). ------
+  # --- §C.4: the AUTHORIZATION ROOT of the production tag path (independent review P1-02). ------
   # A previous revision ran this preflight as a STEP inside the goreleaser job — i.e.
   # inside a job that already held `contents/packages/id-token: write` before the first
   # instruction executed, and whose siblings did not depend on it at all. That violates
@@ -120,7 +120,7 @@ jobs:
   # mutating job below `needs:` it — directly or transitively — and reads ONLY its
   # outputs for mode-governed decisions. If it fails, nothing downstream starts.
   #
-  # DELIBERATELY NO repository `if:` here (R1 contrast P2-02): a job-level `if:` that is
+  # DELIBERATELY NO repository `if:` here (independent review P2-02): a job-level `if:` that is
   # false SKIPS silently — green nothing. This read-only job runs in ANY repository the
   # tag push happens in (a fork, a rename, a copied tree) and the script fails RED with
   # the §C.4.2 message. The literal repository guards remain on the MUTATING jobs as the
@@ -1419,10 +1419,10 @@ jobs:
   # the SAME digest before declaring success. Docker's `imagetools create` defaults to
   # `--prefer-index=true`, which WRAPS a single-manifest source in a NEW index with a NEW
   # digest — an alias carrying neither the signature nor the attestations just verified
-  # (R1 contrast P1-01); the script passes `--prefer-index=false` for manifest sources and
+  # (independent review P1-01); the script passes `--prefer-index=false` for manifest sources and
   # asserts digest equality for every source kind.
   #
-  # HONEST SCOPE vs design §D.4 (R1 contrast P3-01): this is ONLY the production-side
+  # HONEST SCOPE vs design §D.4 (independent review P3-01): this is ONLY the production-side
   # extraction of the latest aliases out of the shared build — it is NOT the full §D.4
   # protected promotion. That split (environment: production-release with required
   # reviewers, Docker Hub + Homebrew + draft publication behind the approval) is called
@@ -1811,7 +1811,7 @@ jobs:
   # protected `ota-release-ceremony` environment requires maintainer approval.
   #
   # AUTHORIZATION CONTRACT OF THIS DISPATCH — declared separately from the §C.4 tag-push
-  # preflight, deliberately (R1 contrast P1-02 adjudication). The push-path preflight
+  # preflight, deliberately (independent review P1-02 adjudication). The push-path preflight
   # asserts ref==tag identity, which a phase-2 dispatch cannot satisfy or need: this
   # ceremony runs AFTER the tag run, against an existing draft. Its authorization root is:
   #   1. the protected `ota-release-ceremony` environment — a human maintainer approves

@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -20,6 +21,7 @@ import (
 // this adapter never accepts HTTP input and never exposes a general token issuer.
 type sessionWorkCredentialSource struct {
 	authenticator *auth.Authenticator
+	module        *sessions.Module
 }
 
 func (s sessionWorkCredentialSource) Mint(
@@ -35,6 +37,23 @@ func (s sessionWorkCredentialSource) Mint(
 	)
 	if err != nil {
 		return sessions.WorkSessionCredential{}, err
+	}
+	if req.OrchestrationGrant != "" {
+		if s.module == nil {
+			return sessions.WorkSessionCredential{}, auth.ErrUnauthenticated
+		}
+		spec, err := s.module.OrchestrationCredentialSpec(ctx, req, true)
+		if err != nil || spec == nil {
+			if err == nil {
+				err = auth.ErrUnauthenticated
+			}
+			return sessions.WorkSessionCredential{}, err
+		}
+		issued, err := s.authenticator.IssueOrchestrationSessionCredential(ctx, actor, *spec)
+		if err != nil {
+			return sessions.WorkSessionCredential{}, err
+		}
+		return sessions.WorkSessionCredential{ID: issued.ID, Token: issued.Token, Tenant: issued.Tenant, SessionRef: issued.SessionRef, RunRef: issued.RunRef, AgentRef: issued.AgentRef, ClaimFence: issued.ClaimFence, NotAfter: issued.ExpiresAt}, nil
 	}
 	issued, err := s.authenticator.IssueWorkSessionCredential(ctx, actor, auth.WorkSessionCredentialSpec{
 		Tenant: req.Tenant, SessionRef: req.SessionRef, RunRef: req.RunRef,
@@ -65,10 +84,12 @@ func (s sessionWorkCredentialSource) Revoke(
 	if err != nil {
 		return err
 	}
-	return s.authenticator.RevokeWorkSessionCredential(ctx, actor, id, auth.WorkSessionCredentialSpec{
-		Tenant: expected.Tenant, SessionRef: expected.SessionRef,
-		RunRef: expected.RunRef, AgentRef: expected.AgentRef, ClaimFence: expected.ClaimFence,
-	})
+	spec := auth.WorkSessionCredentialSpec{Tenant: expected.Tenant, SessionRef: expected.SessionRef, RunRef: expected.RunRef, AgentRef: expected.AgentRef, ClaimFence: expected.ClaimFence}
+	err = s.authenticator.RevokeWorkSessionCredential(ctx, actor, id, spec)
+	if errors.Is(err, auth.ErrUnauthenticated) {
+		return s.authenticator.RevokeOrchestrationRuntimeCredential(ctx, actor, id, spec)
+	}
+	return err
 }
 
 func (s sessionWorkCredentialSource) Renew(
@@ -85,6 +106,15 @@ func (s sessionWorkCredentialSource) Renew(
 	)
 	if err != nil {
 		return time.Time{}, err
+	}
+	if s.module != nil {
+		spec, err := s.module.OrchestrationCredentialSpec(ctx, expected, false)
+		if err != nil {
+			return time.Time{}, err
+		}
+		if spec != nil {
+			return s.authenticator.RenewOrchestrationSessionCredential(ctx, actor, id, *spec)
+		}
 	}
 	return s.authenticator.RenewWorkSessionCredential(ctx, actor, id, auth.WorkSessionCredentialSpec{
 		Tenant: expected.Tenant, SessionRef: expected.SessionRef,

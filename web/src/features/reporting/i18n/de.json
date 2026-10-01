@@ -58,7 +58,7 @@
     "description": "Live-Compliance-Status, die Risikozusammenfassung für die Leitung und das signierte Audit-Nachweispaket.",
     "request": "Anfordern",
     "done": "Bericht heruntergeladen",
-    "seam": "Dieser Bericht liegt in einem Add-on, das mit dieser Installation nicht verknüpft ist. Es ist nichts defekt.",
+    "seam": "Dieser Bericht liegt in einem Modul, das mit dieser Installation nicht verknüpft ist. Es ist nichts defekt.",
     "posture": {
       "title": "Compliance-Status",
       "description": "Status je Rahmenwerk und Kontrolle, live berechnet."

@@ -181,7 +181,7 @@ func (e *Engine) inspectRelease(ctx context.Context, root *os.Root, rel, abs, dr
 	}
 	switch schema {
 	case ReceiptSchemaV2:
-		return e.inspectReleaseV2(root, rel, abs, driver)
+		return e.inspectReleaseV2(ctx, root, rel, abs, driver)
 	case ReceiptSchema:
 		return e.inspectReleaseV1(ctx, root, rel, abs, driver)
 	default:
@@ -190,7 +190,7 @@ func (e *Engine) inspectRelease(ctx context.Context, root *os.Root, rel, abs, dr
 	}
 }
 
-func (e *Engine) inspectReleaseV2(root *os.Root, rel, abs, driver string) Installed {
+func (e *Engine) inspectReleaseV2(ctx context.Context, root *os.Root, rel, abs, driver string) Installed {
 	in := Installed{Driver: driver, ReleaseDir: abs, State: StateDamaged}
 	rec, err := readReceiptV2(root, filepath.Join(rel, ReceiptFile), abs)
 	if err != nil {
@@ -204,6 +204,12 @@ func (e *Engine) inspectReleaseV2(root *os.Root, rel, abs, driver string) Instal
 	if rec.Driver != driver {
 		in.Reason = fmt.Sprintf("receipt records driver %q under the %q directory", rec.Driver, driver)
 		return in
+	}
+	if rec.VerificationKind == VerificationGitHubReleaseSHA256 {
+		if err := verifyReleaseArchiveReceipt(ctx, root, rel, rec); err != nil {
+			in.Reason = err.Error()
+			return in
+		}
 	}
 	entry := "bin/" + driver
 	if rec.Driver == DriverGrok {
@@ -340,6 +346,8 @@ type DetectOptions struct {
 	// are ignored so nothing resolves against the working directory.
 	PathEnv string
 	Probe   bool
+	// NoAuthObservation omits credential-home observations for executable-only callers.
+	NoAuthObservation bool
 	// ProbePaths are exact absolute paths the operator selected for execution.
 	ProbePaths []string
 	// Material, when set, is verified under the pinned key and used to mark a
@@ -575,9 +583,11 @@ func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, e
 		if perr != nil {
 			c.ProbeError = perr.Error()
 			failures++
+		} else if version := probeVersion(opts.Driver, rep.Output); ValidVersion(version) {
+			c.Version = version
 		}
 	}
-	if observeAuth != nil && filepath.IsAbs(opts.Home) {
+	if observeAuth != nil && !opts.NoAuthObservation && filepath.IsAbs(opts.Home) {
 		obs := observeAuth(opts.Home)
 		for i := range out {
 			a := obs

@@ -20,7 +20,8 @@ const maxPages = 1000
 // handshake for backward compatibility with servers that do not yet speak the RC.
 // It never calls a tool or reads a resource's contents in either mode.
 type Client struct {
-	t transport
+	t          transport
+	inspection bool
 	// meta, when non-nil, puts the client in stateless (RC) mode: every request
 	// carries `_meta` (protocolVersion/clientInfo/clientCapabilities) and every
 	// result's envelope is checked (MRTR input_required is declined deny-closed).
@@ -147,7 +148,13 @@ func (c *Client) ListTools(ctx context.Context) ([]Tool, error) {
 	err := c.paginate(ctx, "tools/list", func(raw json.RawMessage) (string, error) {
 		var res listToolsResult
 		if err := json.Unmarshal(raw, &res); err != nil {
+			if c.inspection {
+				return "", ErrInspectionCatalogInvalid
+			}
 			return "", err
+		}
+		if c.inspection && len(out)+len(res.Tools) > 128 {
+			return "", ErrInspectionCatalogInvalid
 		}
 		out = append(out, res.Tools...)
 		return res.NextCursor, nil
@@ -208,7 +215,11 @@ func (c *Client) Close() error { return c.t.Close() }
 // so the first page is representative; ttlMs may vary per page).
 func (c *Client) paginate(ctx context.Context, method string, collect func(json.RawMessage) (string, error)) error {
 	cursor := ""
-	for page := 0; page < maxPages; page++ {
+	limit := maxPages
+	if c.inspection {
+		limit = 8
+	}
+	for page := 0; page < limit; page++ {
 		raw, err := c.call(ctx, method, listParams{Cursor: cursor})
 		if err != nil {
 			return fmt.Errorf("%s: %w", method, err)
@@ -220,10 +231,16 @@ func (c *Client) paginate(ctx context.Context, method string, collect func(json.
 		if err != nil {
 			return fmt.Errorf("%s result: %w", method, err)
 		}
+		if c.inspection && next != "" && next == cursor {
+			return ErrInspectionCatalogInvalid
+		}
 		if next == "" || next == cursor {
 			return nil
 		}
 		cursor = next
+	}
+	if c.inspection {
+		return ErrInspectionCatalogInvalid
 	}
 	return nil
 }

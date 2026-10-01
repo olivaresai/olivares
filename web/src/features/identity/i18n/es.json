@@ -8,7 +8,8 @@
     "mcp": "Auth MCP",
     "wif": "Grafo WIF",
     "posture": "Postura de claves y residencia",
-    "login": "Acceso privilegiado"
+    "login": "Acceso privilegiado",
+    "totp": "Factor TOTP"
   },
   "seam": {
     "badge": "Backend pendiente",
@@ -609,5 +610,40 @@
       "title": "Aún no hay identidades humanas ni no humanas",
       "description": "Tras configurar una fuente de directorio, resincroniza el censo de identidades para incorporar identidades humanas y no humanas con sus identificadores externos."
     }
+  },
+  "totp": {
+    "title": "Segundo factor TOTP",
+    "description": "Una contraseña de un solo uso basada en tiempo (RFC 6238) como factor adicional de tu cuenta local. Añade a tus passkeys y PIV; nunca los sustituye.",
+    "state": "Factor",
+    "enrolled": "Registrado",
+    "notEnrolled": "Sin registrar",
+    "algorithm": "Parámetros",
+    "everySeconds": "códigos de {{period}} s",
+    "activatedAt": "Activado",
+    "recoveryRemaining": "Códigos de recuperación",
+    "recoveryCount": "quedan {{count}}",
+    "enrol": "Registrar un factor",
+    "replace": "Sustituir el factor",
+    "remove": "Eliminar el factor",
+    "confirmRemove": "¿Eliminar de verdad?",
+    "activate": "Activar",
+    "scanPrompt": "Escanea el QR con tu app de autenticación o introduce el secreto a mano, y escribe el código que muestre.",
+    "qrAlt": "Código QR con el URI de aprovisionamiento TOTP",
+    "manualEntry": "Secreto para entrada manual",
+    "codeLabel": "Código de tu app",
+    "recoveryWarning": "Estos códigos de recuperación se muestran una sola vez. Guárdalos ahora: cada uno puede usarse una vez si pierdes el dispositivo.",
+    "savedCodes": "He guardado los códigos",
+    "stepUpRequired": "Esta acción requiere una sesión AAL3 reciente. Completa antes un paso de passkey o PIV.",
+    "sealerUnavailable": "El sellador de semillas TOTP no está disponible en este despliegue; el registro queda desactivado hasta que un operador lo arregle.",
+    "loadFailed": "No se pudo cargar el estado del factor.",
+    "policyTitle": "Exigir TOTP a los administradores",
+    "policyDescription": "Cuando está activo, los administradores (superadministradores y cualquier admin o owner de tenant) deben registrar un factor antes de completar su login con contraseña.",
+    "policyState": "Política",
+    "policyOn": "Exigido",
+    "policyOff": "Desactivada",
+    "policyEnable": "Exigir a los administradores",
+    "policyConfirmOn": "Confirmar: exigir",
+    "policyDisable": "Desactivar",
+    "policyAal3Note": "Cambiar esta política requiere una sesión AAL3. Las cuentas sin factor se envían al registro en su próximo login; nunca quedan bloqueadas."
   }
 }

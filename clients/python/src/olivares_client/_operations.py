@@ -11,7 +11,7 @@ from typing import TypedDict, cast
 from urllib.parse import quote
 
 API_VERSION = "v1"
-SPEC_HASH = "1004dfb0a826f2933f3ae5a92e87031207887699806019aa3638a8296b9daf1b"
+SPEC_HASH = "7ba1caee75b2092bdd7e5de30b8c3bf9de48fad83e8320a4695362c05d1eaa0b"
 STABILITY_POLICY = "https://olivares.ai/docs"
 
 class _AuthCapabilityQuestionRequired(TypedDict):
@@ -645,6 +645,55 @@ class OperationsMixin:
         """
         return self._do("POST", "/v1/auth/refresh", "/v1/auth/refresh", body=body, query=query, tenant=tenant)
 
+    def delete_v1_auth_totp(self, *, tenant=None, **query):
+        """DELETE /v1/auth/totp — Remove the calling account's factor with AAL3.
+
+        Stability: stable.
+        """
+        return self._do("DELETE", "/v1/auth/totp", "/v1/auth/totp", query=query, tenant=tenant)
+
+    def post_v1_auth_totp_activate(self, body=None, *, tenant=None, **query):
+        """POST /v1/auth/totp/activate — Prove possession and reveal recovery codes once.
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/auth/totp/activate", "/v1/auth/totp/activate", body=body, query=query, tenant=tenant)
+
+    def post_v1_auth_totp_challenge(self, body=None, *, tenant=None, **query):
+        """POST /v1/auth/totp/challenge — Complete a pending login with a code or recovery code.
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/auth/totp/challenge", "/v1/auth/totp/challenge", body=body, query=query, tenant=tenant)
+
+    def post_v1_auth_totp_enrol(self, body=None, *, tenant=None, **query):
+        """POST /v1/auth/totp/enrol — Start a TOTP enrolment with a session or a pending login.
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/auth/totp/enrol", "/v1/auth/totp/enrol", body=body, query=query, tenant=tenant)
+
+    def get_v1_auth_totp_policy(self, *, tenant=None, **query):
+        """GET /v1/auth/totp/policy — Read the administrator factor policy.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/auth/totp/policy", "/v1/auth/totp/policy", query=query, tenant=tenant)
+
+    def put_v1_auth_totp_policy(self, body=None, *, tenant=None, **query):
+        """PUT /v1/auth/totp/policy — Set the administrator factor policy with AAL3.
+
+        Stability: stable.
+        """
+        return self._do("PUT", "/v1/auth/totp/policy", "/v1/auth/totp/policy", body=body, query=query, tenant=tenant)
+
+    def get_v1_auth_totp_status(self, *, tenant=None, **query):
+        """GET /v1/auth/totp/status — Read the calling account's factor status.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/auth/totp/status", "/v1/auth/totp/status", query=query, tenant=tenant)
+
     def get_v1_auth_whoami(self, *, tenant=None, **query):
         """GET /v1/auth/whoami — The calling principal and its tenant grants.
 
@@ -735,6 +784,48 @@ class OperationsMixin:
         Stability: stable.
         """
         return self._do("DELETE", "/v1/console/license", "/v1/console/license", query=query, tenant=tenant)
+
+    def get_v1_console_mcp_gateway(self, *, tenant=None, **query):
+        """GET /v1/console/mcp-gateway — Read the effective MCP gateway configuration and governance.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/console/mcp-gateway", "/v1/console/mcp-gateway", query=query, tenant=tenant)
+
+    def post_v1_console_mcp_gateway_servers(self, body=None, *, tenant=None, **query):
+        """POST /v1/console/mcp-gateway/servers — Add a disabled upstream using tenant secret references (AAL3).
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/console/mcp-gateway/servers", "/v1/console/mcp-gateway/servers", body=body, query=query, tenant=tenant)
+
+    def put_v1_console_mcp_gateway_servers_by_id(self, id, body=None, *, tenant=None, **query):
+        """PUT /v1/console/mcp-gateway/servers/{id} — Update or explicitly enable a tested upstream (AAL3).
+
+        Stability: stable.
+        """
+        return self._do("PUT", "/v1/console/mcp-gateway/servers/{id}", "/v1/console/mcp-gateway/servers/" + quote(str(id), safe=""), body=body, query=query, tenant=tenant)
+
+    def delete_v1_console_mcp_gateway_servers_by_id(self, id, *, tenant=None, **query):
+        """DELETE /v1/console/mcp-gateway/servers/{id} — Remove an upstream from the tenant gateway (AAL3).
+
+        Stability: stable.
+        """
+        return self._do("DELETE", "/v1/console/mcp-gateway/servers/{id}", "/v1/console/mcp-gateway/servers/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def post_v1_console_mcp_gateway_servers_by_id_test(self, id, body=None, *, tenant=None, **query):
+        """POST /v1/console/mcp-gateway/servers/{id}/test — Initialize and list tools without calling them; record a bounded verdict (AAL3).
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/console/mcp-gateway/servers/{id}/test", "/v1/console/mcp-gateway/servers/" + quote(str(id), safe="") + "/test", body=body, query=query, tenant=tenant)
+
+    def put_v1_console_mcp_gateway_session_tools(self, body=None, *, tenant=None, **query):
+        """PUT /v1/console/mcp-gateway/session-tools — Set the default-off session MCP switch for this tenant (AAL3).
+
+        Stability: stable.
+        """
+        return self._do("PUT", "/v1/console/mcp-gateway/session-tools", "/v1/console/mcp-gateway/session-tools", body=body, query=query, tenant=tenant)
 
     def get_v1_console_secrets(self, *, tenant=None, **query):
         """GET /v1/console/secrets — List sealed secrets (names and hints, never values)
@@ -967,6 +1058,20 @@ class OperationsMixin:
         """
         return self._do("POST", "/v1/users/{id}/enable", "/v1/users/" + quote(str(id), safe="") + "/enable", body=body, query=query, tenant=tenant)
 
+    def get_v1_users_by_id_totp(self, id, *, tenant=None, **query):
+        """GET /v1/users/{id}/totp — Read a member's factor status in the selected tenant.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/users/{id}/totp", "/v1/users/" + quote(str(id), safe="") + "/totp", query=query, tenant=tenant)
+
+    def post_v1_users_by_id_totp_reset(self, id, body=None, *, tenant=None, **query):
+        """POST /v1/users/{id}/totp/reset — Reset a tenant-governed member's factor with AAL3.
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/users/{id}/totp/reset", "/v1/users/" + quote(str(id), safe="") + "/totp/reset", body=body, query=query, tenant=tenant)
+
     def get_v1_workspaces(self, *, tenant=None, **query):
         """GET /v1/workspaces — List workspaces in the resolved tenant.
 
@@ -1078,6 +1183,41 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("GET", "/v1/m/adoption/trend", "/v1/m/adoption/trend", query=query, tenant=tenant)
+
+    def get_v1_m_agenttools_detect(self, *, tenant=None, **query):
+        """GET /v1/m/agenttools/detect — Discovers host executables without reading provider credential homes.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/agenttools/detect", "/v1/m/agenttools/detect", query=query, tenant=tenant)
+
+    def post_v1_m_agenttools_installs(self, body, *, tenant=None, **query):
+        """POST /v1/m/agenttools/installs — Starts one audited host installation from an approved plan at AAL3.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/agenttools/installs", "/v1/m/agenttools/installs", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_agenttools_inventory(self, *, tenant=None, **query):
+        """GET /v1/m/agenttools/inventory — Lists managed host tools, release integrity, verification policies and the five most recently updated installation jobs.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/agenttools/inventory", "/v1/m/agenttools/inventory", query=query, tenant=tenant)
+
+    def get_v1_m_agenttools_jobs_by_id(self, id, *, tenant=None, **query):
+        """GET /v1/m/agenttools/jobs/{id} — Returns bounded installation progress, state, errors and the verified receipt to a system administrator.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/agenttools/jobs/{id}", "/v1/m/agenttools/jobs/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def post_v1_m_agenttools_plans(self, body, *, tenant=None, **query):
+        """POST /v1/m/agenttools/plans — Resolves an official release and returns the digest-bound version, verification policy and destination for system administrator review before install.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/agenttools/plans", "/v1/m/agenttools/plans", body=body, query=query, tenant=tenant)
 
     def get_v1_m_capabilities_configs(self, *, tenant=None, **query):
         """GET /v1/m/capabilities/configs — Lists managed MCP-server configs, optionally filtered.
@@ -5620,35 +5760,35 @@ class OperationsMixin:
         return self._do("POST", "/v1/m/sessions/protocol-bindings/{id}/reconcile", "/v1/m/sessions/protocol-bindings/" + quote(str(id), safe="") + "/reconcile", body=body, query=query, tenant=tenant)
 
     def get_v1_m_sessions_provider_accounts(self, *, tenant=None, **query):
-        """GET /v1/m/sessions/provider-accounts — sessions module route (requires sessions:account:read)
+        """GET /v1/m/sessions/provider-accounts — Lists the tenant's named provider accounts, optionally narrowed by environment, driver and state; a profile nobody has named is never listed.
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/sessions/provider-accounts", "/v1/m/sessions/provider-accounts", query=query, tenant=tenant)
 
     def post_v1_m_sessions_provider_accounts(self, body, *, tenant=None, **query):
-        """POST /v1/m/sessions/provider-accounts — sessions module route (requires sessions:account:write)
+        """POST /v1/m/sessions/provider-accounts — Creates a provider account: the server builds its home on this node in two phases and registers the account that owns it, under the given name or a generated one.
 
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/sessions/provider-accounts", "/v1/m/sessions/provider-accounts", body=body, query=query, tenant=tenant)
 
     def get_v1_m_sessions_provider_accounts_by_ref(self, ref, *, tenant=None, **query):
-        """GET /v1/m/sessions/provider-accounts/{ref} — sessions module route (requires sessions:account:read)
+        """GET /v1/m/sessions/provider-accounts/{ref} — Returns one provider account by its reference, without its paths; a profile nobody has named is not an account and answers not found.
 
         Stability: beta.
         """
         return self._do("GET", "/v1/m/sessions/provider-accounts/{ref}", "/v1/m/sessions/provider-accounts/" + quote(str(ref), safe=""), query=query, tenant=tenant)
 
     def patch_v1_m_sessions_provider_accounts_by_ref(self, ref, body, *, tenant=None, **query):
-        """PATCH /v1/m/sessions/provider-accounts/{ref} — sessions module route (requires sessions:account:write)
+        """PATCH /v1/m/sessions/provider-accounts/{ref} — Edits the display name and/or color without changing the account's stable name, reference, home or launch configuration; an empty string clears that field.
 
         Stability: beta.
         """
         return self._do_json_required("PATCH", "/v1/m/sessions/provider-accounts/{ref}", "/v1/m/sessions/provider-accounts/" + quote(str(ref), safe=""), body=body, query=query, tenant=tenant)
 
     def post_v1_m_sessions_provider_accounts_by_ref_adopt(self, ref, body, *, tenant=None, **query):
-        """POST /v1/m/sessions/provider-accounts/{ref}/adopt — sessions module route (requires sessions:account:write)
+        """POST /v1/m/sessions/provider-accounts/{ref}/adopt — Names an existing provider profile as an account, under the given name or a generated one; the database decides whether the name is free, and the home is recorded as shared isolation.
 
         Stability: beta.
         """

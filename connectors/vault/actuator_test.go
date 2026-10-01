@@ -228,6 +228,75 @@ func TestRotateListNotFoundMeansEmpty(t *testing.T) {
 	}
 }
 
+// TestRotateRefusesEchoedCredential is the H-01 regression test (26.10.x
+// security backlog): a broken or hostile configured authority can answer the
+// mint with the credential that AUTHENTICATED the request (the operator's write
+// token), and Rotate must refuse instead of handing it to the admin-tier
+// rotation caller as the "new secret". Before the fix the echo was released as
+// RotatedCredential.Secret.
+func TestRotateRefusesEchoedCredential(t *testing.T) {
+	cases := []struct {
+		name     string
+		secretID string
+	}{
+		{"exact echo", testToken},
+		{"embedded echo", "rotated-" + testToken + "-v2"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			a, _ := newTestActuator(t, func(method, _ string) *http.Response {
+				if method == "LIST" {
+					return jsonResp(200, `{"data":{"keys":[]}}`)
+				}
+				return jsonResp(200, `{"data":{"secret_id":"`+tc.secretID+`","secret_id_accessor":"acc-new"}}`)
+			})
+			cred, err := a.Rotate(context.Background(), identitysource.ActuationRequest{
+				Ref: "entity:x", Kind: "vault_entity", TargetRef: "approle:role",
+			})
+			if err == nil {
+				t.Fatalf("Rotate released the authenticating credential as the new secret %q", cred.Secret)
+			}
+			if !errors.Is(err, identitysource.ErrCredentialEcho) {
+				t.Fatalf("err = %v, want the typed credential-echo refusal", err)
+			}
+			if strings.Contains(err.Error(), testToken) {
+				t.Fatalf("refusal must never carry the credential: %v", err)
+			}
+			if cred.Secret != "" {
+				t.Fatalf("no secret may be released on refusal, got %q", cred.Secret)
+			}
+		})
+	}
+}
+
+// TestRotateRefusesShortConfiguredToken is the H-01 follow-up regression test
+// (independent P3 finding, independent reviewer's scenario credited): Vault supports a short custom
+// token ID (the documented dev ID "root"), NewActuator accepts it, and an exact
+// echo of it must be refused like any other credential — before the fix the
+// eight-byte floor skipped equality too and the echo was released.
+func TestRotateRefusesShortConfiguredToken(t *testing.T) {
+	const shortToken = "root"
+	doer := &scriptDoer{t: t, respond: func(method, _ string) *http.Response {
+		if method == "LIST" {
+			return jsonResp(200, `{"data":{"keys":[]}}`)
+		}
+		return jsonResp(200, `{"data":{"secret_id":"`+shortToken+`","secret_id_accessor":"acc"}}`)
+	}}
+	a := NewActuator("https://vault.example:8200", shortToken, "", doer)
+	cred, err := a.Rotate(context.Background(), identitysource.ActuationRequest{
+		Ref: "entity:x", Kind: "vault_entity", TargetRef: "approle:role",
+	})
+	if err == nil {
+		t.Fatalf("Rotate released a short configured token echo as the new secret %q", cred.Secret)
+	}
+	if !errors.Is(err, identitysource.ErrCredentialEcho) {
+		t.Fatalf("err = %v, want the typed credential-echo refusal", err)
+	}
+	if cred.Secret != "" {
+		t.Fatalf("no secret may be released on refusal, got %q", cred.Secret)
+	}
+}
+
 func TestRotateTargetRefValidation(t *testing.T) {
 	a := NewActuator("", testToken, "", &fatalDoer{t: t})
 	ctx := context.Background()
@@ -329,6 +398,81 @@ func TestErrorsCarryStatusNeverToken(t *testing.T) {
 	if err == nil || len(err.Error()) > 512 {
 		t.Fatalf("error excerpt must be bounded, got %d bytes", len(err.Error()))
 	}
+}
+
+// TestActuationErrorScrubsEchoedToken is the H-02 regression test (26.10.x
+// security backlog): a broken or hostile Vault can reflect the request token
+// inside its error body, and that excerpt is persisted in the NHI failure
+// trail (modules/governance persistActuationFailure). The sent credential must
+// be scrubbed — the message keeps the status and says WHAT was removed, never
+// the value. Before the fix the excerpt carried the token verbatim.
+func TestActuationErrorScrubsEchoedToken(t *testing.T) {
+	t.Run("echo inside the errors array", func(t *testing.T) {
+		a, _ := newTestActuator(t, func(string, string) *http.Response {
+			return jsonResp(http.StatusForbidden, `{"errors":["denied: token `+testToken+` is not permitted"]}`)
+		})
+		_, err := a.Disable(context.Background(), identitysource.ActuationRequest{Ref: "ent-1"})
+		if err == nil {
+			t.Fatal("non-2xx must error")
+		}
+		msg := err.Error()
+		if strings.Contains(msg, testToken) {
+			t.Fatalf("error excerpt must not carry the echoed token: %q", msg)
+		}
+		if !strings.Contains(msg, "403") || !strings.Contains(msg, "[removed: request credential]") {
+			t.Fatalf("error must keep the status and say what was removed: %q", msg)
+		}
+		if !strings.Contains(msg, "denied: token ") || !strings.Contains(msg, " is not permitted") {
+			t.Fatalf("the surrounding diagnostic text must survive the scrub: %q", msg)
+		}
+	})
+	t.Run("echo inside a raw body excerpt", func(t *testing.T) {
+		a, _ := newTestActuator(t, func(string, string) *http.Response {
+			return jsonResp(http.StatusInternalServerError, `fatal: `+testToken+` rejected`)
+		})
+		_, err := a.Disable(context.Background(), identitysource.ActuationRequest{Ref: "ent-1"})
+		if err == nil {
+			t.Fatal("non-2xx must error")
+		}
+		msg := err.Error()
+		if strings.Contains(msg, testToken) {
+			t.Fatalf("raw excerpt must not carry the echoed token: %q", msg)
+		}
+		if !strings.Contains(msg, "fatal: [removed: request credential] rejected") {
+			t.Fatalf("scrubbed raw excerpt = %q", msg)
+		}
+	})
+	t.Run("short configured token is scrubbed too", func(t *testing.T) {
+		// independent P3 finding (independent reviewer's scenario credited): Vault's documented dev
+		// token ID "root" is a supported configured credential; before the
+		// fix the scrub floor left it in the persisted excerpt.
+		a := NewActuator("https://vault.example:8200", "root", "", &scriptDoer{t: t, respond: func(string, string) *http.Response {
+			return jsonResp(http.StatusForbidden, `{"errors":["rejected request token: root"]}`)
+		}})
+		_, err := a.Disable(context.Background(), identitysource.ActuationRequest{Ref: "ent-1"})
+		if err == nil {
+			t.Fatal("non-2xx must error")
+		}
+		msg := err.Error()
+		if strings.Contains(msg, "root") {
+			t.Fatalf("short configured token must be scrubbed from the excerpt: %q", msg)
+		}
+		if !strings.Contains(msg, "rejected request token: [removed: request credential]") {
+			t.Fatalf("the surrounding diagnostic text must survive the scrub: %q", msg)
+		}
+	})
+	t.Run("no echo keeps the excerpt byte-identical", func(t *testing.T) {
+		a, _ := newTestActuator(t, func(string, string) *http.Response {
+			return jsonResp(http.StatusForbidden, `{"errors":["permission denied"]}`)
+		})
+		_, err := a.Disable(context.Background(), identitysource.ActuationRequest{Ref: "ent-1"})
+		if err == nil {
+			t.Fatal("non-2xx must error")
+		}
+		if want := "vault: actuator: disable rejected: http 403: permission denied"; err.Error() != want {
+			t.Fatalf("well-behaved excerpt must not move: got %q want %q", err.Error(), want)
+		}
+	})
 }
 
 func TestUnconfiguredActuatorRefusesWithoutTraffic(t *testing.T) {

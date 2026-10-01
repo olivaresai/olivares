@@ -9,7 +9,7 @@ draft: false
 ---
 
 :::note[公開されているパッケージ名]
-GitHub の v26.9.0 リリースは `amd64` と `arm64` 向けの `.deb`、`.rpm`、`.apk` を公開し、
+GitHub の 26.10.0 リリースは `amd64` と `arm64` 向けの `.deb`、`.rpm`、`.apk` を公開し、
 あわせて `checksums.txt`、`checksums.txt.sig`、`checksums.txt.pem` を置く。以下のコマンドは
 そのリリースのリテラルな `amd64` 名を使う。64 ビット ARM ホストでは `amd64` を `arm64` に
 置き換える。このガイドでは、それらの検証済みリリース成果物からインストールする。ソースツリー
@@ -75,13 +75,13 @@ Debian/Ubuntu と RHEL/Fedora/SUSE のデフォルトは **systemd** である�
 
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_26.9.0_linux_amd64.deb
+sudo dpkg -i olivares_26.10.0_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_26.9.0_linux_amd64.rpm
+sudo rpm -Uvh olivares_26.10.0_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_26.9.0_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_26.10.0_linux_amd64.apk
 ```
 
 インストールは **システムユーザーとグループ `olivares` を作成する**（シェルは

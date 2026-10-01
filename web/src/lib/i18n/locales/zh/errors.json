@@ -40,5 +40,9 @@
     "setup_complete": "设置已完成。",
     "cross_tenant_admin_pool_not_configured": "此部署没有跨租户的管理数据库连接池。请使用 `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` 预配 NOSUPERUSER BYPASSRLS 角色（参见 deploy/postgres/README.md），并使用指向该角色的 --admin-dsn 重启服务器。",
     "internal": "发生内部错误。"
+  },
+  "tenantAdmission": {
+    "title": "需要组织准入",
+    "description": "请使用已获组织准入的目录身份登录。全局 bootstrap 权限不能操作工作区通信。"
   }
 }

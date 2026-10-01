@@ -735,20 +735,12 @@ export function WorkComposer({
   return (
     <div
       data-testid="work-composer"
-      // ⛔ EVERY NUMBER IN THIS BOX IS THE 64 px BUDGET, MEASURED (bar §2, "compositor
-      //    64"). It was 138 px at 1440 on the session work surface and 215 at 390: the
-      //    control row wrapped because three controls declared a 10–12 rem MINIMUM
-      //    width each, and the scope row wrapped under it into two more lines. A
-      //    composer that grows when the pane narrows takes the height from the
-      //    narrative it is docked under, which is the one thing on that screen that
-      //    cannot be made shorter.
-      //
-      //    So the height is DECLARED and not accumulated: `h-16 max-h-16` over one
-      //    32 px control row and one 20 px caption, 4 px apart, centred in the 64.
-      //    A box that states its height cannot be grown by what lands inside it.
+      // Interactive rows retain their compact height. A blocked state needs room for
+      // the complete reason and its recovery action, including long translations.
       title={phone ? scopeFacts(t, org, draftScope).title : undefined}
       className={cn(
-        'relative flex h-16 max-h-16 shrink-0 flex-col justify-center gap-1 bg-surface px-3',
+        'relative flex shrink-0 flex-col justify-center gap-1 bg-surface px-3',
+        blocked && blocked !== 'asking' ? 'min-h-16 py-2' : 'h-16 max-h-16',
         frame === 'docked'
           ? 'border-t border-border'
           : 'rounded-lg border border-border',
@@ -772,11 +764,7 @@ export function WorkComposer({
         blocked === 'read-failed' ? (
         <p
           className={cn(
-            // The box states its height, so a sentence that wraps is a sentence CLIPPED
-            // by the pane rather than a taller composer — and `readFailed` is 108
-            // characters in German. It gives way at its end with the whole of it on
-            // `title`, the same rule the scope line follows two rows down.
-            'min-w-0 truncate text-caption',
+            'min-w-0 whitespace-normal text-caption [overflow-wrap:anywhere]',
             blocked === 'read-failed' ? 'text-danger' : 'text-muted-foreground',
           )}
           title={t(
@@ -801,7 +789,7 @@ export function WorkComposer({
         // the profile mandatory, so there is one thing to do and this is it.
         <div className="flex min-w-0 items-center gap-2">
           <p
-            className="min-w-0 flex-1 truncate text-caption text-muted-foreground"
+            className="min-w-0 flex-1 whitespace-normal text-caption text-muted-foreground [overflow-wrap:anywhere]"
             title={t('nav:launcher.noProfiles')}
           >
             {t('nav:launcher.noProfiles')}

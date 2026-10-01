@@ -58,7 +58,7 @@ Sécurité & identité, Déploiement, Observabilité & preuves, puis Système & 
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-La console publie **76 routes**. Elles figurent toutes dans les tableaux ci-dessous, avec la
+La console publie **80 routes**. Elles figurent toutes dans les tableaux ci-dessous, avec la
 permission requise et la page de référence ouverte par leur lien d'aide dans le produit.
 
 ### Exploiter
@@ -66,7 +66,8 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
 | Vue d'ensemble | `/` | Vue d'ensemble du parc et état de santé en un coup d'œil | tout utilisateur connecté | [accueil de la documentation](/fr/) |
-| Claude Code | `/agentops` | Créez, attachez-vous à et gouvernez les sessions Claude Code — sans SSH | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/fr/how-to/run-claude-code-with-olivares/) |
+| Outils des agents | `/agent-tools` | Détectez, installez et mettez à jour les outils des agents sur cet hôte et suivez chaque installation ; réservé aux administrateurs du déploiement | `system:admin` | [how-to/add-a-provider](/fr/how-to/add-a-provider/) |
+| Opérer les sessions | `/agentops` | Créer, rejoindre et gouverner des sessions Claude Code — sans SSH ; partage son écran avec « Observer les sessions » | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/fr/how-to/run-claude-code-with-olivares/) |
 | Sauvegardes | `/backups` | Déclenchez, planifiez, téléchargez et restaurez des sauvegardes, avec une seconde confirmation sur le chemin destructif. | `system:admin` | [how-to/backup-and-restore](/fr/how-to/backup-and-restore/) |
 | Communications | `/communications` | Canaux, avis directs et boîte de réception personnelle de l'espace de travail sélectionné | `sessions:channel:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Administration des canaux | `/communications/administration` | Administrer les canaux : configuration et historique des droits, chaque acte sous l'ETag actuel du canal | `sessions:channel:admin` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
@@ -77,11 +78,12 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Coupe-circuit | `/killswitch` | Arrêt d'urgence, reprise en double contrôle et confinement par gardien | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/fr/how-to/cookbook/kill-switch-drill/) |
 | Journaux | `/logs` | Flux en direct du journal du moteur, filtré par niveau et module, avec recherche et pause. | `system:admin` | [how-to/troubleshooting](/fr/how-to/troubleshooting/) |
 | Observabilité | `/observability` | Santé de l'ingestion par standard et exploration des traces | `health:status:read` | [reference/modules/observability](/fr/reference/modules/observability/) |
+| Comptes de fournisseur | `/provider-accounts` | Lister les comptes de fournisseur nommés et adopter un profil de fournisseur existant comme compte | `sessions:account:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Liaisons de sources | `/provider-bindings` | Dédiez des sources configurées, à la révision appliquée par ce nœud, à des profils de fournisseur | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Profils de fournisseur | `/provider-profiles` | Enregistrez et administrez les répertoires de fournisseur sous lesquels les sessions se lancent, et lisez leur configuration à la demande | `sessions:profile:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Fournisseurs | `/providers` | Enregistrez les clés d'API et les points de terminaison avec lesquels les sessions démarrent ; testez-les, changez-les et révoquez-les | `sessions:provider:read` | [how-to/add-a-provider](/fr/how-to/add-a-provider/) |
 | Bac à sable | `/sandbox` | Test isolé des agents et relecture | `sandbox:run:read` | [reference/modules/xvii-sandbox](/fr/reference/modules/xvii-sandbox/) |
-| Sessions | `/sessions` | Opération des agents en direct et chronologies | `sessions:live:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
+| Observer les sessions | `/sessions` | Observer les sessions en direct et découvertes avec leurs chronologies ; partage son écran avec « Opérer les sessions » | `sessions:live:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Locataires | `/tenants` | Retirer ou rétablir le service d'un locataire | `system:admin` | [how-to/troubleshooting](/fr/how-to/troubleshooting/) |
 | Voix | `/voice` | Sessions vocales et en temps réel | `voice:session:read` | [reference/modules/xvi-voice](/fr/reference/modules/xvi-voice/) |
 | Travail | `/work` | Le backlog durable entre sessions : éléments, dépendances, acceptation et décisions | `sessions:work:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
@@ -106,7 +108,8 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Catalogue | `/catalog` | Agents et capacités curés et approuvés | `catalog:entry:read` | [reference/modules/xiv-catalog](/fr/reference/modules/xiv-catalog/) |
 | Liaisons de protocole | `/communications/protocol-bindings` | Composez et réconciliez les liaisons A2A et MCP gouvernées | `sessions:protocol-binding:read` | [reference/modules/ii-sessions](/fr/reference/modules/ii-sessions/) |
 | Déploiement | `/deploy` | Provisionnez et câblez les agents à l'infrastructure | `deploy:deployment:read` | [reference/modules/vii-deploy](/fr/reference/modules/vii-deploy/) |
-| Inventaire | `/inventory` | Découvrez et cataloguez chaque agent, MCP et modèle | `inventory:catalog:read` | [reference/modules/i-inventory](/fr/reference/modules/i-inventory/) |
+| Publication Git | `/git-publication` | Pousser des commits, ouvrir des pull requests et fusionner via des cibles Git approuvées | `gitpublish:target:read` | [reference/modules/gitpublish](/fr/reference/modules/gitpublish/) |
+| Inventaire | `/inventory` | Découvrez et cataloguez les agents, serveurs MCP et modèles que les connecteurs ont observés. | `inventory:catalog:read` | [reference/modules/i-inventory](/fr/reference/modules/i-inventory/) |
 | Connaissances | `/knowledge` | Bases de connaissances, RAG et lignage des données | `knowledge:kb:read` | [reference/modules/viii-knowledge](/fr/reference/modules/viii-knowledge/) |
 | Opérations sur les modèles | `/model-operations` | Modèles détenus, admission et déploiements | `models:registry:read` | [reference/modules/xxiii-model-operations](/fr/reference/modules/xxiii-model-operations/) |
 | Modèles | `/models` | Modèles, routage et clés de fournisseur | `models:catalog:read` | [reference/modules/x-models](/fr/reference/modules/x-models/) |
@@ -118,9 +121,10 @@ permission requise et la page de référence ouverte par leur lien d'aide dans l
 | Écran | Chemin | Description | Requis | Référence |
 |---|---|---|---|---|
 | Carte des accès | `/access-map` | Ce que chaque agent lit et écrit (R/RW) | `accessmap:graph:read` | [reference/modules/iii-access-map](/fr/reference/modules/iii-access-map/) |
-| Export AgentCore | `/agentcore-export` | Planifiez et appliquez l'export de policy Cedar vers AWS AgentCore, et examinez les changements avant leur application. | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
+| Export AgentCore | `/agentcore-export` | Planifier, relire et appliquer la projection des règles de gouvernance de ce tenant sur AWS AgentCore sous forme de politiques Cedar ; la planification n’écrit rien | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
 | Gouvernance de Claude Code | `/claude-policy` | Politique gérée, hooks, MCP, bac à sable et policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/fr/how-to/connectors/claude-code-hooks-pep/) |
-| Console de contrôle | `/console` | Intégrez les utilisateurs, connectez SSO/IdP et structurez les espaces de travail et les groupes d'agents. | `tenant:admin` | [reference/modules/xx-multi-tenancy](/fr/reference/modules/xx-multi-tenancy/) |
+| Administration | `/console` | Utilisateurs, SSO/IdP, espaces de travail, groupes d’agents, rôles, secrets, connecteurs, clés API et licence de cette installation | `tenant:admin` | [reference/modules/xx-multi-tenancy](/fr/reference/modules/xx-multi-tenancy/) |
+| Comparaison de source | `/console/sources/diff` | Comparez une révision de base et une révision head d'un dépôt Git connecté, fichier par fichier | `system:admin` | [reference/console](/fr/reference/console/) |
 | Identité et NHI | `/identity` | SSO, SCIM, le répertoire des NHI et le graphe WIF | `governance:identity:read` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |
 | Proxy d'inférence | `/inference-proxy` | Gates du proxy, règles DLP de sortie et approbations d'appareils | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/fr/reference/modules/inferenceproxy/) |
 | Permissions | `/permissions` | Identité, rôles et approbations | `governance:identity:read` | [reference/modules/vi-governance](/fr/reference/modules/vi-governance/) |

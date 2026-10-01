@@ -36,9 +36,10 @@ etwas noch nicht abdeckt, sagt die Seite das, statt es zu suggerieren.
   wird aus dem eigenen OpenAPI-3.1-Vertrag des Produkts gerendert. Das Audit-Ledger
   ist append-only und hash-chained mit Ed25519-signierten Checkpoints und kann in
   mehreren SIEM-Formaten exportiert werden.
-- **Releases sind signiert und offline verifizierbar.** Signatur, SLSA-Provenienz,
-  SBOM und OpenVEX lassen sich allesamt [ohne Netzwerkzugang verifizieren](/de/how-to/verify-a-release/),
-  und das Produkt liefert ein [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das neueste getaggte Release, **v26.9.0**, ist mit signierten Archiven, nativen Paketen und Container-Images veröffentlicht; APIs, Schemata und die Modul-Oberfläche können sich vor 1.0 noch ändern.
+- **Releases sind signiert und verifizierbar.** Signatur, SLSA-Provenienz, SBOM und OpenVEX lassen sich allesamt
+  [verifizieren](/de/how-to/verify-a-release/). Die Verifikation ist noch nicht vollständig ohne Netzwerk möglich: schlüssellose
+  Prüfungen brauchen Sigstore-Trusted-Root-Material, und der SLSA-Schritt hat keinen Offline-Modus. Das Produkt liefert ein
+  [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das neueste getaggte Release, **26.10.0**, ist mit signierten Archiven, nativen Paketen und Container-Images veröffentlicht; APIs, Schemata und die Modul-Oberfläche können sich vor 1.0 noch ändern.
 
 ## Open Core — was offen ist vs. Enterprise
 
@@ -58,17 +59,17 @@ vorzutäuschen:
   `multi_idp_requires_enterprise` zurück — eine explizite Produktgrenze, niemals ein
   vorgetäuschtes 501.
 - **Es gibt kein Benutzerlimit — Konten sind in jeder Edition unbegrenzt.** Community,
-  Business, die Add-ons und Enterprise self-hosted lassen alle unbegrenzt viele
+  Business, die Module und Enterprise self-hosted lassen alle unbegrenzt viele
   Benutzerkonten zu, unabhängig vom Lizenzzustand: gültig, abgelaufen oder gar keine.
   Das Limit von drei aktiven Konten, das vor dem 2026-07-27 galt, wurde vollständig
   entfernt (die Seat-Naht bleibt als Kompatibilitäts-No-op im Code und lehnt nichts
   ab), und ein Lizenzablauf begrenzt, deaktiviert oder löscht nie ein Konto. Das
-  kommerzielle Modell ist eine laufzeitbasierte Berechtigung für die Add-ons, niemals
+  kommerzielle Modell ist eine laufzeitbasierte Berechtigung für die Module, niemals
   eine Abrechnung pro Sitzplatz.
 - **Der Rest der Plattform ist offen.** Die gesamte Governance-Schleife — Inventar,
   die R/RW-Access-Map, RBAC-/ABAC-/Cedar-Policy, das versiegelte Audit-Ledger,
   FinOps, Compliance, SIEM-Egress, MCP, HA/verteilt — läuft im offenen Binary ohne
-  Lizenzprüfung. Die additiven `enterprise/`-Add-ons (Multi-IdP-Federation, Content
+  Lizenzprüfung. Die additiven `enterprise/`-Module (Multi-IdP-Federation, Content
   Firewall/DLP, Hook-Hardening, der kompilierte Threat-Intel-Katalog, Server-Tool-Egress, der
   CyberArk-Conjur-Connector und der Incident-Close-Loop)
   sind neuer Code, der nie im offenen Produkt enthalten war, keine daraus entfernten
@@ -153,7 +154,7 @@ Progress**, sofern eine Seite nichts anderes angibt.
   vermittelte Frontier-Modelle können das nicht.
 - **Modul-Routen sind ein separater, Beta-Vertrag.** Die Modul-Endpunkte (zum
   Beispiel der Access-Map-Graph und der Drift) sind nicht Teil des stabilen
-  54-Pfad-Core-Vertrags; sie werden als separates **Beta**-Dokument veröffentlicht —
+  67-Pfad-Core-Vertrags; sie werden als separates **Beta**-Dokument veröffentlicht —
   die [Modul-Routen-Referenz](/reference/api-beta/) (ausgeliefert unter
   `/openapi.beta.json`). Beta bedeutet, dass sich die Formen mit Vorankündigung
   ändern können, und der Detailgrad auf Feldebene lebt weiterhin in den typisierten

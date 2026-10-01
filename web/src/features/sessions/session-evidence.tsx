@@ -65,11 +65,11 @@ function EntryRow({ entry }: { entry: TimelineDTO }) {
         aria-hidden
       />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-caption text-foreground">
+        <span className="block break-words text-caption text-foreground">
           {label}
         </span>
         {entry.resource_ref ? (
-          <span className="block truncate font-mono text-caption text-muted-foreground">
+          <span className="block font-mono text-caption text-muted-foreground [overflow-wrap:anywhere]">
             {entry.resource_ref}
           </span>
         ) : null}

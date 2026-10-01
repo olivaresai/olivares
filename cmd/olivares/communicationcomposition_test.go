@@ -374,7 +374,7 @@ func TestK1ApplyAndPublicDrainHoldK3OnEveryProductionPath(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Activation withdrawn (requested OFF, effective OFF): the review's R1
+	// Activation withdrawn (requested OFF, effective OFF): the review's finding 1
 	// sequence. The pump holds K3, then a normal K1 Apply must hold it too.
 	t.Setenv(envCommunicationActivation, "off")
 	eng = bootForComposition(t, dir)

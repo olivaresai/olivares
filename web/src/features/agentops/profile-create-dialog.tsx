@@ -18,7 +18,11 @@ import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { agentOpsApi, agentOpsKeys } from './api'
-import { useAuthBoundary } from './auth-boundary'
+import { AuthorityLostError, useAuthBoundary } from './auth-boundary'
+import {
+  ProfileAuthenticationFields,
+  useProfileProviders,
+} from './profile-authentication'
 import type { CreateProfileRequest, ProviderProfileDTO } from './types'
 import './i18n'
 
@@ -32,15 +36,27 @@ const DRIVER_SUGGESTIONS = ['claude', 'codex', 'grok']
 
 /**
  * ProfileCreateDialog — registers a provider profile for homes that ALREADY EXIST on
- * this node's execution environment. What leaves the browser is a driver key,
- * two paths and a label: the server canonicalises and validates the paths on the
+ * this node's execution environment. The browser sends a driver key, homes,
+ * label and explicit authentication references: the server canonicalises and validates the paths on the
  * node that owns them (absolute, symlinks resolved, existing, a directory), never
  * creates a missing home, installs nothing and logs nothing in. No environment_ref
  * is sent — the node registers on its own environment, and a profile for another
  * environment is registered from that environment, the only one that can validate
  * its paths. No credential travels here, and none is asked for.
  */
-export function ProfileCreateDialog({
+export function ProfileCreateDialog(props: {
+  open: boolean
+  onOpenChange: (open: boolean) => void
+  localEnvironment?: string
+}) {
+  const boundary = useAuthBoundary()
+  const { can } = useAuth()
+  return can('sessions:profile:write') ? (
+    <ProfileCreateForm key={boundary.key} {...props} />
+  ) : null
+}
+
+function ProfileCreateForm({
   open,
   onOpenChange,
   localEnvironment,
@@ -52,7 +68,7 @@ export function ProfileCreateDialog({
   localEnvironment?: string
 }) {
   const { t } = useTranslation('agentops')
-  const { activeTenant } = useAuth()
+  const { activeTenant, can } = useAuth()
   const boundary = useAuthBoundary()
   const listId = useId()
 
@@ -60,22 +76,42 @@ export function ProfileCreateDialog({
   const [configHome, setConfigHome] = useState('')
   const [userHome, setUserHome] = useState('')
   const [displayName, setDisplayName] = useState('')
+  const [authentication, setAuthentication] = useState({
+    source: '',
+    provider: '',
+  })
+  const providers = useProfileProviders(
+    driver,
+    open && authentication.source === 'managed_injection',
+  )
+  const bindingReady =
+    authentication.source !== 'managed_injection' ||
+    providers.records.some((r) => r.provider_ref === authentication.provider)
 
   const reset = () => {
     setDriver('')
     setConfigHome('')
     setUserHome('')
     setDisplayName('')
+    setAuthentication({ source: '', provider: '' })
   }
 
   const create = usePrivilegedMutation<void, ProviderProfileDTO>({
     mutationFn: () => {
+      if (!can('sessions:profile:write') || !bindingReady)
+        throw new AuthorityLostError()
       const name = displayName.trim()
       const body: CreateProfileRequest = {
         driver: driver.trim(),
         config_home: configHome.trim(),
         user_home: userHome.trim(),
         ...(name ? { display_name: name } : {}),
+        ...(authentication.source
+          ? { auth_source: authentication.source }
+          : {}),
+        ...(authentication.source === 'managed_injection'
+          ? { provider_record_ref: authentication.provider }
+          : {}),
       }
       return agentOpsApi.createProfile(body)
     },
@@ -88,7 +124,10 @@ export function ProfileCreateDialog({
   })
 
   const ready =
-    driver.trim() !== '' && configHome.trim() !== '' && userHome.trim() !== ''
+    driver.trim() !== '' &&
+    configHome.trim() !== '' &&
+    userHome.trim() !== '' &&
+    bindingReady
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -100,7 +139,7 @@ export function ProfileCreateDialog({
       open={open}
       onOpenChange={(o) => (create.isPending ? undefined : onOpenChange(o))}
     >
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-h-[90svh] max-w-lg overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{t('profiles.create.title')}</DialogTitle>
           <DialogDescription>
@@ -114,7 +153,10 @@ export function ProfileCreateDialog({
           >
             <Input
               value={driver}
-              onChange={(e) => setDriver(e.target.value)}
+              onChange={(e) => {
+                setDriver(e.target.value)
+                setAuthentication((value) => ({ ...value, provider: '' }))
+              }}
               placeholder={t('profiles.create.driverPlaceholder')}
               list={listId}
               autoComplete="off"
@@ -126,6 +168,12 @@ export function ProfileCreateDialog({
               <option key={d} value={d} />
             ))}
           </datalist>
+          <ProfileAuthenticationFields
+            value={authentication}
+            onChange={setAuthentication}
+            providers={providers}
+            disabled={create.isPending}
+          />
           <Field
             label={t('profiles.create.configHome')}
             description={t('profiles.create.configHomeHint')}

@@ -14,7 +14,8 @@
 /** The four credential kinds the engine accepts. Closed on the engine, and closed
  * here: a kind decides which environment variables a child process receives, so an
  * open set would be an open injection set. */
-export type ProviderKind = 'anthropic' | 'openai' | 'xai' | 'openai_compatible'
+export type ProviderKind =
+  'anthropic' | 'openai' | 'xai' | 'openai_compatible' | 'ollama'
 
 /** Two states. Revoking is final for that reference: the record is kept so the
  * sessions it authorised still read truthfully, not so it can come back. */
@@ -58,7 +59,7 @@ export interface CreateProviderRequest {
   kind: ProviderKind
   display_name: string
   base_url?: string
-  api_key: string
+  api_key?: string
 }
 
 /** Rename, re-endpoint and/or rotate. `kind` is absent because changing it would

@@ -306,7 +306,7 @@ func assertHeldRow(t *testing.T, f workFixture, eventID model.ID, what string) {
 }
 
 // TestWorkOutboxAuthorityGovernsEveryDrainEntryPoint is the module half of
-// review finding R1: the bound authority is consulted for the communication
+// review finding finding 1: the bound authority is consulted for the communication
 // and unknown families on the Apply post-commit nudge, on DrainWorkOutbox and
 // on DrainWorkOutboxWithPolicy, a caller policy can only narrow it, and K1
 // work facts keep flowing on every path without asking it.

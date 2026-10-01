@@ -102,7 +102,7 @@ Perimeter überschreitet nur, was **Sie** dafür konfigurieren — Aufrufe an Ih
 Modell-APIs, die von Ihnen eingerichteten SIEM-/Webhook-Ausgaben und ein externer
 Embedding-Anbieter, falls Sie einen bereitstellen. Olivares AI gehört nicht zu dieser
 Liste: Der Anbieter liegt nie im Datenpfad. Er wird nur erreicht, wenn Sie etwas von ihm
-anfordern — `olivares upgrade` oder ein Abo-Download kommerzieller Add-ons und ihrer
+anfordern — `olivares upgrade` oder ein Abo-Download kommerzieller Module und ihrer
 Updates — nie als Nebeneffekt des Betriebs. Und `olivares upgrade --endpoint` richtet selbst das auf Ihren eigenen Mirror. Das ist ein starkes Argument für
 Datenresidenz, DSGVO und air-gapped-Umgebungen.
 

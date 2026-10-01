@@ -42,7 +42,7 @@ mesh должен обращаться к ней в каждом pod так же
 
 <!-- BEGIN GENERATED olivares-grpc-reference — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-Движок и хост плагинов регистрируют **28 RPC** в **7 службах**. Таблицы ниже считываются из
+Движок и хост плагинов регистрируют **29 RPC** в **7 службах**. Таблицы ниже считываются из
 сгенерированных регистрационных таблиц, которые серверы передают gRPC; указанный здесь метод
 доступен для вызова клиентом.
 
@@ -114,13 +114,14 @@ mesh должен обращаться к ней в каждом pod так же
 
 ### `olivares.sdk.v1.SourceService`
 
-Определено в `olivaresv1/v1.proto`; 4 RPC.
+Определено в `olivaresv1/v1.proto`; 5 RPC.
 
 | Метод | Полное имя метода | Вид | Запрос | Ответ | Назначение |
 |---|---|---|---|---|---|
 | `Close` | `/olivares.sdk.v1.SourceService/Close` | unary | `Empty` | `Empty` | Завершает сессию, открытую `Open`, и освобождает всё, что коннектор удерживал для неё. |
 | `Describe` | `/olivares.sdk.v1.SourceService/Describe` | unary | `Empty` | `DescribeResponse` | Возвращает дескриптор коннектора: идентичность, поля конфигурации и объявленные возможности. |
 | `Gather` | `/olivares.sdk.v1.SourceService/Gather` | server-streaming | `Empty` | `Observation` (stream) | Передаёт наблюдения хосту, который поднимает каждое в шину событий. Поток завершается с пакетным запуском или отменой хостом. |
+| `GatherInventory` | `/olivares.sdk.v1.SourceService/GatherInventory` | server-streaming | `GatherInventoryRequest` | `Observation` (stream) | Передаёт потоком наблюдения инвентаризации коннектора только для согласованной возможности inventory-coverage-v1; любая другая возможность отклоняется, а отменённый поток никогда не сообщает об успехе. |
 | `Open` | `/olivares.sdk.v1.SourceService/Open` | unary | `OpenRequest` | `Empty` | Начинает сессию с предоставленной хостом конфигурацией до сбора наблюдений. |
 
 <!-- END GENERATED olivares-grpc-reference -->

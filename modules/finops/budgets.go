@@ -486,7 +486,7 @@ const alertWriterLockKeyPrefix = "finops.budget_alert.writer.v1:"
 // deny it did not already have).
 //
 // WHAT THIS COSTS, said plainly because it is a NEW SUPPORTED-SCOPE REQUIREMENT and
-// not a preserved legacy behaviour (R1 of the independent review, adjudicated): the
+// not a preserved legacy behaviour (finding 1 of the independent review, adjudicated): the
 // alert writer already refused a scope without the capability, but the reservation
 // ledger did not. Through a decorator that embeds store.Scope without forwarding
 // LockTransaction, reserve/settle/sweep used to work — reserve within headroom, deny

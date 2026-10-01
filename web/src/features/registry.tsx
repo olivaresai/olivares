@@ -85,10 +85,12 @@ import {
   Timer,
   Waypoints,
   Workflow,
+  Wrench,
   Zap,
 } from 'lucide-react'
 import { Spinner } from '@/components/ui/spinner'
 import type { RouteAlias } from './route-census'
+import { FEATURE_EXTENSIONS } from './extensions'
 
 // Estate overview — the home front door (route `/`), the real overview that
 // replaced the foundation placeholder (the last one). Named export → default for lazy().
@@ -189,6 +191,12 @@ const ProviderAdminView = lazy(() =>
 // inside it. A profile says which home an official CLI runs under; a provider says
 // which credential it runs with. They have independent permission tiers, and before
 // this route `sessions:provider:read` was a permission with no screen.
+const AgentToolsView = lazy(() =>
+  import('./agent-tools/agent-tools-view').then((m) => ({
+    default: m.AgentToolsView,
+  })),
+)
+
 const ProvidersView = lazy(() =>
   import('./providers/providers-view').then((m) => ({
     default: m.ProvidersView,
@@ -1489,6 +1497,20 @@ export const FEATURE_VIEWS: readonly FeatureView[] = Object.freeze(
         }),
       },
       {
+        id: 'agent-tools',
+        path: '/agent-tools',
+        helpHref: '/how-to/add-a-provider',
+        navigation: {
+          kind: 'feature',
+          areaId: 'ai',
+          sectionId: 'environments',
+        },
+        hub: 'operate',
+        icon: Wrench,
+        permission: 'system:admin',
+        element: lazyView(AgentToolsView),
+      },
+      {
         // The credential a session launches with. It sits FIRST in the environments
         // section because it is the first thing a new operator needs and the last thing
         // the product used to offer: a profile with no credential launches nothing, and
@@ -2082,6 +2104,7 @@ export const FEATURE_VIEWS: readonly FeatureView[] = Object.freeze(
         permission: 'system:admin',
         element: lazyView(ResidencyView),
       },
+      ...FEATURE_EXTENSIONS,
     ] satisfies FeatureView[]
   ).map((view) => Object.freeze(view)),
 )

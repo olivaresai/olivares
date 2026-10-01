@@ -13,6 +13,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/agenttoolsapi"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/audit"
 )
@@ -83,5 +84,7 @@ func moduleOpenAPIDocument() (map[string]any, error) {
 	if err != nil {
 		return nil, fmt.Errorf("load module operator config: %w", err)
 	}
-	return api.ModuleOpenAPIDocument(set.all), nil
+	// Route reflection does not invoke handlers. This zero-value module adds the
+	// composition-root host routes without opening a journal or probing the host.
+	return api.ModuleOpenAPIDocument(set.apiModules(&agenttoolsapi.Module{})), nil
 }

@@ -91,7 +91,7 @@ telemetry and no control-plane egress by default, so what crosses your perimeter
 what **you** configure to cross it — calls to your model APIs, the SIEM/webhook
 outputs you wire, an external embedding provider if you provision one. Olivares AI
 is not on that list: the vendor is never in the data path. It is reached only when you ask
-it for something — `olivares upgrade`, or a subscription download of commercial add-ons and
+it for something — `olivares upgrade`, or a subscription download of commercial modules and
 their updates — never as a side effect of running. And `olivares upgrade --endpoint`
 points even that at your own mirror, so the one command that reaches out does not have
 to. That is a strong argument

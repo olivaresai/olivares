@@ -33,9 +33,10 @@ cubre algo, la página lo dice en lugar de dar a entender que sí lo hace.
   se renderiza desde el propio contrato OpenAPI 3.1 del producto. El audit ledger es
   append-only y hash-chained con checkpoints firmados con Ed25519, y puede exportarse
   en varios formatos SIEM.
-- **Las releases están firmadas y son verificables sin conexión.** Firma, procedencia SLSA, SBOM
-  y OpenVEX pueden todos [verificarse sin acceso a red](/es/how-to/verify-a-release/),
-  y el producto incluye un [bundle air-gap](/es/how-to/air-gap-install/). La última release etiquetada, **v26.9.0**, está publicada con archivos firmados, paquetes nativos e imágenes de contenedor; las API, los esquemas y la superficie de módulos aún pueden cambiar antes de la 1.0.
+- **Las releases están firmadas y son verificables.** Firma, procedencia SLSA, SBOM y OpenVEX pueden todos
+  [verificarse](/es/how-to/verify-a-release/). La verificación aún no funciona del todo sin red: las comprobaciones sin clave
+  necesitan el material de raíz de confianza de Sigstore y el paso SLSA no tiene modo sin conexión. El producto incluye un
+  [bundle air-gap](/es/how-to/air-gap-install/). La última release etiquetada, **26.10.0**, está publicada con archivos firmados, paquetes nativos e imágenes de contenedor; las API, los esquemas y la superficie de módulos aún pueden cambiar antes de la 1.0.
 
 ## Open core — qué es abierto vs enterprise
 
@@ -53,17 +54,17 @@ en lugar de fingirlas:
   devuelve `multi_idp_requires_enterprise` — un límite de producto explícito, nunca un 501
   falso.
 - **No hay tope de usuarios: las cuentas son ilimitadas en todas las ediciones.**
-  Community, Business, los add-ons y Enterprise self-hosted admiten un número ilimitado
+  Community, Business y Enterprise self-hosted admiten un número ilimitado
   de cuentas de usuario, sea cual sea el estado de la licencia: válida, caducada o
   inexistente. El tope de tres cuentas activas anterior al 2026-07-27 se eliminó por
   completo (el seam de asientos sigue en el código, como un no-op de compatibilidad que
   no rechaza nada), y que una licencia caduque nunca limita, desactiva ni borra una
-  cuenta. El modelo comercial es un derecho por término sobre los add-ons, nunca un
+  cuenta. El modelo comercial es un derecho por término sobre los módulos, nunca un
   cobro por asiento.
 - **El resto de la plataforma es abierto.** El bucle completo de gobierno — inventario, el
   mapa de acceso R/RW, la política RBAC/ABAC/Cedar, el audit ledger sellado, FinOps,
   compliance, egress SIEM, MCP, HA/distribuido — corre en el binario abierto sin comprobación
-  de licencia. Los add-ons aditivos de `enterprise/` (federación multi-IdP, content
+  de licencia. Los módulos aditivos de `enterprise/` (federación multi-IdP, content
   firewall/DLP, hook hardening, el catálogo compilado de threat-intel, el egress de server-tool, el conector
   de CyberArk Conjur y el incident close-loop) son código nuevo
   que nunca estuvo en el producto abierto, no funciones quitadas de él. La validación de
@@ -139,7 +140,7 @@ Trata la profundidad a nivel de módulo como **trabajo en curso** salvo que una 
   air-gapped; los modelos frontier brokered no.
 - **Las rutas de módulo son un contrato beta separado.** Los endpoints de módulo (por
   ejemplo, el grafo del access map y el drift) no forman parte del contrato estable de
-  54 rutas del núcleo; se publican como un documento **beta** separado: la
+  67 rutas del núcleo; se publican como un documento **beta** separado: la
   [referencia de rutas de módulo](/reference/api-beta/) (servida en
   `/openapi.beta.json`). Beta significa que las formas pueden cambiar con aviso, y el
   detalle de cada campo sigue viviendo en las interfaces tipadas del producto. La

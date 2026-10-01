@@ -46,6 +46,10 @@ export interface ConfirmDialogProps {
   /** Hide the audit-ledger notice (default: shown). */
   hideAuditNotice?: boolean
   onConfirm: () => void
+  /** Programmatically opened dialogs can name the control to focus on close. */
+  onCloseAutoFocus?: React.ComponentProps<
+    typeof DialogContent
+  >['onCloseAutoFocus']
 }
 
 export function ConfirmDialog({
@@ -62,6 +66,7 @@ export function ConfirmDialog({
   pending = false,
   hideAuditNotice = false,
   onConfirm,
+  onCloseAutoFocus,
 }: ConfirmDialogProps) {
   const { t } = useTranslation('common')
   const [typed, setTyped] = useState('')
@@ -83,7 +88,7 @@ export function ConfirmDialog({
       open={open}
       onOpenChange={(o) => (pending ? undefined : onOpenChange(o))}
     >
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description != null && (

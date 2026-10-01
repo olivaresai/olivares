@@ -40,5 +40,9 @@
     "setup_complete": "La configuration est déjà terminée.",
     "cross_tenant_admin_pool_not_configured": "Ce déploiement n’a pas de pool de base de données d’administration inter-tenants. Provisionnez un rôle NOSUPERUSER BYPASSRLS avec `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (voir deploy/postgres/README.md) puis redémarrez le serveur avec --admin-dsn pointant vers ce rôle.",
     "internal": "Une erreur interne est survenue."
+  },
+  "tenantAdmission": {
+    "title": "Admission dans l’organisation requise",
+    "description": "Connectez-vous avec une identité d’annuaire admise dans l’organisation. L’autorité globale de bootstrap ne permet pas de gérer les communications du workspace."
   }
 }

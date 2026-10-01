@@ -11,7 +11,8 @@ description: >-
 
 模块 III 的图，包含**发起方**（agent、identity、session）与它们所触及的 **resource**，每条 edge
 都按 [mode](#mode) 分类，并标注其[signal source](#signal-source信号源)、[归因](#attribution归因置信度)
-与[覆盖层级](#coverage-tier覆盖层级)。一项关键的差异化能力——31 个模块之一，而非整个产品。见
+与[覆盖层级](#coverage-tier覆盖层级)。一项关键的差异化能力——31
+个模块之一，而非整个产品。见
 [什么是 Olivares AI？](/zh/start/what-is-olivares-ai/)。
 
 ### 作动状态：`v1` / `on-demand` / `seam`
@@ -149,7 +150,7 @@ agent identity）。名册来自[身份 source](/zh/how-to/connectors/sso-scim-i
 
 ### live_ref
 
-服务器为 **一行** 实时会话分配的身份。v26.9.0 按 `(观察范围, 外部 id)` 为观察
+服务器为 **一行** 实时会话分配的身份。26.10.0 按 `(观察范围, 外部 id)` 为观察
 编制键，使两个宣布同一会话 id 的提供商主目录仍是两行。表示「这一行」的控制台
 和 API 读取使用 `live_ref`，而不是裸提供商 id。裸外部 id 路由是遗留的，只回答
 遗留行（`CHANGELOG.md` `[26.9.0]` B2）。见

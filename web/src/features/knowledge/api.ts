@@ -447,7 +447,7 @@ export async function fetchMemoryExport(params?: {
   const qs = search.toString()
   let res: Response
   try {
-    res = await fetch(`${BASE}/memory/export${qs ? `?${qs}` : ''}`, {
+    res = await fetch(`${BASE}/memory/export?${qs}`, {
       method: 'GET',
       headers,
       credentials: 'same-origin',

@@ -36,6 +36,11 @@ package api
 // a non-superadmin caller must hold, which is exactly what the annotation is
 // for.
 var corePermissions = map[string]string{
+	"getMCPGateway": "tenant:admin", "addMCPGatewayServer": "tenant:admin", "updateMCPGatewayServer": "tenant:admin", "removeMCPGatewayServer": "tenant:admin", "testMCPGatewayServer": "tenant:admin", "setMCPGatewaySessionTools": "tenant:admin",
+	"getTOTPPolicy":     "system:admin",
+	"setTOTPPolicy":     "system:admin",
+	"getUserTOTPStatus": "membership:read",
+	"resetUserTOTP":     "membership:write",
 	// Agents + access graph (handlers_core.go).
 	"listAgents":      "agent:read",
 	"getAgent":        "agent:read",
@@ -116,7 +121,9 @@ var corePermissions = map[string]string{
 // annotation (see the doc comment on corePermissions). openapi_perm_test.go
 // enforces that every secured operation is in exactly one of the two sets, so
 // a new core route cannot land unannotated by accident.
+// TOTP self-service authenticates a session or a primary-verified pending token.
 var corePermissionExempt = map[string]bool{
+	"enrolTOTP": true, "activateTOTP": true, "getTOTPStatus": true, "removeTOTP": true,
 	"logout":           true,
 	"refreshToken":     true,
 	"whoami":           true,

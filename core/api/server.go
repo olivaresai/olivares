@@ -185,6 +185,9 @@ type Options struct {
 	// secrets into the store and persisting reference-only source rows via).
 	// Superadmin-gated; writes/test need AAL3. nil leaves those endpoints 501.
 	ConnectorOnboarding ConnectorOnboarding
+	// MCPGateway manages tenant-owned upstreams; writes/test require tenant admin and AAL3.
+	MCPGateway        MCPGatewayService
+	MCPGatewayRuntime MCPGatewayRuntime
 	// KnowledgeStatus exposes the composition-root knowledge-plane posture (embedder
 	// kind and whether retrieval is semantic) to /status and the console summary.
 	// nil reports an unwired local-hash posture so the degraded state stays visible.
@@ -368,6 +371,8 @@ type Server struct {
 	// the descriptor catalog + sealed-credential CRUD + test under
 	// /v1/console/connectors. nil = those endpoints answer 501.
 	connectorOnboarding ConnectorOnboarding
+	mcpGateway          MCPGatewayService
+	mcpGatewayRuntime   MCPGatewayRuntime
 	// knowledgeStatus is the no-secret, process-level knowledge-plane posture.
 	knowledgeStatus KnowledgeStatusProvider
 	// updateStatus returns the latest cached OTA update check; nil when
@@ -482,6 +487,7 @@ func New(opts Options) (*Server, error) {
 		inviteSender:       opts.InviteSender, fedSvc: opts.FederationService, secretStore: opts.SecretStore,
 		standing:     opts.Standing,
 		sourceRoster: opts.SourceRoster, contentDiff: opts.ContentDiff, connectorOnboarding: opts.ConnectorOnboarding,
+		mcpGateway: opts.MCPGateway, mcpGatewayRuntime: opts.MCPGatewayRuntime,
 		knowledgeStatus:                opts.KnowledgeStatus,
 		updateStatus:                   opts.UpdateStatus,
 		updateRefresh:                  opts.UpdateRefresh,
@@ -638,6 +644,11 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	mw = append(mw, s.setupGate)
 	r.Use(mw...)
 
+	if s.mcpGatewayRuntime != nil {
+		r.Handle("/session/mcp", http.HandlerFunc(s.mcpGatewayRuntime.ServeSessionHTTP))
+		r.Handle("/mcp/gateway/{tenant}/{id}", http.HandlerFunc(s.mcpGatewayRuntime.ServeGatewayHTTP))
+		r.Handle("/.well-known/oauth-protected-resource/mcp/gateway/{tenant}/{id}", http.HandlerFunc(s.mcpGatewayRuntime.ServeGatewayHTTP))
+	}
 	r.Get("/healthz", s.handleHealth)
 	r.Get("/openapi.json", s.handleOpenAPI)
 	// the beta module-route document, alongside the stable one and exempt
@@ -719,6 +730,17 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		r.Delete("/webauthn/credentials/{id}", s.handleWebAuthnDelete)
 		r.Get("/piv/status", s.handlePIVStatus)
 		r.Post("/piv/elevate", s.handlePIVElevate)
+		// TOTP second factor. The three anonymous paths take the pending
+		// login credential in the body (a factor-gated password login has no
+		// session yet); the rest are the acting session's own factor, the
+		// deployment policy, and the admin reset under /users.
+		r.Post("/totp/enrol", s.handleTOTPEnrol)
+		r.Post("/totp/activate", s.handleTOTPActivate)
+		r.Post("/totp/challenge", s.handleTOTPChallenge)
+		r.Get("/totp/status", s.handleTOTPStatus)
+		r.Delete("/totp", s.handleTOTPRemove)
+		r.Get("/totp/policy", s.handleTOTPPolicyGet)
+		r.Put("/totp/policy", s.handleTOTPPolicyPut)
 	})
 
 	v1.Route("/agents", func(r chi.Router) {
@@ -818,6 +840,14 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		r.Post("/test", s.handleTestConnector)
 	})
 	v1.Post("/console/runtime/reload", s.handleReloadRuntime)
+	v1.Route("/console/mcp-gateway", func(r chi.Router) {
+		r.Get("/", s.handleMCPGateway)
+		r.Post("/servers", s.handlePutMCPGatewayServer)
+		r.Put("/servers/{id}", s.handlePutMCPGatewayServer)
+		r.Delete("/servers/{id}", s.handleDeleteMCPGatewayServer)
+		r.Post("/servers/{id}/test", s.handleTestMCPGatewayServer)
+		r.Put("/session-tools", s.handleMCPGatewaySessionTools)
+	})
 
 	// the live edition/license surface — install/observe/HOT-APPLY a commercial
 	// license without a restart (the Grafana/Elastic in-place model). Superadmin-gated;
@@ -902,6 +932,11 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		r.Get("/superadmins", s.handleListSuperadmins)
 		r.Post("/{id}/disable", s.handleDisableSuperadmin)
 		r.Post("/{id}/enable", s.handleEnableSuperadmin)
+		// an administrator's view and reset of another account's TOTP
+		// factor (tenant-scoped membership permission + AAL3, the onboarding
+		// gates — the population that may issue an invite may clear a factor).
+		r.Get("/{id}/totp", s.handleUserTOTPStatus)
+		r.Post("/{id}/totp/reset", s.handleUserTOTPReset)
 	})
 	v1.Route("/tokens", func(r chi.Router) {
 		r.Get("/", s.handleListTokens)
@@ -1172,9 +1207,18 @@ func checkRoutePermsDeclared(m Module) error {
 	missing := map[auth.Permission]bool{}
 	var names []string
 	for _, r := range routes {
-		if !declared[r.perm] && !missing[r.perm] {
-			missing[r.perm] = true
-			names = append(names, string(r.perm))
+		if r.system {
+			continue
+		} // Fixed core system:admin permission; never module-delegable.
+		permissions := []auth.Permission{r.perm}
+		if r.deniedReadPermission != "" {
+			permissions = append(permissions, r.deniedReadPermission)
+		}
+		for _, perm := range permissions {
+			if !declared[perm] && !missing[perm] {
+				missing[perm] = true
+				names = append(names, string(perm))
+			}
 		}
 	}
 	if len(names) == 0 {
@@ -1703,7 +1747,7 @@ func (cr chiRegistrar) entityResource(
 	if ref.CoreKind != CoreKindNone {
 		return cr.coreEntityResource(r, res, ref, model.ID(id))
 	}
-	if ref.Kind == "" || (ref.WorkspaceColumn == "" && !ref.ConcealDeniedAsNotFound) {
+	if ref.Kind == "" || (ref.WorkspaceColumn == "" && ref.LookupColumn == "" && !ref.ConcealDeniedAsNotFound) {
 		return res, "", true, nil, nil
 	}
 	p, ok := principalFrom(r.Context())
@@ -1744,7 +1788,27 @@ func (s *Server) storedEntityLineage(
 		if e != nil {
 			return e
 		}
-		rec, e := repo.Get(ctx, model.ID(id))
+		var rec model.Record
+		if ref.LookupColumn == "" {
+			rec, e = repo.Get(ctx, model.ID(id))
+		} else {
+			var rows []model.Record
+			rows, _, e = repo.List(ctx, model.Query{
+				Filters: []model.Filter{{Column: ref.LookupColumn, Op: model.OpEq, Value: id}},
+				Limit:   2,
+			})
+			if e == nil {
+				switch len(rows) {
+				case 0:
+					return nil
+				case 1:
+					rec = rows[0]
+					res.ID = rec.String(model.ColID)
+				default:
+					return errors.New("api: stored entity reference is not unique")
+				}
+			}
+		}
 		if errors.Is(e, store.ErrNotFound) {
 			return nil // no row: stay at collection level, the handler answers 404
 		}
@@ -1866,7 +1930,7 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 				w, r, perm, resource, meta, errForbidden, governed,
 			)
 		} else {
-			res, _, found, locatorErr, err := cr.entityResource(r, perm, *ref)
+			res, lineageTenant, found, locatorErr, err := cr.entityResource(r, perm, *ref)
 			if err != nil {
 				// Deny-closed: a lineage we could not read is not a lineage we may
 				// ignore — authorizing at collection level here would silently widen
@@ -1893,8 +1957,23 @@ func (cr chiRegistrar) handle(method, pattern string, perm auth.Permission, ref 
 				cr.s.writeError(w, r, locatorErr)
 				return
 			}
+			concealDenied := ref.ConcealDeniedAsNotFound
+			if concealDenied && ref.DeniedReadPermission != "" {
+				// Readability only selects the denial's status. The action still
+				// requires its own decision, and absence is never disclosed as 403.
+				// Evaluate the read overlay for absent references and scoped forbids
+				// too: skipping its remote work would reveal a concealed row.
+				reader, authenticated := principalFrom(r.Context())
+				if authenticated && lineageTenant != "" {
+					read := cr.s.authz.AuthorizeDisclosure(r.Context(), auth.Request{
+						Principal: reader, Permission: ref.DeniedReadPermission,
+						Tenant: lineageTenant, Resource: res,
+					})
+					concealDenied = !found || !read.Allow
+				}
+			}
 			p, tenant, witness, ok = cr.authzEntityResourcePolicy(
-				w, r, perm, res, meta, ref.ConcealDeniedAsNotFound, governed,
+				w, r, perm, res, meta, concealDenied, governed,
 			)
 			if ok && ref.ConcealDeniedAsNotFound && !found {
 				cr.s.writeError(w, r, store.ErrNotFound)

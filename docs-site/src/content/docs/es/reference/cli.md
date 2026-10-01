@@ -158,7 +158,7 @@ una traducción humana. La guía editorial que los rodea está localizada.
 
 ## Complete command reference
 
-This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 851 command nodes — the root command and 850 subcommands, of which 185 are groups that carry subcommands and 9 are hidden diagnostics — together with the 2948 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
+This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 866 command nodes — the root command and 865 subcommands, of which 188 are groups that carry subcommands and 9 are hidden diagnostics — together with the 3041 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
 
 Nothing here is a stability promise: see [Stability](#stability) below for what may still change.
 
@@ -190,7 +190,7 @@ Command groups declare further flags that their own subcommands inherit. A flag 
 
 ### Command index
 
-All 851 commands, in alphabetical order.
+All 866 commands, in alphabetical order.
 
 | Command | Summary |
 |---|---|
@@ -263,6 +263,9 @@ All 851 commands, in alphabetical order.
 | [`olivares auth login`](#command-olivares-auth-login) | Validate a credential and save it in a client context |
 | [`olivares auth logout`](#command-olivares-auth-logout) | Remove a saved token from a client context |
 | [`olivares auth status`](#command-olivares-auth-status) | Show the effective CLI identity and authentication context |
+| [`olivares auth totp-policy`](#command-olivares-auth-totp-policy) | Read or set the require-TOTP-for-administrators policy (system:admin) |
+| [`olivares auth totp-policy get`](#command-olivares-auth-totp-policy-get) | Read the policy |
+| [`olivares auth totp-policy set`](#command-olivares-auth-totp-policy-set) | Set the policy (requires an AAL3 session) |
 | [`olivares auth use-context`](#command-olivares-auth-use-context) | Select the current CLI client context |
 | [`olivares capabilities`](#command-olivares-capabilities) | What this estate can do: connected servers, and the tools and skills they bring |
 | [`olivares capabilities servers`](#command-olivares-capabilities-servers) | The MCP servers this estate talks to |
@@ -691,6 +694,16 @@ All 851 commands, in alphabetical order.
 | [`olivares members invites ls`](#command-olivares-members-invites-ls) | List the tenant's pending, unexpired invitations |
 | [`olivares members invites revoke`](#command-olivares-members-invites-revoke) | Revoke a pending invitation |
 | [`olivares members ls`](#command-olivares-members-ls) | List the resolved tenant's member roster |
+| [`olivares message`](#command-olivares-message) | Exchange exact-session messages through governed channels |
+| [`olivares message ack`](#command-olivares-message-ack) | Acknowledge this exact session's delivery |
+| [`olivares message get`](#command-olivares-message-get) | Read this exact session's delivery |
+| [`olivares message handoff`](#command-olivares-message-handoff) | Offer and respond to exact-session work handoffs |
+| [`olivares message handoff get`](#command-olivares-message-handoff-get) | Read protected handoff context by carrier delivery |
+| [`olivares message handoff inbox`](#command-olivares-message-handoff-inbox) | List this exact session's incoming handoffs |
+| [`olivares message handoff offer`](#command-olivares-message-handoff-offer) | Offer owned work to one exact canonical session SID |
+| [`olivares message handoff respond`](#command-olivares-message-handoff-respond) | Accept or reject this exact session's incoming handoff |
+| [`olivares message inbox`](#command-olivares-message-inbox) | Read this authenticated session's inbox |
+| [`olivares message send`](#command-olivares-message-send) | Send plain-text content to one canonical session SID |
 | [`olivares migrate`](#command-olivares-migrate) | Inspect migration state or explicitly apply the PostgreSQL schema |
 | [`olivares migrate apply`](#command-olivares-migrate-apply) | Apply the PostgreSQL schema and stop WITHOUT serving (migrate → grant → serve) |
 | [`olivares migrate manifest`](#command-olivares-migrate-manifest) | Print this binary's registered schema manifest (deterministic; the open≡enterprise parity oracle) |
@@ -1012,6 +1025,8 @@ All 851 commands, in alphabetical order.
 | [`olivares users enable`](#command-olivares-users-enable) | Re-enable a disabled superadmin account (requires an AAL3 session) |
 | [`olivares users ls`](#command-olivares-users-ls) | List the global user accounts |
 | [`olivares users superadmins`](#command-olivares-users-superadmins) | List the superadmin accounts and whether each is active |
+| [`olivares users totp`](#command-olivares-users-totp) | Show an account's TOTP second factor (non-secret) |
+| [`olivares users totp-reset`](#command-olivares-users-totp-reset) | Reset an account's TOTP factor (destructive; requires an AAL3 session) |
 | [`olivares version`](#command-olivares-version) | Print the olivares version, build metadata and FIPS 140-3 mode |
 | [`olivares voice`](#command-olivares-voice) | Inspect governed voice sessions and set the per-agent voice policy |
 | [`olivares voice decisions`](#command-olivares-voice-decisions) | List the append-only voice decision ledger for the tenant |
@@ -1742,7 +1757,7 @@ olivares agent tool install
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--driver` | `string` | `claude` | provider tool to install: claude, codex or grok |
+| `--driver` | `string` | `claude` | provider tool to install: claude, codex, grok, opencode or ollama |
 | `--plan` | `string` | — | execute this plan file written by 'plan --out'; it is the approval, so no prompt is shown |
 | `--platform` | `string` | — | target platform key: linux-x64, linux-arm64, linux-x64-musl, linux-arm64-musl (default: this host) |
 | `--root` | `string` | — | absolute directory that owns installed tools (default &lt;data-dir&gt;/tools, with data-dir from $OLIVARES_DATA_DIR or the installation default) |
@@ -1774,7 +1789,7 @@ olivares agent tool plan
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--driver` | `string` | `claude` | provider tool to install: claude, codex or grok |
+| `--driver` | `string` | `claude` | provider tool to install: claude, codex, grok, opencode or ollama |
 | `--out` | `string` | — | write the plan JSON (with its digest) to this new file for a later 'install --plan' |
 | `--platform` | `string` | — | target platform key: linux-x64, linux-arm64, linux-x64-musl, linux-arm64-musl (default: this host) |
 | `--root` | `string` | — | absolute directory that owns installed tools (default &lt;data-dir&gt;/tools, with data-dir from $OLIVARES_DATA_DIR or the installation default) |
@@ -2242,6 +2257,48 @@ olivares auth status
 | `--timeout` | `duration` | `10s` | request timeout |
 | `--token` | `string` | — | API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
 | `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+
+#### Command: olivares auth totp-policy
+
+Read or set the require-TOTP-for-administrators policy (system:admin)
+
+```
+olivares auth totp-policy
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**. control-plane base URL (default $OLIVARES_SERVER_URL, then current context) |
+| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
+| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+
+#### Command: olivares auth totp-policy get
+
+Read the policy
+
+```
+olivares auth totp-policy get
+```
+
+Declares no flags of its own; it takes those of [`olivares auth totp-policy`](#command-olivares-auth-totp-policy) and the root command.
+
+#### Command: olivares auth totp-policy set
+
+Set the policy (requires an AAL3 session)
+
+```
+olivares auth totp-policy set
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--require-for-admins` | `bool` | `false` | administrators must hold a TOTP factor to finish a password login |
 
 #### Command: olivares auth use-context
 
@@ -8103,6 +8160,196 @@ Aliases: `list`
 
 Declares no flags of its own; it takes those of [`olivares members`](#command-olivares-members) and the root command.
 
+#### Command: olivares message
+
+Exchange exact-session messages through governed channels
+
+```
+olivares message
+```
+
+Declares no flags of its own; it takes those of [`olivares`](#command-olivares) and the root command.
+
+#### Command: olivares message ack
+
+Acknowledge this exact session's delivery
+
+```
+olivares message ack delivery-id
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--idempotency-key` | `string` | — | canonical UUIDv7 key retained for exact retries |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
+| `--version` | `int64` | `0` | current delivery version |
+
+#### Command: olivares message get
+
+Read this exact session's delivery
+
+```
+olivares message get delivery-id
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
+
+#### Command: olivares message handoff
+
+Offer and respond to exact-session work handoffs
+
+```
+olivares message handoff
+```
+
+Declares no flags of its own; it takes those of [`olivares message`](#command-olivares-message) and the root command.
+
+#### Command: olivares message handoff get
+
+Read protected handoff context by carrier delivery
+
+```
+olivares message handoff get delivery-id
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
+
+#### Command: olivares message handoff inbox
+
+List this exact session's incoming handoffs
+
+```
+olivares message handoff inbox
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--continuation` | `string` | — | opaque continuation from the previous inbox page |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--limit` | `int` | `50` | page size (1..200) |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--state` | `string` | `offered` | one handoff state: offered, accepted, rejected, withdrawn or expired |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
+| `--workspace-id` | `string` | — | exact session workspace UUID |
+
+#### Command: olivares message handoff offer
+
+Offer owned work to one exact canonical session SID
+
+```
+olivares message handoff offer
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ack-deadline` | `string` | — | future acknowledgment deadline in RFC3339 |
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--channel-id` | `string` | — | operator-authorized channel UUID |
+| `--context-file` | `string` | — | HandoffContent JSON file, or - for stdin |
+| `--idempotency-key` | `string` | — | canonical UUIDv7 key retained for exact retries |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--owner-epoch` | `int64` | `0` | owner epoch from the current work read |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--to-sid` | `string` | — | exact recipient canonical SID (osn_UUID) |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
+| `--version` | `int64` | `0` | current work item version |
+| `--work-item-id` | `string` | — | owned work item UUID |
+
+#### Command: olivares message handoff respond
+
+Accept or reject this exact session's incoming handoff
+
+```
+olivares message handoff respond handoff-id
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--idempotency-key` | `string` | — | canonical UUIDv7 key retained for exact retries |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--reason-file` | `string` | — | CommunicationReasonContent JSON required for reject; file or - for stdin |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
+| `--transition` | `string` | — | accept or reject |
+| `--version` | `int64` | `0` | current handoff version from the protected detail |
+
+#### Command: olivares message inbox
+
+Read this authenticated session's inbox
+
+```
+olivares message inbox
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--continuation` | `string` | — | opaque continuation from the previous inbox page |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--limit` | `int` | `50` | page size (1..200) |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
+| `--workspace-id` | `string` | — | exact session workspace UUID |
+
+#### Command: olivares message send
+
+Send plain-text content to one canonical session SID
+
+```
+olivares message send
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | PEM CA bundle used to verify the control plane (default: the active client context) |
+| `--channel-id` | `string` | — | operator-authorized channel UUID |
+| `--idempotency-key` | `string` | — | stable key retained for exact retries |
+| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed dev planes only) |
+| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | control-plane base URL (default $OLIVARES_SERVER_URL or the active client context) |
+| `--subject` | `string` | — | message subject |
+| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--text-file` | `string` | — | plain-text file, or - for stdin |
+| `--timeout` | `duration` | `30s` | request timeout |
+| `--to-sid` | `string` | — | exact recipient canonical SID (osn_UUID) |
+| `--token` | `string` | — | API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
+
 #### Command: olivares migrate
 
 Inspect migration state or explicitly apply the PostgreSQL schema
@@ -10768,7 +11015,7 @@ olivares release manifest
 | `--security` | `bool` | `false` | mark this as a security release |
 | `--sign-key` | `string` | — | base64 (or @file) Ed25519 PRIVATE key to sign the manifest |
 | `--start-at` | `string` | — | rollout start time (RFC3339); before it no node upgrades |
-| `--version` | `string` | — | release version (semver), e.g. 26.9.0 (required) |
+| `--version` | `string` | — | release version (semver), e.g. 26.10.0 (required) |
 
 #### Command: olivares release sign-manifest
 
@@ -12644,6 +12891,28 @@ olivares users superadmins
 ```
 
 Declares no flags of its own; it takes those of [`olivares users`](#command-olivares-users) and the root command.
+
+#### Command: olivares users totp
+
+Show an account's TOTP second factor (non-secret)
+
+```
+olivares users totp <user-id>
+```
+
+Declares no flags of its own; it takes those of [`olivares users`](#command-olivares-users) and the root command.
+
+#### Command: olivares users totp-reset
+
+Reset an account's TOTP factor (destructive; requires an AAL3 session)
+
+```
+olivares users totp-reset <user-id>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `-y`, `--yes` | `bool` | `false` | proceed without the confirmation prompt (required in a non-interactive session) |
 
 #### Command: olivares version
 

@@ -411,7 +411,11 @@ func (l *auditArchiveLoop) anchorAndAdvance(ctx context.Context, tenant model.Te
 		if last >= res.Manifest.ToSeq {
 			return nil
 		}
-		if _, err := sc.Audit().Append(ctx, audit.SegmentAnchorDraft(res)); err != nil {
+		draft, err := audit.SegmentAnchorDraft(res)
+		if err != nil {
+			return err
+		}
+		if _, err := sc.Audit().Append(ctx, draft); err != nil {
 			return err
 		}
 		settings := org.Settings
