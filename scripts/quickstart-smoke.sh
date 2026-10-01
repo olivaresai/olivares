@@ -133,69 +133,41 @@ g=json.load(sys.stdin); E=g.get("edges",[])
 t=Counter(e.get("attribution_tier") for e in E)
 print(len(g.get("nodes",[])), len(E), t.get("firm",0), t.get("approximate",0))')
 EOF
-# ⛔ THE FOUR NUMBERS COME FROM THE README, NOT FROM LITERALS HERE.
-#
-# README.md's Quickstart, step 3, publishes "20 nodes / 13 edges, with 8 unexpected accesses and
-# 2 unused grants", and the paragraph that closes Quickstart says THIS SCRIPT "asserts the
-# access-map and drift counts listed above, so this section cannot quietly drift from the code".
-# (Cited by SECTION, not by line: the line numbers this comment used to carry were already two
-# rewrites stale, and a stale pointer sends the next reader to the wrong paragraph.)
-# It could drift: the four values lived here as literals of
-# their own, and nothing compared them with the sentence. Change the prose and this stayed green;
-# change these and the prose stayed wrong. Two declarations of one fact, with the guarantee written
-# on top of the pair.
-#
-# Parsed from the canonical English README — the six translations are held to the same numbers by
-# their own parity gate, and duplicating the parse per locale would recreate the defect one level up.
-readme_counts() {
-    local readme="${ROOT}/README.md"
-    [ -f "$readme" ] || fail "cannot read $readme to take the published counts from it"
-    python3 - "$readme" <<'PYEOF'
+# The four numbers come from the canonical English quickstart guide, not literals
+# here. Keep its sentence shape explicit: a prose change must not silently stop
+# this script from checking the access graph and drift against the published claims.
+guide_counts() {
+    local guide="${ROOT}/docs-site/src/content/docs/start/quickstart.md"
+    [ -f "$guide" ] || fail "cannot read $guide to take the published counts from it"
+    python3 - "$guide" <<'PYEOF'
 import re, sys
 src = open(sys.argv[1], encoding="utf-8").read()
 m = re.search(
-    r"\((\d+) nodes / (\d+) edges, with (\d+) unexpected accesses and (\d+) unused grants\)",
+    r"The demo estate returns exactly \*\*(\d+) nodes and (\d+) edges\*\*, and the drift surfaces\n"
+    r"\*\*(\d+) unexpected accesses\*\* and \*\*(\d+) unused grants\*\*\.",
     src,
 )
 if not m:
     sys.stderr.write(
-        "quickstart-smoke: the README no longer states the counts in the shape this script reads.\n"
-        "  Expected: (N nodes / N edges, with N unexpected accesses and N unused grants)\n"
+        "quickstart-smoke: the quickstart guide no longer states the counts in the shape this script reads.\n"
+        "  Expected: The demo estate returns exactly **N nodes and N edges**, and the drift surfaces\n"
+        "  **N unexpected accesses** and **N unused grants**.\n"
         "  NOT a licence to skip the assertion: if the sentence changed shape, decide deliberately.\n")
     sys.exit(1)
 print(" ".join(m.groups()))
 PYEOF
 }
-# ⛔ This read used to be written as:
-#
-#     read -r R_NODES R_EDGES R_UNEXP R_UNUSED <<EOF
-#     $(readme_counts) || exit 1
-#     EOF
-#
-# Inside a heredoc `|| exit 1` is TEXT, not an operator, and one line carried two defects.
-# The one that showed: `read` puts the leftover of the line into the LAST field, so R_UNUSED
-# became "2 || exit 1" and the drift assertion went red. The one that mattered: the refusal
-# above — the whole point of parsing rather than hardcoding — could not abort anything. If the
-# README changed shape, python exited 1, the heredoc still produced a line, and the "guard" was
-# decoration.
-#
-# Measured, both forms against the same mutant (readme_counts returns 1):
-#   old:  R_NODES="||"  — NOT empty, so the [ -n ] below did not catch it either; the script
-#         ran on and went red three assertions later on "demo graph nodes (README says ||)",
-#         blaming the demo graph for a defect in the README parse
-#   new:  aborts at this line, with python's own message
-#
-# And it was visible at all only because the corrupted field had an assertion on it. Had the
-# leftover landed on a field nobody compares, this passes green while measuring nothing.
-readme_line="$(readme_counts)" || exit 1
+# Capture a parser refusal before splitting its output: a command substitution in
+# a heredoc does not propagate failure to read, which would leave a decorative guard.
+guide_line="$(guide_counts)" || exit 1
 read -r R_NODES R_EDGES R_UNEXP R_UNUSED <<EOF
-$readme_line
+$guide_line
 EOF
-[ -n "$R_UNUSED" ] || fail "could not take the four published counts from README.md"
-echo "    ok: README publishes ${R_NODES} nodes / ${R_EDGES} edges, ${R_UNEXP} unexpected, ${R_UNUSED} unused"
+[ -n "$R_UNUSED" ] || fail "could not take the four published counts from the quickstart guide"
+echo "    ok: quickstart guide publishes ${R_NODES} nodes / ${R_EDGES} edges, ${R_UNEXP} unexpected, ${R_UNUSED} unused"
 
-assert_eq "demo graph nodes (README says $R_NODES)" "$A_NODES" "$R_NODES"
-assert_eq "demo graph edges (README says $R_EDGES)" "$A_EDGES" "$R_EDGES"
+assert_eq "demo graph nodes (quickstart guide says $R_NODES)" "$A_NODES" "$R_NODES"
+assert_eq "demo graph edges (quickstart guide says $R_EDGES)" "$A_EDGES" "$R_EDGES"
 # attribution_tier is live in every edge (firm vs approximate, honestly split).
 [ "$A_FIRM" -ge 1 ] || fail "expected at least one firm-attributed edge, got $A_FIRM"
 [ "$A_APPROX" -ge 1 ] || fail "expected at least one approximate-attributed edge, got $A_APPROX"
@@ -215,8 +187,8 @@ def tier(ref):
 print(d.get("unexpected_count",0), d.get("unused_count",0),
       tier("appdb.public.secrets"), tier("appdb.public.logs"))')
 EOF
-assert_eq "demo drift unexpected_accesses (README says $R_UNEXP)" "$A_UNEXP" "$R_UNEXP"
-assert_eq "demo drift unused_grants (README says $R_UNUSED)" "$A_UNUSED" "$R_UNUSED"
+assert_eq "demo drift unexpected_accesses (quickstart guide says $R_UNEXP)" "$A_UNEXP" "$R_UNEXP"
+assert_eq "demo drift unused_grants (quickstart guide says $R_UNUSED)" "$A_UNUSED" "$R_UNUSED"
 # The doc's narrative: a firmly-attributed unexpected read (secrets) and an honestly
 # approximate shared-pool write (logs). These guard the exact claims on the page.
 assert_eq "demo secrets-read attribution_tier" "$A_SECRETS_TIER" "firm"
