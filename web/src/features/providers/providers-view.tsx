@@ -228,11 +228,7 @@ function Inner() {
             </Button>
           )}
         {canWrite && record.kind !== 'ollama' && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setRotating(record)}
-          >
+          <Button variant="ghost" size="sm" onClick={() => setRotating(record)}>
             <RefreshCw className="size-3.5" />
             {t('actions.rotate')}
           </Button>

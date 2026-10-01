@@ -286,7 +286,7 @@ check "the fixture uses the REAL .gitignore, which ignores none of these" "no in
 	: >dist/checksums.txt
 	git add -A >/dev/null 2>&1
 	git commit -q -m "release commit"
-	git tag v26.8.0
+	git tag 26.10.0
 ) || exit 1
 OID="$(git -C "$TREE" rev-parse HEAD)"
 [ -z "$(git -C "$TREE" status --porcelain)" ]
@@ -390,7 +390,7 @@ case "${1:-} ${2:-}" in
 		[ "$_a" = "--clobber" ] && _up_clobber=1
 	done
 	for _a in "$@"; do
-		case "$_a" in release|upload|--*|v[0-9]*) continue ;; esac
+		case "$_a" in release|upload|--*|[0-9]*) continue ;; esac
 		_base="${_a##*/}"
 		if command grep -qxF "$_base" "$_seen" && [ "$_up_clobber" -ne 1 ]; then
 			echo "gh: ${_base} already exists (use --clobber to overwrite)" >&2
@@ -398,7 +398,7 @@ case "${1:-} ${2:-}" in
 		fi
 	done
 	for _a in "$@"; do
-		case "$_a" in release|upload|--*|v[0-9]*) continue ;; esac
+		case "$_a" in release|upload|--*|[0-9]*) continue ;; esac
 		printf '%s\n' "${_a##*/}" >>"$_seen"
 	done
 	exit 0
@@ -489,12 +489,12 @@ run_step() { # run_step <script> [VAR=VAL …]
 		GITHUB_WORKSPACE="$TREE" GITHUB_REPOSITORY="olivaresai/olivares" \
 		RUNNER_TOOL_CACHE="$WORK/toolcache" \
 		GITHUB_REPOSITORY_ID="$CTX_REPO_ID" GITHUB_EVENT_NAME="push" \
-		GITHUB_REF="refs/tags/v26.8.0" GITHUB_RUN_ID="$CTX_RUN_ID" \
+		GITHUB_REF="refs/tags/26.10.0" GITHUB_RUN_ID="$CTX_RUN_ID" \
 		GITHUB_RUN_ATTEMPT="$CTX_RUN_ATTEMPT" \
-		RELEASE_TAG="v26.8.0" RELEASE_VERSION="26.8.0" RELEASE_COMMIT="$OID" \
+		RELEASE_TAG="26.10.0" RELEASE_VERSION="26.10.0" RELEASE_COMMIT="$OID" \
 		MANIFEST_EXPIRES_IN="2160h" GH_TOKEN="stub" STUB_LOG="$WORK/log.$n" \
 		COSIGN_EXPECTED_VERSION="v2.6.4" \
-		CERT_IDENTITY_REGEXP='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v[0-9]+\.[0-9]+\.[0-9]+$' \
+		CERT_IDENTITY_REGEXP='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+\.[0-9]+$' \
 		CERT_OIDC_ISSUER="https://token.actions.githubusercontent.com" \
 		COSIGN_EXPECTED_SHA256="$(sha256sum "$WORK/bin/cosign" | cut -d' ' -f1)" \
 		GITHUB_SHA="$OID" "$@" \
@@ -517,7 +517,7 @@ CTX_RUN_ID="4242424242"
 CTX_RUN_ATTEMPT="1"
 build_context_bytes() { # build_context_bytes <commit> [event]
 	printf '{"schema":"olivares.ai/release-build-context/v1","schema_version":1,"repository_id":"%s","repository":"%s","event":"%s","ref":"%s","commit":"%s","run_id":"%s","run_attempt":"%s"}\n' \
-		"$CTX_REPO_ID" "olivaresai/olivares" "${2:-push}" "refs/tags/v26.8.0" "$1" "$CTX_RUN_ID" "$CTX_RUN_ATTEMPT"
+		"$CTX_REPO_ID" "olivaresai/olivares" "${2:-push}" "refs/tags/26.10.0" "$1" "$CTX_RUN_ID" "$CTX_RUN_ATTEMPT"
 }
 write_phase1_evidence() {
 	printf '%s\n' "$OID" >"$TREE/release-commit.txt"
@@ -546,8 +546,8 @@ reset_tree() {
 
 # --- A · THE POSITIVE FLOW, in order -------------------------------------------------------
 reset_tree
-printf 'CVE-2026-0001\n' >"$TREE/release/advisories/26.8.0.txt"
-(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f v26.8.0 >/dev/null 2>&1)
+printf 'CVE-2026-0001\n' >"$TREE/release/advisories/26.10.0.txt"
+(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f 26.10.0 >/dev/null 2>&1)
 OID="$(git -C "$TREE" rev-parse HEAD)"
 write_phase1_evidence
 [ -n "$(git -C "$TREE" status --porcelain)" ]
@@ -559,8 +559,8 @@ command grep -q 'release manifest' "$WORK/log.$n"
 check "and it actually produced" "not a silent skip" $?
 
 reset_tree
-rm -f "$TREE/release/advisories/26.8.0.txt"
-(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f v26.8.0 >/dev/null 2>&1)
+rm -f "$TREE/release/advisories/26.10.0.txt"
+(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f 26.10.0 >/dev/null 2>&1)
 OID="$(git -C "$TREE" rev-parse HEAD)"
 seed_phase2_download
 [ -n "$(git -C "$TREE" status --porcelain)" ]
@@ -573,8 +573,8 @@ check "the CEREMONY completes after phase 2 downloaded" "generated exact allow" 
 # The allow-list must not become a hole. A foreign untracked file, a modified tracked file and
 # a staged change all still refuse — in both blocks.
 reset_tree
-printf 'CVE-2026-0001\n' >"$TREE/release/advisories/26.8.0.txt"
-(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f v26.8.0 >/dev/null 2>&1)
+printf 'CVE-2026-0001\n' >"$TREE/release/advisories/26.10.0.txt"
+(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f 26.10.0 >/dev/null 2>&1)
 OID="$(git -C "$TREE" rev-parse HEAD)"
 write_phase1_evidence
 printf 'x\n' >"$TREE/scripts/injected-helper.sh"
@@ -595,8 +595,8 @@ run_step "$WORK/producer.sh"
 [ "$rc" -ne 0 ]
 check "a STAGED change still denies the producer" "index still counts" $?
 reset_tree
-rm -f "$TREE/release/advisories/26.8.0.txt"
-(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f v26.8.0 >/dev/null 2>&1)
+rm -f "$TREE/release/advisories/26.10.0.txt"
+(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f 26.10.0 >/dev/null 2>&1)
 OID="$(git -C "$TREE" rev-parse HEAD)"
 
 seed_phase2_download
@@ -627,8 +627,8 @@ reset_tree
 # phase BEFORE any of that, and the late guard exists so tampering that lands AFTER the early
 # one still dies before the release rule is read. Both windows are exercised.
 reset_tree
-printf 'CVE-2026-0001\n' >"$TREE/release/advisories/26.8.0.txt"
-(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f v26.8.0 >/dev/null 2>&1)
+printf 'CVE-2026-0001\n' >"$TREE/release/advisories/26.10.0.txt"
+(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f 26.10.0 >/dev/null 2>&1)
 OID="$(git -C "$TREE" rev-parse HEAD)"
 
 # window 1 — tampering BEFORE the consumer: the early guard stops the phase, and nothing runs
@@ -656,8 +656,8 @@ check "tampering AFTER the early guard still dies at the producer" "the late win
 check "and the producer produced nothing" "no side effects survive" $?
 (cd "$TREE" && /usr/bin/git checkout -q -- scripts/release-ota-channel.sh)
 reset_tree
-rm -f "$TREE/release/advisories/26.8.0.txt"
-(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f v26.8.0 >/dev/null 2>&1)
+rm -f "$TREE/release/advisories/26.10.0.txt"
+(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f 26.10.0 >/dev/null 2>&1)
 OID="$(git -C "$TREE" rev-parse HEAD)"
 
 # the same two windows in phase 2
@@ -717,13 +717,13 @@ OTHER="$(cat "$WORK/other-oid" 2>/dev/null)"
 check "the fixture has a second real commit for the moved-tag case" "the case is real" $?
 if [ -n "$OTHER" ] && [ "${#OTHER}" -eq 40 ]; then
 	seed_phase2_download
-	(cd "$TREE" && /usr/bin/git checkout -q "$OTHER" 2>/dev/null && /usr/bin/git tag -f v26.8.0 "$OTHER" >/dev/null 2>&1)
+	(cd "$TREE" && /usr/bin/git checkout -q "$OTHER" 2>/dev/null && /usr/bin/git tag -f 26.10.0 "$OTHER" >/dev/null 2>&1)
 	run_step "$WORK/bind2.sh" RELEASE_COMMIT="$OTHER"
 	[ "$rc" -ne 0 ] && contains_literal "$out" 'not the commit phase 1 built'
 	check "a tag+checkout+input moved together is refused at binding" "identity before execution" $?
 	contains_literal "$out" 'No tracked script has been executed'
 	check "and zero tracked code ran" "no unbound execution" $?
-	(cd "$TREE" && /usr/bin/git checkout -q "$OID" 2>/dev/null && /usr/bin/git tag -f v26.8.0 "$OID" >/dev/null 2>&1)
+	(cd "$TREE" && /usr/bin/git checkout -q "$OID" 2>/dev/null && /usr/bin/git tag -f 26.10.0 "$OID" >/dev/null 2>&1)
 	seed_phase2_download
 	run_step "$WORK/bind2.sh" RELEASE_COMMIT="$OID"
 	[ "$rc" -eq 0 ]
@@ -769,8 +769,8 @@ reset_tree
 
 # --- F · the build itself can dirty the tree, and then nothing may be uploaded -------------
 reset_tree
-printf 'CVE-2026-0001\n' >"$TREE/release/advisories/26.8.0.txt"
-(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f v26.8.0 >/dev/null 2>&1)
+printf 'CVE-2026-0001\n' >"$TREE/release/advisories/26.10.0.txt"
+(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f 26.10.0 >/dev/null 2>&1)
 OID="$(git -C "$TREE" rev-parse HEAD)"
 write_phase1_evidence
 printf '\n# written by the build\n' >>"$TREE/scripts/release-ota-channel.sh"
@@ -843,13 +843,13 @@ reset_tree
 # THE BROKEN CASE GOES LAST ON PURPOSE: a corrupt loose ref survives reset_tree, so it is
 # created immediately before the check that needs it and removed immediately after.
 reset_tree
-printf 'CVE-2026-0001\n' >"$TREE/release/advisories/26.8.0.txt"
-(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f v26.8.0 >/dev/null 2>&1)
+printf 'CVE-2026-0001\n' >"$TREE/release/advisories/26.10.0.txt"
+(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f 26.10.0 >/dev/null 2>&1)
 OID="$(git -C "$TREE" rev-parse HEAD)"
 write_phase1_evidence
 
 # (1) THE MATCHING TAG PASSES. The baseline: nothing about deny-closed may cost the normal path.
-(cd "$TREE" && /usr/bin/git tag -f v26.8.0 "$OID" >/dev/null 2>&1)
+(cd "$TREE" && /usr/bin/git tag -f 26.10.0 "$OID" >/dev/null 2>&1)
 run_step "$WORK/postbuild1.sh"
 [ "$rc" -eq 0 ]
 check "a tag that MATCHES the built commit passes" "permit direction" $?
@@ -857,7 +857,7 @@ check "a tag that MATCHES the built commit passes" "permit direction" $?
 # (2) THE ABSENT TAG STILL PASSES. This is why the old code tolerated an empty read at all:
 # before the tag is cut there is nothing to compare. Deny-closed must not turn a legitimate
 # absence into a refusal, and this is the case that would catch it if it did.
-(cd "$TREE" && /usr/bin/git tag -d v26.8.0 >/dev/null 2>&1)
+(cd "$TREE" && /usr/bin/git tag -d 26.10.0 >/dev/null 2>&1)
 run_step "$WORK/postbuild1.sh"
 [ "$rc" -eq 0 ]
 check "an ABSENT tag still passes the post-build guard" "permit direction" $?
@@ -865,7 +865,7 @@ check "an ABSENT tag still passes the post-build guard" "permit direction" $?
 # (3) THE MOVED TAG STILL REFUSES. The property the old code DID catch has to survive the
 # rewrite: a guard fixed for one direction that loses the other is a regression, not a fix.
 OTHER="$(cd "$TREE" && /usr/bin/git commit -q --allow-empty -m other >/dev/null 2>&1; /usr/bin/git rev-parse HEAD)"
-(cd "$TREE" && /usr/bin/git reset -q --hard "$OID" >/dev/null 2>&1 && /usr/bin/git tag -f v26.8.0 "$OTHER" >/dev/null 2>&1)
+(cd "$TREE" && /usr/bin/git reset -q --hard "$OID" >/dev/null 2>&1 && /usr/bin/git tag -f 26.10.0 "$OTHER" >/dev/null 2>&1)
 [ -n "$OTHER" ] && [ "$OTHER" != "$OID" ]
 check "the fixture really has a second commit to move the tag to" "the case is real" $?
 run_step "$WORK/postbuild1.sh"
@@ -875,8 +875,8 @@ check "a MOVED tag still refuses after the rewrite" "no lost property" $?
 # (4) THE UNREADABLE TAG REFUSES — the case that did not exist before. The ref is present but
 # does not resolve, which is precisely what the old `|| tag_oid=""` swallowed. A corrupt loose
 # ref takes precedence over packed-refs, so this reproduces the shape without touching objects.
-(cd "$TREE" && /usr/bin/git tag -f v26.8.0 "$OID" >/dev/null 2>&1)
-printf 'this-is-not-an-object-id\n' >"$TREE/.git/refs/tags/v26.8.0"
+(cd "$TREE" && /usr/bin/git tag -f 26.10.0 "$OID" >/dev/null 2>&1)
+printf 'this-is-not-an-object-id\n' >"$TREE/.git/refs/tags/26.10.0"
 run_step "$WORK/postbuild1.sh"
 [ "$rc" -ne 0 ]
 check "a tag that LISTS but does not RESOLVE refuses" "not knowing is not agreeing" $?
@@ -885,9 +885,9 @@ check "and it says so: a refusal, never an empty read" "the message names the cl
 
 # Remove the corrupt ref BY HAND: `git tag -d` cannot delete a broken ref, and reset_tree does
 # not touch .git/refs, so leaving it here would contaminate every case that follows.
-rm -f "$TREE/.git/refs/tags/v26.8.0"
-(cd "$TREE" && /usr/bin/git tag -f v26.8.0 "$OID" >/dev/null 2>&1)
-git -C "$TREE" rev-parse --verify --quiet 'refs/tags/v26.8.0^{commit}' >/dev/null
+rm -f "$TREE/.git/refs/tags/26.10.0"
+(cd "$TREE" && /usr/bin/git tag -f 26.10.0 "$OID" >/dev/null 2>&1)
+git -C "$TREE" rev-parse --verify --quiet 'refs/tags/26.10.0^{commit}' >/dev/null
 check "the fixture's tag is sound again before the next section" "no contamination" $?
 reset_tree
 
@@ -916,13 +916,13 @@ check "and the DOWNLOAD --clobber is left alone" "not a blanket ban" $?
 
 # Calibration: the stub must be able to refuse, or the static check above is alone.
 : >"$WORK/uploaded-assets.txt"
-STUB_LOG="$WORK/log.calib" "$WORK/bin/gh" release upload v26.8.0 dist/stable-manifest.json >/dev/null 2>&1
+STUB_LOG="$WORK/log.calib" "$WORK/bin/gh" release upload 26.10.0 dist/stable-manifest.json >/dev/null 2>&1
 _first=$?
-STUB_LOG="$WORK/log.calib" "$WORK/bin/gh" release upload v26.8.0 dist/stable-manifest.json >"$WORK/calib.out" 2>&1
+STUB_LOG="$WORK/log.calib" "$WORK/bin/gh" release upload 26.10.0 dist/stable-manifest.json >"$WORK/calib.out" 2>&1
 _second=$?
 [ "$_first" -eq 0 ] && [ "$_second" -ne 0 ] && command grep -q 'already exists' "$WORK/calib.out"
 check "calibration: the stub ACCEPTS a first upload and REFUSES the second" "the stub can say no" $?
-STUB_LOG="$WORK/log.calib" "$WORK/bin/gh" release upload v26.8.0 dist/stable-manifest.json --clobber >/dev/null 2>&1
+STUB_LOG="$WORK/log.calib" "$WORK/bin/gh" release upload 26.10.0 dist/stable-manifest.json --clobber >/dev/null 2>&1
 check "calibration: and --clobber still overwrites, so the refusal is about the flag" "control positive" $?
 : >"$WORK/uploaded-assets.txt"
 
@@ -1003,8 +1003,8 @@ check "an unparseable version is refused" "deny-closed on the read" $?
 # passes at 2.97 is driven below the floor and must refuse — a floor asserted only by grepping
 # the workflow would pass just as happily if the comparison were inverted.
 reset_tree
-printf 'CVE-2026-0001\n' >"$TREE/release/advisories/26.8.0.txt"
-(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f v26.8.0 >/dev/null 2>&1)
+printf 'CVE-2026-0001\n' >"$TREE/release/advisories/26.10.0.txt"
+(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f 26.10.0 >/dev/null 2>&1)
 OID="$(git -C "$TREE" rev-parse HEAD)"
 seed_phase2_download
 run_step "$WORK/bind2.sh" RELEASE_COMMIT="$OID" STUB_GH_VERSION="2.39.0"
@@ -1018,8 +1018,8 @@ reset_tree
 
 # --- G · the earliest windows, and byte-exact evidence ------------------------------------
 reset_tree
-printf 'CVE-2026-0001\n' >"$TREE/release/advisories/26.8.0.txt"
-(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f v26.8.0 >/dev/null 2>&1)
+printf 'CVE-2026-0001\n' >"$TREE/release/advisories/26.10.0.txt"
+(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f 26.10.0 >/dev/null 2>&1)
 OID="$(git -C "$TREE" rev-parse HEAD)"
 
 # a build input rewritten by an earlier action: the post-checkout guard must stop it
@@ -1090,8 +1090,8 @@ reset_tree
 # refuses an existing destination — so the ceremony denied itself on files it had just
 # authenticated. Only the sequence shows it: each step alone is fine.
 reset_tree
-rm -f "$TREE/release/advisories/26.8.0.txt"
-(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f v26.8.0 >/dev/null 2>&1)
+rm -f "$TREE/release/advisories/26.10.0.txt"
+(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f 26.10.0 >/dev/null 2>&1)
 OID="$(git -C "$TREE" rev-parse HEAD)"
 seed_phase2_download
 run_step "$WORK/bind2.sh" RELEASE_COMMIT="$OID"
@@ -1108,7 +1108,7 @@ check "the second download does not re-request the evidence" "reuse the verified
 # existing file without --clobber fails
 run_step "$WORK/bind2.sh" RELEASE_COMMIT="$OID"
 _probe="$(cd "$TREE" && env -i PATH="$WORK/trusted:$WORK/bin:/usr/bin:/bin" STUB_LOG=/dev/null \
-	"$WORK/bin/gh" release download v26.8.0 --dir ota-dist --pattern checksums.txt 2>&1)" && _prc=0 || _prc=1
+	"$WORK/bin/gh" release download 26.10.0 --dir ota-dist --pattern checksums.txt 2>&1)" && _prc=0 || _prc=1
 [ "$_prc" -ne 0 ] && contains_literal "$_probe" 'already exists'
 check "calibration: a second fetch without --clobber really refuses" "the trap is modelled" $?
 reset_tree
@@ -1126,8 +1126,8 @@ reset_tree
 # (internal/pipe/git/git.go:217-224), from the git pipe, which runs BEFORE the `before` hooks
 # (internal/pipeline/pipeline.go:63-104). That ordering is the whole reason the write is a hook.
 reset_tree
-rm -f "$TREE/release/advisories/26.8.0.txt"
-(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f v26.8.0 >/dev/null 2>&1)
+rm -f "$TREE/release/advisories/26.10.0.txt"
+(cd "$TREE" && git add -A -- scripts release .gitignore >/dev/null 2>&1 && git commit -q --amend --no-edit && git tag -f 26.10.0 >/dev/null 2>&1)
 OID="$(git -C "$TREE" rev-parse HEAD)"
 
 goreleaser_dirty_check() { # the pinned engine's own gate, verbatim in behaviour
@@ -1143,7 +1143,7 @@ check "the tree GoReleaser is handed is CLEAN" "the release can start at all" $?
 # 2 — the hook runs INSIDE GoReleaser, after that gate, and writes the evidence.
 (cd "$TREE" && env -i PATH="/usr/bin:/bin" HOME="$WORK" GITHUB_SHA="$OID" \
 	GITHUB_REPOSITORY_ID="$CTX_REPO_ID" GITHUB_REPOSITORY="olivaresai/olivares" \
-	GITHUB_EVENT_NAME="push" GITHUB_REF="refs/tags/v26.8.0" \
+	GITHUB_EVENT_NAME="push" GITHUB_REF="refs/tags/26.10.0" \
 	GITHUB_RUN_ID="$CTX_RUN_ID" GITHUB_RUN_ATTEMPT="$CTX_RUN_ATTEMPT" \
 	bash scripts/release-commit-evidence.sh false) >"$WORK/hook.out" 2>&1
 [ "$?" -eq 0 ]
@@ -1186,7 +1186,7 @@ run_hook() { # run_hook <event> [VAR=VAL …]
 	rm -f "$TREE/release-commit.txt" "$TREE/release-build-context.json"
 	(cd "$TREE" && env -i PATH="/usr/bin:/bin" HOME="$WORK" GITHUB_SHA="$OID" \
 		GITHUB_REPOSITORY_ID="$CTX_REPO_ID" GITHUB_REPOSITORY="olivaresai/olivares" \
-		GITHUB_EVENT_NAME="$ev" GITHUB_REF="refs/tags/v26.8.0" \
+		GITHUB_EVENT_NAME="$ev" GITHUB_REF="refs/tags/26.10.0" \
 		GITHUB_RUN_ID="$CTX_RUN_ID" GITHUB_RUN_ATTEMPT="$CTX_RUN_ATTEMPT" "$@" \
 		bash scripts/release-commit-evidence.sh false) >"$WORK/hook-event.out" 2>&1
 }
@@ -1237,7 +1237,7 @@ hook_write_fail() { # hook_write_fail <generated-name-to-point-at-/dev/full>
 	ln -s /dev/full "$TREE/$1" || return 99
 	(cd "$TREE" && env -i PATH="/usr/bin:/bin" HOME="$WORK" GITHUB_SHA="$OID" \
 		GITHUB_REPOSITORY_ID="$CTX_REPO_ID" GITHUB_REPOSITORY="olivaresai/olivares" \
-		GITHUB_EVENT_NAME="push" GITHUB_REF="refs/tags/v26.8.0" \
+		GITHUB_EVENT_NAME="push" GITHUB_REF="refs/tags/26.10.0" \
 		GITHUB_RUN_ID="$CTX_RUN_ID" GITHUB_RUN_ATTEMPT="$CTX_RUN_ATTEMPT" \
 		bash scripts/release-commit-evidence.sh false) >"$WORK/hook-writefail.out" 2>&1
 }

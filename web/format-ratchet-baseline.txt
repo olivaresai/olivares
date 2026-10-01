@@ -10,7 +10,6 @@ e2e/foundation.spec.ts
 e2e/onboarding-first-hour.spec.ts
 e2e/sessions-unified.spec.ts
 index.html
-src/components/layout/command-menu.test.tsx
 src/features/access-map/authority.test.ts
 src/features/access-map/legend.tsx
 src/features/access-map/types.ts
@@ -25,7 +24,6 @@ src/features/governance/routine-policies.test.tsx
 src/features/governance/step-up-policy.test.tsx
 src/features/health/status-page.test.tsx
 src/features/identity/identity-deeplink.test.tsx
-src/features/identity/identity-view.tsx
 src/features/identity/wif/wif-lint.test.ts
 src/features/identity/wif/wif-lint.ts
 src/features/killswitch/types.ts
@@ -37,8 +35,6 @@ src/features/platforms/platforms.test.tsx
 src/features/posture-export/posture-export-view.test.tsx
 src/features/recordings/recordings.test.tsx
 src/features/redteam/types.ts
-src/features/registry.nouns.test.ts
-src/features/registry.route-conservation.test.ts
 src/features/route-census.test.ts
 src/features/route-census.ts
 src/features/sandbox/fixtures.ts

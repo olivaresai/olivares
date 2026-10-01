@@ -76,13 +76,11 @@ function setup() {
   return { ...view, qc }
 }
 beforeEach(() => {
-  useSessionStore
-    .getState()
-    .setSession({
-      token: 'fixture-first',
-      sessionId: 'fixture-session',
-      expiresAt: '2099-01-01T00:00:00Z',
-    })
+  useSessionStore.getState().setSession({
+    token: 'fixture-first',
+    sessionId: 'fixture-session',
+    expiresAt: '2099-01-01T00:00:00Z',
+  })
   vi.clearAllMocks()
   auth.activeTenant = 'tenant-one'
   auth.can.mockReturnValue(true)
@@ -190,13 +188,11 @@ describe('MCP console governance', () => {
     setup()
     await user.click(await screen.findByRole('button', { name: 'Configure' }))
     act(() =>
-      useSessionStore
-        .getState()
-        .setSession({
-          token: 'fixture-successor',
-          sessionId: 'fixture-session',
-          expiresAt: '2099-01-01T00:00:00Z',
-        }),
+      useSessionStore.getState().setSession({
+        token: 'fixture-successor',
+        sessionId: 'fixture-session',
+        expiresAt: '2099-01-01T00:00:00Z',
+      }),
     )
     await waitFor(() =>
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
