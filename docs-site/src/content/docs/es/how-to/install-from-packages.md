@@ -72,15 +72,11 @@ imagen de contenedor está en
 Los tres formatos llevan el binario en `/usr/bin/olivares`, un fichero de entorno en
 `/etc/olivares/olivares.env` (`config|noreplace`), el directorio de datos
 `/var/lib/olivares` y los textos de licencia bajo `/usr/share/doc/olivares/`.
-`.deb` y `.rpm` entregan la unidad **systemd** endurecida. **Los paquetes de este
-árbol fuente** ponen en el `.apk` una unidad **OpenRC** ejecutable en
+`.deb` y `.rpm` entregan la unidad **systemd** endurecida. El
+`.apk` pone una unidad **OpenRC** ejecutable en
 `/etc/init.d/olivares`, con un sello `package-init` explícito para que los ganchos no
-adivinen por la presencia de `systemctl` en el host.
-
-El `.apk` **publicado anteriormente** entregaba esa misma unidad systemd y **no** una unidad
-OpenRC. Aquel tarball linux publicado lleva los textos de licencia, el README y
-`SECURITY.md`; no incluye `scripts/install-service.sh` ni `packaging/service/`. Esos
-ficheros adaptadores están en el archivo firmado del árbol para la siguiente release.
+adivinen por la presencia de `systemctl` en el host. Los archivos Linux llevan los mismos
+adaptadores de servicio: `scripts/install-service.sh` y `packaging/service/`.
 
 ```bash
 # Debian / Ubuntu

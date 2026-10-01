@@ -9,9 +9,9 @@ description: >-
 This page is the first hour of the **provider** plane: where your API key goes, how
 you know it works, and how a session launches with it.
 
-In 26.10.0, the published release, a server environment variable is the only answer to the first question. In the pending v26.10 it can still be an environment variable on the
-server. Those variables still work. They are no longer the only path, and they are no
-longer how a new operator starts.
+In 26.10, a server environment variable is still one answer to the first question, and those
+variables still work. They are no longer the only path, and they are no longer how a new
+operator starts.
 
 ## What the three words mean
 

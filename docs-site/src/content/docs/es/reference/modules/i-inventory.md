@@ -15,12 +15,9 @@ identidades no humanas que los conectores han nombrado de hecho. Descubre
 *escuchando*, nunca sondeando. Registra relaciones, identificadores y vitalidad
 — no payloads — y **no** es un censo de todo lo que existe. Esta página es la
 referencia de lo que el catálogo contiene, de cómo funcionan la procedencia de
-observación y la frescura durable en el desarrollo de la próxima versión, y de lo
-que el módulo deliberadamente no afirma.
+observación y la frescura durable, y de lo que el módulo deliberadamente no afirma.
 
-La procedencia de observación y la frescura durable están aceptadas para una
-composición de desarrollo acotada. Son capacidades de desarrollo para
-la próxima versión, no un release publicado, un RC completo ni un despliegue.
+La procedencia de observación y la frescura durable forman parte de 26.10.
 
 ## Qué materializa
 

@@ -277,8 +277,11 @@ MAX_RECORD_AGE_DAYS=45
 # they answer 404 until the release is published (public-release-26.10.0-pending). The v26.9.0 tag
 # page row left the record: nothing emits it any more. The appliance origin and the two credential
 # audiences were added with their owners above.
+# 2026-10-01 · 26.10.0 published. Its tag page and the three README package downloads answered 200
+# in five of five probes (GET, following redirects), so their rows carry no owner. The v26.9.0 tag
+# page row left the record: README.md names 26.10.0 and nothing else emits it.
 EMITTED_RECORD="https://alma.olivares.ai 200 2026-09-24
-https://appliance.olivares.ai 000 2026-09-30 appliance-origin-unpublished
+https://appliance.olivares.ai 000 2026-10-01 appliance-origin-unpublished
 https://docs.olivares.ai 200 2026-09-24
 https://docs.olivares.ai/cli 200 2026-09-24
 https://docs.olivares.ai/reference/api-stability/ 200 2026-09-24
@@ -294,15 +297,15 @@ https://github.com/olivaresai/olivares/blob/main/SUPPORT.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/docs/RELEASE-VERIFICATION.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/scripts/smoke-agentops.sh 200 2026-09-24
 https://github.com/olivaresai/olivares/releases 200 2026-09-24
-https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.apk 404 2026-09-30 public-release-26.10.0-pending
-https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.deb 404 2026-09-30 public-release-26.10.0-pending
-https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.rpm 404 2026-09-30 public-release-26.10.0-pending
-https://github.com/olivaresai/olivares/releases/tag/26.10.0 404 2026-09-30 public-release-26.10.0-pending
+https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.apk 200 2026-10-01
+https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.deb 200 2026-10-01
+https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.rpm 200 2026-10-01
+https://github.com/olivaresai/olivares/releases/tag/26.10.0 200 2026-10-01
 https://github.com/olivaresai/olivares/security/advisories/OLIVARES-DRILL-0001 404 2026-09-24 drill-fixture-not-a-location
 https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code 200 2026-09-24
 https://licenses.olivares.ai 200 2026-09-24
-https://licenses.olivares.ai/apt/v1/ 400 2026-09-30 credential-audience-not-a-location
-https://licenses.olivares.ai/dnf/v1/ 400 2026-09-30 credential-audience-not-a-location
+https://licenses.olivares.ai/apt/v1/ 400 2026-10-01 credential-audience-not-a-location
+https://licenses.olivares.ai/dnf/v1/ 400 2026-10-01 credential-audience-not-a-location
 https://olivares.ai 200 2026-09-24
 https://olivares.ai/compliance/assessment-plan/ 200 2026-09-24
 https://olivares.ai/compliance/capabilities 200 2026-09-24

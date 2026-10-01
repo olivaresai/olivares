@@ -76,15 +76,10 @@ Die drei Paketformate tragen die Binärdatei unter `/usr/bin/olivares`, eine
 kommentierte Umgebungsdatei unter `/etc/olivares/olivares.env` (`config|noreplace`),
 das Datenverzeichnis `/var/lib/olivares` und die Lizenztexte unter
 `/usr/share/doc/olivares/`. `.deb` und `.rpm` liefern die gehärtete **systemd**-Unit.
-**Pakete aus diesem Quellbaum** legen in der `.apk` eine ausführbare **OpenRC**-Unit
+Die `.apk` legt eine ausführbare **OpenRC**-Unit
 unter `/etc/init.d/olivares` ab, mit einem expliziten `package-init`-Stempel, damit die
-Hooks nicht aus dem Vorhandensein von `systemctl` auf dem Host raten.
-
-Die **zuvor veröffentlichten** `.apk` lieferten dieselbe systemd-Unit und **keine**
-OpenRC-Unit. Jenes veröffentlichte Linux-Tarball trägt die Lizenztexte, das README
-und `SECURITY.md`; es enthält weder `scripts/install-service.sh` noch
-`packaging/service/`. Diese Adapterdateien liegen im signierten Archiv des Baums für die
-nächste Release.
+Hooks nicht aus dem Vorhandensein von `systemctl` auf dem Host raten. Die Linux-Archive
+tragen dieselben Dienst-Adapter: `scripts/install-service.sh` und `packaging/service/`.
 
 ```bash
 # Debian / Ubuntu

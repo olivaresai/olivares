@@ -24,12 +24,11 @@ use [`scripts/verify-release.sh`](scripts/verify-release.sh) (see
 
 ## Versioning
 
-Releases use **CalVer**: `vYY.M.PATCH` — two-digit year, month, and the release number
-within that month. The latest public release is `26.10.0` (September 2026); the next planned
-release is `v26.10`, pending. Container tags follow: `:26.10.0`, `:latest`, plus the `-fips` /
+Releases use **CalVer**: a monthly release is `YY.M` (two-digit year and month, such as
+26.10), and a patch release adds a third number, `YY.M.N`. Tags have no `v` prefix; the 26.10
+release is tagged `26.10.0`. Container tags follow the release tag: `:26.10.0`, `:latest`, plus the `-fips` /
 `-stig` variants. The maturity label (**beta**) is separate from the version; a release that
-should be flagged *pre-release* on GitHub is tagged with a suffix, e.g. `-beta.1` for a beta of
-`v26.10`.
+should be flagged *pre-release* on GitHub is tagged with a suffix, such as `-beta.1`.
 
 ---
 
@@ -120,12 +119,12 @@ present:
 
 ```sh
 # systemd user service on Linux, LaunchAgent on macOS; review before starting
-ver=YY.M.PATCH
-sh "olivares-install-$ver.sh" --version "v$ver" --user
+ver=26.10.0   # the release tag
+sh "olivares-install-$ver.sh" --version "$ver" --user
 olivares doctor --mode user
 
 # explicit system privilege; auto-detects systemd/OpenRC/launchd
-sudo sh "olivares-install-$ver.sh" --version "v$ver" --system --start
+sudo sh "olivares-install-$ver.sh" --version "$ver" --system --start
 sudo olivares doctor --mode system --data-dir /var/lib/olivares
 ```
 
@@ -588,7 +587,7 @@ olivares uninstall --plan --data-dir /var/lib/olivares
 olivares uninstall --preserve --data-dir /var/lib/olivares
 olivares uninstall --purge --data-dir /var/lib/olivares --yes
 # Same contract through the verified installer:
-sh olivares-install-YY.M.PATCH.sh --uninstall --plan --data-dir /var/lib/olivares
+sh olivares-install-26.10.0.sh --uninstall --plan --data-dir /var/lib/olivares
 ```
 
 To move an estate, create a DR bundle before purge, install the destination, then use

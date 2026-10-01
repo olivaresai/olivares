@@ -267,7 +267,7 @@ The declared structure — re-confirm with counsel at first release:
 
 | Release line | First placed on EU market | End of support |
 |---|---|---|
-| — (no releases yet) | — | — |
+| 26.10 (Community) | 2026-10-01 | Until the next release: fixes ship as the next signed release ([`SECURITY.md`](../SECURITY.md)) |
 
 **Condition of validity** (from the fallback re-adjudication): the per-module hard
 lock at term end must exist and be regression-tested before first sale — without it

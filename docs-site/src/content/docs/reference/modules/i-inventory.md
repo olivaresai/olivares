@@ -13,12 +13,10 @@ skills, tools, resources, models, providers and non-human identities that
 connectors have actually named. It discovers by *listening*, never by probing.
 It records relationships, identifiers and liveness — not payloads — and it is
 **not** a census of everything that exists. This page is the reference for what
-the catalog holds, how observation provenance and durable freshness work in
-development for the next release, and what the module deliberately does not claim.
+the catalog holds, how observation provenance and durable freshness work, and
+what the module deliberately does not claim.
 
-Observation provenance and durable freshness are accepted for bounded
-development composition. They are development capabilities for the next release,
-not a published release, a complete RC, or a deployment.
+Observation provenance and durable freshness are part of 26.10.
 
 ## What it materializes
 

@@ -162,6 +162,65 @@ func TestRequestFieldsForCustodyAreRefused(t *testing.T) {
 	}
 }
 
+func TestPushRouteRejectsTrailingJSONWithoutApplying(t *testing.T) {
+	for _, tc := range []struct{ name, tail string }{
+		{"object", "{}"}, {"array", "[]"}, {"null", "null"},
+		{"true", "true"}, {"false", "false"}, {"number", "42"}, {"string", `"other"`},
+		{"whitespace_then_object", " \n\t{}"}, {"nested_object", `{"x":[1,2]}`},
+		{"close_object", "}"}, {"close_array", "]"},
+		{"close_then_object", "\n]{}"}, {"close_then_null", "\n}null"},
+	} {
+		t.Run(tc.name, func(t *testing.T) { checkPushEnvelope(t, tc.tail, http.StatusBadRequest) })
+	}
+}
+
+func TestPushRouteAcceptsSingleJSONDocumentWhitespace(t *testing.T) {
+	for _, tc := range []struct{ name, tail string }{{"no_tail", ""}, {"whitespace", " \r\n\t "}} {
+		t.Run(tc.name, func(t *testing.T) { checkPushEnvelope(t, tc.tail, http.StatusOK) })
+	}
+}
+
+func checkPushEnvelope(t *testing.T, tail string, wantStatus int) {
+	t.Helper()
+	h := newHarness(t)
+	push := handlerFor(t, h.m, http.MethodPost, "/targets/{id}/pushes")
+	body, err := json.Marshal(map[string]any{
+		"operation_id": "op-trailing", "ref": "refs/heads/olivares/trailing",
+		"expected_old": "", "commit": shaCommit, "tree": shaTree,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := httptest.NewRequest(http.MethodPost, "/x", bytes.NewReader(append(body, []byte(tail)...)))
+	rc := chi.NewRouteContext()
+	rc.URLParams.Add("id", h.target.ID.String())
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rc))
+	rec := httptest.NewRecorder()
+	c := h.user()
+	push(rec, req, api.ModuleContext{Principal: c.Principal, Tenant: c.Tenant})
+	if rec.Code != wantStatus {
+		t.Errorf("HTTP=%d, want %d; body %s", rec.Code, wantStatus, rec.Body.String())
+	}
+	intents, err := h.m.Intents(context.Background(), c, h.target.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if wantStatus == http.StatusBadRequest {
+		var response map[string]any
+		if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+			t.Fatal(err)
+		}
+		if len(response) != 1 || response["error"] != "invalid_request" {
+			t.Errorf("refusal response: %v", response)
+		}
+		if len(intents) != 0 || h.git.count() != 0 || h.host.mints != 0 || h.host.ref("olivares/trailing") != "" {
+			t.Errorf("refused envelope applied: %d intents, %d pushes, %d mints, ref %q", len(intents), h.git.count(), h.host.mints, h.host.ref("olivares/trailing"))
+		}
+	} else if len(intents) != 1 || h.git.count() != 1 || h.host.ref("olivares/trailing") != shaCommit {
+		t.Errorf("valid envelope effects: %d intents, %d pushes, ref %q", len(intents), h.git.count(), h.host.ref("olivares/trailing"))
+	}
+}
+
 func TestPushRouteReturnsContractDTO(t *testing.T) {
 	h := newHarness(t)
 	push := handlerFor(t, h.m, http.MethodPost, "/targets/{id}/pushes")

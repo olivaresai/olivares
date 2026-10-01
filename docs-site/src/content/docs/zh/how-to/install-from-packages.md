@@ -53,13 +53,10 @@ Sigstore 信任根材料，尚未缓存时由 cosign 获取。`--offline` 只去
 
 三种格式携带二进制 `/usr/bin/olivares`、环境文件 `/etc/olivares/olivares.env`
 （`config|noreplace`）、数据目录 `/var/lib/olivares` 以及许可证文本。
-`.deb`/`.rpm` 附带加固的 **systemd** 单元。**本源码树构建的软件包** 在 `.apk` 中放入
+`.deb`/`.rpm` 附带加固的 **systemd** 单元。`.apk` 中放入
 可执行的 **OpenRC** 单元 `/etc/init.d/olivares`，并带有显式的 `package-init` 标记，使钩子不
-根据主机上是否存在 `systemctl` 来猜测。
-
-此前发布的 `.apk` 仍附带同一个 systemd 单元，**不** 附带 OpenRC 单元。那个已发布的
-linux tarball 携带许可证文本、README 和 `SECURITY.md`；它不含 `scripts/install-service.sh` 或
-`packaging/service/`。这些适配器文件位于源码树内为下一发行准备的签名归档中。
+根据主机上是否存在 `systemctl` 来猜测。Linux 归档携带相同的服务适配器：
+`scripts/install-service.sh` 和 `packaging/service/`。
 
 ```bash
 # Debian / Ubuntu

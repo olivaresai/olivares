@@ -9,8 +9,8 @@ description: >-
 Cette page est la première heure du plan **fournisseur** : où va votre clé d'API,
 comment vous savez qu'elle fonctionne, et comment une session démarre avec elle.
 
-Dans la 26.10.0, la version publiée, une variable d'environnement du serveur est la seule réponse à la première question. Dans la v26.10, encore à paraître, la réponse peut encore être une variable d'environnement
-sur le serveur. Ces variables fonctionnent toujours. Elles ne sont plus le seul
+Dans la 26.10, une variable d'environnement du serveur reste une réponse à la première question, et ces
+variables fonctionnent toujours. Elles ne sont plus le seul
 chemin, et ce n'est plus ainsi qu'une nouvelle opératrice commence.
 
 ## Ce que veulent dire les trois mots

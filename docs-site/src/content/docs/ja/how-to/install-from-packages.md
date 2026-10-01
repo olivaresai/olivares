@@ -64,14 +64,10 @@ Debian/Ubuntu と RHEL/Fedora/SUSE のデフォルトは **systemd** である�
 
 3 つの形式はバイナリ `/usr/bin/olivares`、環境ファイル `/etc/olivares/olivares.env`
 （`config|noreplace`）、データディレクトリ `/var/lib/olivares`、ライセンス文書を運ぶ。
-`.deb`/`.rpm` は硬化した **systemd** ユニットを同梱する。**このソースのパッケージ** の
+`.deb`/`.rpm` は硬化した **systemd** ユニットを同梱する。
 `.apk` は実行可能な **OpenRC** ユニットを `/etc/init.d/olivares` に置き、フックがホストの
-`systemctl` の有無から推測しないよう明示的な `package-init` スタンプを添える。
-
-以前に公開された `.apk` は同じ systemd ユニットを同梱し、OpenRC ユニットは **同梱しない**。
-その公開済み linux tarball はライセンス文書、README、`SECURITY.md` を運ぶが、
-`scripts/install-service.sh` も `packaging/service/` も含まない。それらのアダプタファイルは、
-次のリリースに向けたツリー内の署名済みアーカイブにある。
+`systemctl` の有無から推測しないよう明示的な `package-init` スタンプを添える。Linux アーカイブは
+同じサービスアダプタ `scripts/install-service.sh` と `packaging/service/` を運ぶ。
 
 ```bash
 # Debian / Ubuntu
