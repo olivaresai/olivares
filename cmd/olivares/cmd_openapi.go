@@ -86,5 +86,5 @@ func moduleOpenAPIDocument() (map[string]any, error) {
 	}
 	// Route reflection does not invoke handlers. This zero-value module adds the
 	// composition-root host routes without opening a journal or probing the host.
-	return api.ModuleOpenAPIDocument(append(set.all, &agenttoolsapi.Module{})), nil
+	return api.ModuleOpenAPIDocument(set.apiModules(&agenttoolsapi.Module{})), nil
 }

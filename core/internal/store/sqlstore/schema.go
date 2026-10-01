@@ -62,7 +62,7 @@ func buildCoreMigrations(
 		if totpRelation(d.Kind) {
 			continue
 		}
-		d = beforeGroupOrigin(beforeConsentCustody(beforeAuthenticationFreshness(d)))
+		d = beforeExternalProvider(beforeGroupOrigin(beforeConsentCustody(beforeAuthenticationFreshness(d))))
 		entity = append(entity, dia.CreateTableStmts(d)...)
 	}
 	migrations := []migrate.Migration{

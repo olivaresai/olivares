@@ -87,8 +87,7 @@ afin qu’il n’apparaisse jamais dans la table des processus :
 
 ```bash
 # collez le jeton olst_… que le moteur a affiché au démarrage
-olivares auth bootstrap --server https://127.0.0.1:8443 \
-  --ca-cert <data-dir>/tls.crt \
+./bin/olivares auth bootstrap --server http://127.0.0.1:8443 \
   --setup-token-file - \
   --email admin@local --password-file ./admin.pw \
   --organization "First hour" --save-context

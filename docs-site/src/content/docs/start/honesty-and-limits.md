@@ -33,9 +33,9 @@ cover something, the page says so rather than implying it does.
   is rendered from the product's own OpenAPI 3.1 contract. The audit ledger is
   append-only and hash-chained with Ed25519-signed checkpoints, and can be exported
   in several SIEM formats.
-- **Releases are signed and verifiable offline.** Signature, SLSA provenance, SBOM
-  and OpenVEX can all be [verified without network access](/how-to/verify-a-release/),
-  and the product ships an [air-gap bundle](/how-to/air-gap-install/). The latest tagged release, **26.10.0**, is published with signed archives, native packages and container images; APIs, schemas and the module surface may still change before 1.0.
+- **Releases are signed and verifiable.** Signatures, SLSA provenance, SBOM and OpenVEX can all be
+  [verified](/how-to/verify-a-release/). Verification is not yet fully network-free: keyless checks need Sigstore trusted-root
+  material and the SLSA step has no offline mode. The product ships an [air-gap bundle](/how-to/air-gap-install/). The latest tagged release, **26.10.0**, is published with signed archives, native packages and container images; APIs, schemas and the module surface may still change before 1.0.
 
 ## Open core — what is open vs enterprise
 

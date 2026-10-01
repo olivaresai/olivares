@@ -30,9 +30,8 @@ description: >-
   从产品自身的 OpenAPI 3.1 契约渲染而来。审计账本是
   append-only（仅追加）且哈希链式（hash-chained）的，并带有 Ed25519 签名的检查点，
   可导出为多种 SIEM 格式。
-- **发布版本经过签名且可离线验证。** 签名、SLSA 来源、SBOM
-  和 OpenVEX 都可[在无网络访问的情况下验证](/zh/how-to/verify-a-release/)，
-  且产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。最新的带标签发布版本 **26.10.0** 已发布，附有签名归档、原生软件包和容器镜像；API、schema 和模块表面在 1.0 之前仍可能变化。
+- **发布版本经过签名且可验证。** 签名、SLSA 来源、SBOM 和 OpenVEX 都可[验证](/zh/how-to/verify-a-release/)。
+  验证目前还不能完全离线：无密钥验证需要 Sigstore 信任根材料，SLSA 步骤没有离线模式。产品提供[气隙（air-gap）包](/zh/how-to/air-gap-install/)。最新的带标签发布版本 **26.10.0** 已发布，附有签名归档、原生软件包和容器镜像；API、schema 和模块表面在 1.0 之前仍可能变化。
 
 ## 开放内核 —— 哪些开放、哪些属于企业版
 

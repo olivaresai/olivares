@@ -60,6 +60,8 @@ type sessionPolicy struct {
 	ToolsDeclared bool
 	// PermissionMode is the declared mode, or "" when the profile declares none.
 	PermissionMode string
+	// Re-resolved for each launch; it is not part of the dispatch digest.
+	workGrant string
 }
 
 // effectiveTools is what the launch form must emit for this policy: the declared

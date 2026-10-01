@@ -212,7 +212,7 @@ var commandGroups = map[string]string{
 	// session launches with is something a new operator does once, in the first hour,
 	// beside `connector` and `keys` — not something they do while operating a session.
 	"provider": "setup",
-	"eventing": "operate", "sources": "operate", "secrets": "operate", "work": "operate",
+	"eventing": "operate", "sources": "operate", "secrets": "operate", "work": "operate", "message": "operate",
 	"superadmin": "operate", "support": "operate",
 	// Govern.
 	"license": "govern", "hookpep": "govern", "claude-hook": "govern", "codex-hook": "govern",

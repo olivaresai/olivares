@@ -726,8 +726,21 @@ func TestServedBetaOpenAPIEndpoint(t *testing.T) {
 	}
 
 	stable := decodeDoc(t, rawGet(h, "/openapi.json", "", nil))
-	if n := len(stable["paths"].(map[string]any)); n != 54 {
-		t.Errorf("/openapi.json = %d paths, want 54 (stable contract incl. the wave-2 routes, /pod-readyz and the self capability projection)", n)
+	stablePaths := stable["paths"].(map[string]any)
+	want := make(map[string]bool, len(stableContractPaths))
+	for _, path := range stableContractPaths {
+		want[path] = true
+		if _, present := stablePaths[path]; !present {
+			t.Errorf("/openapi.json is missing pinned stable path %q", path)
+		}
+	}
+	for path := range stablePaths {
+		if !want[path] {
+			t.Errorf("/openapi.json carries unpinned stable path %q", path)
+		}
+	}
+	if len(stablePaths) != len(want) {
+		t.Errorf("/openapi.json has %d paths, pinned set has %d", len(stablePaths), len(want))
 	}
 }
 

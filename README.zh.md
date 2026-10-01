@@ -32,7 +32,7 @@ Olivares AI 把答案汇集在一处。它连接你已经在用的 agent 和工�
 - **控制 AI 支出。** 按团队、agent 或模型设置预算，在账单到来之前发出警告、减缓或停止支出。
 - **安全地让 agent 使用公司知识。** 连接 SharePoint、Confluence、Google Drive、Notion、Salesforce、Snowflake、S3 和 PostgreSQL。每个 agent 只能看到使用它的人有权看到的内容。
 - **跨会话继续工作。** 会话结束后，任务、负责人和决策仍然保留。无需 SSH，就能从浏览器启动、加入和停止 Claude Code、Codex 和 Grok 会话。
-- **需要时提供证据。** 每项决策都写入事后不可更改的签名日志。安全团队和审计人员从这些记录生成报告，证据对应 26 个框架目录。
+- **需要时提供证据。** 每项决策都写入签名日志，事后的任何篡改都可被检测到。安全团队和审计人员从这些记录生成报告，证据对应 26 个框架目录。
 
 支持你已有的工具：Claude Code、Codex、Grok、Cursor、gemini-cli、opencode、OpenHands，以及通过 Ollama 运行的本地模型。**31 个模块**和 **159 项集成**全部包含在免费版本中：[所有模块](docs-site/src/content/docs/reference/modules/overview.md) · [所有连接器](connectors/README.md)。
 
@@ -129,7 +129,7 @@ olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.
 |---|---|
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-dark.png"><img src="docs-site/public/console/access-map-light.png" alt="Access map: what each agent reads and writes across your estate, origins on the left, resources on the right."></picture><br><sub><b>访问图</b> — 谁读取和写入了什么。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/access-map-drift-dark.png"><img src="docs-site/public/console/access-map-drift-light.png" alt="Least-privilege drift: unexpected accesses and unused grants overlaid on the access map."></picture><br><sub><b>Drift</b> — 无人授权的访问，以及无人使用的权限。</sub> |
 | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/agentops-dark.png"><img src="docs-site/public/console/agentops-light.png" alt="Claude Code sessions created, attached to and governed from the console."></picture><br><sub><b>会话</b> — 从浏览器启动、加入和停止 agent 会话。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/work-dark.png"><img src="docs-site/public/console/work-light.png" alt="Work: the durable cross-session backlog of work items and decisions."></picture><br><sub><b>工作</b> — 会话结束后仍保留的任务、负责人和决策。</sub> |
-| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/security-dark.png"><img src="docs-site/public/console/security-light.png" alt="Security and forensics: guardrail findings, the anomaly queue and tamper-evident forensics."></picture><br><sub><b>安全</b> — 被拦截的操作、异常和不可更改的记录。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/finops-dark.png"><img src="docs-site/public/console/finops-light.png" alt="FinOps: model spend, token usage, budgets and a run-rate projection."></picture><br><sub><b>支出</b> — 按模型和 agent 查看费用、预算和预测。</sub> |
+| <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/security-dark.png"><img src="docs-site/public/console/security-light.png" alt="Security and forensics: guardrail findings, the anomaly queue and tamper-evident forensics."></picture><br><sub><b>安全</b> — 被拦截的操作、异常和可检测篡改的记录。</sub> | <picture><source media="(prefers-color-scheme: dark)" srcset="docs-site/public/console/finops-dark.png"><img src="docs-site/public/console/finops-light.png" alt="FinOps: model spend, token usage, budgets and a run-rate projection."></picture><br><sub><b>支出</b> — 按模型和 agent 查看费用、预算和预测。</sub> |
 
 全部页面见[控制台参考](docs-site/src/content/docs/reference/console.md)。
 

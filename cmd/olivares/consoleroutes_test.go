@@ -22,6 +22,8 @@ import (
 
 	"github.com/go-chi/chi/v5"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/agenttoolsapi"
+
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/auth"
@@ -927,7 +929,7 @@ var consoleMachineFacing = map[string]string{
 	"POST /v1/m/finops/admission/reconcile": "the reconciliation JOB (budget write): the engine's scheduler runs it; the operator reads GET /admission/reconciliation",
 
 	"/v1/auth/federation/": "arranque y retorno de federación: son NAVEGACIONES del navegador, no XHR",
-	"/v1/auth/token":       "endpoints de token OAuth: máquina a máquina",
+	"POST /v1/auth/token":  "JWT-bearer OAuth grant: machine client, not the console agent-launch token exchange",
 }
 
 var consoleUnresolvedSites = map[string]map[string]int{
@@ -1055,7 +1057,7 @@ func walkEveryRoute(t *testing.T) map[string]bool {
 	srv, err := api.New(api.Options{
 		Store: st, Authenticator: authr, Authorizer: auth.NewAuthorizer(nil),
 		Signer: signer, SetupToken: secure.NewSetupToken(filepath.Join(t.TempDir(), "setup.token")),
-		Logger: log, Version: "test", Modules: set.all, PrincipalEvidenceProducer: authr,
+		Logger: log, Version: "test", Modules: set.apiModules(&agenttoolsapi.Module{}), PrincipalEvidenceProducer: authr,
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -1700,7 +1702,13 @@ func TestEveryEngineRouteHasAConsoleSurface(t *testing.T) {
 			if strings.ContainsRune(pref, ' ') {
 				sujeto = key
 			}
-			if strings.HasPrefix(sujeto, pref) {
+			matches := strings.HasPrefix(sujeto, pref)
+			if strings.ContainsRune(pref, ' ') {
+				// Method-qualified operations end at a path segment: /token
+				// must not classify the separate /token-exchange operation.
+				matches = sujeto == pref || strings.HasPrefix(sujeto, pref+"/")
+			}
+			if matches {
 				maquinaTocada[pref] = true
 				return razon, true
 			}

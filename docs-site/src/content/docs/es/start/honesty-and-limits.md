@@ -33,9 +33,10 @@ cubre algo, la página lo dice en lugar de dar a entender que sí lo hace.
   se renderiza desde el propio contrato OpenAPI 3.1 del producto. El audit ledger es
   append-only y hash-chained con checkpoints firmados con Ed25519, y puede exportarse
   en varios formatos SIEM.
-- **Las releases están firmadas y son verificables sin conexión.** Firma, procedencia SLSA, SBOM
-  y OpenVEX pueden todos [verificarse sin acceso a red](/es/how-to/verify-a-release/),
-  y el producto incluye un [bundle air-gap](/es/how-to/air-gap-install/). La última release etiquetada, **26.10.0**, está publicada con archivos firmados, paquetes nativos e imágenes de contenedor; las API, los esquemas y la superficie de módulos aún pueden cambiar antes de la 1.0.
+- **Las releases están firmadas y son verificables.** Firma, procedencia SLSA, SBOM y OpenVEX pueden todos
+  [verificarse](/es/how-to/verify-a-release/). La verificación aún no funciona del todo sin red: las comprobaciones sin clave
+  necesitan el material de raíz de confianza de Sigstore y el paso SLSA no tiene modo sin conexión. El producto incluye un
+  [bundle air-gap](/es/how-to/air-gap-install/). La última release etiquetada, **26.10.0**, está publicada con archivos firmados, paquetes nativos e imágenes de contenedor; las API, los esquemas y la superficie de módulos aún pueden cambiar antes de la 1.0.
 
 ## Open core — qué es abierto vs enterprise
 

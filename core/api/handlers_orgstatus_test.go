@@ -120,18 +120,27 @@ func TestSetOrgStatusContractDoesNotPromiseAAL3(t *testing.T) {
 		t.Fatalf("GET /openapi.json = %d", res.code)
 	}
 	var doc struct {
-		Paths map[string]map[string]struct {
-			OperationID string `json:"operationId"`
-			Summary     string `json:"summary"`
-			Description string `json:"description"`
-		} `json:"paths"`
+		Paths map[string]map[string]json.RawMessage `json:"paths"`
 	}
 	if err := json.Unmarshal([]byte(res.raw), &doc); err != nil {
 		t.Fatalf("decode spec: %v", err)
 	}
 	text := func(opID string) string {
 		for _, ops := range doc.Paths {
-			for _, op := range ops {
+			for method, raw := range ops {
+				switch method {
+				case "get", "put", "post", "delete", "patch", "options", "head", "trace":
+				default:
+					continue
+				}
+				var op struct {
+					OperationID string `json:"operationId"`
+					Summary     string `json:"summary"`
+					Description string `json:"description"`
+				}
+				if err := json.Unmarshal(raw, &op); err != nil {
+					t.Fatalf("decode %s operation: %v", method, err)
+				}
 				if op.OperationID == opID {
 					return op.Summary + " " + op.Description
 				}

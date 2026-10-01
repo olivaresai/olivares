@@ -39,10 +39,10 @@ dit plutôt que de laisser entendre le contraire.
   3.1 du produit lui-même. L'audit ledger est en append-only (ajout seul) et
   hash-chained (chaîné par hachage) avec des checkpoints signés en Ed25519, et
   peut être exporté dans plusieurs formats SIEM.
-- **Les versions sont signées et vérifiables hors ligne.** La signature, la
-  provenance SLSA, le SBOM et l'OpenVEX peuvent tous être
-  [vérifiés sans accès réseau](/fr/how-to/verify-a-release/), et le produit livre
-  un [bundle air-gap](/fr/how-to/air-gap-install/). La dernière version taguée, **26.10.0**, est publiée avec des archives signées, des paquets natifs et des images de conteneur ; les API, les schémas et la surface des modules peuvent encore changer avant la 1.0.
+- **Les versions sont signées et vérifiables.** La signature, la provenance SLSA, le SBOM et l'OpenVEX peuvent tous être
+  [vérifiés](/fr/how-to/verify-a-release/). La vérification n'est pas encore entièrement hors ligne : les vérifications sans clé
+  ont besoin du matériel de racine de confiance Sigstore et l'étape SLSA n'a pas de mode hors ligne. Le produit livre un
+  [bundle air-gap](/fr/how-to/air-gap-install/). La dernière version taguée, **26.10.0**, est publiée avec des archives signées, des paquets natifs et des images de conteneur ; les API, les schémas et la surface des modules peuvent encore changer avant la 1.0.
 
 ## Open core — ce qui est ouvert vs entreprise
 

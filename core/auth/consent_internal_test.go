@@ -263,6 +263,7 @@ var principalBuilders = map[string]string{
 	"pepservice.go:AuthenticatePEP":                         "service credential: no account authority",
 	"worksession.go:workSessionPrincipal":                   "runtime credential: no account subject",
 	"communicationsession.go:communicationSessionPrincipal": "runtime credential: no account subject",
+	"orchestrationsession.go:orchestrationSessionPrincipal": "runtime credential: no account subject; exact tenant/workspace and restricted orchestration capabilities",
 	"scoped.go:ScopedPrincipal":                             "in-process subject: no account",
 	"ema.go:PrincipalForExternalID":                         "unwired",
 	"ema.go:PrincipalForSSOSubject":                         "unwired",

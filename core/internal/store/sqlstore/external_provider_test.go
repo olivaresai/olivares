@@ -7,6 +7,7 @@ package sqlstore
 import (
 	"context"
 	"database/sql"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -14,6 +15,28 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
+
+func TestExternalProviderFreshSQLiteColumnsReconcile(t *testing.T) {
+	ctx := context.Background()
+	st, err := Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: filepath.Join(t.TempDir(), "fresh.db")}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = st.Close() })
+	dia, ok := dialect.New(store.EngineSQLite)
+	if !ok {
+		t.Fatal("sqlite dialect unavailable")
+	}
+	columns, err := dia.TableColumns(ctx, st.(*sqlStore).db, federationConfigDescriptor.Table)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"external_connector_ref", "external_connector_generation", "external_issuer"} {
+		if !columns[name] {
+			t.Errorf("fresh federation config lacks %s", name)
+		}
+	}
+}
 
 func TestExternalProviderColumnsUpgradeLegacyConfigWithoutAdoption(t *testing.T) {
 	ctx := context.Background()

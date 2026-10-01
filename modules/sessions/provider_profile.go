@@ -189,7 +189,6 @@ type ProviderHomeSnapshot struct {
 	// that DOES carry a record digests it — and a second dispatch of the same key
 	// under another record is a conflict rather than a replay.
 	ProviderRecordRef string `json:"provider_record_ref,omitempty"`
-	SessionWorkGrant  string `json:"session_work_grant,omitempty"`
 }
 
 // CreateProfileInput is the validated create request.
@@ -259,7 +258,7 @@ func (m *Module) registerProviderProfileSchema(reg store.ExtensionRegistry) erro
 			// predates the columns therefore reads as undeclared, which is what it is.
 			{Name: colPPSessionTools, Kind: model.KindText, Nullable: true, Principal: pdeclProfileSessionTools},
 			{Name: colPPSessionPermissionMode, Kind: model.KindText, Nullable: true, Principal: pdeclNonePermissionMode},
-			{Name: colPPSessionWorkGrant, Kind: model.KindText, Nullable: true, Principal: model.None("operator-delegated non-human session capability and workspace, validated in provider_profile_work_grant.go")},
+			{Name: colPPSessionWorkGrant, Kind: model.KindText, Nullable: true, Principal: model.None("operator-delegated non-human session capability and workspace; re-read for mint and renewal: modules/sessions/orchestration_work.go:87, modules/sessions/orchestration_work.go:145")},
 			// Account metadata does not enter ProviderHomeSnapshot. A NULL name keeps
 			// every existing row an unnamed profile; account identity reuses its ref.
 			{Name: colPPAccountName, Kind: model.KindText, Nullable: true, Principal: model.None("a provider account label, read for display and name allocation without human identity resolution: provider_account.go:166, provider_account.go:472, provider_account_api.go:127")},
@@ -869,6 +868,7 @@ func profileSessionPolicy(prof ProviderProfile) sessionPolicy {
 		Tools:          prof.SessionTools,
 		ToolsDeclared:  prof.SessionToolsDeclared,
 		PermissionMode: prof.SessionPermissionMode,
+		workGrant:      prof.SessionWorkGrant,
 	}
 }
 
@@ -906,7 +906,6 @@ func (m *Module) snapshotForLaunch(prof ProviderProfile, env string) (ProviderHo
 		ProfileID: prof.Ref, Driver: prof.Driver, EnvironmentRef: prof.EnvironmentRef,
 		ConfigHome: prof.ConfigHome, UserHome: prof.UserHome, AuthSource: prof.AuthSource,
 		ProviderRecordRef: prof.ProviderRecordRef,
-		SessionWorkGrant:  prof.SessionWorkGrant,
 	}, nil
 }
 

@@ -136,7 +136,7 @@ func (m *Module) mintRuntimeCredentials(
 	lease Lease,
 ) (runtimeCredentials, error) {
 	var grant string
-	if snapshot, ok := ctx.Value(orchestrationLaunchProfileKey{}).(ProviderHomeSnapshot); ok {
+	if snapshot, ok := ctx.Value(orchestrationLaunchProfileKey{}).(orchestrationLaunchProfile); ok {
 		grant = snapshot.SessionWorkGrant
 	}
 	if !m.rt.communicationCredentialsEnabled {

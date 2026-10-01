@@ -120,17 +120,21 @@ func authTOTPPolicyCmd(flags *authClientFlags) *cobra.Command {
   olivares auth totp-policy set --require-for-admins`,
 	}
 	cmd.AddCommand(&cobra.Command{
-		Use:   "get",
-		Short: "Read the policy",
-		Args:  cobra.NoArgs,
+		Use:     "get",
+		Short:   "Read the policy",
+		Long:    "Read whether local administrators must enrol a TOTP factor before password login completes. Requires system:admin; returns no factor or recovery-code material.",
+		Example: "  olivares auth totp-policy get",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return totpPolicyRender(cmd, client, http.MethodGet, nil)
 		},
 	})
 	set := &cobra.Command{
-		Use:   "set",
-		Short: "Set the policy (requires an AAL3 session)",
-		Args:  cobra.NoArgs,
+		Use:     "set",
+		Short:   "Set the policy (requires an AAL3 session)",
+		Long:    "Set the deployment-wide TOTP requirement for local administrators. Requires system:admin and a session with AAL3 step-up. Set --require-for-admins=false to turn the requirement off; existing factors remain enrolled.",
+		Example: "  olivares auth totp-policy set --require-for-admins",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return totpPolicyRender(cmd, client, http.MethodPut, map[string]any{"require_for_admins": requireForAdmins})
 		},

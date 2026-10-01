@@ -2145,7 +2145,7 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 			agentTools.Close()
 		}
 	}()
-	set.all = append(set.all, agentTools)
+	set.all = set.apiModules(agentTools)
 	gatewayCfg, err := loadAgentGatewayConfig(log)
 	if err != nil {
 		return nil, err

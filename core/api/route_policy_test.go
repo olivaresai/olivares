@@ -526,6 +526,7 @@ func TestTheRegistrationDoorsAreAClosedSet(t *testing.T) {
 		"HandlePolicy": "the LOOSE governed door: accepts a bare RouteMetadata, which is what " +
 			"R-629 phase 1b retires or seals once the module that calls it can compile",
 		"HandleSealed": "the governed door that only accepts a SealedRoute",
+		"HandleSystem": "system-scope door: accepts no route metadata; always requires system:admin and an explicit superadmin, supplies only SystemTenantID and no-store responses",
 		"HandleNoStore": "the NoStoreRouteRegistrar capability: it does not accept metadata at " +
 			"all — it forwards to Handle after attaching response metadata (Cache-Control), so " +
 			"it cannot carry an unsealed RouteMetadata past this seal",

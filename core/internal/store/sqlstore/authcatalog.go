@@ -59,8 +59,8 @@ func decTenant(rec model.Record, col string) model.TenantID {
 // auth partition's columns share. pdeclActorEvidence is an audit-actor string
 // ("user:<id>", "token:<id>", ...) that records who wrote the row.
 var (
-	pdeclNoneAuthSelector   = model.None("the public lookup key of a hashed secret: core/model/auth.go:146, core/model/auth.go:228, core/model/auth.go:293, core/model/auth.go:457")
-	pdeclNoneAuthSecretHash = model.None("SHA-256 of a secret, never the secret: core/model/auth.go:148, core/model/auth.go:230, core/model/auth.go:295, core/model/auth.go:459")
+	pdeclNoneAuthSelector   = model.None("the public lookup key of a hashed secret: core/model/auth.go:147, core/model/auth.go:239, core/model/auth.go:365, core/model/auth.go:529")
+	pdeclNoneAuthSecretHash = model.None("SHA-256 of a secret, never the secret: core/model/auth.go:149, core/model/auth.go:241, core/model/auth.go:367, core/model/auth.go:531")
 	pdeclNoneAuthRole       = model.None("a built-in role name: core/auth/permission.go:42")
 	pdeclActorEvidence      = model.Ref(model.EncodeUserRef, model.ClassEvidence)
 
@@ -78,10 +78,10 @@ var userDescriptor = model.EntityDescriptor{
 		pdecl(field("email", model.KindText, false),
 			model.Ref(model.EncodeEmail, model.ClassEvidence)),
 		pdecl(field("display_name", model.KindText, true),
-			model.None("a human label safe to show: core/model/auth.go:31, core/api/dto.go:161")),
+			model.None("a human label safe to show: core/model/auth.go:32, core/api/dto.go:161")),
 		pdecl(field("status", model.KindText, false), pdeclNoneLifecycle),
 		pdecl(field("password_hash", model.KindText, true),
-			model.None("an argon2id encoded password hash, never an identifier: core/model/auth.go:35")),
+			model.None("an argon2id encoded password hash, never an identifier: core/model/auth.go:37")),
 		field("is_superadmin", model.KindBool, false),
 		// SCIM externalId (RFC 7643): the provisioning IdP's stable id. Nullable
 		// (local users have none); indexed so SCIM can correlate by externalId eq.
@@ -93,9 +93,9 @@ var userDescriptor = model.EntityDescriptor{
 		// ALTER TABLE ADD COLUMN on an existing DB and v2 regenerates them on a
 		// fresh one — no hand-authored migration. Non-secret directory metadata.
 		pdecl(field("employee_number", model.KindText, true),
-			model.None("the SCIM enterprise employeeNumber, rendered only: core/model/auth.go:55, core/api/scim/user.go:192")),
+			model.None("the SCIM enterprise employeeNumber, rendered only: core/model/auth.go:56, core/api/scim/user.go:192")),
 		pdecl(field("department", model.KindText, true),
-			model.None("the SCIM enterprise department, rendered only: core/model/auth.go:57, core/api/scim/user.go:195")),
+			model.None("the SCIM enterprise department, rendered only: core/model/auth.go:58, core/api/scim/user.go:195")),
 		// manager is the IdP's manager.value, kept verbatim and never resolved; it
 		// may spell another account's id or alias.
 		pdecl(field("manager", model.KindText, true), model.Scan(model.ClassEvidence)),
@@ -112,9 +112,9 @@ var userDescriptor = model.EntityDescriptor{
 		// tenant for tenant custody. Both nullable and appended last for the
 		// additive reconcile; the engine writes them and no tenant API does.
 		pdecl(field("credential_custody", model.KindText, true),
-			model.None("a custody label from the closed tenant/deployment/holder vocabulary: core/model/auth.go:86")),
+			model.None("a custody label from the closed tenant/deployment/holder vocabulary: core/model/auth.go:76")),
 		pdecl(field("custody_tenant_id", model.KindUUID, true),
-			model.None("the tenant whose authority created the account: core/model/auth.go:77")),
+			model.None("the tenant whose authority created the account: core/model/auth.go:79")),
 	},
 	// Email is globally unique among users; the index leads with tenant_id so it
 	// obeys the tenant-isolation rule even though every user shares SystemTenantID.
@@ -174,14 +174,14 @@ var membershipDescriptor = model.EntityDescriptor{
 		pdecl(indexedField("user_id", model.KindUUID, false),
 			model.Ref(model.EncodeUserID, model.ClassAuthority)),
 		pdecl(field("target_tenant_id", model.KindUUID, false),
-			model.None("the business tenant the membership grants access to: core/model/auth.go:116")),
+			model.None("the business tenant the membership grants access to: core/model/auth.go:117")),
 		pdecl(field("role", model.KindText, false), pdeclNoneAuthRole),
 		// workspace_id OPTIONALLY scopes the membership to one workspace in the
 		// granted tenant (FASE X). Nullable and appended last for additive
 		// reconcile; NULL is the historical tenant-wide membership. Enforcement is
 		// Own the precise index when they query by workspace.
 		pdecl(field("workspace_id", model.KindUUID, true),
-			model.None("the workspace the membership optionally narrows to: core/model/auth.go:120")),
+			model.None("the workspace the membership optionally narrows to: core/model/auth.go:127")),
 	},
 	// One membership per (user, granted tenant); enumerated at login by user_id.
 	// The unique key is deliberately (user, target_tenant) — NOT including
@@ -214,27 +214,27 @@ var userGroupDescriptor = model.EntityDescriptor{
 	Table: "user_groups",
 	Fields: []model.FieldSpec{
 		pdecl(indexedField("target_tenant_id", model.KindUUID, false),
-			model.None("the business tenant the group is provisioned into: core/model/auth.go:168")),
+			model.None("the business tenant the group is provisioned into: core/model/auth.go:171")),
 		// display_name is deliberately NOT unique: Microsoft Entra legally
 		// provisions duplicate group names (it correlates by externalId), so its
 		// dedupe is application-level in core/auth, never a DB index.
 		pdecl(indexedField("display_name", model.KindText, false),
-			model.None("the IdP's group name: core/model/auth.go:172")),
+			model.None("the IdP's group name: core/model/auth.go:175")),
 		pdecl(indexedField("external_id", model.KindText, true),
-			model.None("the provisioning IdP's stable id for the group, never an account: core/model/auth.go:176")),
+			model.None("the provisioning IdP's stable id for the group, never an account: core/model/auth.go:179")),
 		pdecl(field("mapped_role", model.KindText, true), pdeclNoneAuthRole),
 		// parent_group_id nests this group under another of the same tenant (S256
 		// group hierarchy). Nullable and APPENDED last so a reconciled (pre-S256)
 		// table and a freshly-created one agree on column order — the same additive
 		// discipline as the assurance columns on auth_sessions.
 		pdecl(field("parent_group_id", model.KindUUID, true),
-			model.None("the parent group row of the same tenant: core/model/auth.go:187")),
+			model.None("the parent group row of the same tenant: core/model/auth.go:209")),
 		// Group-origin contract : who provisions this row. NULL = today's
 		// SCIM/IdP-managed group; "operator" = console-managed; a slug = the
 		// provisioner that owns it. Nullable and appended LAST (additive
 		// reconcile); NULL and "" read alike.
 		pdecl(field("provisioned_by", model.KindText, true),
-			model.None("the provisioner slug that owns the group, empty for IdP-managed: core/model/auth.go:199")),
+			model.None("the provisioner slug that owns the group, empty for IdP-managed: core/model/auth.go:196")),
 	},
 	// external_id IS unique per granted tenant: it is the IdP's correlation key,
 	// and the application-level probe alone is a non-atomic check-then-insert
@@ -276,7 +276,7 @@ var userGroupMemberDescriptor = model.EntityDescriptor{
 	Table: "user_group_members",
 	Fields: []model.FieldSpec{
 		pdecl(indexedField("group_id", model.KindUUID, false),
-			model.None("the group row the membership belongs to: core/model/auth.go:208")),
+			model.None("the group row the membership belongs to: core/model/auth.go:219")),
 		pdecl(indexedField("user_id", model.KindUUID, false),
 			model.Ref(model.EncodeUserID, model.ClassAuthority)),
 	},
@@ -311,7 +311,7 @@ var authSessionDescriptor = model.EntityDescriptor{
 		field("expires_at", model.KindTimestamp, false),
 		field("revoked", model.KindBool, false),
 		pdecl(field("created_ip", model.KindText, true),
-			model.None("the client IP at issue time: core/model/auth.go:236")),
+			model.None("the client IP at issue time: core/model/auth.go:247")),
 		// Assurance columns. Nullable (additive reconcile on an existing DB);
 		// NULL aal reads as 1 — a pre session is never inflated past AAL1.
 		// Appended at the end so fresh and reconciled tables agree on column order.
@@ -322,7 +322,7 @@ var authSessionDescriptor = model.EntityDescriptor{
 		// tenant_scope confines the session to one tenant; NULL is account scope.
 		// Nullable and appended last for the additive reconcile.
 		pdecl(field("tenant_scope", model.KindUUID, true),
-			model.None("the one tenant the session is confined to: core/model/auth.go:254")),
+			model.None("the one tenant the session is confined to: core/model/auth.go:268")),
 		field("aal_authenticated_at", model.KindTimestamp, true),
 	},
 	Indexes: []model.IndexSpec{
@@ -382,11 +382,11 @@ var webauthnCredentialDescriptor = model.EntityDescriptor{
 		pdecl(indexedField("user_id", model.KindUUID, false),
 			model.Ref(model.EncodeUserID, model.ClassAuthority)),
 		pdecl(field("name", model.KindText, true),
-			model.None("an optional operator-facing label: core/model/auth.go:269")),
+			model.None("an optional operator-facing label: core/model/auth.go:284")),
 		pdecl(field("credential_id", model.KindText, false),
-			model.None("the authenticator's credential id, the lookup key: core/model/auth.go:271")),
+			model.None("the authenticator's credential id, the lookup key: core/model/auth.go:287")),
 		pdecl(field("credential", model.KindJSON, false),
-			model.None("the library's public credential record (public key, flags, sign count, attestation), no user handle: core/model/auth.go:274")),
+			model.None("the library's public credential record (public key, flags, sign count, attestation), no user handle: core/model/auth.go:292")),
 	},
 	Indexes: []model.IndexSpec{
 		{Name: "webauthn_credentials_id_uniq", Columns: []string{"tenant_id", "credential_id"}, Unique: true},
@@ -421,15 +421,19 @@ var totpCredentialDescriptor = model.EntityDescriptor{
 		pdecl(indexedField("account_id", model.KindUUID, false),
 			model.Ref(model.EncodeUserID, model.ClassAuthority)),
 		pdecl(field("seed_sealed", model.KindText, false),
-			model.None("a sealed TOTP seed envelope, opened only to verify a code: core/model/auth.go:290")),
+			model.None("a sealed TOTP seed envelope, opened only to verify a code: core/model/auth.go:307")),
 		pdecl(field("seed_hint", model.KindText, false),
-			model.None("a fingerprint prefix of a sealed seed, for display: core/model/auth.go:292")),
-		field("algorithm", model.KindText, false),
-		field("digits", model.KindInt, false),
-		field("period", model.KindInt, false),
+			model.None("a fingerprint prefix of a sealed seed, for display: core/model/auth.go:309")),
+		pdecl(field("algorithm", model.KindText, false),
+			model.None("the HMAC algorithm name, not account identity: core/auth/totp.go:660")),
+		pdecl(field("digits", model.KindInt, false),
+			model.None("the numeric code length used for verification: core/auth/totp.go:668")),
+		pdecl(field("period", model.KindInt, false),
+			model.None("the time-step length in seconds, not an account identifier: core/auth/totp.go:659")),
 		pdecl(field("confirmed_at", model.KindTimestamp, true),
-			model.None("when possession of the seed was proven: core/model/auth.go:303")),
-		field("last_used_step", model.KindInt, false),
+			model.None("when possession of the seed was proven: core/model/auth.go:318")),
+		pdecl(field("last_used_step", model.KindInt, false),
+			model.None("the numeric replay-refusal step, not account identity: core/auth/totp.go:668")),
 	},
 	Indexes: []model.IndexSpec{
 		{Name: "totp_credentials_account_uniq", Columns: []string{"tenant_id", "account_id"}, Unique: true},
@@ -469,7 +473,7 @@ var totpRecoveryCodeDescriptor = model.EntityDescriptor{
 			model.Ref(model.EncodeUserID, model.ClassAuthority)),
 		pdecl(field("code_hash", model.KindBytes, false), pdeclNoneAuthSecretHash),
 		pdecl(field("used_at", model.KindTimestamp, true),
-			model.None("when the code was spent: core/model/auth.go:325")),
+			model.None("when the code was spent: core/model/auth.go:336")),
 	},
 }
 
@@ -499,7 +503,8 @@ var authPolicyDescriptor = model.EntityDescriptor{
 	Kind:  "core.auth_policy",
 	Table: "auth_policy",
 	Fields: []model.FieldSpec{
-		field("require_totp_admins", model.KindBool, false),
+		pdecl(field("require_totp_admins", model.KindBool, false),
+			model.None("the deployment policy switch, not an account identifier: core/auth/totp.go:1292")),
 	},
 }
 
@@ -520,7 +525,7 @@ var apiTokenDescriptor = model.EntityDescriptor{
 	Table: "api_tokens",
 	Fields: []model.FieldSpec{
 		pdecl(field("name", model.KindText, false),
-			model.None("a human label for the token: core/model/auth.go:288, core/api/dto.go:257")),
+			model.None("a human label for the token: core/model/auth.go:360, core/api/dto.go:257")),
 		// user_id is indexed: the leaver/deprovision path lists a user's tokens to
 		// revoke them, and the delegation cascade lists by parent_token_id.
 		pdecl(indexedField("user_id", model.KindUUID, true),
@@ -528,9 +533,9 @@ var apiTokenDescriptor = model.EntityDescriptor{
 		pdecl(field("selector", model.KindText, false), pdeclNoneAuthSelector),
 		pdecl(field("secret_hash", model.KindBytes, false), pdeclNoneAuthSecretHash),
 		pdecl(indexedField("bound_tenant_id", model.KindUUID, true),
-			model.None("the only tenant the token may act in: core/model/auth.go:297")),
+			model.None("the only tenant the token may act in: core/model/auth.go:370")),
 		pdecl(field("role", model.KindText, true),
-			model.None("the role the token acts with in its bound tenant: core/model/auth.go:300")),
+			model.None("the role the token acts with in its bound tenant: core/model/auth.go:372")),
 		field("is_superadmin", model.KindBool, false),
 		field("expires_at", model.KindTimestamp, true),
 		field("revoked", model.KindBool, false),
@@ -538,34 +543,34 @@ var apiTokenDescriptor = model.EntityDescriptor{
 		// Delegation columns (RFC 8693/8707); all nullable, populated only on a
 		// token-exchange-minted token. Added post-v2 via the additive reconcile.
 		pdecl(field("audience", model.KindText, true),
-			model.None("resource indicators and logical audiences the token is bound to: core/model/auth.go:321")),
+			model.None("resource indicators and logical audiences the token is bound to: core/model/auth.go:397")),
 		pdecl(field("act_as_user_id", model.KindUUID, true),
 			model.Ref(model.EncodeUserID, model.ClassAuthority)),
 		pdecl(indexedField("parent_token_id", model.KindUUID, true),
-			model.None("the API token this token was exchanged from: core/model/auth.go:331")),
+			model.None("the API token this token was exchanged from: core/model/auth.go:407")),
 		pdecl(field("scope", model.KindText, true),
-			model.None("space-delimited permission verbs: core/model/auth.go:337")),
+			model.None("space-delimited permission verbs: core/model/auth.go:412")),
 		// agent_ref is the external_id of the agent identity this token is delegated
 		// to (agent-OBO). Nullable; non-empty only on an agent-OBO exchange.
 		pdecl(field("agent_ref", model.KindText, true),
-			model.None("the external id of an agent identity the token is delegated to, never an account: core/model/auth.go:342")),
+			model.None("the external id of an agent identity the token is delegated to, never an account: core/model/auth.go:416")),
 		// purpose is nullable for additive reconciliation and reads as empty on
 		// pre-existing rows. Non-empty values mark credentials reserved for a
 		// specialized protocol rather than ordinary API authentication.
 		pdecl(field("purpose", model.KindText, true),
-			model.None("a purpose label that restricts the credential: core/model/auth.go:310")),
+			model.None("a purpose label that restricts the credential: core/model/auth.go:384")),
 		// session_ref is a server-authored canonical work-session SID. It is
 		// nullable so existing API tokens remain agent/user scoped and cannot be
 		// mistaken for a session credential after additive reconciliation.
 		pdecl(field("session_ref", model.KindText, true),
-			model.None("the canonical session identity the credential is confined to: core/model/auth.go:346")),
+			model.None("the canonical session identity the credential is confined to: core/model/auth.go:422")),
 		// communication-session stores its complete server-authored binding in
 		// dedicated nullable columns. They remain NULL on ordinary and legacy
 		// work-session tokens; no binding is encoded into a display name.
 		pdecl(field("workspace_id", model.KindUUID, true),
-			model.None("the workspace of a purpose-restricted communication credential: core/model/auth.go:352")),
+			model.None("the workspace of a purpose-restricted communication credential: core/model/auth.go:426")),
 		pdecl(field("session_run_ref", model.KindText, true),
-			model.None("the exact supervised runtime generation: core/model/auth.go:356")),
+			model.None("the exact supervised runtime generation: core/model/auth.go:430")),
 		field("session_fence", model.KindInt, true),
 	},
 	Indexes: []model.IndexSpec{
@@ -622,7 +627,7 @@ var userInviteDescriptor = model.EntityDescriptor{
 		pdecl(field("email", model.KindText, false),
 			model.Ref(model.EncodeEmail, model.ClassObligation)),
 		pdecl(indexedField("target_tenant_id", model.KindUUID, false),
-			model.None("the tenant the invite grants membership in: core/model/auth.go:142")),
+			model.None("the tenant the invite grants membership in: core/model/auth.go:143")),
 		pdecl(field("role", model.KindText, false), pdeclNoneAuthRole),
 		pdecl(field("selector", model.KindText, false), pdeclNoneAuthSelector),
 		pdecl(field("secret_hash", model.KindBytes, false), pdeclNoneAuthSecretHash),
@@ -862,15 +867,15 @@ var tenantExclusionDescriptor = model.EntityDescriptor{
 		pdecl(indexedField("user_id", model.KindUUID, false),
 			model.Ref(model.EncodeUserID, model.ClassRestrict)),
 		pdecl(indexedField("target_tenant_id", model.KindUUID, false),
-			model.None("the tenant the account is excluded from: core/model/auth.go:402")),
+			model.None("the tenant the account is excluded from: core/model/auth.go:474")),
 		pdecl(field("session_id", model.KindText, false),
-			model.None("the one excluded session, for a session exclusion: core/model/auth.go:404")),
+			model.None("the one excluded session, for a session exclusion: core/model/auth.go:476")),
 		pdecl(field("kind", model.KindText, false),
-			model.None("offboard or session: core/model/auth.go:406, core/model/auth.go:370")),
+			model.None("offboard or session: core/model/auth.go:478, core/model/auth.go:443")),
 		pdecl(field("created_by", model.KindText, true), pdeclActorEvidence),
 		field("retirement_generation", model.KindInt, true),
 		pdecl(field("retirement_state", model.KindText, true),
-			model.None("a retirement state from the closed vocabulary: core/model/auth.go:381")),
+			model.None("a retirement state from the closed vocabulary: core/model/auth.go:485")),
 		field("retired_epoch", model.KindInt, true),
 		// blocking_refs and module_results record, as text, the rows and module
 		// steps a retirement found; they are evidence of the retirement.
@@ -933,7 +938,7 @@ var accountOfferDescriptor = model.EntityDescriptor{
 	Table: "account_offers",
 	Fields: []model.FieldSpec{
 		pdecl(field("kind", model.KindText, false),
-			model.None("join or recovery: core/model/auth.go:440")),
+			model.None("join or recovery: core/model/auth.go:512")),
 		pdecl(indexedField("user_id", model.KindUUID, false),
 			model.Ref(model.EncodeUserID, model.ClassAuthority)),
 		// email is the address the offer was issued to; the account the offer is
@@ -941,25 +946,25 @@ var accountOfferDescriptor = model.EntityDescriptor{
 		pdecl(field("email", model.KindText, false),
 			model.Ref(model.EncodeEmail, model.ClassEvidence)),
 		pdecl(indexedField("target_tenant_id", model.KindUUID, true),
-			model.None("the tenant the offer joins: core/model/auth.go:446")),
+			model.None("the tenant the offer joins: core/model/auth.go:518")),
 		pdecl(field("role", model.KindText, true), pdeclNoneAuthRole),
 		field("authority_version", model.KindInt, false),
 		pdecl(field("claim_tenant_id", model.KindUUID, true),
-			model.None("the tenant whose identity provider claimed the domain: core/model/auth.go:452")),
+			model.None("the tenant whose identity provider claimed the domain: core/model/auth.go:525")),
 		pdecl(field("trusted_tenant_id", model.KindUUID, true),
-			model.None("the claiming tenant the target tenant trusted: core/model/auth.go:455")),
+			model.None("the claiming tenant the target tenant trusted: core/model/auth.go:527")),
 		pdecl(field("selector", model.KindText, false), pdeclNoneAuthSelector),
 		pdecl(field("secret_hash", model.KindBytes, false), pdeclNoneAuthSecretHash),
 		field("expires_at", model.KindTimestamp, false),
 		field("accepted_at", model.KindTimestamp, true),
 		field("voided_at", model.KindTimestamp, true),
 		pdecl(field("void_reason", model.KindText, true),
-			model.None("why the offer was voided: core/model/auth.go:467")),
+			model.None("why the offer was voided: core/model/auth.go:539")),
 		pdecl(field("created_by", model.KindText, true), pdeclActorEvidence),
 		pdecl(field("reason", model.KindText, true),
-			model.None("a deployment recovery's justification: core/model/auth.go:471")),
+			model.None("a deployment recovery's justification: core/model/auth.go:543")),
 		pdecl(field("evidence_ref", model.KindText, true),
-			model.None("a deployment recovery's evidence reference: core/model/auth.go:471")),
+			model.None("a deployment recovery's evidence reference: core/model/auth.go:544")),
 	},
 	Indexes: []model.IndexSpec{
 		{Name: "account_offers_selector_uniq", Columns: []string{"tenant_id", "selector"}, Unique: true},

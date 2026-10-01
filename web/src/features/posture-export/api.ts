@@ -87,7 +87,7 @@ export async function fetchPostureExport(
 
   let res: Response
   try {
-    res = await fetch(`${BASE}/export${qs ? `?${qs}` : ''}`, {
+    res = await fetch(`${BASE}/export?${qs}`, {
       method: 'GET',
       headers,
       credentials: 'same-origin',

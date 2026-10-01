@@ -28,11 +28,11 @@ func resolveMessageClientConfig(cfg *agentClientConfig) error {
 }
 
 func newMessageCmd() *cobra.Command {
-	root := &cobra.Command{Use: "message", Short: "Exchange exact-session messages through governed channels", Args: cobra.NoArgs}
+	root := &cobra.Command{Use: "message", Short: "Exchange exact-session messages through governed channels", Long: "Read, send and acknowledge messages as the authenticated session through operator-authorized channels. Uses the session communication credential from OLIVARES_COMMUNICATION_TOKEN; it does not substitute human or work authority.", Example: "  olivares message inbox --workspace-id <workspace-id>", Args: cobra.NoArgs}
 	for _, action := range []string{"inbox", "get", "send", "ack"} {
 		root.AddCommand(newMessageActionCmd(action))
 	}
-	handoff := &cobra.Command{Use: "handoff", Short: "Offer and respond to exact-session work handoffs", Args: cobra.NoArgs}
+	handoff := &cobra.Command{Use: "handoff", Short: "Offer and respond to exact-session work handoffs", Long: "Offer owned work to one exact session and inspect or answer incoming handoffs. Protected context is read through the carrier delivery; accepting a handoff uses the current handoff version and an idempotency key.", Example: "  olivares message handoff inbox --workspace-id <workspace-id>", Args: cobra.NoArgs}
 	for _, action := range []string{"inbox", "get", "offer", "respond"} {
 		handoff.AddCommand(newMessageActionCmd("handoff-" + action))
 	}
@@ -175,6 +175,26 @@ func newMessageActionCmd(action string) *cobra.Command {
 			_, err = fmt.Fprintln(cmd.OutOrStdout(), string(result))
 			return err
 		}}
+	cmd.Long = map[string]string{
+		"inbox":           "List deliveries for the authenticated session in its exact workspace. Pagination returns an opaque continuation; no other session's inbox is exposed.",
+		"get":             "Read one delivery belonging to the authenticated session by delivery ID. Protected content remains subject to the channel and session's current authority.",
+		"send":            "Send a plain-text file to one exact canonical session SID through an operator-authorized channel. Retain the idempotency key for retries; the server checks sender and recipient authority.",
+		"ack":             "Acknowledge one delivery belonging to the authenticated session. Supply its current version and a canonical UUIDv7 idempotency key.",
+		"handoff-inbox":   "List incoming work handoffs for the authenticated session in its exact workspace, filtered by one state. Use the opaque continuation for subsequent pages.",
+		"handoff-get":     "Read one protected handoff context through its carrier delivery ID. The authenticated session must remain an authorized recipient.",
+		"handoff-offer":   "Offer owned work to one exact canonical session SID through an authorized channel. Supply the work item's current version and owner epoch, a future acknowledgement deadline and a HandoffContent JSON file.",
+		"handoff-respond": "Accept or reject an incoming handoff as the authenticated session. Supply its current version and a canonical UUIDv7 idempotency key; rejection also requires a CommunicationReasonContent JSON file.",
+	}[action]
+	cmd.Example = map[string]string{
+		"inbox":           "  olivares message inbox --workspace-id <workspace-id>",
+		"get":             "  olivares message get <delivery-id>",
+		"send":            "  olivares message send --channel-id <channel-id> --to-sid <osn_UUID> --text-file message.txt --idempotency-key <key>",
+		"ack":             "  olivares message ack <delivery-id> --version 1 --idempotency-key <key>",
+		"handoff-inbox":   "  olivares message handoff inbox --workspace-id <workspace-id>",
+		"handoff-get":     "  olivares message handoff get <delivery-id>",
+		"handoff-offer":   "  olivares message handoff offer --channel-id <channel-id> --to-sid <osn_UUID> --work-item-id <item-id> --owner-epoch 1 --version 1 --ack-deadline <RFC3339> --context-file handoff.json --idempotency-key <key>",
+		"handoff-respond": "  olivares message handoff respond <handoff-id> --transition accept --version 1 --idempotency-key <key>",
+	}[action]
 	cfg.addFlags(cmd)
 	cmd.Flags().Lookup("token").Usage = "API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution)"
 	switch action {

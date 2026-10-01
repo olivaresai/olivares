@@ -28,11 +28,17 @@ func (m *Module) UseOrchestrationWorkScopeSource(source OrchestrationWorkScopeSo
 
 type orchestrationLaunchProfileKey struct{}
 
-func withOrchestrationLaunchProfile(ctx context.Context, snapshot *ProviderHomeSnapshot) context.Context {
-	if snapshot == nil || snapshot.SessionWorkGrant == "" {
+// This launch term stays outside ProviderHomeSnapshot and its historical digest.
+type orchestrationLaunchProfile struct {
+	ProfileID        string
+	SessionWorkGrant string
+}
+
+func withOrchestrationLaunchProfile(ctx context.Context, snapshot *ProviderHomeSnapshot, grant string) context.Context {
+	if snapshot == nil || grant == "" {
 		return ctx
 	}
-	return context.WithValue(ctx, orchestrationLaunchProfileKey{}, *snapshot)
+	return context.WithValue(ctx, orchestrationLaunchProfileKey{}, orchestrationLaunchProfile{ProfileID: snapshot.ProfileID, SessionWorkGrant: grant})
 }
 
 func lockOrchestrationProfile(ctx context.Context, sc store.Scope, profile string) error {

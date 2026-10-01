@@ -396,6 +396,10 @@ export interface TOTPStatusDTO {
   recovery_codes_remaining: number
 }
 
+type TOTPActivationResponse =
+  | { recovery_codes: string[]; token?: undefined }
+  | ({ token: string; session_id: string; expires_at: string } & { recovery_codes?: string[] })
+
 export const totpApi = {
   /** Start an enrolment: self-service (session) or a pending login (mfa_token). */
   enrol: (req: { mfa_token?: string }) =>
@@ -405,10 +409,7 @@ export const totpApi = {
   /** Confirm with the app's code. Self-service returns the recovery codes; a
    * pending login's activation completes the login (session + codes). */
   activate: (req: { code: string; mfa_token?: string }) =>
-    http.post<
-      | { recovery_codes: string[]; token?: undefined }
-      | ({ token: string; session_id: string; expires_at: string } & { recovery_codes?: string[] })
-    >('/v1/auth/totp/activate', req, {
+    http.post<TOTPActivationResponse>('/v1/auth/totp/activate', req, {
       anonymous: req.mfa_token !== undefined,
     }),
   /** Complete a factor-gated login with a code or a recovery code. */

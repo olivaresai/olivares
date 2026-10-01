@@ -576,6 +576,7 @@ type CreateRunParams struct {
 	// the same dispatch key with another home is a conflict rather than a replay.
 	ProviderProfileRef string                `json:"ProviderProfileRef,omitempty"`
 	ProviderHome       *ProviderHomeSnapshot `json:"ProviderHome,omitempty"`
+	orchestrationGrant string
 }
 
 // launchIntentFor builds the references-only launch intent the governance gates
@@ -845,7 +846,7 @@ func (m *Module) createRunInternal(
 	}
 	var orchestrationGrant *SessionWorkGrant
 	if p.ProviderHome != nil {
-		orchestrationGrant, err = decodeProfileWorkGrant(p.ProviderHome.SessionWorkGrant)
+		orchestrationGrant, err = decodeProfileWorkGrant(p.orchestrationGrant)
 		if err != nil {
 			return runDTO{}, err
 		}
@@ -964,7 +965,7 @@ func (m *Module) createRunInternal(
 		m.releaseLaunchClaim(ctx, tenant, lease)
 		return runDTO{}, err
 	}
-	runtimeCreds, err := m.mintRuntimeCredentials(withOrchestrationLaunchProfile(ctx, p.ProviderHome), tenant, runRef, intent.AgentRef, lease)
+	runtimeCreds, err := m.mintRuntimeCredentials(withOrchestrationLaunchProfile(ctx, p.ProviderHome, p.orchestrationGrant), tenant, runRef, intent.AgentRef, lease)
 	if err != nil {
 		m.releaseLaunchClaim(ctx, tenant, lease)
 		return runDTO{}, err
@@ -1266,6 +1267,7 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 		p.ProviderProfileRef = profile.ProfileID
 		snap := profile
 		p.ProviderHome = &snap
+		p.orchestrationGrant = storedPolicy.workGrant
 		// The session policy is re-applied from the CURRENT profile, for the same
 		// reason the template is re-resolved and the gates are re-run: a tightened
 		// policy governs the relaunch rather than the one the run was born under.
@@ -1377,7 +1379,7 @@ func (m *Module) resumeRun(ctx context.Context, tenant model.TenantID, runRef, a
 	if err != nil {
 		return abortReservation(err, lease)
 	}
-	runtimeCreds, err := m.mintRuntimeCredentials(withOrchestrationLaunchProfile(ctx, p.ProviderHome), tenant, runRef, intent.AgentRef, lease)
+	runtimeCreds, err := m.mintRuntimeCredentials(withOrchestrationLaunchProfile(ctx, p.ProviderHome, p.orchestrationGrant), tenant, runRef, intent.AgentRef, lease)
 	if err != nil {
 		return abortReservation(err, lease)
 	}
@@ -2293,13 +2295,13 @@ func (m *Module) maybeMintWorkSession(
 	lease Lease,
 ) (WorkSessionCredential, error) {
 	if m.rt.workSessionCreds == nil || lease.SID == "" {
-		if _, required := ctx.Value(orchestrationLaunchProfileKey{}).(ProviderHomeSnapshot); required {
+		if _, required := ctx.Value(orchestrationLaunchProfileKey{}).(orchestrationLaunchProfile); required {
 			return WorkSessionCredential{}, forbiddenErr("orchestration credential issuer or live Claim is unavailable")
 		}
 		return WorkSessionCredential{}, nil
 	}
 	req := workSessionCredentialRequest(tenant, runRef, agentRef, lease)
-	if snap, ok := ctx.Value(orchestrationLaunchProfileKey{}).(ProviderHomeSnapshot); ok && snap.SessionWorkGrant != "" {
+	if snap, ok := ctx.Value(orchestrationLaunchProfileKey{}).(orchestrationLaunchProfile); ok && snap.SessionWorkGrant != "" {
 		req.OrchestrationProfileRef, req.OrchestrationGrant = snap.ProfileID, snap.SessionWorkGrant
 	}
 	cred, err := m.rt.workSessionCreds.Mint(ctx, req)

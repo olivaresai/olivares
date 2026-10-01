@@ -266,6 +266,9 @@ func newManagedMCPClient(in auth.MCPGatewayServerInput, timeout time.Duration) (
 		ctx = egress.WithReservedAuthorization(ctx, decision.ReservedAuthorized)
 		return egress.DialPinned(ctx, dialer, network, address)
 	}
+	// cli-transport-exempt: ENGINE→upstream MCP server, not a CLI-to-control-plane call.
+	// The tenant's upstream credential uses exact destination and DNS-pinned egress;
+	// a human CLI context must not supply its transport, credential or tenant scope.
 	return &http.Client{Transport: managedMCPTransport{inner: base, endpoint: in.URL}, Timeout: timeout, CheckRedirect: func(*http.Request, []*http.Request) error { return errManagedMCPRedirect }}, nil
 }
 

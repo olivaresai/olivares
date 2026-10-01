@@ -36,9 +36,10 @@ etwas noch nicht abdeckt, sagt die Seite das, statt es zu suggerieren.
   wird aus dem eigenen OpenAPI-3.1-Vertrag des Produkts gerendert. Das Audit-Ledger
   ist append-only und hash-chained mit Ed25519-signierten Checkpoints und kann in
   mehreren SIEM-Formaten exportiert werden.
-- **Releases sind signiert und offline verifizierbar.** Signatur, SLSA-Provenienz,
-  SBOM und OpenVEX lassen sich allesamt [ohne Netzwerkzugang verifizieren](/de/how-to/verify-a-release/),
-  und das Produkt liefert ein [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das neueste getaggte Release, **26.10.0**, ist mit signierten Archiven, nativen Paketen und Container-Images veröffentlicht; APIs, Schemata und die Modul-Oberfläche können sich vor 1.0 noch ändern.
+- **Releases sind signiert und verifizierbar.** Signatur, SLSA-Provenienz, SBOM und OpenVEX lassen sich allesamt
+  [verifizieren](/de/how-to/verify-a-release/). Die Verifikation ist noch nicht vollständig ohne Netzwerk möglich: schlüssellose
+  Prüfungen brauchen Sigstore-Trusted-Root-Material, und der SLSA-Schritt hat keinen Offline-Modus. Das Produkt liefert ein
+  [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das neueste getaggte Release, **26.10.0**, ist mit signierten Archiven, nativen Paketen und Container-Images veröffentlicht; APIs, Schemata und die Modul-Oberfläche können sich vor 1.0 noch ändern.
 
 ## Open Core — was offen ist vs. Enterprise
 
