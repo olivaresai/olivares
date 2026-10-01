@@ -29,6 +29,15 @@ is_contract_lib() {
 	return 1
 }
 
+is_git_host_adapter() {
+	# gitpublish implements its own Host and modules/gitpublish.Git contracts;
+	# it is a module write adapter, not a library, SDK source/output, or plugin.
+	case "$1" in
+		gitpublish) return 0 ;;
+	esac
+	return 1
+}
+
 is_noop_allowlisted() {
 	case "$1" in
 		aicontroltower|keycloak|spiffe)
@@ -150,6 +159,7 @@ for dir in connectors/*; do
 	if grep_go "$dir" '_[[:space:]]+identitysource\.GraphProvider[[:space:]]*='; then class_signal=1; fi
 	if grep_go "$dir" '_[[:space:]]+contentsource\.Source[[:space:]]*='; then class_signal=1; fi
 	if is_contract_lib "$base"; then class_signal=1; fi
+	if is_git_host_adapter "$base"; then class_signal=1; fi
 	if [ "$base" = "backstage" ]; then class_signal=1; fi
 
 	if [ "$class_signal" -eq 0 ]; then

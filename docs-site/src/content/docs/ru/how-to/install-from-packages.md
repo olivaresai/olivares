@@ -72,14 +72,10 @@ Init Alpine по умолчанию — **OpenRC**, не systemd. Для кон�
 Три формата несут двоичный файл в `/usr/bin/olivares`, файл окружения в
 `/etc/olivares/olivares.env` (`config|noreplace`), каталог данных
 `/var/lib/olivares` и тексты лицензий. `.deb` и `.rpm` поставляют укреплённый
-**systemd**-юнит. **Пакеты из этого исходного дерева** кладут в `.apk` исполняемый
+**systemd**-юнит. `.apk` кладёт исполняемый
 юнит **OpenRC** в `/etc/init.d/olivares` с явным штампом `package-init`, чтобы хуки не
-угадывали по наличию `systemctl` на узле.
-
-Ранее опубликованный `.apk` поставлял тот же systemd-юнит и **не** поставлял юнит
-OpenRC. Тот опубликованный linux-tar несёт тексты лицензий, README и `SECURITY.md`;
-он не включает `scripts/install-service.sh` и `packaging/service/`. Эти файлы-адаптеры
-находятся в подписанном архиве дерева для следующего выпуска.
+угадывали по наличию `systemctl` на узле. Linux-архивы несут те же адаптеры службы:
+`scripts/install-service.sh` и `packaging/service/`.
 
 ```bash
 # Debian / Ubuntu

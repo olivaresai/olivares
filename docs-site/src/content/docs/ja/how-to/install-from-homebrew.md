@@ -12,11 +12,9 @@ Linux パッケージ経路
 （[パッケージからインストール](/how-to/install-from-packages/)）でも Docker
 （[Docker でデプロイ](/how-to/docker-deployment/)）でもありません。
 
-:::note[ベータ — 26.10.0 の cask は公開済み]
-インストール面の証人は Homebrew を **published** と記録しています
-（`docs/releases/26.10.0-install-surfaces.json`、測定
-2026-09-23T20:28:11Z）。tap の `Casks/olivares.rb` はバージョン 26.10.0 と、SHA-256 が
-リリースのものと一致する 4 つのプラットフォーム向けアーカイブを示しています。プロデューサーは
+:::note[ベータ — 26.10 の cask は公開済み]
+tap の `Casks/olivares.rb` は 2026-10-01 に 26.10 向けに更新されました。バージョン 26.10.0 と、
+SHA-256 がリリースの署名済み `checksums.txt` と一致する 4 つのプラットフォーム向けアーカイブを示しています。プロデューサーは
 `.goreleaser.yaml` `homebrew_casks:` で、tap の cask はリリースジョブが上げます。下のコマンドは
 `INSTALL.md` が名付ける座標です（`brew install olivaresai/tap/olivares`）。
 :::

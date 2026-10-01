@@ -27,6 +27,7 @@ import { PasskeyAddressNotice } from '@/features/identity/passkey-address'
 import { SecondFactorPanel } from '@/features/identity/totp-login'
 import type { LoginChallenge } from '@/lib/api/types'
 import { viewById } from '@/features/navigation/model'
+import type { FeatureView } from '@/features/registry'
 import { ANONYMOUS_VIEWS } from '@/features/anonymous-registry'
 import {
   START_PAGE_IDS,
@@ -58,20 +59,21 @@ function tenantFor(principal: Whoami): string | null {
 function permitsNow(
   client: QueryClient,
   hookCan: (permission: string) => boolean,
-): (permission: string) => boolean {
+): (view: FeatureView) => boolean {
   const principal = client.getQueryData<Whoami>(queryKeys.whoami) ?? null
-  if (!principal) return hookCan
+  if (!principal) return (view) => !view.permission || hookCan(view.permission)
   const tenant = tenantFor(principal)
-  return (permission) => rbacCan(permission, { principal, tenant })
+  return (view) =>
+    !view.permission || rbacCan(view.permission, { principal, tenant })
 }
 
 /** Where sign-in lands. An unknown or refused destination stays on the home page. */
-function startPath(permits: (permission: string) => boolean): string {
+function startPath(permits: (view: FeatureView) => boolean): string {
   const choice = useClientSettings.getState().startPage
   if (!(START_PAGE_IDS as readonly string[]).includes(choice)) return '/'
   const view = viewById(choice)
   if (!view) return '/'
-  if (view.permission && !permits(view.permission)) return '/'
+  if (!permits(view)) return '/'
   return view.path
 }
 

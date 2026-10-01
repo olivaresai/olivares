@@ -76,14 +76,11 @@ Les trois formats portent le binaire dans `/usr/bin/olivares`, un fichier
 d'environnement dans `/etc/olivares/olivares.env` (`config|noreplace`), le
 répertoire de données `/var/lib/olivares`, et les textes de licence sous
 `/usr/share/doc/olivares/`. `.deb` et `.rpm` livrent l'unité **systemd** durcie.
-**Les paquets de cet arbre source** placent dans le `.apk` une unité **OpenRC**
+Le `.apk` place une unité **OpenRC**
 exécutable dans `/etc/init.d/olivares`, avec un tampon `package-init` explicite pour que
-les crochets ne devinent pas d'après la présence de `systemctl` sur l'hôte.
-
-Le `.apk` **publié précédemment** livrait cette même unité systemd et **pas** d'unité
-OpenRC. Cette archive tar linux publiée porte les textes de licence, le README et
-`SECURITY.md` ; elle n'inclut ni `scripts/install-service.sh` ni `packaging/service/`.
-Ces fichiers adaptateurs sont dans l'archive signée de l'arbre pour la prochaine release.
+les crochets ne devinent pas d'après la présence de `systemctl` sur l'hôte. Les archives
+Linux portent les mêmes adaptateurs de service : `scripts/install-service.sh` et
+`packaging/service/`.
 
 ```bash
 # Debian / Ubuntu

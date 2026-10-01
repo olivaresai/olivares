@@ -79,6 +79,10 @@ func decode(w http.ResponseWriter, r *http.Request, v any) bool {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": code})
 		return false
 	}
+	if err := dec.Decode(&json.RawMessage{}); err != io.EOF {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid_request"})
+		return false
+	}
 	return true
 }
 

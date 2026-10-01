@@ -12,11 +12,10 @@ cuarentena de Gatekeeper. No es la vía de paquetes Linux
 ([Instalar desde un paquete](/how-to/install-from-packages/)) ni Docker
 ([Desplegar con Docker](/how-to/docker-deployment/)).
 
-:::note[Beta — el cask 26.10.0 está publicado]
-El testigo de superficies de instalación registra Homebrew como
-**published** (`docs/releases/26.10.0-install-surfaces.json`, medido el
-2026-09-23T20:28:11Z): `Casks/olivares.rb` del tap nombra la versión 26.10.0 y cuatro
-archivos de plataforma cuyos SHA-256 son los de la release. El productor es
+:::note[Beta — el cask 26.10 está publicado]
+`Casks/olivares.rb` del tap se actualizó para 26.10 el 2026-10-01: nombra la versión 26.10.0 y
+cuatro archivos de plataforma cuyos SHA-256 coinciden con el `checksums.txt` firmado de la
+release. El productor es
 `.goreleaser.yaml` `homebrew_casks:`; el trabajo de release actualiza el cask del tap. El
 comando de abajo es la coordenada que nombra `INSTALL.md` (`brew install olivaresai/tap/olivares`).
 :::

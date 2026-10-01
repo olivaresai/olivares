@@ -15,14 +15,10 @@ nicht-menschlichen Identitäten, die Connectoren tatsächlich benannt haben. Es
 betreibt Discovery durch *Zuhören*, nie durch Sondieren. Es erfasst
 Beziehungen, Identifikatoren und Lebendigkeit — keine Payloads — und ist
 **kein** Zensus von allem, was existiert. Diese Seite ist die Referenz dafür,
-was der Katalog enthält, wie Beobachtungsprovenienz und dauerhafte Frische in
-der Entwicklung für die nächste Version funktionieren, und was das Modul bewusst
-nicht behauptet.
+was der Katalog enthält, wie Beobachtungsprovenienz und dauerhafte Frische
+funktionieren, und was das Modul bewusst nicht behauptet.
 
-Die Beobachtungsprovenienz und die dauerhafte Frische sind für eine begrenzte
-Entwicklungs-Composition akzeptiert. Es handelt sich um Funktionen in Entwicklung
-für die nächste Version, nicht um ein veröffentlichtes Release, ein
-vollständiges RC oder ein Deployment.
+Die Beobachtungsprovenienz und die dauerhafte Frische sind Teil von 26.10.
 
 ## Was es materialisiert
 

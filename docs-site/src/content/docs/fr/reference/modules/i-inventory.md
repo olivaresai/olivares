@@ -16,13 +16,9 @@ découvre en *écoutant*, jamais en sondant. Il enregistre des relations, des
 identifiants et la vivacité — pas de charges utiles — et ce n'est **pas** un
 recensement de tout ce qui existe. Cette page est la référence de ce que le
 catalogue contient, de la façon dont la provenance d'observation et la
-fraîcheur durable fonctionnent dans le développement de la prochaine version, et de
-ce que le module ne prétend délibérément pas.
+fraîcheur durable fonctionnent, et de ce que le module ne prétend délibérément pas.
 
-La provenance d'observation et la fraîcheur durable sont acceptées pour une
-composition de développement bornée. Ce sont des capacités actuelles de
-développement pour la prochaine version, non une release publiée, un RC complet ou un
-déploiement.
+La provenance d'observation et la fraîcheur durable font partie de la 26.10.
 
 ## Ce qu'il matérialise
 

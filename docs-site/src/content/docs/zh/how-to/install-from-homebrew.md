@@ -11,11 +11,9 @@ draft: false
 （[从软件包安装](/how-to/install-from-packages/)），也不是 Docker
 （[用 Docker 部署](/how-to/docker-deployment/)）。
 
-:::note[测试版 — 26.10.0 cask 已发布]
-安装面证人将 Homebrew 记为 **published**
-（`docs/releases/26.10.0-install-surfaces.json`，测量于
-2026-09-23T20:28:11Z）：tap 的 `Casks/olivares.rb` 标明版本 26.10.0，以及四个平台归档，
-其 SHA-256 与该发布的一致。生产者是 `.goreleaser.yaml` `homebrew_casks:`；tap 的 cask
+:::note[测试版 — 26.10 cask 已发布]
+tap 的 `Casks/olivares.rb` 已于 2026-10-01 为 26.10 更新：它标明版本 26.10.0，以及四个平台归档，
+其 SHA-256 与该发布签名的 `checksums.txt` 一致。生产者是 `.goreleaser.yaml` `homebrew_casks:`；tap 的 cask
 由发布作业提升。下面的命令是 `INSTALL.md` 命名的坐标（`brew install olivaresai/tap/olivares`）。
 :::
 

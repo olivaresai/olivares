@@ -1,0 +1,1 @@
+import{Er as e,hr as t}from"./index-GnMdvLOq.js";function n(n){return e(t,n)}export{n as t};

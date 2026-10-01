@@ -3,12 +3,13 @@
 All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project uses [CalVer](https://calver.org/) — `vYY.M.PATCH` (two-digit year,
-month, release-of-month).
+and this project uses [CalVer](https://calver.org/): a monthly release is `YY.M` (two-digit
+year and month, such as 26.10), and a patch release adds a third number, `YY.M.N`. Tags have
+no `v` prefix; the 26.10 release is tagged `26.10.0`.
 
-> **Status: beta.** The latest published release is **26.10.0**; its dated section below is the
-> record of what it shipped. The next release is **v26.10**, pending: its changes are recorded
-> under **[Unreleased]**, with no release date until it is published. The
+> **Status: beta.** The latest published release is **26.10**; its dated section below is the
+> record of what it shipped. Changes for the next release are recorded under **[Unreleased]**,
+> with no release date until it is published. The
 > [releases page](https://github.com/olivaresai/olivares/releases) lists every published release.
 > Release notes and artifacts become authoritative when the corresponding release is published.
 > Every earlier release keeps its own dated section, unchanged.
@@ -26,7 +27,7 @@ month, release-of-month).
   human-readable counterpart to the [Conventional Commits](CONTRIBUTING.md)
   history; we do not dump git logs into it.
 - At release time, the **[Unreleased]** entries move into a new, dated version
-  section (`## [yy.m.patch] - YYYY-MM-DD`, latest first), and a fresh empty
+  section (`## [<release tag>] - YYYY-MM-DD`, latest first), and a fresh empty
   **[Unreleased]** is started.
 - The **Security** heading is the public face of the advisory process: each
   entry links the relevant GitHub Security Advisory (GHSA) / OSV record from the
@@ -37,6 +38,12 @@ month, release-of-month).
 
 Pending for the next release. Nothing below is published until that release is, and the
 section is dated only then.
+
+### Fixed
+
+- The Git publish push API refuses a request body followed by anything other than whitespace (a
+  second JSON value or a stray bracket) with `400 invalid_request`, before it records or pushes
+  anything. Before, it applied the first value.
 
 ## [26.10.0] - 2026-10-01
 

@@ -123,7 +123,7 @@ Versioning is provided by the [`starlight-versions`](https://starlight-versions.
 plugin and is **active**. The only archived version is honestly labelled as a
 **dated docs snapshot**, not a product release: slug `2026-06`, label
 **"2026-06 (pre-1.0 preview)"**. The first public CalVer cut was `v26.8.0`.
-The current canon is `v26.9.0` (`RELEASE-VERSION`). The docs tree remains
+The current canon is `26.10.0` (`RELEASE-VERSION`). The docs tree remains
 **Latest** until a maintainer cuts a dated snapshot; do not fabricate a
 release archive.
 
@@ -162,7 +162,7 @@ What is true today, measured:
 | Worker | `olivares-docs`, a static-assets Worker; config in [`wrangler.jsonc`](./wrangler.jsonc) |
 | Live at | `https://docs.olivares.ai` — a **zone route** onto that Worker. The hostname's DNS is still carried by a custom domain on the marketing Worker; `wrangler.jsonc` documents the pending migration and why its order matters |
 | Build artifact | `.github/workflows/docs-site-artifact.yml` — dispatch-only, uploads `dist/`, **deploys nothing** |
-| Deploy | `.github/workflows/docs-site-deploy.yml` — dispatch-only, requires typing `PUBLISH`, selects its target from a fixed `github.repository_id` table (`docs.olivares.ai` from this repository; a rehearsal target via `wrangler.preprod.jsonc` from the repository that owns it; any other repository refuses), and **refuses with a named secret** if `CLOUDFLARE_API_TOKEN` is absent (it is, in this repository, today) |
+| Deploy | `.github/workflows/docs-site-deploy.yml` — dispatch-only, requires typing `PUBLISH`, selects its target from a fixed `github.repository_id` table (`docs.olivares.ai` from this repository; a rehearsal target via `wrangler.preprod.jsonc` from the repository that owns it; any other repository refuses), and **refuses with a named secret** if `CLOUDFLARE_API_TOKEN` is absent |
 | Staleness | `bash ../scripts/check-docs-site-live.sh` — compares the live site against what this tree promises. `0` up to date · `1` stale or broken · `2` could not look |
 
 Publishing is still owner-gated and still deliberate: there is no push trigger, and the

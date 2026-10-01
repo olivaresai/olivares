@@ -12,11 +12,10 @@ Gatekeeper. Ce n’est pas le chemin des paquets Linux
 ([Installer depuis un paquet](/how-to/install-from-packages/)) ni Docker
 ([Déployer avec Docker](/how-to/docker-deployment/)).
 
-:::note[Bêta — le cask 26.10.0 est publié]
-Le témoin des surfaces d’installation enregistre Homebrew comme
-**published** (`docs/releases/26.10.0-install-surfaces.json`, mesuré le
-2026-09-23T20:28:11Z) : `Casks/olivares.rb` du tap nomme la version 26.10.0 et quatre
-archives de plateforme dont les SHA-256 sont ceux de la release. Le producteur est
+:::note[Bêta — le cask 26.10 est publié]
+`Casks/olivares.rb` du tap a été mis à jour pour la 26.10 le 2026-10-01 : il nomme la version
+26.10.0 et quatre archives de plateforme dont les SHA-256 correspondent au `checksums.txt` signé
+de la release. Le producteur est
 `.goreleaser.yaml` `homebrew_casks:` ; le job de release met à jour le cask du tap. La
 commande ci-dessous est la coordonnée que nomme `INSTALL.md` (`brew install olivaresai/tap/olivares`).
 :::

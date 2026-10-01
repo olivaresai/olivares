@@ -67,14 +67,10 @@ environment file at `/etc/olivares/olivares.env` (marked `config|noreplace`, so 
 survive an upgrade), the data directory `/var/lib/olivares`, and the licence texts —
 `LICENSE`, `NOTICE`, `LICENSING.md`, `DISCLAIMER.md` — under `/usr/share/doc/olivares/`.
 `.deb` and `.rpm` ship the hardened **systemd** unit at
-`/usr/lib/systemd/system/olivares.service`. **Packages built from this source** put an
-executable **OpenRC** unit at `/etc/init.d/olivares` in the `.apk`, with an explicit
-`package-init` stamp so hooks do not guess from host `systemctl` presence.
-
-The **previously published** `.apk` assets shipped that same systemd unit and did **not**
-ship an OpenRC unit. That published linux tarball carries licence texts, README and
-`SECURITY.md`; it does not include `scripts/install-service.sh` or `packaging/service/`.
-Those adapter files are in the in-tree signed archive for the next release.
+`/usr/lib/systemd/system/olivares.service`. The `.apk` puts an executable **OpenRC** unit at
+`/etc/init.d/olivares`, with an explicit `package-init` stamp so hooks do not guess from host
+`systemctl` presence. The Linux archives carry the same service adapters:
+`scripts/install-service.sh` and `packaging/service/`.
 
 ```bash
 # Debian / Ubuntu

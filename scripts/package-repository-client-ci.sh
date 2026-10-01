@@ -168,12 +168,12 @@ apk)
 		key=/etc/apk/keys/olivares-packages-apk.rsa.pub
 		curl --fail --silent --show-error --proto '=https' \
 			"$repository_url/keys/olivares-packages-apk.rsa.pub" -o "$key"
-		apk_origin="$repository_url/stable/apk/x86_64"
+		apk_origin="$repository_url/stable/apk"
 	else
 		key="$(find /repository/keys -maxdepth 1 -type f -name '*.rsa.pub' -print)"
 		[[ -n "$key" && "$(printf '%s\n' "$key" | wc -l)" -eq 1 ]] || fail 'published APK key inventory is not exact'
 		cp "$key" "/etc/apk/keys/${key##*/}"
-		apk_origin=file:///repository/stable/apk/x86_64
+		apk_origin=file:///repository/stable/apk
 	fi
 	printf '%s\n' "$apk_origin" >/etc/apk/repositories
 	apk update
