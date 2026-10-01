@@ -9,7 +9,7 @@ import (
 	"context"
 	"crypto/hmac"
 	"crypto/rand"
-	"crypto/sha1"
+	"crypto/sha1" // #nosec G505 -- RFC 6238 TOTP defaults to HMAC-SHA1 for authenticator-app compatibility (keyed PRF, not a collision-resistant hash)
 	"crypto/sha256"
 	"crypto/sha512"
 	"encoding/base32"
