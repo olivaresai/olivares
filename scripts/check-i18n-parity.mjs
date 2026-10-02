@@ -224,6 +224,14 @@ const NO_I18N_ALLOWLIST = new Map([
     'navigation',
     'shell navigation: every string is a key of the foundation nav namespace (locales/*/nav.json), already under parity',
   ],
+  // settings/ (ARCH C1 and the S seam, 2026-10-02) renders the Edition & modules and
+  // Report signing panels of the Settings page. Both call useTranslation('settings'),
+  // the foundation namespace (web/src/lib/i18n/locales/*/settings.json) that the Settings
+  // page already uses and this scan already compares across the seven languages.
+  [
+    'settings',
+    'settings panels: every string is a key of the foundation settings namespace (locales/*/settings.json), already under parity',
+  ],
 ])
 
 /** Does this feature dir contain any .tsx (i.e. does it render UI)? */

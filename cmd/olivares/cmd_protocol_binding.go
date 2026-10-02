@@ -58,7 +58,7 @@ func newProtocolBindingCmd() *cobra.Command {
 		Use:   "protocol-binding",
 		Short: "Compose and reconcile durable A2A and MCP protocol bindings",
 		Long: "protocol-binding manages immutable protocol mapping generations and their durable runtime " +
-			"bindings. All mutations use the control-plane validate, plan, test, and apply phases.",
+			"bindings. All mutations use the engine validate, plan, test, and apply phases.",
 		Example: "  olivares work protocol-binding spec list --workspace-id 0195f1a7-8b6c-7d2e-9f10-112233445566\n" +
 			"  olivares work protocol-binding binding list --workspace-id 0195f1a7-8b6c-7d2e-9f10-112233445566",
 	}

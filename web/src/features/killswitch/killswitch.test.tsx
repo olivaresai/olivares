@@ -76,6 +76,22 @@ vi.mock('./api', async (importOriginal) => {
   return { ...actual, killswitchApi: api }
 })
 
+// The organization's member roster (Identity & access): three active admin accounts by
+// default, so the two-admin line stays out of the cases that do not test it.
+const members = vi.hoisted(() => ({ listMembers: vi.fn() }))
+vi.mock('@/features/console/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/console/api')>()
+  return { ...actual, consoleApi: { ...actual.consoleApi, ...members } }
+})
+const admin = (id: string, role = 'admin') => ({
+  user_id: id,
+  email: `${id}@acme.io`,
+  status: 'active',
+  sso_only: false,
+  role,
+})
+
+import en from './i18n/en.json'
 import KillswitchView from './killswitch-view'
 import { ReenableDialog } from './reenable-dialog'
 
@@ -98,6 +114,10 @@ beforeEach(() => {
   api.list.mockResolvedValue({ items: [], has_more: false })
   api.listGuardianRules.mockResolvedValue({ items: [], has_more: false })
   api.listGuardianActions.mockResolvedValue({ items: [], has_more: false })
+  members.listMembers.mockResolvedValue({
+    items: [admin('a', 'owner'), admin('b'), admin('c')],
+    has_more: false,
+  })
 })
 afterEach(() => vi.clearAllMocks())
 
@@ -217,9 +237,7 @@ describe('KillswitchView — engage (the one-click emergency stop)', () => {
 
     // The deliberate confirm step (no single-click estate stop).
     const dialog = await screen.findByRole('dialog')
-    expect(
-      within(dialog).getByText(/stop the entire estate\?/i),
-    ).toBeInTheDocument()
+    expect(within(dialog).getByText(/stop all agents\?/i)).toBeInTheDocument()
     await userEvent.click(
       within(dialog).getByRole('button', { name: /engage kill switch/i }),
     )
@@ -296,9 +314,9 @@ describe('KillswitchView — live state + stop rows', () => {
     })
     wrap(<KillswitchView />)
 
-    expect(await screen.findByText('ESTATE STOPPED')).toBeInTheDocument()
+    expect(await screen.findByText('ALL AGENTS STOPPED')).toBeInTheDocument()
     expect(
-      screen.getByText(/3 pending actuation approvals revoked/i),
+      screen.getByText(/3 pending approval requests canceled/i),
     ).toBeInTheDocument()
     // The row: engager handle, reason, source, recorded AAL, lifecycle chip.
     expect(screen.getAllByText('user:u-1').length).toBeGreaterThan(0)
@@ -385,7 +403,7 @@ describe('KillswitchView — dual-control re-enable', () => {
       /re-enabled under dual-control/i,
     )
     expect(toast.success.mock.calls[0][1]?.description).toMatch(
-      /post-review is now due/i,
+      /the review of this stop is now due/i,
     )
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
@@ -452,6 +470,79 @@ describe('KillswitchView — forced post-review', () => {
       note: 'Stop justified; prompt hardened.',
     })
     await waitFor(() => expect(toast.success).toHaveBeenCalled())
+  })
+})
+
+// HU 047 (09b, one-admin install): starting the estate again needs two OTHER admin
+// accounts to approve and one to review; the console said nothing before the stop, and a
+// refused review left its dialog silent.
+describe('KillswitchView — the two-admin rule, said before and after', () => {
+  async function openEstateConfirm() {
+    wrap(<KillswitchView />)
+    await userEvent.type(
+      await screen.findByLabelText(/^reason/i),
+      'Prompt-injection cascade',
+    )
+    await userEvent.click(
+      screen.getByRole('button', { name: /emergency stop/i }),
+    )
+    return screen.findByRole('dialog')
+  }
+  const LINE =
+    'Starting again needs two other admin accounts to approve it and one of them to review it afterwards.'
+  // The two bodies as the locale has them, so the case follows CLX's wording.
+  const BODY_WITH_RESTART = en.engage.confirmBodyEstate
+  const BODY_WITHOUT_RESTART = en.engage.confirmBodyEstateNoRestart
+
+  it('with fewer than three active admin accounts, the stop confirmation says what starting again needs', async () => {
+    members.listMembers.mockResolvedValue({
+      items: [admin('a', 'owner'), admin('v', 'viewer')],
+      has_more: false,
+    })
+    const dialog = await openEstateConfirm()
+    expect(await within(dialog).findByText(LINE)).toBeInTheDocument()
+    // One sentence about starting again: the body drops its own (Root, 047 review).
+    expect(within(dialog).getByText(BODY_WITHOUT_RESTART)).toBeInTheDocument()
+    expect(within(dialog).queryByText(BODY_WITH_RESTART)).toBeNull()
+  })
+
+  it('with three active admin accounts, the line is not there and the body keeps its sentence', async () => {
+    const dialog = await openEstateConfirm()
+    await waitFor(() => expect(members.listMembers).toHaveBeenCalled())
+    await new Promise((r) => setTimeout(r, 30))
+    expect(within(dialog).queryByText(LINE)).toBeNull()
+    expect(within(dialog).getByText(BODY_WITH_RESTART)).toBeInTheDocument()
+  })
+
+  it('a roster that cannot be read shows the line anyway', async () => {
+    members.listMembers.mockRejectedValue(
+      new ApiError(403, 'forbidden', 'forbidden'),
+    )
+    const dialog = await openEstateConfirm()
+    expect(await within(dialog).findByText(LINE)).toBeInTheDocument()
+  })
+
+  it("a refused post-review shows the engine's sentence in the dialog", async () => {
+    const sentence =
+      'separation of duties: whoever engaged, requested or executed the re-enable cannot review it'
+    api.list.mockResolvedValue({
+      items: [reenabledUnreviewedFixture],
+      has_more: false,
+    })
+    api.review.mockRejectedValue(new ApiError(403, 'forbidden', sentence))
+    wrap(<KillswitchView />)
+    await userEvent.click(
+      await screen.findByRole('button', { name: /^review$/i }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.type(
+      within(dialog).getByLabelText(/^note/i),
+      'Looked at it.',
+    )
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: /record review/i }),
+    )
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(sentence)
   })
 })
 
@@ -758,7 +849,7 @@ describe('KillswitchView — RBAC gating', () => {
     wrap(<KillswitchView />)
 
     // The read view still shows the truth…
-    expect(await screen.findByText('ESTATE STOPPED')).toBeInTheDocument()
+    expect(await screen.findByText('ALL AGENTS STOPPED')).toBeInTheDocument()
     // …but offers no privileged action the backend would 403.
     expect(screen.queryByRole('button', { name: /emergency stop/i })).toBeNull()
     expect(screen.queryByRole('button', { name: /re-enable/i })).toBeNull()

@@ -24,6 +24,7 @@
 //    supposed to trust the one they learn to ignore.
 import type { RunDTO } from '@/features/agentops/types'
 import { isLiveRun, type UnifiedSession } from './provenance'
+import { pinnedAddress } from './session-pins'
 
 /** The three sections of the rail, in the order they are rendered. */
 export const WORK_GROUPS = ['active', 'attention', 'settled'] as const
@@ -35,9 +36,14 @@ export interface WorkGroup {
   sessions: UnifiedSession[]
 }
 
-/** A run is asking for a person: it failed, or its provider says it needs a login. */
+/** A run is asking for a person: it failed, its provider says it needs a login, or a
+ * tool call of it waits on an approval (HU-R12). */
 function runWantsAPerson(run: RunDTO): boolean {
-  return run.state === 'failed' || run.provider_auth_state === 'required'
+  return (
+    run.state === 'failed' ||
+    run.provider_auth_state === 'required' ||
+    (!!run.pending_approval_ref && isLiveRun(run))
+  )
 }
 
 /**
@@ -51,7 +57,10 @@ export function groupOf(s: UnifiedSession): WorkGroupId {
     s.runs.some(runWantsAPerson)
   )
     return 'attention'
-  if (s.live?.cc_state === 'active' || s.runs.some(isLiveRun)) return 'active'
+  // A launched session's state is its run's: the observed row keeps its last signal
+  // after a Stop, and read "Running" in the composer after a reload (EU, Business 06).
+  if (s.runs.length > 0) return s.runs.some(isLiveRun) ? 'active' : 'settled'
+  if (s.live?.cc_state === 'active') return 'active'
   return 'settled'
 }
 
@@ -80,7 +89,9 @@ export function groupSessions(
     id,
     // A STABLE sort, so the incoming order (most recent activity first) survives it.
     sessions: [...(byGroup.get(id) ?? [])].sort(
-      (a, b) => Number(pinned.has(b.key)) - Number(pinned.has(a.key)),
+      (a, b) =>
+        Number(pinnedAddress(pinned, b) !== undefined) -
+        Number(pinnedAddress(pinned, a) !== undefined),
     ),
   }))
 }

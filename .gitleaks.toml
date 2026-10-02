@@ -882,3 +882,50 @@ regexes = [
     '''^93642aec521a1e5e96dd715f7ae0ec0850ebc9de09a94ce03cae5263f26cc18a$''',
     '''^36F612DCF27F7D1A48A835E4DBFCF71C6D9F90A6$''',
   ]
+
+# ── 2026-10-02 · generic-api-key · cmd/olivares/cli_error_safety_invalid_json_test.go:32,79
+# Two CLI refusal tests declare `const token = "sr-synthetic-effective-bearer-01234567"`, send it as
+# the request bearer to `fixture.invalid` or to an in-process httptest server, and assert that no
+# refusal output shows it, in plain or in JSON-escaped form. The value names itself as synthetic,
+# occurs in this one tracked file only, and authenticates nothing outside the test process. The
+# detector captures the 38-byte value of each `token = "…"` declaration (the other three uses in the
+# file are not captured). Rule-specific AND exact-path AND exact-Secret: a changed value on this
+# path, this value on another path, or any other rule on this path is still a finding.
+[[allowlists]]
+  description = "CLI refusal tests: a synthetic request bearer that the tests assert never appears in refusal output, not a credential"
+  targetRules = ["generic-api-key"]
+  condition = "AND"
+  paths = ['''^cmd/olivares/cli_error_safety_invalid_json_test\.go$''']
+  regexTarget = "secret"
+  regexes = ['''^sr-synthetic-effective-bearer-01234567$''']
+
+# ── 2026-10-02 · curl-auth-header · connectors/redact/shell_review_test.go:74,79
+# `olvs_abcdefgh` is the shell-review tests' synthetic operand in the shape of an Olivares token
+# (the `olvs_` prefix and eight letters). Two table rows give it to the review redactor inside curl
+# header arguments (`-H "Authorization: Bearer …"` and `-H "X-Api-Key: …"`) and assert that the
+# review shows a `[REDACTED…]` marker instead. The curl rule spans up to five lines, so each finding
+# starts on an earlier `curl` row; the captured Secret is this 13-byte value in both. Rule-specific
+# AND exact-path AND exact-Secret: another value in a curl header on this path, this value on
+# another path, or any other rule on this path is still a finding.
+[[allowlists]]
+  description = "shell-review redaction tests: a synthetic token-shaped operand in curl header rows whose redaction the tests assert, not a credential"
+  targetRules = ["curl-auth-header"]
+  condition = "AND"
+  paths = ['''^connectors/redact/shell_review_test\.go$''']
+  regexTarget = "secret"
+  regexes = ['''^olvs_abcdefgh$''']
+
+# ── 2026-10-02 · curl-auth-user · cmd/olivares/providerapproval_secret_test.go:50
+# A provider-approval test builds the command line of its request as
+# "curl --user user:" + secret + " https://example.invalid", where `secret` is a constant canary
+# that the test then asserts never reaches the ledger. The detector captures the Go concatenation
+# `user:" + secret + "`: source text around an identifier, not a value. Rule-specific AND
+# exact-path AND exact-Secret: a literal user and password on this path, this expression on another
+# path, or any other rule on this path is still a finding.
+[[allowlists]]
+  description = "provider-approval secret test: the captured text is a Go string concatenation around the test's canary, not a credential"
+  targetRules = ["curl-auth-user"]
+  condition = "AND"
+  paths = ['''^cmd/olivares/providerapproval_secret_test\.go$''']
+  regexTarget = "secret"
+  regexes = ['''^user:" \+ secret \+ "$''']

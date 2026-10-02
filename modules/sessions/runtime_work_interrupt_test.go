@@ -405,23 +405,26 @@ func TestInterruptForWorkPreEffectRefusalsAreRefusalsAndNotAmbiguities(t *testin
 		}
 	})
 
-	t.Run("a run with no protocol driver is told so, not stopped", func(t *testing.T) {
+	// A Claude Code run has no protocol driver session, but its stream-json stdin takes
+	// Claude's own interrupt control request (FH, 2026-10-01). Until then this case
+	// was the example of a run with no interruption; it is now interrupted, and still
+	// never stopped.
+	t.Run("a Claude run's turn is interrupted through its control request, never stopped", func(t *testing.T) {
 		t.Parallel()
 		fx := newRuntimeWorkControlFixture(t)
-		err := fx.m.InterruptForWork(context.Background(), fx.tenant, fx.runRef, fx.lease.Fence)
-		var re *runErr
-		if !errors.As(err, &re) || re.status != http.StatusConflict || asWorkError(err) != nil {
-			t.Fatalf("interrupt of a driverless run = %v, want a direct runtime conflict", err)
+		claudeProtocolStub(t, fx.proc.fakeProc, "success")
+		if err := fx.m.InterruptForWork(context.Background(), fx.tenant, fx.runRef, fx.lease.Fence); err != nil {
+			t.Fatalf("interrupt of a Claude run = %v, want it confirmed", err)
 		}
 		if got := fx.proc.stopCount(); got != 0 {
-			t.Fatalf("the refusal stopped the process %d time(s); interrupt never becomes stop", got)
+			t.Fatalf("the interrupt stopped the process %d time(s); interrupt never becomes stop", got)
 		}
 		rec, lerr := fx.m.loadRun(context.Background(), fx.tenant, fx.runRef)
 		if lerr != nil || rec.String(colState) != stateRunning {
-			t.Fatalf("the run must stay running after a refused interrupt: %v %q", lerr, rec.String(colState))
+			t.Fatalf("the run must stay running after an interrupt: %v %q", lerr, rec.String(colState))
 		}
 		if got := countNamedRunEvents(t, fx.st, fx.tenant, fx.runRef, workInterruptAmbiguous); got != 0 {
-			t.Fatalf("a driverless refusal recorded %d ambiguous event(s)", got)
+			t.Fatalf("a confirmed interrupt recorded %d ambiguous event(s)", got)
 		}
 	})
 }

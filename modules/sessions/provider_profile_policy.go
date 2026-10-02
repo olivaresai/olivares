@@ -22,12 +22,12 @@ import (
 // one sentence: *"The product governs WHICH profile launches and WHOSE home it
 // runs under, and then narrows nothing about what the child may do."*
 //
-// So the profile now declares it, and an UNDECLARED policy is deny-closed: the
-// child is launched with no built-in tools at all. That is a real product
-// decision with a real cost — a profile nobody configured can converse and cannot
-// code — and it is the only honest default for a plane whose whole subject is
-// governance. The operator declares what the agent may use, once, on the profile:
-// `olivares agent profile create --tools ...` and `agent profile update --tools`.
+// The profile could then declare it, and an UNDECLARED policy was deny-closed:
+// no built-in tools at all, so a profile nobody configured could converse and not
+// code. Since 2026-10-01 (ARCH TARGET §3, §5) what a session may do is governed by
+// its permission level, Olivares' tool-call hooks and the folder confinement, so an
+// undeclared profile gets the tool's default surface (effectiveTools). Declaring a
+// list still narrows it, and declaring none (`--tools ""`) still disables them all.
 //
 // ⛔ AND IT IS EXPRESSED ONLY WHERE THE LAUNCH FORM CAN EXPRESS IT. The Claude
 // form takes `--tools`, which is what the child's own init frame reports back. The
@@ -65,15 +65,26 @@ type sessionPolicy struct {
 }
 
 // effectiveTools is what the launch form must emit for this policy: the declared
-// list, or the EMPTY list when nothing was declared. There is no third answer —
-// "undeclared" and "declared none" produce the same argv on purpose, and they are
-// kept apart only so the operator can be told which one they are in.
+// list; the EMPTY list (every built-in tool disabled) when the profile declared
+// none; and the tool's own default surface when the profile declared nothing.
+//
+// Undeclared used to mean "no tools at all", and every session started from a
+// profile nobody had tuned could read nothing and run nothing (ARCH AS-IS row 3,
+// HU J5). What a session may do is decided by its permission level, Olivares'
+// tool-call hooks and the folder confinement, not by the profile (TARGET §3, §5):
+// "default" is Claude Code's documented value for its full built-in set.
 func (p sessionPolicy) effectiveTools() []string {
-	if !p.ToolsDeclared || len(p.Tools) == 0 {
+	if !p.ToolsDeclared {
+		return []string{defaultToolSurface}
+	}
+	if len(p.Tools) == 0 {
 		return []string{}
 	}
 	return append([]string(nil), p.Tools...)
 }
+
+// defaultToolSurface is the --tools value for the tool's full built-in set.
+const defaultToolSurface = "default"
 
 // validSessionTool bounds one tool name. It is deliberately a SHAPE and not a
 // closed set of today's tool names: the provider owns that vocabulary and adds to

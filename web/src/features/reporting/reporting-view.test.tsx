@@ -27,6 +27,11 @@ const { api, fetchReportMock, downloadBlobMock, authState } = vi.hoisted(
   }),
 )
 
+const edition = vi.hoisted(() => ({ community: false }))
+vi.mock('@/lib/hooks/use-edition', () => ({
+  useCommunityBuild: () => edition.community,
+  useEdition: () => (edition.community ? 'community' : undefined),
+}))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
@@ -83,6 +88,21 @@ beforeEach(() => {
 })
 
 describe('ReportingView', () => {
+  it('shows neither enterprise reports nor schedules on a Community build, and reads neither', async () => {
+    edition.community = true
+    try {
+      wrap(<ReportingView />)
+      expect(
+        await screen.findByText('Compliance Evidence Report'),
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/enterprise reports/i)).toBeNull()
+      expect(screen.queryByText(/enterprise capability/i)).toBeNull()
+      expect(api.listSchedules).not.toHaveBeenCalled()
+    } finally {
+      edition.community = false
+    }
+  })
+
   it('forbids a reader without the permission', () => {
     authState.can = () => false
     wrap(<ReportingView />)

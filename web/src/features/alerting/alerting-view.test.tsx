@@ -60,6 +60,10 @@ vi.mock('./api', async (importOriginal) => ({
 const { recordingApiMock } = vi.hoisted(() => ({
   recordingApiMock: { notice: vi.fn(), acknowledge: vi.fn() },
 }))
+// The notice reads only once server-info says Recording runs (EU-CB02): here it does.
+vi.mock('@/lib/hooks/use-server-info', () => ({
+  useServerInfo: () => ({ isSuccess: true, data: { modules_not_enabled: [] } }),
+}))
 vi.mock('@/features/recordings/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/recordings/api')>()),
   recordingApi: recordingApiMock,

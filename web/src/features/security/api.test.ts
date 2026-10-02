@@ -27,7 +27,7 @@ function sarifResponse(headers: Record<string, string> = {}) {
 
 beforeEach(() => {
   vi.restoreAllMocks()
-  useSessionStore.setState({ token: 'tok' } as never)
+  useSessionStore.setState({ csrfToken: 'tok' } as never)
   useTenantStore.setState({ activeTenant: 'acme' } as never)
 })
 
@@ -46,7 +46,7 @@ describe('securityApi.exportFindings', () => {
     // have to interpret.
     expect(query.has('status')).toBe(false)
     const headers = (init as RequestInit).headers as Headers
-    expect(headers.get('Authorization')).toBe('Bearer tok')
+    expect(headers.get('X-CSRF-Token')).toBe('tok')
     expect(headers.get('X-Olivares-Tenant')).toBe('acme')
   })
 
@@ -110,7 +110,7 @@ describe('securityApi.exportFindings', () => {
 describe('los parámetros de lista llegan a la URL, no sólo a la firma', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
-    useSessionStore.setState({ token: 't' } as never)
+    useSessionStore.setState({ csrfToken: 't' } as never)
     useTenantStore.setState({ activeTenant: 't1' } as never)
   })
 

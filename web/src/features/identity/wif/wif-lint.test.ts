@@ -96,7 +96,10 @@ describe('lintCelOverBroad', () => {
       narrowRule({ rule_id: 'fdrl_nosub', subject_prefix: '' }),
     ])
     expect(out).toHaveLength(1)
-    expect(out[0]).toMatchObject({ rule: 'cel-over-broad', severity: 'warning' })
+    expect(out[0]).toMatchObject({
+      rule: 'cel-over-broad',
+      severity: 'warning',
+    })
     expect(out[0].meta?.reason).toBe('over-broad-subject')
     expect(out[0].meta?.subject).toBe('empty')
   })
@@ -210,7 +213,8 @@ describe('lintDrift (declared-vs-actual reconciliation)', () => {
       (f) => f.subjectRef === 'fdrl_orphan' && f.meta?.reason === 'orphan-rule',
     )
     const orphanIssuer = out.find(
-      (f) => f.subjectRef === 'fdis_lonely' && f.meta?.reason === 'orphan-issuer',
+      (f) =>
+        f.subjectRef === 'fdis_lonely' && f.meta?.reason === 'orphan-issuer',
     )
     expect(orphanRule).toHaveLength(1)
     expect(orphanRule[0].severity).toBe('warning')

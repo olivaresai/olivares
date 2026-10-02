@@ -36,7 +36,7 @@ cubre algo, la página lo dice en lugar de dar a entender que sí lo hace.
 - **Las releases están firmadas y son verificables.** Firma, procedencia SLSA, SBOM y OpenVEX pueden todos
   [verificarse](/es/how-to/verify-a-release/). La verificación aún no funciona del todo sin red: las comprobaciones sin clave
   necesitan el material de raíz de confianza de Sigstore y el paso SLSA no tiene modo sin conexión. El producto incluye un
-  [bundle air-gap](/es/how-to/air-gap-install/). La última release etiquetada, **26.10.0**, está publicada con archivos firmados, paquetes nativos e imágenes de contenedor; las API, los esquemas y la superficie de módulos aún pueden cambiar antes de la 1.0.
+  [bundle air-gap](/es/how-to/air-gap-install/). La última release etiquetada, **26.10.1**, está publicada con archivos firmados, paquetes nativos e imágenes de contenedor; las API, los esquemas y la superficie de módulos aún pueden cambiar antes de la 1.0.
 
 ## Open core — qué es abierto vs enterprise
 
@@ -140,7 +140,7 @@ Trata la profundidad a nivel de módulo como **trabajo en curso** salvo que una 
   air-gapped; los modelos frontier brokered no.
 - **Las rutas de módulo son un contrato beta separado.** Los endpoints de módulo (por
   ejemplo, el grafo del access map y el drift) no forman parte del contrato estable de
-  67 rutas del núcleo; se publican como un documento **beta** separado: la
+  70 rutas del núcleo; se publican como un documento **beta** separado: la
   [referencia de rutas de módulo](/reference/api-beta/) (servida en
   `/openapi.beta.json`). Beta significa que las formas pueden cambiar con aviso, y el
   detalle de cada campo sigue viviendo en las interfaces tipadas del producto. La

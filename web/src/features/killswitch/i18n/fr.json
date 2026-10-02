@@ -1,44 +1,46 @@
 {
   "title": "Coupe-circuit",
-  "subtitle": "L’arrêt d’urgence du parc : un clic stoppe toutes les surfaces d’actuation gouvernées. L’activation est volontairement peu coûteuse ; la reprise exige deux comptes utilisateur distincts et un post-examen imposé.",
+  "subtitle": "Arrêt d'urgence de tous les agents d'IA de ce serveur, ou d'un seul. L'arrêt se fait en un clic ; le redémarrage exige l'approbation de deux comptes utilisateur différents, puis une revue.",
   "banner": {
-    "estateTitle": "PARC ARRÊTÉ",
-    "estateBody": "Toutes les surfaces d’actuation gouvernées refusent jusqu’à une réactivation en double contrôle.",
+    "estateTitle": "TOUS LES AGENTS ARRÊTÉS",
+    "estateBody": "Les agents ne peuvent pas agir tant que deux comptes utilisateur n'ont pas approuvé le redémarrage : les sessions se terminent, et les appels d'outils, MCP, planifications, voix, appels de modèles, déploiements et la livraison d'événements sont refusés.",
     "agentCount": "{{count}} arrêt d’agent actif",
     "agentCount_one": "{{count}} arrêt d’agent actif",
     "agentCount_many": "{{count}} arrêts d’agent actifs",
     "agentCount_other": "{{count}} arrêts d’agent actifs",
-    "agentBody": "Les agents arrêtés sont refusés sur toutes les surfaces d’actuation gouvernées qui portent une dimension d’agent.",
-    "none": "Aucun arrêt actif — le parc actionne normalement.",
+    "agentBody": "Les agents arrêtés ne peuvent pas agir : leurs appels d'outils, leurs appels MCP et leurs autres actions sont refusés.",
+    "none": "Rien n'est arrêté. Les sessions et les agents fonctionnent normalement.",
     "engagedBy": "Activé par",
-    "revoked": "{{count}} approbation d’actuation en attente révoquée",
-    "revoked_one": "{{count}} approbation d’actuation en attente révoquée",
-    "revoked_many": "{{count}} approbations d’actuation en attente révoquées",
-    "revoked_other": "{{count}} approbations d’actuation en attente révoquées"
+    "revoked": "{{count}} demande d'approbation en attente annulée",
+    "revoked_one": "{{count}} demande d'approbation en attente annulée",
+    "revoked_many": "{{count}} demandes d'approbation en attente annulées",
+    "revoked_other": "{{count}} demandes d'approbation en attente annulées"
   },
   "engage": {
     "title": "Arrêt d’urgence",
-    "caption": "Arrête le parc (ou un seul agent) sur les hooks, MCP, l’orchestration, la voix, les modèles, le déploiement et l’eventing, et révoque les approbations d’actuation en attente dans le périmètre. Aucune barrière d’approbation à l’activation — c’est la réactivation que protège le double contrôle.",
+    "caption": "Arrête tous les agents, ou un seul : les sessions en cours se terminent, et les appels d'outils, MCP, planifications et workflows, voix, appels de modèles, déploiements et la livraison d'événements sont refusés. Les demandes d'approbation en attente pour ces actions sont annulées. L'arrêt ne demande aucune approbation ; le redémarrage, si. La console, la piste d'audit et la connexion continuent de fonctionner.",
     "scope": "Périmètre",
-    "scopeEstate": "Tout le parc",
+    "scopeEstate": "Tous les agents",
     "scopeAgent": "Agent unique",
     "agentRef": "Agent",
     "agentRefHint": "UUID de l’agent ou référence externe. Une référence inconnue active tout de même — l’arrêt s’applique alors à cette chaîne exacte.",
     "reason": "Motif",
-    "reasonHint": "Obligatoire — qui le lira plus tard : le post-examen et le régulateur.",
+    "reasonHint": "Obligatoire : dites pourquoi. La revue de cet arrêt et les audits ultérieurs le lisent.",
     "button": "Arrêt d’urgence",
-    "confirmTitleEstate": "Arrêter tout le parc ?",
-    "confirmBodyEstate": "Toutes les surfaces d’actuation gouvernées refusent immédiatement et les approbations d’actuation en attente dans le périmètre sont révoquées. La réactivation exige l’approbation de deux comptes utilisateur distincts ainsi qu’un post-examen obligatoire — il n’existe aucun chemin de retour par accès d’urgence.",
+    "confirmTitleEstate": "Arrêter tous les agents ?",
+    "confirmBodyEstate": "Tous les agents s'arrêtent immédiatement : les sessions en cours se terminent, leurs actions sont refusées et les demandes d'approbation en attente pour ces actions sont annulées. Pour redémarrer, deux comptes utilisateur différents doivent approuver, et l'arrêt doit être revu ensuite. Aucune voie d'urgence ne permet de l'éviter.",
+    "confirmBodyEstateNoRestart": "Tous les agents s'arrêtent immédiatement : les sessions en cours se terminent, leurs actions sont refusées et les demandes d'approbation en attente pour ces actions sont annulées. Aucune voie d'urgence ne permet de l'éviter.",
     "confirmTitleAgent": "Arrêter cet agent ?",
-    "confirmBodyAgent": "L’agent est refusé sur toutes les surfaces d’actuation gouvernées qui portent une dimension d’agent, et ses approbations d’actuation en attente sont révoquées. La réactivation exige l’approbation de deux comptes utilisateur distincts ainsi qu’un post-examen obligatoire.",
+    "confirmBodyAgent": "Cet agent s'arrête immédiatement : ses actions sont refusées et ses demandes d'approbation en attente sont annulées. Pour le redémarrer, deux comptes utilisateur différents doivent approuver, et l'arrêt doit être revu ensuite.",
     "confirm": "Activer le coupe-circuit",
     "done": "Coupe-circuit activé",
     "doneBody": "L’arrêt {{id}} est actif. La réactivation exige un double contrôle.",
-    "alreadyStopped": "Un arrêt actif existe déjà pour ce périmètre"
+    "alreadyStopped": "Un arrêt actif existe déjà pour ce périmètre",
+    "restartNeedsAdmins": "Redémarrer exige l’approbation de deux autres comptes administrateur, et que l’un d’eux le revoie ensuite."
   },
   "stops": {
     "title": "Arrêts",
-    "caption": "Les lignes d’arrêt persistées — qui a activé, quand, le périmètre, le motif et tout le cycle de vie réactivation + post-examen. La ligne est l’unique source de vérité que chaque barrière d’actuation consulte en direct.",
+    "caption": "Chaque arrêt : qui l'a lancé, quand, ce qu'il couvre, pourquoi, et comment il a été levé et revu. Chaque action vérifie ces arrêts avant de s'exécuter.",
     "search": "Rechercher des arrêts…",
     "label": "Arrêts du coupe-circuit",
     "filterStatus": "Statut",
@@ -49,8 +51,8 @@
     "engaged": "Activé",
     "aalShort": "AAL{{aal}}",
     "aalHint": "Niveau d’assurance enregistré de la session ayant activé (analyse forensique ; l’activation elle-même n’est jamais conditionnée à l’AAL).",
-    "revoked": "Révoqué",
-    "revokedHint": "Approbations d’actuation en attente annulées par l’activation.",
+    "revoked": "Demandes annulées",
+    "revokedHint": "Demandes d'approbation en attente annulées par cet arrêt.",
     "status": "Statut",
     "byRule": "règle",
     "empty": "Aucun arrêt enregistré",
@@ -68,7 +70,7 @@
     "reviewed": "Examiné"
   },
   "scope": {
-    "estate": "Parc",
+    "estate": "Tous les agents",
     "agent": "Agent"
   },
   "source": {
@@ -77,7 +79,7 @@
   },
   "reenable": {
     "title": "Réactiver cet arrêt",
-    "body": "La réactivation n’est jamais unilatérale : elle ouvre une approbation en double contrôle que deux comptes utilisateur distincts doivent approuver (anti-auto-approbation, AAL3 par décision). Il n’existe volontairement aucun chemin d’accès d’urgence — le parc arrêté est l’état sûr. Le moteur impose des COMPTES distincts ; il ne peut pas prouver que deux comptes correspondent à deux personnes différentes. Le seuil de deux comptes est structurel ; l’exigence AAL3 dépend du niveau de risque en vigueur, qu’une politique d’approbation peut abaisser.",
+    "body": "Le redémarrage n'est jamais la décision d'une seule personne : deux comptes utilisateur différents doivent approuver, et personne ne peut approuver sa propre demande. Chaque approbateur doit utiliser une connexion renforcée (AAL3), sauf si une règle d'approbation abaisse le niveau de risque de cette action ; la règle des deux comptes s'applique même dans ce cas. Aucune voie d'urgence ne permet de l'éviter, car rester arrêté est l'état sûr. Le moteur vérifie que les comptes sont différents ; il ne peut pas vérifier qu'ils sont utilisés par deux personnes différentes.",
     "reason": "Note",
     "reasonHint": "Facultatif — joint à la demande de double contrôle pour les approbateurs.",
     "existingApproval": "Une approbation en double contrôle ({{id}}) est déjà ouverte pour cet arrêt. La vérification rend compte de son avancement et finalise la réactivation une fois que les deux comptes ont approuvé.",
@@ -89,7 +91,7 @@
     "progress": "{{approved}} sur {{required}} approbations",
     "goToApprovals": "Ouvrir la file des approbations",
     "done": "Coupe-circuit réactivé sous double contrôle",
-    "reviewDue": "L’actuation reprend — le post-examen obligatoire est maintenant requis.",
+    "reviewDue": "Les agents fonctionnent de nouveau. La revue de cet arrêt est maintenant due.",
     "blocked": "Réactivation bloquée",
     "dualControl": "Double contrôle requis"
   },
@@ -110,7 +112,7 @@
   },
   "guardian": {
     "title": "Règles de gardien",
-    "caption": "Confinement semi-autonome rédigé par l’opérateur sur le rail des constats. Une règle apparie les constats par type et par seuil de gravité et déclenche un confinement — immédiatement (auto) ou derrière une approbation humaine. Elle n’apparie jamais les propres constats du coupe-circuit (anti-boucle-de-rétroaction).",
+    "caption": "Réponses automatiques aux constats de sécurité. Une règle sélectionne les constats par type et gravité minimale et exécute une réponse, immédiatement ou après l'approbation d'une personne. Une règle ne réagit jamais aux constats du coupe-circuit lui-même, de sorte qu'un arrêt ne peut pas en déclencher un autre.",
     "newRule": "Nouvelle règle",
     "name": "Règle",
     "kinds": "Types de constat",
@@ -141,7 +143,7 @@
     "actionLabel": {
       "stop_agent": "Arrêter l’agent",
       "quarantine_nhi": "Mettre en quarantaine la NHI",
-      "stop_estate": "Arrêter le parc"
+      "stop_estate": "Arrêter tous les agents"
     },
     "modeLabel": {
       "auto": "Auto",

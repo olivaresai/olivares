@@ -7,8 +7,7 @@
 #
 #   docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 #
-# AND THEN, WITHOUT A SHELL — the image is distroless, so `docker exec … bash` has
-# nothing to run. These four are the whole operator surface:
+# Then finish setup and inspect the running service:
 #
 #   docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
 #   docker compose -f deploy/compose/docker-compose.yml logs olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'
@@ -75,6 +74,7 @@ services:
       # This changes no bind and no TLS posture: it only decides what the banner
       # prints and what the passkey relying party is derived from.
       OLIVARES_PUBLIC_URL: "${OLIVARES_PUBLIC_URL:-}"
+      HOME: /var/lib/olivares/home
     ports:
       # PUBLISHED ON EVERY HOST INTERFACE BY DEFAULT. This is a server: the console
       # answers over TLS with a self-signed first-boot certificate and no default
@@ -89,9 +89,9 @@ services:
       - "${OLIVARES_BIND:-0.0.0.0}:8443:8443"   # HTTPS: REST API + web UI
       - "${OLIVARES_BIND:-0.0.0.0}:8444:8444"   # gRPC: ControlPlane/ingest API
     volumes:
-      # Holds the audit signing key, TLS material and the SQLite store — persist it.
+      # Holds engine state, managed tools, account homes and session folders — persist it.
       - olivares-data:/var/lib/olivares
-    # --- hardening (mirrors the distroless image + docs/SECURITY-HARDENING.md) ---
+    # Agent dependencies are in the image; installations and caches stay in the volume.
     user: "65532:65532"
     read_only: true
     tmpfs:
@@ -110,7 +110,7 @@ services:
           cpus: "0.1"
           memory: 256M
     restart: unless-stopped
-    # Direct exec: the distroless image needs no shell, curl or wget. The probe
+    # Direct exec: readiness uses the engine binary. The probe
     # trusts the engine's own first-boot certificate from the persistent data
     # volume and returns 0 ready, 1 not-ready, 2 unable-to-measure.
     healthcheck:

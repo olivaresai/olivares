@@ -107,7 +107,7 @@ func (r observeResult) decode(into any) error {
 	}
 	if err := json.Unmarshal(r.raw, into); err != nil {
 		return exitcode.New(exitcode.Server,
-			fmt.Errorf("the control plane answered HTTP %d with a body this command could not parse as JSON: %w",
+			fmt.Errorf("the engine answered HTTP %d with a body this command could not parse as JSON: %w",
 				r.status, err))
 	}
 	return nil
@@ -201,9 +201,9 @@ func (c observeCall) do(cmd *cobra.Command) (observeResult, error) {
 
 	// LimitReader at cap+1 so an over-cap body is DETECTED rather than silently
 	// truncated into something that parses.
-	raw, rerr := io.ReadAll(io.LimitReader(resp.Body, maxObserveBodySize+1))
+	raw, rerr := readCLIHTTPResponse(resp, req, maxObserveBodySize+1, resp.StatusCode < 300, observeHTTPError)
 	if rerr != nil {
-		return observeResult{}, exitcode.New(exitcode.Server, fmt.Errorf("read %s response: %w", c.ns, rerr))
+		return observeResult{status: resp.StatusCode, raw: raw, contentType: resp.Header.Get("Content-Type")}, wrapCLIResponseReadError(rerr, fmt.Sprintf("read %s response", c.ns))
 	}
 	if len(raw) > maxObserveBodySize {
 		return observeResult{}, exitcode.New(exitcode.Server,
@@ -229,6 +229,10 @@ func (c observeCall) do(cmd *cobra.Command) (observeResult, error) {
 func observeHTTPError(status int, body []byte) error {
 	if status == http.StatusNotImplemented {
 		detail := observeErrorMessage(body)
+		// The engine names an enterprise seam it does not have: a Business feature.
+		if strings.Contains(strings.ToLower(detail), "enterprise") {
+			return notInEdition()
+		}
 		msg := "this capability is not wired in this build (HTTP 501); the rest of this namespace is unaffected"
 		if detail != "" {
 			msg = detail + " (HTTP 501); the rest of this namespace is unaffected"
@@ -292,7 +296,7 @@ type observePageFlags struct {
 // page again — a loop that never terminates and a script that believes it read
 // the whole list.
 func addObservePageFlags(cmd *cobra.Command, f *observePageFlags) {
-	cmd.Flags().IntVar(&f.limit, "limit", 0, "maximum rows to return in one page (0 = the engine's default)")
+	cmd.Flags().IntVar(&f.limit, "limit", 0, "maximum rows to return in one page (left out: the engine's default)")
 	cmd.Flags().StringVar(&f.cursor, "cursor", "", "continue from the cursor printed by the previous page")
 }
 
@@ -321,7 +325,7 @@ func observeTruncationNote(w io.Writer, page observePage, cmdPath string) error 
 	}
 	if page.Cursor == "" {
 		_, err := fmt.Fprintln(w,
-			"more rows exist but the control plane returned no cursor: this page is NOT the whole list")
+			"more rows exist but the engine returned no cursor: this page is NOT the whole list")
 		return err
 	}
 	_, err := fmt.Fprintf(w, "more rows exist — continue with: %s --cursor %s\n",

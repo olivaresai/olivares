@@ -17,6 +17,7 @@ const (
 	PackagePolicyReleaseArchiveV1   = "github-release-archive-v1"
 	LayoutIDOpenCodeArchiveV1       = "opencode-archive-v1"
 	LayoutIDOllamaArchiveV1         = "ollama-runtime-archive-v1"
+	LayoutIDCodexArchiveV1          = "codex-archive-v1"
 	maxReleaseArchiveBytes          = int64(2 << 30)
 	maxOllamaExpandedBytes          = int64(8 << 30)
 )
@@ -27,10 +28,24 @@ func releaseRepository(driver string) string {
 		return "anomalyco/opencode"
 	case DriverOllama:
 		return "ollama/ollama"
+	case DriverCodex:
+		return "openai/codex"
 	}
 	return ""
 }
+
+// releaseTagPrefix is how the repository names a release tag: Codex publishes
+// "rust-v<version>", the others "v<version>".
+func releaseTagPrefix(driver string) string {
+	if driver == DriverCodex {
+		return "rust-v"
+	}
+	return "v"
+}
 func releaseAssetName(driver, vendor string) string {
+	if driver == DriverCodex {
+		return "codex-" + vendor + ".tar.gz"
+	}
 	if driver == DriverOpenCode {
 		return "opencode-" + vendor + ".tar.gz"
 	}
@@ -40,6 +55,11 @@ func releaseArchiveLayout(driver string) ExpectedLayout {
 	layout := ExpectedLayout{ID: LayoutIDOpenCodeArchiveV1, Variant: driver, EntryPoint: "bin/" + driver, Members: []ExpectedMember{
 		{Path: "bin", Kind: MemberKindDirectory, Role: MemberRoleArchiveOnly, FinalMode: v2ModeExec},
 		{Path: "bin/" + driver, Kind: MemberKindRegular, Role: MemberRoleArchiveOnly, FinalMode: v2ModeExec}}, Limits: ExtractionLimits{MaxCompressedBytes: 128 << 20, MaxExpandedBytes: 512 << 20, MaxMembers: 2, MaxMemberBytes: 512 << 20}}
+	if driver == DriverCodex {
+		// One static binary per platform (about 290 MB expanded), placed as bin/codex.
+		layout.ID = LayoutIDCodexArchiveV1
+		layout.Limits = ExtractionLimits{MaxCompressedBytes: 256 << 20, MaxExpandedBytes: 1 << 30, MaxMembers: 2, MaxMemberBytes: 1 << 30}
+	}
 	if driver == DriverOllama {
 		layout.ID = LayoutIDOllamaArchiveV1
 		layout.Members = append(layout.Members, ExpectedMember{Path: "lib", Kind: MemberKindDirectory, Role: MemberRoleArchiveOnly, FinalMode: v2ModeExec}, ExpectedMember{Path: "lib/ollama", Kind: MemberKindDirectory, Role: MemberRoleArchiveOnly, FinalMode: v2ModeExec})
@@ -48,12 +68,15 @@ func releaseArchiveLayout(driver string) ExpectedLayout {
 	return layout
 }
 func releaseArchiveLayoutID(id string) bool {
-	return id == LayoutIDOpenCodeArchiveV1 || id == LayoutIDOllamaArchiveV1
+	return id == LayoutIDOpenCodeArchiveV1 || id == LayoutIDOllamaArchiveV1 || id == LayoutIDCodexArchiveV1
 }
 func validateReleaseArchiveLayout(layout ExpectedLayout) error {
 	driver := DriverOpenCode
-	if layout.ID == LayoutIDOllamaArchiveV1 {
+	switch layout.ID {
+	case LayoutIDOllamaArchiveV1:
 		driver = DriverOllama
+	case LayoutIDCodexArchiveV1:
+		driver = DriverCodex
 	}
 	if !reflect.DeepEqual(layout, releaseArchiveLayout(driver)) {
 		return refuse(KindInvalidRequest, "release archive layout must match its fixed bounded policy")
@@ -85,14 +108,15 @@ func (s SelectionV2) validateReleaseArchiveSelection() error {
 		return refuse(KindInvalidRequest, "release archive layout does not match its driver")
 	}
 	api := "https://api.github.com/repos/" + repo + "/releases/"
-	metadata := api + "tags/v" + s.Version
+	tag := releaseTagPrefix(s.Driver) + s.Version
+	metadata := api + "tags/" + tag
 	if s.Source.Checksums != (URLRef{State: URLStatePresent, URL: metadata}) {
 		return refuse(KindInvalidRequest, "checksum metadata must use the pinned official repository API")
 	}
 	if s.Source.Pointer.State != URLStatePresent || (s.Source.Pointer.URL != api+"latest" && s.Source.Pointer.URL != metadata) {
 		return refuse(KindInvalidRequest, "release pointer is outside the pinned official repository API")
 	}
-	pkg := "https://github.com/" + repo + "/releases/download/v" + s.Version + "/" + releaseAssetName(s.Driver, vendor)
+	pkg := "https://github.com/" + repo + "/releases/download/" + tag + "/" + releaseAssetName(s.Driver, vendor)
 	if s.Source.Package != (URLRef{State: URLStatePresent, URL: pkg}) {
 		return refuse(KindInvalidRequest, "archive URL is outside the selected official release")
 	}
@@ -123,6 +147,9 @@ func releaseArchivePath(raw string) (string, error) {
 func releaseArchiveMember(driver, name string) bool {
 	if driver == DriverOpenCode {
 		return name == "bin" || name == "bin/opencode"
+	}
+	if driver == DriverCodex {
+		return name == "bin" || name == "bin/codex"
 	}
 	return name == "bin" || name == "bin/ollama" || name == "lib" || name == "lib/ollama" || strings.HasPrefix(name, "lib/ollama/")
 }

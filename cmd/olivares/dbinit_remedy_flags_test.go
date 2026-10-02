@@ -26,14 +26,16 @@ func TestDBInitCarriesTheFlagsTheRefusalMessageQuotes(t *testing.T) {
 		t.Fatalf("db init subcommand not found: %v", err)
 	}
 	// Exactly the flags quoted in honestSeamMessage["cross_tenant_admin_pool_not_configured"].
-	for _, name := range []string{"superuser-dsn", "admin-role", "admin-password-file"} {
+	for _, name := range []string{"superuser-dsn", "data-dir", "install-directory-inventory"} {
 		if init.Flags().Lookup(name) == nil {
 			t.Errorf("`olivares db init` has no --%s, but the 501 refusal message tells operators to pass it", name)
 		}
 	}
-	// --admin-role takes a VALUE. The broken draft quoted it bare, which is why the
-	// type matters here and not just the name.
-	if f := init.Flags().Lookup("admin-role"); f != nil && f.Value.Type() != "string" {
-		t.Errorf("--admin-role is %s, not string: the quoted command passes it a role name", f.Value.Type())
+	// The quoted command passes values to the first two and none to the third. The
+	// broken first draft quoted a value flag bare, which is why the types matter.
+	for name, want := range map[string]string{"superuser-dsn": "string", "data-dir": "string", "install-directory-inventory": "bool"} {
+		if f := init.Flags().Lookup(name); f != nil && f.Value.Type() != want {
+			t.Errorf("--%s is %s, not %s, as the quoted command uses it", name, f.Value.Type(), want)
+		}
 	}
 }

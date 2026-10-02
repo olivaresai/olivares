@@ -15,6 +15,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -124,7 +126,8 @@ type FederationSealer interface {
 // construct a provider. Secrets are opened from the sealed store fields just
 // before the build and never persisted on this struct.
 type FederationParams struct {
-	Protocol string
+	AssuranceMapping *model.FederationAssuranceMapping
+	Protocol         string
 
 	OIDCIssuer       string
 	OIDCClientID     string
@@ -269,8 +272,12 @@ func (r ResolvedIdP) AllowsEmail(email string) bool {
 // field means "keep the sealed value already stored" (so editing config does not
 // force re-entering the client secret / SP key).
 type FederationConfigInput struct {
-	Protocol string
-	Enabled  bool
+	// Omission preserves the mapping; {} restores default lists and [] trusts none.
+	AssuranceMapping *model.FederationAssuranceMapping
+	// Omission preserves the label for existing clients; blank resets its default.
+	DisplayName *string
+	Protocol    string
+	Enabled     bool
 	// External provider metadata contains only an opaque immutable revision.
 	ExternalConnectorRef        string
 	ExternalConnectorGeneration int64
@@ -317,6 +324,8 @@ type FederationConfigInput struct {
 // FederationConfigView is the console's read shape: every field EXCEPT secrets,
 // plus non-secret hints and whether this build can activate SSO.
 type FederationConfigView struct {
+	AssuranceMapping  *model.FederationAssuranceMapping
+	DisplayName       string
 	Configured        bool
 	ProviderAvailable bool
 	// Alias is the IdP's scope-unique identifier (U4); "default" is the scope's
@@ -418,6 +427,55 @@ func NewFederationService(st store.Store, sealer FederationSealer, builder Feder
 	return &FederationService{st: st, sealer: sealer, builder: builder, fallback: fallback, multiIDP: multiIDP, cache: map[model.ID]cachedFederation{}}
 }
 
+// SelectableIdP carries only the display label and the selection needed to begin
+// browser SSO. Discovery never opens secrets or contacts an identity provider.
+type SelectableIdP struct {
+	Label string
+	Scope model.TenantID
+	Alias string
+}
+
+// SelectableProviders lists active OIDC/SAML choices this build can select.
+// A managed global row, including a disabled tombstone, supersedes env fallback.
+func (s *FederationService) SelectableProviders(ctx context.Context) []SelectableIdP {
+	var rows []model.FederationConfig
+	var err error
+	if s.multiIDP == nil {
+		rows, err = s.configsForScope(ctx, GlobalFederationScope)
+	} else {
+		err = s.st.AuthView(ctx, func(as store.AuthScope) error {
+			rows, err = drainList(ctx, as.FederationConfigs().List, model.Query{})
+			return err
+		})
+	}
+	if err != nil {
+		return nil
+	}
+	var result []SelectableIdP
+	globalManaged := false
+	for _, cfg := range rows {
+		if cfg.TargetTenantID == GlobalFederationScope && cfg.Alias == model.DefaultFederationAlias {
+			globalManaged = true
+		}
+		if cfg.Status != model.StatusActive || s.builder == nil ||
+			(cfg.Protocol != ProtocolOIDC && cfg.Protocol != ProtocolSAML) {
+			continue
+		}
+		if cfg.TargetTenantID == GlobalFederationScope && cfg.Alias != model.DefaultFederationAlias {
+			continue // global login selects only the deployment's default provider
+		}
+		label := cfg.DisplayName
+		if label == "" {
+			label = "Single sign-on"
+		}
+		result = append(result, SelectableIdP{Label: label, Scope: cfg.TargetTenantID, Alias: cfg.Alias})
+	}
+	if !globalManaged && (s.fallback.Protocol() == ProtocolOIDC || s.fallback.Protocol() == ProtocolSAML) {
+		result = append(result, SelectableIdP{Label: "Single sign-on", Scope: GlobalFederationScope, Alias: model.DefaultFederationAlias})
+	}
+	return result
+}
+
 // configsForScope drains EVERY IdP config row of a scope (U4 — a scope may hold
 // several, keyed by alias). The set is tiny, so a full drain is cheap; the page bound
 // is a runaway guard.
@@ -466,6 +524,8 @@ func (s *FederationService) loadConfig(ctx context.Context, scope model.TenantID
 // viewOf builds the console view (no secrets) of a stored config row.
 func (s *FederationService) viewOf(cfg model.FederationConfig) FederationConfigView {
 	return FederationConfigView{
+		AssuranceMapping: cfg.AssuranceMapping,
+		DisplayName:      cfg.DisplayName,
 		// A row with no protocol is a deleted/tombstoned config — report it as
 		// unconfigured (DeleteConfig clears the DEFAULT row rather than removing it, so the
 		// "off" state authoritatively overrides any env-configured fallback at login).
@@ -615,6 +675,12 @@ func (s *FederationService) putConfigIdP(ctx context.Context, actor Principal, s
 	}
 	next.OIDCIssuer = in.OIDCIssuer
 	next.OIDCClientID = in.OIDCClientID
+	if in.DisplayName != nil {
+		next.DisplayName = strings.TrimSpace(*in.DisplayName)
+	}
+	if in.AssuranceMapping != nil {
+		next.AssuranceMapping = in.AssuranceMapping
+	}
 	next.SAMLMetadataURL = in.SAMLMetadataURL
 	next.SAMLEntityID = in.SAMLEntityID
 	next.SAMLACSURL = in.SAMLACSURL
@@ -935,8 +1001,9 @@ func (s *FederationService) TestConfigIdP(ctx context.Context, scope model.Tenan
 	}
 	params := FederationParams{
 		Protocol: in.Protocol, OIDCIssuer: in.OIDCIssuer, OIDCClientID: in.OIDCClientID,
-		OIDCGroupsClaim: in.OIDCGroupsClaim,
-		SAMLMetadataURL: in.SAMLMetadataURL, SAMLEntityID: in.SAMLEntityID, SAMLACSURL: in.SAMLACSURL,
+		AssuranceMapping: existing.AssuranceMapping,
+		OIDCGroupsClaim:  in.OIDCGroupsClaim,
+		SAMLMetadataURL:  in.SAMLMetadataURL, SAMLEntityID: in.SAMLEntityID, SAMLACSURL: in.SAMLACSURL,
 		SAMLIDPSSOURL: in.SAMLIDPSSOURL, SAMLEmailAttr: in.SAMLEmailAttr, SAMLGroupsAttr: in.SAMLGroupsAttr,
 		// Same "blank = keep" rule as PutConfigIdP, for the same reason: the test builds a
 		// provider from the candidate config, so taking the cert verbatim while resolving the
@@ -945,6 +1012,9 @@ func (s *FederationService) TestConfigIdP(ctx context.Context, scope model.Tenan
 		// defect on our side.
 		SAMLSPCertPEM:     resolvePublic(in.SAMLSPCertPEM, existing.SAMLSPCertPEM),
 		SAMLSPSignCertPEM: resolvePublic(in.SAMLSPSignCertPEM, existing.SAMLSPSignCertPEM),
+	}
+	if in.AssuranceMapping != nil {
+		params.AssuranceMapping = in.AssuranceMapping
 	}
 	params.OIDCClientSecret, err = s.resolveSecret(ctx, scope, in.OIDCClientSecret, existing.OIDCClientSecretSealed)
 	if err != nil {
@@ -1326,8 +1396,9 @@ func (s *FederationService) build(ctx context.Context, cfg model.FederationConfi
 	}
 	params := FederationParams{
 		Protocol: cfg.Protocol, OIDCIssuer: cfg.OIDCIssuer, OIDCClientID: cfg.OIDCClientID,
-		OIDCGroupsClaim: cfg.OIDCGroupsClaim,
-		SAMLMetadataURL: cfg.SAMLMetadataURL, SAMLEntityID: cfg.SAMLEntityID, SAMLACSURL: cfg.SAMLACSURL,
+		AssuranceMapping: cfg.AssuranceMapping,
+		OIDCGroupsClaim:  cfg.OIDCGroupsClaim,
+		SAMLMetadataURL:  cfg.SAMLMetadataURL, SAMLEntityID: cfg.SAMLEntityID, SAMLACSURL: cfg.SAMLACSURL,
 		SAMLIDPSSOURL: cfg.SAMLIDPSSOURL, SAMLEmailAttr: cfg.SAMLEmailAttr, SAMLGroupsAttr: cfg.SAMLGroupsAttr,
 		SAMLSPCertPEM:     cfg.SAMLSPCertPEM,
 		SAMLSPSignCertPEM: cfg.SAMLSPSignCertPEM,
@@ -1447,6 +1518,25 @@ var ErrBadFederationConfig = errors.New("auth: invalid SSO configuration")
 // to choose between a bad rule and allow-all at login (it still fails closed if it
 // somehow sees one — defense in depth).
 func validateFederationInput(in FederationConfigInput) error {
+	if in.AssuranceMapping != nil {
+		for _, values := range [][]string{in.AssuranceMapping.AMR, in.AssuranceMapping.ACR, in.AssuranceMapping.SAMLContexts} {
+			if len(values) > 32 {
+				return fmt.Errorf("%w: assurance mapping permits at most 32 values per list", ErrBadFederationConfig)
+			}
+			for _, value := range values {
+				if value == "" || len(value) > 512 || !utf8.ValidString(value) ||
+					strings.TrimSpace(value) != value || strings.ContainsFunc(value, unicode.IsControl) || strings.Contains(value, "*") {
+					return fmt.Errorf("%w: assurance mapping needs exact nonempty values without wildcards or control characters", ErrBadFederationConfig)
+				}
+			}
+		}
+	}
+	if in.DisplayName != nil {
+		name := strings.TrimSpace(*in.DisplayName)
+		if !utf8.ValidString(name) || utf8.RuneCountInString(name) > 80 || strings.ContainsFunc(name, unicode.IsControl) {
+			return fmt.Errorf("%w: display name must contain at most 80 characters without control characters", ErrBadFederationConfig)
+		}
+	}
 	if in.Protocol != ProtocolExternal && (in.ExternalConnectorRef != "" || in.ExternalConnectorGeneration != 0 || in.ExternalIssuer != "") {
 		return fmt.Errorf("%w: external metadata requires an external provider", ErrBadFederationConfig)
 	}

@@ -508,10 +508,12 @@ func TestTOTPFailClosedWithoutSealer(t *testing.T) {
 	}
 }
 
-// The AAL3 rules mirror the passkey lifecycle: replacing an existing factor
-// and removing the factor both demand a stepped-up session.
+// Under the passkey step-up policy the rules mirror the passkey lifecycle:
+// replacing an existing factor and removing the factor both demand a
+// stepped-up session. (The default policy is in stepup_policy_test.go.)
 func TestTOTPStepUpRules(t *testing.T) {
 	f := newTOTPFixture(t)
+	setStepUpPolicy(t, f.ctx, f.st, auth.StepUpPasskey)
 	res, _ := f.loginAs(f.user.Email)
 	f.enrolFactor(res.Token)
 

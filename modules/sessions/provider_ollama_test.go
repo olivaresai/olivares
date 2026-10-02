@@ -5,8 +5,14 @@ package sessions
 
 import (
 	"context"
+	"encoding/json"
+	"net/http"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
+
+	"github.com/olivaresai/olivares/core/model"
 )
 
 func TestProviderOllamaNeedsNoVaultAndMintsOnlyCompatibleDrivers(t *testing.T) {
@@ -30,18 +36,24 @@ func TestProviderOllamaNeedsNoVaultAndMintsOnlyCompatibleDrivers(t *testing.T) {
 	if len(probe.keys) != 1 || probe.keys[0] != "" {
 		t.Fatal("probe received a credential")
 	}
-	for _, driver := range []string{"codex"} {
+	// The compatible drivers: Codex and OpenCode both consume the keyless local
+	// endpoint (<base_url>/v1) through their own launch config (HU-R14).
+	for _, driver := range []string{"codex", "opencode"} {
 		authority, env, err := m.mintFromProviderRecord(context.Background(), tenant, driver, rec.Ref)
 		if err != nil {
-			t.Fatal(err)
+			t.Fatalf("%s: %v", driver, err)
 		}
 
 		if authority.localModelEndpoint != "http://127.0.0.1:11434/v1" || len(env) != 0 || authority.Token != "" {
-			t.Fatalf("local endpoint authority: %+v %+v", authority, env)
+			t.Fatalf("%s local endpoint authority: %+v %+v", driver, authority, env)
 		}
 	}
-	if _, _, err := m.mintFromProviderRecord(context.Background(), tenant, "opencode", rec.Ref); err == nil {
-		t.Fatal("incompatible driver accepted")
+	// Every other driver is still refused: a keyless local endpoint never mints
+	// for Claude or Grok.
+	for _, driver := range []string{"claude", "grok"} {
+		if _, _, err := m.mintFromProviderRecord(context.Background(), tenant, driver, rec.Ref); err == nil {
+			t.Fatalf("incompatible driver %q accepted", driver)
+		}
 	}
 	endpoint := "http://localhost:11435"
 	updated, err := m.PatchProviderRecord(context.Background(), tenant, rec.Ref, ProviderRecordPatch{BaseURL: &endpoint})
@@ -89,5 +101,131 @@ func TestProviderOllamaCompilesBoundEndpointIntoCodexLaunch(t *testing.T) {
 		if item.Name == "OPENAI_API_KEY" || item.Name == "OPENAI_BASE_URL" {
 			t.Fatalf("invented credential/base-url env: %s", item.Name)
 		}
+	}
+}
+
+// ARCH driver table item 4 (2026-10-02): the OpenCode driver's inline config for the
+// bound local endpoint (HU-R14) reached LaunchEnv but was dropped as a profile-owned
+// name before the spawn, so the child never saw its local provider. The launch now
+// carries it; an OpenCode launch with no local model still carries none.
+func TestProviderOllamaCompilesBoundEndpointIntoOpenCodeLaunch(t *testing.T) {
+	probe := &fakeProbe{result: ProviderProbeResult{Models: []string{"qwen3:8b"}}}
+	m, _, tenant, _ := newRuntimeHarness(t, WithProviderDriver(NewOpenCodeDriver()), WithProviderProbe(probe))
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	rec := mustCreateRecord(t, m, tenant, CreateProviderRecordInput{Kind: "ollama", DisplayName: "Local", BaseURL: "http://127.0.0.1:11435"})
+	// An OpenCode launch needs the endpoint's models (FH 085): the probe lists them.
+	if _, err := m.TestProviderRecord(context.Background(), tenant, rec.Ref); err != nil {
+		t.Fatal(err)
+	}
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "opencode", ConfigHome: t.TempDir(), UserHome: t.TempDir(), AuthSource: AuthSourceManagedInjection, ProviderRecordRef: rec.Ref})
+	p := CreateRunParams{ProviderProfileRef: profile.Ref}
+	if err := m.resolveLaunchProfileInto(context.Background(), tenant, &p); err != nil {
+		t.Fatal(err)
+	}
+	cred, env, err := m.mintLaunchAuthority(context.Background(), tenant, "", p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := m.buildLaunchSpec(p, cred, WorkSessionCredential{}, CommunicationSessionCredential{}, "", nil, nil, env)
+	inline := ""
+	for _, item := range spec.Env {
+		if item.Name == envOpenCodeConfigContent {
+			inline = item.Value
+		}
+	}
+	if !strings.Contains(inline, `"baseURL":"http://127.0.0.1:11435/v1"`) || !strings.Contains(inline, `"olivares_ollama"`) {
+		t.Fatalf("OPENCODE_CONFIG_CONTENT in the actual launch = %q, want the bound local provider", inline)
+	}
+}
+
+// openCodeLocalLaunch binds an OpenCode profile to a local Ollama record, probes it
+// when models are given, and returns the launch's inline OpenCode config and error.
+type openCodeLocal struct {
+	m      *Module
+	tenant model.TenantID
+	record string
+}
+
+func openCodeLocalLaunch(t *testing.T, models []string, runModel string) (string, openCodeLocal, error) {
+	t.Helper()
+	probe := &fakeProbe{result: ProviderProbeResult{Models: models}}
+	m, _, tenant, _ := newRuntimeHarness(t, WithProviderDriver(NewOpenCodeDriver()), WithProviderProbe(probe))
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	rec := mustCreateRecord(t, m, tenant, CreateProviderRecordInput{Kind: "ollama", DisplayName: "GPU", BaseURL: "http://192.168.8.59:11434"})
+	if len(models) > 0 {
+		if _, err := m.TestProviderRecord(context.Background(), tenant, rec.Ref); err != nil {
+			t.Fatal(err)
+		}
+	}
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "opencode", ConfigHome: t.TempDir(), UserHome: t.TempDir(), AuthSource: AuthSourceManagedInjection, ProviderRecordRef: rec.Ref})
+	p := CreateRunParams{ProviderProfileRef: profile.Ref, Model: runModel}
+	at := openCodeLocal{m: m, tenant: tenant, record: rec.Ref}
+	if err := m.resolveLaunchProfileInto(context.Background(), tenant, &p); err != nil {
+		t.Fatal(err)
+	}
+	cred, env, err := m.mintLaunchAuthority(context.Background(), tenant, "", p)
+	if err != nil {
+		return "", at, err
+	}
+	spec := m.buildLaunchSpec(p, cred, WorkSessionCredential{}, CommunicationSessionCredential{}, "", nil, nil, env)
+	for _, item := range spec.Env {
+		if item.Name == envOpenCodeConfigContent {
+			return item.Value, at, nil
+		}
+	}
+	t.Fatal("no OPENCODE_CONFIG_CONTENT in the launch")
+	return "", at, nil
+}
+
+// FH 085 (fix C proof on a GPU Ollama, OpenCode 1.18.34): with the endpoint's models
+// unlisted, a session with no model ran on OpenCode's own hosted default
+// (opencode/big-pickle, OpenCode Zen) and the prompt left the server. A session
+// bound to the local endpoint now defaults to the local model, and no other
+// provider is enabled.
+func TestOpenCodeLocalLaunchWithNoModelGivenUsesTheLocalDefaultNeverAHostedOne(t *testing.T) {
+	inline, _, err := openCodeLocalLaunch(t, []string{"qwen3:8b", "llama3.2:1b"}, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var cfg struct {
+		Model            string   `json:"model"`
+		EnabledProviders []string `json:"enabled_providers"`
+		Provider         map[string]struct {
+			Options map[string]string `json:"options"`
+			Models  map[string]any    `json:"models"`
+		} `json:"provider"`
+	}
+	if err := json.Unmarshal([]byte(inline), &cfg); err != nil {
+		t.Fatalf("inline config %q: %v", inline, err)
+	}
+	if cfg.Model != "olivares_ollama/qwen3:8b" {
+		t.Fatalf("default model = %q, want the endpoint's first model", cfg.Model)
+	}
+	if !reflect.DeepEqual(cfg.EnabledProviders, []string{"olivares_ollama"}) || len(cfg.Provider) != 1 {
+		t.Fatalf("providers = %v enabled %v, want only the local one", cfg.Provider, cfg.EnabledProviders)
+	}
+	local := cfg.Provider["olivares_ollama"]
+	listed := make([]string, 0, len(local.Models))
+	for name := range local.Models {
+		listed = append(listed, name)
+	}
+	sort.Strings(listed)
+	if !reflect.DeepEqual(listed, []string{"llama3.2:1b", "qwen3:8b"}) || local.Options["baseURL"] != "http://192.168.8.59:11434/v1" {
+		t.Fatalf("local provider = %+v", local)
+	}
+	if strings.Contains(inline, "opencode/") {
+		t.Fatalf("the launch names a hosted OpenCode model: %s", inline)
+	}
+}
+
+// With no model listed, OpenCode would fall back to its hosted default: the launch is
+// refused before spawn, by name, and Codex on the same record is not affected.
+func TestOpenCodeLocalLaunchIsRefusedWhenTheEndpointListsNoModel(t *testing.T) {
+	_, at, err := openCodeLocalLaunch(t, nil, "")
+	if statusOf(err) != http.StatusConflict || !strings.Contains(err.Error(), `"GPU" lists no model`) {
+		t.Fatalf("launch on an endpoint with no listed model: %v", err)
+	}
+	if _, _, err := at.m.mintFromProviderRecord(context.Background(), at.tenant, "codex", at.record); err != nil {
+		t.Fatalf("codex on the same record: %v", err)
 	}
 }

@@ -51,6 +51,8 @@ const (
 	// a policy/update channel, so it gets its own domain so a portability signature
 	// can never be replayed as an update-manifest or DDIL bundle.
 	TagMemoryPortability = "olivares.memory-portability.v1\n"
+	// TagReporting is the neutral domain for signed report documents.
+	TagReporting = "olivares.reporting.v1\n"
 )
 
 // Tags is the registry of every domain tag in use. The uniqueness/no-prefix test in
@@ -61,6 +63,7 @@ var Tags = []string{
 	TagDDILBundle,
 	TagSecurityAdvisories,
 	TagMemoryPortability,
+	TagReporting,
 }
 
 // Signing/verification errors. These are integrity signals surfaced to the operator,

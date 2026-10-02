@@ -39,6 +39,7 @@ func (e *Engine) PlanV2(ctx context.Context, req RequestV2) (*PlanV2, error) {
 // place, inventory, required verification, executable modes, probe, receipt,
 // atomic publication. Error removes only this operation's staging.
 func (e *Engine) InstallV2(ctx context.Context, req RequestV2, approved *PlanV2, progress io.Writer) (*ReceiptV2, *PlanV2, error) {
+	defer e.verified.Forget(req.Driver)
 	if progress == nil {
 		progress = io.Discard
 	}
@@ -254,7 +255,7 @@ func (e *Engine) revalidateV2(ctx context.Context, root *os.Root, p PackageProvi
 	if rec.Driver != plan.Selection.Driver || rec.Version != plan.Selection.Version || rec.VendorPlatform != plan.Selection.VendorPlatform {
 		return nil, refuse(KindDamaged, "%s records a different driver, version or platform than the plan", plan.Selection.Destination.ReleaseDir)
 	}
-	if rec.PlanDigest != plan.Digest {
+	if rec.PlanDigest != plan.Digest && !sameReleaseOtherRoute(p, plan, rec.PlanDigest) {
 		return nil, refuse(KindDamaged, "%s receipt plan digest %s does not match the current plan %s", plan.Selection.Destination.ReleaseDir, short(rec.PlanDigest), short(plan.Digest))
 	}
 	if rec.VerificationKind == VerificationGitHubReleaseSHA256 {
@@ -281,6 +282,34 @@ func (e *Engine) revalidateV2(ctx context.Context, root *os.Root, p PackageProvi
 	_ = p
 	_ = ctx
 	return rec, nil
+}
+
+// sameReleaseOtherRoute reports whether digest is the plan for plan's release
+// selected through another route a person can type: its exact version, latest or
+// stable (CONTRACT, 09570b6b: Grok installed as stable, then asked for 1.0.46, was
+// called damaged). Those plans differ only in the channel, the requested version
+// and the pointer; the version, platform, source, package, checksum and layout
+// they bind are the same, and the rest of revalidation still checks the release
+// on disk against its receipt. An adapter that cannot name its pointers keeps the
+// exact digest match.
+func sameReleaseOtherRoute(p PackageProviderV2, plan *PlanV2, digest string) bool {
+	routes, ok := p.(releaseRoutes)
+	if !ok {
+		return false
+	}
+	for _, channel := range []string{ChannelExact, ChannelLatest, ChannelStable} {
+		alt := &PlanV2{Schema: plan.Schema, Selection: plan.Selection}
+		alt.Selection.Channel = channel
+		alt.Selection.RequestedVersion = channel
+		if channel == ChannelExact {
+			alt.Selection.RequestedVersion = plan.Selection.Version
+		}
+		alt.Selection.Source.Pointer = URLRef{State: URLStatePresent, URL: routes.routePointer(plan.Selection, channel)}
+		if ComputeDigestV2(alt) == digest {
+			return true
+		}
+	}
+	return false
 }
 
 type stagingAccess struct {

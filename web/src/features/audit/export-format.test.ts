@@ -31,11 +31,15 @@ function engineFormats(): string[] {
   }
   const params = doc.paths['/v1/audit/export']?.get?.parameters
   if (!params) {
-    throw new Error('the OpenAPI snapshot no longer describes GET /v1/audit/export')
+    throw new Error(
+      'the OpenAPI snapshot no longer describes GET /v1/audit/export',
+    )
   }
   const format = params.find((p) => p.name === 'format')
   if (!format?.schema?.enum?.length) {
-    throw new Error('the OpenAPI snapshot has no enum for the export format parameter')
+    throw new Error(
+      'the OpenAPI snapshot has no enum for the export format parameter',
+    )
   }
   return format.schema.enum
 }
@@ -46,7 +50,12 @@ describe('audit export formats', () => {
   })
 
   it('saves the JSON formats as .ndjson and the line formats as .log', () => {
-    const ndjson: ExportFormat[] = ['otlp', 'otlp_envelope', 'otlp_log_record', 'ocsf']
+    const ndjson: ExportFormat[] = [
+      'otlp',
+      'otlp_envelope',
+      'otlp_log_record',
+      'ocsf',
+    ]
     const text: ExportFormat[] = ['cef', 'leef', 'syslog']
     for (const f of ndjson) {
       expect(exportFilename(f)).toBe(`olivares-audit-${f}.ndjson`)

@@ -29,8 +29,14 @@ export interface ConversationItem {
   text?: string
   toolName?: string
   toolArgsSummary?: string
+  /** A command tool's (Bash) command, whole: the row shows it, not its JSON input. */
+  toolCommand?: string
+  /** The description the agent gave a command, when it gave one. */
+  toolDescription?: string
   toolResultSummary?: string
   toolId?: string
+  /** How long the tool has been running, from Claude Code's `tool_progress`. */
+  toolElapsedSeconds?: number
   model?: string
   inputTokens?: number
   outputTokens?: number
@@ -257,7 +263,9 @@ function isJsonRpc(frame: Record<string, unknown>): boolean {
   return (
     (typeof frame.method === 'string' &&
       (frame.id !== undefined || frame.params !== undefined)) ||
-    (frame.result !== undefined && frame.id !== undefined && !frame.type)
+    ((frame.result !== undefined || frame.error !== undefined) &&
+      frame.id !== undefined &&
+      !frame.type)
   )
 }
 
@@ -273,6 +281,135 @@ function jsonRpcSummary(frame: Record<string, unknown>): string {
  * items. Unknown input is kept as an `unknown` item: the mapper never drops a
  * line it cannot name.
  */
+/** One Codex app-server notification read as a conversation item, or null. */
+function codexItem(
+  frame: Record<string, unknown>,
+  raw: string,
+  n: number,
+): ConversationItem | null {
+  const method = asString(frame.method)
+  const params = asRecord(frame.params)
+  if (!method || !params) return null
+  if (method === 'item/completed') {
+    const item = asRecord(params.item)
+    const kind = asString(item?.type)
+    const id = asString(item?.id)
+    if (kind === 'agentMessage' && typeof item?.text === 'string') {
+      return {
+        kind: 'assistant',
+        id: nextId('assistant', n, id),
+        summary: truncateSummary(item.text),
+        text: item.text,
+        raw: [raw],
+      }
+    }
+    if (kind === 'userMessage') {
+      const content = Array.isArray(item?.content) ? item.content : []
+      const text = content
+        .map((c) => asString(asRecord(c)?.text) ?? '')
+        .join(' ')
+        .trim()
+      if (text)
+        return {
+          kind: 'operator',
+          id: nextId('operator', n, id),
+          summary: truncateSummary(text),
+          text,
+          raw: [raw],
+        }
+    }
+    if (kind === 'commandExecution') {
+      const command = asString(item?.command) ?? ''
+      return {
+        kind: 'tool',
+        id: nextId('tool', n, id),
+        summary: truncateSummary(command),
+        toolName: 'command',
+        toolArgsSummary: truncateSummary(command),
+        raw: [raw],
+      }
+    }
+    return null
+  }
+  if (method === 'turn/completed') {
+    return {
+      kind: 'result',
+      id: nextId('result', n),
+      summary: 'Turn completed',
+      raw: [raw],
+    }
+  }
+  return null
+}
+
+function progressSummary(name: string, seconds: number | undefined): string {
+  return seconds === undefined
+    ? `${name} running`
+    : `${name} running · ${Math.round(seconds)} s`
+}
+
+/**
+ * Claude Code reports a running tool every few seconds (`tool_progress`). It is the
+ * tool's clock, not a new event: it folds into its tool call. Progress for a tool
+ * this view has not seen (a sub-agent's) is one quiet line that keeps the latest time.
+ */
+function foldToolProgress(
+  items: ConversationItem[],
+  frame: Record<string, unknown>,
+  raw: string,
+): ConversationItem[] {
+  const toolId = asString(frame.tool_use_id)
+  const seconds = asNumber(frame.elapsed_time_seconds)
+  let at = -1
+  for (let i = items.length - 1; toolId && i >= 0; i--) {
+    if (items[i]?.kind === 'tool' && items[i]?.toolId === toolId) {
+      at = i
+      break
+    }
+  }
+  if (at >= 0) {
+    const item = items[at]!
+    return [
+      ...items.slice(0, at),
+      {
+        ...item,
+        toolElapsedSeconds: seconds ?? item.toolElapsedSeconds,
+        raw: [...item.raw, raw],
+      },
+      ...items.slice(at + 1),
+    ]
+  }
+  const name = asString(frame.tool_name) ?? 'Tool'
+  const last = items[items.length - 1]
+  if (
+    last?.kind === 'system' &&
+    last.systemKind === 'tool_progress' &&
+    last.toolId === toolId
+  ) {
+    return [
+      ...items.slice(0, -1),
+      {
+        ...last,
+        summary: progressSummary(name, seconds ?? last.toolElapsedSeconds),
+        toolElapsedSeconds: seconds ?? last.toolElapsedSeconds,
+        raw: [...last.raw, raw],
+      },
+    ]
+  }
+  return [
+    ...items,
+    {
+      kind: 'system',
+      id: nextId('system', items.length, toolId),
+      summary: progressSummary(name, seconds),
+      systemKind: 'tool_progress',
+      toolId,
+      toolElapsedSeconds: seconds,
+      raw: [raw],
+    },
+  ]
+}
+
 export function foldConversationLine(
   items: ConversationItem[],
   line: string,
@@ -307,6 +444,32 @@ export function foldConversationLine(
   }
 
   const type = asString(frame.type)
+
+  // Codex app-server frames are JSON-RPC notifications ({method, params}); the
+  // ones that carry the conversation are told like Claude's. Everything else
+  // stays an unknown item with its raw line, never dropped.
+  const codex = codexItem(frame, trimmed, items.length)
+  if (codex) return [...items, codex]
+
+  if (type === 'tool_progress') return foldToolProgress(items, frame, trimmed)
+
+  // `control_response` answers a control request the plane itself sent (the turn
+  // interrupt). Its outcome is the turn's own next frame and the person's toast, so
+  // it is no row of its own: it joins the line before it, and the inspector keeps it.
+  if (type === 'control_response') {
+    const last = items[items.length - 1]
+    if (last)
+      return [...items.slice(0, -1), { ...last, raw: [...last.raw, trimmed] }]
+    return [
+      {
+        kind: 'system',
+        id: nextId('system', 0),
+        summary: 'Control reply',
+        systemKind: 'control',
+        raw: [trimmed],
+      },
+    ]
+  }
 
   if (type === 'rate_limit_event') {
     return [
@@ -400,13 +563,23 @@ export function foldConversationLine(
       const added: ConversationItem[] = uses.map((use, i) => {
         const name = asString(use.name) ?? 'tool'
         const toolId = asString(use.id)
+        const input = asRecord(use.input)
+        const command = asString(input?.command)
         return {
           kind: 'tool' as const,
           id: nextId('tool', items.length + i, toolId ?? name),
           summary: name,
           toolName: name,
           toolId,
-          toolArgsSummary: summariseArgs(use.input),
+          toolArgsSummary: command
+            ? truncateSummary(command)
+            : summariseArgs(use.input),
+          ...(command
+            ? {
+                toolCommand: command,
+                toolDescription: asString(input?.description),
+              }
+            : {}),
           raw: [trimmed],
         }
       })
@@ -512,12 +685,36 @@ export function foldConversationLine(
   }
 
   if (isJsonRpc(frame)) {
+    // PROTOCOL BOOKKEEPING IS ONE QUIET LINE, NOT A CONVERSATION TURN. Replies and lifecycle
+    // notifications (initialize, thread/start, turn/start, token usage) read as a run of
+    // "Unrecognised frame" cards on every Codex session. Consecutive frames fold into one
+    // system line that keeps every raw line for the inspector; an error says what failed.
+    const error = asRecord(frame.error)
+    if (error) {
+      return [
+        ...items,
+        {
+          kind: 'system',
+          id: nextId('system', items.length, asString(String(frame.id ?? ''))),
+          summary: truncateSummary(
+            asString(error.message) ?? jsonRpcSummary(frame),
+          ),
+          systemKind: 'protocolError',
+          raw: [trimmed],
+        },
+      ]
+    }
+    const last = items[items.length - 1]
+    if (last?.kind === 'system' && last.systemKind === 'protocol') {
+      return [...items.slice(0, -1), { ...last, raw: [...last.raw, trimmed] }]
+    }
     return [
       ...items,
       {
-        kind: 'unknown',
-        id: nextId('unknown', items.length, asString(String(frame.id ?? ''))),
+        kind: 'system',
+        id: nextId('system', items.length, asString(String(frame.id ?? ''))),
         summary: jsonRpcSummary(frame),
+        systemKind: 'protocol',
         raw: [trimmed],
       },
     ]

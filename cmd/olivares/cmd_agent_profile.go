@@ -36,7 +36,7 @@ func newAgentProfileCmd() *cobra.Command {
 			"home and the child's user home.\n\n" +
 			"A profile is NOT a credential. `olivares provider` registers the credential and\n" +
 			"`olivares provider bind` joins the two.\n\n" +
-			"The homes must already exist on the machine that runs the control plane. The server\n" +
+			"The homes must already exist on the machine that runs the engine. The server\n" +
 			"validates them there and never creates a missing one: an empty fallback home would\n" +
 			"give a session a fresh provider identity nobody configured.",
 		Example: "  olivares agent profile ls\n" +
@@ -118,7 +118,7 @@ func newAgentProfileUpdateCmd() *cobra.Command {
 			if len(body) == 0 {
 				return sessionCLIUsage("name what to change: --name, --state, --auth-source, --provider, --unbind-provider, --tools or --permission-mode")
 			}
-			status, b, err := cfg.do(cmd.Context(), "PATCH", profilesPath+"/"+args[0], body)
+			status, b, err := cfg.do(cmd.Context(), "PATCH", profilesPath+"/"+args[0], body, 200)
 			if err != nil {
 				return err
 			}
@@ -140,7 +140,7 @@ func newAgentProfileUpdateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&authSource, "auth-source", "",
 		"provider_account_home, managed_injection, or \"\" to withdraw the authorization")
 	cmd.Flags().StringVar(&providerRef, "provider", "", "registered provider reference this profile's managed launches use")
-	cmd.Flags().BoolVar(&unbind, "unbind-provider", false, "clear the bound provider and return to the host-wide credential")
+	cmd.Flags().BoolVar(&unbind, "unbind-provider", false, "clear the bound provider record only (the auth source stays; provider bind --unbind also returns the profile to the tool's own sign-in)")
 	cmd.Flags().StringSliceVar(&tools, "tools", nil,
 		"the built-in tools sessions under this profile may use (repeatable or comma-separated; --tools \"\" declares NONE)")
 	cmd.Flags().StringVar(&permissionMode, "permission-mode", "",
@@ -181,7 +181,7 @@ func newAgentProfileRemoveCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "POST", profilesPath+"/"+args[0]+"/retire", nil)
+			status, b, err := cfg.do(cmd.Context(), "POST", profilesPath+"/"+args[0]+"/retire", nil, 200)
 			if err != nil {
 				return err
 			}
@@ -214,7 +214,7 @@ func newAgentProfileListCmd() *cobra.Command {
 		Short:   "List the provider profiles this tenant has registered",
 		Long: "ls shows each profile's reference, driver, state and bound provider. It shows no\n" +
 			"path: the homes are an authorized read of their own, so a list an operator leaves on\n" +
-			"screen does not publish the filesystem layout of the control-plane host.",
+			"screen does not publish the filesystem layout of the engine host.",
 		Example: "  olivares agent profile ls\n  olivares agent profile ls --state active -o json",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -225,7 +225,7 @@ func newAgentProfileListCmd() *cobra.Command {
 			if s := strings.TrimSpace(state); s != "" {
 				path += "?state=" + s
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", path, nil)
+			status, b, err := cfg.do(cmd.Context(), "GET", path, nil, 200)
 			if err != nil {
 				return err
 			}
@@ -261,7 +261,7 @@ func newAgentProfileGetCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", profilesPath+"/"+args[0], nil)
+			status, b, err := cfg.do(cmd.Context(), "GET", profilesPath+"/"+args[0], nil, 200)
 			if err != nil {
 				return err
 			}
@@ -289,7 +289,7 @@ func newAgentProfileCreateCmd() *cobra.Command {
 		providerRef                                    string
 		tools                                          []string
 		permissionMode                                 string
-		errNoProfile                                   = "the control plane did not return a provider profile"
+		errNoProfile                                   = "the engine did not return a provider profile"
 	)
 	cmd := &cobra.Command{
 		Use:   "create",
@@ -304,10 +304,10 @@ func newAgentProfileCreateCmd() *cobra.Command {
 			"                          registered provider named there\n\n" +
 			"With --provider the profile is bound in the same call, so deploying an agent is one\n" +
 			"step. The engine refuses a credential this driver cannot read.\n\n" +
-			"--tools declares what the agent may USE. It is deny-closed: a profile that declares\n" +
-			"no tools launches its sessions with no built-in tools at all, because the product\n" +
-			"governs which profile launches and must not then hand the child everything. Declare\n" +
-			"the surface you want (--tools Read,Grep,Edit) or declare none out loud (--tools \"\").\n" +
+			"--tools narrows what the agent may USE. A profile that declares no tools launches\n" +
+			"its sessions with the tool's default set, governed by the session's permission level,\n" +
+			"Olivares' tool-call hooks and its folder. Declare the surface you want\n" +
+			"(--tools Read,Grep,Edit) or declare none out loud (--tools \"\").\n" +
 			"A driver that negotiates its tools in its own protocol (codex, grok, opencode)\n" +
 			"refuses the flag rather than storing a policy nobody would apply.",
 		Example: "  olivares agent profile create --driver claude --config-home /home/ops/.claude --user-home /home/ops --name \"Claude (work)\"\n" +
@@ -341,7 +341,7 @@ func newAgentProfileCreateCmd() *cobra.Command {
 			if permissionMode != "" {
 				body["session_permission_mode"] = permissionMode
 			}
-			status, b, err := cfg.do(cmd.Context(), "POST", profilesPath, body)
+			status, b, err := cfg.do(cmd.Context(), "POST", profilesPath, body, 201)
 			if err != nil {
 				return err
 			}
@@ -359,15 +359,15 @@ func newAgentProfileCreateCmd() *cobra.Command {
 	}
 	cfg.addFlags(cmd)
 	cmd.Flags().StringVar(&driver, "driver", "", "official CLI this profile launches: claude, codex, grok or opencode")
-	cmd.Flags().StringVar(&configHome, "config-home", "", "absolute path of the CLI's configuration home on the control-plane host")
-	cmd.Flags().StringVar(&userHome, "user-home", "", "absolute path of the child's user home on the control-plane host")
+	cmd.Flags().StringVar(&configHome, "config-home", "", "absolute path of the CLI's configuration home on the engine host")
+	cmd.Flags().StringVar(&userHome, "user-home", "", "absolute path of the child's user home on the engine host")
 	cmd.Flags().StringVar(&name, "name", "", "your own label for this profile")
 	cmd.Flags().StringVar(&authSource, "auth-source", "",
 		"provider_account_home (the login saved in the homes) or managed_injection (a credential the engine supplies)")
 	cmd.Flags().StringVar(&providerRef, "provider", "", "registered provider reference to bind in the same call (needs --auth-source managed_injection)")
 	cmd.Flags().StringSliceVar(&tools, "tools", nil,
 		"the built-in tools sessions under this profile may use (repeatable or comma-separated; --tools \"\" declares NONE). "+
-			"Undeclared is deny-closed: the child launches with no built-in tools")
+			"Undeclared launches the tool's default set")
 	cmd.Flags().StringVar(&permissionMode, "permission-mode", "",
 		"permission mode those sessions run under: default | acceptEdits | plan | auto | dontAsk | bypassPermissions")
 	_ = cmd.MarkFlagRequired("driver")
@@ -486,7 +486,7 @@ var permissionModeChoices = []string{
 func profileToolsSentence(rec map[string]any) string {
 	declared, _ := rec["session_tools_declared"].(bool)
 	if !declared {
-		return "not declared — sessions launch with NO built-in tools (deny-closed); declare them with `agent profile update --tools`"
+		return "not declared — sessions launch with the tool's default set; narrow it with `agent profile update --tools`"
 	}
 	raw, _ := rec["session_tools"].([]any)
 	names := make([]string, 0, len(raw))

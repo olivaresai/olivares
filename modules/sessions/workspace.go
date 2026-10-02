@@ -9,6 +9,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"io/fs"
 	"net/http"
@@ -70,13 +71,15 @@ func (m *Module) createWorkspace(ctx context.Context, tenant model.TenantID, p C
 	}
 	// The root must be an absolute, existing directory; we store its CANONICAL real
 	// path so a later symlink swap cannot redirect the jail.
+	// The refusals name the folder as the person typed it (SC 09b item 7): the field
+	// name root_path means nothing on the New session form.
 	rootReal, err := filepath.EvalSymlinks(p.RootPath)
 	if err != nil {
-		return workspaceDTO{}, badRequest("root_path does not exist or is not resolvable")
+		return workspaceDTO{}, badRequest(fmt.Sprintf("The folder %s does not exist or cannot be opened on this server.", p.RootPath))
 	}
 	info, err := os.Stat(rootReal)
 	if err != nil || !info.IsDir() {
-		return workspaceDTO{}, badRequest("root_path is not a directory")
+		return workspaceDTO{}, badRequest(fmt.Sprintf("%s is a file, not a folder.", p.RootPath))
 	}
 
 	ref := string(model.NewID())
@@ -557,7 +560,7 @@ func validateWorkspace(p *CreateWorkspaceParams) error {
 		return badRequest("invalid mount_mode (want rw|ro)")
 	}
 	if p.DLPMode == "" {
-		p.DLPMode = dlpLabel
+		p.DLPMode = dlpOff
 	}
 	if p.DLPMode != dlpLabel && p.DLPMode != dlpDeny && p.DLPMode != dlpOff {
 		return badRequest("invalid dlp_mode (want label|deny|off)")

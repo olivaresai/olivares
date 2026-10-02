@@ -26,11 +26,13 @@ import (
 // exact callback URL to register at the IdP, and whether this build can activate
 // SSO (the enterprise provider builder).
 type ssoConfigDTO struct {
-	Configured        bool   `json:"configured"`
-	ProviderAvailable bool   `json:"provider_available"`
-	Protocol          string `json:"protocol,omitempty"`
-	Status            string `json:"status,omitempty"`
-	RedirectURI       string `json:"redirect_uri"`
+	AssuranceMapping  *model.FederationAssuranceMapping `json:"assurance_mapping,omitempty"`
+	DisplayName       string                            `json:"display_name,omitempty"`
+	Configured        bool                              `json:"configured"`
+	ProviderAvailable bool                              `json:"provider_available"`
+	Protocol          string                            `json:"protocol,omitempty"`
+	Status            string                            `json:"status,omitempty"`
+	RedirectURI       string                            `json:"redirect_uri"`
 
 	// TargetTenant is the scope this config governs (U6): "" for the
 	// deployment-wide global config, else the tenant id whose IdP this is. The
@@ -103,7 +105,9 @@ func toSSOConfigDTO(v auth.FederationConfigView, scope model.TenantID, redirectU
 		targetTenant = scope.String()
 	}
 	d := ssoConfigDTO{
-		Configured: v.Configured, ProviderAvailable: v.ProviderAvailable, Protocol: v.Protocol,
+		AssuranceMapping: v.AssuranceMapping,
+		DisplayName:      v.DisplayName,
+		Configured:       v.Configured, ProviderAvailable: v.ProviderAvailable, Protocol: v.Protocol,
 		Status: v.Status, RedirectURI: redirectURI, TargetTenant: targetTenant, Alias: v.Alias,
 		OIDCIssuer: v.OIDCIssuer, OIDCClientID: v.OIDCClientID, OIDCClientSecretHint: v.OIDCClientSecretHint,
 		SAMLMetadataURL: v.SAMLMetadataURL, SAMLEntityID: v.SAMLEntityID, SAMLACSURL: v.SAMLACSURL,
@@ -186,8 +190,10 @@ func (s *Server) ssoEnforcedBy(scope model.TenantID, alias string) string {
 // ssoConfigInput is the PUT/test payload. A blank secret field keeps the sealed
 // value already stored (so editing config never forces re-entering the secret).
 type ssoConfigInput struct {
-	Protocol string `json:"protocol"`
-	Enabled  bool   `json:"enabled"`
+	AssuranceMapping *model.FederationAssuranceMapping `json:"assurance_mapping,omitempty"`
+	DisplayName      *string                           `json:"display_name,omitempty"`
+	Protocol         string                            `json:"protocol"`
+	Enabled          bool                              `json:"enabled"`
 
 	OIDCIssuer       string `json:"oidc_issuer"`
 	OIDCClientID     string `json:"oidc_client_id"`
@@ -222,7 +228,9 @@ type ssoConfigInput struct {
 
 func (in ssoConfigInput) toParams() auth.FederationConfigInput {
 	return auth.FederationConfigInput{
-		Protocol: in.Protocol, Enabled: in.Enabled,
+		AssuranceMapping: in.AssuranceMapping,
+		DisplayName:      in.DisplayName,
+		Protocol:         in.Protocol, Enabled: in.Enabled,
 		OIDCIssuer: in.OIDCIssuer, OIDCClientID: in.OIDCClientID, OIDCClientSecret: in.OIDCClientSecret,
 		SAMLMetadataURL: in.SAMLMetadataURL, SAMLEntityID: in.SAMLEntityID, SAMLACSURL: in.SAMLACSURL,
 		SAMLIDPSSOURL: in.SAMLIDPSSOURL, SAMLEmailAttr: in.SAMLEmailAttr,
@@ -357,7 +365,7 @@ func (s *Server) handlePutSSOConfig(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	svc, ok := s.ssoService(w, r)
@@ -390,7 +398,7 @@ func (s *Server) handleDeleteSSOConfig(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	svc, ok := s.ssoService(w, r)
@@ -420,7 +428,7 @@ func (s *Server) handleTestSSOConfig(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	svc, ok := s.ssoService(w, r)

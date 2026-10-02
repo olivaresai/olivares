@@ -40,6 +40,15 @@ import type {
   PolicyKind,
 } from './types'
 
+const MAX_APPROVALS = 64
+const MAX_SECONDS = 31536000
+
+/** A count field holds nothing (the engine default) or a whole number from 0 to max. */
+function countInRange(value: string, max: number): boolean {
+  const v = value.trim()
+  return v === '' || (/^\d+$/.test(v) && Number(v) <= max)
+}
+
 interface DraftRule extends AbacRule {
   /** Stable client key so React keys survive reordering/removal. */
   _k: string
@@ -101,19 +110,6 @@ function asAbacSpec(spec: unknown): AbacSpec {
   return { rules: Array.isArray(rules) ? rules : [] }
 }
 
-function asApprovalSpec(spec: unknown): ApprovalSpec {
-  const s = (spec as ApprovalSpec | null) ?? {}
-  return {
-    required_approvals: s.required_approvals ?? 1,
-    expires_in_seconds: s.expires_in_seconds ?? 0,
-    escalate_in_seconds: s.escalate_in_seconds ?? 0,
-    match: {
-      action: s.match?.action ?? '',
-      subject_kind: s.match?.subject_kind ?? '',
-    },
-  }
-}
-
 function PolicyForm({
   policy,
   onClose,
@@ -138,10 +134,13 @@ function PolicyForm({
     })),
   )
 
-  // Approval draft.
-  const approvalSeed = asApprovalSpec(policy?.spec)
+  // Approval draft, seeded from the stored spec as it is. A count the engine left
+  // out stays empty on edit, so saving does not invent one.
+  const approvalSeed: ApprovalSpec = isEdit
+    ? ((policy?.spec as ApprovalSpec | null) ?? {})
+    : {}
   const [requiredApprovals, setRequiredApprovals] = useState(
-    String(approvalSeed.required_approvals ?? 1),
+    String(approvalSeed.required_approvals ?? (isEdit ? '' : 1)),
   )
   const [expiresIn, setExpiresIn] = useState(
     String(approvalSeed.expires_in_seconds ?? 0),
@@ -167,11 +166,19 @@ function PolicyForm({
           (r.permission?.trim() ||
             r.verb?.trim() ||
             r.resource?.trim() ||
-            r.principal_kind?.trim()) &&
+            r.principal_kind?.trim() ||
+            r.min_aal) &&
           true,
       ))
 
-  const valid = name.trim().length > 0 && !ruleWarn && rulesValid
+  const requiredOk = countInRange(requiredApprovals, MAX_APPROVALS)
+  const expiresOk = countInRange(expiresIn, MAX_SECONDS)
+  const escalateOk = countInRange(escalateIn, MAX_SECONDS)
+  const approvalValid =
+    kind !== 'approval' || (requiredOk && expiresOk && escalateOk)
+
+  const valid =
+    name.trim().length > 0 && !ruleWarn && rulesValid && approvalValid
 
   const mutation = usePrivilegedMutation<PolicyInput, PolicyDTO>({
     mutationFn: (input) =>
@@ -188,31 +195,33 @@ function PolicyForm({
     onDone: onClose,
   })
 
+  // Both branches start from the stored rule or spec and overlay only what this form
+  // edits, so a save never drops a field the engine returned. An undefined value is
+  // left out of the JSON body, which the engine reads as its default.
   function buildSpec(): AbacSpec | ApprovalSpec {
     if (kind === 'abac') {
       return {
-        rules: rules.map((r) => ({
+        rules: rules.map(({ _k, ...stored }) => ({
+          ...stored,
           deny: true,
-          ...(r.permission?.trim() ? { permission: r.permission.trim() } : {}),
-          ...(r.verb?.trim() ? { verb: r.verb.trim() } : {}),
-          ...(r.resource?.trim() ? { resource: r.resource.trim() } : {}),
-          ...(r.principal_kind?.trim()
-            ? { principal_kind: r.principal_kind.trim() }
-            : {}),
+          permission: stored.permission?.trim() || undefined,
+          verb: stored.verb?.trim() || undefined,
+          resource: stored.resource?.trim() || undefined,
+          principal_kind: stored.principal_kind?.trim() || undefined,
+          min_aal: stored.min_aal || undefined,
         })),
       }
     }
-    const match: ApprovalSpec['match'] = {
-      ...(matchAction.trim() ? { action: matchAction.trim() } : {}),
-      ...(matchSubjectKind.trim()
-        ? { subject_kind: matchSubjectKind.trim() }
-        : {}),
-    }
     return {
-      required_approvals: Number(requiredApprovals) || 0,
-      expires_in_seconds: Number(expiresIn) || 0,
-      escalate_in_seconds: Number(escalateIn) || 0,
-      ...(match.action || match.subject_kind ? { match } : {}),
+      ...approvalSeed,
+      required_approvals: Number(requiredApprovals) || undefined,
+      expires_in_seconds: Number(expiresIn) || undefined,
+      escalate_in_seconds: Number(escalateIn) || undefined,
+      match: {
+        ...approvalSeed.match,
+        action: matchAction.trim() || undefined,
+        subject_kind: matchSubjectKind.trim() || undefined,
+      },
     }
   }
 
@@ -316,10 +325,15 @@ function PolicyForm({
                   const warn =
                     looksLikeCredential(r.permission) ||
                     looksLikeCredential(r.resource)
+                  const id = `pol-rule-${r._k}`
+                  const setRule = (patch: Partial<DraftRule>) =>
+                    setRules((arr) =>
+                      arr.map((x, j) => (j === i ? { ...x, ...patch } : x)),
+                    )
                   return (
                     <div
                       key={r._k}
-                      className="flex flex-col gap-2 rounded-md border border-border bg-muted/40 p-2"
+                      className="flex flex-col gap-3 rounded-md border border-border bg-muted/40 p-3"
                     >
                       <div className="flex items-center justify-between">
                         <span className="text-caption font-medium text-danger">
@@ -337,108 +351,124 @@ function PolicyForm({
                           <Trash2 />
                         </Button>
                       </div>
-                      <Input
-                        aria-label={t('policyEditor.rulePermission')}
-                        placeholder={t(
-                          'policyEditor.rulePermissionPlaceholder',
-                        )}
-                        value={r.permission ?? ''}
-                        onChange={(e) =>
-                          setRules((arr) =>
-                            arr.map((x, j) =>
-                              j === i
-                                ? { ...x, permission: e.target.value }
-                                : x,
-                            ),
-                          )
-                        }
-                        aria-invalid={
-                          looksLikeCredential(r.permission) || undefined
-                        }
-                        mono
-                      />
-                      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-                        <Select
-                          value={r.verb || '__any__'}
-                          onValueChange={(v) =>
-                            setRules((arr) =>
-                              arr.map((x, j) =>
-                                j === i
-                                  ? { ...x, verb: v === '__any__' ? '' : v }
-                                  : x,
-                              ),
-                            )
-                          }
-                        >
-                          <SelectTrigger
-                            aria-label={t('policyEditor.ruleVerb')}
-                          >
-                            <SelectValue
-                              placeholder={t('policyEditor.ruleVerb')}
-                            />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__any__">
-                              {t('policyEditor.ruleAny')}
-                            </SelectItem>
-                            {ABAC_VERBS.map((v) => (
-                              <SelectItem key={v} value={v}>
-                                {v}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                      <Field
+                        label={t('policyEditor.rulePermission')}
+                        htmlFor={`${id}-permission`}
+                      >
                         <Input
-                          aria-label={t('policyEditor.ruleResource')}
-                          placeholder={t('policyEditor.ruleResource')}
-                          value={r.resource ?? ''}
+                          placeholder={t(
+                            'policyEditor.rulePermissionPlaceholder',
+                          )}
+                          value={r.permission ?? ''}
                           onChange={(e) =>
-                            setRules((arr) =>
-                              arr.map((x, j) =>
-                                j === i
-                                  ? { ...x, resource: e.target.value }
-                                  : x,
-                              ),
-                            )
+                            setRule({ permission: e.target.value })
                           }
                           aria-invalid={
-                            looksLikeCredential(r.resource) || undefined
+                            looksLikeCredential(r.permission) || undefined
                           }
                           mono
                         />
-                        <Select
-                          value={r.principal_kind || '__any__'}
-                          onValueChange={(v) =>
-                            setRules((arr) =>
-                              arr.map((x, j) =>
-                                j === i
-                                  ? {
-                                      ...x,
-                                      principal_kind: v === '__any__' ? '' : v,
-                                    }
-                                  : x,
-                              ),
-                            )
-                          }
+                      </Field>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                        <Field
+                          label={t('policyEditor.ruleVerb')}
+                          htmlFor={`${id}-verb`}
                         >
-                          <SelectTrigger
-                            aria-label={t('policyEditor.rulePrincipalKind')}
+                          <Select
+                            value={r.verb || '__any__'}
+                            onValueChange={(v) =>
+                              setRule({ verb: v === '__any__' ? '' : v })
+                            }
                           >
-                            <SelectValue
-                              placeholder={t('policyEditor.rulePrincipalKind')}
-                            />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__any__">
-                              {t('policyEditor.ruleAny')}
-                            </SelectItem>
-                            {ABAC_PRINCIPAL_KINDS.map((p) => (
-                              <SelectItem key={p} value={p}>
-                                {p}
+                            <SelectTrigger id={`${id}-verb`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__any__">
+                                {t('policyEditor.ruleAny')}
                               </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                              {ABAC_VERBS.map((v) => (
+                                <SelectItem key={v} value={v}>
+                                  {v}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </Field>
+                        <Field
+                          label={t('policyEditor.ruleResource')}
+                          htmlFor={`${id}-resource`}
+                        >
+                          <Input
+                            value={r.resource ?? ''}
+                            onChange={(e) =>
+                              setRule({ resource: e.target.value })
+                            }
+                            aria-invalid={
+                              looksLikeCredential(r.resource) || undefined
+                            }
+                            mono
+                          />
+                        </Field>
+                        <Field
+                          label={t('policyEditor.rulePrincipalKind')}
+                          htmlFor={`${id}-principal`}
+                        >
+                          <Select
+                            value={r.principal_kind || '__any__'}
+                            onValueChange={(v) =>
+                              setRule({
+                                principal_kind: v === '__any__' ? '' : v,
+                              })
+                            }
+                          >
+                            <SelectTrigger id={`${id}-principal`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__any__">
+                                {t('policyEditor.ruleAny')}
+                              </SelectItem>
+                              {ABAC_PRINCIPAL_KINDS.map((p) => (
+                                <SelectItem key={p} value={p}>
+                                  {p}
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </Field>
+                        <Field
+                          label={t('policyEditor.ruleMinAal')}
+                          htmlFor={`${id}-min-aal`}
+                        >
+                          <Select
+                            value={r.min_aal ? String(r.min_aal) : '__none__'}
+                            onValueChange={(v) =>
+                              setRule({
+                                min_aal:
+                                  v === '__none__' ? undefined : Number(v),
+                              })
+                            }
+                          >
+                            <SelectTrigger id={`${id}-min-aal`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__none__">
+                                {t('policyEditor.ruleMinAalNone')}
+                              </SelectItem>
+                              <SelectItem value="1">
+                                {t('policyEditor.aal1')}
+                              </SelectItem>
+                              <SelectItem value="2">
+                                {t('policyEditor.aal2')}
+                              </SelectItem>
+                              <SelectItem value="3">
+                                {t('policyEditor.aal3')}
+                              </SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </Field>
                       </div>
                       {warn && (
                         <p role="alert" className="text-caption text-danger">
@@ -457,13 +487,15 @@ function PolicyForm({
               <Field
                 label={t('policyEditor.requiredApprovals')}
                 htmlFor="pol-required"
+                error={
+                  !requiredOk &&
+                  t('policyEditor.countError', { max: MAX_APPROVALS })
+                }
                 description={t('policyEditor.requiredApprovalsHint')}
               >
                 <Input
                   id="pol-required"
-                  type="number"
-                  min={0}
-                  max={64}
+                  inputMode="numeric"
                   value={requiredApprovals}
                   onChange={(e) => setRequiredApprovals(e.target.value)}
                   mono
@@ -472,13 +504,15 @@ function PolicyForm({
               <Field
                 label={t('policyEditor.expiresInSeconds')}
                 htmlFor="pol-expires"
+                error={
+                  !expiresOk &&
+                  t('policyEditor.countError', { max: MAX_SECONDS })
+                }
                 description={t('policyEditor.expiresInSecondsHint')}
               >
                 <Input
                   id="pol-expires"
-                  type="number"
-                  min={0}
-                  max={31536000}
+                  inputMode="numeric"
                   value={expiresIn}
                   onChange={(e) => setExpiresIn(e.target.value)}
                   mono
@@ -487,13 +521,15 @@ function PolicyForm({
               <Field
                 label={t('policyEditor.escalateInSeconds')}
                 htmlFor="pol-escalate"
+                error={
+                  !escalateOk &&
+                  t('policyEditor.countError', { max: MAX_SECONDS })
+                }
                 description={t('policyEditor.escalateInSecondsHint')}
               >
                 <Input
                   id="pol-escalate"
-                  type="number"
-                  min={0}
-                  max={31536000}
+                  inputMode="numeric"
                   value={escalateIn}
                   onChange={(e) => setEscalateIn(e.target.value)}
                   mono

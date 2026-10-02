@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"log/slog"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -16,6 +17,27 @@ import (
 
 	"github.com/olivaresai/olivares/core/store"
 )
+
+func TestQuickstartVerboseSurvivesFullLogFile(t *testing.T) {
+	full, err := os.OpenFile("/dev/full", os.O_WRONLY, 0)
+	if os.IsNotExist(err) {
+		t.Skip("/dev/full is unavailable on this platform")
+	}
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer full.Close()
+	var terminal bytes.Buffer
+	writer := &engineLogBuffer{console: &terminal}
+	if err := writer.flushTo(full); err != nil {
+		t.Fatal(err)
+	}
+	log := slog.New(engineLogHandler(writer, slog.LevelInfo))
+	log.Error("diagnostic after log filesystem filled")
+	if !strings.Contains(terminal.String(), "diagnostic after log filesystem filled") {
+		t.Fatal("full log file suppressed verbose terminal diagnostics")
+	}
+}
 
 // Measured 2026-09-18: ONE first hour produced TWO log formats from one
 // binary — Go's default handler without --quiet and a TextHandler with it — and the
@@ -129,8 +151,8 @@ func TestAnOrdinaryFirstBootIsNotAnErrorOnTheCommunicationStore(t *testing.T) {
 	}
 
 	// And the other direction: a proof with ANY other blocker is NOT awaiting
-	// activation, so it keeps the ERROR it deserves. The store whose optional
-	// status capability is hidden is exactly that case.
+	// activation, so requested activation still reports a warning. The store whose
+	// optional status capability is hidden is exactly that case.
 	hidden := newCommunicationStoreProofWitness(
 		hiddenStatusStore{staged.st}, nil, staged.sm, staged.listOrgs, func() bool { return true }, time.Now)
 	if err := hidden.ReconcileAndVerify(ctx); err == nil {

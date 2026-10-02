@@ -272,6 +272,10 @@ func (m *Module) handleImportMemory(w http.ResponseWriter, r *http.Request, mc a
 		return
 	}
 	r.Body = http.MaxBytesReader(w, r.Body, maxImportBytes)
+	// check-json-decoders: exempt — a memory-portability bundle is a SIGNED JSONL
+	// stream by contract: one manifest document, then one entry per line until
+	// io.EOF, all under the signature and digest verified before any write.
+	// Single-document decoding would reject a valid bundle.
 	dec := json.NewDecoder(r.Body)
 	dec.DisallowUnknownFields()
 

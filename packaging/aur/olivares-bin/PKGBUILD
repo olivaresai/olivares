@@ -10,7 +10,7 @@
 # its sha256 from that release's signed checksums.txt.
 
 pkgname=olivares-bin
-pkgver=26.10.0
+pkgver=26.10.1
 pkgrel=1
 pkgdesc='Open, self-hosted AI governance control plane (release binary)'
 arch=('x86_64')

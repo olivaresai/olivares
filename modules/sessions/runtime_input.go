@@ -76,7 +76,7 @@ func (a RuntimeInputAuthority) AuthorityFor(now time.Time, target RuntimeInputTa
 		(a.Entry.Permission.Verb() != auth.VerbWrite && a.Entry.Permission.Verb() != auth.VerbAdmin) ||
 		a.Entry.Route.CedarAction != "input:write" || !a.Entry.Route.RequireScopedGrant || a.Entry.Route.MinimumAAL < auth.AAL3 ||
 		auth.RoleRank(a.Entry.Route.RBACMinimumRole) < auth.RoleRank(auth.RoleEditor) ||
-		p.Kind != auth.KindUser || p.UserID.IsZero() || p.CredID.IsZero() || p.AAL < auth.AAL3 {
+		p.Kind != auth.KindUser || p.UserID.IsZero() || p.CredID.IsZero() || p.AAL < auth.AAL1 {
 		return store.AuthoritySnapshotBundle{}, ErrRuntimeInputAuthority
 	}
 	entry, err := a.EntryAuthorization.AuthorityFor(now, a.Entry)

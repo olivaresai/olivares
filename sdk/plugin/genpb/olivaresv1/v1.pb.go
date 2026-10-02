@@ -1492,8 +1492,11 @@ type Event struct {
 	// (IngestEnvelope) deliberately has no such field.
 	SourceRegistration *SourceRegistration `protobuf:"bytes,11,opt,name=source_registration,json=sourceRegistration,proto3" json:"source_registration,omitempty"`
 	InventoryMember    *InventoryMember    `protobuf:"bytes,12,opt,name=inventory_member,json=inventoryMember,proto3" json:"inventory_member,omitempty"`
-	unknownFields      protoimpl.UnknownFields
-	sizeCache          protoimpl.SizeCache
+	// Internal engine bus only: the sessions host committed the managed projection.
+	// Collector Observation/IngestEnvelope deliberately has no such field.
+	SessionProjection bool `protobuf:"varint,13,opt,name=session_projection,json=sessionProjection,proto3" json:"session_projection,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *Event) Reset() {
@@ -1625,6 +1628,13 @@ func (x *Event) GetInventoryMember() *InventoryMember {
 		return x.InventoryMember
 	}
 	return nil
+}
+
+func (x *Event) GetSessionProjection() bool {
+	if x != nil {
+		return x.SessionProjection
+	}
+	return false
 }
 
 type isEvent_Payload interface {
@@ -3180,7 +3190,7 @@ const file_olivaresv1_v1_proto_rawDesc = "" +
 	"\x10collection_start\x18\x05 \x01(\v2).olivares.sdk.v1.InventoryCollectionStartH\x00R\x0fcollectionStart\x12Y\n" +
 	"\x11collection_member\x18\x06 \x01(\v2*.olivares.sdk.v1.InventoryCollectionMemberH\x00R\x10collectionMember\x12Y\n" +
 	"\x11collection_report\x18\a \x01(\v2*.olivares.sdk.v1.InventoryCollectionReportH\x00R\x10collectionReportB\t\n" +
-	"\apayload\"\xbe\x04\n" +
+	"\apayload\"\xed\x04\n" +
 	"\x05Event\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\tR\x02id\x12\x12\n" +
 	"\x04type\x18\x02 \x01(\tR\x04type\x12\x16\n" +
@@ -3194,7 +3204,8 @@ const file_olivaresv1_v1_proto_rawDesc = "" +
 	"\x06metric\x18\n" +
 	" \x01(\v2\x1d.olivares.sdk.v1.MetricSampleH\x00R\x06metric\x12T\n" +
 	"\x13source_registration\x18\v \x01(\v2#.olivares.sdk.v1.SourceRegistrationR\x12sourceRegistration\x12K\n" +
-	"\x10inventory_member\x18\f \x01(\v2 .olivares.sdk.v1.InventoryMemberR\x0finventoryMemberB\t\n" +
+	"\x10inventory_member\x18\f \x01(\v2 .olivares.sdk.v1.InventoryMemberR\x0finventoryMember\x12-\n" +
+	"\x12session_projection\x18\r \x01(\bR\x11sessionProjectionB\t\n" +
 	"\apayload\"\xa4\x01\n" +
 	"\x12SourceRegistration\x12\x1b\n" +
 	"\tsource_id\x18\x01 \x01(\tR\bsourceId\x12'\n" +

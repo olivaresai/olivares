@@ -9,7 +9,7 @@ draft: false
 ---
 
 :::note[Опубликованные имена пакетов]
-Выпуск 26.10.0 на GitHub публикует артефакты `.deb`, `.rpm` и `.apk` для `amd64` и
+Выпуск 26.10.1 на GitHub публикует артефакты `.deb`, `.rpm` и `.apk` для `amd64` и
 `arm64`, вместе с `checksums.txt`, `checksums.txt.sig` и `checksums.txt.pem`. Команды
 ниже используют буквальные имена `amd64` этого выпуска; на 64-битном ARM-узле замените
 `amd64` на `arm64`. Устанавливайте из этих проверенных артефактов выпуска.
@@ -79,13 +79,13 @@ Init Alpine по умолчанию — **OpenRC**, не systemd. Для кон�
 
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_26.10.0_linux_amd64.deb
+sudo dpkg -i olivares_26.10.1_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_26.10.0_linux_amd64.rpm
+sudo rpm -Uvh olivares_26.10.1_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_26.10.0_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk
 ```
 
 Установка **создаёт системного пользователя и группу `olivares`** (оболочка

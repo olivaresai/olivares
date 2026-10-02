@@ -12,7 +12,6 @@ import { useNavigate } from '@tanstack/react-router'
 import { Network } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { SelfAuditNotice } from '@/features/_intel'
 import { StatusBadge } from '@/components/data/badges'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { Badge } from '@/components/ui/badge'
@@ -174,7 +173,6 @@ export function NhiRosterTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <SelfAuditNotice />
       <DataTable
         columns={columns}
         data={rows}

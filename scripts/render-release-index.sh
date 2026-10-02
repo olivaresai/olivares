@@ -76,7 +76,7 @@ jq -e '."$id" == "https://olivares.ai/schemas/release-index-v1.json"' "$SCHEMA" 
 [ -n "$OUT" ] || blind "--out is required"
 [ -d "$(dirname -- "$OUT")" ] || blind "output directory does not exist: $(dirname -- "$OUT")"
 [[ "$REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || blind "repository must be OWNER/REPO"
-[[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || blind "version must be MAJOR.MINOR.PATCH"
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || blind "version must be YY.M or YY.M.N"
 case "$CHANNEL" in stable | security | lts) ;; *) blind "unsupported channel: ${CHANNEL:-<empty>}" ;; esac
 case "$STATE" in candidate | published) ;; *) blind "unsupported index state: ${STATE:-<empty>}" ;; esac
 [ "${#images[@]}" -gt 0 ] || blind "at least one immutable image reference is required"
@@ -198,7 +198,7 @@ if ! jq -S -n \
 	--arg schema 'olivares.ai/release-index/v1' \
 	--arg state "$STATE" \
 	--arg version "$VERSION" \
-	--arg tag "v$VERSION" \
+	--arg tag "$(if [[ "${VERSION%%.*}" -lt 26 ]] || { [[ "${VERSION%%.*}" -eq 26 ]] && [[ "${VERSION#*.}" =~ ^[1-9](\.|$) ]]; }; then printf 'v%s' "$VERSION"; else printf '%s' "$VERSION"; fi)" \
 	--arg commit "$commit" \
 	--arg channel "$CHANNEL" \
 	--arg repository "$REPOSITORY" \

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, Play, XCircle } from 'lucide-react'
 import { type ReactNode, useState } from 'react'
@@ -8,7 +9,7 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { Field } from '@/components/ui/field'
 import { KvList, KvRow } from '@/components/ui/kv'
@@ -162,7 +163,10 @@ export function InstanceDetailSheet({
           ) : query.error instanceof ApiError && query.error.isForbidden ? (
             <ForbiddenState />
           ) : query.error || !instance ? (
-            <ErrorState retry={() => query.refetch()} />
+            <QueryErrorState
+              error={query.error}
+              retry={() => query.refetch()}
+            />
           ) : (
             <div className="flex flex-col gap-5">
               {/* Governance action bar (admin only, gated by current state). */}

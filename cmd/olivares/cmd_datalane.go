@@ -114,10 +114,11 @@ func (c datalaneClient) do(cmd *cobra.Command, method, path string, query url.Va
 		return nil, 0, exitcode.Or(exitcode.Server, redactCoded(err, resolved.Token))
 	}
 	defer func() { _ = resp.Body.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxDatalaneResponseSize+1))
+	raw, err := readCLIHTTPResponse(resp, req, maxDatalaneResponseSize+1, datalaneOK(resp.StatusCode), func(status int, body []byte) error {
+		return datalaneHTTPError(c.what, status, body)
+	})
 	if err != nil {
-		return nil, resp.StatusCode, exitcode.New(exitcode.Server,
-			fmt.Errorf("read %s response: %w", c.what, err))
+		return raw, resp.StatusCode, wrapCLIResponseReadError(err, fmt.Sprintf("read %s response", c.what))
 	}
 	if len(raw) > maxDatalaneResponseSize {
 		return nil, resp.StatusCode, exitcode.New(exitcode.Server,
@@ -162,10 +163,11 @@ func (c datalaneClient) doRawBody(cmd *cobra.Command, method, path string, body 
 		return nil, 0, exitcode.Or(exitcode.Server, redactCoded(err, resolved.Token))
 	}
 	defer func() { _ = resp.Body.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxDatalaneResponseSize+1))
+	raw, err := readCLIHTTPResponse(resp, req, maxDatalaneResponseSize+1, datalaneOK(resp.StatusCode), func(status int, body []byte) error {
+		return datalaneHTTPError(c.what, status, body)
+	})
 	if err != nil {
-		return nil, resp.StatusCode, exitcode.New(exitcode.Server,
-			fmt.Errorf("read %s response: %w", c.what, err))
+		return raw, resp.StatusCode, wrapCLIResponseReadError(err, fmt.Sprintf("read %s response", c.what))
 	}
 	// The +1 on the LimitReader is what makes an overflow DETECTABLE, and the
 	// comparison is what makes it REPORTED. Without it the sentinel byte is read
@@ -356,7 +358,7 @@ func datalaneRenderList(cmd *cobra.Command, what string, raw []byte, emptyNote s
 				"more rows: this is one page — re-run with --cursor %s\n", safeCLIValue(page.Cursor, ""))
 		} else {
 			fmt.Fprintln(cmd.ErrOrStderr(),
-				"more rows: the control plane reported has_more with no cursor, so this page cannot be continued")
+				"more rows: the engine reported has_more with no cursor, so this page cannot be continued")
 		}
 	}
 	return nil

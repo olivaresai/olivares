@@ -5,10 +5,45 @@
 package main
 
 import (
+	"bytes"
 	"io"
 	"log/slog"
+	"os"
 	"strings"
+	"sync"
 )
+
+// engineLogBuffer retains startup records until boot resolves the data directory.
+// Opening the file after boot preserves configuration validation before writes.
+type engineLogBuffer struct {
+	mu      sync.Mutex
+	pending bytes.Buffer
+	writer  io.Writer
+	console io.Writer
+}
+
+func (b *engineLogBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if b.console != nil {
+		// Terminal diagnostics must still arrive when the log filesystem is full.
+		_, _ = b.console.Write(p)
+	}
+	if b.writer != nil {
+		return b.writer.Write(p)
+	}
+	return b.pending.Write(p)
+}
+
+func (b *engineLogBuffer) flushTo(w io.Writer) error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	if _, err := b.pending.WriteTo(w); err != nil {
+		return err
+	}
+	b.writer = w
+	return nil
+}
 
 // enginelog.go gives the engine ONE log format.
 //
@@ -98,6 +133,31 @@ func engineLogLevel(getenv func(string) string, quiet bool) (slog.Level, string)
 func installEngineLogger(w io.Writer, getenv func(string) string, quiet bool) *slog.Logger {
 	level, _ := engineLogLevel(getenv, quiet)
 	log := slog.New(engineLogHandler(w, level))
+	slog.SetDefault(log)
+	return log
+}
+
+// cliProcess is set by runMain: it is true in the real `olivares` process and false
+// when tests drive the command tree, which keep slog.Default() and its captures.
+var cliProcess bool
+
+// cliBootLogger is the logger for a CLI command that opens this host's store by
+// booting the engine (audit, eventing, secrets, sources, dr …). The boot's startup
+// report belongs to `serve`, not to the command's answer: measured 2026-10-01,
+// `eventing subscriptions ls` printed about 80 INFO/WARN lines before "no
+// subscriptions". So these commands show only `floor` and above on stderr, unless
+// OLIVARES_LOG_LEVEL asks for a level explicitly. In the real process the logger
+// also becomes the process default, because the store code logs through the
+// package-level slog; such a command is short-lived and serves nothing.
+func cliBootLogger(floor slog.Level) *slog.Logger {
+	if !cliProcess {
+		return slog.Default()
+	}
+	level := floor
+	if strings.TrimSpace(os.Getenv(envLogLevel)) != "" {
+		level, _ = engineLogLevel(os.Getenv, false)
+	}
+	log := slog.New(engineLogHandler(os.Stderr, level))
 	slog.SetDefault(log)
 	return log
 }

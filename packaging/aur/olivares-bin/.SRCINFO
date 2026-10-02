@@ -1,11 +1,11 @@
 pkgbase = olivares-bin
 	pkgdesc = Open, self-hosted AI governance control plane (release binary)
-	pkgver = 26.10.0
+	pkgver = 26.10.1
 	pkgrel = 1
 	url = https://olivares.ai
 	arch = x86_64
 	license = AGPL-3.0-only
-	provides = olivares=26.10.0
+	provides = olivares=26.10.1
 	conflicts = olivares
 	options = !strip
 	options = !debug
@@ -13,7 +13,7 @@ pkgbase = olivares-bin
 	source = olivares-tmpfiles.conf
 	sha256sums = 764f423d1407aed39273615f494133b1572be792013a7e7961fc096a1a20f3de
 	sha256sums = 6195db3366a4e196dd81262c260c5f36cd0c57f90e745018c003e198c7aca038
-	source_x86_64 = https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.tar.gz
+	source_x86_64 = https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.tar.gz
 	sha256sums_x86_64 = 85d1873266ec940734578b5c3f92cdba79eb53453f7ca715b7bf6f7d1093a1c2
 
 pkgname = olivares-bin

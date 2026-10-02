@@ -66,7 +66,7 @@ export function SecondFactorPanel({ challenge, onDone, onRestart }: Props) {
     onSuccess: (res) => {
       setCode('')
       setRecoveryCodes(res.recovery_codes ?? [])
-      if (res.token) setCompleted(res)
+      if (res.csrf_token) setCompleted(res)
     },
     onError: (err) => setError(failureMessage(err, t)),
   })

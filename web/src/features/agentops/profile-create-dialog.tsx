@@ -32,7 +32,17 @@ import './i18n'
  * name. The server's `operable` is the legacy enablement flag, reported after
  * registration; launch requirements are a later point read.
  */
-const DRIVER_SUGGESTIONS = ['claude', 'codex', 'grok']
+// The drivers this engine launches, by the tool's own name. Claude Code is the default.
+const DRIVERS: [string, string][] = [
+  ['claude', 'Claude Code'],
+  ['codex', 'Codex'],
+  ['grok', 'Grok'],
+  ['opencode', 'OpenCode'],
+]
+const selectClass =
+  'h-9 w-full min-w-0 rounded-md border border-border bg-background px-3 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+// The tool's own login, kept in its own folders, unless the operator picks otherwise.
+const DEFAULT_AUTHENTICATION = { source: 'provider_account_home', provider: '' }
 
 /**
  * ProfileCreateDialog — registers a provider profile for homes that ALREADY EXIST on
@@ -70,16 +80,13 @@ function ProfileCreateForm({
   const { t } = useTranslation('agentops')
   const { activeTenant, can } = useAuth()
   const boundary = useAuthBoundary()
-  const listId = useId()
+  const driverId = useId()
 
-  const [driver, setDriver] = useState('')
+  const [driver, setDriver] = useState('claude')
   const [configHome, setConfigHome] = useState('')
   const [userHome, setUserHome] = useState('')
   const [displayName, setDisplayName] = useState('')
-  const [authentication, setAuthentication] = useState({
-    source: '',
-    provider: '',
-  })
+  const [authentication, setAuthentication] = useState(DEFAULT_AUTHENTICATION)
   const providers = useProfileProviders(
     driver,
     open && authentication.source === 'managed_injection',
@@ -89,11 +96,11 @@ function ProfileCreateForm({
     providers.records.some((r) => r.provider_ref === authentication.provider)
 
   const reset = () => {
-    setDriver('')
+    setDriver('claude')
     setConfigHome('')
     setUserHome('')
     setDisplayName('')
-    setAuthentication({ source: '', provider: '' })
+    setAuthentication(DEFAULT_AUTHENTICATION)
   }
 
   const create = usePrivilegedMutation<void, ProviderProfileDTO>({
@@ -123,11 +130,25 @@ function ProfileCreateForm({
     },
   })
 
-  const ready =
-    driver.trim() !== '' &&
-    configHome.trim() !== '' &&
-    userHome.trim() !== '' &&
-    bindingReady
+  // With the tool's own login both homes may stay empty: the server uses the tool's
+  // standard folders. With an API key from Providers they may too: the server makes
+  // the profile's own (provider_profile.go managedProfileHomes, HU-R16). Otherwise,
+  // or once one is named, both are named.
+  const homesOptional =
+    authentication.source === 'provider_account_home' ||
+    authentication.source === 'managed_injection'
+  const homesNamed = configHome.trim() !== '' && userHome.trim() !== ''
+  const homesEmpty = configHome.trim() === '' && userHome.trim() === ''
+  const homesReady = homesNamed || (homesOptional && homesEmpty)
+  const ready = driver.trim() !== '' && homesReady && bindingReady
+  // What keeps Register disabled, said next to it rather than left to be guessed.
+  const missing = !bindingReady
+    ? t('profiles.create.missingProvider')
+    : !homesReady
+      ? homesOptional
+        ? t('profiles.create.missingHomesOrNone')
+        : t('profiles.create.missingHomes')
+      : null
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -147,33 +168,36 @@ function ProfileCreateForm({
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          <Field
-            label={t('profiles.create.driver')}
-            description={t('profiles.create.driverHint')}
-          >
-            <Input
+          <Field label={t('profiles.create.driver')} htmlFor={driverId}>
+            <select
+              id={driverId}
+              className={selectClass}
               value={driver}
               onChange={(e) => {
                 setDriver(e.target.value)
                 setAuthentication((value) => ({ ...value, provider: '' }))
               }}
-              placeholder={t('profiles.create.driverPlaceholder')}
-              list={listId}
-              autoComplete="off"
-              mono
-            />
+            >
+              {DRIVERS.map(([key, label]) => (
+                <option key={key} value={key}>
+                  {label}
+                </option>
+              ))}
+            </select>
           </Field>
-          <datalist id={listId}>
-            {DRIVER_SUGGESTIONS.map((d) => (
-              <option key={d} value={d} />
-            ))}
-          </datalist>
           <ProfileAuthenticationFields
             value={authentication}
             onChange={setAuthentication}
             providers={providers}
             disabled={create.isPending}
           />
+          {homesOptional && (
+            <p className="text-caption text-muted-foreground">
+              {authentication.source === 'managed_injection'
+                ? t('profiles.create.homesOptionalManaged')
+                : t('profiles.create.homesOptional')}
+            </p>
+          )}
           <Field
             label={t('profiles.create.configHome')}
             description={t('profiles.create.configHomeHint')}
@@ -210,6 +234,11 @@ function ProfileCreateForm({
               ? t('profiles.create.environmentKnown', { env: localEnvironment })
               : t('profiles.create.environmentUnknown')}
           </p>
+          {missing && !create.isPending ? (
+            <p role="status" className="text-caption text-muted-foreground">
+              {missing}
+            </p>
+          ) : null}
           <DialogFooter>
             <Button
               type="button"

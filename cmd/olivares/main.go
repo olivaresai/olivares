@@ -25,6 +25,7 @@ import (
 	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/release"
 	"github.com/olivaresai/olivares/core/webui"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 // Build metadata, overridable at link time, e.g.:
@@ -39,20 +40,33 @@ var (
 )
 
 func main() {
+	// A session child is started through this binary re-executed as the
+	// confinement helper; it never reaches the CLI.
+	if len(os.Args) > 1 && os.Args[1] == confine.HelperArg {
+		os.Exit(confine.RunHelper(os.Args[2:]))
+	}
 	os.Exit(runMain())
 }
 
 func runMain() int {
+	cliProcess = true
 	// ExecuteC (not Execute) so the resolved command is available to the
 	// classifier: it is the only way to classify the failures cobra reports
 	// past every hook, and the rejected invocations it reports as success.
-	code, printable := classifyOutcome(newRootCmd().ExecuteC())
+	cmd, err := newRootCmd().ExecuteC()
+	// A server that asked to restart itself has drained and closed: start the
+	// same binary again in this process (selfrestart.go).
+	var restart *selfRestartError
+	if errors.As(err, &restart) {
+		err = fmt.Errorf("the engine could not restart itself: %w", reexecSelf(restart.env))
+	}
+	code, printable := classifyOutcome(cmd, err)
 	if printable != nil {
 		// SilenceErrors (set on the root) stops cobra from printing, so surface
 		// the message here — otherwise every command failure exits 1 with NO
 		// explanation (e.g. the release-build `license sign` hint would never
 		// reach the operator).
-		fmt.Fprintln(os.Stderr, "Error:", printable)
+		_ = printCLIErrorAs(os.Stderr, printable, cmd != nil && outputIsJSON(cmd))
 	}
 	return code
 }
@@ -107,28 +121,14 @@ func newRootCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "olivares",
 		Short: "Olivares AI — self-hosted engine for enterprise AI",
-		Long: "olivares is the single self-hosted binary for Olivares AI: integrate, manage and\n" +
-			"secure the AI running in your enterprise — one ground truth: Claude Code at the deepest level, Codex and Grok Build alongside.\n" +
-			"Run `olivares quickstart` for a guided, secure-by-default first run.\n\n" +
-			"Exit codes:\n" +
-			"  0  success\n" +
-			"  1  generic error\n" +
-			"  2  usage error (unknown flag or bad arguments); `doctor` and `readyz`\n" +
-			"     also use 2 when a required local check cannot be measured\n" +
-			"  3  authentication/authorization rejected\n" +
-			"  4  entity not found\n" +
-			"  5  conflict with current state\n" +
-			"  6  server or network failure\n" +
-			"  7  degraded (`status` on an engine reporting a FAULT — an install\n" +
-			"     that merely has optional capabilities unconfigured exits 0 and\n" +
-			"     names them; `security check` on an affected version)\n" +
-			"  8  indeterminate — the answer could not be established (`security\n" +
-			"     check` on a build that declares no version). NOT a clean result:\n" +
-			"     treat it as unanswered, not as safe",
+		Long: "olivares runs and governs AI coding agents (Claude Code, Codex, Grok Build, OpenCode)\n" +
+			"on your own server: one binary for the engine, its console and this CLI.\n" +
+			"Run `olivares` alone to see this installation's state and the next step.\n" +
+			"Exit codes: olivares help exit-codes",
 		Example: "  olivares quickstart\n" +
-			"  olivares auth login --server https://plane.example.com --token \"$OLIVARES_TOKEN\"\n" +
-			"  olivares status\n" +
-			"  olivares agent session ls -o json",
+			"  olivares login\n" +
+			"  olivares tool install claude\n" +
+			"  olivares session start . \"explain this repository\"",
 		// Wire the stamped build metadata into cobra so `olivares --version`
 		// exists and reports the SAME provenance as the `version` subcommand
 		// (E2 traceability; the full key/FIPS report stays in `version`).
@@ -154,7 +154,7 @@ func newRootCmd() *cobra.Command {
 	root.PersistentFlags().VarP(&outputFlagValue{value: "text"}, "output", "o",
 		"global output format: text or json (report commands keep json unless -o is given)")
 	_ = root.RegisterFlagCompletionFunc("output", completeOutput)
-	root.AddCommand(newQuickstartCmd(), newFirstBootCmd(), newSetupCmd(), newConfigCmd(), newAuthCmd(), newDBCmd(), newMigrateCmd(), newVersionCmd(), newStatusCmd(), newReadyzCmd(), newDoctorCmd(), newWebUIFilesCmd(), newServeCmd(), newCollectorCmd(), newLicenseCmd(), newUpgradeCmd(), newUninstallCmd(), newReleaseCmd(), newAuditCmd(), newDDILCmd(), newDRCmd(), newOpenAPICmd(), newClaudeHookCmd(), newCodexHookCmd(), newGrokHookCmd(), newHookPEPCmd(), newKeysCmd(), newEvalsCmd(), newAgentCmd(), newProviderCmd(), newWorkCmd(), newMessageCmd(), newCodexCmd(), newGrokCmd(), newMCPCmd(), newThreatIntelCmd(), newHooksCmd(), newSecretsCmd(), newSourcesCmd(), newConnectorCmd(), newSuperadminCmd(), newEventingCmd(), newSecurityCmd(), newFindingsCmd(), newComplianceCmd(), newSupportCmd(), newCompletionCmd(root), newCommandsCmd(), newFirstPartyBinsCmd(), newExtractCmd(), newTokensCmd(), newUsersCmd(), newMembersCmd(), newTenantsCmd(), newGovernanceCmd(), newPolicyCmd(), newCapabilitiesCmd())
+	root.AddCommand(newQuickstartCmd(), newFirstBootCmd(), newSetupCmd(), newConfigCmd(), newAuthCmd(), newDBCmd(), newMigrateCmd(), newVersionCmd(), newStatusCmd(), newReadyzCmd(), newDoctorCmd(), newWebUIFilesCmd(), newServeCmd(), newCollectorCmd(), newLicenseCmd(), newUpgradeCmd(), newUninstallCmd(), newReleaseCmd(), newAuditCmd(), newDDILCmd(), newDRCmd(), newOpenAPICmd(), newClaudeHookCmd(), newCodexHookCmd(), newGrokHookCmd(), newHookPEPCmd(), newKeysCmd(), newEvalsCmd(), newAgentCmd(), newSessionCmd(), newToolCmd(), newAuthLoginCmd(), newAuthLogoutCmd(), newProviderCmd(), newWorkCmd(), newMessageCmd(), newCodexCmd(), newGrokCmd(), newMCPCmd(), newThreatIntelCmd(), newHooksCmd(), newSecretsCmd(), newSourcesCmd(), newConnectorCmd(), newSuperadminCmd(), newEventingCmd(), newSecurityCmd(), newFindingsCmd(), newComplianceCmd(), newSupportCmd(), newCompletionCmd(root), newCommandsCmd(), newFirstPartyBinsCmd(), newExtractCmd(), newTokensCmd(), newUsersCmd(), newMembersCmd(), newTenantsCmd(), newGovernanceCmd(), newPolicyCmd(), newCapabilitiesCmd())
 	// The observe-and-report lane: one top-level command per module namespace it
 	// covers, named after the namespace so `olivares <ns>` and /v1/m/<ns>/ are the
 	// same word. Their shared transport is cmd_observeplane.go.
@@ -178,6 +178,7 @@ func newRootCmd() *cobra.Command {
 	// wire_noenterprise.go, so the community binary never links the activation writer;
 	// the -tags enterprise overlay wires the real command group.
 	root.AddCommand(enterpriseRootCommands()...)
+	root.AddCommand(newExitCodesTopic())
 	groupRootCommands(root)
 	hideUnavailableAddOns(root)
 	// Last, so it sees every command this build registered: make the exit-code
@@ -185,6 +186,12 @@ func newRootCmd() *cobra.Command {
 	// subcommand inside a group printed the group's help to STDOUT and exited
 	// 0 — `olivares agent typo` was indistinguishable from success to `set -e`.
 	enforceSubcommandContract(root)
+	enforcePositiveLimits(root)
+	// After the stubs exist, so every RunE (theirs included) answers a Business
+	// capability the same way.
+	installEditionAnswers(root)
+	// Last: the edition answers hide the paid groups, which can leave a group empty.
+	hideInternalCommands(root)
 	// After every command is registered, so the first-hour path is stamped onto
 	// the real tree and a rename shows up as a missing path.
 	installFirstHourHelp(root)
@@ -196,77 +203,21 @@ func newRootCmd() *cobra.Command {
 // cmd_help_completeness_test enforces the map stays total, so a new visible
 // command cannot land ungrouped.
 var commandGroups = map[string]string{
-	// Setup & configuration.
-	"quickstart": "setup", "first-boot": "setup", "setup": "setup", "config": "setup", "auth": "setup", "db": "setup",
-	"migrate": "setup", "keys": "setup", "completion": "setup", "connector": "setup",
-	// The browser-free first run (C08-01): the identity families an install must
-	// have before anything else in this binary can authenticate.
-	"tenants": "setup", "users": "setup", "members": "setup", "tokens": "setup",
-	// Operate.
-	"serve": "operate", "collector": "operate", "agent": "operate", "codex": "operate",
-	// `grok` authors the managed requirements file, exactly as `codex` does, so it
-	// belongs in the same group. It arrived without one and a VISIBLE command with
-	// no group is absent from help by topic: it exists and cannot be found.
-	"grok": "operate",
-	// `provider` is SETUP and not operate, deliberately: registering the credential a
-	// session launches with is something a new operator does once, in the first hour,
-	// beside `connector` and `keys` — not something they do while operating a session.
-	"provider": "setup",
-	"eventing": "operate", "sources": "operate", "secrets": "operate", "work": "operate", "message": "operate",
-	"superadmin": "operate", "support": "operate",
-	// Govern.
-	"license": "govern", "hookpep": "govern", "claude-hook": "govern", "codex-hook": "govern",
-	// grok-hook entra con sus gemelos: llego en el PR #1011 sin grupo, y un comando VISIBLE sin
-	// grupo no aparece en la ayuda por temas — existe y no se encuentra.
-	"grok-hook": "govern",
-	"hooks":     "govern", "evals": "govern", "ddil": "govern", "mcp": "govern",
-	"compliance": "govern",
-	"models":     "govern", "inference-proxy": "govern",
-	// Observe.
-	"status": "observe", "readyz": "observe", "doctor": "observe", "audit": "observe", "version": "observe", "openapi": "observe",
-	"finops": "observe",
-	// Security.
-	"security": "security", "findings": "security", "threatintel": "security", "dr": "security",
-	// Release.
-	"upgrade": "release", "uninstall": "release",
-	// The agent-execution plane (C09 lot 3). Split by what an operator is doing:
-	// deploying and orchestrating an agent is operating it; recording, voice
-	// policy and the Claude-managed surfaces are governing it; and red-teaming it
-	// is security work.
-	"orchestration": "operate", "sandbox": "operate", "deploy": "operate",
-	"recording": "govern", "voice": "govern", "claude-policy": "govern", "claude-agents": "govern",
-	"redteam": "security",
-	// The observe-and-report lane (C09 lot 4). Grouped by the question each verb
-	// answers rather than by the module that serves it: `accessmap` and `posture`
-	// are security reads even though they are ordinary module namespaces, and
-	// `notify` is an operate verb because authoring a route changes what the
-	// estate actually does when something goes wrong.
-	"reporting": "observe", "health": "observe", "observability": "observe",
-	"adoption": "observe", "inventory": "observe", "consoleviews": "observe",
-	"accessmap": "security", "posture": "security",
-	"identity": "govern",
-	"notify":   "operate",
-	// The governed-data lane (C09 lot 2). The split is not clean and the majority
-	// verb decides it: `knowledge` is 31 verbs an operator runs on the corpus
-	// (ingest, reindex, query, documents, prompts, memory, scans) against 22 that
-	// govern it (DLP rules, context policies, data-product lifecycle and
-	// contracts, lineage), so it lands in operate. `sourcescope` and `catalog`
-	// have no such majority to weigh: every verb in them decides who may reach a
-	// source or what may be admitted at all, and two of them (posture approve,
-	// admission policy) are the second leg of a dual control.
-	"knowledge": "operate", "sourcescope": "govern", "catalog": "govern",
-	// El plano de gobierno y la superficie descubierta (C08-02). El criterio es el de este
-	// mapa —la PREGUNTA que contesta el verbo, no el módulo que la sirve—, y por eso los dos
-	// no caen en el mismo sitio aunque nazcan juntos:
-	//
-	//   `governance` DECIDE: kill switches, break-glass, aprobaciones, guardian. Va a govern
-	//   con `license`, `hookpep` y `compliance`, aunque sus verbos de hoy sean sólo lectura —
-	//   lo que se lee ahí es el estado de la aplicación de política.
-	//
-	//   `capabilities` INVENTARÍA: qué servidores hay conectados y qué herramientas y skills
-	//   traen. Es la pregunta de `inventory`, que está en observe. NO va con `mcp` —que sí
-	//   está en govern— porque `mcp pins` DECIDE qué puede ejecutarse y esto sólo describe.
-	"governance": "govern", "policy": "govern", "capabilities": "observe",
+	// The stable CLI of 26.10.1 (ARCH TARGET §11: setup/auth, users and workspaces, tools,
+	// accounts, sessions, approvals, policies, MCP servers, audit, license), then running the
+	// engine. Everything else works and may still change: it is listed as beta. Nothing here
+	// is removed; a command that is internal or does not work yet is hidden instead.
+	"quickstart": "start", "login": "start", "tool": "start", "session": "start", "status": "start", "doctor": "start",
+	"auth": "manage", "logout": "manage", "users": "manage", "members": "manage", "tenants": "manage", "tokens": "manage", "provider": "manage", "mcp": "manage", "audit": "manage", "license": "manage", "agent": "manage",
+	"serve": "engine", "setup": "engine", "config": "engine", "db": "engine", "migrate": "engine", "first-boot": "engine", "readyz": "engine", "keys": "engine", "dr": "engine", "support": "engine", "upgrade": "engine", "uninstall": "engine", "version": "engine", "completion": "engine", "superadmin": "engine", "openapi": "engine",
+	"connector": "beta", "collector": "beta", "codex": "beta", "grok": "beta", "eventing": "beta", "sources": "beta",
+	"secrets": "beta", "work": "beta", "message": "beta", "hookpep": "beta", "claude-hook": "beta", "codex-hook": "beta",
+	"grok-hook": "beta", "hooks": "beta", "evals": "beta", "ddil": "beta", "compliance": "beta", "models": "beta",
+	"inference-proxy": "beta", "finops": "beta", "security": "beta", "findings": "beta", "threatintel": "beta", "orchestration": "beta",
+	"sandbox": "beta", "deploy": "beta", "recording": "beta", "voice": "beta", "claude-policy": "beta", "claude-agents": "beta",
+	"redteam": "beta", "reporting": "beta", "health": "beta", "observability": "beta", "adoption": "beta", "inventory": "beta",
+	"consoleviews": "beta", "accessmap": "beta", "posture": "beta", "identity": "beta", "notify": "beta", "knowledge": "beta",
+	"sourcescope": "beta", "catalog": "beta", "governance": "beta", "policy": "beta", "capabilities": "beta",
 }
 
 // addOnOnlyCommands are the top-level groups whose every verb answers
@@ -315,21 +266,65 @@ func hideUnavailableAddOns(root *cobra.Command) {
 	}
 }
 
+// internalCommands stay invocable and out of the help: the tools' hook clients are
+// run by Claude Code, Codex and Grok Build, not by people, and the session
+// communication plane is not offered in 26.10.1 (ARCH TARGET §11, Root 2026-10-01).
+var internalCommands = []string{"claude-hook", "codex-hook", "grok-hook", "message"}
+
+func hideInternalCommands(root *cobra.Command) {
+	for _, c := range root.Commands() {
+		for _, name := range internalCommands {
+			if c.Name() == name {
+				c.Hidden = true
+			}
+		}
+		// A group whose every command is hidden offers nothing: `mcp` in a Community
+		// build, until its server commands exist.
+		if c.HasSubCommands() && !c.HasAvailableSubCommands() {
+			c.Hidden = true
+		}
+	}
+}
+
 // groupRootCommands registers the help groups and assigns each visible command.
 func groupRootCommands(root *cobra.Command) {
 	root.AddGroup(
-		&cobra.Group{ID: "setup", Title: "Setup & Configuration:"},
-		&cobra.Group{ID: "operate", Title: "Operate:"},
-		&cobra.Group{ID: "govern", Title: "Govern:"},
-		&cobra.Group{ID: "observe", Title: "Observe & Diagnose:"},
-		&cobra.Group{ID: "security", Title: "Security:"},
-		&cobra.Group{ID: "release", Title: "Release & Upgrade:"},
+		&cobra.Group{ID: "start", Title: "Start here:"},
+		&cobra.Group{ID: "manage", Title: "Manage:"},
+		&cobra.Group{ID: "engine", Title: "Run the engine:"},
+		&cobra.Group{ID: "beta", Title: "Beta (works; may change before it is stable):"},
 	)
-	root.SetHelpCommandGroupID("setup")
+	root.SetHelpCommandGroupID("engine")
 	for _, c := range root.Commands() {
 		if g, ok := commandGroups[c.Name()]; ok {
 			c.GroupID = g
 		}
+	}
+}
+
+// newExitCodesTopic is `olivares help exit-codes`: the exit-code contract, out of the
+// first screen of the root help and still one command away.
+func newExitCodesTopic() *cobra.Command {
+	return &cobra.Command{
+		Use:    "exit-codes",
+		Short:  "What the exit codes of olivares mean",
+		Hidden: true,
+		Long: "Exit codes:\n" +
+			"  0  success\n" +
+			"  1  generic error\n" +
+			"  2  usage error (unknown flag or bad arguments); `doctor` and `readyz`\n" +
+			"     also use 2 when a required local check cannot be measured\n" +
+			"  3  authentication/authorization rejected\n" +
+			"  4  entity not found\n" +
+			"  5  conflict with current state\n" +
+			"  6  server or network failure\n" +
+			"  7  degraded (`status` on an engine reporting a FAULT — an install\n" +
+			"     that merely has optional capabilities unconfigured exits 0 and\n" +
+			"     names them; `security check` on an affected version)\n" +
+			"  8  indeterminate — the answer could not be established (`security\n" +
+			"     check` on a build that declares no version). NOT a clean result:\n" +
+			"     treat it as unanswered, not as safe\n" +
+			"  9  a Business feature that this build or this engine does not have",
 	}
 }
 

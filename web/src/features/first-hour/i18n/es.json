@@ -1,0 +1,98 @@
+{
+  "tools": {
+    "claude": "Claude Code",
+    "codex": "Codex",
+    "grok": "Grok Build"
+  },
+  "status": {
+    "installed": "Instalado",
+    "notInstalled": "No instalado",
+    "signedIn": "Sesión iniciada",
+    "signedInAs": "Sesión iniciada como {{account}}",
+    "notSignedIn": "Sin iniciar sesión",
+    "usesKey": "Usa tu clave de API: {{name}}"
+  },
+  "actions": {
+    "install": "Instalar",
+    "installing": "Instalando…",
+    "retry": "Reintentar",
+    "cancel": "Cancelar",
+    "signInClaude": "Iniciar sesión con Claude",
+    "signInChatGPT": "Iniciar sesión con ChatGPT",
+    "useApiKey": "Usar una clave de API en su lugar",
+    "signInGrok": "Iniciar sesión con tu cuenta de xAI"
+  },
+  "signIn": {
+    "openLink": "Abrir la página de inicio de sesión",
+    "codeLabel": "Código de la página de inicio de sesión",
+    "codeHint": "Cuando apruebes el acceso, la página mostrará un código. Pégalo aquí.",
+    "continue": "Continuar",
+    "enterCode": "En la página de inicio de sesión, introduce este código:",
+    "waiting": "Esperando a que termines en la página de inicio de sesión…",
+    "expires": "El código sirve durante 15 minutos. Cancelar detiene el inicio de sesión en este servidor."
+  },
+  "errors": {
+    "status": "No se pudo leer el estado de la herramienta.",
+    "install": "La instalación no terminó: {{error}}",
+    "signIn": "El inicio de sesión no se completó. Vuelve a empezarlo.",
+    "start": "La sesión no se inició: {{error}}",
+    "needsApproval": "Ejecutar comandos sin preguntar necesita la aprobación de una segunda persona en este despliegue. Empieza solo con ediciones:"
+  },
+  "steps": {
+    "install": {
+      "title": "Instala una herramienta de agente",
+      "body": "Olivares ejecuta el Claude Code o el Codex oficial en este servidor. Con uno basta."
+    },
+    "signIn": {
+      "title": "Inicia sesión en ella",
+      "body": "Usa tu suscripción de Claude o de ChatGPT. El inicio de sesión se queda en este servidor, donde la herramienta lo guarda.",
+      "waiting": "Primero instala una herramienta."
+    },
+    "start": {
+      "title": "Inicia una sesión",
+      "body": "Elige una carpeta y, si quieres, di qué hacer primero."
+    },
+    "progress": "{{done}} de 3 hechos"
+  },
+  "start": {
+    "tool": "Herramienta",
+    "notReady": "{{tool}} todavía no puede empezar.",
+    "folder": "Carpeta",
+    "folderHint": "Una carpeta de este servidor. Déjala vacía para empezar en una carpeta nueva.",
+    "prompt": "Primer mensaje (opcional)",
+    "promptPlaceholder": "¿Qué debe hacer primero?",
+    "more": "Más opciones",
+    "permission": "Qué puede hacer el agente",
+    "start": "Iniciar",
+    "starting": "Iniciando…",
+    "needTool": "Primero instala una herramienta e inicia sesión en ella.",
+    "dialogTitle": "Nueva sesión",
+    "dialogDescription": "Elige una carpeta y di qué hacer.",
+    "advanced": "Opciones avanzadas de inicio",
+    "secrets": "Secretos como variables de entorno",
+    "secretsHint": "La sesión lee cada secreto elegido del almacén desde la variable que indiques. El valor nunca se muestra, se registra ni se escribe en la carpeta.",
+    "secretsNone": "Aún no hay secretos de sesión. Añade uno con un nombre que empiece por env/.",
+    "secretUse": "Dar {{name}} a esta sesión",
+    "secretVariable": "Variable para {{name}}",
+    "secretsManage": "Gestionar secretos de sesión",
+    "openTools": "Abrir Herramientas de IA"
+  },
+  "permission": {
+    "editsOnly": "Solo editar archivos",
+    "editsAndCommands": "Editar archivos y ejecutar comandos",
+    "readOnly": "Solo lectura",
+    "ask": "Preguntar antes de cada acción"
+  },
+  "next": {
+    "title": "Lo siguiente, cuando lo necesites",
+    "invite": "Invitar a personas",
+    "identity": "Conectar un proveedor de identidad",
+    "policies": "Definir políticas",
+    "mcp": "Añadir servidores MCP",
+    "budgets": "Definir presupuestos",
+    "cli": "Usar la línea de comandos de olivares",
+    "cliHint": "En este servidor, el comando olivares ya está instalado. Desde otro equipo, instálalo con:",
+    "copy": "Copiar",
+    "copied": "Copiado"
+  }
+}

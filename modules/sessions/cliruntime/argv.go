@@ -37,10 +37,14 @@ func LaunchArgs(kind string, req LaunchRequest) ([]string, error) {
 // ClaudeRemoteControlArgs is that form, and it shares this one's governed tail.
 func ClaudeArgs(req LaunchRequest) []string {
 	// The supported headless control transport: bidirectional NDJSON over stdio.
+	// --replay-user-messages re-emits each message the person sent on stdout, so the
+	// session's one output stream holds both sides of the conversation (without it the
+	// console showed only the agent's replies).
 	args := []string{
 		"--input-format", "stream-json",
 		"--output-format", "stream-json",
 		"--verbose", "--print",
+		"--replay-user-messages",
 	}
 	return append(args, claudeGovernedTail(req)...)
 }
@@ -93,8 +97,8 @@ func claudeGovernedTail(req LaunchRequest) []string {
 	// selects the child's BUILT-IN tool surface from the official set, and the CLI
 	// documents `""` as "disable all tools" — it is what the child's own init frame
 	// reports back, so it is checkable rather than asserted. The server emits it for
-	// every profiled launch: the declared surface, or nothing at all when the
-	// profile declared nothing.
+	// every profiled launch: the declared surface, none when the profile declared
+	// an empty list, or "default" when it declared nothing.
 	//
 	// It travels as ONE comma-separated value for the same reason --allowedTools
 	// does: `--tools A B` is variadic and would swallow the flags that follow it.
@@ -128,7 +132,7 @@ func ClaudeLaunchTerms() LaunchTerms {
 
 // CodexArgs is the owned stdio app-server of the official Codex CLI.
 func CodexArgs(LaunchRequest) []string {
-	return []string{"app-server", "--listen", "stdio://"}
+	return []string{"-c", "check_for_update_on_startup=false", "app-server", "--listen", "stdio://"}
 }
 
 // GrokArgs is the owned non-leader stdio agent of the official Grok CLI.

@@ -76,7 +76,7 @@ function stubFetch() {
       if (init?.signal?.aborted) throw new DOMException('aborted', 'AbortError')
       const h = new Headers(init?.headers)
       sent.push({
-        authorization: h.get('Authorization'),
+        authorization: h.get('X-CSRF-Token'),
         tenant: h.get('X-Olivares-Tenant'),
         path: url,
       })
@@ -99,9 +99,11 @@ const TOKEN_B = 'synthetic-credential-B'
 const far = () => new Date(Date.now() + 3_600_000).toISOString()
 const soon = () => new Date(Date.now() + 10_000).toISOString()
 function install(token: string) {
-  useSessionStore
-    .getState()
-    .setSession({ token, sessionId: 'same-session', expiresAt: far() })
+  useSessionStore.getState().setSession({
+    csrfToken: token,
+    sessionId: 'same-session',
+    expiresAt: far(),
+  })
 }
 /** The production wiring of providers.tsx: getters over the live stores. */
 function wireClient(over: {
@@ -109,7 +111,8 @@ function wireClient(over: {
   getExpiresAt?: () => string | null
 }) {
   configureApiClient({
-    getToken: () => useSessionStore.getState().token,
+    getToken: () => null,
+    getCSRFToken: () => useSessionStore.getState().csrfToken,
     getTenant: () => useTenantStore.getState().activeTenant,
     onUnauthorized: () => {},
     refreshSession: over.refreshSession ?? (async () => false),
@@ -251,7 +254,7 @@ describe('RequestOptions.dispatchGuard on the real client', () => {
       replayed: false,
     })
     expect(sent).toHaveLength(1)
-    expect(sent[0].authorization).toBe(`Bearer ${TOKEN_A}`)
+    expect(sent[0].authorization).toBe(TOKEN_A)
   })
 
   it('SOURCE ORDER: the guard call sits after the awaited refresh and the header composition, immediately before the fetch, once', () => {
@@ -314,7 +317,7 @@ describe('an I1 intent carries the authority it was confirmed under, and the tra
       r.release()
       expect(await settled).toBe('StaleIntentError')
       expect(sent).toHaveLength(1)
-      expect(sent[0].authorization).toBe(`Bearer ${TOKEN_A}`)
+      expect(sent[0].authorization).toBe(TOKEN_A)
     },
   )
 
@@ -453,7 +456,7 @@ describe('an I1 intent carries the authority it was confirmed under, and the tra
       r.release()
       expect(await settled).toBe('StaleIntentError')
       expect(sent).toHaveLength(1)
-      expect(sent[0].authorization).toBe(`Bearer ${TOKEN_A}`)
+      expect(sent[0].authorization).toBe(TOKEN_A)
     },
   )
   it.each(i2Dispatches)(
@@ -467,7 +470,7 @@ describe('an I1 intent carries the authority it was confirmed under, and the tra
       r.release()
       expect(await settled).toBe('resolved')
       expect(sent).toHaveLength(1)
-      expect(sent[0].authorization).toBe(`Bearer ${TOKEN_A}`)
+      expect(sent[0].authorization).toBe(TOKEN_A)
     },
   )
 
@@ -519,7 +522,7 @@ describe('an I1 intent carries the authority it was confirmed under, and the tra
     r.release()
     expect(await settled).toBe('StaleIntentError')
     expect(sent).toHaveLength(1)
-    expect(sent[0].authorization).toBe(`Bearer ${TOKEN_A}`)
+    expect(sent[0].authorization).toBe(TOKEN_A)
   })
 
   it('IR-I2-1 POSITIVE CONTROL — cursor preparation: with nothing moving the normal GET leaves once with the original credential', async () => {
@@ -532,7 +535,7 @@ describe('an I1 intent carries the authority it was confirmed under, and the tra
     r.release()
     expect(await settled).toBe('resolved')
     expect(sent).toHaveLength(1)
-    expect(sent[0].authorization).toBe(`Bearer ${TOKEN_A}`)
+    expect(sent[0].authorization).toBe(TOKEN_A)
     expect(sent[0].path).toContain('/v1/m/sessions/inbox/cursors/personal/')
   })
 
@@ -550,7 +553,7 @@ describe('an I1 intent carries the authority it was confirmed under, and the tra
     r.release()
     expect(await settled).toBe('resolved')
     expect(sent).toHaveLength(1)
-    expect(sent[0].authorization).toBe(`Bearer ${TOKEN_B}`)
+    expect(sent[0].authorization).toBe(TOKEN_B)
   })
 
   it('IR-I2-1 MISSING-GUARD MUTANT at the seam (causal control): with `dispatchGuard` stripped from getWithMeta, the SAME guarded preparation sends the GET with the ROTATED credential', async () => {
@@ -574,7 +577,7 @@ describe('an I1 intent carries the authority it was confirmed under, and the tra
     r.release()
     expect(await settled).toBe('resolved')
     expect(sent).toHaveLength(1)
-    expect(sent[0].authorization).toBe(`Bearer ${TOKEN_B}`)
+    expect(sent[0].authorization).toBe(TOKEN_B)
   })
 
   it('IR-I2-1 — the preparation guard re-evaluates BOTH permissions live: losing delivery:read or delivery:write refuses it', () => {
@@ -633,7 +636,7 @@ describe('an I1 intent carries the authority it was confirmed under, and the tra
     r.release()
     expect(await settled).toBe('resolved')
     expect(sent).toHaveLength(1)
-    expect(sent[0].authorization).toBe(`Bearer ${TOKEN_B}`)
+    expect(sent[0].authorization).toBe(TOKEN_B)
   })
 
   it('a stale intent is a typed LOCAL cancellation: an AuthorityLostError naming only the fact that moved, no status, no request id', async () => {
@@ -761,7 +764,7 @@ describe('queued mutate(intent) then a SAME-TURN rotation (the reported witness)
       current!.mutate(intent)
       expect(await settled).toBe('resolved')
       expect(sent).toHaveLength(1)
-      expect(sent[0].authorization).toBe(`Bearer ${TOKEN_A}`)
+      expect(sent[0].authorization).toBe(TOKEN_A)
       expect(sent[0].tenant).toBe('t1')
       unmount()
     })
@@ -823,7 +826,7 @@ describe('queued mutate(intent) then a SAME-TURN rotation (the reported witness)
     install(TOKEN_B)
     expect(await settled).toBe('resolved')
     expect(sent).toHaveLength(1)
-    expect(sent[0].authorization).toBe(`Bearer ${TOKEN_B}`)
+    expect(sent[0].authorization).toBe(TOKEN_B)
     unmount()
   })
 })
@@ -949,7 +952,7 @@ describe('I3 — ZERO before the first send, ONE before a refused 401 replay', (
       // …and the replay never leaves: one request, under the ORIGINAL credential.
       expect(sent).toHaveLength(1)
       expect(sent[0].path).toBe(path)
-      expect(sent[0].authorization).toBe(`Bearer ${TOKEN_A}`)
+      expect(sent[0].authorization).toBe(TOKEN_A)
     },
   )
 
@@ -992,7 +995,7 @@ describe('I3 — ZERO before the first send, ONE before a refused 401 replay', (
     r.release()
     expect(await settled).toBe('resolved')
     expect(sent).toHaveLength(1)
-    expect(sent[0].authorization).toBe(`Bearer ${TOKEN_B}`)
+    expect(sent[0].authorization).toBe(TOKEN_B)
   })
 
   it('a same-key EXPLICIT retry re-sends the identical object: same key, same If-Match, same bytes, same target', async () => {

@@ -43,6 +43,10 @@ const NO_VERB: ReadonlyArray<{ dir: string; why: string }> = [
   },
 
   {
+    dir: 'features/agent-tools',
+    why: 'each tool row carries its own verbs (install, sign in, review a version)',
+  },
+  {
     dir: 'features/api-playground',
     why: 'the verb IS the request the operator composes in the form',
   },

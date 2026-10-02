@@ -144,6 +144,9 @@ export interface UsageKpi {
    *  established. */
   liveActive: number | null
   liveIdle: number | null
+  /** Every live session that has not ended: working, idle between turns, or gone silent.
+   *  The figure Now's "Live sessions" shows (HU-R24: it showed working ones only, 3 of 5). */
+  liveNow: number | null
   /** Gone silent inside its cadence — a possible-evasion signal, surfaced not hidden. */
   silentEvasion: number | null
   liveTotal: number | null
@@ -203,6 +206,11 @@ export function deriveUsage(
     totalEntities: inventory ? inventory.total : null,
     liveActive: count('active'),
     liveIdle: count('idle'),
+    liveNow: live
+      ? live.items.filter((s) =>
+          ['active', 'idle', 'silent_evasion'].includes(s.cc_state),
+        ).length
+      : null,
     silentEvasion: count('silent_evasion'),
     liveTotal: live ? live.items.length : null,
     truncated: !!inventory?.truncated,

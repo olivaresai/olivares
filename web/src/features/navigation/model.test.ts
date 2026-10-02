@@ -48,6 +48,7 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   providerBindings: ['ai', 'environments'],
   providerAccounts: ['ai', 'environments'],
   'agent-tools': ['ai', 'environments'],
+  mcpServers: ['ai', 'environments'],
   'workspace-templates': ['ai', 'environments'],
   models: ['ai', 'models'],
   modelOps: ['ai', 'models'],
@@ -266,9 +267,9 @@ describe('resolveLocation and the trail', () => {
   it('builds the trails the proposal names, ancestors linked and the page not', () => {
     const labels = (path: string) =>
       breadcrumbTrail(t, resolveLocation(path)).map((c) => [c.label, c.to])
-    expect(labels('/')).toEqual([['Overview', undefined]])
+    expect(labels('/')).toEqual([['Now', undefined]])
     expect(labels('/areas/ai')).toEqual([
-      ['Overview', '/'],
+      ['Now', '/'],
       ['AI', undefined],
     ])
     expect(labels('/agentops')).toEqual([

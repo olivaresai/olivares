@@ -6,7 +6,12 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { FIRST_HOUR_TOOLS, type ToolKey } from '@/features/first-hour/api'
+import { ToolCard } from '@/features/first-hour/first-hour'
+import { OllamaService } from './ollama-service'
+import '@/features/first-hour/i18n'
+import { ForbiddenState } from '@/components/ui/error-state'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/ui/page-header'
 import { Spinner } from '@/components/ui/spinner'
@@ -49,7 +54,7 @@ function Tools({ epoch }: { epoch: number }) {
     plan: ToolPlan
     request: InstallRequest
   } | null>(null)
-  const [jobID, setJobID] = useState<string | null>(null)
+  const [startedJobID, setJobID] = useState<string | null>(null)
   const preview = useMutation({
     mutationFn: ({ driver, version }: { driver: string; version: string }) =>
       agentToolsApi.plan(driver, version),
@@ -68,8 +73,11 @@ function Tools({ epoch }: { epoch: number }) {
       setApproval(null)
     },
   })
+  // The job this page started, else the latest one the engine reports: derived, not
+  // copied into state by an effect (react-hooks/set-state-in-effect).
+  const jobID = startedJobID ?? inventory.data?.jobs?.[0]?.id ?? null
   const job = useQuery({
-    queryKey: [...scope, 'job', jobID],
+    queryKey: ['agent-tools', epoch, 'job', jobID],
     queryFn: ({ signal }) => agentToolsApi.job(jobID!, signal),
     enabled: isSuperadmin && !!jobID,
     refetchInterval: (query) =>
@@ -79,9 +87,6 @@ function Tools({ epoch }: { epoch: number }) {
     if (job.data && job.data.state !== 'running')
       void qc.invalidateQueries({ queryKey: inventoryKey })
   }, [job.data?.state, qc, epoch])
-  useEffect(() => {
-    if (!jobID && inventory.data?.jobs?.[0]) setJobID(inventory.data.jobs[0].id)
-  }, [inventory.data, jobID])
   useEffect(
     () => () => {
       void qc.cancelQueries({ queryKey: scope })
@@ -106,10 +111,16 @@ function Tools({ epoch }: { epoch: number }) {
           </Button>
         }
       />
+      {/* ONE LIST, ONE ROW PER TOOL. Claude Code and Codex install in one action and
+          sign in with their own login (the first-hour card) and show the version
+          installed; the other tools keep their install row. API keys are the other tab;
+          each tool card links to it ("Use an API key instead"), so the page does not. */}
       {inventory.isPending ? (
         <Spinner />
       ) : inventory.isError ? (
-        <ErrorState
+        <QueryErrorState
+          error={inventory.error}
+          subject={t('title')}
           description={message(inventory.error)}
           retry={() => void inventory.refetch()}
         />
@@ -122,6 +133,8 @@ function Tools({ epoch }: { epoch: number }) {
           )}
           <ul className="divide-y divide-border rounded-md border border-border">
             {inventory.data.drivers.map((driver) => (
+              // Every tool keeps its install row; Claude Code and Codex add their sign-in
+              // in it (ToolRow). A merge brought back a card-only branch for those two.
               <ToolRow
                 key={driver}
                 driver={driver}
@@ -150,7 +163,12 @@ function Tools({ epoch }: { epoch: number }) {
         </>
       )}
       {preview.isPending && <p role="status">{t('planning')}</p>}
-      {preview.isError && <ErrorState description={message(preview.error)} />}
+      {preview.isError && (
+        <QueryErrorState
+          error={preview.error}
+          description={message(preview.error)}
+        />
+      )}
       {approval && (
         <section
           aria-labelledby="tool-approval"
@@ -173,7 +191,10 @@ function Tools({ epoch }: { epoch: number }) {
           </p>
           <p className="text-sm text-muted-foreground">{t('installHint')}</p>
           {install.isError && (
-            <ErrorState description={message(install.error)} />
+            <QueryErrorState
+              error={install.error}
+              description={message(install.error)}
+            />
           )}
           <div className="flex flex-wrap gap-2">
             <Button
@@ -193,7 +214,8 @@ function Tools({ epoch }: { epoch: number }) {
         </section>
       )}
       {job.isError && (
-        <ErrorState
+        <QueryErrorState
+          error={job.error}
           description={message(job.error)}
           retry={() => void job.refetch()}
         />
@@ -269,8 +291,20 @@ function ToolRow({
   const detection = probe.data ?? detect.data
 
   const name = NAMES[driver] ?? driver
+  // Claude Code and Codex: one-click install of the latest verified release and sign-in
+  // with the tool's own login, in the same row as the versions and the advanced install.
+  const firstHour = (FIRST_HOUR_TOOLS as readonly string[]).includes(driver)
   return (
     <li className="flex min-w-0 flex-col gap-3 p-4">
+      {firstHour ? <ToolCard driver={driver as ToolKey} /> : null}
+      {driver === 'grok' &&
+      installs.some((row) => row.state === 'installed') ? (
+        <ToolCard driver="grok" part="signIn" />
+      ) : null}
+      {driver === 'ollama' &&
+      installs.some((row) => row.state === 'installed') ? (
+        <OllamaService />
+      ) : null}
       <div className="flex flex-wrap items-baseline gap-2">
         <h2 className="text-heading">{name}</h2>
         {installs.length === 0 ? (

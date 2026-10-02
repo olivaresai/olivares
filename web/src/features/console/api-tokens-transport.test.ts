@@ -22,7 +22,7 @@ function jsonResponse(body: unknown): Response {
 
 beforeEach(() => {
   vi.restoreAllMocks()
-  useSessionStore.setState({ token: 'tok' } as never)
+  useSessionStore.setState({ csrfToken: 'tok' } as never)
   useTenantStore.setState({ activeTenant: 'acme' } as never)
 })
 

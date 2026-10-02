@@ -85,7 +85,7 @@ func buildOpenAPI() map[string]any {
 		return obj("required", true, "content", jsonContent(schemaRef))
 	}
 
-	bearer := []any{obj("bearerAuth", []any{})}
+	bearer := []any{obj("bearerAuth", []any{}), obj("browserSession", []any{})}
 	noAuth := []any{obj()}
 
 	tenantParam := obj("name", "X-Olivares-Tenant", "in", "header", "required", false,
@@ -244,9 +244,12 @@ func buildOpenAPI() map[string]any {
 		"/v1/auth/login", obj("post", op("login", "Exchange email/password for a session token", tagAuth, false,
 			jsonResp("OK", ref("LoginResponse")),
 			body(ref("LoginInput")))),
+		"/v1/auth/browser-session", obj(
+			"get", op("getBrowserSession", "Restore cookie session metadata", tagAuth, true, jsonResp("OK", ref("BrowserSessionResponse")), nil),
+			"post", op("migrateBrowserSession", "Rotate a legacy bearer into a cookie without extending expiry", tagAuth, true, jsonResp("OK", ref("BrowserSessionResponse")), nil)),
 		"/v1/auth/logout", obj("post", op204("logout", "Revoke the calling session", tagAuth, true)),
 		"/v1/auth/refresh", obj("post", op("refreshToken", "Renew the calling session token (rotates the credential, extends expiry)", tagAuth, true,
-			jsonResp("OK", ref("LoginResponse")), nil)),
+			jsonResp("OK", ref("SessionResponse")), nil)),
 		"/v1/auth/whoami", obj("get", op("whoami", "The calling principal and its tenant grants", tagAuth, true,
 			jsonResp("OK", ref("WhoamiResponse")), nil)),
 		"/v1/auth/capabilities", obj("post", capabilityOperation(op("authCapabilities",
@@ -314,6 +317,15 @@ func buildOpenAPI() map[string]any {
 					"reason", obj("type", "string", "description", "\"no-checkpoints\" for the empty case, else the first failure."),
 				)),
 			))), nil, tenantParam)),
+		"/v1/audit/recent", obj("get", op("listRecentAuditEvents", "The newest ledger events, newest first, without audit reads (not itself recorded)", tagAudit, true,
+			jsonResp("OK", obj("type", "object", "properties", obj(
+				"items", obj("type", "array", "items", ref("AuditEvent")),
+				"head_seq", obj("type", "integer", "description", "The ledger head the events were read at; 0 when the ledger is empty."),
+			), "required", arr("items", "head_seq"))),
+			nil, tenantParam,
+			obj("name", "limit", "in", "query", "required", false,
+				"description", "How many events, 1 to 50 (default 10).",
+				"schema", obj("type", "integer", "minimum", 1, "maximum", 50, "default", 10)))),
 		"/v1/audit/export", obj("get", func() map[string]any {
 			o := rawOp("exportAuditLedger", "Export the ledger ("+audit.FormatList()+")", tagAudit, true,
 				"Exported ledger stream (format-dependent text or NDJSON)",
@@ -522,6 +534,7 @@ func buildOpenAPI() map[string]any {
 			"error", obj("type", "object", "properties", obj(
 				"code", obj("type", "string"),
 				"message", obj("type", "string"),
+				"module", obj("type", "string", "description", "With code module_not_enabled: the namespace of the module this node does not run."),
 			), "required", arr("code", "message")),
 		), "required", arr("error")),
 
@@ -768,6 +781,12 @@ func buildOpenAPI() map[string]any {
 			"organization", ref("Org"),
 		), "required", arr("id", "email", "status", "is_superadmin", "created_at", "organization")),
 
+		"SessionResponse", obj("oneOf", arr(ref("LoginResponse"), ref("BrowserSessionResponse"))),
+		"BrowserSessionResponse", obj("type", "object", "properties", obj(
+			"csrf_token", obj("type", "string"),
+			"session_id", obj("type", "string", "format", "uuid"),
+			"expires_at", obj("type", "string", "format", "date-time"),
+		), "required", arr("csrf_token", "session_id", "expires_at")),
 		"LoginResponse", obj("type", "object", "properties", obj(
 			"token", obj("type", "string", "description", "Opaque session token (olvs_…)"),
 			"session_id", obj("type", "string", "format", "uuid"),
@@ -873,6 +892,9 @@ func buildOpenAPI() map[string]any {
 				"confined_workspace", obj("type", "string",
 					"description", "Present only when this membership is confined to a workspace: "+
 						"the principal may act only within it, enforced server-side on every request."),
+				"tenant_name", obj("type", "string",
+					"description", "The display name of this tenant's organization, read from the principal's "+
+						"own tenant (no cross-tenant read). Absent when it cannot be read."),
 			), "required", arr("tenant", "role", "permissions"))),
 			"aal", obj("type", "integer", "description", "Authentication assurance level (sessions only)"),
 			"amr", obj("type", "array", "items", obj("type", "string"), "description", "Authentication method references (sessions only)"),
@@ -885,9 +907,17 @@ func buildOpenAPI() map[string]any {
 
 		// ── Server info ─────────────────────────────────────────────
 		"ServerInfo", obj("type", "object", "properties", obj(
+			"sso_providers", obj("type", "array", "items", obj("type", "object", "properties", obj(
+				"label", obj("type", "string"), "start_url", obj("type", "string"),
+			), "required", arr("label", "start_url"))),
 			"version", obj("type", "string"),
 			"engine", obj("type", "string"),
 			"setup_required", obj("type", "boolean"),
+			"edition", obj("type", "string"),
+			"tls_pin_sha256", obj("type", "string",
+				"description", "The --pin-sha256 value of the certificate this engine serves (base64 SHA-256 of its SubjectPublicKeyInfo). Absent when the engine serves plain HTTP."),
+			"modules_not_enabled", obj("type", "array", "items", obj("type", "string")),
+			"communication_ready", obj("type", "boolean"),
 			"license", obj("type", "object", "properties", obj(
 				"status", obj("type", "string"),
 				"licensee", obj("type", "string"),
@@ -902,6 +932,12 @@ func buildOpenAPI() map[string]any {
 				"agents_md_enforce_available", obj("type", "boolean"),
 				"aaif_standards", obj("type", "array", "items", obj("type", "string")),
 			)),
+			"jobs_not_running", obj("type", "array",
+				"description", "Background jobs this node does not run, and why. Absent when every job runs.",
+				"items", obj("type", "object", "properties", obj(
+					"job", obj("type", "string", "enum", arr("retention", "legal_hold_archive", "audit_checkpoints", "audit_archive", "directory_synchronization")),
+					"reason", obj("type", "string", "enum", arr("no_tenant_inventory", "addon_requires_license", "directory_unavailable")),
+				), "required", arr("job", "reason"))),
 		), "required", arr("version", "engine", "setup_required")),
 
 		// ── Public status ───────────────────────────────────────────
@@ -1205,6 +1241,8 @@ func buildOpenAPI() map[string]any {
 		// Formats and enums stay hand-written and are NOT pinned by that test: they are
 		// editorial, and the failure this closes is a name no decoder accepts.
 		"SSOConfig", obj("type", "object", "properties", obj(
+			"assurance_mapping", ref("FederationAssuranceMapping"),
+			"display_name", obj("type", "string", "maxLength", 80),
 			"configured", obj("type", "boolean"),
 			"provider_available", obj("type", "boolean"),
 			"protocol", obj("type", "string", "enum", arr("oidc", "saml")),
@@ -1239,6 +1277,8 @@ func buildOpenAPI() map[string]any {
 		), "required", arr("configured", "provider_available")),
 
 		"SSOConfigInput", obj("type", "object", "properties", obj(
+			"assurance_mapping", ref("FederationAssuranceMapping"),
+			"display_name", obj("type", "string", "maxLength", 80),
 			"protocol", obj("type", "string", "enum", arr("oidc", "saml")),
 			"enabled", obj("type", "boolean"),
 			"oidc_issuer", obj("type", "string", "format", "uri"),
@@ -1269,6 +1309,11 @@ func buildOpenAPI() map[string]any {
 	)
 
 	addMCPGatewayContracts(paths, schemas)
+	schemas["FederationAssuranceMapping"] = obj("type", "object", "properties", obj(
+		"amr", obj("type", arr("array", "null"), "items", obj("type", "string")),
+		"acr", obj("type", arr("array", "null"), "items", obj("type", "string")),
+		"saml_contexts", obj("type", arr("array", "null"), "items", obj("type", "string")),
+	), "description", "Exact upstream MFA values. Omitted/null amr accepts mfa or a signed combination of knowledge (pwd/pin) and possession (otp/hwk/swk); a single method never counts by default. Explicit amr lists replace these defaults with operator-owned exact matches. Omitted/null saml_contexts defaults to https://refeds.org/profile/mfa. ACR has no implicit values. Empty lists trust none. An empty object restores defaults; omission preserves the stored mapping.")
 	addTOTPContract(paths, schemas)
 	stampCorePermissions(paths)
 	applyOperationDescriptions(paths)
@@ -1298,7 +1343,9 @@ func buildOpenAPI() map[string]any {
 		"components", obj(
 			"securitySchemes", obj("bearerAuth", obj(
 				"type", "http", "scheme", "bearer",
-				"description", "Opaque session (olvs_) or API (olvk_) token.")),
+				"description", "Opaque session (olvs_) or API (olvk_) token."),
+				"browserSession", obj("type", "apiKey", "in", "cookie", "name", browserSessionCookie,
+					"description", "HttpOnly browser session. Mutations require the per-session X-CSRF-Token header.")),
 			"schemas", schemas,
 		),
 		"paths", paths,

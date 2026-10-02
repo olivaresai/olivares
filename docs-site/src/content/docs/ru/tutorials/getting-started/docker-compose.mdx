@@ -23,14 +23,14 @@ control plane с резервными копиями.
 действие, — тот же, что проверен от начала до конца против бинарника в
 [туториале по одному узлу](/tutorials/getting-started/single-node/).
 
-<Aside type="caution" title="Закрепите опубликованный образ 26.10.0 по digest">
-Релиз **26.10.0** опубликовал подписанные образы: свидетель поверхностей установки
-записывает Docker Hub и GHCR для `26.10.0` как **published**
-(`docs/releases/26.10.0-install-surfaces.json`). Та же честность есть в
+<Aside type="caution" title="Закрепите опубликованный образ 26.10.1 по digest">
+Релиз **26.10.1** опубликовал подписанные образы: свидетель поверхностей установки
+записывает Docker Hub и GHCR для `26.10.1` как **published**
+(`docs/releases/26.10.1-install-surfaces.json`). Та же честность есть в
 [Развёртывание с Docker](/how-to/docker-deployment/). Установите
 `OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` и сначала
 [проверьте его](/how-to/verify-a-release/) — по digest, никогда по тегу. Чтобы вместо этого
-запустить дерево разработки, соберите укреплённый distroless-образ из исходников и направьте
+запустить дерево разработки, соберите укреплённый образ из исходников и направьте
 на него стек:
 
 ```bash
@@ -61,8 +61,8 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 2. Спросите у движка, где он, и прочитайте одноразовый setup-токен из логов:
 
    ```bash
-   # where the console answers, and whether setup is still pending. The image is
-   # distroless: `docker exec … bash` has nothing to run, this needs no shell.
+   # where the console answers, and whether setup is still pending. It runs the binary
+   # directly and needs no shell.
    docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
 
    # the one-time setup token, printed once at first boot

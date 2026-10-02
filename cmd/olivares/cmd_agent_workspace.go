@@ -90,7 +90,7 @@ func newWorkspaceAddCmd() *cobra.Command {
 			if maxRead > 0 {
 				body["max_read_bytes"] = maxRead
 			}
-			status, b, err := cfg.do(cmd.Context(), "POST", "/v1/m/sessions/workspaces", body)
+			status, b, err := cfg.do(cmd.Context(), "POST", "/v1/m/sessions/workspaces", body, http.StatusCreated)
 			if err != nil {
 				return err
 			}
@@ -127,7 +127,7 @@ func newWorkspaceListCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", "/v1/m/sessions/workspaces", nil)
+			status, b, err := cfg.do(cmd.Context(), "GET", "/v1/m/sessions/workspaces", nil, http.StatusOK)
 			if err != nil {
 				return err
 			}
@@ -165,7 +165,7 @@ func newWorkspaceRemoveCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "DELETE", "/v1/m/sessions/workspaces/"+args[0], nil)
+			status, b, err := cfg.do(cmd.Context(), "DELETE", "/v1/m/sessions/workspaces/"+args[0], nil, http.StatusOK)
 			if err != nil {
 				return err
 			}
@@ -195,7 +195,7 @@ func newWorkspaceFilesCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", filesPath(args[0], "", path), nil)
+			status, b, err := cfg.do(cmd.Context(), "GET", filesPath(args[0], "", path), nil, http.StatusOK)
 			if err != nil {
 				return err
 			}
@@ -233,7 +233,7 @@ func newWorkspaceStatCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", filesPath(args[0], "stat", args[1]), nil)
+			status, b, err := cfg.do(cmd.Context(), "GET", filesPath(args[0], "stat", args[1]), nil, http.StatusOK)
 			if err != nil {
 				return err
 			}
@@ -260,7 +260,7 @@ func newWorkspaceGetCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", filesPath(args[0], "raw", args[1]), nil)
+			status, b, err := cfg.do(cmd.Context(), "GET", filesPath(args[0], "raw", args[1]), nil, http.StatusOK)
 			if err != nil {
 				return err
 			}
@@ -339,7 +339,7 @@ func newWorkspaceMkdirCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "POST", filesPath(args[0], "dir", args[1]), nil)
+			status, b, err := cfg.do(cmd.Context(), "POST", filesPath(args[0], "dir", args[1]), nil, http.StatusCreated)
 			if err != nil {
 				return err
 			}
@@ -368,7 +368,7 @@ func newWorkspaceMoveCmd() *cobra.Command {
 			}
 			status, b, err := cfg.do(cmd.Context(), "POST",
 				"/v1/m/sessions/workspaces/"+url.PathEscape(args[0])+"/files/move",
-				map[string]any{"from": args[1], "to": args[2]})
+				map[string]any{"from": args[1], "to": args[2]}, http.StatusOK)
 			if err != nil {
 				return err
 			}
@@ -414,7 +414,7 @@ func newWorkspaceRmCmd() *cobra.Command {
 				}
 				path += "&recursive=true"
 			}
-			status, b, err := cfg.do(cmd.Context(), "DELETE", path, nil)
+			status, b, err := cfg.do(cmd.Context(), "DELETE", path, nil, http.StatusOK)
 			if err != nil {
 				return err
 			}
@@ -458,7 +458,7 @@ func (c *agentClientConfig) putRaw(ctx context.Context, path string, raw []byte)
 		return 0, nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	b, err := readCLIHTTPResponse(resp, req, 1<<20, resp.StatusCode == http.StatusOK, httpErr)
 	return resp.StatusCode, b, err
 }
 

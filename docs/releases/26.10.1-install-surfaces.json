@@ -1,0 +1,119 @@
+{
+  "$comment": "STAND-IN, NOT AN OBSERVATION: derived from the previous release's witness with every anchor and coordinate swept to this 26.10.1 cut tree, so the gates run end to end before publication. The real witness for 26.10.1 is observed from the published surfaces at publication time, as every earlier one was.",
+  "schema": "olivares.ai/install-surfaces/v1",
+  "version": "26.10.1",
+  "measured_at": "2026-10-01T08:08:36Z",
+  "surfaces": [
+    {
+      "id": "github-release",
+      "status": "published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^release:$"
+      },
+      "prose": {
+        "path": "README.md",
+        "contains": "https://github.com/olivaresai/olivares/releases/tag/26.10.1"
+      },
+      "evidence": "STAND-IN, not observed: the github-release surface of 26.10.1 is read from the published release after publication, and that observation replaces this text."
+    },
+    {
+      "id": "archives",
+      "status": "published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^archives:$"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "olivares_${ver#v}_${os}_${arch}.tar.gz"
+      },
+      "evidence": "STAND-IN, not observed: the archives surface of 26.10.1 is read from the published release after publication, and that observation replaces this text."
+    },
+    {
+      "id": "native-packages",
+      "status": "published",
+      "producer": {
+        "path": "packaging/nfpm/packages.json",
+        "matches": "^[[:space:]]*\"nfpms\": [[]$"
+      },
+      "prose": {
+        "path": "docs-site/src/content/docs/how-to/install-from-packages.md",
+        "contains": "olivares_26.10.1_linux_amd64.deb"
+      },
+      "evidence": "STAND-IN, not observed: the native-packages surface of 26.10.1 is read from the published release after publication, and that observation replaces this text."
+    },
+    {
+      "id": "ghcr",
+      "status": "published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^dockers:$"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "ghcr.io/olivaresai/olivares:26.10.1"
+      },
+      "evidence": "STAND-IN, not observed: the ghcr surface of 26.10.1 is read from the published release after publication, and that observation replaces this text."
+    },
+    {
+      "id": "docker-hub",
+      "status": "published",
+      "producer": {
+        "path": ".github/workflows/release.yml",
+        "matches": "^[[:space:]]+MIRROR_IMAGE_REPO:.*['\"]docker[.]io/olivaresai/olivares['\"]"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "docker.io/olivaresai/olivares:26.10.1"
+      },
+      "evidence": "STAND-IN, not observed: the docker-hub surface of 26.10.1 is read from the published release after publication, and that observation replaces this text."
+    },
+    {
+      "id": "homebrew",
+      "status": "published",
+      "producer": {
+        "path": ".goreleaser.yaml",
+        "matches": "^homebrew_casks:$"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "brew install olivaresai/tap/olivares"
+      },
+      "evidence": "STAND-IN, not observed: the homebrew surface of 26.10.1 is read from the published release after publication, and that observation replaces this text."
+    },
+    {
+      "id": "installer",
+      "status": "published",
+      "producer": {
+        "path": "scripts/install.sh",
+        "matches": "^\"[$]cosign_bin\" verify-blob"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "https://olivares.ai/olivares/install.sh"
+      },
+      "evidence": "STAND-IN, not observed: the installer surface of 26.10.1 is read from the published release after publication, and that observation replaces this text."
+    },
+    {
+      "id": "helm-oci",
+      "status": "publication-unverified",
+      "producer": {
+        "path": ".github/workflows/release-chart.yml",
+        "matches": "^[[:space:]]+tags: [[][\"]chart-v[*][\"][]]$"
+      },
+      "prose": {
+        "path": "INSTALL.md",
+        "contains": "cosign-signed — is **unverified**"
+      },
+      "evidence": "STAND-IN, not observed: the helm-oci surface of 26.10.1 is read from the published release after publication, and that observation replaces this text.",
+      "inabilities": [
+        {
+          "observed_at": "2026-10-01T08:08:36Z",
+          "request": "anonymous pull token for ghcr.io/olivaresai/charts/olivares (scope repository:olivaresai/charts/olivares:pull)",
+          "answer": "HTTP 403 {\"errors\":[{\"code\":\"DENIED\",\"message\":\"requested access to the resource is denied\"}]}\n"
+        }
+      ]
+    }
+  ]
+}

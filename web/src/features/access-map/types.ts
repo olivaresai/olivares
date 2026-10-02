@@ -11,11 +11,7 @@
 
 /** R/RW access mode on an edge. `readwrite`/`write` carry risk; `unknown` is gray. */
 export type AccessMapMode =
-  | 'read'
-  | 'write'
-  | 'readwrite'
-  | 'unknown'
-  | (string & {})
+  'read' | 'write' | 'readwrite' | 'unknown' | (string & {})
 
 /** Attribution confidence — `attributed` is firm (solid), `approximate` is
  * inferred (dotted). The UI must never render `approximate` as if it were firm. */
@@ -23,11 +19,7 @@ export type AccessConfidence = 'attributed' | 'approximate' | (string & {})
 
 /** Declared capture fidelity of the resource (ARCHITECTURE.md tiered coverage).*/
 export type CoverageTier =
-  | 'clean'
-  | 'lossy'
-  | 'opaque'
-  | 'mixed'
-  | (string & {})
+  'clean' | 'lossy' | 'opaque' | 'mixed' | (string & {})
 
 /** Honest per-edge firmness of the origin→agent/NHI attribution (G8):
  * `firm` only with an SVID/WIF/dedicated credential, `approximate` for a shared
@@ -196,4 +188,3 @@ export interface AttackPathSummary {
   critical_agents: number
   sensitive_targets: number
 }
-

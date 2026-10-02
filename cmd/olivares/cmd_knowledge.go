@@ -136,7 +136,7 @@ func newKnowledgeCmd() *cobra.Command {
 			"controls as `auth`. These routes are served by the knowledge module: an engine\n" +
 			"built without it answers 404 for the whole namespace, and this command says so.",
 		Example: `  olivares knowledge kbs ls
-  olivares knowledge --server https://plane.example.com --tenant tenant-a kbs ls`,
+  olivares knowledge --server https://olivares.example.com --tenant tenant-a kbs ls`,
 		Args: cobra.NoArgs,
 	}
 	flags.addPersistent(cmd)
@@ -278,7 +278,7 @@ func newKnowledgeKBsCreateCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create",
 		Short: "Declare a knowledge base",
-		Long: "Declare a governed knowledge base. The control plane validates the\n" +
+		Long: "Declare a governed knowledge base. The engine validates the\n" +
 			"embed-policy/egress and residency/egress gates before it exists: a region-locked\n" +
 			"corpus cannot be declared while an egressing embedder is wired.",
 		Example: `  olivares knowledge kbs create --name handbook --classification internal
@@ -311,7 +311,7 @@ func newKnowledgeKBsSetCmd(client datalaneClient) *cobra.Command {
 		Use:   "set <kb-id>",
 		Short: "Replace a knowledge base's authored fields",
 		Long: "Replace the authored fields of a knowledge base.\n\n" +
-			"THIS REPLACES, IT DOES NOT PATCH. The control plane rewrites classification,\n" +
+			"THIS REPLACES, IT DOES NOT PATCH. The engine rewrites classification,\n" +
 			"residency region, embed policy, default ACL and status from the request, so a\n" +
 			"field left out is reset to its server default — an omitted classification\n" +
 			"becomes internal, an omitted ACL becomes empty. The command therefore refuses a\n" +
@@ -350,7 +350,7 @@ func newKnowledgeKBsRemoveCmd(client datalaneClient) *cobra.Command {
 		Use:     "rm <kb-id>",
 		Aliases: []string{"delete"},
 		Short:   "Delete a knowledge base and cascade its documents",
-		Long: "Delete a knowledge base. The control plane cascades its documents, chunks and\n" +
+		Long: "Delete a knowledge base. The engine cascades its documents, chunks and\n" +
 			"sensitivity labels in one transaction; the append-only lineage and PII scan\n" +
 			"evidence are retained deliberately. An active legal hold vetoes the delete.\n\n" +
 			"JSON output is the raw API response.",
@@ -579,7 +579,7 @@ func newKnowledgeKBsScanCmd(client datalaneClient) *cobra.Command {
 		Use:   "scan <kb-id>",
 		Short: "Run PII discovery over a knowledge base",
 		Long: "Scan a knowledge base at rest for personal data, writing sensitivity labels and\n" +
-			"append-only scan evidence. With no classifier wired the control plane REFUSES\n" +
+			"append-only scan evidence. With no classifier wired the engine REFUSES\n" +
 			"(409) rather than reporting a clean corpus it never inspected.",
 		Example: "  olivares knowledge kbs scan kb_123",
 		Args:    cobra.ExactArgs(1),
@@ -1067,7 +1067,7 @@ func newKnowledgeMemoryGetCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get <entry-id>",
 		Short: "Show one memory entry",
-		Long: "Show one memory entry. The control plane answers 404 for an entry outside the\n" +
+		Long: "Show one memory entry. The engine answers 404 for an entry outside the\n" +
 			"declared scope or above the caller's clearance: absence and refusal are the same\n" +
 			"answer here on purpose, so a probe cannot enumerate what it may not read.",
 		Example: `  olivares knowledge memory get mem_123
@@ -1111,7 +1111,7 @@ func newKnowledgeMemoryPutCmd(client datalaneClient) *cobra.Command {
 			"write path the module uses everywhere; use --content-file (- for stdin) to keep\n" +
 			"the value out of the process table.\n\n" +
 			"--user-ref and --session-ref DECLARE the entry's namespace. Declaring one blank\n" +
-			"is rejected by the control plane: an undeclared scope and an empty one are\n" +
+			"is rejected by the engine: an undeclared scope and an empty one are\n" +
 			"different facts.",
 		Example: `  olivares knowledge memory put --agent-ref agent-1 --key preferences --content-file ./prefs.txt
   olivares knowledge memory put --agent-ref agent-1 --key note --content "call back" --ttl-seconds 3600`,
@@ -1208,7 +1208,7 @@ func newKnowledgeMemoryPurgeCmd(client datalaneClient) *cobra.Command {
 		Long: "Purge expired memory entries, optionally for one agent. This deletes rows: it is\n" +
 			"destructive even though the method is POST, so it asks for confirmation and\n" +
 			"refuses an unattended session without --yes. Entries under an active legal hold\n" +
-			"are excluded by the control plane, one subject at a time.",
+			"are excluded by the engine, one subject at a time.",
 		Example: `  olivares knowledge memory purge --yes
   olivares knowledge memory purge --agent-ref agent-1 --yes`,
 		Args: cobra.NoArgs,
@@ -1301,7 +1301,7 @@ func newKnowledgeMemoryImportCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "import",
 		Short: "Import a signed portability bundle",
-		Long: "Import a memory bundle produced by `memory export`. The control plane verifies\n" +
+		Long: "Import a memory bundle produced by `memory export`. The engine verifies\n" +
 			"the manifest signature before writing anything and applies the same fail-closed\n" +
 			"write path as `put`, entry by entry. Without a verify key wired it answers 501\n" +
 			"rather than importing unverified content.",
@@ -1584,7 +1584,7 @@ func newKnowledgeDLPCmd(client datalaneClient) *cobra.Command {
 		Use:   "put",
 		Short: "Create or replace one DLP rule",
 		Long: "Create or replace the rule for one sensitivity class. The action must be allow\n" +
-			"or deny; anything else is refused by the control plane rather than defaulted.",
+			"or deny; anything else is refused by the engine rather than defaulted.",
 		Example: `  olivares knowledge dlp put --class pii.email --action deny
   olivares knowledge dlp put --class pii.name --action allow --note "approved by DPO"`,
 		Args: cobra.NoArgs,
@@ -1660,7 +1660,7 @@ func newKnowledgeSourcesCmd(client datalaneClient) *cobra.Command {
 		Short: "Scan a content source for personal data without ingesting",
 		Long: "Pull a registered DOCUMENT content source and classify it in place. Audit and\n" +
 			"inventory feeds are refused: they are not knowledge, and labeling them as source\n" +
-			"documents would be wrong. With no classifier wired the control plane refuses\n" +
+			"documents would be wrong. With no classifier wired the engine refuses\n" +
 			"(409) instead of reporting a clean source it never read.",
 		Example: "  olivares knowledge sources scan confluence",
 		Args:    cobra.ExactArgs(1),
@@ -1881,7 +1881,7 @@ func newKnowledgeDataProductsSetCmd(client datalaneClient) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "set <product-id>",
 		Short: "Update a data product's authored fields",
-		Long: "Update a data product. This endpoint is a genuine PATCH — the control plane\n" +
+		Long: "Update a data product. This endpoint is a genuine PATCH — the engine\n" +
 			"applies only the fields present in the request — so an unset flag leaves its\n" +
 			"stored value alone. That is why this verb carries no --replace guard while\n" +
 			"`kbs set` does.",

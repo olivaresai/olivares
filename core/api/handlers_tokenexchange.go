@@ -50,6 +50,11 @@ func (s *Server) handleTokenExchange(w http.ResponseWriter, r *http.Request) {
 		RequestedActorRef:  r.PostForm.Get("requested_actor"),
 	}
 
+	// Cookie callers down-scope the authenticated session without exposing its
+	// bearer to JavaScript. All actor, scope and tenant checks stay in ExchangeToken.
+	if req.SubjectToken == "browser-session" && browserCredential(r) != "" {
+		req.SubjectToken = browserCredential(r)
+	}
 	res, err := s.authr.ExchangeToken(r.Context(), caller, req)
 	if err != nil {
 		status, code, internal := classifyExchangeError(err)

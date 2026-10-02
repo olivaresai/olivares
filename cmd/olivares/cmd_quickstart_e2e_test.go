@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path/filepath"
@@ -18,35 +19,11 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/secure"
+	"github.com/spf13/cobra"
 )
 
-// cmd_quickstart_e2e_test.go RUNS `olivares quickstart`.
-//
-// ⛔ WHY THIS FILE EXISTS, measured 2026-08-27: the FIRST command README.md and INSTALL.md put
-// in front of a community user had NOT ONE execution anywhere in the tree.
-// an internal design note (not shipped) marks the `quickstart` row "1 verb, 0 with a test,
-// NOT MEASURED" (deny-closed), and it was right: cmd_quickstart_test.go asserts the command's
-// SHAPE (its flags, its secure-by-construction posture) and never starts it, and
-// scripts/quickstart-smoke.sh boots the engine through `serve --seed-demo`, which is the docs
-// page's path and NOT this verb. So the exact thing a first-time operator sees — the header,
-// then the panel, then a one-time setup token they must paste — had never been watched by any
-// gate. A wrapper is not "low risk" when nothing has ever run it: the panel is minted from live
-// engine state (eng.setupTok.Ensure), and this very file's subject once printed a BLANK LINE
-// where the token should be, on the second run of an unfinished data dir.
-//
-// It runs IN THE DEFAULT SUITE on purpose. The black-box binary smoke next door is behind
-// `//go:build e2e`, so it is absent from every gate a lane or CI actually runs, and a row the
-// matrix calls NOT MEASURED cannot be closed with a test nobody executes.
-//
-// WHAT IT ASSERTS, and each is a distinct way this can rot:
-//   - the header arrives BEFORE the engine's startup checks (the ordering);
-//   - the welcome panel arrives at all — i.e. announceQuickstart was reached, which means the
-//     engine came up;
-//   - the token is a REAL setup token by shape (olst_ + 52 base32 chars, core/secure/setup.go),
-//     not merely a non-empty line — the defect this file guards against printed an empty one;
-//   - the token the operator is shown VERIFIES against the store the engine wrote, so it is
-//     the live credential and not an echo;
-//   - the console URL printed is the loopback HTTPS one the secure defaults imply.
+// These tests execute the real quickstart command with an isolated SQLite store.
+// They verify the console address, one-time token, setup-state guidance and logging.
 
 // setupTokenShape is the token as core/secure/setup.go mints it: the operator-facing prefix
 // plus unpadded base32 over 32 bytes of entropy (52 characters).
@@ -83,9 +60,12 @@ func freeLoopbackPort(t *testing.T) int {
 // runQuickstart drives the real command by argv until `want` appears in its output (or the
 // deadline passes), then cancels it and returns everything it printed.
 func runQuickstart(t *testing.T, want *regexp.Regexp, args ...string) string {
+	return runEngineCommand(t, newQuickstartCmd(), want, args...)
+}
+
+func runEngineCommand(t *testing.T, cmd *cobra.Command, want *regexp.Regexp, args ...string) string {
 	t.Helper()
 	out := &syncBuf{}
-	cmd := newQuickstartCmd()
 	cmd.SetOut(out)
 	cmd.SetErr(out)
 	cmd.SetArgs(args)
@@ -113,7 +93,7 @@ func runQuickstart(t *testing.T, want *regexp.Regexp, args ...string) string {
 		select {
 		case err := <-done:
 			cancel()
-			t.Fatalf("quickstart exited before printing what was expected: %v\n%s", err, out.String())
+			t.Fatalf("quickstart exited before printing what was expected: %v\n%s", err, setupTokenShape.ReplaceAllString(out.String(), "[setup token redacted]"))
 		case <-time.After(100 * time.Millisecond):
 		}
 	}
@@ -124,7 +104,7 @@ func runQuickstart(t *testing.T, want *regexp.Regexp, args ...string) string {
 		cancel()
 		<-done
 		t.Fatalf("quickstart did not print /%s/ within %s — it was still starting, or it never gets there:\n%s",
-			want, budget, out.String())
+			want, budget, setupTokenShape.ReplaceAllString(out.String(), "[setup token redacted]"))
 	}
 	cancel()
 	select {
@@ -142,35 +122,30 @@ func TestQuickstartByArgvPrintsBannerAndSetupToken(t *testing.T) {
 
 	got := runQuickstart(t, setupTokenShape,
 		"--data-dir", dataDir, "--listen", listen, "--grpc-listen", grpc, "--quiet")
+	safeOutput := setupTokenShape.ReplaceAllString(got, "[setup token redacted]")
 
-	// 1) The header is what an operator reads first, before any startup check.
-	if !strings.Contains(got, "=== OLIVARES AI — FIRST RUN ===") {
-		t.Fatalf("the first-run header is missing:\n%s", got)
-	}
-	// 2) The panel was reached, which means the engine came up.
-	if !strings.Contains(got, "=== WELCOME TO OLIVARES AI ===") {
-		t.Fatalf("the welcome panel is missing:\n%s", got)
-	}
-	// 3) The header comes BEFORE the panel (ordering: product first, checks after).
-	if strings.Index(got, "=== OLIVARES AI — FIRST RUN ===") > strings.Index(got, "=== WELCOME TO OLIVARES AI ===") {
-		t.Fatalf("the header must precede the welcome panel:\n%s", got)
+	if strings.Contains(got, "FIRST RUN") {
+		t.Fatalf("quickstart must use state-aware guidance instead of an unconditional first-run header")
 	}
 	// 4) The console URL is the loopback HTTPS one the secure defaults imply.
 	if want := "https://" + listen; !strings.Contains(got, want) {
-		t.Fatalf("the panel does not point at %s:\n%s", want, got)
+		t.Fatalf("the panel does not point at %s:\n%s", want, safeOutput)
 	}
 	// 5) The token is a real setup token BY SHAPE, and it VERIFIES against what the engine
 	//    stored — the two halves of "this is a usable credential, not a decorative line".
 	m := setupTokenShape.FindString(got)
 	if m == "" {
-		t.Fatalf("no setup token of the shape core/secure mints:\n%s", got)
+		t.Fatalf("no setup token of the shape core/secure mints:\n%s", safeOutput)
 	}
 	if !strings.Contains(got, "one-time token") {
-		t.Fatalf("the panel does not tell the operator what the token is for:\n%s", got)
+		t.Fatalf("the panel does not tell the operator what the token is for:\n%s", safeOutput)
 	}
-	for _, want := range []string{"olivares doctor", "olivares agent tool detect", "Privileged login"} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("the panel does not name the first-hour next step %q:\n%s", want, got)
+	if !strings.Contains(got, firstHourWelcomeNextSteps) {
+		t.Fatalf("the panel must point to the guided console flow:\n%s", safeOutput)
+	}
+	for _, unwanted := range []string{"passkey", "POST /v1/agents", "olivares doctor", "Privileged login"} {
+		if strings.Contains(got, unwanted) {
+			t.Fatalf("the panel contains an obsolete onboarding instruction %q:\n%s", unwanted, safeOutput)
 		}
 	}
 	if _, err := os.Stat(filepath.Join(dataDir, "setup.token")); err != nil {
@@ -178,6 +153,88 @@ func TestQuickstartByArgvPrintsBannerAndSetupToken(t *testing.T) {
 	}
 	if !secure.NewSetupToken(filepath.Join(dataDir, "setup.token")).Verify(m) {
 		t.Fatal("the token printed to the operator does not verify against the stored one")
+	}
+}
+
+func TestQuickstartDefaultKeepsStartupChecksInLogFile(t *testing.T) {
+	dir := t.TempDir()
+	got := runQuickstart(t, setupTokenShape, "--data-dir", dir,
+		"--listen", fmt.Sprintf("127.0.0.1:%d", freeLoopbackPort(t)),
+		"--grpc-listen", fmt.Sprintf("127.0.0.1:%d", freeLoopbackPort(t)))
+	if strings.Contains(got, "level=") {
+		t.Fatalf("default output includes engine logs:\n%s", setupTokenShape.ReplaceAllString(got, "[setup token redacted]"))
+	}
+	file := filepath.Join(dir, "olivares.log")
+	data, err := os.ReadFile(file)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"WRITER FENCE", "ACTUATED", "level=INFO"} {
+		if !strings.Contains(string(data), want) {
+			t.Errorf("the log file lost startup check %q", want)
+		}
+	}
+	if setupTokenShape.Match(data) {
+		t.Fatal("the one-time setup token was written to the log file")
+	}
+	info, err := os.Stat(file)
+	if err != nil || info.Mode().Perm() != 0o600 {
+		t.Fatalf("log file permissions: info=%v err=%v", info, err)
+	}
+}
+
+func TestQuickstartVerbosePrintsAndRetainsStartupChecks(t *testing.T) {
+	dir := t.TempDir()
+	got := runQuickstart(t, setupTokenShape, "--verbose", "--data-dir", dir,
+		"--listen", fmt.Sprintf("127.0.0.1:%d", freeLoopbackPort(t)),
+		"--grpc-listen", fmt.Sprintf("127.0.0.1:%d", freeLoopbackPort(t)))
+	data, err := os.ReadFile(filepath.Join(dir, "olivares.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"WRITER FENCE", "ACTUATED", "level=INFO"} {
+		if !strings.Contains(got, want) || !strings.Contains(string(data), want) {
+			t.Errorf("--verbose must print and retain %q", want)
+		}
+	}
+}
+
+func TestQuickstartFailedBootKeepsStartupDiagnostics(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "olivares.db"), []byte("not a SQLite database"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	var out bytes.Buffer
+	cmd := newQuickstartCmd()
+	cmd.SetOut(&out)
+	cmd.SetErr(&out)
+	cmd.SetArgs([]string{"--data-dir", dir, "--public-url", "https://console.example.invalid"})
+	if err := cmd.ExecuteContext(context.Background()); err == nil {
+		t.Fatal("corrupt store must fail boot")
+	}
+	data, err := os.ReadFile(filepath.Join(dir, "olivares.log"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "console: public address declared") {
+		t.Fatal("failed boot discarded its startup diagnostics")
+	}
+	if strings.Contains(out.String(), "level=") {
+		t.Fatal("failed boot printed internal records by default")
+	}
+}
+
+func TestQuickstartInvalidConfigurationCreatesNoLog(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "absent")
+	cmd := newQuickstartCmd()
+	cmd.SetOut(io.Discard)
+	cmd.SetErr(io.Discard)
+	cmd.SetArgs([]string{"--data-dir", dir, "--public-url", "not a URL"})
+	if err := cmd.ExecuteContext(context.Background()); err == nil {
+		t.Fatal("invalid configuration must fail")
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("invalid configuration created a data directory or log: %v", err)
 	}
 }
 
@@ -195,20 +252,20 @@ func TestQuickstartByArgvSecondRunSaysTheTokenIsGone(t *testing.T) {
 	first := runQuickstart(t, setupTokenShape,
 		"--data-dir", dataDir, "--listen", listen, "--grpc-listen", grpc, "--quiet")
 	if !setupTokenShape.MatchString(first) {
-		t.Fatalf("the first run must mint a token:\n%s", first)
+		t.Fatalf("the first run must mint a token:\n%s", setupTokenShape.ReplaceAllString(first, "[setup token redacted]"))
 	}
 
-	pending := regexp.MustCompile(`SETUP STILL PENDING`)
+	pending := regexp.MustCompile(`Setup is still pending`)
 	second := runQuickstart(t, pending,
 		"--data-dir", dataDir, "--listen", listen, "--grpc-listen", grpc, "--quiet")
-	if !strings.Contains(second, "CANNOT be shown again") {
+	if !strings.Contains(second, "cannot be shown again") {
 		t.Fatalf("the second run must explain that the token cannot be reshown:\n%s", second)
 	}
-	if strings.Contains(second, "setup.token") == false {
-		t.Fatalf("the second run must name the file to delete to mint a fresh token:\n%s", second)
+	if !strings.Contains(second, "--new-token") {
+		t.Fatalf("the second run must name the supported token recovery command:\n%s", second)
 	}
 	// NON-FIRING DIRECTION: it must NOT print a token-shaped string it cannot know.
 	if setupTokenShape.MatchString(second) {
-		t.Fatalf("the second run printed a token it cannot recover:\n%s", second)
+		t.Fatalf("the second run printed a token it cannot recover:\n%s", setupTokenShape.ReplaceAllString(second, "[setup token redacted]"))
 	}
 }

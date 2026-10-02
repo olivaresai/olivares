@@ -292,7 +292,14 @@ def root_entry(name):
 
 # CalVer product versions: vYY.M.PATCH with YY>=26 — dependency versions (go1.26.5,
 # chi v5.3.1, node 24) do not match this shape.
-VERSION = re.compile(r"\bv?(2[6-9]|[3-9][0-9])\.([1-9]|1[0-2])\.([0-9]+)(-fips|-stig)?\b")
+VERSION = re.compile(r"(?<![\w.])v?(2[6-9]|[3-9][0-9])\.([1-9]|1[0-2])(?:\.([0-9]+))?(-fips|-stig)?\b(?!\.\d)")
+
+# Before 26.11, YY.M in prose named a release month, while published versions
+# always included a patch. Monthly release tokens start with 26.11 rule.
+def release_token(match):
+    if match.string[match.end():].startswith("%") or match.string[:match.start()].rstrip().endswith(("§", "ORD-")):
+        return False  # percentage or specification section, not a release coordinate
+    return match.group(3) is not None or (int(match.group(1)), int(match.group(2))) >= (26, 11)
 
 # Exact allowlist records: (path suffix, exemption kind, reason). Kinds:
 #   variants   — the -fips/-stig image-tag forms of the exact canon
@@ -347,7 +354,7 @@ DERIVED_ALLOW = [
 # shape collides with test fixtures and third-party versions (measured 2026-08-13: 124 shaped
 # tokens in core/, 980 in connectors/, one of them the date 27.12.2022).
 PIN = re.compile(
-    r"(?:olivares(?:ai)?/olivares:|olivares[-_])v?(2[6-9]|[3-9][0-9])\.([1-9]|1[0-2])\.([0-9]+)(-fips|-stig)?\b"
+    r"(?:olivares(?:ai)?/olivares:|olivares[-_])v?(2[6-9]|[3-9][0-9])\.([1-9]|1[0-2])(?:\.([0-9]+))?(-fips|-stig)?\b(?!\.\d)"
 )
 
 SKIP_DIRS = {"node_modules", ".git", "vendor", "dist", ".astro"}
@@ -682,10 +689,21 @@ def witness_version(path):
 
     docs/releases/ is a ledger with one file per release, and the file says which one it is. The
     allowance is therefore not "any past version here" but "the version on the label": a v26.8.0
-    witness stating 26.5.0 is a witness about the wrong release, and no other rule would see it."""
+    witness stating 26.5.0 is a witness about the wrong release, and no other rule would see it.
+
+    The label follows the release's own era (BARE_CANON_FROM): v-prefixed before 26.10, bare from
+    26.10 on. Without the bare form, 26.10.0's own witness lost its allowance on the 26.10.1 cut, and
+    every token in it read as a stale live claim. A label in the wrong shape for its era names no
+    release that was ever tagged, so it earns nothing."""
     base = os.path.basename(path)
-    m = re.match(r"^(v(?:2[6-9]|[3-9][0-9])\.(?:[1-9]|1[0-2])\.[0-9]+)-", base)
-    return m.group(1) if m else None
+    m = re.match(r"^(v?)((?:2[6-9]|[3-9][0-9])\.(?:[1-9]|1[0-2])(?:\.[0-9]+)?)-", base)
+    if not m:
+        return None
+    prefix, ver = m.groups()
+    yy, mm = (int(x) for x in ver.split(".")[:2])
+    if bool(prefix) == ((yy, mm) >= BARE_CANON_FROM):
+        return None
+    return prefix + ver
 
 
 def historical_allowed(canon, path, tok, dated, curated, kept=frozenset()):
@@ -734,7 +752,7 @@ def historical_allowed(canon, path, tok, dated, curated, kept=frozenset()):
 #
 # It cannot rescue anything `changelog-history` refuses: a heading does not name the file it
 # sits in, so the masthead stays judged and the sections stay the record.
-CITED_SECTION = re.compile(r"\[v?(?:2[6-9]|[3-9][0-9])[.](?:[1-9]|1[0-2])[.][0-9]+\]")
+CITED_SECTION = re.compile(r"\[v?(?:2[6-9]|[3-9][0-9])[.](?:[1-9]|1[0-2])(?:[.][0-9]+)?\]")
 
 # The changelog is named by its filename, which is the same string every one of those pages
 # uses to point at it. Bare "changelog" is deliberately not enough: the word is prose.
@@ -797,6 +815,8 @@ def scan_pins(tops):
                 start = dated_from(text)
                 for i, line in enumerate(text.splitlines(), 1):
                     for m in PIN.finditer(line):
+                        if not release_token(m):
+                            continue
                         hits.append((path, i, m.group(0), line.strip(),
                                      start is not None and i >= start))
     return hits
@@ -827,7 +847,7 @@ def judge_pins(canon, hits, curated=None, kept=None):
 # same rule — a v-prefixed 26.10.0 canon and a bare 26.9.0 canon are both refused — and the
 # SURFACES follow it too: under a bare canon only the bare form states the release, so a
 # surface writing v26.10.0 is a divergence the sweep reports instead of silently tolerating.
-CANON_SHAPE = re.compile(r"(v?)(2[6-9]|[3-9][0-9])\.([1-9]|1[0-2])\.([0-9]+)")
+CANON_SHAPE = re.compile(r"(v?)(2[6-9]|[3-9][0-9])\.([1-9]|1[0-2])(?:\.([0-9]+))?")
 BARE_CANON_FROM = (26, 10)  # the first release whose tag carries no v prefix
 
 
@@ -838,7 +858,7 @@ def canon_parts(canon):
 # Where a changelog stops stating the CURRENT release and starts being the RECORD of past
 # ones: the first section heading, `## [Unreleased]` or the first dated version heading.
 SECTION_START = re.compile(
-    r"^## \[(?:Unreleased|v?(?:2[6-9]|[3-9][0-9])\.(?:[1-9]|1[0-2])\.[0-9]+)\]")
+    r"^## \[(?:Unreleased|v?(?:2[6-9]|[3-9][0-9])\.(?:[1-9]|1[0-2])(?:\.[0-9]+)?)\]")
 
 
 def dated_from(text):
@@ -925,7 +945,7 @@ BOUND = re.compile(r"""(?:>=|≥|--min-version|introduced["']?\s*:)\s*["']?v?$""
 # assignment the package logic reads — `first_contract_version='<v>~'`, the tilde sorting the
 # value before that release's own pre-releases — on the exact path the records name: any other
 # version in that file, or that assignment on any other file, is judged exactly as before.
-CONTRACT = re.compile(r"^first_contract_version=['\"]v?(\d+\.\d+\.\d+)~['\"]$")
+CONTRACT = re.compile(r"^first_contract_version=['\"]v?(\d+\.\d+(?:\.\d+)?)~['\"]$")
 
 
 def contract_assignment(line, tok):
@@ -947,13 +967,13 @@ def bounded(line, tok):
 def _tuple(tok):
     """'26.7.0' / 'v26.7.0-fips' -> (26, 7, 0). Comparable, so a floor can be ordered."""
     m = VERSION.search(tok)
-    return (int(m.group(1)), int(m.group(2)), int(m.group(3)))
+    return (int(m.group(1)), int(m.group(2)), int(m.group(3) or "0"))
 
 
 def artifact_allowed(canon, path, tok, line):
     """-> (ok, why). The canon exactly, plus the two context-bound artifact kinds."""
     _, yy, mm, pp = canon_parts(canon)
-    base = f"{yy}.{mm}.{pp}"
+    base = f"{yy}.{mm}" + (f".{pp}" if pp is not None else "")
     if token_version(tok) in allowed_at(canon, path):
         return True, "canon"
     kinds = {k for p, k, _ in ARTIFACT_ALLOW if path == p or path.endswith("/" + p)}
@@ -1000,8 +1020,10 @@ def read_canon(text):
                    "to hold the release-bearing surfaces to, and nothing is certified without one.")
     m = CANON_SHAPE.fullmatch(canon)
     if not m:
-        sys.exit(f"FAIL check-release-version: RELEASE-VERSION record {canon!r} is not CalVer YY.M.PATCH (month 1-12)")
+        sys.exit(f"FAIL check-release-version: RELEASE-VERSION record {canon!r} is not CalVer YY.M or YY.M.N (month 1-12)")
     prefix, yy, mm, _pp = m.groups()
+    if (int(yy), int(mm)) > (26, 10) and _pp == "0":
+        sys.exit(f"FAIL check-release-version: new canon {canon!r} must omit a zero patch")
     if (int(yy), int(mm)) >= BARE_CANON_FROM:
         if prefix:
             sys.exit(f"FAIL check-release-version: RELEASE-VERSION record {canon!r} carries a v prefix; "
@@ -1019,11 +1041,11 @@ def require_decided(canon):
     UNDECIDED back into a pass."""
     if not CANON_SHAPE.fullmatch(str(canon)):
         unverified(f"UNVERIFIED check-release-version: {canon!r} is not a decided canon "
-                   "(vYY.M.PATCH before 26.10, bare YY.M.PATCH from 26.10 on); no surface is judged against it.")
+                   "(vYY.M.PATCH before 26.10, bare YY.M[.N] from 26.10 on); no surface is judged against it.")
 
 def allowed_at(canon, path):
     prefix, yy, mm, pp = canon_parts(canon)
-    base = f"{yy}.{mm}.{pp}"
+    base = f"{yy}.{mm}" + (f".{pp}" if pp is not None else "")
     # THE ERA RULE, on the surfaces too: under a bare canon (26.10 on) only the bare form
     # states the release — v26.10.0 on a surface is a divergence, which is the row the
     # battery pins. Under a v canon both spellings of ITS OWN version stay tolerated, which
@@ -1040,7 +1062,7 @@ def allowed_at(canon, path):
 def token_version(tok):
     """-> the version form a token states at its end, its v-prefix KEPT: the exact spelling
     the surface carries, compared against the exact forms allowed_at returns."""
-    m = re.search(r"(v?\d+\.\d+\.\d+(?:-fips|-stig)?)$", tok)
+    m = re.search(r"(v?\d+\.\d+(?:\.\d+)?(?:-fips|-stig)?)$", tok)
     return m.group(1) if m else None
 
 def scan(files, rd):
@@ -1056,6 +1078,8 @@ def scan(files, rd):
         start = dated_from(text)
         for i, line in enumerate(text.splitlines(), 1):
             for m in VERSION.finditer(line):
+                if not release_token(m):
+                    continue
                 hits.append((path, i, m.group(0), line.strip(),
                              start is not None and i >= start))
     return hits
@@ -1249,6 +1273,13 @@ def selftest():
     expect("well-formed canon -> accepted", read_canon("v26.7.0\n") == "v26.7.0")
     # ── the tag-name correction: bare CalVer from 26.10 on, v-shaped history before it ──
     expect("bare canon from 26.10 -> accepted", read_canon("26.10.0\n") == "26.10.0")
+    expect("monthly canon -> accepted", read_canon("26.11\n") == "26.11")
+    expect("patch canon -> accepted", read_canon("26.11.1\n") == "26.11.1")
+    canon_refuses("new zero-patch canon -> refused", "26.11.0\n")
+    monthly_tree = {"README.md": "Olivares 26.11 today", "deploy/fixture.yaml": "image: olivaresai/olivares:26.11"}
+    expect("monthly surface pins -> green", judge("26.11", scan(monthly_tree, rd(monthly_tree)))[0] == [])
+    stale_tree = {"README.md": "Olivares 26.10.0 today"}
+    expect("monthly canon sees historical stale surface", judge("26.11", scan(stale_tree, rd(stale_tree)))[0] == [("README.md", 1, "26.10.0")])
     canon_refuses("v-prefixed canon from 26.10 -> refuse", "v26.10.0\n")
     canon_refuses("bare canon before 26.10 -> refuse (history keeps its shape)", "26.9.0\n")
     # ── decided canon: divergence is red; derived forms only in their contexts ──
@@ -1305,6 +1336,8 @@ def selftest():
     expect("the same coordinate as an artefact pin -> green for the same reason", (ok_artifact, why) == (True, "contract-floor"))
     tree = {"d.md": "requires Go 1.26.5 and chi v5.3.1"}
     expect("dependency versions -> not product-shaped", scan(tree, rd(tree)) == [])
+    references = {"d.md": "target 99.9% uptime; see SPEC §47.1 and ORD-47.1"}
+    expect("percentage and specification section are not monthly releases", scan(references, rd(references)) == [])
     tree = {"e.md": "since 26.0.9 things"}
     expect("month-zero token -> not product-shaped", scan(tree, rd(tree)) == [])
     _, census = judge("v26.7.0", scan({"f.md": "v26.6.0 and v26.7.0"}, rd({"f.md": "v26.6.0 and v26.7.0"})))
@@ -1745,6 +1778,19 @@ def selftest():
     expect("historical: the CURRENT witness naming a past release -> red (the label is the allowance)",
            judge("v26.9.1", scan(current, rd(current)), curated=hist)[0]
            == [("docs/releases/v26.9.1-install-surfaces.json", 1, "v26.9.0")])
+    # 8c · THE BARE ERA'S LEDGER (added 2026-10-02, on the 26.10.1 cut). 26.10.0 is the first
+    #      release with a bare label, and its witness must keep its allowance once the canon moves
+    #      past it. A label in the wrong shape for its era names no tagged release: it earns nothing.
+    bare_prev = {"docs/releases/26.10.0-install-surfaces.json": '  "version": "26.10.0",'}
+    v_in_bare_era = {"docs/releases/v26.10.0-install-surfaces.json": '  "version": "26.10.0",'}
+    bare_before_era = {"docs/releases/26.9.0-install-surfaces.json": '  "version": "v26.9.0",'}
+    expect("historical: a bare-era witness admits its own label under a later canon",
+           judge("26.10.1", scan(bare_prev, rd(bare_prev)), curated=hist)[0] == [])
+    expect("historical: a v label in the bare era, or a bare label before it, earns nothing",
+           judge("26.10.1", scan(v_in_bare_era, rd(v_in_bare_era)), curated=hist)[0]
+           == [("docs/releases/v26.10.0-install-surfaces.json", 1, "26.10.0")]
+           and judge("26.10.1", scan(bare_before_era, rd(bare_before_era)), curated=hist)[0]
+           == [("docs/releases/26.9.0-install-surfaces.json", 1, "v26.9.0")])
     # A changelog with TWO dated sections: both are the record, and the masthead above them is
     # still the live claim. The founding defect of this gate lives in that masthead.
     two = ("# Changelog\n\nthe current release is `v26.9.0`.\n\n## [Unreleased]\n\n"
@@ -1848,13 +1894,13 @@ def selftest():
     expect("stale: a current-install pin one patch above the canon -> red",
            live("INSTALL.md", "docker pull docker.io/olivaresai/olivares:26.9.1")
            == [("INSTALL.md", 1, "26.9.1")])
-    expect("pending: the next release in its two-part form (v26.10) is not a version token",
-           scan({"INSTALL.md": "the next release is v26.10, pending"},
-                rd({"INSTALL.md": "the next release is v26.10, pending"})) == [])
+    expect("a future monthly release is a version token and is refused on a live surface",
+           scan({"INSTALL.md": "the next release is 26.11, pending"},
+                rd({"INSTALL.md": "the next release is 26.11, pending"})) == [("INSTALL.md", 1, "26.11", "the next release is 26.11, pending", False)])
     expect("pending: its tag form on a live surface is judged like any version -> red (no pending-target allowance)",
            live("INSTALL.md", "the next tag is v26.10.0") == [("INSTALL.md", 1, "v26.10.0")])
     base2 = ("# Changelog\n\nthe latest published release is `v26.9.0`.\n\n## [Unreleased]\n\n"
-             "pending for v26.10\n\n## [26.9.0] - 2026-09-16\n\nTag `v26.9.0`\n\n"
+             "pending for YY.M\n\n## [26.9.0] - 2026-09-16\n\nTag `v26.9.0`\n\n"
              "## [26.8.0] - 2026-09-01\n\nTag `v26.8.0`\n")
     expect("historical: the dated sections survive under the published baseline, and the masthead states it",
            live("CHANGELOG.md", base2) == [])

@@ -16,6 +16,11 @@ import { ApiError, NetworkError, parseErrorEnvelope } from './errors'
 interface ClientConfig {
   /** Current opaque session/API bearer token, or null when anonymous. */
   getToken: () => string | null
+  /** Wait for page-load recovery before a new cookie sign-in can supersede it.
+   * The browser auth module supplies this; non-browser clients stay independent. */
+  beforeBrowserSignIn?: () => Promise<void>
+  /** Browser CSRF token; the credential stays in the HttpOnly cookie. */
+  getCSRFToken?: () => string | null
   /** Active tenant id for the X-Olivares-Tenant header, or null. */
   getTenant: () => string | null
   /** Called when an authenticated request gets 401 (session expired/revoked). */
@@ -377,6 +382,7 @@ export async function apiFetchWithMeta<T>(
   //    frase de arriba sea cierta por construcción y no por que nadie lo haya intentado todavía.
   if (opts.anonymous) {
     headers.delete('Authorization')
+    headers.delete('X-CSRF-Token')
     headers.delete('X-Olivares-Tenant')
   }
   if (opts.rawBody !== undefined)
@@ -401,10 +407,19 @@ export async function apiFetchWithMeta<T>(
 
   if (!opts.anonymous) {
     const token = config.getToken()
+    headers.delete('Authorization')
     if (token) headers.set('Authorization', `Bearer ${token}`)
+    headers.delete('X-CSRF-Token')
+    const csrf = config.getCSRFToken?.()
+    if (csrf) headers.set('X-CSRF-Token', csrf)
     const tenant = opts.tenant !== undefined ? opts.tenant : config.getTenant()
     if (tenant) headers.set('X-Olivares-Tenant', tenant)
   }
+
+  // A late migration Set-Cookie cannot be undone by a JavaScript generation
+  // check. Finish recovery before requesting the next browser sign-in cookie.
+  if (opts.anonymous && headers.get('X-Olivares-Session') === 'cookie')
+    await config.beforeBrowserSignIn?.()
 
   // ⛔ THE DISPATCH GUARD RUNS HERE AND NOWHERE EARLIER: after every await above (the
   //    preventive refresh) and after the headers are composed, immediately before the
@@ -425,8 +440,7 @@ export async function apiFetchWithMeta<T>(
             ? JSON.stringify(opts.body)
             : undefined,
       signal: opts.signal,
-      // Same-origin embedded SPA; no cookies are used (bearer auth), but keep
-      // same-origin credentials semantics explicit.
+      // Browser session cookies never leave the embedded console origin.
       credentials: 'same-origin',
     })
   } catch (cause) {

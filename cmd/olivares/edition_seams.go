@@ -157,8 +157,12 @@ type EditionRuntimeLaunchObserverRegistration interface {
 // EditionDependencies contains existing engine capabilities, never a private engine
 // or a second configuration source. Boot binds these after store/auth composition.
 type EditionDependencies struct {
-	Store    store.Store
-	Sessions sessions.SessionIdentityReader
+	// RegisterJobNotRunning registers a job's bounded in-memory status reader
+	// with server-info. Empty reason means running; values follow the public API.
+	// Nil means the status collector is unavailable, not scheduling authority.
+	RegisterJobNotRunning func(job string, reason func() string) error
+	Store                 store.Store
+	Sessions              sessions.SessionIdentityReader
 	// RuntimeLaunches registers bounded in-memory completion custody. Absence
 	// means the edition cannot retain new launches through this optional seam.
 	RuntimeLaunches EditionRuntimeLaunchObserverRegistration
@@ -176,6 +180,24 @@ type EditionDependencies struct {
 	// Secrets is the same configured resolver boot gives to its other consumers.
 	// Absence is unavailable; callers must not construct a permissive replacement.
 	Secrets *secret.Resolver
+	// RequestRestart asks the serving engine to drain and start again with the
+	// same binary and arguments (selfrestart.go); it returns at once. Nil when the
+	// engine is not serving (a CLI command).
+	RequestRestart func(reason string) error
+	// ProductSettings is the deployment settings record (productsettings.go). An
+	// activation saved here applies to every node at its next start.
+	ProductSettings EditionProductSettings
+}
+
+// EditionProductSettings is the activation half of the deployment settings.
+type EditionProductSettings interface {
+	// Activation is the deployment's activation (the record, or this node's file
+	// before the first record exists).
+	Activation(ctx context.Context) (*ActivationManifest, error)
+	// SaveActivation records it for the whole deployment, audited as actor, and
+	// writes this node's copy; owned (when non-nil) must cover every requested
+	// module. Call RequestRestart afterwards to build the modules from it.
+	SaveActivation(ctx context.Context, actor auth.Principal, m *ActivationManifest, owned []string) error
 }
 
 func closeEditionResources(resources []io.Closer, log *slog.Logger) {

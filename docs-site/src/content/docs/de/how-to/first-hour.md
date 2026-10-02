@@ -125,13 +125,44 @@ curl -sf "$BASE/v1/agents" \
 ./bin/olivares agent managed-settings --out ./managed-settings.json
 ```
 
-`POST /v1/agents` verlangt **kein** AAL3. Quellen, Konnektoren, Workspaces
-und Geheimnisse **schon**.
+`POST /v1/agents` verlangt keine zusätzliche administrative Anmeldung. Bei
+Quellen, Konnektoren, Workspaces und Geheimnissen richtet sich die zusätzliche
+Prüfung nach `admin_step_up`; der Standard ist `none`. Die Anleitung unten
+erklärt, wie Sie AAL3 verlangen.
 
 ### 4. Gesteuerte Sitzung: Read zulassen, Bash verweigern
 
-Starten Sie mit `OLIVARES_HOOK_PEP_CONFIG` und einer deny-closed Policy neu.
-Dann:
+Stoppen Sie den Engine-Prozess aus Schritt 1. Führen Sie danach Folgendes im
+selben Arbeitsverzeichnis aus und behalten Sie `DATA` und `TENANT` aus den
+Schritten 1 und 2 bei. Die Policy verweigert standardmäßig und der Neustart
+aktiviert den PEP:
+
+```bash
+# TENANT is the tenant_id returned in step 2.
+: "${TENANT:?Set TENANT to the tenant_id from step 2}"
+cat > ./hook-pep.json <<JSON
+{
+  "listen": "127.0.0.1:8447",
+  "tenants": [
+    {
+      "tenant": "$TENANT",
+      "require_firm_identity": false,
+      "policy": {
+        "version": "first-hour/v1",
+        "default": "deny",
+        "rules": [
+          { "tool": "Read", "decision": "allow", "reason": "reads are permitted in the first hour" },
+          { "tool": "Bash", "decision": "deny", "reason": "shell execution is blocked in the first hour" }
+        ]
+      }
+    }
+  ]
+}
+JSON
+OLIVARES_HOOK_PEP_CONFIG=./hook-pep.json \
+  ./bin/olivares serve --insecure --data-dir "$DATA" \
+  --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444
+```
 
 ```bash
 export OLIVARES_HOOK_PEP_URL=http://127.0.0.1:8447/
@@ -175,12 +206,23 @@ Halten Sie die Control Plane auf lokalem SQLite. Führen Sie den Agenten auf
 einer Workstation mit `claude` aus. Eine lebende offizielle CLI-Sitzung (PTY)
 ist Sache der Community-Laufzeit, nicht dieser Seite.
 
-## Die AAL3-Schranke (weiterhin wahr)
+## Administrative Step-up-Policy
 
-Das Anlegen von Quellen, Konnektoren, Workspaces und Geheimnissen wird bis
-AAL3 **verweigert**. PIV/CAC antwortet auf einer Standardinstallation mit
-**501**. Öffnen Sie `https://localhost:PORT`, dann **Identity → Privileged
-login**.
+Der Standard für `admin_step_up` ist `none`: Ein angemeldeter Administrator
+arbeitet mit der Stärke seiner aktuellen Sitzung. Das Anlegen von Quellen,
+Konnektoren, Workspaces und Geheimnissen verlangt daher standardmäßig kein
+AAL3. Authentifizierung, Berechtigungen, Mandantentrennung und Audit gelten
+weiterhin; API-Tokens erfüllen diese Prüfung nicht.
+
+Um für diese Aktionen frisches AAL3 zu verlangen, registrieren Sie unter
+`https://localhost:PORT` einen Passkey und führen Sie an dieser Konsolenadresse
+einen frischen Passkey/PIV-Step-up durch. Wählen Sie unter **Settings → Sign-in
+→ Extra check for administrative actions** die Option **Passkey**. Über die
+API entspricht das `PUT /v1/auth/step-up-policy` mit
+`{"admin_step_up":"passkey"}`. Die Engine lässt die strengere Policy erst zu,
+wenn der Administrator die Funktion des gewählten Faktors nachgewiesen hat.
+`POST /v1/agents` bleibt außerhalb dieser zusätzlichen Prüfung.
+
 
 ## 3. Eine Claude-Code-Sitzung über die Konsole starten
 

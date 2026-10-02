@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { firstHourKeys } from '@/features/first-hour/api'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { KeyRound, PlugZap, Plus, RefreshCw, Trash2 } from 'lucide-react'
@@ -108,7 +109,12 @@ function Inner() {
 
   const revoke = usePrivilegedMutation<string, ProviderRecordDTO>({
     mutationFn: (ref) => providersApi.revoke(ref),
-    invalidateKeys: () => [providerKeys.list(activeTenant, boundary.epoch)],
+    invalidateKeys: () => [
+      providerKeys.list(activeTenant, boundary.epoch),
+      // What a tool runs on may change with the keys (FH: first-hour keeps a
+      // "nothing to run on yet" answer for a minute).
+      firstHourKeys.all(activeTenant),
+    ],
     stepUpAction: 'providers',
     successMessage: (record) =>
       t(record.kind === 'ollama' ? 'revoke.localSuccess' : 'revoke.success'),

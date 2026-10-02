@@ -54,6 +54,9 @@ type orchCadencePump struct {
 // falls back to read-time piggybacking (someone must LOOK at schedules), which
 // defeats the anti-evasion posture, so the disable warns loudly.
 func newOrchCadencePump(getenv func(string) string, st store.Store, orch *orchestration.Module, log *slog.Logger) *orchCadencePump {
+	if orch == nil {
+		return nil // the orchestration module does not run on this node
+	}
 	interval, ok := orchCadencePumpInterval(getenv(orchCadencePumpIntervalEnv), log)
 	if !ok {
 		return nil
@@ -113,5 +116,5 @@ func (p *orchCadencePump) runOnce(ctx context.Context) error {
 // skipped deliberately: schedules are tenant-scoped facts (the eventing pump's
 // rule).
 func (p *orchCadencePump) businessTenants(ctx context.Context) ([]model.TenantID, error) {
-	return servedBusinessTenants(ctx, p.st)
+	return servedWorkTenants(ctx, p.st)
 }

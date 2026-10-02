@@ -115,6 +115,13 @@ type RouteAuthorizationWitness struct {
 // a top-level FreshUntil in the future passed both the digest and the freshness check.
 // Removing the copy leaves one truth, and it is the one already inside the digest.
 
+// UsesOwnerScopedGrant reports the source of a direct route authorization for
+// auditing. The scoped producer's actual effect remains in ScopedEffect.
+func (w RouteAuthorizationWitness) UsesOwnerScopedGrant() bool {
+	return w.minted && w.Decision.Outcome == EvidenceAllow &&
+		w.Decision.CorePermission.Code == "owner_scoped_grant_permitted"
+}
+
 // IsFresh reports whether the witness still stands at now.
 //
 // A zero FreshUntil is NOT treated as "forever": an evidence window that was never
@@ -247,10 +254,11 @@ func (az *Authorizer) AuthorizeRoute(ctx context.Context, req Request) (RouteAut
 	if az == nil {
 		return RouteAuthorizationWitness{}, ErrAuthorizerUnavailable
 	}
-	if req.Route.RequiresStepUp(req.Principal.AAL) {
+	if req.Route.RequiresStepUp(ctx, req.Principal) {
 		// Assurance is checked BEFORE the policy evaluation, so a principal who must
 		// step up is not told, by timing or by error, whether they would have been
 		// allowed afterwards.
+		az.RecordStepUpRefusal(ctx, req)
 		return RouteAuthorizationWitness{}, ErrStepUpRequired
 	}
 
@@ -612,7 +620,16 @@ func questionDigest(req Request) [32]byte {
 // el comentario que introdujo la segunda argumenta, tres parrafos mas arriba de si mismo, que dos
 // copias de un flujo de autorizacion DERIVAN y la que deriva es la que menos gente lee.
 //
-// Un suelo cero no exige nada, que es lo que declara toda ruta que no ha optado por entrar.
-func (m RouteMetadata) RequiresStepUp(aal int) bool {
-	return m.MinimumAAL > 0 && aal < m.MinimumAAL
+// Un suelo cero no exige nada, que es lo que declara toda ruta que no ha optado por entrar. Un
+// suelo AAL1 exige una sesion humana. Un suelo AAL3 es el step-up administrativo, y lo que pide lo
+// decide la politica admin_step_up del despliegue (StepUpSatisfied), igual que en cada otra puerta.
+func (m RouteMetadata) RequiresStepUp(ctx context.Context, p Principal) bool {
+	switch {
+	case m.MinimumAAL <= 0:
+		return false
+	case m.MinimumAAL < AAL3:
+		return p.AAL < m.MinimumAAL
+	default:
+		return !StepUpSatisfied(ctx, p)
+	}
 }

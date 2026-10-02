@@ -122,3 +122,13 @@ describe('makeJsonLintSource', () => {
     expect(makeJsonLintSource('hooks')('{ not json')).toHaveLength(0)
   })
 })
+
+it('takes marketplace sources as the documented objects', () => {
+  const errors = (v: unknown) =>
+    validateManagedSettings(v).filter((i) => i.severity === 'error')
+  const source = [{ source: 'github', repo: 'untrusted-org/*' }]
+  expect(
+    errors({ blockedMarketplaces: source, strictKnownMarketplaces: source }),
+  ).toEqual([])
+  expect(errors({ blockedMarketplaces: ['untrusted-org'] })).not.toEqual([])
+})

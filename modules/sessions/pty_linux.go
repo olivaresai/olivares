@@ -21,19 +21,21 @@ import (
 // stderr stays a pipe so the two streams remain distinct on the bridge.
 // Closing stdin on Stop does not close the master: that would also tear down
 // the stdout pump before SIGTERM has a chance to flush.
-func (pr *procRunner) launchPTY(cmd *exec.Cmd, waitDelay time.Duration) (Process, error) {
+func (pr *procRunner) launchPTY(cmd *exec.Cmd, waitDelay time.Duration, release func()) (*procProcess, error) {
 	master, slave, err := openLocalPTY()
 	if err != nil {
 		return nil, fmt.Errorf("sessions: local PTY: %w", err)
 	}
 	cmd.Stdin = slave
 	cmd.Stdout = slave
-	stderr, err := cmd.StderrPipe()
+	stderr, stderrWrite, err := os.Pipe()
 	if err != nil {
 		_ = master.Close()
 		_ = slave.Close()
 		return nil, fmt.Errorf("sessions: stderr pipe: %w", err)
 	}
+	defer stderrWrite.Close()
+	cmd.Stderr = stderrWrite
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		Setsid:  true,
 		Setctty: true,
@@ -41,6 +43,7 @@ func (pr *procRunner) launchPTY(cmd *exec.Cmd, waitDelay time.Duration) (Process
 	}
 	cmd.Cancel = func() error { return procGroupKill(cmd) }
 	if err := cmd.Start(); err != nil {
+		_ = stderr.Close()
 		_ = master.Close()
 		_ = slave.Close()
 		return nil, fmt.Errorf("sessions: start %q: %w", specProgram(cmd), err)
@@ -48,7 +51,7 @@ func (pr *procRunner) launchPTY(cmd *exec.Cmd, waitDelay time.Duration) (Process
 	cmd.Env = nil
 	_ = slave.Close()
 	stdin := ptyWriter{f: master}
-	return pr.watch(cmd, stdin, master, stderr, waitDelay), nil
+	return pr.watch(cmd, stdin, master, stderr, waitDelay, release), nil
 }
 
 func openLocalPTY() (master, slave *os.File, err error) {

@@ -67,6 +67,7 @@ import {
   PanelsTopLeft,
   Play,
   Plug,
+  PlugZap,
   Radar,
   Rocket,
   Scale,
@@ -194,6 +195,12 @@ const ProviderAdminView = lazy(() =>
 const AgentToolsView = lazy(() =>
   import('./agent-tools/agent-tools-view').then((m) => ({
     default: m.AgentToolsView,
+  })),
+)
+
+const MCPServersView = lazy(() =>
+  import('./console/mcp-servers-view').then((m) => ({
+    default: m.MCPServersView,
   })),
 )
 
@@ -552,6 +559,8 @@ export const PRODUCT_NOUNS: readonly ProductNoun[] = [
       'sessions',
       'agentops',
       'workspace-templates',
+      // AI tools: the tools a session runs (install, sign in), beside API keys.
+      'agent-tools',
       'providers',
       'providerProfiles',
       'providerBindings',
@@ -604,6 +613,7 @@ export const PRODUCT_NOUNS: readonly ProductNoun[] = [
     hub: 'connect',
     views: [
       'capabilities',
+      'mcpServers',
       'console',
       'knowledge',
       'catalog',
@@ -667,6 +677,7 @@ export const PRODUCT_NOUNS: readonly ProductNoun[] = [
     hub: 'connect',
     views: [
       'capabilities',
+      'mcpServers',
       'protocolBindings',
       'observability',
       'apiPlayground',
@@ -1324,6 +1335,9 @@ export const FEATURE_VIEWS: readonly FeatureView[] = Object.freeze(
         hub: 'govern',
         icon: Fingerprint,
         permission: 'governance:identity:read',
+        // ⌘K "Invite people" (console remake 26.10): People with its onboarding dialog open
+        // in invite mode. The engine's authority for that write is membership:write.
+        commandActions: [{ id: 'invite', permission: 'membership:write' }],
         element: lazyView(IdentityView),
       },
       {
@@ -1458,6 +1472,11 @@ export const FEATURE_VIEWS: readonly FeatureView[] = Object.freeze(
         hub: 'operate',
         icon: OctagonAlert,
         permission: 'governance:killswitch:read',
+        // ⌘K "Engage kill switch" (console remake 26.10, CONCEPT-IA command menu): opens the
+        // engage form at its mandatory reason; engaging stays the form's own confirmation.
+        commandActions: [
+          { id: 'engage', permission: 'governance:killswitch:admin' },
+        ],
         element: lazyView(KillswitchView),
       },
       {
@@ -1509,6 +1528,22 @@ export const FEATURE_VIEWS: readonly FeatureView[] = Object.freeze(
         icon: Wrench,
         permission: 'system:admin',
         element: lazyView(AgentToolsView),
+      },
+      {
+        // The tenant MCP gateway's servers, beside the AI tools that use them. The same
+        // surface stays in Administration as the MCP gateway tab.
+        id: 'mcpServers',
+        path: '/mcp-servers',
+        helpHref: '/how-to/connectors/mcp-governance',
+        navigation: {
+          kind: 'feature',
+          areaId: 'ai',
+          sectionId: 'environments',
+        },
+        hub: 'connect',
+        icon: PlugZap,
+        permission: 'tenant:admin',
+        element: lazyView(MCPServersView),
       },
       {
         // The credential a session launches with. It sits FIRST in the environments

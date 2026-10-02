@@ -50,8 +50,8 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusOK, nil)
 		return
 	}
-	status, msg, _ := api.StoreErrorStatus(err)
-	writeJSON(w, status, errorBody(msg))
+	status, body, _ := api.StoreErrorBody(err)
+	writeJSON(w, status, body)
 }
 
 // rfc3339 formats t for the wire: RFC3339 UTC, with sub-second precision kept

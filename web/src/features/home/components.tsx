@@ -32,6 +32,8 @@ export type TileState = 'ready' | 'loading' | 'unavailable'
 export interface EstateTileProps {
   /** Drill-down route (the feature registry IS the route table, so this is valid). */
   to: string
+  /** Lay the tile out for Now's narrow estate column. */
+  compact?: boolean
   icon: ReactNode
   label: ReactNode
   /** The headline figure — only read in the `ready` state. */
@@ -120,13 +122,16 @@ export function EstateTile({
   scope,
   partial,
   tone = 'default',
+  compact = false,
 }: EstateTileProps) {
+  const density = compact ? ('compact' as const) : ('default' as const)
   const { t } = useTranslation('home')
 
   if (state === 'loading') {
     // No link while loading — there is no figure to drill into yet.
     return (
       <MetricStat
+        density={density}
         icon={icon}
         label={label}
         value={<Skeleton className="h-7 w-20" />}
@@ -146,6 +151,7 @@ export function EstateTile({
     return (
       <LinkTile to={to}>
         <MetricStat
+          density={density}
           icon={icon}
           label={label}
           value="—"
@@ -179,6 +185,7 @@ export function EstateTile({
   return (
     <CoverageLinkTile to={to} partial={partial}>
       <MetricStat
+        density={density}
         icon={icon}
         label={label}
         value={

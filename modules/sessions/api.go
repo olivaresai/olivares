@@ -377,7 +377,7 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		// semantic decision about the sentinel, not a refactor (see moduleerrors.go).
 		writeJSON(w, http.StatusNotFound, errorBody("not found"))
 	default:
-		status, msg, _ := api.StoreErrorStatus(err)
-		writeJSON(w, status, errorBody(msg))
+		status, body, _ := api.StoreErrorBody(err)
+		writeJSON(w, status, body)
 	}
 }

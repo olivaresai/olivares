@@ -1,15 +1,15 @@
 {
-  "title": "Permissions",
-  "subtitle": "Approbations avec humain dans la boucle, politique RBAC/ABAC, et les identités et liaisons d’agents derrière chaque action.",
+  "title": "Approbations et autorisations",
+  "subtitle": "Les demandes qui attendent la décision d'une personne, les règles qui autorisent ou refusent des actions, et qui peut agir.",
   "tabs": {
     "approvals": "Approbations",
     "policies": "Politiques",
     "identities": "Identités et groupes",
-    "breakGlass": "Accès d’urgence",
+    "breakGlass": "Accès d'urgence",
     "agentRisk": "Risque des agents"
   },
   "breakGlass": {
-    "title": "Accès d’urgence break-glass",
+    "title": "Accès d'urgence",
     "caption": "Exceptions temporaires au double contrôle. Chaque activation, utilisation, révocation et revue a posteriori constitue une preuve d’audit permanente ; cette surface sert à rendre des comptes, pas à faciliter l’accès.",
     "forbiddenTitle": "Non autorisé",
     "forbiddenBody": "Vous n’avez pas l’autorisation de consulter les octrois break-glass ni leurs pistes d’utilisation immuables.",
@@ -115,10 +115,8 @@
   },
   "approvals": {
     "title": "File d’approbation",
-    "caption": "Demandes en attente avec humain dans la boucle. Chaque approbation, rejet et annulation est une décision délibérée et auditée, consignée dans la piste de décision immuable.",
+    "caption": "Les demandes qui attendent une décision. Chaque approbation, rejet et annulation est enregistré.",
     "search": "Rechercher des demandes…",
-    "action": "Action",
-    "subject": "Sujet",
     "requestedBy": "Demandé par",
     "status": "Statut",
     "progress": "Approbations",
@@ -136,7 +134,7 @@
     "noSubject": "Aucun sujet",
     "filterStatus": "Statut",
     "statusAll": "Tous les statuts",
-    "runSweep": "Lancer le balayage",
+    "runSweep": "Faire expirer et escalader les demandes en retard",
     "newRequest": "Nouvelle demande",
     "empty": "Aucune demande d’approbation",
     "emptyHint": "Lorsqu’une action requiert une approbation humaine, elle apparaît ici pour examen.",
@@ -146,7 +144,9 @@
     "reject": "Rejeter",
     "cancel": "Annuler",
     "viewDetail": "Voir le détail",
-    "actorHint": "Identifiant d’acteur d’audit — jamais une adresse e-mail. L’identité est résolue depuis l’annuaire, et non affichée ici."
+    "actorHint": "Identifiant d’acteur d’audit — jamais une adresse e-mail. L’identité est résolue depuis l’annuaire, et non affichée ici.",
+    "expiredAt": "Expirée {{time}}",
+    "request": "Demande"
   },
   "status": {
     "pending": "En attente",
@@ -157,17 +157,18 @@
   },
   "decide": {
     "approveTitle": "Approuver cette demande ?",
-    "approveBody": "Votre décision est consignée de façon permanente dans la piste de décision immuable et compte dans le seuil d’approbation.",
+    "approveBody": "Votre approbation compte parmi les approbations dont cette demande a besoin.",
     "rejectTitle": "Rejeter cette demande ?",
-    "rejectBody": "Un seul rejet met fin à la demande et est consigné de façon permanente dans la piste de décision.",
+    "rejectBody": "Un seul rejet met fin à la demande.",
     "approveConfirm": "Approuver",
     "rejectConfirm": "Rejeter",
     "note": "Note",
-    "noteHint": "Facultatif — consigné de façon permanente avec votre décision.",
+    "noteHint": "Facultatif.",
     "notePlaceholder": "Pourquoi vous approuvez ou rejetez (facultatif)…",
     "approved": "Décision consignée — approuvée",
     "rejected": "Décision consignée — rejetée",
-    "sodHint": "Vous ne pouvez pas décider d’une demande que vous avez ouverte, et un jeton sans utilisateur stable ne peut pas décider."
+    "sodHint": "Vous ne pouvez pas décider d’une demande que vous avez ouverte, et un jeton sans utilisateur stable ne peut pas décider.",
+    "notPending": "Cette demande n’attend plus de décision."
   },
   "cancel": {
     "title": "Annuler cette demande d’approbation ?",
@@ -178,7 +179,7 @@
   "sweep": {
     "title": "Lancer le balayage des approbations ?",
     "body": "Il marque comme expirées les demandes ayant dépassé leur échéance et escalade les demandes ayant dépassé leur fenêtre d’escalade, puis émet les constats correspondants. Sans risque à relancer.",
-    "confirm": "Lancer le balayage",
+    "confirm": "Faire expirer et escalader les demandes en retard",
     "done": "Balayage terminé",
     "result": "Analysées {{scanned}} · escaladées {{escalated}} · expirées {{expired}}.",
     "more": "Des demandes en attente restent non analysées — relancez le balayage pour terminer."
@@ -222,12 +223,13 @@
     "trailEmpty": "Aucune décision consignée pour l’instant",
     "trailEmptyHint": "Chaque décision sur cette approbation — qui a décidé, quand et pourquoi — est consignée ici. Personne n’a encore décidé.",
     "decisionApprove": "Approuvé",
-    "decisionReject": "Rejeté"
+    "decisionReject": "Rejeté",
+    "reenableNeedsAdmins": "Deux autres comptes administrateur doivent approuver. Créez-les dans Identité et NHI, ou avec `olivares users create`.",
+    "openIdentity": "Ouvrir Identité et NHI"
   },
   "policies": {
     "title": "Politiques",
-    "caption": "Règles de refus ABAC et seuils d’approbation. Une règle ABAC ne peut que restreindre davantage l’accès ; elle traduit l’intention déclarée de l’auteur, et non la preuve d’une application à l’exécution.",
-    "enforcementCaption": "Qu’une politique soit réellement appliquée dépend du déploiement — une politique activée peut être rédigée et auditée mais inerte si son évaluateur n’est pas câblé.",
+    "caption": "Une politique activée s’applique dès son enregistrement. Les règles de refus ne font que retirer des accès ; les seuils d’approbation s’appliquent aux nouvelles demandes correspondantes.",
     "search": "Rechercher des politiques…",
     "name": "Politique",
     "kind": "Type",
@@ -254,7 +256,7 @@
     "kindHint": "Le type de politique. Il ne peut pas être modifié après la création.",
     "enabled": "Activée",
     "abacRules": "Règles de refus",
-    "abacRulesHint": "Chaque règle restreint davantage l’accès. Le « Refus » est implicite et non modifiable — la v1 ne prend en charge que les règles de refus. Une règle doit sélectionner au moins l’un des éléments suivants : permission, verbe, ressource ou type de principal.",
+    "abacRulesHint": "Chaque règle refuse les requêtes qu’elle cible et n’accorde jamais d’accès. Une règle a besoin d’au moins une condition. Avec une connexion minimale, elle ne refuse que les appelants connectés en dessous de ce niveau ; les jetons comptent toujours comme en dessous.",
     "addRule": "Ajouter une règle",
     "removeRule": "Supprimer",
     "rulePermission": "Permission",
@@ -263,14 +265,20 @@
     "ruleResource": "Ressource",
     "rulePrincipalKind": "Type de principal",
     "ruleAny": "Tout",
+    "ruleMinAal": "Connexion minimale",
+    "ruleMinAalNone": "Aucune",
+    "aal1": "AAL1 (mot de passe)",
+    "aal2": "AAL2 (multifacteur)",
+    "aal3": "AAL3 (résistant à l’hameçonnage)",
     "noRules": "Aucune règle de refus",
     "denyImplicit": "Refus (implicite)",
     "requiredApprovals": "Approbations requises",
-    "requiredApprovalsHint": "0–64 — le seuil faisant autorité.",
+    "requiredApprovalsHint": "De 0 à 64. Vide ou 0 utilise la valeur par défaut du moteur, qui peut être plus élevée pour les actions critiques.",
     "expiresInSeconds": "Expire dans (secondes)",
     "expiresInSecondsHint": "0–31536000 (0 = jamais).",
     "escalateInSeconds": "Escalade dans (secondes)",
     "escalateInSecondsHint": "0–31536000 (0 = jamais).",
+    "countError": "Saisissez un nombre entier de 0 à {{max}}.",
     "matchAction": "Action à faire correspondre",
     "matchActionHint": "Vide = correspond à toute action.",
     "matchSubjectKind": "Type de sujet à faire correspondre",
@@ -374,8 +382,8 @@
     "done": "Agent délié"
   },
   "caveat": {
-    "deny": "Une règle de refus traduit l’intention déclarée de l’auteur de la politique — et non la preuve que la règle est appliquée à l’exécution.",
-    "enforcement": "Activée ne signifie pas toujours appliquée : l’évaluateur ou les fournisseurs d’annuaire peuvent ne pas être câblés dans ce déploiement."
+    "deny": "Une règle de refus ne peut que retirer un accès. Elle ne donne jamais à quelqu'un plus que ce que son rôle permet.",
+    "enforcement": "Une règle activée est vérifiée ; une règle désactivée est conservée et n'est pas vérifiée."
   },
   "computerUse": {
     "title": "Gouvernance computer-use",
@@ -597,8 +605,8 @@
       "description": "Une fois une source d’annuaire configurée, resynchronisez le registre pour réconcilier les identités humaines et non humaines de ce locataire."
     },
     "policies": {
-      "title": "Aucune politique de gouvernance rédigée",
-      "description": "Rédigez une règle de refus ABAC ou un seuil d’approbation ; l’application à l’exécution reste tributaire du câblage de l’évaluateur dans ce déploiement."
+      "title": "Aucune règle pour l'instant",
+      "description": "Ajoutez une règle de refus ou un seuil d’approbation. Chaque politique s’applique dès son enregistrement."
     },
     "routinePolicies": {
       "title": "Aucune politique de routines rédigée",
@@ -699,5 +707,21 @@
       "draft": "Brouillon — ne pas coder en dur",
       "stable": "Stable — une couture peut le viser"
     }
+  },
+  "preview": {
+    "title": "Ce qui sera exécuté",
+    "session": "Session",
+    "folder": "Dossier",
+    "askedBy": "Demandé par",
+    "askedBySession": "La session elle-même",
+    "tool": "Outil",
+    "willRun": "Ce qui sera exécuté",
+    "noReview": "Cette demande n’indique pas ce qui sera exécuté.",
+    "showAll": "Tout afficher",
+    "showLess": "Afficher moins",
+    "details": "Détails",
+    "id": "Identifiant de la demande",
+    "untitled": "Session sans titre",
+    "openToDecide": "Ouvrir pour approuver ou refuser"
   }
 }

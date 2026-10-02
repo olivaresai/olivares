@@ -136,8 +136,9 @@ curl -sf "$BASE/v1/agents" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT"
 ```
 
-`POST /v1/agents` does **not** require AAL3 (`core/api/handlers_core.go`).
-Creating sources, connectors, workspaces and secrets **does** (`requireAAL3`).
+`POST /v1/agents` does not require administrative step-up. For sources,
+connectors, workspaces and secrets, the extra check follows `admin_step_up`,
+whose default is `none`. See the policy instructions below to require AAL3.
 
 Render the managed hook that Claude Code will invoke:
 
@@ -151,11 +152,32 @@ keeps it in the work directory and drives `olivares claude-hook` directly.
 
 ### 4. Governed session: allow Read, deny Bash
 
-Write a deny-closed policy and restart with the PEP mounted:
+Stop the engine from step 1, then run the following in the same working
+directory, keeping `DATA` and `TENANT` from steps 1 and 2. This writes a
+deny-closed policy and restarts the engine with the PEP mounted:
 
 ```bash
-# hook-pep.json — replace TENANT with the id from step 2
-# listen on 127.0.0.1:8447; default deny; Read allow; Bash deny
+# TENANT is the tenant_id returned in step 2.
+: "${TENANT:?Set TENANT to the tenant_id from step 2}"
+cat > ./hook-pep.json <<JSON
+{
+  "listen": "127.0.0.1:8447",
+  "tenants": [
+    {
+      "tenant": "$TENANT",
+      "require_firm_identity": false,
+      "policy": {
+        "version": "first-hour/v1",
+        "default": "deny",
+        "rules": [
+          { "tool": "Read", "decision": "allow", "reason": "reads are permitted in the first hour" },
+          { "tool": "Bash", "decision": "deny", "reason": "shell execution is blocked in the first hour" }
+        ]
+      }
+    }
+  ]
+}
+JSON
 OLIVARES_HOOK_PEP_CONFIG=./hook-pep.json \
   ./bin/olivares serve --insecure --data-dir "$DATA" \
   --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444
@@ -265,19 +287,21 @@ need the official CLI on the same host. Hybrid is that split.
 A live official-CLI session (PTY, attach, stop) is the Community runtime, not this page. This
 hour proves the hook PEP path that the Community runtime reuses.
 
-## The AAL3 wall (still true)
+## Administrative step-up policy
 
-After setup, **creating sources, connectors, workspaces and secrets is
-refused until the session is AAL3**. The gate is `requireAAL3` in
-`core/api/middleware.go`. A principal below AAL3 gets `403 step_up_required`.
+`admin_step_up` defaults to `none`: a signed-in administrator uses their
+session's current strength. Creating sources, connectors, workspaces and
+secrets therefore does not demand AAL3 by default. Authentication, permissions,
+tenant isolation and audit still apply; API tokens do not satisfy this check.
 
-PIV/CAC answers **501** `piv_not_configured` on a stock install. A platform
-authenticator is enough. Open the console at `https://localhost:PORT`, then
-**Identity → Privileged login → Register passkey**.
+To require fresh AAL3 for these actions, enroll a passkey at
+`https://localhost:PORT` and complete a fresh passkey/PIV step-up at that
+console address. Under **Settings → Sign-in → Extra check for administrative
+actions**, select **Passkey**. The API equivalent is
+`PUT /v1/auth/step-up-policy` with `{"admin_step_up":"passkey"}`. The engine
+refuses to raise the policy until the administrator proves the selected factor
+works. `POST /v1/agents` remains outside this additional step-up check.
 
-`POST /v1/agents` is not behind that gate. The local first hour can register
-the agent and govern the hook without a passkey. Adding a connector from the
-console still needs AAL3.
 
 ## 3. Launching a Claude Code session from the console
 

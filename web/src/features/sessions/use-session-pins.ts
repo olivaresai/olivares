@@ -53,21 +53,23 @@ export function useSessionPins(): SessionPins {
   // and an effect may not set state in this codebase.
   if (state.key !== key) setState({ key, pins: read(key) })
 
+  // ⛔ THE WRITE IS NOT INSIDE THE STATE UPDATER. An updater must be pure: React's
+  //    StrictMode (the development build) runs it twice, and with the write inside it the
+  //    second run read the first run's pin and removed it, so the pin showed and never
+  //    reached storage (WEB2, 09b capture r4: stored {"pins":[]} after Pin).
   const toggle = useCallback(
     (address: string) => {
       if (!key) return
-      setState((prev) => {
-        // Re-read before writing: two tabs share one origin, and the last writer of a
-        // whole array silently discards the other's pin.
-        const next = togglePin(read(key), address)
-        try {
-          window.localStorage.setItem(key, encodePins([...next]))
-        } catch {
-          // Out of quota or blocked: the pin does not survive the reload, and saying
-          // so with a toast would interrupt an operator over a bookmark.
-        }
-        return { key, pins: next === prev.pins ? [...next] : next }
-      })
+      // Re-read before writing: two tabs share one origin, and the last writer of a
+      // whole array silently discards the other's pin.
+      const next = togglePin(read(key), address)
+      try {
+        window.localStorage.setItem(key, encodePins([...next]))
+      } catch {
+        // Out of quota or blocked: the pin does not survive the reload, and saying
+        // so with a toast would interrupt an operator over a bookmark.
+      }
+      setState({ key, pins: next })
     },
     [key],
   )

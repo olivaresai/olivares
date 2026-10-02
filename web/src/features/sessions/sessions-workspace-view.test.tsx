@@ -428,13 +428,34 @@ describe('SessionsWorkspaceView — the third answer', () => {
 })
 
 describe('SessionsWorkspaceView — two doors, one room', () => {
-  it('keeps the operate framing on the /agentops door', async () => {
+  it('reads Sessions on the /agentops door too, and opens its table on launched sessions', async () => {
     renderView('operate')
     expect(
-      await screen.findByRole('heading', { name: 'Claude Code' }),
+      await screen.findByRole('heading', { name: 'Sessions' }),
     ).toBeInTheDocument()
-    // …and still lists the sessions Olivares only discovered.
-    expect(await screen.findByText('Untitled session')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: 'Claude Code' })).toBeNull()
+    // The door is only the filter the table opens on: what Olivares launched, while
+    // the source filter keeps every other session one choice away.
+    expect(
+      await screen.findByRole('combobox', { name: 'All sources' }),
+    ).toHaveTextContent('Launched')
+    expect(await screen.findByText('nightly-indexer')).toBeInTheDocument()
+    expect(screen.queryByText('Untitled session')).toBeNull()
+  })
+
+  it('says the filters hide the sessions, never "no sessions yet", and offers the way back', async () => {
+    // Nothing launched: the operate door opens on a filter that matches nothing.
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [],
+      has_more: false,
+    } as never)
+    const user = userEvent.setup()
+    renderView('operate')
+    expect(await screen.findByText('No results')).toBeInTheDocument()
+    expect(screen.queryByText('No sessions yet')).toBeNull()
+    await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+    // Both discovered sessions are back in the table.
+    expect(await screen.findAllByText('Untitled session')).toHaveLength(2)
   })
 
   it('keeps the observe framing on the /sessions door', async () => {
@@ -837,7 +858,36 @@ describe('SessionsWorkspaceView — one chrome row above the work', () => {
     ).toBeInTheDocument()
   })
 
-  it('keeps the counts and the scope note on that same line', async () => {
+  it('the header says only the counts: sessions and running, no engine wording (Root review, 09)', async () => {
+    renderSurface()
+    const summary = await screen.findByTestId('sessions-summary')
+    expect(summary.textContent).toMatch(/^\d+ sessions?( · \d+ running)?$/)
+    const header = summary.closest('[data-slot="page-header"]') as HTMLElement
+    expect(header.textContent).not.toMatch(/plane|Tenant-wide|—/i)
+    expect(screen.queryByTestId('sessions-scope-note')).toBeNull()
+  })
+
+  // CLX via Root: with no sessions the header said "0 sessions · 0 running" above the
+  // empty state. The empty state is the whole answer.
+  it('with no sessions the header shows no count, only the empty state speaks', async () => {
+    vi.mocked(sessionsApi.live).mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    renderSurface()
+    await screen.findAllByRole('tab', { name: 'Table' })
+    await waitFor(() => expect(agentOpsApi.listRuns).toHaveBeenCalled())
+    await new Promise((r) => setTimeout(r, 50))
+    expect(screen.queryByTestId('sessions-summary')).toBeNull()
+    expect(screen.queryByText(/0 sessions/)).toBeNull()
+  })
+
+  // The scope note left the header with the subtitle (Root review, 09: counts only).
+  it('keeps the counts on the header line', async () => {
     renderSurface()
     const chrome = (await waitFor(() => {
       const el = document.querySelector('[data-slot="work-chrome"]')
@@ -849,9 +899,6 @@ describe('SessionsWorkspaceView — one chrome row above the work', () => {
         within(chrome).getByTestId('sessions-summary'),
       ).toBeInTheDocument(),
     )
-    expect(
-      within(chrome).getByTestId('sessions-scope-note'),
-    ).toBeInTheDocument()
   })
 
   // Measured at 1440: the description was cut from 1454 px to 797 with no `title` at
@@ -880,7 +927,9 @@ describe('SessionsWorkspaceView — one chrome row above the work', () => {
     expect(naked.map((el) => (el.textContent ?? '').slice(0, 40))).toEqual([])
     const described = within(chrome).getByTestId('sessions-summary')
       .parentElement as HTMLElement
-    expect(described.getAttribute('title')).toContain('Tenant-wide')
+    expect(described.getAttribute('title')).toBe(
+      within(chrome).getByTestId('sessions-summary').textContent,
+    )
   })
 
   /**

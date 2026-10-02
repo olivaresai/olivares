@@ -94,18 +94,44 @@ func TestManagedInstallRegistersTheDriverFromTheEnginesOwnDataDirectory(t *testi
 		}
 	}
 
+	// Every official driver is registered at boot; what the managed install
+	// decides is the PROGRAM a launch runs, resolved at launch (no restart).
 	m := sessions.New(buildSessionRuntimeOptions(noPins, nil, dataDir, nil)...)
 	if got := m.OperableProviderDrivers(); !slices.Contains(got, "grok") {
-		t.Fatalf("a managed install in the engine's own data directory did not register the driver; operable=%v (install at %s)", got, exe)
+		t.Fatalf("the grok driver is not registered; operable=%v", got)
+	}
+	notOnPath := func(string) (string, error) { return "", os.ErrNotExist }
+	if got := installedSessionProgram(newHostToolObserverForDataDir(dataDir, noPins), "grok", notOnPath); got != exe {
+		t.Fatalf("launch program from the engine's own data directory = %q, want the managed install %s", got, exe)
 	}
 
 	// The control: WITHOUT the engine's data directory, the same environment finds
 	// nothing — which is what the engine did on every boot before this parameter
 	// existed, and what makes the assertion above about the parameter rather than
 	// about the fixture.
-	blind := sessions.New(buildSessionRuntimeOptions(noPins, nil, "", nil)...)
-	if got := blind.OperableProviderDrivers(); slices.Contains(got, "grok") {
-		t.Fatalf("the environment default found the install after all; the test proves nothing: operable=%v", got)
+	if got := installedSessionProgram(newHostToolObserverForDataDir("", noPins), "grok", notOnPath); got != "" {
+		t.Fatalf("the environment default found the install after all; the test proves nothing: program=%q", got)
+	}
+}
+
+// TestInstalledSessionProgramFallsBackToThePath pins the second source: with no
+// managed install, the official program name on the engine's PATH.
+func TestInstalledSessionProgramFallsBackToThePath(t *testing.T) {
+	lookPath := func(name string) (string, error) {
+		if name == "codex" {
+			return "/usr/local/bin/codex", nil
+		}
+		return "", os.ErrNotExist
+	}
+	empty := newHostToolObserverForDataDir(t.TempDir(), func(string) string { return "" })
+	if got := installedSessionProgram(empty, "codex", lookPath); got != "/usr/local/bin/codex" {
+		t.Fatalf("codex = %q, want the PATH binary", got)
+	}
+	if got := installedSessionProgram(empty, "grok", lookPath); got != "" {
+		t.Fatalf("grok = %q, want nothing (not installed, not on PATH)", got)
+	}
+	if got := installedSessionProgram(empty, "unknown-driver", lookPath); got != "" {
+		t.Fatalf("an unknown driver resolved to %q", got)
 	}
 }
 

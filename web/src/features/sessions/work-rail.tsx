@@ -36,6 +36,7 @@ import {
   type ReactNode,
 } from 'react'
 import { useTranslation } from 'react-i18next'
+import { runFolder } from './folder'
 import { EmptyState } from '@/components/ui/empty-state'
 import { workLine } from '@/features/home/work-line'
 import { RelTimeLabel, humanDurationSeconds } from '@/features/shared'
@@ -44,8 +45,14 @@ import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
 import { CcStateBadge } from './cc-state-badge'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
-import { primaryRun, sessionNaming, type UnifiedSession } from './provenance'
+import {
+  primaryRun,
+  sessionNaming,
+  sharedNames,
+  type UnifiedSession,
+} from './provenance'
 import { addressOf } from './session-address'
+import { pinnedAddress } from './session-pins'
 import { WorkClause } from './work-clause'
 import { groupSessions, railOrder, WORK_GROUPS } from './session-groups'
 
@@ -73,6 +80,7 @@ function RailRow({
   pinned,
   onOpen,
   registerRef,
+  shared,
 }: {
   session: UnifiedSession
   selected: boolean
@@ -80,10 +88,13 @@ function RailRow({
   pinned: boolean
   onOpen: (session: UnifiedSession) => void
   registerRef: (address: string, el: HTMLDivElement | null) => void
+  /** Names another row of this rail also carries: those rows show their tail. */
+  shared: ReadonlySet<string>
 }) {
   const { t } = useTranslation('sessions')
   const address = addressOf(session)
   const run = primaryRun(session.runs)
+  const folder = runFolder(run)
   // The clause comes from the OBSERVED half, through that same ladder. With no observed
   // half there is no sentence to tell — a launched run whose telemetry has not arrived
   // is a real state, and saying so beats printing its reference twice.
@@ -94,7 +105,7 @@ function RailRow({
   //    sessions read `sess-coder-7a3f`, `sess-batch-1` … — six machine ids where the
   //    operator has to choose one. `sessionNaming` is the front door's ladder; when it
   //    has no sentence the row says so and keeps the distinguishing tail beside it.
-  const naming = sessionNaming(session, t('untitled'))
+  const naming = sessionNaming(session, t('untitled'), shared)
   // Name, tail and WHOLE reference on one hover, the way the front door's rows do it:
   // a truncated name stays readable and the identifier stays reachable from the row
   // that no longer paints it. Duplicates are dropped — an untitled row whose tail IS
@@ -170,13 +181,14 @@ function RailRow({
           data-slot="rail-row-state"
           className="inline-flex shrink-0 whitespace-nowrap"
         >
-          {session.live ? (
+          {/* A launched session's state is its run's (one state, as in the header). */}
+          {run ? (
+            <RunStateBadge state={run.state} className="whitespace-nowrap" />
+          ) : session.live ? (
             <CcStateBadge
               state={session.live.cc_state}
               className="whitespace-nowrap"
             />
-          ) : run ? (
-            <RunStateBadge state={run.state} className="whitespace-nowrap" />
           ) : null}
         </span>
       ) : null}{' '}
@@ -190,6 +202,16 @@ function RailRow({
           <span className="font-mono text-caption text-muted-foreground">
             {' '}
             {naming.shortId}
+          </span>
+        ) : null}
+        {folder ? (
+          <span
+            className="font-mono text-caption text-muted-foreground"
+            title={run?.workspace_path}
+            data-testid="rail-row-folder"
+          >
+            {' · '}
+            {folder}
           </span>
         ) : null}
       </span>{' '}
@@ -215,6 +237,7 @@ export function WorkRail({
   const { t } = useTranslation('sessions')
   const groups = groupSessions(sessions, pinned)
   const order = railOrder(groups)
+  const shared = sharedNames(sessions, t('untitled'))
   const rowRefs = useRef(new Map<string, HTMLDivElement>())
 
   // WHICH ROW THE KEYBOARD IS ON. It is NOT the selection: moving focus down a rail of
@@ -280,7 +303,7 @@ export function WorkRail({
     if (command === 'rail.pin' && onTogglePin) {
       e.preventDefault()
       const row = order[at]
-      if (row) onTogglePin(addressOf(row))
+      if (row) onTogglePin(pinnedAddress(pinned, row) ?? addressOf(row))
     }
   }
 
@@ -340,9 +363,10 @@ export function WorkRail({
                 session={s}
                 selected={addressOf(s) === selected}
                 focused={addressOf(s) === focused}
-                pinned={pinned.has(addressOf(s))}
+                pinned={pinnedAddress(pinned, s) !== undefined}
                 onOpen={onOpen}
                 registerRef={registerRef}
+                shared={shared}
               />
             ))
           )}

@@ -191,7 +191,9 @@ describe('la matriz pintada', () => {
       screen.getByRole('columnheader', { name: /^activation$/i }),
     ).toBeInTheDocument()
     expect(screen.getByText('entitled')).toBeInTheDocument()
-    expect(screen.getByText('pending restart')).toBeInTheDocument()
+    // EU-07: a pending module with no reason and no restart required is staged; it
+    // reads "pending restart" only when the status says a restart is required.
+    expect(screen.getByText('staged')).toBeInTheDocument()
     expect(
       document.querySelector('[data-slot="entitlement-matrix-table"]'),
     ).toBeTruthy()
@@ -435,5 +437,109 @@ describe('classifyLicenseRead — failed refresh is not current success', () => 
       lastSuccess: undefined,
       status: 500,
     })
+  })
+})
+
+describe('coverage facts from the engine (in_build, license_covered)', () => {
+  it('absent is not known, false is an observed no, true is yes; activation still comes from state', () => {
+    renderIntel(
+      <EntitlementMatrix
+        addons={[
+          {
+            key: 'addon_known',
+            state: 'available',
+            in_build: true,
+            license_covered: true,
+          },
+          {
+            key: 'addon_absent',
+            state: 'available',
+            in_build: false,
+            license_covered: false,
+          },
+          {
+            key: 'addon_silent',
+            state: 'pending',
+            reason: 'needs review — check the rules, then promote.',
+          },
+        ]}
+        features={['addon_known']}
+        edition="enterprise"
+      />,
+    )
+    const row = (key: string) =>
+      screen.getByRole('rowheader', { name: key }).closest('tr') as HTMLElement
+    expect(row('addon_known').textContent).toContain('in this edition')
+    expect(row('addon_known').textContent).toContain('entitled')
+    // Covered and in the build, but off: coverage never paints a module as on.
+    expect(row('addon_known').textContent).toContain('off')
+    expect(row('addon_absent').textContent).toContain('not in this edition')
+    expect(row('addon_absent').textContent).toContain(
+      'not covered by the license',
+    )
+    expect(row('addon_silent').textContent).toContain('not known')
+    expect(row('addon_silent').textContent).toContain('needs review')
+    expect(row('addon_silent').textContent).toContain(
+      'check the rules, then promote.',
+    )
+    expect(row('addon_silent').textContent).not.toContain('pending restart')
+  })
+
+  it('says pending restart when the status reports a restart is required', () => {
+    renderIntel(
+      <EntitlementMatrix
+        addons={[{ key: 'addon_next', state: 'pending' }]}
+        edition="enterprise"
+        restartRequired
+      />,
+    )
+    expect(screen.getByText('pending restart')).toBeInTheDocument()
+  })
+})
+
+describe('the coverage notice says only what is unknown (EU-06)', () => {
+  it('a valid license beside rows the engine says are covered shows no unknown notice', () => {
+    renderIntel(
+      <EntitlementMatrix
+        addons={[
+          { key: 'addon_a', state: 'active', license_covered: true },
+          { key: 'addon_b', state: 'available', license_covered: false },
+        ]}
+        edition="enterprise"
+        entitlementUnknownReason="no-verified"
+      />,
+    )
+    expect(
+      document.querySelector('[data-slot="license-read-state"]'),
+    ).toBeNull()
+  })
+
+  it('still says so when a row’s coverage is not known', () => {
+    renderIntel(
+      <EntitlementMatrix
+        addons={[
+          { key: 'addon_a', state: 'active', license_covered: true },
+          { key: 'addon_c', state: 'available' },
+        ]}
+        edition="enterprise"
+        entitlementUnknownReason="no-verified"
+      />,
+    )
+    expect(
+      document.querySelector('[data-slot="license-read-state"]'),
+    ).not.toBeNull()
+  })
+
+  it('a failed license read is still said, whatever the rows know', () => {
+    renderIntel(
+      <EntitlementMatrix
+        addons={[{ key: 'addon_a', state: 'active', license_covered: true }]}
+        edition="enterprise"
+        entitlementUnknownReason="refresh-failed"
+      />,
+    )
+    expect(
+      document.querySelector('[data-slot="license-read-state"]'),
+    ).not.toBeNull()
   })
 })

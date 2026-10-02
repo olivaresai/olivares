@@ -24,25 +24,32 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/internal/toolinstall"
 )
 
+// verifiedToolReleases is this process's memory of the tool releases a full check
+// found installed (toolinstall.VerifiedCache): every engine the composition builds
+// shares it, so the AI tools status, the resolve rule and a launch stop re-hashing
+// an unchanged install at every read (EU-CB07). Memory only; a restart starts empty.
+var verifiedToolReleases = toolinstall.NewVerifiedCache()
+
 // toolInstallEngine builds the engine behind `olivares agent tool`. It is a
 // variable so tests can substitute an engine that trusts a fixture signing key
 // and a fixture release server. Production wiring trusts the embedded Claude
 // release key only; no flag or environment variable reaches this seam.
 var toolInstallEngine = func(ctx context.Context) *toolinstall.Engine {
-	var verifier toolinstall.SignatureVerifier
-	if v, err := toolinstall.NewGPGVerifier(ctx, exec.LookPath); err != nil {
-		verifier = toolinstall.UnavailableVerifier{Err: err}
-	} else {
+	// gpg when the node has it; otherwise the in-process OpenPGP check, so a
+	// distroless container verifies the same signed manifest.
+	var verifier toolinstall.SignatureVerifier = toolinstall.NativeOpenPGPVerifier{}
+	if v, err := toolinstall.NewGPGVerifier(ctx, exec.LookPath); err == nil {
 		verifier = v
 	}
 	claude := toolinstall.NewClaude(toolinstall.ClaudeOptions{Verifier: verifier})
-	codex := toolinstall.NewCodex(toolinstall.CodexOptions{})
+	codex := toolinstall.NewCodexRelease(toolinstall.ReleaseArchiveOptions{})
 	grok := toolinstall.NewGrok(toolinstall.GrokOptions{})
 	cat, err := toolinstall.NewCapabilityCatalog(toolinstall.NewCatalog(claude), codex, grok, toolinstall.NewOpenCode(toolinstall.ReleaseArchiveOptions{}), toolinstall.NewOllama(toolinstall.ReleaseArchiveOptions{}))
+	opts := toolinstall.EngineOptions{InstallerVersion: version, Verified: verifiedToolReleases}
 	if err != nil {
-		return toolinstall.NewEngine(toolinstall.NewCatalog(claude), toolinstall.EngineOptions{InstallerVersion: version})
+		return toolinstall.NewEngine(toolinstall.NewCatalog(claude), opts)
 	}
-	return toolinstall.NewEngineWithCapabilities(cat, toolinstall.EngineOptions{InstallerVersion: version})
+	return toolinstall.NewEngineWithCapabilities(cat, opts)
 }
 
 func newAgentToolCmd() *cobra.Command {
@@ -69,7 +76,7 @@ func newAgentToolCmd() *cobra.Command {
 			"install can pin the session runtime when OLIVARES_SESSION_RUNTIME_*_BIN is unset.",
 		Example: "  olivares agent tool plan --driver claude --version latest\n" +
 			"  olivares agent tool install --driver grok --version stable --yes\n" +
-			"  olivares agent tool install --driver codex --version 0.153.4 --yes\n" +
+			"  olivares agent tool install --driver claude --version latest --yes\n" +
 			"  olivares agent tool list -o json\n" +
 			"  olivares agent tool detect --driver grok --probe",
 	}

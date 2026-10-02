@@ -4,8 +4,10 @@
 package modelprovider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -76,6 +78,15 @@ func NewClient(base string, doer Doer, scheme AuthScheme, cred string, headers m
 // maxErrBody bounds how much of an error response body is read for diagnostics.
 const maxErrBody = 2 << 10 // 2 KiB
 
+// maxJSONBody bounds complete metadata pages and liveness bodies to 16 MiB,
+// matching the shared directory client. Existing catalog/usage fixtures fit this
+// bound; no endpoint exception is currently needed. Inference/batch downloads
+// have their own limits and do not use this read-only client.
+const maxJSONBody = 16 << 20
+
+// ErrResponseTooLarge identifies a provider response that exceeded its byte bound.
+var ErrResponseTooLarge = errors.New("modelprovider: JSON response exceeds 16 MiB")
+
 // maxTextBody bounds a GetText body (a /metrics exposition can be large but not
 // unbounded — protect memory against a hostile or runaway endpoint).
 const maxTextBody = 4 << 20 // 4 MiB
@@ -114,11 +125,25 @@ func (c *Client) GetJSON(ctx context.Context, path string, query url.Values, out
 		// existing tests are unaffected.
 		return &APIError{Method: http.MethodGet, Path: path, Status: resp.StatusCode, Body: strings.TrimSpace(string(excerpt))}
 	}
+	limited := io.LimitReader(resp.Body, maxJSONBody+1)
 	if out == nil {
-		_, _ = io.Copy(io.Discard, resp.Body)
+		n, err := io.Copy(io.Discard, limited)
+		if n > maxJSONBody {
+			err = errors.Join(ErrResponseTooLarge, err)
+		}
+		if err != nil {
+			return fmt.Errorf("modelprovider: read %s: %w", path, err)
+		}
 		return nil
 	}
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+	raw, err := io.ReadAll(limited)
+	if len(raw) > maxJSONBody {
+		err = errors.Join(ErrResponseTooLarge, err)
+	}
+	if err != nil {
+		return fmt.Errorf("modelprovider: read %s: %w", path, err)
+	}
+	if err := json.NewDecoder(bytes.NewReader(raw)).Decode(out); err != nil {
 		return fmt.Errorf("modelprovider: decode %s: %w", path, err)
 	}
 	return nil

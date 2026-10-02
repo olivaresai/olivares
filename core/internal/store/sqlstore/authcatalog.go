@@ -4,7 +4,11 @@
 
 package sqlstore
 
-import "github.com/olivaresai/olivares/core/model"
+import (
+	"encoding/json"
+
+	"github.com/olivaresai/olivares/core/model"
+)
 
 // This file catalogs the engine's authentication/authorization entities,
 // in the same descriptor+codec style as catalog.go. They are core entities, so
@@ -34,6 +38,7 @@ func authDescriptors() []model.EntityDescriptor {
 		pepServiceDescriptor, pepServiceCredentialDescriptor, delegationHandleDescriptor, pdpDecisionClaimDescriptor,
 		tenantExclusionDescriptor, accountOfferDescriptor, credentialBindingDescriptor,
 		totpCredentialDescriptor, totpRecoveryCodeDescriptor, authPolicyDescriptor,
+		deploymentSettingsDescriptor,
 	}
 }
 
@@ -505,17 +510,54 @@ var authPolicyDescriptor = model.EntityDescriptor{
 	Fields: []model.FieldSpec{
 		pdecl(field("require_totp_admins", model.KindBool, false),
 			model.None("the deployment policy switch, not an account identifier: core/auth/totp.go:1292")),
+		pdecl(field("admin_step_up", model.KindText, true),
+			model.None("the deployment step-up policy name, not an account identifier: core/auth/stepup_policy.go:175")),
 	},
 }
 
 var authPolicyCodec = model.Codec[model.AuthPolicy]{
 	Base: func(p *model.AuthPolicy) *model.BaseFields { return &p.BaseFields },
 	Encode: func(p model.AuthPolicy) (model.Record, error) {
-		return model.Record{"require_totp_admins": p.RequireTOTPAdmins}, nil
+		return model.Record{"require_totp_admins": p.RequireTOTPAdmins, "admin_step_up": p.AdminStepUp}, nil
 	},
 	Decode: func(b model.BaseFields, r model.Record) (model.AuthPolicy, error) {
-		return model.AuthPolicy{BaseFields: b, RequireTOTPAdmins: r.Bool("require_totp_admins")}, nil
+		return model.AuthPolicy{BaseFields: b, RequireTOTPAdmins: r.Bool("require_totp_admins"),
+			AdminStepUp: r.String("admin_step_up")}, nil
 	},
+}
+
+// deploymentSettingsDescriptor stores the deployment's product settings
+// singleton: one row in the system tenant, created on first write. No core
+// migration version owns it: v2 does not render it and the reconcile creates it
+// on every database, fresh or upgraded (deploymentSettingsRelation). A binary that
+// predates it ignores the table and keeps reading its node's file copy.
+var deploymentSettingsDescriptor = model.EntityDescriptor{
+	Kind:  "core.deployment_settings",
+	Table: "deployment_settings",
+	Fields: []model.FieldSpec{
+		pdecl(field("doc", model.KindText, false),
+			model.None("the product settings document, which names no account: cmd/olivares/productsettings.go:66")),
+	},
+	// One row per deployment: two nodes recording at once cannot leave two.
+	Indexes: []model.IndexSpec{
+		{Name: "deployment_settings_singleton", Columns: []string{"tenant_id"}, Unique: true},
+	},
+}
+
+var deploymentSettingsCodec = model.Codec[model.DeploymentSettings]{
+	Base: func(s *model.DeploymentSettings) *model.BaseFields { return &s.BaseFields },
+	Encode: func(s model.DeploymentSettings) (model.Record, error) {
+		return model.Record{"doc": s.Doc}, nil
+	},
+	Decode: func(b model.BaseFields, r model.Record) (model.DeploymentSettings, error) {
+		return model.DeploymentSettings{BaseFields: b, Doc: r.String("doc")}, nil
+	},
+}
+
+// deploymentSettingsRelation reports whether kind is the settings singleton,
+// which v2 keeps out of its historical DDL.
+func deploymentSettingsRelation(kind model.Kind) bool {
+	return kind == deploymentSettingsDescriptor.Kind
 }
 
 // --- APIToken ----------------------------------------------------------------
@@ -728,6 +770,12 @@ var federationConfigDescriptor = model.EntityDescriptor{
 			model.None("the immutable connector revision selected by this slot: core/model/federation.go:155")),
 		pdecl(field("external_issuer", model.KindText, true),
 			model.None("the configured issuer namespace: core/model/federation.go:158")),
+		pdecl(field("display_name", model.KindText, true),
+			model.None("the operator-entered provider label rendered at login: core/auth/federation_config.go:467")),
+		pdecl(field("assurance_mapping", model.KindJSON, true), model.Nested(model.FederationAssuranceMapping{}, model.ClassEvidence,
+			model.Leaf("amr[]", model.None("exact authentication method tokens: core/auth/federation/assurance.go:49")),
+			model.Leaf("acr[]", model.None("exact assurance context tokens: core/auth/federation/assurance.go:46")),
+			model.Leaf("saml_contexts[]", model.None("exact SAML authentication context tokens: core/auth/federation/assurance.go:73")))),
 	},
 	// U4: one config per (scope, alias) — the first-class IdP entity key that lets
 	// multiple IdPs coexist under a TargetTenantID. RELAXED from the pre-U4
@@ -744,6 +792,14 @@ var federationConfigDescriptor = model.EntityDescriptor{
 var federationConfigCodec = model.Codec[model.FederationConfig]{
 	Base: func(c *model.FederationConfig) *model.BaseFields { return &c.BaseFields },
 	Encode: func(c model.FederationConfig) (model.Record, error) {
+		var mapping any
+		if c.AssuranceMapping != nil {
+			data, err := json.Marshal(c.AssuranceMapping)
+			if err != nil {
+				return nil, err
+			}
+			mapping = string(data)
+		}
 		cidrs, err := encStrings(c.NetworkAllowCIDRs)
 		if err != nil {
 			return nil, err
@@ -776,9 +832,17 @@ var federationConfigCodec = model.Codec[model.FederationConfig]{
 			"external_connector_ref":        encOptStr(c.ExternalConnectorRef),
 			"external_connector_generation": encOptInt(c.ExternalConnectorGeneration),
 			"external_issuer":               encOptStr(c.ExternalIssuer),
+			"display_name":                  encOptStr(c.DisplayName),
+			"assurance_mapping":             mapping,
 		}, nil
 	},
 	Decode: func(b model.BaseFields, r model.Record) (model.FederationConfig, error) {
+		var mapping *model.FederationAssuranceMapping
+		if data := r.String("assurance_mapping"); data != "" {
+			if err := json.Unmarshal([]byte(data), &mapping); err != nil {
+				return model.FederationConfig{}, err
+			}
+		}
 		cidrs, err := decStrings(r, "network_allow_cidrs")
 		if err != nil {
 			return model.FederationConfig{}, err
@@ -788,8 +852,10 @@ var federationConfigCodec = model.Codec[model.FederationConfig]{
 			return model.FederationConfig{}, err
 		}
 		return model.FederationConfig{BaseFields: b, TargetTenantID: decTenant(r, "target_tenant_id"),
-			Alias:    model.NormalizeFederationAlias(r.String("alias")),
-			Protocol: r.String("protocol"), Status: model.LifecycleStatus(r.String("status")),
+			AssuranceMapping: mapping,
+			DisplayName:      r.String("display_name"),
+			Alias:            model.NormalizeFederationAlias(r.String("alias")),
+			Protocol:         r.String("protocol"), Status: model.LifecycleStatus(r.String("status")),
 			OIDCIssuer: r.String("oidc_issuer"), OIDCClientID: r.String("oidc_client_id"),
 			OIDCClientSecretSealed: r.String("oidc_client_secret_sealed"), OIDCClientSecretHint: r.String("oidc_client_secret_hint"),
 			SAMLMetadataURL: r.String("saml_metadata_url"), SAMLEntityID: r.String("saml_entity_id"),
@@ -821,11 +887,11 @@ var federationDomainClaimDescriptor = model.EntityDescriptor{
 	Table: "federation_domain_claims",
 	Fields: []model.FieldSpec{
 		pdecl(indexedField("target_tenant_id", model.KindUUID, false),
-			model.None("the scope of the config that claims the domain: core/model/federation.go:180")),
+			model.None("the scope of the config that claims the domain: core/model/federation.go:184")),
 		pdecl(indexedField("config_id", model.KindUUID, false),
-			model.None("the federation config row the claim derives from: core/model/federation.go:182")),
+			model.None("the federation config row the claim derives from: core/model/federation.go:186")),
 		pdecl(field("domain", model.KindText, false),
-			model.None("a normalized claimed email domain: core/model/federation.go:185")),
+			model.None("a normalized claimed email domain: core/model/federation.go:189")),
 	},
 	Indexes: []model.IndexSpec{
 		{Name: "federation_domain_claims_domain_uniq", Columns: []string{"tenant_id", "domain"}, Unique: true},

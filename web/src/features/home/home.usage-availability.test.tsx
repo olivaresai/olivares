@@ -405,7 +405,7 @@ describe('HomeView inventory tile — a truncated summary', () => {
     // The scope disclosure is a different statement and stays exactly as accepted.
     expect(
       within(inventory).getByTestId('home-inventory-scope-note'),
-    ).toHaveTextContent('Tenant-wide — not filtered by workspace')
+    ).toHaveTextContent('All workspaces')
     // Sessions is another source, with its own read: it is never marked partial.
     expect(screen.getAllByTestId('home-inventory-partial-note')).toHaveLength(1)
     expect(screen.queryByTestId('home-sessions-partial-details')).toBeNull()
@@ -551,7 +551,7 @@ describe('HomeView sessions tile — a page with more rows', () => {
     // The scope disclosure is a different statement and stays exactly as accepted.
     expect(
       within(sessions).getByTestId('home-sessions-scope-note'),
-    ).toHaveTextContent('Tenant-wide — not filtered by workspace')
+    ).toHaveTextContent('All workspaces')
     // Inventory is another source with its own read: it is never marked by this page.
     expect(within(tile('Inventory')).getByText('25')).toBeInTheDocument()
     expect(screen.queryByTestId('home-inventory-partial-note')).toBeNull()
@@ -764,7 +764,7 @@ describe('HomeView usage tiles — pending reasons (pure flag fixture)', () => {
     expect(screen.queryByTestId('home-sessions-partial-note')).toBeNull()
     expect(
       within(sessions).getByTestId('home-sessions-scope-note'),
-    ).toHaveTextContent('Tenant-wide — not filtered by workspace')
+    ).toHaveTextContent('All workspaces')
     expect(
       within(tile('Inventory')).getByText('4 agents · 3 active'),
     ).toBeInTheDocument()

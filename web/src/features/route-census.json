@@ -59,6 +59,7 @@
     "/knowledge",
     "/login",
     "/logs",
+    "/mcp-servers",
     "/model-operations",
     "/models",
     "/observability",

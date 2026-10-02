@@ -16,7 +16,7 @@ EMBEDDED_VERSION='@OLIVARES_INSTALLER_VERSION@'
 # `v?` — releases before the 2026-09-29 tag-name correction carry the v prefix (v26.9.0);
 # current release tags are bare CalVer (26.10.0). The default's claim is 'this repository's
 # release workflow on a release tag', both shapes of it; pin one release with --source-tag.
-DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$'
+DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$'
 CERT_IDENTITY_REGEXP="${OLIVARES_CERT_IDENTITY:-$DEFAULT_CERT_IDENTITY}"
 CERT_OIDC_ISSUER="${OLIVARES_CERT_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
 # cosign is the verifier and is never optional. When it is not on PATH the installer fetches
@@ -39,12 +39,13 @@ cosign_digest() { # cosign_digest <os> <arch> -> pinned SHA-256 of cosign-<os>-<
 say() { printf '%s\n' "$*"; }
 err() { printf 'error: %s\n' "$*" >&2; exit 1; }
 have() { command -v "$1" >/dev/null 2>&1; }
+shell_quote() { printf "'%s'" "$(printf '%s' "$1" | sed "s/'/'\\\\''/g")"; }
 
 # Explicit versions use v<version> before 26.10 and bare tags from 26.10 on.
 # API tag_name is already the release's identity and is never normalized.
 release_tag() {
   release_version="${1#v}"
-  printf '%s\n' "$release_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' ||
+  printf '%s\n' "$release_version" | grep -Eq '^[0-9]+\.[0-9]+(\.[0-9]+)?$' ||
     err "invalid release version: $1"
   release_major="${release_version%%.*}"
   release_minor="${release_version#*.}"; release_minor="${release_minor%%.*}"
@@ -57,7 +58,7 @@ release_tag() {
 
 usage() {
   cat <<'EOF'
-Usage: olivares-install-<version>.sh [--version YY.M.PATCH] [--bindir DIR]
+Usage: olivares-install-<version>.sh [--version YY.M[.N]] [--bindir DIR]
        [--user|--system] [--init auto|systemd|openrc|launchd]
        [--data-dir PATH] [--config PATH] [--start] [--install-cosign] [--dry-run]
        olivares-install-<version>.sh --uninstall (--plan|--preserve|--purge)
@@ -210,9 +211,9 @@ if [ -z "$tag" ]; then
   say "==> resolving the latest release of $REPO"
   tag="$(dl_stdout "$API/repos/$REPO/releases/latest" |
     sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | sed -n '1p')"
-  [ -n "$tag" ] || err "could not resolve a release; pass --version YY.M.PATCH"
+  [ -n "$tag" ] || err "could not resolve a release; pass --version YY.M[.N]"
 fi
-printf '%s\n' "$tag" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+$' ||
+printf '%s\n' "$tag" | grep -Eq '^v?[0-9]+\.[0-9]+(\.[0-9]+)?$' ||
   err "invalid release version: $tag"
 
 os="${OLIVARES_OS:-$(uname -s | tr '[:upper:]' '[:lower:]')}"
@@ -275,7 +276,8 @@ fi
 have install || err "the POSIX install utility is required"
 
 tmp="$(mktemp -d "${TMPDIR:-/tmp}/olivares-install.XXXXXX")"
-cleanup() { rm -rf "$tmp"; [ -z "$exedir" ] || rm -rf "$exedir"; }
+stage=""
+cleanup() { [ -z "$stage" ] || rm -f "$stage"; rm -rf "$tmp"; [ -z "$exedir" ] || rm -rf "$exedir"; }
 trap cleanup EXIT HUP INT TERM
 
 resolve_cosign
@@ -303,8 +305,12 @@ fi
 got="$(sha256_of "$tmp/$archive")"
 [ "$want" = "$got" ] || err "checksum mismatch for $archive (signed $want, obtained $got)"
 
-tar -xOf "$tmp/$archive" olivares >"$tmp/olivares" ||
-  err "the verified archive does not contain a top-level olivares binary"
+if ! tar -xOf "$tmp/$archive" olivares >"$tmp/olivares"; then
+  if [ "$(df -Pk "$tmp" | awk 'END { print $4 }')" = 0 ]; then
+    err "no space left in ${TMPDIR:-/tmp} while extracting olivares; free space there or set TMPDIR to a directory with more space and retry"
+  fi
+  err "could not extract olivares into $tmp; see the tar error above. If temporary space is full, free space in ${TMPDIR:-/tmp} or set TMPDIR to a directory with more space"
+fi
 [ -s "$tmp/olivares" ] || err "the verified olivares binary is empty"
 
 if [ -n "$service_mode" ]; then
@@ -323,10 +329,15 @@ if [ -n "$service_mode" ]; then
   OLIVARES_ASSET_ROOT="$tmp/service-assets" "$@"
 fi
 mkdir -p "$bindir" || err "cannot create $bindir; create it with the intended owner and retry"
-stage="$bindir/.olivares-install.$$"
+stage="$(mktemp "$bindir/.olivares-install.XXXXXX")"
 install -m 0755 "$tmp/olivares" "$stage" ||
   err "cannot write $bindir; choose a writable --bindir or perform the privilege step explicitly"
+# Probe on the destination filesystem before replacing a working installation.
+# A wrong architecture, missing loader or noexec mount leaves the old binary intact.
+"$stage" version >/dev/null ||
+  err "the candidate binary did not report its version; the existing installation was not replaced. Check the platform and executable permissions of $bindir, then retry"
 mv "$stage" "$bindir/olivares"
+stage=""
 
 say "==> installed verified binary: $bindir/olivares"
 "$bindir/olivares" version || err "the installed binary did not report its version"
@@ -354,9 +365,17 @@ if [ -n "$service_mode" ]; then
   OLIVARES_ASSET_ROOT="$tmp/service-assets" "$@" ||
     err "verified binary remains installed, but service configuration failed; correct the named precondition and rerun this pinned installer"
 fi
-case ":$PATH:" in *":$bindir:"*) ;; *) say "note: $bindir is not on PATH" ;; esac
+next_binary=olivares
+case ":$PATH:" in
+  *":$bindir:"*) ;;
+  *)
+    say "note: $bindir is not on PATH. Run this in your shell:"
+    printf '  export PATH=%s:"$PATH"\n' "$(shell_quote "$bindir")"
+    next_binary="$(shell_quote "$bindir/olivares")"
+    ;;
+esac
 if [ -n "$service_mode" ]; then
   say "Next: $bindir/olivares doctor --data-dir ${service_data_dir:-<resolved-by-service-mode>}"
 else
-  say "Next: olivares quickstart"
+  say "Next: $next_binary quickstart"
 fi

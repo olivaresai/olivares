@@ -279,8 +279,9 @@ func newHarnessWith(t *testing.T, hopts harnessOpts) *harness {
 		Store: st, Authenticator: authr,
 		Authorizer: auth.NewAuthorizer(gov.RequestEvaluator(), auth.WithScopedGrants(gov.ScopedGrants())),
 		Signer:     signer, SetupToken: tok, Version: "test",
-		Modules:  []api.Module{gov, policy, agents, identity},
-		Recorder: recGate,
+		AuthorizationRecorder: gov,
+		Modules:               []api.Module{gov, policy, agents, identity},
+		Recorder:              recGate,
 		// the same module, in its REPORTING capacity — whoami must be able to tell
 		// the console about authority a tenant-scoped grant confers. Wired here (not only
 		// in the composition root) because the tests that pin the boundary between what

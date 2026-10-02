@@ -173,16 +173,15 @@ PY
 extract_nfpms() {
 	python3 - "$1" "$2" <<'PY' || fail "could not extract the nfpms block from $1"
 from pathlib import Path
-import sys
-src = Path(sys.argv[1]).read_text(encoding="utf-8")
-start = src.find("\nnfpms:\n")
-end = src.find("\nhomebrew_casks:\n")
-if start < 0 or end < 0 or end <= start:
-    raise SystemExit("nfpms block not found")
-Path(sys.argv[2]).write_text(src[start + 1 : end], encoding="utf-8")
+import sys, json
+recipe = json.loads(Path(sys.argv[1]).read_text())
+for entry in recipe["nfpms"]:
+    entry.pop("version_schema", None)
+out = "nfpms: " + json.dumps(recipe["nfpms"]) + "\n"
+Path(sys.argv[2]).write_text(out)
 PY
 }
-extract_nfpms "$root/.goreleaser.yaml" "$scratch/current.nfpms.yaml"
+extract_nfpms "$root/packaging/nfpm/packages.json" "$scratch/current.nfpms.yaml"
 
 baseline_predicate "$fixture/nfpms.yaml" "$fixture/postinstall.sh" "$fixture/preremove.sh" ||
 	fail "baseline fixture no longer reads as the defect it witnesses (it looks like the OpenRC correction)"
@@ -198,7 +197,7 @@ OLIVARES_ROOT="$root" bash "$root/scripts/check-uninstall-contract.sh" >/dev/nul
 printf '%s\n' 'ok - current uninstall/nfpm contract is green'
 
 # --- mutant: drop APK OpenRC from current goreleaser ---------------------------
-python3 - "$root/.goreleaser.yaml" "$scratch/mutant.goreleaser.yaml" <<'PY' || fail "could not write goreleaser mutant"
+python3 - "$root/packaging/nfpm/packages.json" "$scratch/mutant.goreleaser.yaml" <<'PY' || fail "could not write goreleaser mutant"
 import pathlib, sys, yaml
 src, dst = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 data = yaml.safe_load(src.read_text(encoding="utf-8"))

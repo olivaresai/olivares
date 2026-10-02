@@ -44,12 +44,15 @@ const (
 	ClassRestrict PrincipalClass = "restrict"
 	// ClassEvidence records what happened; no reader turns it into authority.
 	ClassEvidence PrincipalClass = "evidence"
+	// ClassThirdPartyText is prose about a subject written by someone else.
+	// Retirement states that it was not scanned; a text match is never erasure.
+	ClassThirdPartyText PrincipalClass = "third-party-text"
 )
 
-// Valid reports whether c is one of the four classes.
+// Valid reports whether c is a declared principal class.
 func (c PrincipalClass) Valid() bool {
 	switch c {
-	case ClassAuthority, ClassObligation, ClassRestrict, ClassEvidence:
+	case ClassAuthority, ClassObligation, ClassRestrict, ClassEvidence, ClassThirdPartyText:
 		return true
 	}
 	return false
@@ -164,6 +167,18 @@ type ColumnDecl struct {
 	// holds (see BoundToMembers). The store honours it only for the columns it
 	// names itself.
 	MemberBound bool
+	// ContentErasure names the subject-owned content rule and the existing
+	// retirement reader that proves it. Nested/Union annotations pass to their
+	// Ref/Scan leaves; unknown leaves still make the census incomplete.
+	ContentErasure *ContentErasure
+}
+
+// ContentErasure binds subject-owned content to a named rule, with its source
+// citation, and the composition module whose retirement step proves that rule.
+// Classification is not proof that a particular store has been erased.
+type ContentErasure struct {
+	Rule   string
+	Reader string
 }
 
 // LeafDecl classifies one leaf path of a Nested type, or every occurrence of a
@@ -287,62 +302,114 @@ func (d EntityDescriptor) PrincipalDefects() []error {
 // (AUTHORITY or OBLIGATION) reference, directly, through a Nested leaf, or
 // through any variant of a Union.
 func (d EntityDescriptor) CountedColumns() []string {
+	return d.columnsMatching(countedLeaf)
+}
+
+// ContentColumns returns columns with a subject-owned content erasure rule,
+// through the same leaf walk as CountedColumns.
+func (d EntityDescriptor) ContentColumns() []string {
+	return d.columnsMatching(contentLeaf)
+}
+
+// ThirdPartyTextColumns returns columns whose prose retirement does not scan.
+// They are stated limits, never counted references or claims of erased content.
+func (d EntityDescriptor) ThirdPartyTextColumns() []string {
+	return d.columnsMatching(func(c *ColumnDecl) bool { return c.Form == FormScan && c.Class == ClassThirdPartyText })
+}
+
+func (d EntityDescriptor) columnsMatching(pred func(*ColumnDecl) bool) []string {
 	var out []string
 	for _, f := range d.Fields {
-		if f.Principal != nil && f.Principal.counted() {
+		if f.Principal.anyLeaf(pred) {
 			out = append(out, f.Name)
 		}
 	}
 	return out
 }
 
-// Counted reports whether the declaration can hold a counted (AUTHORITY or
-// OBLIGATION) reference, directly, through a Nested leaf, or through any variant
-// of a Union.
-func (c *ColumnDecl) Counted() bool { return c.counted() }
+// Counted reports whether any leaf holds AUTHORITY or OBLIGATION.
+func (c *ColumnDecl) Counted() bool {
+	return c.anyLeaf(countedLeaf)
+}
 
-func (c *ColumnDecl) counted() bool {
+// HasContentErasure reports whether any classified content leaf has a rule.
+func (c *ColumnDecl) HasContentErasure() bool { return c.anyLeaf(contentLeaf) }
+
+func countedLeaf(c *ColumnDecl) bool {
+	return (c.Form == FormRef || c.Form == FormScan) && c.Class.Counted()
+}
+
+func contentLeaf(c *ColumnDecl) bool {
+	return (c.Form == FormRef || c.Form == FormScan) && c.ContentErasure != nil
+}
+
+// ContentErasures returns the distinct rules of this column's content leaves.
+// Readiness binds each rule's reader to the single declared column reader.
+func (c *ColumnDecl) ContentErasures() []ContentErasure {
+	var out []ContentErasure
+	seen := make(map[ContentErasure]bool)
+	c.anyLeaf(func(leaf *ColumnDecl) bool {
+		if contentLeaf(leaf) && !seen[*leaf.ContentErasure] {
+			seen[*leaf.ContentErasure] = true
+			out = append(out, *leaf.ContentErasure)
+		}
+		return false // inspect every leaf, including every accepted variant
+	})
+	return out
+}
+
+// anyLeaf is the one structural walk for all census views. Copies carry an
+// enclosing Nested class or content rule without changing shared declarations.
+func (c *ColumnDecl) anyLeaf(pred func(*ColumnDecl) bool) bool {
 	if c == nil {
 		return false
 	}
 	switch c.Form {
-	case FormRef, FormScan:
-		return c.Class.Counted()
+	case FormRef, FormScan, FormNone:
+		return pred(c)
 	case FormNested:
+		// Preserve the existing enclosing-class gate of the counted view. Content
+		// and third-party annotations remain visible through the same leaf walk.
+		leafPred := pred
 		if !c.Class.Counted() {
-			return false
+			leafPred = func(leaf *ColumnDecl) bool {
+				effective := *leaf
+				if effective.Class.Counted() {
+					effective.Class = c.Class
+				}
+				return pred(&effective)
+			}
 		}
-		return nestedHasPrincipalLeaf(c.Leaves)
+		for _, l := range c.Leaves {
+			child := l.Decl
+			if l.Type != nil {
+				child = &ColumnDecl{Form: FormNested, Class: c.Class, Leaves: l.Leaves}
+			}
+			if child != nil {
+				inherited := *child
+				if inherited.Class == "" {
+					inherited.Class = c.Class
+				}
+				if inherited.ContentErasure == nil {
+					inherited.ContentErasure = c.ContentErasure
+				}
+				if inherited.anyLeaf(leafPred) {
+					return true
+				}
+			}
+		}
 	case FormUnion:
-		if c.Kinds == nil {
-			return false
-		}
-		for _, k := range c.Kinds.Kinds() {
-			if v, ok := c.Kinds.Variant(k); ok && v.counted() {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-func nestedHasPrincipalLeaf(leaves []LeafDecl) bool {
-	for _, l := range leaves {
-		if l.Type != nil {
-			if nestedHasPrincipalLeaf(l.Leaves) {
-				return true
-			}
-			continue
-		}
-		if l.Decl == nil {
-			continue
-		}
-		switch l.Decl.Form {
-		case FormRef, FormScan:
-			return true
-		case FormUnion:
-			if l.Decl.counted() {
-				return true
+		if c.Kinds != nil {
+			for _, kind := range c.Kinds.Kinds() {
+				if variant, ok := c.Kinds.Variant(kind); ok && variant != nil {
+					inherited := *variant
+					if inherited.ContentErasure == nil {
+						inherited.ContentErasure = c.ContentErasure
+					}
+					if inherited.anyLeaf(pred) {
+						return true
+					}
+				}
 			}
 		}
 	}
@@ -367,6 +434,23 @@ func sqlKindName(k SQLKind) string {
 // Nested type; hasSibling answers whether a sibling column or leaf exists.
 func validateDecl(where string, c *ColumnDecl, leaf bool, hasSibling func(string) bool) []error {
 	var out []error
+	if c.Class == ClassThirdPartyText && c.Form != FormScan {
+		out = append(out, fmt.Errorf("%s: third-party text requires Scan", where))
+	}
+	if rule := c.ContentErasure; rule != nil {
+		if strings.TrimSpace(rule.Rule) == "" || !noneCitation.MatchString(rule.Rule) {
+			out = append(out, fmt.Errorf("%s: content erasure rule cites no reader lines", where))
+		}
+		if strings.TrimSpace(rule.Reader) == "" {
+			out = append(out, fmt.Errorf("%s: content erasure names no retirement reader", where))
+		}
+		if !c.HasContentErasure() {
+			out = append(out, fmt.Errorf("%s: content erasure has no classified content leaf", where))
+		}
+	}
+	if c.anyLeaf(func(l *ColumnDecl) bool { return l.Class == ClassThirdPartyText && l.ContentErasure != nil }) {
+		out = append(out, fmt.Errorf("%s: third-party text cannot claim content erasure", where))
+	}
 	switch c.Form {
 	case FormRef:
 		if !c.Encoding.Valid() {
@@ -790,7 +874,7 @@ func pruneCounted(c *ColumnDecl, inherited PrincipalClass) *ColumnDecl {
 		}
 		return &out
 	case FormUnion:
-		if c.Kinds == nil || !c.counted() {
+		if c.Kinds == nil || !c.Counted() {
 			return nil
 		}
 		return &ColumnDecl{Form: FormUnion, Discriminator: c.Discriminator, Kinds: countedKinds{c.Kinds}}

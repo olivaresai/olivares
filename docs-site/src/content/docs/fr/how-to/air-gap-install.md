@@ -33,17 +33,17 @@ SBOM/OpenVEX/provenance, et émet une seule archive tarball avec un `VERIFY.md` 
 
 ```bash
 scripts/airgap-bundle.sh \
-  --version 26.10.0 \
-  --image ghcr.io/olivaresai/olivares:26.10.0-amd64 \
+  --version 26.10.1 \
+  --image ghcr.io/olivaresai/olivares:26.10.1-amd64 \
   --chart deploy/helm/olivares \
   --cosign-key cosign.key \
   [--collector-image <ref>] [--out dist/airgap] [--gpg-key <id>]
 ```
 
-Le tag par architecture (`26.10.0-amd64`) est publié sur `ghcr.io/olivaresai/olivares`, où la
+Le tag par architecture (`26.10.1-amd64`) est publié sur `ghcr.io/olivaresai/olivares`, où la
 release est construite et signée. Docker Hub (`docker.io/olivaresai/olivares`, le pull officiel)
-porte les tags multi-arch et durcis, identiques par digest, mais pas `26.10.0-amd64`
-(`docs/releases/26.10.0-install-surfaces.json`). ghcr.io ne limite pas le débit des pulls anonymes
+porte les tags multi-arch et durcis, identiques par digest, mais pas `26.10.1-amd64`
+(`docs/releases/26.10.1-install-surfaces.json`). ghcr.io ne limite pas le débit des pulls anonymes
 d’images publiques, ce qui aide aussi sur un hôte de build non authentifié.
 
 :::caution[Le SBOM/VEX/provenance sont fournis, pas générés]
@@ -104,7 +104,7 @@ mise en miroir (il utilise `crane` et `cosign load` — et **non** `oras`) :
 
 ```bash
 scripts/airgap-mirror.sh \
-  --bundle olivares-airgap-26.10.0.tar.gz \
+  --bundle olivares-airgap-26.10.1.tar.gz \
   --registry registry.internal:5000 [--insecure]
 ```
 

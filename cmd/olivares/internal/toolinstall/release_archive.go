@@ -32,6 +32,14 @@ func NewOpenCode(options ReleaseArchiveOptions) *ReleaseArchive {
 func NewOllama(options ReleaseArchiveOptions) *ReleaseArchive {
 	return newReleaseArchive(DriverOllama, options)
 }
+
+// NewCodexRelease installs the official Codex CLI from github.com/openai/codex
+// releases, pinned to the SHA-256 the release metadata states for the platform
+// archive. The chatgpt.com/codex origin the Codex package installer used answers
+// 404, so this is the installer the engine wires for Codex.
+func NewCodexRelease(options ReleaseArchiveOptions) *ReleaseArchive {
+	return newReleaseArchive(DriverCodex, options)
+}
 func newReleaseArchive(driver string, options ReleaseArchiveOptions) *ReleaseArchive {
 	client := options.Client
 	if client == nil {
@@ -68,7 +76,8 @@ func (p *ReleaseArchive) metadata(ctx context.Context, u string) (githubReleaseM
 	if err := json.Unmarshal(body, &meta); err != nil {
 		return meta, nil, refuse(KindManifestInvalid, "official release metadata is invalid")
 	}
-	if meta.Draft || meta.Prerelease || !strings.HasPrefix(meta.Tag, "v") || !ValidVersion(strings.TrimPrefix(meta.Tag, "v")) {
+	prefix := releaseTagPrefix(p.driver)
+	if meta.Draft || meta.Prerelease || !strings.HasPrefix(meta.Tag, prefix) || !ValidVersion(strings.TrimPrefix(meta.Tag, prefix)) {
 		return meta, nil, refuse(KindVersionUnknown, "official release metadata does not name a supported stable semantic version")
 	}
 	return meta, body, nil
@@ -87,7 +96,8 @@ func (p *ReleaseArchive) ResolveV2(ctx context.Context, req RequestV2) (*PlanV2,
 	requested := strings.TrimSpace(req.Version)
 	channel := ChannelExact
 	endpoint := "https://api.github.com/repos/" + releaseRepository(p.driver) + "/releases/"
-	pointer := endpoint + "tags/v" + requested
+	prefix := releaseTagPrefix(p.driver)
+	pointer := endpoint + "tags/" + prefix + requested
 	if requested == ChannelLatest || requested == ChannelStable {
 		channel = requested
 		pointer = endpoint + "latest"
@@ -98,24 +108,24 @@ func (p *ReleaseArchive) ResolveV2(ctx context.Context, req RequestV2) (*PlanV2,
 	if err != nil {
 		return nil, nil, err
 	}
-	version := strings.TrimPrefix(meta.Tag, "v")
+	version := strings.TrimPrefix(meta.Tag, prefix)
 	if channel == ChannelExact && version != requested {
 		return nil, nil, refuse(KindVersionUnknown, "official release tag differs from the requested version")
 	}
-	checksumURL := endpoint + "tags/v" + version
+	checksumURL := endpoint + "tags/" + prefix + version
 	checksumBody := pointerBody
 	if pointer != checksumURL {
 		meta, checksumBody, err = p.metadata(ctx, checksumURL)
 		if err != nil {
 			return nil, nil, err
 		}
-		if meta.Tag != "v"+version {
+		if meta.Tag != prefix+version {
 			return nil, nil, refuse(KindPlanChanged, "official release tag changed while resolving")
 		}
 	}
 	layout := releaseArchiveLayout(p.driver)
 	assetName := releaseAssetName(p.driver, vendor)
-	pkgURL := "https://github.com/" + releaseRepository(p.driver) + "/releases/download/v" + version + "/" + assetName
+	pkgURL := "https://github.com/" + releaseRepository(p.driver) + "/releases/download/" + prefix + version + "/" + assetName
 	var digest string
 	var size int64
 	matches := 0
@@ -142,6 +152,16 @@ func (p *ReleaseArchive) ResolveV2(ctx context.Context, req RequestV2) (*PlanV2,
 	}
 	plan.Digest = ComputeDigestV2(plan)
 	return plan, &ResolvedMaterialV2{Pointer: resolvedFromURL(selection.Source.Pointer, pointerBody), Checksums: resolvedFromURL(selection.Source.Checksums, checksumBody), Proofs: []ResolvedProofV2{}}, nil
+}
+
+// routePointer is the pointer ResolveV2 records for sel's release selected
+// through channel: the tag metadata for its exact version, else the latest pointer.
+func (p *ReleaseArchive) routePointer(sel SelectionV2, channel string) string {
+	endpoint := "https://api.github.com/repos/" + releaseRepository(p.driver) + "/releases/"
+	if channel == ChannelExact {
+		return endpoint + "tags/" + releaseTagPrefix(p.driver) + sel.Version
+	}
+	return endpoint + "latest"
 }
 func (p *ReleaseArchive) FetchV2(ctx context.Context, plan *PlanV2, w io.Writer) (FetchedObjectObserved, error) {
 	if err := plan.validate(); err != nil {

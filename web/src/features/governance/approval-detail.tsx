@@ -1,16 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { Check, X } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
+import { CodeLine } from '@/components/ui/code-line'
 import { KvList, KvRow } from '@/components/ui/kv'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
@@ -28,10 +30,30 @@ import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { RelTimeLabel } from '@/features/shared'
 import { governanceApi, governanceKeys } from './api'
+import { ApprovalDetails, ApprovalPreview } from './approval-preview'
 import { DecisionDialog } from './decision-dialog'
 import './i18n'
 import { canDecideOnRequest } from './types'
 import type { ApprovalDTO, DecisionDTO, DecisionVerb } from './types'
+
+/** A tool-call approval (claude.tool, provider.tool, mcp.tool …): its reason
+ * names the command or path under review. */
+function isToolCall(subjectKind?: string): boolean {
+  return subjectKind?.endsWith('.tool') ?? false
+}
+
+/** The approval the engine opens to re-enable a stopped estate (dual control). */
+const REENABLE_ACTION = 'security.killswitch.reenable'
+
+/** A translated sentence whose `backticked` parts are commands: each becomes the inline
+ * command chip, the rest stays text. */
+function withInlineCommands(text: string): ReactNode[] {
+  return text
+    .split(/`([^`]+)`/)
+    .map((part, i) =>
+      i % 2 === 1 ? <CodeLine key={i} command={part} inline /> : part,
+    )
+}
 
 export interface ApprovalDetailSheetProps {
   approvalId: string | null
@@ -104,7 +126,7 @@ export function ApprovalDetailSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl">
         <SheetHeader>
-          <SheetTitle>{detail?.action ?? t('detail.title')}</SheetTitle>
+          <SheetTitle>{t('detail.title')}</SheetTitle>
           {detail && (
             <SheetDescription className="flex flex-wrap items-center gap-1.5">
               <StatusBadge status={detail.status} />
@@ -138,10 +160,17 @@ export function ApprovalDetailSheet({
           ) : query.error instanceof ApiError && query.error.isForbidden ? (
             <ForbiddenState />
           ) : query.error || !detail ? (
-            <ErrorState retry={() => query.refetch()} />
+            <QueryErrorState
+              error={query.error}
+              retry={() => query.refetch()}
+            />
           ) : (
             <div className="flex flex-col gap-5">
-              <Overview detail={detail} />
+              {/* What will run first; the engine's references behind Details. */}
+              <ApprovalPreview approval={detail} />
+              <ApprovalDetails approval={detail}>
+                <Overview detail={detail} />
+              </ApprovalDetails>
 
               <Separator />
 
@@ -162,6 +191,32 @@ export function ApprovalDetailSheet({
             </div>
           )}
         </ScrollArea>
+
+        {/* HU 047: the requester of an estate re-enable cannot decide it, and the sheet
+            offered nothing else. It says what is needed and where to do it. */}
+        {detail &&
+        isPending &&
+        detail.action === REENABLE_ACTION &&
+        !canDecideOnRequest(
+          detail.requested_by,
+          principal?.actor,
+          principal?.kind,
+        ) ? (
+          <div
+            className="border-t border-border pt-3 text-body text-text-2"
+            data-slot="reenable-needs-admins"
+          >
+            {/* The command in the sentence reads as a command (the inline chip with Copy),
+                not as text between backticks (Root, 047 review). */}
+            {withInlineCommands(t('detail.reenableNeedsAdmins'))}{' '}
+            <a
+              href="/identity"
+              className="text-accent-text underline underline-offset-2"
+            >
+              {t('detail.openIdentity')}
+            </a>
+          </div>
+        ) : null}
 
         {/* Actions footer — gated by permission + pending status. */}
         {detail && isPending && (mayDecide || canWrite) && (
@@ -205,6 +260,7 @@ export function ApprovalDetailSheet({
           open={decisionOpen}
           onOpenChange={setDecisionOpen}
           approvalId={detail.id}
+          approval={detail}
           verb={decisionVerb}
         />
       )}
@@ -279,7 +335,18 @@ function Overview({ detail }: { detail: ApprovalDTO }) {
       )}
       {detail.reason && (
         <KvRow label={t('detail.reason')} align="start">
-          {detail.reason}
+          {isToolCall(detail.subject_kind) ? (
+            // A tool call's reason carries the command the reviewer approves:
+            // shown whole, as code, wrapped at any character, scrolled when long.
+            <pre
+              data-slot="approval-command"
+              className="max-h-80 overflow-y-auto whitespace-pre-wrap break-all rounded-md bg-muted px-2 py-1.5 font-mono text-caption text-foreground"
+            >
+              {detail.reason}
+            </pre>
+          ) : (
+            detail.reason
+          )}
         </KvRow>
       )}
     </KvList>
@@ -312,7 +379,7 @@ function DecisionTrail({
   if (error instanceof ApiError && error.isStepUpRequired)
     return <StepUpRequiredState action="generic" onElevated={onRetry} />
   if (error instanceof ApiError && error.isForbidden) return <ForbiddenState />
-  if (error) return <ErrorState retry={onRetry} />
+  if (error) return <QueryErrorState error={error} retry={onRetry} />
   if (items.length === 0)
     return (
       <EmptyState

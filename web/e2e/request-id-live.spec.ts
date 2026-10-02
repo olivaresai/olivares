@@ -21,7 +21,7 @@ async function entra(page: Page) {
   await page.locator('#password').fill(PASSWORD)
   await page.getByRole('button', { name: /^sign in$/i }).click()
   await expect(
-    page.getByRole('link', { name: 'Overview', exact: true }),
+    page.getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible({ timeout: 20_000 })
 }
 

@@ -1,6 +1,6 @@
 {
   "title": "エージェントツール",
-  "description": "コントロールプレーンのホスト上のツールを管理します。",
+  "description": "セッションが実行する AI ツールをこのサーバーにインストールし、サインインします。",
   "refresh": "更新",
   "adminOnly": "ホストのツールを管理するにはシステム管理者のセッションが必要です。",
   "readOnly": "このコントロールプレーンは読み取り専用です。インストールは無効です。",
@@ -14,7 +14,7 @@
   "versionUnknown": "バージョン不明",
   "planning": "選択したバージョンを検証中…",
   "approval": "インストールを確認",
-  "installHint": "インストールにはハードウェア検証による追加認証が必要です。エージェントやモデルサーバーは起動しません。",
+  "installHint": "ツールをインストールできるのは管理者だけです。エージェントやモデルサーバーは起動しません。",
   "install": "承認したバージョンをインストール",
   "starting": "開始中…",
   "started": "インストールを開始しました",
@@ -41,6 +41,25 @@
   },
   "probe": "バージョンを確認",
   "probeName": "{{path}} のバージョンを確認",
-  "probeHint": "ハードウェア認証後、この実行ファイルの --version コマンドを実行します。",
-  "probeComplete": "バージョン確認が完了しました。"
+  "probeHint": "このチェックを実行できるのは管理者だけです。この実行ファイルの --version コマンドを実行します。",
+  "probeComplete": "バージョン確認が完了しました。",
+  "versionLine": "バージョン {{version}} をインストール済み",
+  "ollama": {
+    "stopped": "停止中",
+    "starting": "起動中…",
+    "running": "{{endpoint}} で稼働中",
+    "failed": "停止中: 終了しました。",
+    "start": "起動",
+    "stop": "停止",
+    "hint": "エンドポイントはこの組織のプロバイダーに追加され、Codex のプロファイルで使えます。ほかの組織はそれぞれそこに追加します。モデルはこのサーバーに保存されます。",
+    "noModels": "まだモデルがありません。",
+    "model": "モデル",
+    "download": "ダウンロード",
+    "downloading": "{{model}} をダウンロード中…",
+    "downloadingPercent": "{{model}} をダウンロード中 · {{percent}}%",
+    "downloaded": "{{model}} をダウンロードしました。",
+    "downloadFailed": "{{model}} をダウンロードできませんでした。{{error}}",
+    "startRequested": "このサーバーで Ollama を起動しています。",
+    "downloadRequested": "ダウンロードを開始しました。"
+  }
 }

@@ -60,16 +60,29 @@ func readManifest(t *testing.T) (manifest struct {
 }
 
 // productOwned lists the paths the product's package installs (every nfpm dst in
-// .goreleaser.yaml) and those its postinstall creates.
+// packaging/nfpm/packages.json) and those its postinstall creates.
 func productOwned(t *testing.T) []string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(repoRoot, ".goreleaser.yaml"))
+	data, err := os.ReadFile(filepath.Join(repoRoot, "packaging/nfpm/packages.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	owned := []string{"/usr/bin/olivares", "/etc/olivares", "/var/lib/olivares", "/usr/lib/olivares"}
-	for _, m := range regexp.MustCompile(`(?m)^\s+(?:- )?dst: (/\S+)$`).FindAllStringSubmatch(string(data), -1) {
-		owned = append(owned, m[1])
+	var recipes struct {
+		Nfpms []struct {
+			Contents []nfpmContent `json:"contents"`
+		} `json:"nfpms"`
+	}
+	if err := json.Unmarshal(data, &recipes); err != nil {
+		t.Fatal(err)
+	}
+	if len(recipes.Nfpms) != 2 {
+		t.Fatalf("native recipe inventory: got %d, want 2", len(recipes.Nfpms))
+	}
+	for _, recipe := range recipes.Nfpms {
+		for _, content := range recipe.Contents {
+			owned = append(owned, content.Dst)
+		}
 	}
 	return owned
 }

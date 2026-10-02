@@ -1,15 +1,15 @@
 {
-  "title": "权限",
-  "subtitle": "人工介入审批、RBAC/ABAC 策略，以及每个操作背后的身份与智能体绑定。",
+  "title": "审批与权限",
+  "subtitle": "等待人工决定的请求、允许或拒绝操作的规则，以及谁可以执行操作。",
   "tabs": {
     "approvals": "审批",
     "policies": "策略",
     "identities": "身份与组",
-    "breakGlass": "紧急破窗",
+    "breakGlass": "紧急访问",
     "agentRisk": "智能体风险"
   },
   "breakGlass": {
-    "title": "Break-glass 紧急访问",
+    "title": "紧急访问",
     "caption": "对双人控制的限时例外。每次激活、使用、撤销和事后审查都会成为永久审计证据；此界面用于问责，而非提供便利。",
     "forbiddenTitle": "无权访问",
     "forbiddenBody": "您无权查看 break-glass 授权或其不可变使用轨迹。",
@@ -115,10 +115,8 @@
   },
   "approvals": {
     "title": "审批队列",
-    "caption": "待处理的人工介入请求。每一次批准、拒绝和取消都是经过审计的审慎决策，记录在不可变的决策轨迹中。",
+    "caption": "等待决定的请求。每次批准、拒绝和取消都会被记录。",
     "search": "搜索请求…",
-    "action": "操作",
-    "subject": "对象",
     "requestedBy": "请求者",
     "status": "状态",
     "progress": "审批",
@@ -134,7 +132,7 @@
     "noSubject": "无对象",
     "filterStatus": "状态",
     "statusAll": "全部状态",
-    "runSweep": "运行清扫",
+    "runSweep": "让逾期请求过期并升级",
     "newRequest": "新建请求",
     "empty": "暂无审批请求",
     "emptyHint": "当某项操作需要人工批准时，将在此处显示以供审查。",
@@ -144,7 +142,9 @@
     "reject": "拒绝",
     "cancel": "取消",
     "viewDetail": "查看详情",
-    "actorHint": "审计操作者标识 —— 绝不会是电子邮件地址。身份从目录中解析得出，此处不予显示。"
+    "actorHint": "审计操作者标识 —— 绝不会是电子邮件地址。身份从目录中解析得出，此处不予显示。",
+    "expiredAt": "已过期 {{time}}",
+    "request": "请求"
   },
   "status": {
     "pending": "待处理",
@@ -155,17 +155,18 @@
   },
   "decide": {
     "approveTitle": "批准此请求？",
-    "approveBody": "您的决策将永久记录在不可变的决策轨迹中，并计入审批阈值。",
+    "approveBody": "你的批准会计入此请求所需的批准数。",
     "rejectTitle": "拒绝此请求？",
-    "rejectBody": "单次拒绝即会终止该请求，并永久记录在决策轨迹中。",
+    "rejectBody": "单次拒绝即会终止该请求。",
     "approveConfirm": "批准",
     "rejectConfirm": "拒绝",
     "note": "备注",
-    "noteHint": "可选 —— 将与您的决策一同永久记录。",
+    "noteHint": "可选。",
     "notePlaceholder": "您批准或拒绝的原因（可选）…",
     "approved": "决策已记录 —— 已批准",
     "rejected": "决策已记录 —— 已拒绝",
-    "sodHint": "您不能对自己发起的请求作出决策，没有稳定用户的令牌也无法作出决策。"
+    "sodHint": "您不能对自己发起的请求作出决策，没有稳定用户的令牌也无法作出决策。",
+    "notPending": "此请求已不再等待决定。"
   },
   "cancel": {
     "title": "取消此审批请求？",
@@ -176,7 +177,7 @@
   "sweep": {
     "title": "运行审批清扫？",
     "body": "此操作会将超过截止时间的请求标记为已过期，并升级超过升级窗口的请求，然后发出相应的发现项。可安全地重复运行。",
-    "confirm": "运行清扫",
+    "confirm": "让逾期请求过期并升级",
     "done": "清扫完成",
     "result": "已扫描 {{scanned}} 个 · 已升级 {{escalated}} 个 · 已过期 {{expired}} 个。",
     "more": "仍有待处理的请求未被扫描 —— 请再次运行清扫以完成。"
@@ -220,12 +221,13 @@
     "trailEmpty": "尚无决策记录",
     "trailEmptyHint": "关于该审批的每一次决定——谁在何时因何决定——都会记录在这里。目前还没有人做出决定。",
     "decisionApprove": "已批准",
-    "decisionReject": "已拒绝"
+    "decisionReject": "已拒绝",
+    "reenableNeedsAdmins": "需要另外两个管理员账户批准。请在“身份与 NHI”中创建，或使用 `olivares users create`。",
+    "openIdentity": "打开“身份与 NHI”"
   },
   "policies": {
     "title": "策略",
-    "caption": "ABAC 拒绝规则与审批阈值。ABAC 规则只能进一步限制访问；它是作者声明的意图，而非运行时强制执行的证明。",
-    "enforcementCaption": "策略是否真正强制执行取决于部署 —— 已启用的策略可能已被编写并审计，但若其评估器未接线则处于失效状态。",
+    "caption": "已启用的策略在保存后立即生效。拒绝规则只会收回访问权限；审批阈值适用于新的匹配请求。",
     "search": "搜索策略…",
     "name": "策略",
     "kind": "类别",
@@ -250,7 +252,7 @@
     "kindHint": "策略类型。创建后无法更改。",
     "enabled": "已启用",
     "abacRules": "拒绝规则",
-    "abacRulesHint": "每条规则都会进一步限制访问。「拒绝」是隐含的且不可编辑 —— v1 仅支持拒绝规则。规则必须至少选择权限、动词、资源或主体类别中的一项。",
+    "abacRulesHint": "每条规则拒绝与之匹配的请求，从不授予访问权限。规则至少需要一个条件。设置最低登录级别后，它只拒绝登录级别低于该级别的调用方；令牌始终视为低于该级别。",
     "addRule": "添加规则",
     "removeRule": "移除",
     "rulePermission": "权限",
@@ -259,14 +261,20 @@
     "ruleResource": "资源",
     "rulePrincipalKind": "主体类别",
     "ruleAny": "任意",
+    "ruleMinAal": "最低登录级别",
+    "ruleMinAalNone": "无",
+    "aal1": "AAL1（密码）",
+    "aal2": "AAL2（多因素）",
+    "aal3": "AAL3（抗钓鱼）",
     "noRules": "暂无拒绝规则",
     "denyImplicit": "拒绝（隐含）",
     "requiredApprovals": "所需审批数",
-    "requiredApprovalsHint": "0–64 —— 权威阈值。",
+    "requiredApprovalsHint": "0–64。留空或 0 使用引擎默认值，关键操作的默认值可能更高。",
     "expiresInSeconds": "到期时间（秒）",
     "expiresInSecondsHint": "0–31536000（0 = 永不）。",
     "escalateInSeconds": "升级时间（秒）",
     "escalateInSecondsHint": "0–31536000（0 = 永不）。",
+    "countError": "请输入 0 到 {{max}} 之间的整数。",
     "matchAction": "匹配操作",
     "matchActionHint": "留空 = 匹配任意操作。",
     "matchSubjectKind": "匹配对象类别",
@@ -368,8 +376,8 @@
     "done": "智能体已解除绑定"
   },
   "caveat": {
-    "deny": "拒绝规则是策略作者声明的意图 —— 并非该规则在运行时被强制执行的证明。",
-    "enforcement": "已启用并不总是意味着已强制执行：在此部署中，评估器或目录提供方可能未接线。"
+    "deny": "拒绝规则只能移除访问权限，绝不会给任何人超出其角色允许的权限。",
+    "enforcement": "已启用的规则会被检查；已停用的规则会保留，但不会被检查。"
   },
   "computerUse": {
     "title": "计算机使用治理",
@@ -591,8 +599,8 @@
       "description": "配置目录来源后，重新同步名册，以协调此租户的人类与非人类身份。"
     },
     "policies": {
-      "title": "尚未编写治理策略",
-      "description": "编写 ABAC 拒绝规则或审批阈值；运行时强制执行仍取决于此部署中的评估器接线。"
+      "title": "暂无规则",
+      "description": "添加拒绝规则或审批阈值。策略在保存后立即生效。"
     },
     "routinePolicies": {
       "title": "尚未编写例行任务策略",
@@ -693,5 +701,21 @@
       "draft": "草案——不要写死",
       "stable": "稳定——接缝可以指向它"
     }
+  },
+  "preview": {
+    "title": "将要运行的内容",
+    "session": "会话",
+    "folder": "文件夹",
+    "askedBy": "请求方",
+    "askedBySession": "会话本身",
+    "tool": "工具",
+    "willRun": "将要运行的内容",
+    "noReview": "此请求未包含将要运行的内容。",
+    "showAll": "显示全部",
+    "showLess": "收起",
+    "details": "详情",
+    "id": "请求 ID",
+    "untitled": "未命名会话",
+    "openToDecide": "打开以批准或拒绝"
   }
 }

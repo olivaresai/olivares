@@ -38,7 +38,7 @@ func newDRCmd() *cobra.Command {
 		Example: "  olivares dr inspect --in /srv/backups/olivares-2026-07-14.drbundle\n" +
 			"  olivares dr verify --in /srv/backups/olivares-2026-07-14.drbundle --passphrase-file /run/secrets/dr-passphrase\n" +
 			"  olivares dr drill --events 100",
-		Long: "dr backs up and restores the control plane in a way that preserves the audit\n" +
+		Long: "dr backs up and restores the engine in a way that preserves the audit\n" +
 			"ledger's hash-chain continuity and signing-key custody — not a naive database\n" +
 			"dump (docs/DR-RUNBOOK.md). The backup bundle carries the store snapshot, the\n" +
 			"signing keys encrypted under your key-encryption key (KEK), and a manifest of\n" +
@@ -193,6 +193,8 @@ func drBoot(ctx context.Context, f drFlags) (*engine, error) {
 		// nothing below this line needed changing for the split to work.
 		OwnerDSN: f.ownerDSN,
 		Version:  version, Logger: slog.Default(),
+		// DR has already selected the dump/restore format before this boot.
+		storeEngineExplicit: true,
 	})
 }
 

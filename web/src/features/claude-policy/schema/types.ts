@@ -16,7 +16,14 @@ export type FieldScope = 'managed-only' | 'any'
 export interface KeyDescriptor {
   /** The setting key (dotted for nested, e.g. sandbox.network.allowManagedDomainsOnly). */
   key: string
-  type: 'boolean' | 'string' | 'number' | 'string[]' | 'object' | 'enum'
+  type:
+    | 'boolean'
+    | 'string'
+    | 'number'
+    | 'string[]'
+    | 'object'
+    | 'object[]'
+    | 'enum'
   /** managed-only = takes effect ONLY in managed-settings; any = works from any scope. */
   scope: FieldScope
   summary: string

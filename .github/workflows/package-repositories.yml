@@ -60,8 +60,8 @@ jobs:
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
           set -euo pipefail
-          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-            echo "::error::release_version must be MAJOR.MINOR.PATCH"
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || {
+            echo "::error::release_version must be YY.M or YY.M.N"
             exit 2
           }
           release_repo=olivaresai/olivares

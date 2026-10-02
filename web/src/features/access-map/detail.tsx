@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useNavigate } from '@tanstack/react-router'
 import {
   ArrowUpRight,
@@ -17,7 +18,6 @@ import { useTranslation } from 'react-i18next'
 import { AccessModeBadge, ConfidenceBadge } from '@/components/data/badges'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { ErrorState } from '@/components/ui/error-state'
 import { Separator } from '@/components/ui/separator'
 import {
   Sheet,
@@ -141,7 +141,8 @@ export function AccessDetailSheet({
                   <Locate className="size-3.5" /> {t('detail.expand')}
                 </Button>
                 {expandError ? (
-                  <ErrorState
+                  <QueryErrorState
+                    error={expandError}
                     className="py-4"
                     retry={() => onExpand(selection.id, selection.kind)}
                   />

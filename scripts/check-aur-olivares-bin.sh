@@ -120,7 +120,7 @@ package_body="$(sed -n '/^package_body<<$/,$p' <<<"$values" | sed '1d')"
 
 pkgver="$(value pkgver)"
 [[ "$(value pkgname)" == olivares-bin ]] || finding 'pkgname must be olivares-bin'
-[[ "$pkgver" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || finding "pkgver is not a release version: $pkgver"
+[[ "$pkgver" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || finding "pkgver is not a release version: $pkgver"
 [[ "$(value arch)" == x86_64 ]] || finding 'arch must be exactly x86_64: aarch64 is not a published target'
 [[ " $(value provides) " == *" olivares=$pkgver "* ]] || finding "provides must name olivares=$pkgver"
 [[ " $(value conflicts) " == *" olivares "* ]] || finding 'conflicts must name olivares'

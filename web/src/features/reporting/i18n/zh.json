@@ -55,7 +55,7 @@
   },
   "enterprise": {
     "title": "企业版报告",
-    "description": "实时合规状态、面向管理层的风险摘要，以及经签名的审计证据包。",
+    "description": "实时合规状态、面向管理层的风险摘要，以及审计证据包。",
     "request": "请求",
     "done": "报告已下载",
     "seam": "该报告位于未与本部署关联的模块中，并非出现故障。",
@@ -69,8 +69,14 @@
     },
     "bundle": {
       "title": "证据包",
-      "description": "经签名的审计证据包 — 交给外部审计师的材料。"
-    }
+      "description": "交给外部审计师的审计证据包。只有配置了签名密钥时才会签名。"
+    },
+    "signed": "已用配置的密钥签名。",
+    "signedDone": "证据包已下载并签名。",
+    "unsigned": "已下载，未签名：{{reason}}。",
+    "notReady": "将以未签名方式下载：{{reason}}。",
+    "unsignedUnknown": "引擎未给出原因",
+    "signingSettings": "报告签名设置"
   },
   "runs": {
     "open": "历史",

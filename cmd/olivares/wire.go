@@ -238,6 +238,7 @@ type moduleSet struct {
 	knowledgeStatus     *knowledgePlaneStatus
 	knowledgeEmbedder   *governedKnowledgeEmbedder
 	sourceScopeResolver *sourcescope.Resolver
+	workspaceSecrets    *workspaceConnectorSecrets
 	// the enterprise RTBF crypto-shred coordinator (nil / typed-nil in the
 	// default build). Kept as `any` — the AGPL root never imports enterprise/rtbf —
 	// so boot() can hand it to bindCryptoShredPorts once the compliance module and
@@ -295,10 +296,6 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	if err != nil {
 		return moduleSet{}, err
 	}
-	approvalCfg, err := loadApprovalBridgeConfig(log)
-	if err != nil {
-		return moduleSet{}, err
-	}
 	nhiCfg, err := loadNHIActuatorsConfig(log)
 	if err != nil {
 		return moduleSet{}, err
@@ -352,7 +349,8 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// resolver is injected into the models ScopeGate and the knowledge RetrievalScopeGate
 	// below; its store handle is late-bound by boot() (UseData), exactly like the
 	// scoped-grant engine it consults (gov.ScopedGrants()).
-	ss := sourcescope.New(sourcescope.WithScopedAuthorizer(gov.ScopedGrants()))
+	workspaceSecrets := &workspaceConnectorSecrets{}
+	ss := sourcescope.New(sourcescope.WithScopedAuthorizer(gov.ScopedGrants()), sourcescope.WithWorkspaceSealer(workspaceSecrets))
 	ssResolver := ss.Resolver()
 	// CLA-17-A: resolve the Claude inference seams (Judge / model-backed Embedder)
 	// from env. Both stay fail-closed (offline judge / zero-egress local embedder) when
@@ -485,7 +483,13 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// governed approvals over the engine's own handler (late-bound by boot() after
 	// api.New). It must never be a hard dependency: an un-configured deployment is
 	// fully functional and simply denies governed actuation, exactly as before.
-	bridge := newApprovalBridge(approvalCfg, log)
+	// Approval windows/quorums live in governance policy; the engine calls the
+	// shared service without operator service tokens or a loopback HTTP handler.
+	bridge := newApprovalBridge(approvalBridgeConfig{}, log)
+	if bridge != nil {
+		sessions.WithProviderApprovalGate(providerApprovalAdapter{bridge: bridge, approvalWait: sm.BeginApprovalWait})(sm)
+		sessions.WithDriverTimeouts(0, 15*time.Minute)(sm)
+	}
 	var (
 		deployOpts []deploy.Option
 		orchOpts   []orchestration.Option
@@ -727,14 +731,6 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 	// now is in time.
 	live := liveingest.New(liveingest.WithObservedRefInspection(osGetenv("OLIVARES_LIVEINGEST_INSPECT_OBSERVED_REFS") == "1"))
 	ci.bindRuntimeCostSink(live)
-	// v26.10: and the SESSIONS plane publishes through the same producer. Until this
-	// line existed, a governed session's real cost reached no ledger at all
-	// (sessioncostsink.go names the measurement). Late-bound for the same reason as
-	// the judge's sink above: `live`'s Host exists only at Init, and its publish
-	// methods are nil-safe, so binding the stable pointer here is in time.
-	if sm != nil {
-		sm.UseSessionCostSink(&sessionCostSink{sink: live, log: log})
-	}
 	// a governed A2A scheduled-fire is also a COMMUNICATION fact — make it visible
 	// in module IV's graph (an a2a edge) + the SOC feed (an a2a_delegation finding) via
 	// the same in-process producer. Late-bound (live's Host exists only at Init) and
@@ -1098,6 +1094,7 @@ func buildModules(signer *audit.Signer, catalogSigner, policySigner ed25519.Priv
 		knowledgeStatus:     ci.knowledgeStatus,
 		knowledgeEmbedder:   governedEmbedder,
 		sourceScopeResolver: ssResolver,
+		workspaceSecrets:    workspaceSecrets,
 		rtbfCoordinator:     rtbfCoord,
 		pinVerifier:         pinVerifier,
 		identityConsole:     identityConsole,

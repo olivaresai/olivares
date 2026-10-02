@@ -68,7 +68,7 @@ type openCodeFixtureRecord struct {
 }
 
 var openCodeFixtureEnvValues = []string{
-	"HOME", envOpenCodeConfigDir, envOpenCodeConfig, envXDGConfigHome, envXDGDataHome,
+	"HOME", envOpenCodeConfigDir, envOpenCodeConfig, envOpenCodeConfigContent, envXDGConfigHome, envXDGDataHome,
 	envXDGStateHome, envXDGCacheHome, envXDGRuntimeDir, envGrokHome, envCodexHome,
 	envClaudeConfigDir, envOpenCodeDisableAutoUpdate, "FIXTURE_MARKER",
 }

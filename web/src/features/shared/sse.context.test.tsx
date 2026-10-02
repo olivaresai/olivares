@@ -121,7 +121,7 @@ beforeEach(() => {
   conns = []
   deafToAbort = false
   armFetch()
-  useSessionStore.setState({ token: 'sse-ctx-token' })
+  useSessionStore.setState({ csrfToken: 'sse-ctx-token' })
   useTenantStore.setState({ activeTenant: 'tenant-a' })
 })
 

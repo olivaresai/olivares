@@ -5,8 +5,13 @@
 package deploy
 
 import (
+	"context"
 	"net/http"
 	"testing"
+
+	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // deploy apply/retire are CRITICAL infrastructure mutations: a HUMAN
@@ -18,6 +23,7 @@ import (
 // phase-1/phase-2 work happens; after stepping up the same session proceeds.
 func TestApplyRequiresStepUp(t *testing.T) {
 	h := newHarness(t)
+	requirePasskeyStepUp(t, h.st)
 	root := h.adminLogin()
 	tid := h.createOrg(root, "acme")
 	elevated := h.roleToken(root, tid, "ops@acme.io", "admin")
@@ -51,5 +57,19 @@ func TestApplyRequiresStepUp(t *testing.T) {
 	h.stepUp(low)
 	if rr := h.applyPhase1(low, tid, defID); rr.code != http.StatusAccepted {
 		t.Fatalf("apply phase1 after step-up = %d %s, want 202", rr.code, rr.raw)
+	}
+}
+
+// requirePasskeyStepUp turns on the strictest administrative step-up policy
+// (passkey), the behavior before the policy existed. The default (none) is
+// covered in core/api.
+func requirePasskeyStepUp(t *testing.T, st store.Store) {
+	t.Helper()
+	ctx := context.Background()
+	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+		_, err := as.AuthPolicy().Create(ctx, model.AuthPolicy{AdminStepUp: auth.StepUpPasskey})
+		return err
+	}); err != nil {
+		t.Fatalf("require passkey step-up: %v", err)
 	}
 }

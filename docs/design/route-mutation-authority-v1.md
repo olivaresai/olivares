@@ -57,8 +57,10 @@ permission grammar, the ordinary route witness and evidence digest v2 are unchan
    sealed principal through `principalCompleteAuthorizationEvidence` — the existing read
    extraction, renamed because it is no longer read-only. A supported explicit authority
    mode is required: a human has one valid matching User fence, a token has none. System
-   actors, superadmins, local and synthetic principals cannot acquire the seal this rests
-   on, so they gain no path.
+   actors, global API tokens, local and synthetic principals cannot acquire the seal
+   this rests on. A human superadmin entering an explicit business tenant carries
+   sealed owner authority for that tenant, with its matching User fence and
+   superadmin attribution; it gains no authority in another tenant through this value.
 5. The ordinary witness must verify for the copied whole question at the authorizer clock,
    its window must be contained by the caller's deadline, and its facts must recompute to
    the canonical order with complete lease coordinates. Nothing is dropped, broadened,

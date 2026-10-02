@@ -8,7 +8,7 @@
 // coverage caveat / not-yet-wired seam is shown, not hidden; a compliance disclaimer
 // is always rendered. They are quiet by default — a hairline strip, not an alarm.
 import type { ReactNode } from 'react'
-import { Eye, Info, Plug, TriangleAlert } from 'lucide-react'
+import { Info, Plug, TriangleAlert } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
@@ -143,16 +143,6 @@ export function TruncatedNotice({ className }: { className?: string }) {
       <span className="text-muted-foreground">
         {t('notices.truncatedHint')}
       </span>
-    </IntelNotice>
-  )
-}
-
-/** Shown above a privileged, self-audited read (forensics, anomalies, evidence). */
-export function SelfAuditNotice({ className }: { className?: string }) {
-  const { t } = useTranslation('intel')
-  return (
-    <IntelNotice tone="info" icon={<Eye />} className={className}>
-      <span className="text-muted-foreground">{t('notices.selfAudited')}</span>
     </IntelNotice>
   )
 }

@@ -105,7 +105,7 @@ beforeEach(() => {
     ],
   })
   useSessionStore.setState({
-    token: 'olvs_test',
+    csrfToken: 'olvs_test',
     sessionId: 's1',
     expiresAt: null,
   })
@@ -156,7 +156,7 @@ describe('EntityDetailSheet C3 freshness', () => {
     const first = mount()
     const dialog = await screen.findByRole('dialog')
     expect(
-      await within(dialog).findByText('Not authorized'),
+      await within(dialog).findByText('You do not have access to this.'),
     ).toBeInTheDocument()
     expect(within(dialog).queryByText('Catalog freshness')).toBeNull()
     expect(within(dialog).queryByText('2026-06-04T07:00:00Z')).toBeNull()

@@ -47,6 +47,7 @@ export const AUTH_ROUTES = [
   '/killswitch',
   '/work',
   '/agentops',
+  '/mcp-servers',
   '/providers',
   '/agent-tools',
   '/provider-profiles',

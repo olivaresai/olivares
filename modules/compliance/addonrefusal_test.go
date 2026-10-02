@@ -90,3 +90,21 @@ func TestComplianceMapperStillDistinguishesRealFaults(t *testing.T) {
 		}
 	}
 }
+
+// The compliance mapper's refusal carries core's code too, so the console tells a
+// lapsed add-on from a missing role without reading the sentence.
+func TestAddonRefusalCarriesTheLicenseCodeOnTheComplianceMapper(t *testing.T) {
+	rec := httptest.NewRecorder()
+	writeDepthError(rec, license.AddonRequired("compliance-packs", "compliance.depth.export"))
+	var env struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("body is not the JSON error envelope: %v", err)
+	}
+	if rec.Code != http.StatusForbidden || env.Error.Code != "addon_requires_license" {
+		t.Fatalf("license refusal = %d code %q, want 403 code addon_requires_license; body = %s", rec.Code, env.Error.Code, rec.Body.String())
+	}
+}

@@ -29,6 +29,8 @@ vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('@/features/identity/assurance', () => ({
   AAL: { PASSWORD: 1, MFA: 2, HARDWARE: 3 },
   useAssurance: () => ({ aal: assur.aal, amr: [] }),
+  // The engine's answer under the passkey policy these cases pin.
+  useStepUpSatisfied: () => assur.aal >= 3,
   StepUpPanel: () => <div>step-up-required</div>,
 }))
 vi.mock('./api', async (importOriginal) => ({

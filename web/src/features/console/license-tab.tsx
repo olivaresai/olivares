@@ -1,8 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 
+import { useCommunityBuild } from '@/lib/hooks/use-edition'
 import { currentLanguage } from '@/lib/i18n'
 import {
   BadgeCheck,
@@ -24,7 +26,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog'
-import { ErrorState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
@@ -48,6 +49,13 @@ import {
   type LicenseStatusDTO,
 } from './api'
 import { StaticTable } from '@/components/data/static-table'
+import {
+  activationDetail,
+  activationLabel,
+  activationText,
+  activationTone,
+} from './activation-label'
+import { waitForEngineRestart } from './engine-restart'
 
 // Badge tone for each license lifecycle status.
 function statusVariant(
@@ -201,6 +209,7 @@ function LicenseFacts({
 export function LicenseTab() {
   const { t } = useTranslation(['console', 'common'])
   const { isSuperadmin } = useAuth()
+  const communityBuild = useCommunityBuild()
   const [installOpen, setInstallOpen] = useState(false)
   const [removeOpen, setRemoveOpen] = useState(false)
   const installBtnRef = useRef<HTMLButtonElement>(null)
@@ -394,8 +403,10 @@ export function LicenseTab() {
         </DialogContent>
       </Dialog>
       {/* Matrix stays below activation: activation is the operational state; the
-          matrix composes independent edition / entitlement / activation facts. */}
-      <EntitlementMatrixCard />
+          matrix composes independent edition / entitlement / activation facts. A
+          Community build serves no module activation (the read answers 501 there), so
+          it shows no matrix; Settings › Edition & modules states the edition. */}
+      {!communityBuild && <EntitlementMatrixCard />}
     </div>
   )
 }
@@ -436,6 +447,10 @@ function InstallForm({ onClose }: { onClose: () => void }) {
       // fichero invalidaba `['serverInfo']` — no casan ni en el primer segmento, así que las dos
       // invalidaciones no tocaban nada y «About» seguía enseñando la edición anterior.
       await queryClient.invalidateQueries({ queryKey: queryKeys.serverInfo })
+      // The modules' coverage follows the license: read it now, not at the next apply.
+      await queryClient.invalidateQueries({
+        queryKey: consoleKeys.activation(),
+      })
       toast.success(t('console:license.installed', { status: data.status }))
       onClose()
     },
@@ -571,6 +586,10 @@ function RemoveForm({ onClose }: { onClose: () => void }) {
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: consoleKeys.license() })
       await queryClient.invalidateQueries({ queryKey: queryKeys.serverInfo })
+      // The modules' coverage follows the license: read it now, not at the next apply.
+      await queryClient.invalidateQueries({
+        queryKey: consoleKeys.activation(),
+      })
       toast.success(t('console:license.removed'))
       onClose()
     },
@@ -646,22 +665,6 @@ function RemoveForm({ onClose }: { onClose: () => void }) {
 
 // --- enterprise activation ----------------------------------------------
 
-// addonStateTone maps an activation state to a badge tone.
-function addonStateTone(
-  state: string,
-): 'success' | 'warning' | 'neutral' | 'accent' {
-  switch (state) {
-    case 'active':
-      return 'success'
-    case 'pending':
-      return 'warning'
-    case 'console':
-      return 'accent'
-    default:
-      return 'neutral' // available
-  }
-}
-
 /**
  * ActivationSection is the console surface over the enterprise activation
  * manifest: it lists every add-on's state and lets a superadmin enable a preset
@@ -672,7 +675,34 @@ function addonStateTone(
  */
 function ActivationSection() {
   const { t } = useTranslation(['console', 'common'])
+  const queryClient = useQueryClient()
   const [enablePreset, setEnablePreset] = useState<string | null>(null)
+  // An apply that answered `restarting: true`: the engine goes down and comes back
+  // with the new modules wired. Wait for it, then reload the catalog by itself.
+  const [restarting, setRestarting] = useState(false)
+  useEffect(() => {
+    if (!restarting) return
+    const ctl = new AbortController()
+    void waitForEngineRestart({ signal: ctl.signal }).then(() => {
+      if (ctl.signal.aborted) return
+      setRestarting(false)
+      void queryClient.invalidateQueries({ queryKey: consoleKeys.activation() })
+    })
+    return () => ctl.abort()
+  }, [restarting, queryClient])
+  const onApplied = (status: ActivationStatusDTO) => {
+    if (status.restarting) {
+      // Show what the engine answered; a read now could reach the stopping
+      // process and paint the section as unavailable.
+      queryClient.setQueryData(consoleKeys.activation(), {
+        ...status,
+        restarting: false,
+      })
+      setRestarting(true)
+      return
+    }
+    void queryClient.invalidateQueries({ queryKey: consoleKeys.activation() })
+  }
 
   const query = useQuery<ActivationStatusDTO>({
     queryKey: consoleKeys.activation(),
@@ -735,16 +765,32 @@ function ActivationSection() {
           </thead>
           <tbody>
             {data.addons.map((a) => (
-              <AddonRow key={a.key} addon={a} />
+              <AddonRow
+                key={a.key}
+                addon={a}
+                restartRequired={data.restart_required}
+                onApplied={onApplied}
+              />
             ))}
           </tbody>
         </StaticTable>
       </div>
 
-      <p className="flex items-start gap-2 text-caption text-muted-foreground">
-        <RotateCw className="mt-0.5 size-3.5 shrink-0" aria-hidden />
-        {t('console:activation.restartNote')}
-      </p>
+      {restarting ? (
+        <p
+          role="status"
+          className="flex items-center gap-2 text-caption text-muted-foreground"
+          data-slot="engine-restarting"
+        >
+          <Spinner size="sm" aria-hidden />
+          {t('console:activation.restarting')}
+        </p>
+      ) : (
+        <p className="flex items-start gap-2 text-caption text-muted-foreground">
+          <RotateCw className="mt-0.5 size-3.5 shrink-0" aria-hidden />
+          {t('console:activation.restartNote')}
+        </p>
+      )}
 
       {enablePreset && (
         <Dialog open onOpenChange={(o) => !o && setEnablePreset(null)}>
@@ -762,6 +808,7 @@ function ActivationSection() {
               <EnablePresetForm
                 preset={enablePreset}
                 onClose={() => setEnablePreset(null)}
+                onApplied={onApplied}
               />
             </RequireAssurance>
           </DialogContent>
@@ -794,9 +841,19 @@ function ActivationSection() {
 // operator COULD have navigated to /identity, elevated there, and come back.
 // What this fixes is a dead end in context, not a total absence — worth having,
 // and worth stating at its real size. Deleting this gate opens no hole.
-function AddonRow({ addon }: { addon: ActivationAddonDTO }) {
+function AddonRow({
+  addon,
+  restartRequired,
+  onApplied,
+}: {
+  addon: ActivationAddonDTO
+  restartRequired: boolean
+  onApplied: (status: ActivationStatusDTO) => void
+}) {
   const { t } = useTranslation(['console'])
   const [confirmOpen, setConfirmOpen] = useState(false)
+  const label = activationLabel(addon, restartRequired)
+  const detail = activationDetail(label)
   return (
     <tr className="border-border/60">
       <td>
@@ -806,7 +863,14 @@ function AddonRow({ addon }: { addon: ActivationAddonDTO }) {
         </div>
       </td>
       <td className="align-top">
-        <Badge variant={addonStateTone(addon.state)}>{addon.state}</Badge>
+        <Badge variant={activationTone(label)}>
+          {activationText(label, t)}
+        </Badge>
+        {detail && (
+          <div className="mt-1 max-w-[42ch] text-caption text-muted-foreground [overflow-wrap:anywhere]">
+            {detail}
+          </div>
+        )}
       </td>
       <td className="align-top text-caption text-muted-foreground">
         {addon.preset}
@@ -842,6 +906,7 @@ function AddonRow({ addon }: { addon: ActivationAddonDTO }) {
                 <PromoteAddonForm
                   addon={addon}
                   onClose={() => setConfirmOpen(false)}
+                  onApplied={onApplied}
                 />
               </RequireAssurance>
             </DialogContent>
@@ -857,12 +922,13 @@ function AddonRow({ addon }: { addon: ActivationAddonDTO }) {
 function PromoteAddonForm({
   addon,
   onClose,
+  onApplied,
 }: {
   addon: ActivationAddonDTO
   onClose: () => void
+  onApplied: (status: ActivationStatusDTO) => void
 }) {
   const { t } = useTranslation(['console', 'common'])
-  const queryClient = useQueryClient()
   const report = useFailedActionReporter('console')
   // No ejecutes la escritura de un formulario ya desmontado: ver use-resume-guard.ts.
   const guardarReanudacion = useResumeGuard()
@@ -870,10 +936,8 @@ function PromoteAddonForm({
   const promote = useMutation({
     mutationFn: () =>
       consoleApi.applyActivation({ action: 'promote', addon: addon.key }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: consoleKeys.activation(),
-      })
+    onSuccess: (status) => {
+      onApplied(status)
       toast.success(t('console:activation.promoted', { addon: addon.key }))
       onClose()
     },
@@ -939,12 +1003,13 @@ function PromoteAddonForm({
 function EnablePresetForm({
   preset,
   onClose,
+  onApplied,
 }: {
   preset: string
   onClose: () => void
+  onApplied: (status: ActivationStatusDTO) => void
 }) {
   const { t } = useTranslation(['console', 'common'])
-  const queryClient = useQueryClient()
   const preview = useQuery({
     queryKey: ['console', 'activation-preview', preset],
     queryFn: () => consoleApi.previewActivation(preset),
@@ -955,10 +1020,8 @@ function EnablePresetForm({
   const activarRef = useRef<(() => void) | null>(null)
   const apply = useMutation({
     mutationFn: () => consoleApi.applyActivation({ action: 'enable', preset }),
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({
-        queryKey: consoleKeys.activation(),
-      })
+    onSuccess: (status) => {
+      onApplied(status)
       toast.success(t('console:activation.enabled', { preset }))
       onClose()
     },
@@ -998,7 +1061,10 @@ function EnablePresetForm({
           <Spinner />
         </div>
       ) : preview.isError || !preview.data ? (
-        <ErrorState retry={() => void preview.refetch()} />
+        <QueryErrorState
+          error={preview.error}
+          retry={() => void preview.refetch()}
+        />
       ) : (
         <div className="flex flex-col gap-1 rounded-lg border border-border p-3 font-mono text-caption">
           {preview.data.entries.map((e) => (

@@ -189,7 +189,7 @@ describe('NHI lifecycle action honesty', () => {
     const requestDialog = screen.getByRole('dialog')
     expect(
       within(requestDialog).getByText(
-        /two distinct user accounts, each over an AAL3 session/i,
+        /approval from two different user accounts before it can run/i,
       ),
     ).toBeInTheDocument()
     // Rotation is CRITICAL but break-glass CAN authorize it (the server passes
@@ -245,7 +245,7 @@ describe('NHI lifecycle action honesty', () => {
     ).toBeInTheDocument()
     expect(
       within(dialog).getByText(
-        /two distinct user accounts, each over an AAL3 session/i,
+        /approval from two different user accounts before it can run/i,
       ),
     ).toBeInTheDocument()
     const confirm = within(dialog).getByRole('button', {

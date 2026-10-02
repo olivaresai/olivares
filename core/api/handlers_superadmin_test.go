@@ -15,7 +15,7 @@ func TestSuperadminLifecycleEndpoints(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin() // bootstrap superadmin A (session, AAL1)
 
-	// Create a second superadmin B via POST /v1/users.
+	// Create a second superadmin B via POST /v1/users (default policy: no step-up).
 	r := h.do("POST", "/v1/users", admin, map[string]any{
 		"email": "b@acme.io", "display_name": "B", "password": "superpass-b1", "superadmin": true,
 	}, nil)
@@ -25,6 +25,16 @@ func TestSuperadminLifecycleEndpoints(t *testing.T) {
 	bID, _ := r.body["id"].(string)
 	if bID == "" {
 		t.Fatalf("create response carried no id: %s", r.raw)
+	}
+
+	// HU-28: once the deployment asks for a passkey step-up, adding a person from
+	// the API asks for it too, exactly like the console's onboarding.
+	h.requirePasskeyStepUp()
+	r = h.do("POST", "/v1/users", admin, map[string]any{
+		"email": "c@acme.io", "display_name": "C", "password": "superpass-c1", "superadmin": true,
+	}, nil)
+	if r.code != http.StatusForbidden || errCode(r.body) != "step_up_required" {
+		t.Fatalf("create superadmin at AAL1 under passkey step-up = %d %s, want 403 step_up_required", r.code, r.raw)
 	}
 
 	// GET /v1/users/superadmins (read, no AAL3): A and B.

@@ -246,7 +246,7 @@ fi
 run "version 1x2 is not a version" 2 "refuse" -- 1x2 "$adv"
 run "version with a space is not a version" 2 "refuse" -- "1 2" "$adv"
 run "a bare integer is not a version" 2 "refuse" -- 12 "$adv"
-run "two fields are not a version" 2 "refuse" -- 1.2 "$adv"
+run "monthly release has no zero patch" 0 "none	" -- 26.11 "$adv"
 run "four fields are not a version" 2 "refuse" -- 1.2.3.4 "$adv"
 run "a leading zero is not a field" 2 "refuse" -- 01.2.3 "$adv"
 run "an empty pre-release suffix refuses" 2 "refuse" -- 1.2.3- "$adv"

@@ -188,6 +188,89 @@ func streamSession(t *testing.T, r *bufio.Reader) liveDTO {
 	return dto
 }
 
+func TestSuperadminTenantOwnerStreamConfinement(t *testing.T) {
+	f := newStreamConfinementFixture(t, store.Config{Engine: store.EngineSQLite, DSN: ":memory:"})
+	admin := f.adminLogin()
+	tenant := f.createOrg(admin, "superadmin-stream")
+	ctx := t.Context()
+	principal, err := f.authr.Authenticate(ctx, admin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var workspace model.ID
+	if err := f.st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		row, err := sc.Workspaces().Create(ctx, model.Workspace{Name: "Confined", Slug: "confined-owner", Status: model.StatusActive})
+		workspace = row.ID
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Seed a stored boundary; account joining still requires holder consent.
+	var membership model.Membership
+	if err := f.st.AuthMutate(ctx, func(sc store.AuthScope) error {
+		var err error
+		membership, err = sc.Memberships().Create(ctx, model.Membership{UserID: principal.UserID,
+			TargetTenantID: tenant, Role: auth.RoleOwner, WorkspaceID: workspace})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	resolve := func() auth.Principal {
+		t.Helper()
+		current, err := f.authr.Authenticate(ctx, admin)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ref, ok := current.Ref()
+		if !ok {
+			t.Fatal("authenticated superadmin has no session reference")
+		}
+		bounded, cancel := context.WithTimeout(ctx, 5*time.Second)
+		defer cancel()
+		owner, err := f.authr.ResolvePrincipalScope(bounded, ref, tenant)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if role, member := owner.RoleIn(tenant); !owner.Superadmin || !member || role != auth.RoleOwner {
+			t.Fatal("superadmin was not admitted as the explicit tenant owner")
+		}
+		return owner
+	}
+	owner := resolve()
+	if actual, confined := owner.ConfinedWorkspaceIn(tenant); !confined || actual != workspace {
+		t.Fatal("owner admission did not retain workspace confinement")
+	}
+	before, active := streamBrokerCounts(f.m)
+	data := &streamFailingData{err: errors.New("fixture store unavailable")}
+	rec := httptest.NewRecorder()
+	f.m.handleStream(rec, httptest.NewRequest("GET", "/stream?live_ref="+model.NewID().String(), nil), api.ModuleContext{
+		Principal: owner, Tenant: tenant, Data: data,
+	})
+	assertStreamDenied(t, rec.Result(), http.StatusForbidden, "workspace_confined", "workspace confined")
+	assertStreamDenied(t, f.get(t, "stream", admin, tenant), http.StatusForbidden, "workspace_confined", "workspace confined")
+	if next, subscribers := streamBrokerCounts(f.m); next != before || subscribers != active || data.views != 0 {
+		t.Fatal("confined owner reached a data read or stream subscription")
+	}
+	if err := f.st.AuthMutate(ctx, func(sc store.AuthScope) error {
+		row, err := sc.Memberships().Get(ctx, membership.ID)
+		if err != nil {
+			return err
+		}
+		row.WorkspaceID = ""
+		_, err = sc.Memberships().Update(ctx, row)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, confined := resolve().ConfinedWorkspaceIn(tenant); confined {
+		t.Fatal("unconfined owner retained a stale workspace boundary")
+	}
+	response := f.get(t, "stream", admin, tenant)
+	_ = streamConnected(t, response)
+	_ = response.Body.Close()
+	waitFor(t, "unconfined owner stream closes", func() bool { _, n := streamBrokerCounts(f.m); return n == active })
+}
+
 func TestSessionsStreamConfinement(t *testing.T) {
 	backends := []struct {
 		name   string
@@ -281,7 +364,7 @@ func TestSessionsStreamConfinement(t *testing.T) {
 						waitFor(t, "causal subscriber cancellation", func() bool { _, n := streamBrokerCounts(f.m); return n == subs })
 						t.Fatal("confined /stream opened and delivered the published DTO despite /live 403")
 					}
-					assertStreamDenied(t, res, http.StatusForbidden, "workspace confined")
+					assertStreamDenied(t, res, http.StatusForbidden, "workspace_confined", "workspace confined")
 					if after, active := streamBrokerCounts(f.m); after != next || active != subs {
 						t.Fatalf("rejection registered a subscriber: before=%d/%d after=%d/%d", next, subs, after, active)
 					}
@@ -300,7 +383,7 @@ func TestSessionsStreamConfinement(t *testing.T) {
 				f.m.handleStream(rec, httptest.NewRequest("GET", "/stream?live_ref="+liveID, nil), api.ModuleContext{
 					Principal: principal, Tenant: tenant, Data: data,
 				})
-				assertStreamDenied(t, rec.Result(), http.StatusForbidden, "workspace confined")
+				assertStreamDenied(t, rec.Result(), http.StatusForbidden, "workspace_confined", "workspace confined")
 				if data.views != 0 {
 					t.Fatal("admission depended on the selector's store/descriptor")
 				}
@@ -327,8 +410,7 @@ func TestSessionsStreamConfinement(t *testing.T) {
 				}
 			}
 			seedEditor(principal.UserID, other, "")
-			// The exception is tested with a superadmin who really DOES carry a
-			// confined membership, so omitting !Superadmin cannot pass unnoticed.
+			// A superadmin carrying this stored confinement must be refused too.
 			seedEditor(root.UserID, tenant, workspace)
 			root, err = f.authr.Authenticate(ctx, admin)
 			if err != nil {
@@ -348,8 +430,6 @@ func TestSessionsStreamConfinement(t *testing.T) {
 				name, token, query string
 				tenant             model.TenantID
 			}{
-				{"superadmin", admin, "", tenant},
-				{"superadmin-exact", admin, "?live_ref=" + liveID, tenant},
 				{"confinement-in-different-tenant", token, "", other},
 			} {
 				t.Run(tc.name, func(t *testing.T) {
@@ -373,6 +453,8 @@ func TestSessionsStreamConfinement(t *testing.T) {
 				status             int
 			}{
 				{"anonymous", "", "", tenant, http.StatusUnauthorized},
+				{"confined-superadmin", admin, "", tenant, http.StatusForbidden},
+				{"confined-superadmin-exact", admin, "?live_ref=" + liveID, tenant, http.StatusForbidden},
 				{"foreign-tenant", wide, "", other, http.StatusForbidden},
 				{"exact-foreign-row", otherReader, "?live_ref=" + liveID, other, http.StatusNotFound},
 				{"exact-missing", wide, "?live_ref=" + model.NewID().String(), tenant, http.StatusNotFound},
@@ -380,7 +462,7 @@ func TestSessionsStreamConfinement(t *testing.T) {
 			} {
 				t.Run("existing-denials/"+tc.name, func(t *testing.T) {
 					before, active := streamBrokerCounts(f.m)
-					assertStreamDenied(t, f.get(t, "stream"+tc.query, tc.token, tc.tenant), tc.status, "")
+					assertStreamDenied(t, f.get(t, "stream"+tc.query, tc.token, tc.tenant), tc.status, "", "")
 					if next, n := streamBrokerCounts(f.m); next != before || n != active {
 						t.Fatal("denial subscribed")
 					}
@@ -408,6 +490,22 @@ func TestSessionsStreamConfinement(t *testing.T) {
 				t.Logf("%d committed folds; slow buffer bounded at %d; fast reader received all", cap(slow)+2, cap(slow))
 			})
 
+			// Restore the administrator's tenant-wide membership before authoring
+			// the unrelated policy control; confined owners cannot publish tenant policy.
+			if err := f.st.AuthMutate(ctx, func(sc store.AuthScope) error {
+				members, _, err := sc.Memberships().List(ctx, model.Query{Filters: []model.Filter{
+					{Column: "user_id", Op: model.OpEq, Value: root.UserID.String()},
+					{Column: "target_tenant_id", Op: model.OpEq, Value: tenant.String()},
+				}})
+				if err != nil || len(members) != 1 {
+					return errors.New("fixture superadmin membership unavailable")
+				}
+				members[0].WorkspaceID = ""
+				_, err = sc.Memberships().Update(ctx, members[0])
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
 			// An authored deny removes the reader's effective Sessions permission.
 			// This is the real policy path, not an Allow=true/false authorization stub.
 			policy := f.doJSON("POST", "/v1/m/governance/policies", admin, map[string]any{
@@ -419,7 +517,7 @@ func TestSessionsStreamConfinement(t *testing.T) {
 			}
 			t.Run("effective-permission-denied", func(t *testing.T) {
 				before, active := streamBrokerCounts(f.m)
-				assertStreamDenied(t, f.get(t, "stream", wide, tenant), http.StatusForbidden, "")
+				assertStreamDenied(t, f.get(t, "stream", wide, tenant), http.StatusForbidden, "", "")
 				if next, n := streamBrokerCounts(f.m); next != before || n != active {
 					t.Fatal("policy denial subscribed")
 				}
@@ -428,13 +526,13 @@ func TestSessionsStreamConfinement(t *testing.T) {
 	}
 }
 
-func assertStreamDenied(t *testing.T, res *http.Response, status int, message string) {
+func assertStreamDenied(t *testing.T, res *http.Response, status int, code, message string) {
 	t.Helper()
 	body, err := io.ReadAll(res.Body)
 	if err != nil || res.StatusCode != status {
 		t.Fatalf("denial = %d %s err=%v, want %d", res.StatusCode, body, err, status)
 	}
-	if message != "" && strings.TrimSpace(string(body)) != `{"error":{"message":"`+message+`"}}` {
+	if message != "" && strings.TrimSpace(string(body)) != `{"error":{"code":"`+code+`","message":"`+message+`"}}` {
 		t.Fatalf("denial body=%s", body)
 	}
 	if strings.Contains(res.Header.Get("Content-Type"), "event-stream") || res.Header.Get("X-Accel-Buffering") != "" || res.Header.Get("Cache-Control") == "no-cache" || res.Header.Get("Connection") == "keep-alive" {
@@ -522,7 +620,7 @@ func TestSessionsStreamSelectorStoreFailure(t *testing.T) {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/stream?live_ref="+model.NewID().String(), nil)
 	m.handleStream(rec, req, api.ModuleContext{Data: data})
-	assertStreamDenied(t, rec.Result(), http.StatusInternalServerError, "")
+	assertStreamDenied(t, rec.Result(), http.StatusInternalServerError, "", "")
 	if data.views != 1 {
 		t.Fatal("exact selector did not reach store")
 	}

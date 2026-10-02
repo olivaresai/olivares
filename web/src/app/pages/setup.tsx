@@ -7,6 +7,7 @@ import { Navigate, useNavigate } from '@tanstack/react-router'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
+import { isEngineEmail } from '@/lib/email'
 import { AuthShell } from '@/components/layout/auth-shell'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -18,12 +19,12 @@ import { authApi } from '@/lib/api/endpoints'
 import { ApiError } from '@/lib/api/errors'
 import { queryKeys } from '@/lib/api/query'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
+import { useAuth } from '@/lib/auth/context'
 import { useTenantStore } from '@/stores/tenant'
-import { PasskeyAddressNotice } from '@/features/identity/passkey-address'
 
 const schema = z.object({
   token: z.string().min(1),
-  email: z.string().email(),
+  email: z.string().refine(isEngineEmail),
   password: z.string().min(1),
 })
 type SetupValues = z.infer<typeof schema>
@@ -39,9 +40,10 @@ export function SetupPage() {
     defaultValues: { token: '', email: '', password: '' },
   })
 
+  const { login } = useAuth()
   const mutation = useMutation({
     mutationFn: (values: SetupValues) => authApi.setup(values),
-    onSuccess: async (created) => {
+    onSuccess: async (created, values) => {
       // Setup creates the first organization together with the superadmin that
       // owns it (core/api/handlers_auth.go handleSetup). SELECT it here: the
       // tenant store is persisted, so by the time the operator finishes signing
@@ -51,9 +53,31 @@ export function SetupPage() {
       // tenant effect drops a selection the principal cannot act in.
       if (created?.organization?.tenant_id)
         setActiveTenant(created.organization.tenant_id)
+      // Sign the new administrator in with what they just typed (it stays in
+      // memory only) and open the setup wizard. Anything short of a session —
+      // a second-factor demand, a refusal, a network error — falls back to the
+      // ordinary sign-in page with the same message as before. Navigate BEFORE
+      // refreshing the server info: a refreshed "setup done" re-renders this
+      // page's own redirect to the sign-in page.
+      let signedIn = false
+      try {
+        const res = await login({
+          email: values.email,
+          password: values.password,
+        })
+        // The sign-in page's own test: whatever carries the session (a bearer
+        // or the browser cookie), only a second-factor demand is not one.
+        signedIn = !!res && !('mfa_required' in res && res.mfa_required)
+      } catch {
+        // fall through to the sign-in page
+      }
+      if (signedIn) {
+        navigate({ to: '/onboarding' as '/' })
+      } else {
+        toast.success(t('setup.done'))
+        navigate({ to: '/login' })
+      }
       await queryClient.invalidateQueries({ queryKey: queryKeys.serverInfo })
-      toast.success(t('setup.done'))
-      navigate({ to: '/login' })
     },
   })
 
@@ -169,11 +193,6 @@ export function SetupPage() {
           </Button>
         </form>
       </Card>
-      {/* First boot is the cheapest moment to learn that this address cannot
-       *  carry a passkey: the administrator being created here is the one who
-       *  will be asked for AAL3 later. It renders nothing when the address is
-       *  fine, and it gates nothing — setup is unchanged either way. */}
-      <PasskeyAddressNotice className="mt-1" />
     </AuthShell>
   )
 }

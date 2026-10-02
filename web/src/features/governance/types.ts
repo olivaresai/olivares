@@ -13,9 +13,8 @@
 //    are typed + re-serialized with an inline-credential guard). The *_ref / requested_by
 //    / decider fields are identity/audit IDENTIFIERS, not secrets, and are rendered as
 //    actor handles / opaque refs, never resolved to PII (no email lookup).
-//  - abacRule.deny is the policy AUTHOR's stated intent (server-validated true), NOT
-//    proof of runtime enforcement; the composition root may leave the ABAC evaluator /
-//    roster providers UNWIRED. The UI must never imply "enforced" from enabled=true.
+//  - abacRule.deny is always true (server-validated): an ABAC rule can only take access
+//    away. The composition root may leave the roster providers UNWIRED.
 
 // --- identities & groups -----------------------------------------------------
 
@@ -158,6 +157,9 @@ export interface AbacRule {
   resource?: string
   /** user | token. */
   principal_kind?: string
+  /** 1..3: the rule denies only a caller whose sign-in assurance is below this level.
+   * A token has assurance 0, so a min_aal rule always denies tokens. */
+  min_aal?: number
 }
 
 /** Spec body of an abac policy. */
@@ -182,6 +184,8 @@ export interface ApprovalSpec {
   expires_in_seconds?: number
   /** 0..31536000. */
   escalate_in_seconds?: number
+  /** low | medium | high | critical; absent = the built-in tier of the action. */
+  risk_tier?: string
   match?: ApprovalMatch
 }
 
@@ -245,6 +249,12 @@ export interface CreateApprovalRequest {
 /** One approval request — the APPROVAL QUEUE row. */
 export interface ApprovalDTO {
   id: string
+  /** The session the request belongs to (canonical id), when the engine names one. */
+  session_ref?: string
+  /** What will run, as the engine stored it for review (PEP; native drivers via N1):
+   * the tool and the reviewed text, masked secrets as [secret <name>]. Shown verbatim;
+   * absent on an engine that does not expose it yet. */
+  review?: { tool?: string; text?: string }
   /** WHAT class of thing the action targets. */
   subject_kind?: string
   /** WHICH specific subject (opaque ref). */

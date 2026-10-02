@@ -195,7 +195,47 @@
   "notifications": {
     "title": "Recent activity",
     "empty": "No recent activity.",
-    "viewAll": "View all in the audit ledger"
+    "viewAll": "View all in the audit ledger",
+    "events": {
+      "auditCheckpoint": "Audit checkpoint created",
+      "orgCreated": "Organization created",
+      "loginBlocked": "A sign-in was blocked for {{actor}}",
+      "loginBlocked_you": "A sign-in of yours was blocked",
+      "ssoLogin": "{{actor}} signed in with SSO",
+      "ssoLogin_you": "You signed in with SSO",
+      "userInvited": "{{actor}} invited someone",
+      "userInvited_you": "You invited someone",
+      "userJoined": "{{actor}} joined",
+      "userJoined_you": "You joined",
+      "sessionStarted": "{{actor}} started a session",
+      "sessionStarted_you": "You started a session",
+      "sessionStopped": "{{actor}} stopped a session",
+      "sessionStopped_you": "You stopped a session",
+      "sessionResumed": "{{actor}} resumed a session",
+      "sessionResumed_you": "You resumed a session",
+      "sessionFailed": "A session failed to start",
+      "approvalRequested": "{{actor}}'s session asks for approval",
+      "approvalRequested_you": "Your session asks for approval",
+      "killswitchEngaged": "Kill switch engaged by {{actor}}",
+      "killswitchEngaged_you": "You engaged the kill switch",
+      "killswitchReleased": "Kill switch released by {{actor}}",
+      "killswitchReleased_you": "You released the kill switch",
+      "killswitchDenied": "A session was stopped by the kill switch",
+      "toolInstalled": "An agent tool was installed",
+      "secretStored": "A secret was stored",
+      "viewSaved": "{{actor}} saved a view",
+      "viewSaved_you": "You saved a view",
+      "workspaceCreated": "{{actor}} created a workspace",
+      "workspaceCreated_you": "You created a workspace",
+      "workspaceUpdated": "{{actor}} updated a workspace",
+      "workspaceUpdated_you": "You updated a workspace"
+    },
+    "actors": {
+      "you": "You",
+      "member": "A member",
+      "token": "An API token",
+      "system": "Olivares"
+    }
   },
   "passphrase": {
     "tooShort": "Passphrase must be at least {{min}} characters",
@@ -257,6 +297,15 @@
         "first": "First module",
         "last": "Last module",
         "pin": "Pin or unpin this module"
+      },
+      "session": {
+        "new": "New session"
+      },
+      "sourceDiff": {
+        "nextFile": "Next file",
+        "previousFile": "Previous file",
+        "nextHunk": "Next change",
+        "previousHunk": "Previous change"
       }
     },
     "when": {

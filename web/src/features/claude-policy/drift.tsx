@@ -6,6 +6,7 @@
 // read-only connectors emit, read from /v1/m/security/findings. This is a
 // PRIVILEGED, self-audited read (docs/SECURITY-HARDENING.md). Evidence is a redacted fingerprint
 // (detail_hash) — never a payload (docs/SECURITY-HARDENING.md).
+import { ModuleGate } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
@@ -14,7 +15,6 @@ import { StatusBadge } from '@/components/data/badges'
 import {
   AsyncSection,
   SectionCard,
-  SelfAuditNotice,
   ListTruncationBadge,
 } from '@/features/_intel'
 import { RelTimeLabel } from '@/features/shared'
@@ -85,6 +85,15 @@ export function DriftFindingList({
 
 /** The "Drift & posture" tab: the PERMITTED-vs-OBSERVED verification emits.*/
 export function DriftView({ active }: { active: boolean }) {
+  // Drift is read from the security module's findings (EU18).
+  return (
+    <ModuleGate module="security">
+      <DriftReads active={active} />
+    </ModuleGate>
+  )
+}
+
+function DriftReads({ active }: { active: boolean }) {
   const { t } = useTranslation('claudePolicy')
   const { activeTenant, can } = useAuth()
   const canRead = can('governance:claude-policy:read')
@@ -97,7 +106,6 @@ export function DriftView({ active }: { active: boolean }) {
 
   return (
     <div className="flex flex-col gap-3">
-      <SelfAuditNotice />
       <SectionCard title={t('drift.title')} description={t('drift.subtitle')}>
         <ListTruncationBadge
           query={query}

@@ -28,12 +28,21 @@ export const scenariosFixture: Scenario[] = [
       'Drives the checkout agent through cart → quote → confirm against mocked payment and catalog MCPs.',
     subject_kind: 'agent',
     steps: [
-      { key: 'step-1-add-to-cart', input: 'Add SKU SYNTH-1 and SKU SYNTH-2 to the cart.' },
+      {
+        key: 'step-1-add-to-cart',
+        input: 'Add SKU SYNTH-1 and SKU SYNTH-2 to the cart.',
+      },
       { key: 'step-2-quote', input: 'Ask for the order total.' },
-      { key: 'step-3-confirm', input: 'Confirm the order with the synthetic card.' },
+      {
+        key: 'step-3-confirm',
+        input: 'Confirm the order with the synthetic card.',
+      },
     ],
     mocks: [
-      { resource: 'catalog.lookup', response: '{"sku":"SYNTH-1","price":"SYNTH"}' },
+      {
+        resource: 'catalog.lookup',
+        response: '{"sku":"SYNTH-1","price":"SYNTH"}',
+      },
       { resource: 'payment.authorize', response: '{"status":"authorized"}' },
     ],
     spec_hash:
@@ -49,12 +58,18 @@ export const scenariosFixture: Scenario[] = [
     steps: [
       { key: 'step-1-classify', input: 'Classify this refund request.' },
       { key: 'step-2-lookup-order', input: 'Look up order #SYNTH-1042.' },
-      { key: 'step-3-ledger-balance', input: 'Read the customer ledger balance.' },
+      {
+        key: 'step-3-ledger-balance',
+        input: 'Read the customer ledger balance.',
+      },
       { key: 'step-4-draft-reply', input: 'Draft the refund reply.' },
     ],
     // The ledger mock is deliberately absent — step 3 produces a mock-miss marker.
     mocks: [
-      { resource: 'policy.refunds', response: 'Refunds within 30 days are eligible.' },
+      {
+        resource: 'policy.refunds',
+        response: 'Refunds within 30 days are eligible.',
+      },
     ],
     spec_hash:
       'd0c2e4a6b8d0f2c4e6a8b0d1f3a5c7e9b1d3f5a7c9e1b3d5f7a9c1e3b5d7f9a1',
@@ -65,7 +80,12 @@ export const scenariosFixture: Scenario[] = [
     name: 'Legacy router regression',
     description: 'Archived scenario kept for historical comparison only.',
     subject_kind: 'agent',
-    steps: [{ key: 'step-1-route', input: 'Route a synthetic request through the legacy path.' }],
+    steps: [
+      {
+        key: 'step-1-route',
+        input: 'Route a synthetic request through the legacy path.',
+      },
+    ],
     mocks: [],
     spec_hash:
       'b5d7f9a1c3e5b7d9f1a3c5e7b9d1f3a5c7e9b1d3f5a7c9e1b3d5f7a9c1e3b5d7',

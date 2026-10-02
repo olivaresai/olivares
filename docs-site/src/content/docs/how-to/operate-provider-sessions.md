@@ -26,9 +26,10 @@ references, `cmd/olivares/sessionruntime.go`, and
 Complete these before a launch. A missing item is a refusal, not a fallback.
 
 1. Olivares AI is installed and the first administrator exists.
-   See [Your first hour](/how-to/first-hour/) for the setup token and the AAL3
-   passkey wall. Creating sources and privileged session operations require AAL3
-   (`core/api/middleware.go` `requireAAL3`).
+   See [Your first hour](/how-to/first-hour/) for the setup token.
+   Administrative step-up (`admin_step_up`) defaults to `none`. If an
+   administrator enables `totp` or `passkey`, satisfy that policy before
+   privileged operations (`core/api/middleware.go` `requireStepUp`).
 2. The official provider CLI is already installed on **this node**. The profile
    registers homes that already exist. The server resolves the paths (absolute,
    symlinks resolved, existing directory) and does not create, install, or log
@@ -176,7 +177,7 @@ provider receipt.
 
 ## Related
 
-- [Your first hour](/how-to/first-hour/) — setup token, AAL3, Claude credential source.
+- [Your first hour](/how-to/first-hour/) — setup token, administrative step-up, Claude credential source.
 - [Run Claude Code with Olivares](/how-to/run-claude-code-with-olivares/) — co-deployment topologies.
 - [Integrate Codex](/how-to/integrations/codex/) / [Integrate Grok Build](/how-to/integrations/grok/) — connector and PEP hook.
 - [Session runtime API](/reference/session-runtime-api/) — list, attach, input, stop; Community PTY and edition cut.

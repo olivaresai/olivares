@@ -5,16 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [CalVer](https://calver.org/): a monthly release is `YY.M` (two-digit
 year and month, such as 26.10), and a patch release adds a third number, `YY.M.N`. Tags have
-no `v` prefix; the 26.10 release is tagged `26.10.0`.
+no `v` prefix; the latest release is tagged `26.10.1`.
 
-> **Status: beta.** The latest published release is **26.10**; its dated section below is the
+> **Status: beta.** The latest published release is **26.10.1**; its dated section below is the
 > record of what it shipped. Changes for the next release are recorded under **[Unreleased]**,
 > with no release date until it is published. The
 > [releases page](https://github.com/olivaresai/olivares/releases) lists every published release.
 > Release notes and artifacts become authoritative when the corresponding release is published.
 > Every earlier release keeps its own dated section, unchanged.
-> APIs, schemas and the module surface MAY still change before a
-> stability commitment. Because CalVer does not encode breaking changes in the version number,
+> Published CLI commands and flags, API routes and fields, configuration keys, defaults,
+> paths and stored data stay compatible in later releases, also during beta. A removal is
+> first announced as a deprecation in an earlier release and comes with an automatic
+> migration. CalVer names the release month; it never permits a regression.
+> Because CalVer does not encode breaking changes in the version number,
 > every breaking change is called out explicitly under **Changed**/**Removed** here. No
 > versions, tags, or dates are invented here (see [`SECURITY.md`](SECURITY.md) *Supported
 > versions*).
@@ -39,11 +42,67 @@ no `v` prefix; the 26.10 release is tagged `26.10.0`.
 Pending for the next release. Nothing below is published until that release is, and the
 section is dated only then.
 
+## [26.10.1] - 2026-10-02
+
+### Before you upgrade
+
+- Back up first. The database gains nullable columns (session runs, approvals, session claims) and a deployment
+  settings record; no data is rewritten. Rolling back to 26.10.0 is not supported.
+- On its first start, the engine records which modules this installation runs: the standard set plus every module that
+  already holds data. It then restarts itself once, in the same process, to apply that selection.
+- Agent tools no longer use a sign-in stored in the server account's home. Sign each tool in once from **AI tools** or
+  with `olivares tool login <tool>`; the sign-in belongs to your organization.
+- If managed Claude Code settings on this host set `disableAllHooks` or `allowManagedHooksOnly`, Claude Code sessions
+  are refused until both are `false` or removed. `olivares doctor` names the file.
+- `olivares upgrade` on 26.10.0 finds 26.10.1 by itself.
+
+### New
+
+- Modules: an installation runs only the modules it selects (**Settings > Edition & modules**). A module that is off
+  keeps its data and runs no work; its routes answer `404 module_not_enabled`.
+- Sessions run confined to their folder (Linux Landlock); stdio MCP servers too. Without Landlock, every run says so.
+- Sign in Claude Code, Codex and Grok Build through the engine. Start Ollama and pull its models from the console.
+- Sessions can message each other and hand work to the sessions they may reach.
+- Vault secrets as environment variables for a session or a template. Values reach only the session's environment;
+  output, approvals and audit show `[secret <name>]`.
+- One approval queue: approve or reject in **Approvals** or with `olivares governance approvals approve|reject`.
+- MCP servers: add, test and turn on a server, and choose which of its tools run without approval. By default every
+  tool asks.
+- CLI: `olivares session`, `olivares tool`, `olivares mcp`, `olivares login`/`logout`, `olivares audit ls`,
+  `olivares reporting signing`. `olivares` alone shows this installation and the next step. No command was removed.
+- Each session's turn cost is recorded.
+
+### Changed
+
+- The console opens on **Now** (approvals, budgets, kill switch). Setup is three steps: install a tool, sign it in,
+  start a session. One **New session** dialog everywhere.
+- A new session picks how it runs by itself: your tool sign-in first, then the provider key, then a local model, and
+  says which.
+- A Claude Code turn can be interrupted without stopping the session.
+- API: additions only. No operation was removed; some requests gained optional fields.
+
+### Security
+
+- The console keeps its sign-in in HttpOnly cookies.
+- Approval reviews show the full command; a command or MCP argument that masking would hide is refused, not shown
+  partly.
+- An approval cannot be granted after its session's turn ended, was interrupted or stopped.
+- An organization's tool sign-in cannot be used by another organization.
+- A session stops when its owner's directory groups change; a resume uses the owner's current access.
+- Offboarding stops late SSO and SCIM changes from restoring access.
+- Policy decision evidence is redacted before it is stored.
+
 ### Fixed
 
-- The Git publish push API refuses a request body followed by anything other than whitespace (a
-  second JSON value or a stray bracket) with `400 invalid_request`, before it records or pushes
-  anything. Before, it applied the first value.
+- Tool sign-in, profile resolution and background work on a default PostgreSQL installation.
+- `olivares quickstart` on PostgreSQL; running `olivares db init` again no longer breaks the next start.
+- The New session dialog with one tool ready and another not signed in.
+- `olivares mcp enable` and `olivares reporting signing`.
+- `olivares serve --seed-demo` restarts on the data it seeded.
+- Native package upgrades keep hand-edited service overrides.
+- The installer prints commands that work when its directory is not on `PATH`.
+- The Git publish push API refuses a body with trailing content.
+- Report signing says when a license is needed, and its refusal carries an error code.
 
 ## [26.10.0] - 2026-10-01
 

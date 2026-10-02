@@ -29,7 +29,6 @@ import {
   CaveatNotice,
   IntelPage,
   SectionCard,
-  SelfAuditNotice,
 } from '@/features/_intel'
 import { ForbiddenState } from '@/components/ui/error-state'
 import {
@@ -131,7 +130,6 @@ export function AttestationView() {
             </CaveatNotice>
           )}
           {/* Privileged, self-audited read. */}
-          <SelfAuditNotice />
         </>
       }
     >

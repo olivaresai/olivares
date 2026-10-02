@@ -37,6 +37,7 @@ import { GovernancePanel } from './governance-panel'
 import { LiveConsole } from './live-console'
 import { RunStateBadge } from './run-state-badge'
 import type { RunDTO, RunEventDTO } from './types'
+import { currentControlFence } from './work-fence'
 import './i18n'
 
 /**
@@ -97,6 +98,17 @@ export function RunDetailSheet({
 
             <RunActions run={run} />
 
+            {/* MC: a Grok Build or OpenCode run can reach MCP servers named in the tool's
+                own settings, outside Olivares. The engine's sentence, shown as-is. */}
+            {run.mcp_governance_warning ? (
+              <p
+                role="note"
+                className="text-caption text-warning"
+                data-slot="mcp-governance-warning"
+              >
+                {run.mcp_governance_warning}
+              </p>
+            ) : null}
             <Tabs value={tab} onValueChange={setTab}>
               <TabsList>
                 <TabsTrigger value="live">{t('detail.live')}</TabsTrigger>
@@ -159,7 +171,8 @@ export function RunDetailSheet({
       toast.error(err instanceof ApiError ? err.message : t('title'))
 
     const stop = useMutation({
-      mutationFn: () => agentOpsApi.stop(run.run_ref),
+      mutationFn: async () =>
+        agentOpsApi.stop(run.run_ref, await currentControlFence(run)),
       onSuccess: () => {
         setConfirm(null)
         invalidate()
@@ -180,7 +193,11 @@ export function RunDetailSheet({
       onError: onErr,
     })
     const del = useMutation({
-      mutationFn: () => agentOpsApi.deleteRun(run.run_ref),
+      // The server deletes only a cleaned record; a stopped or failed one is cleaned first.
+      mutationFn: async () => {
+        if (run.state !== 'cleaned') await agentOpsApi.cleanup(run.run_ref)
+        return agentOpsApi.deleteRun(run.run_ref)
+      },
       onSuccess: () => {
         setConfirm(null)
         invalidate()
@@ -190,11 +207,12 @@ export function RunDetailSheet({
     })
 
     const stoppable = ['pending', 'running', 'idle'].includes(run.state)
-    const resumable =
-      ['stopped', 'failed'].includes(run.state) &&
-      (run.transport !== 'stream-json' || !!run.claude_session_id)
+    // A stream-json run that never captured a session starts again with the same settings.
+    const resumable = ['stopped', 'failed'].includes(run.state)
+    const startsAgain =
+      run.transport === 'stream-json' && !run.claude_session_id
     const cleanable = ['stopped', 'failed'].includes(run.state)
-    const deletable = run.state === 'cleaned'
+    const deletable = cleanable || run.state === 'cleaned'
 
     if (!canWrite && !canAdmin) return null
 
@@ -219,7 +237,7 @@ export function RunDetailSheet({
             disabled={resume.isPending}
           >
             <Play className="size-3.5" />
-            {t('actions.resume')}
+            {startsAgain ? t('actions.startAgain') : t('actions.resume')}
           </Button>
         )}
         {canAdmin && cleanable && (

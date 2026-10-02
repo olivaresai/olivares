@@ -60,6 +60,7 @@ func TestConnectorsCatalogAndCRUD(t *testing.T) {
 		{Kind: "claude", Transport: "plugin", FieldsKnown: false},
 	}}
 	h := newConnectorsHarness(t, fake)
+	h.requirePasskeyStepUp()
 	admin := h.adminLogin()
 
 	// GET catalog (superadmin, NO AAL3 for a read): returns the connector kinds + fields.

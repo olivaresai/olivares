@@ -72,19 +72,19 @@ describe('session renewal', () => {
    */
   it('renews before the deadline, not after it', async () => {
     refreshMock.mockResolvedValue({
-      token: 'olvs_new',
+      csrf_token: 'olvs_new',
       session_id: 's2',
       expires_at: IN(600_000),
     })
     useSessionStore.setState({
-      token: 'olvs_old',
+      csrfToken: 'olvs_old',
       sessionId: 's1',
       expiresAt: IN(90_000), // 90s left, margin is 60s → renew in ~30s
     })
     mount()
     await vi.advanceTimersByTimeAsync(35_000)
     await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1))
-    expect(useSessionStore.getState().token).toBe('olvs_new')
+    expect(useSessionStore.getState().csrfToken).toBe('olvs_new')
   })
 
   /**
@@ -108,7 +108,7 @@ describe('session renewal', () => {
     const MAX = 2_147_483_647
     const espia = vi.spyOn(window, 'setTimeout')
     useSessionStore.setState({
-      token: 'olvs_old',
+      csrfToken: 'olvs_old',
       sessionId: 's1',
       expiresAt: new Date(Date.now() + 4 * 365 * 24 * 3_600_000).toISOString(),
     })
@@ -133,7 +133,7 @@ describe('session renewal', () => {
    */
   it('does not renew a session that is nowhere near its deadline', async () => {
     useSessionStore.setState({
-      token: 'olvs_old',
+      csrfToken: 'olvs_old',
       sessionId: 's1',
       expiresAt: IN(3_600_000),
     })
@@ -149,7 +149,7 @@ describe('session renewal', () => {
    */
   it('does not renew a session that has already expired', async () => {
     useSessionStore.setState({
-      token: 'olvs_old',
+      csrfToken: 'olvs_old',
       sessionId: 's1',
       expiresAt: IN(-1_000),
     })
@@ -165,7 +165,7 @@ describe('session renewal', () => {
    */
   it('does not schedule anything on an unreadable expiry', async () => {
     useSessionStore.setState({
-      token: 'olvs_old',
+      csrfToken: 'olvs_old',
       sessionId: 's1',
       expiresAt: 'not-a-date',
     })
@@ -182,7 +182,7 @@ describe('session renewal', () => {
   it('does not retry a renewal the engine refused', async () => {
     refreshMock.mockRejectedValue(new Error('401'))
     useSessionStore.setState({
-      token: 'olvs_old',
+      csrfToken: 'olvs_old',
       sessionId: 's1',
       expiresAt: IN(90_000),
     })
@@ -191,7 +191,7 @@ describe('session renewal', () => {
     await waitFor(() => expect(refreshMock).toHaveBeenCalledTimes(1))
     await vi.advanceTimersByTimeAsync(600_000)
     expect(refreshMock).toHaveBeenCalledTimes(1)
-    expect(useSessionStore.getState().token).toBe('olvs_old')
+    expect(useSessionStore.getState().csrfToken).toBe('olvs_old')
   })
 })
 
@@ -213,7 +213,7 @@ describe('login populates whoami without aborting it', () => {
   it('calls whoami once after login and keeps the session', async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
     loginMock.mockResolvedValue({
-      token: 'olvs_login',
+      csrf_token: 'olvs_login',
       session_id: 's-login',
       expires_at: IN(600_000),
     })
@@ -231,7 +231,7 @@ describe('login populates whoami without aborting it', () => {
     await user.click(screen.getByRole('button'))
     await waitFor(() => expect(loginMock).toHaveBeenCalledTimes(1))
     await waitFor(() => expect(whoamiMock).toHaveBeenCalledTimes(1))
-    expect(useSessionStore.getState().token).toBe('olvs_login')
+    expect(useSessionStore.getState().csrfToken).toBe('olvs_login')
     expect(qc.getQueryData(queryKeys.whoami)).toEqual({
       grants: [],
       superadmin: true,

@@ -218,10 +218,7 @@ describe('ProvidersView', () => {
     expect(
       screen.queryByPlaceholderText('Paste the key'),
     ).not.toBeInTheDocument()
-    await user.type(
-      screen.getByPlaceholderText('Anthropic (production)'),
-      'Local',
-    )
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Local')
     expect(
       screen.getByDisplayValue('http://127.0.0.1:11434'),
     ).toBeInTheDocument()

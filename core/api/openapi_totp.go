@@ -34,12 +34,13 @@ func addTOTPContract(paths, schemas map[string]any) {
 	schemas["TOTPEnrolment"] = object(oaObj("secret", str(), "uri", str(), "algorithm", str(),
 		"digits", oaObj("type", "integer"), "period", oaObj("type", "integer"), "qr_png_base64", oaObj("type", "string", "contentEncoding", "base64")),
 		"secret", "uri", "algorithm", "digits", "period", "qr_png_base64")
-	schemas["TOTPActivationResponse"] = object(oaObj("recovery_codes", codes, "token", str(), "session_id", oaObj("type", "string", "format", "uuid"),
+	schemas["TOTPActivationResponse"] = object(oaObj("recovery_codes", codes, "token", str(), "csrf_token", str(), "session_id", oaObj("type", "string", "format", "uuid"),
 		"expires_at", oaObj("type", "string", "format", "date-time")), "recovery_codes")
 	schemas["TOTPStatus"] = object(oaObj("enrolled", oaObj("type", "boolean"), "algorithm", str(), "digits", oaObj("type", "integer"),
 		"period", oaObj("type", "integer"), "seed_hint", str(), "activated_at", oaObj("type", "string", "format", "date-time"),
 		"recovery_codes_remaining", oaObj("type", "integer")), "enrolled", "recovery_codes_remaining")
 	schemas["TOTPPolicy"] = object(oaObj("require_for_admins", oaObj("type", "boolean")), "require_for_admins")
+	schemas["StepUpPolicy"] = object(oaObj("admin_step_up", oaObj("type", "string", "enum", []any{"none", "totp", "passkey"})), "admin_step_up")
 	schemas["TOTPOK"] = object(oaObj("ok", oaObj("type", "boolean", "const", true)), "ok")
 	add := func(path, method, id, summary, output, input string, security []any, params ...any) {
 		responses := oaObj("200", response(output))
@@ -60,17 +61,19 @@ func addTOTPContract(paths, schemas map[string]any) {
 		}
 		item[method] = op
 	}
-	dual := []any{oaObj("bearerAuth", []any{}), oaObj()}
+	dual := append(oaBearer(), oaObj())
 	add("/v1/auth/totp/enrol", "post", "enrolTOTP", "Start a TOTP enrolment with a session or a pending login", "TOTPEnrolment", "TOTPEnrolInput", dual)
 	add("/v1/auth/totp/activate", "post", "activateTOTP", "Prove possession and reveal recovery codes once", "TOTPActivationResponse", "TOTPActivateInput", dual)
-	add("/v1/auth/totp/challenge", "post", "completeTOTPLogin", "Complete a pending login with a code or recovery code", "LoginResponse", "TOTPChallengeInput", []any{oaObj()})
+	add("/v1/auth/totp/challenge", "post", "completeTOTPLogin", "Complete a pending login with a code or recovery code", "SessionResponse", "TOTPChallengeInput", []any{oaObj()})
 	add("/v1/auth/totp/status", "get", "getTOTPStatus", "Read the calling account's factor status", "TOTPStatus", "", oaBearer())
-	add("/v1/auth/totp", "delete", "removeTOTP", "Remove the calling account's factor with AAL3", "TOTPOK", "", oaBearer())
+	add("/v1/auth/totp", "delete", "removeTOTP", "Remove the calling account's factor behind the administrative step-up", "TOTPOK", "", oaBearer())
 	add("/v1/auth/totp/policy", "get", "getTOTPPolicy", "Read the administrator factor policy", "TOTPPolicy", "", oaBearer())
-	add("/v1/auth/totp/policy", "put", "setTOTPPolicy", "Set the administrator factor policy with AAL3", "TOTPPolicy", "TOTPPolicy", oaBearer())
+	add("/v1/auth/totp/policy", "put", "setTOTPPolicy", "Set the administrator factor policy behind the administrative step-up", "TOTPPolicy", "TOTPPolicy", oaBearer())
+	add("/v1/auth/step-up-policy", "get", "getStepUpPolicy", "Read what administrative actions demand beyond the sign-in", "StepUpPolicy", "", oaBearer())
+	add("/v1/auth/step-up-policy", "put", "setStepUpPolicy", "Set what administrative actions demand beyond the sign-in", "StepUpPolicy", "StepUpPolicy", oaBearer())
 	id := oaObj("name", "id", "in", "path", "required", true, "schema", oaObj("type", "string", "format", "uuid"))
 	add("/v1/users/{id}/totp", "get", "getUserTOTPStatus", "Read a member's factor status in the selected tenant", "TOTPStatus", "", oaBearer(), id, oaTenantParam())
-	add("/v1/users/{id}/totp/reset", "post", "resetUserTOTP", "Reset a tenant-governed member's factor with AAL3", "TOTPOK", "", oaBearer(), id, oaTenantParam())
+	add("/v1/users/{id}/totp/reset", "post", "resetUserTOTP", "Reset a tenant-governed member's factor behind the administrative step-up", "TOTPOK", "", oaBearer(), id, oaTenantParam())
 	login := paths["/v1/auth/login"].(map[string]any)["post"].(map[string]any)
-	login["responses"].(map[string]any)["200"] = oaJSONRespSchema("Completed session or pending second-factor challenge", oaObj("oneOf", []any{ref("LoginResponse"), ref("TOTPLoginChallenge")}))
+	login["responses"].(map[string]any)["200"] = oaJSONRespSchema("Completed session or pending second-factor challenge", oaObj("oneOf", []any{ref("SessionResponse"), ref("TOTPLoginChallenge")}))
 }

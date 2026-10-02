@@ -25,7 +25,7 @@ func (s *Server) mcpGatewayAdmission(w http.ResponseWriter, r *http.Request, wri
 		s.writeError(w, r, errForbidden)
 		return p, tenant, false
 	}
-	if write && !s.requireAAL3(w, r, p) {
+	if write && !s.requireStepUp(w, r, p) {
 		return p, tenant, false
 	}
 	if s.mcpGateway == nil {

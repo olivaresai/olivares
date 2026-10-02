@@ -7,6 +7,7 @@ package sessions
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
@@ -57,7 +58,8 @@ func (v *fakeVault) Open(_ context.Context, tenant model.TenantID, locator strin
 	}
 	val, ok := v.values[tenant.String()+"|"+locator]
 	if !ok {
-		return nil, errors.New("fake vault: no such secret")
+		// The real store (auth.SecretStore.Resolve) wraps this sentinel.
+		return nil, fmt.Errorf("fake vault: %w", auth.ErrSecretNotFound)
 	}
 	return []byte(val), nil
 }
@@ -486,6 +488,12 @@ func TestRecordServesDriver(t *testing.T) {
 		{ProviderKindAnthropic, providerDriverOpenCode, true},
 		{ProviderKindOpenAI, providerDriverOpenCode, true},
 		{ProviderKindXAI, providerDriverOpenCode, true},
+		// HU-R14: an Ollama record serves Codex AND OpenCode — the local
+		// OpenAI-compatible endpoint both consume with no key.
+		{ProviderKindOllama, providerDriverCodex, true},
+		{ProviderKindOllama, providerDriverOpenCode, true},
+		{ProviderKindOllama, providerDriverClaude, false},
+		{ProviderKindOllama, providerDriverGrok, false},
 		// openai_compatible names what it injects, so it serves anything.
 		{ProviderKindOpenAICompatible, providerDriverClaude, true},
 		{ProviderKindOpenAICompatible, "some-future-driver", true},
@@ -556,4 +564,39 @@ func countProviderRecordRows(t *testing.T, st store.Store, tenant model.TenantID
 		t.Fatal(err)
 	}
 	return n
+}
+
+// HU-R14: the OpenAI-compatible kind serves every driver, and local servers are
+// plain http. Plain http is accepted only for loopback and private-network
+// addresses (localhost, RFC 1918, fc00::/7); a public http host is refused, and
+// https keeps working anywhere. The other kinds stay https-only: the value that
+// travels over their URL is a credential.
+func TestValidProviderBaseURLHTTPOnlyForLocalHosts(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name    string
+		url     string
+		wantErr bool
+	}{
+		{"https public", "https://api.example.com", false},
+		{"http loopback IP", "http://127.0.0.1:11434", false},
+		{"http localhost", "http://localhost:11434", false},
+		{"http RFC1918 10/8", "http://10.1.2.3:11434", false},
+		{"http RFC1918 192.168", "http://192.168.1.20:11434", false},
+		{"http IPv6 ULA", "http://[fd00::1]:11434", false},
+		{"http public host", "http://api.example.com", true},
+		{"http public IP", "http://203.0.113.10:11434", true},
+		{"http carrying credentials", "http://user:secret@127.0.0.1:11434", true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := validProviderBaseURL(ProviderKindOpenAICompatible, tc.url)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("validProviderBaseURL(openai_compatible, %q) err = %v, wantErr %v", tc.url, err, tc.wantErr)
+			}
+		})
+	}
+	// The credential kinds keep the https rule even for local servers.
+	if _, err := validProviderBaseURL(ProviderKindOpenAI, "http://127.0.0.1:11434"); err == nil {
+		t.Fatal("the OpenAI kind must stay https-only even on loopback")
+	}
 }

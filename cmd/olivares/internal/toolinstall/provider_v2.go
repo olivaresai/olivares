@@ -29,6 +29,14 @@ type PackageProviderV2 interface {
 	DefaultPaths(string) []string
 }
 
+// releaseRoutes is implemented by a v2 adapter that can name the pointer its plan
+// for a release records when a person selects that release another way: by its
+// exact version, latest or stable. Revalidation uses it to recognize an installed
+// release reached through another route (sameReleaseOtherRoute).
+type releaseRoutes interface {
+	routePointer(sel SelectionV2, channel string) string
+}
+
 // PayloadAccess is the confined view VerifyPayload uses to inspect placed
 // members. Lstat and OpenFile take paths relative to the owning *os.Root.
 type PayloadAccess interface {

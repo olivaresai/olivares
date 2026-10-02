@@ -47,6 +47,11 @@ const GLOBALES: Record<string, string> = {
   // `/v1/console/activation*` — «global, superadmin-gated» (`console/api.ts`).
   'console|activation-preview':
     'la activación es del despliegue, no del inquilino',
+  // `/v1/m/agenttools/*` se registran con HandleSystem: las herramientas instaladas en el
+  // host, sus versiones, sus trabajos y el Ollama de este servidor son del despliegue, las
+  // lee un administrador del sistema y la ruta ignora la selección de inquilino.
+  'agent-tools':
+    'herramientas del host: rutas de sistema que ignoran el inquilino (HandleSystem)',
 }
 
 /** Un identificador que nombra al inquilino dentro de la clave. */

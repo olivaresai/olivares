@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { ProviderAccent } from './provider-accent'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import {
@@ -33,7 +34,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import {
   PagePrimaryAction,
@@ -58,8 +58,6 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { toast } from '@/components/ui/toaster'
 import { NamedRef } from '@/features/shared'
-import { StepUpRequiredState } from '@/components/layout/step-up-state'
-import { ApiError, NetworkError, isEvidenceUnavailable } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { formatDateTime } from '@/lib/format'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
@@ -532,39 +530,9 @@ export function ProfileListError({
   error: unknown
   onRetry: () => void
 }) {
-  const { t } = useTranslation('errors')
-  if (error instanceof ApiError && error.isStepUpRequired) {
-    return <StepUpRequiredState action="generic" onElevated={onRetry} />
-  }
-  if (error instanceof ApiError && error.isForbidden) {
-    return (
-      <ForbiddenState
-        title={t('forbidden.title')}
-        description={t('forbidden.description')}
-      />
-    )
-  }
-  if (isEvidenceUnavailable(error)) {
-    return (
-      <ErrorState
-        title={t('evidenceUnavailable.title')}
-        description={t('evidenceUnavailable.description')}
-        retry={onRetry}
-        requestId={error.requestId}
-      />
-    )
-  }
-  const isNetwork = error instanceof NetworkError
-  return (
-    <ErrorState
-      title={isNetwork ? t('network.title') : t('serverError.title')}
-      description={
-        isNetwork ? t('network.description') : t('serverError.description')
-      }
-      retry={onRetry}
-      requestId={error instanceof ApiError ? error.requestId : undefined}
-    />
-  )
+  // The one mapping (EU20): step-up, 403, a module that is off, "could not look", and the
+  // failure with Retry and its request id.
+  return <QueryErrorState error={error} retry={onRetry} />
 }
 
 function EnvironmentCell({ profile }: { profile: ProviderProfileDTO }) {
@@ -596,6 +564,13 @@ export function StateBadge({ state }: { state: string }) {
 /** Legacy enablement flag as the server reported it — not a launch guarantee. */
 function OperableBadge({ profile }: { profile: ProviderProfileDTO }) {
   const { t } = useTranslation('agentops')
+  // FH 036: not launched, and said so, until an administrator decides what to do.
+  if (profile.server_user_login)
+    return (
+      <Badge variant="warning" data-testid="profile-server-user-login">
+        {t('profiles.serverUserLogin')}
+      </Badge>
+    )
   return profile.operable ? (
     <Badge variant="success">{t('profiles.operable.yes')}</Badge>
   ) : (

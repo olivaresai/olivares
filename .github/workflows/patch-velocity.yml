@@ -5,14 +5,14 @@
 # a shipped image's CVE posture decays the day after release. This scheduled job
 # rebuilds the image from the latest patched base, re-runs the reachability gate
 # (govulncheck) and the image scanners (grype + trivy), checks whether the pinned
-# distroless base has a newer digest, and REFRESHES the SBOM + OpenVEX. On any
+# agent runtime base has a newer digest, and REFRESHES the SBOM + OpenVEX. On any
 # finding it opens/updates a tracking issue against the published CVE-remediation
 # targets (SECURITY.md §"Vulnerability remediation targets" — targets, never an SLA).
 #
 # It does NOT auto-publish: republishing a signed release is a human-cut patch tag
 # (which runs release.yml) — releases are cut manually by a maintainer; never automated.
 # The refreshed SBOM/VEX are uploaded as run artifacts for the human cutting the tag.
-# The distroless base digest itself is bumped by Dependabot (docker ecosystem).
+# The agent runtime base digest itself is bumped by Dependabot (docker ecosystem).
 #
 # POSIX cron, UTC, DOW 1=Monday (NOT Quartz). Tuesday 06:00 so it follows the
 # weekly Scorecard/Dependabot cadence.
@@ -29,7 +29,7 @@ permissions:
 env:
   GOVULNCHECK_VERSION: "v1.3.0"
   IMAGE_REF: ghcr.io/olivaresai/olivares:latest
-  BASE_IMAGE: gcr.io/distroless/static-debian12:nonroot
+  BASE_IMAGE: node:24-trixie-slim
 
 jobs:
   rescan:
@@ -64,19 +64,20 @@ jobs:
           fi
           tail -40 govuln.txt >> "$GITHUB_STEP_SUMMARY" || true
 
-      # --- distroless base digest drift -----------------------------------------
+      # --- agent runtime base digest drift -----------------------------------------
       - name: base image digest drift
         id: base
         run: |
           set -euo pipefail
           go install github.com/google/go-containerregistry/cmd/crane@latest
-          pinned="$(grep -hoE 'static-debian12:nonroot@sha256:[0-9a-f]+' Dockerfile.release | head -1 | sed 's/.*@//')"
+          pinned="$(sed -nE 's/^FROM node:24-trixie-slim@(sha256:[0-9a-f]{64})$/\1/p' Dockerfile.release)"
+          test -n "$pinned"
           current="$(crane digest "${BASE_IMAGE}")"
           echo "pinned=$pinned"  >> "$GITHUB_OUTPUT"
           echo "current=$current" >> "$GITHUB_OUTPUT"
           if [ "$pinned" != "$current" ]; then
             echo "drift=true" >> "$GITHUB_OUTPUT"
-            echo "::warning::distroless base drifted: pinned $pinned != current $current (Dependabot should PR the bump)"
+            echo "::warning::agent runtime base drifted: pinned $pinned != current $current (Dependabot should PR the bump)"
           else
             echo "drift=false" >> "$GITHUB_OUTPUT"
           fi
@@ -193,7 +194,7 @@ jobs:
 
           - govulncheck reachable vulns: \`${{ steps.govuln.outputs.found }}\`
           - image scanners (grype + trivy) at/above HIGH: \`${{ steps.scanners.outputs.found }}\` — ${{ steps.scanners.outputs.detail }}
-          - distroless base drift: \`${{ steps.base.outputs.drift }}\` (pinned \`${{ steps.base.outputs.pinned }}\` vs current \`${{ steps.base.outputs.current }}\`)
+          - agent runtime base drift: \`${{ steps.base.outputs.drift }}\` (pinned \`${{ steps.base.outputs.pinned }}\` vs current \`${{ steps.base.outputs.current }}\`)
 
           Next step (human): cut a patch tag \`vX.Y.Z\` to rebuild + re-sign + republish via release.yml. Refreshed SBOM/VEX are attached to this workflow run.
           See the run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

@@ -51,9 +51,9 @@ describe('the selected state never rests on colour alone', () => {
     it(`${site.file} carries a non-colour signal per selection site`, () => {
       // The rail: filled when selected, transparent otherwise, same width in both —
       // presence/absence is the signal, so it survives greyscale and colour blindness.
-      expect(src.split("'bg-accent-strong' : 'bg-transparent'").length - 1).toBe(
-        site.occurrences,
-      )
+      expect(
+        src.split("'bg-accent-strong' : 'bg-transparent'").length - 1,
+      ).toBe(site.occurrences)
       expect(src).toContain('w-1 shrink-0 rounded-full')
     })
 

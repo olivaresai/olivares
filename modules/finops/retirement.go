@@ -64,7 +64,7 @@ func (s retirementStep) RetireUser(ctx context.Context, req auth.RetirementReque
 		return auth.RetirementOutcome{}, errors.New("finops: the retirement step has no data handle")
 	}
 	var out auth.RetirementOutcome
-	err := m.data.Mutate(ctx, req.Tenant, func(sc store.Scope) error {
+	err := m.mutate(ctx, req.Tenant, func(sc store.Scope) error {
 		out = auth.RetirementOutcome{}
 		fact, err := auth.PinRetirement(ctx, sc, req)
 		if err != nil {

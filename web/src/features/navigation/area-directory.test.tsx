@@ -79,7 +79,7 @@ describe('AreaDirectoryView', () => {
       within(status).getByText('No entries in this area are available to you'),
     ).toBeInTheDocument()
     expect(
-      within(status).getByRole('link', { name: 'Go to Overview' }),
+      within(status).getByRole('link', { name: 'Go to Now' }),
     ).toHaveAttribute('href', '/')
     expect(screen.queryByText('Operate sessions')).toBeNull()
     expect(screen.queryByText('/agentops')).toBeNull()

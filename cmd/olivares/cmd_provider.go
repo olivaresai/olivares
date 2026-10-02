@@ -43,7 +43,7 @@ var providerKindChoices = []string{
 func newProviderCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "provider",
-		Short: "Register, test and withdraw the provider credentials sessions launch with",
+		Short: "API-key accounts sessions can use instead of a tool's own sign-in",
 		Long: "provider is where an API key becomes something the product owns: the engine seals it,\n" +
 			"reports a four-character hint, can test the connection, and hands it to a session at\n" +
 			"launch. Nothing here needs a variable in the server's shell.\n\n" +
@@ -116,11 +116,11 @@ func newProviderAddCmd() *cobra.Command {
 		kind, name, baseURL   string
 		keyEnv                string
 		bindProfile           string
-		errNotAProviderRecord = "the control plane did not return a provider record"
+		errNotAProviderRecord = "the engine did not return a provider record"
 	)
 	cmd := &cobra.Command{
 		Use:   "add",
-		Short: "Register a provider credential with the control plane",
+		Short: "Register a provider credential with the engine",
 		Long: "add seals one provider credential in the engine and returns its reference and a\n" +
 			"four-character hint. The value is never returned, logged or printed again.\n\n" +
 			"With --profile the new provider is bound to that provider profile in the same run, so\n" +
@@ -140,7 +140,7 @@ func newProviderAddCmd() *cobra.Command {
 			}
 			status, b, err := cfg.do(cmd.Context(), "POST", providersPath, map[string]any{
 				"kind": kind, "display_name": name, "base_url": baseURL, "api_key": key,
-			})
+			}, 201)
 			if err != nil {
 				return err
 			}
@@ -153,7 +153,7 @@ func newProviderAddCmd() *cobra.Command {
 			}
 			ref := str(rec, "provider_ref")
 			if bindProfile != "" && ref != "" {
-				if berr := bindProviderToProfile(cmd, &cfg, ref, bindProfile); berr != nil {
+				if _, berr := bindProviderToProfile(cmd, &cfg, ref, bindProfile); berr != nil {
 					return berr
 				}
 			}
@@ -337,7 +337,8 @@ func newProviderBindCmd() *cobra.Command {
 			"own credential variables are not consulted for it.\n\n" +
 			"The engine refuses a credential the profile's driver cannot read — an OpenAI key on a\n" +
 			"Claude profile is a 422 that names both, not a launch that fails later.\n\n" +
-			"--unbind removes the binding and returns the profile to the host-wide credential.",
+			"--unbind removes the binding: new sessions on the profile use the tool's own sign-in\n" +
+			"(olivares tool login <tool>). Each prints one line that says what changed.",
 		Example: "  olivares provider bind prv_01J8ABCDEF --profile ppf_01J8ZZZZZZ\n" +
 			"  olivares provider bind --unbind --profile ppf_01J8ZZZZZZ",
 		Args: cobra.MaximumNArgs(1),
@@ -355,7 +356,19 @@ func newProviderBindCmd() *cobra.Command {
 			case !unbind && ref == "":
 				return sessionCLIUsage("name the provider to bind, or pass --unbind to clear the profile's binding")
 			}
-			return bindProviderToProfile(cmd, &cfg, ref, profile)
+			saved, err := bindProviderToProfile(cmd, &cfg, ref, profile)
+			if err != nil {
+				return err
+			}
+			return renderOut(cmd, func(w io.Writer) error {
+				var err error
+				if ref == "" {
+					_, err = fmt.Fprintf(w, "Unbound %s. New sessions on this profile use the tool's own sign-in.\n", termSafe(profile))
+				} else {
+					_, err = fmt.Fprintf(w, "Bound %s to %s. New sessions on this profile use its credential.\n", termSafe(ref), termSafe(profile))
+				}
+				return err
+			}, saved)
 		},
 	}
 	cfg.addFlags(cmd)
@@ -368,20 +381,32 @@ func newProviderBindCmd() *cobra.Command {
 
 // bindProviderToProfile patches the profile's provider_record_ref. An empty ref
 // unbinds, which is why the caller and not this function decides what empty means.
-func bindProviderToProfile(cmd *cobra.Command, cfg *agentClientConfig, providerRef, profileRef string) error {
+// The profile's auth_source moves with it (FH 025): bound, the engine injects the
+// key (managed_injection); unbound, the tool's own login applies again. Setting only
+// the record left the profile on the own login, so the key was never opened.
+func bindProviderToProfile(cmd *cobra.Command, cfg *agentClientConfig, providerRef, profileRef string) (map[string]any, error) {
 	if strings.TrimSpace(profileRef) == "" {
-		return sessionCLIUsage("--profile is required to bind a provider")
+		return nil, sessionCLIUsage("--profile is required to bind a provider")
+	}
+	authSource := "managed_injection"
+	if providerRef == "" {
+		authSource = "provider_account_home"
 	}
 	status, b, err := cfg.do(cmd.Context(), "PATCH",
 		"/v1/m/sessions/provider-profiles/"+profileRef,
-		map[string]any{"provider_record_ref": providerRef})
+		map[string]any{"provider_record_ref": providerRef, "auth_source": authSource})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if status != 200 {
-		return httpErr(status, b)
+		return nil, httpErr(status, b)
 	}
-	return nil
+	// The engine answers with the profile as saved; -o json prints it.
+	saved := map[string]any{}
+	if err := json.Unmarshal(b, &saved); err != nil {
+		return nil, err
+	}
+	return saved, nil
 }
 
 func newProviderRemoveCmd() *cobra.Command {
@@ -420,7 +445,7 @@ func newProviderRemoveCmd() *cobra.Command {
 // providerPointCall performs one request against a single provider and renders the
 // record it answered with.
 func providerPointCall(cmd *cobra.Command, cfg *agentClientConfig, method, suffix string, body any, want int) error {
-	status, b, err := cfg.do(cmd.Context(), method, providersPath+suffix, body)
+	status, b, err := cfg.do(cmd.Context(), method, providersPath+suffix, body, want)
 	if err != nil {
 		return err
 	}

@@ -177,7 +177,7 @@ jobs:
   pr-build:
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -193,6 +193,8 @@ jobs:
         run: task build:go
       - name: build the development CLI with its first-party connectors
         run: task build:bin
+      - name: the core session journey works on this build
+        run: bash scripts/session-journey-smoke.sh --binary bin/olivares --label pr-build
       - name: verify and package the development CLI
         env:
           PR_HEAD: ${{ github.event.pull_request.head.sha }}
@@ -253,6 +255,110 @@ jobs:
           path: ${{ runner.temp }}/cli-development-verification.tar.gz
           retention-days: 7
           compression-level: 0
+          if-no-files-found: error
+      # Use this job's already-built candidate and the release's canonical payload.
+      # Container package matrices stub systemd; this hosted runner starts the real unit.
+      - name: package the candidate for the native service journey
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          nfpm="$(bash scripts/ensure-nfpm.sh --dest "$RUNNER_TEMP/package-tools")"
+          mkdir -p "$RUNNER_TEMP/package-service/logs"
+          /usr/bin/python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          source = next(p for p in json.loads(Path('packaging/nfpm/packages.json').read_text())['nfpms']
+                        if p['id'] == 'olivares-nfpm')
+          config = {key: source[key] for key in ('vendor', 'homepage', 'maintainer', 'description',
+                    'license', 'section', 'priority', 'scripts')}
+          config.update(name=source['package_name'], arch='amd64', platform='linux',
+                        version='26.10.1~ci.' + os.environ['GITHUB_RUN_ID'], version_schema='none')
+          config['contents'] = [{k: v for k, v in entry.items() if k != 'packager'}
+                                for entry in source['contents'] if entry.get('packager', 'deb') == 'deb']
+          config['contents'].append({'src': 'bin/olivares', 'dst': '/usr/bin/olivares',
+                                     'file_info': {'mode': 0o755}})
+          Path(os.environ['RUNNER_TEMP'], 'package-service/nfpm.json').write_text(json.dumps(config))
+          PY
+          "$nfpm" package --config "$RUNNER_TEMP/package-service/nfpm.json" \
+            --packager deb --target "$RUNNER_TEMP/package-service/candidate.deb"
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        timeout-minutes: 3
+        with:
+          cosign-release: 'v2.6.4'
+      - name: assert reviewed release verifier bytes
+        run: bash scripts/assert-cosign-binary.sh --isolate
+      - name: install, start, upgrade and uninstall the native package
+        timeout-minutes: 6
+        run: |
+          set -euo pipefail
+          proof="$RUNNER_TEMP/package-service"
+          [[ "$(ps -p 1 -o comm=)" == systemd ]]
+          trap 'sudo systemctl stop olivares.service 2>/dev/null || true' EXIT
+          ready() {
+            sudo systemctl restart olivares.service
+            for attempt in {1..40}; do
+              if [[ "$(sudo curl -sS --max-time 2 --cacert /var/lib/olivares/tls.crt \
+                --output "$proof/logs/$1-readyz.json" --write-out '%{http_code}' \
+                https://127.0.0.1:8443/readyz 2>/dev/null || true)" == 200 ]]; then
+                echo "$1: packaged service /readyz 200"
+                return 0
+              fi
+              sleep 1
+            done
+            sudo journalctl -u olivares.service --no-pager -n 80 | \
+              sed -E 's/olst_[A-Z2-7]{52}/[setup token redacted]/g'
+            return 1
+          }
+          remove_package() {
+            sudo dpkg --purge olivares
+            ! sudo systemctl is-active --quiet olivares.service
+            [[ ! -e /usr/bin/olivares ]]
+          }
+          sudo dpkg -i "$proof/candidate.deb"
+          cmp bin/olivares /usr/bin/olivares
+          ready fresh
+          pid="$(sudo systemctl show --property MainPID --value olivares.service)"
+          sudo cmp bin/olivares "/proc/$pid/exe"
+          remove_package
+          # Reset only this disposable runner's product fixture before the old install.
+          sudo rm -rf /var/lib/olivares
+          base=https://github.com/olivaresai/olivares/releases/download/26.10.0
+          old=olivares_26.10.0_linux_amd64.deb
+          for asset in "$old" checksums.txt checksums.txt.sig checksums.txt.pem; do
+            curl -fSL --retry 2 --max-time 90 "$base/$asset" -o "$proof/$asset"
+          done
+          "$OLIVARES_COSIGN_BIN" verify-blob --certificate "$proof/checksums.txt.pem" \
+            --signature "$proof/checksums.txt.sig" \
+            --certificate-identity 'https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/26.10.0' \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com "$proof/checksums.txt"
+          awk -v name="$old" '$2 == name {print; count++} END {if (count != 1) exit 1}' \
+            "$proof/checksums.txt" > "$proof/old-checksum.txt"
+          (cd "$proof" && sha256sum --check old-checksum.txt)
+          sudo dpkg -i "$proof/$old"
+          ready previous
+          sudo mkdir -p /etc/systemd/system/olivares.service.d
+          printf '[Service]\nProtectHome=tmpfs\n# operator edit: retain my policy\n' | \
+            sudo tee /etc/systemd/system/olivares.service.d/agentops.conf > "$proof/edited-dropin.conf"
+          sudo dpkg -i "$proof/candidate.deb"
+          cmp "$proof/edited-dropin.conf" /etc/systemd/system/olivares.service.d/agentops.conf
+          cmp bin/olivares /usr/bin/olivares
+          ready upgrade
+          pid="$(sudo systemctl show --property MainPID --value olivares.service)"
+          sudo cmp bin/olivares "/proc/$pid/exe"
+          doctor_rc=0
+          sudo /usr/bin/olivares doctor --data-dir /var/lib/olivares --output json \
+            > "$proof/logs/doctor.json" || doctor_rc=$?
+          [[ "$doctor_rc" -le 1 ]]
+          grep -Fq 'overrides the base service unit' "$proof/logs/doctor.json"
+          remove_package
+          echo 'PASS: fresh .deb service, 26.10.0 upgrade preserves edited drop-in, doctor warns, uninstall stops service'
+      - name: retain native package journey output
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: package-service-journey
+          path: ${{ runner.temp }}/package-service/logs/
+          retention-days: 7
           if-no-files-found: error
 
   # ⛔ THE SUITE IS SPLIT BY A DECLARED LIST, AND THAT IS THE WHOLE CHANGE. Measured on

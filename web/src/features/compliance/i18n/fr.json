@@ -179,6 +179,8 @@
     "noAccessHint": "Les calendriers de conservation déterminent la durée de conservation de chaque classe d’enregistrement. Demandez à un administrateur la permission de lecture correspondante.",
     "sweepNow": "Lancer le balayage",
     "gateHint": "Un calendrier n'est qu'un document tant qu'un humain n'a pas approuvé sa purge. L'enregistrer ne supprime jamais de données ; un balayage, si.",
+    "notRunning": "La conservation ne s'exécute pas : cette base de données ne peut pas lister tous les locataires.",
+    "notRunningHow": "Comment l'activer",
     "noClasses": "Le moteur n'a renvoyé aucune classe de données",
     "noClassesHint": "Le registre des classes est figé dans le moteur : une liste vide ne signifie donc pas un tenant vide, mais que cette réponse n'a pas pu être lue comme le registre. Rechargez, et signalez-le si cela persiste.",
     "disposition": {

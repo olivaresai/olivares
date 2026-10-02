@@ -166,9 +166,9 @@ func (c agentExecCall) do(cmd *cobra.Command) (agentExecResult, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	raw, rerr := io.ReadAll(io.LimitReader(resp.Body, maxAgentExecBodySize+1))
+	raw, rerr := readCLIHTTPResponse(resp, req, maxAgentExecBodySize+1, resp.StatusCode < 300, agentExecHTTPError)
 	if rerr != nil {
-		return agentExecResult{}, exitcode.New(exitcode.Server, fmt.Errorf("read response: %w", rerr))
+		return agentExecResult{status: resp.StatusCode, raw: raw}, wrapCLIResponseReadError(rerr, "read response")
 	}
 	if len(raw) > maxAgentExecBodySize {
 		return agentExecResult{}, exitcode.New(exitcode.Server,
@@ -269,7 +269,7 @@ func agentExecHTTPError(status int, body []byte) error {
 		return exitcode.New(exitcode.Conflict, fmt.Errorf("%s", msg))
 	case http.StatusUnprocessableEntity:
 		return exitcode.New(exitcode.Usage, fmt.Errorf(
-			"the control plane rejected the argument (HTTP 422): %s", agentExecErrorMessage(body)))
+			"the engine rejected the argument (HTTP 422): %s", agentExecErrorMessage(body)))
 	case http.StatusNotImplemented:
 		return exitcode.New(exitcode.Err, fmt.Errorf(
 			"this verb is not available in this build (HTTP 501): %s\n"+
@@ -289,9 +289,9 @@ func agentExecHTTPError(status int, body []byte) error {
 func agentExecDenialMessage(body []byte) (string, bool) {
 	var env agentExecErrorEnvelope
 	if json.Unmarshal(body, &env) == nil && env.Error.Code == "step_up_required" {
-		return "refused: this mutation needs a fresh hardware step-up on your session " +
-			"(WebAuthn/PIV, AAL3) — your role is not the problem (HTTP 403)\n" +
-			"re-authenticate with the second factor in the console, then retry", true
+		return "Refused: your administrator requires an extra check (step-up) for this action " +
+			"(Settings > Security); your role is not the problem. Sign in again with that check in " +
+			"the console, then retry (HTTP 403)", true
 	}
 	var op agentExecOpEnvelope
 	if json.Unmarshal(body, &op) != nil {
@@ -390,7 +390,7 @@ type agentExecPageFlags struct {
 }
 
 func (p *agentExecPageFlags) add(cmd *cobra.Command) {
-	cmd.Flags().IntVar(&p.limit, "limit", 0, "page size (0 uses the engine's default)")
+	cmd.Flags().IntVar(&p.limit, "limit", 0, "page size (left out: the engine's default)")
 	cmd.Flags().StringVar(&p.cursor, "cursor", "", "continue from the cursor a previous page reported")
 }
 
@@ -733,8 +733,8 @@ func streamAgentExecEvents(cmd *cobra.Command, flags *authClientFlags, module, p
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxAgentExecBodySize))
-		return agentExecHTTPError(resp.StatusCode, raw)
+		raw, readErr := readCLIResponse(resp, req, maxAgentExecBodySize, false)
+		return guardCLIRefusalError(agentExecHTTPError(resp.StatusCode, raw), resp.StatusCode, cliRequestSecrets(req), readErr)
 	}
 	out := cmd.OutOrStdout()
 	errOut := cmd.ErrOrStderr()

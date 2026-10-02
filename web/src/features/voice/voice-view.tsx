@@ -32,7 +32,6 @@ import {
   CaveatNotice,
   IntelPage,
   SectionCard,
-  SelfAuditNotice,
 } from '@/features/_intel'
 import { voiceApi, voiceKeys } from './api'
 import {
@@ -99,7 +98,6 @@ export function VoiceView() {
       icon={AudioLines}
       title={t('title')}
       description={t('description')}
-      notices={<SelfAuditNotice />}
       actions={
         <Button
           variant="outline"

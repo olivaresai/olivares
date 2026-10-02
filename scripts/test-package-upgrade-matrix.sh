@@ -488,15 +488,15 @@ export GOCACHE="$scratch/gocache"
 extract_nfpms() {
 	python3 - "$1" "$2" <<'PY' || could_not_look "could not extract the nfpms block from $1"
 from pathlib import Path
-import sys
-src = Path(sys.argv[1]).read_text(encoding="utf-8")
-start, end = src.find("\nnfpms:\n"), src.find("\nhomebrew_casks:\n")
-if start < 0 or end <= start:
-    raise SystemExit("nfpms block not found")
-Path(sys.argv[2]).write_text(src[start + 1 : end], encoding="utf-8")
+import sys, json
+recipe = json.loads(Path(sys.argv[1]).read_text())
+for entry in recipe["nfpms"]:
+    entry.pop("version_schema", None)
+out = "nfpms: " + json.dumps(recipe["nfpms"]) + "\n"
+Path(sys.argv[2]).write_text(out)
 PY
 }
-extract_nfpms "$root/.goreleaser.yaml" "$scratch/nfpms.yaml"
+extract_nfpms "$root/packaging/nfpm/packages.json" "$scratch/nfpms.yaml"
 # build_set LABEL VERSION [SCRIPTS_DIR]: a throwaway project with the real packaging tree,
 # the test-double binary and the nfpms block; the old set overlays the ccf7ea20 scripts.
 build_set() {

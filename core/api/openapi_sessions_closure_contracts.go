@@ -53,6 +53,8 @@ func sessionsClosureRequestBodyDeclarationFor(r moduleRoute) (sessionsClosureReq
 		return sessionsClosureBodyDeclaration(true, sessionsHandoffResponseSchema()), true
 	case http.MethodPost + " /runs":
 		return sessionsClosureBodyDeclaration(true, sessionsCreateRunSchema()), true
+	case http.MethodPut + " /runs/{ref}/peers":
+		return sessionsClosureBodyDeclaration(true, sessionsSetRunPeersSchema()), true
 	case http.MethodPost + " /templates":
 		return sessionsClosureBodyDeclaration(true, sessionsCreateTemplateSchema()), true
 	case http.MethodPut + " /templates/{id}":
@@ -69,6 +71,8 @@ func sessionsClosureRequestBodyDeclarationFor(r moduleRoute) (sessionsClosureReq
 		return sessionsClosureBodyDeclaration(true, sessionsCreateProviderProfileSchema()), true
 	case http.MethodPatch + " /provider-profiles/{ref}":
 		return sessionsClosureBodyDeclaration(true, sessionsPatchProviderProfileSchema()), true
+	case http.MethodPost + " /provider-profiles/resolve":
+		return sessionsClosureBodyDeclaration(true, sessionsResolveProviderProfileSchema()), true
 	case http.MethodPost + " /provider-source-bindings":
 		return sessionsClosureBodyDeclaration(true, sessionsCreateProviderBindingSchema()), true
 	case http.MethodPost + " /providers":
@@ -132,6 +136,17 @@ func sessionsClosureOptionalString(description string) map[string]any {
 	return sessionsClosureNullable(oaObj("type", "string", "description", description))
 }
 
+// sessionsSecretEnvSchema is a launch's or a template's vault secrets: NAMES of
+// env/… secrets and the variable each is read from (modules/sessions
+// session_secret_env.go). No value is ever accepted or returned here.
+func sessionsSecretEnvSchema() map[string]any {
+	ref := sessionsClosureClosedObject(oaObj(
+		"env", oaObj("type", "string", "description", "The environment variable the child reads the secret from. A shell name; variables the runtime, a provider or the host base owns are refused."),
+		"secret", oaObj("type", "string", "description", "The vault secret's name in the tenant scope; must begin with env/."),
+	), "env", "secret")
+	return sessionsClosureNullable(oaObj("type", "array", "maxItems", 32, "items", ref))
+}
+
 func sessionsCreateRunSchema() map[string]any {
 	envName := oaObj(
 		"type", "string",
@@ -147,8 +162,25 @@ func sessionsCreateRunSchema() map[string]any {
 		"template_id", sessionsClosureOptionalString("When non-empty, identifies the stored template whose terms govern the launch."),
 		"isolation", sessionsClosureNullable(oaObj("type", "string", "enum", oaEnum("", "native", "container", "sandbox"), "description", "Empty/null defaults to native; unavailable runners refuse rather than downgrade.")),
 		"env_allow", sessionsClosureNullable(oaObj("type", "array", "maxItems", 64, "uniqueItems", true, "items", envName)),
+		"secret_env", sessionsSecretEnvSchema(),
 		"provider_profile_ref", sessionsClosureOptionalString("When non-empty, names the provider profile the session launches under; the server resolves its homes and refuses a disabled, retired, foreign-environment or non-operable profile, and one whose driver requires an authorized authentication source it does not have. Only the reference is accepted: no home, environment, driver, binding, session id or authentication source. Refused (422) while profiled launches are not enabled on the deployment."),
 	)))
+}
+
+// sessionsSetRunPeersSchema is the run peers choice (modules/sessions session_peers.go):
+// exactly one of an explicit list of peer sessions or the same-template rule. The
+// handler refuses {} and both fields together, so the schema says "exactly one"
+// with two oneOf branches, each requiring its field.
+func sessionsSetRunPeersSchema() map[string]any {
+	schema := sessionsClosureClosedObject(oaObj(
+		"peers", oaObj("type", "array", "maxItems", 128, "uniqueItems", true,
+			"items", oaObj("type", "string", "description", "A canonical session ID of another live session in this run's folder."),
+			"description", "The sessions this run may message or hand work to. Send this or peers_rule, not both."),
+		"peers_rule", oaObj("type", "string", "enum", oaEnum("same-template"),
+			"description", "Every live session launched from the same template in this folder. Send this or peers, not both."),
+	))
+	schema["oneOf"] = []any{oaObj("required", oaEnum("peers")), oaObj("required", oaEnum("peers_rule"))}
+	return schema
 }
 
 func sessionsTemplateBodySchema() map[string]any {
@@ -168,6 +200,7 @@ func sessionsTemplateBodySchema() map[string]any {
 		"effort", sessionsClosureOptionalString("Validated when the template is reduced for preview or launch."),
 		"model", sessionsClosureOptionalString("Stored template model selector."),
 		"custom_instructions", sessionsClosureOptionalString("Stored custom instructions."),
+		"secret_env", sessionsSecretEnvSchema(),
 	)))
 	stringList := sessionsClosureNullable(oaObj(
 		"type", "array", "items", sessionsClosureNullable(oaObj("type", "string")),
@@ -277,6 +310,28 @@ func sessionsPatchProviderProfileSchema() map[string]any {
 		"auth_source", sessionsClosureNullable(oaObj("type", "string", "enum", oaEnum("", "provider_account_home", "managed_injection"), "description", "Re-authorizes (or, with the empty string, withdraws) the authentication source. It is not identity, so it does not create a new profile id; a live child keeps the source its own launch was authorized under.")),
 		"provider_record_ref", sessionsClosureOptionalString("Binds (or, with the empty string, unbinds) the registered provider this profile's managed launches use. Like auth_source it is an authorization and not identity, and it does not reach a live child: a running session keeps the provider its own launch resolved."),
 	))
+}
+
+// sessionsResolveProviderProfileSchema mirrors resolveProfileRequest: the driver
+// only. Which profile a new session of that driver uses is the engine's one rule
+// (its own login when signed in, otherwise a record in Providers it can use), so
+// both clients ask instead of choosing.
+func sessionsResolveProviderProfileSchema() map[string]any {
+	return sessionsClosureClosedObject(oaObj(
+		"driver", oaObj("type", "string", "enum", oaEnum("claude", "codex", "grok", "opencode"), "description", "The coding tool the new session runs. The answer is a profile this node can launch it with, reused or created; a tool with nothing to run on is refused with the step that fixes it."),
+	), "driver")
+}
+
+// sessionsResolvePreviewRoute is the read-only twin of the resolve: the same rule's
+// answer with no profile made, for a page that shows what a session would run on.
+func sessionsResolvePreviewRoute(r moduleRoute) bool {
+	return r.ns == "sessions" && r.method == http.MethodGet && r.pattern == "/provider-profiles/resolve"
+}
+
+func sessionsResolvePreviewParameters() []any {
+	return []any{oaParam("driver", "query",
+		"The coding tool a new session would run. Answered with the reason (own_login or api_key) and, for a key, the provider record; a tool with nothing to run on is refused 409 with the sentence the resolve gives.",
+		true, oaObj("type", "string", "enum", oaEnum("claude", "codex", "grok", "opencode")))}
 }
 
 // sessionsCreateProviderSchema mirrors createProviderRecordRequest. api_key is

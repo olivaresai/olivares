@@ -6,7 +6,11 @@
   },
   "forbidden": {
     "title": "Not authorized",
-    "description": "You do not have permission to view this. Ask an administrator for access."
+    "description": "You do not have permission to view this. Ask an administrator for access.",
+    "accessTo": "You do not have access to {{subject}}.",
+    "accessToThis": "You do not have access to this.",
+    "nextStep": "Your roles or a group policy do not allow it. An owner or administrator of this organization can grant it.",
+    "deniedByPolicy": "The policy “{{policy}}” denies it. An owner or administrator of this organization can change it."
   },
   "serverError": {
     "title": "Something went wrong",
@@ -44,5 +48,15 @@
   "tenantAdmission": {
     "title": "Tenant admission required",
     "description": "Sign in with a tenant-admitted directory identity. Global bootstrap authority cannot operate workspace communications."
+  },
+  "moduleNotEnabled": {
+    "title": "Not enabled on this installation",
+    "description": "This part of Olivares is switched off here, so it has nothing to show.",
+    "named": "{{module}} is not enabled on this installation.",
+    "unnamed": "This module is not enabled on this installation."
+  },
+  "notInEdition": {
+    "subject": "This edition does not include {{subject}}.",
+    "generic": "This edition does not include this."
   }
 }

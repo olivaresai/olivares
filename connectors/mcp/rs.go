@@ -659,8 +659,14 @@ func (rs *ResourceServer) handleToolsCall(ctx context.Context, w http.ResponseWr
 		dec, gerr := rs.gate.Authorize(ctx, ToolApprovalRequest{
 			Tenant: rs.tenant, Subject: tok.Subject, Tool: toolName,
 			Scope: policy.RequiredScope, PlanHash: plan, RequestedBy: tok.Subject,
+			Arguments: append(json.RawMessage(nil), canon.Args...),
 		})
 		if gerr != nil {
+			if errors.Is(gerr, ErrArgumentsNotReviewable) {
+				rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false, "argument not reviewable", "", "MCP07", trace)
+				rs.writeRPCError(w, http.StatusForbidden, req.ID, rpcAccessDenied, "argument not reviewable")
+				return
+			}
 			rs.auditTraced(ctx, tok, toolName, policy.RequiredScope, false, "gate error (fail-closed)", "", "MCP07", trace)
 			rs.writeRPCError(w, http.StatusForbidden, req.ID, rpcAccessDenied, "approval gate error")
 			return

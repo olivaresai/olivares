@@ -62,7 +62,11 @@ export function AccessLegend({
     >
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <Swatch color="var(--color-info)" label={t('legend.read')} />
-        <Swatch color="var(--color-accent-text)" thick label={t('legend.writeRw')} />
+        <Swatch
+          color="var(--color-accent-text)"
+          thick
+          label={t('legend.writeRw')}
+        />
         <Swatch
           color="var(--color-muted-foreground)"
           label={t('legend.unknown')}

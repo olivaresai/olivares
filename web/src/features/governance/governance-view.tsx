@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { formatDateTime, formatShortDateTime } from '@/lib/format'
 import { useQuery } from '@tanstack/react-query'
 import {
   Check,
@@ -10,6 +11,7 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react'
+import { useRouter } from '@tanstack/react-router'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
@@ -37,6 +39,7 @@ import { AgentRiskView } from './agent-risk-view'
 import { ApprovalDetailSheet } from './approval-detail'
 import { BreakGlassView } from './break-glass'
 import { DecisionDialog } from './decision-dialog'
+import { ApprovalRequestCell, AskedBy } from './approval-preview'
 import { IdentitiesView } from './identities-view'
 import { NewRequestDialog } from './new-request-dialog'
 import { PoliciesView } from './policies-view'
@@ -50,6 +53,25 @@ import {
 
 type TabKey =
   'approvals' | 'policies' | 'identities' | 'agent-risk' | 'break-glass'
+
+const TAB_KEYS: readonly TabKey[] = [
+  'approvals',
+  'policies',
+  'identities',
+  'agent-risk',
+  'break-glass',
+]
+
+/** The section a `?tab=` link names (the sidebar's Approvals entry and Now link to
+ *  `?tab=approvals`), or the queue when the link names nothing this principal may open. */
+function initialTab(canReadApprovals: boolean): TabKey {
+  const fallback: TabKey = canReadApprovals ? 'approvals' : 'policies'
+  if (typeof window === 'undefined') return fallback
+  const want = new URLSearchParams(window.location.search).get('tab')
+  if (!want || !(TAB_KEYS as readonly string[]).includes(want)) return fallback
+  if (want === 'approvals' && !canReadApprovals) return fallback
+  return want as TabKey
+}
 
 // The HITL approval queue polls on a 12s interval — there is NO SSE; all freshness is
 // poll-based, and status is computed at read (so an expired item surfaces before a
@@ -74,7 +96,23 @@ export default function GovernanceView() {
   // view an operator holding only that delegated permission could not reach it —
   // the same reasoning that gave routine policies their own route.
 
-  const [tab, setTab] = useState<TabKey>('approvals')
+  // Outside a RouterProvider (component tests) the hook answers undefined and the section
+  // is simply not written to the URL — the installed hook's own no-provider contract.
+  const router = useRouter({ warn: false }) as
+    { navigate: (opts: unknown) => Promise<void> } | undefined
+  const [tab, setTabState] = useState<TabKey>(() =>
+    initialTab(canReadApprovals),
+  )
+  function setTab(value: TabKey) {
+    setTabState(value)
+    // `replace` and out of scroll restoration, like the other tabbed screens: a section is
+    // a facet of this page, not a place Back returns to.
+    void router?.navigate({
+      search: (prev: Record<string, unknown>) => ({ ...prev, tab: value }),
+      replace: true,
+      resetScroll: false,
+    })
+  }
 
   return (
     <div className="flex flex-col gap-5 pb-10">
@@ -123,6 +161,12 @@ export default function GovernanceView() {
   )
 }
 
+/** The approval named by ?approval= in the address, if any. */
+function linkedApproval(): string | null {
+  const v = new URLSearchParams(window.location.search).get('approval')
+  return v || null
+}
+
 function ApprovalsTab({ active }: { active: boolean }) {
   const { t } = useTranslation(['governance', 'common'])
   const { activeTenant, can, principal } = useAuth()
@@ -131,10 +175,14 @@ function ApprovalsTab({ active }: { active: boolean }) {
   const canWrite = can('governance:approval:write')
 
   const [statusFilter, setStatusFilter] = useState<string>('pending')
-  const [selected, setSelected] = useState<string | null>(null)
-  const [detailOpen, setDetailOpen] = useState(false)
+  // ?approval=<id> opens that request: the notification bell links a waiting session's
+  // approval here, one click from the bell to the decision (Warp concept).
+  const [selected, setSelected] = useState<string | null>(linkedApproval)
+  const [detailOpen, setDetailOpen] = useState(() => linkedApproval() !== null)
   const [decisionVerb, setDecisionVerb] = useState<DecisionVerb | null>(null)
-  const [decisionId, setDecisionId] = useState<string | null>(null)
+  const [decisionApproval, setDecisionApproval] = useState<ApprovalDTO | null>(
+    null,
+  )
   const [decisionOpen, setDecisionOpen] = useState(false)
   const [confirmCancel, setConfirmCancel] = useState<ApprovalDTO | null>(null)
   const [confirmSweep, setConfirmSweep] = useState(false)
@@ -172,56 +220,24 @@ function ApprovalsTab({ active }: { active: boolean }) {
 
   if (!canRead) return <ForbiddenState />
 
-  function openDecision(id: string, verb: DecisionVerb) {
-    setDecisionId(id)
+  function openDecision(approval: ApprovalDTO, verb: DecisionVerb) {
+    setDecisionApproval(approval)
     setDecisionVerb(verb)
     setDecisionOpen(true)
   }
 
   const columns: TableColumn<ApprovalDTO, unknown>[] = [
     {
-      accessorKey: 'action',
-      header: t('approvals.action'),
-      cell: ({ row }) => (
-        <span className="font-mono text-caption font-medium text-foreground">
-          {row.original.action || '—'}
-        </span>
-      ),
-    },
-    {
-      id: 'subject',
-      header: t('approvals.subject'),
-      cell: ({ row }) => {
-        const { subject_kind, subject_ref } = row.original
-        if (!subject_kind && !subject_ref)
-          return (
-            <span className="text-muted-foreground">
-              {t('approvals.noSubject')}
-            </span>
-          )
-        return (
-          <span className="flex items-center gap-1.5">
-            {subject_kind && <Badge variant="neutral">{subject_kind}</Badge>}
-            {subject_ref && (
-              <span className="truncate font-mono text-caption text-muted-foreground">
-                {subject_ref}
-              </span>
-            )}
-          </span>
-        )
-      },
+      // What will run comes first (SC sweep, 09b): session, tool, the reviewed text and
+      // the folder. The action and the references are in the review's Details.
+      id: 'request',
+      header: t('approvals.request'),
+      cell: ({ row }) => <ApprovalRequestCell approval={row.original} />,
     },
     {
       accessorKey: 'requested_by',
       header: t('approvals.requestedBy'),
-      cell: ({ row }) => (
-        <span
-          className="font-mono text-caption text-muted-foreground"
-          title={t('approvals.actorHint')}
-        >
-          {row.original.requested_by || '—'}
-        </span>
-      ),
+      cell: ({ row }) => <AskedBy approval={row.original} />,
     },
     {
       id: 'progress',
@@ -261,7 +277,17 @@ function ApprovalsTab({ active }: { active: boolean }) {
       id: 'age',
       header: t('approvals.expires'),
       cell: ({ row }) =>
-        row.original.expires_at ? (
+        // An expired request says so with the time the engine stored (HU 039: a
+        // no-expiry policy has no expires_at, but the bounded wait still ends it).
+        // The shortest absolute time that fits the column (09b capture: the full date and
+        // time was cut at 1280); the whole of it is the title.
+        row.original.status === 'expired' && row.original.decided_at ? (
+          <span title={formatDateTime(row.original.decided_at)}>
+            {t('approvals.expiredAt', {
+              time: formatShortDateTime(row.original.decided_at),
+            })}
+          </span>
+        ) : row.original.expires_at ? (
           <RelTimeLabel ts={row.original.expires_at} />
         ) : (
           '—'
@@ -303,7 +329,7 @@ function ApprovalsTab({ active }: { active: boolean }) {
                 aria-label={t('approvals.reject')}
                 onClick={(e) => {
                   e.stopPropagation()
-                  openDecision(row.original.id, 'reject')
+                  openDecision(row.original, 'reject')
                 }}
               >
                 <X />
@@ -316,7 +342,7 @@ function ApprovalsTab({ active }: { active: boolean }) {
                 aria-label={t('approvals.approve')}
                 onClick={(e) => {
                   e.stopPropagation()
-                  openDecision(row.original.id, 'approve')
+                  openDecision(row.original, 'approve')
                 }}
               >
                 <Check />
@@ -416,11 +442,12 @@ function ApprovalsTab({ active }: { active: boolean }) {
         onOpenChange={setDetailOpen}
       />
 
-      {decisionId && (
+      {decisionApproval && (
         <DecisionDialog
           open={decisionOpen}
           onOpenChange={setDecisionOpen}
-          approvalId={decisionId}
+          approvalId={decisionApproval.id}
+          approval={decisionApproval}
           verb={decisionVerb}
         />
       )}

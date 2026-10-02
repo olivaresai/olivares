@@ -68,7 +68,8 @@ const SUJETOS = [
   'session-viewer/session-viewer-page.tsx',
 ]
 
-const leer = (rel: string) => sinComentarios(readFileSync(join(FEATURES, rel), 'utf8'))
+const leer = (rel: string) =>
+  sinComentarios(readFileSync(join(FEATURES, rel), 'utf8'))
 /**
  * ⛔ POR IDENTIFICADOR, NO POR SUBCADENA. Buscaba con `includes` y un mutante sobrevivió:
  * renombrar `isStepUpRequired` a `isStepUpRequiredX` —que en ejecución no existe y deja la
@@ -121,8 +122,10 @@ describe('el residuo de ceremonia: la acusación nunca va sin la salida delante'
       const l = leer(rel)
       const roles = todas(l, 'isForbidden', false)
       const ceremonias = todas(l, 'isStepUpRequired')
-      expect(roles.length, `${rel} ya no decide el rol — ¿sigue siendo sujeto?`)
-        .toBeGreaterThan(0)
+      expect(
+        roles.length,
+        `${rel} ya no decide el rol — ¿sigue siendo sujeto?`,
+      ).toBeGreaterThan(0)
 
       // ⛔ LA DISTANCIA SE MIDE EN LÍNEAS CON CONTENIDO. Al despojar comentarios quedan huecos,
       //    y una cadena bien documentada separaba su ceremonia de su rol por 16 renglones de los
@@ -182,7 +185,9 @@ describe('el residuo de ceremonia: la acusación nunca va sin la salida delante'
         // fallaba justo así en `workflows-tab`. Se busca hacia atrás dentro del mismo bloque.
         let nombre: string | undefined
         for (let k = i; k >= Math.max(0, i - 6); k--) {
-          const m = l[k]?.match(/const\s+(\w+)\s*=\s*$/) ?? l[k]?.match(/const\s+(\w+)\s*=/)
+          const m =
+            l[k]?.match(/const\s+(\w+)\s*=\s*$/) ??
+            l[k]?.match(/const\s+(\w+)\s*=/)
           if (m) {
             nombre = m[1]
             break
@@ -232,10 +237,9 @@ describe('el residuo de ceremonia: la acusación nunca va sin la salida delante'
     for (const rel of SUJETOS) {
       const l = leer(rel)
       expect(l.length, `${rel} vacío`).toBeGreaterThan(50)
-      expect(
-        primera(l, 'isForbidden'),
-        `${rel} no decide el rol`,
-      ).not.toBe(Number.POSITIVE_INFINITY)
+      expect(primera(l, 'isForbidden'), `${rel} no decide el rol`).not.toBe(
+        Number.POSITIVE_INFINITY,
+      )
     }
   })
 })

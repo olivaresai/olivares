@@ -7,7 +7,6 @@ package api_test
 import (
 	"context"
 	"net/http"
-	"strings"
 	"testing"
 	"time"
 
@@ -16,16 +15,8 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// QA05 on the REAL engine. The decorator next door reproduces the error the store
-// returns; only a real PostgreSQL reproduces the CONFIGURATION that produces it —
-// FORCE ROW LEVEL SECURITY against a NOSUPERUSER NOBYPASSRLS application role whose
-// System transaction has cleared its tenant GUC, so the cross-tenant read matches
-// nothing and the store refuses to call that an empty estate.
-//
-// The two subtests differ in EXACTLY ONE input: whether store.Config.AdminDSN names
-// the provisioned NOSUPERUSER BYPASSRLS role. Same cluster, same provisioning, same
-// schema, same isolated database shape — so the difference in the readiness answer
-// is attributable to the administrative pool and to nothing else.
+// Real PostgreSQL setup on the documented application-role-only topology, with
+// an administrative pool as the positive control for estate-wide operations.
 
 // openFirstBootPostgres provisions an isolated database and opens the engine over
 // it, with or without the administrative pool. It returns a store with no user in
@@ -35,9 +26,9 @@ func openFirstBootPostgres(t *testing.T, withAdminPool bool) store.Store {
 	if !pgtest.Available(t) {
 		t.Skip("no Postgres configured: set OLIVARES_TEST_POSTGRES_SUPERUSER_DSN to run the first-boot readiness leg")
 	}
-	dsns := pgtest.Isolate(t, sqlstore.ProvisionPostgres, pgtest.SplitOwner)
+	dsns := pgtest.Isolate(t, sqlstore.ProvisionPostgres, pgtest.SingleRole)
 	cfg := store.Config{
-		Engine: store.EnginePostgres, DSN: dsns.App, OwnerDSN: dsns.Owner, MaxConns: 8,
+		Engine: store.EnginePostgres, DSN: dsns.App, MaxConns: 8,
 	}
 	if withAdminPool {
 		cfg.AdminDSN = dsns.Admin
@@ -76,50 +67,42 @@ func openFirstBootPostgres(t *testing.T, withAdminPool bool) store.Store {
 	return st
 }
 
-// TestReadyzFirstBootOnPostgresWithoutAdministrativePool is the measured defect on
-// the engine that has it. The store answers its ping, this node holds the election
-// lock, no user exists — every condition the old probe checked is satisfied — and
-// the first thing this install must do cannot be done.
+// The documented default uses the application role alone. Readiness, setup,
+// owner sign-in and tenant-scoped reads must work without an administrative DSN.
 func TestReadyzFirstBootOnPostgresWithoutAdministrativePool(t *testing.T) {
 	st := openFirstBootPostgres(t, false)
 	h := newHarnessOptsFromStoreSource(t, harnessStoreSource{borrowed: st}, nil)
-
 	r := probeReadyz(t, h)
-	if r.code != http.StatusServiceUnavailable {
-		t.Fatalf("/readyz on a fresh PostgreSQL install with no admin pool = %d %s, want 503", r.code, r.raw)
+	if r.code != http.StatusOK || r.body["setup_required"] != true {
+		t.Fatalf("/readyz = %d %s, want 200 setup_required=true", r.code, r.raw)
 	}
-	if r.body["status"] != "setup_blocked" || r.body["code"] != "cross_tenant_admin_pool_not_configured" {
-		t.Errorf("/readyz body = %s, want status=setup_blocked code=cross_tenant_admin_pool_not_configured", r.raw)
-	}
-	if r.body["store"] != "up" || r.body["leader"] != true || r.body["setup_required"] != true {
-		t.Errorf("/readyz body = %s, want store=up leader=true setup_required=true", r.raw)
-	}
-	if remedy, _ := r.body["remedy"].(string); !strings.Contains(remedy, "--admin-dsn") {
-		t.Errorf("the readiness remedy does not name --admin-dsn: %q", remedy)
-	}
-	requireNoRawStoreText(t, r.raw)
-
-	// The prediction is redeemed against the real ceremony: the setup readiness
-	// refused to promise is the setup that actually refuses.
 	sr := h.do(http.MethodPost, "/v1/setup", "", map[string]any{
 		"token": h.setupTok, "email": "root@x.io", "password": "supersecret1",
 	}, nil)
-	if sr.code != http.StatusNotImplemented {
-		t.Fatalf("POST /v1/setup on real PostgreSQL with no admin pool = %d %s, want 501", sr.code, sr.raw)
+	if sr.code != http.StatusCreated {
+		t.Fatalf("POST /v1/setup = %d %s, want 201 on the app pool", sr.code, sr.raw)
 	}
-	errObj, _ := sr.body["error"].(map[string]any)
-	if errObj == nil || errObj["code"] != "cross_tenant_admin_pool_not_configured" {
-		t.Fatalf("POST /v1/setup answered %s, want the admin-pool refusal", sr.raw)
+	login := h.do("POST", "/v1/auth/login", "", map[string]any{"email": "root@x.io", "password": "supersecret1"}, nil)
+	if login.code != http.StatusOK {
+		t.Fatalf("sign-in = %d %s", login.code, login.raw)
 	}
-
-	// Pod health is a different question and keeps its answer: this replica is
-	// healthy, and a missing optional capability must not restart it or wedge a
-	// StatefulSet rollout.
-	if pod := h.do(http.MethodGet, "/pod-readyz", "", nil, nil); pod.code != http.StatusOK {
-		t.Fatalf("/pod-readyz = %d %s, want 200", pod.code, pod.raw)
+	token, _ := login.body["token"].(string)
+	org, _ := sr.body["organization"].(map[string]any)
+	tenant, _ := org["tenant_id"].(string)
+	for _, path := range tenantScopedGETs {
+		read := h.do("GET", path, token, nil, map[string]string{"X-Olivares-Tenant": tenant})
+		if read.code != http.StatusOK {
+			t.Errorf("GET %s = %d %s", path, read.code, read.raw)
+		}
 	}
-	if live := h.do(http.MethodGet, "/livez", "", nil, nil); live.code != http.StatusOK {
-		t.Fatalf("/livez = %d %s, want 200", live.code, live.raw)
+	// Full-estate enumeration remains deliberately unavailable.
+	list := h.do("GET", "/v1/system/orgs", token, nil, nil)
+	if list.code != http.StatusNotImplemented {
+		t.Fatalf("GET /v1/system/orgs = %d %s, want 501", list.code, list.raw)
+	}
+	after := probeReadyz(t, h)
+	if after.code != http.StatusOK || after.body["setup_required"] != false {
+		t.Fatalf("/readyz after setup = %d %s", after.code, after.raw)
 	}
 }
 

@@ -11,7 +11,7 @@
 #   - tar.gz archives bundling LICENSE / NOTICE / SECURITY.md / README.
 #   - A SHA-256 checksums.txt over every artifact.
 #   - An SPDX SBOM per archive (syft).
-#   - A distroless, non-root container image (Dockerfile.release).
+#   - A Debian 13, non-root agent runtime image (Dockerfile.release).
 #   - cosign signatures (keyless / Sigstore by default) over the checksums file AND
 #     the container image, with the certificate + transparency log entry (Rekor).
 #
@@ -400,171 +400,11 @@ signs:
 # never enables/starts the service (the operator opts in). Contents use the
 # packager field (goreleaser v2.17.0 NFPMContent) so APK does not receive the
 # systemd unit. APK upgrade scripts are apk.scripts, not host-tool detection.
-# The Arch Linux package is the second entry below.
-nfpms:
-  - id: olivares-nfpm
-    package_name: olivares
-    ids: [olivares, olivares-ports]
-    vendor: Olivares.AI
-    homepage: https://olivares.ai
-    maintainer: Olivares.AI <enterprise@olivares.ai>
-    description: |-
-      Ground truth for enterprise AI — open, self-hosted AI governance control plane.
-      Discover the agents on your infrastructure, map what they can touch (the read/write
-      access map), surface least-privilege drift, and prove it — without standing in the
-      data path. Single static binary, embedded console, SQLite or Postgres.
-    license: AGPL-3.0-only
-    formats: [deb, rpm, apk]
-    bindir: /usr/bin
-    section: utils
-    priority: optional
-    contents:
-      # The licence texts ship WITH the package. Before 2026-08-04 `contents` listed only
-      # the unit, the env sample and the data dir, so installing the .deb/.rpm/.apk left an
-      # AGPL binary on disk with no LICENSE, no NOTICE and no warranty disclaimer anywhere —
-      # while the .tar.gz beside it carried all of them. The `license:` field above is
-      # package metadata, not the document AGPL sections 4 and 5 ask you to pass on.
-      - src: LICENSE
-        dst: /usr/share/doc/olivares/LICENSE
-      - src: NOTICE
-        dst: /usr/share/doc/olivares/NOTICE
-      - src: LICENSING.md
-        dst: /usr/share/doc/olivares/LICENSING.md
-      - src: DISCLAIMER.md
-        dst: /usr/share/doc/olivares/DISCLAIMER.md
-      - src: LICENSES
-        dst: /usr/share/doc/olivares/LICENSES
-      - src: packaging/systemd/olivares.service
-        dst: /usr/lib/systemd/system/olivares.service
-        packager: deb
-      - src: packaging/systemd/olivares.service
-        dst: /usr/lib/systemd/system/olivares.service
-        packager: rpm
-      - src: packaging/nfpm/package-init-systemd.txt
-        dst: /usr/lib/olivares/package-init
-        packager: deb
-      - src: packaging/nfpm/package-init-systemd.txt
-        dst: /usr/lib/olivares/package-init
-        packager: rpm
-      - src: packaging/openrc/olivares.sh
-        dst: /etc/init.d/olivares
-        packager: apk
-        file_info:
-          mode: 0755
-      - src: packaging/openrc/load-env.sh
-        dst: /usr/lib/olivares/openrc-load-env.sh
-        packager: apk
-      - src: packaging/nfpm/package-init-openrc.txt
-        dst: /usr/lib/olivares/package-init
-        packager: apk
-      - src: packaging/olivares.env.example
-        dst: /etc/olivares/olivares.env
-        type: "config|noreplace"
-        packager: deb
-      - src: packaging/olivares.env.example
-        dst: /etc/olivares/olivares.env
-        type: "config|noreplace"
-        packager: rpm
-      - src: packaging/olivares.env.example
-        dst: /usr/share/olivares/olivares.env.example
-        packager: apk
-      # APK must not ship this directory: apk applies the packaged root:root
-      # 0750 node after post-install, so the service user cannot write
-      # .gitignore/keys (measured Alpine 3.22). postinstall mkdir+chown and
-      # OpenRC start_pre re-apply ownership. deb/rpm keep the directory node.
-      - dst: /var/lib/olivares
-        type: dir
-        file_info:
-          mode: 0750
-        packager: deb
-      - dst: /var/lib/olivares
-        type: dir
-        file_info:
-          mode: 0750
-        packager: rpm
-    scripts:
-      postinstall: packaging/nfpm/postinstall.sh
-      preremove: packaging/nfpm/preremove.sh
-      postremove: packaging/nfpm/postremove.sh
-    apk:
-      scripts:
-        preupgrade: packaging/nfpm/apk-preupgrade.sh
-        postupgrade: packaging/nfpm/postinstall.sh
-  # The Arch Linux package: linux/amd64 only (the `olivares` build), because no pacman
-  # repository or AUR entry serves another architecture. Its own entry because nfpm
-  # selects binaries per entry, not per format. The licence texts, unit, stamp and env
-  # file match the entry above; the scriptlets are Arch's own, because nFPM copies each
-  # script body into a function of .INSTALL and pacman calls it with version arguments,
-  # not with the deb/rpm/apk arguments the shared scripts read. The file name stays
-  # GoReleaser's default olivares_<version>_linux_amd64: the release index admits only
-  # olivares_<version>_* members.
-  - id: olivares-nfpm-archlinux
-    package_name: olivares
-    ids: [olivares]
-    vendor: Olivares.AI
-    homepage: https://olivares.ai
-    maintainer: Olivares.AI <enterprise@olivares.ai>
-    description: |-
-      Ground truth for enterprise AI — open, self-hosted AI governance control plane.
-      Discover the agents on your infrastructure, map what they can touch (the read/write
-      access map), surface least-privilege drift, and prove it — without standing in the
-      data path. Single static binary, embedded console, SQLite or Postgres.
-    license: AGPL-3.0-only
-    formats: [archlinux]
-    bindir: /usr/bin
-    contents:
-      - src: LICENSE
-        dst: /usr/share/doc/olivares/LICENSE
-      - src: NOTICE
-        dst: /usr/share/doc/olivares/NOTICE
-      - src: LICENSING.md
-        dst: /usr/share/doc/olivares/LICENSING.md
-      - src: DISCLAIMER.md
-        dst: /usr/share/doc/olivares/DISCLAIMER.md
-      - src: LICENSES
-        dst: /usr/share/doc/olivares/LICENSES
-      # Arch Linux keeps application licences in /usr/share/licenses/<package> (Arch package
-      # guidelines), and its container images do not extract /usr/share/doc.
-      - src: LICENSE
-        dst: /usr/share/licenses/olivares/LICENSE
-      - src: NOTICE
-        dst: /usr/share/licenses/olivares/NOTICE
-      - src: LICENSING.md
-        dst: /usr/share/licenses/olivares/LICENSING.md
-      - src: DISCLAIMER.md
-        dst: /usr/share/licenses/olivares/DISCLAIMER.md
-      - src: LICENSES
-        dst: /usr/share/licenses/olivares/LICENSES
-      - src: packaging/systemd/olivares.service
-        dst: /usr/lib/systemd/system/olivares.service
-      - src: packaging/nfpm/package-init-systemd.txt
-        dst: /usr/lib/olivares/package-init
-      # nFPM lists an Arch config file in .PKGINFO `backup`: pacman keeps a modified copy
-      # as .pacnew on upgrade and .pacsave on removal.
-      - src: packaging/olivares.env.example
-        dst: /etc/olivares/olivares.env
-        type: "config|noreplace"
-      # No /var/lib/olivares node: the package would own a root:root node that pacman
-      # compares with the olivares-owned directory on every upgrade.
-    scripts:
-      postinstall: packaging/nfpm/archlinux-postinstall.sh
-      preremove: packaging/nfpm/archlinux-preremove.sh
-      postremove: packaging/nfpm/archlinux-postremove.sh
-    archlinux:
-      packager: Olivares.AI <enterprise@olivares.ai>
-      scripts:
-        # pacman runs pre_upgrade/post_upgrade on an upgrade, never remove+install.
-        # There is no pre_upgrade: an upgrade does not stop the service.
-        postupgrade: packaging/nfpm/archlinux-postinstall.sh
+# The Arch Linux package is the second entry in packaging/nfpm/packages.json.
+# Native payloads: packaging/nfpm/packages.json. The release workflow packages
+# the same archives with pinned nFPM and version_schema=none, then signs the
+# complete checksum set before SLSA subjects and publication.
 
-# Homebrew tap, as a CASK (the non-deprecated successor to `brews`; Homebrew now wants
-# casks for pre-built binaries). A cask auto-strips the Gatekeeper quarantine xattr on
-# install, so it doubles as the macOS-notarization stopgap until an Apple Developer ID
-# notarizes the darwin binaries (a documented later step). The validated release profile
-# supplies the repository coordinate: production still resolves to olivaresai/homebrew-tap;
-# preprod resolves to the dedicated preprod tap. Owner/name are public routing data and
-# therefore environment variables, never secrets. The token remains a secret and retains
-# the exact GoReleaser token-template form required by REL-83.
 homebrew_casks:
   - name: olivares
     ids: [olivares]
@@ -619,6 +459,7 @@ dockers:
       - DISCLAIMER.md
       - LICENSES
       - packaging/container/data-dir
+      - packaging/container/uv-LICENSE-MIT.txt
     use: buildx
     goos: linux
     goarch: amd64
@@ -648,6 +489,7 @@ dockers:
       - DISCLAIMER.md
       - LICENSES
       - packaging/container/data-dir
+      - packaging/container/uv-LICENSE-MIT.txt
     use: buildx
     goos: linux
     goarch: arm64
@@ -662,13 +504,13 @@ dockers:
       - "--label=org.opencontainers.image.licenses=AGPL-3.0-only"
       - "--label=org.opencontainers.image.source={{ .Env.SOURCE_REPOSITORY_URL }}"
 
-  # ---- FIPS image (SCP-09): the FIPS binary on the same distroless static base ----
-  # Same hardened, non-root, distroless runtime as the default image, but built FROM
+  # ---- FIPS image (SCP-09): the FIPS binary on the same Debian 13 agent runtime ----
+  # Same non-root Debian 13 agent runtime as the default image, but built FROM
   # the olivares-fips binary and launched with GODEBUG=fips140=on (set in
   # Dockerfile.fips) so the CMVP v1.0.0 module's self-tests run and only approved
   # algorithms are permitted. Distinct `…-fips` tags — never overwrites :latest.
-  # NOTE: distroless has no OS/package DB, so there is nothing for an OSCAP scan to
-  # evaluate here — STIG verification is the *-stig image below.
+  # FIPS covers the Go engine only. The *-stig variant retains the RHEL
+  # substrate for the matching SCAP datastream.
   - id: olivares-fips-image
     ids: [olivares-fips]
     dockerfile: Dockerfile.fips
@@ -681,6 +523,7 @@ dockers:
       - DISCLAIMER.md
       - LICENSES
       - packaging/container/data-dir
+      - packaging/container/uv-LICENSE-MIT.txt
     use: buildx
     goos: linux
     goarch: amd64
@@ -703,8 +546,8 @@ dockers:
       - "--build-arg=BIN_SOURCE=prebuilt"
 
   # ---- STIG image (SCP-09): the FIPS binary on a SCANNABLE, STIG-profiled base ----
-  # OSCAP/STIG evaluation needs a real OS with a SCAP datastream (distroless has
-  # none). This variant bases on Red Hat UBI micro (ships DISA STIG SCAP content),
+  # This variant keeps Red Hat UBI minimal and its RPM database for the matching
+  # RHEL DISA STIG SCAP datastream,
   # carries the FIPS binary, runs non-root, and is self-verifiable with the published
   # OpenSCAP profile referenced in oscap/. It is the hardened *deployment* image —
   # separate from the reproducible base image above.
@@ -720,6 +563,7 @@ dockers:
       - DISCLAIMER.md
       - LICENSES
       - packaging/container/data-dir
+      - packaging/container/uv-LICENSE-MIT.txt
     use: buildx
     goos: linux
     goarch: amd64

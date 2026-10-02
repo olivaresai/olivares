@@ -252,10 +252,8 @@ describe('classifyAuthority — NOT HAVING LOOKED is its own answer', () => {
     // (sqlstore/accessgraph.go:82), so it is never in the drift set and the read adds nothing.
     for (const lookup of [DRIFT_UNREAD, READ_ABSENT]) {
       expect(
-        classifyAuthority(
-          edge({ observed: false, permitted: false }),
-          lookup,
-        ).cls,
+        classifyAuthority(edge({ observed: false, permitted: false }), lookup)
+          .cls,
       ).toBe('undetermined')
     }
   })
@@ -370,7 +368,11 @@ describe('classifyAuthority — what step 4 can ever answer', () => {
   it('an unused grant CANNOT CLOSE: deleting the grant never clears `permitted`', () => {
     // This is the promise the screen used to make anyway. An operator who deletes the grant,
     // re-checks and is told "still in the drift set" concludes the deletion failed.
-    const grant = edge({ observed: false, permitted: true, signal_sources: 'scoped_grant' })
+    const grant = edge({
+      observed: false,
+      permitted: true,
+      signal_sources: 'scoped_grant',
+    })
     const a = classifyAuthority(
       grant,
       driftRead({ kind: 'unused_grant', edge: grant }),

@@ -33,19 +33,22 @@ const (
 	demoOrgSlug  = "demo"
 )
 
-// seedDemoEstate provisions the demo tenant and request-driven read models at the
-// store level, then registers the demo seed SourceConnector with the runtime — all
-// BEFORE rt.Start. The agents therefore exist when the source's agent-origin edges
-// attribute, while knowledge/scoping/evals are immediately available to their
-// normal HTTP readers without inventing observation kinds. It returns the demo
-// tenant id. Called only from boot when DemoSeed is set.
-// demoOrgExists answers whether the demo org is already in this store. It exists so the
-// conflict advice above is EARNED: store.ErrConflict covers both a unique-key collision and
-// an optimistic-concurrency mismatch, and telling an operator "you already seeded this" when
-// they actually hit a concurrent write is a confident wrong answer, which is worse than the
-// raw error it replaced.
-func demoOrgExists(ctx context.Context, st store.Store) (bool, error) {
-	found := false
+// demoSeedMarker is written into the demo org's settings in the transaction that
+// creates it: it is how a later start knows the seed made that org, so a restart
+// with --seed-demo (the engine's own settings restart, a service manager restart)
+// starts on the estate instead of refusing it, and an org the seed did not make is
+// never taken over.
+const (
+	demoSeedMarkerKey   = "olivares.demo_seed"
+	demoSeedMarkerValue = "v1"
+)
+
+// demoOrg returns the org with the demo slug, if any.
+func demoOrg(ctx context.Context, st store.Store) (model.Org, bool, error) {
+	var (
+		org   model.Org
+		found bool
+	)
 	err := st.System(ctx, func(sys store.SystemScope) error {
 		orgs, err := sys.ListOrgs(ctx)
 		if err != nil {
@@ -53,71 +56,107 @@ func demoOrgExists(ctx context.Context, st store.Store) (bool, error) {
 		}
 		for _, o := range orgs {
 			if o.Slug == demoOrgSlug {
-				found = true
+				org, found = o, true
 				return nil
 			}
 		}
 		return nil
 	})
-	return found, err
+	return org, found, err
 }
 
+// seedDemoEstate provisions the demo tenant and request-driven read models at the
+// store level, then registers the demo seed SourceConnector with the runtime — all
+// BEFORE rt.Start. The agents therefore exist when the source's agent-origin edges
+// attribute, while knowledge/scoping/evals are immediately available to their
+// normal HTTP readers without inventing observation kinds. It returns the demo
+// tenant id. Called only from boot when DemoSeed is set.
+//
+// It is idempotent: a start with --seed-demo on a directory the seed already
+// made (the engine's own settings restart, a service manager restart) starts on
+// that estate and writes nothing, and finishes a seed whose read models never
+// committed. An org with the demo slug that the seed did not make is refused.
 func seedDemoEstate(ctx context.Context, st store.Store, rt *runtime.Runtime, now time.Time) (model.TenantID, error) {
 	var tenant model.TenantID
+	existing, found, err := demoOrg(ctx, st)
+	if err != nil {
+		return tenant, fmt.Errorf("look for the demo org: %w", err)
+	}
+	switch {
+	case found && existing.Settings[demoSeedMarkerKey] != demoSeedMarkerValue:
+		return tenant, fmt.Errorf("an organization with slug %q already exists and --seed-demo did not create it, so it will not seed over it: start without --seed-demo or use a fresh --data-dir", demoOrgSlug)
+	case found:
+		tenant = existing.TenantID
+		seeded, err := demoReadModelsSeeded(ctx, st, tenant)
+		if err != nil {
+			return tenant, fmt.Errorf("read the demo estate: %w", err)
+		}
+		if !seeded {
+			// The org committed and its read models did not (they are one
+			// transaction, so none of them did): finish the seed.
+			if err := seedDemoReadModels(ctx, st, tenant, now); err != nil {
+				return tenant, err
+			}
+		}
+	default:
+		if tenant, err = createDemoOrg(ctx, st); err != nil {
+			return tenant, err
+		}
+		if err := seedDemoReadModels(ctx, st, tenant, now); err != nil {
+			return tenant, err
+		}
+	}
+
+	if err := rt.AddSource(seed.NewSource(seed.SourceName, now), sdk.Config{}, tenant.String()); err != nil {
+		return tenant, fmt.Errorf("register demo source: %w", err)
+	}
+	return tenant, nil
+}
+
+// demoReadModelsSeeded reports whether the demo read models are in the tenant:
+// they are written in one transaction, so its first workspace is their witness.
+func demoReadModelsSeeded(ctx context.Context, st store.Store, tenant model.TenantID) (bool, error) {
+	seeded := false
+	err := st.View(ctx, tenant, func(sc store.Scope) error {
+		rows, _, err := sc.Workspaces().List(ctx, model.Query{Limit: 1000})
+		if err != nil {
+			return err
+		}
+		for _, w := range rows {
+			if w.Slug == seed.Workspaces()[0].Slug {
+				seeded = true
+			}
+		}
+		return nil
+	})
+	return seeded, err
+}
+
+// createDemoOrg creates the demo org with the seed's marker, in one transaction.
+func createDemoOrg(ctx context.Context, st store.Store) (model.TenantID, error) {
+	var tenant model.TenantID
 	if err := st.System(ctx, func(sys store.SystemScope) error {
-		org, err := sys.CreateOrg(ctx, model.Org{Name: demoOrgName, Slug: demoOrgSlug, Status: model.StatusActive})
+		org, err := sys.CreateOrg(ctx, model.Org{Name: demoOrgName, Slug: demoOrgSlug, Status: model.StatusActive,
+			Settings: map[string]any{demoSeedMarkerKey: demoSeedMarkerValue}})
 		if err != nil {
 			return err
 		}
 		tenant = org.TenantID
 		return nil
 	}); err != nil {
-		// ⛔ UN DATA-DIR YA SEMBRADO NO ES UN FALLO DEL MOTOR, y decirlo con el código de
-		// constraint de SQLite delante lo parece. Medido el 2026-08-24 relanzando `serve
-		// --seed-demo` sobre su propio data-dir:
-		//
-		//   Error: seed demo estate: create demo org: version conflict: constraint failed:
-		//   UNIQUE constraint failed: orgs.slug (2067)
-		//
-		// El motor hace lo correcto —REHÚSA en vez de sembrar a medias— y luego se lo cuenta
-		// al operador en el idioma del store. Quien lo lee no sabe que la respuesta es «usa
-		// otro --data-dir»: sabe que algo se rompió con un número. El canon llama a esto
-		// parecer amateur, y cuesta un ciclo de reinicio averiguarlo.
-		//
-		// El conflicto SIGUE siendo el mismo error envuelto: nada se traga, sólo se nombra.
 		if errors.Is(err, store.ErrConflict) {
-			// ⛔ Y LA ADVERTENCIA SE GANA, NO SE SUPONE. La primera version de esta rama
-			// afirmaba dos cosas que no podia sostener, y una revision sobre mi propio
-			// diff las tumbo:
-			//
-			//  · «refuses rather than half-seeding» es FALSO. La org se crea en SU
-			//    transaccion (st.System, arriba) y los read models en OTRA (st.Mutate,
-			//    abajo, que puede fallar en :138 con «seed demo read models»). Un fallo
-			//    posterior deja la org commiteada: media siembra es exactamente lo que
-			//    puede pasar. Decirle al operador «sirve este dir SIN --seed-demo» podia
-			//    dejarle sirviendo un estate incompleto.
-			//  · `store.ErrConflict` es «optimistic-concurrency mismatch OR unique-key
-			//    collision» (core/store/errors.go:16), asi que atribuirlo al slug sin
-			//    mirar es adivinar. Ahora se MIRA: si la org demo existe, la causa esta
-			//    establecida; si no, se dice que no se ha podido establecer.
-			if existe, verr := demoOrgExists(ctx, st); verr != nil {
-				return tenant, fmt.Errorf(
-					"demo seeding hit a conflict and I could not check whether org %q already "+
-						"exists (%v), so I cannot tell you which: %w", demoOrgSlug, verr, err)
-			} else if existe {
-				return tenant, fmt.Errorf(
-					"this data dir already has the demo org %q, so --seed-demo has run here "+
-						"before. NOTE it seeds in more than one transaction, so if a previous "+
-						"run was interrupted the estate may be INCOMPLETE — prefer a fresh "+
-						"--data-dir over serving this one: %w", demoOrgSlug, err)
-			}
-			return tenant, fmt.Errorf(
-				"demo seeding conflicted and org %q does NOT exist, so this is a concurrent "+
-					"write rather than a re-seed: %w", demoOrgSlug, err)
+			// The org did not exist a moment ago: this is a concurrent write, not a
+			// re-seed (store.ErrConflict covers both, core/store/errors.go).
+			return tenant, fmt.Errorf("demo seeding conflicted with a concurrent write creating org %q: %w", demoOrgSlug, err)
 		}
 		return tenant, fmt.Errorf("create demo org: %w", err)
 	}
+	return tenant, nil
+}
 
+// seedDemoReadModels writes the demo workspaces, agents, groups, knowledge and
+// evals in one tenant transaction.
+func seedDemoReadModels(ctx context.Context, st store.Store, tenant model.TenantID, now time.Time) error {
 	// Pre-create the named workspace before the cooperative agents so the reviewer
 	// can carry its explicit workspace_id. The other agents retain a zero id, which
 	// the store resolves to the tenant's default workspace.
@@ -181,13 +220,9 @@ func seedDemoEstate(ctx context.Context, st store.Store, rt *runtime.Runtime, no
 		}
 		return seedDemoEvals(ctx, sc, now)
 	}); err != nil {
-		return tenant, fmt.Errorf("seed demo read models: %w", err)
+		return fmt.Errorf("seed demo read models: %w", err)
 	}
-
-	if err := rt.AddSource(seed.NewSource(seed.SourceName, now), sdk.Config{}, tenant.String()); err != nil {
-		return tenant, fmt.Errorf("register demo source: %w", err)
-	}
-	return tenant, nil
+	return nil
 }
 
 func seedDemoKnowledge(ctx context.Context, sc store.Scope, now time.Time) error {

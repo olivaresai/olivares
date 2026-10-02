@@ -69,9 +69,28 @@ func (lr *liveRun) cierraVentanaYVuelca() {
 // process exited), it finalizes the run.
 func (m *Module) bridge(lr *liveRun) {
 	ctx := context.Background() // a fresh ctx: the per-run ctx governs the PROCESS, not these DB writes
+	sequenceExhausted := false
 	for frame := range lr.proc.Output() {
 		at := m.now()
+		// A session's vault secret values never leave it through its output: they
+		// are withheld before the ring (the attach stream), the recorder and the
+		// frame parser see the line (session_secret_env.go).
+		frame.Data = lr.redact.apply(frame.Data)
 		seq := lr.ring.append(frame.Stream, frame.Data, at)
+		if seq == 0 {
+			if !sequenceExhausted {
+				sequenceExhausted = true
+				lr.mu.Lock()
+				lr.launchFailed = true
+				lr.mu.Unlock()
+				lr.stopDeadline()
+				m.stopRuntimeCredentialHeartbeat(lr)
+				// The existing asynchronous stop keeps this bridge draining and
+				// withdraws both credentials even when Stop cannot confirm exit.
+				m.terminateForRuntimeCredentialFailure(lr, "session output sequence range exhausted")
+			}
+			continue
+		}
 		// Governed I/O recording (default no-op). Only runs when the
 		// LaunchGate flagged this run for recording (CRITICAL/privileged or opted-in 2026-06-16) — a non-recorded run never anchors I/O, keeping the ledger
 		// minimal. Best-effort: a recorder failure must not corrupt the live stream
@@ -86,6 +105,9 @@ func (m *Module) bridge(lr *liveRun) {
 	}
 	// The owned child is gone: fail every in-flight protocol waiter now, so a
 	// handshake or a turn returns an error instead of hanging on a dead process.
+	if err := m.endSessionCalls(lr, ""); err != nil {
+		m.warnf("session tool call cancellation incomplete", "run_ref", lr.runRef)
+	}
 	m.closeDriverSession(lr)
 	lr.ring.close()
 	// flush + seal this run's I/O evidence chain once its I/O has ended
@@ -111,7 +133,13 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 		// here precisely because it touches NO row: it resolves an in-memory waiter
 		// and dispatches a protocol reply, and every durable consequence still goes
 		// through the deferral below.
+		turn := lr.session.ActiveTurn()
 		lr.session.Deliver(OutputFrame{Stream: streamStdout, Data: data})
+		if turn != "" && lr.session.ActiveTurn() != turn {
+			m.finishSessionCalls(lr, turn)
+		}
+	} else if frame, ok := parseStreamJSON(data); ok && frame.isResult() {
+		m.finishSessionCalls(lr, "")
 	}
 	aplicar := func() {
 		if lr.session != nil {
@@ -321,6 +349,7 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 	lr.finalized = true
 	requested := lr.stopRequested
 	requestedReason := lr.stopReason
+	ownerAccessEnded := lr.ownerAccessEnded
 	lr.mu.Unlock()
 	// the process is gone, so the template's duration ceiling has nothing left to
 	// end. Released here rather than at the timer's own expiry so a session that exits
@@ -390,17 +419,41 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 		// estaba en el fichero y la llamada siguiente lo olvidaba. Lo midio r25 y me lo
 		// adjudico; el hueco que tapaba es que un rechazo de la guarda —o un fallo de
 		// verdad— dejaba la fila sin asentar y sin que nadie se enterase.
-		// P1: nil means this Process exited under the port contract; an error means
-		// collection was not confirmed. Not childWasReaped, which classifies STOP
-		// errors, not Wait errors.
+		// Wait may report incomplete output after collecting the child. Retain
+		// that failure without turning confirmed reaping into an unknown process.
+		// An unconfirmed collection remains the stronger classification.
 		observation := obsProcessExitObserved
-		if waitErr != nil {
+		if !childWasReaped(waitErr) {
 			observation = obsProcessWaitUnverified
+		}
+		detail := "exit " + strconv.Itoa(exit)
+		if requestedReason != "" {
+			detail = requestedReason
+		}
+		if !requested && exit != 0 {
+			if cause := exitCause(lr.ring); cause != "" {
+				driver := providerDriverClaude // the historical frame-driven path
+				if lr.driver != nil {
+					driver = lr.driver.Key()
+				}
+				detail += ": " + productCause(driver, cause)
+			}
+		}
+		if outputWasIncomplete(lr.proc, waitErr) {
+			detail += "; output incomplete"
+		}
+		if errors.Is(waitErr, ErrOutputLineTooLong) {
+			detail += "; protocol output limit exceeded"
+		}
+		if !requested && exit != 0 {
+			m.warnf("sessions: the session's tool exited on its own",
+				"run_ref", lr.runRef, "exit", exit, "reason", detail)
 		}
 		if _, err := m.transition(ctx, lr.tenant, lr.runRef, transitionInput{
 			event: event, toState: state,
-			detail: "exit " + strconv.Itoa(exit), guard: guardRuntimeLaunch(lr.launchID),
+			detail: detail, guard: guardRuntimeLaunch(lr.launchID),
 			terminalObservation: observation,
+			ownerAccessEnded:    ownerAccessEnded,
 			mutate: func(rec model.Record) {
 				rec[colExitCode] = int64(exit)
 				rec[colStoppedAt] = model.NewTimestamp(m.now()).String()
@@ -521,14 +574,14 @@ func (m *Module) buildLaunchSpec(
 
 	var args []string
 	var driverLaunch DriverLaunch
-	program := m.rt.program
+	program := m.claudeProgram()
 	if driven {
 		// The driver owns its own official argv. resumeID is deliberately NOT a flag
 		// here: an app-server/ACP child resumes through a METHOD on the owned
 		// protocol, and the correlated root response is the only thing allowed to
 		// nominate the conversation.
 		program = m.driverProgram(drv)
-		driverLaunch = DriverLaunch{WorkDir: dir, Model: p.Model, Effort: p.Effort, LocalModelEndpoint: cred.localModelEndpoint}
+		driverLaunch = DriverLaunch{WorkDir: dir, Model: p.Model, Effort: p.Effort, Preset: launchPreset(p), CodexSandboxFallback: p.codexSandboxFallback, LocalModelEndpoint: cred.localModelEndpoint, LocalModels: cred.localModels}
 		if p.ProviderHome != nil {
 			driverLaunch.ConfigHome = p.ProviderHome.ConfigHome
 			driverLaunch.UserHome = p.ProviderHome.UserHome
@@ -592,6 +645,9 @@ func (m *Module) buildLaunchSpec(
 	// nothing else. Empty under provider_account_home, where the authorized home is
 	// the credential and Olivares injects nothing at all.
 	env = append(env, providerEnv...)
+	// The vault secrets this launch was given, by the names validated against every
+	// reserved variable (session_secret_env.go); opened for this spawn only.
+	env = append(env, p.secretEnvValues...)
 	if workCred.Token != "" {
 		// Exact-session kernel authority. These are explicit launch values, not
 		// inherited host environment, and the token is never persisted/logged.
@@ -641,6 +697,12 @@ func (m *Module) buildLaunchSpec(
 		// driver is downstream of that decision like a caller or a gate.
 		if withEnv, ok := drv.(ProviderDriverLaunchEnv); ok {
 			for _, item := range withEnv.LaunchEnv(driverLaunch) {
+				if driverKey == providerDriverOpenCode && item.Name == envOpenCodeConfigContent {
+					// This is the driver's own non-secret native configuration, not a
+					// caller or launch gate overriding the resolved account homes.
+					env = append(env, item)
+					continue
+				}
 				if providerHomeEnvName(item.Name) ||
 					(driverKey == providerDriverOpenCode && openCodeReservedEnvName(item.Name)) {
 					m.warnf("sessions: a provider driver named a variable the profile owns; it was dropped",
@@ -667,6 +729,7 @@ func (m *Module) buildLaunchSpec(
 	// any host value); a per-session PEP bearer is held in memory and never persisted.
 	env = append(env, injectEnv...)
 
+	preset := launchPreset(p)
 	return LaunchSpec{
 		Program:   program,
 		Args:      args,
@@ -676,6 +739,12 @@ func (m *Module) buildLaunchSpec(
 		Isolation: p.Isolation,
 		WaitDelay: m.rt.waitDelay,
 		Workspace: mount,
+		// The child may write its folder and its account homes, and nothing of
+		// the engine (runtime_confinement.go).
+		Confinement: m.sessionConfinement(dir, p.ProviderHome, preset),
+		// A read-only session's promise is the operating system's: it does not start
+		// where it cannot be confined, whatever the node's own setting.
+		ConfinementRequired: m.rt.confineRequired || preset == PresetReadOnly,
 	}
 }
 
@@ -732,4 +801,14 @@ func runtimeSettleWarrantsWarning(err error) bool {
 		return false
 	}
 	return !isRunConflict(err) && !errors.Is(err, store.ErrConflict)
+}
+
+func outputWasIncomplete(proc Process, waitErr error) bool {
+	if errors.Is(waitErr, ErrOutputAbandoned) {
+		return true
+	}
+	if reporter, ok := proc.(outputCompletionReporter); ok {
+		return reporter.OutputIncomplete()
+	}
+	return false
 }

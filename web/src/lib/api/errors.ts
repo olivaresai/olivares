@@ -129,6 +129,13 @@ export function isEvidenceUnavailable(error: unknown): error is ApiError {
   return isApiError(error) && error.code === 'evidence_unavailable'
 }
 
+/** The read reached a module this installation does not run (ARCH C1): 404 with the
+ *  `module_not_enabled` code (core/api/server.go moduleNotEnabledHandler). Not a failure:
+ *  the panel says the module is off, never "Retry". */
+export function isModuleNotEnabled(error: unknown): error is ApiError {
+  return isApiError(error) && error.code === 'module_not_enabled'
+}
+
 /** parseErrorEnvelope extracts {code,message} plus any EXTRA structured fields
  * the handler attached, tolerating a malformed/empty body (some 5xx may not
  * carry the envelope). The extras ride to ApiError.details so callers read a

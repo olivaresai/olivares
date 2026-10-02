@@ -13,6 +13,7 @@ import (
 	"golang.org/x/oauth2"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
 )
 
 // oidcProvider implements the OIDC Authorization Code + S256 PKCE login flow per
@@ -23,10 +24,13 @@ import (
 // nonce itself (go-oidc does NOT). It accepts only RS256/ES256 and never sets any
 // Insecure*/Skip* verifier option.
 type oidcProvider struct {
-	provider     *oidc.Provider
-	clientID     string
-	clientSecret string
-	verifier     *oidc.IDTokenVerifier
+	// An explicit AMR list replaces default distinct-factor inference.
+	allowAMRCombination bool
+	assurance           model.FederationAssuranceMapping
+	provider            *oidc.Provider
+	clientID            string
+	clientSecret        string
+	verifier            *oidc.IDTokenVerifier
 	// groupsClaim is the ID-token/UserInfo claim carrying the subject's directory
 	// groups (U1); "" ⇒ groups are not read. The claim value may be a JSON
 	// array of strings or a single string; both are accepted.
@@ -61,10 +65,12 @@ func oidcFromParts(ctx context.Context, issuer, clientID, clientSecret, groupsCl
 		return nil, fmt.Errorf("%w: discovery: %v", ErrNotConfigured, err)
 	}
 	op := &oidcProvider{
-		provider:     prov,
-		clientID:     clientID,
-		clientSecret: clientSecret,
-		groupsClaim:  strings.TrimSpace(groupsClaim),
+		allowAMRCombination: true,
+		assurance:           assuranceMapping(nil),
+		provider:            prov,
+		clientID:            clientID,
+		clientSecret:        clientSecret,
+		groupsClaim:         strings.TrimSpace(groupsClaim),
 		// Pin the accepted signing algorithms; never accept "none".
 		verifier: prov.Verifier(&oidc.Config{
 			ClientID:             clientID,
@@ -149,6 +155,9 @@ func (o *oidcProvider) validate(ctx context.Context, a auth.Assertion) (auth.Fed
 	// raw holds every ID-token claim so the configurable groups claim (U1,
 	// whose key is not known at compile time) can be read alongside the typed ones.
 	var raw map[string]any
+	// Assurance comes only from the signature-verified ID token, before any
+	// best-effort UserInfo merge. auth_time is the event, never iat or callback time.
+	aal, authenticatedAt := o.assertionAssurance(idToken)
 	_ = idToken.Claims(&claims)
 	_ = idToken.Claims(&raw)
 	if raw == nil {
@@ -209,6 +218,7 @@ func (o *oidcProvider) validate(ctx context.Context, a auth.Assertion) (auth.Fed
 	// discovery-bound issuer (SkipIssuerCheck is never set), so it is a trustworthy
 	// qualifier for the subject, not a self-asserted claim (U3).
 	id := auth.FederatedIdentity{Protocol: auth.ProtocolOIDC, Subject: subject, Issuer: idToken.Issuer, Email: claims.Email, EmailVerified: claims.EmailVerified != nil && *claims.EmailVerified, DisplayName: claims.Name}
+	id.AAL, id.AuthenticatedAt = aal, authenticatedAt
 	if o.groupsClaim != "" {
 		id.Groups = claimStrings(raw[o.groupsClaim])
 	}

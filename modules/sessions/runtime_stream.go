@@ -5,6 +5,7 @@
 package sessions
 
 import (
+	"errors"
 	"sync"
 	"time"
 )
@@ -29,6 +30,10 @@ const (
 	defaultRingFrames = 4096
 	// defaultRingBytes bounds a run's buffered output bytes (8 MiB).
 	defaultRingBytes = 8 << 20
+	// Each durable launch reservation owns a disjoint range. Both frame seq and
+	// the next cursor must remain exact JavaScript integers.
+	outputSequenceRange = int64(1) << 32
+	maxOutputGeneration = (int64(1) << 21) - 1
 )
 
 // seqFrame is one sequenced output frame in the ring.
@@ -48,7 +53,9 @@ type outputRing struct {
 	maxBytes int
 	curBytes int
 	firstSeq int64 // seq of frames[0]; 0 when empty
-	nextSeq  int64 // next seq to assign (starts at 1)
+	startSeq int64 // first seq of this process generation, before eviction
+	nextSeq  int64 // next seq to assign
+	limitSeq int64 // exclusive generation bound; never reuse another's range
 	closed   bool
 	notify   chan struct{} // closed+replaced on every append/close to wake readers
 }
@@ -64,18 +71,41 @@ func newOutputRing(maxCount, maxBytes int) *outputRing {
 	return &outputRing{
 		maxCount: maxCount,
 		maxBytes: maxBytes,
+		startSeq: 1,
 		nextSeq:  1,
+		limitSeq: outputSequenceRange,
 		notify:   make(chan struct{}),
 	}
+}
+
+// newResumedOutputRing uses the lifecycle event committed by the resuming
+// reservation. The counter survives closed-tail reclamation and node restart;
+// no old process output or secret binding is transferred to the new ring.
+func newResumedOutputRing(maxCount, maxBytes int, eventSeq int64) (*outputRing, error) {
+	if eventSeq < 0 || eventSeq >= maxOutputGeneration-1 {
+		return nil, errors.New("session output sequence range is exhausted; create a new session")
+	}
+	generation := eventSeq + 1 // historical runs may have their first event at 0
+	r := newOutputRing(maxCount, maxBytes)
+	r.startSeq = generation*outputSequenceRange + 1
+	r.nextSeq = r.startSeq
+	r.limitSeq = (generation + 1) * outputSequenceRange
+	return r, nil
 }
 
 // append seals a frame with the next sequence number, appends it, evicts the
 // oldest frames while over either bound, and wakes readers. It NEVER blocks on a
 // consumer (the deny-of-silent-loss is handled at read time via the gap marker).
-// Returns the assigned sequence number.
+// Returns the assigned sequence number, or 0 when the attempt exhausted its
+// range and must stop. No unsafe or duplicate sequence is ever published.
 func (r *outputRing) append(stream string, data []byte, at time.Time) int64 {
 	r.mu.Lock()
 	defer r.mu.Unlock()
+	if r.nextSeq >= r.limitSeq {
+		r.closed = true
+		r.wakeLocked()
+		return 0
+	}
 	seq := r.nextSeq
 	r.nextSeq++
 	f := seqFrame{Seq: seq, Stream: stream, Data: data, At: at}
@@ -146,6 +176,13 @@ func (r *outputRing) readFrom(cursor int64) ringRead {
 		return res
 	}
 	start := cursor
+	// A prior process generation's unused numeric range contains no frames.
+	// Skip it without claiming loss; eviction within this generation remains an
+	// explicit gap, including for a reconnect from an earlier generation.
+	if cursor >= 1 && cursor < r.startSeq {
+		cursor = r.startSeq
+		start = cursor
+	}
 	if cursor < r.firstSeq {
 		// Below the retained floor: serve from the floor. A FRESH attach (from=0)
 		// is not a lag — only an explicit resume cursor (>=1, the first real seq)

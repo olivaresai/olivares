@@ -36,7 +36,8 @@ import { useAuth } from '@/lib/auth/context'
 import { NEXT_STEPS, stepView } from './next-step-catalog'
 import './i18n'
 
-export function NextStep() {
+/** `stacked` lays the steps in one column, for the narrow side column of Now. */
+export function NextStep({ stacked = false }: { stacked?: boolean } = {}) {
   const { t } = useTranslation('home')
   const { can } = useAuth()
   const offered = NEXT_STEPS.map((step) => ({
@@ -65,7 +66,11 @@ export function NextStep() {
           is read whole: on one line, German showed 251 px of an 867 px label and left
           the rest on a hover title that no keyboard or touch user can open. Where the
           language is short the link is still one line; where it is long it grows. */}
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+      <div
+        className={
+          stacked ? 'grid gap-2' : 'grid gap-2 sm:grid-cols-2 lg:grid-cols-3'
+        }
+      >
         {offered.map(({ step, view }) => {
           const Icon = view!.icon
           const full = `${t(`next.${step.id}.title`)} · ${t(

@@ -2,7 +2,7 @@
 title: Install with Homebrew
 description: >-
   The macOS Homebrew cask coordinate for Olivares AI, what the cask does with
-  Gatekeeper, and the publication state of the 26.10.0 tap bump.
+  Gatekeeper, and the publication state of the 26.10.1 tap bump.
 draft: false
 ---
 
@@ -13,7 +13,7 @@ quarantine. It is not the Linux package path
 ([Deploy with Docker](/how-to/docker-deployment/)).
 
 :::note[Beta — the 26.10 cask is published]
-The tap's `Casks/olivares.rb` was updated for 26.10 on 2026-10-01: it names version 26.10.0 and
+The tap's `Casks/olivares.rb` was updated for 26.10 on 2026-10-01: it names version 26.10.1 and
 four platform archives whose SHA-256 values equal the release's signed `checksums.txt`. The producer is `.goreleaser.yaml` `homebrew_casks:`; the release job bumps the
 tap cask. The command below is the coordinate `INSTALL.md` names
 (`brew install olivaresai/tap/olivares`).

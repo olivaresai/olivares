@@ -40,7 +40,7 @@ import (
 //
 // Each page runs through the module's ordinary data handle, which boot binds to the
 // composed store. A tenant pinned to another region or whose service is withdrawn
-// is refused there exactly as on every other path; servedBusinessTenants only stops
+// is refused there exactly as on every other path; servedWorkTenants only stops
 // the loop from attempting that work.
 
 const (
@@ -125,7 +125,7 @@ func (l *runLineageRepairLoop) runOnce(ctx context.Context) error {
 		l.log.Debug("run-lineage-repair skipped: this node is a standby, not the active writer")
 		return nil
 	}
-	tenants, err := servedBusinessTenants(ctx, l.st)
+	tenants, err := servedWorkTenants(ctx, l.st)
 	if err != nil {
 		// An enumeration cut short by the engine lifecycle is shutdown, not a fault.
 		if ctxErr := ctx.Err(); ctxErr != nil {

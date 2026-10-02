@@ -68,14 +68,17 @@ import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
+import { useServerInfo } from '@/lib/hooks/use-server-info'
 import {
   AsyncSection,
   CaveatNotice,
   HashChip,
   SectionCard,
-  SelfAuditNotice,
 } from '@/features/_intel'
 import { complianceApi, complianceKeys } from './api'
+
+/** Where an operator learns to install the PostgreSQL tenant inventory. */
+const ADMIN_ROLE_GUIDE = 'https://docs.olivares.ai/reference/configuration/'
 import type {
   DataClassEntry,
   RetentionDisposition,
@@ -131,6 +134,12 @@ export function RetentionTab({
   const [deleting, setDeleting] = useState<ClassRow | null>(null)
   const [sweeping, setSweeping] = useState(false)
   const [lastSweep, setLastSweep] = useState<RetentionSummary | null>(null)
+  // The engine says when it composes the retention sweep but cannot run it (a
+  // PostgreSQL database that cannot list every tenant): the schedules below would
+  // never be applied.
+  const retentionNotRunning = useServerInfo().data?.jobs_not_running?.some(
+    (j) => j.job === 'retention',
+  )
 
   const classesQ = useQuery({
     queryKey: complianceKeys.dataClasses(activeTenant),
@@ -203,9 +212,21 @@ export function RetentionTab({
           ) : null
         }
       >
-        <SelfAuditNotice className="mb-3" />
         {/* The model, stated where the operator acts: a schedule is a document
             until a human approves the purge, and only then does anything vanish. */}
+        {retentionNotRunning ? (
+          <CaveatNotice tone="warning" className="mb-3">
+            {t('retention.notRunning')}{' '}
+            <a
+              className="underline"
+              href={ADMIN_ROLE_GUIDE}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {t('retention.notRunningHow')}
+            </a>
+          </CaveatNotice>
+        ) : null}
         <CaveatNotice tone="info" className="mb-3">
           {t('retention.gateHint')}
         </CaveatNotice>

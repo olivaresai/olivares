@@ -88,22 +88,88 @@ func (openCodeDriver) TransportProfile() DriverTransportProfile {
 // LaunchTerms declares what an OpenCode launch hands its child. The model and
 // the effort travel on session/set_config_option, each only as an exact value the
 // agent offered, and a value it did not offer fails the handshake rather than
-// falling back to a default. The permission mode reaches no frame, so it is not
-// carried; here that comes with a refusal rather than a drop, because a launch
-// that asks for any mode but the default is refused before the spawn
-// (refuseOpenCodeUnsupportedControls). The models can be discovered by probing
+// falling back to a default. The permission preset reaches the native inline
+// configuration, with stronger live policy still deciding each edit or command.
+// The models can be discovered by probing
 // the credential a profile binds; the driver lists none.
 func (openCodeDriver) LaunchTerms() DriverLaunchTerms {
 	return DriverLaunchTerms{
 		Model:          TermCarried,
 		Effort:         TermCarried,
-		PermissionMode: TermNotCarried,
+		PermissionMode: TermCarried,
 		ModelDiscovery: ModelDiscoveryBoundCredentialProbe,
 	}
 }
 
-func (openCodeDriver) LaunchEnv(DriverLaunch) []EnvVar {
-	return []EnvVar{{Name: envOpenCodeDisableAutoUpdate, Value: "1"}}
+func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
+	env := []EnvVar{{Name: envOpenCodeDisableAutoUpdate, Value: "1"}}
+	cfg := map[string]any{}
+	if l.LocalModelEndpoint != "" {
+		_ = json.Unmarshal([]byte(openCodeLocalProviderConfig(l.LocalModelEndpoint, l.LocalModels)), &cfg)
+	}
+	permission := ""
+	switch l.Preset {
+	case PresetReadOnly:
+		permission = "deny"
+	case PresetAsk, PresetEditsOnly, PresetEditsAndCommands, PresetFull:
+		permission = "ask"
+	}
+	if permission != "" {
+		rules := map[string]any{"*": permission, "bash": permission, "edit": permission,
+			"read": map[string]string{"*": "allow", "*.env": "deny", "*.env.*": "deny", "*.env.example": "allow"},
+			"glob": "allow", "grep": "allow", "list": "allow"}
+		// Keep edits and commands asking so live policy can still deny or ask.
+		// ACP approval is answered at once when that policy permits it.
+		cfg["permission"] = rules
+		// Agent-specific configuration takes precedence over global permission
+		// rules. Pin the native built-in agent and its rules for this launch too.
+		cfg["default_agent"] = "build"
+		cfg["agent"] = map[string]any{"build": map[string]any{"permission": rules}}
+	}
+	if len(cfg) > 0 {
+		body, _ := json.Marshal(cfg)
+		env = append(env, EnvVar{Name: envOpenCodeConfigContent, Value: string(body)})
+	}
+	return env
+}
+
+// openCodeLocalProviderID names the local provider in OpenCode's configuration.
+const openCodeLocalProviderID = "olivares_ollama"
+
+// openCodeLocalProviderConfig hands the child its local provider the way Codex
+// gets it (driver_codex.go LaunchArgs): direct launch-time configuration that
+// modifies no home. OpenCode's documented inline-config source is
+// OPENCODE_CONFIG_CONTENT (opencode.ai/docs/config — merged over the global and
+// project files for the keys it sets); the block is the OpenAI-compatible
+// adapter pointed at <endpoint>/v1 with no key, the record's own contract.
+//
+// A session bound to the local endpoint never reaches a hosted model (FH 085,
+// measured on OpenCode 1.18.34): OpenCode offers only the models its config lists,
+// and its own default is a hosted OpenCode Zen model. So the endpoint's models are
+// listed, the first is the default, and enabled_providers allows no other
+// provider. A launch with no listed model is refused before this is built
+// (runtime_provider_auth.go).
+func openCodeLocalProviderConfig(endpoint string, models []string) string {
+	listed := map[string]any{}
+	for _, name := range models {
+		listed[name] = map[string]any{"name": name}
+	}
+	cfg := map[string]any{
+		"provider": map[string]any{
+			openCodeLocalProviderID: map[string]any{
+				"npm":     "@ai-sdk/openai-compatible",
+				"name":    "Olivares Ollama (local)",
+				"options": map[string]any{"baseURL": endpoint},
+				"models":  listed,
+			},
+		},
+		"enabled_providers": []string{openCodeLocalProviderID},
+	}
+	if len(models) > 0 {
+		cfg["model"] = openCodeLocalProviderID + "/" + models[0]
+	}
+	body, _ := json.Marshal(cfg)
+	return string(body)
 }
 
 func (openCodeDriver) OpenSession(cfg DriverSessionConfig) DriverSession {

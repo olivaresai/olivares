@@ -88,7 +88,8 @@
     "success": "Anbieter registriert. Testen Sie die Verbindung, um zu bestätigen, dass er funktioniert.",
     "testNext": "Verbindung jetzt testen",
     "registering": "Wird registriert…",
-    "localNameHint": "Ihre Bezeichnung für diesen Endpunkt. Sie erscheint in der Auswahl."
+    "localNameHint": "Ihre Bezeichnung für diesen Endpunkt. Sie erscheint in der Auswahl.",
+    "advanced": "Advanced: custom endpoint"
   },
   "rotate": {
     "title": "Schlüssel dieses Anbieters wechseln",

@@ -56,7 +56,6 @@ import {
   DisclaimerNote,
   HashChip,
   SectionCard,
-  SelfAuditNotice,
 } from '@/features/_intel'
 import {
   approvalRefOf,
@@ -205,7 +204,6 @@ export function ErasureTab({
           </div>
         }
       >
-        <SelfAuditNotice className="mb-3" />
         <CaveatNotice tone="warning" className="mb-3">
           {t('erasure.irreversibleHint')}
         </CaveatNotice>

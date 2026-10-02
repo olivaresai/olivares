@@ -260,14 +260,24 @@ const TOKEN_PAIRS: {
     fg: '--ctl-border',
     bg: '--background',
   },
-  { name: 'ctl-border/surface', kind: 'ui', fg: '--ctl-border', bg: '--surface' },
+  {
+    name: 'ctl-border/surface',
+    kind: 'ui',
+    fg: '--ctl-border',
+    bg: '--surface',
+  },
   {
     name: 'ctl-border/elevated',
     kind: 'ui',
     fg: '--ctl-border',
     bg: '--elevated',
   },
-  { name: 'surface/ctl-border', kind: 'ui', fg: '--surface', bg: '--ctl-border' },
+  {
+    name: 'surface/ctl-border',
+    kind: 'ui',
+    fg: '--surface',
+    bg: '--ctl-border',
+  },
   { name: 'ring/background', kind: 'ui', fg: '--ring', bg: '--background' },
   { name: 'ring/surface', kind: 'ui', fg: '--ring', bg: '--surface' },
   { name: 'accent/background', kind: 'ui', fg: '--accent', bg: '--background' },
@@ -1233,7 +1243,6 @@ async function main() {
         `NO STYLESHEET APPLIED [${theme}] — no emito veredicto de contraste.\n` +
           `  motivo: ${sinHoja ? 'los tokens no resuelven en :root' : sinCascada ? ':root declara los dos con el MISMO color, que ningún tema produce' : `${iguales} de ${measured.rows.length} parejas miden fg == bg: la sonda no está leyendo el tema`}\n` +
           `  --foreground: ${JSON.stringify(tp.rootFg)}   --background: ${JSON.stringify(tp.rootBg)}\n` +
-
           `  hojas cargadas: ${tp.sheets}`,
       )
       process.exit(3)
@@ -1447,7 +1456,8 @@ async function main() {
     .map((r) => r.route)
   const blocking = [
     ...desautenticadas.map(
-      (x) => `sesion-perdida ${x} — renderizó la pantalla de acceso, no la vista`,
+      (x) =>
+        `sesion-perdida ${x} — renderizó la pantalla de acceso, no la vista`,
     ),
     ...sinMain.map((x) => `landmark-main ${x}`),
     ...axeBlocking.map((x) => `axe ${x}`),

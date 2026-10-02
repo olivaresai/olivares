@@ -66,10 +66,80 @@ type RetirementOutcome struct {
 	UnknownKinds []string
 	// FactVersion is the tenant fact version the step ran at.
 	FactVersion int64
+	// Stores names every store inspected, or whose absence could not be proved.
+	Stores []RetirementStoreState
+	// Limits states what the proof does not cover; limits do not imply erasure
+	// and do not block an otherwise clean outcome.
+	Limits []string
+}
+
+// RetirementStoreState records the custody and absence verdict for one store.
+type RetirementStoreState struct {
+	Store     string `json:"store"`
+	State     string `json:"state"`               // clean, outside_custody, unreadable, unknown, offline, changing or legal_hold
+	Retention string `json:"retention,omitempty"` // required for outside_custody
+	// Holds names preservation duties over any subject (user, session or agent),
+	// without retaining the held content or the hold's reason.
+	Holds []RetirementHoldRef `json:"holds,omitempty"`
+}
+
+// RetirementHoldRef identifies a hold and its matter, never customer content.
+type RetirementHoldRef struct {
+	ID        string `json:"id"`
+	MatterRef string `json:"matter_ref,omitempty"`
+}
+
+func (s RetirementStoreState) clean() bool {
+	return strings.TrimSpace(s.Store) != "" && s.State == "clean" && len(s.Holds) == 0
 }
 
 // Clean reports whether the step found nothing that blocks the retirement.
-func (o RetirementOutcome) Clean() bool { return len(o.Blocking) == 0 && len(o.UnknownKinds) == 0 }
+func (o RetirementOutcome) Clean() bool {
+	if len(o.Blocking) != 0 || len(o.UnknownKinds) != 0 {
+		return false
+	}
+	for _, s := range o.Stores {
+		if !s.clean() {
+			return false
+		}
+	}
+	return true
+}
+
+// SubjectExcluded reports whether user has an unlifted offboard in tenant.
+// Ingest writers check once per write transaction, refuse exclusion or errors,
+// and renew their fence-time writer lease before an absence read can complete.
+// Each call reads the live record; no negative answer is cached.
+func (a *Authenticator) SubjectExcluded(ctx context.Context, tenant model.TenantID, user model.ID) (bool, error) {
+	var excluded bool
+	err := a.st.AuthView(ctx, func(as store.AuthScope) error {
+		var err error
+		excluded, err = subjectExcluded(ctx, as, tenant, user)
+		return err
+	})
+	return excluded, err
+}
+
+// SubjectExcludedIn reads the same live offboard fence as SubjectExcluded,
+// within the caller's existing auth transaction. Ingest writers check once per
+// write batch and refuse writes when the result is true or the read fails.
+// It opens no AuthView and never caches a negative answer.
+func SubjectExcludedIn(ctx context.Context, as store.AuthScope, tenant model.TenantID, user model.ID) (bool, error) {
+	return subjectExcluded(ctx, as, tenant, user)
+}
+
+// subjectExcluded shares the live offboard predicate with an auth writer that
+// already owns its transaction, without opening a nested AuthView.
+func subjectExcluded(ctx context.Context, as store.AuthScope, tenant model.TenantID, user model.ID) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
+	if tenant == "" || user == "" {
+		return false, errors.New("auth: subject exclusion requires a tenant and user")
+	}
+	rec, found, err := retirementRecord(ctx, as, user, tenant)
+	return found && rec.RetirementState != model.RetirementLifted, err
+}
 
 // RetirementRecord returns the account's retirement record in tenant, and
 // whether one exists.
@@ -167,10 +237,12 @@ func RetirementBackoff(attempts int64) time.Duration {
 
 // moduleResult is one declared module's entry in a record's module results.
 type moduleResult struct {
-	State string   `json:"state"`
-	Fact  int64    `json:"fact,omitempty"`
-	Refs  []string `json:"refs,omitempty"`
-	Cause string   `json:"cause,omitempty"`
+	State  string                 `json:"state"`
+	Fact   int64                  `json:"fact,omitempty"`
+	Refs   []string               `json:"refs,omitempty"`
+	Cause  string                 `json:"cause,omitempty"`
+	Stores []RetirementStoreState `json:"stores,omitempty"`
+	Limits []string               `json:"limits,omitempty"`
 }
 
 // RetirementProgress is what one retirement pass did to its record.
@@ -239,13 +311,17 @@ func (a *Authenticator) AdvanceRetirement(ctx context.Context, steps []Retiremen
 		return RetirementPass{Record: rec, Progress: RetirementSettled}, nil
 	}
 	results := make(map[string]moduleResult, len(steps))
+	censusLimits := a.retirementCensusLimits()
 	cause := a.compositionUnready()
 	if cause == "" {
 		cause = a.missingSteps(steps)
 	}
 	if cause != "" {
-		results["composition"] = moduleResult{State: "incomplete", Cause: cause}
+		results["composition"] = moduleResult{State: "incomplete", Cause: cause, Limits: censusLimits}
 		return a.recordRetirementFailure(ctx, rec, req, results, errors.New(cause))
+	}
+	if len(censusLimits) != 0 {
+		results["composition"] = moduleResult{State: "limited", Limits: censusLimits}
 	}
 	var (
 		blocking []string
@@ -253,6 +329,10 @@ func (a *Authenticator) AdvanceRetirement(ctx context.Context, steps []Retiremen
 	)
 	for _, step := range steps {
 		out, err := step.RetireUser(ctx, req)
+		if step.Module() == "composition" {
+			// A real reader may use this name; keep its outcome and the census limits.
+			out.Limits = append(append([]string(nil), censusLimits...), out.Limits...)
+		}
 		if errors.Is(err, store.ErrConflict) {
 			// The step's barrier found the account's authority version or the
 			// tenant's fact moved since the pass read them: the pass is stale, and
@@ -260,15 +340,16 @@ func (a *Authenticator) AdvanceRetirement(ctx context.Context, steps []Retiremen
 			return RetirementPass{Record: rec, Progress: RetirementStale}, nil
 		}
 		if err != nil {
-			results[step.Module()] = moduleResult{State: "failed", Cause: "the step did not complete"}
+			results[step.Module()] = moduleResult{State: "failed", Cause: "the step did not complete", Stores: out.Stores, Limits: out.Limits}
 			return a.recordRetirementFailure(ctx, rec, req, results, err)
 		}
 		refs := append(append([]string(nil), out.Blocking...), unknownKindRefs(out.UnknownKinds)...)
+		refs = append(refs, storeBlockingRefs(out.Stores)...)
 		state := "clean"
 		if !out.Clean() {
 			state = "blocked"
 		}
-		results[step.Module()] = moduleResult{State: state, Fact: out.FactVersion, Refs: refs}
+		results[step.Module()] = moduleResult{State: state, Fact: out.FactVersion, Refs: refs, Stores: out.Stores, Limits: out.Limits}
 		blocking = append(blocking, refs...)
 		if out.FactVersion > epoch {
 			epoch = out.FactVersion
@@ -296,6 +377,32 @@ func unknownKindRefs(tables []string) []string {
 		out = append(out, "unknown_kind:"+t)
 	}
 	return out
+}
+
+// storeBlockingRefs keeps every unproved store visible by name. Unknown or
+// malformed verdicts remain blockers, including an unnamed supposedly clean store.
+func storeBlockingRefs(stores []RetirementStoreState) []string {
+	var refs []string
+	for _, s := range stores {
+		if s.clean() {
+			continue
+		}
+		name, state := s.Store, s.State
+		if strings.TrimSpace(name) == "" {
+			name = "unnamed"
+		}
+		if state == "" {
+			state = "unknown"
+		}
+		if len(s.Holds) != 0 {
+			state = "legal_hold"
+		}
+		refs = append(refs, "store:"+name+":"+state)
+		for _, hold := range s.Holds {
+			refs = append(refs, "legal_hold:"+hold.ID+":matter:"+hold.MatterRef)
+		}
+	}
+	return refs
 }
 
 // retirementRequestFor reads what the steps need about the account: its current
@@ -350,8 +457,33 @@ func (a *Authenticator) compositionUnready() string {
 	return ""
 }
 
+// retirementCensusLimits states the columns the same census explicitly excludes
+// from content erasure. These limits are persisted, never counted as erased.
+func (a *Authenticator) retirementCensusLimits() []string {
+	census := a.census
+	if census == nil {
+		census, _ = a.st.(store.CompositionCensus)
+	}
+	if census == nil {
+		return nil // compositionUnready already refuses an absent census
+	}
+	descriptors := append([]model.EntityDescriptor(nil), census.CensusDescriptors()...)
+	if contributions, ok := census.(store.CompositionContributions); ok {
+		for _, contribution := range contributions.CompositionContributions() {
+			descriptors = append(descriptors, contribution.OutsideStores...)
+		}
+	}
+	var limits []string
+	for _, d := range descriptors {
+		for _, col := range d.ThirdPartyTextColumns() {
+			limits = append(limits, "text by others not scanned: "+string(d.Kind)+"."+col)
+		}
+	}
+	return limits
+}
+
 // missingSteps returns the census cause when steps lack the step of a module the
-// composition declares, as a reader of counted columns or as a module an edition
+// composition declares, as a retirement reader or as a module an edition
 // expects, and "" when every such module has its step. The step list is the
 // caller's; what must be in it is the store's record of the composition, so a
 // declared module that is missing is never taken for one with nothing to find.
@@ -440,7 +572,7 @@ func (a *Authenticator) recordRetirementFailure(ctx context.Context, read model.
 // still at the pass's generation becomes retired when nothing blocks it, and
 // blocked with the listed references otherwise, not due again until the backoff
 // of its attempts has passed. A record already blocked by exactly those
-// references is not written again: the pass is Unchanged. A moved epoch or
+// references and store evidence is not written again: the pass is Unchanged. A moved epoch or
 // version, or a record that moved on, writes nothing: the pass is Stale. read is
 // the record as the pass read it.
 func (a *Authenticator) commitRetirementProof(ctx context.Context, read model.TenantExclusion, req RetirementRequest, results map[string]moduleResult, blocking []string, epoch int64) (RetirementPass, error) {
@@ -468,7 +600,7 @@ func (a *Authenticator) commitRetirementProof(ctx context.Context, read model.Te
 			pass = RetirementPass{Record: rec, Progress: RetirementStale}
 			return nil
 		}
-		if len(blocking) > 0 && rec.RetirementState == model.RetirementBlocked && rec.BlockingRefs == refs {
+		if len(blocking) > 0 && rec.RetirementState == model.RetirementBlocked && rec.BlockingRefs == refs && sameRetirementResults(rec.ModuleResults, results) {
 			pass = RetirementPass{Record: rec, Progress: RetirementUnchanged}
 			return nil
 		}
@@ -502,6 +634,26 @@ func (a *Authenticator) commitRetirementProof(ctx context.Context, read model.Te
 		return RetirementPass{Record: read}, err
 	}
 	return pass, nil
+}
+
+// sameRetirementResults compares observations without their transaction fact:
+// a new epoch alone does not reset backoff, but changed custody, retention or
+// stated limits must be recorded even when the same references still block.
+func sameRetirementResults(previous string, results map[string]moduleResult) bool {
+	var prior map[string]moduleResult
+	if err := json.Unmarshal([]byte(previous), &prior); err != nil {
+		return false
+	}
+	for module, result := range prior {
+		result.Fact = 0
+		prior[module] = result
+	}
+	current := make(map[string]moduleResult, len(results))
+	for module, result := range results {
+		result.Fact = 0
+		current[module] = result
+	}
+	return encodeModuleResults(prior) == encodeModuleResults(current)
 }
 
 // encodeModuleResults renders a pass's per-module results for the record.

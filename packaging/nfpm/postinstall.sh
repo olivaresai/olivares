@@ -373,6 +373,10 @@ else
   unit_mode=0644
 fi
 
+# deb/rpm and apk upgrades share this migration. APK normally uses OpenRC, but
+# preserve or replace a previous native systemd drop-in if one is present.
+/bin/sh /usr/share/olivares/migrate-agentops-dropin.sh /etc/systemd/system/olivares.service.d/agentops.conf
+
 # Package-owned paths are listed but not marked managed: dpkg/rpm/apk removes
 # them. The same v2 manifest still drives plan/preserve/purge and bounds an
 # explicit data purge to the release-index install_layout.

@@ -5,6 +5,7 @@
 // Agent Artifacts — tenant-estate registry + its dedicated agent-supply-chain BOM.
 // The view records identity/provenance/posture metadata only; it never accepts or
 // renders artifact content, and never presents a recorded grade as a console scan.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Download, FileJson2, PackageSearch, Plus, Trash2 } from 'lucide-react'
@@ -22,7 +23,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
@@ -1020,7 +1021,11 @@ function SealHistory({
           {t('aibom.live.loading')}
         </div>
       ) : error ? (
-        <ErrorState title={t('aibom.history.loadError')} retry={onRetry} />
+        <QueryErrorState
+          error={error}
+          title={t('aibom.history.loadError')}
+          retry={onRetry}
+        />
       ) : seals.length === 0 ? (
         <EmptyState
           title={t('aibom.history.empty')}

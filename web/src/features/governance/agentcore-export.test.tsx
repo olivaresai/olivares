@@ -278,7 +278,9 @@ describe('AgentCore export — the plan the operator reviewed is the plan applie
     await user.click(screen.getByRole('button', { name: /compute plan/i }))
 
     // …then move the selector while that request is still in flight.
-    await user.click(screen.getByRole('combobox', { name: /enforcement mode/i }))
+    await user.click(
+      screen.getByRole('combobox', { name: /enforcement mode/i }),
+    )
     await user.click(await screen.findByRole('option', { name: /LOG_ONLY/ }))
 
     release(planWithHash(REVIEWED_HASH))
@@ -307,7 +309,9 @@ describe('AgentCore export — the plan the operator reviewed is the plan applie
       await screen.findByRole('button', { name: /apply this plan/i }),
     ).toBeInTheDocument()
 
-    await user.click(screen.getByRole('combobox', { name: /enforcement mode/i }))
+    await user.click(
+      screen.getByRole('combobox', { name: /enforcement mode/i }),
+    )
     await user.click(await screen.findByRole('option', { name: /LOG_ONLY/ }))
 
     await waitFor(() =>
@@ -349,7 +353,9 @@ describe('AgentCore export — the console payload IS the engine contract', () =
     })
     wrap(<AgentCoreExportView />)
 
-    await user.click(screen.getByRole('combobox', { name: /enforcement mode/i }))
+    await user.click(
+      screen.getByRole('combobox', { name: /enforcement mode/i }),
+    )
     await user.click(await screen.findByRole('option', { name: /LOG_ONLY/ }))
 
     // The plan the engine would return for THIS request: rendered in LOG_ONLY,
@@ -361,7 +367,9 @@ describe('AgentCore export — the console payload IS the engine contract', () =
     // The confirmation names the mode taken from the PLAN, so a LOG_ONLY plan
     // must say LOG_ONLY — an operator confirming a weakening export has to read
     // it in the dialog, not infer it from the selector behind the modal.
-    expect(await screen.findByText(/LOG_ONLY enforcement mode/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(/LOG_ONLY enforcement mode/i),
+    ).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: /^apply export$/i }))
 
     await waitFor(() => expect(http.postWithMeta).toHaveBeenCalled())
@@ -380,7 +388,9 @@ describe('AgentCore export — the console payload IS the engine contract', () =
       fixture('agentcore_console_plan_default.json'),
     )
 
-    await user.click(screen.getByRole('combobox', { name: /enforcement mode/i }))
+    await user.click(
+      screen.getByRole('combobox', { name: /enforcement mode/i }),
+    )
     await user.click(await screen.findByRole('option', { name: /LOG_ONLY/ }))
     await user.click(screen.getByRole('button', { name: /compute plan/i }))
     await waitFor(() => expect(http.post).toHaveBeenCalledTimes(2))
@@ -489,13 +499,19 @@ describe('AgentCore export — the frontiers', () => {
 
   it('reports a 501 as a capability this deployment did not wire, naming the variable', async () => {
     http.post.mockRejectedValue(
-      new ApiError(501, 'not_implemented', 'AgentCore export is not configured'),
+      new ApiError(
+        501,
+        'not_implemented',
+        'AgentCore export is not configured',
+      ),
     )
     const user = userEvent.setup()
     wrap(<AgentCoreExportView />)
     await user.click(screen.getByRole('button', { name: /compute plan/i }))
 
-    expect(await screen.findByText(/not wired in this deployment/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(/not wired in this deployment/i),
+    ).toBeInTheDocument()
     expect(
       screen.getByText('OLIVARES_AGENTCORE_EXPORT_CONFIG'),
     ).toBeInTheDocument()
@@ -556,7 +572,9 @@ describe('AgentCore export — the frontiers', () => {
     expect(
       await screen.findByText(/some policy writes failed/i),
     ).toBeInTheDocument()
-    expect(screen.getByText(/cedar validation found 1 error/)).toBeInTheDocument()
+    expect(
+      screen.getByText(/cedar validation found 1 error/),
+    ).toBeInTheDocument()
     expect(screen.queryByText(/^Export applied$/)).not.toBeInTheDocument()
   })
 
@@ -600,7 +618,9 @@ describe('AgentCore export — the surface is REACHABLE', () => {
     await user.click(
       await screen.findByRole('button', { name: /compute plan/i }),
     )
-    expect(await screen.findByText(new RegExp(REVIEWED_HASH))).toBeInTheDocument()
+    expect(
+      await screen.findByText(new RegExp(REVIEWED_HASH)),
+    ).toBeInTheDocument()
   })
 
   it('no longer hides behind the governance view’s identity gate', async () => {

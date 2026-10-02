@@ -1,6 +1,13 @@
 {
   "title": "アイデンティティと NHI",
   "subtitle": "SSO、SCIM、アイデンティティインベントリ、NHI ライフサイクル、WIF グラフ、特権ログインを観測・統制・監査します。",
+  "sections": "アイデンティティのセクション",
+  "groups": {
+    "people": "ユーザー",
+    "signIn": "サインイン",
+    "machines": "マシン ID",
+    "posture": "ポスチャ"
+  },
   "tabs": {
     "federation": "SSO と SCIM",
     "inventory": "アイデンティティインベントリ",
@@ -42,7 +49,10 @@
       "nhiLifecycleFinalize": "非人間アイデンティティ廃止の確定",
       "providers": "プロバイダーの資格情報を登録または失効させる",
       "generic": "この操作",
-      "console": "コネクターの管理"
+      "console": "コネクターの管理",
+      "stepUpPolicy": "Changing the extra check for administrative actions",
+      "modules": "モジュールのオン・オフ",
+      "signing": "レポート署名のオン・オフ"
     },
     "aal": {
       "aal1": "AAL1（パスワード）",
@@ -63,7 +73,12 @@
     "verificationFailed": "この操作に必要なセッションの確認ができませんでした。認証は完了している可能性がありますが、操作は続行されていません。",
     "cancelled": "パスキー操作がキャンセルされたか、タイムアウトしました。新たに試行できます。操作は続行されていません。",
     "cancelHint": "閉じるとこの操作はキャンセルされます。送信済みの登録や認証は完了する場合があります。",
-    "registrationUnknownElsewhere": "登録結果を確認できませんでした。パスキーは保存されている可能性があります。このダイアログを閉じてパスキーを確認してから、新しい登録を開始してください。"
+    "registrationUnknownElsewhere": "登録結果を確認できませんでした。パスキーは保存されている可能性があります。このダイアログを閉じてパスキーを確認してから、新しい登録を開始してください。",
+    "code": {
+      "title": "Sign in with your authenticator code",
+      "body": "{{action}} needs a sign-in with your authenticator code on this deployment. Sign in again and enter your code.",
+      "signInAgain": "Sign in again"
+    }
   },
   "references": {
     "note": "このパネルが反映する標準規格です。パネルは観測と検証を行うものであり、認証取得を主張するものではありません。",
@@ -101,7 +116,7 @@
   },
   "sso": {
     "title": "シングルサインオン（OIDC / SAML）",
-    "description": "フェデレーションログインはビジネスビルドで実装され、起動時に環境ごとに構成されます。このパネルは構成を文書化し、正確なリダイレクト URI を確認し、接続状態を表示します。構成の書き込みは行いません。",
+    "description": "フェデレーションログインは SSO / IdP で、または起動時に環境で構成します。このパネルは構成を文書化し、正確なリダイレクト URI を確認し、接続状態を表示します。構成の書き込みは行いません。",
     "notConfigured": "未構成",
     "notConfiguredHint": "アイデンティティプロバイダーが構成されていないため、フェデレーション要求は 501 を返します。SSO を有効にするには、以下の環境キーを設定してエンジンを再起動してください。",
     "seamWhat": "SSO 接続状態のサマリー",
@@ -280,9 +295,9 @@
       "title": "ライフサイクル操作",
       "reason": "理由",
       "critical": {
-        "twoAccountsAal3": "この重大操作を実行するには、異なる 2 つのユーザーアカウントによる承認と、それぞれの AAL3 セッションが必要です。エンジンが強制するのは異なる「アカウント」であり、2 つのアカウントが 2 人の別人であることは証明できません。 この 2 つの条件は現在のリスク階層に従い、承認ポリシーによって引き下げられる場合があります。",
-        "breakGlassPossible": "異なる 2 つのユーザーアカウントが、それぞれハードウェア検証済みのセッションで承認するまで何も実行されません。有効なブレークグラス緊急付与があれば代わりに認可できます。その使用は記録され、事後にレビューされます。 この 2 つの条件は現在のリスク階層に従い、承認ポリシーによって引き下げられる場合があります。",
-        "noBreakGlass": "異なる 2 つのユーザーアカウントが、それぞれハードウェア検証済みのセッションで承認するまで何も実行されません。これにブレークグラスは使えません。2 人目の承認者を迂回する緊急経路は存在しません。 この 2 つの条件は現在のリスク階層に従い、承認ポリシーによって引き下げられる場合があります。"
+        "twoAccountsAal3": "この重大操作を実行するには、異なる 2 つのユーザーアカウントによる承認が必要です。エンジンが強制するのは異なる「アカウント」であり、2 つのアカウントが 2 人の別人であることは証明できません。 これは現在のリスク階層に従い、承認ポリシーによって引き下げられる場合があります。",
+        "breakGlassPossible": "異なる 2 つのユーザーアカウントが承認するまで何も実行されません。有効なブレークグラス緊急付与があれば代わりに認可できます。その使用は記録され、事後にレビューされます。 これは現在のリスク階層に従い、承認ポリシーによって引き下げられる場合があります。",
+        "noBreakGlass": "異なる 2 つのユーザーアカウントが承認するまで何も実行されません。これにブレークグラスは使えません。2 人目の承認者を迂回する緊急経路は存在しません。 これは現在のリスク階層に従い、承認ポリシーによって引き下げられる場合があります。"
       },
       "ownership": {
         "button": "責任者を割り当てる",
@@ -502,33 +517,6 @@
       "inferenceGeos": "許可された推論リージョン",
       "unrestricted": "制限なし / 未報告"
     },
-    "tls": {
-      "title": "パネルの TLS（cert-manager）",
-      "description": "パネル自身の TLS 態勢です。issuer、有効期限、ローテーション、チェーンを表示します。",
-      "seamWhat": "パネルの cert-manager TLS 態勢",
-      "issuer": "issuer",
-      "notAfter": "有効期限",
-      "autoRenew": "自動更新",
-      "chain": "チェーン"
-    },
-    "crypto": {
-      "title": "暗号アジリティ / PQC インベントリ",
-      "description": "アイデンティティエステート全体にわたる従来型アルゴリズムとポスト量子アルゴリズムの比較、およびどのスロットを PQC にローテーションできるかを示します（NIST SP 800-57 r6）。",
-      "seamWhat": "暗号アジリティ / PQC インベントリ",
-      "ready": "PQC 対応",
-      "notReady": "従来型のみ",
-      "family": {
-        "classic": "従来型",
-        "pqc": "ポスト量子",
-        "hybrid": "ハイブリッド"
-      },
-      "col": {
-        "usage": "用途",
-        "algorithm": "アルゴリズム",
-        "family": "ファミリー",
-        "pqcReady": "PQC アジリティ"
-      }
-    },
     "unavailable": {
       "badge": "読み取り不可",
       "fallback": "このデプロイではこのポスチャを読み取れませんでした。"
@@ -573,6 +561,8 @@
       "registerHint": "後で識別できるようにパスキーに名前を付けてください。",
       "nameLabel": "パスキー名",
       "namePlaceholder": "例: YubiKey 5C, MacBook Touch ID",
+      "defaultName": "{{device}} のパスキー",
+      "defaultNameNoDevice": "パスキー",
       "registering": "セレモニーを実行中…",
       "registered": "パスキーを登録しました。",
       "registerFailed": "登録に失敗しました。ブラウザが WebAuthn に対応していないか、セレモニーがキャンセルされた可能性があります。",
@@ -596,10 +586,6 @@
     }
   },
   "empty": {
-    "cryptoInventory": {
-      "title": "暗号資産はインベントリ化されていません",
-      "description": "このビルドは TLS と耐量子態勢の契約を宣言していますが提供していないため、その実装が応答するまでは保留中契約の通知がこのパネルに代わって表示されます。"
-    },
     "externalKeys": {
       "title": "External Keys の参照はまだ報告されていません",
       "description": "この組織では顧客管理暗号鍵は報告されませんでした。インベントリの読み取りは成功しています。バックエンドの欠如ではなく、実際のゼロです。"
@@ -643,5 +629,21 @@
     "policyConfirmOn": "確認：必須化",
     "policyDisable": "オフにする",
     "policyAal3Note": "このポリシーの変更には AAL3 セッションが必要です。因子のないアカウントは次回ログイン時に登録へ案内され、締め出されることはありません。"
+  },
+  "stepUpPolicy": {
+    "title": "Extra check for administrative actions",
+    "description": "Off by default. Turn it on to ask for an authenticator code or a passkey before administrative changes such as users, identity providers, secrets or tool installs.",
+    "options": {
+      "none": "Off",
+      "totp": "Authenticator code",
+      "passkey": "Passkey"
+    },
+    "saved": "Saved.",
+    "loadFailed": "This setting could not be read. Refresh the page to try again.",
+    "note": "To require a passkey, sign in with your passkey here first. To require an authenticator code, sign in with your code first. You can always turn it off. A change takes effect within a few seconds on every server.",
+    "refused": {
+      "passkey_not_enrolled": "Add a passkey to your account first (Identity > Passkeys), then turn this on.",
+      "totp_sign_in_required": "Set up an authenticator app and sign in with its code first, then turn this on."
+    }
   }
 }

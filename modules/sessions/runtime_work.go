@@ -9,6 +9,7 @@ import (
 	"errors"
 
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 const (
@@ -36,12 +37,9 @@ func runHasWorkBinding(rec model.Record) bool {
 		!rec.IsNull(colRunWorkLaunchSpecHash)
 }
 
-// refuseLegacyControlUnderWork is the gate the legacy /stop, /input and /resume
-// paths ask before touching a run. A durable work stamp selects the fenced
-// control plane for the lifetime of the run, even after one lease generation
-// ends. Reopening legacy control after a read of the lease creates a TOCTOU:
-// acquire can install a new generation between that read and Process.Send/Stop.
-// The immutable stamp is therefore both evidence and the permanent selector.
+// Resume retains its launch commitment: ending a work lease does not authorize
+// an ordinary relaunch of a work-bound run. Live input/Stop instead ask the
+// current lease through refuseUnfencedActiveWork below.
 func (m *Module) refuseLegacyControlUnderWork(
 	_ context.Context,
 	_ model.TenantID,
@@ -51,6 +49,46 @@ func (m *Module) refuseLegacyControlUnderWork(
 		return conflictErr("work-bound session requires fenced runtime control")
 	}
 	return nil
+}
+
+// refuseUnfencedActiveWork admits ordinary control after work ends, retaining
+// the stamp as history. A partial stamp or unavailable lease never grants that
+// control. Re-read the generation under the existing item lock: a re-acquire
+// between loadRun and this admission closes the unfenced path again.
+//
+// As with assertRunWorkLease, authority linearizes in this committed mutation;
+// no database lock spans child I/O. The caller holds the run operation lock and
+// the shared effect path separately re-proves the owned launch and Claim.
+// An explicit fence always uses the fenced path, including after the lease ends.
+func (m *Module) refuseUnfencedActiveWork(ctx context.Context, tenant model.TenantID, rec model.Record) error {
+	if !runHasWorkBinding(rec) {
+		return nil
+	}
+	fence := rec.Int(colRunWorkLeaseFence)
+	if _, err := parseRunWorkStamp(rec, fence, false); err != nil {
+		return conflictErr("session work binding is incomplete or invalid")
+	}
+	err := m.workData(tenant).Mutate(ctx, func(sc store.Scope) error {
+		e, err := loadLockedRunWork(ctx, sc, tenant, rec.String(colRunRef), fence, false)
+		if err != nil {
+			return err
+		}
+		state, err := workLeaseFenceState(e.lease)
+		if err != nil {
+			return err
+		}
+		if state.Fence < e.stamp.fence {
+			return unknown("evidence_unavailable", nil)
+		}
+		if state.Lifecycle == fenceActive && fenceIsLive(state, e.now.Time()) {
+			return conflictErr("active work lease requires fenced runtime control")
+		}
+		return nil
+	})
+	if we := asWorkError(err); we != nil && (we.code == "stale_fence" || we.code == "dispatch_conflict") {
+		return conflictErr("session work lease changed; use its current fence")
+	}
+	return err
 }
 
 // InputForWork writes one RAW NDJSON line under the exact durable WorkLease
@@ -112,7 +150,7 @@ func (m *Module) InputForWork(
 // generation stamped on the run.
 //
 // ⛔ IT EXISTS BECAUSE A WORK-BOUND DRIVER RUN HAD NO ROUTE AT ALL. The durable
-// work stamp permanently selects the fenced control plane (refuseLegacyControlUnderWork),
+// active work lease selects fenced live control (refuseUnfencedActiveWork),
 // so the unfenced text route refuses it; and the only fenced route was
 // InputForWork, which carries RAW BYTES — which a driver run must refuse, because
 // an owned JSON-RPC peer would read an arbitrary line as a method call. The review
@@ -182,8 +220,8 @@ const maxWorkTextInputBytes = 128 * 1024
 // the conversation and the run usable for the next input.
 //
 // ⛔ IT EXISTS BECAUSE THE FENCED PLANE HAD TWO CONTROLS AND NEEDED THREE. A
-// durable work stamp selects the fenced plane for the life of the run
-// (refuseLegacyControlUnderWork), and that plane had input and stop but no
+// active work lease selects the fenced plane (refuseUnfencedActiveWork),
+// and that plane had input and stop but no
 // interrupt — so a work-bound driver run could be spoken to and it could be
 // killed, and the only way to take back a turn already in flight was to end the
 // process, the conversation and the claim generation with it. That is not a

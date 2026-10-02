@@ -55,6 +55,10 @@ type fakeSessionContextPolicy struct {
 	last  knowledge.ContextPolicyQuery
 }
 
+func (f *fakeSessionContextPolicy) HasContextPolicies(context.Context, model.TenantID) (bool, error) {
+	return true, nil
+}
+
 func (f *fakeSessionContextPolicy) Apply(_ context.Context, _ model.TenantID, q knowledge.ContextPolicyQuery) (knowledge.EffectivePolicy, error) {
 	f.calls++
 	f.last = q
@@ -142,8 +146,14 @@ func TestIsCriticalLaunch(t *testing.T) {
 		in   sessions.LaunchIntent
 		want bool
 	}{
-		{"bypass", sessions.LaunchIntent{PermissionMode: "bypassPermissions"}, true},
+		// "full" is an administrator's own decision (checked at create/resume), not CRITICAL.
+		{"bypass", sessions.LaunchIntent{PermissionMode: "bypassPermissions"}, false},
 		{"dontAsk", sessions.LaunchIntent{PermissionMode: "dontAsk"}, true},
+		// A built-in template's allowlist confines a dontAsk launch: not privileged.
+		{"dontAsk under a built-in allowlist", sessions.LaunchIntent{PermissionMode: "dontAsk", TemplateRef: "tpl", TemplateBuiltin: true, AllowedTools: []string{"Read", "Bash"}}, false},
+		{"dontAsk under a custom template", sessions.LaunchIntent{PermissionMode: "dontAsk", TemplateRef: "tpl", AllowedTools: []string{"Read", "Bash"}}, true},
+		{"dontAsk under a built-in template with no allowlist", sessions.LaunchIntent{PermissionMode: "dontAsk", TemplateRef: "tpl", TemplateBuiltin: true}, true},
+		{"bypass under a built-in template", sessions.LaunchIntent{PermissionMode: "bypassPermissions", TemplateBuiltin: true, AllowedTools: []string{"Read"}}, false},
 		{"classified-rw", sessions.LaunchIntent{PermissionMode: "default", WorkspaceClassified: true, WorkspaceReadWrite: true}, true},
 		{"classified-ro", sessions.LaunchIntent{PermissionMode: "default", WorkspaceClassified: true, WorkspaceReadWrite: false}, false},
 		{"plain", sessions.LaunchIntent{PermissionMode: "default"}, false},
@@ -157,7 +167,7 @@ func TestIsCriticalLaunch(t *testing.T) {
 }
 
 func TestSessionLaunchGate_CriticalHITL(t *testing.T) {
-	critical := sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "bypassPermissions", Actor: "user:u1"}
+	critical := sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "dontAsk", Actor: "user:u1"}
 
 	// Pending approval ⇒ the launch is DENIED (with the ref) until approved out-of-band.
 	op := &fakeOpener{status: nbPending}
@@ -194,7 +204,7 @@ func TestSessionLaunchGate_CriticalHITL(t *testing.T) {
 // break-glass is NOT double-consumed (the engine recorded its one-shot use at grant time).
 // RED before the fix (nbApproved allowed without any consume), GREEN after.
 func TestSessionLaunchGate_CriticalApprovalIsSingleUse(t *testing.T) {
-	critical := sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "bypassPermissions", Actor: "user:u1"}
+	critical := sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "dontAsk", Actor: "user:u1"}
 
 	// Approved: the launch proceeds and SPENDS the approval exactly once.
 	op := &fakeOpener{status: nbApproved}
@@ -225,7 +235,7 @@ func TestSessionLaunchGate_CriticalApprovalIsSingleUse(t *testing.T) {
 }
 
 func TestSessionLaunchGate_CriticalDenyClosed(t *testing.T) {
-	critical := sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "bypassPermissions"}
+	critical := sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "dontAsk"}
 
 	// No HITL bridge ⇒ a CRITICAL launch is denied (deny-closed).
 	g := &sessionLaunchGate{bridge: nil, recordAvailable: true, log: slog.Default()}
@@ -571,7 +581,7 @@ func TestManagedSettingsRender(t *testing.T) {
 		t.Fatalf("render output is not JSON: %v\n%s", err, buf.String())
 	}
 	if doc["allowManagedHooksOnly"] != true {
-		t.Fatal("rendered managed-settings must set allowManagedHooksOnly (anti-tamper)")
+		t.Fatal("rendered managed-settings must retain the published managed-only hook posture")
 	}
 	if !bytes.Contains(buf.Bytes(), []byte("PreToolUse")) || !bytes.Contains(buf.Bytes(), []byte("olivares claude-hook")) {
 		t.Fatalf("rendered managed-settings must carry the PreToolUse PEP hook command:\n%s", buf.String())
@@ -633,4 +643,95 @@ func itoa(i int) string {
 		i /= 10
 	}
 	return string(b)
+}
+
+func TestSessionLaunchPlanBindsProviderToolSurface(t *testing.T) {
+	original := sessions.LaunchIntent{Action: sessions.LaunchActionCreate, Actor: "user:original", ToolSurfaceDeclared: true, ToolSurface: []string{"Read"}}
+	widened := original
+	widened.ToolSurface = []string{"Read", "Bash"}
+	if sessionLaunchPlanHash(original) == sessionLaunchPlanHash(widened) {
+		t.Fatal("provider tool widening must invalidate the original approval")
+	}
+	undeclared := original
+	undeclared.ToolSurfaceDeclared = false
+	if sessionLaunchPlanHash(original) == sessionLaunchPlanHash(undeclared) {
+		t.Fatal("unrestricted tools must differ from an explicit tool list")
+	}
+}
+
+// --- LaunchGate: B2 conditional budget admission ------------------------------
+
+// spyProberBudget adds the optional HasAdmissionTargets capability to fakeBudget
+// and counts the calls, so the gate's conditional reserve is observable.
+type spyProberBudget struct {
+	fakeBudget
+	hasTargets  bool
+	probeErr    error
+	probeCalls  int
+	reserveReqs []finops.AdmissionRequest
+}
+
+func (s *spyProberBudget) HasAdmissionTargets(context.Context, model.TenantID) (bool, error) {
+	s.probeCalls++
+	return s.hasTargets, s.probeErr
+}
+
+func (s *spyProberBudget) Reserve(ctx context.Context, tenant model.TenantID, req finops.AdmissionRequest) (finops.Reservation, error) {
+	s.reserveReqs = append(s.reserveReqs, req)
+	return s.fakeBudget.Reserve(ctx, tenant, req)
+}
+
+// CUTS B2: with no admission target the gate asks the probe once and never
+// reserves — zero finops writes at launch.
+func TestSessionLaunchGate_NoAdmissionTargetsSkipsReserve(t *testing.T) {
+	spy := &spyProberBudget{fakeBudget: fakeBudget{chk: finops.BudgetCheck{Allowed: true}}, hasTargets: false}
+	g := &sessionLaunchGate{fin: spy, recordAvailable: true, log: slog.Default()}
+	dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "default"})
+	if err != nil || !dec.Allowed {
+		t.Fatalf("a targetless tenant must launch, got allowed=%v err=%v", dec.Allowed, err)
+	}
+	if spy.probeCalls != 1 {
+		t.Fatalf("probe calls = %d, want 1", spy.probeCalls)
+	}
+	if len(spy.reserveReqs) != 0 {
+		t.Fatalf("Reserve called %d times with no admission target — the launch paid the full admission for nothing", len(spy.reserveReqs))
+	}
+}
+
+// CUTS B2: with one admission target the gate reserves exactly as before — the
+// decision is byte-equal to the unconditional path.
+func TestSessionLaunchGate_WithTargetsDecisionIsByteEqual(t *testing.T) {
+	intent := sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "default", AgentRef: "agent:a1"}
+	baseline := &sessionLaunchGate{fin: fakeBudget{chk: finops.BudgetCheck{Allowed: true}}, recordAvailable: true, log: slog.Default()}
+	wantDec, err := baseline.Authorize(context.Background(), "t1", intent)
+	if err != nil {
+		t.Fatalf("baseline Authorize: %v", err)
+	}
+	spy := &spyProberBudget{fakeBudget: fakeBudget{chk: finops.BudgetCheck{Allowed: true}}, hasTargets: true}
+	gotDec, err := (&sessionLaunchGate{fin: spy, recordAvailable: true, log: slog.Default()}).Authorize(context.Background(), "t1", intent)
+	if err != nil {
+		t.Fatalf("Authorize: %v", err)
+	}
+	if len(spy.reserveReqs) != 1 {
+		t.Fatalf("with a target the reserve runs exactly once, got %d", len(spy.reserveReqs))
+	}
+	wantJSON, _ := json.Marshal(wantDec)
+	gotJSON, _ := json.Marshal(gotDec)
+	if !bytes.Equal(wantJSON, gotJSON) {
+		t.Fatalf("the conditional path changed the decision:\n unconditional: %s\n conditional:   %s", wantJSON, gotJSON)
+	}
+}
+
+// CUTS B2: a probe that cannot answer is not a skip — the gate falls through to
+// Reserve, which owns the unreachable postures.
+func TestSessionLaunchGate_ProbeErrorKeepsReserve(t *testing.T) {
+	spy := &spyProberBudget{fakeBudget: fakeBudget{chk: finops.BudgetCheck{Allowed: true}}, probeErr: errors.New("ledger down")}
+	g := &sessionLaunchGate{fin: spy, recordAvailable: true, log: slog.Default()}
+	dec, err := g.Authorize(context.Background(), "t1", sessions.LaunchIntent{Transport: sessions.TransportStreamJSON, PermissionMode: "default"})
+	if err != nil || !dec.Allowed {
+		t.Fatalf("probe error must keep today's behavior (reserve then allow), got allowed=%v err=%v", dec.Allowed, err)
+	}
+	if len(spy.reserveReqs) != 1 {
+		t.Fatalf("a probe error must fall through to Reserve, got %d calls", len(spy.reserveReqs))
+	}
 }

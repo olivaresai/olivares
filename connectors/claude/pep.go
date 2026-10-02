@@ -78,8 +78,8 @@ type HookIdentity struct {
 // HookDecisionInput is the redacted, minimal-data context the governed decider sees for
 // one tool-call (docs/SECURITY-HARDENING.md). It carries NO raw tool arguments — only the derived,
 // sanitized resource reference and structural fields. The raw tool input is held
-// privately and used ONLY to compute a governed rewrite (updatedInput) when the decider
-// asks for one; it is never stored, logged or audited.
+// privately for a governed rewrite or a bounded, redacted command/path projection for
+// human review. Raw arguments and file contents are never stored, logged or audited.
 type HookDecisionInput struct {
 	Event        string // PreToolUse | PostToolUse | PermissionRequest
 	SessionID    string
@@ -97,14 +97,14 @@ type HookDecisionInput struct {
 	At       time.Time
 
 	// rawInput is the untrusted tool_input. It is unexported so it can never be audited;
-	// the decider reads it only via RewriteBase to compute a sanitized replacement.
+	// RewriteBase supplies governed rewrites and redacted human-review facts.
 	rawInput map[string]any
 }
 
 // RewriteBase returns a shallow copy of the original tool input for the decider to base
 // a governed rewrite on (e.g. set "--dry-run", narrow a path). It is a copy, so the
 // decider cannot mutate the connector's parsed payload, and it is the ONLY accessor to
-// the raw input — keeping raw arguments out of every audited/logged path.
+// the raw input. Callers must project and redact review facts before retaining them.
 func (in HookDecisionInput) RewriteBase() map[string]any {
 	if in.rawInput == nil {
 		return map[string]any{}

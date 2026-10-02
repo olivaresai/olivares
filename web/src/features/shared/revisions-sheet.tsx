@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useInfiniteQuery, type QueryKey } from '@tanstack/react-query'
 import { History } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
@@ -10,7 +11,6 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { CodeDiff } from '@/components/ui/code-diff'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   Sheet,
@@ -217,7 +217,10 @@ export function RevisionsSheet<TSnapshot, TEntity>({
               <Spinner />
             </div>
           ) : revisionsQ.isError ? (
-            <ErrorState retry={() => void revisionsQ.refetch()} />
+            <QueryErrorState
+              error={revisionsQ.error}
+              retry={() => void revisionsQ.refetch()}
+            />
           ) : revisions.length === 0 ? (
             <EmptyState
               description={labels.emptyHint}

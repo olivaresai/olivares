@@ -46,7 +46,6 @@ import {
   ListTruncationBadge,
   SeamBadge,
   SectionCard,
-  SelfAuditNotice,
 } from '@/features/_intel'
 import { evalsApi, evalsKeys, type ScorecardGroupBy } from './api'
 import {
@@ -100,7 +99,6 @@ export function EvalsView() {
       icon={ClipboardCheck}
       title={t('title')}
       description={t('description')}
-      notices={<SelfAuditNotice />}
     >
       <Tabs defaultValue="scorecards">
         <TabsList>
@@ -913,7 +911,6 @@ function RunDetailDialog({
         </DialogHeader>
         {run ? (
           <div className="flex flex-col gap-4">
-            <SelfAuditNotice />
             <CaseOutcomeBar run={run} />
             <CaveatNotice>{t('cases.noPayload')}</CaveatNotice>
             <AsyncSection query={resultsQ} skeletonHeight={200}>
@@ -1173,7 +1170,6 @@ function AbTab({ tenant }: { tenant: string | null }) {
                     </span>
                   </span>
                 </label>
-                <SelfAuditNotice />
                 <div>
                   <Button
                     variant="primary"

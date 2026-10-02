@@ -148,7 +148,9 @@ describe('StatusPage', () => {
     )
 
     await waitFor(() => {
-      expect(screen.getAllByText(/currently unavailable/i).length).toBeGreaterThan(0)
+      expect(
+        screen.getAllByText(/currently unavailable/i).length,
+      ).toBeGreaterThan(0)
     })
     // A green verdict with no evidence behind it is the one thing a status page
     // must never print.

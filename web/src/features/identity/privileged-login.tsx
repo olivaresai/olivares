@@ -10,11 +10,12 @@
 // orchestrates + fails closed, shows the honest pending seam, and makes NO
 // NIST/FIPS conformance claim the backend does not guarantee. The
 // session AAL drives the gate on the WIF/identity views.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Fingerprint, IdCard, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { SectionCard, SelfAuditNotice } from '@/features/_intel'
+import { SectionCard } from '@/features/_intel'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -26,7 +27,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import { Input } from '@/components/ui/input'
 import { KvList, KvRow } from '@/components/ui/kv'
 import { Spinner } from '@/components/ui/spinner'
@@ -62,6 +62,7 @@ import { useStepUpOwner } from '@/stores/step-up'
 import { useResumeGuard } from '@/lib/hooks/use-resume-guard'
 import { isPivKnownUnconfigured, pivStatusQueryKey } from './piv-configuration'
 import { StaticTable } from '@/components/data/static-table'
+import { defaultPasskeyName } from './passkey-name'
 
 export function PrivilegedLoginTab() {
   return (
@@ -167,7 +168,6 @@ function PasskeysManagementSection() {
         title={t('login.passkeys.title')}
         description={t('login.passkeys.description')}
       >
-        <SelfAuditNotice />
         <div className="mt-3">
           <ContractPendingNotice what={t('login.passkeySeamWhat')} />
         </div>
@@ -184,8 +184,8 @@ function PasskeysManagementSection() {
         title={t('login.passkeys.title')}
         description={t('login.passkeys.description')}
       >
-        <SelfAuditNotice />
-        <ErrorState
+        <QueryErrorState
+          error={credentialsQuery.error}
           className="py-6"
           retry={() => void credentialsQuery.refetch()}
         />
@@ -198,8 +198,6 @@ function PasskeysManagementSection() {
       title={t('login.passkeys.title')}
       description={t('login.passkeys.description')}
     >
-      <SelfAuditNotice />
-
       <div className="mt-3 flex justify-end">
         <Button onClick={() => setRegisterOpen(true)}>
           <Plus className="size-4" aria-hidden />
@@ -332,6 +330,8 @@ function RegisterPasskeyForm({
 }) {
   const { t } = useTranslation(['identity', 'common'])
   const [name, setName] = useState('')
+  // An empty name is the device's: nothing here is required that has a default.
+  const fallbackName = defaultPasskeyName(t)
   const [pending, setPending] = useState(false)
   const report = useFailedActionReporter('identity')
   const captureOwner = useStepUpOwner()
@@ -339,16 +339,9 @@ function RegisterPasskeyForm({
   const [failure, setFailure] = useState<
     'unknown' | 'sessionExpired' | 'pending' | null
   >(null)
-  const valid = name.trim().length > 0
 
   async function handleRegister() {
-    if (
-      pending ||
-      failure === 'unknown' ||
-      failure === 'sessionExpired' ||
-      !valid
-    )
-      return
+    if (pending || failure === 'unknown' || failure === 'sessionExpired') return
     if (!canEnrollPasskey()) {
       toast.error(t('login.passkeys.unsupported'))
       return
@@ -358,7 +351,7 @@ function RegisterPasskeyForm({
     setPending(true)
     setFailure(null)
     try {
-      await enrollPasskey(name, attempt)
+      await enrollPasskey(name.trim() || fallbackName, attempt)
       attempt.dispatchGuard()
       onRegistered()
     } catch (err) {
@@ -412,7 +405,7 @@ function RegisterPasskeyForm({
           <Input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            placeholder={t('login.passkeys.namePlaceholder')}
+            placeholder={fallbackName}
           />
         </label>
       </div>
@@ -424,10 +417,7 @@ function RegisterPasskeyForm({
           variant="primary"
           onClick={() => void handleRegister()}
           disabled={
-            !valid ||
-            pending ||
-            failure === 'unknown' ||
-            failure === 'sessionExpired'
+            pending || failure === 'unknown' || failure === 'sessionExpired'
           }
         >
           {pending && <Spinner size="sm" aria-hidden />}

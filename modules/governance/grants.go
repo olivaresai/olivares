@@ -1244,8 +1244,9 @@ func (e *scopedEngine) Scoped(ctx context.Context, req auth.Request) (auth.Scope
 	// the Authorizer applies before RBAC). Checked BEFORE the no-grants fast path so it holds
 	// even for a tenant with no authored scoped grants. Additive/back-compat: a principal with
 	// no workspace-scoped membership (ConfinedWorkspaceIn ok=false) skips this entirely — every
-	// existing decision is byte-identical. Superadmin is never confined.
-	if confinedWS, confined := req.Principal.ConfinedWorkspaceIn(req.Tenant); confined && !req.Principal.Superadmin {
+	// existing decision is byte-identical. A superadmin acting as the tenant owner
+	// retains any stored workspace confinement like another tenant principal.
+	if confinedWS, confined := req.Principal.ConfinedWorkspaceIn(req.Tenant); confined {
 		if e.resolver == nil {
 			return auth.ScopedDecision{}, errors.New("governance: scope resolver unavailable")
 		}
@@ -1285,6 +1286,7 @@ func (e *scopedEngine) Scoped(ctx context.Context, req auth.Request) (auth.Scope
 	}
 	set := state.set
 	if set == nil {
+		auth.CaptureAuthorizationInputs(ctx, true, "none-v1", struct{}{})
 		return auth.ScopedDecision{Effect: auth.EffectAbstain, Reason: "no scoped grants for tenant"}, nil
 	}
 	if e.resolver == nil {
@@ -1296,6 +1298,7 @@ func (e *scopedEngine) Scoped(ctx context.Context, req auth.Request) (auth.Scope
 	}
 	now := e.clock()
 	creq := cedar.Request{Principal: pUID, Action: actionUID(req), Resource: resUID, Context: scopedContext(req, now)}
+	captureScopedCedar(ctx, state, em, creq, scopedGrantAboveFloor(req.Principal, req.Tenant, state.generation) && !e.grantExpiredState(state, loaded, now))
 	decision, diag := cedar.Authorize(set.policies, em, creq)
 	e.logDiagErrors(diag)
 	// F-06: a forbid rule that errored is a restriction Cedar dropped — fail
@@ -1431,12 +1434,12 @@ func (e *scopedEngine) logEffect(req auth.Request, effect string) {
 		return
 	}
 	e.log.Info("cedar scoped "+effect,
-		"tenant", string(req.Tenant),
-		"principal_kind", string(req.Principal.Kind),
-		"cred_id", string(req.Principal.CredID),
-		"permission", string(req.Permission),
-		"resource_kind", req.Resource.Kind,
-		"resource_id", req.Resource.ID,
+		"tenant", redactPDPText(req.EvidenceRedactor, string(req.Tenant)),
+		"principal_kind", redactPDPText(req.EvidenceRedactor, string(req.Principal.Kind)),
+		"cred_id", redactPDPText(req.EvidenceRedactor, string(req.Principal.CredID)),
+		"permission", redactPDPText(req.EvidenceRedactor, string(req.Permission)),
+		"resource_kind", redactPDPText(req.EvidenceRedactor, req.Resource.Kind),
+		"resource_id", redactPDPText(req.EvidenceRedactor, req.Resource.ID),
 	)
 }
 

@@ -6,6 +6,7 @@ package reporting
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -356,5 +357,28 @@ func TestWarmCacheRefusalIsWiredToTheRealGuard(t *testing.T) {
 	}
 	if after.Code != http.StatusLocked {
 		t.Fatalf("withdrawn tenant got %d %s, want 423 Locked", after.Code, after.Body.String())
+	}
+}
+
+func TestReportEmptyScheduleListsAreArrays(t *testing.T) {
+	h := newES07Harness(t)
+	for _, tc := range []struct {
+		name    string
+		handler func(http.ResponseWriter, *http.Request, api.ModuleContext)
+	}{
+		{"schedules", h.module.handleListSchedules},
+		{"schedule runs", h.module.handleListScheduleRuns},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			tc.handler(recorder, httptest.NewRequest(http.MethodGet, "/schedules", nil), h.mc)
+			var result map[string]json.RawMessage
+			if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+				t.Fatal(err)
+			}
+			if recorder.Code != http.StatusOK || string(result["items"]) != "[]" {
+				t.Fatalf("empty list=%d %s", recorder.Code, recorder.Body.String())
+			}
+		})
 	}
 }

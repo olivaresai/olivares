@@ -7,6 +7,7 @@
 // evidence panel, and the reusable admit dialog. Kept here so the Owned-models drawer
 // (canonical per-version Admit) and the Admission tab (verdict history + re-admit)
 // render admission the SAME way and never diverge.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { type ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -21,7 +22,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { KvList, KvRow } from '@/components/ui/kv'
@@ -243,7 +244,10 @@ export function VersionEvidence({ versionRef }: { versionRef: string }) {
   // —una afirmación sobre el MUNDO— cuando lo único cierto es que no se pudo mirar. En un
   // panel de evidencia de admisión esa confusión es de las caras: dice que no hubo intento
   // donde igual lo hubo y fue denegado. Es preexistente, y lo cazó el contraste `sol max`.
-  if (query.error) return <ErrorState retry={() => void query.refetch()} />
+  if (query.error)
+    return (
+      <QueryErrorState error={query.error} retry={() => void query.refetch()} />
+    )
   const verdict = query.data?.items?.[0]
   if (!verdict)
     return (

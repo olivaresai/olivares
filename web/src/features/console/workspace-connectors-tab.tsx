@@ -2,6 +2,10 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 
+import {
+  ModuleGate,
+  QueryErrorState,
+} from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { Link, Pencil, Plus, Trash2, Unlink } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -18,7 +22,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
@@ -92,6 +96,15 @@ function useWorkspaceRef(
 }
 
 export function WorkspaceConnectorsTab() {
+  // Assignments and workspace connectors are the sourcescope module’s (EU18).
+  return (
+    <ModuleGate module="sourcescope">
+      <WorkspaceConnectorsTabReads />
+    </ModuleGate>
+  )
+}
+
+function WorkspaceConnectorsTabReads() {
   const { activeTenant, can } = useAuth()
   const { workspaceId } = useWorkspaceFilter()
 
@@ -170,7 +183,12 @@ function AssignmentSection({
   }
   if (workspaceId && workspaces.isLoading) return <Spinner />
   if (workspaceId && workspaces.isError) {
-    return <ErrorState retry={() => void workspaces.refetch()} />
+    return (
+      <QueryErrorState
+        error={workspaces.error}
+        retry={() => void workspaces.refetch()}
+      />
+    )
   }
   // ⛔ El resolver `workspaceId` → slug tiene su propio estado y no lo miraba NADIE: si
   //    `getWorkspaceByID` falla, la dependiente queda `enabled: false`, que no es `isLoading` ni
@@ -178,11 +196,21 @@ function AssignmentSection({
   //    era «no he podido mirar». La ausencia no prueba nada; el fallo sí.
   if (workspaceId && refQuery.isLoading) return <Spinner />
   if (workspaceId && refQuery.isError) {
-    return <ErrorState retry={() => void refQuery.refetch()} />
+    return (
+      <QueryErrorState
+        error={refQuery.error}
+        retry={() => void refQuery.refetch()}
+      />
+    )
   }
   if (assignments.isLoading) return <Spinner />
   if (assignments.isError) {
-    return <ErrorState retry={() => void assignments.refetch()} />
+    return (
+      <QueryErrorState
+        error={assignments.error}
+        retry={() => void assignments.refetch()}
+      />
+    )
   }
 
   const items = assignments.data?.items ?? []
@@ -582,7 +610,12 @@ function WsConnectorSection({
   }
   if (workspaceId && workspaces.isLoading) return <Spinner />
   if (workspaceId && workspaces.isError) {
-    return <ErrorState retry={() => void workspaces.refetch()} />
+    return (
+      <QueryErrorState
+        error={workspaces.error}
+        retry={() => void workspaces.refetch()}
+      />
+    )
   }
   // ⛔ El resolver `workspaceId` → slug tiene su propio estado y no lo miraba NADIE: si
   //    `getWorkspaceByID` falla, la dependiente queda `enabled: false`, que no es `isLoading` ni
@@ -590,11 +623,21 @@ function WsConnectorSection({
   //    era «no he podido mirar». La ausencia no prueba nada; el fallo sí.
   if (workspaceId && refQuery.isLoading) return <Spinner />
   if (workspaceId && refQuery.isError) {
-    return <ErrorState retry={() => void refQuery.refetch()} />
+    return (
+      <QueryErrorState
+        error={refQuery.error}
+        retry={() => void refQuery.refetch()}
+      />
+    )
   }
   if (connectors.isLoading) return <Spinner />
   if (connectors.isError) {
-    return <ErrorState retry={() => void connectors.refetch()} />
+    return (
+      <QueryErrorState
+        error={connectors.error}
+        retry={() => void connectors.refetch()}
+      />
+    )
   }
 
   const items = connectors.data?.items ?? []

@@ -315,6 +315,23 @@ describe('a RETIRED address that comes back through Back', () => {
     expect(card()).toHaveTextContent('unknown:false')
   })
 
+  it('on a narrow screen, opening a list row brings its work forward', async () => {
+    // jsdom's matchMedia (test/setup.ts) matches nothing, so this is the below-`xl` case:
+    // one pane is in front, and opening a row moves it from the list to the work.
+    const user = userEvent.setup()
+    renderView(makeClient(), false)
+    let row: HTMLElement | null = null
+    await waitFor(() => {
+      row = screen
+        .getByTestId('work-rail')
+        .querySelector('[data-address="sess:rev-a"]') as HTMLElement | null
+      expect(row).not.toBeNull()
+    })
+    await user.click(row as unknown as HTMLElement)
+    await waitFor(() => expect(fakeRouter.url()).toContain('sess%3Arev-a'))
+    expect(fakeRouter.url()).toContain('pane=narrative')
+  })
+
   it('the NARRATIVE pane paints no stale half either', async () => {
     const user = userEvent.setup()
     const { again } = renderView(makeClient(), false)

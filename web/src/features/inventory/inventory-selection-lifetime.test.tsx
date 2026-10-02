@@ -240,7 +240,7 @@ beforeEach(() => {
   reads.length = 0
   whoamiMock.mockReset().mockResolvedValue(FULL)
   useSessionStore.setState({
-    token: 'olvs_test',
+    csrfToken: 'olvs_test',
     sessionId: 's1',
     expiresAt: null,
   })

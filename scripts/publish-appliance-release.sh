@@ -43,7 +43,7 @@ done
 blind() { printf 'publish-appliance-release: UNABLE TO LOOK — %s\n' "$*" >&2; exit 2; }
 refuse() { printf 'publish-appliance-release: REFUSED — %s\n' "$*" >&2; exit 1; }
 
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || blind '--version must be X.Y.Z'
+[[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || blind '--version must be X.Y.Z'
 [[ "$sums" =~ ^[A-Za-z0-9][A-Za-z0-9._+-]*$ ]] || blind '--sums must be a safe file name'
 [[ "$dir" == /* && -d "$dir" && ! -L "$dir" ]] || blind '--dir must be an existing absolute directory'
 for tool in gh curl sha256sum jq; do

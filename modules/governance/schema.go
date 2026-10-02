@@ -239,21 +239,23 @@ const (
 
 // approval columns (a human-in-the-loop request; mutable lifecycle).
 const (
-	colSubjectKind      = "subject_kind"
-	colSubjectRef       = "subject_ref"
-	colAction           = "action"
-	colRequestedBy      = "requested_by"      // audit-actor string (user:<id>/token:<id>) — provenance only
-	colRequestedByUser  = "requested_by_user" // stable user id — the separation-of-duty identity
-	colStatus           = "status"
-	colRequiredApproval = "required_approvals"
-	colApproveCount     = "approve_count"
-	colRejectCount      = "reject_count"
-	colReason           = "reason"
-	colPolicyRef        = "policy_ref"
-	colExpiresAt        = "expires_at"
-	colEscalateAt       = "escalate_at"
-	colEscalatedAt      = "escalated_at" // set once when escalation emits — gates the finding against double-emit
-	colDecidedAt        = "decided_at"
+	colApprovalSessionRef = "session_ref"
+	colSubjectKind        = "subject_kind"
+	colSubjectRef         = "subject_ref"
+	colAction             = "action"
+	colRequestedBy        = "requested_by"      // audit-actor string (user:<id>/token:<id>) — provenance only
+	colRequestedByUser    = "requested_by_user" // stable user id — the separation-of-duty identity
+	colStatus             = "status"
+	colRequiredApproval   = "required_approvals"
+	colApproveCount       = "approve_count"
+	colRejectCount        = "reject_count"
+	colReason             = "reason"
+	colApprovalReview     = "review"
+	colPolicyRef          = "policy_ref"
+	colExpiresAt          = "expires_at"
+	colEscalateAt         = "escalate_at"
+	colEscalatedAt        = "escalated_at" // set once when escalation emits — gates the finding against double-emit
+	colDecidedAt          = "decided_at"
 	// (F-02) single-use consume of an APPROVED request. colConsumedBy is the
 	// stable id of the one caller (the Claude Code tool_use_id) that spent the
 	// approval; colConsumedAt is when. An approved request is a ONE-SHOT token: the
@@ -524,6 +526,7 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		Kind:  approvalKind,
 		Table: approvalTable,
 		Fields: []model.FieldSpec{
+			{Name: colApprovalSessionRef, Kind: model.KindText, Nullable: true, Indexed: true, Principal: model.None("an operated session reference, never a user or credential identity: approvals.go:94")},
 			{Name: colSubjectKind, Kind: model.KindText, Indexed: true, Principal: model.None("an approval subject category, matched against approval policies and compared with \"agent\" only: approvals.go:314, killswitch.go:410")},
 			{Name: colSubjectRef, Kind: model.KindText, Indexed: true, Principal: model.None("an opaque approval subject compared verbatim with a gated action's subject: cmd/olivares/approvalbridge.go:793, killswitch.go:413")},
 			{Name: colAction, Kind: model.KindText, Indexed: true, Principal: model.None("a governed action name, matched against approval policies and the stop's action set: approvals.go:314, killswitch.go:384")},
@@ -536,6 +539,9 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 			{Name: colApproveCount, Kind: model.KindInt},
 			{Name: colRejectCount, Kind: model.KindInt},
 			{Name: colReason, Kind: model.KindText, Nullable: true, Principal: model.None("bounded operator prose, rendered only: approvals.go:94")},
+			{Name: colApprovalReview, Kind: model.KindJSON, Nullable: true, Principal: model.Nested(ApprovalReview{}, model.ClassEvidence,
+				model.Leaf("tool", model.None("a reviewed tool's display name, never resolved to a principal: approval_review.go:51")),
+				model.Leaf("text", model.None("bounded masked display facts, never execution or authority input: approval_review.go:51")))},
 			{Name: colPolicyRef, Kind: model.KindText, Nullable: true, Principal: model.None("the id of the matched approval policy, rendered only: approvals.go:94")},
 			{Name: colExpiresAt, Kind: model.KindTimestamp, Nullable: true, Indexed: true},
 			{Name: colEscalateAt, Kind: model.KindTimestamp, Nullable: true},

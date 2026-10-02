@@ -35,6 +35,7 @@ interface ResponseMetadata {
 
 const MANAGED_HEADERS = new Set([
   'authorization',
+  'x-csrf-token',
   'x-olivares-tenant',
   'content-type',
 ])
@@ -120,7 +121,7 @@ function isAbortError(error: unknown): boolean {
 
 export function RequestPanel({ endpoint }: RequestPanelProps) {
   const { t } = useTranslation('apiPlayground')
-  const token = useSessionStore((s) => s.token)
+  const token = useSessionStore((s) => s.csrfToken)
   const tenant = useTenantStore((s) => s.activeTenant)
   const {
     headers,
@@ -192,7 +193,7 @@ export function RequestPanel({ endpoint }: RequestPanelProps) {
       Object.entries(headers).filter(([key]) => !isManagedHeader(key)),
     )
     if (endpoint.secured && token) {
-      h['Authorization'] = `Bearer ${token}`
+      h['X-CSRF-Token'] = token
     }
     if (tenant) {
       h['X-Olivares-Tenant'] = tenant
@@ -384,10 +385,13 @@ export function RequestPanel({ endpoint }: RequestPanelProps) {
     const origin = window.location.origin
     try {
       const requestPath = resolvePlaygroundRequestPath(resolvedUrl, origin)
+      const curlHeaders = { ...effectiveHeaders }
+      delete curlHeaders['X-CSRF-Token']
+      if (endpoint.secured) curlHeaders.Authorization = 'Bearer <API_TOKEN>'
       const curl = generateCurl({
         method: endpoint.method,
         url: new URL(requestPath, origin).href,
-        headers: effectiveHeaders,
+        headers: curlHeaders,
         body: body.trim() && endpoint.method !== 'GET' ? body : null,
       })
       void navigator.clipboard.writeText(curl)

@@ -6,11 +6,10 @@ package main
 
 import (
 	"net"
-	"net/netip"
 	"os"
-	"sort"
 	"strings"
 
+	"github.com/olivaresai/olivares/core/secure"
 	"github.com/olivaresai/olivares/core/webaddr"
 )
 
@@ -53,53 +52,10 @@ func hostConsoleAddresses(listen, scheme string) []webaddr.Address {
 	if !ok {
 		return nil
 	}
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return nil
-	}
-	var v4, v6 []netip.Addr
-	seen := map[netip.Addr]bool{}
-	for _, iface := range ifaces {
-		if iface.Flags&net.FlagUp == 0 {
-			continue
-		}
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-		for _, a := range addrs {
-			ipnet, ok := a.(*net.IPNet)
-			if !ok {
-				continue
-			}
-			addr, ok := netip.AddrFromSlice(ipnet.IP)
-			if !ok {
-				continue
-			}
-			addr = addr.Unmap().WithZone("")
-			switch {
-			case seen[addr],
-				addr.IsLoopback(),
-				addr.IsUnspecified(),
-				addr.IsLinkLocalUnicast(),
-				addr.IsLinkLocalMulticast(),
-				addr.IsMulticast(),
-				addr.IsInterfaceLocalMulticast():
-				continue
-			}
-			seen[addr] = true
-			if addr.Is4() {
-				v4 = append(v4, addr)
-			} else {
-				v6 = append(v6, addr)
-			}
-		}
-	}
-	sortAddrs(v4)
-	sortAddrs(v6)
+	addrs := secure.LocalLANAddresses()
 
-	out := make([]webaddr.Address, 0, len(v4)+len(v6)+1)
-	for _, addr := range append(v4, v6...) {
+	out := make([]webaddr.Address, 0, len(addrs)+1)
+	for _, addr := range addrs {
 		if a, _ := webaddr.FromListen(net.JoinHostPort(addr.String(), port), scheme); !a.IsZero() {
 			out = append(out, a)
 		}
@@ -111,13 +67,6 @@ func hostConsoleAddresses(listen, scheme string) []webaddr.Address {
 		out = append(out, a)
 	}
 	return out
-}
-
-// sortAddrs orders addresses by their canonical byte form, so two boots of the
-// same host print the same list in the same order. netip.Addr.Compare is that
-// order.
-func sortAddrs(addrs []netip.Addr) {
-	sort.Slice(addrs, func(i, j int) bool { return addrs[i].Compare(addrs[j]) < 0 })
 }
 
 // splitListenPort extracts the port from a bind spelling. It is deliberately

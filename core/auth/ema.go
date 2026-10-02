@@ -384,7 +384,7 @@ func (a *Authenticator) PrincipalForExternalID(ctx context.Context, externalID s
 		if u.Status != model.StatusActive {
 			return nil
 		}
-		grants, groups, confined, e := loadGrants(ctx, as, u.ID)
+		grants, groups, confined, e := loadGrants(ctx, as, u.ID, u.IsSuperadmin)
 		if e != nil {
 			return e
 		}
@@ -420,7 +420,7 @@ func (a *Authenticator) PrincipalForSSOSubject(ctx context.Context, qualifiedSub
 		if u.Status != model.StatusActive {
 			return nil
 		}
-		grants, groups, confined, e := loadGrants(ctx, as, u.ID)
+		grants, groups, confined, e := loadGrants(ctx, as, u.ID, u.IsSuperadmin)
 		if e != nil {
 			return e
 		}

@@ -121,6 +121,7 @@ type tplTerms struct {
 	effort         string
 	model          string
 	instructions   string
+	secretEnv      []SecretEnvRef
 	allowedTools   []string
 	recordIO       bool
 	maxDuration    time.Duration
@@ -132,6 +133,7 @@ type tplTerms struct {
 	// unenforceable names every field the template declares that this launch cannot keep.
 	// Non-empty ⇒ the launch is refused (422) and the /apply preview reports applied=false.
 	unenforceable []string
+	peersRule     string
 }
 
 // templateTerms reduces a template body to the terms a launch can impose, and names
@@ -145,6 +147,7 @@ func templateTerms(body tplBody) tplTerms {
 		t.effort = strings.TrimSpace(s.Effort)
 		t.model = strings.TrimSpace(s.Model)
 		t.instructions = strings.TrimSpace(s.CustomInstructions)
+		t.secretEnv = append([]SecretEnvRef(nil), s.SecretEnv...)
 	}
 	if p := body.Policies; p != nil {
 		t.allowedTools = normalizeTools(p.AllowedTools)
@@ -280,6 +283,10 @@ func templateTerms(body tplBody) tplTerms {
 				"modes either auto-approve a class before the allow rules are read, or leave the outcome to a "+
 				"resolver step this runtime wires nothing into")
 	}
+	t.peersRule = body.PeersRule
+	if !validTemplatePeerRule(t.peersRule) {
+		t.unenforceable = append(t.unenforceable, "peers_rule: want same-template or omission")
+	}
 	return t
 }
 
@@ -330,6 +337,9 @@ func normalizeTools(in []string) []string {
 // "default", and a defaulted value is indistinguishable from a chosen one, so merging
 // after it would report a conflict against a value the caller never asked for.
 func (t tplTerms) applyTo(p *CreateRunParams) []mergeConflict {
+	// This is a launch default. Only persistNewRun stores it; resume keeps the
+	// run's own peer choice, even if the template has changed in the meantime.
+	p.templatePeersRule = t.peersRule
 	var conflicts []mergeConflict
 	set := func(field string, cur *string, want string) {
 		if want == "" || *cur == want {
@@ -347,6 +357,14 @@ func (t tplTerms) applyTo(p *CreateRunParams) []mergeConflict {
 	wantMode := t.permissionMode
 	if len(t.allowedTools) > 0 {
 		wantMode = permModeDontAsk
+	}
+	// SR2 on FH 031 (P2): the person's preset at launch is not widened by a template.
+	// A narrower mode the launch named stands; a template that needs its wider mode
+	// (an allowlist) was refused by refuseWiderTemplateMode before this. A resume
+	// re-applies today's template and is judged on the result (refuseUnrestrictedFor).
+	if named := strings.TrimSpace(p.PermissionMode); !p.resuming && named != "" && wantMode != "" &&
+		permissionRank(wantMode) > permissionRank(named) {
+		wantMode = ""
 	}
 	set("permission_mode", &p.PermissionMode, wantMode)
 	set("effort", &p.Effort, t.effort)
@@ -367,6 +385,26 @@ func (t tplTerms) applyTo(p *CreateRunParams) []mergeConflict {
 			})
 		}
 		p.Instructions = t.instructions
+	}
+	// The template's vault secrets join the launch's. The same variable named to two
+	// secrets is a conflict the template wins, like every other term.
+	for _, want := range t.secretEnv {
+		found := false
+		for i, have := range p.SecretEnv {
+			if strings.TrimSpace(have.Env) != strings.TrimSpace(want.Env) {
+				continue
+			}
+			found = true
+			if strings.TrimSpace(have.Secret) != strings.TrimSpace(want.Secret) {
+				conflicts = append(conflicts, mergeConflict{
+					Field: "secret_env." + want.Env, OldValue: have.Secret, NewValue: want.Secret,
+				})
+				p.SecretEnv[i] = want
+			}
+		}
+		if !found {
+			p.SecretEnv = append(p.SecretEnv, want)
+		}
 	}
 	if t.recordIO && !p.RecordRequested {
 		// Not a conflict: recording only ever goes from off to on here, and turning
@@ -497,6 +535,9 @@ func (m *Module) applyLaunchTemplate(ctx context.Context, tenant model.TenantID,
 	if bad := append(terms.unenforceable, unenforceableForTransport(terms, p.Transport)...); len(bad) > 0 {
 		return templateDTO{}, nil, unenforceableErr(dto.Name, bad)
 	}
+	if err := terms.refuseWiderTemplateMode(p); err != nil {
+		return templateDTO{}, nil, err
+	}
 	conflicts := terms.applyTo(p)
 	// The template's identity AND revision travel with the launch. The revision is what
 	// binds a governed human approval to the terms that were approved: templates are
@@ -506,5 +547,38 @@ func (m *Module) applyLaunchTemplate(ctx context.Context, tenant model.TenantID,
 	// exact anti-TOCTOU boundary the approval's plan hash exists to draw (Codex sol max
 	// contrast, 2026-08-11).
 	p.TemplateVersion = dto.Version
+	p.TemplateBuiltin = dto.Builtin
 	return dto, conflicts, nil
+}
+
+// permissionRank orders the permission modes by how much a session may do without
+// asking: read only, ask, edits only, the allowlist's commands, auto, full. An
+// unknown mode ranks widest, so it is never kept as "narrower".
+func permissionRank(mode string) int {
+	switch strings.TrimSpace(mode) {
+	case "plan":
+		return 0
+	case "default":
+		return 1
+	case "acceptEdits":
+		return 2
+	case permModeDontAsk:
+		return 3
+	case "auto":
+		return 4
+	}
+	return 5
+}
+
+// refuseWiderTemplateMode refuses a launch whose named preset is narrower than a
+// template that cannot run under it: a tool allowlist is enforced by its own mode
+// (dontAsk), so keeping the person's narrower mode would drop the template's terms,
+// and widening it would override the person's choice. Nothing is changed silently.
+func (t tplTerms) refuseWiderTemplateMode(p *CreateRunParams) error {
+	named := strings.TrimSpace(p.PermissionMode)
+	if p.resuming || named == "" || len(t.allowedTools) == 0 || named == permModeDontAsk ||
+		permissionRank(permModeDontAsk) <= permissionRank(named) {
+		return nil
+	}
+	return forbiddenErr("this template runs its allowed tools without asking (edits and commands), which is more than the permission you chose; choose edits and commands, or launch without this template")
 }

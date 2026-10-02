@@ -8,9 +8,11 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -119,12 +121,15 @@ var errNoProviderAdapter = errors.New("sessions: no managed provider credential 
 // Provider approval authority.
 // ---------------------------------------------------------------------------
 
-// ProviderApprovalRequest is the references-only view of one approval an owned
-// provider child asked for. It carries no command, no patch and no file content:
-// the driver's codec decides the wire shape, this seam decides authority.
+// ProviderApprovalRequest describes one approval from an owned provider child.
+// Commands and paths are bounded; patches and file contents are excluded.
+// Effective facts are process-only PDP input; only reviewed projections may be retained.
+// The driver's codec decides the wire shape, this seam decides authority.
 type ProviderApprovalRequest struct {
 	Driver         string
 	RunRef         string
+	SessionRef     string
+	Principal      auth.Principal
 	ProfileRef     string
 	ConversationID string
 	TurnID         string
@@ -136,6 +141,14 @@ type ProviderApprovalRequest struct {
 	// Requested names the permission entries the provider asked for. Grants are
 	// intersected with it: an authority cannot widen a request it was shown.
 	Requested []string
+	// Bounded, redacted policy and human-review facts. File contents are excluded.
+	CommandLine   string
+	FilePaths     []string
+	FactsComplete bool
+	// Effective facts preserve the owned child's input before display redaction.
+	// Never serialize or execute these copies; the provider owns execution.
+	EffectiveCommandLine string   `json:"-"`
+	EffectiveFilePaths   []string `json:"-"`
 }
 
 // ProviderApprovalDecision is an authority's verdict. Granted is intersected with
@@ -381,7 +394,17 @@ func (m *Module) mintFromProviderRecord(
 		}
 	}
 	if rec.Kind == ProviderKindOllama {
-		return Credential{localModelEndpoint: strings.TrimRight(rec.BaseURL, "/") + "/v1"}, nil, nil
+		models := localModelNames(rec.Models)
+		if driver == providerDriverOpenCode && len(models) == 0 {
+			// OpenCode is pointed at the local endpoint only (driver_opencode.go). With
+			// no model listed it would fall back to its own hosted default and send the
+			// prompt off this server; the launch is refused instead (FH 085).
+			return Credential{}, nil, &runErr{
+				http.StatusConflict,
+				"the local model provider " + strconv.Quote(rec.DisplayName) + " lists no model; download a model in Ollama, then test the provider in Providers so its models are read",
+			}
+		}
+		return Credential{localModelEndpoint: strings.TrimRight(rec.BaseURL, "/") + "/v1", localModels: models}, nil, nil
 	}
 
 	if m.rt.providerVault == nil {
@@ -430,4 +453,116 @@ func validateRecordCredentialEnv(kind string, env []EnvVar) error {
 		}
 	}
 	return validateExplicitEnv(env)
+}
+
+// ProviderApprovalDisposition is the live policy verdict before human review.
+// Only Ask may enter the approval queue; unknown verdicts deny closed.
+type ProviderApprovalDisposition string
+
+const (
+	ProviderApprovalAllow ProviderApprovalDisposition = "allow"
+	ProviderApprovalDeny  ProviderApprovalDisposition = "deny"
+	ProviderApprovalAsk   ProviderApprovalDisposition = "ask"
+)
+
+type ProviderApprovalPolicyDecision struct {
+	Disposition ProviderApprovalDisposition
+	Granted     []string
+	Reason      string
+}
+type ProviderApprovalPolicy func(context.Context, model.TenantID, ProviderApprovalRequest) (ProviderApprovalPolicyDecision, error)
+
+// WithProviderApprovalPolicy binds the live PDP and its decision audit. The policy
+// owns recording its verdict; the existing driver rechecks turn and launch authority
+// after this decision, including after a queued human decision.
+func WithProviderApprovalPolicy(policy ProviderApprovalPolicy) Option {
+	return func(m *Module) { m.rt.providerApprovalPolicy = policy }
+}
+
+// WithProviderApprovalPrincipalResolver connects the one engine session credential
+// service to approval requests. Composition adapts SessionCredentials.ResolveRun;
+// this consumer does not mint credentials or retain bearer material.
+func WithProviderApprovalPrincipalResolver(resolve func(context.Context, model.TenantID, string) (auth.Principal, string, error)) Option {
+	return func(m *Module) { m.rt.providerApprovalPrincipal = resolve }
+}
+
+func (m *Module) authorizeProviderApproval(ctx context.Context, tenant model.TenantID, req ProviderApprovalRequest) (ProviderApprovalDecision, error) {
+	resolvePrincipal := func() error {
+		if m.rt.providerApprovalPrincipal == nil {
+			return nil
+		}
+		principal, sessionRef, err := m.rt.providerApprovalPrincipal(ctx, tenant, req.RunRef)
+		if err != nil {
+			return err
+		}
+		if sessionRef == "" || principal.SessionIdentity != sessionRef || (req.SessionRef != "" && req.SessionRef != sessionRef) {
+			return errors.New("session approval identity is unavailable")
+		}
+		req.Principal, req.SessionRef = principal, sessionRef
+		return nil
+	}
+	if err := resolvePrincipal(); err != nil {
+		return ProviderApprovalDecision{}, err
+	}
+
+	if m.rt.providerApprovalPolicy != nil {
+		verdict, err := m.rt.providerApprovalPolicy(ctx, tenant, req)
+		if err != nil {
+			return ProviderApprovalDecision{}, err
+		}
+		switch verdict.Disposition {
+		case ProviderApprovalAllow:
+			return ProviderApprovalDecision{Allow: true, Granted: append([]string(nil), verdict.Granted...), Reason: verdict.Reason}, nil
+		case ProviderApprovalAsk:
+		default:
+			return ProviderApprovalDecision{Reason: verdict.Reason}, nil
+		}
+	}
+	decision, err := m.rt.approvalGate.Approve(ctx, tenant, req)
+	if err != nil || !decision.Allow {
+		return decision, err
+	}
+	// A human decision cannot override authority or a live policy that changed
+	// while waiting. Ask here means this same approved question, never a new wait.
+	if err := resolvePrincipal(); err != nil {
+		return ProviderApprovalDecision{}, err
+	}
+	if m.rt.providerApprovalPolicy != nil {
+		verdict, err := m.rt.providerApprovalPolicy(ctx, tenant, req)
+		if err != nil {
+			return ProviderApprovalDecision{}, err
+		}
+		switch verdict.Disposition {
+		case ProviderApprovalAsk:
+		case ProviderApprovalAllow:
+			granted := make([]string, 0, len(decision.Granted))
+			for _, humanGrant := range decision.Granted {
+				for _, liveGrant := range verdict.Granted {
+					if humanGrant == liveGrant {
+						granted = append(granted, humanGrant)
+						break
+					}
+				}
+			}
+			decision.Granted = granted
+		default:
+			return ProviderApprovalDecision{Reason: verdict.Reason}, nil
+		}
+	}
+	return decision, nil
+}
+
+// localModelNames is the record's probed model list without blanks or repeats, in
+// the provider's order.
+func localModelNames(models []string) []string {
+	out := make([]string, 0, len(models))
+	seen := map[string]bool{}
+	for _, name := range models {
+		name = strings.TrimSpace(name)
+		if name != "" && !seen[name] {
+			seen[name] = true
+			out = append(out, name)
+		}
+	}
+	return out
 }

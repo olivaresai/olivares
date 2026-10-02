@@ -25,11 +25,7 @@
  *  `pre_1_0` = pre-1.0 schema (e.g. ASIM AgentEvent 0.1.0). Widened with `| string`
  *  so a new upstream maturity does not break the type (ARCHITECTURE.md).*/
 export type StandardMaturity =
-  | 'development'
-  | 'ga'
-  | 'pre_1_0'
-  | 'stable'
-  | string
+  'development' | 'ga' | 'pre_1_0' | 'stable' | string
 
 /** Direction of a standard relative to the engine: `in` = ingest profile we accept,
  *  `out` = export/emit format we produce. */
@@ -39,11 +35,7 @@ export type StandardDirection = 'in' | 'out' | string
  *  `available` = implemented but not currently producing records; `opt_in_off` = a
  *  gated profile that is off by default; `blocked` = depends on an unshipped seam. */
 export type StandardStatus =
-  | 'active'
-  | 'available'
-  | 'opt_in_off'
-  | 'blocked'
-  | string
+  'active' | 'available' | 'opt_in_off' | 'blocked' | string
 
 /** One interop standard's ingestion-health row (modules/observability ingestion.go).
  *  Versions/maturities are the verified upstream pins cited in the module header. */
@@ -117,13 +109,7 @@ export interface IngestionHealthResponse {
 /** Span kind. The ledger read-model always reports "ledger" (an honest non-OTel
  *  label); the OTel kinds remain renderable for any future OTLP-backed source. */
 export type SpanKind =
-  | 'ledger'
-  | 'server'
-  | 'client'
-  | 'producer'
-  | 'consumer'
-  | 'internal'
-  | string
+  'ledger' | 'server' | 'client' | 'producer' | 'consumer' | 'internal' | string
 
 /** Span status. The ledger stores no OTel status code, so the read-model always
  *  reports "unset" — never a fabricated ok/error verdict. */

@@ -1,6 +1,13 @@
 {
   "title": "Identité & NHI",
   "subtitle": "SSO, SCIM, inventaire des identités, cycle de vie NHI, graphe WIF et connexion privilégiée — observés, gouvernés et audités.",
+  "sections": "Sections d’identité",
+  "groups": {
+    "people": "Personnes",
+    "signIn": "Connexion",
+    "machines": "Identités machine",
+    "posture": "Posture"
+  },
   "tabs": {
     "federation": "SSO & SCIM",
     "inventory": "Inventaire des identités",
@@ -42,7 +49,10 @@
       "nhiLifecycleFinalize": "Finalisation du retrait d’une identité non humaine",
       "providers": "Enregistrer ou retirer un identifiant de fournisseur",
       "generic": "Cette action",
-      "console": "Gestion des connecteurs"
+      "console": "Gestion des connecteurs",
+      "stepUpPolicy": "Changing the extra check for administrative actions",
+      "modules": "Activer ou désactiver des modules",
+      "signing": "Activer ou désactiver la signature des rapports"
     },
     "aal": {
       "aal1": "AAL1 (mot de passe)",
@@ -63,7 +73,12 @@
     "verificationFailed": "La session n’a pas pu être vérifiée pour cette action. L’authentification a peut-être abouti ; l’action n’a pas été poursuivie.",
     "cancelled": "L’opération avec la clé d’accès a été annulée ou a expiré. Vous pouvez réessayer. L’action n’a pas été poursuivie.",
     "cancelHint": "Fermer annule cette action. Un enregistrement ou une authentification déjà envoyés peuvent encore aboutir.",
-    "registrationUnknownElsewhere": "L’inscription n’a pas pu être confirmée. La clé d’accès a peut-être été enregistrée. Fermez cette boîte de dialogue et vérifiez vos clés d’accès avant de commencer une nouvelle inscription."
+    "registrationUnknownElsewhere": "L’inscription n’a pas pu être confirmée. La clé d’accès a peut-être été enregistrée. Fermez cette boîte de dialogue et vérifiez vos clés d’accès avant de commencer une nouvelle inscription.",
+    "code": {
+      "title": "Sign in with your authenticator code",
+      "body": "{{action}} needs a sign-in with your authenticator code on this deployment. Sign in again and enter your code.",
+      "signInAgain": "Sign in again"
+    }
   },
   "references": {
     "note": "Normes reflétées par ce panneau. Le panneau observe et vérifie ; il ne revendique aucune certification.",
@@ -101,7 +116,7 @@
   },
   "sso": {
     "title": "Authentification unique (OIDC / SAML)",
-    "description": "La connexion fédérée est implémentée dans la version business et configurée par l’environnement au démarrage. Ce panneau documente la configuration, vérifie l’URI de redirection exacte et expose l’état de la connexion — il n’écrit pas la configuration.",
+    "description": "La connexion fédérée se configure dans SSO / IdP, ou par l’environnement au démarrage. Ce panneau documente la configuration, vérifie l’URI de redirection exacte et expose l’état de la connexion — il n’écrit pas la configuration.",
     "notConfigured": "Non configuré",
     "notConfiguredHint": "Aucun fournisseur d’identité n’est configuré, les requêtes de fédération renvoient donc 501. Définissez les clés d’environnement ci-dessous et redémarrez le moteur pour activer le SSO.",
     "seamWhat": "Le résumé de l’état de connexion SSO",
@@ -282,9 +297,9 @@
       "title": "Actions du cycle de vie",
       "reason": "Motif",
       "critical": {
-        "twoAccountsAal3": "Cette action CRITIQUE exige l’approbation de deux comptes utilisateur distincts, chacun depuis une session AAL3, avant toute exécution. Le moteur impose des COMPTES distincts : il ne peut pas prouver que deux comptes correspondent à deux personnes différentes. Ces deux conditions dépendent du niveau de risque en vigueur, qu’une politique d’approbation peut abaisser.",
-        "breakGlassPossible": "Rien ne s’exécute tant que deux comptes utilisateur distincts n’ont pas approuvé, chacun depuis une session vérifiée par matériel. Une autorisation d’urgence break-glass active peut l’autoriser à la place : cet usage est enregistré puis revu. Ces deux conditions dépendent du niveau de risque en vigueur, qu’une politique d’approbation peut abaisser.",
-        "noBreakGlass": "Rien ne s’exécute tant que deux comptes utilisateur distincts n’ont pas approuvé, chacun depuis une session vérifiée par matériel. Ici, le break-glass ne peut pas autoriser : aucune voie d’urgence ne contourne le second approbateur. Ces deux conditions dépendent du niveau de risque en vigueur, qu’une politique d’approbation peut abaisser."
+        "twoAccountsAal3": "Cette action CRITIQUE exige l’approbation de deux comptes utilisateur distincts avant toute exécution. Le moteur impose des COMPTES distincts : il ne peut pas prouver que deux comptes correspondent à deux personnes différentes. Cela dépend du niveau de risque en vigueur, qu’une politique d’approbation peut abaisser.",
+        "breakGlassPossible": "Rien ne s’exécute tant que deux comptes utilisateur distincts n’ont pas approuvé. Une autorisation d’urgence break-glass active peut l’autoriser à la place : cet usage est enregistré puis revu. Cela dépend du niveau de risque en vigueur, qu’une politique d’approbation peut abaisser.",
+        "noBreakGlass": "Rien ne s’exécute tant que deux comptes utilisateur distincts n’ont pas approuvé. Ici, le break-glass ne peut pas autoriser : aucune voie d’urgence ne contourne le second approbateur. Cela dépend du niveau de risque en vigueur, qu’une politique d’approbation peut abaisser."
       },
       "ownership": {
         "button": "Attribuer les responsables",
@@ -504,33 +519,6 @@
       "inferenceGeos": "Régions d’inférence autorisées",
       "unrestricted": "Non restreint / non signalé"
     },
-    "tls": {
-      "title": "TLS du panneau (cert-manager)",
-      "description": "La posture TLS propre au panneau : émetteur, expiration, renouvellement et chaîne.",
-      "seamWhat": "La posture TLS cert-manager du panneau",
-      "issuer": "Émetteur",
-      "notAfter": "Expire",
-      "autoRenew": "Renouvellement automatique",
-      "chain": "Chaîne"
-    },
-    "crypto": {
-      "title": "Agilité cryptographique / inventaire PQC",
-      "description": "Algorithmes classiques face aux algorithmes post-quantiques à travers le parc d’identités, et quels emplacements peuvent être renouvelés vers la PQC (NIST SP 800-57 r6).",
-      "seamWhat": "L’inventaire d’agilité cryptographique / PQC",
-      "ready": "Prêt pour la PQC",
-      "notReady": "Classique uniquement",
-      "family": {
-        "classic": "Classique",
-        "pqc": "Post-quantique",
-        "hybrid": "Hybride"
-      },
-      "col": {
-        "usage": "Usage",
-        "algorithm": "Algorithme",
-        "family": "Famille",
-        "pqcReady": "Agilité PQC"
-      }
-    },
     "unavailable": {
       "badge": "Illisible",
       "fallback": "Cette posture n'a pas pu être lue sur ce déploiement."
@@ -575,6 +563,8 @@
       "registerHint": "Donnez un nom à votre passkey pour l'identifier ultérieurement.",
       "nameLabel": "Nom de la passkey",
       "namePlaceholder": "ex. YubiKey 5C, MacBook Touch ID",
+      "defaultName": "Passkey sur {{device}}",
+      "defaultNameNoDevice": "Passkey",
       "registering": "Cérémonie en cours…",
       "registered": "Passkey enregistrée.",
       "registerFailed": "Échec de l'enregistrement. Votre navigateur ne prend peut-être pas en charge WebAuthn ou la cérémonie a été annulée.",
@@ -598,10 +588,6 @@
     }
   },
   "empty": {
-    "cryptoInventory": {
-      "title": "Aucun actif cryptographique inventorié",
-      "description": "Cette version déclare le contrat de posture TLS et post-quantique sans le servir ; un avis de contrat en attente remplace ce panneau jusqu’à ce que son implémentation réponde."
-    },
     "externalKeys": {
       "title": "Aucune référence de clé externe signalée",
       "description": "Aucune clé de chiffrement gérée par le client n'a été signalée pour cette organisation. L'inventaire a bien été lu : c'est un zéro réel, pas un backend absent."
@@ -645,5 +631,21 @@
     "policyConfirmOn": "Confirmer : exiger",
     "policyDisable": "Désactiver",
     "policyAal3Note": "Modifier cette politique exige une session AAL3. Les comptes sans facteur sont orientés vers l'enregistrement à leur prochaine connexion — jamais verrouillés."
+  },
+  "stepUpPolicy": {
+    "title": "Extra check for administrative actions",
+    "description": "Off by default. Turn it on to ask for an authenticator code or a passkey before administrative changes such as users, identity providers, secrets or tool installs.",
+    "options": {
+      "none": "Off",
+      "totp": "Authenticator code",
+      "passkey": "Passkey"
+    },
+    "saved": "Saved.",
+    "loadFailed": "This setting could not be read. Refresh the page to try again.",
+    "note": "To require a passkey, sign in with your passkey here first. To require an authenticator code, sign in with your code first. You can always turn it off. A change takes effect within a few seconds on every server.",
+    "refused": {
+      "passkey_not_enrolled": "Add a passkey to your account first (Identity > Passkeys), then turn this on.",
+      "totp_sign_in_required": "Set up an authenticator app and sign in with its code first, then turn this on."
+    }
   }
 }

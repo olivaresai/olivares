@@ -12,8 +12,14 @@ import { expectNoRawI18nKeys } from '@/test/i18n-keys'
 // own namespaces; if that regresses, this test goes red with the raw key.
 import { ApiError } from '@/lib/api/errors'
 import { finopsApi } from '@/features/finops/api'
+import { governanceApi } from '@/features/governance/api'
+import { killswitchApi } from '@/features/killswitch/api'
 import { securityApi } from '@/features/security/api'
 import { healthApi } from '@/features/health/api'
+import { signInApi } from '@/features/first-hour/api'
+import { sessionsApi } from '@/features/sessions/api'
+import { agentOpsApi } from '@/features/agentops/api'
+import { useModulesStore } from '@/stores/modules'
 import {
   finopsForecastFixture,
   finopsSummaryFixture,
@@ -42,12 +48,15 @@ vi.mock('@tanstack/react-router', () => ({
 const authState = vi.hoisted(() => ({
   can: (_p: string): boolean => true,
   activeTenant: 'demo' as string | null,
+  // The tools' own status is a system administrator's read (useToolStatus).
+  isSuperadmin: true,
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 
 afterEach(() => {
   vi.restoreAllMocks()
   authState.can = () => true
+  authState.isSuperadmin = true
 })
 
 describe('EstateTile (the three honest states)', () => {
@@ -220,6 +229,56 @@ describe('HomeView (RBAC gating + honest states)', () => {
     expect(screen.queryByText('Health & SLA')).toBeNull()
     expect(screen.queryByText('Inventory')).toBeNull()
     expect(screen.queryByText('Compliance')).toBeNull()
+    expect(screen.queryByText('Kill switch')).toBeNull()
+  })
+
+  it('gives a role that reads only the approval queue its pending approvals on Now', async () => {
+    authState.can = (p) => p === 'governance:approval:read'
+    vi.spyOn(governanceApi, 'listApprovals').mockResolvedValue({
+      items: [
+        {
+          id: 'ap-9',
+          action: 'deploy.promote',
+          requested_by: 'user:grace',
+          status: 'pending',
+          required_approvals: 2,
+          approve_count: 1,
+          reject_count: 0,
+          escalated: false,
+        },
+      ],
+      has_more: false,
+    } as never)
+    renderIntel(<HomeView />)
+    // This file's Link double renders href and children only, so the row is read by text.
+    const action = await screen.findByText('deploy.promote')
+    expect(action.closest('a')).toHaveAttribute('href', '/permissions')
+    expect(screen.queryByText(/Nothing to show yet/i)).toBeNull()
+  })
+
+  it('states the kill switch posture from its own read, and opens the kill switch', async () => {
+    authState.can = (p) => p === 'governance:killswitch:read'
+    vi.spyOn(killswitchApi, 'state').mockResolvedValue({
+      estate_stopped: true,
+      active: [
+        {
+          id: 'ks-1',
+          scope_kind: 'estate',
+          status: 'active',
+          source: 'operator',
+          engaged_aal: 3,
+          engage_audit_seq: 1,
+          revoked_approvals: 0,
+          reviewed: false,
+        },
+      ],
+    })
+    renderIntel(<HomeView />)
+    expect(await screen.findByText('ALL AGENTS STOPPED')).toBeInTheDocument()
+    const tile = screen.getByText('Kill switch').closest('a')
+    expect(tile).toHaveAttribute('href', '/killswitch')
+    // A role that can read only the kill switch still gets a Now page, not "nothing".
+    expect(screen.queryByText(/Nothing to show yet/i)).toBeNull()
   })
 
   it('shows the honest empty state when the role can read nothing', () => {
@@ -338,5 +397,170 @@ describe('HomeView (RBAC gating + honest states)', () => {
     expect(screen.getByTestId('estate-kpi-value')).not.toHaveTextContent(
       '2/2 healthy',
     )
+  })
+})
+
+describe('Now — the next step once a coding tool is ready (HU 022)', () => {
+  // What each tool runs on is the engine's answer (GET provider-profiles/resolve):
+  // a tool missing from the map is refused with the engine's 409 sentence.
+  const runsOn = (
+    answers: Partial<
+      Record<string, Awaited<ReturnType<typeof agentOpsApi.previewProfile>>>
+    >,
+  ) =>
+    vi
+      .spyOn(agentOpsApi, 'previewProfile')
+      .mockImplementation(async (driver) => {
+        const answer = answers[driver]
+        if (answer) return answer
+        throw new ApiError(
+          409,
+          'conflict',
+          `${driver} has nothing to run on yet.`,
+        )
+      })
+
+  it('drops the generic next steps when a tool is signed in; New session is the action', async () => {
+    runsOn({ claude: { reason: 'own_login' } })
+    vi.spyOn(signInApi, 'status').mockImplementation(
+      async (driver) =>
+        ({
+          driver,
+          installed: driver === 'claude',
+          signed_in: driver === 'claude',
+        }) as Awaited<ReturnType<typeof signInApi.status>>,
+    )
+    renderIntel(<HomeView />)
+    expect(await screen.findByTestId('now-start')).toBeInTheDocument()
+    expect(screen.queryByTestId('home-next-step')).toBeNull()
+  })
+
+  it('a tool that runs on an API key from Providers is ready too (HU 029)', async () => {
+    vi.spyOn(signInApi, 'status').mockImplementation(async (driver) => ({
+      driver,
+      installed: driver === 'claude',
+      signed_in: false,
+    }))
+    runsOn({
+      claude: {
+        reason: 'api_key',
+        provider: { provider_ref: 'prv_1', kind: 'anthropic' },
+      },
+    })
+    renderIntel(<HomeView />)
+    expect(await screen.findByTestId('now-start')).toHaveTextContent(
+      'Claude Code is ready.',
+    )
+    expect(screen.queryByTestId('home-next-step')).toBeNull()
+  })
+
+  // WEB on 09b: an editor's Home asked GET agenttools/sign-in for both tools and got
+  // 403 twice per load. Only a system administrator may read it, so nobody else asks.
+  it('never asks for the tools\u2019 own status for someone who is not a system administrator', async () => {
+    authState.isSuperadmin = false
+    runsOn({ claude: { reason: 'own_login' } })
+    const status = vi.spyOn(signInApi, 'status')
+    renderIntel(<HomeView />)
+    expect(await screen.findByTestId('now-start')).toHaveTextContent(
+      'Claude Code is ready.',
+    )
+    expect(status).not.toHaveBeenCalled()
+  })
+
+  it('a fresh install shows the real next step, signing the tool in, and no generic cards (N2 J8)', async () => {
+    runsOn({})
+    vi.spyOn(signInApi, 'status').mockImplementation(
+      async (driver) =>
+        ({
+          driver,
+          installed: driver === 'claude',
+          signed_in: false,
+        }) as Awaited<ReturnType<typeof signInApi.status>>,
+    )
+    renderIntel(<HomeView />)
+    expect(await screen.findByTestId('now-start')).toHaveTextContent(
+      'Sign Claude Code in to start a session.',
+    )
+    expect(screen.queryByTestId('home-next-step')).toBeNull()
+  })
+})
+
+describe('Home with modules not enabled (ARCH C1)', () => {
+  afterEach(() => useModulesStore.getState().setOff([]))
+
+  it('shows no tile and asks nothing of a module that is not enabled', async () => {
+    useModulesStore.getState().setOff(['finops', 'security'])
+    const summary = vi.spyOn(finopsApi, 'summary')
+    const findings = vi.spyOn(securityApi, 'findings')
+    renderIntel(<HomeView />)
+    await screen.findByTestId('now-aside')
+    expect(summary).not.toHaveBeenCalled()
+    expect(findings).not.toHaveBeenCalled()
+  })
+})
+
+describe('Now counts sessions, not the rows each one wrote (HU 029)', () => {
+  it('one launch with its hook and usage rows is one live session', async () => {
+    const RUN = '01a0f8bd-e094-7cfd-ace2-5e36665dca8b'
+    const OSN = 'osn_01a0f8bd-e095-7203-b4fa-2b332c008029'
+    const base = {
+      cc_state: 'active',
+      input_tokens: 0,
+      output_tokens: 0,
+      cost_micro_usd: 0,
+      event_count: 0,
+      tool_call_count: 0,
+      first_event_at: '2026-10-01T18:33:08Z',
+      last_event_at: '2026-10-01T18:33:08Z',
+      duration_seconds: 0,
+    }
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue({
+      items: [
+        {
+          ...base,
+          session_ref: 'claude-sid',
+          live_ref: 'lr-m',
+          attribution: 'managed',
+          canonical_sid: OSN,
+          run_ref: RUN,
+          provider_profile_ref: 'ppf_1',
+        },
+        {
+          ...base,
+          session_ref: RUN,
+          live_ref: 'lr-hook',
+          attribution: 'legacy',
+        },
+        {
+          ...base,
+          session_ref: OSN,
+          live_ref: 'lr-usage',
+          attribution: 'legacy',
+        },
+      ],
+      has_more: false,
+    } as never)
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue({
+      items: [
+        {
+          run_ref: RUN,
+          state: 'running',
+          transport: 'stream-json',
+          provider_profile_ref: 'ppf_1',
+          live_ref: 'lr-m',
+          claude_session_id: 'claude-sid',
+        },
+      ],
+      has_more: false,
+    } as never)
+    const { container } = renderIntel(<HomeView />)
+    await waitFor(() => {
+      const tile = [...container.querySelectorAll('a[href="/sessions"]')].find(
+        (a) => a.textContent?.includes('Live sessions'),
+      )
+      expect(
+        tile?.querySelector('[data-testid="estate-kpi-value"]')?.textContent,
+      ).toBe('1')
+    })
   })
 })

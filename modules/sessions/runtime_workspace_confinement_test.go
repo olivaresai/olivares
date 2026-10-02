@@ -215,16 +215,20 @@ func TestRunHTTPWorkspaceConfinement(t *testing.T) {
 			t.Fatalf("caller selected the event parent: %d %s", r.code, r.raw)
 		}
 	})
-	for _, action := range []string{"input", "interrupt", "stop", "resume", "cleanup", "delete"} {
+	for _, action := range []string{"input", "interrupt", "stop", "resume", "peers", "cleanup", "delete"} {
 		t.Run("foreign control/"+action, func(t *testing.T) {
 			beforeRead, beforeWrite := reads.views.Load(), reads.mutations.Load()
 			method, suffix := "POST", "/"+action
 			if action == "delete" {
 				method, suffix = "DELETE", ""
+			} else if action == "peers" {
+				method = "PUT"
 			}
 			var body any
 			if action == "input" {
 				body = map[string]any{"text": "must not reach the foreign process"}
+			} else if action == "peers" {
+				body = map[string]any{"peers": []string{}}
 			}
 			r := h.doJSON(method, "/v1/m/sessions/runs/"+runRef+suffix, confined, body, tenantHdr(tenant))
 			if r.code != 404 || strings.Contains(r.raw, marker) {
@@ -248,10 +252,14 @@ func TestRunHTTPWorkspaceConfinement(t *testing.T) {
 				method, suffix := "POST", "/"+action
 				if action == "delete" {
 					method, suffix = "DELETE", ""
+				} else if action == "peers" {
+					method = "PUT"
 				}
 				var body any
 				if action == "input" {
 					body = map[string]any{"text": "must not reach the process"}
+				} else if action == "peers" {
+					body = map[string]any{"peers": []string{}}
 				}
 				r := h.doJSON(method, "/v1/m/sessions/runs/"+tc.ref+suffix, tc.token, body, tenantHdr(tenant))
 				if r.code != tc.want || strings.Contains(r.raw, marker) {

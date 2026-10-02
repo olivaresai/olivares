@@ -12,29 +12,8 @@ import (
 	"testing"
 )
 
-// The defect these tests close: the first hour never named its own CLI route.
-// Every panel and every page sent the operator to the console, and
-// `olivares auth bootstrap` — which does the same job against the running engine
-// in under 300 ms — was named by nothing the product prints. On a headless host
-// it is the ONLY route.
-
-// TestQuickstartWelcomeNamesTheCLISetupRoute pins that the panel offers it.
-func TestQuickstartWelcomeNamesTheCLISetupRoute(t *testing.T) {
-	dir := t.TempDir()
-	eng, err := boot(context.Background(), bootConfig{
-		DataDir: dir, Engine: "sqlite", Version: "test", Logger: slog.Default(),
-	})
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = eng.Close() })
-
-	var out strings.Builder
-	if err := announceQuickstart(context.Background(), &out, eng, declaredConsoleAddress(t, "https://127.0.0.1:8443", false)); err != nil {
-		t.Fatal(err)
-	}
-	assertCLISetupRoute(t, out.String(), dir, "https://127.0.0.1:8443")
-}
+// first-boot retains the headless CLI setup route. The default quickstart panel
+// points to the console; its state-aware behavior is tested through live argv.
 
 // TestFirstBootNamesTheCLISetupRoute pins the same for the command an operator
 // runs when they come back to a pending install.

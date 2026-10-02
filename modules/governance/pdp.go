@@ -121,6 +121,10 @@ func composeEvaluators(onDeny func(auth.Request, auth.Decision), members ...auth
 func (c *chainEvaluator) Evaluate(ctx context.Context, req auth.Request) (auth.Decision, error) {
 	var firstPolicyDeny *auth.Decision
 	for _, m := range c.members {
+		before := retainedMember(m)
+		if !before {
+			auth.IncompleteAuthorizationInputs(ctx)
+		}
 		dec, err := m.Evaluate(ctx, req)
 		if err != nil {
 			return auth.Decision{}, err
@@ -147,4 +151,14 @@ func (c *chainEvaluator) Evaluate(ctx context.Context, req auth.Request) (auth.D
 		return *firstPolicyDeny, nil
 	}
 	return auth.Decision{Allow: true, Reason: "no policy restriction"}, nil
+}
+
+// Unknown external producers may decide live, but cannot claim retained replay.
+func retainedMember(m auth.PolicyEvaluator) bool {
+	switch m.(type) {
+	case *evaluator, *CedarEvaluator, *chainEvaluator, auth.DenyNothing:
+		return true
+	default:
+		return false
+	}
 }

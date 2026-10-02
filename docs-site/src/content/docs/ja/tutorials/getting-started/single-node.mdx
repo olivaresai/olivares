@@ -29,9 +29,9 @@ import { Steps, Aside } from '@astrojs/starlight/components'
 
 - systemd と `curl` を備えた Linux ホスト。
 - バイナリをビルドするための **Go 1.26+**（ストアは純粋 Go の SQLite なので、
-  C ツールチェーンは不要）。公開済みリリース **26.10.0** は署名済みアーカイブとネイティブ
+  C ツールチェーンは不要）。公開済みリリース **26.10.1** は署名済みアーカイブとネイティブ
   パッケージを提供しています。インストール面の証人は両方を **published** と記録しています
-  （`docs/releases/26.10.0-install-surfaces.json`）。このチュートリアルはチェックアウトから
+  （`docs/releases/26.10.1-install-surfaces.json`）。このチュートリアルはチェックアウトから
   ビルドします。代わりに公開リリースを入れるには、`main` 上の検証済みインストーラ
   （`scripts/install.sh`）を使います。[リリースの検証](/ja/how-to/verify-a-release/)は
   それらの成果物のためのチェーンです。
@@ -211,6 +211,7 @@ JSON ファイルで宣言され、エンジンが起動する前に読み込ま
 [pgAudit ガイド](/ja/how-to/connectors/pgaudit/)を参照）です:
 
 ```bash
+sudo mkdir -p /etc/olivares
 sudo tee /etc/olivares/sources.json >/dev/null <<JSON
 {"sources":[{
   "name": "salesdb-pgaudit",

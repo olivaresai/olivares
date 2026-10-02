@@ -28,29 +28,30 @@ and their honest constraints, are below.
 
 ## Two principles before you start
 
-1. **Opt-in.** The base Olivares image is distroless and **carries no `claude`**. The
-   Operate-Claude-Code layer is a *separate* artifact — a combined image
-   (`Dockerfile.agentops`) or a native install add-on. If you do not run governed Claude
-   Code, you never pull it, and its extra surface never touches your control plane.
+1. **Opt-in.** The Olivares image **carries no `claude`**. In Docker, Olivares installs
+   the agent tools into its data volume and signs them in through the product when you
+   ask for them; natively, the install add-on below does it. If you do not run governed
+   Claude Code, nothing is installed.
 2. **Official source, never redistributed.** Anthropic's terms do not permit
    redistributing the `claude` binary, so we **install it from Anthropic's official,
-   GPG-signed source** at build/first-run (the signed apt/dnf/apk repositories), pinned
-   and with the auto-updater disabled. We ship no third-party binary. You can also
+   GPG-signed source** at install time (natively the signed apt/dnf/apk repositories; in
+   the image Anthropic's signed release, checked against the same key), pinned and with
+   the auto-updater disabled. We ship no third-party binary. You can also
    **bring your own** `claude` and point the engine at it.
 
 ## The four topologies at a glance
 
 | # | Olivares | Claude Code | How the engine conducts it | Status |
 |---|----------|-------------|----------------------------|--------|
-| 1 | Docker | Docker | **Same container** (combined image), procRunner child | **Recommended** (same governed path as 2) |
+| 1 | Docker | Docker | **Same container** (the standard image), procRunner child | **Recommended** (same governed path as 2) |
 | 2 | Native | Native | Same host (systemd), procRunner child | **Recommended**, smoke-tested end-to-end |
 | 3 | Docker | Native (host) | Cross-namespace — not governable as-is | Co-locate instead (see below) |
 | 4 | Native | Docker (per-session) | Per-session container via the Docker API | Follow-up (documented) |
 
 The two **co-located** topologies (1, 2) are the secure default. Topology 2 (native) is
 tested end-to-end by [`scripts/smoke-agentops.sh`](https://github.com/olivaresai/olivares/blob/main/scripts/smoke-agentops.sh);
-topology 1 reuses the **same** governed procRunner path (the combined image's build/run
-is not yet wired into an automated test). Topologies 3 and 4 want the governor and the governed in
+topology 1 reuses the **same** governed procRunner path, and CI runs the image's agent
+runtime check (`scripts/qualify-container-agent-runtime.sh`). Topologies 3 and 4 want the governor and the governed in
 *different* containers; bridging stdio across that boundary needs Docker-API access (a
 privilege the engine deliberately does **not** take by default). Their honest paths are
 spelled out in [Mixed topologies](#mixed-topologies-3-and-4).
@@ -59,53 +60,36 @@ spelled out in [Mixed topologies](#mixed-topologies-3-and-4).
 
 ## Topology 1 — both in Docker (recommended)
 
-One hardened container runs the engine **and** `claude`; a workspace volume is the
-shared working directory. Loopback-only, non-root, read-only root filesystem — identical
-posture to the base compose, plus the conducted runtime.
-
-### Build the combined image
-
-`claude` is installed at build time from Anthropic's **signed apt repository**, with the
-signing-key fingerprint pinned (`31DD DE24 DDFA B679 F42D 7BD2 BAA9 29FF 1A7E CACE`) and
-auto-update disabled. Pin the engine base by digest and verify it first:
-
-```sh
-# verify the engine image you build FROM (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.10.0 \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com
-
-docker build -f Dockerfile.agentops \
-  --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
-  --build-arg CLAUDE_CHANNEL=stable \
-  -t olivares-agentops:26.10.0 .
-```
-
-Bring your own `claude` instead with `--build-arg CLAUDE_INSTALL=byo` (the image ships
-without `claude`; mount yours at runtime and set `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`).
+The standard engine container runs `claude` as well: Olivares installs the agent tools into
+its data volume and signs them in through the product. Non-root, read-only
+root filesystem — the base compose posture, with no second image and no override file.
 
 ### Bring it up
 
+Pin the engine by digest and verify it first:
+
 ```sh
-export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.10.0
-docker compose -f deploy/compose/docker-compose.yml \
-               -f deploy/compose/docker-compose.agentops.yml up -d
+# verify the engine image you run (it is cosign-signed)
+cosign verify docker.io/olivaresai/olivares:26.10.1 \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+export OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
+export OLIVARES_BIND=127.0.0.1
+docker compose -f deploy/compose/docker-compose.yml up -d
 ```
 
-The override changes only what Operate needs: the combined image, four writable volumes
-(engine data, **workspace**, claude's `~/.claude` home, the short-lived inference token),
-and the session-runtime env. Everything else — `127.0.0.1`-bound ports, uid 65532,
-`read_only` root, `cap_drop: ALL`, `no-new-privileges` — is inherited from the base.
+### Install and sign in Claude Code
 
-:::caution[The first governed session needs an inference credential]
-The credential source is **deny-closed**: a `stream-json` launch reads a *short-lived*
-bearer token from `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` (`/run/olivares/session-token`,
-on the `olivares-runtime` volume) and discards it — only a non-sensitive `credential_id`
-is ever stored. Point your WIF/SPIFFE/OIDC refresher at that volume. Until a token is
-present, `stream-json` launches fail **closed** — the engine still runs and is otherwise
-governable; wiring auth is your deliberate step. (The live in-process token exchange is
-wired separately.)
-:::
+From **AI tools** in the console, or with the CLI:
+
+```sh
+olivares tool install claude
+olivares tool login claude
+```
+
+The tool lives in the data volume and the sign-in belongs to your organization; sessions
+never use a sign-in stored in the server account's home.
 
 ---
 
@@ -142,7 +126,7 @@ Then, deliberately:
 
 ```sh
 sudo nano /etc/olivares/agentops.env     # wire the short-lived inference token (refresher)
-sudo systemctl enable --now olivares     # loopback-only by default
+sudo systemctl enable --now olivares     # listens on every interface by default
 ```
 
 :::note[Why there is no separate `claude` service]
@@ -190,7 +174,7 @@ session is governable end to end.
 values, not wired yet** (the per-session container Runner is the documented follow-up in
 [Topology 4](#topology-4--olivares-native-claude-in-a-per-session-container)). The native
 runner **refuses** a container/sandbox launch (a clear error) rather than silently run
-`claude` without the isolation you asked for. Use `native` — under the combined image /
+`claude` without the isolation you asked for. Use `native` — under the standard image /
 systemd co-deployment that is the engine's own hardened container/host boundary.
 :::
 
@@ -214,7 +198,7 @@ There is **no clean governed path**: a containerised engine cannot own the stdio
 process in the host's namespaces, and the governed transport is stdio. Reaching a host
 `claude` would require sharing the host PID namespace and mounts into the engine
 container — a large, deliberate de-isolation that defeats the point of containing the
-engine. **Co-locate instead**: run both in the combined image (that *is* topology 1), or
+engine. **Co-locate instead**: run both in the standard image (that *is* topology 1), or
 run both native (topology 2). This is a real limit, stated rather than papered over.
 
 ### Topology 4 — Olivares native, Claude in a per-session container
@@ -230,7 +214,7 @@ note above).
 **It is a documented follow-up, not shipped in this release.** Driving sibling containers
 means giving the engine Docker-API access (ideally through a least-privilege socket
 proxy) — a trust surface this release deliberately avoids in favour of the socket-free
-combined image. Choosing this topology is choosing stronger governor/governed isolation
+standard image. Choosing this topology is choosing stronger governor/governed isolation
 *at the cost of* that Docker-API grant; it will arrive behind the existing
 `isolation=container` seam. Until then, the secure default is co-location.
 
@@ -238,10 +222,11 @@ combined image. Choosing this topology is choosing stronger governor/governed is
 
 ## Security posture (all topologies)
 
-- **Loopback by default.** Host ports publish on `127.0.0.1` only. In a container the
-  engine listens on `0.0.0.0` *inside* the container, so the **host port mapping is the
-  exposure boundary** — never publish it on a non-loopback host address without your own
-  TLS-terminating auth proxy. The native/systemd default bind is loopback. Expose deliberately.
+- **Published ports.** Docker Compose publishes HTTPS and gRPC on every host interface
+  (`0.0.0.0`) by default. Set `OLIVARES_BIND=127.0.0.1`, as in the command above, to
+  restrict them to this host. The engine listens on `0.0.0.0` inside the container;
+  the host port mapping controls exposure. Native/systemd listeners also bind every
+  interface by default; configure their listen addresses to restrict access.
 - **Non-root, least privilege.** uid/gid 65532, read-only root filesystem, `cap_drop:
   ALL`, `no-new-privileges` (Docker) / the full `Protect*`/`Restrict*` set minus the one
   documented W^X relaxation (systemd).

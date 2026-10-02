@@ -1,6 +1,8 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { useModuleOn } from '@/stores/modules'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronRight, FolderTree } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -8,7 +10,6 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
@@ -43,9 +44,12 @@ export function ResourceTreePicker({
         : { limit: RESOURCE_PAGE },
     [workspaceId],
   )
+  // Resources are the sourcescope module's: nothing to pick while it is off.
+  const sourcescopeOn = useModuleOn('sourcescope')
   const roots = useQuery({
     queryKey: consoleKeys.resources(activeTenant, params),
     queryFn: () => consoleApi.listResources(params),
+    enabled: sourcescopeOn,
   })
 
   if (roots.isLoading) {
@@ -56,7 +60,9 @@ export function ResourceTreePicker({
     )
   }
   if (roots.isError) {
-    return <ErrorState retry={() => void roots.refetch()} />
+    return (
+      <QueryErrorState error={roots.error} retry={() => void roots.refetch()} />
+    )
   }
   const items = roots.data?.items ?? []
   const raicesIncompletas = roots.data?.has_more === true && !roots.error
@@ -108,12 +114,13 @@ function ResourceTreeItem({
   const { t } = useTranslation('console')
   const { activeTenant } = useAuth()
   const [expanded, setExpanded] = useState(false)
+  const sourcescopeOn = useModuleOn('sourcescope')
   // El recorte es POR NIVEL: cada rama se pide por separado, así que el aviso también.
   const childParams = { parent: node.id, limit: RESOURCE_PAGE }
   const children = useQuery({
     queryKey: consoleKeys.resources(activeTenant, childParams),
     queryFn: () => consoleApi.listResources(childParams),
-    enabled: expanded,
+    enabled: expanded && sourcescopeOn,
   })
   const hijosIncompletos = children.data?.has_more === true && !children.error
   const selected = selectedId === node.id

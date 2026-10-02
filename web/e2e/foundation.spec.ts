@@ -64,7 +64,8 @@ test.describe('Foundation — CSP L3 + Trusted Types', () => {
     page,
   }) => {
     await page.addInitScript(() => {
-      ;(window as unknown as { __cspViolations: unknown[] }).__cspViolations = []
+      ;(window as unknown as { __cspViolations: unknown[] }).__cspViolations =
+        []
       document.addEventListener('securitypolicyviolation', (e) => {
         ;(
           window as unknown as { __cspViolations: unknown[] }
@@ -81,7 +82,8 @@ test.describe('Foundation — CSP L3 + Trusted Types', () => {
     const suspect =
       /content security policy|trusted ?types|trustedscript|trustedhtml|trustedscripturl|refused to (load|execute|apply|evaluate)|violates the following/i
     page.on('console', (m) => {
-      if (m.type() === 'error' && suspect.test(m.text())) consoleHits.push(m.text())
+      if (m.type() === 'error' && suspect.test(m.text()))
+        consoleHits.push(m.text())
     })
     page.on('pageerror', (e) => {
       if (suspect.test(String(e))) consoleHits.push(String(e))
@@ -91,7 +93,8 @@ test.describe('Foundation — CSP L3 + Trusted Types', () => {
     await page.waitForLoadState('networkidle')
 
     const reported = await page.evaluate(
-      () => (window as unknown as { __cspViolations: unknown[] }).__cspViolations,
+      () =>
+        (window as unknown as { __cspViolations: unknown[] }).__cspViolations,
     )
     expect(reported, JSON.stringify(reported, null, 2)).toEqual([])
     expect(consoleHits, consoleHits.join('\n')).toEqual([])
@@ -114,7 +117,11 @@ test.describe('Foundation — CSP L3 + Trusted Types', () => {
       el.innerHTML = '<b>ok</b><img src=x onerror="alert(1)">'
       return el.innerHTML
     })
-    expect(got, 'safe markup must survive the safety net').toContain('<b>ok</b>')
-    expect(got, 'the event handler must not survive it').not.toContain('onerror')
+    expect(got, 'safe markup must survive the safety net').toContain(
+      '<b>ok</b>',
+    )
+    expect(got, 'the event handler must not survive it').not.toContain(
+      'onerror',
+    )
   })
 })

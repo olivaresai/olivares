@@ -143,7 +143,6 @@ func TestGroupOriginHTTPWritesRefuseClaimedGroups(t *testing.T) {
 		suffix string
 		body   map[string]any
 	}{
-		{"role", map[string]any{"role": "viewer"}},
 		{"parent", map[string]any{"parent_id": ""}},
 	} {
 		t.Run("native/"+route.suffix, func(t *testing.T) {

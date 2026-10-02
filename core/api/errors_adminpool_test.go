@@ -72,12 +72,13 @@ func TestAdminPoolRefusalIsActionableNotInternal(t *testing.T) {
 		t.Fatal("the operator is still told `internal error` and has nothing to act on")
 	}
 	// The two things the operator has to DO. Without both, the message is sympathy
-	// rather than a remedy: one names what to provision, the other how to pass it.
-	if !strings.Contains(msg, "olivares db init") || !strings.Contains(msg, "--admin-role") {
-		t.Errorf("message does not name a command that provisions the role: %q", msg)
+	// rather than a remedy: the command that installs the tenant inventory, and the
+	// restart that starts using it.
+	if !strings.Contains(msg, "olivares db init") || !strings.Contains(msg, "--install-directory-inventory") {
+		t.Errorf("message does not name the command that installs the tenant inventory: %q", msg)
 	}
-	if !strings.Contains(msg, "--admin-dsn") {
-		t.Errorf("message does not name the flag to pass: %q", msg)
+	if !strings.Contains(msg, "restart the engine") {
+		t.Errorf("message does not say to restart the engine: %q", msg)
 	}
 }
 
@@ -127,7 +128,7 @@ func TestAdminPoolRefusalNeverEchoesWrappedContext(t *testing.T) {
 	}
 	// And the wrap must not COST the actionable message either — a fix that goes
 	// mute again the moment a caller adds context is not a fix.
-	if msg == "internal error" || !strings.Contains(msg, "--admin-dsn") {
+	if msg == "internal error" || !strings.Contains(msg, "--install-directory-inventory") {
 		t.Fatalf("wrapping the sentinel cost the remedy: %q", msg)
 	}
 }
@@ -159,7 +160,7 @@ func TestGRPCAdminPoolRefusalMatchesRESTAndNeverEchoesWrappedContext(t *testing.
 			t.Fatalf("the wrapped error's context reached the gRPC client (%q): %q", leak, msg)
 		}
 	}
-	if !strings.Contains(msg, "--admin-dsn") || !strings.Contains(msg, "olivares db init") {
+	if !strings.Contains(msg, "--install-directory-inventory") || !strings.Contains(msg, "olivares db init") {
 		t.Errorf("the gRPC message carries no remedy: %q", msg)
 	}
 }

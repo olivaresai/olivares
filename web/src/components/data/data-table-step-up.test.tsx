@@ -139,9 +139,11 @@ describe('DataTable — los dos 403 no son el mismo, y esta tabla los ve por 45 
     // Anclado a lo POSITIVO, que ya está en pantalla: una ausencia sola se cumpliría en el
     // primer tick, antes de que nada hubiera podido pintarse.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-    // Y no acompaña a la acusación: «Not authorized» es la copy EXACTA de ForbiddenState
+    // Y no acompaña a la acusación: «You do not have access to this.» es la copy EXACTA de ForbiddenState
     // (lib/i18n/locales/en/errors.json:8), no un rol genérico que cualquier estado satisface.
-    expect(screen.queryByText('Not authorized')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('You do not have access to this.'),
+    ).not.toBeInTheDocument()
     // La exclusión se comprueba, no se declara: el anunciador sr-only SIGUE ahí. Si el filtro
     // se llevara todo por delante, la aserción de arriba pasaría sin mirar nada.
     expect(announcer()).toHaveLength(1)
@@ -182,7 +184,9 @@ describe('DataTable — los dos 403 no son el mismo, y esta tabla los ve por 45 
     // `EmptyState` —que TAMBIÉN lleva role="status" (components/ui/empty-state.tsx:36)— y
     // esta celda, titulada «conserva la negativa de ROL», siguió verde enseñando «Nothing
     // here» a quien de verdad no tiene el permiso. Un rol no identifica un estado.
-    expect(screen.getByText('Not authorized')).toBeInTheDocument()
+    expect(
+      screen.getByText('You do not have access to this.'),
+    ).toBeInTheDocument()
     expect(stateStatus()).toHaveLength(1)
     expect(screen.queryByText('step-up ceremony')).not.toBeInTheDocument()
   })

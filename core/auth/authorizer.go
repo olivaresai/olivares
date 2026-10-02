@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/sdk"
 )
 
 // Decision is the outcome of an authorization check. Reason is a non-sensitive
@@ -88,6 +89,13 @@ type Request struct {
 	Permission Permission
 	Tenant     model.TenantID
 	Resource   ResourceAttrs
+	// EvidenceRedactor removes this run's secrets from persisted/logged inputs.
+	// It never changes the request evaluated by the PDP. Nil uses the writer's
+	// pattern redaction. The caller supplies a function safe for this request.
+	EvidenceRedactor func(string) string `json:"-"`
+	// Purpose labels history only; it never changes the authorization question or outcome.
+	// The zero value records a live authorization; projections declare current what-if.
+	Purpose sdk.DecisionPurpose
 	// Route carries the SEALED per-route metadata the engine declares where the route
 	// is registered (V269 / COCKPIT-02 §5). The zero value is every route that has not
 	// opted in, and for it the decision is bit-for-bit what it was before this field
@@ -122,7 +130,8 @@ type PolicyEvaluator interface {
 type DenyNothing struct{}
 
 // Evaluate always allows (no further restriction).
-func (DenyNothing) Evaluate(context.Context, Request) (Decision, error) {
+func (DenyNothing) Evaluate(ctx context.Context, _ Request) (Decision, error) {
+	CaptureAuthorizationInputs(ctx, false, "none-v1", struct{}{})
 	return Decision{Allow: true, Reason: "no policy restriction"}, nil
 }
 
@@ -239,7 +248,16 @@ func NewAuthorizer(eval PolicyEvaluator, opts ...Option) *Authorizer {
 //     (no overlay needed — there is nothing to narrow).
 //  3. The deny-overlay (ABAC + external PDP) may then further-restrict the base
 //     grant. A faulty/unavailable overlay or scoped engine fails CLOSED.
-func (az *Authorizer) Authorize(ctx context.Context, req Request) Decision {
+func (az *Authorizer) Authorize(ctx context.Context, req Request) (decision Decision) {
+	ctx, capture := beginAuthorizationCapture(ctx, req)
+	at := az.clock()
+	defer func() {
+		finishDecisionCapture(ctx, req, capture, at, decision)
+	}()
+	return az.authorize(ctx, req)
+}
+
+func (az *Authorizer) authorize(ctx context.Context, req Request) Decision {
 	// An account removed from the tenant, or a session confined to another one,
 	// holds nothing there: no role, no scoped grant, no group subject. This is a
 	// platform invariant, refused before any grant is evaluated.
@@ -253,7 +271,8 @@ func (az *Authorizer) Authorize(ctx context.Context, req Request) Decision {
 	if restricted && !restrictionAllows {
 		return Decision{Allow: false, Reason: "credential ceiling: not permitted"}
 	}
-	granted := false
+	ownerGrant := ownerImplicitScopedGrant(req) && !restricted
+	granted := ownerGrant
 	if az.scoped != nil {
 		sd, err := az.scopedSafe(ctx, req)
 		if err != nil {
@@ -276,6 +295,7 @@ func (az *Authorizer) Authorize(ctx context.Context, req Request) Decision {
 			}
 		}
 	}
+	ownerGrantUsed := ownerGrant && !req.Route.rbacPermitted(req, az.rbacAllows(req))
 	baseAllowed := restrictionAllows
 	if !restricted {
 		// Route metadata may only REMOVE the RBAC term (routemetadata.go): a route can
@@ -288,7 +308,7 @@ func (az *Authorizer) Authorize(ctx context.Context, req Request) Decision {
 		return Decision{Allow: false, Reason: "rbac: not permitted"}
 	}
 	if az.eval == nil {
-		return Decision{Allow: true, Reason: baseReason(granted)}
+		return Decision{Allow: true, Reason: baseReason(granted, ownerGrantUsed)}
 	}
 	dec, err := az.evalSafe(ctx, req)
 	if err != nil {
@@ -302,7 +322,7 @@ func (az *Authorizer) Authorize(ctx context.Context, req Request) Decision {
 		// evalSafe error above, which already denies invariant). Propagate, never assume.
 		return Decision{Allow: false, Reason: "policy: " + dec.Reason, Class: dec.Class}
 	}
-	return Decision{Allow: true, Reason: baseReason(granted)}
+	return Decision{Allow: true, Reason: baseReason(granted, ownerGrantUsed)}
 }
 
 // AuthorizeDisclosure makes the same authorization decision as Authorize, but
@@ -311,12 +331,24 @@ func (az *Authorizer) Authorize(ctx context.Context, req Request) Decision {
 // this for both present and absent references: neither absence nor a row-level
 // forbid may skip a remote read-policy request. This changes evaluation work,
 // never authority; the action still needs its own independent authorization.
-func (az *Authorizer) AuthorizeDisclosure(ctx context.Context, req Request) Decision {
+func (az *Authorizer) AuthorizeDisclosure(ctx context.Context, req Request) (decision Decision) {
+	ctx, capture := beginAuthorizationCapture(ctx, req)
+	at := az.clock()
+	if capture != nil {
+		capture.snapshot.Disclosure = true
+	}
+	defer func() {
+		finishDecisionCapture(ctx, req, capture, at, decision)
+	}()
+	return az.authorizeDisclosure(ctx, req)
+}
+
+func (az *Authorizer) authorizeDisclosure(ctx context.Context, req Request) Decision {
 	// Copy the immutable configuration, retaining every base restriction while
 	// separating policy evaluation from Authorize's ordinary short circuit.
 	base := *az
 	base.eval = nil
-	decision := base.Authorize(ctx, req)
+	decision := base.authorize(ctx, req)
 	if az.eval == nil {
 		return decision
 	}
@@ -335,7 +367,10 @@ func (az *Authorizer) AuthorizeDisclosure(ctx context.Context, req Request) Deci
 
 // baseReason labels an allow by which base authorization carried it (a positive
 // scoped grant vs. a tenant-wide RBAC grant) for the audit trail.
-func baseReason(granted bool) string {
+func baseReason(granted, ownerGrantUsed bool) string {
+	if ownerGrantUsed {
+		return "permitted (owner implicit scoped grant)"
+	}
 	if granted {
 		return "permitted (scoped grant)"
 	}
@@ -348,10 +383,22 @@ func (az *Authorizer) Allowed(ctx context.Context, p Principal, perm Permission,
 	return az.Authorize(ctx, Request{Principal: p, Permission: perm, Tenant: tenant, Resource: ResourceFor(perm)}).Allow
 }
 
+// ownerImplicitScopedGrant is the tenant owner's built-in scoped grant. It
+// replaces the need to publish a positive grant, never the scoped engine's
+// confinement/forbid checks or a credential's exact permission ceiling.
+func ownerImplicitScopedGrant(req Request) bool {
+	if !req.Route.RequireScopedGrant || req.Tenant.IsZero() || req.Tenant == model.SystemTenantID || req.Permission == PermSystemAdmin {
+		return false
+	}
+	role, member := req.Principal.RoleIn(req.Tenant)
+	return member && role == RoleOwner
+}
+
 // rbacAllows applies the built-in role-based check.
 func (az *Authorizer) rbacAllows(req Request) bool {
-	// The superadmin holds the system role: every permission, every tenant.
-	if req.Principal.Superadmin {
+	// An account-wide superadmin holds the system role. Explicit tenant entry
+	// retains that attribution but carries only the selected tenant's owner role.
+	if req.Principal.Superadmin && req.Principal.SessionScope().IsZero() {
 		return true
 	}
 	// The system permission is held only by a superadmin.
@@ -369,6 +416,12 @@ func (az *Authorizer) rbacAllows(req Request) bool {
 // evalSafe runs the ABAC evaluator, converting a panic into an error so a faulty
 // policy denies rather than crashing the request.
 func (az *Authorizer) evalSafe(ctx context.Context, req Request) (dec Decision, err error) {
+	requireAuthorizationInputs(ctx, false)
+	defer func() {
+		if err != nil {
+			IncompleteAuthorizationInputs(ctx)
+		}
+	}()
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("auth: policy evaluator panicked: %v", r)
@@ -380,6 +433,12 @@ func (az *Authorizer) evalSafe(ctx context.Context, req Request) (dec Decision, 
 // scopedSafe runs the scoped-grant engine, converting a panic into an error so a
 // faulty engine fails the request CLOSED (denies) rather than crashing it.
 func (az *Authorizer) scopedSafe(ctx context.Context, req Request) (sd ScopedDecision, err error) {
+	requireAuthorizationInputs(ctx, true)
+	defer func() {
+		if err != nil {
+			IncompleteAuthorizationInputs(ctx)
+		}
+	}()
 	defer func() {
 		if r := recover(); r != nil {
 			err = fmt.Errorf("auth: scoped authorizer panicked: %v", r)

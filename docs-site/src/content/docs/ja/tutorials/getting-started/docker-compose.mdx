@@ -22,14 +22,14 @@ control plane までを案内します。
 [シングルノードチュートリアル](/tutorials/getting-started/single-node/)でバイナリに
 対してエンドツーエンドで検証されたものと同じです。
 
-<Aside type="caution" title="公開済みの 26.10.0 イメージを digest で固定する">
-リリース **26.10.0** は署名済みイメージを公開しました。インストール面の証人は
-`26.10.0` の Docker Hub と GHCR を **published** と記録しています
-（`docs/releases/26.10.0-install-surfaces.json`）。同じ誠実さは
+<Aside type="caution" title="公開済みの 26.10.1 イメージを digest で固定する">
+リリース **26.10.1** は署名済みイメージを公開しました。インストール面の証人は
+`26.10.1` の Docker Hub と GHCR を **published** と記録しています
+（`docs/releases/26.10.1-install-surfaces.json`）。同じ誠実さは
 [Docker でデプロイする](/how-to/docker-deployment/) にあります。
 `OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` を設定し、まず
 [検証](/how-to/verify-a-release/)してください — タグではなく digest で。代わりに開発ツリーを
-動かすには、堅牢化された distroless イメージをソースからビルドし、スタックをそれに向けます：
+動かすには、堅牢化されたイメージをソースからビルドし、スタックをそれに向けます：
 
 ```bash
 task image                                   # builds olivares:dev
@@ -59,8 +59,8 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 2. エンジンに現在地を尋ね、ログからワンタイムのセットアップトークンを読み取ります：
 
    ```bash
-   # where the console answers, and whether setup is still pending. The image is
-   # distroless: `docker exec … bash` has nothing to run, this needs no shell.
+   # where the console answers, and whether setup is still pending. It runs the binary
+   # directly and needs no shell.
    docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
 
    # the one-time setup token, printed once at first boot

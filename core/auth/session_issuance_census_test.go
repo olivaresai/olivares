@@ -38,8 +38,8 @@ func TestSessionIssuanceCensus(t *testing.T) {
 		"auth/authenticator.go:mintSessionTx->NewCredential(PrefixScopedSession)": {"TestATenantProviderSessionCarriesOnlyItsTenant"},
 		// Refresh rotates an existing admitted credential; it is not a new login
 		// (docs/LOGIN-ENFORCEMENT-OPERATIONS.md, Existing sessions are unaffected).
-		"auth/authenticator.go:RefreshSession->NewCredential(PrefixSession)":       {"TestLoginComponentAbsent_ExistingSessionsKeepRefreshAndRevoke"},
-		"auth/authenticator.go:RefreshSession->NewCredential(PrefixScopedSession)": {"TestAScopedSessionRefreshKeepsItsScope"},
+		"auth/authenticator.go:rotateSession->NewCredential(PrefixSession)":       {"TestLoginComponentAbsent_ExistingSessionsKeepRefreshAndRevoke"},
+		"auth/authenticator.go:rotateSession->NewCredential(PrefixScopedSession)": {"TestAScopedSessionRefreshKeepsItsScope"},
 		// the TOTP completions mint after the password already verified and
 		// the factor challenge consumed its pending credential; their refusal
 		// controls are the wrong-code/lockout/enrolment-required paths.

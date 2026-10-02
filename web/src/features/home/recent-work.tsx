@@ -9,63 +9,79 @@
 // evidence was always another route away, which a review recorded as the row "How work
 // is told".
 //
-// ⛔ IT COSTS NO REQUEST. `home-view` ALREADY reads `GET /v1/m/sessions/live` to put
-//    one number on the live-sessions tile, and that answer carries everything a
-//    narrative needs: duration, what the session was doing, how many tool calls,
-//    tokens, cost, and when it was last seen. This component is handed that same
-//    array. A front door that opened a second endpoint to say what the first one had
-//    already said would be paying twice for one fact.
+// ⛔ ONE SESSION, ONE ROW. The rows are the sessions `home-view` merges from the two reads
+//    it holds: the runs Olivares operates and the live sessions it observes
+//    (`mergeSessions`, the same join the Sessions page and the rail use). A launched
+//    session used to be missing here, or shown as "Untitled session <uuid>", because this
+//    list read the observed half only (HU-11).
 //
-// ⛔ WHAT IT WILL NOT DO IS INVENT THE SENTENCE. The degradation ladder and the
-//    measurement behind it live in `work-line.ts`; nothing here composes prose about
-//    work the engine did not report.
+// ⛔ WHAT IT WILL NOT DO IS INVENT THE SENTENCE. A row is named by what its operator
+//    typed, else by the degradation ladder in `work-line.ts`; nothing here composes prose
+//    about work the engine did not report.
 //
-// ⛔ AND THE CLICK NOW REACHES THE CARD. This comment used to record the gap:
-//    `/sessions` held its selection in component state, so a row here could only open
-//    the room that holds the card. The session is addressable now
-//    (`features/sessions/session-address.ts`), so every row is a link to the ONE
-//    session it tells — which is the row that review measured this front door against.
-//
-//    The address is the row's own key, built here from the live row the front door
-//    already holds. Nothing is composed: `liveRowKey` is the same function the join
-//    uses, so a row's link and the surface's own identity for it cannot drift.
+// ⛔ AND THE CLICK REACHES THE SESSION. Every row links to the one session it tells, by the
+//    same address the Sessions page uses (`features/sessions/session-address.ts`).
 import { Link } from '@tanstack/react-router'
 import { ArrowRight } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { useNewSession } from '@/components/layout/new-session'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ErrorState } from '@/components/ui/error-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CcStateBadge } from '@/features/sessions/cc-state-badge'
-import { liveRowKey } from '@/features/sessions/provenance'
-import { SESSION_PARAM } from '@/features/sessions/session-address'
-import type { LiveDTO } from '@/features/sessions/types'
+import {
+  primaryRun,
+  sessionNaming,
+  sharedNames,
+  type UnifiedSession,
+} from '@/features/sessions/provenance'
+import { runFolder } from '@/features/sessions/folder'
+import { RunStateBadge } from '@/features/agentops/run-state-badge'
+import { addressOf, SESSION_PARAM } from '@/features/sessions/session-address'
 import { WorkClause } from '@/features/sessions/work-clause'
 import { workFacts } from '@/features/sessions/work-facts'
 import { RelTime } from '@/features/shared/rel-time'
 import { formatDuration, formatMicroUsd } from '@/lib/format'
 import type { TileState } from './components'
-import { RECENT_WORK_ROWS, shortSessionId, workLine } from './work-line'
+import { RECENT_WORK_ROWS } from './work-line'
 import './i18n'
 
-function WorkRow({ session }: { session: LiveDTO }) {
+function WorkRow({
+  session,
+  shared,
+}: {
+  session: UnifiedSession
+  /** Names another row of this list also carries: those rows show their tail. */
+  shared: ReadonlySet<string>
+}) {
   const { t } = useTranslation(['home', 'sessions'])
   const { t: ts } = useTranslation('sessions')
-  const line = workLine(session)
-  const name = line.from === 'untitled' ? t('recent.untitled') : line.text
-  const sessionId = line.id ?? session.session_ref
-  const shortId = line.from === 'untitled' ? shortSessionId(sessionId) : null
+  // One session, one row: a launched run and what was observed of it are the same row
+  // (mergeSessions), named by what its operator typed, else by what it did.
+  const live = session.live
+  const run = primaryRun(session.runs)
+  const naming = sessionNaming(session, t('recent.untitled'), shared)
+  const name = naming.name
+  const shortId = naming.shortId
+  const folder = runFolder(run)
   // The "what changed" line. The RULE lives in the sessions plane, because the work
   // surface tells the same line and two copies would have drifted the first time a
   // field was added. Every part is still a figure the engine sent, and a part it did
   // not send is still left out rather than printed as a zero.
-  const facts = workFacts(session, ts, {
-    duration: (ms) => formatDuration(ms),
-    cost: (micro) => formatMicroUsd(micro, { compact: true }),
-  })
-  const fullTitle = [name, shortId, sessionId, ...facts]
+  const facts = live
+    ? workFacts(live, ts, {
+        duration: (ms) => formatDuration(ms),
+        cost: (micro) => formatMicroUsd(micro, { compact: true }),
+      })
+    : []
+  const fullTitle = [name, shortId, naming.reference, folder, ...facts]
     .filter((part, i, all) => part && all.indexOf(part) === i)
     .join(' · ')
+  const at =
+    session.lastActivityMs > 0
+      ? new Date(session.lastActivityMs).toISOString()
+      : live?.last_event_at
 
   return (
     <li className="border-b border-border last:border-b-0">
@@ -95,25 +111,41 @@ function WorkRow({ session }: { session: LiveDTO }) {
           badge and the age stay whole beside it. */}
       <Link
         to={'/sessions' as never}
-        search={{ [SESSION_PARAM]: liveRowKey(session) } as never}
+        search={{ [SESSION_PARAM]: addressOf(session) } as never}
         data-testid="home-recent-row"
         title={fullTitle}
         aria-label={t('recent.open', { what: name })}
-        className="flex min-h-[var(--console-list-row-height)] min-w-0 items-center gap-2 px-3 py-1.5 outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
+        /* Below `sm` the row wraps: the state and the time share the first line and the
+           sentence takes the full width below them — at 320 px it was one word a line
+           between the badge and "4 months ago". */
+        className="flex min-h-[var(--console-list-row-height)] min-w-0 items-center gap-2 px-3 py-1.5 outline-none transition-colors hover:bg-muted focus-visible:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset max-sm:flex-wrap max-sm:gap-y-1"
       >
-        <CcStateBadge
-          state={session.cc_state}
-          className="shrink-0 whitespace-nowrap"
-        />
+        {run ? (
+          <RunStateBadge
+            state={run.state}
+            className="shrink-0 whitespace-nowrap"
+          />
+        ) : live ? (
+          <CcStateBadge
+            state={live.cc_state}
+            className="shrink-0 whitespace-nowrap"
+          />
+        ) : null}
         <span
           data-slot="recent-row-sentence"
-          className="min-w-0 flex-1 text-body text-foreground [overflow-wrap:anywhere]"
+          className="min-w-0 flex-1 text-body text-foreground [overflow-wrap:anywhere] max-sm:order-last max-sm:basis-full"
         >
           <span>
-            <WorkClause text={name} live={session} />
+            <WorkClause text={name} live={live} />
           </span>
           {shortId ? (
             <span className="text-muted-foreground"> {shortId}</span>
+          ) : null}
+          {folder ? (
+            <span className="font-mono text-caption text-muted-foreground">
+              {' · '}
+              {folder}
+            </span>
           ) : null}
           {facts.length > 0 ? (
             <span className="text-muted-foreground">
@@ -122,10 +154,12 @@ function WorkRow({ session }: { session: LiveDTO }) {
             </span>
           ) : null}
         </span>
-        <RelTime
-          ts={session.last_event_at}
-          className="shrink-0 whitespace-nowrap text-caption text-muted-foreground"
-        />
+        {at ? (
+          <RelTime
+            ts={at}
+            className="shrink-0 whitespace-nowrap text-caption text-muted-foreground max-sm:ml-auto"
+          />
+        ) : null}
       </Link>
     </li>
   )
@@ -135,19 +169,30 @@ export function RecentWork({
   sessions,
   state,
   canStartSession,
+  titled = false,
 }: {
-  /** The page `home-view` already holds, most recent first. */
-  sessions: LiveDTO[] | undefined
+  /** Show the section title (Now, where the list follows "Needs you"); otherwise it is
+   *  for assistive technology only. */
+  titled?: boolean
+  /** The sessions `home-view` holds (runs and live rows merged), most recent first. */
+  sessions: UnifiedSession[] | undefined
   state: TileState
   /** May this principal actually start a run? Decides whether the empty state offers. */
   canStartSession: boolean
 }) {
   const { t } = useTranslation('home')
+  const newSession = useNewSession()
   const rows = (sessions ?? []).slice(0, RECENT_WORK_ROWS)
+  const shared = sharedNames(rows, t('recent.untitled'))
 
   return (
     <section aria-labelledby="home-recent-heading" data-testid="home-recent">
-      <h2 id="home-recent-heading" className="sr-only">
+      <h2
+        id="home-recent-heading"
+        className={
+          titled ? 'mb-1.5 text-heading font-semibold text-text' : 'sr-only'
+        }
+      >
         {t('recent.title')}
       </h2>
       {state === 'loading' ? (
@@ -168,10 +213,13 @@ export function RecentWork({
           description={t('recent.emptyDescription')}
           action={
             canStartSession ? (
-              <Button asChild variant="primary" size="sm">
-                <Link to={'/agentops' as never} data-testid="home-recent-start">
-                  {t('next.session.title')}
-                </Link>
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={newSession}
+                data-testid="home-recent-start"
+              >
+                {t('next.session.title')}
               </Button>
             ) : undefined
           }
@@ -180,7 +228,7 @@ export function RecentWork({
         <>
           <ul data-testid="home-recent-rows">
             {rows.map((s) => (
-              <WorkRow key={s.live_ref || s.session_ref} session={s} />
+              <WorkRow key={s.key} session={s} shared={shared} />
             ))}
           </ul>
           <div className="flex h-6 items-center justify-end">

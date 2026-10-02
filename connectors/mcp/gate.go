@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"strings"
 	"time"
 
@@ -37,6 +38,10 @@ import (
 // cannot import the AGPL governance module's vocabulary.
 type GateStatus string
 
+// ErrArgumentsNotReviewable refuses before review or actuation. It carries no
+// input value: the MCP client can receive this reason without disclosure.
+var ErrArgumentsNotReviewable = errors.New("argument not reviewable")
+
 const (
 	StatusApproved GateStatus = "approved"
 	StatusPending  GateStatus = "pending"
@@ -45,9 +50,11 @@ const (
 	StatusNoGate   GateStatus = "no_gate"
 )
 
-// ToolApprovalRequest is the minimal-data description of a destructive tool call that
-// needs human approval. PlanHash binds the approval to the exact (tool, args-shape,
-// subject) tuple (anti-TOCTOU). It carries NO arguments in the clear and NO token.
+// ToolApprovalRequest describes a destructive call for human review. PlanHash
+// binds the exact canonical arguments, tool and subject. Arguments is a transient
+// copy for the in-process reviewer: an adapter must bound and redact it before
+// storage. It is excluded from serialization and ToolDecision audit records.
+// No bearer is carried through this seam.
 type ToolApprovalRequest struct {
 	Tenant      string
 	Subject     string
@@ -55,6 +62,7 @@ type ToolApprovalRequest struct {
 	Scope       string
 	PlanHash    string
 	RequestedBy string
+	Arguments   json.RawMessage `json:"-"`
 }
 
 // GateDecision is the gate's answer. Allowed() is the only authorization; every other
@@ -437,7 +445,7 @@ const taskUpdatePlanVersion = "mcp-task-update-v1"
 // toolCallPlanHash computes the anti-TOCTOU binding for a destructive tool call: a
 // stable SHA-256 over (tool, subject, argumentsHash). A different tool, subject, or
 // argument set changes the hash and voids a stale approval. argsHash is a digest of
-// the arguments (never the arguments in the clear in the approval).
+// the arguments; the reviewer adapter separately bounds and redacts its preview.
 func toolCallPlanHash(tool, subject, argsHash string) string {
 	return hashPlanParts(toolCallPlanVersion, tool, subject, argsHash)
 }

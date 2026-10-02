@@ -140,3 +140,39 @@ func TestElevateSessionRefusesNonSessions(t *testing.T) {
 		t.Fatalf("elevate token principal err = %v, want ErrUnauthenticated", err)
 	}
 }
+
+func TestFederatedAssuranceSessionLifecycle(t *testing.T) {
+	ctx := context.Background()
+	st := testStore(t)
+	clock := newStepClock()
+	a := auth.NewAuthenticator(st, clock)
+	id := auth.FederatedIdentity{
+		Protocol: auth.ProtocolOIDC, Issuer: "https://idp.example", Subject: "mfa-user",
+		Email: "mfa@corp.example", EmailVerified: true,
+		AAL: auth.AAL2, AuthenticatedAt: clock.Now().Time().Add(-time.Minute),
+	}
+	token, sess, err := a.CompleteSSO(ctx, id, "10.0.0.1", "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := a.Authenticate(ctx, token)
+	if err != nil || p.AAL != auth.AAL2 || sess.AAL != auth.AAL2 {
+		t.Fatalf("verified IdP MFA session AAL = %d/%d, err %v; want 2", p.AAL, sess.AAL, err)
+	}
+	if sess.AALAuthenticatedAt == nil || !sess.AALAuthenticatedAt.Time().Equal(id.AuthenticatedAt) {
+		t.Fatal("upstream authentication instant must survive session issuance")
+	}
+	totp := auth.WithStepUpSource(ctx, func(context.Context) (string, error) { return auth.StepUpTOTP, nil })
+	if !auth.StepUpSatisfied(totp, p) {
+		t.Fatal("fresh federated MFA must satisfy totp policy")
+	}
+	clock.advance(auth.StepUpTTL - time.Minute)
+	p, err = a.Authenticate(ctx, token)
+	if err != nil || p.AAL != auth.AAL1 || auth.StepUpSatisfied(totp, p) {
+		t.Fatalf("at upstream freshness deadline = %d/%v, err %v", p.AAL, auth.StepUpSatisfied(totp, p), err)
+	}
+	id.AAL = auth.AAL3
+	if token, _, err := a.CompleteSSO(ctx, id, "10.0.0.1", "", false); err == nil || token != "" {
+		t.Fatal("federated AAL3 must be refused before a credential is exposed")
+	}
+}

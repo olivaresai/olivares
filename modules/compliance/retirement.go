@@ -18,10 +18,10 @@ import (
 // preservation duty over the tenant's records about that person, ordered and
 // released only through the hold's own governed lifecycle. Removing the account
 // from the tenant neither discharges the duty nor lets the account act, so the
-// step keeps every such hold and reports nothing for it: it reads the holds that
-// name the account, which fails the step on a store fault, and leaves them as they
-// are. The step's transaction first pins the tenant's authorization epoch and the
-// account's authority version the pass read, like every other step.
+// step preserves every hold and reports active covering holds as blockers until
+// their governed release. A store fault also refuses the proof. The step's
+// transaction first pins the tenant's authorization epoch and the account's
+// authority version the pass read, like every other step.
 
 // retirementModule is the declared module name of this step.
 const retirementModule = "compliance"
@@ -54,11 +54,18 @@ func (s retirementStep) RetireUser(ctx context.Context, req auth.RetirementReque
 		if err != nil {
 			return err
 		}
-		// Kept: a hold naming the account neither blocks the retirement nor is
-		// removed by it.
-		if _, err := holdsNaming(ctx, sc, req); err != nil {
+		holds, err := holdsNaming(ctx, sc, req)
+		if err != nil {
 			return err
 		}
+		state := auth.RetirementStoreState{Store: string(legalHoldKind), State: "clean"}
+		for _, rec := range holds {
+			hold := holdRefOf(rec)
+			state.State = "legal_hold"
+			state.Holds = append(state.Holds, auth.RetirementHoldRef{ID: hold.ID, MatterRef: hold.MatterRef})
+			out.Blocking = append(out.Blocking, string(legalHoldKind)+":"+hold.ID)
+		}
+		out.Stores = []auth.RetirementStoreState{state}
 		out.FactVersion = fact
 		return nil
 	})
@@ -68,15 +75,16 @@ func (s retirementStep) RetireUser(ctx context.Context, req auth.RetirementReque
 	return out, nil
 }
 
-// holdsNaming returns the legal holds whose subject reference names the account
+// holdsNaming returns active tenant holds and subject holds naming the account
 // by one of its aliases: its id, "user:<id>", its email (compared
-// case-insensitively) or its external id.
+// case-insensitively) or its external id. Released holds remain in custody but
+// no longer block. Content erasers separately check each erased data class.
 func holdsNaming(ctx context.Context, sc store.Scope, req auth.RetirementRequest) ([]model.Record, error) {
 	repo, err := sc.Ext(legalHoldKind)
 	if err != nil {
 		return nil, err
 	}
-	recs, err := listAll(ctx, repo)
+	recs, err := listAll(ctx, repo, eq(colStatus, holdStatusActive))
 	if err != nil {
 		return nil, err
 	}
@@ -89,8 +97,12 @@ func holdsNaming(ctx context.Context, sc store.Scope, req auth.RetirementRequest
 	}
 	var out []model.Record
 	for _, rec := range recs {
+		subject := HoldSubject{Kind: "user", Ref: req.User.String()}
 		ref := strings.TrimSpace(rec.String(colSubjectRef))
 		if ref != "" && (aliases[ref] || aliases[strings.ToLower(ref)]) {
+			subject.Ref = rec.String(colSubjectRef)
+		}
+		if holdCovers(rec, subject) {
 			out = append(out, rec)
 		}
 	}

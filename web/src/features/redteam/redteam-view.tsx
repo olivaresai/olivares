@@ -43,7 +43,6 @@ import {
   CaveatNotice,
   IntelPage,
   SectionCard,
-  SelfAuditNotice,
   ListTruncationBadge,
 } from '@/features/_intel'
 import { redteamApi, redteamKeys } from './api'
@@ -72,12 +71,7 @@ export function RedTeamView() {
   const { t } = useTranslation('redteam')
 
   return (
-    <IntelPage
-      icon={Swords}
-      title={t('title')}
-      description={t('description')}
-      notices={<SelfAuditNotice />}
-    >
+    <IntelPage icon={Swords} title={t('title')} description={t('description')}>
       <Tabs defaultValue="targets">
         <TabsList>
           <TabsTrigger value="targets">{t('tabs.targets')}</TabsTrigger>

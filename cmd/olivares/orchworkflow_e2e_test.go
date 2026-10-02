@@ -335,25 +335,57 @@ func TestScheduleFireOpensApprovalThroughLoopback(t *testing.T) {
 // product's differentiator, could not run at all. This pins the path.
 func TestPrivilegedSessionLaunchOpensApprovalThroughLoopback(t *testing.T) {
 	h := newHarness(t)
+	// Mirror boot: queued writes read standing and retain the initiating credential.
+	h.set.sessions.UseStanding(h.authr)
+	h.set.sessions.UseQueuedCredentialCapture(h.authr.BindQueuedCredential)
 	svc := h.mintBoundToken(t, auth.RoleEditor)
 	bridge := buildBridge(t, h, svc)
 	h.set.sessions.UseLaunchGate(&sessionLaunchGate{bridge: bridge, recordAvailable: true})
 
+	// dontAsk with no template's allowlist is the privileged launch ("full" is an
+	// administrator's own decision and opens no approval).
 	code, body := h.req("POST", "/v1/m/sessions/runs", h.adminToken, h.tenantA, map[string]any{
-		"permission_mode": "bypassPermissions",
+		"permission_mode": "dontAsk",
 		"transport":       "stream-json",
 	})
-	// The launch is correctly DENIED — a privileged launch needs a human — but
-	// it must be denied because an approval is PENDING, never because the
-	// engine could not open one.
-	if code != http.StatusForbidden {
+	// The request now persists a waiting run and answers 202; it starts only
+	// after approval. A 403 was the former request-bound refusal contract.
+	if code != http.StatusAccepted {
 		t.Fatalf("privileged launch = %d: %s", code, body)
 	}
-	msg := string(body)
-	if strings.Contains(msg, "could not open a governed approval") {
-		t.Fatalf("the launch gate could not reach governance — the loopback regression is back: %s", msg)
+	var run struct {
+		RunRef      string `json:"run_ref"`
+		ApprovalRef string `json:"approval_ref"`
+		ApprovalURL string `json:"approval_url"`
+		State       string `json:"state"`
+		PID         int    `json:"pid"`
+		Credential  string `json:"credential_id"`
 	}
-	if !strings.Contains(msg, "requires human approval") {
-		t.Fatalf("privileged launch denial = %s, want a pending-approval denial", msg)
+	if err := json.Unmarshal(body, &run); err != nil {
+		t.Fatal(err)
+	}
+	if run.State != "waiting_approval" || run.RunRef == "" || run.ApprovalRef == "" || run.ApprovalURL != "/v1/m/governance/approvals/"+run.ApprovalRef || run.PID != 0 || run.Credential != "" {
+		t.Fatalf("launch did not retain an unstarted waiting run: %s", body)
+	}
+	code, body = h.req("GET", "/v1/m/governance/approvals/"+run.ApprovalRef, h.adminToken, h.tenantA, nil)
+	var approval struct {
+		Status     string `json:"status"`
+		Action     string `json:"action"`
+		SubjectRef string `json:"subject_ref"`
+		SessionRef string `json:"session_ref"`
+	}
+	if err := json.Unmarshal(body, &approval); err != nil {
+		t.Fatal(err)
+	}
+	if code != http.StatusOK || approval.Status != "pending" || approval.Action != "sessions.run.launch" || !strings.HasPrefix(approval.SubjectRef, "session:no-workspace#plan=") || approval.SessionRef == "" {
+		t.Fatalf("loopback approval did not bind the waiting run: %d %s", code, body)
+	}
+	tenant, err := model.ParseTenantID(h.tenantA)
+	if err != nil {
+		t.Fatal(err)
+	}
+	identity, err := h.set.sessions.ReadSessionIdentity(context.Background(), tenant, approval.SessionRef)
+	if err != nil || identity.Origin != "operated" {
+		t.Fatalf("approval has no launched session identity: %+v, %v", identity, err)
 	}
 }

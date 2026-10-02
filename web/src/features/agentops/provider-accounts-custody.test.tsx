@@ -172,10 +172,10 @@ async function parkAnAdoptionAndLeaveTheRoom() {
   const ui = render(<Shell room />)
   await settleWhoami('u-a')
   await user.click(
-    await screen.findByRole('button', { name: 'Adopt a profile' }),
+    await screen.findByRole('button', { name: 'Name a profile as an account' }),
   )
   const dialog = await screen.findByRole('dialog', {
-    name: 'Adopt a provider profile',
+    name: 'Name a profile as an account',
   })
   await user.type(
     within(dialog).getByRole('textbox', { name: 'Profile reference' }),
@@ -185,7 +185,9 @@ async function parkAnAdoptionAndLeaveTheRoom() {
     within(dialog).getByRole('textbox', { name: 'Account name (optional)' }),
     DRAFT_NAME,
   )
-  await user.click(within(dialog).getByRole('button', { name: 'Adopt' }))
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Name as account' }),
+  )
   await waitFor(() => expect(api.adoptAccount).toHaveBeenCalledOnce())
   expect(cacheHolds(PARKED)).toBe(true)
   // The probes see the submitted adoption where it lives while its POST is pending.
@@ -211,7 +213,7 @@ beforeEach(() => {
     throw new ApiError(404, 'not_found', 'provider account not found')
   })
   useSessionStore.setState({
-    token: 'olvs_custody_first',
+    csrfToken: 'olvs_custody_first',
     sessionId: SID,
     expiresAt: EXP,
   })
@@ -236,7 +238,7 @@ describe('the shell ends a retired boundary’s adoption intent while the room i
     api.whoami.mockResolvedValue(principal('u-b', TIERS, ['t-new-principal']))
     await act(async () => {
       useSessionStore.getState().setSession({
-        token: 'olvs_custody_other',
+        csrfToken: 'olvs_custody_other',
         sessionId: 'sid-other',
         expiresAt: EXP,
       })
@@ -258,7 +260,7 @@ describe('the shell ends a retired boundary’s adoption intent while the room i
     await parkAnAdoptionAndLeaveTheRoom()
     act(() => {
       useSessionStore.getState().setSession({
-        token: 'olvs_custody_rotated',
+        csrfToken: 'olvs_custody_rotated',
         sessionId: SID,
         expiresAt: EXP,
       })
@@ -300,7 +302,7 @@ describe('the same boundary keeps what it may still need', () => {
     ui.rerender(<Shell room />)
     expect(
       await screen.findByText(
-        `The outcome of adopting ${PARKED} is not known here.`,
+        `Whether ${PARKED} became an account is not known here.`,
       ),
     ).toBeInTheDocument()
     expect(
@@ -337,7 +339,7 @@ for (const movement of ['tenant', 'credential'] as const) {
       if (movement === 'tenant') useTenantStore.getState().setActiveTenant(T2)
       else
         useSessionStore.getState().setSession({
-          token: 'olvs_creation_rotated',
+          csrfToken: 'olvs_creation_rotated',
           sessionId: SID,
           expiresAt: EXP,
         })

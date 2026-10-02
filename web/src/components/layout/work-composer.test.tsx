@@ -36,6 +36,7 @@ const api = vi.hoisted(() => ({
   createRun: vi.fn(),
   input: vi.fn(),
   inputText: vi.fn(),
+  getRun: vi.fn(),
 }))
 vi.mock('@/features/agentops/api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/features/agentops/api')>()),
@@ -191,7 +192,8 @@ describe('WorkComposer — what it offers, and to whom', () => {
 
   it('says WHY there is nothing to type into, and offers the one action', async () => {
     // Never a disabled field with no reason: the engine makes the profile mandatory
-    // server-side, so with none registered there is exactly one thing to do.
+    // server-side, so with none registered there is exactly one thing to do: the setup
+    // that installs Claude Code, signs it in and starts (HU-19), in Home's words.
     api.listProfiles.mockResolvedValue({ items: [], has_more: false })
     const user = userEvent.setup()
     renderIntel(<WorkComposer />)
@@ -199,9 +201,12 @@ describe('WorkComposer — what it offers, and to whom', () => {
       await screen.findByText(/No provider profile is registered/i),
     ).toBeInTheDocument()
     expect(screen.queryByTestId('launcher-input')).toBeNull()
+    expect(screen.getByTestId('launcher-add-provider')).toHaveTextContent(
+      'Set up a tool',
+    )
     await user.click(screen.getByTestId('launcher-add-provider'))
     expect(navigateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ to: '/provider-profiles' }),
+      expect.objectContaining({ to: '/onboarding' }),
     )
   })
 
@@ -340,11 +345,12 @@ describe('ScopeLine — the scope of the next action', () => {
     )
   })
 
-  it('names the organization, and says plainly when there is no workspace yet', async () => {
+  it('names the organization, and says nothing about a workspace when none is chosen', async () => {
+    // HU-19: "Workspace: No workspace" sat beside the workspace the installation has.
     renderIntel(<WorkComposer />)
     const line = await screen.findByTestId('work-scope-line')
     expect(line).toHaveTextContent('tnt-demo')
-    expect(line).toHaveTextContent('No workspace')
+    expect(line).not.toHaveTextContent(/workspace/i)
     // The environment belongs to the PROFILE, so with none chosen there is none to
     // report — and the line says so instead of borrowing a value from the topbar.
     expect(line).toHaveTextContent('Not declared')
@@ -643,6 +649,13 @@ describe('WorkComposer — attached to the session it started', () => {
   //    409 before the child sees a byte (`refuseLegacyControlUnderWork`), so the
   //    session the composer started could not be spoken to from the composer.
   it('carries the run work-lease fence on a sentence, as the CLI does', async () => {
+    // During an active lease the exact fence is still sent.
+    api.getRun.mockResolvedValue({
+      ...RUNNING,
+      work_item_id: 'work-a',
+      work_lease_fence: 7,
+      work_lease_state: 'active',
+    })
     const user = userEvent.setup()
     renderIntel(
       <WorkComposer
@@ -666,6 +679,12 @@ describe('WorkComposer — attached to the session it started', () => {
   })
 
   it('carries the fence on a wrapped user frame too', async () => {
+    api.getRun.mockResolvedValue({
+      ...RUNNING,
+      work_item_id: 'work-a',
+      work_lease_fence: 7,
+      work_lease_state: 'active',
+    })
     const user = userEvent.setup()
     renderIntel(
       <WorkComposer
@@ -686,6 +705,31 @@ describe('WorkComposer — attached to the session it started', () => {
       }),
       7,
     )
+  })
+
+  // MC (Root 2026-10-02, F1 on 09): once the peer work item is submitted, its lease has
+  // ended; the engine applies ordinary control and refuses the now stale fence.
+  it('after the work item is submitted, Send carries no fence', async () => {
+    api.getRun.mockResolvedValue({
+      ...RUNNING,
+      work_item_id: 'work-a',
+      work_lease_fence: 7,
+      work_lease_state: 'ended',
+    })
+    const user = userEvent.setup()
+    renderIntel(
+      <WorkComposer
+        attached={{
+          run: { ...RUNNING, work_item_id: 'work-a', work_lease_fence: 7 },
+          group: 'active',
+        }}
+      />,
+    )
+    await user.type(await screen.findByTestId('launcher-input'), 'continue')
+    await user.click(screen.getByTestId('composer-send'))
+    await waitFor(() => expect(api.input).toHaveBeenCalledTimes(1))
+    expect(api.getRun).toHaveBeenCalledWith(RUNNING.run_ref)
+    expect(api.input.mock.calls[0][2]).toBeUndefined()
   })
 
   // The mirror mistake: a fence sent on a run that has none is a 400 from the engine.

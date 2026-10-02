@@ -125,7 +125,7 @@ func newAgentDeployCmd() *cobra.Command {
 				body["auth_source"] = "managed_injection"
 				body["provider_record_ref"] = providerRef
 			}
-			status, b, err := cfg.do(cmd.Context(), "POST", profilesPath, body)
+			status, b, err := cfg.do(cmd.Context(), "POST", profilesPath, body, 201)
 			if err != nil {
 				return err
 			}

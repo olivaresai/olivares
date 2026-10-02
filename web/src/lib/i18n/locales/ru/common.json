@@ -195,7 +195,47 @@
   "notifications": {
     "title": "Последняя активность",
     "empty": "Нет недавней активности.",
-    "viewAll": "Показать всё в журнале аудита"
+    "viewAll": "Показать всё в журнале аудита",
+    "events": {
+      "auditCheckpoint": "Создана контрольная точка аудита",
+      "orgCreated": "Организация создана",
+      "loginBlocked": "Вход {{actor}} заблокирован",
+      "loginBlocked_you": "Ваш вход заблокирован",
+      "ssoLogin": "{{actor}} вошёл через SSO",
+      "ssoLogin_you": "Вы вошли через SSO",
+      "userInvited": "{{actor}} пригласил пользователя",
+      "userInvited_you": "Вы пригласили пользователя",
+      "userJoined": "{{actor}} присоединился",
+      "userJoined_you": "Вы присоединились",
+      "sessionStarted": "{{actor}} запустил сессию",
+      "sessionStarted_you": "Вы запустили сессию",
+      "sessionStopped": "{{actor}} остановил сессию",
+      "sessionStopped_you": "Вы остановили сессию",
+      "sessionResumed": "{{actor}} возобновил сессию",
+      "sessionResumed_you": "Вы возобновили сессию",
+      "sessionFailed": "Сессию не удалось запустить",
+      "approvalRequested": "Сессия {{actor}} запрашивает одобрение",
+      "approvalRequested_you": "Ваша сессия запрашивает одобрение",
+      "killswitchEngaged": "{{actor}} включил аварийный выключатель",
+      "killswitchEngaged_you": "Вы включили аварийный выключатель",
+      "killswitchReleased": "{{actor}} отключил аварийный выключатель",
+      "killswitchReleased_you": "Вы отключили аварийный выключатель",
+      "killswitchDenied": "Аварийный выключатель остановил сессию",
+      "toolInstalled": "Установлен инструмент агента",
+      "secretStored": "Сохранён секрет",
+      "viewSaved": "{{actor}} сохранил представление",
+      "viewSaved_you": "Вы сохранили представление",
+      "workspaceCreated": "{{actor}} создал рабочее пространство",
+      "workspaceCreated_you": "Вы создали рабочее пространство",
+      "workspaceUpdated": "{{actor}} изменил рабочее пространство",
+      "workspaceUpdated_you": "Вы изменили рабочее пространство"
+    },
+    "actors": {
+      "you": "Вы",
+      "member": "Участник",
+      "token": "API-токен",
+      "system": "Olivares"
+    }
   },
   "passphrase": {
     "tooShort": "Парольная фраза должна содержать не менее {{min}} символов",
@@ -257,6 +297,15 @@
         "first": "Первый модуль",
         "last": "Последний модуль",
         "pin": "Закрепить или открепить этот модуль"
+      },
+      "session": {
+        "new": "Новый сеанс"
+      },
+      "sourceDiff": {
+        "nextFile": "Следующий файл",
+        "previousFile": "Предыдущий файл",
+        "nextHunk": "Следующее изменение",
+        "previousHunk": "Предыдущее изменение"
       }
     },
     "when": {

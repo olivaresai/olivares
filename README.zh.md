@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md)
-[![Release: 26.10](https://img.shields.io/badge/release-26.10-28282B)](https://github.com/olivaresai/olivares/releases/tag/26.10.0)
+[![Release: 26.10](https://img.shields.io/badge/release-26.10-28282B)](https://github.com/olivaresai/olivares/releases/tag/26.10.1)
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -47,7 +47,7 @@ curl -fsSL https://olivares.ai/olivares/install.sh | sh
 olivares quickstart
 ```
 
-**Docker。** 多架构、distroless、非 root。它监听主机的所有网络接口；在每个 `-p` 前加上 `127.0.0.1:`，即可限制为本机访问。
+**Docker。** 多架构。容器镜像基于 Debian 13 slim（含供代理工具使用的 Node.js 24），并以非 root 用户运行。它监听主机的所有网络接口；在每个 `-p` 前加上 `127.0.0.1:`，即可限制为本机访问。
 
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
@@ -80,25 +80,25 @@ kubectl create namespace olivares-system && kubectl apply -n olivares-system -f 
 **Debian 和 Ubuntu。** 软件包添加一个无法登录的 `olivares` 用户和一个经过安全加固的服务；服务由你启动。
 
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.deb
-sudo dpkg -i olivares_26.10.0_linux_amd64.deb && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.deb
+sudo dpkg -i olivares_26.10.1_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 
 **RHEL、Fedora 和 SUSE。**
 
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.rpm
-sudo rpm -i olivares_26.10.0_linux_amd64.rpm && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.rpm
+sudo rpm -i olivares_26.10.1_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
 
 **Alpine。**
 
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_26.10.0_linux_amd64.apk && sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk && sudo rc-service olivares start
 ```
 
-ARM 服务器请用 `arm64` 替换 `amd64`。全部发布文件见[发布页面](https://github.com/olivaresai/olivares/releases/tag/26.10.0)。
+ARM 服务器请用 `arm64` 替换 `amd64`。全部发布文件见[发布页面](https://github.com/olivaresai/olivares/releases/tag/26.10.1)。
 
 **Homebrew。** macOS 和 Linux。
 

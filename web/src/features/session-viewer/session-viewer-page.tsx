@@ -9,6 +9,7 @@
 // decisions) on left, unified timeline in center, detail panel below.
 //
 // Registered in the feature registry at /session-viewer/$id (Task 11).
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import {
   useInfiniteQuery,
   useMutation,
@@ -20,7 +21,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { Separator } from '@/components/ui/separator'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -363,7 +364,12 @@ export function SessionViewerPage() {
     ) {
       return <ForbiddenState />
     }
-    return <ErrorState retry={() => void unifiedQuery.refetch()} />
+    return (
+      <QueryErrorState
+        error={unifiedQuery.error}
+        retry={() => void unifiedQuery.refetch()}
+      />
+    )
   }
 
   if (!session) {

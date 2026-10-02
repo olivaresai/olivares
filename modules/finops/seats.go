@@ -75,7 +75,7 @@ func (m *Module) handleIngestSeats(w http.ResponseWriter, r *http.Request, mc ap
 		writeJSON(w, http.StatusBadRequest, errorBody(msg))
 		return
 	}
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := m.mutate(r.Context(), mc.Tenant, func(sc store.Scope) error {
 		if _, aerr := sc.Audit().Append(r.Context(), model.AuditDraft{
 			Actor:      mc.Principal.Actor(),
 			ActorKind:  mc.Principal.ActorKind(),

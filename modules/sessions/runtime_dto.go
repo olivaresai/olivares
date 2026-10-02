@@ -7,10 +7,9 @@ package sessions
 import (
 	"encoding/hex"
 	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
 
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -23,21 +22,28 @@ type runDTO struct {
 	// Completion belongs only to an originating in-process launch call.
 	Completion     RuntimeLaunchCompletion `json:"-"`
 	RunRef         string                  `json:"run_ref"`
+	Peers          []string                `json:"peers"`
+	PeersRule      string                  `json:"peers_rule,omitempty"`
 	Name           string                  `json:"name,omitempty"`
 	Transport      string                  `json:"transport"`
 	PermissionMode string                  `json:"permission_mode"`
 	Effort         string                  `json:"effort,omitempty"`
 	ModelRef       string                  `json:"model_ref,omitempty"`
 	WorkspaceRef   string                  `json:"workspace_ref,omitempty"`
+	// AuthzWorkspaceID is the stored core authorization scope, separate from the folder.
+	AuthzWorkspaceID string `json:"authz_workspace_id,omitempty"`
 	// WorkspacePath is the HOST directory this session's child was started in: the
 	// registered workspace's canonical root, or the directory of its own this plane
 	// created under the data directory. It is shown by NAME because the walk of
 	// 2026-09-18 could only answer "where is this session working" by reading the
 	// child's own init frame — and the answer then was the engine's own directory.
 	// Empty on a run that predates the column, which reads as "not recorded".
-	WorkspacePath   string           `json:"workspace_path,omitempty"`
-	TemplateID      string           `json:"template_id,omitempty"`
-	TemplateVersion int64            `json:"template_version,omitempty"`
+	WorkspacePath   string `json:"workspace_path,omitempty"`
+	TemplateID      string `json:"template_id,omitempty"`
+	TemplateVersion int64  `json:"template_version,omitempty"`
+	// SecretEnv names the vault secrets this session receives as environment
+	// variables. Names only: no read of a run ever returns a value.
+	SecretEnv       []SecretEnvRef   `json:"secret_env,omitempty"`
 	MaxDurationSecs int64            `json:"max_duration_secs,omitempty"`
 	Isolation       string           `json:"isolation"`
 	State           string           `json:"state"`
@@ -64,7 +70,11 @@ type runDTO struct {
 	PEPProvisioned bool   `json:"pep_provisioned"`
 	RecordIO       bool   `json:"record_io"`
 	ApprovalRef    string `json:"approval_ref,omitempty"`
+	ApprovalURL    string `json:"approval_url,omitempty"`
 	Critical       bool   `json:"critical"`
+
+	// PendingApprovalRef is the existing human request this supervised run currently awaits.
+	PendingApprovalRef string `json:"pending_approval_ref,omitempty"`
 
 	// Work binding is references-only dispatch provenance. All fields are empty
 	// for historical/ordinary runs; a work-launched run exposes the complete
@@ -73,6 +83,9 @@ type runDTO struct {
 	WorkLeaseFence  *int64   `json:"work_lease_fence,omitempty"`
 	WorkDispatchKey string   `json:"work_dispatch_key,omitempty"`
 	WorkOwnerEpoch  *int64   `json:"work_owner_epoch,omitempty"`
+	// WorkLeaseState is the read-time control posture: active, ended or unknown.
+	// It carries no lease details and never replaces effect-time fence checks.
+	WorkLeaseState string `json:"work_lease_state,omitempty"`
 
 	// Provider-profile facts (B1), persisted at launch: the profile, its driver and
 	// its execution environment. References and labels only — the homes live on the
@@ -80,6 +93,7 @@ type runDTO struct {
 	// run, which is never assigned a profile after the fact.
 	ProviderProfileRef     string `json:"provider_profile_ref,omitempty"`
 	ProviderDriver         string `json:"provider_driver,omitempty"`
+	MCPGovernanceWarning   string `json:"mcp_governance_warning,omitempty"`
 	ProviderEnvironmentRef string `json:"provider_environment_ref,omitempty"`
 	// ProviderConversationID is the DRIVER-NEUTRAL name of the provider
 	// conversation this run owns (Codex `thread.id`, Grok ACP `sessionId`, Claude's
@@ -118,17 +132,21 @@ type runDTO struct {
 
 // toRunDTO projects a run record, deriving the displayed state at read time.
 func (m *Module) toRunDTO(rec model.Record) runDTO {
-	return runDTO{
+	out := runDTO{
 		RunRef:                 rec.String(colRunRef),
+		Peers:                  runPeers(rec),
+		PeersRule:              rec.String(colRunPeersRule),
 		Name:                   rec.String(colRunName),
 		Transport:              rec.String(colTransport),
 		PermissionMode:         rec.String(colPermissionMode),
 		Effort:                 rec.String(colEffort),
 		ModelRef:               rec.String(colRunModelRef),
 		WorkspaceRef:           rec.String(colWorkspaceRef),
+		AuthzWorkspaceID:       rec.String(colRunAuthzWorkspaceID),
 		WorkspacePath:          rec.String(colRunWorkspacePath),
 		TemplateID:             rec.String(colTemplateID),
 		TemplateVersion:        rec.Int(colTemplateVersion),
+		SecretEnv:              storedSecretEnvNames(rec),
 		MaxDurationSecs:        rec.Int(colTemplateCeiling),
 		Isolation:              rec.String(colIsolation),
 		State:                  m.deriveRunState(rec),
@@ -147,7 +165,9 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 		AgentRef:               rec.String(colRunAgentRef),
 		PEPProvisioned:         rec.Bool(colPEPProvisioned),
 		RecordIO:               rec.Bool(colRecordIO),
+		ApprovalURL:            approvalURL(rec.String(colApprovalRef)),
 		ApprovalRef:            rec.String(colApprovalRef),
+		PendingApprovalRef:     m.pendingRunApproval(rec),
 		Critical:               rec.Bool(colCritical),
 		WorkItemID:             model.ID(rec.String(colRunWorkItemID)),
 		WorkLeaseFence:         intPtr(rec, colRunWorkLeaseFence),
@@ -165,6 +185,13 @@ func (m *Module) toRunDTO(rec model.Record) runDTO {
 		CostMicroUSD:           intPtr(rec, colRunCostMicroUSD),
 		UsageModelRef:          rec.String(colRunUsageModelRef),
 	}
+	if runHasWorkBinding(rec) {
+		out.WorkLeaseState = "unknown"
+	}
+	if out.ProviderDriver == providerDriverGrok || out.ProviderDriver == providerDriverOpenCode {
+		out.MCPGovernanceWarning = "MCP servers configured in this tool's own settings are not governed by Olivares."
+	}
+	return out
 }
 
 // deriveRunState derives the displayed state: a stored `running` session whose
@@ -248,6 +275,10 @@ type createRunRequest struct {
 	TemplateID     string   `json:"template_id"`
 	Isolation      string   `json:"isolation"`
 	EnvAllow       []string `json:"env_allow"`
+	// SecretEnv names vault secrets (env/…) the child receives as environment
+	// variables. Names only; the server opens the values and needs tenant
+	// administration from the caller.
+	SecretEnv []SecretEnvRef `json:"secret_env"`
 	// ProviderProfileRef (B1) names the provider profile to launch under. Only the
 	// reference: no home, environment, driver, binding, canonical sid, process
 	// handle or authentication source is accepted from a client — the source is an
@@ -311,16 +342,9 @@ func decodeOptionalJSONBody(w http.ResponseWriter, r *http.Request, v any) bool 
 	if r.Body == nil || r.ContentLength == 0 {
 		return true
 	}
-	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		if errors.Is(err, io.EOF) {
-			return true // a chunked/unknown-length body that turned out to be empty
-		}
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid request body"))
-		return false
-	}
-	if dec.More() {
+	// Optional: a chunked/unknown-length body that turns out to be empty also
+	// keeps v at its zero value.
+	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 1 << 20, Optional: true}); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid request body"))
 		return false
 	}
@@ -330,16 +354,7 @@ func decodeOptionalJSONBody(w http.ResponseWriter, r *http.Request, v any) bool 
 // decodeJSONBody decodes a bounded JSON request body with unknown-field rejection.
 // It writes a 400 and returns false on any decode error.
 func decodeJSONBody(w http.ResponseWriter, r *http.Request, v any) bool {
-	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid request body"))
-		return false
-	}
-	// A body is ONE JSON document. This helper is named decodeJSONBody rather than
-	// decodeJSON, which is why the first version of check-json-decoders.sh — keyed on the
-	// NAME — reported OK while this route accepted two and mutated on the first.
-	if err := dec.Decode(&struct{}{}); err != io.EOF {
+	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 1 << 20}); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid request body"))
 		return false
 	}

@@ -143,9 +143,9 @@ function wrap() {
 
 async function openAdopt(user: ReturnType<typeof userEvent.setup>) {
   await user.click(
-    await screen.findByRole('button', { name: 'Adopt a profile' }),
+    await screen.findByRole('button', { name: 'Name a profile as an account' }),
   )
-  return screen.findByRole('dialog', { name: 'Adopt a provider profile' })
+  return screen.findByRole('dialog', { name: 'Name a profile as an account' })
 }
 
 beforeEach(() => {
@@ -154,7 +154,7 @@ beforeEach(() => {
   auth.principal = 'u1'
   grant(AR, AW)
   useSessionStore.setState({
-    token: 'olvs_first',
+    csrfToken: 'olvs_first',
     sessionId: 'sid-1',
     expiresAt: '2030-01-01T00:00:00Z',
   })
@@ -197,9 +197,11 @@ describe('ProviderAccountsPanel — the list', () => {
     grant(AR)
     wrap()
     expect(await screen.findByText('No provider accounts')).toBeInTheDocument()
-    expect(screen.getByText(/needs sessions:account:write/)).toBeInTheDocument()
     expect(
-      screen.queryByRole('button', { name: 'Adopt a profile' }),
+      screen.getByText(/needs the sessions:account:write permission/),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Name a profile as an account' }),
     ).not.toBeInTheDocument()
   })
 
@@ -208,10 +210,10 @@ describe('ProviderAccountsPanel — the list', () => {
     wrap()
     expect(await screen.findByText('No provider accounts')).toBeInTheDocument()
     expect(
-      screen.getByText(/to name an existing provider profile as an account/),
+      screen.getByText(/name a profile you already have as an account/),
     ).toBeInTheDocument()
     expect(
-      screen.getByRole('button', { name: 'Adopt a profile' }),
+      screen.getByRole('button', { name: 'Name a profile as an account' }),
     ).toBeInTheDocument()
   })
 
@@ -267,7 +269,9 @@ describe('ProviderAccountsPanel — the list', () => {
     )
     wrap()
     // The calm refusal (a status, not an alert): never an error, never an empty list.
-    expect(await screen.findByText('Not authorized')).toBeInTheDocument()
+    expect(
+      await screen.findByText('You do not have access to this.'),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.queryByRole('table')).not.toBeInTheDocument()
     expect(screen.queryByText('No provider accounts')).not.toBeInTheDocument()
@@ -315,7 +319,7 @@ describe('ProviderAccountsPanel — one account', () => {
       within(sheet).getByText(/It is not a dedicated, isolated home\./),
     ).toBeInTheDocument()
     expect(
-      within(sheet).getByText('Adopted (an existing home)'),
+      within(sheet).getByText('From an existing profile'),
     ).toBeInTheDocument()
     expect(
       within(sheet).getByText('ppf_a', { selector: 'dd, dd *' }),
@@ -329,7 +333,7 @@ describe('ProviderAccountsPanel — one account', () => {
       await screen.findByRole('button', { name: 'review-codex' }),
     )
     const sheet = await screen.findByRole('dialog')
-    await within(sheet).findByText('Adopted (an existing home)')
+    await within(sheet).findByText('From an existing profile')
     expect(within(sheet).queryByText(/tenant-1\/xenv_1/)).toBeNull()
   })
 
@@ -344,7 +348,7 @@ describe('ProviderAccountsPanel — one account', () => {
     expect(
       await within(sheet).findByText(/This account was not found\./),
     ).toBeInTheDocument()
-    expect(within(sheet).queryByText('Adopted (an existing home)')).toBeNull()
+    expect(within(sheet).queryByText('From an existing profile')).toBeNull()
     expect(within(sheet).queryByText(/Not checked/)).toBeNull()
   })
 })
@@ -363,7 +367,9 @@ describe('ProviderAccountsPanel — adopt', () => {
       within(dialog).getByRole('textbox', { name: 'Profile reference' }),
       'ppf_b',
     )
-    await user.click(within(dialog).getByRole('button', { name: 'Adopt' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Name as account' }),
+    )
     await waitFor(() => expect(api.adoptAccount).toHaveBeenCalledOnce())
     const [ref, body, scope] = api.adoptAccount.mock.calls[0]
     expect(ref).toBe('ppf_b')
@@ -374,19 +380,18 @@ describe('ProviderAccountsPanel — adopt', () => {
     })
     // In flight: pending, announced as a status, and no success before the answer.
     expect(
-      within(dialog).getByRole('button', { name: /Adopting/ }),
+      within(dialog).getByRole('button', { name: /Naming/ }),
     ).toBeDisabled()
-    expect(within(dialog).getByText(/^Adopting ppf_b\./)).toHaveAttribute(
-      'role',
-      'status',
-    )
+    expect(
+      within(dialog).getByText(/^Naming ppf_b as an account\./),
+    ).toHaveAttribute('role', 'status')
     expect(toast.success).not.toHaveBeenCalled()
     await act(async () => {
       answer.resolve(adopted)
     })
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith(
-        'Adopted as claude-b',
+        'Named as claude-b',
         undefined,
       ),
     )
@@ -399,7 +404,7 @@ describe('ProviderAccountsPanel — adopt', () => {
       await screen.findByRole('heading', { name: /claude-b/ }),
     ).toBeInTheDocument()
     expect(
-      screen.queryByRole('dialog', { name: 'Adopt a provider profile' }),
+      screen.queryByRole('dialog', { name: 'Name a profile as an account' }),
     ).not.toBeInTheDocument()
   })
 
@@ -416,12 +421,14 @@ describe('ProviderAccountsPanel — adopt', () => {
       within(dialog).getByRole('textbox', { name: 'Account name (optional)' }),
       'claude-1',
     )
-    await user.click(within(dialog).getByRole('button', { name: 'Adopt' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Name as account' }),
+    )
     await waitFor(() => expect(api.adoptAccount).toHaveBeenCalledOnce())
     expect(api.adoptAccount.mock.calls[0][1]).toEqual({ name: 'claude-1' })
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith(
-        'Adopted as claude-1',
+        'Named as claude-1',
         undefined,
       ),
     )
@@ -442,9 +449,11 @@ describe('ProviderAccountsPanel — adopt', () => {
     })
     await user.type(refBox, 'ppf_b')
     await user.type(nameBox, 'claude-1')
-    await user.click(within(dialog).getByRole('button', { name: 'Adopt' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Name as account' }),
+    )
     const alert = await within(dialog).findByRole('alert')
-    expect(alert).toHaveTextContent('The profile was not adopted')
+    expect(alert).toHaveTextContent('The profile was not named as an account')
     expect(alert).toHaveTextContent(reason)
     expect(refBox).toHaveValue('ppf_b')
     expect(nameBox).toHaveValue('claude-1')
@@ -464,10 +473,12 @@ describe('ProviderAccountsPanel — adopt', () => {
       within(dialog).getByRole('textbox', { name: 'Profile reference' }),
       'ppf_b',
     )
-    await user.click(within(dialog).getByRole('button', { name: 'Adopt' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Name as account' }),
+    )
     expect(
       await within(dialog).findByText(
-        'Your role cannot adopt accounts in this tenant. Nothing was changed.',
+        'Your role cannot add accounts in this organization. Nothing was changed.',
       ),
     ).toBeInTheDocument()
     expect(toast.warning).toHaveBeenCalled()
@@ -490,15 +501,17 @@ describe('ProviderAccountsPanel — adopt', () => {
       within(dialog).getByRole('textbox', { name: 'Profile reference' }),
       'ppf_b',
     )
-    await user.click(within(dialog).getByRole('button', { name: 'Adopt' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Name as account' }),
+    )
     // The draft may already have been applied: it closes, and the panel says so.
     expect(
       await screen.findByText(
-        'The outcome of adopting ppf_b is not known here.',
+        'Whether ppf_b became an account is not known here.',
       ),
     ).toBeInTheDocument()
     expect(
-      screen.queryByRole('dialog', { name: 'Adopt a provider profile' }),
+      screen.queryByRole('dialog', { name: 'Name a profile as an account' }),
     ).not.toBeInTheDocument()
     // The account list is read again, and the profile's account read answers now.
     await waitFor(() => expect(api.listAccounts).toHaveBeenCalledTimes(2))
@@ -530,20 +543,24 @@ describe('ProviderAccountsPanel — adopt', () => {
       within(dialog).getByRole('textbox', { name: 'Profile reference' }),
       'ppf_b',
     )
-    await user.click(within(dialog).getByRole('button', { name: 'Adopt' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Name as account' }),
+    )
     expect(
       await screen.findByText(
-        'The outcome of adopting ppf_b is not known here.',
+        'Whether ppf_b became an account is not known here.',
       ),
     ).toBeInTheDocument()
-    expect(screen.queryByText('The profile was not adopted')).toBeNull()
+    expect(
+      screen.queryByText('The profile was not named as an account'),
+    ).toBeNull()
     await waitFor(() =>
       expect(api.getAccount).toHaveBeenCalledWith('ppf_b', expect.anything()),
     )
     expect(toast.success).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'Dismiss' }))
     expect(
-      screen.queryByText('The outcome of adopting ppf_b is not known here.'),
+      screen.queryByText('Whether ppf_b became an account is not known here.'),
     ).toBeNull()
     expect(api.adoptAccount).toHaveBeenCalledOnce()
   })
@@ -553,7 +570,7 @@ describe('ProviderAccountsPanel — adopt', () => {
     wrap()
     await screen.findByRole('button', { name: 'work-claude' })
     expect(
-      screen.queryByRole('button', { name: 'Adopt a profile' }),
+      screen.queryByRole('button', { name: 'Name a profile as an account' }),
     ).not.toBeInTheDocument()
     expect(api.adoptAccount).not.toHaveBeenCalled()
     expect(api.listProfiles).not.toHaveBeenCalled()
@@ -594,7 +611,9 @@ describe('ProviderAccountsPanel — adopt', () => {
       screen.getByRole('option', { name: 'Enter a reference…' }),
     ).toBeInTheDocument()
     await user.click(screen.getByRole('option', { name: /Home B/ }))
-    await user.click(within(dialog).getByRole('button', { name: 'Adopt' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Name as account' }),
+    )
     await waitFor(() => expect(api.adoptAccount).toHaveBeenCalledOnce())
     expect(api.adoptAccount.mock.calls[0][0]).toBe('ppf_b')
     expect(api.adoptAccount.mock.calls[0][1]).toEqual({})
@@ -622,7 +641,9 @@ describe('ProviderAccountsPanel — adopt', () => {
       within(dialog).getByRole('textbox', { name: 'Profile reference' }),
       'ppf_b',
     )
-    await user.click(within(dialog).getByRole('button', { name: 'Adopt' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Name as account' }),
+    )
     await waitFor(() => expect(api.adoptAccount).toHaveBeenCalledOnce())
     expect(api.adoptAccount.mock.calls[0][0]).toBe('ppf_b')
   })
@@ -643,7 +664,9 @@ describe('ProviderAccountsPanel — adopt', () => {
       within(dialog).getByRole('textbox', { name: 'Profile reference' }),
       'ppf_b',
     )
-    await user.click(within(dialog).getByRole('button', { name: 'Adopt' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Name as account' }),
+    )
     await waitFor(() =>
       expect(api.adoptAccount.mock.calls[0]?.[0]).toBe('ppf_b'),
     )
@@ -675,7 +698,9 @@ describe('ProviderAccountsPanel — adopt', () => {
       within(dialog).getByRole('button', { name: 'Cancel' }),
     ).toBeInTheDocument()
     // Nothing to submit yet: the reference is empty.
-    expect(within(dialog).getByRole('button', { name: 'Adopt' })).toBeDisabled()
+    expect(
+      within(dialog).getByRole('button', { name: 'Name as account' }),
+    ).toBeDisabled()
     expect(findRawI18nKeys(document.body)).toEqual([])
   })
 })
@@ -691,7 +716,9 @@ describe('ProviderAccountsPanel — authority boundary and revocation', () => {
       within(dialog).getByRole('textbox', { name: 'Profile reference' }),
       'ppf_b',
     )
-    await user.click(within(dialog).getByRole('button', { name: 'Adopt' }))
+    await user.click(
+      within(dialog).getByRole('button', { name: 'Name as account' }),
+    )
     await waitFor(() => expect(api.adoptAccount).toHaveBeenCalledOnce())
 
     auth.activeTenant = 't2'
@@ -701,7 +728,7 @@ describe('ProviderAccountsPanel — authority boundary and revocation', () => {
       await screen.findByRole('button', { name: 'other-tenant-account' }),
     ).toBeInTheDocument()
     expect(
-      screen.queryByRole('dialog', { name: 'Adopt a provider profile' }),
+      screen.queryByRole('dialog', { name: 'Name a profile as an account' }),
     ).not.toBeInTheDocument()
 
     await act(async () => {
@@ -757,7 +784,9 @@ describe('ProviderAccountsPanel — authority boundary and revocation', () => {
     grant(AR, AW)
     rerender()
     expect(
-      await screen.findByRole('button', { name: 'Adopt a profile' }),
+      await screen.findByRole('button', {
+        name: 'Name a profile as an account',
+      }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(api.adoptAccount).not.toHaveBeenCalled()
@@ -1308,7 +1337,7 @@ describe('ProviderAccountsPanel — display name metadata', () => {
       if (kind === 'principal') auth.principal = 'u2'
       if (kind === 'credential')
         useSessionStore.getState().setSession({
-          token: 'olvs_rotated',
+          csrfToken: 'olvs_rotated',
           sessionId: 'sid-1',
           expiresAt: '2030-01-01T00:00:00Z',
         })
@@ -1697,7 +1726,7 @@ describe('ProviderAccountsPanel — uncertain metadata fields', () => {
       if (kind === 'principal') auth.principal = 'u2'
       if (kind === 'credential')
         useSessionStore.getState().setSession({
-          token: 'olvs_rotated',
+          csrfToken: 'olvs_rotated',
           sessionId: 'sid-1',
           expiresAt: '2030-01-01T00:00:00Z',
         })

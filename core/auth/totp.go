@@ -751,7 +751,7 @@ func (a *Authenticator) BeginTOTPEnrolment(ctx context.Context, actor Principal,
 	if err := mayChangeAuthenticators(actor, user); err != nil {
 		return nil, err
 	}
-	if has && actor.AAL < AAL3 {
+	if has && !a.stepUpSatisfied(ctx, actor) {
 		a.auditStepUpFailure(ctx, actor, "totp", "enrolment_step_up")
 		return nil, ErrStepUpRequired
 	}
@@ -854,7 +854,7 @@ func (a *Authenticator) FinishTOTPEnrolment(ctx context.Context, actor Principal
 	if err := mayChangeAuthenticators(actor, user); err != nil {
 		return nil, err
 	}
-	if has && actor.AAL < AAL3 {
+	if has && !a.stepUpSatisfied(ctx, actor) {
 		a.auditStepUpFailure(ctx, actor, "totp", "enrolment_step_up")
 		return nil, ErrStepUpRequired
 	}
@@ -1127,7 +1127,7 @@ func (a *Authenticator) RemoveTOTP(ctx context.Context, actor Principal) error {
 	if actor.Kind != KindUser || actor.CredID.IsZero() {
 		return ErrUnauthenticated
 	}
-	if actor.AAL < AAL3 {
+	if !a.stepUpSatisfied(ctx, actor) {
 		a.auditStepUpFailure(ctx, actor, "totp", "removal_step_up")
 		return ErrStepUpRequired
 	}
@@ -1148,7 +1148,7 @@ func (a *Authenticator) ResetTOTP(ctx context.Context, actor Principal, accountI
 	if actor.Kind != KindUser || actor.CredID.IsZero() {
 		return ErrUnauthenticated
 	}
-	if actor.AAL < AAL3 {
+	if !a.stepUpSatisfied(ctx, actor) {
 		return ErrStepUpRequired
 	}
 	if !actor.Superadmin || !actor.SessionScope().IsZero() {
@@ -1173,7 +1173,7 @@ func (a *Authenticator) ResetTOTPInTenant(ctx context.Context, actor Principal, 
 	if actor.Kind != KindUser || actor.CredID.IsZero() {
 		return ErrUnauthenticated
 	}
-	if actor.AAL < AAL3 {
+	if !a.stepUpSatisfied(ctx, actor) {
 		return ErrStepUpRequired
 	}
 	if tenant.IsZero() || tenant.IsSystem() {

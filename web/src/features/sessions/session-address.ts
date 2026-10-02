@@ -57,6 +57,7 @@ export const SESSION_ADDRESS_KEYS = [
  */
 export const WORK_PANES = ['rail', 'narrative', 'context'] as const
 export type WorkPane = (typeof WORK_PANES)[number]
+/** The pane in front when the address names no session (a named one opens on `narrative`). */
 export const DEFAULT_PANE: WorkPane = 'rail'
 
 /**
@@ -164,8 +165,12 @@ export function decodeSessionAddress(raw: {
     else issues.push(SESSION_PARAM)
   }
 
+  // A named session opens on its conversation. Below `xl` only one pane is in front, and
+  // an address with no pane used to put the list there: a desktop link narrowed or
+  // reloaded on a phone hid the conversation, the composer and Stop (F1 09b sweep).
+  // An explicit pane, "Back to sessions" included, still wins.
   const rawPane = raw[PANE_PARAM]
-  let pane: WorkPane = DEFAULT_PANE
+  let pane: WorkPane = address ? 'narrative' : DEFAULT_PANE
   if (rawPane !== undefined) {
     if ((WORK_PANES as readonly string[]).includes(rawPane))
       pane = rawPane as WorkPane

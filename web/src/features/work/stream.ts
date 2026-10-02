@@ -59,7 +59,7 @@ export function useWorkStream({
   onEvent,
   onUnavailable,
 }: UseWorkStreamOptions): UseWorkStreamResult {
-  const token = useSessionStore((s) => s.token)
+  const token = useSessionStore((s) => s.csrfToken)
   const tenant = useTenantStore((s) => s.activeTenant)
   const [status, setStatus] = useState<StreamStatus>('closed')
   const [cursor, setCursor] = useState<string | null>(initialCursor)

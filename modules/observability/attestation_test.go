@@ -278,7 +278,8 @@ func TestReleaseIdentityShapes(t *testing.T) {
 		// (2) a stamp that is not a version.
 		{"bare object name", "abc1234", "release", false, "is not a semantic version"},
 		{"bare object dirty", "abc1234-dirty", "release", false, "is not a semantic version"},
-		{"two-component", "26.8", "release", false, "is not a semantic version"},
+		{"single-component", "26", "release", false, "is not a semantic version"},
+		{"four-component", "26.11.1.2", "release", false, "is not a semantic version"},
 		// (3) a local build wearing a version: both git-describe markers parse.
 		{"describe distance", "v26.8.0-3-gabc1234", "release", false, "git-describe marker"},
 		{"describe dirty", "26.8.0-dirty", "release", false, "git-describe marker"},
@@ -290,6 +291,12 @@ func TestReleaseIdentityShapes(t *testing.T) {
 		// (5) both facts: a release. Prereleases the ceremony really produces are
 		// releases too — an rc IS published, and refusing it would be the same
 		// defect in the other direction.
+		{"two-component", "26.8", "release", true, "release-stamped 26.8 (self-declared)"},
+		{"released monthly", "26.10", "release", true, "release-stamped 26.10 (self-declared)"},
+		{"released next monthly", "26.11", "release", true, "release-stamped 26.11 (self-declared)"},
+		{"released next year", "27.1", "release", true, "release-stamped 27.1 (self-declared)"},
+		{"released first patch", "26.11.1", "release", true, "release-stamped 26.11.1 (self-declared)"},
+		{"released second patch", "26.11.2", "release", true, "release-stamped 26.11.2 (self-declared)"},
 		{"released", "26.8.0", "release", true, "release-stamped 26.8.0 (self-declared)"},
 		{"released with v", "v26.8.0", "release", true, "release-stamped v26.8.0 (self-declared)"},
 		{"released rc", "26.8.0-rc.1", "release", true, "release-stamped 26.8.0-rc.1 (self-declared)"},

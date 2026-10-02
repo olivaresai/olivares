@@ -6,6 +6,7 @@ package main
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/spf13/cobra"
 )
@@ -49,7 +50,7 @@ func newFinOpsCmd() *cobra.Command {
 		Long: "Report what the AI estate costs and what it returns, and govern the budgets, model\n" +
 			"rates and cost centers that shape it.\n\n" +
 			"Connection, credential and TLS values use the same resolution order and trust controls\n" +
-			"as `auth`. Time windows are RFC3339 and the control plane refuses an unparseable one\n" +
+			"as `auth`. Time windows are RFC3339 and the engine refuses an unparseable one\n" +
 			"rather than widening it, so a mistyped --since exits 2 instead of returning a bigger\n" +
 			"number than you asked for.",
 		Example: `  olivares finops spend summary --since 2026-08-01T00:00:00Z
@@ -85,7 +86,7 @@ func newFinOpsSpendCmd(c modelstackClient) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "spend",
 		Short: "Report observed AI spend over a window",
-		Long: "Report the spend the control plane observed over a time window: the raw series, a\n" +
+		Long: "Report the spend the engine observed over a time window: the raw series, a\n" +
 			"summary, a trend, the reconciliation against provider invoices, the allocation to cost\n" +
 			"centers, the unified cross-source view, and the FOCUS export.",
 		Example: `  olivares finops spend summary --since 2026-08-01T00:00:00Z
@@ -120,7 +121,7 @@ func newFinOpsSpendCmd(c modelstackClient) *cobra.Command {
 		newModelstackGetCmd(c, modelstackGetSpec{
 			Use:   "reconciliation",
 			Short: "Compare observed spend against provider-reported cost",
-			Long: "Compare what this control plane observed against what the provider reported, so a\n" +
+			Long: "Compare what this engine observed against what the provider reported, so a\n" +
 				"gap is a measured number rather than a suspicion.",
 			Example: `  olivares finops spend reconciliation --since 2026-08-01T00:00:00Z -o json`,
 			Target:  modelstackTarget{Collection: "/spend", Nested: "reconciliation"},
@@ -145,7 +146,7 @@ func newFinOpsSpendCmd(c modelstackClient) *cobra.Command {
 		newModelstackGetCmd(c, modelstackGetSpec{
 			Use:   "export",
 			Short: "Export spend in the FOCUS interchange format",
-			Long: "Export the window's spend for an external FinOps tool. The control plane may answer\n" +
+			Long: "Export the window's spend for an external FinOps tool. The engine may answer\n" +
 				"a media type that is not JSON; when it does, stdout carries the export VERBATIM so it\n" +
 				"can be redirected to a file, and the media type is named on stderr.",
 			Example: `  olivares finops spend export --since 2026-08-01T00:00:00Z --format focus
@@ -230,7 +231,7 @@ func newFinOpsOutcomesCmd(c modelstackClient) *cobra.Command {
 		newModelstackWriteCmd(c, modelstackWriteSpec{
 			Use:   "ingest",
 			Short: "Record one business outcome",
-			Long: "Record one outcome from a JSON document. The control plane answers 202 Accepted:\n" +
+			Long: "Record one outcome from a JSON document. The engine answers 202 Accepted:\n" +
 				"the record is taken, not yet aggregated into the value reports.",
 			Example: `  olivares finops outcomes ingest --data @outcome.json
   cat outcome.json | olivares finops outcomes ingest --data -`,
@@ -257,18 +258,30 @@ func newFinOpsSeatsCmd(c modelstackClient) *cobra.Command {
 			Use:   "ingest",
 			Short: "Record a provider's seat counts for a day",
 			Long: "Record assigned, premium and pending-invite seat counts for one provider and day,\n" +
-				"from a JSON document. The control plane answers 202 Accepted.",
+				"from a JSON document. The engine answers 202 Accepted.",
 			Example: `  olivares finops seats ingest --data @seats.json`,
 			Method:  http.MethodPost,
 			Target:  modelstackTarget{Collection: "/seats"},
 			Body:    modelstackBodyRequired,
 		}),
 		newModelstackGetCmd(c, modelstackGetSpec{
-			Use:     "utilization",
-			Short:   "Show seat utilization",
-			Long:    "Show how the recorded seats compare with observed activity, per provider.",
-			Example: `  olivares finops seats utilization -o json`,
-			Target:  modelstackTarget{Collection: "/seats", Nested: "utilization"},
+			Use:   "utilization",
+			Short: "Show seat utilization",
+			Long: "Show how one provider's recorded seats compare with observed activity, per day.\n" +
+				"The range defaults to the last 30 days (UTC).",
+			Example: `  olivares finops seats utilization --provider anthropic
+  olivares finops seats utilization --provider anthropic --from 2026-09-01 --to 2026-09-30 -o json`,
+			Target: modelstackTarget{Collection: "/seats", Nested: "utilization"},
+			// N1 RU-03 (2026-10-01): the route needs provider, from and to; without
+			// them every call was a 400 the help never explained.
+			Filters: []modelstackFilterSpec{
+				{Flag: "provider", Query: "provider", Required: true,
+					Usage: "provider whose seats to compare, as recorded by `seats ingest` (for example anthropic)"},
+				{Flag: "from", Query: "from", AtRun: func() string { return time.Now().UTC().AddDate(0, 0, -29).Format("2006-01-02") },
+					Usage: "first day, YYYY-MM-DD (UTC; default 30 days ago, counting today)"},
+				{Flag: "to", Query: "to", AtRun: func() string { return time.Now().UTC().Format("2006-01-02") },
+					Usage: "last day, YYYY-MM-DD (UTC; default today)"},
+			},
 		}),
 	)
 	return cmd
@@ -280,7 +293,7 @@ func newFinOpsCostIngestCmd(c modelstackClient) *cobra.Command {
 		Short: "Record an observed cost sample",
 		Long: "Record one observed cost sample — tokens, cost, provider, model, and the workspace,\n" +
 			"key, actor and provenance it is attributed to — from a JSON document.\n\n" +
-			"This is the ingest path every spend report is built from. The control plane answers\n" +
+			"This is the ingest path every spend report is built from. The engine answers\n" +
 			"202 Accepted: the sample is taken, not yet aggregated.",
 		Example: `  olivares finops cost ingest --data @sample.json
   cat sample.json | olivares finops cost ingest --data -`,
@@ -289,7 +302,7 @@ func newFinOpsCostIngestCmd(c modelstackClient) *cobra.Command {
 	cmd.AddCommand(newModelstackWriteCmd(c, modelstackWriteSpec{
 		Use:   "ingest",
 		Short: "Record one observed cost sample",
-		Long: "Record one cost sample from a JSON document. Fields the control plane does not\n" +
+		Long: "Record one cost sample from a JSON document. Fields the engine does not\n" +
 			"recognize are rejected with a 400 (exit 2) rather than silently dropped.",
 		Example: `  olivares finops cost ingest --data @sample.json`,
 		Method:  http.MethodPost,
@@ -505,14 +518,14 @@ func newFinOpsCostCenterMappingsCmd(c modelstackClient) *cobra.Command {
 			Aliases: []string{"list"},
 			Short:   "List one cost centre's mapping rules",
 			Long: "List the mapping rules of one cost center, in priority order.\n\n" +
-				"This route takes NO cursor or limit: the control plane serves it under a fixed\n" +
+				"This route takes NO cursor or limit: the engine serves it under a fixed\n" +
 				"server-side cap (modules/finops/costcenter.go:306-309). The flags are therefore not\n" +
 				"offered, and a capped page says so rather than looking complete.",
 			Example:   `  olivares finops cost-centers mappings ls 018f2a10-0000-7000-8000-00000000000a -o json`,
 			Target:    modelstackTarget{Collection: "/cost-centers", Nested: "mappings", IDs: 1},
 			EmptyNote: "no mapping rules on this cost center",
 			Paginated: false,
-			CapNote:   "the control plane caps this list server-side and does not page it; narrow it by cost center",
+			CapNote:   "the engine caps this list server-side and does not page it; narrow it by cost center",
 			Columns: []modelstackColumn{
 				{Header: "ID", Key: "id"},
 				{Header: "DIMENSION", Key: "source_dimension"},
@@ -551,7 +564,7 @@ func newFinOpsRatesCmd(c modelstackClient) *cobra.Command {
 		Use:     "rates",
 		Aliases: []string{"model-rates"},
 		Short:   "Govern the model rate catalog used to price usage",
-		Long: "Govern the per-model rates the control plane prices observed usage with: input,\n" +
+		Long: "Govern the per-model rates the engine prices observed usage with: input,\n" +
 			"output, cache-read and cache-creation rates, and the window each rate is effective in.\n\n" +
 			"These identifiers are the SAME model references `models ls` reports.",
 		Example: `  olivares finops rates ls --provider anthropic
@@ -640,7 +653,7 @@ func newFinOpsStatementsCmd(c modelstackClient) *cobra.Command {
 			Use:   "generate",
 			Short: "Generate statements for a period",
 			Long: "Generate the statements for one period from a JSON document naming the period\n" +
-				"(monthly or weekly) and its RFC3339 start. The control plane refuses any other\n" +
+				"(monthly or weekly) and its RFC3339 start. The engine refuses any other\n" +
 				"period or an unparseable start with a 400, which exits 2.",
 			Example: `  olivares finops statements generate --data '{"period":"monthly","period_start":"2026-08-01T00:00:00Z"}'`,
 			Method:  http.MethodPost,
@@ -681,7 +694,7 @@ func newFinOpsStatementsCmd(c modelstackClient) *cobra.Command {
 		newModelstackGetCmd(c, modelstackGetSpec{
 			Use:   "export <statement-id>",
 			Short: "Export one statement",
-			Long: "Export one statement for an accounting system. When the control plane answers a\n" +
+			Long: "Export one statement for an accounting system. When the engine answers a\n" +
 				"media type that is not JSON, stdout carries it VERBATIM so it can be redirected, and\n" +
 				"the media type is named on stderr.",
 			Example: `  olivares finops statements export 018f2a10-0000-7000-8000-00000000000d > statement.csv`,
@@ -715,7 +728,7 @@ func newFinOpsRecommendationsCmd(c modelstackClient) *cobra.Command {
 	return newModelstackGetCmd(c, modelstackGetSpec{
 		Use:   "recommendations",
 		Short: "Show cost-reduction recommendations",
-		Long: "Show the recommendations the control plane derives from observed spend: the changes\n" +
+		Long: "Show the recommendations the engine derives from observed spend: the changes\n" +
 			"that would reduce it, each with the evidence it was derived from.",
 		Example: `  olivares finops recommendations
   olivares finops recommendations -o json`,

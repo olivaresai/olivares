@@ -5,6 +5,7 @@
 // Shared building blocks for the identity & NHI console. Mirrors the
 // honest-seam pattern: a DECLARED endpoint that is not live yet renders a plain
 // "backend pending" notice — never a fake success, never a red error.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import type { UseQueryResult } from '@tanstack/react-query'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -17,7 +18,7 @@ import {
 import { StatusBadge } from '@/components/data/badges'
 import { EmptyState } from '@/components/ui/empty-state'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, NetworkError } from '@/lib/api/errors'
 import { cn } from '@/lib/utils'
@@ -105,7 +106,8 @@ export function DeclaredSection<T>({
     }
     const isNetwork = error instanceof NetworkError
     return (
-      <ErrorState
+      <QueryErrorState
+        error={query.error}
         title={isNetwork ? t('network.title') : t('serverError.title')}
         description={
           isNetwork ? t('network.description') : t('serverError.description')

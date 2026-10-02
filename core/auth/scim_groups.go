@@ -102,13 +102,13 @@ func (a *Authenticator) SCIMCreateGroup(ctx context.Context, actor Principal, te
 		} else if ok {
 			return store.ErrConflict
 		}
-		g, err := as.Groups().Create(ctx, model.UserGroup{
-			TargetTenantID: tenant, DisplayName: in.DisplayName, ExternalID: in.ExternalID,
-		})
+		valid, skipped, err := validMembers(ctx, as, tenant, in.Members)
 		if err != nil {
 			return err
 		}
-		valid, skipped, err := validMembers(ctx, as, tenant, in.Members)
+		g, err := as.Groups().Create(ctx, model.UserGroup{
+			TargetTenantID: tenant, DisplayName: in.DisplayName, ExternalID: in.ExternalID,
+		})
 		if err != nil {
 			return err
 		}
@@ -363,11 +363,8 @@ func (a *Authenticator) ConfigureGroupRole(ctx context.Context, actor Principal,
 		if err != nil {
 			return err
 		}
-		// Group-origin boundary: the console writes NULL-origin and its own
-		// "operator" groups; a provisioner-owned group is read-only to it.
-		if !mayWriteGroupOrigin(g.ProvisionedBy, GroupProvisionerOperator) {
-			return ErrGroupOriginReadOnly
-		}
+		// MappedRole is locally managed for every origin. The provisioner owns
+		// the group's identity and roster; this writer changes neither.
 		if role != "" {
 			if !IsRole(role) {
 				return ErrInvalidGroupRole
@@ -393,7 +390,8 @@ func (a *Authenticator) ConfigureGroupRole(ctx context.Context, actor Principal,
 // ConfigureGroupParent sets (or, with parentID zero, clears) the group this
 // group is nested under — the OPERATOR path (PUT /v1/groups/{id}/parent), never
 // reachable through SCIM. The IdP decides membership; the tenant operator
-// decides the hierarchy, exactly like MappedRole. Nesting C under P makes every
+// decides hierarchy for writable groups. A named provisioner's hierarchy
+// stays read-only to the operator. Nesting C under P makes every
 // member of C ALSO a member of P for authorization (loadGrants materializes the
 // ancestor chain as Cedar `Group::` principal parents), so a scoped grant on P
 // reaches C's members.
@@ -423,7 +421,7 @@ func (a *Authenticator) ConfigureGroupParent(ctx context.Context, actor Principa
 		if err := checkRoleCeiling(actor, g.TargetTenantID, RoleOwner); err != nil {
 			return err
 		}
-		// Group-origin boundary, same as the role mapping.
+		// Hierarchy remains provisioner-owned, unlike the local role mapping.
 		if !mayWriteGroupOrigin(g.ProvisionedBy, GroupProvisionerOperator) {
 			return ErrGroupOriginReadOnly
 		}
@@ -600,10 +598,14 @@ func usersByID(ctx context.Context, as store.AuthScope, ids []model.ID) ([]model
 }
 
 // validMembers filters want down to the deduplicated, order-preserving ids that
-// hold a membership in tenant (membershipOf), counting the rest as skipped. A
+// hold a membership in tenant and no unlifted offboard, counting the rest as skipped. A
 // non-member and another tenant's member are skipped IDENTICALLY — counting
 // them differently would let a SCIM connection probe foreign user ids.
 func validMembers(ctx context.Context, as store.AuthScope, tenant model.TenantID, want []model.ID) ([]model.ID, int, error) {
+	// Reserve the directory writer before discovering the complete User lock set.
+	if err := prepareUserAuthorityWrite(ctx, as); err != nil {
+		return nil, 0, err
+	}
 	valid := make([]model.ID, 0, len(want))
 	seen := make(map[model.ID]bool, len(want))
 	skipped := 0
@@ -620,5 +622,22 @@ func validMembers(ctx context.Context, as store.AuthScope, tenant model.TenantID
 		}
 		valid = append(valid, uid)
 	}
-	return valid, skipped, nil
+	// Pin all current members together before tenant facts or audit are written.
+	// Unknown/nonmember IDs retain the same skip behavior and input order.
+	if err := prepareUserAuthorityWrite(ctx, as, valid...); err != nil {
+		return nil, 0, err
+	}
+	admitted := valid[:0]
+	for _, uid := range valid {
+		excluded, err := subjectExcluded(ctx, as, tenant, uid)
+		if err != nil {
+			return nil, 0, err
+		}
+		if excluded {
+			skipped++
+			continue
+		}
+		admitted = append(admitted, uid)
+	}
+	return admitted, skipped, nil
 }

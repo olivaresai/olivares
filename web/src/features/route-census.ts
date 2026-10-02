@@ -118,7 +118,9 @@ export function auditRouteCensus(input: CensusInput): CensusReport {
   const censusSet = new Set(input.census)
   const unrecorded = input.live.filter((p) => !censusSet.has(p))
 
-  const shadowed = input.aliases.filter((a) => live.has(a.from)).map((a) => a.from)
+  const shadowed = input.aliases
+    .filter((a) => live.has(a.from))
+    .map((a) => a.from)
 
   // `new Map` silently keeps ONE of two entries sharing a `from`, so the checker would
   // report a clean tree for a pair the router refuses to build.

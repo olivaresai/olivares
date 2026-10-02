@@ -27,18 +27,19 @@ import (
 func newAuditCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "audit",
-		Short: "Inspect and checkpoint the evidence ledger",
+		Short: "See recent events; verify, checkpoint and export the audit ledger",
 		Long: "audit is how the evidence ledger is proved, anchored and handed over: verify a\n" +
 			"tenant's hash chain against its signed checkpoints, write a new checkpoint,\n" +
 			"export the ledger to a SIEM format or to a verifiable offline archive, record a\n" +
 			"signing-key epoch boundary, and — after a corruption — seal the bad tail and\n" +
 			"open a governed recovery epoch.\n\n" +
 			"Reading the ledger is read-only and never mints keys or writes to the data dir.",
-		Example: "  olivares audit verify --tenant t_abc123\n" +
+		Example: "  olivares audit ls\n" +
+			"  olivares audit verify --tenant t_abc123\n" +
 			"  olivares audit checkpoint --tenant t_abc123\n" +
 			"  olivares audit export --tenant t_abc123 --format cef",
 	}
-	root.AddCommand(auditVerifyCmd(), auditRecoverCmd(), auditKeyTransitionCmd(), auditCheckpointCmd(), auditExportCmd(), auditArchiveCmd(), auditObserveReportCmd())
+	root.AddCommand(auditListCmd(), auditVerifyCmd(), auditRecoverCmd(), auditKeyTransitionCmd(), auditCheckpointCmd(), auditExportCmd(), auditArchiveCmd(), auditObserveReportCmd())
 	return root
 }
 
@@ -64,8 +65,9 @@ func auditBoot(cmd *cobra.Command, dataDir, engine, dsn string) (*engine, error)
 func auditBootCrossTenant(cmd *cobra.Command, dataDir, engine, dsn, adminDSN string) (*engine, error) {
 	return boot(cmd.Context(), bootConfig{
 		DataDir: dataDir, Engine: engine, DSN: dsn, AdminDSN: adminDSN,
-		Version: version, Logger: slog.Default(),
-		NoImplicitInstall: true,
+		Version: version, Logger: cliBootLogger(slog.LevelWarn),
+		NoImplicitInstall:   true,
+		storeEngineExplicit: cmd.Flags().Changed("engine"),
 	})
 }
 
@@ -75,8 +77,9 @@ func auditBootCrossTenant(cmd *cobra.Command, dataDir, engine, dsn, adminDSN str
 // one there. Everything that lists, shows, verifies or exports uses this.
 func auditBootRO(cmd *cobra.Command, dataDir, engine, dsn string) (*engine, error) {
 	return boot(cmd.Context(), bootConfig{
-		DataDir: dataDir, Engine: engine, DSN: dsn, Version: version, Logger: slog.Default(),
-		ReadOnly: true,
+		DataDir: dataDir, Engine: engine, DSN: dsn, Version: version, Logger: cliBootLogger(slog.LevelError),
+		ReadOnly:            true,
+		storeEngineExplicit: cmd.Flags().Changed("engine"),
 	})
 }
 
@@ -99,13 +102,14 @@ func auditBootRO(cmd *cobra.Command, dataDir, engine, dsn string) (*engine, erro
 // somebody to rediscover.
 func rosterReadBoot(cmd *cobra.Command, dataDir, engine, dsn string) (*engine, error) {
 	return boot(cmd.Context(), bootConfig{
-		DataDir: dataDir, Engine: engine, DSN: dsn, Version: version, Logger: slog.Default(),
+		DataDir: dataDir, Engine: engine, DSN: dsn, Version: version, Logger: cliBootLogger(slog.LevelError),
 		ReadOnly: true, NoIngest: true,
+		storeEngineExplicit: cmd.Flags().Changed("engine"),
 	})
 }
 
 func auditVerifyCmd() *cobra.Command {
-	var dataDir, engine, dsn, tenant, pubAlg string
+	var dataDir, engine, dsn, ownerDSN, tenant, pubAlg string
 	var pubB64s, eventPubB64s []string
 	var fromSeq int64
 	var strict bool
@@ -136,7 +140,7 @@ func auditVerifyCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("--tenant: %w", err)
 			}
-			eng, err := auditBootRO(cmd, dataDir, engine, dsn)
+			eng, err := auditVerifyBoot(cmd, dataDir, engine, dsn, ownerDSN)
 			if err != nil {
 				return err
 			}
@@ -224,12 +228,12 @@ func auditVerifyCmd() *cobra.Command {
 			// been withdrawn. Through View an operator could not so much as verify a
 			// suspended tenant's ledger without first restoring its service, which is
 			// the opposite of what a grace period is for.
-			return eng.store.Custody(cmd.Context(), t, func(sc store.CustodyScope) error {
-				rep, err := sc.Audit().Verify(cmd.Context(), fromSeq)
+			return eng.ledger.ViewAudit(cmd.Context(), t, func(ledger store.AuditLog) error {
+				rep, err := ledger.Verify(cmd.Context(), fromSeq)
 				if err != nil {
 					return err
 				}
-				cr, err := audit.VerifyCheckpointsWith(cmd.Context(), sc.Audit(), cpVerifier)
+				cr, err := audit.VerifyCheckpointsWith(cmd.Context(), ledger, cpVerifier)
 				if err != nil {
 					return err
 				}
@@ -238,14 +242,14 @@ func auditVerifyCmd() *cobra.Command {
 				// marker here, including markers outside --from: absence is neutral, but
 				// any present invalid or displaced marker is an integrity failure. Without
 				// --pubkey this uses engine-held keys and is advisory, like checkpoints.
-				rr, err := audit.VerifyRecoveryMarkersWith(cmd.Context(), sc.Audit(), cpVerifier)
+				rr, err := audit.VerifyRecoveryMarkersWith(cmd.Context(), ledger, cpVerifier)
 				if err != nil {
 					return err
 				}
 				// F-07: every signing-key epoch boundary (audit.key.rotation) must
 				// carry a valid off-box signature and sit at the sequence it declares.
 				// Fail-closed, like recovery markers: a forged boundary anywhere fails.
-				kr, err := audit.VerifyKeyRotationMarkersWith(cmd.Context(), sc.Audit(), cpVerifier)
+				kr, err := audit.VerifyKeyRotationMarkersWith(cmd.Context(), ledger, cpVerifier)
 				if err != nil {
 					return err
 				}
@@ -255,7 +259,7 @@ func auditVerifyCmd() *cobra.Command {
 				// names it — honestly advisory). Pinned: exactly the caller's fenced pins.
 				eventKeys := pinnedEventKeys
 				if advisoryEvents {
-					fences, ferr := audit.LocateKeyFences(cmd.Context(), sc.Audit(), cpVerifier)
+					fences, ferr := audit.LocateKeyFences(cmd.Context(), ledger, cpVerifier)
 					if ferr != nil {
 						return ferr
 					}
@@ -268,7 +272,7 @@ func auditVerifyCmd() *cobra.Command {
 				// the key whose epoch owns its sequence (signing is on by default).
 				// Signed==Events proves the tail was not rewritten or stripped even
 				// between checkpoints, AND a retired key cannot validate outside its epoch.
-				er, err := audit.VerifyEventsFenced(cmd.Context(), sc.Audit(), fromSeq, eventKeys)
+				er, err := audit.VerifyEventsFenced(cmd.Context(), ledger, fromSeq, eventKeys)
 				if err != nil {
 					return err
 				}
@@ -293,7 +297,7 @@ func auditVerifyCmd() *cobra.Command {
 				}
 				var recovery map[string]any
 				if external {
-					found, recoverSeq, evidence, lerr := audit.LocateRecoveryEvidence(cmd.Context(), sc.Audit(), cpVerifier)
+					found, recoverSeq, evidence, lerr := audit.LocateRecoveryEvidence(cmd.Context(), ledger, cpVerifier)
 					if lerr != nil {
 						return lerr
 					}
@@ -317,11 +321,11 @@ func auditVerifyCmd() *cobra.Command {
 					if rep.BreakAt > 0 && found && evidence.BreakAt == rep.BreakAt && evidence.BreakReason == rep.Reason &&
 						evidence.QuarantinedFrom == rep.BreakAt && evidence.QuarantinedTo == recoverSeq-1 &&
 						cr.LatestAttestedSeq >= recoverSeq && rr.OK {
-						epochChain, eerr := sc.Audit().Verify(cmd.Context(), recoverSeq)
+						epochChain, eerr := ledger.Verify(cmd.Context(), recoverSeq)
 						if eerr != nil {
 							return eerr
 						}
-						epochEvents, eerr := audit.VerifyEventsFenced(cmd.Context(), sc.Audit(), recoverSeq, eventKeys)
+						epochEvents, eerr := audit.VerifyEventsFenced(cmd.Context(), ledger, recoverSeq, eventKeys)
 						if eerr != nil {
 							return eerr
 						}
@@ -373,6 +377,7 @@ func auditVerifyCmd() *cobra.Command {
 		},
 	}
 	addStoreFlags(cmd, &dataDir, &engine, &dsn)
+	cmd.Flags().StringVar(&ownerDSN, "owner-dsn", "", "Postgres owner-role DSN for topology verification (accepts file:/env: references; never runs DDL)")
 	cmd.Flags().StringVar(&tenant, "tenant", "", "tenant id to verify (default $OLIVARES_TENANT)")
 	cmd.Flags().Int64Var(&fromSeq, "from", 1, "first sequence of the structural walk (a recovered epoch begins at its recover_seq; genesis remains the default)")
 	cmd.Flags().BoolVar(&strict, "strict", false, "exit non-zero if any integrity check fails (chain/checkpoints/event_sigs); for on-call cron/CI. The default exits 0 and reports status only in the JSON")

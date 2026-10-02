@@ -79,7 +79,7 @@ export interface SubscribeOptions {
 export async function subscribeStream(opts: SubscribeOptions): Promise<void> {
   const { path, token, tenant, signal, onMessage, onOpen, query } = opts
   const headers = new Headers({ Accept: 'text/event-stream' })
-  if (token) headers.set('Authorization', `Bearer ${token}`)
+  if (token) headers.set('X-CSRF-Token', token)
   if (tenant) headers.set('X-Olivares-Tenant', tenant)
 
   const url = new URL(path, window.location.origin)
@@ -177,7 +177,7 @@ export function useLiveStream<T>({
   enabled = true,
   contextKey,
 }: UseLiveStreamOptions<T>): { status: StreamStatus } {
-  const token = useSessionStore((s) => s.token)
+  const token = useSessionStore((s) => s.csrfToken)
   const tenant = useTenantStore((s) => s.activeTenant)
   const [status, setStatus] = useState<StreamStatus>('closed')
 

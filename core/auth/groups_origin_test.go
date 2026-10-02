@@ -17,7 +17,7 @@ import (
 // The group-origin contract (generic seam). The two witnesses that matter
 // most run FIRST: every pre-existing SCIM/operator behavior on a NULL-origin
 // group is exactly today's (the seam adds a column, not a behavior change),
-// and then the three boundaries — SCIM replace/delete, the console mappings,
+// and then the three boundaries — SCIM replace/delete, the console hierarchy,
 // and the login reconcile — each refuse or skip a claimed group.
 
 // setGroupOrigin writes a group's origin directly through the store, the way
@@ -150,8 +150,8 @@ func TestGroupOriginConsoleBoundary(t *testing.T) {
 	super := mustSuperadmin(t, ctx, a)
 	tenant := provisionTenant(t, st, "origin-console")
 
-	// The console may write NULL and its own origin; a named provisioner's
-	// group is read-only to it.
+	// Role mapping is locally managed on every origin; a named provisioner's
+	// identity, roster and hierarchy remain read-only to the console.
 	local, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Local", ExternalID: "grp-local"})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -169,8 +169,9 @@ func TestGroupOriginConsoleBoundary(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	setGroupOrigin(t, st, tenant, foreign.Group.ID, "ldap")
-	if _, err := a.ConfigureGroupRole(ctx, super, tenant, foreign.Group.ID, auth.RoleViewer); !errors.Is(err, auth.ErrGroupOriginReadOnly) {
-		t.Fatalf("map role on named-origin group err = %v, want ErrGroupOriginReadOnly", err)
+	mapped, err := a.ConfigureGroupRole(ctx, super, tenant, foreign.Group.ID, auth.RoleViewer)
+	if err != nil || mapped.MappedRole != auth.RoleViewer || mapped.ProvisionedBy != "ldap" || mapped.ExternalID != foreign.Group.ExternalID {
+		t.Fatalf("local role mapping on named-origin group = %+v, %v", mapped, err)
 	}
 	if _, err := a.ConfigureGroupParent(ctx, super, tenant, foreign.Group.ID, local.Group.ID); !errors.Is(err, auth.ErrGroupOriginReadOnly) {
 		t.Fatalf("nest named-origin group err = %v, want ErrGroupOriginReadOnly", err)

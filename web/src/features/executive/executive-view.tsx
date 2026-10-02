@@ -9,6 +9,7 @@
 // derive.ts, and composes the pure pieces. It computes NO metric (ARCHITECTURE.md): the
 // modules own the math; this aggregates and presents. Multi-tenant: every query is
 // scoped to the active tenant, so the org switcher re-scopes the whole dashboard.
+import { useModuleEnabled } from '@/stores/modules'
 import { useEffect, useMemo, useState } from 'react'
 import {
   useQuery,
@@ -155,16 +156,19 @@ export function ExecutiveView() {
   const [rangeId, setRangeId] = useState('30d')
   const params = useMemo(() => ({ since: sinceFor(rangeId) }), [rangeId])
 
-  // RBAC: gate every pillar by the same read permission its nav item uses.
-  const canFinops = can('finops:spend:read')
-  const canModels = can('models:catalog:read')
-  const canInventory = can('inventory:catalog:read')
+  // RBAC: gate every pillar by the same read permission its nav item uses, and read a
+  // module only where it runs (ARCH C1, EU18): a module that is off is never asked.
+  const on = useModuleEnabled()
+  const may = (permission: string) => can(permission) && on(permission)
+  const canFinops = may('finops:spend:read')
+  const canModels = may('models:catalog:read')
+  const canInventory = may('inventory:catalog:read')
   const canSessions = can('sessions:live:read')
-  const canSecurity = can('security:finding:read')
-  const canRedteam = can('redteam:run:read')
-  const canAccessMap = can('accessmap:graph:read')
-  const canCompliance = can('compliance:framework:read')
-  const canHealth = can('health:status:read')
+  const canSecurity = may('security:finding:read')
+  const canRedteam = may('redteam:run:read')
+  const canAccessMap = may('accessmap:graph:read')
+  const canCompliance = may('compliance:framework:read')
+  const canHealth = may('health:status:read')
 
   const canUsage = canInventory || canSessions
   const canRisk = canSecurity || canRedteam || canAccessMap

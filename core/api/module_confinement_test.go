@@ -483,3 +483,21 @@ func TestConfinedScopeHidesForeignRowOnGet(t *testing.T) {
 		t.Fatalf("view: %v", err)
 	}
 }
+
+func TestEngineApprovalContextDetachesRequestBoundaryAndPreservesCancellation(t *testing.T) {
+	base, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	tenant, workspace := model.TenantID(model.NewID()), model.NewID()
+	marked := context.WithValue(base, ctxKeyModuleBoundary, moduleRequestBoundary{tenant: tenant, workspace: workspace})
+	detached := DetachRequestContext(marked)
+	if _, confined := moduleBoundaryFrom(detached, tenant); confined {
+		t.Fatal("engine service inherited request workspace confinement")
+	}
+	if _, confined := moduleBoundaryFrom(marked, tenant); !confined {
+		t.Fatal("original request confinement was lost")
+	}
+	cancel()
+	if detached.Err() != context.Canceled {
+		t.Fatal("engine service lost request cancellation")
+	}
+}

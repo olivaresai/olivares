@@ -9,6 +9,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -41,6 +42,7 @@ type ssoFlow struct {
 	requestID   string
 	redirectURI string
 	returnTo    string
+	browser     bool
 	// scope + alias identify the IdP the start leg actually RESOLVED (U5), so the
 	// callback completes against the SAME IdP by (scope, alias) — no drift from re-running
 	// domain/priority selection — and the SELECTED scope (not the raw ?tenant= hint) governs
@@ -161,6 +163,48 @@ func (s *Server) resolveLoginCallback(r *http.Request, scope model.TenantID, ali
 	return s.fed, auth.ResolvedIdP{Scope: auth.GlobalFederationScope, Alias: model.DefaultFederationAlias}
 }
 
+// handleSAMLMetadata publishes only the active SP's public onboarding document.
+func (s *Server) handleSAMLMetadata(w http.ResponseWriter, r *http.Request) {
+	fed, _ := s.resolveLoginStart(r, ssoSelection(r))
+	metadata, ok := fed.(interface{ SAMLMetadata() ([]byte, error) })
+	if !ok || fed.Protocol() != auth.ProtocolSAML {
+		s.writeError(w, r, auth.ErrSSONotConfigured)
+		return
+	}
+	document, err := metadata.SAMLMetadata()
+	if err != nil {
+		s.writeError(w, r, auth.ErrSSONotConfigured)
+		return
+	}
+	w.Header().Set("Content-Type", "application/samlmetadata+xml; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(document)
+}
+
+type loginProviderDTO struct {
+	Label    string `json:"label"`
+	StartURL string `json:"start_url"`
+}
+
+func (s *Server) loginProviders(r *http.Request) []loginProviderDTO {
+	var providers []auth.SelectableIdP
+	if s.fedSvc != nil {
+		providers = s.fedSvc.SelectableProviders(r.Context())
+	} else if s.fed.Protocol() == auth.ProtocolOIDC || s.fed.Protocol() == auth.ProtocolSAML {
+		providers = []auth.SelectableIdP{{Label: "Single sign-on", Scope: auth.GlobalFederationScope, Alias: model.DefaultFederationAlias}}
+	}
+	result := make([]loginProviderDTO, 0, len(providers))
+	for _, provider := range providers {
+		query := url.Values{"browser_session": {"1"}, "return_to": {"/"}}
+		if provider.Scope != auth.GlobalFederationScope {
+			query.Set("tenant", provider.Scope.String())
+			query.Set("idp", provider.Alias)
+		}
+		result = append(result, loginProviderDTO{Label: provider.Label, StartURL: "/v1/auth/federation/start?" + query.Encode()})
+	}
+	return result
+}
+
 // handleSSOStart begins an SSO login: it generates the single-use flow secrets,
 // asks the provider for the IdP redirect, persists the flow under a cookie, and
 // 302-redirects the browser to the IdP.
@@ -186,13 +230,21 @@ func (s *Server) handleSSOStart(w http.ResponseWriter, r *http.Request) {
 	s.sso.put(flowID, ssoFlow{
 		state: state, nonce: nonce, verifier: verifier, requestID: requestID,
 		redirectURI: redirectURI, returnTo: r.URL.Query().Get("return_to"),
+		browser: r.URL.Query().Get("browser_session") == "1",
 		scope:   resolved.Scope.String(),
 		alias:   resolved.Alias,
 		expires: s.clock.Now().Time().Add(ssoFlowTTL),
 	})
+	secure := strings.HasPrefix(schemeHost(r), "https://")
+	sameSite := http.SameSiteLaxMode
+	if fed.Protocol() == auth.ProtocolSAML && secure {
+		// SAML returns through a cross-site form POST, which a Lax cookie omits.
+		// Only the one-time flow cookie needs this; session transport is shared.
+		sameSite = http.SameSiteNoneMode
+	}
 	http.SetCookie(w, &http.Cookie{
 		Name: ssoFlowName, Value: flowID, Path: "/v1/auth/federation",
-		HttpOnly: true, Secure: r.TLS != nil, SameSite: http.SameSiteLaxMode,
+		HttpOnly: true, Secure: secure, SameSite: sameSite,
 		MaxAge: int(ssoFlowTTL.Seconds()),
 	})
 	http.Redirect(w, r, redirect, http.StatusFound)
@@ -297,6 +349,17 @@ func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
 	token, sess, err := s.authr.CompleteSSO(r.Context(), identity, clientIP(r), resolved.Scope, resolved.SCIMAuthoritative)
 	if err != nil {
 		s.writeError(w, r, err)
+		return
+	}
+	if flow.browser {
+		// The console returns to a local page and restores metadata from the
+		// cookie. Never put the bearer in HTML, JSON or the redirect URL.
+		SessionEnvelope(w, withBrowserCredential(r, token), token, sess)
+		returnTo := flow.returnTo
+		if !strings.HasPrefix(returnTo, "/") || strings.HasPrefix(returnTo, "//") || strings.ContainsAny(returnTo, "\\\r\n\t") {
+			returnTo = "/"
+		}
+		http.Redirect(w, r, returnTo, http.StatusSeeOther)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{

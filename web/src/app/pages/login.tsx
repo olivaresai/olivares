@@ -8,10 +8,11 @@ import {
   type QueryClient,
 } from '@tanstack/react-query'
 import { useState } from 'react'
-import { Link, Navigate, useNavigate } from '@tanstack/react-router'
+import { Link, Navigate, useNavigate, useSearch } from '@tanstack/react-router'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { z } from 'zod'
+import { isEngineEmail } from '@/lib/email'
 import { AuthShell } from '@/components/layout/auth-shell'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
@@ -21,10 +22,11 @@ import { ApiError } from '@/lib/api/errors'
 import { queryKeys } from '@/lib/api/query'
 import type { Whoami } from '@/lib/api/types'
 import { useAuth } from '@/lib/auth/context'
+import { consoleReturnPath } from '@/lib/auth/return-path'
 import { can as rbacCan } from '@/lib/auth/rbac'
 import { useServerInfo } from '@/lib/hooks/use-server-info'
-import { PasskeyAddressNotice } from '@/features/identity/passkey-address'
 import { SecondFactorPanel } from '@/features/identity/totp-login'
+import { SsoButtons } from './login-sso'
 import type { LoginChallenge } from '@/lib/api/types'
 import { viewById } from '@/features/navigation/model'
 import type { FeatureView } from '@/features/registry'
@@ -78,7 +80,7 @@ function startPath(permits: (view: FeatureView) => boolean): string {
 }
 
 const schema = z.object({
-  email: z.string().email(),
+  email: z.string().refine(isEngineEmail),
   password: z.string().min(1),
 })
 type LoginValues = z.infer<typeof schema>
@@ -88,6 +90,16 @@ export function LoginPage() {
   const { status, login, adoptSession, can } = useAuth()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { returnTo } = useSearch({ from: '/login' })
+  const requestedPath = consoleReturnPath(returnTo, window.location.origin)
+  const destination = () =>
+    requestedPath
+      ? {
+          to: requestedPath.split(/[?#]/)[0] as '/',
+          href: requestedPath,
+          replace: true,
+        }
+      : { to: startPath(permitsNow(queryClient, can)) as '/' }
   const serverInfo = useServerInfo()
   const form = useForm<LoginValues>({
     resolver: zodResolver(schema),
@@ -106,23 +118,22 @@ export function LoginPage() {
         setChallenge(res)
         return
       }
-      navigate({ to: startPath(permitsNow(queryClient, can)) as '/' })
+      navigate(destination())
     },
   })
 
   const finishSecondFactor = async (session: {
-    token: string
+    csrf_token: string
     session_id: string
     expires_at: string
   }) => {
     await adoptSession(session)
-    navigate({ to: startPath(permitsNow(queryClient, can)) as '/' })
+    navigate(destination())
   }
 
   // First-boot has no users yet → the setup flow takes precedence.
   if (serverInfo.data?.setup_required) return <Navigate to="/setup" />
-  if (status === 'authenticated')
-    return <Navigate to={startPath(permitsNow(queryClient, can)) as '/'} />
+  if (status === 'authenticated') return <Navigate {...destination()} />
 
   const submitError =
     mutation.error instanceof ApiError && mutation.error.isLockedOut
@@ -159,62 +170,68 @@ export function LoginPage() {
             }}
           />
         ) : (
-          <form
-            onSubmit={form.handleSubmit((v) => mutation.mutate(v))}
-            className="flex flex-col gap-4"
-            noValidate
-          >
-            <Field
-              label={t('login.email')}
-              htmlFor="email"
-              error={
-                form.formState.errors.email
-                  ? t('common:validation.email')
-                  : undefined
-              }
+          <>
+            <SsoButtons
+              providers={serverInfo.data?.sso_providers}
+              returnTo={requestedPath}
+            />
+            <form
+              onSubmit={form.handleSubmit((v) => mutation.mutate(v))}
+              className="flex flex-col gap-4"
+              noValidate
             >
-              <Input
-                id="email"
-                type="email"
-                autoComplete="username"
-                placeholder={t('login.emailPlaceholder')}
-                aria-invalid={!!form.formState.errors.email}
-                {...form.register('email')}
-              />
-            </Field>
-            <Field
-              label={t('login.password')}
-              htmlFor="password"
-              error={
-                form.formState.errors.password
-                  ? t('common:validation.required')
-                  : undefined
-              }
-            >
-              <Input
-                id="password"
-                type="password"
-                autoComplete="current-password"
-                aria-invalid={!!form.formState.errors.password}
-                {...form.register('password')}
-              />
-            </Field>
+              <Field
+                label={t('login.email')}
+                htmlFor="email"
+                error={
+                  form.formState.errors.email
+                    ? t('common:validation.email')
+                    : undefined
+                }
+              >
+                <Input
+                  id="email"
+                  type="email"
+                  autoComplete="username"
+                  placeholder={t('login.emailPlaceholder')}
+                  aria-invalid={!!form.formState.errors.email}
+                  {...form.register('email')}
+                />
+              </Field>
+              <Field
+                label={t('login.password')}
+                htmlFor="password"
+                error={
+                  form.formState.errors.password
+                    ? t('common:validation.required')
+                    : undefined
+                }
+              >
+                <Input
+                  id="password"
+                  type="password"
+                  autoComplete="current-password"
+                  aria-invalid={!!form.formState.errors.password}
+                  {...form.register('password')}
+                />
+              </Field>
 
-            {submitError && (
-              <p className="text-body text-danger" role="alert">
-                {submitError}
-              </p>
-            )}
+              {submitError && (
+                <p className="text-body text-danger" role="alert">
+                  {submitError}
+                </p>
+              )}
 
-            <Button
-              type="submit"
-              variant="primary"
-              disabled={mutation.isPending}
-              className="w-full"
-            >
-              {mutation.isPending ? t('login.signingIn') : t('login.submit')}
-            </Button>
-          </form>
+              <Button
+                type="submit"
+                variant="primary"
+                disabled={mutation.isPending}
+                className="w-full"
+              >
+                {mutation.isPending ? t('login.signingIn') : t('login.submit')}
+              </Button>
+            </form>
+          </>
         )}
         {ANONYMOUS_VIEWS.some((view) => view.loginLabel) && (
           <div className="mt-4 flex flex-col gap-2">
@@ -231,13 +248,8 @@ export function LoginPage() {
           </div>
         )}
       </Card>
-      {/* ⛔ THE FOOTNOTES ARE GROUPED AND QUIET, AND THAT IS THE FIX. Both of
-          these were already here and both still are — nothing is hidden. What changed
-          is rank: measured at 1600 px on 2026-09-17, the passkey panel was the LONGEST
-          element on the login screen, so the first thing a new operator read was a
-          limitation of their address. It is a footnote about a ceremony they have not
-          started yet; the form is the page. Renders nothing at all at an address where
-          passkeys work. */}
+      {/* Passkeys are optional (Settings > Security), so the sign-in page says
+          nothing about them: the form is the page. */}
       <div className="mt-5 flex flex-col items-center gap-3">
         {/*surface the public status page (it needs no session) so an operator
          * facing a login failure can tell an outage from a credential problem. */}
@@ -249,7 +261,6 @@ export function LoginPage() {
             {t('login.statusPage')}
           </Link>
         </p>
-        <PasskeyAddressNotice />
       </div>
     </AuthShell>
   )

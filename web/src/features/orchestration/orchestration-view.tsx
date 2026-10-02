@@ -50,7 +50,6 @@ import {
   HashChip,
   IntelPage,
   SectionCard,
-  SelfAuditNotice,
 } from '@/features/_intel'
 import { orchestrationApi, orchestrationKeys } from './api'
 import {
@@ -173,7 +172,6 @@ export function OrchestrationView() {
       icon={Workflow}
       title={t('title')}
       description={t('description')}
-      notices={<SelfAuditNotice />}
     >
       <Tabs value={tab} onValueChange={setTab}>
         <TabsList>

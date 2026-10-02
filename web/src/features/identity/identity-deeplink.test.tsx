@@ -13,7 +13,14 @@
 // back with `replace: true`; this one did not, and nothing said so, because the suite tested
 // only the landing. A shared deep link therefore reopened the roster whatever tab was on
 // screen. The write is here now, and so is the case that turns red without it.
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
+import { queryKeys } from '@/lib/api/query'
+import { liveCapabilityContext } from '@/lib/auth/capabilities'
+import { useCommandStore } from '@/stores/command'
+import { useSessionStore } from '@/stores/session'
+import { useTenantStore } from '@/stores/tenant'
+import { useWorkspaceStore } from '@/stores/workspace'
 import userEvent from '@testing-library/user-event'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import './i18n'
@@ -24,6 +31,33 @@ vi.mock('@tanstack/react-router', () => ({
   // No RouterProvider in this test: the shared Tabs strip consults useRouter, and the real
   // hook answers undefined here (console-tab-scroll-restoration R2, 2026-09-06).
   useRouter: () => undefined,
+}))
+
+// The Identity page's administration sections need `tenant:admin`; by default this principal
+// lacks it, so every case below sees exactly the identity sections /identity always had.
+const auth = vi.hoisted(() => ({ admin: false }))
+vi.mock('@/lib/auth/context', () => ({
+  useAuth: () => ({
+    can: (p: string) =>
+      (p === 'tenant:admin' || p === 'membership:write') && auth.admin,
+    activeTenant: 't1',
+  }),
+}))
+vi.mock('@/features/console/people-tab', () => ({
+  PeopleTab: ({ inviteRequested }: { inviteRequested?: boolean }) => (
+    <div>
+      {inviteRequested ? 'PeopleTab mounted · invite' : 'PeopleTab mounted'}
+    </div>
+  ),
+}))
+vi.mock('@/features/console/roles-tab', () => ({
+  RolesTab: () => <div>RolesTab mounted</div>,
+}))
+vi.mock('@/features/console/sso-tab', () => ({
+  SSOTab: () => <div>SSOTab mounted</div>,
+}))
+vi.mock('@/features/console/api-keys-tab', () => ({
+  ApiKeysTab: () => <div>ApiKeysTab mounted</div>,
 }))
 
 vi.mock('@/features/recordings/recording-notice', () => ({
@@ -38,25 +72,38 @@ vi.mock('./nhi-roster', () => ({
 vi.mock('./nhi-lifecycle', () => ({
   NhiLifecycleTab: () => <div>NhiLifecycleTab mounted</div>,
 }))
-vi.mock('./mcp-auth', () => ({ McpAuthTab: () => <div>McpAuthTab mounted</div> }))
+vi.mock('./mcp-auth', () => ({
+  McpAuthTab: () => <div>McpAuthTab mounted</div>,
+}))
 vi.mock('./wif/wif-graph', () => ({
   WifGraphTab: () => <div>WifGraphTab mounted</div>,
 }))
-vi.mock('./posture', () => ({ PostureTab: () => <div>PostureTab mounted</div> }))
+vi.mock('./posture', () => ({
+  PostureTab: () => <div>PostureTab mounted</div>,
+}))
 vi.mock('./privileged-login', () => ({
   PrivilegedLoginTab: () => <div>PrivilegedLoginTab mounted</div>,
 }))
 
 import IdentityView from './identity-view'
 
-function renderAt(search: string) {
+function renderAt(search: string, client?: QueryClient) {
   window.history.replaceState({}, '', `/identity${search}`)
-  return render(<IdentityView />)
+  // The view listens for its ⌘K verb (Invite people), whose authority reads the query
+  // cache, so it mounts inside a client as it does in the app.
+  const qc =
+    client ?? new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  return render(
+    <QueryClientProvider client={qc}>
+      <IdentityView />
+    </QueryClientProvider>,
+  )
 }
 
 beforeEach(() => {
   window.history.replaceState({}, '', '/identity')
   navigate.mockClear()
+  auth.admin = false
 })
 
 describe('IdentityView — ?tab= deep link', () => {
@@ -116,5 +163,74 @@ describe('IdentityView — the URL follows a manual tab change', () => {
     // Non-firing direction: writing while reading would fight the caller's own navigation.
     renderAt('?tab=inventory')
     expect(navigate).not.toHaveBeenCalled()
+  })
+})
+
+describe('IdentityView — Identities & access (console remake slice 3)', () => {
+  it('for an administrator, adds people, roles, identity providers and API keys and opens People', () => {
+    auth.admin = true
+    renderAt('')
+    expect(screen.getByText('PeopleTab mounted')).toBeInTheDocument()
+    const tabs = screen.getAllByRole('tab').map((t) => t.textContent)
+    for (const name of [
+      'Users & groups',
+      'Roles & delegation',
+      'SSO / IdP',
+      'API keys',
+    ])
+      expect(tabs).toContain(name)
+    // The identity sections are all still there, after people and roles.
+    expect(tabs.indexOf('Users & groups')).toBe(0)
+    expect(tabs).toContain('Identity inventory')
+  })
+
+  it('without tenant:admin, offers exactly the identity sections and mounts no administration panel', () => {
+    renderAt('')
+    const tabs = screen.getAllByRole('tab').map((t) => t.textContent)
+    expect(tabs).toHaveLength(8)
+    expect(tabs).not.toContain('Users & groups')
+    expect(
+      screen.queryByText(/PeopleTab|RolesTab|SSOTab|ApiKeysTab/),
+    ).toBeNull()
+  })
+
+  it('opens an administration section by deep link, and ignores it without the permission', () => {
+    auth.admin = true
+    const first = renderAt('?tab=apiKeys')
+    expect(screen.getByText('ApiKeysTab mounted')).toBeInTheDocument()
+    first.unmount()
+    auth.admin = false
+    renderAt('?tab=apiKeys')
+    expect(screen.getByText('FederationTab mounted')).toBeInTheDocument()
+    expect(screen.queryByText('ApiKeysTab mounted')).toBeNull()
+  })
+})
+
+describe('IdentityView — the Invite people verb (console remake slice 12)', () => {
+  it('opens People with its onboarding dialog requested in invite mode', async () => {
+    auth.admin = true
+    useTenantStore.setState({ activeTenant: 't1' })
+    useSessionStore.setState({ credentialGeneration: 0 })
+    useWorkspaceStore.setState({ activeWorkspace: null })
+    useCommandStore.setState({ pendingAction: null, open: false, opener: null })
+    const qc = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    })
+    qc.setQueryData(queryKeys.whoami, {
+      kind: 'user',
+      user_id: 'u-1',
+      actor: 'u-1',
+      display_name: 'Ada',
+      superadmin: false,
+      grants: [],
+    })
+    useCommandStore
+      .getState()
+      .setPendingAction('identity', 'invite', liveCapabilityContext(qc))
+    renderAt('?tab=federation', qc)
+    expect(
+      await screen.findByText('PeopleTab mounted · invite'),
+    ).toBeInTheDocument()
+    expect(useCommandStore.getState().pendingAction).toBeNull()
   })
 })

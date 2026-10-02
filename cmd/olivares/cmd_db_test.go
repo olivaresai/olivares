@@ -62,7 +62,7 @@ func TestDBCheckNeedsADSN(t *testing.T) {
 
 func TestDBInitPrintSQLSingleRole(t *testing.T) {
 	t.Parallel()
-	out, err := runDB(t, "init", "--print-sql", "--app-role", "olivares_app", "--database", "olivares")
+	out, err := runDB(t, "init", "--print-sql", "--app-role", "olivares_app", "--owner-role", "", "--database", "olivares")
 	if err != nil {
 		t.Fatalf("db init --print-sql: %v\n%s", err, out)
 	}

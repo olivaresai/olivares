@@ -116,6 +116,55 @@ BEGIN
 END
 $login_capability_birth$`
 
+// loginCapabilityReprovisionStmt re-establishes the core v13 boundary after `db init`'s
+// bulk grant (GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES ... TO <app>). On a
+// database the engine has already migrated, that grant hands the application role DELETE
+// and every UPDATE on this relation; boots never reset grants and the v13 verifier refuses
+// the drift, so re-running `db init` (to add the admin role later, say) left an engine that
+// would not start. The statement is the birth revoke (every non-owner grantee to at most
+// SELECT, PUBLIC removed) followed by the split ACL for app, issued as the owner.
+//
+// It is a no-op before the relation exists: `db init` also runs against a database the
+// engine has never opened. The relation is reached only through to_regclass and EXECUTE,
+// so no statement in the block is planned against a missing relation. app is a validated
+// role identifier.
+func loginCapabilityReprovisionStmt(app string) string {
+	role := "'" + strings.ReplaceAll(app, "'", "''") + "'"
+	return `DO $login_capability_reprovision$
+DECLARE
+  rel pg_catalog.regclass := pg_catalog.to_regclass('` + dialect.EngineSchema + `.` + dialect.LoginCapabilityObservationTable + `');
+  grantee_name pg_catalog.text;
+  grantee_reads pg_catalog.bool;
+BEGIN
+  IF rel IS NULL THEN
+    RETURN;
+  END IF;
+  FOR grantee_name, grantee_reads IN
+    SELECT CASE WHEN a.grantee OPERATOR(pg_catalog.=) 0 THEN NULL
+                ELSE pg_catalog.pg_get_userbyid(a.grantee) END,
+           pg_catalog.bool_or(a.privilege_type OPERATOR(pg_catalog.=) 'SELECT')
+    FROM pg_catalog.pg_class c
+    CROSS JOIN LATERAL pg_catalog.aclexplode(COALESCE(c.relacl, pg_catalog.acldefault('r', c.relowner))) a
+    WHERE c.oid OPERATOR(pg_catalog.=) rel
+      AND a.grantee OPERATOR(pg_catalog.<>) c.relowner
+    GROUP BY a.grantee
+  LOOP
+    IF grantee_name IS NULL THEN
+      EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE %s FROM PUBLIC', rel);
+      CONTINUE;
+    END IF;
+    EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE %s FROM %I', rel, grantee_name);
+    IF grantee_reads THEN
+      EXECUTE pg_catalog.format('GRANT SELECT ON TABLE %s TO %I', rel, grantee_name);
+    END IF;
+  END LOOP;
+  EXECUTE pg_catalog.format('REVOKE ALL PRIVILEGES ON TABLE %s FROM %I', rel, ` + role + `);
+  EXECUTE pg_catalog.format('GRANT SELECT, INSERT ON TABLE %s TO %I', rel, ` + role + `);
+  EXECUTE pg_catalog.format('GRANT UPDATE (` + strings.Join(loginCapabilityUpdatableColumns, ", ") + `) ON TABLE %s TO %I', rel, ` + role + `);
+END
+$login_capability_reprovision$`
+}
+
 func loginCapabilityTopology(roles []guardRoles) (guardRoles, error) {
 	if len(roles) != 1 {
 		return guardRoles{}, fmt.Errorf("sqlstore: core v13 login capability requires exactly one guard roles value, got %d: %w",

@@ -59,9 +59,11 @@ type consoleAddress struct {
 	// tell", never "is not".
 	Container bool
 
-	// wildcard and insecure are what the address was derived under, kept so the
+	// wildcard, loopback and insecure describe the actual listener, independently
+	// of a declared public URL, kept so the
 	// paragraphs can be built later without re-deriving anything.
 	wildcard bool
+	loopback bool
 	insecure bool
 }
 
@@ -80,10 +82,11 @@ func resolveConsoleAddress(declared webaddr.Address, listen string, insecure boo
 		scheme = "http"
 	}
 	out := consoleAddress{Browse: declared, Declared: !declared.IsZero()}
-	var wildcard bool
+	browse, wildcard := webaddr.FromListen(listen, scheme)
 	if !out.Declared {
-		out.Browse, wildcard = webaddr.FromListen(listen, scheme)
+		out.Browse = browse
 	}
+	out.loopback = browse.IsLoopback()
 	out.wildcard, out.insecure = wildcard, insecure
 	if wildcard {
 		out.Reachable = hostConsoleAddresses(listen, scheme)
@@ -148,7 +151,7 @@ func (c consoleAddress) withPlan(plan webAuthnPlan) consoleAddress {
 // wildcardAddressList is the DATA half: the addresses, and the sentence that says
 // what they are.
 func wildcardAddressList(c consoleAddress) string {
-	if !c.wildcard {
+	if !c.wildcard || c.Declared {
 		return ""
 	}
 	var b strings.Builder
@@ -173,7 +176,7 @@ func wildcardAddressList(c consoleAddress) string {
 // container the remedy is different in kind, so it is a different paragraph and
 // not a hedge on the list.
 func wildcardBindGuidance(c consoleAddress) string {
-	if !c.wildcard {
+	if !c.wildcard || c.Declared {
 		return ""
 	}
 	if c.Container {

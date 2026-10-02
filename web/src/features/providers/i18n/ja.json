@@ -88,7 +88,8 @@
     "success": "プロバイダーを登録しました。接続をテストして動作を確認してください。",
     "testNext": "今すぐ接続をテスト",
     "registering": "登録中…",
-    "localNameHint": "このエンドポイントの表示名です。選択リストに表示されます。"
+    "localNameHint": "このエンドポイントの表示名です。選択リストに表示されます。",
+    "advanced": "Advanced: custom endpoint"
   },
   "rotate": {
     "title": "このプロバイダーのキーを交換",

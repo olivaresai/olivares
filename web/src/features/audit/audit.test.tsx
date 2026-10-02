@@ -73,6 +73,7 @@ vi.mock('@/features/console/api', async (importOriginal) => {
 
 const api = vi.hoisted(() => ({
   list: vi.fn(),
+  recent: vi.fn(),
   systemList: vi.fn(),
   verify: vi.fn(),
   pubkey: vi.fn(),
@@ -216,6 +217,8 @@ beforeEach(() => {
     has_more: false,
   })
   window.history.replaceState(null, '', '/audit')
+  // The view reads the head first (newest first, HU-15): 100 positions = one window.
+  api.recent.mockResolvedValue({ items: [], head_seq: 100 })
   api.list.mockResolvedValue({ items: [], has_more: false })
   api.systemList.mockResolvedValue({ items: [], has_more: false })
   api.verify.mockResolvedValue(verifyOk)
@@ -321,11 +324,20 @@ describe('AuditView — ledger list', () => {
     expect(within(row2).getByText('System')).toBeInTheDocument()
   })
 
-  it('reading the ledger is disclosed as itself audited', async () => {
+  it('lists the newest events first and steps back one window for older ones (HU-15)', async () => {
+    api.recent.mockResolvedValue({ items: [], head_seq: 13 })
+    api.list.mockResolvedValue({ items: [ev1, ev2], has_more: false })
     wrap(<AuditView />)
-    expect(
-      await screen.findByText(/recorded in the.*ledger|itself.*audit/i),
-    ).toBeInTheDocument()
+
+    expect(await screen.findByText('agent.create')).toBeInTheDocument()
+    // The last window of the ledger, read forward and shown newest first.
+    expect(api.list).toHaveBeenCalledWith({ from: 1, limit: 100 })
+    const rows = screen
+      .getAllByRole('row')
+      .map((r) => r.textContent ?? '')
+      .filter((text) => /agent\.create|audit\.read/.test(text))
+    expect(rows[0]).toMatch(/audit\.read/)
+    expect(rows[1]).toMatch(/agent\.create/)
   })
 
   it('sends validated server-side filters and RFC3339 UTC bounds', async () => {

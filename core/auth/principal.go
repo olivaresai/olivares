@@ -56,7 +56,9 @@ type Principal struct {
 	// CredID is the credential's id: the session id (KindUser) or token id
 	// (KindToken). It is the revocation handle and part of the audit actor.
 	CredID model.ID
-	// Superadmin grants the system role: cross-tenant operations and provisioning.
+	// Superadmin identifies a system-role account. An account-wide principal can
+	// act across tenants; explicit tenant entry retains this flag for attribution
+	// while SessionScope confines its authority to that tenant's owner role.
 	Superadmin bool
 	// DisplayName is a non-sensitive label for UI/logs.
 	DisplayName string
@@ -113,9 +115,9 @@ type Principal struct {
 	// of the authorization graph — buildPrincipalEntity turns each id into a Cedar
 	// `Group::"<id>"` principal parent so a scoped grant whose subject is the group
 	// (or any group it is nested under) matches every member. A group appears here
-	// ONLY where the user holds a direct membership in the group's tenant — the
-	// SAME deny-closed gate loadGrants applies to a group's MappedRole, so an IdP
-	// roster push never admits a non-member. Empty for a token principal (least
+	// where the user holds a direct membership or is an admitted superadmin.
+	// MappedRole still requires a direct membership, so an IdP roster push never
+	// admits an ordinary non-member. Empty for a token principal (least
 	// privilege) and for a synthetic ScopedPrincipal.
 	groups map[model.TenantID][]string
 

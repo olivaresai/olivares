@@ -676,10 +676,14 @@ func RenderProvisionSQL(spec store.PgProvisionSpec) ([]store.PgProvisionStep, er
 		// operator who copied the grants without the revoke, or committed between
 		// them, would leave (or briefly publish) a database in which evidence is
 		// mutable, so they are printed as one indivisible unit.
+		// The v13 login capability relation is not append-only, but its boundary is just as
+		// exact (SELECT, INSERT and three UPDATE columns): on a database the engine has
+		// already migrated the bulk grant widens it, so it is re-established in the same
+		// transaction (loginCapabilityReprovisionStmt).
 		add("app role: DML on the owner's future + existing tables, minus mutation on the append-only (evidence) ones — ONE TRANSACTION",
-			fmt.Sprintf("BEGIN;\nGRANT USAGE ON SCHEMA public TO %s;\nALTER DEFAULT PRIVILEGES FOR ROLE %s IN SCHEMA public\n  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %s;\nALTER DEFAULT PRIVILEGES FOR ROLE %s IN SCHEMA public\n  GRANT USAGE, SELECT ON SEQUENCES TO %s;\nGRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO %s;\nGRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %s;\n%s;\nCOMMIT;",
+			fmt.Sprintf("BEGIN;\nGRANT USAGE ON SCHEMA public TO %s;\nALTER DEFAULT PRIVILEGES FOR ROLE %s IN SCHEMA public\n  GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO %s;\nALTER DEFAULT PRIVILEGES FOR ROLE %s IN SCHEMA public\n  GRANT USAGE, SELECT ON SEQUENCES TO %s;\nGRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO %s;\nGRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO %s;\n%s;\n%s;\nCOMMIT;",
 				spec.App.Name, owner.Name, spec.App.Name, owner.Name, spec.App.Name, spec.App.Name, spec.App.Name,
-				dialect.AppendOnlyCatalogRevokeStmt(spec.App.Name, "public")), false)
+				dialect.AppendOnlyCatalogRevokeStmt(spec.App.Name, "public"), loginCapabilityReprovisionStmt(spec.App.Name)), false)
 	}
 
 	if spec.Admin != nil {
@@ -1335,6 +1339,9 @@ func grantAppDML(ctx context.Context, db *sql.DB, dbName, ownerName, appName str
 		// schema from search_path here instead would scan somewhere else entirely on a
 		// maintenance connection that has one, and repair nothing at all.
 		dialect.AppendOnlyCatalogRevokeStmt(appName, "public"),
+		// And re-establish the exact core v13 login capability boundary the bulk grant
+		// widened on a migrated database, or the next boot refuses the drift.
+		loginCapabilityReprovisionStmt(appName),
 	}
 	return execAllTx(ctx, db, stmts)
 }

@@ -57,7 +57,7 @@ const authState = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 
-const TENANT_WIDE_LABEL = 'Tenant-wide — not filtered by workspace'
+const TENANT_WIDE_LABEL = 'All workspaces'
 /** One note for the whole tile, naming the sources the role reads:
  *  "<Sessions noun> · <Inventory item> · <tenant-wide>". */
 const BOTH_SCOPE_NOTE = `Sessions · Inventory · ${TENANT_WIDE_LABEL}`
@@ -236,7 +236,9 @@ describe('ExecutiveView — the usage pillar pretends the workspace filter for n
     ).toHaveLength(1)
     // It travels with the tile's accessible name.
     expect(
-      screen.getByRole('link', { name: /Sessions · Inventory · Tenant-wide/i }),
+      screen.getByRole('link', {
+        name: /Sessions · Inventory · All workspaces/i,
+      }),
     ).toBe(usageTile())
   })
 

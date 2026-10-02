@@ -47,6 +47,24 @@ export interface ToolDetection {
   }[]
   probe_error?: string
 }
+/** The Ollama this engine runs (HU-R17). */
+export interface OllamaStatus {
+  installed: boolean
+  state: 'stopped' | 'starting' | 'running' | 'failed'
+  message?: string
+  endpoint?: string
+  models: string[]
+}
+/** One model download, with Ollama's own progress. */
+export interface OllamaPull {
+  id: string
+  model: string
+  state: 'running' | 'succeeded' | 'failed'
+  status?: string
+  completed: number
+  total: number
+  error?: string
+}
 const ROOT = '/v1/m/agenttools'
 type Options = Pick<RequestOptions, 'signal' | 'dispatchGuard'>
 export const agentToolsApi = {
@@ -69,4 +87,20 @@ export const agentToolsApi = {
     http.post<ToolJob>(`${ROOT}/installs`, body, opts),
   job: (id: string, signal?: AbortSignal) =>
     http.get<ToolJob>(`${ROOT}/jobs/${encodeURIComponent(id)}`, { signal }),
+  ollama: (signal?: AbortSignal) =>
+    http.get<OllamaStatus>(`${ROOT}/ollama`, { signal }),
+  /** `tenantId` gets the endpoint in its Providers once Ollama answers; null, none does. */
+  ollamaStart: (tenantId: string | null, opts?: Options) =>
+    http.post<OllamaStatus>(
+      `${ROOT}/ollama/start`,
+      tenantId ? { tenant_id: tenantId } : undefined,
+      opts,
+    ),
+  ollamaStop: () => http.post<OllamaStatus>(`${ROOT}/ollama/stop`, undefined),
+  ollamaPull: (model: string, opts?: Options) =>
+    http.post<OllamaPull>(`${ROOT}/ollama/pulls`, { model }, opts),
+  ollamaPullStatus: (id: string, signal?: AbortSignal) =>
+    http.get<OllamaPull>(`${ROOT}/ollama/pulls/${encodeURIComponent(id)}`, {
+      signal,
+    }),
 }

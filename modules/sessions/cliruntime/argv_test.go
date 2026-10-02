@@ -30,7 +30,7 @@ func TestLaunchArgs_CodexIsOwnedStdioAppServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(args, " ") != "app-server --listen stdio://" {
+	if strings.Join(args, " ") != "-c check_for_update_on_startup=false app-server --listen stdio://" {
 		t.Fatalf("codex argv = %v", args)
 	}
 	for _, forbidden := range []string{"--remote", "serve", "daemon"} {

@@ -410,10 +410,6 @@ for mapped_prefix in home/runner/work/mapped-home var/lib/olivares-fixtures/mapp
     grep -Fqx "$assignment" "$mapped" || fail "prefix $mapped_prefix: $assignment is not the mapped path"
   done
   grep -Fq "DATA_DIR=$fx/var/lib/olivares" "$mapped" || fail "prefix $mapped_prefix: the default data root is not mapped once"
-  # The prefix's own /home stays literal: only the installer's own guard is namespaced, and
-  # /root and /run/user are deliberately not mapped at all.
-  grep -Fq "$fx/home|$fx/home/*|/root|/root/*|/run/user|/run/user/*)" "$mapped" ||
-    fail "prefix $mapped_prefix: the protected-home guard is not mapped once"
   case_ok "prefix $mapped_prefix: every mapped root is expanded exactly once"
   run_case 0 "prefix $mapped_prefix: the default install runs at its single-prefix paths"
   [[ -f "$fx/etc/systemd/system/olivares.service" ]] || fail "prefix $mapped_prefix: the unit is not at the single-prefix path"
@@ -537,41 +533,30 @@ run_case 0 'an engine installed at another absolute path still witnesses its lay
 grep -Fq "data=$fx/srv/olivares (recorded by" "$fx/out" || fail 'non-default engine path was not honoured'
 grep -Fqx "Environment=HOME=$fx/srv/olivares/claude-home" "$(dropin)" || fail 'drop-in not rendered for the witnessed layout'
 
-# Sandbox reach of the selected workspace.
+# Legacy reinstall must not reintroduce masks over other chosen folders.
 fixture protected-home 1 1
 mkdir -p "$fx/home/operator"
-run_case 0 'workspace under a ProtectHome path renders ProtectHome=tmpfs and BindPaths' \
+run_case 0 'a home workspace leaves other chosen folders visible' \
   OLIVARES_WORKSPACE_DIR="$fx/home/operator/workspaces"
-[[ -d "$fx/home/operator/workspaces" ]] || fail 'protected-home workspace not created for the service'
-grep -Fqx 'ProtectHome=tmpfs' "$(dropin)" || fail 'ProtectHome=tmpfs not rendered'
-grep -Fqx "BindPaths=$fx/home/operator/workspaces" "$(dropin)" || fail 'BindPaths not rendered'
-grep -Fqx "ReadWritePaths=$fx/home/operator/workspaces" "$(dropin)" || fail 'ReadWritePaths not rendered'
-grep -q 'sandbox access: protected-home' "$fx/out" || fail 'protected-home access not disclosed'
-grep -q 'other home directories stay hidden' "$fx/out" || fail 'scoped relaxation not disclosed'
-if grep -qE '^(ProtectHome|BindPaths)=' "$root/packaging/systemd/olivares.service.d/agentops.conf"; then fail 'default drop-in gained a ProtectHome or BindPaths directive'; fi
+[[ -d "$fx/home/operator/workspaces" ]] || fail 'workspace not created for the service'
+grep -Fqx 'ProtectHome=false' "$(dropin)" || fail 'home folders remain masked'
+grep -Fqx "ReadWritePaths=$fx/home/operator/workspaces" "$(dropin)" || fail 'workspace path lost'
+if grep -q '^BindPaths=' "$(dropin)"; then fail 'obsolete folder bind returned'; fi
 
-# R5. A workspace under /tmp keeps PrivateTmp=true and is bound in on its own. It is
-# staged inside the fixture's own /tmp so nothing is created on the host's.
 fixture private-tmp 1 1
 mkdir -p "$fx/tmp-host"
-run_case 0 'workspace under a private temporary directory keeps PrivateTmp and binds only itself' \
+run_case 0 'a temporary workspace uses the visible host directory' \
   OLIVARES_WORKSPACE_DIR="$fx/tmp-host/olivares-ws"
-[[ -d "$fx/tmp-host/olivares-ws" ]] || fail 'private-tmp workspace not created for the service'
-grep -Fqx "BindPaths=$fx/tmp-host/olivares-ws" "$(dropin)" || fail 'BindPaths not rendered for the /tmp workspace'
-grep -Fqx "ReadWritePaths=$fx/tmp-host/olivares-ws" "$(dropin)" || fail 'ReadWritePaths not rendered'
-if grep -q '^ProtectHome=' "$(dropin)"; then fail 'the /tmp mapping relaxed ProtectHome'; fi
-grep -q 'sandbox access: private-tmp' "$fx/out" || fail 'private-tmp access not disclosed'
-grep -q 'stays hidden from the service' "$fx/out" || fail 'scoped relaxation not disclosed'
-grep -q 'needs systemd 235 or later' "$fx/out" || fail 'the version the mapping needs is not disclosed'
-grep -q 'clear them on boot or on a timer' "$fx/err" || fail 'shared temporary directory caveat not disclosed'
-if grep -qE '^(ProtectHome|BindPaths)=' "$root/packaging/systemd/olivares.service.d/agentops.conf"; then fail 'default drop-in gained a ProtectHome or BindPaths directive'; fi
+[[ -d "$fx/tmp-host/olivares-ws" ]] || fail 'temporary workspace not created for the service'
+grep -Fqx 'PrivateTmp=false' "$(dropin)" || fail 'temporary folder remains hidden'
+grep -Fqx "ReadWritePaths=$fx/tmp-host/olivares-ws" "$(dropin)" || fail 'workspace path lost'
+grep -q 'clear them on boot or on a timer' "$fx/err" || fail 'temporary directory lifetime not disclosed'
 
 fixture private-tmp-colon 1 1
 mkdir -p "$fx/var-tmp-host"
-run_case 1 'a colon in a bind-exposed workspace is refused' OLIVARES_WORKSPACE_DIR="$fx/var-tmp-host/olivares:ws"
-grep -q 'separate source from destination' "$fx/err" || fail 'the BindPaths separator is not named'
-[[ ! -e "$fx/var-tmp-host/olivares:ws" ]] || fail 'refused workspace was created'
-[[ ! -e "$(dropin)" ]] || fail 'drop-in rendered for a refused workspace'
+run_case 0 'a colon is allowed without an obsolete bind mapping' OLIVARES_WORKSPACE_DIR="$fx/var-tmp-host/olivares:ws"
+[[ -d "$fx/var-tmp-host/olivares:ws" ]] || fail 'workspace not created'
+grep -Fqx "ReadWritePaths=$fx/var-tmp-host/olivares:ws" "$(dropin)" || fail 'workspace path changed'
 
 fixture api-fs 1 1
 run_case 1 'workspace under /proc is refused as an API file system' OLIVARES_WORKSPACE_DIR=/proc/olivares
@@ -862,7 +847,7 @@ grep -Fq "still mentions $estate_a" "$fx/out" || fail 'the remaining mentions of
 diff <(printf '%s\n' "$operator_env" | grep -Fv 'OLIVARES_SESSION_RUNTIME_TOKEN_FILE=') \
      <(operator_lines "$(runtime_env)") || fail 'the operator content of the runtime env changed'
 grep -Fqx "Environment=HOME=$estate_b/claude-home" "$(dropin)" || fail 'the drop-in is not rendered for estate B'
-grep -Fqx "BindPaths=$fx/home/estate-b" "$(dropin)" || fail 'the workspace of estate B is not bound in'
+grep -Fqx "ReadWritePaths=$fx/home/estate-b" "$(dropin)" || fail 'the workspace of estate B is not selected'
 grep -Fq "\"workspace_dir\": \"$fx/home/estate-b\"" "$estate_b/install-manifest.json" ||
   fail 'estate B did not record its workspace'
 grep -Fq "\"path\": \"$(runtime_env)\", \"role\": \"runtime-env\", \"mode\": \"0640\", \"managed\": true" \

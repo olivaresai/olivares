@@ -49,7 +49,7 @@ done
 blind() { printf 'publish-appliance-images: UNABLE TO LOOK — %s\n' "$*" >&2; exit 2; }
 fail() { printf 'publish-appliance-images: REFUSED — %s\n' "$*" >&2; exit 1; }
 
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || blind '--version must be X.Y.Z'
+[[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || blind '--version must be X.Y.Z'
 [[ "$dir" == /* && -d "$dir" && ! -L "$dir" ]] || blind '--dir must be an existing absolute directory'
 [[ "$origin" == https://* ]] || blind '--origin must be an https:// URL (the public custom domain of the bucket)'
 origin="${origin%/}"

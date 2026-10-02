@@ -178,14 +178,37 @@ function ConversationRow({
             <span className="min-w-0 flex-1 truncate font-medium">
               {item.toolName ?? t('conversation.tool')}
             </span>
-            {item.toolArgsSummary ? (
+            {item.toolCommand ? (
+              // A command reads as itself, in one line; the whole of it is below.
+              <span
+                className="min-w-0 max-w-[60%] truncate font-mono text-muted-foreground"
+                title={item.toolCommand}
+              >
+                {item.toolCommand}
+              </span>
+            ) : item.toolArgsSummary ? (
               <span className="min-w-0 max-w-[50%] truncate text-muted-foreground">
                 {item.toolArgsSummary}
               </span>
             ) : null}
+            {item.toolElapsedSeconds !== undefined ? (
+              <span className="shrink-0 tabular-nums text-muted-foreground">
+                {formatDuration(item.toolElapsedSeconds * 1000)}
+              </span>
+            ) : null}
           </summary>
           <div className="space-y-1 px-8 pb-2 text-caption text-muted-foreground">
-            {item.toolArgsSummary ? (
+            {item.toolCommand ? (
+              <>
+                <pre
+                  data-slot="tool-command"
+                  className="m-0 whitespace-pre-wrap font-mono text-caption text-foreground [overflow-wrap:anywhere]"
+                >
+                  {item.toolCommand}
+                </pre>
+                {item.toolDescription ? <p>{item.toolDescription}</p> : null}
+              </>
+            ) : item.toolArgsSummary ? (
               <p>
                 <span className="text-overline uppercase">
                   {t('conversation.args')}{' '}
@@ -223,7 +246,11 @@ function ConversationRow({
             selected && 'border-l-accent bg-accent-soft text-foreground',
           )}
         >
-          <span className="min-w-0 truncate">{item.summary}</span>
+          <span className="min-w-0 truncate">
+            {item.systemKind === 'protocol'
+              ? t('conversation.protocol', { count: item.raw.length })
+              : item.summary}
+          </span>
         </button>
       </li>
     )

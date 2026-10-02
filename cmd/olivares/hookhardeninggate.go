@@ -6,7 +6,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"time"
 
 	"github.com/olivaresai/olivares/connectors/managedsettings"
@@ -40,9 +39,9 @@ type hookHardeningEngine interface {
 	Conform(ctx context.Context, policy managedsettings.Policy, behavioral bool, signingKeyB64 string, now time.Time) (certJSON []byte, signedBlob string, err error)
 }
 
-var errHookHardeningNotActive = errors.New(
-	"hooks-hardening add-on not available: " + enterpriseEditionHint +
-		"; this build ships the governed hooks PEP, but not the DLP firewall, fleet attestation or conformance cert")
+// errHookHardeningNotActive is a Business capability this build does not have; the
+// governed hooks PEP itself is in every build.
+var errHookHardeningNotActive = notInEdition()
 
 // resolveHookHardening returns the engine, or an honest error when the add-on is not in this build.
 func resolveHookHardening() (hookHardeningEngine, error) {

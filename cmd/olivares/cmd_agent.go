@@ -14,6 +14,7 @@ import (
 	"net/http"
 	"strings"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/spf13/cobra"
@@ -39,13 +40,15 @@ import (
 // warning clitransport.go emits. This is the largest of the four ad-hoc paths:
 // every session and every workspace verb went through it.
 type agentClientConfig struct {
-	server   string
-	token    string
-	tenant   string
-	caCert   string
-	pins     []string
-	insecure bool
-	timeout  time.Duration
+	command         *cobra.Command
+	credentialFlags authClientFlags
+	server          string
+	token           string
+	tenant          string
+	caCert          string
+	pins            []string
+	insecure        bool
+	timeout         time.Duration
 	// flags is captured at declaration time so resolve() can tell an explicitly
 	// passed empty value from an omitted one, which is what gives the active
 	// client context its correct precedence.
@@ -55,13 +58,16 @@ type agentClientConfig struct {
 }
 
 func (c *agentClientConfig) addFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&c.server, "server", "", "control-plane base URL (default $OLIVARES_SERVER_URL or the active client context)")
+	c.command = cmd
+	cmd.Flags().StringVar(&c.credentialFlags.tokenFile, "token-file", "", "read the API bearer token from a file, or - for stdin")
+	cmd.Flags().StringVar(&c.server, "server", "", "the engine's address, https://<host>:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in)")
 	cmd.Flags().StringVar(&c.token, "token", "", "API bearer token (default $OLIVARES_TOKEN or the active client context)")
 	cmd.Flags().StringVar(&c.tenant, "tenant", "", "tenant id (default $OLIVARES_TENANT or the active client context)")
-	cmd.Flags().StringVar(&c.caCert, "ca-cert", "", "PEM CA bundle used to verify the control plane (default: the active client context)")
+	cmd.Flags().StringVar(&c.caCert, "ca-cert", "", "PEM CA bundle used to verify the engine (default: the active client context)")
 	cmd.Flags().StringArrayVar(&c.pins, "pin-sha256", nil, "pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context")
-	cmd.Flags().BoolVar(&c.insecure, "insecure", false, "skip TLS certificate verification (self-signed dev planes only)")
+	cmd.Flags().BoolVar(&c.insecure, "insecure", false, "skip TLS certificate verification (self-signed development engines only)")
 	cmd.Flags().DurationVar(&c.timeout, "timeout", 30*time.Second, "request timeout")
+	hideConnectionFlags(cmd.Flags())
 	c.flags = cmd.Flags()
 }
 
@@ -70,11 +76,20 @@ func (c *agentClientConfig) changed(name string) bool {
 }
 
 func (c *agentClientConfig) resolve() error {
+	token, tokenExplicit := c.token, c.changed("token") || c.token != ""
+	if c.command != nil {
+		c.credentialFlags.token = c.token
+		value, explicit, err := c.credentialFlags.resolveToken(c.command)
+		if err != nil {
+			return err
+		}
+		token, tokenExplicit = value, explicit || tokenExplicit
+	}
 	resolved, err := resolveCLIConfig(cliResolutionOptions{
-		Server: c.server, Token: c.token, Tenant: c.tenant,
+		Server: c.server, Token: token, Tenant: c.tenant,
 		CACert: c.caCert, PinSHA256: append([]string(nil), c.pins...),
 		ServerExplicit: c.changed("server") || c.server != "",
-		TokenExplicit:  c.changed("token") || c.token != "",
+		TokenExplicit:  tokenExplicit,
 		TenantExplicit: c.changed("tenant") || c.tenant != "",
 		CACertExplicit: c.changed("ca-cert") || c.caCert != "",
 		PinsExplicit:   c.changed("pin-sha256") || len(c.pins) > 0,
@@ -137,8 +152,9 @@ func (c *agentClientConfig) newRequest(ctx context.Context, method, path string,
 	return req, nil
 }
 
-// do performs one buffered JSON request.
-func (c *agentClientConfig) do(ctx context.Context, method, path string, body any) (int, []byte, error) {
+// do performs one buffered JSON request. Every call names the accepted statuses;
+// without an explicit list, only HTTP 200 is accepted.
+func (c *agentClientConfig) do(ctx context.Context, method, path string, body any, accepted ...int) (int, []byte, error) {
 	req, err := c.newRequest(ctx, method, path, body)
 	if err != nil {
 		return 0, nil, err
@@ -152,24 +168,23 @@ func (c *agentClientConfig) do(ctx context.Context, method, path string, body an
 		return 0, nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	b, err := readCLIHTTPResponse(resp, req, 8<<20, cliStatusAccepted(resp.StatusCode, accepted...), httpErr)
 	return resp.StatusCode, b, err
 }
 
 func newAgentCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "agent",
-		Short: "Operate governed provider sessions (launch, attach, interrupt, stop, resume, clean up)",
+		Short: "Expert settings behind sessions: profiles, registered folders, managed settings",
 		Long: "agent is the operator surface for official provider sessions under governance: the\n" +
 			"sessions themselves, the workspaces a session may read and write, and the\n" +
 			"managed-settings.json that binds a launched Claude Code session to the PEP hook.\n\n" +
-			"session and workspace act on a running control plane and need --server (or\n" +
+			"session and workspace act on a running engine and need --server (or\n" +
 			"OLIVARES_SERVER_URL) plus a token; managed-settings renders a file locally, and tool\n" +
 			"installs and inventories official provider CLIs from signed releases on this host\n" +
-			"without any server. Available session verbs depend on the driver and control plane;\n" +
+			"without any server. Available session verbs depend on the driver and engine;\n" +
 			"this CLI does not claim that every provider supports every operation.",
-		Example: "  olivares agent session ls\n" +
-			"  olivares agent workspace ls -o json\n" +
+		Example: "  olivares agent workspace ls -o json\n" +
 			"  sudo olivares agent managed-settings --out /etc/claude-code/managed-settings.json\n" +
 			"  olivares agent tool install --driver claude --version latest --yes",
 	}
@@ -184,14 +199,17 @@ func newAgentCmd() *cobra.Command {
 
 func newAgentSessionCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "session",
-		Short: "Manage the lifecycle of governed provider sessions",
+		Use: "session",
+		// `olivares session` is the path a person takes (cmd_session.go). This spelling
+		// keeps working for scripts and is out of the help.
+		Hidden: true,
+		Short:  "Manage the lifecycle of governed provider sessions",
 		Long: "session covers a governed official-provider run end to end: create and stop it,\n" +
 			"attach to its live output, send input, interrupt an active turn, read its lifecycle\n" +
 			"ledger, and release its record once the work is done.\n\n" +
 			"interrupt cancels the active provider turn and leaves the owned process running.\n" +
 			"stop ends the session. interrupt does not stop, resume, or clean up a session.\n\n" +
-			"Every verb here is a control-plane call, so a session outlives the terminal that\n" +
+			"Every verb here is an engine call, so a session outlives the terminal that\n" +
 			"launched it and stays inspectable from any authenticated CLI. Which input form and\n" +
 			"which interrupt a run accepts is decided by its driver; this CLI does not convert\n" +
 			"payloads or claim that every provider supports every verb.",
@@ -229,7 +247,7 @@ func newAgentSessionCreateCmd() *cobra.Command {
 		Short: "Launch a governed Claude Code session",
 		Long: "create launches a Claude Code session through the Olivares sessions API, applying the\n" +
 			"selected transport, permission mode, workspace, isolation, model, effort, environment\n" +
-			"allowlist and, when given, provider profile. Current control planes require\n" +
+			"allowlist and, when given, provider profile. Current engines require\n" +
 			"--provider-profile; omitting it keeps the older request body, and the live API still\n" +
 			"refuses the launch rather than selecting a profile, home or environment implicitly.",
 		Example: `  # Create a governed session with stream-json transport under a selected profile
@@ -252,7 +270,7 @@ func newAgentSessionCreateCmd() *cobra.Command {
 			if cmd.Flags().Changed("provider-profile") {
 				body["provider_profile_ref"] = providerProfile
 			}
-			status, b, err := cfg.do(cmd.Context(), "POST", "/v1/m/sessions/runs", body)
+			status, b, err := cfg.do(cmd.Context(), "POST", "/v1/m/sessions/runs", body, http.StatusCreated)
 			if err != nil {
 				return err
 			}
@@ -326,7 +344,7 @@ func newAgentSessionListCmd() *cobra.Command {
 			if state != "" {
 				path += "?state=" + state
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", path, nil)
+			status, b, err := cfg.do(cmd.Context(), "GET", path, nil, http.StatusOK)
 			if err != nil {
 				return err
 			}
@@ -373,7 +391,7 @@ func newAgentSessionGetCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", "/v1/m/sessions/runs/"+args[0], nil)
+			status, b, err := cfg.do(cmd.Context(), "GET", "/v1/m/sessions/runs/"+args[0], nil, http.StatusOK)
 			if err != nil {
 				return err
 			}
@@ -400,7 +418,7 @@ func newAgentSessionEventsCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "GET", "/v1/m/sessions/runs/"+args[0]+"/events", nil)
+			status, b, err := cfg.do(cmd.Context(), "GET", "/v1/m/sessions/runs/"+args[0]+"/events", nil, http.StatusOK)
 			if err != nil {
 				return err
 			}
@@ -457,8 +475,8 @@ func (c *agentClientConfig) streamAttach(cmd *cobra.Command, ref string, from in
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		b, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return httpErr(resp.StatusCode, b)
+		b, readErr := readCLIResponse(resp, req, 1<<20, false)
+		return guardCLIRefusalError(httpErr(resp.StatusCode, b), resp.StatusCode, cliRequestSecrets(req), readErr)
 	}
 	out := cmd.OutOrStdout()
 	sc := bufio.NewScanner(resp.Body)
@@ -510,11 +528,11 @@ func newAgentSessionInputCmd() *cobra.Command {
 			"trailing newline. Empty or whitespace-only text is refused locally. --text and\n" +
 			"--line cannot be combined, including when either flag is explicitly empty.\n\n" +
 			"--work-lease-fence, when set, must be a positive integer and is sent as\n" +
-			"work_lease_fence. The control plane decides whether the session accepts line or\n" +
+			"work_lease_fence. The engine decides whether the session accepts line or\n" +
 			"text; this command does not infer the provider, convert one form into the other,\n" +
 			"or retry after refusal.",
-		Example: `  printf '%s\n' '{"type":"user","message":"continue"}' | olivares agent session input run-123
-  olivares agent session input run-123 --line '{"type":"user","message":"continue"}'
+		Example: `  printf '%s\n' '{"type":"user","message":{"role":"user","content":"continue"}}' | olivares agent session input run-123
+  olivares agent session input run-123 --line '{"type":"user","message":{"role":"user","content":"continue"}}'
   olivares agent session input run-123 --text 'review the remaining tests'
   cat prompt.txt | olivares agent session input run-123 --text -
   olivares agent session input run-123 --text 'continue' --work-lease-fence 7`,
@@ -552,7 +570,7 @@ func newAgentSessionInputCmd() *cobra.Command {
 				body["work_lease_fence"] = *fence
 			}
 			status, b, err := cfg.do(cmd.Context(), "POST",
-				"/v1/m/sessions/runs/"+agentExecPathID(args[0])+"/input", body)
+				"/v1/m/sessions/runs/"+agentExecPathID(args[0])+"/input", body, http.StatusAccepted)
 			if err != nil {
 				return err
 			}
@@ -580,7 +598,7 @@ func newAgentSessionInterruptCmd() *cobra.Command {
 		Long: "interrupt cancels the active provider turn of a live governed session and keeps\n" +
 			"the owned process running. It is not stop: stop ends the session. interrupt does\n" +
 			"not stop, resume, or clean up a session, and it does not retry another lifecycle\n" +
-			"endpoint if the control plane refuses, reports the operation unsupported, or\n" +
+			"endpoint if the engine refuses, reports the operation unsupported, or\n" +
 			"conflicts.\n\n" +
 			"An omitted --work-lease-fence sends no request body. A supplied fence must be a\n" +
 			"positive integer and is sent as work_lease_fence. Support depends on the session's\n" +
@@ -602,7 +620,7 @@ func newAgentSessionInterruptCmd() *cobra.Command {
 				body = map[string]any{"work_lease_fence": *fence}
 			}
 			status, b, err := cfg.do(cmd.Context(), "POST",
-				"/v1/m/sessions/runs/"+agentExecPathID(args[0])+"/interrupt", body)
+				"/v1/m/sessions/runs/"+agentExecPathID(args[0])+"/interrupt", body, http.StatusOK)
 			if err != nil {
 				return err
 			}
@@ -711,7 +729,7 @@ func newAgentSessionActionCmd(use, short, method, suffix string) *cobra.Command 
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), method, "/v1/m/sessions/runs/"+args[0]+suffix, nil)
+			status, b, err := cfg.do(cmd.Context(), method, "/v1/m/sessions/runs/"+args[0]+suffix, nil, http.StatusOK)
 			if err != nil {
 				return err
 			}
@@ -741,7 +759,7 @@ func newAgentSessionDeleteCmd() *cobra.Command {
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
-			status, b, err := cfg.do(cmd.Context(), "DELETE", "/v1/m/sessions/runs/"+args[0], nil)
+			status, b, err := cfg.do(cmd.Context(), "DELETE", "/v1/m/sessions/runs/"+args[0], nil, http.StatusOK)
 			if err != nil {
 				return err
 			}
@@ -871,7 +889,12 @@ func printRaw(cmd *cobra.Command, b []byte) error {
 // logged. A body that is not the envelope is kept verbatim: an engine that
 // answered with something else is exactly when the raw bytes matter.
 func httpErr(status int, b []byte) error {
-	err := fmt.Errorf("%s", describeAPIRefusal(status, b))
+	refusal := &apiRefusal{status: status, text: describeAPIRefusal(status, b)}
+	var env apiErrorEnvelope
+	if json.Unmarshal(b, &env) == nil {
+		refusal.code = strings.TrimSpace(env.Error.Code)
+	}
+	var err error = refusal
 	switch {
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
 		return exitcode.New(exitcode.Auth, err)
@@ -900,6 +923,8 @@ func sessionStateRole(state string) termrender.Role {
 		return termrender.RoleFail
 	case "stopped", "cleaned":
 		return termrender.RoleMuted
+	case "needs approval":
+		return termrender.RoleWarn
 	default: // pending, and anything a newer engine reports
 		return termrender.RoleNone
 	}
@@ -918,6 +943,25 @@ type apiErrorEnvelope struct {
 		Code    string `json:"code"`
 		Message string `json:"message"`
 	} `json:"error"`
+}
+
+// apiRefusal is an engine refusal: the sentence a person reads, and the status and
+// code a script or a support conversation quotes (printed with -o json, never in the
+// sentence when the engine already wrote one).
+type apiRefusal struct {
+	status int
+	code   string
+	text   string
+}
+
+func (e *apiRefusal) Error() string { return e.text }
+
+// isSentence reports whether an engine message was written for a person: it starts
+// with a capital letter and has at least three words. A code or a short lowercase
+// phrase ("forbidden", "no such run") keeps the lead and the status around it.
+func isSentence(s string) bool {
+	r, _ := utf8.DecodeRuneInString(s)
+	return unicode.IsUpper(r) && len(strings.Fields(s)) >= 3
 }
 
 // describeAPIRefusal builds the sentence. It is separate from httpErr so it can
@@ -941,6 +985,11 @@ func describeAPIRefusal(status int, b []byte) string {
 	var env apiErrorEnvelope
 	if json.Unmarshal(b, &env) == nil && strings.TrimSpace(env.Error.Message) != "" {
 		detail := strings.TrimSpace(env.Error.Message)
+		// EU-08: a message the engine wrote for a person is printed as it is; the status
+		// and code stay on the error (-o json), not in the sentence.
+		if isSentence(detail) {
+			return detail
+		}
 		// A code that only repeats the message adds nothing: the engine answers
 		// {"code":"forbidden","message":"forbidden"} on a plain refusal, and
 		// "forbidden (HTTP 403 forbidden)" is three sayings of one fact.

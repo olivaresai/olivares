@@ -1754,22 +1754,58 @@ func TestResolvePrincipalScopeDegradesExpiredElevatedAAL(t *testing.T) {
 	}
 }
 
-func TestResolvePrincipalScopeRefusesGlobalAndRecoversPurposeTokenBindings(t *testing.T) {
+func TestResolvePrincipalScopeAdmitsSuperadminSessionsAndRefusesGlobalTokens(t *testing.T) {
 	f := newPrincipalEvidenceFixture(t)
 	sessionRef := f.sessionRef()
 	if err := f.raw.AuthMutate(f.ctx, func(as store.AuthScope) error {
+		if err := prepareUserAuthorityWrite(f.ctx, as, f.user.ID); err != nil {
+			return err
+		}
 		user, err := as.Users().Get(f.ctx, f.user.ID)
 		if err != nil {
 			return err
 		}
 		user.IsSuperadmin = true
+		if err := as.Memberships().Delete(f.ctx, f.member.ID); err != nil {
+			return err
+		}
 		_, err = as.Users().Update(f.ctx, user)
 		return err
 	}); err != nil {
 		t.Fatalf("mark session user superadmin: %v", err)
 	}
-	if _, err := f.a.ResolvePrincipalScope(f.deadline(time.Minute), sessionRef, f.tenant); !errors.Is(err, ErrPrincipalEvidenceUnavailable) || !errors.Is(err, ErrPrincipalScopeAdmissionRequired) {
-		t.Fatalf("global session scope error = %v, want ErrPrincipalEvidenceUnavailable", err)
+	resolved, err := f.a.ResolvePrincipalScope(f.deadline(time.Minute), sessionRef, f.tenant)
+	if err != nil {
+		t.Fatalf("explicit superadmin tenant entry: %v", err)
+	}
+	role, member := resolved.RoleIn(f.tenant)
+	if !member || role != RoleOwner || !resolved.Superadmin || resolved.SessionScope() != f.tenant {
+		t.Fatal("superadmin did not resolve as the selected tenant's owner")
+	}
+	az := NewAuthorizer(nil)
+	if err := az.PrincipalAuthorityAvailable(resolved, f.tenant); err != nil {
+		t.Fatal(err)
+	}
+	if az.Allowed(f.ctx, resolved, "agent:write", model.NewTenantID()) {
+		t.Fatal("tenant admission widened a reconstructed principal to another tenant")
+	}
+	if az.Allowed(f.ctx, resolved, PermSystemAdmin, f.tenant) ||
+		az.Allowed(f.ctx, resolved, PermSystemAdmin, model.SystemTenantID) {
+		t.Fatal("tenant owner admission retained account-wide system authority")
+	}
+	if err := checkRoleCeiling(resolved, f.tenant, RoleOwner); err != nil {
+		t.Fatalf("tenant owner cannot grant its own role: %v", err)
+	}
+	if err := checkRoleCeiling(resolved, model.NewTenantID(), RoleOwner); !errors.Is(err, ErrRoleCeiling) {
+		t.Fatalf("tenant owner acquired another tenant's role ceiling: %v", err)
+	}
+	if _, _, err := f.a.IssueToken(f.ctx, resolved, TokenSpec{Name: "tenant-owner-global-token", Superadmin: true}); !errors.Is(err, ErrRoleCeiling) {
+		t.Fatalf("tenant owner minted a system-role API token: %v", err)
+	}
+	for _, tenant := range []model.TenantID{"", model.SystemTenantID} {
+		if _, err := f.a.ResolvePrincipalScope(f.deadline(time.Minute), sessionRef, tenant); !errors.Is(err, ErrPrincipalEvidenceUnavailable) {
+			t.Fatalf("invalid tenant admitted: %v", err)
+		}
 	}
 
 	globalCred, err := NewCredential(PrefixToken)
@@ -1987,5 +2023,132 @@ func assertTraceExact(t *testing.T, trace []string, want ...string) {
 		if trace[i] != want[i] {
 			t.Fatalf("trace = %v, want exactly %v", trace, want)
 		}
+	}
+}
+
+func TestResolveSuperadminExplicitTenantPreservesSessionGuards(t *testing.T) {
+	for _, change := range []string{"tenant scope", "excluded", "inactive", "revoked", "demoted"} {
+		t.Run(change, func(t *testing.T) {
+			f := newPrincipalEvidenceFixture(t)
+			if err := f.raw.AuthMutate(f.ctx, func(as store.AuthScope) error {
+				user, err := as.Users().Get(f.ctx, f.user.ID)
+				if err != nil {
+					return err
+				}
+				user.IsSuperadmin = true
+				_, err = as.Users().Update(f.ctx, user)
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+			ref := f.sessionRef()
+			if _, err := f.a.ResolvePrincipalScope(f.deadline(time.Minute), ref, f.tenant); err != nil {
+				t.Fatalf("entry control: %v", err)
+			}
+			if err := f.raw.AuthMutate(f.ctx, func(as store.AuthScope) error {
+				switch change {
+				case "tenant scope", "revoked":
+					session, err := as.Sessions().Get(f.ctx, f.session.ID)
+					if err != nil {
+						return err
+					}
+					if change == "revoked" {
+						session.Revoked = true
+					} else {
+						session.TenantScope = model.NewTenantID()
+					}
+					updated, err := as.Sessions().Update(f.ctx, session)
+					if change == "tenant scope" {
+						ref.version = updated.Version
+					}
+					return err
+				case "excluded":
+					_, err := as.TenantExclusions().Create(f.ctx, model.TenantExclusion{
+						UserID: f.user.ID, TargetTenantID: f.tenant, SessionID: f.session.ID, Kind: model.ExclusionSession,
+					})
+					return err
+				default:
+					user, err := as.Users().Get(f.ctx, f.user.ID)
+					if err != nil {
+						return err
+					}
+					if change == "inactive" {
+						user.Status = model.StatusInactive
+					} else {
+						user.IsSuperadmin = false
+					}
+					_, err = as.Users().Update(f.ctx, user)
+					return err
+				}
+			}); err != nil {
+				t.Fatal(err)
+			}
+			resolved, err := f.a.ResolvePrincipalScope(f.deadline(time.Minute), ref, f.tenant)
+			if change == "demoted" {
+				if err != nil {
+					t.Fatal(err)
+				}
+				role, member := resolved.RoleIn(f.tenant)
+				if resolved.Superadmin || !member || role != RoleViewer {
+					t.Fatalf("stale superadmin admission after demotion: %+v", resolved)
+				}
+			} else if err == nil {
+				t.Fatalf("superadmin escaped %s", change)
+			}
+		})
+	}
+}
+
+func TestResolveSuperadminRetainsTenantPolicySubjects(t *testing.T) {
+	for _, membership := range []string{"with_membership", "without_membership"} {
+		t.Run(membership, func(t *testing.T) {
+			f := newPrincipalEvidenceFixture(t)
+			group := f.addGroupWithMember(f.tenant, "superadmin-policy-subject", RoleViewer)
+			if err := f.raw.AuthMutate(f.ctx, func(as store.AuthScope) error {
+				if err := prepareUserAuthorityWrite(f.ctx, as, f.user.ID); err != nil {
+					return err
+				}
+				user, err := as.Users().Get(f.ctx, f.user.ID)
+				if err != nil {
+					return err
+				}
+				user.IsSuperadmin = true
+				if _, err = as.Users().Update(f.ctx, user); err != nil {
+					return err
+				}
+				if membership == "without_membership" {
+					return as.Memberships().Delete(f.ctx, f.member.ID)
+				}
+				return nil
+			}); err != nil {
+				t.Fatal(err)
+			}
+			f.hooks.now = model.NewTimestamp(time.Now().UTC())
+			principal, err := f.a.ResolvePrincipalScope(f.deadline(time.Minute), f.sessionRef(), f.tenant)
+			if err != nil {
+				t.Fatal(err)
+			}
+			groups := principal.GroupsIn(f.tenant)
+			if len(groups) != 1 || groups[0] != group.ID.String() || !principal.Superadmin {
+				t.Fatalf("tenant admission lost authored policy subjects: groups=%v", groups)
+			}
+			if role, member := principal.RoleIn(f.tenant); !member || role != RoleOwner {
+				t.Fatal("subject group narrowed owner admission")
+			}
+		})
+	}
+}
+
+func TestResolvePrincipalScopeDoesNotAdmitUnjoinedGroupMembers(t *testing.T) {
+	f := newPrincipalEvidenceFixture(t)
+	f.addGroupWithMember(f.tenant, "unjoined-owner-group", RoleOwner)
+	if err := f.raw.AuthMutate(f.ctx, func(as store.AuthScope) error {
+		return as.Memberships().Delete(f.ctx, f.member.ID)
+	}); err != nil {
+		t.Fatal(err)
+	}
+	f.hooks.now = model.NewTimestamp(time.Now().UTC())
+	if _, err := f.a.ResolvePrincipalScope(f.deadline(time.Minute), f.sessionRef(), f.tenant); !errors.Is(err, ErrPrincipalEvidenceUnavailable) {
+		t.Fatalf("a group admitted an ordinary user without membership: %v", err)
 	}
 }

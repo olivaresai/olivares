@@ -486,3 +486,25 @@ func TestProviderAccount_CreateAuditsWithTheAbsolutePathAndTheDtoDoesNot(t *test
 		})
 	}
 }
+
+// ARCH smoke on refresh 03b: an account made through /provider-accounts left its
+// profile with no auth source, so a session started from it was refused like
+// HU-01. Its profile now signs in with the tool's own login in the account's homes.
+func TestProviderAccount_CreateGivesAProfileThatSignsInWithTheToolsOwnLogin(t *testing.T) {
+	be := profileBackends(t)[0]
+	m, st := openProfileModule(t, be, nil)
+	tenant := ensureTenant(t, st, "account-auth-source")
+	a := newAcctAPI(m, st, tenant)
+	acctUseAccountsRoot(t, m, t.TempDir())
+	r := a.create(acctHomeDriver, "claude-own-login")
+	if r.code != http.StatusCreated {
+		t.Fatalf("create = %d %s, want 201", r.code, r.raw)
+	}
+	ref, _ := r.body["account_ref"].(string)
+	if got := acctRow(t, m, tenant, ref).String(colPPAuthSource); got != AuthSourceAccountHome {
+		t.Fatalf("account profile auth_source = %q, want %q", got, AuthSourceAccountHome)
+	}
+	if err := requireAuthSourceForDriver(acctHomeDriver, AuthSourceAccountHome); err != nil {
+		t.Fatalf("the account profile still cannot launch: %v", err)
+	}
+}

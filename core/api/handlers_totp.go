@@ -110,12 +110,9 @@ func (s *Server) handleTOTPActivate(w http.ResponseWriter, r *http.Request) {
 			s.writeError(w, r, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"token":          token,
-			"session_id":     sess.ID.String(),
-			"expires_at":     sess.ExpiresAt.String(),
-			"recovery_codes": codes,
-		})
+		out := SessionEnvelope(w, r, token, sess)
+		out["recovery_codes"] = codes
+		writeJSON(w, http.StatusOK, out)
 		return
 	}
 	p, ok := s.sessionPrincipal(w, r)
@@ -153,11 +150,7 @@ func (s *Server) handleTOTPChallenge(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"token":      token,
-		"session_id": sess.ID.String(),
-		"expires_at": sess.ExpiresAt.String(),
-	})
+	writeJSON(w, http.StatusOK, SessionEnvelope(w, r, token, sess))
 }
 
 // handleTOTPStatus reports the acting account's factor (non-secret shape).
@@ -182,7 +175,7 @@ func (s *Server) handleTOTPRemove(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	if err := s.authr.RemoveTOTP(r.Context(), p); err != nil {
@@ -212,7 +205,7 @@ func (s *Server) handleTOTPPolicyPut(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	var in totpPolicyInput
@@ -255,7 +248,7 @@ func (s *Server) handleUserTOTPReset(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	accountID, ok := totpAccountParam(w, r)

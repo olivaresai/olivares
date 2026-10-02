@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 
 import { currentLanguage } from '@/lib/i18n'
@@ -27,7 +28,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
@@ -38,9 +39,10 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
-import { Switch } from '@/components/ui/switch'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import { ListTruncationBadge } from '@/features/_intel'
+import { ApiError } from '@/lib/api/errors'
+import { isEngineEmail } from '@/lib/email'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import {
@@ -59,16 +61,29 @@ import { StaticTable } from '@/components/data/static-table'
 
 const ROLES = ['viewer', 'editor', 'admin', 'owner'] as const
 
-export function PeopleTab() {
+export function PeopleTab({
+  inviteRequested = false,
+  onInviteHandled,
+}: {
+  /** ⌘K "Invite people" (identity-view.tsx): open the onboarding dialog in its invite
+   * mode, behind the same step-up as the button, for a principal who may onboard. */
+  inviteRequested?: boolean
+  onInviteHandled?: () => void
+} = {}) {
   const { t } = useTranslation(['console', 'common'])
-  const { activeTenant, can } = useAuth()
+  const { activeTenant, can, principal } = useAuth()
   const canOnboard = can('membership:write')
   const canReadMembers = can('user:read')
   const canManageMembers = can('user:write')
   // The internal-superadmin lifecycle is global and remains superadmin-only.
   const canReadSupers = can('user:read', { tenant: null })
   const canManageSupers = can('user:write', { tenant: null })
-  const [onboardOpen, setOnboardOpen] = useState(false)
+  const [onboardButtonOpen, setOnboardButtonOpen] = useState(false)
+  const onboardOpen = onboardButtonOpen || (inviteRequested && canOnboard)
+  const setOnboardOpen = (open: boolean) => {
+    setOnboardButtonOpen(open)
+    if (!open) onInviteHandled?.()
+  }
   const [revoke, setRevoke] = useState<InviteDTO | null>(null)
   const [toggle, setToggle] = useState<OnboardedUser | null>(null)
   const [memberToggle, setMemberToggle] = useState<RosterMemberDTO | null>(null)
@@ -145,6 +160,9 @@ export function PeopleTab() {
 
   const items = invites.data?.items ?? []
   const roster = members.data?.items ?? []
+  const activeOwners = roster.filter(
+    (m) => m.role === 'owner' && m.status === 'active',
+  ).length
   const supers = superadmins.data?.items ?? []
 
   return (
@@ -201,7 +219,10 @@ export function PeopleTab() {
             <Spinner />
           </div>
         ) : members.isError ? (
-          <ErrorState retry={() => void members.refetch()} />
+          <QueryErrorState
+            error={members.error}
+            retry={() => void members.refetch()}
+          />
         ) : roster.length === 0 ? (
           <EmptyState
             icon={<Users />}
@@ -229,6 +250,12 @@ export function PeopleTab() {
                       key={member.user_id}
                       member={member}
                       canManage={canManageMembers}
+                      // Never offered on your own row or on the organization's only
+                      // active owner: either would lock the organization out (HU-25).
+                      canRemove={
+                        member.user_id !== principal?.user_id &&
+                        !(member.role === 'owner' && activeOwners <= 1)
+                      }
                       onToggle={setMemberToggle}
                       onResetTOTP={setTotpResetTarget}
                     />
@@ -263,7 +290,10 @@ export function PeopleTab() {
             <Spinner />
           </div>
         ) : invites.isError ? (
-          <ErrorState retry={() => void invites.refetch()} />
+          <QueryErrorState
+            error={invites.error}
+            retry={() => void invites.refetch()}
+          />
         ) : items.length === 0 ? (
           /* ⛔ THE SENTENCE SAID "Invite someone to add the first one" AND OFFERED NO
              WAY TO. The control exists, at the top of a page with the whole user
@@ -364,7 +394,10 @@ export function PeopleTab() {
               <Spinner />
             </div>
           ) : superadmins.isError ? (
-            <ErrorState retry={() => void superadmins.refetch()} />
+            <QueryErrorState
+              error={superadmins.error}
+              retry={() => void superadmins.refetch()}
+            />
           ) : (
             <div className="overflow-hidden rounded-lg border border-border">
               <XScroll>
@@ -420,7 +453,12 @@ export function PeopleTab() {
         <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
           {onboardOpen && (
             <RequireAssurance minAal={AAL.HARDWARE} action="console">
-              <OnboardForm onClose={() => setOnboardOpen(false)} />
+              <OnboardForm
+                initialMode={
+                  inviteRequested && !onboardButtonOpen ? 'invite' : 'password'
+                }
+                onClose={() => setOnboardOpen(false)}
+              />
             </RequireAssurance>
           )}
         </DialogContent>
@@ -501,11 +539,14 @@ export function PeopleTab() {
 function RosterMemberRow({
   member,
   canManage,
+  canRemove,
   onToggle,
   onResetTOTP,
 }: {
   member: RosterMemberDTO
   canManage: boolean
+  /** False on your own row and on the only active owner. */
+  canRemove: boolean
   onToggle: (member: RosterMemberDTO) => void
   onResetTOTP: (member: RosterMemberDTO) => void
 }) {
@@ -582,15 +623,20 @@ function RosterMemberRow({
               {t('console:members.totpReset')}
             </Button>
           ) : null}
-          {canManage && active ? (
-            <Switch
-              checked
-              onCheckedChange={() => onToggle(member)}
+          {/* Removing a member is an action with a confirmation, never a switch: a
+              switch read "on" beside "Remove" (HU-25). */}
+          {canManage && active && canRemove ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => onToggle(member)}
               aria-label={t('console:members.toggleDisableLabel', {
                 email: member.email,
               })}
-            />
-          ) : canManage ? (
+            >
+              {t('console:members.disable')}
+            </Button>
+          ) : canManage && active ? null : canManage && canRemove ? (
             // An account the deployment suspended cannot be re-activated by an
             // organization; removing it is the one thing this organization can do.
             <div className="flex items-center justify-end gap-2">
@@ -623,27 +669,49 @@ function memberStatusVariant(status: RosterMemberDTO['status']) {
   return 'neutral'
 }
 
-function OnboardForm({ onClose }: { onClose: () => void }) {
+function OnboardForm({
+  onClose,
+  initialMode = 'password',
+}: {
+  onClose: () => void
+  initialMode?: 'password' | 'invite'
+}) {
   const { t } = useTranslation(['console', 'common'])
   const { activeTenant } = useAuth()
   const [email, setEmail] = useState('')
   const [displayName, setDisplayName] = useState('')
   const [role, setRole] = useState('editor')
-  const [mode, setMode] = useState<'password' | 'invite'>('password')
+  const [mode, setMode] = useState<'password' | 'invite'>(initialMode)
   const [password, setPassword] = useState('')
   const [invite, setInvite] = useState<OnboardResult['invite'] | null>(null)
   const [consent, setConsent] = useState(false)
+  // The engine's own sentence when it refuses the request (ID's account sweep: a malformed
+  // address came back "User onboarded."). Shown in the form, not as a generic toast.
+  const [refused, setRefused] = useState('')
 
   const mutation = usePrivilegedMutation<void, OnboardResponse>({
-    mutationFn: () =>
-      consoleApi.onboard({
+    mutationFn: () => {
+      setRefused('')
+      return consoleApi.onboard({
         email: email.trim(),
         display_name: displayName.trim() || undefined,
         role,
         mode,
         password: mode === 'password' ? password : undefined,
-      }),
-    invalidateKeys: () => [consoleKeys.invites(activeTenant)],
+      })
+    },
+    onError: (err) => {
+      if (!(err instanceof ApiError) || err.status !== 400 || !err.message)
+        return false
+      setRefused(err.message)
+      return true
+    },
+    // The roster too: a new account is a member at once, and the Users table showed only
+    // the administrator until the page was left (ID's account sweep, P2).
+    invalidateKeys: () => [
+      consoleKeys.invites(activeTenant),
+      consoleKeys.members(activeTenant),
+    ],
     successMessage: (data) =>
       isConsentRequired(data)
         ? t('console:onboard.consentRequiredToast')
@@ -657,8 +725,11 @@ function OnboardForm({ onClose }: { onClose: () => void }) {
     },
   })
 
-  const valid =
-    email.includes('@') && (mode === 'invite' || password.length >= 8)
+  // The engine's own rule, the one sign-in uses (lib/email): an address the engine would
+  // refuse is not sent ("bad@" passed the old check, which only looked for an @), and an
+  // internal-domain address the engine accepts is not refused.
+  const emailValid = isEngineEmail(email)
+  const valid = emailValid && (mode === 'invite' || password.length >= 8)
 
   if (consent) {
     return (
@@ -706,12 +777,18 @@ function OnboardForm({ onClose }: { onClose: () => void }) {
           label={t('console:people.email')}
           htmlFor="ob-email"
           description={t('console:onboard.emailHint')}
+          error={
+            email.trim() && !emailValid
+              ? t('common:validation.email')
+              : undefined
+          }
           required
         >
           <Input
             id="ob-email"
             type="email"
             value={email}
+            aria-invalid={!!email.trim() && !emailValid}
             onChange={(e) => setEmail(e.target.value)}
           />
         </Field>
@@ -777,6 +854,11 @@ function OnboardForm({ onClose }: { onClose: () => void }) {
             />
           </Field>
         )}
+        {refused ? (
+          <p role="alert" className="text-body text-danger">
+            {refused}
+          </p>
+        ) : null}
       </div>
 
       <DialogFooter>

@@ -110,6 +110,90 @@ describe('SessionConversation', () => {
     expect(screen.getAllByText(/file_path/).length).toBeGreaterThan(0)
   })
 
+  it('a Bash row shows its command in one line, the whole command and its description when opened', async () => {
+    const user = userEvent.setup()
+    wrap('ws-1')
+    await screen.findByTestId('session-conversation')
+    act(() => {
+      push(
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool_use',
+                id: 'toolu_bash',
+                name: 'Bash',
+                input: {
+                  command: 'echo cli-key-works > cli-key.txt',
+                  description: 'Run the command the person asked for',
+                },
+              },
+            ],
+          },
+        }),
+        1,
+      )
+    })
+    const row = (await screen.findByText('Bash')).closest('details')!
+    expect(row.textContent).not.toContain('{"command"')
+    await user.click(row.querySelector('summary')!)
+    const full = row.querySelector('[data-slot="tool-command"]')
+    expect(full?.textContent).toBe('echo cli-key-works > cli-key.txt')
+    expect(
+      screen.getByText('Run the command the person asked for'),
+    ).toBeInTheDocument()
+  })
+
+  // HU 025 (real Claude Code 2.1.287): a long Bash turn printed "Unrecognised frame"
+  // for its progress and for the reply to the interrupt the console sent.
+  it("shows a running tool's elapsed time on its row and no unrecognised frame", async () => {
+    wrap('ws-1')
+    await screen.findByTestId('session-conversation')
+    act(() => {
+      push(
+        JSON.stringify({
+          type: 'assistant',
+          message: {
+            role: 'assistant',
+            content: [
+              {
+                type: 'tool_use',
+                id: 'toolu_bash_1',
+                name: 'Bash',
+                input: { command: 'python3 -c "import time; time.sleep(60)"' },
+              },
+            ],
+          },
+        }),
+        1,
+      )
+      push(
+        JSON.stringify({
+          type: 'tool_progress',
+          tool_use_id: 'toolu_bash_1',
+          tool_name: 'Bash',
+          parent_tool_use_id: null,
+          elapsed_time_seconds: 31,
+        }),
+        2,
+      )
+      push(
+        JSON.stringify({
+          type: 'control_response',
+          response: { subtype: 'success', request_id: 'olv-interrupt-1' },
+        }),
+        3,
+      )
+    })
+    const rows = await screen.findAllByTestId('conversation-item')
+    expect(rows).toHaveLength(1)
+    expect(rows[0]).toHaveAttribute('data-kind', 'tool')
+    expect(rows[0]).toHaveTextContent('31')
+    expect(screen.queryByText('Unrecognised frame')).toBeNull()
+  })
+
   it('warns when there is no workspace and the init frame names a cwd', async () => {
     wrap(undefined)
     await screen.findByTestId('session-conversation')

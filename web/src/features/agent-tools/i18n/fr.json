@@ -1,6 +1,6 @@
 {
   "title": "Outils des agents",
-  "description": "Gérez les outils sur le serveur du plan de contrôle.",
+  "description": "Installez sur ce serveur les outils d'IA qu'exécutent les sessions, et connectez-les.",
   "refresh": "Actualiser",
   "adminOnly": "Une session administrateur système est requise pour gérer les outils du serveur.",
   "readOnly": "Ce plan de contrôle est en lecture seule. L’installation est désactivée.",
@@ -14,7 +14,7 @@
   "versionUnknown": "Version inconnue",
   "planning": "Vérification de la version sélectionnée…",
   "approval": "Vérifier l’installation",
-  "installHint": "L’installation exige une authentification matérielle renforcée. Elle ne démarre aucun agent ni serveur de modèles.",
+  "installHint": "Seul un administrateur peut installer des outils. L’installation ne démarre aucun agent ni serveur de modèles.",
   "install": "Installer la version approuvée",
   "starting": "Démarrage…",
   "started": "Installation démarrée",
@@ -41,6 +41,25 @@
   },
   "probe": "Vérifier la version",
   "probeName": "Vérifier la version à {{path}}",
-  "probeHint": "La vérification exécute --version sur ce fichier précis après une authentification matérielle.",
-  "probeComplete": "Vérification de version terminée."
+  "probeHint": "Seul un administrateur peut lancer cette vérification. Elle exécute --version sur ce fichier précis.",
+  "probeComplete": "Vérification de version terminée.",
+  "versionLine": "Version {{version}} installée",
+  "ollama": {
+    "stopped": "Arrêté",
+    "starting": "Démarrage…",
+    "running": "En marche sur {{endpoint}}",
+    "failed": "Arrêté : il s’est interrompu.",
+    "start": "Démarrer",
+    "stop": "Arrêter",
+    "hint": "Son point d’accès est ajouté aux Fournisseurs de cette organisation pour que les profils Codex l’utilisent ; une autre organisation l’y ajoute elle-même. Les modèles restent sur ce serveur.",
+    "noModels": "Aucun modèle pour l’instant.",
+    "model": "Modèle",
+    "download": "Télécharger",
+    "downloading": "Téléchargement de {{model}}…",
+    "downloadingPercent": "Téléchargement de {{model}} · {{percent}} %",
+    "downloaded": "{{model}} téléchargé.",
+    "downloadFailed": "{{model}} n’a pas été téléchargé. {{error}}",
+    "startRequested": "Ollama démarre sur ce serveur.",
+    "downloadRequested": "Téléchargement lancé."
+  }
 }

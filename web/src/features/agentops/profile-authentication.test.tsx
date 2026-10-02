@@ -73,11 +73,8 @@ function mount() {
 }
 async function homes() {
   const user = userEvent.setup()
-  await user.type(screen.getByLabelText('Driver'), 'claude')
-  await user.type(
-    screen.getByLabelText('Configuration home'),
-    '/fixture/config',
-  )
+  await user.selectOptions(screen.getByLabelText('Driver'), 'claude')
+  await user.type(screen.getByLabelText('Settings folder'), '/fixture/config')
   await user.type(screen.getByLabelText('User home'), '/fixture/user')
   return user
 }
@@ -128,8 +125,7 @@ it('clears incompatible selection on driver change and never substitutes another
   )
   await screen.findByRole('option', { name: /Claude fixture/ })
   await user.selectOptions(screen.getByLabelText('Provider'), 'prv_a')
-  await user.clear(screen.getByLabelText('Driver'))
-  await user.type(screen.getByLabelText('Driver'), 'codex')
+  await user.selectOptions(screen.getByLabelText('Driver'), 'codex')
   expect(screen.getByRole('button', { name: 'Register' })).toBeDisabled()
   expect(api.createProfile).not.toHaveBeenCalled()
 })
@@ -155,6 +151,27 @@ it('account-home selection withdraws the provider binding without copying a cred
       auth_source: 'provider_account_home',
     }),
   )
+})
+it('registers Claude Code with its own login and nothing typed', async () => {
+  mount()
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: 'Register' }))
+  await waitFor(() =>
+    expect(api.createProfile).toHaveBeenCalledWith({
+      driver: 'claude',
+      config_home: '',
+      user_home: '',
+      auth_source: 'provider_account_home',
+    }),
+  )
+})
+it('asks for both homes once one is named', async () => {
+  mount()
+  const user = userEvent.setup()
+  await user.type(screen.getByLabelText('Settings folder'), '/fixture/config')
+  expect(screen.getByRole('button', { name: 'Register' })).toBeDisabled()
+  await user.type(screen.getByLabelText('User home'), '/fixture/user')
+  expect(screen.getByRole('button', { name: 'Register' })).toBeEnabled()
 })
 it('does not read providers or allow a managed write without provider-read permission', async () => {
   auth.permissions.delete('sessions:provider:read')
@@ -183,8 +200,13 @@ it.each(['principal', 'tenant', 'credential'] as const)(
     if (change === 'credential')
       useSessionStore.setState({ credentialGeneration: 2 })
     ui.refresh()
-    expect(screen.getByLabelText('Driver')).toHaveValue('')
-    expect(screen.getByRole('button', { name: 'Register' })).toBeDisabled()
+    // The draft is gone: back to the defaults, with no provider binding left over.
+    expect(screen.getByLabelText('Driver')).toHaveValue('claude')
+    expect(screen.getByLabelText('Settings folder')).toHaveValue('')
+    expect(screen.getByLabelText('Authentication source')).toHaveValue(
+      'provider_account_home',
+    )
+    expect(screen.queryByLabelText('Provider')).toBeNull()
     expect(api.createProfile).not.toHaveBeenCalled()
   },
 )

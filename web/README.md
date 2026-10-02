@@ -40,14 +40,14 @@ pnpm typecheck    # TypeScript strict check
 
 ## Structure
 
-| Directory | Purpose |
-|---|---|
-| `src/features/` | Feature modules (console, observability, compliance, security, identity, …) |
-| `src/components/ui/` | Shared UI primitives (Badge, Button, Dialog, Field, Spinner, …) |
-| `src/lib/` | Auth context, API client, hooks, i18n, routing |
-| `e2e/` | Playwright E2E tests |
-| `openapi/` | Generated OpenAPI spec (feeds the API reference) |
-| `public/` | Static assets (favicon, OG image, webmanifest) |
+| Directory            | Purpose                                                                     |
+| -------------------- | --------------------------------------------------------------------------- |
+| `src/features/`      | Feature modules (console, observability, compliance, security, identity, …) |
+| `src/components/ui/` | Shared UI primitives (Badge, Button, Dialog, Field, Spinner, …)             |
+| `src/lib/`           | Auth context, API client, hooks, i18n, routing                              |
+| `e2e/`               | Playwright E2E tests                                                        |
+| `openapi/`           | Generated OpenAPI spec (feeds the API reference)                            |
+| `public/`            | Static assets (favicon, OG image, webmanifest)                              |
 
 ## Internationalization
 

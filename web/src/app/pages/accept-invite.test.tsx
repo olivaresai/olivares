@@ -5,7 +5,7 @@
 // E1 — the public invite-acceptance page. Covers: token read from the URL,
 // client validation mirroring the server MinPasswordLen, the accept POST with the
 // URL token, the coarse (non-oracle) invalid-token error, and that the post-success
-// redirect is ALWAYS the internal /login (never a URL-supplied destination).
+// redirect is ALWAYS the internal / (never a URL-supplied destination).
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -26,6 +26,10 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 const mockAcceptInvite = vi.fn()
+const mockAdoptSession = vi.fn()
+vi.mock('@/lib/auth/context', () => ({
+  useAuth: () => ({ adoptSession: mockAdoptSession }),
+}))
 vi.mock('@/lib/api/endpoints', () => ({
   authApi: {
     acceptInvite: (...args: unknown[]) => mockAcceptInvite(...args),
@@ -112,10 +116,10 @@ describe('AcceptInvitePage', () => {
     expect(mockAcceptInvite).not.toHaveBeenCalled()
   })
 
-  it('POSTs the URL token + password and redirects to the internal /login', async () => {
+  it('POSTs the invite proof, adopts the cookie session and opens the console', async () => {
     setUrl('#token=olvi_sel_secret')
     mockAcceptInvite.mockResolvedValue({
-      token: 'olvs_session',
+      csrf_token: 'csrf-session',
       session_id: 's1',
       expires_at: '2026-08-01T00:00:00Z',
     })
@@ -136,8 +140,13 @@ describe('AcceptInvitePage', () => {
     )
     // The redirect target is hardcoded — a tampered URL can never change it.
     await waitFor(() =>
-      expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' }),
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/', replace: true }),
     )
+    expect(mockAdoptSession).toHaveBeenCalledWith({
+      csrf_token: 'csrf-session',
+      session_id: 's1',
+      expires_at: '2026-08-01T00:00:00Z',
+    })
     expect(window.location.hash).toBe('')
     expect(window.location.search).toBe('')
   })

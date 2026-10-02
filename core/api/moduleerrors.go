@@ -48,9 +48,8 @@ import (
 // THE STATUS IS NOT RE-DECIDED HERE. It comes from statusFor, so core/api and the
 // modules cannot answer differently for the same error however either changes; a
 // sentinel added to statusFor tomorrow reaches all thirty-six copies without
-// touching one of them. What this function adds is the module envelope's MESSAGE,
-// because that envelope carries no code field ({"error":{"message":…}}) where
-// core/api's carries one.
+// touching one of them. What this function adds is the module envelope's MESSAGE;
+// StoreErrorBody below adds the envelope itself, with the code.
 //
 // The returned message is safe to hand a client by construction: it is keyed on
 // the curated code statusFor produced, never on err.Error(), so it cannot echo a
@@ -59,12 +58,29 @@ import (
 // "internal error" fallback, so a caller that ignores ok stays correct and one
 // that reads it can keep its own default arm.
 func StoreErrorStatus(err error) (status int, message string, ok bool) {
+	status, _, message, ok = storeErrorAnswer(err)
+	return status, message, ok
+}
+
+// StoreErrorBody is StoreErrorStatus with the module envelope built:
+// {"error":{"code":…,"message":…}}, the code being the one core/api's own envelope
+// carries for the same error. A client then tells an add-on license refusal
+// (addon_requires_license) from a role refusal (forbidden) by the code, without
+// reading the sentence. The fallback is 500 with the code "internal", as on
+// core/api. ok is StoreErrorStatus's.
+func StoreErrorBody(err error) (status int, body map[string]any, ok bool) {
+	status, code, message, ok := storeErrorAnswer(err)
+	return status, map[string]any{"error": map[string]string{"code": code, "message": message}}, ok
+}
+
+// storeErrorAnswer is the one decision behind StoreErrorStatus and StoreErrorBody.
+func storeErrorAnswer(err error) (status int, code, message string, ok bool) {
 	if err == nil {
 		// A nil error is not this function's business — every mapper in the family
 		// answers it 200 with an empty body in its own first arm, which is a writing
 		// decision and not a mapping one. Reaching here with nil is a caller bug, so
 		// it fails closed rather than manufacturing a success.
-		return http.StatusInternalServerError, "internal error", false
+		return http.StatusInternalServerError, "internal", "internal error", false
 	}
 	if errors.Is(err, store.ErrCursorWithSort) || errors.Is(err, store.ErrUnknownEntity) {
 		// ⚠ A MEASURED DIVERGENCE THAT IS DELIBERATELY *NOT* RESOLVED HERE, named so
@@ -84,21 +100,21 @@ func StoreErrorStatus(err error) (status int, message string, ok bool) {
 		// modules tree would notice. Picking the right answer is a semantic decision
 		// about what the sentinel MEANS, and it belongs to whoever splits the two
 		// producers apart — not to the session that centralized the mapping.
-		return http.StatusBadRequest, "invalid query", true
+		return http.StatusBadRequest, "bad_request", "invalid query", true
 	}
 	if addon, operation, isRefusal := license.AddonRefusal(err); isRefusal {
-		return http.StatusForbidden, AddonRefusalMessage(addon, operation), true
+		return http.StatusForbidden, "addon_requires_license", AddonRefusalMessage(addon, operation), true
 	}
-	status, code := statusFor(err)
+	status, code = statusFor(err)
 	msg, known := moduleErrorMessage[code]
 	if !known {
 		// Deliberately closed: a code with no sentence here is one the module family
 		// has never been able to receive, or one nobody has decided a wording for.
 		// Inventing a humanized form of the code (which writeError does for its
 		// honest-seam band) would put an unreviewed sentence in front of a customer.
-		return http.StatusInternalServerError, "internal error", false
+		return http.StatusInternalServerError, "internal", "internal error", false
 	}
-	return status, msg, true
+	return status, code, msg, true
 }
 
 // moduleErrorMessage is the module envelope's sentence for each statusFor code a

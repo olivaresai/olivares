@@ -268,6 +268,7 @@ STUB
 
 # ship FORMAT: lay down the files that package format installs.
 ship() {
+	cp "$root/packaging/service/migrate-agentops-dropin.sh" "$box/usr/share/olivares/migrate-agentops-dropin.sh"
 	case "$1" in
 	deb | rpm)
 		mkdir -p "$box/usr/lib/systemd/system"

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { groupOf } from './session-groups'
 import {
   useQuery,
   useQueryClient,
@@ -36,7 +37,7 @@ import {
 } from '@/features/agentops/auth-boundary'
 import { ProfilesPanel } from '@/features/agentops/profiles-panel'
 import { RunCreateDialog } from '@/features/agentops/run-create-dialog'
-import { RunStateBadge } from '@/features/agentops/run-state-badge'
+import { NewSessionDialog } from '@/features/first-hour/first-hour'
 import type { RunState } from '@/features/agentops/types'
 import { WorkspacesPanel } from '@/features/agentops/workspaces-panel'
 import { LiveDot, RelTimeLabel, useLiveStream } from '@/features/shared'
@@ -61,7 +62,7 @@ import {
   type WorkPane,
 } from './session-address'
 import { AttributionChip } from './attribution-chip'
-import { CcStateBadge } from './cc-state-badge'
+import { SessionStateBadge } from './session-state-badge'
 import {
   mergeSessions,
   primaryRun,
@@ -303,9 +304,11 @@ const RUN_STATES: RunState[] = [
   'cleaned',
 ]
 
-/** Which entrance opened this view. Both land on the SAME room and the SAME card;
- * the entrance only decides which source the list opens focused on, and whether the
- * operate affordances (launch, workspaces) are offered. */
+/** Which entrance opened this view. Both land on the SAME room, the SAME card and the
+ * same title (the sidebar has one Sessions destination, console remake 26.10); the
+ * entrance only decides which source the table opens filtered on — the operate door on
+ * launched sessions. The operate affordances (launch, workspaces) follow permissions,
+ * never the door. */
 export type SessionsEntrance = 'observe' | 'operate'
 
 /**
@@ -393,7 +396,6 @@ function Inner({
   // panels below register when they load.
   const { t: ta } = useTranslation('agentops')
   const lang = i18n.language
-  const { t: tn } = useTranslation('nav')
   const { activeTenant, can } = useAuth()
 
   const canLiveRead = can('sessions:live:read')
@@ -407,9 +409,12 @@ function Inner({
 
   const [tab, setTab] = useState('sessions')
   const [state, setState] = useState<string>(ALL)
-  const [source, setSource] = useState<string>(ALL)
+  const [source, setSource] = useState<string>(
+    entrance === 'operate' ? 'launched' : ALL,
+  )
   const [selection, setSelection] = useState<Selection | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
+  const [quickOpen, setQuickOpen] = useState(false)
   /**
    * IS THE FULL DETAIL SHEET OPEN? Selecting a session no longer opens it: the three
    * panes are where a session is READ, and the sheet is where it is OPERATED — attach,
@@ -986,19 +991,15 @@ function Inner({
     [sessions, state, source],
   )
 
-  const counts = useMemo(() => {
-    let launched = 0
-    let discovered = 0
-    let attention = 0
-    for (const s of sessions) {
-      if (s.provenance === 'launched') launched++
-      else discovered++
-      if (s.live?.cc_state === 'silent_evasion' || s.live?.unclaimed)
-        attention++
-      else if (s.runs.some((r) => r.state === 'failed')) attention++
-    }
-    return { total: sessions.length, launched, discovered, attention }
-  }, [sessions])
+  // The header's two figures (Root, 09): how many sessions, and how many run now, by the
+  // same rule as the rail's Active section.
+  const counts = useMemo(
+    () => ({
+      total: sessions.length,
+      running: sessions.filter((s) => groupOf(s) === 'active').length,
+    }),
+    [sessions],
+  )
 
   // A page that reports has_more is a page, not the estate. Provenance in THIS TABLE
   // is joined over what is loaded, so a run older than the run page would leave its
@@ -1181,8 +1182,7 @@ function Inner({
              the table to keep two 20 px badges apart. */
           return (
             <span className="flex flex-nowrap items-center gap-1">
-              {s.live && <CcStateBadge state={s.live.cc_state} />}
-              {run && <RunStateBadge state={run.state} />}
+              <SessionStateBadge run={run} live={s.live} />
               {!s.live && !run && (
                 <span className="text-muted-foreground">—</span>
               )}
@@ -1350,7 +1350,12 @@ function Inner({
     urlAddress.address && !target ? urlAddress.address : null
   useEffect(() => {
     if (!addressToClear) return
-    patchAddress({ [SESSION_PARAM]: undefined }, { history: 'replace' })
+    // The pane goes with the session it was showing: a narrow screen that opened the
+    // retired session's work returns to the list instead of an empty work pane.
+    patchAddress(
+      { [SESSION_PARAM]: undefined, [PANE_PARAM]: undefined },
+      { history: 'replace' },
+    )
   }, [addressToClear, patchAddress])
 
   /**
@@ -1401,7 +1406,17 @@ function Inner({
   /** The RAIL opens a session: the panes are the destination, no modal. */
   const abrirDelCarril = useCallback(
     (s: UnifiedSession) => {
-      patchAddress({ [SESSION_PARAM]: addressOf(s) })
+      // Below `xl` one pane is in front: opening a session from the list brings its
+      // work forward, so a phone goes list → detail in one tap (AU5-06). At `xl` the
+      // panes sit side by side and the pane in the address is left as it is.
+      const narrow =
+        typeof window !== 'undefined' &&
+        typeof window.matchMedia === 'function' &&
+        !window.matchMedia('(min-width: 80rem)').matches
+      patchAddress({
+        [SESSION_PARAM]: addressOf(s),
+        ...(narrow ? { [PANE_PARAM]: 'narrative' } : {}),
+      })
     },
     [patchAddress],
   )
@@ -1460,18 +1475,26 @@ function Inner({
   // tab follows that permission, and the panel checks write/admin at each control.
   const showProfiles = can('sessions:profile:read')
   const canBindingRead = can('sessions:profile-binding:read')
-  const title = entrance === 'operate' ? t('operateTitle') : t('title')
-  const subtitle =
-    entrance === 'operate' ? t('operateSubtitle') : t('unifiedSubtitle')
+  const title = t('title')
   const loadingCounts = liveQuery.isLoading || runsQuery.isLoading
-  const countText = loadingCounts
-    ? ''
-    : [
-        `${formatInt(counts.total, lang)} ${t('summary.total')}`,
-        `${originUnknown ? '—' : formatInt(counts.launched, lang)} ${t('summary.launched')}`,
-        `${originUnknown ? '—' : formatInt(counts.discovered, lang)} ${t('summary.discovered')}`,
-        `${formatInt(counts.attention, lang)} ${t('summary.attention')}`,
-      ].join(' · ')
+  // Without the run half a launched session's state is not known, so "running" is left
+  // out rather than guessed from the observed half; the partial notice says which half.
+  // No sessions: the empty state says it; a "0 sessions · 0 running" line above it says
+  // nothing more (CLX, Root 2026-10-02).
+  const countText =
+    loadingCounts || counts.total === 0
+      ? ''
+      : [
+          t('summary.sessions', {
+            count: counts.total,
+            n: formatInt(counts.total, lang),
+          }),
+          originUnknown
+            ? null
+            : t('summary.running', { n: formatInt(counts.running, lang) }),
+        ]
+          .filter(Boolean)
+          .join(' · ')
 
   return (
     /* WORK MODE. `min-h-0` and `flex-1` so this screen DIVIDES the viewport
@@ -1503,24 +1526,12 @@ function Inner({
           <PageHeader
             className="min-w-0"
             actionsPanelAnchor="row"
-            icon={entrance === 'operate' ? Terminal : Activity}
+            icon={Activity}
             title={title}
             description={
-              <>
-                {subtitle}
-                {countText ? (
-                  <>
-                    {' '}
-                    <span data-testid="sessions-summary">
-                      {countText}
-                      {' · '}
-                      <span data-testid="sessions-scope-note">
-                        {tn('workspace.tenantWide')}
-                      </span>
-                    </span>
-                  </>
-                ) : null}
-              </>
+              countText ? (
+                <span data-testid="sessions-summary">{countText}</span>
+              ) : undefined
             }
             actions={
               <div className="flex items-center gap-2">
@@ -1553,7 +1564,7 @@ function Inner({
                 <Button
                   variant="primary"
                   size="sm"
-                  onClick={() => setCreateOpen(true)}
+                  onClick={() => setQuickOpen(true)}
                 >
                   <Plus className="size-3.5" />
                   {t('launch')}
@@ -1668,7 +1679,7 @@ function Inner({
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCreateOpen(true)}
+                    onClick={() => setQuickOpen(true)}
                   >
                     <Plus className="size-3.5" />
                     {t('launch')}
@@ -1751,11 +1762,34 @@ function Inner({
               stickyHeader
               label={t('title')}
               empty={
-                <EmptyState
-                  icon={<Activity />}
-                  title={t('empty.title')}
-                  description={t('empty.description')}
-                />
+                /* Sessions exist and only the filters hide them (the operate door opens
+                   on launched ones): say so and offer the way back, never "no sessions
+                   yet" over a list that is not empty. */
+                sessions.length > 0 ? (
+                  <EmptyState
+                    icon={<Activity />}
+                    title={t('common:states.noResults')}
+                    description={t('common:states.noResultsHint')}
+                    action={
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => {
+                          setSource(ALL)
+                          setState(ALL)
+                        }}
+                      >
+                        {t('common:ui.state.filtered.clear')}
+                      </Button>
+                    }
+                  />
+                ) : (
+                  <EmptyState
+                    icon={<Activity />}
+                    title={t('empty.title')}
+                    description={t('empty.description')}
+                  />
+                )
               }
             />
           </TabsContent>
@@ -1797,6 +1831,14 @@ function Inner({
         </div>
       </Tabs>
 
+      <NewSessionDialog
+        open={quickOpen}
+        onOpenChange={setQuickOpen}
+        onAdvanced={() => {
+          setQuickOpen(false)
+          setCreateOpen(true)
+        }}
+      />
       <RunCreateDialog open={createOpen} onOpenChange={setCreateOpen} />
       <SessionCard
         open={detailOpen}

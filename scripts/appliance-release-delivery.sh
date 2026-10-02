@@ -62,7 +62,7 @@ done
 case "$version" in
 '' | 0.0.0-dev) die "VERSION must be the release's X.Y.Z, not '${version:-<empty>}'" ;;
 esac
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "VERSION is X.Y.Z, not '$version'"
+[[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || die "VERSION is X.Y.Z, not '$version'"
 [[ "$expected_sha256" =~ ^[0-9a-f]{64}$ ]] || die "--expected-sha256 must be 64 lowercase hex"
 for tool in go docker gpg gpgconf python3 jq sha256sum; do
 	command -v "$tool" >/dev/null 2>&1 || die "$tool is not on PATH"

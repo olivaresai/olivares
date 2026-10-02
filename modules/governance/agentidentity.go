@@ -6,7 +6,6 @@ package governance
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -41,8 +40,7 @@ type AgentRegistration struct {
 // sponsor. Deny-closed: no sponsor → 400. Subsystem G.
 func (m *Module) handleRegisterAgent(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	var in AgentRegistration
-	dec := json.NewDecoder(r.Body)
-	if err := dec.Decode(&in); err != nil || dec.More() {
+	if err := api.DecodeRequestBody(w, r, &in, api.RequestBodySpec{AllowUnknownFields: true}); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
 		return
 	}

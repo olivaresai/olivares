@@ -87,7 +87,7 @@ const moves: Array<[string, () => void]> = [
     'new-session credential',
     () =>
       useSessionStore.getState().setSession({
-        token: 'olvs_next',
+        csrfToken: 'olvs_next',
         sessionId: `sid-${Date.now()}`,
         expiresAt: EXP,
       }),
@@ -97,7 +97,7 @@ const moves: Array<[string, () => void]> = [
     () => {
       const before = useSessionStore.getState().sessionId
       useSessionStore.getState().setSession({
-        token: `olvs_rotated_${++rotations}`,
+        csrfToken: `olvs_rotated_${++rotations}`,
         sessionId: SID,
         expiresAt: EXP,
       })
@@ -109,7 +109,7 @@ const moves: Array<[string, () => void]> = [
 /** Every key of the provider room is partitioned by an OPAQUE number, and no key in the
  *  cache carries the bearer or the session id. */
 function expectOpaqueKeys(qc: QueryClient) {
-  const { token, sessionId } = useSessionStore.getState()
+  const { csrfToken: token, sessionId } = useSessionStore.getState()
   const keys = qc
     .getQueryCache()
     .findAll()
@@ -157,7 +157,7 @@ beforeEach(() => {
   auth.principal = 'u1'
   auth.perms = new Set(['sessions:account:read', 'sessions:account:write'])
   useSessionStore.setState({
-    token: 'olvs_first',
+    csrfToken: 'olvs_first',
     sessionId: SID,
     expiresAt: EXP,
   })
@@ -242,16 +242,20 @@ describe('an adoption submitted under a moved boundary', () => {
       const user = userEvent.setup()
       const { qc, rerender } = wrap()
       await user.click(
-        await screen.findByRole('button', { name: 'Adopt a profile' }),
+        await screen.findByRole('button', {
+          name: 'Name a profile as an account',
+        }),
       )
       const dialog = await screen.findByRole('dialog', {
-        name: 'Adopt a provider profile',
+        name: 'Name a profile as an account',
       })
       await user.type(
         within(dialog).getByRole('textbox', { name: 'Profile reference' }),
         'ppf_b',
       )
-      await user.click(within(dialog).getByRole('button', { name: 'Adopt' }))
+      await user.click(
+        within(dialog).getByRole('button', { name: 'Name as account' }),
+      )
       await waitFor(() => expect(api.adoptAccount).toHaveBeenCalledOnce())
 
       act(() => {

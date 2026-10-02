@@ -237,10 +237,10 @@ func TestMCPPinsEnterprisePendingIsClearGenericError(t *testing.T) {
 	if err == nil {
 		t.Fatal("community 501 must fail")
 	}
-	if got := exitcode.From(err); got != exitcode.Err {
-		t.Fatalf("exit code = %d, want generic %d: %v", got, exitcode.Err, err)
+	if got := exitcode.From(err); got != exitcode.Edition {
+		t.Fatalf("exit code = %d, want %d: %v", got, exitcode.Edition, err)
 	}
-	if !strings.Contains(err.Error(), "enterprise add-on") {
+	if !strings.Contains(err.Error(), "Business feature") {
 		t.Fatalf("501 error is not actionable: %q", err)
 	}
 }

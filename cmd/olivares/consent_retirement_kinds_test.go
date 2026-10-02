@@ -18,6 +18,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/eventing"
@@ -323,7 +324,7 @@ var retirementSeeders = map[string]retirementSeeder{
 			`","period":"monthly","period_start":"","period_end":"","has_period_bounds":false,"action":"block","membership":[]}]`
 		return e.seedFenced(e.tT, "finops.attempt", attemptRecord(attemptBinding(model.NewID()), targets), s.id)
 	}},
-	"compliance.legal_hold.subject_ref": {"compliance.legal_hold", retireKeeps, func(e *consentEstate, s retirementSubject) model.ID {
+	"compliance.legal_hold.subject_ref": {"compliance.legal_hold", retireBlocks, func(e *consentEstate, s retirementSubject) model.ID {
 		return e.seedFenced(e.tT, "compliance.legal_hold", model.Record{
 			"matter_ref": "matter-" + s.id.String(), "scope_kind": "subject", "subject_kind": "user",
 			"subject_ref": "user:" + s.id.String(), "reason": "test", "status": "active", "created_by": "test",
@@ -331,10 +332,56 @@ var retirementSeeders = map[string]retirementSeeder{
 	}},
 }
 
+// queuedRunNaming retains the account through exactly one queued-launch column.
+// A still-pending launch blocks retirement until it is declined or stopped.
+func queuedRunNaming(e *consentEstate, column string, subject retirementSubject) model.Record {
+	e.t.Helper()
+	rec := model.Record{
+		"run_ref": model.NewID().String(), "transport": "stream-json", "permission_mode": "default",
+		"isolation": "native", "state": "waiting_approval", "last_event_seq": int64(0),
+	}
+	switch column {
+	case "queued_user_id":
+		rec[column] = subject.id.String()
+	case "queued_actor":
+		rec[column], rec["queued_actor_kind"] = "user:"+subject.id.String(), "user"
+	case "queued_credential_id":
+		credential, err := auth.NewCredential(auth.PrefixToken)
+		if err != nil {
+			e.t.Fatal(err)
+		}
+		ctx := context.Background()
+		if err := e.eng.store.AuthMutate(ctx, func(as store.AuthScope) error {
+			token, err := as.Tokens().Create(ctx, model.APIToken{
+				Name: "queued-launch", UserID: subject.id, BoundTenantID: e.tT,
+				Role: auth.RoleViewer, Selector: credential.Selector, SecretHash: credential.SecretHash,
+			})
+			if err == nil {
+				rec[column], rec["queued_credential_kind"] = token.ID.String(), "token"
+			}
+			return err
+		}); err != nil {
+			e.t.Fatalf("seed the queued launch credential: %v", err)
+		}
+	default:
+		e.t.Fatalf("a queued launch names no account through %s", column)
+	}
+	return rec
+}
+
 // sessionsSeeders are the communication rows a cmd test can seed without a full
 // message graph; messagingSeeders holds the rest, which need an activated
 // communication kernel.
 var sessionsSeeders = map[string]retirementSeeder{
+	"sessions.run.queued_user_id": {"sessions.run", retireBlocks, func(e *consentEstate, s retirementSubject) model.ID {
+		return e.seedFenced(e.tT, "sessions.run", queuedRunNaming(e, "queued_user_id", s), s.id)
+	}},
+	"sessions.run.queued_actor": {"sessions.run", retireBlocks, func(e *consentEstate, s retirementSubject) model.ID {
+		return e.seedFenced(e.tT, "sessions.run", queuedRunNaming(e, "queued_actor", s), s.id)
+	}},
+	"sessions.run.queued_credential_id": {"sessions.run", retireBlocks, func(e *consentEstate, s retirementSubject) model.ID {
+		return e.seedFenced(e.tT, "sessions.run", queuedRunNaming(e, "queued_credential_id", s), s.id)
+	}},
 	"sessions.channel_grant.subject_ref": {"sessions.channel_grant", retireRevokes, func(e *consentEstate, s retirementSubject) model.ID {
 		workspace, channel := e.seedChannel(e.tT, "grant-"+s.id.String())
 		return e.seedFenced(e.tT, "sessions.channel_grant", model.Record{

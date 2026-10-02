@@ -18,8 +18,9 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ApiError } from '@/lib/api/errors'
 import './i18n'
 
+const auth = vi.hoisted(() => ({ isSuperadmin: false }))
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ activeTenant: 't1', can: () => true }),
+  useAuth: () => ({ activeTenant: 't1', can: () => true, ...auth }),
 }))
 
 const toastSpy = {
@@ -66,6 +67,7 @@ function montar() {
 beforeEach(() => {
   toastSpy.success.mockReset()
   toastSpy.error.mockReset()
+  toastSpy.warning.mockReset()
   bundleMock.mockReset().mockResolvedValue({ signed: true })
   postureMock.mockReset().mockResolvedValue({})
   riskMock.mockReset().mockResolvedValue({})
@@ -90,6 +92,66 @@ describe('los tres informes enterprise', () => {
       await within(fila).findByRole('button', { name: /Request/i }),
     )
     await waitFor(() => expect(bundleMock).toHaveBeenCalled())
+  })
+
+  it('an unsigned bundle says so and never reads as signed (EU-04)', async () => {
+    bundleMock.mockResolvedValue({
+      signature: { signed: false, reason: 'no signing key configured' },
+    })
+    const user = userEvent.setup()
+    montar()
+    const fila = (await screen.findByText('Evidence bundle')).closest('div')
+      ?.parentElement as HTMLElement
+    await user.click(
+      await within(fila).findByRole('button', { name: /Request/i }),
+    )
+    expect(
+      await within(fila).findByText(
+        'Downloaded, not signed: no signing key configured.',
+      ),
+    ).toBeInTheDocument()
+    expect(toastSpy.warning).toHaveBeenCalledWith(
+      'Downloaded, not signed: no signing key configured.',
+    )
+    expect(toastSpy.success).not.toHaveBeenCalled()
+    expect(within(fila).queryByText(/^Signed/)).toBeNull()
+  })
+
+  it('a system administrator is offered Report signing from the unsigned line', async () => {
+    auth.isSuperadmin = true
+    bundleMock.mockResolvedValue({
+      signature: { signed: false, reason: 'no signing key configured' },
+    })
+    const user = userEvent.setup()
+    montar()
+    const fila = (await screen.findByText('Evidence bundle')).closest('div')
+      ?.parentElement as HTMLElement
+    await user.click(
+      await within(fila).findByRole('button', { name: /Request/i }),
+    )
+    expect(
+      await within(fila).findByRole('link', {
+        name: 'Report signing settings',
+      }),
+    ).toHaveAttribute('href', '/settings?section=signing')
+    auth.isSuperadmin = false
+  })
+
+  it('a signed bundle says signed only because the engine said so', async () => {
+    bundleMock.mockResolvedValue({ signature: { signed: true } })
+    const user = userEvent.setup()
+    montar()
+    const fila = (await screen.findByText('Evidence bundle')).closest('div')
+      ?.parentElement as HTMLElement
+    await user.click(
+      await within(fila).findByRole('button', { name: /Request/i }),
+    )
+    expect(
+      await within(fila).findByText('Signed with the configured key.'),
+    ).toBeInTheDocument()
+    expect(toastSpy.success).toHaveBeenCalledWith(
+      'Bundle downloaded and signed.',
+    )
   })
 
   /**

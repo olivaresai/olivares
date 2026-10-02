@@ -26,7 +26,8 @@
     "docs": "Doku",
     "enabled": "Aktiviert",
     "unset": "Nicht gesetzt",
-    "listPlaceholder": "kommagetrennte Werte"
+    "listPlaceholder": "kommagetrennte Werte",
+    "objectListInvalid": "Gib eine JSON-Liste von Objekten ein, zum Beispiel [{\"source\": \"github\", \"repo\": \"your-org/*\"}]."
   },
   "panel": {
     "guided": "Geführt",

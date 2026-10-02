@@ -9,6 +9,7 @@ import (
 	"errors"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -59,6 +60,12 @@ func (a *Authenticator) GroupMappingAvailable() bool { return a.groupMapper != n
 // binding answers ErrUnauthenticated, like any refused assertion, and leaves one audit
 // record. The global/"" scope is the deployment's own provider and is not bound.
 func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, ip string, tenant model.TenantID, scimAuthoritative bool) (string, model.AuthSession, error) {
+	if id.AAL != 0 && id.AAL != AAL1 && id.AAL != AAL2 {
+		return "", model.AuthSession{}, ErrUnauthenticated
+	}
+	if id.AAL == AAL2 && id.Protocol != ProtocolOIDC && id.Protocol != ProtocolSAML {
+		return "", model.AuthSession{}, ErrUnauthenticated
+	}
 	// the network allow-list applies to EVERY login, so an SSO completion from
 	// a peer outside the configured CIDRs is refused BEFORE the local user is found or
 	// JIT-provisioned. require-SSO is NOT consulted here: this IS the SSO path it exists
@@ -96,11 +103,6 @@ func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, i
 		a.auditLoginBlocked(ctx, "user:"+user.ID.String(), ip, "sso_into_superadmin_refused")
 		return "", model.AuthSession{}, ErrUnauthenticated
 	}
-	// A federated login is AAL1 here regardless of how the IdP authenticated:
-	// this engine verified only the assertion, not the authenticator, and the
-	// assurance claim is never inflated beyond what was verified first-party
-	// (SP 800-63-4 defines no acr/amr conveyance mapping to trust instead).
-	//
 	// R5 (ROOT-R5-SSO-COMPLETION-1): the session is issued FIRST and its whole AuthMutate
 	// is awaited. The new-session commit under the login capability lock is the admission
 	// point, so a refused session (for example ErrLoginEnforcementComponentAbsent) returns
@@ -113,9 +115,56 @@ func (a *Authenticator) CompleteSSO(ctx context.Context, id FederatedIdentity, i
 	if isTenantScope(tenant) {
 		scope = tenant
 	}
-	token, sess, err := a.mintSession(ctx, attempt, user, scope, "sso.login", federatedLogin, nil, nil, nil)
+	var methods []string
+	authenticatedAt := model.NewTimestamp(id.AuthenticatedAt.UTC().Truncate(time.Microsecond))
+	assuranceUntil := model.NewTimestamp(authenticatedAt.Time().Add(StepUpTTL))
+	now := a.clock.Now()
+	if id.AAL == AAL2 && validAuthenticationInstant(authenticatedAt.Time()) &&
+		!authenticatedAt.Time().After(now.Time()) && now.Before(assuranceUntil) {
+		methods = []string{"mfa"}
+	}
+	token, sess, err := a.mintSession(ctx, attempt, user, scope, "sso.login", federatedLogin, methods, nil, nil)
 	if err != nil {
 		return "", model.AuthSession{}, err
+	}
+	// Admission stays in the shared mintSession path. Verified upstream assurance
+	// is persisted before this function exposes the opaque credential; a failed
+	// write exposes no token and performs no subsequent completion effects.
+	if len(methods) != 0 {
+		err = a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+			current, err := as.Sessions().Get(ctx, sess.ID)
+			if err != nil {
+				return err
+			}
+			now := a.clock.Now()
+			if current.Revoked || current.DeletedAt != nil || !now.Before(current.ExpiresAt) {
+				return ErrUnauthenticated
+			}
+			if !now.Before(assuranceUntil) {
+				return nil // upstream proof expired while admission was waiting
+			}
+			until := assuranceUntil
+			if current.ExpiresAt.Before(until) {
+				until = current.ExpiresAt
+			}
+			current.AAL, current.AALAuthenticatedAt, current.AALExpiresAt = AAL2, &authenticatedAt, &until
+			updated, err := as.Sessions().Update(ctx, current)
+			if err != nil {
+				return err
+			}
+			_, err = as.Audit().Append(ctx, model.AuditDraft{
+				Actor: "user:" + user.ID.String(), ActorKind: model.ActorUser,
+				Action: "sso.assurance", TargetKind: "core.auth_session", TargetID: current.ID,
+				Meta: map[string]any{"aal": AAL2},
+			})
+			if err == nil {
+				sess = updated
+			}
+			return err
+		})
+		if err != nil {
+			return "", model.AuthSession{}, err
+		}
 	}
 	// Completion effects of the admitted login run in their own best-effort transactions:
 	// they are not atomic with issuance, and a failure never revokes the issued session.
@@ -472,6 +521,21 @@ func (a *Authenticator) bindSubjectIfUnset(ctx context.Context, userID model.ID,
 // admits on its own.
 func (a *Authenticator) reconcileAssertedGroups(ctx context.Context, userID model.ID, tenant model.TenantID, asserted []string) {
 	_ = a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		// Session issuance and completion are separate transactions: pin and
+		// recheck standing so a late assertion cannot restore offboarded rows.
+		if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {
+			return err
+		}
+		if _, member, err := membershipOf(ctx, as, userID, tenant); err != nil {
+			return err
+		} else if !member {
+			return ErrConsentRequired
+		}
+		if excluded, err := subjectExcluded(ctx, as, tenant, userID); err != nil {
+			return err
+		} else if excluded {
+			return ErrRetirementPending
+		}
 		// The tenant's directory groups (auth rows share the system tenant; the
 		// target_tenant_id column isolates one tenant's groups from another's).
 		groups, err := drainList(ctx, as.Groups().List, byEq("target_tenant_id", tenant.String(), 0))

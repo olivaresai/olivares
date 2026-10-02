@@ -45,13 +45,14 @@ const ProviderOperated = "olivares"
 
 // sessions.claim columns.
 const (
-	colClaimSID     = "sid"
-	colHolder       = "holder"
-	colFence        = "fence"
-	colClaimState   = "claim_state"
-	colLeaseExpires = "lease_expires_at"
-	colClaimedAt    = "claimed_at"
-	colRenewedAt    = "renewed_at"
+	colClaimSID         = "sid"
+	colHolder           = "holder"
+	colFence            = "fence"
+	colClaimState       = "claim_state"
+	colLeaseExpires     = "lease_expires_at"
+	colClaimedAt        = "claimed_at"
+	colRenewedAt        = "renewed_at"
+	colClaimWorkspaceID = "workspace_id"
 )
 
 // Claim states. `expired` is DURABLE and ONE-WAY (F5): once anybody observes a
@@ -118,6 +119,7 @@ func (m *Module) registerClaimSchema(reg store.ExtensionRegistry) error {
 	return reg.Register(model.EntityDescriptor{
 		Kind:                   claimKind,
 		Table:                  claimTable,
+		WorkspaceLineage:       model.WorkspaceLineageSpec{Column: colClaimWorkspaceID, Encoding: model.WorkspaceLineageID, Unset: model.WorkspaceUnsetHidden},
 		AuthorizationFact:      true,
 		AuthorizationLockOrder: 40,
 		AuthorizationLeaseFence: model.AuthorizationLeaseFenceSpec{
@@ -128,10 +130,11 @@ func (m *Module) registerClaimSchema(reg store.ExtensionRegistry) error {
 			DeadlineColumn: colLeaseExpires,
 		},
 		Fields: []model.FieldSpec{
+			{Name: colClaimWorkspaceID, Kind: model.KindUUID, Nullable: true, Principal: model.None("the canonical session core workspace, never an account: managed_stop_lineage.go:40, claim.go:221")},
 			{Name: colClaimSID, Kind: model.KindText, Principal: pdeclNoneSID},
 			{Name: colHolder, Kind: model.KindText, Principal: pdeclClaimHolder},
 			{Name: colFence, Kind: model.KindInt},
-			{Name: colClaimState, Kind: model.KindText, Indexed: true, Principal: model.None("a claim state, a closed set: claim.go:62-64, claim.go:842")},
+			{Name: colClaimState, Kind: model.KindText, Indexed: true, Principal: model.None("a claim state, a closed set: claim.go:63-65, claim.go:866")},
 			{Name: colLeaseExpires, Kind: model.KindTimestamp, Indexed: true},
 			{Name: colClaimedAt, Kind: model.KindTimestamp},
 			{Name: colRenewedAt, Kind: model.KindTimestamp, Nullable: true},
@@ -188,20 +191,36 @@ func (m *Module) Claim(ctx context.Context, tenant model.TenantID, sid, holder s
 		if err != nil {
 			return err
 		}
+		// The run and its claim derive the same core lineage from the canonical
+		// identity. Unknown/merged identities prove none; historical NULL stays
+		// hidden until this authorized acquire/renew can resolve it.
+		workspace, werr := resolveRunAuthzWorkspace(ctx, sc, sid)
+		if werr != nil && !errors.Is(werr, errRunWorkspaceUnresolved) {
+			return werr
+		}
+		if found && !workspace.IsZero() {
+			if previous := rec.String(colClaimWorkspaceID); previous != "" && previous != workspace.String() {
+				return errRunWorkspaceUnresolved
+			}
+		}
 		if !found {
 			state, aerr := fenceAcquire(fenceState{}, holder, now, ttl,
 				fenceTTLPolicy{Default: defaultLeaseTTL, Max: maxLeaseTTL})
 			if aerr != nil {
 				return aerr
 			}
-			created, cerr := repo.Create(ctx, model.Record{
+			newClaim := model.Record{
 				colClaimSID:     sid,
 				colHolder:       state.Holder,
 				colFence:        state.Fence,
 				colClaimState:   claimActive,
 				colLeaseExpires: model.NewTimestamp(state.ExpiresAt).String(),
 				colClaimedAt:    model.NewTimestamp(state.AcquiredAt).String(),
-			})
+			}
+			if !workspace.IsZero() {
+				newClaim[colClaimWorkspaceID] = workspace.String()
+			}
+			created, cerr := repo.Create(ctx, newClaim)
 			if cerr != nil {
 				return cerr
 			}
@@ -260,6 +279,11 @@ func (m *Module) Claim(ctx context.Context, tenant model.TenantID, sid, holder s
 				return aerr
 			}
 			applyClaimFenceState(rec, state)
+		}
+		// Stamp only a successful acquisition/renewal. A refused exhausted
+		// takeover commits its expiry alone, not a new lineage grant.
+		if !workspace.IsZero() {
+			rec[colClaimWorkspaceID] = workspace.String()
 		}
 		updated, uerr := repo.Update(ctx, rec)
 		if uerr != nil {
@@ -1093,3 +1117,12 @@ var (
 	// nothing its role and grants do not, so it is kept as evidence.
 	pdeclClaimHolder = model.Ref(model.EncodeUserRef, model.ClassEvidence)
 )
+
+// ApprovalStatus only observes a queued decision. It grants no launch authority.
+func (a *ClaimAdmission) ApprovalStatus(ctx context.Context, tenant model.TenantID, intent LaunchIntent, ref string) (string, error) {
+	reader, ok := a.inner.(LaunchApprovalReader)
+	if !ok {
+		return "", errors.New("launch approval status reader is unavailable")
+	}
+	return reader.ApprovalStatus(ctx, tenant, intent, ref)
+}

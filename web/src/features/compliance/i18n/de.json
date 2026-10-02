@@ -179,6 +179,8 @@
     "noAccessHint": "Aufbewahrungspläne legen fest, wie lange jede Datensatzklasse aufbewahrt wird. Bitten Sie eine Administratorin um die Leseberechtigung für Aufbewahrung.",
     "sweepNow": "Lauf starten",
     "gateHint": "Ein Plan ist ein Dokument, bis ein Mensch seine Löschung genehmigt. Das Speichern löscht nie Daten; ein Lauf tut es.",
+    "notRunning": "Die Aufbewahrung läuft nicht: Diese Datenbank kann nicht alle Mandanten auflisten.",
+    "notRunningHow": "So aktivieren Sie sie",
     "noClasses": "Die Engine hat keine Datenklassen zurückgegeben",
     "noClassesHint": "Das Klassenregister ist in der Engine fest hinterlegt: Eine leere Liste bedeutet daher keinen leeren Mandanten, sondern dass diese Antwort nicht als Register gelesen werden konnte. Neu laden und melden, falls es bestehen bleibt.",
     "disposition": {

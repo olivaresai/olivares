@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useQuery } from '@tanstack/react-query'
 import { Building2, Check, ChevronsUpDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -12,11 +11,9 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { systemApi } from '@/lib/api/endpoints'
-import { queryKeys } from '@/lib/api/query'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
-import { shortId } from './tenant-label'
+import { grantName, shortId, useOrgs } from './tenant-label'
 
 interface TenantOption {
   tenant: string
@@ -34,12 +31,7 @@ export function TenantSwitcher({ className }: { className?: string } = {}) {
   const { t } = useTranslation(['auth', 'common'])
   const { grants, activeTenant, setActiveTenant, isSuperadmin } = useAuth()
 
-  const orgs = useQuery({
-    queryKey: queryKeys.orgs,
-    queryFn: () => systemApi.listOrgs(),
-    enabled: isSuperadmin,
-    staleTime: 60_000,
-  })
+  const orgs = useOrgs()
 
   const options: TenantOption[] =
     isSuperadmin && orgs.data
@@ -50,7 +42,7 @@ export function TenantSwitcher({ className }: { className?: string } = {}) {
         }))
       : grants.map((g) => ({
           tenant: g.tenant,
-          label: shortId(g.tenant),
+          label: grantName(grants, g.tenant) ?? shortId(g.tenant),
           sub: t(`auth:roles.${g.role}`, { defaultValue: String(g.role) }),
         }))
 

@@ -137,7 +137,7 @@ do not currently carry a production SLO target.
   dual-control approvals; audited break-glass; graduated estate kill switch with
   structural two-person re-enable.
 - **Supply chain:** signed releases (cosign), SBOM + SLSA Build L3 (SLSA v1.2) provenance + OpenVEX,
-  reproducible build (`task build:repro`), distroless non-root images.
+  reproducible build (`task build:repro`), non-root images on a digest-pinned Debian 13 slim base.
 
 ## 6. Integration surface (what plugs into your stack)
 

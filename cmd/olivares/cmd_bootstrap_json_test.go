@@ -135,7 +135,7 @@ func TestAuthLoginTextUnchangedAndJSONReportsTheTenantItSelected(t *testing.T) {
 	if err != nil {
 		t.Fatalf("auth login: %v\n%s", err, errOut)
 	}
-	assertExactStdout(t, "auth login", out, "login validated; current context set to \"local\"\n")
+	assertExactStdout(t, "auth login", out, "Saved as context \"local\". The next commands use it.\n")
 	// `main` anadio DESPUES de escribirse este test el aviso de que `--token` deja el bearer en la
 	// tabla de procesos y en el historial. Es una mejora deliberada de seguridad: el test la
 	// ESPERA en vez de silenciarla, y sigue exigiendo que no aparezca NADA MAS en stderr.
@@ -478,7 +478,7 @@ func TestConnectorInitJSONCarriesTheFactAndKeepsTheAdviceOffStdout(t *testing.T)
 // ---------------------------------------------------------------- db init
 
 func TestDBInitPrintSQLTextUnchangedAndJSONCarriesEveryStep(t *testing.T) {
-	out, errOut, err := execRoot(t, "db", "init", "--print-sql", "--app-role", "olivares_app", "--database", "olivares")
+	out, errOut, err := execRoot(t, "db", "init", "--print-sql", "--app-role", "olivares_app", "--owner-role", "", "--database", "olivares")
 	if err != nil {
 		t.Fatalf("db init --print-sql: %v\n%s", err, errOut)
 	}
@@ -494,7 +494,7 @@ func TestDBInitPrintSQLTextUnchangedAndJSONCarriesEveryStep(t *testing.T) {
 		t.Fatalf("the preview banner changed:\n%s", out)
 	}
 
-	out, errOut, err = execRoot(t, "db", "init", "--print-sql", "--app-role", "olivares_app", "--database", "olivares", "-o", "json")
+	out, errOut, err = execRoot(t, "db", "init", "--print-sql", "--app-role", "olivares_app", "--owner-role", "", "--database", "olivares", "-o", "json")
 	if err != nil {
 		t.Fatalf("db init --print-sql -o json: %v\n%s", err, errOut)
 	}
@@ -595,13 +595,14 @@ func l3RunRenderer(t *testing.T, output string, fn func(*cobra.Command) error) (
 	return out.String(), errOut.String()
 }
 
-func TestDBInitProvisionedTextUnchangedAndJSONMirrorsEveryVerification(t *testing.T) {
+// Rule 1 (RM, 2026-10-02): a db init run without --data-dir is a 26.10.0 run, and its
+// text stays 26.10.0's byte for byte — the setup flows read these three spellings.
+func TestDBInitProvisionedTextUnchangedFrom26100(t *testing.T) {
 	spec, res := l3ProvisionFixture(true, true)
-
 	text, _ := l3RunRenderer(t, "", func(cmd *cobra.Command) error {
-		return renderDBInitResult(cmd, spec, res)
+		return renderDBInitResult(cmd, spec, res, "")
 	})
-	assertExactStdout(t, "db init (provisioned)", text,
+	assertExactStdout(t, "db init (provisioned, 26.10.0 invocation)", text,
 		"provisioned database \"olivares\" with 2 step(s):\n"+
 			"  • application role\n"+
 			"  • application database\n"+
@@ -614,9 +615,27 @@ func TestDBInitProvisionedTextUnchangedAndJSONMirrorsEveryVerification(t *testin
 			"  --owner-dsn=file:/etc/olivares/secrets/owner.dsn  # postgres://olivares_owner@db:5432/olivares?sslmode=verify-full\n"+
 			"  --admin-dsn=file:/etc/olivares/secrets/admin.dsn  # postgres://olivares_admin@db:5432/olivares?sslmode=verify-full\n"+
 			"`olivares setup` writes these files and the env file for you.\n")
+}
+
+func TestDBInitProvisionedNextRunsQuickstartAndJSONMirrorsEveryVerification(t *testing.T) {
+	spec, res := l3ProvisionFixture(true, true)
+
+	text, _ := l3RunRenderer(t, "", func(cmd *cobra.Command) error {
+		return renderDBInitResult(cmd, spec, res, "/tmp/db-init-render-fixture")
+	})
+	assertExactStdout(t, "db init (provisioned)", text,
+		"provisioned database \"olivares\" with 2 step(s):\n"+
+			"  • application role\n"+
+			"  • application database\n"+
+			"\nverification (reconnected as each provisioned role):\n"+
+			"  app  : olivares_app — OK — NOSUPERUSER NOBYPASSRLS (RLS-safe)\n"+
+			"  owner: olivares_owner — OK — NOSUPERUSER NOBYPASSRLS (RLS-safe)\n"+
+			"  admin: olivares_admin — OK — BYPASSRLS, NOSUPERUSER (cross-tenant admin pool)\n"+
+			"\nPostgreSQL connection: sslmode=verify-full. Credentials saved privately.\n"+
+			"Next: olivares quickstart --data-dir '/tmp/db-init-render-fixture'\n")
 
 	doc, _ := l3RunRenderer(t, "json", func(cmd *cobra.Command) error {
-		return renderDBInitResult(cmd, spec, res)
+		return renderDBInitResult(cmd, spec, res, "/tmp/db-init-render-fixture")
 	})
 	assertJSONKeys(t, "db init (provisioned)", mustJSONObject(t, "db init (provisioned)", doc),
 		"preview", "database", "steps", "executed", "verification",
@@ -662,14 +681,14 @@ func TestDBInitJSONSaysWhenAPoolWasNotReVerified(t *testing.T) {
 	res.AppDSNHint = "postgres://olivares_app@db:5432/olivares?sslmode=verify-full"
 
 	text, _ := l3RunRenderer(t, "", func(cmd *cobra.Command) error {
-		return renderDBInitResult(cmd, spec, res)
+		return renderDBInitResult(cmd, spec, res, "/tmp/db-init-render-fixture")
 	})
 	if !strings.Contains(text, "  app  : (password kept; not re-verified)\n") {
 		t.Fatalf("the text form must still say the pool was not re-verified:\n%s", text)
 	}
 
 	doc, _ := l3RunRenderer(t, "json", func(cmd *cobra.Command) error {
-		return renderDBInitResult(cmd, spec, res)
+		return renderDBInitResult(cmd, spec, res, "/tmp/db-init-render-fixture")
 	})
 	var decoded dbInitResult
 	if err := json.Unmarshal([]byte(doc), &decoded); err != nil {

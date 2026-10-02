@@ -70,7 +70,6 @@
     "truncated": "Teildaten",
     "truncatedHint": "Dieser Aggregatwert hat die Scan-Obergrenze erreicht — er ist teilweise, kein exakter Gesamtwert.",
     "truncatedBrief": "Scan-Obergrenze erreicht",
-    "selfAudited": "Privilegierter Lesezugriff — im Audit-Hauptbuch aufgezeichnet.",
     "seam": "Noch nicht verkabelt",
     "seamBody": "Deklarierter Vertrag — {{what}} ist noch nicht mit dem Backend verkabelt, daher wird hier die deklarierte Form gezeigt, keine Live-Daten.",
     "minimalData": "Nur Aggregate und Metadaten — keine Prompts, Ausgaben oder Geheimnisse.",

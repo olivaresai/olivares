@@ -23,18 +23,14 @@ import (
 	"github.com/olivaresai/olivares/core/secure"
 )
 
-// newLicenseCmd manages commercial licenses offline (Ed25519). License
-// verification is informational only — it gates no feature (LICENSING.md).
+// newLicenseCmd manages commercial licenses offline (Ed25519). On a Business build the
+// license decides which paid families can be turned on (the add-on gate); a Community
+// build needs none. The help says the one that is true for this binary.
 func newLicenseCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "license",
-		Short: "Manage commercial licenses (install/uninstall/status + keygen/sign/verify; offline Ed25519, never a feature gate)",
-		Long: "license covers both sides of the commercial license: the operator side (install\n" +
-			"one, replace it, remove it, report what is installed) and the issuer side (mint a\n" +
-			"keypair, sign a license, verify one against a public key).\n\n" +
-			"Verification is offline Ed25519 — no call-home, and no network is needed to\n" +
-			"establish entitlement. A license is an ATTESTATION of entitlement, never a\n" +
-			"feature gate: an expired or absent license does not switch functionality off.",
+		Short: "See, install and remove the license (Business)",
+		Long:  licenseLongFor(enterpriseAddOnsLinked),
 		Example: "  olivares license status --data-dir /var/lib/olivares\n" +
 			"  olivares license install ./customer.license --data-dir /var/lib/olivares\n" +
 			"  olivares license uninstall --data-dir /var/lib/olivares --yes\n" +
@@ -42,6 +38,24 @@ func newLicenseCmd() *cobra.Command {
 	}
 	root.AddCommand(licenseKeygenCmd(), licenseSignCmd(), licenseVerifyCmd(), licenseInstallCmd(), licenseUninstallCmd(), licenseStatusCmd(), licenseTrustCmd(), licenseConnectCmd())
 	return root
+}
+
+// licenseLongFor is the license help for a Business build (true) or Community (false).
+// EU-08 (2026-10-01): it said a license never gates anything, which is false on Business.
+func licenseLongFor(business bool) string {
+	head := "license covers both sides of the commercial license: the operator side (install\n" +
+		"one, replace it, remove it, report what is installed) and the issuer side (mint a\n" +
+		"keypair, sign a license, verify one against a public key).\n\n"
+	tail := "Verification is offline (Ed25519): no call-home and no network."
+	if !business {
+		return head + "Community needs no license: every feature of this build works without one. On a\n" +
+			"Business build the license decides which paid families can be turned on.\n" + tail
+	}
+	return head + "On this Business build the license decides which paid families can be turned on:\n" +
+		"Regulated, AI Runtime Security, Compliance Packs and Identity & Scale. Enterprise-only\n" +
+		"modules also need the Enterprise plan. With no license, or once it has expired,\n" +
+		"turning them on is refused; turning a module off (teardown) always works. Community\n" +
+		"features never need a license.\n" + tail
 }
 
 // licenseInstallCmd persists a license into the data dir (the customer-side install). It is the offline half of the in-place edition system: it verifies the blob

@@ -10,7 +10,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -74,6 +73,15 @@ type Module struct {
 	jobs     map[model.ID]*savedJob
 	files    *os.Root
 	active   bool
+
+	// resolveProgram and signIns serve the tool sign-in (signin.go).
+	resolveProgram func(driver string) string
+	// loginHome says where a tenant's own login of a tool lives (SetLoginHome);
+	// nil refuses every sign-in and status read.
+	loginHome LoginHomeFunc
+	signIns   map[model.ID]*SignIn
+	// ollama is the local model service this engine runs (ollama.go).
+	ollama ollamaService
 }
 
 var _ api.Module = (*Module)(nil)
@@ -145,48 +153,61 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	door.HandleSystem("POST", "/plans", m.handlePlan)
 	door.HandleSystem("POST", "/installs", m.handleInstall)
 	door.HandleSystem("GET", "/jobs/{id}", m.handleJob)
+	door.HandleSystem("GET", "/sign-in", m.handleSignInStatus)
+	door.HandleSystem("POST", "/sign-in", m.handleSignInStart)
+	door.HandleSystem("GET", "/sign-in/{id}", m.handleSignInGet)
+	door.HandleSystem("POST", "/sign-in/{id}/code", m.handleSignInCode)
+	door.HandleSystem("DELETE", "/sign-in/{id}", m.handleSignInCancel)
+	door.HandleSystem("GET", "/ollama", m.handleOllamaStatus)
+	door.HandleSystem("POST", "/ollama/start", m.handleOllamaStart)
+	door.HandleSystem("POST", "/ollama/stop", m.handleOllamaStop)
+	door.HandleSystem("POST", "/ollama/pulls", m.handleOllamaPull)
+	door.HandleSystem("GET", "/ollama/pulls/{id}", m.handleOllamaPullGet)
 }
 
 // handleInventory lists managed host tools, release integrity, verification
 // policies and the five most recently updated installation jobs. System admin only.
 func (m *Module) handleInventory(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	m.guard(0, m.inventory)(w, r, mc)
+	m.guard(false, m.inventory)(w, r, mc)
 }
 
 // handleDetect discovers host executables without reading provider credential homes.
-// An explicit detected path requires AAL3 before bounded version execution;
+// An explicit detected path requires the administrative step-up before bounded version execution;
 // observations and selected probes require a retained audit event.
 func (m *Module) handleDetect(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	m.guard(0, m.detect)(w, r, mc)
+	m.guard(false, m.detect)(w, r, mc)
 }
 
 // handlePlan resolves an official release and returns the digest-bound version,
 // verification policy and destination for system administrator review before install.
 func (m *Module) handlePlan(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	m.guard(0, m.plan)(w, r, mc)
+	m.guard(false, m.plan)(w, r, mc)
 }
 
-// handleInstall starts one audited host installation from an approved plan at
-// AAL3. The request UUID deduplicates retries; progress and results persist in a job.
+// handleInstall starts one audited host installation from an approved plan behind
+// the administrative step-up. The request UUID deduplicates retries; progress and
+// results persist in a job.
 func (m *Module) handleInstall(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	m.guard(auth.AAL3, m.install)(w, r, mc)
+	m.guard(true, m.install)(w, r, mc)
 }
 
 // handleJob returns bounded installation progress, state, errors and the verified
 // receipt to a system administrator. Interrupted jobs are reported, never replayed.
 func (m *Module) handleJob(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	m.guard(0, m.job)(w, r, mc)
+	m.guard(false, m.job)(w, r, mc)
 }
 
-func (m *Module) guard(aal int, h api.ModuleHandler) api.ModuleHandler {
+// guard admits a system administrator session; stepUp additionally demands the
+// deployment's administrative step-up policy (auth.StepUpSatisfied).
+func (m *Module) guard(stepUp bool, h api.ModuleHandler) api.ModuleHandler {
 	return func(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 		w.Header().Set("Cache-Control", "no-store")
 		if !mc.Principal.Superadmin || mc.Principal.Kind != auth.KindUser {
 			fail(w, 403, "forbidden", "A system administrator session is required.")
 			return
 		}
-		if mc.Principal.AAL < aal {
-			fail(w, 403, "step_up_required", "Complete a hardware-verified step-up before installing tools.")
+		if stepUp && !auth.StepUpSatisfied(r.Context(), mc.Principal) {
+			fail(w, 403, "step_up_required", "Complete the administrative step-up this deployment requires before installing tools.")
 			return
 		}
 		if _, confined := mc.Principal.ConfinedWorkspaceIn(mc.Tenant); confined {
@@ -234,8 +255,8 @@ func (m *Module) detect(w http.ResponseWriter, r *http.Request, mc api.ModuleCon
 	driver := r.URL.Query().Get("driver")
 	selected := r.URL.Query().Get("probe_path")
 	if selected != "" {
-		if mc.Principal.AAL < auth.AAL3 {
-			fail(w, 403, "step_up_required", "Complete a hardware-verified step-up before probing this host executable.")
+		if !auth.StepUpSatisfied(r.Context(), mc.Principal) {
+			fail(w, 403, "step_up_required", "Complete the administrative step-up this deployment requires before probing this host executable.")
 			return
 		}
 		if m.readOnly {
@@ -295,14 +316,8 @@ func (m *Module) detect(w http.ResponseWriter, r *http.Request, mc api.ModuleCon
 	write(w, 200, result)
 }
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	d := json.NewDecoder(http.MaxBytesReader(w, r.Body, 4096))
-	d.DisallowUnknownFields()
-	if err := d.Decode(v); err != nil {
+	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 4096}); err != nil {
 		fail(w, 400, "bad_request", "Provide a valid request with only the supported fields.")
-		return false
-	}
-	if d.Decode(new(any)) != io.EOF {
-		fail(w, 400, "bad_request", "Provide exactly one JSON object.")
 		return false
 	}
 	return true

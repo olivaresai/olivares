@@ -191,6 +191,11 @@ func makeGroupStub(cmd *cobra.Command) {
 	cmd.RunE = func(c *cobra.Command, _ []string) error {
 		// Reached only with zero positional arguments — `olivares agent` on its
 		// own. Help on stdout, exit 0: unchanged from before this contract.
+		// `olivares` alone is the exception: it shows this installation's state
+		// and the next step (HU-29); `olivares --help` is the full help.
+		if !c.HasParent() {
+			return runRootStatus(c)
+		}
 		return c.Help()
 	}
 }

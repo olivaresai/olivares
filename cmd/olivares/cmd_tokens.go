@@ -37,7 +37,7 @@ func newTokensCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	root := &cobra.Command{
 		Use:   "tokens",
-		Short: "Issue, list, rotate and revoke API tokens (the credential a script authenticates with)",
+		Short: "API tokens for scripts: issue, list, rotate, revoke",
 		Long: "Manage the API tokens that authenticate non-interactive callers: CI jobs, collectors,\n" +
 			"and this CLI itself. A token is either BOUND to one tenant with one role, or (superadmin\n" +
 			"only) cross-tenant. The secret is shown ONCE, at issue and at rotate; the engine stores\n" +
@@ -387,7 +387,7 @@ func renderIssuedToken(cmd *cobra.Command, raw []byte, verb string) error {
 	}
 	if issued.Token == "" {
 		return exitcode.New(exitcode.Server,
-			fmt.Errorf("the control plane %s a token but returned no secret", verb))
+			fmt.Errorf("the engine %s a token but returned no secret", verb))
 	}
 	if err := renderOut(cmd, func(out io.Writer) error {
 		_, err := fmt.Fprintf(out, "%s API token %s (id %s)\n%s\n",
@@ -439,7 +439,7 @@ func completeTokenRole(_ *cobra.Command, _ []string, _ string) ([]string, cobra.
 // policy for the whole CLI is a separate, still-open decision, and inventing one
 // here would be a second answer to that question.
 func addListPageFlags(cmd *cobra.Command, limit *int, cursor *string) {
-	cmd.Flags().IntVar(limit, "limit", 0, "server-side page size (0 = the engine's default)")
+	cmd.Flags().IntVar(limit, "limit", 0, "server-side page size (left out: the engine's default)")
 	cmd.Flags().StringVar(cursor, "cursor", "", "continue from the cursor a previous page reported")
 }
 

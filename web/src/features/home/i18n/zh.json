@@ -1,7 +1,8 @@
 {
   "title": "概览",
-  "description": "一览您的 AI 资产域——您的角色可打开的各模块的 30 天聚合数据。",
+  "description": "你的 AI 智能体在过去 30 天里做了什么，仅限你可以打开的区域。",
   "openReport": "高管报告",
+  "aside": "环境摘要",
   "range": "最近 30 天",
   "next": {
     "title": "下一步",
@@ -60,6 +61,14 @@
       "value": "{{healthy}}/{{total}} 项正常",
       "caption": "{{breaches}} 次 SLA 违约 · {{incidents}} 个未结事件",
       "noChecks": "尚无健康检查"
+    },
+    "budgets": {
+      "label": "预算",
+      "none": "尚无预算",
+      "over_other": "{{count}} 项超出限额",
+      "unknown_other": "{{count}} 项金额未知",
+      "within": "没有超出限额",
+      "partial": "已加载 {{n}} 个预算；还有更多"
     }
   },
   "state": {
@@ -78,5 +87,13 @@
   "empty": {
     "title": "暂无可显示内容",
     "description": "您的角色未被授予对任何资产域模块的读取权限。请向管理员申请读取授权以查看概览。"
+  },
+  "start": {
+    "ready": "{{tool}} 已就绪。",
+    "signIn": "登录 {{tool}} 以开始会话。",
+    "signInAction": "登录",
+    "install": "安装 Claude Code 或 Codex 以开始会话。",
+    "installAction": "设置工具",
+    "newSession": "新建会话"
   }
 }

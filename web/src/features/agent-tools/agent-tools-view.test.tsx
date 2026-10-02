@@ -24,6 +24,16 @@ const { api, auth, toast } = vi.hoisted(() => ({
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
 vi.mock('./api', () => ({ agentToolsApi: api }))
 vi.mock('@/components/ui/toaster', () => ({ toast }))
+// The first-hour cards at the top read the tools' own sign-in status; these cases
+// are about the version manager below them, so the tools answer "installed, signed in".
+vi.mock('@/features/first-hour/api', async (orig) => ({
+  ...((await orig()) as object),
+  signInApi: {
+    status: (driver: string) =>
+      Promise.resolve({ driver, installed: true, signed_in: true }),
+  },
+}))
+import { ApiError } from '@/lib/api/errors'
 import { AgentToolsView } from './agent-tools-view'
 function mount() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -270,4 +280,21 @@ it.each([
     failure.probe_error ?? failure.probe_skipped!,
   )
   expect(toast.success).not.toHaveBeenCalled()
+})
+
+// EU18/EU20 (WEB 01f5fe2b): the page maps a failed read like every other panel. A
+// refused inventory says the person has no access, not that the engine failed.
+it('says the person has no access when the inventory read is refused', async () => {
+  api.inventory.mockRejectedValue(
+    new ApiError(
+      403,
+      'forbidden',
+      'A system administrator session is required.',
+    ),
+  )
+  mount()
+  expect(
+    await screen.findByText('You do not have access to Agent tools.'),
+  ).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /try again|retry/i })).toBeNull()
 })

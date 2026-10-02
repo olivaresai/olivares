@@ -17,6 +17,10 @@ var secretCorpus = []struct {
 	leak       string // must be absent from the scrubbed result
 	wantSecret bool
 }{
+	{"embedded-url", "curl https://user:examplepass@host/path", "examplepass", true},
+	{"encoded-url", "curl https://user:example%40pass@host/path", "example%40pass", true},
+	{"engine-session", "execute olvs_1234567890abcdef here", "olvs_1234567890abcdef", true},
+	{"engine-api-key", "execute olvk_1234567890abcdef here", "olvk_1234567890abcdef", true},
 	{"aws-access-key", "AKIAIOSFODNN7EXAMPLE used here", "AKIAIOSFODNN7EXAMPLE", true},
 	{"github-classic", "token ghp_1234567890abcdefghijklmnopqrstuvwxyzAB", "ghp_1234567890abcdefghijklmnopqrstuvwxyzAB", true},
 	{"github-pat", "github_pat_11ABCDEFG0abcdefghijkl_xyz1234567890ABCDEFGH", "github_pat_11ABCDEFG0abcdefghijkl", true},

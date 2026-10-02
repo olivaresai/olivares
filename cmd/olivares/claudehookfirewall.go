@@ -10,6 +10,7 @@ import (
 
 	"github.com/olivaresai/olivares/connectors/claude"
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/sdk/event"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
@@ -86,8 +87,8 @@ func (d *claudeHookDecider) publishHookInspectionFindings(ctx context.Context, t
 			Kind:        firstNonEmpty(f.Kind, "hook_firewall"),
 			Severity:    inspectionSeverity(f.Severity),
 			SubjectKind: "claude.tool",
-			SubjectRef:  firstNonEmpty(f.Detector, tool),
-			Title:       f.Title,
+			SubjectRef:  d.retainedHookText(ctx, firstNonEmpty(f.Detector, tool)),
+			Title:       d.retainedHookText(ctx, f.Title),
 			DetailHash:  hexSHA(tool + "|" + f.Channel + "|" + f.Detail),
 			OccurredAt:  d.clock().UTC(),
 			OWASPLLM:    f.OWASPLLM,
@@ -112,7 +113,7 @@ func (d *claudeHookDecider) emitHookInspectionMeter(ctx context.Context, tenant 
 		Provenance:   sdkmodel.ProvenanceEstimated,
 		OccurredAt:   d.clock().UTC(),
 		Labels: map[string]string{
-			"tool":      tool,
+			"tool":      d.retainedHookText(ctx, tool),
 			"channels":  strconv.Itoa(m.Channels),
 			"detectors": strconv.Itoa(m.Detectors),
 		},
@@ -127,18 +128,48 @@ func (d *claudeHookDecider) openHookInspectionApproval(ctx context.Context, tena
 	if d.bridge == nil || intent == nil {
 		return
 	}
+	// This legacy inspection queue has no generated-span provenance port.
+	// A secret-bearing subject or reason cannot become a different policy
+	// question or an altered preview. Withhold it; the inspection deny stands.
+	_, actionMasks, actionErr := d.exactHookMask(ctx, intent.Action)
+	_, subjectMasks, subjectErr := d.exactHookMask(ctx, intent.Subject)
+	reason, reasonMasks, reasonErr := d.exactHookMask(ctx, intent.Reason)
+	if actionErr != nil || subjectErr != nil || reasonErr != nil || len(actionMasks)+len(subjectMasks)+len(reasonMasks) != 0 {
+		if d.log != nil {
+			d.log.Warn("hook-pep: content-firewall approval input withheld; the denial stands")
+		}
+		return
+	}
 	requestedBy := firstNonEmpty(actor, model.ActorSystem)
-	if _, _, _, err := d.bridge.gateOnce(ctx, tenant, intent.Action, "claude.tool", intent.Subject, intent.PlanHash, intent.Reason, requestedBy); err != nil && d.log != nil {
-		d.log.Warn("hook-pep: content-firewall approval intent could not be opened (verdict stands)", "err", err)
+	if _, _, _, err := d.bridge.gateOnce(ctx, tenant, intent.Action, "claude.tool", intent.Subject, intent.PlanHash, reason, requestedBy); err != nil && d.log != nil {
+		d.log.Warn("hook-pep: content-firewall approval intent could not be opened (verdict stands)", "err", d.retainedHookText(ctx, err.Error()))
 	}
 }
 
+type sessionObservationPrincipalKey struct{}
+
 // publishHookObs publishes one observation (finding/meter) on the engine bus. nil bus ⇒ no-op.
 func (d *claudeHookDecider) publishHookObs(ctx context.Context, tenant model.TenantID, obs sdkmodel.Observation) {
+	if principal, managed := ctx.Value(sessionObservationPrincipalKey{}).(auth.Principal); managed {
+		// Tool edges, costs and session findings use the same owning bridge. Other
+		// firewall findings have no session subject and retain their existing path.
+		_, edge := obs.(sdkmodel.EdgeObservation)
+		_, cost := obs.(sdkmodel.CostSample)
+		finding, isFinding := obs.(sdkmodel.FindingReport)
+		if edge || cost || isFinding && finding.SubjectKind == "session" {
+			if d.sessionObservation == nil {
+				return
+			}
+			if err := d.sessionObservation(ctx, principal, obs); err != nil && d.log != nil {
+				d.log.Warn("hook-pep: managed observation refused (verdict stands)", "err", err)
+			}
+			return // A refused generation never falls back to a legacy row.
+		}
+	}
 	if d.bus == nil {
 		return
 	}
 	if err := d.bus.Publish(ctx, event.FromObservation(tenant.String(), hookFirewallSignalSource, obs)); err != nil && d.log != nil {
-		d.log.Warn("hook-pep: firewall bus publish failed (best-effort)", "err", err)
+		d.log.Warn("hook-pep: firewall bus publish failed (best-effort)", "err", d.retainedHookText(ctx, err.Error()))
 	}
 }

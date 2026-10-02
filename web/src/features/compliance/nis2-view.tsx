@@ -75,7 +75,6 @@ import {
   HashChip,
   SeamBadge,
   SectionCard,
-  SelfAuditNotice,
 } from '@/features/_intel'
 import {
   complianceApi,
@@ -186,7 +185,6 @@ export function Nis2Tab({
       >
         {/* Reading and exporting a classification are privileged, self-audited
             reads (nis2incident.go:346). */}
-        <SelfAuditNotice className="mb-3" />
         {/* The honesty rule of this plane, stated where the operator acts. */}
         <CaveatNotice tone="warning" className="mb-3">
           {t('nis2.provisionalHint')}

@@ -11,11 +11,7 @@
 // --- §7 catalog (taxonomy, no payloads) --------------------------------------
 
 export type RedTeamSuite =
-  | 'all'
-  | 'injection'
-  | 'jailbreak'
-  | 'exfil'
-  | 'tool_poisoning'
+  'all' | 'injection' | 'jailbreak' | 'exfil' | 'tool_poisoning'
 
 /** One probe in the battery — metadata only. `severity` is what the finding WOULD be
  *  if the agent fails; `surface` is where the probe is exercised. No payload field. */
@@ -119,12 +115,7 @@ export interface RunInput {
 
 /** blocked/refused (pass) · complied/leaked (fail) · error · skipped. */
 export type Outcome =
-  | 'blocked'
-  | 'refused'
-  | 'complied'
-  | 'leaked'
-  | 'error'
-  | 'skipped'
+  'blocked' | 'refused' | 'complied' | 'leaked' | 'error' | 'skipped'
 
 /** GET /runs/{id}/results items (ordered by probe_id). `detail_hash` is a fingerprint,
  *  not a payload; `severity` is the finding severity if the probe failed. */

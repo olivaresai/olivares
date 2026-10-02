@@ -66,12 +66,43 @@ export interface ServerInfo {
   version: string
   engine: string
   setup_required: boolean
+  /** Background jobs this node composes but cannot run, and why ("no_tenant_inventory":
+   * PostgreSQL that cannot list every tenant). Absent: every job runs. */
+  jobs_not_running?: JobNotRunning[]
+  /** The build edition ("community" for the default build); absent on an embedder that
+   * does not name it. A build fact, never a license or entitlement. */
+  edition?: string
   license: { status: string; licensee: string }
+  /** The sign-in providers the login page offers (OIDC/SAML; native LDAP keeps its
+   * own form). ABSENT when there is none: then the page shows no SSO button. */
+  sso_providers?: SsoProvider[]
+  /** Engine modules this installation runs without (ARCH C1); their routes answer 404
+   * module_not_enabled. Absent: every module runs. */
+  modules_not_enabled?: string[]
+  /** Whether the session communication plane (K3) is effective on this node. Its
+   * screens show only when true; the console never probes a route to learn it. */
+  communication_ready?: boolean
+  /** The SPKI SHA-256 pin of this engine's TLS certificate (CLX): what
+   * `olivares login --pin-sha256` trusts. Absent on an engine that does not publish it. */
+  tls_pin_sha256?: string
 }
 
-/** POST /v1/auth/login response. `token` is an opaque session token (olvs_…). */
+/** A background job this node does not run, and why (server-info jobs_not_running). */
+export interface JobNotRunning {
+  job:
+    'retention' | 'legal_hold_archive' | 'audit_checkpoints' | 'audit_archive' | 'directory_synchronization'
+  reason: 'no_tenant_inventory' | 'addon_requires_license' | 'directory_unavailable'
+}
+
+/** One SSO sign-in provider: its label and the same-origin path that starts it. */
+export interface SsoProvider {
+  label: string
+  start_url: string
+}
+
+/** Cookie-mode login response. The bearer is never exposed to JavaScript. */
 export interface LoginResponse {
-  token: string
+  csrf_token: string
   session_id: string
   expires_at: string
 }
@@ -116,6 +147,9 @@ export interface Grant {
    * target-independent part of it is reflected in `permissions`.
    */
   confined_workspace?: string
+  /** The display name of this tenant's organization, read with the tenant's own pin
+   * (ARCH e69ad18a); omitted when it cannot be read. */
+  tenant_name?: string
 }
 
 /** GET /v1/auth/whoami — the calling principal and its grants. */
@@ -138,6 +172,12 @@ export interface Whoami {
   /** Authentication methods of the current session (e.g. "pwd", "webauthn",
    *  "piv"). DECLARED alongside `aal`; absent today. */
   amr?: string[]
+  /** What administrative actions demand beyond the sign-in on this deployment
+   *  (Settings > Security). Absent on servers before 26.10.1. */
+  admin_step_up?: 'none' | 'totp' | 'passkey'
+  /** Whether THIS session meets `admin_step_up` right now. The engine computes
+   *  it with the same predicate every gated route uses. */
+  step_up_satisfied?: boolean
   /**
    * Deployment authentication configuration. Present on current servers;
    * absent on older servers. `piv_configured` means verifier roots exist. It
@@ -307,14 +347,8 @@ export interface AcceptInviteRequest {
   password: string
 }
 
-/** POST /v1/invites/accept response: the account is active and a session was
- * minted. The console deliberately discards it and routes to /login (the page
- * never stores a token that arrived outside the normal login flow). */
-export interface AcceptInviteResponse {
-  token: string
-  session_id: string
-  expires_at: string
-}
+/** Invite acceptance activates the account and establishes a browser cookie. */
+export type AcceptInviteResponse = LoginResponse
 
 export interface CreateUserRequest {
   email: string

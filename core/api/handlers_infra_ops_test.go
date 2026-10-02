@@ -125,6 +125,9 @@ func TestResidencyRegistryAndSetOrgRegion(t *testing.T) {
 	// RBAC is evaluated before assurance: a tenant admin remains forbidden even
 	// after elevation because the write is system/superadmin-only.
 	member := h.mkMember(admin, "tenant-admin@acme.io", "tenantadmin1", auth.RoleAdmin, tenant)
+	// Members are added before the passkey step-up is required: adding a person asks
+	// for the same step-up (HU-28).
+	h.requirePasskeyStepUp()
 	h.elevate(member)
 	if denied := h.do(http.MethodPut, "/v1/system/orgs/"+tenant.String()+"/region", member,
 		map[string]any{"data_region": "eu"}, tenantHdr(tenant)); denied.code != http.StatusForbidden ||

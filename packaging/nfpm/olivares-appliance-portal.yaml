@@ -6,6 +6,7 @@
   "arch": "${ARCH}",
   "platform": "linux",
   "version": "${VERSION}",
+  "version_schema": "none",
   "section": "admin",
   "priority": "optional",
   "maintainer": "Olivares.AI <enterprise@olivares.ai>",

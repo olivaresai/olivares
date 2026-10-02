@@ -1,7 +1,8 @@
 {
   "title": "Vue d’ensemble",
-  "description": "Votre parc d’IA en un coup d’œil — agrégats sur 30 jours pour les modules que votre rôle peut ouvrir.",
+  "description": "Ce que vos agents d'IA ont fait au cours des 30 derniers jours, dans les domaines que vous pouvez ouvrir.",
   "openReport": "Rapport exécutif",
+  "aside": "Résumé de l’environnement",
   "range": "30 derniers jours",
   "next": {
     "title": "Étape suivante",
@@ -60,6 +61,18 @@
       "value": "{{healthy}}/{{total}} sains",
       "caption": "{{breaches}} manquements aux SLA · {{incidents}} incidents ouverts",
       "noChecks": "Aucune vérification d’état pour l’instant"
+    },
+    "budgets": {
+      "label": "Budgets",
+      "none": "Aucun budget pour l’instant",
+      "over_one": "{{count}} au-dessus de la limite",
+      "over_many": "{{count}} au-dessus de la limite",
+      "over_other": "{{count}} au-dessus de la limite",
+      "unknown_one": "{{count}} au montant inconnu",
+      "unknown_many": "{{count}} au montant inconnu",
+      "unknown_other": "{{count}} au montant inconnu",
+      "within": "Aucun au-dessus de la limite",
+      "partial": "{{n}} budgets chargés ; il y en a d’autres"
     }
   },
   "state": {
@@ -78,5 +91,13 @@
   "empty": {
     "title": "Rien à afficher pour l’instant",
     "description": "Votre rôle n’accorde aucun accès en lecture à un module du parc. Demandez à un administrateur un octroi en lecture pour voir la vue d’ensemble."
+  },
+  "start": {
+    "ready": "{{tool}} est prêt.",
+    "signIn": "Connectez {{tool}} pour démarrer une session.",
+    "signInAction": "Se connecter",
+    "install": "Installez Claude Code ou Codex pour démarrer une session.",
+    "installAction": "Configurer un outil",
+    "newSession": "Nouvelle session"
   }
 }

@@ -53,7 +53,7 @@ func (s *Server) handleInstallLicense(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	svc, ok := s.licenseSvc(w, r)
@@ -85,7 +85,7 @@ func (s *Server) handleUninstallLicense(w http.ResponseWriter, r *http.Request) 
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	svc, ok := s.licenseSvc(w, r)

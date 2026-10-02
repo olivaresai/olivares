@@ -1,0 +1,98 @@
+{
+  "tools": {
+    "claude": "Claude Code",
+    "codex": "Codex",
+    "grok": "Grok Build"
+  },
+  "status": {
+    "installed": "インストール済み",
+    "notInstalled": "未インストール",
+    "signedIn": "サインイン済み",
+    "signedInAs": "{{account}} としてサインイン済み",
+    "notSignedIn": "未サインイン",
+    "usesKey": "API キーを使用: {{name}}"
+  },
+  "actions": {
+    "install": "インストール",
+    "installing": "インストール中…",
+    "retry": "再試行",
+    "cancel": "キャンセル",
+    "signInClaude": "Claude でサインイン",
+    "signInChatGPT": "ChatGPT でサインイン",
+    "useApiKey": "代わりに API キーを使う",
+    "signInGrok": "xAI アカウントでサインイン"
+  },
+  "signIn": {
+    "openLink": "サインインページを開く",
+    "codeLabel": "サインインページのコード",
+    "codeHint": "アクセスを承認すると、ページにコードが表示されます。ここに貼り付けてください。",
+    "continue": "続行",
+    "enterCode": "サインインページで次のコードを入力してください:",
+    "waiting": "サインインページでの操作が終わるのを待っています…",
+    "expires": "コードの有効期間は 15 分です。キャンセルすると、このサーバーでのサインインを中止します。"
+  },
+  "errors": {
+    "status": "ツールの状態を読み取れませんでした。",
+    "install": "インストールが完了しませんでした: {{error}}",
+    "signIn": "サインインが完了しませんでした。もう一度始めてください。",
+    "start": "セッションを開始できませんでした: {{error}}",
+    "needsApproval": "このデプロイでは、確認なしでコマンドを実行するには 2 人目の承認が必要です。代わりに編集のみで始めてください:"
+  },
+  "steps": {
+    "install": {
+      "title": "エージェントツールをインストール",
+      "body": "Olivares はこのサーバーで公式の Claude Code または Codex を実行します。どちらか 1 つで十分です。"
+    },
+    "signIn": {
+      "title": "サインインする",
+      "body": "Claude または ChatGPT のサブスクリプションを使います。ログインはこのサーバー上の、ツールが保管する場所に残ります。",
+      "waiting": "まずツールをインストールしてください。"
+    },
+    "start": {
+      "title": "セッションを開始",
+      "body": "フォルダーを選び、必要なら最初にやることを伝えます。"
+    },
+    "progress": "3 件中 {{done}} 件完了"
+  },
+  "start": {
+    "tool": "ツール",
+    "notReady": "{{tool}} はまだ開始できません。",
+    "folder": "フォルダー",
+    "folderHint": "このサーバー上のフォルダーです。空のままにすると新しいフォルダーで開始します。",
+    "prompt": "最初のメッセージ (任意)",
+    "promptPlaceholder": "最初に何をしますか?",
+    "more": "その他のオプション",
+    "permission": "エージェントに許可すること",
+    "start": "開始",
+    "starting": "開始中…",
+    "needTool": "まずツールをインストールしてサインインしてください。",
+    "dialogTitle": "新しいセッション",
+    "dialogDescription": "フォルダーを選び、やることを伝えます。",
+    "advanced": "詳細な起動オプション",
+    "secrets": "環境変数としてのシークレット",
+    "secretsHint": "セッションは、選んだ保管庫のシークレットを指定した変数から読み取ります。値が表示・記録されたり、フォルダーに書き込まれたりすることはありません。",
+    "secretsNone": "セッション用シークレットはまだありません。env/ で始まる名前で追加してください。",
+    "secretUse": "このセッションに {{name}} を渡す",
+    "secretVariable": "{{name}} の変数",
+    "secretsManage": "セッション用シークレットを管理",
+    "openTools": "AI ツールを開く"
+  },
+  "permission": {
+    "editsOnly": "ファイルの編集のみ",
+    "editsAndCommands": "ファイルの編集とコマンドの実行",
+    "readOnly": "読み取り専用",
+    "ask": "操作ごとに確認する"
+  },
+  "next": {
+    "title": "次のステップ (必要になったら)",
+    "invite": "ユーザーを招待",
+    "identity": "ID プロバイダーを接続",
+    "policies": "ポリシーを設定",
+    "mcp": "MCP サーバーを追加",
+    "budgets": "予算を設定",
+    "cli": "olivares コマンドラインを使う",
+    "cliHint": "このサーバーには olivares コマンドがすでにインストールされています。別のコンピューターからは次のコマンドでインストールします:",
+    "copy": "コピー",
+    "copied": "コピーしました"
+  }
+}

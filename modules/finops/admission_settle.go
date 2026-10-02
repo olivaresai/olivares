@@ -89,7 +89,7 @@ func (m *Module) settle(ctx context.Context, tenant model.TenantID, h holdID, to
 	// confirmed records that the callback established the tenant has no activation
 	// frontier; until then a failure has classified nothing.
 	confirmed := false
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.mutate(ctx, tenant, func(sc store.Scope) error {
 		confirmed = false
 		if err := lockFinOpsWriter(ctx, sc); err != nil {
 			return storeErr(err)

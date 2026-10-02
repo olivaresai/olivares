@@ -257,14 +257,14 @@ func TestTemplateList_FilterBuiltin(t *testing.T) {
 		"name": "Custom One",
 	}, hdr)
 
-	// List all (includes 8 builtins + 1 custom).
+	// List all (includes 9 builtins + 1 custom).
 	r := h.do("GET", "/v1/m/sessions/templates", admin, hdr)
 	if r.code != http.StatusOK {
 		t.Fatalf("list all = %d %s", r.code, r.raw)
 	}
 	allItems := r.body["items"].([]any)
-	if len(allItems) < 9 {
-		t.Fatalf("expected at least 9 templates (8 builtins + 1 custom), got %d", len(allItems))
+	if len(allItems) < 10 {
+		t.Fatalf("expected at least 10 templates (9 builtins + 1 custom), got %d", len(allItems))
 	}
 
 	// Filter by builtin=true.
@@ -273,8 +273,8 @@ func TestTemplateList_FilterBuiltin(t *testing.T) {
 		t.Fatalf("list builtin = %d %s", r.code, r.raw)
 	}
 	builtinItems := r.body["items"].([]any)
-	if len(builtinItems) != 8 {
-		t.Errorf("builtin items = %d, want 8", len(builtinItems))
+	if len(builtinItems) != 9 {
+		t.Errorf("builtin items = %d, want 9", len(builtinItems))
 	}
 
 	// Filter by builtin=false.

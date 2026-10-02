@@ -10,22 +10,54 @@ export interface MCPToolPolicy {
 }
 export interface MCPServerInput {
   name: string
-  transport: 'streamable_http'
+  /** streamable_http: a remote server at `url`; stdio: `command` started on this server. */
+  transport: 'streamable_http' | 'stdio'
   url: string
+  command?: string
+  args?: string[]
+  env?: Record<string, string>
+  /** NAME -> store:mcp/<secret>: secret values reach the command as environment. */
+  env_secret_refs?: Record<string, string>
   credential_ref?: string
   egress_cidrs: string[]
-  trust: { resource: string; issuer: string; jwks_url?: string; jwks?: unknown }
-  allowed_tools: MCPToolPolicy[]
+  /** External OAuth trust: none at all (`{}`) or complete; never generated. */
+  trust: {
+    resource?: string
+    issuer?: string
+    jwks_url?: string
+    jwks?: unknown
+  }
+  /** Omitted on an enable: every tested tool asks first (Root 2026-10-02). An explicit
+   * list, empty included, is kept as sent: destructive false runs without approval,
+   * destructive true asks first, a tool left out is not allowed. */
+  allowed_tools?: MCPToolPolicy[]
   enabled: boolean
 }
 export interface MCPServer extends MCPServerInput {
   id: string
+  /** The tested tools the server's own hints call read-only (MC, Root 2026-10-02): a
+   * proposal to pre-select, never a grant. Run without approval is the administrator's
+   * explicit choice. */
+  proposed_allow?: string[]
   probe: {
     state: string
     tested_at?: string
-    tools: { name: string; fingerprint: string }[]
+    tools: { name: string; fingerprint: string; read_only?: boolean }[]
+    /** Why an unreachable test failed, when the engine can tell. */
+    reason?: MCPProbeReason
+    /** A local server's failure in one redacted line (stderr or the OS error). */
+    detail?: string
+    http_status?: number
   }
 }
+export type MCPProbeReason =
+  | 'dns'
+  | 'tls'
+  | 'timeout'
+  | 'connection_refused'
+  | 'http_status'
+  | 'process_start'
+  | 'process_exit'
 export interface MCPGatewaySnapshot {
   version: number
   source: 'file' | 'store'

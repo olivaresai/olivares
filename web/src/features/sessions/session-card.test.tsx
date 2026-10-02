@@ -429,7 +429,47 @@ describe('SessionCard — control is what can be done, not what fits', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Stop' }))
 
-    await waitFor(() => expect(agentOpsApi.stop).toHaveBeenCalledWith('run-1'))
+    // The fence argument is now always passed: none for a run with no work stamp
+    // (the request carries no body, as before).
+    await waitFor(() =>
+      expect(agentOpsApi.stop).toHaveBeenCalledWith('run-1', undefined),
+    )
+  })
+
+  // MC (Root 2026-10-02, F1 on 09): after the peer work item is submitted its lease has
+  // ended, and Stop must carry no fence (a stale one is refused); during an active lease
+  // the exact fence is sent on the fenced stop.
+  it('Stop on a work-bound run: no fence after submit, the exact fence during an active lease', async () => {
+    const user = userEvent.setup()
+    perms.add('sessions:run:write')
+    const bound = { ...run, work_item_id: 'item-a', work_lease_fence: 7 }
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [bound],
+      has_more: false,
+    })
+    vi.mocked(agentOpsApi.getRun).mockResolvedValue({
+      ...bound,
+      work_lease_state: 'ended',
+    })
+    const view = renderCard({ sessionRef: 'sess-ours' })
+    await user.click(await screen.findByRole('button', { name: 'Stop' }))
+    await waitFor(() => expect(agentOpsApi.stop).toHaveBeenCalledTimes(1))
+    expect(vi.mocked(agentOpsApi.stop).mock.calls[0]).toEqual([
+      'run-1',
+      undefined,
+    ])
+
+    view.unmount()
+    vi.mocked(agentOpsApi.stop).mockClear()
+    vi.mocked(agentOpsApi.getRun).mockResolvedValue({
+      ...bound,
+      work_lease_state: 'active',
+    })
+    renderCard({ sessionRef: 'sess-ours' })
+    await user.click(await screen.findByRole('button', { name: 'Stop' }))
+    await waitFor(() =>
+      expect(agentOpsApi.stop).toHaveBeenCalledWith('run-1', 7),
+    )
   })
 
   it('fires Resume for a resumable stopped run', async () => {
@@ -469,7 +509,7 @@ describe('SessionCard — control is what can be done, not what fits', () => {
     },
   )
 
-  it('confirms and fires Delete only for a cleaned run and a run admin', async () => {
+  it('confirms and fires Delete for a cleaned run and a run admin', async () => {
     const user = userEvent.setup()
     perms.add('sessions:run:admin')
     vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
@@ -485,6 +525,39 @@ describe('SessionCard — control is what can be done, not what fits', () => {
     await waitFor(() =>
       expect(agentOpsApi.deleteRun).toHaveBeenCalledWith('run-1'),
     )
+  })
+
+  it('deletes a session that failed before it started in one action: cleaned first', async () => {
+    const user = userEvent.setup()
+    perms.add('sessions:run:admin')
+    perms.add('sessions:run:write')
+    // Never started: no conversation id, so the card is reached by its run.
+    const neverStarted = {
+      ...run,
+      state: 'failed' as const,
+      claude_session_id: undefined,
+    }
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [neverStarted],
+      has_more: false,
+    })
+    vi.mocked(agentOpsApi.getRun).mockResolvedValue(neverStarted)
+    renderCard({ runRef: 'run-1' })
+
+    expect(
+      await screen.findByRole('button', { name: 'Start again' }),
+    ).toBeTruthy()
+    await user.click(await screen.findByRole('button', { name: 'Delete' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Delete' })
+    await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+    await waitFor(() =>
+      expect(agentOpsApi.deleteRun).toHaveBeenCalledWith('run-1'),
+    )
+    expect(agentOpsApi.cleanup).toHaveBeenCalledWith('run-1')
+    expect(
+      vi.mocked(agentOpsApi.cleanup).mock.invocationCallOrder[0],
+    ).toBeLessThan(vi.mocked(agentOpsApi.deleteRun).mock.invocationCallOrder[0])
   })
 
   it('withholds lifecycle controls when the matching RBAC grant is absent', async () => {
@@ -568,7 +641,27 @@ describe('SessionCard — a scoped row is named by its live_ref', () => {
     )
     expect(await screen.findByText('Launched')).toBeInTheDocument()
     expect(screen.getAllByText('Managed by Olivares').length).toBeGreaterThan(0)
+    // Never by the provider's id, which two homes may share; only by the ids the plane
+    // mints for this run, where its hook calls and turn usage are written (HU-R24),
+    // and through the filtered list, which answers 200 when there is no row yet (FH 057).
     expect(vi.mocked(sessionsApi.liveOne)).not.toHaveBeenCalled()
+    await waitFor(() =>
+      expect(
+        vi
+          .mocked(sessionsApi.live)
+          .mock.calls.map(([p]) => p?.session_ref)
+          .filter((r) => r === 'osn_a' || r === 'run-a')
+          .sort(),
+      ).toEqual(['osn_a', 'run-a']),
+    )
+    // The provider id is read only beside the profile (the related rows), never alone.
+    expect(
+      vi
+        .mocked(sessionsApi.live)
+        .mock.calls.filter(
+          ([p]) => p?.session_ref === 'sess-dup' && !p?.provider_profile_ref,
+        ),
+    ).toEqual([])
     expect(vi.mocked(agentOpsApi.listRuns)).not.toHaveBeenCalledWith({
       claude_session_id: 'sess-dup',
     })
@@ -588,7 +681,27 @@ describe('SessionCard — a scoped row is named by its live_ref', () => {
       ),
     )
     expect(await screen.findByText('Full control')).toBeInTheDocument()
+    // Never by the provider's id, which two homes may share; only by the ids the plane
+    // mints for this run, where its hook calls and turn usage are written (HU-R24),
+    // and through the filtered list, which answers 200 when there is no row yet (FH 057).
     expect(vi.mocked(sessionsApi.liveOne)).not.toHaveBeenCalled()
+    await waitFor(() =>
+      expect(
+        vi
+          .mocked(sessionsApi.live)
+          .mock.calls.map(([p]) => p?.session_ref)
+          .filter((r) => r === 'osn_a' || r === 'run-a')
+          .sort(),
+      ).toEqual(['osn_a', 'run-a']),
+    )
+    // The provider id is read only beside the profile (the related rows), never alone.
+    expect(
+      vi
+        .mocked(sessionsApi.live)
+        .mock.calls.filter(
+          ([p]) => p?.session_ref === 'sess-dup' && !p?.provider_profile_ref,
+        ),
+    ).toEqual([])
     expect(vi.mocked(agentOpsApi.listRuns)).not.toHaveBeenCalledWith({
       claude_session_id: 'sess-dup',
     })

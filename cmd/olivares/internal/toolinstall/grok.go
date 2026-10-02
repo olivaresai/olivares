@@ -67,6 +67,19 @@ func NewGrok(opts GrokOptions) *Grok {
 
 func (g *Grok) Key() string { return DriverGrok }
 
+// routePointer is the pointer ResolveV2 records for sel's release selected
+// through channel, on the same base (official or mirror) as sel's own pointer.
+func (g *Grok) routePointer(sel SelectionV2, channel string) string {
+	i := strings.LastIndex(sel.Source.Pointer.URL, "/")
+	if i < 0 {
+		return ""
+	}
+	if channel == ChannelExact {
+		return joinURL(sel.Source.Pointer.URL[:i], sel.Version)
+	}
+	return joinURL(sel.Source.Pointer.URL[:i], channel)
+}
+
 func (g *Grok) ResolveV2(ctx context.Context, req RequestV2) (*PlanV2, *ResolvedMaterialV2, error) {
 	if req.Driver != DriverGrok {
 		return nil, nil, refuse(KindInvalidRequest, "grok adapter received driver %q", req.Driver)

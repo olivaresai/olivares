@@ -57,7 +57,14 @@ export interface Capability {
 }
 
 export type CapabilityId =
-  'watch' | 'attach' | 'drive' | 'stop' | 'resume' | 'cleanup' | 'delete'
+  | 'watch'
+  | 'attach'
+  | 'drive'
+  | 'interrupt'
+  | 'stop'
+  | 'resume'
+  | 'cleanup'
+  | 'delete'
 
 /** One session, however it reached us. */
 export interface UnifiedSession {
@@ -83,6 +90,10 @@ export interface UnifiedSession {
    * it can mean the session is not on the loaded page, or that the caller lacks
    * sessions:live:read. The card resolves it; the table says nothing about it. */
   live?: LiveDTO
+  /** Legacy rows the plane wrote for THIS run on other channels, keyed by an id it
+   * minted for the run (see `runEchoTargets`). Shown with the session, never as rows
+   * of their own; they add activity, never control. */
+  echoes?: LiveDTO[]
   provenance: Provenance
   control: ControlLevel
   /** Sort key: the most recent activity from either side, as epoch ms (0 = unknown). */
@@ -100,16 +111,23 @@ export function isLiveRun(run: RunDTO): boolean {
 }
 
 /**
- * A stopped run can be resumed only if the plane can re-attach to the conversation:
- * `stream-json` resumes with `claude --resume <claude_session_id>`, so without a
- * captured id there is nothing to resume into. Mirrors run-detail.tsx's own rule —
- * the backend is the source of truth and refuses regardless.
+ * A stopped or failed run can always be continued. `stream-json` resumes with
+ * `claude --resume <claude_session_id>`; a run that never captured an id never got
+ * going, and the engine starts it again with the same settings (startsAgain). The
+ * backend is the source of truth and refuses regardless.
  */
 export function isResumableRun(run: RunDTO): boolean {
-  return (
-    RESUMABLE_RUN_STATES.includes(run.state) &&
-    (run.transport !== 'stream-json' || !!run.claude_session_id)
-  )
+  return RESUMABLE_RUN_STATES.includes(run.state)
+}
+
+/** True when continuing this run starts a new conversation rather than resuming one. */
+export function startsAgain(run: RunDTO): boolean {
+  return run.transport === 'stream-json' && !run.claude_session_id
+}
+
+/** A stopped, failed or cleaned run can be deleted; one not yet cleaned is cleaned first. */
+export function isDeletableRun(run: RunDTO): boolean {
+  return RESUMABLE_RUN_STATES.includes(run.state) || run.state === 'cleaned'
 }
 
 /** I/O is bridged only for stream-json. `remote-control` is LIFECYCLE-ONLY: Olivares
@@ -203,6 +221,7 @@ export function capabilities(
     for (const id of [
       'attach',
       'drive',
+      'interrupt',
       'stop',
       'resume',
       'cleanup',
@@ -226,15 +245,18 @@ export function capabilities(
     live && bridged && grants.runWrite,
     !live ? 'state' : !bridged ? 'transport' : 'permission',
   )
+  // Interrupt ends the turn in progress and keeps the session: a running bridged run.
+  const running = run.state === 'running'
+  cap(
+    'interrupt',
+    running && bridged && grants.runWrite,
+    !running ? 'state' : !bridged ? 'transport' : 'permission',
+  )
   cap('stop', live && grants.runWrite, !live ? 'state' : 'permission')
   cap(
     'resume',
     isResumableRun(run) && grants.runWrite,
-    !RESUMABLE_RUN_STATES.includes(run.state)
-      ? 'state'
-      : !isResumableRun(run)
-        ? 'transport' // stopped stream-json run with no captured id: nothing to resume into
-        : 'permission',
+    !isResumableRun(run) ? 'state' : 'permission',
   )
   cap(
     'cleanup',
@@ -243,8 +265,8 @@ export function capabilities(
   )
   cap(
     'delete',
-    run.state === 'cleaned' && grants.runAdmin,
-    run.state !== 'cleaned' ? 'state' : 'permission',
+    isDeletableRun(run) && grants.runAdmin,
+    !isDeletableRun(run) ? 'state' : 'permission',
   )
   return out
 }
@@ -256,8 +278,13 @@ function epoch(ts?: string): number {
 }
 
 /** The most recent moment either side of a session was seen. */
-function activityOf(live: LiveDTO | undefined, runs: RunDTO[]): number {
+function activityOf(
+  live: LiveDTO | undefined,
+  runs: RunDTO[],
+  echoes: LiveDTO[] = [],
+): number {
   let ms = epoch(live?.last_event_at)
+  for (const e of echoes) ms = Math.max(ms, epoch(e.last_event_at))
   for (const r of runs) {
     ms = Math.max(
       ms,
@@ -290,10 +317,12 @@ export function runMatchesObserved(run: RunDTO, live: LiveDTO): boolean {
   // managed row whose id the run carries — and by nothing else. A legacy run never
   // joins a profile-scoped row: two homes may announce the very id it captured.
   if (run.provider_profile_ref || isScopedRow(live)) {
+    // The managed row names the run that owns it (`live.run_ref`): the same proof, read
+    // from the live side, before the run carries the row's id.
     return (
-      !!run.live_ref &&
-      run.live_ref === live.live_ref &&
-      live.attribution === 'managed'
+      live.attribution === 'managed' &&
+      ((!!run.live_ref && run.live_ref === live.live_ref) ||
+        (!!live.run_ref && live.run_ref === run.run_ref))
     )
   }
   if (!run.claude_session_id) return false
@@ -332,6 +361,37 @@ export function sessionTarget(s: UnifiedSession): SessionTarget {
 }
 
 /**
+ * The identifiers the plane MINTS for a run, mapped to that run: its run reference and
+ * its managed row's canonical session id. On R1 05 one launch wrote two more live rows
+ * keyed by exactly these — the PEP hook's tool edges under the run reference
+ * (cmd/olivares/claudehookpep.go sets SessionID from the launch bearer's run) and the
+ * turn's usage under the canonical id (cmd/olivares/sessioncostsink.go) — both on the
+ * legacy channel, so the list showed one launch as three sessions (J5).
+ *
+ * Unlike a provider's session id, which two homes may both announce, these are unique by
+ * construction, so a LEGACY row keyed by one is that run's session. A scoped row is never
+ * matched here: its identity is its own `live_ref`.
+ */
+function runEchoTargets(live: LiveDTO[], runs: RunDTO[]): Map<string, string> {
+  const targets = new Map<string, string>()
+  for (const run of runs) targets.set(run.run_ref, run.run_ref)
+  for (const l of live)
+    for (const ref of echoRefsOf(l)) targets.set(ref, l.run_ref!)
+  return targets
+}
+
+/**
+ * The bare references a MANAGED row's echoes are keyed by: its run reference and its
+ * canonical id (see `runEchoTargets`). A card that opens one session reads the legacy rows
+ * under these, so it folds them as the list does (HU-R24: on 08b the managed row's own
+ * timeline was empty and the evidence said "Last turns 0").
+ */
+export function echoRefsOf(l: LiveDTO): string[] {
+  if (l.attribution !== 'managed' || !l.run_ref) return []
+  return l.canonical_sid ? [l.run_ref, l.canonical_sid] : [l.run_ref]
+}
+
+/**
  * The JOIN: one row per session, from the observed page and the run page.
  *
  * A run whose `claude_session_id` is not among the observed rows still gets a row of
@@ -344,8 +404,15 @@ export function mergeSessions(
   runs: RunDTO[],
 ): UnifiedSession[] {
   const rows = new Map<string, UnifiedSession>()
+  const echoTargets = runEchoTargets(live, runs)
+  const echoesOf = new Map<string, LiveDTO[]>()
 
   for (const l of live) {
+    const target = isScopedRow(l) ? undefined : echoTargets.get(l.session_ref)
+    if (target) {
+      echoesOf.set(target, [...(echoesOf.get(target) ?? []), l])
+      continue
+    }
     const key = liveRowKey(l)
     rows.set(key, {
       key,
@@ -361,15 +428,24 @@ export function mergeSessions(
     })
   }
 
+  // A managed row names the run that owns it; until the run carries the row's id
+  // (`run.live_ref`), that is the proved join, so one launch stays one row.
+  const managedByRun = new Map<string, string>()
+  for (const l of live) {
+    if (l.attribution === 'managed' && l.run_ref)
+      managedByRun.set(l.run_ref, liveRowKey(l))
+  }
+
   for (const run of runs) {
     const sid = run.claude_session_id
     // A profiled run's only join is the managed row the plane proved for it
-    // (`run.live_ref`). A legacy run joins the LEGACY row of its bare id, as before.
+    // (`run.live_ref`, or the managed row that names the run). A legacy run joins the
+    // LEGACY row of its bare id, as before.
     const profiled = !!run.provider_profile_ref
     const key = profiled
       ? run.live_ref
         ? `live:${run.live_ref}`
-        : `run:${run.run_ref}`
+        : (managedByRun.get(run.run_ref) ?? `run:${run.run_ref}`)
       : sid
         ? `sess:${sid}`
         : `run:${run.run_ref}`
@@ -410,11 +486,38 @@ export function mergeSessions(
     })
   }
 
+  // Each echo joins the row that holds its run, or the run's managed row when the run is
+  // not on this page; with neither, it stays a row of its own rather than vanish.
+  for (const [runRef, echoes] of echoesOf) {
+    const home =
+      [...rows.values()].find((r) =>
+        r.runs.some((x) => x.run_ref === runRef),
+      ) ?? rows.get(managedByRun.get(runRef) ?? '')
+    if (home) {
+      home.echoes = [...(home.echoes ?? []), ...echoes]
+      continue
+    }
+    for (const l of echoes) {
+      const key = liveRowKey(l)
+      rows.set(key, {
+        key,
+        sessionRef: l.session_ref,
+        liveRef: l.live_ref || undefined,
+        attribution: l.attribution,
+        runs: [],
+        live: l,
+        provenance: 'discovered',
+        control: 'observe',
+        lastActivityMs: 0,
+      })
+    }
+  }
+
   const out: UnifiedSession[] = []
   for (const row of rows.values()) {
     row.provenance = row.runs.length > 0 ? 'launched' : 'discovered'
     row.control = controlLevel(row.runs)
-    row.lastActivityMs = activityOf(row.live, row.runs)
+    row.lastActivityMs = activityOf(row.live, row.runs, row.echoes)
     out.push(row)
   }
   out.sort((a, b) => b.lastActivityMs - a.lastActivityMs)
@@ -502,13 +605,32 @@ export function operatorName(s: UnifiedSession): string | null {
 export function sessionNaming(
   s: UnifiedSession,
   untitled: string,
+  shared?: ReadonlySet<string>,
 ): { name: string; shortId: string | null; reference: string } {
   const { text, from } = sessionNameLadder(operatorName(s), s.live, untitled)
   return {
     name: text,
-    shortId: from === 'untitled' ? sessionShortId(s) : null,
+    // The tail tells apart an untitled row, and any row whose name another row of the
+    // same list also carries (HU 029: two long first messages cut to the same words).
+    shortId:
+      from === 'untitled' || shared?.has(text) ? sessionShortId(s) : null,
     reference: sessionReference(s),
   }
+}
+
+/** The names that two or more sessions of one list would share. */
+export function sharedNames(
+  sessions: readonly UnifiedSession[],
+  untitled: string,
+): ReadonlySet<string> {
+  const seen = new Set<string>()
+  const shared = new Set<string>()
+  for (const s of sessions) {
+    const { text } = sessionNameLadder(operatorName(s), s.live, untitled)
+    if (seen.has(text)) shared.add(text)
+    seen.add(text)
+  }
+  return shared
 }
 
 /**
@@ -542,6 +664,7 @@ export function sessionSearchKey(s: UnifiedSession): string {
     s.profileRef ?? '',
     ...s.runs.map((r) => r.run_ref),
     ...s.runs.map((r) => r.name ?? ''),
+    ...(s.echoes ?? []).map((e) => e.live_ref),
   ]
     .filter(Boolean)
     .join(' ')

@@ -5,6 +5,7 @@
 package governance_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/sdk/event"
 )
 
@@ -339,5 +341,49 @@ func TestApprovalResolvedPayloadIsMinimalData(t *testing.T) {
 		if strings.Contains(string(wire), leak) {
 			t.Fatalf("approval.resolved wire payload leaks %q: %s", leak, wire)
 		}
+	}
+}
+
+func TestEngineApprovalReviewPolicyUsesEnabledScopedAuthoredMatch(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "review-policy")
+	other := h.createOrg(admin, "other-review-policy")
+	service := h.gov.EngineApprovals()
+	check := func(t model.TenantID, action, kind, want string) {
+		policy, err := service.ReviewPolicy(context.Background(), t, action, kind)
+		if err != nil || policy != want {
+			h.t.Fatalf("review(%s,%s)=%q %v want %q", action, kind, policy, err, want)
+		}
+	}
+	check(tenant, "claude.tool.use", "claude.tool", "")
+	create := func(name, action, kind string, enabled bool) string {
+		r := h.do("POST", govPath+"/policies", admin, map[string]any{"name": name, "kind": "approval", "enabled": enabled, "spec": map[string]any{"required_approvals": 1, "match": map[string]any{"action": action, "subject_kind": kind}}}, tenantHdr(tenant))
+		if r.code != http.StatusCreated {
+			h.t.Fatalf("policy=%d %s", r.code, r.raw)
+		}
+		return r.body["id"].(string)
+	}
+	create("disabled ask", "claude.tool.use", "claude.tool", false)
+	check(tenant, "claude.tool.use", "claude.tool", "")
+	codex := create("Codex ask", "sessions.provider.approval", "session_run", true)
+	check(tenant, "sessions.provider.approval", "session_run", codex)
+	check(tenant, "sessions.provider.approval", "claude.tool", "")
+	check(other, "sessions.provider.approval", "session_run", "")
+	claude := create("Claude ask", "claude.tool.use", "claude.tool", true)
+	check(tenant, "claude.tool.use", "claude.tool", claude)
+	canceled, cancel := context.WithCancel(context.Background())
+	cancel()
+	if _, err := service.ReviewPolicy(canceled, tenant, "claude.tool.use", "claude.tool"); err == nil {
+		t.Fatal("unavailable policy state became allow")
+	}
+	if err := h.st.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+		_, err := sc.Policies().Create(context.Background(), model.Policy{Name: "unreadable", Kind: "approval", Enabled: true, Spec: map[string]any{"required_approvals": "invalid integer"}})
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := service.ReviewPolicy(context.Background(), tenant, "claude.tool.use", "claude.tool"); err == nil {
+		t.Fatal("unreadable enabled policy became allow")
 	}
 }

@@ -115,6 +115,18 @@ func statusFor(err error) (int, string) {
 	case errors.Is(err, ErrActivationInvalidRequest):
 		// a malformed enable/disable/promote (unknown preset or add-on). 400.
 		return http.StatusBadRequest, "activation_invalid_request"
+	case errors.Is(err, ErrModulesUnavailable):
+		return http.StatusNotImplemented, "modules_unavailable"
+	case errors.Is(err, ErrUnknownModule):
+		return http.StatusBadRequest, "unknown_module"
+	case errors.Is(err, ErrModulesNotRecorded):
+		return http.StatusServiceUnavailable, "modules_not_recorded"
+	case errors.Is(err, ErrModulesRestartUnavailable):
+		return http.StatusServiceUnavailable, "modules_restart_unavailable"
+	case errors.Is(err, ErrActivationNotRecorded):
+		return http.StatusServiceUnavailable, "activation_not_recorded"
+	case errors.Is(err, ErrActivationRestartUnavailable):
+		return http.StatusServiceUnavailable, "activation_restart_unavailable"
 	case errors.Is(err, ErrLicenseDowngrade):
 		// the explicit acknowledge dialog (Elastic's acknowledge=true) rather
 		// than a generic denial. UNREACHABLE since B10 — no license entitles fewer
@@ -373,6 +385,10 @@ func statusFor(err error) (int, string) {
 		// serviceable, but governed actions fail deny-closed until the operator
 		// restores spool capacity, so 503 describes an actionable transient state.
 		return http.StatusServiceUnavailable, "audit_spool_full"
+	case errors.Is(err, auth.ErrInvalidEmail):
+		return http.StatusBadRequest, "invalid_email"
+	case errors.Is(err, auth.ErrAccountExists):
+		return http.StatusConflict, "conflict"
 	case errors.Is(err, auth.ErrWeakPassword):
 		return http.StatusBadRequest, "weak_password"
 	case errors.Is(err, errRequestBodyTooLarge):
@@ -444,6 +460,8 @@ func statusFor(err error) (int, string) {
 // told `internal error` and has nothing to act on", and a new sentinel added
 // tomorrow must not silently reintroduce it.
 var honestSeamMessage = map[string]string{
+	"activation_not_recorded":          "The change reached this server but could not be saved for the deployment, so the engine did not restart. Apply it again; if it fails again, check the engine log.",
+	"activation_restart_unavailable":   "The change is saved, but this engine cannot restart itself. Restart the engine with its service manager to apply it.",
 	"sso_not_configured":               "SSO is not configured on this deployment.",
 	"sso_builder_unavailable":          "This build can store SSO configuration but has no provider builder to activate it.",
 	"sso_unavailable":                  "SSO is unavailable: no secret sealer is wired, so an SSO secret cannot be sealed or opened.",
@@ -494,7 +512,10 @@ var honestSeamMessage = map[string]string{
 	// message the operator reads while already in trouble, which is the worst place to put a
 	// destructive default. The flags are named explicitly now, with the caution that they
 	// must match what is deployed; a remedy that runs is necessary and is not sufficient.
-	"cross_tenant_admin_pool_not_configured": "This deployment has no cross-tenant admin database pool, so a read across all tenants cannot be made authoritatively. Provision a NOSUPERUSER BYPASSRLS role — `olivares db init --superuser-dsn <dsn> --database <your db> --app-role <your app role> --owner-role <your owner role, omit only if the app role owns the schema> --admin-role olivares_admin --admin-password-file <file>` (see deploy/postgres/README.md) — and restart the server with --admin-dsn pointing at that role. The --database/--app-role/--owner-role values must match what is already deployed: db init runs ALTER DATABASE ... OWNER TO, so a short form that omits them can hand ownership to the wrong role.",
+	// SINCE 2026-10-02 THE REMEDY IS THE TENANT INVENTORY, not the admin role: db init installs it
+	// on a database it provisions, and the install-only mode adds it to an existing one without
+	// a new role or a new pool. The command quotes the two flags it cannot run without.
+	"cross_tenant_admin_pool_not_configured": "This database cannot list every organization. Run `olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` and restart the engine.",
 }
 
 // humanisedCode turns a curated snake_case code into a sentence. It exists so a

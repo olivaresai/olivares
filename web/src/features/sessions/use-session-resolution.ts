@@ -20,7 +20,7 @@
 //
 // Nothing about the resolution itself changed in the move: every comment below is the
 // one that was in `session-card.tsx`, and the card's own tests are the control.
-import { useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { useState } from 'react'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { RunDTO } from '@/features/agentops/types'
@@ -28,7 +28,12 @@ import { useLiveStream } from '@/features/shared'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { sessionsApi, sessionsKeys } from './api'
-import { isScopedRow, mergeSessions, type UnifiedSession } from './provenance'
+import {
+  echoRefsOf,
+  isScopedRow,
+  mergeSessions,
+  type UnifiedSession,
+} from './provenance'
 import type { SessionTarget } from './session-target'
 import type { LiveDTO } from './types'
 
@@ -56,9 +61,14 @@ export interface SessionResolution {
   operateUnknown: boolean
   /** The observed half was not READ. A 404 is an answer and not this. */
   observeUnknown: boolean
+  /** Why the observed half was not read when the read failed (not a 404 answer). */
+  observeError?: unknown
   loading: boolean
   grants: SessionGrants
 }
+
+/** One echo per id is expected; a few more absorb a re-keyed row without paging. */
+const ECHO_PAGE = 5
 
 export function useSessionResolution(
   target: SessionTarget | null,
@@ -184,7 +194,30 @@ export function useSessionResolution(
       ? [seed, ...linked]
       : linked
 
-  const merged = mergeSessions(live ? [live] : [], runs)
+  // A managed row's hook calls and turn usage live on legacy rows keyed by its run ref and
+  // canonical id (HU-R24). They are read through the list filtered by that id, which answers
+  // 200 with no rows before the hook or the usage has written; the single-row route answered
+  // 404 there on every open (FH 057). Folded as the list does.
+  const echoes = useQueries({
+    queries: (live ? echoRefsOf(live) : []).map((ref) => {
+      const params = { session_ref: ref, limit: ECHO_PAGE }
+      return {
+        queryKey: sessionsKeys.live(activeTenant, params),
+        queryFn: () => sessionsApi.live(params),
+        enabled: canLiveRead,
+        retry: false,
+      }
+    }),
+    combine: (results) =>
+      results.flatMap((r, i) =>
+        (r.data?.items ?? []).filter(
+          (row) =>
+            !isScopedRow(row) &&
+            row.session_ref === (live ? echoRefsOf(live)[i] : undefined),
+        ),
+      ),
+  })
+  const merged = mergeSessions(live ? [live, ...echoes] : [], runs)
   const session: UnifiedSession = merged.find((r) => r.live) ??
     merged[0] ?? {
       key: liveRef
@@ -231,6 +264,7 @@ export function useSessionResolution(
     streamStatus,
     operateUnknown,
     observeUnknown,
+    observeError: observeFailed ? liveQuery.error : undefined,
     loading,
     grants,
   }

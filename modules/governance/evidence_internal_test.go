@@ -1477,6 +1477,75 @@ forbid(principal, action, resource) when { resource.owner == "alice" };
 	})
 }
 
+func TestSuperadminTenantOwnerPreservesWorkspaceConfinement(t *testing.T) {
+	f := newTypedEvidenceFixture(t)
+	workspace := model.NewID()
+	user := f.confinedPrincipal(t, workspace)
+	ctx := t.Context()
+	if err := f.st.AuthMutate(ctx, func(sc store.AuthScope) error {
+		row, err := sc.Users().Get(ctx, model.ID(user.UserID))
+		if err != nil {
+			return err
+		}
+		row.IsSuperadmin = true
+		_, err = sc.Users().Update(ctx, row)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	authn := auth.NewAuthenticator(f.st, nil)
+	token, _, err := authn.Login(ctx, "typed-evidence-confined@example.test", "strong-password-2", "127.0.0.1")
+	if err != nil {
+		t.Fatal(err)
+	}
+	authenticated, err := authn.Authenticate(ctx, token)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, ok := authenticated.Ref()
+	if !ok {
+		t.Fatal("authenticated session has no durable reference")
+	}
+	resolveCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	principal, err := authn.ResolvePrincipalScope(resolveCtx, ref, f.tenant)
+	if err != nil {
+		t.Fatal(err)
+	}
+	role, member := principal.RoleIn(f.tenant)
+	actual, confined := principal.ConfinedWorkspaceIn(f.tenant)
+	if !principal.Superadmin || !member || role != auth.RoleOwner || !confined || actual != workspace {
+		t.Fatal("tenant owner admission lost stored workspace confinement")
+	}
+	engine, _ := typedEvidenceScopedEngine(t, f, f.data(typedEvidenceNow, nil), "", 0, FreshnessRecord{})
+	for _, tc := range []struct {
+		name       string
+		permission auth.Permission
+		workspace  model.ID
+		wantEffect auth.Effect
+		wantGuard  auth.CheckVerdict
+	}{
+		{"own workspace", "agent:write", workspace, auth.EffectAbstain, auth.CheckClean},
+		{"foreign workspace", "agent:write", model.NewID(), auth.EffectForbid, auth.CheckBroken},
+		{"tenant write", "agent:write", "", auth.EffectForbid, auth.CheckBroken},
+		{"tenant access graph", "accessgraph:read", "", auth.EffectForbid, auth.CheckBroken},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			req := typedEvidenceRequest(f.tenant)
+			req.Principal, req.Permission = principal, tc.permission
+			req.Resource = auth.ResourceAttrs{Kind: "agent", WorkspaceID: tc.workspace}
+			legacy, err := engine.Scoped(ctx, req)
+			if err != nil || legacy.Effect != tc.wantEffect {
+				t.Fatalf("legacy confinement = effect:%v err:%v, want %v", legacy.Effect, err, tc.wantEffect)
+			}
+			typed, err := engine.ScopedEvidence(typedEvidenceContext(t, typedEvidenceNow.Add(time.Hour)), req)
+			if err != nil || typed.ResourceGuard.Verdict != tc.wantGuard || typed.Effect != tc.wantEffect {
+				t.Fatalf("typed confinement = effect:%v guard:%v err:%v, want %v/%v", typed.Effect, typed.ResourceGuard.Verdict, err, tc.wantEffect, tc.wantGuard)
+			}
+		})
+	}
+}
+
 func TestScopedEvidenceS399AndLineageClassification(t *testing.T) {
 	f := newTypedEvidenceFixture(t)
 	workspace := model.NewID()

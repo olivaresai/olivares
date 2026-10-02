@@ -252,7 +252,7 @@ func TestARepeatedOffboardOfARemovedMemberWritesNothing(t *testing.T) {
 // exclusions, session scope and floors), a token's single bound tenant (and so
 // that tenant's exclusion), or no account at all.
 var principalBuilders = map[string]string{
-	"authenticator.go:authSession":                          "account session: exclusion, floor, session scope",
+	"authenticator.go:principalFromSession":                 "account session: exclusion, floor, session scope; shared with confined session credentials",
 	"authenticator.go:authToken":                            "account token: exclusion of its bound tenant",
 	"principal_lookup.go:principalForUserInScope":           "account standing entitlement: exclusion, floor",
 	"principal_lookup.go:TenantPrincipals":                  "account standing entitlement: exclusion, floor",

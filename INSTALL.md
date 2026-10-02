@@ -7,7 +7,7 @@ short version, and the deployment tutorials (Compose, Kubernetes/Helm, air-gappe
 [`docs-site/`](docs-site/).
 
 > **Beta.** Releases are cut from this repository. The binaries,
-> images and packages below **are published from the latest tagged release (`26.10.0`)**;
+> images and packages below **are published from the latest tagged release (`26.10.1`)**;
 > [building from source](#from-source) remains supported. Everything is self-hosted: the engine
 > makes no mandatory outbound calls at boot and verifying a licence never calls us. The one
 > command that reaches us is `olivares upgrade`, which fetches from the update channel unless
@@ -26,7 +26,7 @@ use [`scripts/verify-release.sh`](scripts/verify-release.sh) (see
 
 Releases use **CalVer**: a monthly release is `YY.M` (two-digit year and month, such as
 26.10), and a patch release adds a third number, `YY.M.N`. Tags have no `v` prefix; the 26.10
-release is tagged `26.10.0`. Container tags follow the release tag: `:26.10.0`, `:latest`, plus the `-fips` /
+release is tagged `26.10.1`. Container tags follow the release tag: `:26.10.1`, `:latest`, plus the `-fips` /
 `-stig` variants. The maturity label (**beta**) is separate from the version; a release that
 should be flagged *pre-release* on GitHub is tagged with a suffix, such as `-beta.1`.
 
@@ -108,7 +108,7 @@ removes it afterwards; pass `--install-cosign` to keep that verified copy next t
 curl -fsSL https://olivares.ai/olivares/install.sh | sh
 ```
 
-To pin a release: `curl -fsSL https://olivares.ai/olivares/install.sh | sh -s -- --version 26.10.0`.
+To pin a release: `curl -fsSL https://olivares.ai/olivares/install.sh | sh -s -- --version 26.10.1`.
 
 Use `--bindir "$HOME/.local/bin"` to select an absolute install directory. Verification
 cannot be bypassed and privilege escalation is always an explicit operator step. The
@@ -119,7 +119,7 @@ present:
 
 ```sh
 # systemd user service on Linux, LaunchAgent on macOS; review before starting
-ver=26.10.0   # the release tag
+ver=26.10.1   # the release tag
 sh "olivares-install-$ver.sh" --version "$ver" --user
 olivares doctor --mode user
 
@@ -221,7 +221,7 @@ it by hand if you really mean to.
 ### Manual binary (tarball)
 
 ```sh
-ver=26.10.0; os=linux; arch=amd64
+ver=26.10.1; os=linux; arch=amd64
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/olivares_${ver#v}_${os}_${arch}.tar.gz
 curl -fsSLO $base/checksums.txt
@@ -234,8 +234,10 @@ sudo install -m0755 olivares /usr/local/bin/olivares
 
 ### Docker
 
-Multi-arch (amd64/arm64), distroless, non-root. Run it — secure by default (TLS on, no default
-credentials, a one-time setup token) with a persistent data volume:
+Multi-arch (amd64/arm64), non-root (uid 65532), on a digest-pinned Debian 13 (trixie) slim base
+with Node.js 24, Python 3 and uv for the agent tools that Olivares installs into the data volume.
+Run it — secure by default (TLS on, no default credentials, a one-time setup token) with a
+persistent data volume:
 
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
@@ -244,8 +246,7 @@ docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
   serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
 ```
 
-Then ask the container where it is, and finish setup. The image is distroless, so there is no
-shell in it — `docker exec … bash` fails, and these two commands are the whole surface:
+Then ask the container where it is, and finish setup:
 
 ```sh
 docker exec olivares olivares first-boot
@@ -290,16 +291,16 @@ is the **fallback**: the release pipeline builds and signs on ghcr.io and then c
 content to Docker Hub **by digest** (`cosign copy`), so both coordinates resolve to identical
 layers, signatures and attestations. Docker Hub applies a rate limit to **anonymous** pulls;
 ghcr.io does not rate-limit anonymous pulls of public images — `docker login` on Docker Hub, or
-switch the host to `ghcr.io`, if a CI node or a large fleet hits the ceiling. Tags: `:26.10.0`
-(pin a release), `:latest`, `:26.10.0-fips` (FIPS 140-3 mode, CMVP #5247) and `:26.10.0-stig`
+switch the host to `ghcr.io`, if a CI node or a large fleet hits the ceiling. Tags: `:26.10.1`
+(pin a release), `:latest`, `:26.10.1-fips` (FIPS 140-3 mode, CMVP #5247) and `:26.10.1-stig`
 (STIG-profiled UBI base) — see [SCP-09](docs/SCP-09-FIPS-STIG.md). The base and `:latest` tags
 are multi-arch (amd64/arm64); `-fips`/`-stig` are amd64-only. **For production, pin by digest**
 (`docker.io/olivaresai/olivares@sha256:…`); the mutable tags above are for evaluation only. Verify
-the image: `cosign verify docker.io/olivaresai/olivares:26.10.0 --certificate-identity-regexp
-'^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$'
+the image: `cosign verify docker.io/olivaresai/olivares:26.10.1 --certificate-identity-regexp
+'^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$'
 --certificate-oidc-issuer
 https://token.actions.githubusercontent.com` (the same verification works identically against the
-`ghcr.io/olivaresai/olivares:26.10.0` fallback — same digest, signatures and attestations).
+`ghcr.io/olivaresai/olivares:26.10.1` fallback — same digest, signatures and attestations).
 
 ### Docker Compose
 
@@ -350,22 +351,21 @@ Bundle the signed image + chart + verification material and move it across the g
 
 Beyond *observing* and *governing* Claude Code, the engine can **conduct** it — launch a
 real `claude` process, bridge its I/O into a governed stream, and tear it down, over a
-shared workspace. This is an **opt-in** layer: the base image above is distroless and
-carries no `claude`; you add this only if you run governed Claude Code sessions.
+shared workspace. This is an **opt-in** layer: the image above carries no `claude` until you install it, and you add it only if you run governed Claude Code sessions.
 
 `claude` is installed from **Anthropic's official, GPG-signed source** (the signed
 apt/dnf/apk repos), pinned, auto-update off — never redistributed by us (their terms
 don't permit it). Bring-your-own is supported too.
 
-**Both in Docker** — one hardened combined image + a workspace volume:
+**Both in Docker** — the standard image runs them: Olivares installs the agent tools into its
+data volume and signs them in through the product. No second image or override file:
 
 ```sh
-docker build -f Dockerfile.agentops \
-  --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares:26.10.0 -t olivares-agentops:26.10.0 .
-OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.10.0 \
-  docker compose -f deploy/compose/docker-compose.yml \
-                 -f deploy/compose/docker-compose.agentops.yml up -d
+docker compose -f deploy/compose/docker-compose.yml up -d
 ```
+
+Then install and sign in to Claude Code from **AI tools** in the console, or with
+`olivares tool install claude` and `olivares tool login claude`.
 
 **Both native** — one command (verifies the engine signature, installs `claude` from the
 signed repo, wires the hardened systemd drop-in; does not auto-start):
@@ -471,7 +471,7 @@ olivares serve --seed-demo --insecure --listen 127.0.0.1:8443 --grpc-listen 127.
 ### Manual binary
 
 ```sh
-ver=26.10.0; arch=arm64   # or amd64 on Intel
+ver=26.10.1; arch=arm64   # or amd64 on Intel
 base=https://github.com/olivaresai/olivares/releases/download/$ver
 curl -fsSLO $base/olivares_${ver#v}_darwin_${arch}.tar.gz
 # ...verify (see Verifying a release), then:
@@ -587,7 +587,7 @@ olivares uninstall --plan --data-dir /var/lib/olivares
 olivares uninstall --preserve --data-dir /var/lib/olivares
 olivares uninstall --purge --data-dir /var/lib/olivares --yes
 # Same contract through the verified installer:
-sh olivares-install-26.10.0.sh --uninstall --plan --data-dir /var/lib/olivares
+sh olivares-install-26.10.1.sh --uninstall --plan --data-dir /var/lib/olivares
 ```
 
 To move an estate, create a DR bundle before purge, install the destination, then use

@@ -23,7 +23,7 @@ import (
 // entity routes (so an active scoped grant resolves the entity's true scope), a
 // committed Mutate with a single semantic audit event per write. Privileged,
 // privilege-shaped actions (creating/archiving a workspace) additionally require
-// AAL3 step-up (requireAAL3) — operational edits (renaming an agent-group) do not.
+// administrative step-up (requireStepUp) — operational edits (renaming an agent-group) do not.
 
 // slugPattern bounds a tenant-unique slug to a short, URL-safe handle.
 var slugPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]{0,62}$`)
@@ -83,7 +83,7 @@ func (s *Server) handleListWorkspaces(w http.ResponseWriter, r *http.Request) {
 	// same reconnaissance leak the module routes had, on the core side of the
 	// house, and the confinement decision that already governs the rest of the
 	// tenant said the operator may act ONLY within its own workspace.
-	if confinedWS, confined := p.ConfinedWorkspaceIn(tenant); confined && !p.Superadmin {
+	if confinedWS, confined := p.ConfinedWorkspaceIn(tenant); confined {
 		q.Filters = append(q.Filters, model.Filter{
 			Column: model.ColID, Op: model.OpEq, Value: confinedWS.String(),
 		})
@@ -117,7 +117,7 @@ func (s *Server) handleGetWorkspace(w http.ResponseWriter, r *http.Request) {
 	// B-03: naming another workspace by id is ErrNotFound, not a distinguishable
 	// refusal — otherwise the route stays an oracle for the ids the list no longer
 	// enumerates.
-	if confinedWS, confined := p.ConfinedWorkspaceIn(tenant); confined && !p.Superadmin && id != confinedWS {
+	if confinedWS, confined := p.ConfinedWorkspaceIn(tenant); confined && id != confinedWS {
 		s.writeError(w, r, store.ErrNotFound)
 		return
 	}
@@ -149,7 +149,7 @@ func (s *Server) handleCreateWorkspace(w http.ResponseWriter, r *http.Request) {
 	if !s.requireOwner(w, r, p, tenant) {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	var in createWorkspaceInput
@@ -196,7 +196,7 @@ func (s *Server) handleUpdateWorkspace(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	var in updateWorkspaceInput
@@ -641,7 +641,7 @@ func (s *Server) handleWorkspaceSummary(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	// Match Workspace GET's concealment before reading metadata or scoped counts.
-	if confinedWS, confined := p.ConfinedWorkspaceIn(tenant); confined && !p.Superadmin && id != confinedWS {
+	if confinedWS, confined := p.ConfinedWorkspaceIn(tenant); confined && id != confinedWS {
 		s.writeError(w, r, store.ErrNotFound)
 		return
 	}

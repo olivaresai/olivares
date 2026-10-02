@@ -1,10 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plug, Plus, RefreshCw } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useCommunityBuild } from '@/lib/hooks/use-edition'
 import { Badge } from '@/components/ui/badge'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { Button } from '@/components/ui/button'
@@ -15,7 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
 import { StatusBadge } from '@/components/data/badges'
 import { SecretRef } from '@/components/data/secret-ref'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
@@ -38,6 +40,10 @@ export default function CapabilitiesView() {
   const queryClient = useQueryClient()
   const canWriteConfig = can('capabilities:config:write')
   const canReadConfig = can('capabilities:config:read')
+  // Tool pins need the Business verifier: a Community build answers 501 there
+  // (modules/capabilities/toolpins.go), so it offers no Tool pins tab.
+  const communityBuild = useCommunityBuild()
+  const showToolPins = canReadConfig && !communityBuild
 
   const [tab, setTab] = useState<TabKey>('servers')
   const [selectedServer, setSelectedServer] = useState<string | null>(null)
@@ -281,7 +287,7 @@ export default function CapabilitiesView() {
         <TabsList>
           <TabsTrigger value="servers">{t('tabs.servers')}</TabsTrigger>
           <TabsTrigger value="tools">{t('tabs.tools')}</TabsTrigger>
-          {canReadConfig && (
+          {showToolPins && (
             <TabsTrigger value="tool-pins">{t('tabs.toolPins')}</TabsTrigger>
           )}
           <TabsTrigger value="skills">{t('tabs.skills')}</TabsTrigger>
@@ -323,6 +329,15 @@ export default function CapabilitiesView() {
               <EmptyState
                 title={t('empty.server.title')}
                 description={t('empty.server.description')}
+                action={
+                  // Servers are added, tested and enabled on MCP servers (HU 025);
+                  // this catalog lists what connectors discovered.
+                  can('tenant:admin') ? (
+                    <Button asChild variant="secondary" size="sm">
+                      <a href="/mcp-servers">{t('empty.server.action')}</a>
+                    </Button>
+                  ) : undefined
+                }
               />
             }
           />
@@ -363,7 +378,7 @@ export default function CapabilitiesView() {
           />
         </TabsContent>
 
-        {canReadConfig && (
+        {showToolPins && (
           <TabsContent value="tool-pins">
             <ToolPinsTab canWrite={canWriteConfig} />
           </TabsContent>
@@ -422,7 +437,10 @@ export default function CapabilitiesView() {
           ) : wiring.error instanceof ApiError && wiring.error.isForbidden ? (
             <ForbiddenState />
           ) : wiring.error ? (
-            <ErrorState retry={() => wiring.refetch()} />
+            <QueryErrorState
+              error={wiring.error}
+              retry={() => wiring.refetch()}
+            />
           ) : wiring.data ? (
             <WiringGraph graph={wiring.data} />
           ) : null}

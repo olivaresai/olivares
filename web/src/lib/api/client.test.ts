@@ -547,3 +547,25 @@ describe('apiFetch', () => {
     })
   })
 })
+
+it('cookie transport pins CSRF and rejects caller-supplied bearer authority', async () => {
+  configureApiClient({
+    getToken: () => null,
+    getCSRFToken: () => 'csrf_fixture',
+    getTenant: () => null,
+  })
+  mock(200, {})
+  try {
+    await apiFetch('/v1/auth/whoami', {
+      sessionEffects: 'none',
+      headers: { Authorization: 'Bearer forged', 'X-CSRF-Token': 'forged' },
+    })
+    const headers = new Headers(
+      vi.mocked(fetch).mock.calls.at(-1)?.[1]?.headers,
+    )
+    expect(headers.has('Authorization')).toBe(false)
+    expect(headers.get('X-CSRF-Token')).toBe('csrf_fixture')
+  } finally {
+    configureApiClient({ getCSRFToken: undefined })
+  }
+})

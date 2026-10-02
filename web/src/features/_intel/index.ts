@@ -27,7 +27,6 @@ export {
   IntelNotice,
   ListTruncationBadge,
   TruncatedNotice,
-  SelfAuditNotice,
   CaveatNotice,
   DisclaimerNote,
   SeamBadge,

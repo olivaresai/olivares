@@ -68,8 +68,8 @@ func TestFirstHourHelpEndsWithTheNextCommand(t *testing.T) {
 	for _, tc := range []struct{ path, next string }{
 		{"quickstart", "olivares first-boot"},
 		{"first-boot", "olivares doctor"},
-		{"doctor", "olivares agent tool detect"},
-		{"agent deploy", "olivares agent session create --provider-profile <ref>"},
+		{"doctor", "olivares tool ls"},
+		{"agent deploy", "olivares session start <folder>"},
 	} {
 		t.Run(tc.path, func(t *testing.T) {
 			got := helpFor(t, strings.Fields(tc.path)...)
@@ -450,8 +450,8 @@ func TestFirstHourHelpSurvivesConcurrentRootBuilds(t *testing.T) {
 	cases := []struct{ path, next string }{
 		{"quickstart", "olivares first-boot"},
 		{"first-boot", "olivares doctor"},
-		{"doctor", "olivares agent tool detect"},
-		{"agent deploy", "olivares agent session create --provider-profile <ref>"},
+		{"doctor", "olivares tool ls"},
+		{"agent deploy", "olivares session start <folder>"},
 	}
 	const builders = 8
 	roots := make([]*cobra.Command, builders)

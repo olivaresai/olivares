@@ -40,6 +40,7 @@ import {
   Coins,
   HeartPulse,
   LayoutDashboard,
+  OctagonAlert,
   ScrollText,
   ShieldAlert,
 } from 'lucide-react'
@@ -65,13 +66,26 @@ import {
 import { finopsApi, finopsKeys } from '@/features/finops/api'
 import { inventoryApi, inventoryKeys } from '@/features/inventory/api'
 import { sessionsApi, sessionsKeys } from '@/features/sessions/api'
+import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import {
+  isLiveRun,
+  mergeSessions,
+  type UnifiedSession,
+} from '@/features/sessions/provenance'
+import type { LiveDTO } from '@/features/sessions/types'
 import { securityApi, securityKeys } from '@/features/security/api'
 import { complianceApi, complianceKeys } from '@/features/compliance/api'
 import { healthApi, healthKeys } from '@/features/health/api'
 import { formatInt, formatMicroUsd, formatPercent } from '@/lib/format'
-import { WorkComposer } from '@/components/layout/work-composer'
 import { EstateTile, type TileState } from './components'
 import { NextStep } from './next-step'
+import { NowQueue } from './now-queue'
+import { BUDGET_READ } from './budget-verdict'
+import { BudgetsTile } from './budgets-tile'
+import { useKillSwitchState } from '@/components/layout/use-killswitch-state'
+import { usePendingApprovals } from '@/features/governance/use-pending-approvals'
+import { NowStart } from './now-start'
+import { useModuleEnabled } from '@/stores/modules'
 import { RecentWork } from './recent-work'
 import './i18n'
 
@@ -158,6 +172,36 @@ function sourceAvailability(
   return partial ? 'partial' : 'current'
 }
 
+/** How many runs Now reads for Recent work (it shows the newest few). */
+const HOME_RUN_PARAMS = { limit: 30 } as const
+/**
+ * The live rows the Sessions tile counts: one per session (HU 029 counted "3" for one
+ * launch). Rows folded into a launched session as echoes are not counted again, and a
+ * launched session is active only while its run is (a stopped run's row keeps its
+ * last "active" signal).
+ */
+export function liveForTiles<T extends { items: LiveDTO[] }>(
+  answer: T | undefined,
+  sessions: UnifiedSession[] | undefined,
+): T | undefined {
+  if (!answer || !sessions) return answer
+  const echoes = new Set(
+    sessions.flatMap((s) => (s.echoes ?? []).map((e) => e.live_ref)),
+  )
+  const runState = new Map<string, boolean>()
+  for (const s of sessions)
+    if (s.live && s.runs.length > 0)
+      runState.set(s.live.live_ref, s.runs.some(isLiveRun))
+  const items = answer.items
+    .filter((l) => !echoes.has(l.live_ref))
+    .map((l) =>
+      runState.get(l.live_ref) === false && l.cc_state === 'active'
+        ? { ...l, cc_state: 'ended' as const }
+        : l,
+    )
+  return { ...answer, items }
+}
+
 export function HomeView() {
   const { t } = useTranslation(['home', 'nav', 'common'])
   const { activeTenant, can } = useAuth()
@@ -165,12 +209,17 @@ export function HomeView() {
   const queryClient = useQueryClient()
 
   // RBAC: gate every tile by the same read permission its nav item uses (docs/SECURITY-HARDENING.md).
-  const canFinops = can('finops:spend:read')
-  const canInventory = can('inventory:catalog:read')
+  // A tile reads its module only where the module runs (ARCH C1): a module that is not
+  // enabled shows no tile and is never asked, so Home shows no error for it.
+  const on = useModuleEnabled()
+  const may = (permission: string) => can(permission) && on(permission)
+  const canFinops = may('finops:spend:read')
+  const canBudgets = may(BUDGET_READ)
+  const canInventory = may('inventory:catalog:read')
   const canSessions = can('sessions:live:read')
-  const canSecurity = can('security:finding:read')
-  const canCompliance = can('compliance:framework:read')
-  const canHealth = can('health:status:read')
+  const canSecurity = may('security:finding:read')
+  const canCompliance = may('compliance:framework:read')
+  const canHealth = may('health:status:read')
 
   // The estate overview reads the last 30 days, computed once on mount so the query key
   // is stable across re-renders (the executive view derives its own 30d window the same way).
@@ -215,11 +264,33 @@ export function HomeView() {
   //    Only that ignored filter went: the read is still pinned to the tenant, still gated by
   //    `sessions:live:read`, and the label under the tile describes SCOPE — not a grant, not
   //    completeness. The inventory read above now follows the same rule.
+  // Pending approvals for "Needs you": the approval queue's own read (shared cache).
+  const pendingApprovals = usePendingApprovals()
+  const killSwitch = useKillSwitchState()
   const sessionsQ = useQuery({
     queryKey: sessionsKeys.live(activeTenant),
     queryFn: () => sessionsApi.live(),
     enabled: canSessions,
   })
+  // The sessions Olivares operates, so a launched session is on Now by its name and state
+  // (one row with what was observed of it, merged below).
+  const canRuns = can('sessions:run:read')
+  // Whoever can start a session reads the real next step on the start line (install, sign
+  // in, or New session); the generic offers are only for those who cannot (N2 J8: a fresh
+  // install showed them under "Sign Claude Code in"), and only the ones they may take.
+  const showNextStep = !can('sessions:run:write')
+  const runsQ = useQuery({
+    queryKey: [...agentOpsKeys.runs(activeTenant, HOME_RUN_PARAMS), 'home'],
+    queryFn: () => agentOpsApi.listRuns(HOME_RUN_PARAMS),
+    enabled: canRuns,
+  })
+  const recentSessions = useMemo(
+    () =>
+      sessionsQ.data || runsQ.data
+        ? mergeSessions(sessionsQ.data?.items ?? [], runsQ.data?.items ?? [])
+        : undefined,
+    [sessionsQ.data, runsQ.data],
+  )
   const findingsQ = useQuery({
     queryKey: securityKeys.findings(activeTenant),
     queryFn: () => securityApi.findings(),
@@ -282,7 +353,7 @@ export function HomeView() {
   // design — the `?? 0` this file used to put in front of it was the fabrication.
   const usage = deriveUsage(
     currentAnswer(canInventory, inventoryQ),
-    currentAnswer(canSessions, sessionsQ),
+    liveForTiles(currentAnswer(canSessions, sessionsQ), recentSessions),
   )
   const risk = deriveRisk(findingsQ.data)
   const compliance = deriveCompliance(complianceQ.data)
@@ -347,7 +418,10 @@ export function HomeView() {
     canSessions ||
     canSecurity ||
     canCompliance ||
-    canHealth
+    canHealth ||
+    killSwitch.permitted ||
+    pendingApprovals.permitted ||
+    canBudgets
 
   if (!anyPermitted) {
     return (
@@ -405,248 +479,274 @@ export function HomeView() {
       >
         {announcement}
       </div>
-      {/* THE WORK, FIRST, AND IT IS THE WORK AND NOT A SUMMARY OF IT.
-          The reference's front door opens on the threads in progress and a place to
-          type; ours opened on six aggregates, and the owner's verdict was that the
-          screens *"no cumplen ningún objetivo ni estándar de uso"*.
+      {/* THE WORK, FIRST: how to start, what needs a person, what is running, then the
+          numbers. How to start is read from the tools themselves (NowStart, HU-19). */}
+      {/* NOW (console remake 26.10): the work column — start work, what needs a person,
+          what is running — beside a quiet column of the estate figures. Nothing below is
+          new data: the queue is the session rail's own groups, the list and the tiles are
+          the reads this view already made. */}
+      <div className="grid gap-x-8 gap-y-6 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex min-w-0 flex-col gap-6">
+          <NowStart />
 
-          The order is now: start work · what is in progress · what to do next · the
-          numbers. An operator who can start a run needs the composer more than a
-          figure; an operator who cannot start one still gets `NextStep` and the tiles,
-          in the same order, because `WorkComposer` renders nothing but its scope line
-          without `sessions:run:write`.
+          {/* What needs a person: the sessions half for a role that reads live sessions,
+              the approvals for a role that reads the queue — either alone is enough. */}
+          {canSessions || pendingApprovals.permitted ? (
+            <NowQueue
+              sessions={sessionsQ.data?.items}
+              state={tileState(sessionsQ)}
+              sessionsReadable={canSessions}
+              approvals={pendingApprovals.query.data?.items}
+              approvalsState={
+                pendingApprovals.permitted
+                  ? tileState(pendingApprovals.query)
+                  : 'ready'
+              }
+            />
+          ) : null}
 
-          This is the SAME component the shell used to dock to the bottom of all 77
-          viewports. Here it is a panel in the work, next to the list its run joins. */}
-      <WorkComposer />
-
-      {/* WHAT IS IN PROGRESS. Reads NOTHING new: the rows are the very page `sessionsQ`
+          {/* WHAT IS IN PROGRESS. Reads NOTHING new: the rows are the very page `sessionsQ`
           already fetched for the live tile. Mounted only for a role that may read live
           sessions, like the tile below it. */}
-      {canSessions ? (
-        <RecentWork
-          sessions={sessionsQ.data?.items}
-          state={tileState(sessionsQ)}
-          canStartSession={can('sessions:run:write')}
-        />
-      ) : null}
+          {canSessions || canRuns ? (
+            <RecentWork
+              titled
+              sessions={recentSessions}
+              state={tileState(canRuns ? runsQ : sessionsQ)}
+              canStartSession={can('sessions:run:write')}
+            />
+          ) : null}
+        </div>
 
-      <div className="mt-6 flex flex-col gap-6">
-        {/* THE NEXT ACTION. A side-by-side with the reference found this page offering
+        <aside
+          aria-label={t('aside')}
+          data-testid="now-aside"
+          className="flex min-w-0 flex-col gap-4"
+        >
+          {/* THE NEXT ACTION. A side-by-side with the reference found this page offering
           "six
           read-only cards, no action anywhere"; the verbs stay above the numbers because
           an operator who cannot start anything does not need a faster way to read. */}
-        <NextStep />
+          {/* The start line above holds the next step for whoever can start a session
+              (HU 022, N2 J8); the generic offers are for those who cannot. */}
+          {showNextStep && <NextStep stacked />}
 
-        {/* Three columns on a wide screen, not four: the front door holds SIX tiles, and
+          {/* Three columns on a wide screen, not four: the front door holds SIX tiles, and
           a four-column grid leaves the second row half-empty — measured at 1600 px on
           2026-09-17. `StatGrid`'s own default stays as it is for the views that lead
           with four figures. */}
-        <StatGrid className="lg:grid-cols-3">
-          {canInventory ? (
-            <EstateTile
-              to="/inventory"
-              icon={<Boxes />}
-              label={t('tiles.inventory.label')}
-              state={tileState(inventoryQ)}
-              value={formatInt(usage.totalEntities)}
-              // With no current answer and no fetch in flight, the caption is the REASON
-              // beside the "—" (a line of dashes explained nothing), in the same muted
-              // register as the tile's own retry hint. The figure line keeps `formatInt`'s
-              // em-dash: nothing here is a zero.
-              caption={
-                inventoryPending ? (
-                  <span
-                    className="text-muted-foreground"
-                    data-testid="home-inventory-pending-reason"
-                  >
-                    {pendingText(inventoryPending)}
+          <StatGrid className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-1">
+            {canInventory ? (
+              <EstateTile
+                compact
+                to="/inventory"
+                icon={<Boxes />}
+                label={t('tiles.inventory.label')}
+                state={tileState(inventoryQ)}
+                value={formatInt(usage.totalEntities)}
+                // With no current answer and no fetch in flight, the caption is the REASON
+                // beside the "—" (a line of dashes explained nothing), in the same muted
+                // register as the tile's own retry hint. The figure line keeps `formatInt`'s
+                // em-dash: nothing here is a zero.
+                caption={
+                  inventoryPending ? (
+                    <span
+                      className="text-muted-foreground"
+                      data-testid="home-inventory-pending-reason"
+                    >
+                      {pendingText(inventoryPending)}
+                    </span>
+                  ) : (
+                    t('tiles.inventory.caption', {
+                      agents: formatInt(usage.totalAgents),
+                      active: formatInt(usage.activeAgents),
+                    })
+                  )
+                }
+                scope={
+                  <span data-testid="home-inventory-scope-note">
+                    {t('nav:workspace.tenantWide')}
                   </span>
-                ) : (
-                  t('tiles.inventory.caption', {
-                    agents: formatInt(usage.totalAgents),
-                    active: formatInt(usage.activeAgents),
-                  })
-                )
-              }
-              scope={
-                <span data-testid="home-inventory-scope-note">
-                  {t('nav:workspace.tenantWide')}
-                </span>
-              }
-              // A TRUNCATED SUMMARY IS A FLOOR, AND THE FRONT DOOR NOW SAYS SO.
-              // `deriveUsage` has always propagated `inventory.truncated` — the engine
-              // aggregated one bounded page and there was more — and the Inventory view
-              // has always flagged it (inventory-view.tsx:189), but this tile printed the
-              // same counts with nothing said, so a bounded scan read as the whole estate.
-              // The source is named because this page shows several aggregates; this
-              // marker describes only Inventory. The counts stay: a floor is a real answer,
-              // and hiding it would be the opposite defect. `currentAnswer` above means a
-              // pending, refused or failed summary is not truncated but UNKNOWN, and the
-              // tile renders this only when it is `ready`, so the marker cannot outlive
-              // the figure it qualifies.
-              partial={
-                usage.truncated
-                  ? {
-                      testId: 'home-inventory-partial-details',
-                      sources: [
-                        {
-                          source: t('nav:items.inventory'),
-                          kind: 'aggregate',
-                          testId: 'home-inventory-partial-note',
-                        },
-                      ],
-                    }
-                  : undefined
-              }
-            />
-          ) : null}
+                }
+                // A TRUNCATED SUMMARY IS A FLOOR, AND THE FRONT DOOR NOW SAYS SO.
+                // `deriveUsage` has always propagated `inventory.truncated` — the engine
+                // aggregated one bounded page and there was more — and the Inventory view
+                // has always flagged it (inventory-view.tsx:189), but this tile printed the
+                // same counts with nothing said, so a bounded scan read as the whole estate.
+                // The source is named because this page shows several aggregates; this
+                // marker describes only Inventory. The counts stay: a floor is a real answer,
+                // and hiding it would be the opposite defect. `currentAnswer` above means a
+                // pending, refused or failed summary is not truncated but UNKNOWN, and the
+                // tile renders this only when it is `ready`, so the marker cannot outlive
+                // the figure it qualifies.
+                partial={
+                  usage.truncated
+                    ? {
+                        testId: 'home-inventory-partial-details',
+                        sources: [
+                          {
+                            source: t('nav:items.inventory'),
+                            kind: 'aggregate',
+                            testId: 'home-inventory-partial-note',
+                          },
+                        ],
+                      }
+                    : undefined
+                }
+              />
+            ) : null}
 
-          {canSessions ? (
-            <EstateTile
-              to="/sessions"
-              icon={<Activity />}
-              label={t('tiles.sessions.label')}
-              state={tileState(sessionsQ)}
-              value={formatInt(usage.liveActive)}
-              caption={
-                sessionsPending ? (
-                  <span
-                    className="text-muted-foreground"
-                    data-testid="home-sessions-pending-reason"
-                  >
-                    {pendingText(sessionsPending)}
-                  </span>
-                ) : (
-                  t('tiles.sessions.caption', {
-                    idle: formatInt(usage.liveIdle),
-                  })
-                )
-              }
-              tone={
-                usage.silentEvasion !== null && usage.silentEvasion > 0
-                  ? 'warning'
-                  : undefined
-              }
-              scope={
-                <span data-testid="home-sessions-scope-note">
-                  {t('nav:workspace.tenantWide')}
-                </span>
-              }
-              // A PAGE WITH ROWS BEYOND IT IS A FLOOR, AND THE FRONT DOOR NOW SAYS SO.
-              // `GET /v1/m/sessions/live` answers with ONE most-recent page — the store
-              // reads limit+1 rows (default 100, ceiling 1000) and reports `has_more`
-              // when the extra row existed (modules/sessions/api.go handleListLive) — and
-              // the active and idle figures on this tile are counted over that page. The
-              // Sessions view says so of its own table (sessions-workspace-view.tsx, the
-              // `partial.truncated` notice); this tile printed the same counts with
-              // nothing said, so a bounded page read as the estate. The
-              // source is named because the neighbouring Inventory tile carries a marker of
-              // its own, for its own aggregate: neither describes the other. The hint is the
-              // PAGE sentence, not the scan-ceiling one. The counts stay — a floor is a real
-              // answer. `currentAnswer` above means a pending, refused or failed page is not
-              // partial but UNKNOWN, and the tile renders this only when it is `ready`, so
-              // the marker cannot outlive the figure it qualifies. A page without
-              // `has_more` keeps the previous rendering exactly: no marker, and no claim of
-              // completeness added either. The tile renders the entry twice from this one
-              // value: a compact caption line inside its link and the full sentence in the
-              // disclosure beneath it (components.tsx, `CoverageLinkTile`).
-              partial={
-                usage.livePartial
-                  ? {
-                      testId: 'home-sessions-partial-details',
-                      sources: [
-                        {
-                          source: t('nav:nouns.sessions'),
-                          kind: 'page',
-                          testId: 'home-sessions-partial-note',
-                        },
-                      ],
-                    }
-                  : undefined
-              }
-              trend={
-                usage.silentEvasion !== null && usage.silentEvasion > 0 ? (
-                  <span className="inline-flex items-center gap-1 text-caption text-warning">
-                    <Activity className="size-3.5" aria-hidden />
-                    {t('tiles.sessions.silent', { count: usage.silentEvasion })}
-                  </span>
-                ) : undefined
-              }
-            />
-          ) : null}
-
-          {canSecurity ? (
-            <EstateTile
-              to="/security"
-              icon={<ShieldAlert />}
-              label={t('tiles.security.label')}
-              state={tileState(findingsQ)}
-              value={formatInt(risk?.openFindings ?? 0)}
-              tone={
-                risk && risk.criticalHigh > 0
-                  ? 'danger'
-                  : risk && risk.openFindings > 0
+            {canSessions ? (
+              <EstateTile
+                compact
+                to="/sessions"
+                icon={<Activity />}
+                label={t('tiles.sessions.label')}
+                state={tileState(sessionsQ)}
+                value={formatInt(usage.liveNow)}
+                caption={
+                  sessionsPending ? (
+                    <span
+                      className="text-muted-foreground"
+                      data-testid="home-sessions-pending-reason"
+                    >
+                      {pendingText(sessionsPending)}
+                    </span>
+                  ) : (
+                    t('tiles.sessions.caption', {
+                      idle: formatInt(usage.liveIdle),
+                    })
+                  )
+                }
+                tone={
+                  usage.silentEvasion !== null && usage.silentEvasion > 0
                     ? 'warning'
-                    : 'success'
-              }
-              caption={
-                risk && risk.openFindings > 0
-                  ? t('tiles.security.caption', {
-                      count: formatInt(risk.criticalHigh),
-                    })
-                  : t('tiles.security.clear')
-              }
-              trend={
-                risk ? (
-                  <SeverityRow bySeverity={risk.bySeverity} compact />
-                ) : undefined
-              }
-            />
-          ) : null}
+                    : undefined
+                }
+                scope={
+                  <span data-testid="home-sessions-scope-note">
+                    {t('nav:workspace.tenantWide')}
+                  </span>
+                }
+                // A PAGE WITH ROWS BEYOND IT IS A FLOOR, AND THE FRONT DOOR NOW SAYS SO.
+                // `GET /v1/m/sessions/live` answers with ONE most-recent page — the store
+                // reads limit+1 rows (default 100, ceiling 1000) and reports `has_more`
+                // when the extra row existed (modules/sessions/api.go handleListLive) — and
+                // the active and idle figures on this tile are counted over that page. The
+                // Sessions view says so of its own table (sessions-workspace-view.tsx, the
+                // `partial.truncated` notice); this tile printed the same counts with
+                // nothing said, so a bounded page read as the estate. The
+                // source is named because the neighbouring Inventory tile carries a marker of
+                // its own, for its own aggregate: neither describes the other. The hint is the
+                // PAGE sentence, not the scan-ceiling one. The counts stay — a floor is a real
+                // answer. `currentAnswer` above means a pending, refused or failed page is not
+                // partial but UNKNOWN, and the tile renders this only when it is `ready`, so
+                // the marker cannot outlive the figure it qualifies. A page without
+                // `has_more` keeps the previous rendering exactly: no marker, and no claim of
+                // completeness added either. The tile renders the entry twice from this one
+                // value: a compact caption line inside its link and the full sentence in the
+                // disclosure beneath it (components.tsx, `CoverageLinkTile`).
+                partial={
+                  usage.livePartial
+                    ? {
+                        testId: 'home-sessions-partial-details',
+                        sources: [
+                          {
+                            source: t('nav:nouns.sessions'),
+                            kind: 'page',
+                            testId: 'home-sessions-partial-note',
+                          },
+                        ],
+                      }
+                    : undefined
+                }
+                trend={
+                  usage.silentEvasion !== null && usage.silentEvasion > 0 ? (
+                    <span className="inline-flex items-center gap-1 text-caption text-warning">
+                      <Activity className="size-3.5" aria-hidden />
+                      {t('tiles.sessions.silent', {
+                        count: usage.silentEvasion,
+                      })}
+                    </span>
+                  ) : undefined
+                }
+              />
+            ) : null}
 
-          {canCompliance ? (
-            <EstateTile
-              to="/compliance"
-              icon={<ScrollText />}
-              label={t('tiles.compliance.label')}
-              state={tileState(complianceQ)}
-              value={
-                compliance && compliance.coveredPct !== null
-                  ? formatPercent(compliance.coveredPct, { digits: 0 })
-                  : '—'
-              }
-              caption={
-                compliance && compliance.total > 0
-                  ? t('tiles.compliance.caption', {
-                      gap: formatInt(compliance.gap),
-                      unmapped: formatInt(compliance.unmapped),
-                    })
-                  : t('tiles.compliance.noControls')
-              }
-              trend={
-                compliance ? (
-                  <ComplianceMixBar
-                    compliance={compliance}
-                    height={6}
-                    showLegend={false}
-                  />
-                ) : undefined
-              }
-            />
-          ) : null}
+            {canSecurity ? (
+              <EstateTile
+                compact
+                to="/security"
+                icon={<ShieldAlert />}
+                label={t('tiles.security.label')}
+                state={tileState(findingsQ)}
+                value={formatInt(risk?.openFindings ?? 0)}
+                tone={
+                  risk && risk.criticalHigh > 0
+                    ? 'danger'
+                    : risk && risk.openFindings > 0
+                      ? 'warning'
+                      : 'success'
+                }
+                caption={
+                  risk && risk.openFindings > 0
+                    ? t('tiles.security.caption', {
+                        count: formatInt(risk.criticalHigh),
+                      })
+                    : t('tiles.security.clear')
+                }
+                trend={
+                  risk ? (
+                    <SeverityRow bySeverity={risk.bySeverity} compact />
+                  ) : undefined
+                }
+              />
+            ) : null}
 
-          {canFinops ? (
-            <EstateTile
-              to="/finops"
-              icon={<Coins />}
-              label={t('tiles.spend.label')}
-              state={tileState(costSummaryQ, costTrendQ, forecastQ)}
-              value={formatMicroUsd(cost?.totalMicroUsd ?? 0, {
-                compact: true,
-              })}
-              tone={cost?.projectedOver ? 'warning' : undefined}
-              /* ⛔ THE STATE IS IN THE WORDS, NOT ONLY IN THE TOKEN (WCAG 2.1 AA 1.4.1).
+            {canCompliance ? (
+              <EstateTile
+                compact
+                to="/compliance"
+                icon={<ScrollText />}
+                label={t('tiles.compliance.label')}
+                state={tileState(complianceQ)}
+                value={
+                  compliance && compliance.coveredPct !== null
+                    ? formatPercent(compliance.coveredPct, { digits: 0 })
+                    : '—'
+                }
+                caption={
+                  compliance && compliance.total > 0
+                    ? t('tiles.compliance.caption', {
+                        gap: formatInt(compliance.gap),
+                        unmapped: formatInt(compliance.unmapped),
+                      })
+                    : t('tiles.compliance.noControls')
+                }
+                trend={
+                  compliance ? (
+                    <ComplianceMixBar
+                      compliance={compliance}
+                      height={6}
+                      showLegend={false}
+                    />
+                  ) : undefined
+                }
+              />
+            ) : null}
+
+            {canFinops ? (
+              <EstateTile
+                compact
+                to="/finops"
+                icon={<Coins />}
+                label={t('tiles.spend.label')}
+                state={tileState(costSummaryQ, costTrendQ, forecastQ)}
+                value={formatMicroUsd(cost?.totalMicroUsd ?? 0, {
+                  compact: true,
+                })}
+                tone={cost?.projectedOver ? 'warning' : undefined}
+                /* ⛔ THE STATE IS IN THE WORDS, NOT ONLY IN THE TOKEN (WCAG 2.1 AA 1.4.1).
                  The tone above tints this caption and nothing else changed: the same
                  estate at 90 % and at 140 % of its run-rate printed the SAME sentence,
                  so a reader who does not see the amber — a monochrome display, a
@@ -656,75 +756,111 @@ export function HomeView() {
                  `trend_projected_micro_usd > spend_micro_usd` (executive/derive.ts),
                  so the second caption says exactly that and not "over budget", which
                  is a different fact this screen does not read. */
-              caption={
-                cost && cost.projectedMicroUsd !== null
-                  ? t(
-                      cost.projectedOver
-                        ? 'tiles.spend.projectedOver'
-                        : 'tiles.spend.projected',
-                      {
-                        amount: formatMicroUsd(cost.projectedMicroUsd, {
-                          compact: true,
-                        }),
-                      },
-                    )
-                  : t('tiles.spend.caption', { range: t('range') })
-              }
-              trend={
-                cost && cost.trend.length > 1 ? (
-                  <div className="flex items-center justify-between gap-2">
-                    <Sparkline
-                      data={cost.trend}
-                      dataKey="cost"
-                      color={theme.accent}
-                      className="max-w-[60%]"
-                    />
+                caption={
+                  cost && cost.projectedMicroUsd !== null
+                    ? t(
+                        cost.projectedOver
+                          ? 'tiles.spend.projectedOver'
+                          : 'tiles.spend.projected',
+                        {
+                          amount: formatMicroUsd(cost.projectedMicroUsd, {
+                            compact: true,
+                          }),
+                        },
+                      )
+                    : t('tiles.spend.caption', { range: t('range') })
+                }
+                trend={
+                  cost && cost.trend.length > 1 ? (
+                    <div className="flex items-center justify-between gap-2">
+                      <Sparkline
+                        data={cost.trend}
+                        dataKey="cost"
+                        color={theme.accent}
+                        className="max-w-[60%]"
+                      />
+                      <DeltaCaption pct={cost.deltaPct} />
+                    </div>
+                  ) : cost ? (
                     <DeltaCaption pct={cost.deltaPct} />
-                  </div>
-                ) : cost ? (
-                  <DeltaCaption pct={cost.deltaPct} />
-                ) : undefined
-              }
-            />
-          ) : null}
+                  ) : undefined
+                }
+              />
+            ) : null}
 
-          {canHealth ? (
-            <EstateTile
-              to="/health"
-              icon={<HeartPulse />}
-              label={t('tiles.health.label')}
-              state={tileState(healthStatusQ, incidentsQ)}
-              value={
-                health && health.total > 0
-                  ? t('tiles.health.value', {
-                      healthy: formatInt(health.healthy),
-                      total: formatInt(health.total),
-                    })
-                  : '—'
-              }
-              tone={
-                health && (health.down > 0 || health.slaBreaches > 0)
-                  ? 'danger'
-                  : health && health.degraded > 0
-                    ? 'warning'
-                    : health && health.total > 0
-                      ? 'success'
+            {/* SPEND AGAINST BUDGETS (CONCEPT-IA): which budget is PROVEN over its limit,
+                read from the canonical amount under the Cost page's own keys
+                (budgets-tile.tsx states the financial rule). */}
+            {canBudgets ? <BudgetsTile /> : null}
+
+            {canHealth ? (
+              <EstateTile
+                compact
+                to="/health"
+                icon={<HeartPulse />}
+                label={t('tiles.health.label')}
+                state={tileState(healthStatusQ, incidentsQ)}
+                value={
+                  health && health.total > 0
+                    ? t('tiles.health.value', {
+                        healthy: formatInt(health.healthy),
+                        total: formatInt(health.total),
+                      })
+                    : '—'
+                }
+                tone={
+                  health && (health.down > 0 || health.slaBreaches > 0)
+                    ? 'danger'
+                    : health && health.degraded > 0
+                      ? 'warning'
+                      : health && health.total > 0
+                        ? 'success'
+                        : undefined
+                }
+                caption={
+                  health && health.total > 0
+                    ? t('tiles.health.caption', {
+                        breaches: formatInt(health.slaBreaches),
+                        incidents: formatInt(health.openIncidents),
+                      })
+                    : t('tiles.health.noChecks')
+                }
+              />
+            ) : null}
+            {/* THE KILL SWITCH (CONCEPT-IA, Now's aside): how many stops are active and what
+                that means, from the kill switch page's own read. Engaging stays on that
+                page, behind its own confirmation and step-up. */}
+            {killSwitch.permitted ? (
+              <EstateTile
+                compact
+                to="/killswitch"
+                icon={<OctagonAlert />}
+                label={t('nav:items.killswitch')}
+                state={tileState(killSwitch.query)}
+                value={formatInt(killSwitch.posture?.active ?? null)}
+                tone={
+                  killSwitch.posture?.estate
+                    ? 'danger'
+                    : killSwitch.posture && killSwitch.posture.agentStops > 0
+                      ? 'warning'
                       : undefined
-              }
-              caption={
-                health && health.total > 0
-                  ? t('tiles.health.caption', {
-                      breaches: formatInt(health.slaBreaches),
-                      incidents: formatInt(health.openIncidents),
-                    })
-                  : t('tiles.health.noChecks')
-              }
-            />
-          ) : null}
-        </StatGrid>
+                }
+                caption={
+                  killSwitch.posture?.estate
+                    ? t('nav:shell.killswitch.estateStopped')
+                    : killSwitch.posture && killSwitch.posture.agentStops > 0
+                      ? t('nav:shell.killswitch.agentStops', {
+                          count: killSwitch.posture.agentStops,
+                        })
+                      : t('nav:shell.killswitch.none')
+                }
+              />
+            ) : null}
+          </StatGrid>
 
-        {/* Keep the cost figure's honesty: a truncated aggregate is a floor, never hidden. */}
-        {canFinops && cost?.truncated ? <TruncatedNotice /> : null}
+          {/* Keep the cost figure's honesty: a truncated aggregate is a floor, never hidden. */}
+          {canFinops && cost?.truncated ? <TruncatedNotice /> : null}
+        </aside>
       </div>
     </IntelPage>
   )

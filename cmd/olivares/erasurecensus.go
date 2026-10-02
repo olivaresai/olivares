@@ -10,6 +10,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/knowledge"
 )
 
 // declaredModule is one module this composition declares to the census: the
@@ -28,6 +29,12 @@ type declaredModule struct {
 type retiringModule interface {
 	RetirementStep() auth.RetirementStep
 	RetirementCovers() []string
+}
+
+// holdGatedRetiringModule lets a content eraser use the declared compliance
+// instance, including when the module profile leaves compliance dormant.
+type holdGatedRetiringModule interface {
+	RetirementStepWithHoldGate(knowledge.HoldGate) auth.RetirementStep
 }
 
 // authPartitionModule is the declared name of the auth partition, whose reader
@@ -93,7 +100,12 @@ func declaredModules(set moduleSet, contributions []store.CompositionContributio
 		if !ok {
 			continue
 		}
-		step := rm.RetirementStep()
+		var step auth.RetirementStep
+		if gated, ok := m.(holdGatedRetiringModule); ok {
+			step = gated.RetirementStepWithHoldGate(complianceHoldGate{m: set.compliance})
+		} else {
+			step = rm.RetirementStep()
+		}
 		if step == nil {
 			continue
 		}

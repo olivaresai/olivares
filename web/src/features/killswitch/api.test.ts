@@ -21,7 +21,7 @@ function jsonOk() {
 
 beforeEach(() => {
   vi.restoreAllMocks()
-  useSessionStore.setState({ token: 't' } as never)
+  useSessionStore.setState({ csrfToken: 't' } as never)
   useTenantStore.setState({ activeTenant: 't1' } as never)
 })
 

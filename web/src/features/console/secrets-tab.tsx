@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { KeyRound, Pencil, Plus, ShieldAlert, Trash2 } from 'lucide-react'
 import { useState, useEffect, useMemo } from 'react'
@@ -17,7 +18,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
@@ -33,6 +33,7 @@ import {
   type SecretInput,
 } from './api'
 import { StaticTable } from '@/components/data/static-table'
+import './i18n'
 
 // A secret name/handle: letters, digits and the separators `. _ - /`. The store
 // rejects anything else; we mirror the rule so the create button explains itself.
@@ -46,14 +47,35 @@ const NAME_RE = /^[A-Za-z0-9._/-]{1,128}$/
  * only a non-secret `hint` (a short fingerprint) so an admin can tell a secret is
  * set / changed without ever seeing it. By construction the value input is blank on
  * edit (blank = keep the stored value). The default is deployment-wide and
- * superadmin-only; explicit tenant mode is restricted to that tenant's mcp/
- * handles and tenant admins. Every write requires AAL3 and is audited.
+ * superadmin-only; explicit tenant mode is restricted to tenant admins and to ONE
+ * namespace of that tenant: MCP credential handles (mcp/, the default) or the
+ * secrets sessions receive as environment variables (env/, design FH 016). Every
+ * write requires AAL3 and is audited.
  */
-export function SecretsTab({ scope }: { scope?: 'tenant' } = {}) {
+export function SecretsTab({
+  scope,
+  namespace = 'mcp/',
+}: { scope?: 'tenant'; namespace?: TenantSecretNamespace } = {}) {
   const boundary = useAuthBoundary()
-  return <SecretsBody key={scope ? boundary.key : 'global'} scope={scope} />
+  return (
+    <SecretsBody
+      key={scope ? boundary.key : 'global'}
+      scope={scope}
+      namespace={namespace}
+    />
+  )
 }
-function SecretsBody({ scope }: { scope?: 'tenant' }) {
+
+/** The tenant scope's namespaces: MCP credential handles and session secrets. */
+export type TenantSecretNamespace = 'mcp/' | 'env/'
+
+function SecretsBody({
+  scope,
+  namespace,
+}: {
+  scope?: 'tenant'
+  namespace: TenantSecretNamespace
+}) {
   const { t } = useTranslation(['console', 'common'])
   const { isSuperadmin, can } = useAuth()
   const boundary = useAuthBoundary()
@@ -120,7 +142,15 @@ function SecretsBody({ scope }: { scope?: 'tenant' }) {
     )
   }
 
-  const secrets = query.data?.secrets ?? []
+  // One tenant list serves both namespaces; each panel shows its own.
+  const secrets = (query.data?.secrets ?? []).filter(
+    (s) => !scope || s.name.startsWith(namespace),
+  )
+  const caption = !scope
+    ? t('console:secrets.caption')
+    : namespace === 'env/'
+      ? t('console:secrets.sessionCaption')
+      : t('console:mcpGateway.credentialCaption')
   const sealerAvailable = query.data?.sealer_available ?? true
 
   return (
@@ -130,11 +160,7 @@ function SecretsBody({ scope }: { scope?: 'tenant' }) {
           <h2 className="text-heading text-foreground">
             {t('console:secrets.title')}
           </h2>
-          <p className="max-w-2xl text-body text-muted-foreground">
-            {scope
-              ? t('console:mcpGateway.credentialCaption')
-              : t('console:secrets.caption')}
-          </p>
+          <p className="max-w-2xl text-body text-muted-foreground">{caption}</p>
         </div>
         <Button onClick={() => setCreateOpen(true)}>
           <Plus />
@@ -154,7 +180,10 @@ function SecretsBody({ scope }: { scope?: 'tenant' }) {
           <Spinner />
         </div>
       ) : query.isError ? (
-        <ErrorState retry={() => void query.refetch()} />
+        <QueryErrorState
+          error={query.error}
+          retry={() => void query.refetch()}
+        />
       ) : secrets.length === 0 ? (
         <EmptyState
           title={t('console:secrets.none')}
@@ -227,6 +256,7 @@ function SecretsBody({ scope }: { scope?: 'tenant' }) {
               <SecretForm
                 queryKey={queryKey}
                 scope={scope}
+                namespace={namespace}
                 onClose={() => setCreateOpen(false)}
               />
             </RequireAssurance>
@@ -244,6 +274,7 @@ function SecretsBody({ scope }: { scope?: 'tenant' }) {
               <SecretForm
                 queryKey={queryKey}
                 scope={scope}
+                namespace={namespace}
                 existing={editing}
                 onClose={() => setEditing(null)}
               />
@@ -269,18 +300,20 @@ function SecretsBody({ scope }: { scope?: 'tenant' }) {
 function SecretForm({
   queryKey,
   scope,
+  namespace,
   existing,
   onClose,
 }: {
   existing?: SecretDTO
   scope?: 'tenant'
+  namespace: TenantSecretNamespace
   queryKey: readonly unknown[]
   onClose: () => void
 }) {
   const { t } = useTranslation(['console', 'common'])
   const boundary = useAuthBoundary()
   const isEdit = !!existing
-  const [name, setName] = useState(existing?.name ?? (scope ? 'mcp/' : ''))
+  const [name, setName] = useState(existing?.name ?? (scope ? namespace : ''))
   // The value input is ALWAYS blank on open — we never receive the stored value, and
   // on edit a blank value means "keep the stored secret" (description-only edit).
   const [value, setValue] = useState('')
@@ -312,7 +345,7 @@ function SecretForm({
 
   const nameValid =
     isEdit ||
-    (NAME_RE.test(name.trim()) && (!scope || name.trim().startsWith('mcp/')))
+    (NAME_RE.test(name.trim()) && (!scope || name.trim().startsWith(namespace)))
   // A new secret requires a value; an existing one may be edited with a blank value
   // (keeps the stored secret).
   const valid = nameValid && (isEdit || value !== '')
@@ -326,9 +359,11 @@ function SecretForm({
             : t('console:secrets.createTitle')}
         </DialogTitle>
         <DialogDescription>
-          {scope
-            ? t('console:mcpGateway.credentialCaption')
-            : t('console:secrets.caption')}
+          {!scope
+            ? t('console:secrets.caption')
+            : namespace === 'env/'
+              ? t('console:secrets.sessionCaption')
+              : t('console:mcpGateway.credentialCaption')}
         </DialogDescription>
       </DialogHeader>
 

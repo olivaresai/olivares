@@ -70,7 +70,6 @@
     "truncated": "Données partielles",
     "truncatedHint": "Cet agrégat a atteint le plafond d’analyse : il est partiel, et non un total exact.",
     "truncatedBrief": "plafond d’analyse atteint",
-    "selfAudited": "Lecture privilégiée : consignée dans le registre d’audit.",
     "seam": "Pas encore câblé",
     "seamBody": "Contrat déclaré : le {{what}} n’est pas encore câblé au backend, ce qui affiche donc la structure déclarée et non des données en direct.",
     "minimalData": "Agrégats et métadonnées uniquement : aucune invite, sortie ni secret.",

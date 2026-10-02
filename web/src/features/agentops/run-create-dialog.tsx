@@ -31,6 +31,7 @@ import { templatesApi, templatesKeys } from '@/features/workspace-templates/api'
 import { ListTruncationBadge } from '@/features/_intel'
 import { agentOpsApi, agentOpsKeys } from './api'
 import { profileOwnedEnvNames } from './provider-contract'
+import { toolName } from './tool-names'
 import { useAuthBoundary } from './auth-boundary'
 import { useStepUpOwner, type StepUpAttempt } from '@/stores/step-up'
 import { launchRunAsAgent } from './launch-agent-api'
@@ -45,6 +46,7 @@ import {
   effectiveLaunchTransport,
   isProfileChangedError,
   launchFailureMessage,
+  stoppedAtStartReason,
   launchRequestPermission,
 } from './launch-readiness'
 import {
@@ -369,7 +371,15 @@ export function RunCreateDialog({
           Request launch are always on screen; only the field region scrolls. */}
       <DialogContent className="flex max-h-[calc(100dvh-2rem)] max-w-lg flex-col">
         <DialogHeader>
-          <DialogTitle>{t('create.title')}</DialogTitle>
+          <DialogTitle>
+            {/* The chosen tool, never a fixed one (HU 043: a Grok profile read "New
+                Claude Code session"). */}
+            {selectedProfile
+              ? t('create.titleTool', {
+                  tool: toolName(selectedProfile.driver),
+                })
+              : t('create.title')}
+          </DialogTitle>
           <DialogDescription>{t('create.description')}</DialogDescription>
         </DialogHeader>
 
@@ -677,9 +687,17 @@ export function RunCreateDialog({
               >
                 <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
                 <div className="min-w-0">
-                  <p>{t('readiness.failedInline')}</p>
+                  <p>
+                    {stoppedAtStartReason(create.error) !== null
+                      ? t('readiness.stoppedAtStart')
+                      : t('readiness.failedInline')}
+                  </p>
                   <p className="mt-0.5 break-words">
-                    {launchFailureMessage(create.error, t('create.title'))}
+                    {launchFailureMessage(
+                      create.error,
+                      t('create.title'),
+                      (reason) => reason || t('readiness.stoppedSilently'),
+                    )}
                   </p>
                   {isProfileChangedError(create.error) && (
                     <Button

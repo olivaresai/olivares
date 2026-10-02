@@ -9,10 +9,11 @@
 // error. Every other state (loading / forbidden / network / data) matches AsyncSection
 // so the four states stay consistent. Honest-seam precedent: Claude-policy
 // identity (never fake live data, never dress a missing API as working).
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import type { ReactNode } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { ApiError, NetworkError } from '@/lib/api/errors'
@@ -96,7 +97,8 @@ export function DeclaredSection<T>({
     }
     const isNetwork = error instanceof NetworkError
     return (
-      <ErrorState
+      <QueryErrorState
+        error={query.error}
         title={isNetwork ? t('network.title') : t('serverError.title')}
         description={
           isNetwork ? t('network.description') : t('serverError.description')

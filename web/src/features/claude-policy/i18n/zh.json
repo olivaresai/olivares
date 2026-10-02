@@ -26,7 +26,8 @@
     "docs": "文档",
     "enabled": "已启用",
     "unset": "未设置",
-    "listPlaceholder": "以逗号分隔的值"
+    "listPlaceholder": "以逗号分隔的值",
+    "objectListInvalid": "请输入对象的 JSON 列表，例如 [{\"source\": \"github\", \"repo\": \"your-org/*\"}]。"
   },
   "panel": {
     "guided": "引导式",

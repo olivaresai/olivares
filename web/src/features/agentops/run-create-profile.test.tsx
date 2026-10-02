@@ -195,6 +195,34 @@ describe('RunCreateDialog — provider profiles', () => {
     expect(agentOpsApi.createRun).not.toHaveBeenCalled()
   })
 
+  // HU 043: a Grok Build profile opened "New Claude Code session". The title names the
+  // tool of the profile chosen, and no tool until one is.
+  it('the title names the chosen tool, and no tool before a profile is chosen', async () => {
+    const user = userEvent.setup()
+    vi.mocked(agentOpsApi.listProfiles).mockResolvedValue({
+      items: [
+        homeA,
+        {
+          ...homeA,
+          profile_ref: 'ppf_grok',
+          driver: 'grok',
+          display_name: 'Grok home',
+        },
+      ],
+      has_more: false,
+    })
+    wrap()
+    expect(
+      await screen.findByRole('heading', { name: 'New session' }),
+    ).toBeInTheDocument()
+    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByRole('option', { name: /Grok home/ }))
+    expect(
+      await screen.findByRole('heading', { name: 'New Grok Build session' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/New Claude Code session/)).toBeNull()
+  })
+
   it('posts only the profile REFERENCE when one is chosen — never a home', async () => {
     const user = userEvent.setup()
     wrap()

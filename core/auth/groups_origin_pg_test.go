@@ -84,7 +84,8 @@ func TestGroupOriginPostgresColumnAndBoundary(t *testing.T) {
 		t.Fatalf("clear parent on operator group: %v", err)
 	}
 
-	// A named provisioner's group is read-only to the console too.
+	// A named provisioner's identity and roster remain read-only; the role
+	// mapping is locally managed on that origin too.
 	foreign, err := a.SCIMCreateGroup(ctx, super, tenant, auth.SCIMGroupInput{DisplayName: "Foreign", ExternalID: "grp-pg-f"})
 	if err != nil {
 		t.Fatalf("create foreign: %v", err)
@@ -100,7 +101,11 @@ func TestGroupOriginPostgresColumnAndBoundary(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("claim foreign origin: %v", err)
 	}
-	if _, err := a.ConfigureGroupRole(ctx, super, tenant, foreign.Group.ID, auth.RoleViewer); !errors.Is(err, auth.ErrGroupOriginReadOnly) {
-		t.Fatalf("map role on named-origin group err = %v, want ErrGroupOriginReadOnly", err)
+	mapped, err := a.ConfigureGroupRole(ctx, super, tenant, foreign.Group.ID, auth.RoleViewer)
+	if err != nil || mapped.MappedRole != auth.RoleViewer || mapped.ProvisionedBy != "ldap" || mapped.ExternalID != foreign.Group.ExternalID {
+		t.Fatalf("local role mapping on named-origin group = %+v, %v", mapped, err)
+	}
+	if _, err := a.SCIMReplaceGroup(ctx, super, tenant, foreign.Group.ID, auth.SCIMGroupInput{DisplayName: "Renamed"}, 0); !errors.Is(err, auth.ErrGroupOriginReadOnly) {
+		t.Fatalf("SCIM replace on mapped named-origin group = %v, want ErrGroupOriginReadOnly", err)
 	}
 }

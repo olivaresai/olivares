@@ -218,7 +218,7 @@ func (m *Module) ApproveDeviceGrant(ctx context.Context, tenant model.TenantID, 
 }
 
 func (m *Module) handleApproveDeviceGrant(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	if !requireAAL3(w, mc) {
+	if !requireStepUp(w, r, mc) {
 		return
 	}
 	var in approveDeviceGrantRequest

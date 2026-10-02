@@ -261,10 +261,7 @@ export interface PdpRevision {
  *                     because reporting a brand-new tenant as `applied` put a
  *                     green "enforcing" badge on a tenant with no policy at all. */
 export type PdpLiveActivation =
-  | 'applied'
-  | 'deferred'
-  | 'not_applicable'
-  | 'no_policy'
+  'applied' | 'deferred' | 'not_applicable' | 'no_policy'
 
 export interface PdpPublishResult {
   engine: PdpEngine

@@ -38,6 +38,13 @@ type Module struct {
 	mu     sync.Mutex
 	cancel func() // bus unsubscribe
 
+	// targetsCache memoizes HasAdmissionTargets per tenant (CUTS B2). It is
+	// invalidated by EVERY module write through the m.mutate funnel, so the only
+	// way a target-creating write can leave a stale "no targets" behind is a
+	// writer outside this module — and budgets, spend limits and the lifecycle
+	// frontier are all written by this module alone.
+	targetsCache sync.Map // model.TenantID -> bool
+
 	// attemptVerifier is the ONE fixed dependency of the attempt lifecycle:
 	// the component that establishes, per call, that the configured executing or
 	// reconciliation component still holds recovery access to the scope's tenant.

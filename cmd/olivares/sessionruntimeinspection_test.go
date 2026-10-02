@@ -70,9 +70,10 @@ func TestSessionRuntimeCompositionWiresAnInspectableRunner(t *testing.T) {
 	}
 }
 
-// TestSessionRuntimeCompositionRegistersDriversIndependently pins the property
-// the readiness read reports per driver: pinning ONE official binary makes ONE
-// driver operable, and the Claude path is unaffected by either.
+// TestSessionRuntimeCompositionRegistersDriversIndependently pins that every
+// official driver is registered whatever is pinned: a pin changes the program a
+// driver runs, never whether its profiles can launch, and the Claude path is
+// unaffected. (The program itself is resolved at launch: installedSessionProgram.)
 func TestSessionRuntimeCompositionRegistersDriversIndependently(t *testing.T) {
 	t.Parallel()
 	env := func(values map[string]string) func(string) string {
@@ -83,11 +84,11 @@ func TestSessionRuntimeCompositionRegistersDriversIndependently(t *testing.T) {
 		vars map[string]string
 		want []string
 	}{
-		{"nothing pinned", nil, []string{}},
-		{"codex only", map[string]string{envSessionCodexBin: "/opt/codex"}, []string{"codex"}},
-		{"grok only", map[string]string{envSessionGrokBin: "/opt/grok"}, []string{"grok"}},
-		{"opencode only", map[string]string{envSessionOpenCodeBin: "/opt/opencode"}, []string{"opencode"}},
-		{"both", map[string]string{envSessionCodexBin: "/opt/codex", envSessionGrokBin: "/opt/grok"}, []string{"codex", "grok"}},
+		{"nothing pinned", nil, []string{"codex", "grok", "opencode"}},
+		{"codex only", map[string]string{envSessionCodexBin: "/opt/codex"}, []string{"codex", "grok", "opencode"}},
+		{"grok only", map[string]string{envSessionGrokBin: "/opt/grok"}, []string{"codex", "grok", "opencode"}},
+		{"opencode only", map[string]string{envSessionOpenCodeBin: "/opt/opencode"}, []string{"codex", "grok", "opencode"}},
+		{"both", map[string]string{envSessionCodexBin: "/opt/codex", envSessionGrokBin: "/opt/grok"}, []string{"codex", "grok", "opencode"}},
 		{"all three", map[string]string{
 			envSessionCodexBin: "/opt/codex", envSessionGrokBin: "/opt/grok", envSessionOpenCodeBin: "/opt/opencode",
 		}, []string{"codex", "grok", "opencode"}},

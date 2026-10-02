@@ -7,7 +7,6 @@ package capabilities
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"sort"
@@ -100,8 +99,7 @@ func (m *Module) handleApproveToolPin(w http.ResponseWriter, r *http.Request, mc
 		return
 	}
 	var in toolPinActionInput
-	dec := json.NewDecoder(r.Body)
-	if err := dec.Decode(&in); err != nil || dec.More() || in.Tool == "" {
+	if err := api.DecodeRequestBody(w, r, &in, api.RequestBodySpec{AllowUnknownFields: true}); err != nil || in.Tool == "" {
 		writeError(w, http.StatusBadRequest, "invalid JSON body (tool is required)")
 		return
 	}
@@ -141,8 +139,7 @@ func (m *Module) handleUnpinToolPin(w http.ResponseWriter, r *http.Request, mc a
 		return
 	}
 	var in toolPinActionInput
-	dec := json.NewDecoder(r.Body)
-	if err := dec.Decode(&in); err != nil || dec.More() || in.Tool == "" {
+	if err := api.DecodeRequestBody(w, r, &in, api.RequestBodySpec{AllowUnknownFields: true}); err != nil || in.Tool == "" {
 		writeError(w, http.StatusBadRequest, "invalid JSON body (tool is required)")
 		return
 	}

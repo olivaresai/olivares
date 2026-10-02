@@ -49,6 +49,8 @@ FAKE
 }
 
 expect_rc 0 "canonical service and doctor contract" bash "$root/scripts/check-service-install.sh"
+expect_rc 0 "26.10 AgentOps upgrade preserves operator edits" \
+  env TMPDIR="$scratch" bash "$root/scripts/test-agentops-upgrade.sh"
 
 dry="$scratch/dry"
 mkdir -p "$scratch/home/.local/bin"
@@ -217,15 +219,17 @@ expect_rc 1 "mutant: unit-unsafe character in a data path is refused" \
   --binary /usr/local/bin/olivares --data-dir '/srv/olivares%i'
 grep -Fq 'unsafe for a service definition' "$scratch/err"
 
-# The default unit carries no BindPaths line and keeps ProtectHome=true.
-if grep -q '^BindPaths=' "$stage/etc/systemd/system/olivares.service"; then
-  printf 'default unit gained a BindPaths line\n' >&2; exit 1
+# The normal install runs Node tools and exposes chosen project folders. The
+# product's session launcher applies the per-folder boundary.
+unit="$stage/etc/systemd/system/olivares.service"
+for directive in ProtectSystem=full ProtectHome=false PrivateTmp=false MemoryDenyWriteExecute=false; do
+  grep -Fqx "$directive" "$unit"
+done
+if grep -q '^BindPaths=' "$unit"; then
+  printf 'default unit gained a folder-specific bind mount\n' >&2; exit 1
 fi
-grep -Fqx 'ProtectHome=true' "$stage/etc/systemd/system/olivares.service"
-if grep -q '@BIND_PATHS@' "$stage/etc/systemd/system/olivares.service"; then
-  printf 'default unit kept the bind marker\n' >&2; exit 1
-fi
-case_ok "default unit keeps ProtectHome=true and no BindPaths"
+grep -Fqx 'SystemCallFilter=@system-service landlock_create_ruleset landlock_add_rule landlock_restrict_self' "$unit"
+case_ok "default unit supports Node and chosen folders without a second installer"
 
 # Engine upgrade: the adapter rewrites the manifest and must carry the AgentOps
 # records the co-deployment installer added, after validating them.
@@ -394,107 +398,45 @@ grep -Fq 'trailing content' "$scratch/err"
 cp "$scratch/manifest.good" "$tamper"
 carry_rerun 0 "the producer's own presentation still carries, unchanged"
 
-# A data directory under a ProtectHome path gets the tmpfs + BindPaths pairing.
-home_root="$scratch/home-root"
-make_binary "$home_root/usr/local/bin/olivares"
-mkdir -p "$home_root/home/olivares"
-expect_rc 0 "data directory under /home renders ProtectHome=tmpfs and BindPaths" \
-  env OLIVARES_OS=linux OLIVARES_ASSET_ROOT="$root" \
-  /bin/sh "$root/scripts/install-service.sh" --system --root "$home_root" --init systemd \
-  --binary /usr/local/bin/olivares --data-dir /home/olivares/data
-grep -Fqx 'ProtectHome=tmpfs' "$home_root/etc/systemd/system/olivares.service"
-grep -Fqx 'BindPaths=/home/olivares/data' "$home_root/etc/systemd/system/olivares.service"
-grep -Fqx 'ReadWritePaths=/home/olivares/data' "$home_root/etc/systemd/system/olivares.service"
-grep -Fq 'protected-home: ProtectHome=tmpfs + BindPaths' "$scratch/out"
-# R5. A data directory under /tmp keeps PrivateTmp=true and is bound in on its own:
-# systemd creates a bind destination inside the private /tmp since v235 (a227a4be), so
-# refusing this location "because no directive can reach it" was a false claim.
-tmp_root="$scratch/tmp-root"
-make_binary "$tmp_root/usr/local/bin/olivares"
-mkdir -p "$tmp_root/tmp" "$tmp_root/var/tmp"
-expect_rc 0 "data directory under /tmp keeps PrivateTmp and binds only itself" \
-  env OLIVARES_OS=linux OLIVARES_ASSET_ROOT="$root" \
-  /bin/sh "$root/scripts/install-service.sh" --system --root "$tmp_root" --init systemd \
-  --binary /usr/local/bin/olivares --data-dir /tmp/olivares
-tmp_unit="$tmp_root/etc/systemd/system/olivares.service"
-grep -Fqx 'PrivateTmp=true' "$tmp_unit"
-grep -Fqx 'BindPaths=/tmp/olivares' "$tmp_unit"
-grep -Fqx 'ReadWritePaths=/tmp/olivares' "$tmp_unit"
-grep -Fqx 'ProtectHome=true' "$tmp_unit"
-[[ "$(grep -c '^BindPaths=' "$tmp_unit")" = 1 ]]
-grep -Fq 'private-tmp: PrivateTmp=true + BindPaths' "$scratch/out"
-grep -Fq 'clear them on boot or on a timer' "$scratch/out"
-# Every other hardening directive is byte-identical to the default unit's.
-diff <(grep -vE '^(ExecStart|ReadWritePaths|BindPaths)=' "$tmp_unit") \
-     <(grep -vE '^(ExecStart|ReadWritePaths|BindPaths)=' "$stage/etc/systemd/system/olivares.service")
-case_ok "the /tmp mapping relaxes nothing else in the sandbox"
+# The normal unit does not mask home or temporary folders, including data paths
+# with spaces or colons. No service restart/bind-mount override is needed when a
+# user selects another session folder.
+location_index=0
+for location in /home/olivares/data /tmp/olivares '/var/tmp/olivares estate' '/tmp/olivares:estate'; do
+  location_index=$((location_index + 1))
+  folder_root="$scratch/folder-root-$location_index"
+  make_binary "$folder_root/usr/local/bin/olivares"
+  mkdir -p "$folder_root$(dirname "$location")"
+  expect_rc 0 "chosen directory $location remains visible" \
+    env OLIVARES_OS=linux OLIVARES_ASSET_ROOT="$root" \
+    /bin/sh "$root/scripts/install-service.sh" --system --root "$folder_root" --init systemd \
+    --binary /usr/local/bin/olivares --data-dir "$location"
+  folder_unit="$folder_root/etc/systemd/system/olivares.service"
+  for directive in ProtectSystem=full ProtectHome=false PrivateTmp=false MemoryDenyWriteExecute=false; do
+    grep -Fqx "$directive" "$folder_unit"
+  done
+  if grep -q '^BindPaths=' "$folder_unit"; then
+    printf 'chosen folder still needs a bind mount\n' >&2; exit 1
+  fi
+  case "$location" in
+    *' '*) grep -Fqx "ReadWritePaths=\"$location\"" "$folder_unit" ;;
+    *) grep -Fqx "ReadWritePaths=$location" "$folder_unit" ;;
+  esac
+done
+home_root="$scratch/folder-root-1"
 
-vartmp_root="$scratch/vartmp-root"
-make_binary "$vartmp_root/usr/local/bin/olivares"
-mkdir -p "$vartmp_root/var/tmp"
-expect_rc 0 "data directory under /var/tmp with a space is quoted in its bind" \
-  env OLIVARES_OS=linux OLIVARES_ASSET_ROOT="$root" \
-  /bin/sh "$root/scripts/install-service.sh" --system --root "$vartmp_root" --init systemd \
-  --binary /usr/local/bin/olivares --data-dir '/var/tmp/olivares estate'
-grep -Fqx 'BindPaths="/var/tmp/olivares estate"' "$vartmp_root/etc/systemd/system/olivares.service"
-grep -Fqx 'PrivateTmp=true' "$vartmp_root/etc/systemd/system/olivares.service"
-
-# The version the mapping needs is read from the running manager, not assumed.
-mkdir -p "$scratch/oldsystemd"
-cat >"$scratch/oldsystemd/systemctl" <<'OLD'
-#!/bin/sh
-[ "${1:-}" = --version ] || exit 1
-printf 'systemd 234 (234-2)\n+PAM +AUDIT\n'
-OLD
-chmod 0755 "$scratch/oldsystemd/systemctl"
-old_root="$scratch/old-systemd-root"
-make_binary "$old_root/usr/local/bin/olivares"
-mkdir -p "$old_root/tmp"
-expect_rc 1 "mutant: a host running systemd 234 is refused, naming its version" \
-  env OLIVARES_OS=linux OLIVARES_ASSET_ROOT="$root" PATH="$scratch/oldsystemd:$PATH" \
-  /bin/sh "$root/scripts/install-service.sh" --system --root "$old_root" --init systemd \
-  --binary /usr/local/bin/olivares --data-dir /tmp/olivares-old
-grep -Fq 'this host runs systemd 234' "$scratch/err"
-grep -Fq 'needs systemd 235 or later' "$scratch/err"
-[[ ! -e "$old_root/tmp/olivares-old" ]]
-[[ ! -e "$old_root/etc/systemd/system/olivares.service" ]]
-cat >"$scratch/oldsystemd/systemctl" <<'NEW'
-#!/bin/sh
-[ "${1:-}" = --version ] || exit 1
-printf 'systemd 235 (235-1)\n'
-NEW
-expect_rc 0 "a host running systemd 235 renders the bind" \
-  env OLIVARES_OS=linux OLIVARES_ASSET_ROOT="$root" PATH="$scratch/oldsystemd:$PATH" \
-  /bin/sh "$root/scripts/install-service.sh" --system --root "$old_root" --init systemd \
-  --binary /usr/local/bin/olivares --data-dir /tmp/olivares-old
-grep -Fqx 'BindPaths=/tmp/olivares-old' "$old_root/etc/systemd/system/olivares.service"
-
-colon_root="$scratch/colon-root"
-make_binary "$colon_root/usr/local/bin/olivares"
-mkdir -p "$colon_root/tmp"
-expect_rc 1 "mutant: a colon in a bind-exposed data directory is refused" \
-  env OLIVARES_OS=linux OLIVARES_ASSET_ROOT="$root" \
-  /bin/sh "$root/scripts/install-service.sh" --system --root "$colon_root" --init systemd \
-  --binary /usr/local/bin/olivares --data-dir '/tmp/olivares:estate'
-grep -Fq "separate source from destination" "$scratch/err"
-[[ ! -e "$colon_root/tmp/olivares:estate" ]]
-[[ ! -e "$colon_root/etc/systemd/system/olivares.service" ]]
-
-# A user service gets the same private /tmp from the shared template, so it gets the same
-# bind. The other classes stay system-only, which this case pins by asserting the user
-# unit keeps ProtectHome=false.
 user_tmp_root="$scratch/user-tmp-root"
 user_home="$scratch/user-tmp-home"
 mkdir -p "$user_tmp_root/tmp" "$user_home/.local/bin"
 make_binary "$user_tmp_root$user_home/.local/bin/olivares"
-expect_rc 0 "a user service under /tmp gets the same bind and keeps ProtectHome as it was" \
+expect_rc 0 "a user service keeps chosen temporary folders visible" \
   env OLIVARES_OS=linux OLIVARES_ASSET_ROOT="$root" HOME="$user_home" \
   /bin/sh "$root/scripts/install-service.sh" --user --root "$user_tmp_root" --init systemd \
   --binary "$user_home/.local/bin/olivares" --data-dir /tmp/user-estate
 user_unit="$user_tmp_root$user_home/.config/systemd/user/olivares.service"
-grep -Fqx 'PrivateTmp=true' "$user_unit"
-grep -Fqx 'BindPaths=/tmp/user-estate' "$user_unit"
+grep -Fqx 'PrivateTmp=false' "$user_unit"
 grep -Fqx 'ProtectHome=false' "$user_unit"
+if grep -q '^BindPaths=' "$user_unit"; then exit 1; fi
 
 expect_rc 1 "mutant: data directory under /proc is refused as an API file system" \
   env OLIVARES_OS=linux OLIVARES_ASSET_ROOT="$root" \

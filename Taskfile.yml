@@ -1132,6 +1132,16 @@ tasks:
     cmds:
       - bash scripts/first-hour-smoke.sh
 
+  smoke:session-journey:
+    desc: >-
+      The core journey on the built binary, the way a person does it: start the engine,
+      create the administrator, add a Claude Code account, register a folder, start a
+      session, send a prompt, read the reply, stop, resume. The agent CLI is a protocol
+      stub; on Linux the session process must be denied the engine data directory.
+    deps: [build:bin]
+    cmds:
+      - bash scripts/session-journey-smoke.sh
+
   smoke:provider-onboarding:
     desc: >-
       Provider path, headless: register a credential from the CLI (key on
@@ -2356,6 +2366,7 @@ tasks:
           bash scripts/test-release-snapshot-checksum.sh || exit $?
           bash scripts/test-release-security-producer.sh || exit $?
           bash scripts/test-release-security-sig-guard.sh || exit $?
+          python3 scripts/test-release-published-delivery.py || exit $?
           bash scripts/test-release-finalize-stable.sh || exit $?
           bash scripts/test-release-race-evidence.sh || exit $?
           bash scripts/test-release-preflight.sh || exit $?
@@ -2387,10 +2398,12 @@ tasks:
       # release asset; the convenience bootstrap names its HTTPS trust boundary,
       # pins in non-interactive use and cannot bypass cosign or invoke implicit sudo.
       - bash scripts/test-release-installer.sh
+      - bash scripts/test-install-binary-probe.sh
       # DIST-24-04: the signed archive's systemd/OpenRC/launchd adapters remain
       # opt-in and validate before init mutation; doctor reports local truth as
       # text/JSON with the explicit 0 healthy, 1 defect, 2 unmeasurable contract.
       - bash scripts/test-service-install.sh
+      - bash scripts/test-install-config-redaction.sh
       # Native co-deployment: full POSIX entrypoint with inert command ports and
       # /etc mapped into a fixture. Verify base-unit ordering, explicit start, clean
       # sudo environment forwarding, failures and temporary cleanup; no host mutation.
@@ -2606,6 +2619,12 @@ tasks:
     cmds:
       - bash scripts/check-uninstall-contract.sh
 
+  test:native-release-packages:
+    desc: Build monthly and patch packages with pinned tools; verify native metadata, ordering and reproducibility.
+    cmds:
+      - python3 scripts/test-native-release-packages.py
+      - python3 scripts/test-native-package-publication.py
+
   lint:package-tools:selftest:
     desc: >-
       Offline bsdtar bootstrap battery using fixture packages and a real ELF loader.
@@ -2624,6 +2643,8 @@ tasks:
     cmds:
       - bash scripts/test-uninstall-migration.sh
       - bash scripts/test-nfpm-openrc.sh
+      - python3 scripts/test-native-release-packages.py
+      - python3 scripts/test-native-package-publication.py
 
   lint:package-upgrade-scripts:
     desc: >-
@@ -9893,6 +9914,8 @@ tasks:
         # smoke must not require OIDC, write a transparency-log entry, or require
         # a Docker daemon; the release workflow exercises those separate pipes.
         goreleaser release --snapshot --clean --skip=sign,docker
+        snapshot_version="$(python3 -c 'import json;print(json.load(open("dist/metadata.json"))["version"])')"
+        python3 scripts/build-native-release-packages.py --snapshot --version "$snapshot_version" --dist dist
 
   release:smoke:
     desc: >-

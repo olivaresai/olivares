@@ -31,7 +31,7 @@ def fail(m):
     print(f"check-helm-chart-prep: FAIL — {m}", file=sys.stderr)
     sys.exit(1)
 ver = re.search(r"(?m)^version:\s*([0-9]+\.[0-9]+\.[0-9]+)\s*$", text)
-app = re.search(r'(?m)^appVersion:\s*"?(2[6-9]|[3-9][0-9])\.(?:[1-9]|1[0-2])\.[0-9]+"?\s*$', text)
+app = re.search(r'(?m)^appVersion:\s*"?(2[6-9]|[3-9][0-9])\.(?:[1-9]|1[0-2])(?:\.[0-9]+)?"?\s*$', text)
 if not ver:
     fail("Chart.yaml version is not SemVer X.Y.Z")
 if not app:

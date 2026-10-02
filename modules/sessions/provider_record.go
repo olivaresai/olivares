@@ -305,6 +305,13 @@ func validProviderBaseURL(kind, s string) (string, error) {
 		return "", badRequest("base_url is too long")
 	}
 	lower := strings.ToLower(s)
+	if kind == ProviderKindOpenAICompatible && strings.HasPrefix(lower, "http://") {
+		// HU-R14: a local model server is plain http. It is accepted only for
+		// loopback and private-network addresses — never for a public host, and
+		// refused rather than warned about for the same reason as before: a
+		// warning an operator can click past is not a control.
+		return validLocalHTTPBaseURL(s)
+	}
 	if !strings.HasPrefix(lower, "https://") {
 		// http:// is refused rather than warned about: the value that travels over it
 		// is a credential, and a warning an operator can click past is not a control.
@@ -327,6 +334,32 @@ func validProviderBaseURL(kind, s string) (string, error) {
 	return strings.TrimRight(s, "/"), nil
 }
 
+// providerLocalHTTPHostAllowed is the one host rule for a plain-http endpoint:
+// localhost, a loopback address, or a private-network address (RFC 1918 /
+// fc00::/7). A public host over plain http fails here, never by accident of a
+// parse that accepted something else.
+func providerLocalHTTPHostAllowed(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && (ip.IsLoopback() || ip.IsPrivate())
+}
+
+// validLocalHTTPBaseURL is the openai_compatible plain-http branch of
+// validProviderBaseURL: the same shape rule validOllamaBaseURL applies, with
+// this kind's own messages.
+func validLocalHTTPBaseURL(s string) (string, error) {
+	u, err := url.Parse(s)
+	if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" || u.ForceQuery {
+		return "", badRequest("a plain-http base_url must be an endpoint without credentials, query or fragment")
+	}
+	if !providerLocalHTTPHostAllowed(u.Hostname()) {
+		return "", badRequest("plain HTTP base_url must be loopback or a private IP address")
+	}
+	return strings.TrimRight(u.String(), "/"), nil
+}
+
 // validOllamaBaseURL accepts native endpoints without embedding credentials.
 // Plain HTTP is limited to loopback and literal private addresses; HTTPS can
 // address a protected remote Ollama endpoint. No key is sent by this kind.
@@ -341,11 +374,8 @@ func validOllamaBaseURL(s string) (string, error) {
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return "", badRequest("Ollama base_url must use http or https")
 	}
-	if u.Scheme == "http" {
-		ip, err := netip.ParseAddr(u.Hostname())
-		if u.Hostname() != "localhost" && (err != nil || (!ip.IsLoopback() && !ip.IsPrivate())) {
-			return "", badRequest("plain HTTP Ollama endpoints must be loopback or a private IP address")
-		}
+	if u.Scheme == "http" && !providerLocalHTTPHostAllowed(u.Hostname()) {
+		return "", badRequest("plain HTTP Ollama endpoints must be loopback or a private IP address")
 	}
 	return strings.TrimRight(u.String(), "/"), nil
 }
@@ -416,7 +446,9 @@ func validProviderRecordRef(ref string) bool {
 // is the one kind that says what it injects in its own name.
 func recordServesDriver(kind, driver string) bool {
 	if kind == ProviderKindOllama {
-		return driver == providerDriverCodex
+		// HU-R14: Codex AND OpenCode — both consume the local OpenAI-compatible
+		// endpoint (<base_url>/v1, no key) through their own launch config.
+		return driver == providerDriverCodex || driver == providerDriverOpenCode
 	}
 	if kind == ProviderKindOpenAICompatible {
 		return true

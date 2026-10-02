@@ -93,8 +93,8 @@ type HoldDecision struct {
 // treat (err != nil) as DENY (fail closed): a hold that cannot be ruled out blocks
 // the destruction.
 func (m *Module) CheckHold(ctx context.Context, tenant model.TenantID, sub HoldSubject) (HoldDecision, error) {
-	if m.data == nil {
-		return HoldDecision{}, errors.New("compliance: no data handle; cannot evaluate holds")
+	if m == nil || m.data == nil {
+		return HoldDecision{}, errors.New("compliance: legal hold check unavailable (no data handle)")
 	}
 	var dec HoldDecision
 	err := m.data.View(ctx, tenant, func(sc store.Scope) error {

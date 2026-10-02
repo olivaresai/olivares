@@ -26,16 +26,16 @@ Helm chart，**按摘要**将它们镜像到你的私有 registry，然后安装
 
 ```bash
 scripts/airgap-bundle.sh \
-  --version 26.10.0 \
-  --image ghcr.io/olivaresai/olivares:26.10.0-amd64 \
+  --version 26.10.1 \
+  --image ghcr.io/olivaresai/olivares:26.10.1-amd64 \
   --chart deploy/helm/olivares \
   --cosign-key cosign.key \
   [--collector-image <ref>] [--out dist/airgap] [--gpg-key <id>]
 ```
 
-按架构区分的 tag（`26.10.0-amd64`）发布在 `ghcr.io/olivaresai/olivares`，发布流程在那里构建并签名。
+按架构区分的 tag（`26.10.1-amd64`）发布在 `ghcr.io/olivaresai/olivares`，发布流程在那里构建并签名。
 Docker Hub（`docker.io/olivaresai/olivares`，官方拉取地址）承载多架构与加固 tag，按摘要完全一致，
-但不承载 `26.10.0-amd64`（`docs/releases/26.10.0-install-surfaces.json`）。ghcr.io 对公共镜像的
+但不承载 `26.10.1-amd64`（`docs/releases/26.10.1-install-surfaces.json`）。ghcr.io 对公共镜像的
 匿名拉取不限速，这在未认证的构建主机上也很有用。
 
 :::caution[SBOM/VEX/溯源是被提供的，而非生成的]
@@ -93,7 +93,7 @@ cosign verify-blob --key cosign.pub --insecure-ignore-tlog \
 
 ```bash
 scripts/airgap-mirror.sh \
-  --bundle olivares-airgap-26.10.0.tar.gz \
+  --bundle olivares-airgap-26.10.1.tar.gz \
   --registry registry.internal:5000 [--insecure]
 ```
 

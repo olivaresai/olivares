@@ -161,6 +161,7 @@ type auditArchiveLoop struct {
 	// sink is fresh exactly once — at construction). No mutex: the runtime runs
 	// a job's passes sequentially on one goroutine (runtime.jobLoop).
 	keysAttempted bool
+	skips         enumerationSkips
 }
 
 // newAuditArchiveLoop builds the loop from the resolved config. nil is valid only
@@ -245,9 +246,10 @@ func (l *auditArchiveLoop) runOnce(ctx context.Context) error {
 	l.writeKeysOnce(ctx)
 	tenants, err := l.tenants(ctx)
 	if err != nil {
-		l.log.Warn("audit-archive: cannot enumerate orgs; skipping this tick", "err", err)
+		l.skips.skip(l.log, "audit-archive", err)
 		return nil
 	}
+	l.skips.listed(l.log, "audit-archive")
 	for _, t := range tenants {
 		if err := ctx.Err(); err != nil {
 			return err

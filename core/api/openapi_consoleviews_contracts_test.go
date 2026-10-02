@@ -19,6 +19,7 @@ func TestConsoleViewsRequestBodyCensus(t *testing.T) {
 		{http.MethodPost, "/views", consoleViewsBodyful},
 		{http.MethodPut, "/views/{id}", consoleViewsBodyful},
 		{http.MethodDelete, "/views/{id}", consoleViewsBodyless},
+		{http.MethodPut, "/favorites", consoleViewsBodyful},
 	}
 	counts := map[consoleViewsRequestBodyKind]int{}
 	for _, test := range tests {
@@ -33,7 +34,7 @@ func TestConsoleViewsRequestBodyCensus(t *testing.T) {
 		}
 		counts[test.kind]++
 	}
-	want := map[consoleViewsRequestBodyKind]int{consoleViewsBodyful: 2, consoleViewsBodyless: 1}
+	want := map[consoleViewsRequestBodyKind]int{consoleViewsBodyful: 3, consoleViewsBodyless: 1}
 	if !reflect.DeepEqual(counts, want) {
 		t.Fatalf("census = %#v, want %#v", counts, want)
 	}

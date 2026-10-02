@@ -14,6 +14,7 @@ import (
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/sdk"
 )
 
 // the sealed access-review export. It answers "who can access this resource,
@@ -91,7 +92,7 @@ func (s *Server) handleAccessReviewExport(w http.ResponseWriter, r *http.Request
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	var in accessReviewRequest
@@ -175,7 +176,7 @@ func (s *Server) handleAccessReviewExport(w http.ResponseWriter, r *http.Request
 			continue
 		}
 		for _, permStr := range perms {
-			d := s.authz.Authorize(r.Context(), auth.Request{Principal: pr, Permission: auth.Permission(permStr), Tenant: tenant, Resource: res})
+			d := s.authorizeAndRetain(r.Context(), auth.Request{Principal: pr, Permission: auth.Permission(permStr), Tenant: tenant, Resource: res, Purpose: sdk.PurposeCurrentWhatIf})
 			if !d.Allow {
 				continue
 			}

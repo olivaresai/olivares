@@ -13,8 +13,7 @@ embedded pure-Go SQLite store — zero external dependencies, air-gap-ready.
 docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 ```
 
-Then, without a shell — the image is distroless, so `docker exec … bash` has nothing to
-run. These four commands are the whole operator surface:
+Then, without a shell, these four commands are the whole operator surface:
 
 ```sh
 # where the console answers, and whether first setup is still pending
@@ -55,7 +54,7 @@ replacement without a restart:
 docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot --new-token
 ```
 
-**DIST-24-12 current tree contract.** The distroless image carries `olivares readyz`,
+**DIST-24-12 current tree contract.** The image carries `olivares readyz`,
 and the reference stack invokes it directly—no shell, curl, or wget. The hermetic
 battery proves local HTTP 200 → rc 0, a received non-200 → rc 1, and an input/TLS/
 transport failure → rc 2; `up --wait` consumes that health state. **Docker qualification
@@ -203,24 +202,23 @@ reconnecting (`../postgres/README.md`).
 
 ## Operate Claude Code (co-deployment)
 
-Layer the **agentops** override to add a governed Claude Code runtime to the same
-node — one hardened container (engine + `claude`) over a shared workspace volume, so
-the control plane launches, governs and tears down Claude Code sessions:
+The standard stack runs governed Claude Code sessions: the engine installs the agent tools
+into its data volume and signs them in through the product, so the control plane launches,
+governs and tears down Claude Code sessions with no second image and no override file:
+
+HTTPS and gRPC publish on every host interface (`0.0.0.0`) by default. Restrict them
+to this host for the local walkthrough:
 
 ```sh
-# build the opt-in combined image (claude installed from Anthropic's signed apt repo)
-docker build -f Dockerfile.agentops \
-  --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares:latest -t olivares-agentops:latest .
-OLIVARES_AGENTOPS_IMAGE=olivares-agentops:latest \
-  docker compose -f deploy/compose/docker-compose.yml \
-                 -f deploy/compose/docker-compose.agentops.yml up --wait --wait-timeout 120
+export OLIVARES_BIND=127.0.0.1
+docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
 ```
 
-Same secure-by-default posture as the base (loopback, non-root 65532, read-only root,
-cap-drop) plus the conducted runtime — only the workspace, `claude`'s `~/.claude` home
-and the short-lived inference token are writable, each its own volume. The deny-closed
-credential reads a rotated bearer from the `olivares-runtime` volume
-(`/run/olivares/session-token`). Full walkthrough + the other three topologies:
+Then install and sign in to Claude Code from **AI tools** in the console, or with
+`olivares tool install claude` and `olivares tool login claude`. The posture is the base
+stack's (non-root 65532, read-only root, cap-drop); the command above restricts the published
+ports to loopback. Full walkthrough + the other
+three topologies:
 `../../docs-site/src/content/docs/how-to/run-claude-code-with-olivares.md`.
 
 ## Supply chain
@@ -232,7 +230,7 @@ digest) and verify it first:
 
 ```sh
 cosign verify docker.io/olivaresai/olivares@sha256:<digest> \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -264,7 +262,7 @@ keys encrypted under your KEK + a manifest of the per-tenant chain tips:
 
 ```sh
 printf 'a strong DR passphrase' > deploy/compose/dr-pass   # keep OUT of the repo/image
-# the host stamps the bundle name (the distroless image has no `date`):
+# the host stamps the bundle name:
 BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \

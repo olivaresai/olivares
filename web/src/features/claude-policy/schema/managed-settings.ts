@@ -13,6 +13,7 @@ import { type KeyDescriptor, type SchemaIssue, validateWith, z } from './types'
 const SETTINGS = 'https://code.claude.com/docs/en/settings'
 const SERVER_MANAGED = 'https://code.claude.com/docs/en/server-managed-settings'
 const PERMISSIONS = 'https://code.claude.com/docs/en/permissions'
+const PLUGINS_ORG = 'https://code.claude.com/docs/en/plugins/org'
 
 /** OS paths where Claude Code reads managed-settings.json (verified). The legacy
  *  Windows C:\\ProgramData\\ClaudeCode path is DEAD since v2.1.75 (do
@@ -109,12 +110,11 @@ export const MANAGED_ONLY_KEYS: readonly KeyDescriptor[] = [
   },
   {
     key: 'blockedMarketplaces',
-    type: 'string[]',
+    type: 'object[]',
     scope: 'managed-only',
-    toConfirm: true,
     summary:
-      'Denylist of plugin marketplaces. Appears in the managed-only table; the enforced allowlist mechanism is strictKnownMarketplaces (verify intended semantics).',
-    source: PERMISSIONS,
+      'Marketplace sources that plugins may not come from. Checked before the strictKnownMarketplaces allowlist, so a source on both lists is blocked.',
+    source: PLUGINS_ORG,
   },
   {
     key: 'channelsEnabled',
@@ -155,11 +155,11 @@ export const MANAGED_ONLY_KEYS: readonly KeyDescriptor[] = [
   },
   {
     key: 'strictKnownMarketplaces',
-    type: 'string[]',
+    type: 'object[]',
     scope: 'managed-only',
     summary:
-      'Plugin-marketplace allowlist. Undefined = no restriction; [] = complete lockdown; a list = allowlist.',
-    source: PERMISSIONS,
+      'Allowlist of marketplace sources, for example {"source": "github", "repo": "your-org/*"}. Unset = no restriction; [] = no marketplace at all.',
+    source: PLUGINS_ORG,
   },
   {
     key: 'strictPluginOnlyCustomization',
@@ -261,6 +261,13 @@ const permissionsSchema = z
   .passthrough()
 
 /** Top-level managed-settings shape — every field optional, passthrough unknowns. */
+/** A marketplace source as the plugins/org docs write it: an object named by `source`
+ * ("github", "git", "url", "file", "directory", "hostPattern", "pathPattern",
+ * "skills-dir") with that source's own fields. */
+const marketplaceSourceSchema = z
+  .object({ source: z.string().min(1) })
+  .passthrough()
+
 export const managedSettingsSchema = z
   .object({
     allowAllClaudeAiMcps: z.boolean().optional(),
@@ -268,11 +275,11 @@ export const managedSettingsSchema = z
     allowManagedHooksOnly: z.boolean().optional(),
     allowManagedMcpServersOnly: z.boolean().optional(),
     allowManagedPermissionRulesOnly: z.boolean().optional(),
-    blockedMarketplaces: z.array(z.string()).optional(),
+    blockedMarketplaces: z.array(marketplaceSourceSchema).optional(),
     channelsEnabled: z.boolean().optional(),
     forceRemoteSettingsRefresh: z.boolean().optional(),
     pluginTrustMessage: z.string().optional(),
-    strictKnownMarketplaces: z.array(z.string()).optional(),
+    strictKnownMarketplaces: z.array(marketplaceSourceSchema).optional(),
     strictPluginOnlyCustomization: z.array(z.string()).optional(),
     wslInheritsWindowsSettings: z.boolean().optional(),
     requiredMinimumVersion: z.string().optional(),

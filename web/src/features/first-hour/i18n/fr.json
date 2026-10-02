@@ -1,0 +1,98 @@
+{
+  "tools": {
+    "claude": "Claude Code",
+    "codex": "Codex",
+    "grok": "Grok Build"
+  },
+  "status": {
+    "installed": "Installé",
+    "notInstalled": "Non installé",
+    "signedIn": "Connecté",
+    "signedInAs": "Connecté en tant que {{account}}",
+    "notSignedIn": "Non connecté",
+    "usesKey": "Utilise votre clé API : {{name}}"
+  },
+  "actions": {
+    "install": "Installer",
+    "installing": "Installation…",
+    "retry": "Réessayer",
+    "cancel": "Annuler",
+    "signInClaude": "Se connecter avec Claude",
+    "signInChatGPT": "Se connecter avec ChatGPT",
+    "useApiKey": "Utiliser plutôt une clé API",
+    "signInGrok": "Se connecter avec votre compte xAI"
+  },
+  "signIn": {
+    "openLink": "Ouvrir la page de connexion",
+    "codeLabel": "Code de la page de connexion",
+    "codeHint": "Une fois l’accès autorisé, la page affiche un code. Collez-le ici.",
+    "continue": "Continuer",
+    "enterCode": "Sur la page de connexion, saisissez ce code :",
+    "waiting": "En attente de la fin de votre connexion sur la page…",
+    "expires": "Le code est valable 15 minutes. Annuler arrête la connexion sur ce serveur."
+  },
+  "errors": {
+    "status": "L’état de l’outil n’a pas pu être lu.",
+    "install": "L’installation ne s’est pas terminée : {{error}}",
+    "signIn": "La connexion n’a pas abouti. Recommencez.",
+    "start": "La session n’a pas démarré : {{error}}",
+    "needsApproval": "Exécuter des commandes sans demander nécessite l’approbation d’une deuxième personne sur ce déploiement. Commencez plutôt avec les modifications seules :"
+  },
+  "steps": {
+    "install": {
+      "title": "Installer un outil d’agent",
+      "body": "Olivares exécute la version officielle de Claude Code ou de Codex sur ce serveur. Un seul suffit."
+    },
+    "signIn": {
+      "title": "Le connecter",
+      "body": "Utilisez votre abonnement Claude ou ChatGPT. La connexion reste sur ce serveur, là où l’outil la conserve.",
+      "waiting": "Installez d’abord un outil."
+    },
+    "start": {
+      "title": "Démarrer une session",
+      "body": "Choisissez un dossier et, si vous le souhaitez, dites quoi faire en premier."
+    },
+    "progress": "{{done}} sur 3 terminés"
+  },
+  "start": {
+    "tool": "Outil",
+    "notReady": "{{tool}} ne peut pas encore démarrer.",
+    "folder": "Dossier",
+    "folderHint": "Un dossier sur ce serveur. Laissez-le vide pour démarrer dans un nouveau dossier.",
+    "prompt": "Premier message (facultatif)",
+    "promptPlaceholder": "Que doit-il faire en premier ?",
+    "more": "Plus d’options",
+    "permission": "Ce que l’agent peut faire",
+    "start": "Démarrer",
+    "starting": "Démarrage…",
+    "needTool": "Installez d’abord un outil et connectez-le.",
+    "dialogTitle": "Nouvelle session",
+    "dialogDescription": "Choisissez un dossier et dites quoi faire.",
+    "advanced": "Options de lancement avancées",
+    "secrets": "Secrets en variables d’environnement",
+    "secretsHint": "La session lit chaque secret du coffre choisi depuis la variable que vous indiquez. La valeur n’est jamais affichée, journalisée ni écrite dans le dossier.",
+    "secretsNone": "Aucun secret de session pour l’instant. Ajoutez-en un dont le nom commence par env/.",
+    "secretUse": "Donner {{name}} à cette session",
+    "secretVariable": "Variable pour {{name}}",
+    "secretsManage": "Gérer les secrets de session",
+    "openTools": "Ouvrir Outils d’IA"
+  },
+  "permission": {
+    "editsOnly": "Modifier les fichiers uniquement",
+    "editsAndCommands": "Modifier les fichiers et exécuter des commandes",
+    "readOnly": "Lecture seule",
+    "ask": "Demander avant chaque action"
+  },
+  "next": {
+    "title": "Ensuite, quand vous en aurez besoin",
+    "invite": "Inviter des personnes",
+    "identity": "Connecter un fournisseur d’identité",
+    "policies": "Définir des politiques",
+    "mcp": "Ajouter des serveurs MCP",
+    "budgets": "Définir des budgets",
+    "cli": "Utiliser la ligne de commande olivares",
+    "cliHint": "Sur ce serveur, la commande olivares est déjà installée. Depuis un autre ordinateur, installez-la avec :",
+    "copy": "Copier",
+    "copied": "Copié"
+  }
+}

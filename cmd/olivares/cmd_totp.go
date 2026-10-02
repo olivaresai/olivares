@@ -71,12 +71,12 @@ func usersTOTPResetCmd(client bootstrapClient) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
 		Use:   "totp-reset <user-id>",
-		Short: "Reset an account's TOTP factor (destructive; requires an AAL3 session)",
+		Short: "Reset an account's TOTP factor (destructive)",
 		Long: "Delete an account's TOTP factor and every recovery code — the lost-device path.\n" +
 			"The account enroles again at next login when the require-for-administrators policy\n" +
-			"demands one, or whenever it chooses to. Tenant-scoped membership:write plus the\n" +
-			"AAL3 step-up: an API token can never carry one, but a session elevated by a\n" +
-			"WebAuthn/PIV ceremony in the console can, for 15 minutes.",
+			"demands one, or whenever it chooses to. Needs tenant-scoped membership:write and a\n" +
+			"signed-in session (an API token is never enough); it may also ask for an extra check\n" +
+			"if your administrator turned one on (Settings > Security).",
 		Example: "  olivares users totp-reset 018f2c2e-0000-7000-8000-000000000002 --yes",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -114,8 +114,8 @@ func authTOTPPolicyCmd(flags *authClientFlags) *cobra.Command {
 		Short: "Read or set the require-TOTP-for-administrators policy (system:admin)",
 		Long: "The deployment-wide local-account policy: when on, administrators (superadmins and\n" +
 			"any tenant admin/owner) must enrol a TOTP factor before their password login\n" +
-			"completes. Reading needs system:admin; setting it also carries the AAL3 step-up,\n" +
-			"which an API token can never hold but a console-elevated session can.",
+			"completes. Reading needs system:admin; setting it also needs a signed-in session, not an\n" +
+			"API token.",
 		Example: `  olivares auth totp-policy
   olivares auth totp-policy set --require-for-admins`,
 	}
@@ -131,8 +131,8 @@ func authTOTPPolicyCmd(flags *authClientFlags) *cobra.Command {
 	})
 	set := &cobra.Command{
 		Use:     "set",
-		Short:   "Set the policy (requires an AAL3 session)",
-		Long:    "Set the deployment-wide TOTP requirement for local administrators. Requires system:admin and a session with AAL3 step-up. Set --require-for-admins=false to turn the requirement off; existing factors remain enrolled.",
+		Short:   "Set the policy",
+		Long:    "Set the deployment-wide TOTP requirement for local administrators. Requires system:admin and a signed-in session (an API token is never enough); it may also ask for an extra check if your administrator turned one on. Set --require-for-admins=false to turn the requirement off; existing factors remain enrolled.",
 		Example: "  olivares auth totp-policy set --require-for-admins",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {

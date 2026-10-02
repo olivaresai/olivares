@@ -514,9 +514,7 @@ describe('Cedar/OPA publish + activation lifecycle', () => {
 
     expect(await screen.findByText('not enforcing here')).toBeInTheDocument()
     expect(
-      screen.getByText(
-        /a previously compiled policy is still in force here/i,
-      ),
+      screen.getByText(/a previously compiled policy is still in force here/i),
     ).toBeInTheDocument()
     // Both facts are on screen at once: the store selects r2, and it is not what
     // is deciding requests. Reporting only the first is what made this dangerous.
@@ -554,16 +552,16 @@ describe('Cedar/OPA publish + activation lifecycle', () => {
     wrap(<CedarOpaView active />)
 
     expect(
-      await screen.findByText(
-        /the contributing surfaces are unknown/i,
-      ),
+      await screen.findByText(/the contributing surfaces are unknown/i),
     ).toBeInTheDocument()
     // The absence assertions are the load-bearing ones: the rows themselves must
     // not render at all, because a row is what carries the fabricated "none".
     expect(
       screen.queryByText('Managed (RBAC projection)'),
     ).not.toBeInTheDocument()
-    expect(screen.queryByText('Adopted (signed bundle)')).not.toBeInTheDocument()
+    expect(
+      screen.queryByText('Adopted (signed bundle)'),
+    ).not.toBeInTheDocument()
     expect(
       screen.queryByText(
         /The enforced Cedar policy is the UNION of three surfaces/i,

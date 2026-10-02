@@ -381,7 +381,7 @@ func gitpublishSweepInterval(raw string, log *slog.Logger) (time.Duration, bool)
 // enumeration, which SweepPump answers by skipping the tick.
 func gitpublishSweepTenants(st store.Store, log *slog.Logger) func(context.Context) ([]model.TenantID, error) {
 	return func(ctx context.Context) ([]model.TenantID, error) {
-		tenants, err := servedBusinessTenants(ctx, st)
+		tenants, err := servedWorkTenants(ctx, st)
 		if err != nil {
 			log.Warn("gitpublish-sweep: cannot enumerate orgs; skipping this tick", "err", err)
 		}

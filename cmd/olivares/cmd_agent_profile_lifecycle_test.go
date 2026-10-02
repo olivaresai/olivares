@@ -114,8 +114,7 @@ func TestAgentProfileRemoveRetiresOnlyWithConsent(t *testing.T) {
 }
 
 // TestAgentProfileGetNamesAnUndeclaredToolPolicy: the operator must be able to
-// SEE the deny-closed state, or the first session that can do nothing is a
-// mystery instead of a policy.
+// SEE that nothing narrows the tool's default set on this profile.
 func TestAgentProfileGetNamesAnUndeclaredToolPolicy(t *testing.T) {
 	p := newCreateProbe(t, http.StatusOK,
 		`{"profile_ref":"ppf-2","driver":"claude","state":"active","session_tools_declared":false}`)
@@ -125,7 +124,7 @@ func TestAgentProfileGetNamesAnUndeclaredToolPolicy(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get: %v", err)
 	}
-	if !strings.Contains(out, "not declared") || !strings.Contains(out, "NO built-in tools") {
-		t.Fatalf("an undeclared policy must read as deny-closed, got %q", out)
+	if !strings.Contains(out, "not declared") || !strings.Contains(out, "the tool's default set") {
+		t.Fatalf("an undeclared policy must read as the default set, got %q", out)
 	}
 }

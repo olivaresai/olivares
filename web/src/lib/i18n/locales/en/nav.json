@@ -30,7 +30,7 @@
     "empty": "No view matches “{{query}}”"
   },
   "items": {
-    "home": "Overview",
+    "home": "Now",
     "onboarding": "Setup wizard",
     "inventory": "Inventory",
     "sessions": "Observe sessions",
@@ -46,7 +46,7 @@
     "console": "Administration",
     "sourceDiff": "Source diff",
     "permissions": "Permissions",
-    "identity": "Identity & NHI",
+    "identity": "Identity & access",
     "claudePolicy": "Claude Code governance",
     "routinePolicies": "Routine policies",
     "deploy": "Deployment",
@@ -92,11 +92,12 @@
     "postureExport": "Posture export",
     "automations": "Automations",
     "agentcoreExport": "AgentCore export",
-    "providers": "Providers",
+    "providers": "API keys",
     "providerProfiles": "Provider profiles",
     "providerBindings": "Source bindings",
     "providerAccounts": "Provider accounts",
-    "agent-tools": "Agent tools"
+    "agent-tools": "Agent tools",
+    "mcpServers": "MCP servers"
   },
   "workspace": {
     "open": "Open {{workspace}}",
@@ -104,7 +105,7 @@
     "all": "All workspaces",
     "allHint": "No workspace filter",
     "default": "default",
-    "tenantWide": "Tenant-wide — not filtered by workspace",
+    "tenantWide": "All workspaces",
     "unresolved": "Workspace not in list",
     "truncated": "The list is incomplete — more workspaces exist than are loaded"
   },
@@ -122,7 +123,7 @@
     "communicationsNew": "Create a channel with explicit initial grants",
     "communicationsAdministration": "Administer channels: configuration and grant history, each act under the channel's current ETag",
     "communicationsHandoffs": "Offers of work responsibility addressed to you: read the context and accept or reject",
-    "console": "Users, SSO/IdP, workspaces, agent groups, roles, secrets, connectors, API keys and this installation's licence",
+    "console": "Users, SSO/IdP, workspaces, agent groups, roles, secrets, connectors, API keys and this installation's license",
     "permissions": "Identity, roles and approvals",
     "identity": "SSO, SCIM, the NHI roster and the WIF graph",
     "claudePolicy": "Managed policy, hooks, MCP, sandbox and policy-as-code",
@@ -131,11 +132,12 @@
     "knowledge": "Knowledge bases, RAG and data lineage",
     "catalog": "Curated, approved agents and capabilities",
     "killswitch": "Emergency stop, dual-control recovery and guardian containment",
-    "work": "The durable cross-session backlog: items, dependencies, acceptance and decisions",
+    "work": "Shared work: items, dependencies, acceptance and decisions",
     "agentops": "Create, attach to and govern Claude Code sessions — no SSH; shares its screen with Observe sessions",
     "agentArtifacts": "Skills, MCP extensions and instruction files — registry, posture and supply-chain BOM",
     "models": "Models, routing and provider keys",
     "agent-tools": "Detect, install and update the agent tools on this host and follow each install; deployment administrators only",
+    "mcpServers": "Connect remote MCP servers to this organization, test them and choose which tools sessions may use",
     "modelOps": "Owned models, admission and deployments",
     "finops": "Token cost, budgets and spend",
     "adoption": "Productivity, acceptance & model mix",
@@ -185,6 +187,12 @@
     },
     "orchestration": {
       "createSchedule": "New schedule"
+    },
+    "killswitch": {
+      "engage": "Engage kill switch"
+    },
+    "identity": {
+      "invite": "Invite people"
     }
   },
   "aliases": {
@@ -283,7 +291,7 @@
     "modulesOf": "{{area}} modules",
     "empty": "No entries in this area are available to you",
     "emptyHint": "Entries appear here when your role in the current organization grants access to a module of this area.",
-    "backHome": "Go to Overview",
+    "backHome": "Go to Now",
     "area": "Area"
   },
   "personal": {
@@ -293,7 +301,8 @@
     "viewAll": "View all ({{count}})",
     "manage": "Manage favorites",
     "empty": "Star a module to keep it here.",
-    "scope": "Saved in this browser for your account and organization.",
+    "scope": "Saved to your account, in every browser.",
+    "saveFailed": "Favorites could not be saved to your account. They are kept in this browser and saved again with your next change or sign-in.",
     "temporary": "Favorites stay in memory for now.",
     "clear": "Clear favorites",
     "recents": "Recent",
@@ -347,11 +356,29 @@
   "shell": {
     "journeysLabel": "Journeys",
     "journeys": {
-      "home": "Home",
+      "home": "Now",
       "sessions": "Sessions",
       "workspaceDashboard": "Workspaces",
       "providers": "AI tools",
-      "deploy": "Deploy"
+      "deploy": "Deploy",
+      "work": "Work",
+      "approvals": "Approvals",
+      "inventory": "Inventory",
+      "finops": "Cost",
+      "accessMap": "Access map",
+      "mcpServers": "MCP servers",
+      "knowledge": "Knowledge",
+      "identity": "Identity & access",
+      "claudePolicy": "Policies",
+      "audit": "Audit",
+      "killswitch": "Kill switch",
+      "agent-tools": "AI tools"
+    },
+    "groups": {
+      "work": "Work",
+      "manage": "Manage",
+      "integrate": "Integrate",
+      "secure": "Secure"
     },
     "phoneBarLabel": "Main",
     "newSession": "New session",
@@ -388,7 +415,8 @@
       "hours": "{{count}}h",
       "days": "{{count}}d",
       "loading": "Reading sessions…",
-      "error": "The sessions could not be read."
+      "error": "The sessions could not be read.",
+      "approvalsError": "Approvals could not be loaded."
     },
     "engine": {
       "checking": "Checking the engine",
@@ -410,6 +438,14 @@
       "when": {
         "outsideField": "not in a field"
       }
+    },
+    "killswitch": {
+      "estateStopped": "ALL AGENTS STOPPED",
+      "estateBody": "Agents cannot act until two user accounts approve starting again.",
+      "agentStops": "{{count}} agent stop active",
+      "agentStops_one": "{{count}} agent stop active",
+      "agentStops_other": "{{count}} agent stops active",
+      "none": "Nothing is stopped. Sessions and agents run normally."
     }
   }
 }

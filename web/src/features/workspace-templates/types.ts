@@ -7,6 +7,7 @@
 // a workspace session. Built-in templates are read-only; user templates can be
 // created, edited, duplicated, and archived. Shapes mirror the backend DTOs from
 // /v1/m/sessions/templates (core/modules/sessions — template CRUD).
+import type { SecretEnvRef } from '@/features/agentops/types'
 
 /** A single hook command with an optional timeout. */
 export interface HookEntry {
@@ -28,6 +29,9 @@ export interface TemplateSettings {
   effort?: string
   model?: string
   custom_instructions?: string
+  /** Vault secrets (env/…) a session from this template receives as environment
+   * variables, by name. The launcher still needs tenant administration. */
+  secret_env?: SecretEnvRef[]
 }
 
 /** Governance policy settings carried in a template. */
@@ -48,6 +52,9 @@ export interface TemplateBody {
   /** List of connector IDs to attach when the template is applied. */
   connectors?: string[]
   policies?: TemplatePolicies
+  /** "same-template": sessions launched from this template may message or hand work to
+   * each other by default (MC); omitted, they may not. A run's own choice wins later. */
+  peers_rule?: 'same-template'
 }
 
 /**

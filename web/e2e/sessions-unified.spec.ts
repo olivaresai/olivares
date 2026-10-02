@@ -47,16 +47,17 @@ test('Claude Code portal: setup → login → navigate → create form → works
   // The portal is registered in the sidebar as "Operate sessions". `exact` is
   // load-bearing: neighbouring entries still mention Claude Code, so a substring
   // match would resolve to more than one link.
-  const navLink = page.getByRole('link', { name: 'Operate sessions', exact: true })
+  const navLink = page.getByRole('link', {
+    name: 'Operate sessions',
+    exact: true,
+  })
   await expect(navLink).toBeVisible()
   await navLink.click()
 
   // The portal renders its heading and the honest empty state (a fresh estate has no
   // sessions at all yet) — no SSH, no fabricated rows. The heading is the operate
   // room's own title; the nav entry that opens it is the broader "Operate sessions".
-  await expect(
-    page.getByRole('heading', { name: 'Claude Code' }),
-  ).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Claude Code' })).toBeVisible()
   await expect(page.getByText('No sessions yet')).toBeVisible()
   // The origin facet is the whole point of the merge: one place to look, whether the
   // session was discovered or launched.
@@ -64,9 +65,7 @@ test('Claude Code portal: setup → login → navigate → create form → works
 
   // The create form is the visual equivalent of the CLI launch.
   await page.getByRole('button', { name: /New session/i }).click()
-  await expect(
-    page.getByText('New Claude Code session'),
-  ).toBeVisible()
+  await expect(page.getByText('New Claude Code session')).toBeVisible()
   // The privileged-mode warning must be honest BEFORE launch, so this actually
   // PICKS bypassPermissions and asserts the warning — the previous version only
   // clicked at the control and asserted nothing, and it clicked at a role that does

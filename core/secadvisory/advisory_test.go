@@ -241,7 +241,7 @@ func TestCheckRefusesUnstampedBuild(t *testing.T) {
 // refusal, so ONE caller-side branch covers every "I cannot evaluate this".
 func TestCheckRefusesUnorderableVersion(t *testing.T) {
 	f := feed(t, advisory("GHSA-zero", "0", "26.7.2"))
-	for _, v := range []string{"15f2fb57a", "26.7", "banana", "26.7.0.1"} {
+	for _, v := range []string{"15f2fb57a", "26.7.x", "banana", "26.7.0.1"} {
 		got, err := f.Check(productModule, v)
 		if err == nil {
 			t.Fatalf("%q is not orderable but Check returned a verdict: %+v", v, got)
@@ -283,9 +283,9 @@ func TestCheckStillAnswersForAStampedVersion(t *testing.T) {
 // inRange claimed the caller compensated by logging; no caller ever did.
 func TestUnparseableRangeIsUnevaluableNotClean(t *testing.T) {
 	for _, bad := range []struct{ introduced, fixed string }{
-		{"26.5", "26.7.2"},    // introduced is not MAJOR.MINOR.PATCH
-		{"0", "twenty-six"},   // fixed is not a version
-		{"v26.5.x", "26.9.0"}, // introduced has a non-numeric component
+		{"26.5.0.1", "26.7.2"}, // introduced has four numeric components
+		{"0", "twenty-six"},    // fixed is not a version
+		{"v26.5.x", "26.9.0"},  // introduced has a non-numeric component
 	} {
 		f := feed(t, advisory("GHSA-bad-range", bad.introduced, bad.fixed))
 		got, err := f.Check(productModule, "26.7.0")

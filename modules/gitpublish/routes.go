@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -69,18 +68,12 @@ func callerOf(mc api.ModuleContext) Caller { return Caller{Principal: mc.Princip
 // accept (a secret reference, an endpoint, an installation id, a path) is
 // field_not_accepted.
 func decode(w http.ResponseWriter, r *http.Request, v any) bool {
-	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
+	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 1 << 20}); err != nil {
 		code := "invalid_request"
 		if strings.Contains(err.Error(), "unknown field") {
 			code = "field_not_accepted"
 		}
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": code})
-		return false
-	}
-	if err := dec.Decode(&json.RawMessage{}); err != io.EOF {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid_request"})
 		return false
 	}
 	return true

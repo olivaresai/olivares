@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { firstHourKeys } from '@/features/first-hour/api'
 import { useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -68,25 +69,33 @@ export function ProviderCreateDialog({
   const [displayName, setDisplayName] = useState('')
   const [baseURL, setBaseURL] = useState('')
   const [apiKey, setApiKey] = useState('')
+  const [advanced, setAdvanced] = useState(false)
 
   const reset = () => {
     setKind('')
     setDisplayName('')
     setBaseURL('')
     setApiKey('')
+    setAdvanced(false)
   }
 
   const create = usePrivilegedMutation<void, ProviderRecordDTO>({
     mutationFn: () => {
       const body: CreateProviderRequest = {
         kind: kind as ProviderKind,
-        display_name: displayName.trim(),
+        // The name is the operator's label; with none typed it is the provider's own.
+        display_name: displayName.trim() || t(`kinds.${kind}`),
         ...(kind === 'ollama' ? {} : { api_key: apiKey }),
         ...(baseURL.trim() ? { base_url: baseURL.trim() } : {}),
       }
       return providersApi.create(body)
     },
-    invalidateKeys: () => [providerKeys.list(activeTenant, boundary.epoch)],
+    invalidateKeys: () => [
+      providerKeys.list(activeTenant, boundary.epoch),
+      // What a tool runs on may change with the keys (FH: first-hour keeps a
+      // "nothing to run on yet" answer for a minute).
+      firstHourKeys.all(activeTenant),
+    ],
     successMessage: t('create.success'),
     stepUpAction: 'providers',
     onDone: (record) => {
@@ -101,7 +110,6 @@ export function ProviderCreateDialog({
   const endpointRequired = kind === 'openai_compatible' || kind === 'ollama'
   const ready =
     kind !== '' &&
-    displayName.trim() !== '' &&
     (kind === 'ollama' || apiKey.trim() !== '') &&
     (!endpointRequired || baseURL.trim() !== '')
 
@@ -162,26 +170,39 @@ export function ProviderCreateDialog({
             <Input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder={t('create.namePlaceholder')}
+              placeholder={
+                kind ? t(`kinds.${kind}`) : t('create.namePlaceholder')
+              }
               autoComplete="off"
             />
           </Field>
-          <Field
-            label={t('create.baseURL')}
-            description={
-              kind === 'ollama'
-                ? t('kindHints.ollama')
-                : t('create.baseURLHint')
-            }
-          >
-            <Input
-              value={baseURL}
-              onChange={(e) => setBaseURL(e.target.value)}
-              placeholder={t('create.baseURLPlaceholder')}
-              autoComplete="off"
-              mono
-            />
-          </Field>
+          {endpointRequired || advanced ? (
+            <Field
+              label={t('create.baseURL')}
+              description={
+                kind === 'ollama'
+                  ? t('kindHints.ollama')
+                  : t('create.baseURLHint')
+              }
+            >
+              <Input
+                value={baseURL}
+                onChange={(e) => setBaseURL(e.target.value)}
+                placeholder={t('create.baseURLPlaceholder')}
+                autoComplete="off"
+                mono
+              />
+            </Field>
+          ) : kind !== '' ? (
+            <Button
+              type="button"
+              variant="link"
+              className="self-start"
+              onClick={() => setAdvanced(true)}
+            >
+              {t('create.advanced')}
+            </Button>
+          ) : null}
           {kind !== 'ollama' && (
             <Field
               label={t('create.apiKey')}

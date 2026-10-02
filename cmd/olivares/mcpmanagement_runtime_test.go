@@ -93,6 +93,9 @@ func TestMCPManagementFileOwnershipAndSanitizedRead(t *testing.T) {
 	if strings.Contains(string(raw), "fixture-private") {
 		t.Fatal("file DTO exposed credential")
 	}
+	if out.Servers[0].ProposedAllow == nil || *out.Servers[0].ProposedAllow == nil || len(*out.Servers[0].ProposedAllow) != 0 {
+		t.Fatal("file source without a tested catalogue must carry an empty proposal")
+	}
 	other, err := file.Get(t.Context(), model.TenantID(model.NewID().String()))
 	if err != nil || len(other.Servers) != 0 {
 		t.Fatal("file tenant inventory escaped")

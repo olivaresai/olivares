@@ -2,7 +2,8 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useNavigate } from '@tanstack/react-router'
-import { LogOut, Settings } from 'lucide-react'
+import { LogOut, Settings, SquareTerminal } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Badge } from '@/components/ui/badge'
@@ -15,6 +16,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { useAuth } from '@/lib/auth/context'
+import { CommandLineDialog } from './command-line-dialog'
 
 function initialsOf(name: string): string {
   const trimmed = name.replace(/^user:/, '').trim()
@@ -30,56 +32,69 @@ export function UserMenu() {
   const navigate = useNavigate()
 
   const name = principal?.display_name || principal?.actor || ''
+  // Every signed-in person can reach the command line (Root, 09b), not only the wizard's
+  // administrator.
+  const [commandLine, setCommandLine] = useState(false)
 
   return (
-    <DropdownMenu modal={false}>
-      <DropdownMenuTrigger asChild>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="rounded-full"
-          aria-label={t('auth:account.title')}
-        >
-          <Avatar size="base">
-            <AvatarFallback>{initialsOf(name)}</AvatarFallback>
-          </Avatar>
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-56">
-        <div className="flex flex-col gap-1 px-2 py-1.5">
-          {principal?.display_name && (
-            <p className="truncate text-body font-medium text-foreground">
-              {principal.display_name}
+    <>
+      <DropdownMenu modal={false}>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="rounded-full"
+            aria-label={t('auth:account.title')}
+          >
+            <Avatar size="base">
+              <AvatarFallback>{initialsOf(name)}</AvatarFallback>
+            </Avatar>
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="min-w-56">
+          <div className="flex flex-col gap-1 px-2 py-1.5">
+            {principal?.display_name && (
+              <p className="truncate text-body font-medium text-foreground">
+                {principal.display_name}
+              </p>
+            )}
+            <p className="truncate font-mono text-caption text-muted-foreground">
+              {principal?.actor}
             </p>
-          )}
-          <p className="truncate font-mono text-caption text-muted-foreground">
-            {principal?.actor}
-          </p>
-          <div className="mt-1 flex flex-wrap gap-1">
-            {/* ⛔ `warning`, NOT `accent`. The chip says which authority this session
+            <div className="mt-1 flex flex-wrap gap-1">
+              {/* ⛔ `warning`, NOT `accent`. The chip says which authority this session
                 is acting with, which is a STATE — the semantic axis — and the accent
                 is reserved for selection, the primary action and links. It keeps a
                 colour of its own because the difference between operating as a
                 superadmin and as anything else is worth seeing without reading. */}
-            {isSuperadmin ? (
-              <Badge variant="warning">{t('auth:roles.superadmin')}</Badge>
-            ) : activeRole ? (
-              <Badge variant="neutral">
-                {t(`auth:roles.${activeRole}`, { defaultValue: activeRole })}
-              </Badge>
-            ) : null}
+              {isSuperadmin ? (
+                <Badge variant="warning">{t('auth:roles.superadmin')}</Badge>
+              ) : activeRole ? (
+                <Badge variant="neutral">
+                  {t(`auth:roles.${activeRole}`, { defaultValue: activeRole })}
+                </Badge>
+              ) : null}
+            </div>
           </div>
-        </div>
-        <DropdownMenuSeparator />
-        <DropdownMenuItem onSelect={() => void navigate({ to: '/settings' })}>
-          <Settings />
-          {t('nav:items.settings')}
-        </DropdownMenuItem>
-        <DropdownMenuItem variant="destructive" onSelect={() => void logout()}>
-          <LogOut />
-          {t('auth:account.signOut')}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <DropdownMenuSeparator />
+          <DropdownMenuItem onSelect={() => void navigate({ to: '/settings' })}>
+            <Settings />
+            {t('nav:items.settings')}
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => setCommandLine(true)}>
+            <SquareTerminal />
+            {t('auth:account.commandLine')}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            variant="destructive"
+            onSelect={() => void logout()}
+          >
+            <LogOut />
+            {t('auth:account.signOut')}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <CommandLineDialog open={commandLine} onOpenChange={setCommandLine} />
+    </>
   )
 }

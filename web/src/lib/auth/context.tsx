@@ -16,6 +16,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { authApi } from '@/lib/api/endpoints'
 import { notifyUnauthorized } from '@/lib/api/client'
 import { ApiError } from '@/lib/api/errors'
+import { toast } from 'sonner'
+import { useTranslation } from 'react-i18next'
 import { queryKeys } from '@/lib/api/query'
 import type {
   Grant,
@@ -64,7 +66,7 @@ export interface AuthContextValue {
   /** Adopt an already-verified session envelope (the second-factor completion
    *  paths): store it and load the principal, exactly like login's session leg. */
   adoptSession: (res: LoginResponse) => Promise<void>
-  /** Revoke the session (best-effort) and clear all client state. */
+  /** Confirm server revocation before clearing client state. */
   logout: () => Promise<void>
   /** Select the active tenant (org switcher). */
   setActiveTenant: (tenant: string | null) => void
@@ -77,11 +79,13 @@ const REFRESH_MARGIN_MS = 60_000
 const REFRESH_FLOOR_MS = 5_000
 
 export function AuthProvider({ children }: { children: ReactNode }) {
+  const { t } = useTranslation('errors')
   const queryClient = useQueryClient()
   // Observe transitions synchronously, including movements React batches into A→A.
   // This retires only step-up intent; HTTP defaults and other caches stay unchanged.
   useLayoutEffect(() => observeStepUpContext(queryClient), [queryClient])
-  const token = useSessionStore((s) => s.token)
+  const ready = useSessionStore((s) => s.ready)
+  const token = useSessionStore((s) => s.csrfToken)
   const setSession = useSessionStore((s) => s.setSession)
   const clearSession = useSessionStore((s) => s.clear)
   const activeTenant = useTenantStore((s) => s.activeTenant)
@@ -204,7 +208,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               const res = await authApi.refresh()
               if (cancelled) return
               setSession({
-                token: res.token,
+                csrfToken: res.csrf_token,
                 sessionId: res.session_id,
                 expiresAt: res.expires_at,
               })
@@ -233,7 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // Disable the observer first so setSession cannot start a second GET.
       setLoginInFlight(true)
       setSession({
-        token: res.token,
+        csrfToken: res.csrf_token,
         sessionId: res.session_id,
         expiresAt: res.expires_at,
       })
@@ -270,7 +274,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = useCallback(
     async (req: LoginRequest): Promise<LoginResult> => {
       const res = await authApi.login(req)
-      if ('token' in res && res.token) {
+      if ('csrf_token' in res && res.csrf_token) {
         await adoptSession(res)
         return res
       }
@@ -282,13 +286,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     try {
       await authApi.logout()
-    } catch {
-      // Best-effort: the token may already be invalid; we clear locally regardless.
+    } catch (error) {
+      // A failed revocation must not look like logout: the cookie would sign the
+      // operator back in on reload. A 401 confirms that the server session has ended.
+      if (!(error instanceof ApiError && error.isUnauthenticated)) {
+        toast.error(t('network.title'))
+        return
+      }
     }
     clearSession()
     clearTenant()
     queryClient.clear()
-  }, [clearSession, clearTenant, queryClient])
+  }, [clearSession, clearTenant, queryClient, t])
 
   const can = useCallback(
     (permission: string, opts?: { tenant?: string | null }) =>
@@ -300,11 +309,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   )
 
   const status: AuthStatus = useMemo(() => {
+    if (!ready) return 'loading'
     if (!token) return 'anonymous'
     if (whoami.isError) return 'error'
     if (principal) return 'authenticated'
     return 'loading'
-  }, [token, whoami.isError, principal])
+  }, [ready, token, whoami.isError, principal])
 
   const value = useMemo<AuthContextValue>(
     () => ({

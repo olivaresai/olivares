@@ -26,7 +26,8 @@
     "docs": "docs",
     "enabled": "Enabled",
     "unset": "Unset",
-    "listPlaceholder": "comma-separated values"
+    "listPlaceholder": "comma-separated values",
+    "objectListInvalid": "Enter a JSON list of objects, for example [{\"source\": \"github\", \"repo\": \"your-org/*\"}]."
   },
   "panel": {
     "guided": "Guided",

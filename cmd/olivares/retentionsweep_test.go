@@ -8,6 +8,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/olivaresai/olivares/modules/compliance"
 )
 
 // retentionsweep_test.go pins the loop's environment contract (default
@@ -44,15 +46,15 @@ func TestNewRetentionSweepLoopDisableSemantics(t *testing.T) {
 	env := map[string]string{}
 	getenv := func(k string) string { return env[k] }
 
-	if l := newRetentionSweepLoop(getenv, nil, nil, discardLog()); l == nil || l.interval != defaultRetentionSweepInterval {
+	if l := newRetentionSweepLoop(getenv, nil, &compliance.Module{}, discardLog()); l == nil || l.interval != defaultRetentionSweepInterval {
 		t.Fatalf("unset env must yield the default-cadence loop, got %+v", l)
 	}
 	env[retentionSweepIntervalEnv] = "0"
-	if l := newRetentionSweepLoop(getenv, nil, nil, discardLog()); l != nil {
+	if l := newRetentionSweepLoop(getenv, nil, &compliance.Module{}, discardLog()); l != nil {
 		t.Fatal("\"0\" must disable the loop (nil)")
 	}
 	env[retentionSweepIntervalEnv] = "2h"
-	if l := newRetentionSweepLoop(getenv, nil, nil, discardLog()); l == nil || l.interval != 2*time.Hour {
+	if l := newRetentionSweepLoop(getenv, nil, &compliance.Module{}, discardLog()); l == nil || l.interval != 2*time.Hour {
 		t.Fatalf("explicit interval not honored: %+v", l)
 	}
 }

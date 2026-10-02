@@ -50,7 +50,7 @@ func (s *Server) handleTestConnector(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	svc, ok := s.connectorOnboardingSvc(w, r)
@@ -74,7 +74,7 @@ func (s *Server) handlePutConnector(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	svc, ok := s.connectorOnboardingSvc(w, r)
@@ -99,7 +99,7 @@ func (s *Server) handleDeleteConnector(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	svc, ok := s.connectorOnboardingSvc(w, r)

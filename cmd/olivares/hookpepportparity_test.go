@@ -45,6 +45,18 @@ func TestEachHookHelpNamesItsOwnPEPPort(t *testing.T) {
 				t.Fatalf("NO HE PODIDO MIRAR: %s does not document %s, so this test has no subject",
 					tc.helpFile, tc.envVar)
 			}
+			if port == "0" {
+				// Claude's default listener is now acquired per engine. Advertising
+				// a fixed port (or port zero) would point at an unrelated socket.
+				if tc.name != "claude" || !strings.Contains(line, "assigned by the engine") || strings.Contains(line, "http://") {
+					t.Fatalf("ephemeral hook help must describe the engine-assigned endpoint: %q", line)
+				}
+				cmd := newClaudeHookCmd()
+				if cmd.Flags().Lookup("server").DefValue != "" || cmd.Flags().Lookup("endpoint").DefValue != "" {
+					t.Fatal("ephemeral hook client must require the engine-assigned endpoint")
+				}
+				return
+			}
 			if !strings.Contains(line, port) {
 				t.Fatalf("%s help points the operator at the wrong PEP: the line for %s is %q "+
 					"but %s.%s listens on :%s. A hook aimed at another engine's socket gets a "+

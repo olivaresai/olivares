@@ -58,8 +58,9 @@ if ! jq -e '
   ] | sort)) and
   .schema == "olivares.ai/release-index/v1" and .schema_version == 1 and
   (.state == "candidate" or .state == "published") and
-  (.version | type == "string" and test("^[0-9]+\\.[0-9]+\\.[0-9]+$")) and
-  .tag == ("v" + .version) and
+  (.version | type == "string" and test("^[0-9]+\\.[0-9]+(\\.[0-9]+)?$")) and
+  (.version | split(".") | map(tonumber)) as $v |
+  .tag == (if $v[0] < 26 or ($v[0] == 26 and $v[1] < 10) then "v" + .version else .version end) and
   (.commit | type == "string" and test("^[0-9a-f]{40}$")) and
   (.channel == "stable" or .channel == "security" or .channel == "lts") and
   (.repository | type == "string" and test("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")) and

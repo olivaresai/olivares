@@ -5,9 +5,9 @@ import { cn } from '@/lib/utils'
 
 /** Row chrome of a sidebar destination, shared by the journeys and the areas entry. */
 export const SHELL_ROW_CLASS = cn(
-  'relative flex min-h-[34px] min-w-0 items-center gap-2.5 rounded-ctl px-2.5 text-body font-medium text-text-2 outline-none transition-colors duration-fast',
+  'relative flex min-h-[30px] min-w-0 items-center gap-2.5 rounded-ctl px-2.5 text-body font-medium text-text-2 outline-none transition-colors duration-fast',
   'hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus',
   '[&_svg]:size-4 [&_svg]:shrink-0',
   'aria-[current=page]:bg-active aria-[current=page]:text-text',
-  "aria-[current=page]:before:absolute aria-[current=page]:before:top-[9px] aria-[current=page]:before:bottom-[9px] aria-[current=page]:before:-left-0.5 aria-[current=page]:before:w-[3px] aria-[current=page]:before:rounded-[3px] aria-[current=page]:before:bg-accent aria-[current=page]:before:content-['']",
+  "aria-[current=page]:before:absolute aria-[current=page]:before:top-[7px] aria-[current=page]:before:bottom-[7px] aria-[current=page]:before:-left-0.5 aria-[current=page]:before:w-[3px] aria-[current=page]:before:rounded-[3px] aria-[current=page]:before:bg-accent aria-[current=page]:before:content-['']",
 )

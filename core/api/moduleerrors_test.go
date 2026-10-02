@@ -156,3 +156,54 @@ func TestStoreErrorStatusAnswersTheAddonRefusalTheOverlayProduces(t *testing.T) 
 		})
 	}
 }
+
+// THE MODULE ENVELOPE CARRIES CORE'S CODE. A client tells an add-on license refusal
+// (addon_requires_license) from a role refusal (forbidden) by the code, without
+// reading the sentence: before 2026-10-02 the module envelope had no code, and the
+// reporting module sent the HTTP status text, "Forbidden", for both. The message is
+// StoreErrorStatus's, unchanged.
+func TestStoreErrorBodyCarriesTheCodeCoreAnswers(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		err        error
+		wantStatus int
+		wantCode   string
+	}{
+		{"add-on refusal", license.AddonRequired("reporting", "reporting.posture"), http.StatusForbidden, "addon_requires_license"},
+		{"bare add-on sentinel", license.ErrAddonRequiresLicense, http.StatusForbidden, "addon_requires_license"},
+		{"not found", store.ErrNotFound, http.StatusNotFound, "not_found"},
+		{"tenant suspended", store.ErrTenantSuspended, http.StatusLocked, "tenant_suspended"},
+		{"workspace confinement", store.ErrWorkspaceConfinement, http.StatusForbidden, "workspace_confined"},
+		// The module family answers both query sentinels 400, so the code is the 400's.
+		{"cursor with sort", store.ErrCursorWithSort, http.StatusBadRequest, "bad_request"},
+		{"unknown entity", store.ErrUnknownEntity, http.StatusBadRequest, "bad_request"},
+		{"a genuine fault", fmt.Errorf("the disk caught fire"), http.StatusInternalServerError, "internal"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := fmt.Errorf("handler: %w", tc.err)
+			status, body, ok := StoreErrorBody(err)
+			envelope, _ := body["error"].(map[string]string)
+			if status != tc.wantStatus || envelope["code"] != tc.wantCode {
+				t.Fatalf("StoreErrorBody(%v) = %d %v, want %d with code %q", tc.err, status, body, tc.wantStatus, tc.wantCode)
+			}
+			wantStatus, wantMsg, wantOK := StoreErrorStatus(err)
+			if status != wantStatus || envelope["message"] != wantMsg || ok != wantOK {
+				t.Fatalf("StoreErrorBody(%v) = (%d, %q, %v), StoreErrorStatus = (%d, %q, %v)", tc.err, status, envelope["message"], ok, wantStatus, wantMsg, wantOK)
+			}
+		})
+	}
+	// Every code the module family maps is statusFor's code for the same sentinel.
+	for _, err := range []error{
+		store.ErrNotFound, store.ErrConflict, store.ErrAuditSpoolFull,
+		store.ErrWorkspaceConfinement, store.ErrWorkspaceLineageRequired,
+		store.ErrNotLeader, store.ErrResidencyViolation,
+		store.ErrTenantSuspended, store.ErrTenantNotInService,
+		license.ErrAddonRequiresLicense,
+	} {
+		_, want := statusFor(err)
+		_, body, _ := StoreErrorBody(err)
+		if got := body["error"].(map[string]string)["code"]; got != want {
+			t.Errorf("StoreErrorBody(%v) code = %q but statusFor says %q", err, got, want)
+		}
+	}
+}

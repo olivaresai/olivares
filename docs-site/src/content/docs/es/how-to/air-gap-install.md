@@ -30,17 +30,17 @@ un único tarball con un `VERIFY.md`:
 
 ```bash
 scripts/airgap-bundle.sh \
-  --version 26.10.0 \
-  --image ghcr.io/olivaresai/olivares:26.10.0-amd64 \
+  --version 26.10.1 \
+  --image ghcr.io/olivaresai/olivares:26.10.1-amd64 \
   --chart deploy/helm/olivares \
   --cosign-key cosign.key \
   [--collector-image <ref>] [--out dist/airgap] [--gpg-key <id>]
 ```
 
-La etiqueta por arquitectura (`26.10.0-amd64`) está publicada en `ghcr.io/olivaresai/olivares`,
+La etiqueta por arquitectura (`26.10.1-amd64`) está publicada en `ghcr.io/olivaresai/olivares`,
 donde la release se construye y se firma. Docker Hub (`docker.io/olivaresai/olivares`, la descarga
-oficial) lleva las etiquetas multi-arch y endurecidas, idénticas por digest, pero no `26.10.0-amd64`
-(`docs/releases/26.10.0-install-surfaces.json`). ghcr.io no limita la tasa de descargas anónimas de
+oficial) lleva las etiquetas multi-arch y endurecidas, idénticas por digest, pero no `26.10.1-amd64`
+(`docs/releases/26.10.1-install-surfaces.json`). ghcr.io no limita la tasa de descargas anónimas de
 imágenes públicas, lo que también ayuda en un host de construcción sin autenticar.
 
 :::caution[El SBOM/VEX/procedencia se suministran, no se generan]
@@ -99,7 +99,7 @@ cosign verify-blob --key cosign.pub --insecure-ignore-tlog \
 
 ```bash
 scripts/airgap-mirror.sh \
-  --bundle olivares-airgap-26.10.0.tar.gz \
+  --bundle olivares-airgap-26.10.1.tar.gz \
   --registry registry.internal:5000 [--insecure]
 ```
 

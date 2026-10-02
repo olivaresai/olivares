@@ -1,42 +1,44 @@
 {
   "title": "Not-Aus",
-  "subtitle": "Die Notabschaltung des Bestands: Ein Klick stoppt jede gesteuerte Aktuierungsoberfläche. Das Auslösen ist bewusst niederschwellig; die Wiederherstellung erfordert zwei unterschiedliche Benutzerkonten und eine erzwungene Nachprüfung.",
+  "subtitle": "Notstopp für alle KI-Agenten auf diesem Server oder für einen einzelnen. Das Stoppen braucht einen Klick; der Neustart braucht die Genehmigung von zwei verschiedenen Benutzerkonten und danach eine Prüfung.",
   "banner": {
-    "estateTitle": "BESTAND GESTOPPT",
-    "estateBody": "Jede gesteuerte Aktuierungsoberfläche verweigert, bis eine Wiederfreigabe im Vier-Augen-Prinzip erfolgt.",
+    "estateTitle": "ALLE AGENTEN GESTOPPT",
+    "estateBody": "Agenten können nicht handeln, bis zwei Benutzerkonten den Neustart genehmigen: Sitzungen enden, und Werkzeugaufrufe, MCP, Zeitpläne, Sprache, Modellaufrufe, Bereitstellungen und Ereigniszustellung werden abgelehnt.",
     "agentCount": "{{count}} Agent-Stopp aktiv",
     "agentCount_one": "{{count}} Agent-Stopp aktiv",
     "agentCount_other": "{{count}} Agent-Stopps aktiv",
-    "agentBody": "Die gestoppten Agenten werden auf jeder gesteuerten Aktuierungsoberfläche verweigert, die eine Agent-Dimension trägt.",
-    "none": "Keine aktiven Stopps — der Bestand aktuiert normal.",
+    "agentBody": "Die gestoppten Agenten können nicht handeln: Ihre Werkzeugaufrufe, MCP-Aufrufe und anderen Aktionen werden abgelehnt.",
+    "none": "Nichts ist gestoppt. Sitzungen und Agenten laufen normal.",
     "engagedBy": "Ausgelöst von",
-    "revoked": "{{count}} ausstehende Aktuierungsgenehmigung widerrufen",
-    "revoked_one": "{{count}} ausstehende Aktuierungsgenehmigung widerrufen",
-    "revoked_other": "{{count}} ausstehende Aktuierungsgenehmigungen widerrufen"
+    "revoked": "{{count}} ausstehende Genehmigungsanfrage storniert",
+    "revoked_one": "{{count}} ausstehende Genehmigungsanfrage storniert",
+    "revoked_other": "{{count}} ausstehende Genehmigungsanfragen storniert"
   },
   "engage": {
     "title": "Notabschaltung",
-    "caption": "Stoppt den Bestand (oder einen einzelnen Agenten) über Hooks, MCP, Orchestrierung, Sprache, Modelle, Bereitstellung und Eventing hinweg und widerruft die im Geltungsbereich ausstehenden Aktuierungsgenehmigungen. Keine Genehmigungsschranke beim Auslösen — was das Vier-Augen-Prinzip schützt, ist die Wiederfreigabe.",
+    "caption": "Stoppt alle Agenten oder einen einzelnen: Laufende Sitzungen enden, und Werkzeugaufrufe, MCP, Zeitpläne und Workflows, Sprache, Modellaufrufe, Bereitstellungen und Ereigniszustellung werden abgelehnt. Ausstehende Genehmigungsanfragen für diese Aktionen werden storniert. Das Stoppen braucht keine Genehmigung, der Neustart schon. Konsole, Audit-Protokoll und Anmeldung funktionieren weiter.",
     "scope": "Geltungsbereich",
-    "scopeEstate": "Bestandsweit",
+    "scopeEstate": "Alle Agenten",
     "scopeAgent": "Einzelner Agent",
     "agentRef": "Agent",
     "agentRefHint": "Agent-UUID oder externe Referenz. Eine unbekannte Referenz löst dennoch aus — der Stopp greift dann auf genau diese Zeichenfolge.",
     "reason": "Begründung",
-    "reasonHint": "Pflichtangabe — wer dies später liest: die Nachprüfung und die Aufsichtsbehörde.",
+    "reasonHint": "Pflichtangabe: Sagen Sie, warum. Die Prüfung dieses Stopps und spätere Audits lesen sie.",
     "button": "Notabschaltung",
-    "confirmTitleEstate": "Den gesamten Bestand stoppen?",
-    "confirmBodyEstate": "Jede gesteuerte Aktuierungsoberfläche verweigert sofort, und die im Geltungsbereich ausstehenden Aktuierungsgenehmigungen werden widerrufen. Die Wiederfreigabe erfordert die Genehmigung durch zwei unterschiedliche Benutzerkonten sowie eine verpflichtende Nachprüfung — es gibt keinen Notfallzugriff zurück.",
+    "confirmTitleEstate": "Alle Agenten stoppen?",
+    "confirmBodyEstate": "Alle Agenten stoppen sofort: Laufende Sitzungen enden, ihre Aktionen werden abgelehnt, und ausstehende Genehmigungsanfragen für diese Aktionen werden storniert. Für den Neustart müssen zwei verschiedene Benutzerkonten zustimmen, und der Stopp muss danach geprüft werden. Es gibt keinen Notfallweg daran vorbei.",
+    "confirmBodyEstateNoRestart": "Alle Agenten stoppen sofort: Laufende Sitzungen enden, ihre Aktionen werden abgelehnt, und ausstehende Genehmigungsanfragen für diese Aktionen werden storniert. Es gibt keinen Notfallweg daran vorbei.",
     "confirmTitleAgent": "Diesen Agenten stoppen?",
-    "confirmBodyAgent": "Der Agent wird auf jeder gesteuerten Aktuierungsoberfläche verweigert, die eine Agent-Dimension trägt, und seine ausstehenden Aktuierungsgenehmigungen werden widerrufen. Die Wiederfreigabe erfordert die Genehmigung durch zwei unterschiedliche Benutzerkonten sowie eine verpflichtende Nachprüfung.",
+    "confirmBodyAgent": "Dieser Agent stoppt sofort: Seine Aktionen werden abgelehnt und seine ausstehenden Genehmigungsanfragen storniert. Für den Neustart müssen zwei verschiedene Benutzerkonten zustimmen, und der Stopp muss danach geprüft werden.",
     "confirm": "Not-Aus auslösen",
     "done": "Not-Aus ausgelöst",
     "doneBody": "Stopp {{id}} ist aktiv. Die Wiederfreigabe erfordert das Vier-Augen-Prinzip.",
-    "alreadyStopped": "Für diesen Geltungsbereich besteht bereits ein aktiver Stopp"
+    "alreadyStopped": "Für diesen Geltungsbereich besteht bereits ein aktiver Stopp",
+    "restartNeedsAdmins": "Der Neustart braucht die Genehmigung von zwei anderen Administratorkonten, und eines davon muss ihn danach prüfen."
   },
   "stops": {
     "title": "Stopps",
-    "caption": "Die persistierten Stopp-Zeilen — wer ausgelöst hat, wann, Geltungsbereich, Begründung und der vollständige Lebenszyklus aus Wiederfreigabe und Nachprüfung. Die Zeile ist die einzige Quelle der Wahrheit, die jede Aktuierungsschranke live konsultiert.",
+    "caption": "Jeder Stopp: wer ihn ausgelöst hat, wann, was er umfasst, warum und wie er beendet und geprüft wurde. Jede Aktion prüft diese Stopps, bevor sie ausgeführt wird.",
     "search": "Stopps suchen…",
     "label": "Not-Aus-Stopps",
     "filterStatus": "Status",
@@ -47,8 +49,8 @@
     "engaged": "Ausgelöst",
     "aalShort": "AAL{{aal}}",
     "aalHint": "Erfasste Vertrauensstufe der auslösenden Sitzung (Forensik; das Auslösen selbst ist nie an AAL gekoppelt).",
-    "revoked": "Widerrufen",
-    "revokedHint": "Durch das Auslösen abgebrochene ausstehende Aktuierungsgenehmigungen.",
+    "revoked": "Stornierte Anfragen",
+    "revokedHint": "Durch diesen Stopp stornierte ausstehende Genehmigungsanfragen.",
     "status": "Status",
     "byRule": "Regel",
     "empty": "Keine Stopps erfasst",
@@ -66,7 +68,7 @@
     "reviewed": "Nachgeprüft"
   },
   "scope": {
-    "estate": "Bestand",
+    "estate": "Alle Agenten",
     "agent": "Agent"
   },
   "source": {
@@ -75,7 +77,7 @@
   },
   "reenable": {
     "title": "Diesen Stopp wieder freigeben",
-    "body": "Die Wiederfreigabe erfolgt nie einseitig: Sie eröffnet eine Genehmigung im Vier-Augen-Prinzip, die zwei unterschiedliche Benutzerkonten genehmigen müssen (Selbstgenehmigung ausgeschlossen, AAL3 je Entscheidung). Es gibt bewusst keinen Notfallzugriff — der gestoppte Bestand ist der sichere Zustand. Die Engine erzwingt verschiedene KONTEN; sie kann nicht nachweisen, dass zwei Konten zwei verschiedene Personen sind. Die Untergrenze von zwei Konten ist strukturell; die AAL3-Anforderung richtet sich nach der aktuellen Risikostufe, die eine Genehmigungsrichtlinie herabsetzen kann.",
+    "body": "Der Neustart ist nie die Entscheidung einer einzelnen Person: Zwei verschiedene Benutzerkonten müssen zustimmen, und niemand kann seine eigene Anfrage genehmigen. Jede genehmigende Person muss eine stärkere Anmeldung (AAL3) verwenden, außer eine Genehmigungsregel senkt die Risikostufe dieser Aktion; die Zwei-Konten-Regel gilt auch dann. Es gibt keinen Notfallweg daran vorbei, denn gestoppt zu bleiben ist der sichere Zustand. Die Engine prüft, dass die Konten verschieden sind; sie kann nicht prüfen, dass zwei verschiedene Personen sie nutzen.",
     "reason": "Notiz",
     "reasonHint": "Optional — wird der Anfrage im Vier-Augen-Prinzip für die Genehmigenden beigefügt.",
     "existingApproval": "Für diesen Stopp ist bereits eine Genehmigung im Vier-Augen-Prinzip ({{id}}) offen. Die Prüfung meldet deren Fortschritt und schließt die Wiederfreigabe ab, sobald beide Konten genehmigt haben.",
@@ -87,7 +89,7 @@
     "progress": "{{approved}} von {{required}} Genehmigungen",
     "goToApprovals": "Genehmigungswarteschlange öffnen",
     "done": "Not-Aus im Vier-Augen-Prinzip wieder freigegeben",
-    "reviewDue": "Die Aktuierung wird fortgesetzt — die verpflichtende Nachprüfung ist nun fällig.",
+    "reviewDue": "Die Agenten laufen wieder. Die Prüfung dieses Stopps ist jetzt fällig.",
     "blocked": "Wiederfreigabe blockiert",
     "dualControl": "Vier-Augen-Prinzip erforderlich"
   },
@@ -108,7 +110,7 @@
   },
   "guardian": {
     "title": "Guardian-Regeln",
-    "caption": "Vom Operator verfasste, halbautonome Eindämmung über die Befundschiene. Eine Regel gleicht Befunde nach Art und Schweregrad-Untergrenze ab und löst eine Eindämmung aus — sofort (automatisch) oder hinter einer einzelnen menschlichen Genehmigung. Sie gleicht nie die eigenen Befunde des Not-Aus ab (Anti-Rückkopplungsschleife).",
+    "caption": "Automatische Reaktionen auf Sicherheitsbefunde. Eine Regel wählt Befunde nach Art und Mindestschweregrad aus und führt eine Reaktion aus, sofort oder nach der Genehmigung durch eine Person. Eine Regel reagiert nie auf die Befunde des Not-Aus selbst, damit ein Stopp keinen weiteren auslöst.",
     "newRule": "Neue Regel",
     "name": "Regel",
     "kinds": "Befundarten",
@@ -139,7 +141,7 @@
     "actionLabel": {
       "stop_agent": "Agent stoppen",
       "quarantine_nhi": "NHI in Quarantäne",
-      "stop_estate": "Bestand stoppen"
+      "stop_estate": "Alle Agenten stoppen"
     },
     "modeLabel": {
       "auto": "Automatisch",

@@ -152,7 +152,6 @@ const SIN_TECHO_CONOCIDAS: Record<string, Record<string, string>> = {
   },
   identity: {
     audit: 'linea base 2026-08-28; sin clasificar drena/recorta',
-    cryptoInventory: 'linea base 2026-08-28; sin clasificar drena/recorta',
     externalKeys: 'linea base 2026-08-28; sin clasificar drena/recorta',
     findings: 'linea base 2026-08-28; sin clasificar drena/recorta',
     groups: 'linea base 2026-08-28; sin clasificar drena/recorta',

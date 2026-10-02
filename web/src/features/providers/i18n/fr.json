@@ -88,7 +88,8 @@
     "success": "Fournisseur enregistré. Testez la connexion pour confirmer qu'il fonctionne.",
     "testNext": "Tester la connexion maintenant",
     "registering": "Enregistrement…",
-    "localNameHint": "Votre nom pour ce point de terminaison. Il apparaît dans le sélecteur."
+    "localNameHint": "Votre nom pour ce point de terminaison. Il apparaît dans le sélecteur.",
+    "advanced": "Advanced: custom endpoint"
   },
   "rotate": {
     "title": "Changer la clé de ce fournisseur",

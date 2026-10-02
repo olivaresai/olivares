@@ -39,7 +39,7 @@ func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request) {
 	if lic.SupportTier != "" {
 		license["support_tier"] = lic.SupportTier
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
+	info := map[string]any{
 		"version":        s.version,
 		"engine":         string(s.st.Engine()),
 		"setup_required": !s.setupCompleteNow(r),
@@ -52,7 +52,42 @@ func (s *Server) handleServerInfo(w http.ResponseWriter, r *http.Request) {
 			"agents_md_enforce_available":  true,
 			"aaif_standards":               []string{"MCP", "A2A", "AGENTS.md"},
 		},
-	})
+	}
+	// The background jobs this node does not run, and why, so the console says so
+	// where an administrator expects them (retention without the PostgreSQL
+	// administration role). Absent when every job runs.
+	if s.jobsNotRunning != nil {
+		if jobs := s.jobsNotRunning(); len(jobs) > 0 {
+			info["jobs_not_running"] = jobs
+		}
+	}
+	// The build edition, so the console offers only what this build serves. A build
+	// fact like version: it carries no license, entitlement or customer data.
+	if s.edition != "" {
+		info["edition"] = s.edition
+	}
+	// The pin of the certificate this engine serves, so the console can print the full
+	// `olivares login --server <address> --pin-sha256 <pin>` line for a self-signed
+	// engine. It is public by nature: every TLS client receives the certificate.
+	if s.tlsPin != nil {
+		if pin := s.tlsPin(); pin != "" {
+			info["tls_pin_sha256"] = pin
+		}
+	}
+	if providers := s.loginProviders(r); len(providers) > 0 {
+		info["sso_providers"] = providers
+	}
+	// The modules this node does not run, so the console hides what would only
+	// answer module_not_enabled. Absent when every module runs.
+	if len(s.notEnabled) > 0 {
+		info["modules_not_enabled"] = s.notEnabled
+	}
+	// Whether the session communication plane is effective: the console shows its
+	// screens only then, and never probes a route to find out.
+	if s.communicationReady != nil {
+		info["communication_ready"] = s.communicationReady(r.Context())
+	}
+	writeJSON(w, http.StatusOK, info)
 }
 
 // --- Agents (representative tenant-scoped CRUD) ------------------------------
@@ -258,6 +293,12 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	// One rule for adding a person, here and in the console's onboarding: the
+	// deployment's administrative step-up (none by default). A superadmin made
+	// from the CLI no longer skips what an invitation asks for (HU-28).
+	if !s.requireStepUp(w, r, p) {
+		return
+	}
 	var in createUserRequest
 	if err := decodeJSON(w, r, &in); err != nil {
 		s.badRequest(w, r, "invalid JSON body")
@@ -385,7 +426,7 @@ func (s *Server) handleSetSuperadminActive(w http.ResponseWriter, r *http.Reques
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	id := model.ID(chi.URLParam(r, "id"))
@@ -683,7 +724,7 @@ func (s *Server) handleSetOrgRegion(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	tenant, err := model.ParseTenantID(chi.URLParam(r, "tenant"))
@@ -872,3 +913,7 @@ func parseFilteredListQuery(r *http.Request, confinedWS model.ID) model.Query {
 	}
 	return q
 }
+
+// SetTLSPin gives server-info the pin of the certificate the engine serves (serve sets
+// it once TLS is ready, before the listener starts). nil or "" leaves the field out.
+func (s *Server) SetTLSPin(pin func() string) { s.tlsPin = pin }

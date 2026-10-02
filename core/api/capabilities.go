@@ -11,6 +11,7 @@ import (
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/sdk"
 )
 
 // The SELF capability projection answers, for the CALLING credential only, whether one
@@ -291,6 +292,7 @@ func (s *Server) projectOuterDecision(
 	req auth.Request,
 	governed routeGovernance,
 ) capabilityProjection {
+	req.Purpose = sdk.PurposeCurrentWhatIf
 	if s.authz == nil {
 		return unknownProjection(capabilityCodeEvidenceUnavailable)
 	}

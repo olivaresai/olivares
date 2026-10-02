@@ -1035,3 +1035,54 @@ func TestOpenCodeHomeEnvNamesAreCrossProvider(t *testing.T) {
 		}
 	}
 }
+
+// HU-R14: an Ollama record reaches an OpenCode launch the way Codex gets it
+// (driver_codex.go LaunchArgs) — direct launch-time configuration that modifies
+// no home. OpenCode's documented inline-config source is OPENCODE_CONFIG_CONTENT;
+// the provider block is the OpenAI-compatible adapter pointed at <endpoint>/v1
+// with no key.
+func TestOpenCodeLocalModelEndpointInjectsTheProvider(t *testing.T) {
+	env := (openCodeDriver{}).LaunchEnv(DriverLaunch{LocalModelEndpoint: "http://127.0.0.1:11434/v1"})
+	var inline string
+	for _, e := range env {
+		if e.Name == "OPENCODE_DISABLE_AUTOUPDATE" && e.Value != "1" {
+			t.Fatalf("autoupdate disable = %q, want 1", e.Value)
+		}
+		if e.Name == "OPENCODE_CONFIG_CONTENT" {
+			inline = e.Value
+		}
+	}
+	if inline == "" {
+		t.Fatal("a local-model launch must carry the inline provider config")
+	}
+	var cfg struct {
+		Provider map[string]struct {
+			Npm     string            `json:"npm"`
+			Options map[string]string `json:"options"`
+			Models  map[string]any    `json:"models"`
+		} `json:"provider"`
+	}
+	if err := json.Unmarshal([]byte(inline), &cfg); err != nil {
+		t.Fatalf("the inline config is not JSON: %v", err)
+	}
+	p, ok := cfg.Provider["olivares_ollama"]
+	if !ok {
+		t.Fatalf("provider block = %v, want olivares_ollama", cfg.Provider)
+	}
+	if p.Npm != "@ai-sdk/openai-compatible" {
+		t.Fatalf("npm = %q, want @ai-sdk/openai-compatible", p.Npm)
+	}
+	if p.Options["baseURL"] != "http://127.0.0.1:11434/v1" {
+		t.Fatalf("baseURL = %q, want the record's <endpoint>/v1", p.Options["baseURL"])
+	}
+	if _, hasKey := p.Options["apiKey"]; hasKey {
+		t.Fatal("a local no-key provider must not carry an apiKey")
+	}
+
+	// No endpoint: no inline config (the ordinary account-home launch is untouched).
+	for _, e := range (openCodeDriver{}).LaunchEnv(DriverLaunch{}) {
+		if e.Name == "OPENCODE_CONFIG_CONTENT" {
+			t.Fatal("a launch with no local model must not carry the inline provider config")
+		}
+	}
+}

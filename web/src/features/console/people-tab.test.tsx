@@ -43,6 +43,7 @@ vi.mock('./api', async (importOriginal) => {
   return { ...actual, consoleApi: api }
 })
 
+import { ApiError } from '@/lib/api/errors'
 import { PeopleTab } from './people-tab'
 
 const emptyList = { items: [], has_more: false }
@@ -206,7 +207,7 @@ describe('PeopleTab members roster', () => {
     expect(screen.getByText('SSO only')).toBeInTheDocument()
 
     await user.click(
-      screen.getByRole('switch', {
+      screen.getByRole('button', {
         name: /remove ada@acme\.io from the organization/i,
       }),
     )
@@ -221,6 +222,38 @@ describe('PeopleTab members roster', () => {
     await waitFor(() =>
       expect(api.setMemberActive).toHaveBeenCalledWith('u1', false),
     )
+  })
+
+  it('never offers to remove yourself or the only owner (HU-25)', async () => {
+    const owner = {
+      ...member,
+      user_id: 'u-owner',
+      email: 'owner@acme.io',
+      role: 'owner' as const,
+    }
+    const self = { ...member, user_id: 'u-self', email: 'me@acme.io' }
+    api.listMembers.mockResolvedValue({
+      items: [owner, self, member],
+      has_more: false,
+    })
+    authState.principal = {
+      aal: 3,
+      user_id: 'u-self',
+    } as typeof authState.principal
+    wrap(<PeopleTab />)
+
+    expect(await screen.findByText('owner@acme.io')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /remove owner@acme\.io/i }),
+    ).toBeNull()
+    expect(
+      screen.queryByRole('button', { name: /remove me@acme\.io/i }),
+    ).toBeNull()
+    expect(
+      screen.getByRole('button', { name: /remove ada@acme\.io/i }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('switch')).toBeNull()
+    authState.principal = { aal: 3 }
   })
 
   it('offers no enable for a member the deployment suspended, only its removal', async () => {
@@ -283,5 +316,97 @@ describe('PeopleTab — the empty invitations panel', () => {
     expect(
       screen.queryByRole('button', { name: 'Invite the first user' }),
     ).toBeNull()
+  })
+})
+
+// ID's account sweep (Root 2026-10-02): the onboarding form accepted "bad@" and said "User
+// onboarded.". It now holds an address to the sign-in field's own rule, and a refusal from
+// the engine reads in the form in the engine's words.
+describe('PeopleTab — onboarding checks the address', () => {
+  async function openOnboard() {
+    const user = userEvent.setup()
+    wrap(<PeopleTab />)
+    await user.click(
+      (await screen.findAllByRole('button', { name: 'Onboard user' }))[0],
+    )
+    const dialog = await screen.findByRole('dialog')
+    return { user, dialog }
+  }
+
+  it('an address the sign-in refuses is refused here too: "bad@" is not onboarded', async () => {
+    const { user, dialog } = await openOnboard()
+    await user.type(within(dialog).getByLabelText(/^Email/), 'bad@')
+    await user.type(
+      within(dialog).getByLabelText(/^Initial password/),
+      'long-enough-1',
+    )
+    expect(
+      within(dialog).getByText('Enter a valid email address.'),
+    ).toBeInTheDocument()
+    expect(
+      within(dialog).getByRole('button', { name: 'Onboard' }),
+    ).toBeDisabled()
+    expect(api.onboard).not.toHaveBeenCalled()
+  })
+
+  it('an internal-domain address the engine accepts is not refused here', async () => {
+    const { user, dialog } = await openOnboard()
+    await user.type(
+      within(dialog).getByLabelText(/^Email/),
+      'ops@corp.internal',
+    )
+    await user.type(
+      within(dialog).getByLabelText(/^Initial password/),
+      'long-enough-1',
+    )
+    expect(
+      within(dialog).queryByText('Enter a valid email address.'),
+    ).toBeNull()
+    expect(
+      within(dialog).getByRole('button', { name: 'Onboard' }),
+    ).toBeEnabled()
+  })
+
+  // ID's account sweep, P2: the Users table showed only the administrator after an
+  // onboarding until the page was left.
+  it('a new account appears in the Users table without leaving the page', async () => {
+    api.onboard.mockResolvedValue({ user: { id: 'u-new' } })
+    const { user, dialog } = await openOnboard()
+    expect(api.listMembers).toHaveBeenCalledTimes(1)
+    api.listMembers.mockResolvedValue({
+      items: [
+        {
+          ...member,
+          user_id: 'u-new',
+          email: 'ana@acme.io',
+          display_name: 'Ana',
+        },
+      ],
+      has_more: false,
+    })
+    await user.type(within(dialog).getByLabelText(/^Email/), 'ana@acme.io')
+    await user.type(
+      within(dialog).getByLabelText(/^Initial password/),
+      'long-enough-1',
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Onboard' }))
+    await waitFor(() => expect(api.listMembers).toHaveBeenCalledTimes(2))
+    expect(await screen.findByText('ana@acme.io')).toBeInTheDocument()
+  })
+
+  it("the engine's refusal reads in the form, in its own words", async () => {
+    api.onboard.mockRejectedValue(
+      new ApiError(400, 'invalid_argument', 'email address is not valid'),
+    )
+    const { user, dialog } = await openOnboard()
+    await user.type(within(dialog).getByLabelText(/^Email/), 'ana@acme.io')
+    await user.type(
+      within(dialog).getByLabelText(/^Initial password/),
+      'long-enough-1',
+    )
+    await user.click(within(dialog).getByRole('button', { name: 'Onboard' }))
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+      'email address is not valid',
+    )
   })
 })

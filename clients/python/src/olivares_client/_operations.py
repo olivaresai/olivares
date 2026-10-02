@@ -11,7 +11,7 @@ from typing import TypedDict, cast
 from urllib.parse import quote
 
 API_VERSION = "v1"
-SPEC_HASH = "7ba1caee75b2092bdd7e5de30b8c3bf9de48fad83e8320a4695362c05d1eaa0b"
+SPEC_HASH = "641d97ca7da284483cf51d3cab34825780d11114851df95754385b8eb0361086"
 STABILITY_POLICY = "https://olivares.ai/docs"
 
 class _AuthCapabilityQuestionRequired(TypedDict):
@@ -604,6 +604,13 @@ class OperationsMixin:
         """
         return self._do("GET", "/v1/audit/pubkey", "/v1/audit/pubkey", query=query, tenant=tenant)
 
+    def get_v1_audit_recent(self, *, tenant=None, **query):
+        """GET /v1/audit/recent — The newest ledger events, newest first, without audit reads (not itself recorded)
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/audit/recent", "/v1/audit/recent", query=query, tenant=tenant)
+
     def get_v1_audit_system(self, *, tenant=None, **query):
         """GET /v1/audit/system — Read the system-tenant evidence ledger (cross-tenant ops; superadmin only)
 
@@ -617,6 +624,20 @@ class OperationsMixin:
         Stability: stable.
         """
         return self._do("GET", "/v1/audit/verify", "/v1/audit/verify", query=query, tenant=tenant)
+
+    def get_v1_auth_browser_session(self, *, tenant=None, **query):
+        """GET /v1/auth/browser-session — Restore cookie session metadata.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/auth/browser-session", "/v1/auth/browser-session", query=query, tenant=tenant)
+
+    def post_v1_auth_browser_session(self, body=None, *, tenant=None, **query):
+        """POST /v1/auth/browser-session — Rotate a legacy bearer into a cookie without extending expiry.
+
+        Stability: stable.
+        """
+        return self._do("POST", "/v1/auth/browser-session", "/v1/auth/browser-session", body=body, query=query, tenant=tenant)
 
     def post_v1_auth_capabilities(self, body: AuthCapabilityQuestions, *, tenant: str | None = None) -> AuthCapabilityResults:
         """POST /v1/auth/capabilities — typed published communication contract."""
@@ -645,8 +666,22 @@ class OperationsMixin:
         """
         return self._do("POST", "/v1/auth/refresh", "/v1/auth/refresh", body=body, query=query, tenant=tenant)
 
+    def get_v1_auth_step_up_policy(self, *, tenant=None, **query):
+        """GET /v1/auth/step-up-policy — Read what administrative actions demand beyond the sign-in.
+
+        Stability: stable.
+        """
+        return self._do("GET", "/v1/auth/step-up-policy", "/v1/auth/step-up-policy", query=query, tenant=tenant)
+
+    def put_v1_auth_step_up_policy(self, body=None, *, tenant=None, **query):
+        """PUT /v1/auth/step-up-policy — Set what administrative actions demand beyond the sign-in.
+
+        Stability: stable.
+        """
+        return self._do("PUT", "/v1/auth/step-up-policy", "/v1/auth/step-up-policy", body=body, query=query, tenant=tenant)
+
     def delete_v1_auth_totp(self, *, tenant=None, **query):
-        """DELETE /v1/auth/totp — Remove the calling account's factor with AAL3.
+        """DELETE /v1/auth/totp — Remove the calling account's factor behind the administrative step-up.
 
         Stability: stable.
         """
@@ -681,7 +716,7 @@ class OperationsMixin:
         return self._do("GET", "/v1/auth/totp/policy", "/v1/auth/totp/policy", query=query, tenant=tenant)
 
     def put_v1_auth_totp_policy(self, body=None, *, tenant=None, **query):
-        """PUT /v1/auth/totp/policy — Set the administrator factor policy with AAL3.
+        """PUT /v1/auth/totp/policy — Set the administrator factor policy behind the administrative step-up.
 
         Stability: stable.
         """
@@ -1066,7 +1101,7 @@ class OperationsMixin:
         return self._do("GET", "/v1/users/{id}/totp", "/v1/users/" + quote(str(id), safe="") + "/totp", query=query, tenant=tenant)
 
     def post_v1_users_by_id_totp_reset(self, id, body=None, *, tenant=None, **query):
-        """POST /v1/users/{id}/totp/reset — Reset a tenant-governed member's factor with AAL3.
+        """POST /v1/users/{id}/totp/reset — Reset a tenant-governed member's factor behind the administrative step-up.
 
         Stability: stable.
         """
@@ -1192,7 +1227,7 @@ class OperationsMixin:
         return self._do("GET", "/v1/m/agenttools/detect", "/v1/m/agenttools/detect", query=query, tenant=tenant)
 
     def post_v1_m_agenttools_installs(self, body, *, tenant=None, **query):
-        """POST /v1/m/agenttools/installs — Starts one audited host installation from an approved plan at AAL3.
+        """POST /v1/m/agenttools/installs — Starts one audited host installation from an approved plan behind the administrative step-up.
 
         Stability: beta.
         """
@@ -1212,12 +1247,82 @@ class OperationsMixin:
         """
         return self._do("GET", "/v1/m/agenttools/jobs/{id}", "/v1/m/agenttools/jobs/" + quote(str(id), safe=""), query=query, tenant=tenant)
 
+    def get_v1_m_agenttools_ollama(self, *, tenant=None, **query):
+        """GET /v1/m/agenttools/ollama — Reports whether Ollama is installed, whether this engine runs it, its endpoint and the models it holds.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/agenttools/ollama", "/v1/m/agenttools/ollama", query=query, tenant=tenant)
+
+    def post_v1_m_agenttools_ollama_pulls(self, body, *, tenant=None, **query):
+        """POST /v1/m/agenttools/ollama/pulls — Downloads a model into the running Ollama and returns the download to follow; Ollama's own progress is read from it.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/agenttools/ollama/pulls", "/v1/m/agenttools/ollama/pulls", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_agenttools_ollama_pulls_by_id(self, id, *, tenant=None, **query):
+        """GET /v1/m/agenttools/ollama/pulls/{id} — Reads one model download: its state and Ollama's progress.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/agenttools/ollama/pulls/{id}", "/v1/m/agenttools/ollama/pulls/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def post_v1_m_agenttools_ollama_start(self, body=None, *, tenant=None, **query):
+        """POST /v1/m/agenttools/ollama/start — Starts the installed Ollama as a managed child of the engine and returns at once; the row reads "running" once the service answers.
+
+        Stability: beta.
+        """
+        return self._do("POST", "/v1/m/agenttools/ollama/start", "/v1/m/agenttools/ollama/start", body=body, query=query, tenant=tenant)
+
+    def post_v1_m_agenttools_ollama_stop(self, *, tenant=None, **query):
+        """POST /v1/m/agenttools/ollama/stop — Stops the Ollama this engine started.
+
+        Stability: beta.
+        """
+        return self._do("POST", "/v1/m/agenttools/ollama/stop", "/v1/m/agenttools/ollama/stop", query=query, tenant=tenant)
+
     def post_v1_m_agenttools_plans(self, body, *, tenant=None, **query):
         """POST /v1/m/agenttools/plans — Resolves an official release and returns the digest-bound version, verification policy and destination for system administrator review before install.
 
         Stability: beta.
         """
         return self._do_json_required("POST", "/v1/m/agenttools/plans", "/v1/m/agenttools/plans", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_agenttools_sign_in(self, *, tenant=None, **query):
+        """GET /v1/m/agenttools/sign-in — Reports what an installed Claude Code, Codex or Grok Build says about its own login on this node: installed, signed in, and with which account.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/agenttools/sign-in", "/v1/m/agenttools/sign-in", query=query, tenant=tenant)
+
+    def post_v1_m_agenttools_sign_in(self, body, *, tenant=None, **query):
+        """POST /v1/m/agenttools/sign-in — Starts the tool's own login on this node (claude auth login, codex or grok login --device-auth) and returns its sign-in page link, plus the device code for Codex and Grok Build.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/agenttools/sign-in", "/v1/m/agenttools/sign-in", body=body, query=query, tenant=tenant)
+
+    def get_v1_m_agenttools_sign_in_by_id(self, id, *, tenant=None, **query):
+        """GET /v1/m/agenttools/sign-in/{id} — Reads one login in progress: its state, link and device code.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/agenttools/sign-in/{id}", "/v1/m/agenttools/sign-in/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def delete_v1_m_agenttools_sign_in_by_id(self, id, *, tenant=None, **query):
+        """DELETE /v1/m/agenttools/sign-in/{id} — Stops a login in progress: the tool's login process ends on this node and the pending login is forgotten.
+
+        Stability: beta.
+        """
+        return self._do("DELETE", "/v1/m/agenttools/sign-in/{id}", "/v1/m/agenttools/sign-in/" + quote(str(id), safe=""), query=query, tenant=tenant)
+
+    def post_v1_m_agenttools_sign_in_by_id_code(self, id, body, *, tenant=None, **query):
+        """POST /v1/m/agenttools/sign-in/{id}/code — Hands the code shown on Claude's sign-in page to the waiting login and answers once the tool says whether it is signed in.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/agenttools/sign-in/{id}/code", "/v1/m/agenttools/sign-in/" + quote(str(id), safe="") + "/code", body=body, query=query, tenant=tenant)
 
     def get_v1_m_capabilities_configs(self, *, tenant=None, **query):
         """GET /v1/m/capabilities/configs — Lists managed MCP-server configs, optionally filtered.
@@ -2136,6 +2241,20 @@ class OperationsMixin:
         """
         return self._do("GET", "/v1/m/compliance/summary", "/v1/m/compliance/summary", query=query, tenant=tenant)
 
+    def get_v1_m_consoleviews_favorites(self, *, tenant=None, **query):
+        """GET /v1/m/consoleviews/favorites — Returns the caller's own favorites; stored is false when none were saved yet.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/consoleviews/favorites", "/v1/m/consoleviews/favorites", query=query, tenant=tenant)
+
+    def put_v1_m_consoleviews_favorites(self, body, *, tenant=None, **query):
+        """PUT /v1/m/consoleviews/favorites — Replaces the caller's favorites with the given ordered list.
+
+        Stability: beta.
+        """
+        return self._do_json_required("PUT", "/v1/m/consoleviews/favorites", "/v1/m/consoleviews/favorites", body=body, query=query, tenant=tenant)
+
     def get_v1_m_consoleviews_views(self, *, tenant=None, **query):
         """GET /v1/m/consoleviews/views — Returns the caller's own views plus the tenant's shared views, optionally scoped with ?feature_id=.
 
@@ -3047,7 +3166,7 @@ class OperationsMixin:
         return self._do("DELETE", "/v1/m/governance/agents/{agentID}/identity", "/v1/m/governance/agents/" + quote(str(agentid), safe="") + "/identity", query=query, tenant=tenant)
 
     def get_v1_m_governance_approvals(self, *, tenant=None, **query):
-        """GET /v1/m/governance/approvals — Lists requests, optionally filtered by status/action.
+        """GET /v1/m/governance/approvals — Filters by the same effective status used by every decision.
 
         Stability: beta.
         """
@@ -3096,7 +3215,7 @@ class OperationsMixin:
         return self._do("GET", "/v1/m/governance/approvals/{id}/decisions", "/v1/m/governance/approvals/" + quote(str(id), safe="") + "/decisions", query=query, tenant=tenant)
 
     def post_v1_m_governance_approvals_by_id_decisions(self, id, body, *, tenant=None, **query):
-        """POST /v1/m/governance/approvals/{id}/decisions — Records one human decision.
+        """POST /v1/m/governance/approvals/{id}/decisions — Lets authorized reviewers approve or reject a pending request.
 
         Stability: beta.
         """
@@ -5230,6 +5349,20 @@ class OperationsMixin:
         """
         return self._do("GET", "/v1/m/reporting/schedules/{id}/runs/{rid}", "/v1/m/reporting/schedules/" + quote(str(id), safe="") + "/runs/" + quote(str(rid), safe=""), query=query, tenant=tenant)
 
+    def get_v1_m_reporting_signing(self, *, tenant=None, **query):
+        """GET /v1/m/reporting/signing — Reports whether evidence bundles are signed on this deployment: enabled, ready (and why not), the signing key's ID and public key, and where the key comes from.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/reporting/signing", "/v1/m/reporting/signing", query=query, tenant=tenant)
+
+    def put_v1_m_reporting_signing(self, body, *, tenant=None, **query):
+        """PUT /v1/m/reporting/signing — Turns evidence bundle signing on or off for the whole deployment and answers with the resulting signing status.
+
+        Stability: beta.
+        """
+        return self._do_json_required("PUT", "/v1/m/reporting/signing", "/v1/m/reporting/signing", body=body, query=query, tenant=tenant)
+
     def get_v1_m_reporting_templates_by_type(self, type_, *, tenant=None, **query):
         """GET /v1/m/reporting/templates/{type} — reporting module route (requires reporting:report:read)
 
@@ -5808,6 +5941,20 @@ class OperationsMixin:
         """
         return self._do_json_required("POST", "/v1/m/sessions/provider-profiles", "/v1/m/sessions/provider-profiles", body=body, query=query, tenant=tenant)
 
+    def get_v1_m_sessions_provider_profiles_resolve(self, *, tenant=None, **query):
+        """GET /v1/m/sessions/provider-profiles/resolve — Answers what a new session of a driver would run on, without creating anything: the tool's own login when it is signed in, otherwise the key or local model from Providers that the resolve rule picks, or the sentence that says what to add.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/provider-profiles/resolve", "/v1/m/sessions/provider-profiles/resolve", query=query, tenant=tenant)
+
+    def post_v1_m_sessions_provider_profiles_resolve(self, body, *, tenant=None, **query):
+        """POST /v1/m/sessions/provider-profiles/resolve — Answers which provider profile a new session of a driver uses on this node: the tool's own login when it is signed in, otherwise a key or local model from Providers; it reuses a matching profile or creates one.
+
+        Stability: beta.
+        """
+        return self._do_json_required("POST", "/v1/m/sessions/provider-profiles/resolve", "/v1/m/sessions/provider-profiles/resolve", body=body, query=query, tenant=tenant)
+
     def get_v1_m_sessions_provider_profiles_by_ref(self, ref, *, tenant=None, **query):
         """GET /v1/m/sessions/provider-profiles/{ref} — Returns one provider profile by its reference, without its paths.
 
@@ -5955,6 +6102,20 @@ class OperationsMixin:
         """
         return self._do_raw("GET", "/v1/m/sessions/runs/{ref}/attach", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/attach", query=query, tenant=tenant)
 
+    def get_v1_m_sessions_runs_by_ref_changes(self, ref, *, tenant=None, **query):
+        """GET /v1/m/sessions/runs/{ref}/changes — Lists the files in the run's folder that changed since the run started, newest first.
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/runs/{ref}/changes", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/changes", query=query, tenant=tenant)
+
+    def get_v1_m_sessions_runs_by_ref_changes_file(self, ref, *, tenant=None, **query):
+        """GET /v1/m/sessions/runs/{ref}/changes/file — Returns the current text of one file in the run's folder (?path=, relative to the folder; at most 256 KiB).
+
+        Stability: beta.
+        """
+        return self._do("GET", "/v1/m/sessions/runs/{ref}/changes/file", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/changes/file", query=query, tenant=tenant)
+
     def post_v1_m_sessions_runs_by_ref_cleanup(self, ref, *, tenant=None, **query):
         """POST /v1/m/sessions/runs/{ref}/cleanup — sessions module route (requires sessions:run:admin)
 
@@ -5982,6 +6143,13 @@ class OperationsMixin:
         Stability: beta.
         """
         return self._do("POST", "/v1/m/sessions/runs/{ref}/interrupt", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/interrupt", body=body, query=query, tenant=tenant)
+
+    def put_v1_m_sessions_runs_by_ref_peers(self, ref, body, *, tenant=None, **query):
+        """PUT /v1/m/sessions/runs/{ref}/peers — Stores one operator choice on the existing run row.
+
+        Stability: beta.
+        """
+        return self._do_json_required("PUT", "/v1/m/sessions/runs/{ref}/peers", "/v1/m/sessions/runs/" + quote(str(ref), safe="") + "/peers", body=body, query=query, tenant=tenant)
 
     def post_v1_m_sessions_runs_by_ref_resume(self, ref, *, tenant=None, **query):
         """POST /v1/m/sessions/runs/{ref}/resume — sessions module route (requires sessions:run:write)

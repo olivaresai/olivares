@@ -6,11 +6,11 @@ package main
 
 import (
 	"context"
-	"crypto/ed25519"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
+	"maps"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -18,18 +18,11 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
-
-	"github.com/olivaresai/olivares/cmd/olivares/internal/agenttoolsapi"
-
-	"github.com/olivaresai/olivares/core/api"
-	"github.com/olivaresai/olivares/core/audit"
-	"github.com/olivaresai/olivares/core/auth"
-	coreengine "github.com/olivaresai/olivares/core/engine"
-	"github.com/olivaresai/olivares/core/secure"
-	"github.com/olivaresai/olivares/core/store"
 )
 
 // THE CLASS: A HAND-WRITTEN CONSOLE CLIENT CALLING A ROUTE THE ENGINE NEVER MOUNTS.
@@ -858,6 +851,11 @@ var consoleMachineFacing = map[string]string{
 	"/openapi":      "la especificación de la API, servida a herramientas",
 	"/v1/ssf/":      "Shared Signals ENTRANTE: lo empuja el IdP",
 
+	// Live boot binds these MCP protocol leaves; their clients are tools. The
+	// console manages the gateway through the separate /v1/console routes.
+	"/session/mcp":       "session MCP protocol: the launched tool uses its own session credential",
+	"/mcp/gateway/{}/{}": "MCP gateway protocol: the MCP client presents its audience-bound credential",
+
 	// ⛔ LAS PRIMITIVAS DEL ROSTER, y la consola hace BIEN en no llamarlas. Medido el 2026-08-19
 	// siguiendo la cadena entera, porque parecían dos huecos y no lo son:
 	//
@@ -1020,51 +1018,42 @@ func assertUnresolvedAreDeclared(t *testing.T, unresolved []clientCall) {
 	}
 }
 
-// walkEveryRoute mounts the production module set on a real server and walks chi for
-// EVERY route — core and module alike, which is what a console client can reach.
+var boundRouteSnapshot struct {
+	sync.Once
+	routes map[string]bool
+}
+
+// The checks share one immutable production snapshot: boot runs once per process.
+// Each caller receives its own map so one check cannot change another's surface.
 func walkEveryRoute(t *testing.T) map[string]bool {
 	t.Helper()
-	ctx := context.Background()
+	boundRouteSnapshot.Do(func() { boundRouteSnapshot.routes = walkBoundRoutes(t) })
+	if len(boundRouteSnapshot.routes) == 0 {
+		t.Fatal("the router walk found no routes at all; this test would pass vacuously")
+	}
+	return maps.Clone(boundRouteSnapshot.routes)
+}
+
+// walkBoundRoutes walks the bound production composition, including edition HTTP
+// wrappers. Descriptive module factories have not received their live ports yet.
+// No ingest source is started and the engine's owned resources close with the test.
+func walkBoundRoutes(t *testing.T) map[string]bool {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), time.Minute)
+	t.Cleanup(cancel)
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
-	_, priv, err := ed25519.GenerateKey(nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	signer, err := audit.NewSigner(priv)
-	if err != nil {
-		t.Fatal(err)
-	}
-	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
-	if err != nil {
-		t.Fatalf("build modules: %v", err)
-	}
-	st, err := coreengine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:"},
-		func(store.ExtensionRegistry) error { return nil })
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = st.Close() })
-	if err := st.System(ctx, func(sys store.SystemScope) error {
-		_, e := sys.EnsureSystemTenant(ctx)
-		return e
-	}); err != nil {
-		t.Fatal(err)
-	}
-	// The composition root wires the authenticator as the principal evidence producer
-	// (boot.go), and api.New refuses to mount a module's governed routes without one,
-	// so the route walk composes the server the same way.
-	authr := auth.NewAuthenticator(st, nil)
-	srv, err := api.New(api.Options{
-		Store: st, Authenticator: authr, Authorizer: auth.NewAuthorizer(nil),
-		Signer: signer, SetupToken: secure.NewSetupToken(filepath.Join(t.TempDir(), "setup.token")),
-		Logger: log, Version: "test", Modules: set.apiModules(&agenttoolsapi.Module{}), PrincipalEvidenceProducer: authr,
+	dir := t.TempDir()
+	eng, err := boot(ctx, bootConfig{
+		Engine: "sqlite", DSN: filepath.Join(dir, "routes.db"), DataDir: dir,
+		Version: "route-census-test", Logger: log, NoIngest: true, ServeMode: true,
 	})
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("bind production routes: %v", err)
 	}
-	router, ok := srv.Handler().(chi.Routes)
+	t.Cleanup(func() { _ = eng.Close() })
+	router, ok := withEnterpriseHTTP(eng.api.Handler(), eng, log).(chi.Routes)
 	if !ok {
-		t.Fatal("handler is not a chi router")
+		t.Fatal("the production HTTP wrapper does not expose its registered routes")
 	}
 	routed := map[string]bool{}
 	if err := chi.Walk(router, func(method, route string, _ http.Handler, _ ...func(http.Handler) http.Handler) error {

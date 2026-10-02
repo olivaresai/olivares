@@ -46,14 +46,17 @@
       "permissionMode": "Berechtigungsmodus",
       "effort": "Aufwandsstufe",
       "model": "Modell",
-      "customInstructions": "Benutzerdefinierte Anweisungen"
+      "customInstructions": "Benutzerdefinierte Anweisungen",
+      "secretEnv": "Geheimnisse als Umgebungsvariablen",
+      "secretEnvHint": "VARIABLE=env/geheimnis, durch Kommas getrennt. Sitzungen aus dieser Vorlage lesen jedes Tresor-Geheimnis aus seiner Variablen; starten kann sie nur, wer die Geheimnisse des Mandanten verwaltet."
     },
     "policies": {
       "dlpMode": "DLP-Modus",
       "maxDuration": "Maximale Sitzungsdauer (Minuten)",
       "allowedTools": "Erlaubte Werkzeuge",
       "allowedToolsPlaceholder": "z. B. Bash,Read,Edit",
-      "recordIo": "Ein-/Ausgabe aufzeichnen"
+      "recordIo": "Ein-/Ausgabe aufzeichnen",
+      "peersSameTemplate": "Sitzungen aus dieser Vorlage dürfen einander schreiben"
     }
   },
   "actions": {

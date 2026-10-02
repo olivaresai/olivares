@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
 import { AlertTriangle, Eye, History, Plus, ShieldAlert } from 'lucide-react'
 import { useState } from 'react'
@@ -9,8 +10,9 @@ import { Badge, type BadgeVariant } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
+import { useStepUpSatisfied } from '@/features/identity/assurance'
 import { Field } from '@/components/ui/field'
 import { KvList, KvRow } from '@/components/ui/kv'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -47,6 +49,7 @@ const MAX_REVIEW_NOTE_LENGTH = 4_096
 export function BreakGlassView({ active = true }: { active?: boolean }) {
   const { t } = useTranslation(['governance', 'common'])
   const { activeTenant, can, principal } = useAuth()
+  const stepUpSatisfied = useStepUpSatisfied()
   const canRead = can('governance:breakglass:read')
   const canAdmin = can('governance:breakglass:admin')
   const [selected, setSelected] = useState<string | null>(null)
@@ -140,7 +143,7 @@ export function BreakGlassView({ active = true }: { active?: boolean }) {
       ? t('breakGlass.activationBlockedUnreviewed')
       : principal?.kind !== 'user' || !principal.user_id
         ? t('breakGlass.activationHumanRequired')
-        : (principal?.aal ?? 1) < 3
+        : !stepUpSatisfied
           ? t('breakGlass.activationHardwareRequired')
           : null
 
@@ -205,7 +208,10 @@ export function BreakGlassView({ active = true }: { active?: boolean }) {
         {activeGrants.isLoading ? (
           <Skeleton className="h-36 w-full" />
         ) : activeGrants.error ? (
-          <ErrorState retry={() => void activeGrants.refetch()} />
+          <QueryErrorState
+            error={activeGrants.error}
+            retry={() => void activeGrants.refetch()}
+          />
         ) : activeItems.length === 0 ? (
           <EmptyState
             icon={<ShieldAlert />}
@@ -380,7 +386,7 @@ function GrantHistoryTable({
       />
     )
   }
-  if (error) return <ErrorState retry={onRetry} />
+  if (error) return <QueryErrorState error={error} retry={onRetry} />
   if (items.length === 0) {
     return (
       <EmptyState
@@ -614,7 +620,10 @@ function BreakGlassDetailSheet({
               description={t('breakGlass.forbiddenBody')}
             />
           ) : detailQuery.error || !detail ? (
-            <ErrorState retry={() => void detailQuery.refetch()} />
+            <QueryErrorState
+              error={detailQuery.error}
+              retry={() => void detailQuery.refetch()}
+            />
           ) : (
             <div className="flex flex-col gap-5">
               <GrantOverview detail={detail} />
@@ -878,7 +887,7 @@ function UseTrail({
       />
     )
   }
-  if (error) return <ErrorState retry={onRetry} />
+  if (error) return <QueryErrorState error={error} retry={onRetry} />
   if (items.length === 0) {
     return (
       <EmptyState

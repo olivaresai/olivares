@@ -1,16 +1,15 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useInfiniteQuery, useQueryClient } from '@tanstack/react-query'
 import { useEffect, useRef, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { Button } from '@/components/ui/button'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
 import { KvList, KvRow } from '@/components/ui/kv'
 import { Skeleton } from '@/components/ui/skeleton'
 import { CaveatNotice } from '@/features/_intel'
-import { ApiError, NetworkError } from '@/lib/api/errors'
+import { ApiError } from '@/lib/api/errors'
 import { formatInt } from '@/lib/format'
 import { inventoryApi, inventoryKeys, type ObservationItem } from './api'
 
@@ -192,39 +191,9 @@ function HistoryFailure({
       </p>
     )
   }
-  if (error instanceof ApiError && error.isStepUpRequired) {
-    return (
-      <StepUpRequiredState action="generic" onElevated={() => onRestart()} />
-    )
-  }
-  if (error instanceof ApiError && error.isForbidden) {
-    return (
-      <div className="flex flex-col items-center gap-3">
-        <ForbiddenState
-          title={t('errors:forbidden.title')}
-          description={t('errors:forbidden.description')}
-        />
-        <Button type="button" variant="secondary" size="sm" onClick={onRestart}>
-          {t('common:actions.retry')}
-        </Button>
-      </div>
-    )
-  }
-  const isNetwork = error instanceof NetworkError
-  return (
-    <ErrorState
-      title={
-        isNetwork ? t('errors:network.title') : t('errors:serverError.title')
-      }
-      description={
-        isNetwork
-          ? t('errors:network.description')
-          : t('errors:serverError.description')
-      }
-      retry={onRestart}
-      requestId={error instanceof ApiError ? error.requestId : undefined}
-    />
-  )
+  // Step-up, 403 (no Retry: re-reading cannot grant access), a module that is off, and the
+  // failure with Retry: the one mapping (EU20).
+  return <QueryErrorState error={error} retry={onRestart} />
 }
 
 function ObservationCard({ item }: { item: ObservationItem }) {

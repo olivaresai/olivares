@@ -518,14 +518,12 @@ func TestBreakGlassReviewRollsBackWhenSealFails(t *testing.T) {
 }
 
 // The MCP destructive-tool gate is one-shot: a human approval must take effect on
-// the retry of the same call (gateOnce reuse). Before it used the two-phase
-// request(), which never reuses an approved grant — deny-forever after approval.
-// mcp.tool.call only ever gates DESTRUCTIVE tools, so it is CRITICAL — the engine
-// floors it at two distinct approvers.
+// the retry of the same call through gateOnce grant reuse.
+// A destructive MCP tool call defaults to HIGH: one
+// human approval releases it, which a single administrator can give.
 func TestMCPToolGateApprovalTakesEffect(t *testing.T) {
 	h := newHarness(t)
 	_, approverB := h.createApprover(t, "mcp-b@bridge.test")
-	_, approverC := h.createApprover(t, "mcp-c@bridge.test")
 	br := buildBridge(t, h, h.mintBoundToken(t, auth.RoleEditor))
 	gate := mcpToolGate{bridge: br, tenant: tenantAID(t, h)}
 	ctx := context.Background()
@@ -535,23 +533,16 @@ func TestMCPToolGateApprovalTakesEffect(t *testing.T) {
 	if err != nil || d.Status != mcpc.StatusPending {
 		t.Fatalf("first authorize = %v err=%v", d.Status, err)
 	}
-	// A destructive MCP tool-call is CRITICAL: one approver leaves it pending.
 	m := h.getJSON(h.adminToken, h.tenantA, "/v1/m/governance/approvals/"+d.ApprovalRef)
-	if m["risk_tier"] != "critical" || m["required_approvals"] != float64(2) {
-		t.Fatalf("mcp.tool.call must be critical/floored: tier=%v required=%v", m["risk_tier"], m["required_approvals"])
+	if m["risk_tier"] != "high" || m["required_approvals"] != float64(1) {
+		t.Fatalf("mcp.tool.call must default to high with one approval: tier=%v required=%v", m["risk_tier"], m["required_approvals"])
 	}
 	if code, body := h.decide(t, approverB, d.ApprovalRef, "approve"); code != http.StatusOK {
-		t.Fatalf("first approve = %d: %s", code, body)
-	}
-	if d, _ = gate.Authorize(ctx, req); d.Status != mcpc.StatusPending {
-		t.Fatalf("one approver must not release a critical destructive tool-call, got %v", d.Status)
-	}
-	if code, body := h.decide(t, approverC, d.ApprovalRef, "approve"); code != http.StatusOK {
-		t.Fatalf("second approve = %d: %s", code, body)
+		t.Fatalf("approve = %d: %s", code, body)
 	}
 	d, err = gate.Authorize(ctx, req)
 	if err != nil || d.Status != mcpc.StatusApproved || !d.Allowed() {
-		t.Fatalf("two approvers must take effect on the retry, got %v err=%v", d.Status, err)
+		t.Fatalf("the approval must take effect on the retry, got %v err=%v", d.Status, err)
 	}
 }
 

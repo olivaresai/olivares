@@ -56,9 +56,15 @@ const providerDriverCodex = "codex"
 // is resolved separately (runtime_provider_auth.go) and only the child's
 // environment ever carries material.
 type DriverLaunch struct {
+	// Preset is resolved from the same launch facts as the session credential.
+	// Each driver translates it into its own controls, never another tool's flags.
+	Preset               string
+	CodexSandboxFallback bool
 	// LocalModelEndpoint is a non-secret server-resolved endpoint. Drivers
 	// compile their own provider configuration; callers cannot supply it.
 	LocalModelEndpoint string
+	// LocalModels are the endpoint's models, as its record's probe listed them.
+	LocalModels []string
 	// WorkDir is the resolved, governed workspace cwd ("" ⇒ the process cwd).
 	WorkDir string
 	// ConfigHome / UserHome are the profile's canonical homes. A driver uses them
@@ -116,9 +122,11 @@ type DriverSessionConfig struct {
 	ClientVersion string
 
 	// The launch terms. WorkDir is the governed workspace cwd.
-	WorkDir string
-	Model   string
-	Effort  string
+	WorkDir              string
+	Model                string
+	Effort               string
+	Preset               string
+	CodexSandboxFallback bool
 
 	// ResumeConversationID is the EXACT stored conversation this launch continues.
 	// Non-empty makes the handshake a resume, and a failed resume is a REFUSAL:
@@ -279,7 +287,7 @@ type ProviderDriverLaunchEnv interface {
 // package to what a launch actually hands the child.
 type DriverLaunchTerms struct {
 	// Model, Effort and PermissionMode say whether the launch hands that choice
-	// to the child, on its argv or on a frame of the driver's own protocol.
+	// to the child, on its argv, environment or own protocol frames.
 	Model, Effort, PermissionMode TermSupport
 	// ModelDiscovery names where the models offered for this driver come from:
 	// ModelDiscoveryNone or ModelDiscoveryBoundCredentialProbe.
@@ -421,12 +429,30 @@ func termSupportOf(carried bool) TermSupport {
 }
 
 // driverProgram is the executable a driver is spawned as: the operator's explicit
-// override when configured, otherwise the driver's own official program name.
+// override when configured, otherwise the installed program the resolver finds,
+// otherwise the driver's own official program name.
 func (m *Module) driverProgram(d ProviderDriver) string {
 	if p := m.rt.driverPrograms[d.Key()]; p != "" {
 		return p
 	}
+	if m.rt.programResolver != nil {
+		if p := m.rt.programResolver(d.Key()); p != "" {
+			return p
+		}
+	}
 	return d.DefaultProgram()
+}
+
+// claudeProgram is the executable of the historical (frame-driven) Claude path:
+// the pinned program, otherwise the installed one the resolver finds, otherwise
+// the official name.
+func (m *Module) claudeProgram() string {
+	if !m.rt.programPinned && m.rt.programResolver != nil {
+		if p := m.rt.programResolver(providerDriverClaude); p != "" {
+			return p
+		}
+	}
+	return m.rt.program
 }
 
 // launchDriverKey is the driver a set of launch params runs under. An unprofiled
@@ -856,6 +882,8 @@ func (m *Module) openDriverSession(lr *liveRun, d ProviderDriver, p CreateRunPar
 		WorkDir:              workDir,
 		Model:                p.Model,
 		Effort:               p.Effort,
+		Preset:               launchPreset(p),
+		CodexSandboxFallback: p.codexSandboxFallback,
 		ResumeConversationID: resumeID,
 		AuthSource:           authSource,
 		CallTimeout:          m.rt.driverCallTimeout,
@@ -863,7 +891,8 @@ func (m *Module) openDriverSession(lr *liveRun, d ProviderDriver, p CreateRunPar
 		RunRef:               lr.runRef,
 		ProfileRef:           profileRef,
 		Approve: func(ctx context.Context, req ProviderApprovalRequest) (ProviderApprovalDecision, error) {
-			return m.rt.approvalGate.Approve(ctx, tenant, req)
+			req.SessionRef = lr.claim.SID
+			return m.authorizeProviderApproval(ctx, tenant, req)
 		},
 		AuthorityCheck: func(ctx context.Context) error { return m.assertRunAuthority(ctx, lr) },
 		OnAuthState: func(state string) {
@@ -1053,6 +1082,11 @@ func (m *Module) driverInputAdmitted(ctx context.Context, lr *liveRun, text stri
 	if err := m.runtimeInputLiveCurrent(ctx, lr, launch, sid); err != nil {
 		return false, err
 	}
+	if lr.session.ActiveTurn() == "" {
+		if err := lr.beginSessionTurn(ctx); err != nil {
+			return false, err
+		}
+	}
 	return lr.session.Input(ctx, text)
 }
 
@@ -1070,7 +1104,9 @@ func (m *Module) interruptDriverTurn(ctx context.Context, lr *liveRun) (bool, er
 	if err := m.assertRunAuthority(ctx, lr); err != nil {
 		return false, err
 	}
-	return lr.session.Interrupt(ctx)
+	callErr := m.endSessionCalls(lr, "")
+	attempted, err := lr.session.Interrupt(ctx)
+	return attempted, errors.Join(callErr, err)
 }
 
 // closeDriverSession releases every in-flight protocol waiter once the owned

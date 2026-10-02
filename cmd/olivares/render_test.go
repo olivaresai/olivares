@@ -218,3 +218,20 @@ func TestWriteStatusLinesKeepsEmptyContainers(t *testing.T) {
 		t.Errorf("an empty map disappeared from the text form entirely:\n%s", got)
 	}
 }
+
+func TestVersionPreservesMonthlyReleaseStamp(t *testing.T) {
+	old := version
+	version = "26.11"
+	defer func() { version = old }()
+	out, stderr, err := execRoot(t, "version", "-o", "json")
+	if err != nil || stderr != "" {
+		t.Fatalf("version: %v %s", err, stderr)
+	}
+	var got map[string]any
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got["version"] != "26.11" {
+		t.Fatalf("version stamp was normalized: %v", got["version"])
+	}
+}

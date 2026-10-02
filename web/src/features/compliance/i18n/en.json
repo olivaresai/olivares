@@ -179,6 +179,8 @@
     "noAccessHint": "Retention schedules decide how long each class of record is kept. Ask an administrator for the retention read permission.",
     "sweepNow": "Run sweep",
     "gateHint": "A schedule is a document until a human approves its purge. Saving one never deletes data; a sweep does.",
+    "notRunning": "Retention is not running: this database cannot list every tenant.",
+    "notRunningHow": "How to enable it",
     "noClasses": "The engine returned no data classes",
     "noClassesHint": "The class registry is fixed in the engine, so an empty list does not mean an empty tenant — it means this response could not be read as the registry. Reload, and report it if it persists.",
     "disposition": {

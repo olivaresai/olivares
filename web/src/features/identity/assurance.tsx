@@ -5,7 +5,6 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Fingerprint, IdCard, ShieldAlert } from 'lucide-react'
 import { useState, type ReactNode, useId, useRef, useLayoutEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { SelfAuditNotice } from '@/features/_intel'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -46,6 +45,7 @@ import {
 } from './webauthn'
 // Foreign lazy chunks use this gate, so it owns registration of its namespace.
 import './i18n'
+import { defaultPasskeyName } from './passkey-name'
 
 export const AAL = { PASSWORD: 1, MFA: 2, HARDWARE: 3 } as const
 export function useAssurance(): { aal: number; amr: string[] } {
@@ -54,6 +54,18 @@ export function useAssurance(): { aal: number; amr: string[] } {
     aal: typeof principal?.aal === 'number' ? principal.aal : AAL.PASSWORD,
     amr: principal?.amr ?? [],
   }
+}
+
+/** Whether this session may perform an action behind the administrative
+ * step-up. The engine says so in whoami (`step_up_satisfied`), computed by the
+ * same predicate its gates use; an older engine that does not say falls back to
+ * the hardware ceremony it always demanded. */
+export function useStepUpSatisfied(): boolean {
+  const { principal } = useAuth()
+  const { aal } = useAssurance()
+  return typeof principal?.step_up_satisfied === 'boolean'
+    ? principal.step_up_satisfied
+    : aal >= AAL.HARDWARE
 }
 
 interface GateProps {
@@ -79,9 +91,12 @@ function AssuranceGate({
   allowEnrollment,
 }: GateProps) {
   const { aal } = useAssurance()
+  const stepUpSatisfied = useStepUpSatisfied()
   // Proof belongs to one challenge episode. A new low-AAL observation retires
   // the previous proof, even when identity and credential generation are unchanged.
-  const sufficient = aal >= minAal
+  // A hardware floor is the administrative step-up: the deployment's policy
+  // decides it, exactly as the engine's gates do.
+  const sufficient = minAal >= AAL.HARDWARE ? stepUpSatisfied : aal >= minAal
   const [wasSufficient, setWasSufficient] = useState(sufficient)
   const [episode, setEpisode] = useState({ verified: sufficient })
   if (sufficient !== wasSufficient) {
@@ -117,11 +132,54 @@ interface PanelProps {
 export function StepUpPanel(props: PanelProps) {
   const { principal } = useAuth()
   const revision = useStepUpStore((s) => s.contextRevision)
+  // Under the authenticator-code policy the remedy is a sign-in with the code,
+  // not a passkey ceremony: say so, and offer that sign-in.
+  if (principal?.admin_step_up === 'totp' && props.minAal >= AAL.HARDWARE)
+    return <CodeSignInPanel action={props.action} className={props.className} />
   return (
     <CeremonyPanel
       key={`${revision}:${stepUpPrincipal(principal)}`}
       {...props}
     />
+  )
+}
+
+/** The step-up remedy when the deployment asks for an authenticator code: this
+ * session was signed in without one, so it signs out and back in with the code. */
+function CodeSignInPanel({
+  action,
+  className,
+}: {
+  action: string
+  className?: string
+}) {
+  const { t } = useTranslation(['identity', 'common'])
+  const { logout } = useAuth()
+  return (
+    <Card className={cn('border-warning/40', className)}>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <ShieldAlert className="size-4 text-warning" />
+          {t('identity:assurance.code.title')}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        <p className="text-body text-muted-foreground">
+          {t('identity:assurance.code.body', {
+            action: t(`identity:assurance.actions.${action}`, {
+              defaultValue: t('identity:assurance.actions.generic'),
+            }),
+          })}
+        </p>
+        <Button
+          variant="primary"
+          className="self-start"
+          onClick={() => void logout()}
+        >
+          {t('identity:assurance.code.signInAgain')}
+        </Button>
+      </CardContent>
+    </Card>
   )
 }
 
@@ -283,10 +341,7 @@ function CeremonyPanel({
     }
     if (
       method === 'register' &&
-      (!enrollmentAvailable ||
-        !allowEnrollment ||
-        !name.trim() ||
-        !canEnrollPasskey())
+      (!enrollmentAvailable || !allowEnrollment || !canEnrollPasskey())
     )
       return
     const owner = captureOwner()
@@ -304,7 +359,7 @@ function CeremonyPanel({
     try {
       attempt.dispatchGuard()
       if (method === 'register') {
-        await enrollPasskey(name, attempt)
+        await enrollPasskey(name.trim() || defaultPasskeyName(t), attempt)
         attempt.dispatchGuard()
         setEnrollmentAvailable(false)
         setStatus('registered')
@@ -371,7 +426,6 @@ function CeremonyPanel({
             current: aalLabel(currentAal, t),
           })}
         </p>
-        <SelfAuditNotice />
         {/* Mounted unconditionally and renders nothing at an address where a
          *  passkey ceremony can run. It sits ABOVE the buttons because the
          *  refusals it names happen in the BROWSER — the request never leaves,
@@ -424,6 +478,7 @@ function CeremonyPanel({
                   <Input
                     value={name}
                     onChange={(event) => setName(event.target.value)}
+                    placeholder={defaultPasskeyName(t)}
                     disabled={busy || terminal}
                   />
                 </label>
@@ -431,7 +486,7 @@ function CeremonyPanel({
                   type="button"
                   variant="outline"
                   onClick={() => void run('register')}
-                  disabled={busy || terminal || !name.trim()}
+                  disabled={busy || terminal}
                   aria-disabled={addressUnusable || undefined}
                   aria-describedby={
                     addressUnusable ? addressNoticeId : undefined

@@ -269,6 +269,9 @@ classify() {
     # for .awk above.
     *.cedar|*.allow)
       echo source; return ;;
+    # REUSE sidecars carry their companion file's licensing metadata. Check the
+    # identifier rather than treating the sidecar as unclassified or silent data.
+    *.license) echo source; return ;;
     # ---- NOT SOURCE, by NAME ------------------------------------------------
     # Container/build recipes and project metadata. `Dockerfile.*` covers the five variants
     # (release, fips, stig, agentops, ebpf-source) whose suffixes are NOT extensions.
@@ -415,6 +418,7 @@ INTERNAL_EVIDENCE_TREE='assessments'
 # Expected identifier for a path. Echoes the id, or "" outside any licensed
 # module (reported as an orphan).
 expected_id() {
+  case "$1" in *.license) set -- "${1%.license}" ;; esac
   if [ "$1" = "$INTERNAL_DEBT" ]; then
     echo "LicenseRef-Olivares-Internal"
     return

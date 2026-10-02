@@ -35,7 +35,8 @@ import { cleanup, configure } from '@testing-library/react'
 // de esta pantalla.
 configure({ asyncUtilTimeout: 5_000 })
 // Initialize i18n once so components using useTranslation render real (English) copy.
-import '@/lib/i18n'
+import { i18nReady } from '@/lib/i18n'
+await i18nReady
 
 afterEach(() => {
   cleanup()

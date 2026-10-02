@@ -532,6 +532,7 @@ func (s *codexSession) resolveServerRequest(req *codexServerRequest, key string,
 	if req.codec.tokens != nil {
 		tokens = req.codec.tokens(params)
 	}
+	facts := s.approvalRequestFacts(req.method, params)
 	dec := ProviderApprovalDecision{}
 	if s.cfg.Approve != nil {
 		got, err := s.cfg.Approve(ctx, ProviderApprovalRequest{
@@ -541,6 +542,8 @@ func (s *codexSession) resolveServerRequest(req *codexServerRequest, key string,
 			// cannot see the turn cannot scope its decision to it.
 			ConversationID: thread, TurnID: boundTurn,
 			Method: req.method, Kind: req.codec.kind, Requested: tokens,
+			CommandLine: facts.CommandLine, FilePaths: facts.FilePaths, FactsComplete: facts.Complete,
+			EffectiveCommandLine: facts.EffectiveCommandLine, EffectiveFilePaths: facts.EffectiveFilePaths,
 		})
 		if err != nil {
 			// An authority that could not decide never means "allow".

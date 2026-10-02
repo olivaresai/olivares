@@ -447,7 +447,7 @@ func (m *Module) handleCreateBudget(w http.ResponseWriter, r *http.Request, mc a
 		return
 	}
 	var out budgetDTO
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := m.mutate(r.Context(), mc.Tenant, func(sc store.Scope) error {
 		p, err := sc.Policies().Create(r.Context(), model.Policy{
 			Name: in.Name, Kind: policyKindBudget, Enabled: in.Enabled, Spec: in.toSpecMap(),
 		})
@@ -484,7 +484,7 @@ func (m *Module) handleUpdateBudget(w http.ResponseWriter, r *http.Request, mc a
 	}
 	var out budgetDTO
 	notBudget := false
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := m.mutate(r.Context(), mc.Tenant, func(sc store.Scope) error {
 		p, err := sc.Policies().Get(r.Context(), id)
 		if err != nil {
 			return err
@@ -521,7 +521,7 @@ func (m *Module) handleDeleteBudget(w http.ResponseWriter, r *http.Request, mc a
 		return
 	}
 	notBudget := false
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := m.mutate(r.Context(), mc.Tenant, func(sc store.Scope) error {
 		p, err := sc.Policies().Get(r.Context(), id)
 		if err != nil {
 			return err

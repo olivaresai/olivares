@@ -168,6 +168,7 @@ describe('deriveUsage', () => {
       totalEntities: null,
       liveActive: null,
       liveIdle: null,
+      liveNow: null,
       silentEvasion: null,
       liveTotal: null,
       truncated: false,
@@ -184,6 +185,7 @@ describe('deriveUsage', () => {
       totalEntities: 0,
       liveActive: 0,
       liveIdle: 0,
+      liveNow: 0,
       silentEvasion: 0,
       liveTotal: 0,
       truncated: false,
@@ -221,6 +223,7 @@ describe('deriveUsage', () => {
     // The observed numbers are real answers (floors), not suppressed.
     expect(usage.liveActive).toBe(2)
     expect(usage.liveIdle).toBe(1)
+    expect(usage.liveNow).toBe(3)
     expect(usage.liveTotal).toBe(3)
     // Inventory is complete here; the Sessions page does not make it partial.
     expect(usage.truncated).toBe(false)

@@ -27,11 +27,14 @@ import (
 // pretends an enterprise capability exists (no rug-pull, no theater).
 
 // EnterpriseReportSource is the commercial report engine seam: live
-// compliance posture, executive risk summary and the signed audit evidence
+// compliance posture, executive risk summary and the optionally signed audit evidence
 // bundle, synthesized from the control plane's own governance data. The results
 // are JSON-marshalable DTOs owned by the implementation; the module serves them
 // verbatim (they carry their own honest "source unavailable" section markers
 // when an upstream source is not wired).
+// A source may also implement BundleSigningStatus() (bool, string) to expose
+// signing readiness and its reason in the catalog. Sources without this optional
+// capability report unknown readiness; they are never assumed to have a key.
 type EnterpriseReportSource interface {
 	PostureReport(ctx context.Context, tenant model.TenantID) (any, error)
 	RiskSummary(ctx context.Context, tenant model.TenantID) (any, error)
@@ -161,7 +164,7 @@ func (m *Module) handleListSchedules(w http.ResponseWriter, r *http.Request, mc 
 		writeError(w, http.StatusInternalServerError, "failed to list schedules")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	writeJSON(w, http.StatusOK, map[string]any{"items": api.JSONArray[ScheduleConfig](items)})
 }
 
 func (m *Module) handleCreateSchedule(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -170,8 +173,7 @@ func (m *Module) handleCreateSchedule(w http.ResponseWriter, r *http.Request, mc
 		return
 	}
 	var cfg ScheduleConfig
-	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<16))
-	if err := dec.Decode(&cfg); err != nil || dec.More() {
+	if err := api.DecodeRequestBody(w, r, &cfg, api.RequestBodySpec{MaxBytes: 1 << 16, AllowUnknownFields: true}); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid schedule JSON")
 		return
 	}
@@ -191,7 +193,7 @@ func (m *Module) handleCreateSchedule(w http.ResponseWriter, r *http.Request, mc
 		return
 	}
 	items, _ := m.scheduler.ListSchedules(r.Context(), mc.Tenant)
-	writeJSON(w, http.StatusCreated, map[string]any{"items": items})
+	writeJSON(w, http.StatusCreated, map[string]any{"items": api.JSONArray[ScheduleConfig](items)})
 }
 
 func (m *Module) handleDeleteSchedule(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -222,7 +224,7 @@ func (m *Module) handleListScheduleRuns(w http.ResponseWriter, r *http.Request, 
 		run.Output = nil
 		metas = append(metas, run)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": metas})
+	writeJSON(w, http.StatusOK, map[string]any{"items": api.JSONArray[ScheduleRun](metas)})
 }
 
 func (m *Module) handleGetScheduleRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -271,8 +273,7 @@ func (m *Module) handleSetBranding(w http.ResponseWriter, r *http.Request, mc ap
 		return
 	}
 	var cfg BrandingConfig
-	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<16))
-	if err := dec.Decode(&cfg); err != nil || dec.More() {
+	if err := api.DecodeRequestBody(w, r, &cfg, api.RequestBodySpec{MaxBytes: 1 << 16, AllowUnknownFields: true}); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid branding JSON")
 		return
 	}

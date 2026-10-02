@@ -133,6 +133,7 @@ async function mount({
     [
       'home',
       'agentops',
+      'sessions',
       'communicationsAdministration',
       'session-viewer',
     ].includes(v.id),
@@ -183,7 +184,7 @@ async function mount({
 beforeEach(() => {
   localStorage.clear()
   useSessionStore.getState().setSession({
-    token: 'local-defensive-fixture',
+    csrfToken: 'local-defensive-fixture',
     sessionId: 'fixture',
     expiresAt: '',
   })
@@ -240,6 +241,39 @@ it('explicit keyboard save/remove/clear and reload leave the deep-link URL autho
   await user.click(screen.getByRole('button', { name: 'Clear favorites' }))
   expect(screen.getByTestId('saved')).toBeEmptyDOMElement()
   expect(second.router.state.location.href).toBe('/?chosen=url#still-here')
+})
+
+// Root (09b real use, WEB 040): the star on Sessions said "Observe sessions" and so did the
+// saved favorite, while the sidebar, the top bar and the page say "Sessions". A sidebar
+// destination is named as the sidebar names it; a view that is not one keeps its own name.
+it('a starred sidebar destination reads as the sidebar names it: Sessions, not Observe sessions', async () => {
+  const user = userEvent.setup()
+  await mount({
+    principal: {
+      ...A,
+      grants: [
+        {
+          tenant: 'tenant-a',
+          role: 'viewer',
+          permissions: ['sessions:run:read', 'sessions:live:read'],
+        },
+      ],
+    },
+    path: '/sessions',
+  })
+  await screen.findByText('Admitted fixture sessions')
+  await user.click(
+    screen.getByRole('button', { name: 'Add Sessions to favorites' }),
+  )
+  expect(screen.getByTestId('saved')).toHaveTextContent('sessions')
+  // The saved favorite is a link named as the sidebar names it.
+  expect(
+    screen.getAllByRole('link', { name: 'Sessions' }).length,
+  ).toBeGreaterThan(0)
+  expect(
+    screen.getByRole('button', { name: 'Remove Sessions from favorites' }),
+  ).toBeInTheDocument()
+  expect(screen.queryByText('Observe sessions')).toBeNull()
 })
 
 it('isolates tenant/user transitions and refuses callbacks captured before a batched round trip', async () => {
@@ -323,7 +357,7 @@ it('clears active memory on logout and never persists an unrecognized principal'
   act(() => old.setFavorite(personalLink('settings')!, true))
   unmount()
   useSessionStore.getState().setSession({
-    token: 'second-fixture',
+    csrfToken: 'second-fixture',
     sessionId: 'fixture-2',
     expiresAt: '',
   })
@@ -479,7 +513,7 @@ it('quarantines cached whoami across credential movement and rejects the late id
   const firstKey = favoriteStorageKey(window.location.origin, A, 'tenant-a')!
   await act(async () =>
     useSessionStore.getState().setSession({
-      token: 'defensive-second',
+      csrfToken: 'defensive-second',
       sessionId: 'fixture-2',
       expiresAt: '',
     }),
@@ -491,7 +525,7 @@ it('quarantines cached whoami across credential movement and rejects the late id
   expect(writes.mock.calls.some(([key]) => key === firstKey)).toBe(false)
   await act(async () =>
     useSessionStore.getState().setSession({
-      token: 'defensive-third',
+      csrfToken: 'defensive-third',
       sessionId: 'fixture-3',
       expiresAt: '',
     }),
@@ -555,7 +589,7 @@ it('records real permitted mounts once, preserves URL, removes/clears by keyboar
   )
   expect(recentIds()).toEqual(['home'])
   expect(
-    screen.getByRole('button', { name: 'Remove Overview from recent modules' }),
+    screen.getByRole('button', { name: 'Remove Now from recent modules' }),
   ).toHaveFocus()
   await user.click(screen.getByRole('button', { name: 'Clear recent modules' }))
   expect(recentIds()).toEqual([])
@@ -588,7 +622,7 @@ it('keeps the same identity history on renewal, clears departures and rejects ol
   const beforeRenewal = latest
   await act(async () =>
     useSessionStore.getState().setSession({
-      token: 'defensive-renewal',
+      csrfToken: 'defensive-renewal',
       sessionId: 'fixture',
       expiresAt: '',
     }),
@@ -616,7 +650,7 @@ it('keeps the same identity history on renewal, clears departures and rejects ol
   act(() => {
     useSessionStore.getState().clear()
     useSessionStore.getState().setSession({
-      token: 'defensive-login',
+      csrfToken: 'defensive-login',
       sessionId: 'fixture',
       expiresAt: '',
     })

@@ -79,13 +79,15 @@
     "create": "Nueva sesión",
     "stop": "Parar",
     "resume": "Reanudar",
+    "startAgain": "Empezar de nuevo",
     "cleanup": "Limpiar",
     "delete": "Borrar",
     "attach": "Adjuntar",
     "detach": "Desadjuntar"
   },
   "create": {
-    "title": "Nueva sesión de Claude Code",
+    "title": "Nueva sesión",
+    "titleTool": "Nueva sesión de {{tool}}",
     "description": "Olivares lanza y gobierna el proceso — el equivalente visual al arranque por CLI, con política en línea.",
     "name": "Nombre",
     "namePlaceholder": "Una etiqueta de display (opcional)",
@@ -165,7 +167,7 @@
     "none": "Ninguno",
     "providerProfile": "Perfil de proveedor",
     "providerDriver": "Driver",
-    "providerEnvironment": "Entorno de ejecución",
+    "providerEnvironment": "Servidor",
     "liveRef": "Fila en vivo"
   },
   "live": {
@@ -347,7 +349,7 @@
   },
   "profiles": {
     "title": "Perfiles de proveedor",
-    "subtitle": "La identidad duradera de una instancia de proveedor configurada en un entorno de ejecución: qué driver la sirve y bajo qué directorio de configuración corre una sesión lanzada. Un perfil registra directorios que ya existen: no instala nada ni inicia sesión en nada.",
+    "subtitle": "Cómo se ejecuta una herramienta en una sesión: qué herramienta y desde qué carpeta de configuración inicia sesión. Un perfil apunta a una instalación de la herramienta que ya existe en este servidor; no instala nada ni inicia ninguna sesión.",
     "register": "Registrar perfil",
     "nextAction": "Registrar un perfil",
     "rowMenu": "Acciones de fila para {{name}}",
@@ -356,7 +358,7 @@
     "cols": {
       "name": "Perfil",
       "driver": "Driver",
-      "environment": "Entorno de ejecución",
+      "environment": "Servidor",
       "state": "Estado",
       "launch": "Habilitado aquí",
       "created": "Creado"
@@ -369,8 +371,9 @@
     "environment": {
       "local": "este nodo",
       "foreign": "otro entorno",
-      "foreignHint": "Este perfil pertenece a otro entorno de ejecución. Se muestra como tal y nunca se lanza desde este nodo."
+      "foreignHint": "Este perfil pertenece a otro servidor. Se muestra aquí, pero nunca se inicia desde este servidor."
     },
+    "serverUserLogin": "Usa el inicio de sesión del usuario del servidor; inicia sesión de nuevo para usar un inicio de sesión del producto",
     "operable": {
       "yes": "Habilitado en este entorno",
       "no": "No habilitado en este entorno",
@@ -378,8 +381,8 @@
     },
     "empty": {
       "title": "No hay perfiles de proveedor",
-      "registerHint": "Usa «{{control}}» arriba para registrar el directorio de configuración de una instalación de proveedor existente en este nodo; las sesiones se lanzan y se atribuyen entonces bajo una identidad estable.",
-      "noWrite": "Registrar el directorio de configuración de una instalación de proveedor existente requiere sessions:profile:write, y tu rol no incluye ese permiso."
+      "registerHint": "Registra un perfil para añadir una instalación de la herramienta que ya existe en este servidor. Después, las sesiones se ejecutan con su configuración e inicio de sesión.",
+      "noWrite": "Añadir un perfil requiere el permiso sessions:profile:write, que tu rol no incluye."
     },
     "filteredEmpty": {
       "title": "Ningún perfil coincide con este estado",
@@ -404,23 +407,26 @@
     },
     "create": {
       "title": "Registrar un perfil de proveedor",
-      "description": "Registra los directorios de una instalación de proveedor existente en este entorno de ejecución. El servidor valida cada ruta en este nodo: absoluta, con enlaces simbólicos resueltos, existente y directorio. No se crea, instala ni inicia sesión en nada, y no se envía ninguna credencial.",
+      "description": "Añade una instalación de la herramienta que ya existe en este servidor. El servidor comprueba que cada carpeta exista aquí; no se crea, instala ni inicia sesión en nada, y no se envía ninguna credencial.",
       "driver": "Driver",
-      "driverPlaceholder": "claude",
-      "driverHint": "Clave del driver en minúsculas (letras, dígitos, - _ .). Si este nodo puede lanzar el perfil lo informa el servidor tras el registro; no lo decide el nombre.",
-      "configHome": "Directorio de configuración",
+      "configHome": "Carpeta de configuración",
       "configHomePlaceholder": "/home/agent/.claude-work",
       "configHomeHint": "Ruta absoluta del directorio de configuración del proveedor (para Claude Code, su CLAUDE_CONFIG_DIR). Se valida en este nodo; un directorio ausente se rechaza, nunca se crea.",
       "userHome": "Directorio del usuario",
       "userHomePlaceholder": "/home/agent",
       "userHomeHint": "Ruta absoluta bajo la que corre la sesión lanzada como HOME. Se valida en este nodo.",
+      "homesOptional": "Con el inicio de sesión propio de la herramienta, deja vacías las dos carpetas para usar las suyas en este servidor.",
       "displayName": "Nombre visible",
       "displayNamePlaceholder": "Una etiqueta (opcional)",
-      "environmentKnown": "Se registra en el entorno de ejecución de este nodo, {{env}}, que valida las rutas. Un perfil para otro entorno se registra desde ese entorno.",
-      "environmentUnknown": "Se registra en el entorno de ejecución de este nodo, que valida las rutas. Un perfil para otro entorno se registra desde ese entorno.",
+      "environmentKnown": "Se añade en este servidor ({{env}}), que comprueba las carpetas. Un perfil para otro servidor se añade en ese servidor.",
+      "environmentUnknown": "Se añade en este servidor, que comprueba las carpetas. Un perfil para otro servidor se añade en ese servidor.",
       "submit": "Registrar",
       "submitting": "Registrando…",
-      "success": "Perfil de proveedor registrado"
+      "success": "Perfil de proveedor registrado",
+      "homesOptionalManaged": "Con una clave de API de Proveedores, deja vacías las dos carpetas: este servidor crea las carpetas propias del perfil.",
+      "missingProvider": "Elige la clave de API que usa este perfil.",
+      "missingHomesOrNone": "Indica las dos carpetas o deja ambas vacías.",
+      "missingHomes": "Indica las dos carpetas. Deben existir ya en este servidor."
     },
     "rename": {
       "title": "Renombrar perfil",
@@ -446,7 +452,7 @@
     "details": {
       "ref": "Referencia",
       "driver": "Driver",
-      "environment": "Entorno de ejecución",
+      "environment": "Servidor",
       "state": "Estado",
       "launch": "Habilitado aquí",
       "created": "Creado",
@@ -457,20 +463,20 @@
     "configuration": {
       "title": "Configuración",
       "hint": "Los directorios almacenados son una lectura solo para administradores, se obtienen solo cuando la pides y nunca se muestran en la lista. Nunca se devuelve el valor de una credencial.",
-      "configHome": "Directorio de configuración",
+      "configHome": "Carpeta de configuración",
       "userHome": "Directorio del usuario",
-      "validatedOn": "Rutas tal como las validó y almacenó el entorno de ejecución {{env}}.",
+      "validatedOn": "Carpetas tal como las comprobó y guardó el servidor {{env}}.",
       "loading": "Leyendo la configuración…",
       "failed": "No se pudo leer la configuración."
     },
     "bindings": {
       "title": "Vínculos de fuentes",
-      "subtitle": "Dedica una fuente configurada, en la revisión exacta que aplicó este nodo, a un perfil, de modo que las sesiones que esa fuente observa se le atribuyan. La identidad es el id persistente y la revisión de la fuente, nunca su nombre.",
+      "subtitle": "Vincula una fuente que lee este servidor a un perfil, para que las sesiones que esa fuente encuentra cuenten en ese perfil.",
       "cols": {
         "source": "Fuente",
         "revision": "Revisión aplicada",
         "profile": "Perfil",
-        "environment": "Entorno de ejecución",
+        "environment": "Servidor",
         "state": "Estado",
         "bound": "Vinculado"
       },
@@ -483,7 +489,7 @@
         "description": "Vincula una fuente configurada a un perfil para atribuirle las sesiones que observa."
       },
       "noRead": "Los vínculos de fuentes no se muestran: tu rol no incluye sessions:profile-binding:read.",
-      "notBindable": "Solo un perfil activo de este entorno de ejecución puede recibir un vínculo.",
+      "notBindable": "Solo se puede vincular un perfil activo de este servidor.",
       "revoke": {
         "title": "Revocar vínculo",
         "description": "Las sesiones ya atribuidas bajo este vínculo conservan su procedencia; las observaciones posteriores por esta fuente dejan de atribuirse al perfil. No se puede deshacer: un vínculo nuevo es una fila nueva.",
@@ -492,16 +498,16 @@
       },
       "create": {
         "title": "Vincular una fuente a un perfil",
-        "description": "El motor vincula el id persistente de la fuente en la revisión que aplicó este nodo. Ambos se leen del catálogo de fuentes: nunca se teclean ni se derivan de un nombre.",
+        "description": "El motor vincula la fuente tal como este servidor la aplicó por última vez, leída de la lista de fuentes. Nunca identifica una fuente por su nombre.",
         "profile": "Perfil",
         "profileNone": "Selecciona un perfil",
         "profileNotBindable": "no vinculable aquí",
-        "profileHint": "Solo un perfil activo de este entorno de ejecución puede recibir un vínculo.",
+        "profileHint": "Solo se puede vincular un perfil activo de este servidor.",
         "profilesNotRead": "No se pudieron leer los perfiles, así que no puede seleccionarse ninguno.",
         "source": "Fuente",
         "sourceNone": "Selecciona una fuente",
         "sourceNotApplied": "no aplicada en este nodo",
-        "sourceHint": "Fuentes del catálogo del despliegue, con la revisión que aplicó este nodo. Una fuente que este nodo no ha aplicado no puede vincularse aquí.",
+        "sourceHint": "Fuentes que este servidor ha aplicado. Una fuente que aún no ha aplicado no se puede vincular aquí.",
         "needsSourceAdmin": "Vincular una fuente también requiere administración de fuentes a nivel de despliegue (administrador del sistema). Tu cuenta no puede leer el catálogo de fuentes, así que aquí no puede seleccionarse ninguna.",
         "rosterFailed": "No se pudo leer el catálogo de fuentes.",
         "rosterEmpty": "No hay fuentes configuradas en este despliegue.",
@@ -526,7 +532,7 @@
         "revision": "Revisión aplicada",
         "profile": "Perfil",
         "driver": "Driver",
-        "environment": "Entorno de ejecución",
+        "environment": "Servidor",
         "selector": "Selector",
         "state": "Estado",
         "bound": "Vinculado",
@@ -606,20 +612,20 @@
     }
   },
   "accounts": {
-    "subtitle": "Cuentas de proveedor con nombre en este tenant. Adoptar da nombre una sola vez a un perfil de proveedor existente; su directorio sigue donde está.",
-    "adopt": "Adoptar un perfil",
+    "subtitle": "Cuentas de herramientas de esta organización, como una segunda suscripción de Claude. Las sesiones usan la cuenta que indica su perfil. Nombrar un perfil existente como cuenta deja su carpeta de configuración donde está.",
+    "adopt": "Nombrar un perfil como cuenta",
     "cols": {
       "name": "Cuenta",
       "driver": "Driver",
-      "environment": "Entorno de ejecución",
+      "environment": "Servidor",
       "state": "Estado",
       "isolation": "Aislamiento",
       "created": "Creada"
     },
     "empty": {
       "title": "No hay cuentas de proveedor",
-      "adoptHint": "Crea una cuenta gestionada o usa «{{control}}» para dar nombre de cuenta a un perfil de proveedor existente.",
-      "noWrite": "Adoptar un perfil de proveedor como cuenta requiere sessions:account:write, que tu rol no incluye."
+      "adoptHint": "Crea una cuenta, o nombra como cuenta un perfil que ya tienes.",
+      "noWrite": "Nombrar un perfil como cuenta requiere el permiso sessions:account:write, que tu rol no incluye."
     },
     "more": "Mostradas hasta ahora: {{shown}}. Hay más cuentas; carga más para verlas.",
     "moreFailed": "No se pudo leer la siguiente página de cuentas. Las cuentas mostradas no son la lista completa.",
@@ -630,7 +636,7 @@
       "dedicatedMeaning": "Dedicado: el servidor registra este directorio como reservado para esta cuenta."
     },
     "home": {
-      "adopted": "Adoptado (un directorio existente)",
+      "adopted": "De un perfil existente",
       "managed": "Gestionado por el servidor"
     },
     "authSource": {
@@ -642,7 +648,7 @@
       "name": "Nombre",
       "ref": "Referencia",
       "driver": "Driver",
-      "environment": "Entorno de ejecución",
+      "environment": "Servidor",
       "state": "Estado",
       "home": "Directorio",
       "isolation": "Aislamiento",
@@ -663,8 +669,8 @@
       "empty": "No se informó nada (origen: {{source}})"
     },
     "adoptDialog": {
-      "title": "Adoptar un perfil de proveedor",
-      "description": "Da nombre de cuenta a un perfil de proveedor existente. Su directorio sigue donde está y se registra como compartido, no dedicado. No se instala nada ni se inicia sesión.",
+      "title": "Nombrar un perfil como cuenta",
+      "description": "Da un nombre de cuenta a un perfil existente. Su carpeta de configuración se queda donde está y es compartida, no exclusiva de esta cuenta. No se instala nada ni se inicia ninguna sesión.",
       "profile": "Perfil",
       "profilePlaceholder": "Elige un perfil",
       "profileOption": "{{name}} ({{ref}})",
@@ -679,19 +685,19 @@
       "referenceHintNoList": "Tu rol no puede listar perfiles de proveedor. Introduce la referencia de uno existente; empieza por ppf_.",
       "name": "Nombre de la cuenta (opcional)",
       "nameHint": "Minúsculas, dígitos y guiones, empezando por una letra, hasta 32 caracteres. Déjalo vacío y el servidor genera uno, como claude o claude-b.",
-      "submit": "Adoptar",
-      "submitting": "Adoptando…",
-      "pendingStatus": "Adoptando {{ref}}. Esperando la respuesta del servidor.",
-      "success": "Adoptado como {{name}}",
-      "failedTitle": "El perfil no se adoptó",
-      "forbidden": "Tu rol no puede adoptar cuentas en este tenant. No se cambió nada."
+      "submit": "Nombrar como cuenta",
+      "submitting": "Nombrando…",
+      "pendingStatus": "Nombrando {{ref}} como cuenta. Esperando la respuesta del servidor.",
+      "success": "Nombrado como {{name}}",
+      "failedTitle": "El perfil no se nombró como cuenta",
+      "forbidden": "Tu rol no puede añadir cuentas en esta organización. No se cambió nada."
     },
     "adoption": {
-      "pending": "Adoptando {{ref}}. El servidor aún no ha respondido.",
-      "adopted": "{{ref}} se adoptó como {{name}}.",
-      "refused": "{{ref}} no se adoptó:",
-      "forbidden": "{{ref}} no se adoptó: tu rol no puede adoptar cuentas en este tenant. No se cambió nada.",
-      "unknown": "El resultado de adoptar {{ref}} no se conoce aquí.",
+      "pending": "Nombrando {{ref}} como cuenta. El servidor aún no ha respondido.",
+      "adopted": "{{ref}} es ahora la cuenta {{name}}.",
+      "refused": "{{ref}} no se nombró como cuenta:",
+      "forbidden": "{{ref}} no se nombró como cuenta: tu rol no puede añadir cuentas en esta organización. No se cambió nada.",
+      "unknown": "Aquí no se sabe si {{ref}} pasó a ser una cuenta.",
       "checking": "Comprobando si {{ref}} es ahora una cuenta…",
       "isAccount": "En esta lectura, {{ref}} es la cuenta {{name}}.",
       "notAccount": "En esta lectura, {{ref}} no es una cuenta.",
@@ -761,6 +767,8 @@
     "transport": "Transporte",
     "isolation": "Aislamiento",
     "failedInline": "La solicitud de lanzamiento fue rechazada. Tus elecciones se conservan.",
+    "stoppedAtStart": "La herramienta arrancó y se detuvo enseguida. Lo que dijo:",
+    "stoppedSilently": "No mostró nada. Comprueba en Herramientas de IA que está instalada y con sesión iniciada, y vuelve a empezar.",
     "state": {
       "ready": "Requisitos locales comprobados",
       "not_configured": "Falta configuración",
@@ -790,8 +798,8 @@
       "profile_disabled": "El perfil está deshabilitado. Habilitar exige sessions:profile:write; un perfil retirado no se reactiva.",
       "profile_retired": "El perfil está retirado y no sirve para un lanzamiento nuevo.",
       "environment_local": "Este perfil pertenece a este nodo.",
-      "other_environment": "Este perfil pertenece a otro entorno de ejecución. Elige un perfil local o usa el entorno que lo administra. No hay ejecución remota automática.",
-      "environment_unavailable": "El entorno de ejecución que administra este perfil no está disponible aquí.",
+      "other_environment": "Este perfil pertenece a otro servidor. Elige un perfil de este servidor o usa el servidor que lo gestiona. Las sesiones nunca se inician automáticamente en otro servidor.",
+      "environment_unavailable": "El servidor que gestiona este perfil no está disponible aquí.",
       "driver_operable": "Hay una ruta de driver registrada en este runtime.",
       "driver_not_registered": "Este driver no está registrado en este runtime. Para Codex configura OLIVARES_SESSION_RUNTIME_CODEX_BIN; para Grok, OLIVARES_SESSION_RUNTIME_GROK_BIN.",
       "transport_unsupported": "Este transporte no es un contrato del driver seleccionado.",
@@ -811,10 +819,11 @@
       "auth_source_required": "Este driver necesita una fuente de autenticación explícita: account-home o inyección administrada. Esa elección se hace en el perfil, no desde esta inspección.",
       "managed_injection_not_applied_for_transport": "Hay inyección administrada seleccionada, pero este transporte no la aplica.",
       "claude_credential_source_configured": "La fuente de credencial de inferencia de Claude está cableada.",
-      "claude_credential_source_not_configured": "La fuente de credencial de inferencia de Claude no está cableada. Configura OLIVARES_SESSION_RUNTIME_WIF o OLIVARES_SESSION_RUNTIME_TOKEN_FILE. Solo nombres, nunca valores.",
+      "claude_credential_source_not_configured": "No hay credencial para Claude Code aquí: inicia su sesión propia en Herramientas de IA o usa una clave de API guardada en Proveedores. Un despliegue con su propia pasarela de inferencia configura OLIVARES_SESSION_RUNTIME_WIF u OLIVARES_SESSION_RUNTIME_TOKEN_FILE.",
       "provider_credential_adapter_configured": "El adaptador de credencial de este driver está cableado.",
       "provider_credential_adapter_not_configured": "El adaptador gobernado de este driver no está cableado. No reutilices el bearer de otro proveedor ni caigas al account-home.",
       "credential_source_not_injected": "Esta combinación no inyecta una credencial de inferencia.",
+      "provider_record_bound": "Este perfil usa una clave de API guardada en Proveedores; esa clave es su credencial.",
       "runtime_credentials_wired": "Las credenciales de runtime work/K3 están cableadas.",
       "runtime_credentials_not_requested": "Esta composición no solicita credenciales de runtime work/K3.",
       "runtime_credential_wiring_incomplete": "El cableado de credenciales de runtime work/K3 está incompleto. Un operador revisa esa composición; esta lectura no pide credenciales comerciales.",
@@ -831,7 +840,7 @@
       "configure_provider_program": "Configura el CLI oficial del proveedor en este runtime.",
       "review_profile_homes": "Revisa los homes almacenados con la lectura de configuración de administración.",
       "authorize_auth_source": "Autoriza account-home o inyección administrada en el perfil (sessions:profile:write).",
-      "configure_claude_credential_source": "Cablea OLIVARES_SESSION_RUNTIME_WIF o OLIVARES_SESSION_RUNTIME_TOKEN_FILE.",
+      "configure_claude_credential_source": "Inicia la sesión de Claude Code en Herramientas de IA o usa una clave de API de Proveedores.",
       "configure_provider_credential_adapter": "Cablea el adaptador gobernado de este driver.",
       "review_runtime_credential_composition": "Revisa la composición de credenciales de runtime work/K3.",
       "select_supported_selection": "Elige un transporte y un aislamiento que este runtime demuestre.",

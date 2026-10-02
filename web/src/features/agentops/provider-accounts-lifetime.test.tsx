@@ -124,16 +124,18 @@ async function submitAdoption(
   ref: string,
 ) {
   await user.click(
-    await screen.findByRole('button', { name: 'Adopt a profile' }),
+    await screen.findByRole('button', { name: 'Name a profile as an account' }),
   )
   const dialog = await screen.findByRole('dialog', {
-    name: 'Adopt a provider profile',
+    name: 'Name a profile as an account',
   })
   await user.type(
     within(dialog).getByRole('textbox', { name: 'Profile reference' }),
     ref,
   )
-  await user.click(within(dialog).getByRole('button', { name: 'Adopt' }))
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Name as account' }),
+  )
   await waitFor(() => expect(api.adoptAccount).toHaveBeenCalledOnce())
 }
 
@@ -203,7 +205,7 @@ describe('account read leaves the room, same boundary', () => {
     await user.click(await screen.findByRole('button', { name: 'work-claude' }))
     const sheet = await screen.findByRole('dialog')
     expect(
-      await within(sheet).findByText('Adopted (an existing home)'),
+      await within(sheet).findByText('From an existing profile'),
     ).toBeInTheDocument()
 
     auth.perms = new Set([PR])
@@ -226,12 +228,12 @@ describe('a submitted adoption outlives the loss of a tier, never its boundary',
     rerender()
     await waitFor(() =>
       expect(
-        screen.queryByRole('dialog', { name: 'Adopt a provider profile' }),
+        screen.queryByRole('dialog', { name: 'Name a profile as an account' }),
       ).toBeNull(),
     )
     expect(
       await screen.findByText(
-        'Adopting ppf_b. The server has not answered yet.',
+        'Naming ppf_b as an account. The server has not answered yet.',
       ),
     ).toHaveAttribute('role', 'status')
 
@@ -241,12 +243,12 @@ describe('a submitted adoption outlives the loss of a tier, never its boundary',
     })
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith(
-        'Adopted as claude-b',
+        'Named as claude-b',
         undefined,
       ),
     )
     expect(
-      await screen.findByText('ppf_b was adopted as claude-b.'),
+      await screen.findByText('ppf_b is now the account claude-b.'),
     ).toBeInTheDocument()
     expect(api.listAccounts.mock.calls.length).toBeGreaterThan(reads)
     expect(api.adoptAccount).toHaveBeenCalledOnce()
@@ -279,7 +281,7 @@ describe('a submitted adoption outlives the loss of a tier, never its boundary',
     })
     expect(
       await screen.findByText(
-        'The outcome of adopting ppf_b is not known here.',
+        'Whether ppf_b became an account is not known here.',
       ),
     ).toBeInTheDocument()
     expect(
@@ -308,11 +310,11 @@ describe('a submitted adoption outlives the loss of a tier, never its boundary',
       answer.reject(new ApiError(409, 'conflict', reason))
     })
     expect(
-      await screen.findByText(`ppf_b was not adopted: ${reason}`),
+      await screen.findByText(`ppf_b was not named as an account: ${reason}`),
     ).toBeInTheDocument()
     expect(toast.success).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'Dismiss' }))
-    expect(screen.queryByText(/ppf_b was not adopted/)).toBeNull()
+    expect(screen.queryByText(/ppf_b was not named as an account/)).toBeNull()
   })
 
   it('read leaves while the POST is parked: the committed late answer paints nothing; the regrant reads fresh and reconciles', async () => {
@@ -345,7 +347,7 @@ describe('a submitted adoption outlives the loss of a tier, never its boundary',
     )
     expect(
       await screen.findByText(
-        'The outcome of adopting ppf_b is not known here.',
+        'Whether ppf_b became an account is not known here.',
       ),
     ).toBeInTheDocument()
     expect(

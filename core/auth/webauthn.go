@@ -270,7 +270,7 @@ func (a *Authenticator) BeginWebAuthnRegistration(ctx context.Context, actor Pri
 	if err := mayChangeAuthenticators(actor, wu.user); err != nil {
 		return nil, err
 	}
-	if len(rows) > 0 && actor.AAL < AAL3 {
+	if len(rows) > 0 && !a.stepUpSatisfied(ctx, actor) {
 		a.auditStepUpFailure(ctx, actor, "webauthn", "registration_step_up")
 		return nil, ErrStepUpRequired
 	}
@@ -340,6 +340,7 @@ func (a *Authenticator) FinishWebAuthnRegistration(ctx context.Context, actor Pr
 		return fmt.Errorf("auth: webauthn credential encode: %w", err)
 	}
 	credID := base64.RawURLEncoding.EncodeToString(cred.ID)
+	steppedUp := a.stepUpSatisfied(ctx, actor)
 	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
 		// Re-check the binding rule INSIDE the write transaction: the begin-leg
 		// check raced any concurrent first-credential registration.
@@ -363,7 +364,7 @@ func (a *Authenticator) FinishWebAuthnRegistration(ctx context.Context, actor Pr
 		if err != nil {
 			return err
 		}
-		if len(existing) > 0 && actor.AAL < AAL3 {
+		if len(existing) > 0 && !steppedUp {
 			return ErrStepUpRequired
 		}
 		row, err := as.WebAuthnCredentials().Create(ctx, model.WebAuthnCredential{
@@ -529,7 +530,7 @@ func (a *Authenticator) DeleteWebAuthnCredential(ctx context.Context, actor Prin
 	if actor.Kind != KindUser || actor.CredID.IsZero() {
 		return ErrUnauthenticated
 	}
-	if actor.AAL < AAL3 {
+	if !a.stepUpSatisfied(ctx, actor) {
 		a.auditStepUpFailure(ctx, actor, "webauthn", "unregister_step_up")
 		return ErrStepUpRequired
 	}

@@ -33,6 +33,9 @@ type moduleHost struct {
 
 	mu   sync.Mutex
 	subs map[eventbus.Subscription]struct{}
+	// dormant hosts deliver no event: the module is initialized for direct
+	// calls but does no event-driven work.
+	dormant bool
 }
 
 var _ sdk.Host = (*moduleHost)(nil)
@@ -66,7 +69,27 @@ func snapshotFinding(payload any) (model.FindingReport, bool, error) {
 	return snapshot, true, nil
 }
 
+// ErrReservedSessionProjection refuses a marker from any other registered host.
+var ErrReservedSessionProjection = errors.New("runtime: reserved session projection refused")
+
 func (h *moduleHost) Publish(ctx context.Context, e event.Event) error {
+	if e.SessionProjection {
+		valid := false
+		switch e.Payload.(type) {
+		case model.EdgeObservation:
+			valid = e.Type == event.TypeEdgeObserved
+		case model.CostSample:
+			valid = e.Type == event.TypeCostSampled
+		case model.FindingReport:
+			valid = e.Type == event.TypeFindingReported
+		}
+		if h.name != "olivares.sessions" || e.SourceRegistration != nil || e.InventoryMember != nil || !valid {
+			return ErrReservedSessionProjection
+		}
+		// The runtime assigns h.name. An envelope's Source is only a label.
+		e.Source = h.name
+	}
+
 	f, finding, err := snapshotFinding(e.Payload)
 	if err != nil {
 		return err
@@ -94,6 +117,9 @@ func (h *moduleHost) Publish(ctx context.Context, e event.Event) error {
 }
 
 func (h *moduleHost) Subscribe(types []event.Type, handler event.Handler) (func(), error) {
+	if h.dormant {
+		return func() {}, nil
+	}
 	// Attach the module's name to the subscription when the bus supports it, so
 	// the per-subscriber queue-depth gauge (docs/17 §5) labels series by
 	// module instead of anonymously. Pure observability; semantics unchanged.

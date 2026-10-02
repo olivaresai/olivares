@@ -35,7 +35,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
@@ -120,7 +120,8 @@ export function TenantGate({ children }: { children: ReactNode }) {
   // organization on the strength of a failed read — it could create a second.
   if (orgsQ.isError)
     return (
-      <ErrorState
+      <QueryErrorState
+        error={orgsQ.error}
         title={t('auth:firstRun.unavailableTitle')}
         description={t('auth:firstRun.unavailableDescription')}
         retry={() => void orgsQ.refetch()}

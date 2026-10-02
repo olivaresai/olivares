@@ -17,12 +17,17 @@
 //    `agent session input --text 'x' --work-lease-fence N` succeeded on that same run.
 //    One derivation, used by every control, is why that cannot come back a door at a
 //    time.
+import { agentOpsApi } from './api'
 import type { RunDTO } from './types'
 
 /** The four K2 authority links. A legacy or non-work run omits all of them. */
 export type WorkBinding = Pick<
   RunDTO,
-  'work_item_id' | 'work_lease_fence' | 'work_dispatch_key' | 'work_owner_epoch'
+  | 'work_item_id'
+  | 'work_lease_fence'
+  | 'work_dispatch_key'
+  | 'work_owner_epoch'
+  | 'work_lease_state'
 >
 
 /**
@@ -56,4 +61,39 @@ export function workLeaseFenceFor(run: WorkBinding): number | undefined {
   return fence !== undefined && Number.isSafeInteger(fence) && fence > 0
     ? fence
     : undefined
+}
+
+/**
+ * The fence a control presents NOW: the run's stamp unless the run says its lease has ended.
+ *
+ * ⛔ THE STAMP IS PERMANENT, THE LEASE IS NOT. After a peer work item is submitted, its
+ *    lease is released and the engine applies ordinary control to the run, but it refuses
+ *    an explicitly STALE fence (MC, F1 on 09). Forwarding the stamp then made the session
+ *    impossible to stop or to speak to. The run's own `work_lease_state` decides (MC, read
+ *    with the run, so a person who may write to runs needs no lease permission, SR2):
+ *    `ended` presents nothing; `active`, `unknown` and an engine that does not say yet keep
+ *    the stamp, and the engine decides.
+ */
+export function controlFence(run: WorkBinding): number | undefined {
+  const stamp = workLeaseFenceFor(run)
+  if (stamp === undefined) return undefined
+  return run.work_lease_state === 'ended' ? undefined : stamp
+}
+
+/** `controlFence` against the run as the engine answers it at dispatch: a run held by the
+ * screen can predate the submit. Read only for a run that carries a stamp.
+ *
+ * Only a CURRENT `ended` drops the stamp. When the read fails, the screen's copy is not
+ * current evidence either way (an old `ended` row may predate a new lease), so the stamp
+ * is presented and the engine decides (SR3 on 2339eb7d). */
+export async function currentControlFence(
+  run: WorkBinding & Pick<RunDTO, 'run_ref'>,
+): Promise<number | undefined> {
+  const stamp = workLeaseFenceFor(run)
+  if (stamp === undefined) return undefined
+  try {
+    return controlFence(await agentOpsApi.getRun(run.run_ref))
+  } catch {
+    return stamp
+  }
 }

@@ -96,7 +96,7 @@ function wrap(run: RunDTO, onCommit?: () => void) {
 
 beforeEach(() => {
   useSessionStore.setState({
-    token: 'olvs_test',
+    csrfToken: 'olvs_test',
     sessionId: 's1',
     expiresAt: '2099-01-01T00:00:00Z',
   })
@@ -113,7 +113,11 @@ afterEach(() => {
   }
   vi.useRealTimers()
   vi.unstubAllGlobals()
-  useSessionStore.setState({ token: null, sessionId: null, expiresAt: null })
+  useSessionStore.setState({
+    csrfToken: null,
+    sessionId: null,
+    expiresAt: null,
+  })
 })
 
 describe('LiveConsole attach continuity', () => {
@@ -290,7 +294,7 @@ describe('LiveConsole attach continuity', () => {
           // leave the opaque remount key unchanged and leak the prior
           // transcript — the defect this case exists to catch.
           useSessionStore.getState().setSession({
-            token: 'olvs_other',
+            csrfToken: 'olvs_other',
             sessionId: 's1',
             expiresAt: '2099-01-01T00:00:00Z',
           })

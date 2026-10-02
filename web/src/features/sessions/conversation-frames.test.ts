@@ -199,6 +199,33 @@ describe('mapConversationFrames — tool calls', () => {
   })
 })
 
+describe('mapConversationFrames — a command tool reads as its command (Root review, 09)', () => {
+  it('a Bash call reads as its command and description, not JSON', () => {
+    // R1 09, real Claude Code 2.1.287: the Bash input as the conversation received it.
+    const bash = JSON.stringify({
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu_bash',
+            name: 'Bash',
+            input: {
+              command: 'echo cli-key-works > cli-key.txt',
+              description: 'Run the command the person asked for',
+            },
+          },
+        ],
+      },
+    })
+    const [item] = mapConversationFrames([bash])
+    expect(item?.toolCommand).toBe('echo cli-key-works > cli-key.txt')
+    expect(item?.toolDescription).toBe('Run the command the person asked for')
+    expect(item?.toolArgsSummary).toBe('echo cli-key-works > cli-key.txt')
+  })
+})
+
 describe('mapConversationFrames — streaming and quiet lines', () => {
   it('joins consecutive stream deltas into one assistant message', () => {
     const items = mapConversationFrames([STREAM_DELTA, STREAM_DELTA_2])
@@ -231,16 +258,128 @@ describe('mapConversationFrames — unknown frames never hide data', () => {
     expect(items[0]?.summary).toContain('foo')
   })
 
-  it('keeps a JSON-RPC protocol frame as unknown rather than dropping it', () => {
-    const line = JSON.stringify({
+  it('keeps JSON-RPC protocol frames as one quiet line rather than dropping them', () => {
+    const start = JSON.stringify({
       id: 1,
       method: 'turn/start',
       params: { input: [{ type: 'text', text: 'hello' }] },
     })
-    const items = mapConversationFrames([line])
-    expect(items[0]?.kind).toBe('unknown')
-    expect(items[0]?.summary).toBe('turn/start')
-    expect(items[0]?.raw).toEqual([line])
+    const reply = JSON.stringify({ id: 1, result: { turn: { id: 'u' } } })
+    const items = mapConversationFrames([start, reply])
+    expect(items).toHaveLength(1)
+    expect(items[0]?.kind).toBe('system')
+    expect(items[0]?.systemKind).toBe('protocol')
+    expect(items[0]?.raw).toEqual([start, reply])
+    const failed = mapConversationFrames([
+      JSON.stringify({
+        id: 2,
+        error: { code: -1, message: 'thread not found' },
+      }),
+    ])
+    expect(failed[0]?.systemKind).toBe('protocolError')
+    expect(failed[0]?.summary).toBe('thread not found')
+  })
+})
+
+// HU 025 (refresh 05, real Claude Code 2.1.287): a long Bash turn printed
+// "Unrecognised frame" twice. The shapes below are the ones that binary emits
+// (read from the build the product installs): `tool_progress` while a tool runs,
+// and `control_response` answering a control request the plane sent (the interrupt).
+const BASH_USE = JSON.stringify({
+  type: 'assistant',
+  message: {
+    role: 'assistant',
+    content: [
+      {
+        type: 'tool_use',
+        id: 'toolu_bash_1',
+        name: 'Bash',
+        input: { command: 'python3 -c "import time; time.sleep(60)"' },
+      },
+    ],
+  },
+})
+const TASK_STARTED = JSON.stringify({
+  type: 'system',
+  subtype: 'task_started',
+  task_id: 'b1',
+  tool_use_id: 'toolu_bash_1',
+})
+const progress = (toolUseId: string, seconds: number) =>
+  JSON.stringify({
+    type: 'tool_progress',
+    tool_use_id: toolUseId,
+    tool_name: 'Bash',
+    parent_tool_use_id: null,
+    elapsed_time_seconds: seconds,
+    task_id: 'b1',
+    session_id: 'sess-1',
+    uuid: `u-${seconds}`,
+  })
+const INTERRUPT_REPLY = JSON.stringify({
+  type: 'control_response',
+  response: { subtype: 'success', request_id: 'olv-interrupt-1' },
+})
+const TASK_NOTIFICATION = JSON.stringify({
+  type: 'system',
+  subtype: 'task_notification',
+  task_id: 'b1',
+  status: 'killed',
+})
+const INTERRUPTED = JSON.stringify({
+  type: 'user',
+  message: {
+    role: 'user',
+    content: [
+      { type: 'text', text: '[Request interrupted by user for tool use]' },
+    ],
+  },
+})
+
+describe('mapConversationFrames — Claude Code tool progress and control replies', () => {
+  it('reads the interrupted long turn without an unrecognised frame', () => {
+    const lines = [
+      BASH_USE,
+      TASK_STARTED,
+      progress('toolu_bash_1', 31),
+      INTERRUPT_REPLY,
+      TASK_NOTIFICATION,
+      INTERRUPTED,
+    ]
+    expect(kindsOf(lines)).not.toContain('unknown')
+    // Every line still reaches the inspector through some item.
+    const raws = mapConversationFrames(lines).flatMap((item) => item.raw)
+    expect(raws.sort()).toEqual([...lines].sort())
+  })
+
+  it('folds tool progress into its tool call and keeps the latest elapsed time', () => {
+    const items = mapConversationFrames([
+      BASH_USE,
+      progress('toolu_bash_1', 15),
+      progress('toolu_bash_1', 31),
+    ])
+    expect(kindsOf([BASH_USE, progress('toolu_bash_1', 15)])).toEqual(['tool'])
+    expect(items).toHaveLength(1)
+    expect(items[0]?.toolElapsedSeconds).toBe(31)
+    expect(items[0]?.raw).toHaveLength(3)
+  })
+
+  it('tells progress for a tool it has not seen as one quiet line', () => {
+    const items = mapConversationFrames([
+      progress('toolu_other', 5),
+      progress('toolu_other', 10),
+    ])
+    expect(items).toHaveLength(1)
+    expect(items[0]?.kind).toBe('system')
+    expect(items[0]?.summary).toContain('Bash')
+    expect(items[0]?.raw).toHaveLength(2)
+  })
+
+  it("keeps the reply to the plane's own control request off the conversation", () => {
+    const items = mapConversationFrames([BASH_USE, INTERRUPT_REPLY])
+    expect(items).toHaveLength(1)
+    expect(items[0]?.kind).toBe('tool')
+    expect(items[0]?.raw).toEqual([BASH_USE, INTERRUPT_REPLY])
   })
 })
 
@@ -248,5 +387,47 @@ describe('conversationCwd', () => {
   it('reads the init frame working directory', () => {
     const items = mapConversationFrames([HOOK_STARTED, INIT, ASSISTANT])
     expect(conversationCwd(items)).toBe('/home/operator/project')
+  })
+})
+
+describe('Codex app-server frames', () => {
+  it('reads an agent message, a command and a completed turn as a conversation', () => {
+    const lines = [
+      JSON.stringify({
+        method: 'item/completed',
+        params: {
+          threadId: 't',
+          turnId: 'u',
+          item: { type: 'agentMessage', id: 'm1', text: 'The tests pass.' },
+        },
+      }),
+      JSON.stringify({
+        method: 'item/completed',
+        params: {
+          item: {
+            type: 'commandExecution',
+            id: 'c1',
+            command: 'go test ./...',
+          },
+        },
+      }),
+      JSON.stringify({
+        method: 'turn/completed',
+        params: { threadId: 't', turn: { id: 'u', status: 'completed' } },
+      }),
+      JSON.stringify({
+        method: 'thread/tokenUsage/updated',
+        params: { threadId: 't' },
+      }),
+    ]
+    const items = mapConversationFrames(lines)
+    expect(items.map((i) => i.kind)).toEqual([
+      'assistant',
+      'tool',
+      'result',
+      'system',
+    ])
+    expect(items[0].text).toBe('The tests pass.')
+    expect(items[1].toolArgsSummary).toBe('go test ./...')
   })
 })

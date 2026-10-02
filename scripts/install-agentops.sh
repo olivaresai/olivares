@@ -70,7 +70,7 @@ set -eu
 # `v?` — releases before the 2026-09-29 tag-name correction carry the v prefix (v26.9.0);
 # current release tags are bare CalVer (26.10.0). The default's claim is 'this repository's
 # release workflow on a release tag', both shapes of it; pin one release with --source-tag.
-DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$'
+DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$'
 
 REPO="olivaresai/olivares"
 RAW="https://raw.githubusercontent.com/${REPO}/main"
@@ -876,59 +876,20 @@ install_native() (
     WORKSPACE_DIR="$DATA_DIR/workspaces"
   fi
   if [ "$WORKSPACE_DIR" = "$DATA_DIR/workspaces" ]; then workspace_kind=default; else workspace_kind=external; fi
-  # How the hardened unit (ProtectSystem=strict, ProtectHome=true, PrivateTmp=true,
-  # PrivateDevices=true) can reach the selected workspace. ReadWritePaths= re-exposes a
-  # path under ProtectSystem=strict; it cannot undo ProtectHome or PrivateTmp, and
-  # BindPaths= is what mounts one selected host directory through either of them:
-  #
-  #   /home, /root, /run/user  ProtectHome=tmpfs + BindPaths=<workspace>; every other
-  #                            home stays hidden.
-  #   /tmp, /var/tmp           PrivateTmp=true is KEPT and BindPaths=<workspace> mounts
-  #                            that one directory into the private tree. Needs systemd
-  #                            235 or later, which is where upstream a227a4be
-  #                            ("we can use namespace bind mounts on dirs in /tmp or
-  #                            /var/tmp even in conjunction with PrivateTmp=") first
-  #                            shipped; it is an ancestor of v235 and absent from v234.
-  #   /dev, /proc, /sys        refused: kernel and device interfaces, not durable state,
-  #                            and the hardening replaces or read-only-mounts them.
-  #
-  # ⛔ UNTIL 2026-09-05 THIS BLOCK REFUSED /tmp AND /var/tmp CLAIMING "no drop-in can
-  # make that workspace reachable". That was false — an untested assumption published
-  # as an impossibility — and it is the R5 correction of the independent review.
+  # The normal unit exposes chosen folders; each child is confined by the
+  # product. Keep durable workspaces off device and kernel API filesystems.
   case "$WORKSPACE_DIR" in
-    /home|/home/*|/root|/root/*|/run/user|/run/user/*) workspace_access=protected-home ;;
-    /tmp|/tmp/*|/var/tmp|/var/tmp/*) workspace_access=private-tmp ;;
-    /dev|/dev/*|/proc|/proc/*|/sys|/sys/*) err "OLIVARES_WORKSPACE_DIR=$WORKSPACE_DIR is under an API file system (/dev, /proc, /sys): those hold kernel and device interfaces rather than durable state, and the hardened unit replaces or read-only-mounts what the service would see there; choose a real directory" ;;
-    *) workspace_access=plain ;;
+    /dev|/dev/*|/proc|/proc/*|/sys|/sys/*) err "OLIVARES_WORKSPACE_DIR=$WORKSPACE_DIR is under an API file system (/dev, /proc, /sys): choose a real directory" ;;
   esac
-  if [ "$workspace_access" != plain ]; then
-    # BindPaths= reads its value as source:destination[:options], so a ":" in the path
-    # would silently bind somewhere else. Only the paths that need a bind are checked.
-    case "$WORKSPACE_DIR" in
-      *:*) err "OLIVARES_WORKSPACE_DIR=$WORKSPACE_DIR contains ':' and this location can only be reached with BindPaths=, whose value uses ':' to separate source from destination; choose a path without it" ;;
-    esac
-  fi
-  if [ "$workspace_access" = private-tmp ]; then
-    # 235 is the first release carrying a227a4be, which creates the bind destination and
-    # is what makes the mount work inside the private /tmp.
-    systemd_running="$(systemctl --version 2>/dev/null | awk 'NR == 1 && $2 ~ /^[0-9]+$/ { print $2; exit }' || true)"
-    if [ -n "$systemd_running" ] && [ "$systemd_running" -lt 235 ]; then
-      err "OLIVARES_WORKSPACE_DIR=$WORKSPACE_DIR is under /tmp or /var/tmp and this host runs systemd $systemd_running: creating a BindPaths= destination inside the private /tmp needs systemd 235 or later (upstream a227a4be), so the service would see its own empty /tmp instead of the workspace; choose a location outside /tmp and /var/tmp on this host (for example /srv/olivares-workspaces)"
-    fi
-  fi
   data_source="default"
   [ -z "$recorded_data" ] || data_source="recorded by $NATIVE_SERVICE_UNIT"
   [ -z "$requested_data" ] || data_source="OLIVARES_DATA_DIR"
   workspace_source="default (no recorded workspace)"
   [ -z "$recorded_workspace" ] || workspace_source="recorded by $MANIFEST"
   [ -z "$requested_workspace" ] || workspace_source="OLIVARES_WORKSPACE_DIR"
-  note "native layout: data=$DATA_DIR ($data_source) workspace=$WORKSPACE_DIR ($workspace_kind, $workspace_source, sandbox access: $workspace_access)"
-  case "$workspace_access" in
-    protected-home)
-      note "workspace under a ProtectHome path: the drop-in sets ProtectHome=tmpfs and binds exactly $WORKSPACE_DIR; other home directories stay hidden from the service" ;;
-    private-tmp)
-      note "workspace under a private temporary directory: the drop-in keeps PrivateTmp=true and binds exactly $WORKSPACE_DIR into it; the rest of the host's /tmp stays hidden from the service (needs systemd 235 or later)"
-      warn "$WORKSPACE_DIR is under /tmp or /var/tmp: those are world-writable and many distributions clear them on boot or on a timer (systemd-tmpfiles), which would delete governed session material under a running service" ;;
+  note "native layout: data=$DATA_DIR ($data_source) workspace=$WORKSPACE_DIR ($workspace_kind, $workspace_source)"
+  case "$WORKSPACE_DIR" in
+    /tmp/*|/var/tmp/*) warn "$WORKSPACE_DIR is under /tmp or /var/tmp: many distributions clear them on boot or on a timer; use a persistent directory for lasting work" ;;
   esac
 
   # 1) the engine binary AND its systemd unit — delegate to the verifying installer
@@ -1211,28 +1172,12 @@ install_native() (
     workspace_pre="# workspace $WORKSPACE_DIR is an explicitly selected external directory: not created or re-moded at start"
     workspace_rw="$workspace_q"
   fi
-  # The two access markers are whole lines: deleted for a plain path, rendered only for
-  # a workspace under a ProtectHome path (see the mapping above).
-  # The bind is what exposes the selected workspace; ProtectHome=tmpfs is only for the
-  # home case. They are rendered independently, so a workspace under /tmp gets its bind
-  # WITHOUT relaxing ProtectHome, and neither case touches the rest of the hardening.
-  protect_expr='/@WORKSPACE_PROTECT_HOME@/d'
-  bind_expr='/@WORKSPACE_BIND@/d'
-  case "$workspace_access" in
-    protected-home)
-      protect_expr="s|@WORKSPACE_PROTECT_HOME@|ProtectHome=tmpfs|"
-      bind_expr="s|@WORKSPACE_BIND@|BindPaths=$workspace_q|" ;;
-    private-tmp)
-      bind_expr="s|@WORKSPACE_BIND@|BindPaths=$workspace_q|" ;;
-  esac
   sed \
     -e "s|@RUNTIME_ENV@|$NATIVE_RUNTIME_ENV|g" \
     -e "s|@CLAUDE_HOME@|$claude_home_q|g" \
     -e "s|@RUN_DIR@|$run_dir_q|g" \
     -e "s|@WORKSPACE_PRE@|$workspace_pre|g" \
     -e "s|@WORKSPACE_RW@|$workspace_rw|g" \
-    -e "$protect_expr" \
-    -e "$bind_expr" \
     -e "s|@WORKSPACE_DIR@|$WORKSPACE_DIR|g" \
     -e "s|@DATA_DIR@|$DATA_DIR|g" \
     "$dropin_template" >"$native_tmp/agentops.conf"

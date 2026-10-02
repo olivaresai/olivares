@@ -12,6 +12,7 @@ import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { FileCheck2, ScrollText, ShieldQuestion } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { useCommunityBuild } from '@/lib/hooks/use-edition'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -41,7 +42,6 @@ import {
   DisclaimerNote,
   IntelPage,
   SectionCard,
-  SelfAuditNotice,
 } from '@/features/_intel'
 import { complianceApi, complianceKeys } from './api'
 import { CalendarTab } from './calendar-view'
@@ -75,6 +75,10 @@ export function ComplianceView() {
   const { t } = useTranslation('compliance')
   const { activeTenant, can } = useAuth()
   const [framework, setFramework] = useState<string | null>(null)
+  // RegOps and NIS 2 incident classification are served by a Business build only:
+  // every generator answers 501 in a Community build, and their lists hold only what
+  // those generators create (modules/compliance). A Community build offers neither tab.
+  const businessPlanes = !useCommunityBuild()
 
   const summaryQ = useQuery({
     queryKey: complianceKeys.summary(activeTenant),
@@ -110,8 +114,12 @@ export function ComplianceView() {
           <TabsTrigger value="holds">{t('tabs.holds')}</TabsTrigger>
           <TabsTrigger value="erasure">{t('tabs.erasure')}</TabsTrigger>
           <TabsTrigger value="calendar">{t('tabs.calendar')}</TabsTrigger>
-          <TabsTrigger value="regops">{t('tabs.regops')}</TabsTrigger>
-          <TabsTrigger value="nis2">{t('tabs.nis2')}</TabsTrigger>
+          {businessPlanes && (
+            <>
+              <TabsTrigger value="regops">{t('tabs.regops')}</TabsTrigger>
+              <TabsTrigger value="nis2">{t('tabs.nis2')}</TabsTrigger>
+            </>
+          )}
           <TabsTrigger value="hipaa">{t('tabs.hipaa')}</TabsTrigger>
         </TabsList>
 
@@ -225,29 +233,33 @@ export function ComplianceView() {
             `depth:read` no veía NADA aunque el motor le hubiera servido, y quien tenía
             `depth:read` y no `aims:read` veía la familia AIMS y cada llamada le daba
             403. */}
-        <TabsContent value="regops" className="flex flex-col gap-4">
-          <RegOpsTab
-            canDoraRead={can('compliance:dora:read')}
-            canDoraAdmin={can('compliance:dora:admin')}
-            canOscalRead={can('compliance:oscal:read')}
-            canOscalAdmin={can('compliance:oscal:admin')}
-            canDepthRead={can('compliance:depth:read')}
-            canDepthAdmin={can('compliance:depth:admin')}
-            canAimsRead={can('compliance:aims:read')}
-            canAimsAdmin={can('compliance:aims:admin')}
-            canCcmRead={can('compliance:ccm:read')}
-            canCcmAdmin={can('compliance:ccm:admin')}
-          />
-        </TabsContent>
+        {businessPlanes && (
+          <TabsContent value="regops" className="flex flex-col gap-4">
+            <RegOpsTab
+              canDoraRead={can('compliance:dora:read')}
+              canDoraAdmin={can('compliance:dora:admin')}
+              canOscalRead={can('compliance:oscal:read')}
+              canOscalAdmin={can('compliance:oscal:admin')}
+              canDepthRead={can('compliance:depth:read')}
+              canDepthAdmin={can('compliance:depth:admin')}
+              canAimsRead={can('compliance:aims:read')}
+              canAimsAdmin={can('compliance:aims:admin')}
+              canCcmRead={can('compliance:ccm:read')}
+              canCcmAdmin={can('compliance:ccm:admin')}
+            />
+          </TabsContent>
+        )}
 
         {/*NIS 2 Art 23 significant-incident classification. Six engine
             routes since compliance.go:547-552 that no console reached. */}
-        <TabsContent value="nis2" className="flex flex-col gap-4">
-          <Nis2Tab
-            canAdmin={can('compliance:nis2:admin')}
-            canRead={can('compliance:nis2:read')}
-          />
-        </TabsContent>
+        {businessPlanes && (
+          <TabsContent value="nis2" className="flex flex-col gap-4">
+            <Nis2Tab
+              canAdmin={can('compliance:nis2:admin')}
+              canRead={can('compliance:nis2:read')}
+            />
+          </TabsContent>
+        )}
 
         {/*el informe TÉCNICO de 45 CFR §164.312, que NO es el framework
             `hipaa_clinical_ai` del catálogo genérico: `hipaaTechnicalFramework()`
@@ -397,7 +409,6 @@ function EvidenceTab({
         }
       >
         {/* Sealing/reading/exporting evidence is a privileged, self-audited read. */}
-        <SelfAuditNotice className="mb-3" />
         <AsyncSection query={evidenceQ} skeletonHeight={200}>
           {(res) =>
             res.items.length === 0 ? (
@@ -537,7 +548,6 @@ function RiskTab({ canReview }: { canReview: boolean }) {
   return (
     <>
       <SectionCard title={t('risk.title')} description={t('risk.description')}>
-        <SelfAuditNotice className="mb-3" />
         <CaveatNotice tone="warning" className="mb-3">
           {t('risk.unacceptableNote')}
         </CaveatNotice>

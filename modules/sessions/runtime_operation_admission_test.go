@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"reflect"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -567,7 +568,7 @@ func TestStopRunEntrypoint_RefusesWhileKeyIsHeldWithoutDownstreamEffects(t *test
 	done := make(chan error, 1)
 	go func() {
 		dto, err := m.stopRun(ctx, tenant, runRef, "user:u1", model.ActorUser)
-		if dto != (runDTO{}) {
+		if !reflect.DeepEqual(dto, runDTO{}) {
 			t.Errorf("a refused stop returned a non-zero DTO: %+v", dto)
 		}
 		done <- err

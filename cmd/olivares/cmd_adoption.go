@@ -99,7 +99,7 @@ func addAdoptionWindowFlags(cmd *cobra.Command, f *adoptionWindowFlags, engineTo
 	cmd.Flags().StringVar(&f.until, "until", "", "window end, RFC3339 (default: now)")
 	if engineTopN > 0 {
 		cmd.Flags().IntVar(&f.limit, "limit", 0, fmt.Sprintf(
-			"top-N rows (0 = the engine's default of %d for this route). NOT a page size: this namespace has no cursor",
+			"top-N rows (left out: the engine's default of %d for this route). NOT a page size: this namespace has no cursor",
 			engineTopN))
 	}
 }

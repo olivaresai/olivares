@@ -157,7 +157,24 @@ export function hasManagedInjectionLimitation(
   )
 }
 
-export function launchFailureMessage(err: unknown, fallback: string): string {
+/** A launch the engine answered with the run itself (409): the tool stopped as it
+ * started. The run's reason carries what the tool said last (the engine records
+ * it); '' when it said nothing, null when the error is not that answer. */
+export function stoppedAtStartReason(err: unknown): string | null {
+  if (!(err instanceof ApiError) || err.status !== 409) return null
+  const body = err.body
+  if (!body || typeof body !== 'object' || !('run_ref' in body)) return null
+  const reason = (body as { reason?: unknown }).reason
+  return typeof reason === 'string' ? reason.trim() : ''
+}
+
+export function launchFailureMessage(
+  err: unknown,
+  fallback: string,
+  stoppedAtStart?: (reason: string) => string,
+): string {
+  const reason = stoppedAtStartReason(err)
+  if (reason !== null && stoppedAtStart) return stoppedAtStart(reason)
   if (err instanceof ApiError) return err.message
   if (err instanceof Error) return err.message
   return fallback

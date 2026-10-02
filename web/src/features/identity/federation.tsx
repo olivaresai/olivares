@@ -13,11 +13,15 @@
 //    revoked). Group provisioning is REAL inbound since — the panel used to
 //    claim otherwise, which was a false statement about our own capability.
 //  • The claude-console posture surfaces the HONEST Admin-API blind-spot finding.
+import {
+  ModuleGate,
+  QueryErrorState,
+} from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { CircleAlert, CircleCheck, ExternalLink } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { SectionCard, SelfAuditNotice } from '@/features/_intel'
+import { SectionCard } from '@/features/_intel'
 import { RelTimeLabel } from '@/features/shared'
 import { StatusBadge } from '@/components/data/badges'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
@@ -25,7 +29,6 @@ import { SecretRef } from '@/components/data/secret-ref'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { KvList, KvRow } from '@/components/ui/kv'
@@ -75,9 +78,14 @@ function expectedRedirectUri(): string {
 export function FederationTab() {
   return (
     <div className="flex flex-col gap-6">
-      <SsoSection />
+      {/* SSO status is the identity module's, the IAM posture the security module's. */}
+      <ModuleGate module="identity">
+        <SsoSection />
+      </ModuleGate>
       <ScimSection />
-      <ClaudeConsolePostureSection />
+      <ModuleGate module="security">
+        <ClaudeConsolePostureSection />
+      </ModuleGate>
       <AuthorityReferences
         area="sso"
         keys={['scim', 'oauthSecurityBcp', 'pkce']}
@@ -135,7 +143,11 @@ function SsoSection() {
         ) : status.isError && isContractPending(status.error) ? (
           <ContractPendingNotice what={t('sso.seamWhat')} />
         ) : status.isError ? (
-          <ErrorState className="py-6" retry={() => void status.refetch()} />
+          <QueryErrorState
+            error={status.error}
+            className="py-6"
+            retry={() => void status.refetch()}
+          />
         ) : status.data ? (
           <KvList>
             <KvRow label={t('sso.protocol')}>
@@ -215,7 +227,7 @@ function SsoSection() {
         <div>
           <Button asChild variant="outline" size="sm">
             <a
-              href="/v1/auth/federation/start"
+              href="/v1/auth/federation/start?browser_session=1"
               target="_blank"
               rel="noreferrer noopener"
             >
@@ -390,7 +402,6 @@ function ScimSection() {
           <h3 className="mb-1.5 flex items-center gap-2 text-body font-medium text-foreground">
             {t('scim.leaverTitle')}
           </h3>
-          <SelfAuditNotice />
           <DeclaredSection
             query={leaver}
             what={t('scim.leaverSeamWhat')}
@@ -460,7 +471,6 @@ function ClaudeConsolePostureSection() {
       description={t('console.description')}
     >
       <div className="flex flex-col gap-4">
-        <SelfAuditNotice />
         <DeclaredSection
           query={posture}
           what={t('console.seamWhat')}

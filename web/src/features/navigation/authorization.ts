@@ -41,6 +41,7 @@ import {
   type NormalizedCapabilityQuestion,
 } from '@/lib/auth/capabilities'
 import { useAuth } from '@/lib/auth/context'
+import { moduleEnabled, useModulesStore } from '@/stores/modules'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 /**
@@ -100,6 +101,7 @@ function stateOfObservation(access: CapabilityAccess): ViewAccessState {
  */
 export function useViewAccess(): ViewAccess {
   const { can, isSuperadmin } = useAuth()
+  const modulesOff = useModulesStore((s) => s.off)
   const workspace = useWorkspaceStore((s) => s.activeWorkspace)
   // The declared surface question of the one capability view, or null when this tree has
   // none and when no workspace is selected (nothing to ask about is not a permission).
@@ -124,8 +126,15 @@ export function useViewAccess(): ViewAccess {
       //    for a permission the engine does not declare.
       return !view.permission || can(view.permission) ? 'allowed' : 'denied'
     }
-    return { state, navigable: (view) => state(view) !== 'denied' }
-  }, [can, observation.access])
+    // A view whose engine module is not enabled here is not offered at all (ARCH C1); its
+    // route says so plainly (RequirePermission).
+    return {
+      state,
+      navigable: (view) =>
+        state(view) !== 'denied' &&
+        moduleEnabled(modulesOff, view.permission, view.id),
+    }
+  }, [can, observation.access, modulesOff])
 }
 
 /* ── the route gate's own answer ──────────────────────────────────────────────── */

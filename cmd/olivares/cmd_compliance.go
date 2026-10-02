@@ -75,7 +75,7 @@ func newComplianceCmd() *cobra.Command {
 			"preservation orders that veto every destruction path, the right-to-erasure\n" +
 			"workflow with its dual-control gates and verifiable receipt, and the\n" +
 			"regulatory artifacts the engine seals.\n\n" +
-			"The dangerous verbs behave like the control plane, not like a script: a\n" +
+			"The dangerous verbs behave like the engine, not like a script: a\n" +
 			"verb that did not finish exits 7 and says exactly how far it got; an erasure\n" +
 			"a legal hold vetoes exits 5 and names the holds that blocked it.",
 		Example: "  olivares compliance holds ls\n" +
@@ -191,9 +191,9 @@ func (c complianceCall) do(cmd *cobra.Command) (complianceResult, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	raw, rerr := io.ReadAll(io.LimitReader(resp.Body, maxComplianceBodySize))
+	raw, rerr := readCLIHTTPResponse(resp, req, maxComplianceBodySize, resp.StatusCode < 300, complianceHTTPError)
 	if rerr != nil {
-		return complianceResult{}, exitcode.New(exitcode.Server, fmt.Errorf("read compliance response: %w", rerr))
+		return complianceResult{status: resp.StatusCode, raw: raw}, wrapCLIResponseReadError(rerr, "read compliance response")
 	}
 	if resp.StatusCode >= 300 {
 		// The body is the plane's and complianceHTTPError embeds it (verbatim in the
@@ -266,7 +266,7 @@ func complianceHTTPError(status int, body []byte) error {
 		default:
 			// An unknown 423 is still a state conflict, but do not put words in
 			// the engine's mouth about which one.
-			b.WriteString("the control plane refused this request (HTTP 423)")
+			b.WriteString("the engine refused this request (HTTP 423)")
 			if msg := strings.TrimSpace(env.Error.Message); msg != "" {
 				fmt.Fprintf(&b, ": %s", msg)
 			} else if decodeErr != nil {
@@ -276,9 +276,7 @@ func complianceHTTPError(status int, body []byte) error {
 		return exitcode.New(exitcode.Conflict, fmt.Errorf("%s", b.String()))
 	}
 	if status == http.StatusNotImplemented {
-		return exitcode.New(exitcode.Err, fmt.Errorf(
-			"this verb is provided by the Olivares enterprise add-on and is not linked in this build (HTTP 501); "+
-				"reads, exports and deletes on this surface work without it"))
+		return notInEdition()
 	}
 	return httpErr(status, body)
 }
@@ -312,17 +310,17 @@ func reportPending(cmd *cobra.Command, res complianceResult, what string) error 
 	// no status, or a status from a newer engine — gets the generic wording. The
 	// default used to be "awaiting dual-control approval", which invented a reason
 	// the response had not given for every one of those shapes.
-	headline := what + ": DID NOT COMPLETE — the control plane returned 202 without a reason this CLI recognizes; check the request status before assuming anything"
+	headline := what + ": DID NOT COMPLETE — the engine returned 202 without a reason this CLI recognizes; check the request status before assuming anything"
 	switch {
 	case decodeErr != nil:
-		headline = what + ": DID NOT COMPLETE — the control plane returned 202 with a body this CLI could not parse; check the request status before assuming anything"
+		headline = what + ": DID NOT COMPLETE — the engine returned 202 with a body this CLI could not parse; check the request status before assuming anything"
 	case env.Status == "provider_pending":
 		headline = what + ": PARTIALLY DONE — local data and the account leg ran, but the model provider still has deletions outstanding. " +
 			"The subject key was NOT shredded and no receipt is sealed; re-execute once the provider approvals are granted"
 	case env.Status == "pending_approval":
 		headline = what + ": NOT DONE — awaiting dual-control approval"
 	case env.Status != "":
-		headline = what + ": DID NOT COMPLETE — the control plane reported " + env.Status
+		headline = what + ": DID NOT COMPLETE — the engine reported " + env.Status
 	}
 
 	err := renderOut(cmd, func(w io.Writer) error {
@@ -386,11 +384,11 @@ func newTabWriter(w io.Writer) *tabwriter.Writer {
 func confirmedCreate(status int, id, got, want string) (bool, string) {
 	switch {
 	case status != http.StatusCreated && status != http.StatusOK:
-		return false, fmt.Sprintf("the control plane answered HTTP %d, which does not confirm the record was created", status)
+		return false, fmt.Sprintf("the engine answered HTTP %d, which does not confirm the record was created", status)
 	case strings.TrimSpace(id) == "":
-		return false, "the control plane returned no id, so there is nothing to confirm"
+		return false, "the engine returned no id, so there is nothing to confirm"
 	case want != "" && got != want:
-		return false, fmt.Sprintf("the control plane returned status %q, not %q", got, want)
+		return false, fmt.Sprintf("the engine returned status %q, not %q", got, want)
 	}
 	return true, ""
 }
@@ -742,7 +740,7 @@ func newHoldsReleaseCmd(flags *authClientFlags) *cobra.Command {
 			rerr := renderOut(cmd, func(w io.Writer) error {
 				if !released {
 					_, werr := fmt.Fprintf(w,
-						"hold %s: the control plane reports status %q, NOT released — preservation may still be in force\n",
+						"hold %s: the engine reports status %q, NOT released — preservation may still be in force\n",
 						h.ID, h.Status)
 					return werr
 				}
@@ -1153,7 +1151,7 @@ func renderErasureOutcome(cmd *cobra.Command, res complianceResult, flags *authC
 		case status == "completed_with_gaps":
 			headline = "erasure COMPLETED WITH GAPS — parts of it could not be carried out; read the outcomes below and the receipt"
 		case !clean:
-			headline = "erasure ran, but the control plane reports it as " + status +
+			headline = "erasure ran, but the engine reports it as " + status +
 				" — that is NOT a clean completion; read the receipt before treating it as finished"
 		}
 		if _, werr := fmt.Fprintf(w, "%s\n", headline); werr != nil {

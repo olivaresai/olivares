@@ -330,11 +330,11 @@ fi
 case "$RELEASE_TAG" in
 v[0-9]*)
 	refuse "release_tag '${RELEASE_TAG}' carries a v prefix" \
-		"Release tags are bare CalVer (YY.M.PATCH, e.g. 26.10.0) since the 2026-09-29 tag-name correction."
+		"Release tags are bare CalVer (YY.M or YY.M.N, e.g. 26.11 or 26.11.1) since the 2026-09-29 tag-name correction."
 	;;
 esac
-[[ "$RELEASE_TAG" =~ ^[0-9]{2}\.([1-9]|1[0-2])\.(0|[1-9][0-9]*)$ ]] ||
-	refuse "release_tag must be bare CalVer YY.M.PATCH (e.g. 26.10.0), got '${RELEASE_TAG}'"
+[[ "$RELEASE_TAG" =~ ^[0-9]{2}\.([1-9]|1[0-2])(\.(0|[1-9][0-9]*))?$ ]] ||
+	refuse "release_tag must be bare CalVer YY.M or YY.M.N, got '${RELEASE_TAG}'"
 [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]] ||
 	refuse "release_commit must be a full lowercase 40-hex OID"
 VERSION="${RELEASE_TAG#v}"
@@ -546,6 +546,11 @@ false)
 	;;
 esac
 
+if [ "$RECONCILE" -eq 0 ]; then
+	[[ "$RELEASE_TAG" =~ ^[0-9]{2}\.([1-9]|1[0-2])(\.[1-9][0-9]*)?$ ]] ||
+		refuse "new release tags must be YY.M or YY.M.N with N >= 1; zero-patch tags are historical only"
+fi
+
 _say "retained release id ${RELEASE_ID} (target_commitish ${TARGET_COMMITISH}, not used as identity)"
 
 # --- 2. the complete remote asset inventory, every page -----------------------------------
@@ -593,7 +598,6 @@ done < <("$JQ_BIN" -r '.[].name' "$assets_json")
 have_asset() { command grep -qxF -- "$1" "$WORK/names.txt"; }
 asset_id_of() { "$JQ_BIN" -r --arg n "$1" 'map(select(.name == $n)) | .[0].id // empty' "$assets_json"; }
 asset_size_of() { "$JQ_BIN" -r --arg n "$1" 'map(select(.name == $n)) | if (.[0] | type) == "object" and (.[0].size != null) then (.[0].size | tostring) else "" end' "$assets_json"; }
-asset_url_of() { "$JQ_BIN" -r --arg n "$1" 'map(select(.name == $n)) | .[0].browser_download_url // empty' "$assets_json"; }
 asset_digest_of() { "$JQ_BIN" -r --arg n "$1" 'map(select(.name == $n)) | .[0].digest // ""' "$assets_json"; }
 # Did this attempt deliver the number of bytes the release declares? UNKNOWN SIZE IS NOT A
 # FAILURE — the release metadata may carry no size, and the digest check below is the real
@@ -1243,10 +1247,15 @@ build_evidence() { # build_evidence <outcome>
 # mutates nothing, uploads nothing and clobbers nothing, which is what makes it safe to run
 # over a release this job did not publish.
 check_published_state() {
-	local pubfile url curl_rc delivered verified latest_rc latest_id
+	local published_tag pubfile url curl_rc delivered verified latest_rc latest_id
+	# Draft asset URLs can retain an untagged-* carrier after publication. Derive
+	# consumer URLs from the tag in the confirmed published release, never that carrier.
+	published_tag="$("$JQ_BIN" -r '.tag_name // empty' "$1")" ||
+		postcondition_failed "the published release tag could not be read"
+	[ "$published_tag" = "$RELEASE_TAG" ] ||
+		postcondition_failed "the published release tag differs from the admitted tag"
 	for pubfile in stable-manifest.json stable-manifest.json.sig; do
-		url="$(asset_url_of "$pubfile")"
-		[ -n "$url" ] || postcondition_failed "the published release exposes no download URL for ${pubfile}"
+		url="https://github.com/${REPOSITORY}/releases/download/${published_tag}/${pubfile}"
 		set +e
 		"$CURL_BIN" --fail --location --silent --show-error --max-time 120 \
 			--output "$WORK/delivered-${pubfile}" "$url" 2>"$WORK/curl.err"
@@ -1290,7 +1299,7 @@ if [ "$RECONCILE" -eq 1 ]; then
 	# The verdict follows the observation, not the intent: a confirmed publication whose
 	# postconditions do not hold is a failed published state (exit 4), never
 	# PUBLICATION_ALREADY_COMPLETE. Nothing below writes: no undraft, no upload, no clobber.
-	check_published_state
+	check_published_state "$release_json"
 	EVIDENCE_JSON="$(build_evidence "PUBLICATION_ALREADY_COMPLETE")"
 	printf '%s\n' "$EVIDENCE_JSON"
 	_say "the already-published candidate verifies completely, and its manifest, signature"
@@ -1371,7 +1380,7 @@ if [ "$MAKE_LATEST" = "true" ]; then
 		"$JQ_BIN" -s -e 'length == 1 and (.[0] |
 			type == "object" and .draft == false and .prerelease == false and
 			(.id | type == "number" and . > 0 and . == floor) and
-			(.tag_name | type == "string" and test("\\Av?(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\z")))' \
+			(.tag_name | type == "string" and test("\\Av?(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(\\.(0|[1-9][0-9]*))?\\z")))' \
 			"$WORK/latest-before.json" >/dev/null 2>&1 ||
 			blind "latest does not identify an ordinary published release with a usable version"
 		latest_tag="$("$JQ_BIN" -r '.tag_name' "$WORK/latest-before.json")"
@@ -1379,7 +1388,7 @@ if [ "$MAKE_LATEST" = "true" ]; then
 		# floating-point rounding. The version grammar excludes leading zeroes.
 		# shellcheck disable=SC2016 # These variables belong to jq.
 		"$JQ_BIN" -en --arg candidate "$RELEASE_TAG" --arg origin "$latest_tag" '
-			def version: ltrimstr("v") | split(".") | map([length, .]);
+			def version: ltrimstr("v") | split(".") | if length == 2 then . + ["0"] else . end | map([length, .]);
 			($candidate | version) > ($origin | version)' >/dev/null ||
 			refuse "${RELEASE_TAG} is not a strict successor of latest ${latest_tag}"
 		_say "latest ${latest_tag} precedes candidate ${RELEASE_TAG}"
@@ -1453,7 +1462,7 @@ set -e
 		"$(diff "$WORK/assets-before.json" "$WORK/assets-published.json" 2>/dev/null | head -8 | tr '\n' ' ')"
 
 # --- 11. public delivery, and the pointer -------------------------------------------------
-check_published_state
+check_published_state "$WORK/published.json"
 
 EVIDENCE_JSON="$(build_evidence "PUBLISHED")"
 printf '%s\n' "$EVIDENCE_JSON"

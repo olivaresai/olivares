@@ -1,0 +1,1 @@
+import{ci as e,yi as t}from"./index-D4R7nKmb.js";function n(n){return t(e,n)}export{n as t};

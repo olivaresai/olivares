@@ -55,7 +55,7 @@
   },
   "enterprise": {
     "title": "Rapports enterprise",
-    "description": "Posture de conformité en direct, la synthèse des risques pour la direction et le pack de preuves d'audit signé.",
+    "description": "Posture de conformité en direct, la synthèse des risques pour la direction et le pack de preuves d'audit.",
     "request": "Demander",
     "done": "Rapport téléchargé",
     "seam": "Ce rapport réside dans un module qui n’est pas lié à ce déploiement. Rien n'est cassé.",
@@ -69,8 +69,14 @@
     },
     "bundle": {
       "title": "Pack de preuves",
-      "description": "Le pack de preuves d'audit SIGNÉ — ce que vous remettez à un auditeur externe."
-    }
+      "description": "Le pack de preuves d'audit que vous remettez à un auditeur externe. Il n'est signé que si une clé de signature est configurée."
+    },
+    "signed": "Signé avec la clé configurée.",
+    "signedDone": "Pack téléchargé et signé.",
+    "unsigned": "Téléchargé, non signé : {{reason}}.",
+    "notReady": "Sera téléchargé sans signature : {{reason}}.",
+    "unsignedUnknown": "le moteur n'a pas donné de raison",
+    "signingSettings": "Réglages de signature des rapports"
   },
   "runs": {
     "open": "Historique",

@@ -78,6 +78,10 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, errForbidden)
 		return
 	}
+	if err := auth.ValidateEmail(in.Email); err != nil {
+		s.writeError(w, r, err)
+		return
+	}
 	// Reject what is already known to be unusable BEFORE provisioning anything: a
 	// request that cannot produce a superadmin must not leave a tenant behind.
 	if len(in.Password) < auth.MinPasswordLen {
@@ -120,9 +124,9 @@ func (s *Server) handleSetup(w http.ResponseWriter, r *http.Request) {
 // enforces residency (a region-scoped instance must hold only data it serves) and
 // unpinned otherwise, which residency.Registry.Serves accepts everywhere.
 func (s *Server) firstOrg(ctx context.Context, name, slug string) (model.Org, error) {
-	existing, found, err := s.orgBySlug(ctx, slug)
-	if err != nil {
-		return model.Org{}, err
+	existing, found, lookupErr := s.orgBySlug(ctx, slug)
+	if lookupErr != nil && !errors.Is(lookupErr, store.ErrEnumerationNotAuthoritative) {
+		return model.Org{}, lookupErr
 	}
 	if found {
 		return existing, nil
@@ -131,7 +135,15 @@ func (s *Server) firstOrg(ctx context.Context, name, slug string) (model.Org, er
 	if s.residency.Enforces() {
 		region = s.residency.Home().String()
 	}
-	return s.provisionOrg(ctx, name, slug, region)
+	// The default PostgreSQL pool can create a tenant under its new tenant bind
+	// without enumerating the estate. Try that write; the unique slug constraint
+	// prevents adopting or replacing an organization the pool cannot see.
+	org, err := s.provisionOrg(ctx, name, slug, region)
+	if errors.Is(err, store.ErrConflict) && lookupErr != nil {
+		// An older orphan with this slug needs authoritative lookup for adoption.
+		return model.Org{}, lookupErr
+	}
+	return org, err
 }
 
 // orgBySlug looks up a tenant org by its unique slug, skipping the reserved
@@ -176,8 +188,8 @@ func (s *Server) orgBySlug(ctx context.Context, slug string) (model.Org, bool, e
 // transaction — the auth partition and the cross-tenant provisioning path are
 // separate units of work by design, so no single commit spans them. If the
 // compensation itself fails (a store outage), an ownerless tenant survives; setup
-// stays open, and the next attempt ADOPTS that tenant (see firstOrg) instead of
-// colliding with its slug, so the install is still completable. What can never
+// stays open. With authoritative lookup the next attempt adopts that tenant;
+// an app-only PostgreSQL install needs an admin pool for that recovery. What can never
 // happen in any ordering is the state this whole handler exists to prevent: a
 // closed setup whose superadmin owns nothing.
 func (s *Server) rollbackFirstOrg(ctx context.Context, tenant model.TenantID) {
@@ -197,7 +209,7 @@ func (s *Server) rollbackFirstOrg(ctx context.Context, tenant model.TenantID) {
 	if derr := s.st.System(ctx, func(sys store.SystemScope) error {
 		return sys.DropTenant(ctx, tenant)
 	}); derr != nil {
-		s.log.Error("api: setup failed and its tenant could not be rolled back; the next setup will adopt it",
+		s.log.Error("api: setup tenant rollback failed; retry needs authoritative organization lookup",
 			"tenant", tenant.String(), "err", derr)
 	}
 }
@@ -247,9 +259,17 @@ func orgSlugFrom(name string) string {
 // the account's second factor gates the login, the pending challenge the
 // caller completes at /v1/auth/totp/challenge (or enrols through first).
 func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if wantsBrowserSession(r) && !BrowserSameOrigin(r) {
+		s.writeError(w, r, errForbidden)
+		return
+	}
 	var in loginInput
 	if err := decodeJSON(w, r, &in); err != nil {
 		s.badRequest(w, r, "invalid JSON body")
+		return
+	}
+	if err := auth.ValidateEmail(in.Email); err != nil {
+		s.writeError(w, r, err)
 		return
 	}
 	res, err := s.authr.LoginFrom(r.Context(), in.Email, in.Password, clientIP(r), r.Header.Values("X-Forwarded-For"))
@@ -276,11 +296,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"token":      res.Token,
-		"session_id": res.Session.ID.String(),
-		"expires_at": res.Session.ExpiresAt.String(),
-	})
+	writeJSON(w, http.StatusOK, SessionEnvelope(w, r, res.Token, res.Session))
 }
 
 // handleRefresh rotates the calling session's credential and extends its expiry,
@@ -302,11 +318,7 @@ func (s *Server) handleRefresh(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"token":      token,
-		"session_id": sess.ID.String(),
-		"expires_at": sess.ExpiresAt.String(),
-	})
+	writeJSON(w, http.StatusOK, SessionEnvelope(w, r, token, sess))
 }
 
 // handleLogout revokes the calling session. It does not apply to token principals.
@@ -323,6 +335,9 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if err := s.authr.RevokeSession(r.Context(), p, p.CredID); err != nil {
 		s.writeError(w, r, err)
 		return
+	}
+	if browserCredential(r) != "" {
+		clearBrowserCookie(w)
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -349,6 +364,7 @@ func (s *Server) handleWhoami(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	grants := make([]map[string]any, 0)
+	names := s.ownTenantNames(r.Context(), p.Tenants())
 	for _, t := range p.Tenants() {
 		role, _ := p.RoleIn(t)
 		ws, confined := p.ConfinedWorkspaceIn(t)
@@ -359,6 +375,9 @@ func (s *Server) handleWhoami(w http.ResponseWriter, r *http.Request) {
 		}
 		if confined {
 			g["confined_workspace"] = ws.String()
+		}
+		if name := names[t]; name != "" {
+			g["tenant_name"] = name
 		}
 		grants = append(grants, g)
 	}
@@ -378,12 +397,36 @@ func (s *Server) handleWhoami(w http.ResponseWriter, r *http.Request) {
 		if len(p.AMR) > 0 {
 			out["amr"] = p.AMR
 		}
+		// What administrative actions demand here, and whether this session
+		// meets it, so the console gates exactly where the engine does.
+		out["admin_step_up"] = auth.StepUpPolicyFrom(r.Context())
+		out["step_up_satisfied"] = auth.StepUpSatisfied(r.Context(), p)
 	}
 	// Deployment readiness, not this principal's certificate, OCSP, AAL, or grants.
 	out["authentication_configuration"] = map[string]any{
 		"piv_configured": s.pivVerifierRootsConfigured(),
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// ownTenantNames reads the organization display name of each of the principal's own
+// tenants, so the console can name them without the cross-tenant org listing
+// (/v1/system/orgs, which needs the admin pool). Each name is read with that
+// tenant's own pin; a name that cannot be read is left out, never an error.
+func (s *Server) ownTenantNames(ctx context.Context, tenants []model.TenantID) map[model.TenantID]string {
+	names := map[model.TenantID]string{}
+	if s.st == nil || len(tenants) == 0 {
+		return names
+	}
+	_ = s.st.System(ctx, func(sys store.SystemScope) error {
+		for _, t := range tenants {
+			if org, err := sys.GetOrg(ctx, t); err == nil {
+				names[t] = org.Name
+			}
+		}
+		return nil
+	})
+	return names
 }
 
 // clientIP returns the real transport peer of r (RemoteAddr) — the one address

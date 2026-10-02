@@ -8,18 +8,19 @@ description: >-
 ---
 
 Это руководство для инженеров и SRE, выводящих control plane Olivares AI в
-продакшен с Docker. Весь продукт — это один distroless-образ — движок со
+продакшен с Docker. Весь продукт — это один образ — движок со
 встроенным веб-интерфейсом — поэтому один хост может запускать топологию SQLite
 без внешних зависимостей, а переопределение для Postgres даёт мультиарендную
-топологию, когда она вам нужна. Каждый путь сохраняет одни и те же безопасные
+топологию, когда она вам нужна. Образы контейнеров основаны на Debian 13 slim (с Node.js 24 для
+инструментов агентов) и запускаются от имени пользователя без прав root. Каждый путь сохраняет одни и те же безопасные
 значения по умолчанию: никаких учётных данных по умолчанию, одноразовый токен
 настройки и TLS, включённый по умолчанию. Порт хоста публикуется на всех интерфейсах,
 потому что это сервер — ограничивайте его осознанно, как показано ниже.
 
-:::note[Бета — образы 26.10.0 опубликованы]
-Olivares AI находится в **бете**. Координаты образа ниже разрешаются: релиз `26.10.0`
+:::note[Бета — образы 26.10.1 опубликованы]
+Olivares AI находится в **бете**. Координаты образа ниже разрешаются: релиз `26.10.1`
 опубликовал их в Docker Hub и `ghcr.io` (свидетель поверхностей установки
-`docs/releases/26.10.0-install-surfaces.json`). Воспринимайте это как форму развёртывания,
+`docs/releases/26.10.1-install-surfaces.json`). Воспринимайте это как форму развёртывания,
 которую вы будете использовать, а не как гарантию готовности к продакшену.
 :::
 
@@ -33,7 +34,7 @@ Olivares AI находится в **бете**. Координаты образ�
 Основная загрузка контейнера — **Docker Hub**:
 
 ```bash
-docker pull docker.io/olivaresai/olivares:26.10.0
+docker pull docker.io/olivaresai/olivares:26.10.1
 ```
 
 То же содержимое также публикуется в `ghcr.io/olivaresai/olivares` — идентичное
@@ -41,8 +42,8 @@ docker pull docker.io/olivaresai/olivares:26.10.0
 **анонимных** пулов; ghcr.io не ограничивает анонимные пулы публичных образов — поэтому
 `docker login` или координата ghcr.io и есть выход, если узел CI или большой парк упирается
 в лимит. Теги несут **без
-ведущего `v`**: `:26.10.0` закрепляет релиз, `:latest` плавает, а
-`:26.10.0-fips` / `:26.10.0-stig` — усиленные варианты. Базовый тег и `:latest`
+ведущего `v`**: `:26.10.1` закрепляет релиз, `:latest` плавает, а
+`:26.10.1-fips` / `:26.10.1-stig` — усиленные варианты. Базовый тег и `:latest`
 мультиархитектурные (`linux/amd64`, `linux/arm64`); `fips`/`stig` — только
 `amd64`.
 
@@ -53,14 +54,14 @@ Docker Hub через `cosign copy`, поэтому digest тот же:
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.10.0")"
+DIGEST="$(crane digest "$IMAGE:26.10.1")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type spdxjson \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -91,7 +92,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:26.10.0 \
+  docker.io/olivaresai/olivares:26.10.1 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -101,7 +102,7 @@ docker run -d --name olivares \
 
 | Флаг | Зачем |
 |---|---|
-| `--user 65532:65532` | запуск под не-root UID `nonroot`, встроенным в distroless-образ |
+| `--user 65532:65532` | запуск под не-root UID `nonroot`, встроенным в образ |
 | `--read-only` | корневая файловая система неизменяема; записываемы только том данных и `/tmp` |
 | `--tmpfs /tmp` | записываемый временный tmpfs, требуемый из-за того, что rootfs только для чтения |
 | `--cap-drop ALL` | движку не нужны Linux-capabilities |
@@ -191,15 +192,15 @@ DR-бандлы: снимок хранилища плюс ключи подпи�
 
 ```bash
 printf 'a strong DR passphrase' > deploy/compose/dr-pass
-# the host stamps the bundle name (the distroless image has no `date`):
+# the host stamps the bundle name:
 BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
                --profile backup run --rm backup
 ```
 
-Задание разделяет том данных движка, пишет бандл в том `olivares-backups` и —
-поскольку образ distroless — оставляет хранение хосту: подчищайте старые бандлы
+Задание разделяет том данных движка, пишет бандл в том `olivares-backups` и
+оставляет хранение хосту: подчищайте старые бандлы
 через cron на хосте (`find <backups> -name '*.drbundle' -mtime +14 -delete`).
 Оберните запуск в cron на хосте для запланированного RPO и **зеркальте том
 `olivares-backups` за пределы площадки** — бэкап на том же хосте не является
@@ -215,8 +216,8 @@ olivares dr restore --in <bundle> --data-dir <dir> --passphrase-file dr-pass
 
 ## 5. Операционные заметки
 
-**Зондируйте здоровье с хоста, а не из контейнера.** Образ **distroless** — в
-нём нет ни оболочки, ни `curl`, поэтому в контейнере намеренно нет
+**Зондируйте здоровье с хоста, а не из контейнера.** В образе
+намеренно не задан внутриконтейнерный
 `HEALTHCHECK`. Движок выставляет `/livez` и `/readyz` на HTTPS-порту; зондируйте
 их с хоста (или вашего оркестратора):
 
@@ -314,7 +315,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. Закрепление по digest для продакшена
 
-Изменяемые теги (`:26.10.0`, `:latest`) — для оценки. В продакшене закрепляйте
+Изменяемые теги (`:26.10.1`, `:latest`) — для оценки. В продакшене закрепляйте
 **digest**, который вы проверили — digest неизменяем и есть ровно то, что вы
 утвердили:
 

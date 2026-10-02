@@ -58,7 +58,7 @@ func newStatusCmd() *cobra.Command {
 	var cfg statusClientConfig
 	cmd := &cobra.Command{
 		Use:   "status",
-		Short: "Show the engine public status, including knowledge retrieval posture",
+		Short: "Show whether the engine is up and which parts are configured",
 		Long: "Reads the existing unauthenticated GET /status endpoint and prints the engine\n" +
 			"status plus the knowledge embedder posture (semantic vs local-hash).",
 		Example: "  olivares status --server https://127.0.0.1:8443 --insecure",
@@ -137,11 +137,12 @@ func newStatusCmd() *cobra.Command {
 			return degraded
 		},
 	}
-	cmd.Flags().StringVar(&cfg.server, "server", "", "control-plane base URL (default $OLIVARES_SERVER_URL, then current context)")
+	cmd.Flags().StringVar(&cfg.server, "server", "", "the engine's address, https://<host>:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in)")
 	cmd.Flags().StringVar(&cfg.caCert, "ca-cert", "", "PEM file containing an additional trusted root CA (default: current context)")
 	cmd.Flags().StringArrayVar(&cfg.pins, "pin-sha256", nil, "trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context)")
-	cmd.Flags().BoolVar(&cfg.insecure, "insecure", false, "skip TLS certificate verification (self-signed dev planes only)")
+	cmd.Flags().BoolVar(&cfg.insecure, "insecure", false, "skip TLS certificate verification (self-signed development engines only)")
 	cmd.Flags().DurationVar(&cfg.timeout, "timeout", 10*time.Second, "request timeout")
+	hideConnectionFlags(cmd.Flags())
 	addDeprecatedJSONFlag(cmd)
 	return cmd
 }
@@ -162,7 +163,7 @@ func (c *statusClientConfig) fetch(ctx context.Context) (statusResponse, []byte,
 		return statusResponse{}, nil, 0, err
 	}
 	if resolved.Server == "" {
-		return statusResponse{}, nil, 0, fmt.Errorf("no server: set --server, OLIVARES_SERVER_URL, or an active client context")
+		return statusResponse{}, nil, 0, notSignedIn("--server", "OLIVARES_SERVER_URL")
 	}
 	client, headers, err := cliTransport(cliTransportOptions{
 		Resolved: resolved,
@@ -183,9 +184,9 @@ func (c *statusClientConfig) fetch(ctx context.Context) (statusResponse, []byte,
 		return statusResponse{}, nil, 0, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	raw, err := readCLIHTTPResponse(resp, req, 1<<20, resp.StatusCode == http.StatusOK, httpErr)
 	if err != nil {
-		return statusResponse{}, nil, resp.StatusCode, err
+		return statusResponse{}, raw, resp.StatusCode, err
 	}
 	if resp.StatusCode != http.StatusOK {
 		return statusResponse{}, raw, resp.StatusCode, httpErr(resp.StatusCode, raw)

@@ -76,7 +76,7 @@ type bootstrapClient struct {
 // interprets the status: each verb classifies its own, because "404" means
 // different things to `tokens revoke` (no such token, or one outside your
 // authority) and to `tenants rm`.
-func (c bootstrapClient) do(cmd *cobra.Command, method, path string, body any) ([]byte, int, string, error) {
+func (c bootstrapClient) do(cmd *cobra.Command, method, path string, body any, accepted ...int) ([]byte, int, string, error) {
 	opts, err := c.flags.resolutionOptions(cmd)
 	if err != nil {
 		return nil, 0, "", redactCoded(err, c.flags.effectiveToken())
@@ -89,6 +89,7 @@ func (c bootstrapClient) do(cmd *cobra.Command, method, path string, body any) (
 	if err != nil {
 		return nil, 0, "", redactCoded(err, c.flags.effectiveToken())
 	}
+	resolved = c.flags.withLocalEngine(resolved, opts)
 	if resolved.Server == "" {
 		return nil, 0, "", missingCLIValueError("server", "--server", "OLIVARES_SERVER_URL", resolved)
 	}
@@ -137,10 +138,9 @@ func (c bootstrapClient) do(cmd *cobra.Command, method, path string, body any) (
 		return nil, 0, resolved.Token, redactCodedServer(err, resolved.Token)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxBootstrapCLIResponseSize+1))
+	raw, err := readCLIHTTPResponse(resp, req, maxBootstrapCLIResponseSize+1, cliStatusAccepted(resp.StatusCode, accepted...), bootstrapHTTPError)
 	if err != nil {
-		return nil, resp.StatusCode, resolved.Token, exitcode.New(exitcode.Server,
-			fmt.Errorf("read %s response: %w", c.surface, err))
+		return raw, resp.StatusCode, resolved.Token, wrapCLIResponseReadError(err, fmt.Sprintf("read %s response", c.surface))
 	}
 	if len(raw) > maxBootstrapCLIResponseSize {
 		return nil, resp.StatusCode, resolved.Token, exitcode.New(exitcode.Server,
@@ -154,7 +154,7 @@ func (c bootstrapClient) do(cmd *cobra.Command, method, path string, body any) (
 // through httpErr (cmd_agent.go:589), which is what makes 401/403 exit 3, 404 exit
 // 4, 409 exit 5 and 5xx exit 6 for these families without each verb restating it.
 func (c bootstrapClient) expect(cmd *cobra.Command, method, path string, body any, want int) ([]byte, error) {
-	raw, status, bearer, err := c.do(cmd, method, path, body)
+	raw, status, bearer, err := c.do(cmd, method, path, body, want)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +192,7 @@ func (c bootstrapClient) expect(cmd *cobra.Command, method, path string, body an
 func bootstrapHTTPError(status int, raw []byte) error {
 	if status == http.StatusForbidden && bytes.Contains(raw, []byte("step-up")) {
 		return exitcode.New(exitcode.Auth, fmt.Errorf(
-			"the control plane requires an AAL3 step-up for this operation and the credential you "+
+			"the engine requires an AAL3 step-up for this operation and the credential you "+
 				"sent does not carry one. An API token never can (it has no assurance level) and a "+
 				"password session starts at AAL1; a USER SESSION that completed the WebAuthn/PIV "+
 				"ceremony does, for 15 minutes. Run the ceremony in the console, then pass that "+
@@ -239,10 +239,31 @@ func redactCoded(err error, secrets ...string) error {
 	// in the message.
 	msg := err.Error()
 	if scrubbed := redactCLISecrets(msg, secrets...); scrubbed != msg {
-		redacted = errors.New(scrubbed)
+		redacted = &cliRedactedError{message: scrubbed, cause: err}
 	}
 	return exitcode.New(code, redacted)
 }
+
+// A scrubbed message must not expose its unsanitized chain through Unwrap.
+// Preserve cause identity and type inspection without making that text printable.
+type cliRedactedError struct {
+	message string
+	cause   error
+}
+
+func (e *cliRedactedError) Error() string        { return e.message }
+func (e *cliRedactedError) Is(target error) bool { return errors.Is(e.cause, target) }
+func (e *cliRedactedError) As(target any) bool   { return errors.As(e.cause, target) }
+
+// cliSafeError prints only sanitized text while preserving typed causes for
+// cancellation, timeout and status inspection.
+type cliSafeError struct {
+	message string
+	cause   error
+}
+
+func (e *cliSafeError) Error() string { return e.message }
+func (e *cliSafeError) Unwrap() error { return e.cause }
 
 // redactCodedServer is redactCoded for the transport paths that must PROMOTE an
 // unclassified failure to Server(6) — a request that could not be built, a plane

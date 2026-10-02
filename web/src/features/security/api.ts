@@ -47,10 +47,10 @@ const BASE = '/v1/m/security'
 async function fetchFindingsExport(
   filters?: FindingFilters,
 ): Promise<FindingsExportResult> {
-  const token = useSessionStore.getState().token
+  const token = useSessionStore.getState().csrfToken
   const tenant = useTenantStore.getState().activeTenant
   const headers = new Headers({ Accept: 'application/json' })
-  if (token) headers.set('Authorization', `Bearer ${token}`)
+  if (token) headers.set('X-CSRF-Token', token)
   if (tenant) headers.set('X-Olivares-Tenant', tenant)
 
   const query = new URLSearchParams({ format: 'sarif' })

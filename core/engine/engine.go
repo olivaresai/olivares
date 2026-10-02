@@ -32,6 +32,12 @@ func Open(ctx context.Context, cfg store.Config, register func(store.ExtensionRe
 	return sqlstore.Open(ctx, cfg, register)
 }
 
+// OpenAuditReader opens an existing ledger for offline read-only verification.
+// It runs no migrations, runtime reconciliation or leader election.
+func OpenAuditReader(ctx context.Context, cfg store.Config) (store.AuditReader, error) {
+	return sqlstore.OpenAuditReader(ctx, cfg)
+}
+
 // ApplyMigrations applies this binary's complete PostgreSQL schema and returns
 // WITHOUT opening a service: no runtime reconciliation, no elector, no listeners, no
 // Store. It is the explicit first phase of migrate → GRANT → serve, which is the

@@ -40,7 +40,7 @@ const (
 // (assurance.go:31), and `auth login --token` exists precisely to carry "a session
 // you already hold". So a superadmin who ran the WebAuthn/PIV ceremony in the
 // console CAN drive these from the CLI, and the only thing stopping them was the
-// absence of the command. Withholding it did not protect the gate — requireAAL3
+// absence of the command. Withholding it did not protect the gate — requireStepUp
 // (core/api/middleware.go:298) protects the gate, and it is untouched here; it
 // just denied the operator the surface.
 //
@@ -52,13 +52,12 @@ func newUsersCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	root := &cobra.Command{
 		Use:   "users",
-		Short: "List, create, disable and re-enable the global user accounts (superadmin)",
+		Short: "User accounts: list, create, disable, enable",
 		Long: "Manage the global user accounts of this installation. A user is an identity; what it\n" +
 			"may DO comes from the tenant memberships granted to it with `olivares members grant`.\n" +
 			"Every verb here is superadmin-gated by the engine.\n\n" +
-			"disable/enable are additionally gated on an AAL3 step-up: an API token can never carry\n" +
-			"one, but a user session elevated by a WebAuthn/PIV ceremony can, for 15 minutes — run\n" +
-			"the ceremony in the console and pass that session with `auth login --token-file`.",
+			"disable/enable also need a signed-in session (`olivares login`), never an API token, and\n" +
+			"may ask for an extra check if your administrator turned one on (Settings > Security).",
 		Example: `  olivares users ls
   olivares users create --email ops@example.com --display-name "Ops" --password-file /run/secrets/pw
   olivares users superadmins
@@ -80,12 +79,12 @@ func usersDisableCmd(client bootstrapClient) *cobra.Command {
 	var yes bool
 	cmd := &cobra.Command{
 		Use:   "disable <user-id>",
-		Short: "Disable a superadmin account (reversible; requires an AAL3 session)",
+		Short: "Disable a superadmin account (reversible)",
 		Long: "Withdraw a superadmin account's access without deleting anything: sessions and tokens\n" +
 			"stop authenticating and `users enable` restores it exactly. The engine refuses to\n" +
 			"disable the LAST active superadmin — check how many are left with `users superadmins`\n" +
-			"first — and gates the action on a verified hardware step-up (AAL3), which an API token\n" +
-			"can never carry and an elevated user session can.",
+			"first. It needs a signed-in session, never an API token, and may ask for an extra\n" +
+			"check if your administrator turned one on.",
 		Example: "  olivares users disable 018f2c2e-0000-7000-8000-000000000002 --yes",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -104,10 +103,10 @@ func usersDisableCmd(client bootstrapClient) *cobra.Command {
 func usersEnableCmd(client bootstrapClient) *cobra.Command {
 	return &cobra.Command{
 		Use:   "enable <user-id>",
-		Short: "Re-enable a disabled superadmin account (requires an AAL3 session)",
+		Short: "Re-enable a disabled superadmin account",
 		Long: "Restore a superadmin account that `users disable` withdrew. It is the safe direction\n" +
-			"and asks for no confirmation; the engine still requires the same AAL3 step-up, because\n" +
-			"granting access back is as privileged as withdrawing it.",
+			"and asks for no confirmation; it needs the same signed-in session as `users disable`,\n" +
+			"because granting access back is as privileged as withdrawing it.",
 		Example: "  olivares users enable 018f2c2e-0000-7000-8000-000000000002",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

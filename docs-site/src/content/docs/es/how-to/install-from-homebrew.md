@@ -2,7 +2,7 @@
 title: Instalar con Homebrew
 description: >-
   La coordenada del cask de Homebrew en macOS para Olivares AI, lo que el cask
-  hace con Gatekeeper y el estado de publicación del bump del tap 26.10.0.
+  hace con Gatekeeper y el estado de publicación del bump del tap 26.10.1.
 draft: false
 ---
 
@@ -13,7 +13,7 @@ cuarentena de Gatekeeper. No es la vía de paquetes Linux
 ([Desplegar con Docker](/how-to/docker-deployment/)).
 
 :::note[Beta — el cask 26.10 está publicado]
-`Casks/olivares.rb` del tap se actualizó para 26.10 el 2026-10-01: nombra la versión 26.10.0 y
+`Casks/olivares.rb` del tap se actualizó para 26.10 el 2026-10-01: nombra la versión 26.10.1 y
 cuatro archivos de plataforma cuyos SHA-256 coinciden con el `checksums.txt` firmado de la
 release. El productor es
 `.goreleaser.yaml` `homebrew_casks:`; el trabajo de release actualiza el cask del tap. El

@@ -33,17 +33,17 @@ aus:
 
 ```bash
 scripts/airgap-bundle.sh \
-  --version 26.10.0 \
-  --image ghcr.io/olivaresai/olivares:26.10.0-amd64 \
+  --version 26.10.1 \
+  --image ghcr.io/olivaresai/olivares:26.10.1-amd64 \
   --chart deploy/helm/olivares \
   --cosign-key cosign.key \
   [--collector-image <ref>] [--out dist/airgap] [--gpg-key <id>]
 ```
 
-Der Architektur-Tag (`26.10.0-amd64`) ist auf `ghcr.io/olivaresai/olivares` veröffentlicht, wo der
+Der Architektur-Tag (`26.10.1-amd64`) ist auf `ghcr.io/olivaresai/olivares` veröffentlicht, wo der
 Release baut und signiert. Docker Hub (`docker.io/olivaresai/olivares`, der offizielle Pull) führt
-die Multi-Arch- und gehärteten Tags, per Digest identisch, aber nicht `26.10.0-amd64`
-(`docs/releases/26.10.0-install-surfaces.json`). ghcr.io begrenzt anonyme Pulls öffentlicher
+die Multi-Arch- und gehärteten Tags, per Digest identisch, aber nicht `26.10.1-amd64`
+(`docs/releases/26.10.1-install-surfaces.json`). ghcr.io begrenzt anonyme Pulls öffentlicher
 Images nicht, was auch auf einem nicht authentifizierten Build-Host hilft.
 
 :::caution[SBOM/VEX/Provenance werden bereitgestellt, nicht generiert]
@@ -104,7 +104,7 @@ Spiegelung überstanden hat (es verwendet `crane` und `cosign load` — **nicht*
 
 ```bash
 scripts/airgap-mirror.sh \
-  --bundle olivares-airgap-26.10.0.tar.gz \
+  --bundle olivares-airgap-26.10.1.tar.gz \
   --registry registry.internal:5000 [--insecure]
 ```
 

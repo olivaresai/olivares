@@ -133,7 +133,7 @@ const moves: Array<[string, () => void]> = [
     'new-session credential',
     () =>
       useSessionStore.getState().setSession({
-        token: 'olvs_next',
+        csrfToken: 'olvs_next',
         sessionId: `sid-${Date.now()}`,
         expiresAt: EXP,
       }),
@@ -144,7 +144,7 @@ const moves: Array<[string, () => void]> = [
       // Faithful to the engine's RefreshSession: a new bearer, the same session id.
       const before = useSessionStore.getState().sessionId
       useSessionStore.getState().setSession({
-        token: `olvs_rotated_${++rotations}`,
+        csrfToken: `olvs_rotated_${++rotations}`,
         sessionId: SID,
         expiresAt: EXP,
       })
@@ -157,7 +157,7 @@ const moves: Array<[string, () => void]> = [
 /** Every key of the plane is partitioned by an OPAQUE number, and none of them — nor
  * any other key in the cache — carries the bearer or the session id. */
 function expectOpaqueKeys(qc: QueryClient) {
-  const { token, sessionId } = useSessionStore.getState()
+  const { csrfToken: token, sessionId } = useSessionStore.getState()
   const keys = qc
     .getQueryCache()
     .findAll()
@@ -179,7 +179,7 @@ beforeEach(() => {
   // The credential every case starts under. A direct write, as rehydration is: not a
   // transition, so the generation is whatever the previous case left (monotonic).
   useSessionStore.setState({
-    token: 'olvs_first',
+    csrfToken: 'olvs_first',
     sessionId: SID,
     expiresAt: EXP,
   })

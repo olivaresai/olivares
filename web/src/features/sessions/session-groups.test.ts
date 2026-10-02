@@ -69,6 +69,10 @@ describe('groupOf — membership is a field the engine sent', () => {
       'the provider says it needs a login',
       row(undefined, { state: 'running', provider_auth_state: 'required' }),
     ],
+    [
+      'a tool call waits on an approval (HU-R12)',
+      row(undefined, { state: 'running', pending_approval_ref: 'apr_1' }),
+    ],
   ])('puts it under Waiting for you when %s', (_why, s) => {
     expect(groupOf(s)).toBe('attention')
   })
@@ -78,6 +82,14 @@ describe('groupOf — membership is a field the engine sent', () => {
     ['it is quiet within tolerance', row({ cc_state: 'idle' })],
     ['its run stopped', row(undefined, { state: 'stopped' })],
     ['its run was cleaned', row(undefined, { state: 'cleaned' })],
+    [
+      // Stop -> reload: the observed row still says active; the run decides (EU, 06).
+      'its run stopped while the observed row still says active',
+      row(
+        { session_ref: 'sess-1', cc_state: 'active' },
+        { claude_session_id: 'sess-1', state: 'stopped' },
+      ),
+    ],
   ])('puts it under Settled when %s', (_why, s) => {
     expect(groupOf(s)).toBe('settled')
   })

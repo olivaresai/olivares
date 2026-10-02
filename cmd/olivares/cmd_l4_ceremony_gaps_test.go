@@ -139,9 +139,9 @@ func TestL4UpgradeInstalledTextPaneIsPinned(t *testing.T) {
 // Both panes, because the exemption has to survive the pane that was added: a
 // flag honored on one and ignored on the other is worse than either rule.
 func TestL4SecurityCheckQuietDoesNotSilenceTheFeedArm(t *testing.T) {
-	// "26.5" is not MAJOR.MINOR.PATCH, so the advisory is unevaluable and the
+	// "26.5.0.1" has four numeric components, so the advisory is unevaluable and the
 	// catalog is incomplete: no findings, no verdict, exit 8.
-	feed, pub := l4SignedFeed(t, l4Advisory("26.5"))
+	feed, pub := l4SignedFeed(t, l4Advisory("26.5.0.1"))
 	args := []string{"security", "check", "--feed", feed, "--pubkey", pub,
 		"--product-version", "26.6.0", "--quiet"}
 
@@ -152,8 +152,8 @@ func TestL4SecurityCheckQuietDoesNotSilenceTheFeedArm(t *testing.T) {
 			"  cause:   1 of the 1 advisory(ies) in this feed could not be evaluated, so\n"+
 			"           \"not affected\" would be a claim about advisories this build never\n"+
 			"           read:\n"+
-			"             - OLIVARES-L4-0001: \"introduced\":\"26.5\" is not a version this build can order: "+
-			"release: version \"26.5\" is not MAJOR.MINOR.PATCH\n"+
+			"             - OLIVARES-L4-0001: \"introduced\":\"26.5.0.1\" is not a version this build can order: "+
+			"release: version \"26.5.0.1\" is not MAJOR.MINOR or MAJOR.MINOR.PATCH\n"+
 			"  way out: this is a FEED problem, not a key problem — the signature verified.\n"+
 			"           Take it to the advisory publisher, or upgrade to a build that\n"+
 			"           understands these ranges.\n")

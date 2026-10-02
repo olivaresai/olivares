@@ -126,6 +126,19 @@ beforeEach(() => {
 })
 
 describe('PeopleTab', () => {
+  it('opens the onboarding dialog in invite mode when the palette asks for it', async () => {
+    const handled = vi.fn()
+    const user = userEvent.setup()
+    wrap(<PeopleTab inviteRequested onInviteHandled={handled} />)
+    // The dialog is the button's own dialog, already set to send an invitation.
+    expect(
+      await screen.findByRole('combobox', { name: /how they sign in/i }),
+    ).toHaveTextContent('Send an email invitation')
+    expect(screen.queryByLabelText(/initial password/i)).toBeNull()
+    await user.keyboard('{Escape}')
+    expect(handled).toHaveBeenCalled()
+  })
+
   it('onboards a user with an admin-set password', async () => {
     api.onboard.mockResolvedValue({
       user: {
@@ -220,7 +233,9 @@ describe('PeopleTab', () => {
     authState.can = (p: string) => !p.startsWith('user:')
     wrap(<PeopleTab />)
     await screen.findByText(/pending invitations/i)
-    expect(screen.queryByText(/^Superadmins$/)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/^Installation administrators$/),
+    ).not.toBeInTheDocument()
     expect(api.listSuperadmins).not.toHaveBeenCalled()
   })
 })
@@ -343,7 +358,7 @@ describe('SSOTab', () => {
     )
   })
 
-  it('shows the honest "not enforced by this build" banner on an open build with posture set', async () => {
+  it('offers no login enforcement on a build that does not enforce it, and claims nothing about it', async () => {
     api.getSSO.mockResolvedValue({
       configured: true,
       provider_available: true,
@@ -353,18 +368,87 @@ describe('SSOTab', () => {
       require_sso: true,
       network_allowlist: ['10.0.0.0/8'],
       enforced_by: 'unavailable',
+      groups_mapped_by: 'unavailable',
+      claimed_domains: ['corp.example'],
+      routed_by: 'unavailable',
+    })
+    const user = userEvent.setup()
+    wrap(<SSOTab />)
+    // SSO itself is served here: its configuration stays.
+    await user.click(await screen.findByRole('button', { name: /edit/i }))
+    expect(await screen.findByLabelText(/issuer url/i)).toBeInTheDocument()
+    expect(screen.getByLabelText(/scim is authoritative/i)).toBeInTheDocument()
+    // What the server reports unavailable is not offered, and no text stands in for it.
+    expect(screen.queryByText(/login enforcement/i)).toBeNull()
+    expect(screen.queryByLabelText(/require sso/i)).toBeNull()
+    expect(screen.queryByLabelText(/network allow-list/i)).toBeNull()
+    expect(screen.queryByLabelText(/groups claim/i)).toBeNull()
+    expect(screen.queryByLabelText(/claimed email domains/i)).toBeNull()
+    expect(
+      screen.queryByText(/business build|business edition|enterprise tag/i),
+    ).toBeNull()
+    expect(screen.queryByText(/stored, not enforced/i)).toBeNull()
+  })
+
+  it('offers the scope and identity-provider choice only where the server selects among several IdPs', async () => {
+    const { unmount } = wrap(<SSOTab />)
+    // The default fixture: routed_by "unavailable" (one IdP, the deployment-wide default).
+    expect(
+      await screen.findByRole('button', { name: /configure sso/i }),
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText(/^scope/i)).toBeNull()
+    expect(screen.queryByText(/add an identity provider/i)).toBeNull()
+    unmount()
+    api.getSSO.mockResolvedValue({
+      configured: false,
+      provider_available: true,
+      redirect_uri: 'https://panel.example/v1/auth/federation/callback',
+      require_sso: false,
+      network_allowlist: [],
+      enforced_by: 'enterprise',
+      claimed_domains: [],
+      routed_by: 'enterprise',
     })
     wrap(<SSOTab />)
-    expect(
-      await screen.findByText(
-        /stores the enforcement posture but does not enforce it/i,
+    expect(await screen.findByLabelText(/^scope/i)).toBeInTheDocument()
+  })
+
+  it('keeps a stored posture, mapping and domains unchanged when a build that cannot serve them saves', async () => {
+    api.getSSO.mockResolvedValue({
+      configured: true,
+      provider_available: true,
+      protocol: 'oidc',
+      status: 'active',
+      oidc_issuer: 'https://idp.example',
+      oidc_client_id: 'cid',
+      oidc_groups_claim: 'groups',
+      redirect_uri: 'https://panel.example/cb',
+      require_sso: true,
+      network_allowlist: ['10.0.0.0/8'],
+      enforced_by: 'unavailable',
+      groups_mapped_by: 'unavailable',
+      claimed_domains: ['corp.example'],
+      routed_by: 'unavailable',
+    })
+    api.putSSO.mockResolvedValue({ configured: true })
+    const user = userEvent.setup()
+    wrap(<SSOTab />)
+    await user.click(await screen.findByRole('button', { name: /edit/i }))
+    await user.click(
+      await screen.findByRole('button', { name: /save configuration/i }),
+    )
+    await waitFor(() =>
+      expect(api.putSSO).toHaveBeenCalledWith(
+        expect.objectContaining({
+          require_sso: true,
+          network_allowlist: ['10.0.0.0/8'],
+          oidc_groups_claim: 'groups',
+          claimed_domains: ['corp.example'],
+        }),
+        undefined,
+        'default',
       ),
-    ).toBeInTheDocument()
-    // The stored CIDR is surfaced, and the "stored, not enforced" badge is shown.
-    expect(screen.getByText('10.0.0.0/8')).toBeInTheDocument()
-    expect(
-      screen.getByText(/stored, not enforced by this build/i),
-    ).toBeInTheDocument()
+    )
   })
 
   it('shows the "Enforced by this build" badge and no unavailable banner on the enterprise build', async () => {
@@ -398,7 +482,7 @@ describe('SSOTab', () => {
       redirect_uri: 'https://panel.example/cb',
       require_sso: false,
       network_allowlist: [],
-      enforced_by: 'unavailable',
+      enforced_by: 'enterprise',
     })
     wrap(<SSOTab />)
     // With nothing stored, the badge must NOT overstate "stored, not enforced".
@@ -416,6 +500,17 @@ describe('SSOTab', () => {
   })
 
   it('toggles require-SSO in the edit form and saves it', async () => {
+    // A build that enforces login policy offers the posture in the form.
+    api.getSSO.mockResolvedValue({
+      configured: false,
+      provider_available: true,
+      redirect_uri: 'https://panel.example/v1/auth/federation/callback',
+      require_sso: false,
+      network_allowlist: [],
+      enforced_by: 'enterprise',
+      claimed_domains: [],
+      routed_by: 'enterprise',
+    })
     api.putSSO.mockResolvedValue({
       configured: true,
       provider_available: true,
@@ -447,6 +542,17 @@ describe('SSOTab', () => {
   })
 
   it('parses the network allow-list textarea into CIDRs on save', async () => {
+    // A build that enforces login policy offers the posture in the form.
+    api.getSSO.mockResolvedValue({
+      configured: false,
+      provider_available: true,
+      redirect_uri: 'https://panel.example/v1/auth/federation/callback',
+      require_sso: false,
+      network_allowlist: [],
+      enforced_by: 'enterprise',
+      claimed_domains: [],
+      routed_by: 'enterprise',
+    })
     api.putSSO.mockResolvedValue({
       configured: true,
       provider_available: true,
@@ -541,7 +647,9 @@ describe('ScopesTab', () => {
 describe('RolesTab', () => {
   it('shows the superadmin delegation authority', async () => {
     wrap(<RolesTab />)
-    expect(await screen.findByText(/you are a superadmin/i)).toBeInTheDocument()
+    expect(
+      await screen.findByText(/you administer this installation/i),
+    ).toBeInTheDocument()
   })
 
   it('shows a load error (never "no authority") when the ceiling fetch fails', async () => {
@@ -665,9 +773,7 @@ describe('RolesTab — S256 group hierarchy', () => {
 
   it('shows empty state when no groups are provisioned', async () => {
     wrap(<RolesTab />)
-    expect(
-      await screen.findByText(/no provisioned groups/i),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/no groups yet/i)).toBeInTheDocument()
   })
 })
 
@@ -710,7 +816,7 @@ describe('RolesTab — access review', () => {
   it('does not render access review search UI when authz:read is missing', async () => {
     authState.can = (p: string) => !p.startsWith('authz:')
     wrap(<RolesTab />)
-    await screen.findByText(/you are a superadmin/i)
+    await screen.findByText(/you administer this installation/i)
     // The gate notice is shown instead of the search tabs
     expect(
       await screen.findByText(/you need authz read access/i),

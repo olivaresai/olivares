@@ -45,7 +45,7 @@ func newCodexCmd() *cobra.Command {
 		Long: "codex renders the configuration files that put an OpenAI Codex install under the\n" +
 			"same governance Policy the rest of the fleet answers to, so the policy is\n" +
 			"authored once and expressed per vendor rather than maintained twice.\n\n" +
-			"It writes artifacts; it does not talk to a control plane.",
+			"It writes artifacts; it does not talk to an engine.",
 		Example: "  olivares codex managed-config --policy policy.json --validate",
 	}
 	cmd.AddCommand(newCodexManagedConfigCmd())

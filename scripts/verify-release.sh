@@ -126,7 +126,7 @@ STRICT=0
 # `v?` — releases before the 2026-09-29 tag-name correction carry the v prefix (v26.9.0);
 # current release tags are bare CalVer (26.10.0). The default's claim is 'this repository's
 # release workflow on a release tag', both shapes of it; pin one release with --source-tag.
-DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$'
+DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$'
 DEFAULT_CERT_OIDC_ISSUER='https://token.actions.githubusercontent.com'
 CERT_IDENTITY_REGEXP="${OLIVARES_CERT_IDENTITY:-$DEFAULT_CERT_IDENTITY}"
 CERT_OIDC_ISSUER="${OLIVARES_CERT_OIDC_ISSUER:-$DEFAULT_CERT_OIDC_ISSUER}"

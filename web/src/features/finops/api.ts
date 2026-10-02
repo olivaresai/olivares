@@ -105,8 +105,8 @@ export async function fetchFocusExport(params: ExportParams): Promise<Blob> {
   const tenant = useTenantStore.getState().activeTenant
   await ensureFreshSession()
   const headers = new Headers({ Accept: 'text/csv' })
-  const token = useSessionStore.getState().token
-  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const token = useSessionStore.getState().csrfToken
+  if (token) headers.set('X-CSRF-Token', token)
   if (tenant) headers.set('X-Olivares-Tenant', tenant)
 
   let res: Response
@@ -453,8 +453,8 @@ export async function fetchStatementExport(id: string): Promise<Blob> {
   const tenant = useTenantStore.getState().activeTenant
   await ensureFreshSession()
   const headers = new Headers({ Accept: 'text/csv' })
-  const token = useSessionStore.getState().token
-  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const token = useSessionStore.getState().csrfToken
+  if (token) headers.set('X-CSRF-Token', token)
   if (tenant) headers.set('X-Olivares-Tenant', tenant)
 
   let res: Response

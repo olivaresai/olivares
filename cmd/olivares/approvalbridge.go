@@ -20,8 +20,11 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/deploy"
+	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/orchestration"
 	"github.com/olivaresai/olivares/modules/security"
 	"github.com/olivaresai/olivares/modules/voice"
@@ -150,14 +153,15 @@ type serviceCred struct {
 	escalateIn int64
 }
 
-// approvalBridge implements the four ApprovalGate seams against over the engine's
-// own in-process handler. It is constructed in buildModules (before the API server
-// exists) and has its handler late-bound by boot() via useHandler once api.New
-// returns — the gate is only ever CALLED at request time, long after boot, so the
-// late binding is safe and a call before binding fails closed.
+// approvalBridge adapts module gates to the one in-process approvals service.
+// Boot binds that service before any request. The old handler transport remains
+// for compatibility tests; a composed engine always calls the service directly.
 type approvalBridge struct {
-	creds map[model.TenantID]serviceCred
-	log   *slog.Logger
+	creds         map[model.TenantID]serviceCred
+	credMu        sync.Mutex
+	localProposer *governance.EngineApprovals
+	localDefault  bool
+	log           *slog.Logger
 	// clock backs the approved-grant freshness window (tests inject a fixed clock).
 	clock func() time.Time
 
@@ -190,9 +194,9 @@ type approvalBridge struct {
 
 // newApprovalBridge builds the bridge from the operator config. A tenant entry with an
 // invalid tenant id or no token is skipped with a warning (a visible misconfiguration,
-// never a silently-open gate). It returns nil when no usable tenant is configured —
-// the honest absence that leaves every module's deny-closed default in place
-// (mirroring newHITLReceiver's nil-when-empty contract).
+// never a silently-open gate). With no operator configuration, boot supplies an
+// in-process local proposer for the same governed queue. Invalid
+// explicit configurations still return nil and fail closed.
 func newApprovalBridge(cfg approvalBridgeConfig, log *slog.Logger) *approvalBridge {
 	creds := map[model.TenantID]serviceCred{}
 	for _, tc := range cfg.Tenants {
@@ -217,11 +221,11 @@ func newApprovalBridge(cfg approvalBridgeConfig, log *slog.Logger) *approvalBrid
 			escalateIn: resolveWindow(tc.EscalateInSeconds, cfg.EscalateInSeconds, defaultApprovalEscalateSeconds),
 		}
 	}
-	if len(creds) == 0 {
-		return nil
+	if len(creds) == 0 && len(cfg.Tenants) != 0 {
+		return nil // An invalid explicit configuration must not acquire fallback authority.
 	}
 	log.Info("approval-bridge: OUTBOUND ApprovalGate wired", "tenants", len(creds))
-	return &approvalBridge{creds: creds, log: log, clock: time.Now, memo: map[string]string{}}
+	return &approvalBridge{creds: creds, log: log, clock: time.Now, memo: map[string]string{}, localDefault: len(cfg.Tenants) == 0}
 }
 
 // resolveWindow picks the tenant override, else the global default, else the built-in
@@ -258,8 +262,19 @@ func (b *approvalBridge) currentHandler() http.Handler {
 }
 
 func (b *approvalBridge) cred(tenant model.TenantID) (serviceCred, bool) {
+	b.credMu.Lock()
+	defer b.credMu.Unlock()
+	if b.localProposer != nil && !tenant.IsZero() && !tenant.IsSystem() {
+		return serviceCred{tenant: tenant, tenantStr: tenant.String(), expiresIn: defaultApprovalExpirySeconds}, true
+	}
 	c, ok := b.creds[tenant]
-	return c, ok
+	if !b.localDefault {
+		return c, ok
+	}
+	if b.localProposer == nil || tenant.IsZero() || tenant.IsSystem() {
+		return serviceCred{}, false
+	}
+	return serviceCred{tenant: tenant, tenantStr: tenant.String(), expiresIn: defaultApprovalExpirySeconds}, true
 }
 
 // warnUnconfigured emits the "no credential for this tenant" warning once per tenant.
@@ -337,12 +352,16 @@ func (b *approvalBridge) request(ctx context.Context, tenant model.TenantID, act
 // flow (securityApprovalAdapter), but binds the plan hash for anti-TOCTOU. An
 // unconfigured tenant denies exactly like the module's own denyGate.
 func (b *approvalBridge) gateOnce(ctx context.Context, tenant model.TenantID, action, subjectKind, subjectRef, planHash, reason, requestedBy string) (ref, status, boundHash string, err error) {
+	return b.gateOnceForSession(ctx, tenant, action, subjectKind, subjectRef, planHash, reason, requestedBy, "")
+}
+
+func (b *approvalBridge) gateOnceForSession(ctx context.Context, tenant model.TenantID, action, subjectKind, subjectRef, planHash, reason, requestedBy, sessionRef string) (ref, status, boundHash string, err error) {
 	cred, ok := b.cred(tenant)
 	if !ok {
 		b.warnUnconfigured(tenant)
 		return noGateRefPrefix + planHash, nbNoGate, planHash, nil
 	}
-	ref, status, boundHash, err = b.ensureApproval(ctx, cred, action, subjectKind, subjectRef, planHash, reason, requestedBy, true)
+	ref, status, boundHash, err = b.ensureApproval(ctx, cred, action, subjectKind, subjectRef, planHash, reason, requestedBy, true, sessionRef)
 	if err != nil || status != nbPending {
 		return ref, status, boundHash, err
 	}
@@ -603,6 +622,10 @@ func decodeBreakGlassRef(ref string) (grantID, boundHash string, isBG bool) {
 // granted" and the caller's normal pending/expired deny stands (break-glass can only ADD
 // an audited authorization, never remove a denial).
 func (b *approvalBridge) consumeBreakGlass(ctx context.Context, cred serviceCred, action, subjectKind, encodedSubjectRef string) (grantID string, granted bool) {
+	if b.localProposer != nil {
+		out, err := b.localProposer.ConsumeEmergency(ctx, cred.tenant, action, subjectKind, encodedSubjectRef)
+		return out.Grant, err == nil && out.Granted
+	}
 	body := map[string]any{"action": action, "subject_kind": subjectKind, "subject_ref": encodedSubjectRef}
 	code, raw := b.do(ctx, cred, http.MethodPost, "/v1/m/governance/breakglass/consume", body)
 	if code != http.StatusOK {
@@ -644,6 +667,10 @@ func (b *approvalBridge) consumeApproval(ctx context.Context, tenant model.Tenan
 	if policyVersion != "" {
 		body["policy_version"] = policyVersion
 	}
+	if b.localProposer != nil {
+		out, err := b.localProposer.Consume(ctx, tenant, ref, consumerID, policyVersion)
+		return out.Granted, out.Replay, err
+	}
 	code, raw := b.do(ctx, cred, http.MethodPost, "/v1/m/governance/approvals/"+url.PathEscape(ref)+"/consume", body)
 	if code == 0 {
 		return false, false, errBridgeUnavailable
@@ -682,7 +709,7 @@ func (b *approvalBridge) breakGlassActive(ctx context.Context, cred serviceCred,
 // gate, an already-approved) approval for this identity, else open a fresh one bound to
 // the exact plan hash. The returned boundHash is the plan hash this approval is bound
 // to (equal to planHash by construction on every reuse/create path).
-func (b *approvalBridge) ensureApproval(ctx context.Context, cred serviceCred, action, subjectKind, subjectRef, planHash, reason, requestedBy string, reuseApproved bool) (ref, status, boundHash string, err error) {
+func (b *approvalBridge) ensureApproval(ctx context.Context, cred serviceCred, action, subjectKind, subjectRef, planHash, reason, requestedBy string, reuseApproved bool, sessionRef ...string) (ref, status, boundHash string, err error) {
 	encoded := encodeSubjectRef(subjectRef, planHash)
 	key := idemKey(cred.tenant, action, subjectKind, encoded)
 	unlock := b.locks.lock(key)
@@ -709,7 +736,7 @@ func (b *approvalBridge) ensureApproval(ctx context.Context, cred serviceCred, a
 
 	// 3. PROPOSE: open a new governed approval, bound to the exact plan hash.
 	newRef, newStatus, cerr := b.createApproval(ctx, cred, action, subjectKind, encoded,
-		composeReason(action, subjectKind, subjectRef, planHash, requestedBy, reason))
+		composeReason(action, subjectKind, subjectRef, planHash, requestedBy, reason), sessionRef...)
 	if cerr != nil {
 		return "", "", "", cerr
 	}
@@ -736,6 +763,16 @@ type approvalView struct {
 // readApproval GETs one approval as the service principal and returns its view. A
 // missing/foreign approval is a lapsed terminal deny (never an authorization).
 func (b *approvalBridge) readApproval(ctx context.Context, cred serviceCred, ref string) (approvalView, error) {
+	if b.localProposer != nil {
+		out, err := b.localProposer.Read(ctx, cred.tenant, ref)
+		if errors.Is(err, store.ErrNotFound) {
+			return approvalView{status: nbExpired}, nil
+		}
+		if err != nil {
+			return approvalView{}, err
+		}
+		return approvalView{status: out.Status, action: out.Action, subjectKind: out.SubjectKind, subjectRef: out.SubjectRef, boundHash: decodePlanHash(out.SubjectRef), decidedAt: out.DecidedAt}, nil
+	}
 	code, raw := b.do(ctx, cred, http.MethodGet, "/v1/m/governance/approvals/"+url.PathEscape(ref), nil)
 	switch {
 	case code == 0:
@@ -798,8 +835,17 @@ func (b *approvalBridge) withinGrant(decidedAt string, windowSecs int64) bool {
 
 // createApproval POSTs a new pending approval as the service principal (write-tier),
 // time-boxed. Self-audits the create to the action→human ledger.
-func (b *approvalBridge) createApproval(ctx context.Context, cred serviceCred, action, subjectKind, encodedSubjectRef, reason string) (ref, status string, err error) {
+func (b *approvalBridge) createApproval(ctx context.Context, cred serviceCred, action, subjectKind, encodedSubjectRef, reason string, sessionRef ...string) (ref, status string, err error) {
+	sessionID := ""
+	if len(sessionRef) > 0 {
+		sessionID = sessionRef[0]
+	}
+	if b.localProposer != nil {
+		out, err := b.localProposer.Request(ctx, cred.tenant, auth.Principal{SessionIdentity: sessionID}, governance.ApprovalRequest{SessionRef: sessionID, Action: action, SubjectKind: subjectKind, SubjectRef: encodedSubjectRef, Reason: reason, ExpiresInSeconds: cred.expiresIn, EscalateInSeconds: cred.escalateIn})
+		return out.ID, out.Status, err
+	}
 	body := map[string]any{
+		"session_ref":  sessionID,
 		"subject_kind": subjectKind,
 		"subject_ref":  encodedSubjectRef,
 		"action":       action,
@@ -854,6 +900,28 @@ func (b *approvalBridge) findReusable(ctx context.Context, cred serviceCred, act
 // status equals what was asked, so a stored-pending request already past its expiry is
 // never reused as if it were live.
 func (b *approvalBridge) scanForApproval(ctx context.Context, cred serviceCred, action, subjectKind, encodedSubjectRef, wantStatus string, freshWindowSecs int64) (ref string, found bool, v approvalView, err error) {
+	if b.localProposer != nil {
+		cursor := ""
+		for {
+			items, page, err := b.localProposer.List(ctx, cred.tenant, action, wantStatus, cursor)
+			if err != nil {
+				return "", false, approvalView{}, err
+			}
+			for _, it := range items {
+				if it.Status != wantStatus || it.SubjectKind != subjectKind || it.SubjectRef != encodedSubjectRef || (freshWindowSecs > 0 && !b.withinGrant(it.DecidedAt, freshWindowSecs)) {
+					continue
+				}
+				return it.ID, true, approvalView{status: it.Status, boundHash: decodePlanHash(it.SubjectRef), decidedAt: it.DecidedAt}, nil
+			}
+			if !page.HasMore || page.Cursor == "" {
+				return "", false, approvalView{}, nil
+			}
+			if page.Cursor == cursor {
+				return "", false, approvalView{}, errors.New("approval cursor did not advance")
+			}
+			cursor = page.Cursor
+		}
+	}
 	cursor := ""
 	for {
 		path := "/v1/m/governance/approvals?status=" + url.QueryEscape(wantStatus) +
@@ -995,7 +1063,7 @@ func idemKey(tenant model.TenantID, action, subjectKind, encodedSubjectRef strin
 // here is an identifier/fingerprint, never a secret.
 func composeReason(action, subjectKind, subjectRef, planHash, requestedBy, extra string) string {
 	var sb strings.Builder
-	sb.WriteString("governed actuation approval opened by the control-plane approval bridge. action=")
+	sb.WriteString("governed actuation approval opened by the engine approval bridge. action=")
 	sb.WriteString(action)
 	sb.WriteString(" subject=")
 	sb.WriteString(subjectKind)
@@ -1237,4 +1305,20 @@ func (k *keyedMutex) lock(key string) func() {
 	k.mu.Unlock()
 	mu.Lock()
 	return mu.Unlock
+}
+
+// observeScoped verifies the original question without spending any authority.
+func (b *approvalBridge) observeScoped(ctx context.Context, tenant model.TenantID, ref, planHash, action, kind, subject string) (string, string, error) {
+	cred, ok := b.cred(tenant)
+	if !ok {
+		return nbNoGate, "", nil
+	}
+	v, err := b.readApproval(ctx, cred, ref)
+	if err != nil {
+		return "", "", err
+	}
+	if v.action != action || v.subjectKind != kind || v.subjectRef != encodeSubjectRef(subject, planHash) {
+		return nbExpired, "", nil
+	}
+	return v.status, v.boundHash, nil
 }

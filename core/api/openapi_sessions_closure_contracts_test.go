@@ -21,6 +21,7 @@ func TestSessionsClosureRequestBodyCensus(t *testing.T) {
 		{http.MethodDelete, "/runs/{ref}", sessionsClosureBodyless, false},
 		{http.MethodPost, "/runs/{ref}/cleanup", sessionsClosureBodyless, false},
 		{http.MethodPost, "/runs/{ref}/resume", sessionsClosureBodyless, false},
+		{http.MethodPut, "/runs/{ref}/peers", sessionsClosureBodyful, true},
 		{http.MethodPost, "/templates", sessionsClosureBodyful, true},
 		{http.MethodDelete, "/templates/{id}", sessionsClosureBodyless, false},
 		{http.MethodPut, "/templates/{id}", sessionsClosureBodyful, true},
@@ -33,6 +34,7 @@ func TestSessionsClosureRequestBodyCensus(t *testing.T) {
 		{http.MethodPost, "/workspaces/{ref}/files/move", sessionsClosureBodyful, true},
 		{http.MethodPost, "/provider-profiles", sessionsClosureBodyful, true},
 		{http.MethodPatch, "/provider-profiles/{ref}", sessionsClosureBodyful, true},
+		{http.MethodPost, "/provider-profiles/resolve", sessionsClosureBodyful, true},
 		{http.MethodPost, "/provider-profiles/{ref}/retire", sessionsClosureBodyless, false},
 		{http.MethodPost, "/provider-source-bindings", sessionsClosureBodyful, true},
 		{http.MethodPost, "/provider-source-bindings/{ref}/revoke", sessionsClosureBodyless, false},
@@ -53,7 +55,7 @@ func TestSessionsClosureRequestBodyCensus(t *testing.T) {
 		}
 		counts[test.kind]++
 	}
-	want := map[sessionsClosureRequestBodyKind]int{sessionsClosureBodyful: 10, sessionsClosureBodyless: 9}
+	want := map[sessionsClosureRequestBodyKind]int{sessionsClosureBodyful: 12, sessionsClosureBodyless: 9}
 	if !reflect.DeepEqual(counts, want) {
 		t.Fatalf("census = %#v, want %#v", counts, want)
 	}
@@ -93,6 +95,28 @@ func TestSessionsClosureSchemasMatchStrictDTOs(t *testing.T) {
 	}
 	if got := capabilitiesSortedStrings(profile["required"]); !reflect.DeepEqual(got, []string{"config_home", "driver", "user_home"}) {
 		t.Fatalf("provider profile required = %v", got)
+	}
+	// The run peers body is exactly one of its two fields, as session_peers.go
+	// accepts: {} and both together are refused by the handler and the schema.
+	peers := sessionsSetRunPeersSchema()
+	branches, _ := peers["oneOf"].([]any)
+	if peers["additionalProperties"] != false || len(branches) != 2 {
+		t.Fatalf("peers schema = %#v, want a closed object with two oneOf branches", peers)
+	}
+	var one []string
+	for _, b := range branches {
+		one = append(one, capabilitiesSortedStrings(b.(map[string]any)["required"])...)
+	}
+	if !reflect.DeepEqual(one, []string{"peers", "peers_rule"}) {
+		t.Fatalf("peers oneOf requires %v, want peers or peers_rule", one)
+	}
+	resolve := sessionsResolveProviderProfileSchema()
+	if got := capabilitiesSortedStrings(resolve["required"]); resolve["additionalProperties"] != false || !reflect.DeepEqual(got, []string{"driver"}) {
+		t.Fatalf("resolve schema = %#v, want a closed object requiring driver", resolve)
+	}
+	preview := moduleRouteParameters(moduleRoute{ns: "sessions", method: http.MethodGet, pattern: "/provider-profiles/resolve"})
+	if len(preview) != 1 || preview[0].(map[string]any)["name"] != "driver" || preview[0].(map[string]any)["required"] != true {
+		t.Fatalf("resolve preview parameters = %#v, want the required driver", preview)
 	}
 	binding := sessionsCreateProviderBindingSchema()
 	if got := capabilitiesSortedStrings(binding["required"]); !reflect.DeepEqual(got, []string{"profile_ref", "source_id", "source_revision"}) {

@@ -44,6 +44,9 @@ const (
 	StatusStopped Status = "stopped"
 	// StatusFailed means it errored or panicked; it is isolated, not retried (S02).
 	StatusFailed Status = "failed"
+	// StatusDormant means registered for its schema only: this node does not run
+	// the module (it is outside the node's module profile).
+	StatusDormant Status = "dormant"
 )
 
 // ComponentStatus is a snapshot of one component's state, surfaced for health
@@ -218,6 +221,9 @@ type moduleReg struct {
 	host   *moduleHost
 	status Status
 	err    error
+	// dormant modules declare their schema and are initialized with a host
+	// that delivers no event; they are never started or stopped.
+	dormant bool
 }
 
 // New creates a runtime. If opts.Bus is nil it builds and owns an in-process bus.
@@ -526,6 +532,25 @@ func (r *Runtime) AddModule(mod sdk.Module, cfg sdk.Config) error {
 		r.inventoryRecorder = recorder
 	}
 	r.modules = append(r.modules, &moduleReg{mod: mod, cfg: cfg, name: d.Name, status: StatusPending})
+	return nil
+}
+
+// AddDormantModule registers a module this node does not run. Its schema is
+// still declared, so its tables, guards and retirement stay as they are. It is
+// initialized, so a direct call from the composition still finds its logger and
+// configuration, but its host delivers no event and it is never started or
+// stopped, so it runs no event-driven or background work.
+func (r *Runtime) AddDormantModule(mod sdk.Module, cfg sdk.Config) error {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.started {
+		return ErrAlreadyStarted
+	}
+	d := mod.Descriptor()
+	if err := r.reserveDescriptorName(d); err != nil {
+		return err
+	}
+	r.modules = append(r.modules, &moduleReg{mod: mod, cfg: cfg, name: d.Name, status: StatusDormant, dormant: true})
 	return nil
 }
 

@@ -35,6 +35,7 @@ type server struct {
 	git    *fakeGit
 	setup  string
 	tenant model.TenantID
+	st     store.Store
 }
 
 func newServer(t *testing.T) *server {
@@ -70,7 +71,21 @@ func newServer(t *testing.T) *server {
 	}
 	m.UseData(api.NewModuleData(st))
 	m.UseAuthority(authr, authz)
-	return &server{t: t, srv: srv, m: m, host: host, git: g, setup: plaintext}
+	return &server{t: t, srv: srv, m: m, host: host, git: g, setup: plaintext, st: st}
+}
+
+// requirePasskeyStepUp turns on the strictest administrative step-up policy
+// (passkey), the behavior before the policy existed. The default (none) is
+// covered in core/api.
+func requirePasskeyStepUp(t *testing.T, st store.Store) {
+	t.Helper()
+	ctx := context.Background()
+	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+		_, err := as.AuthPolicy().Create(ctx, model.AuthPolicy{AdminStepUp: auth.StepUpPasskey})
+		return err
+	}); err != nil {
+		t.Fatalf("require passkey step-up: %v", err)
+	}
 }
 
 func (s *server) do(method, path, token string, body any, tenant model.TenantID) (int, map[string]any, string) {
@@ -112,6 +127,7 @@ func (s *server) member(root string, role string) string {
 
 func TestProductionCompositionThroughTheSealedDoor(t *testing.T) {
 	s := newServer(t)
+	requirePasskeyStepUp(t, s.st)
 	if code, _, raw := s.do("POST", "/v1/setup", "", map[string]any{"token": s.setup, "email": "root@x.io", "password": "supersecret1"}, ""); code != http.StatusCreated {
 		t.Fatalf("setup = %d %s", code, raw)
 	}

@@ -39,12 +39,14 @@ var _ store.CompositionContributions = (*sqlStore)(nil)
 // editions declared their outside stores, every declaration defect of every
 // descriptor (an undeclared column, an unclassified or stale leaf, an opaque
 // leaf nothing maps, a union kind with no typed and classified variant, a None
-// without cited lines), then every counted column that no declared module, or
-// more than one, reads, then every declared reader of a column that is not
-// counted, then every module an edition expects that declared no reader.
+// without cited lines), then every counted or content-erasure column that lacks
+// exactly one declared reader. Content rules must name that same reader. A
+// reader of neither a counted nor content column, or a module that declares no
+// reader, also keeps the composition unready.
 func computeCompositionReadiness(reg *registry) store.Readiness {
 	out := store.Readiness{Computed: true}
 	counted := make(map[string]bool)
+	retirement := make(map[string]bool)
 	var order []string
 	all := reg.descriptors()
 	for _, c := range reg.contributions {
@@ -66,25 +68,45 @@ func computeCompositionReadiness(reg *registry) store.Readiness {
 		for _, col := range d.CountedColumns() {
 			key := string(d.Kind) + "." + col
 			counted[key] = true
+			retirement[key] = true
 			order = append(order, key)
+		}
+		for _, col := range d.ContentColumns() {
+			key := string(d.Kind) + "." + col
+			if !retirement[key] {
+				retirement[key] = true
+				order = append(order, key)
+			}
+		}
+		for _, field := range d.Fields {
+			key := string(d.Kind) + "." + field.Name
+			for _, rule := range field.Principal.ContentErasures() {
+				if readers := reg.readers[key]; len(readers) != 1 || readers[0] != rule.Reader {
+					out.Causes = append(out.Causes, fmt.Sprintf("%s: content erasure reader %q is not its single declared retirement reader %v", key, rule.Reader, readers))
+				}
+			}
 		}
 	}
 	for _, key := range order {
 		if readers := reg.readers[key]; len(readers) != 1 {
+			class := "content"
+			if counted[key] {
+				class = "counted"
+			}
 			out.Causes = append(out.Causes, fmt.Sprintf(
-				"%s: counted column read by %d declared modules %v, want exactly one", key, len(readers), readers))
+				"%s: %s column read by %d declared modules %v, want exactly one", key, class, len(readers), readers))
 		}
 	}
 	declared := make([]string, 0, len(reg.readers))
 	for key := range reg.readers {
-		if !counted[key] {
+		if !retirement[key] {
 			declared = append(declared, key)
 		}
 	}
 	sort.Strings(declared)
 	for _, key := range declared {
 		out.Causes = append(out.Causes, fmt.Sprintf(
-			"%s: declared modules %v read a column that is not counted", key, reg.readers[key]))
+			"%s: declared modules %v read a column that is not counted and has no declared content erasure", key, reg.readers[key]))
 	}
 	byModule := reg.readersByModule()
 	for _, c := range reg.contributions {

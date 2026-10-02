@@ -38,7 +38,6 @@ import { ApiError } from '@/lib/api/errors'
 import type { ListResponse, LoginResponse } from '@/lib/api/types'
 import type {
   AuditEntry,
-  CryptoInventoryItem,
   ExternalKeyRef,
   IdentityDTO,
   IdentityFinding,
@@ -57,7 +56,6 @@ import type {
   ScimServiceProviderConfig,
   ScimUser,
   SsoStatus,
-  TlsPosture,
   WebAuthnChallenge,
   WebAuthnCredentialItem,
   WifGraphData,
@@ -205,9 +203,6 @@ export const identityApi = {
     http.get<ListResponse<WorkspaceResidency> & PostureAvailability>(
       `${IDENTITY}/residency`,
     ),
-  tlsPosture: () => http.get<TlsPosture>(`${IDENTITY}/tls`),
-  cryptoInventory: () =>
-    http.get<ListResponse<CryptoInventoryItem>>(`${IDENTITY}/crypto-inventory`),
 
   // --- DECLARED: privileged-login ceremony --------------------
   /** List the operator's registered WebAuthn credentials. */
@@ -360,8 +355,6 @@ export const identityKeys = {
   wif: (t: string | null) => ['identity', t, 'wif'] as const,
   externalKeys: (t: string | null) => ['identity', t, 'external-keys'] as const,
   residency: (t: string | null) => ['identity', t, 'residency'] as const,
-  tls: (t: string | null) => ['identity', t, 'tls'] as const,
-  crypto: (t: string | null) => ['identity', t, 'crypto'] as const,
   piv: (t: string | null) => ['identity', t, 'piv'] as const,
   webauthnCredentials: (t: string | null) =>
     ['identity', t, 'webauthn', 'credentials'] as const,
@@ -396,8 +389,8 @@ export interface TOTPStatusDTO {
 }
 
 type TOTPActivationResponse =
-  | { recovery_codes: string[]; token?: undefined }
-  | ({ token: string; session_id: string; expires_at: string } & {
+  | { recovery_codes: string[]; csrf_token?: undefined }
+  | ({ csrf_token: string; session_id: string; expires_at: string } & {
       recovery_codes?: string[]
     })
 
@@ -406,12 +399,16 @@ export const totpApi = {
   enrol: (req: { mfa_token?: string }) =>
     http.post<TOTPEnrolmentDTO>('/v1/auth/totp/enrol', req, {
       anonymous: req.mfa_token !== undefined,
+      headers:
+        req.mfa_token !== undefined ? { 'X-Olivares-Session': 'cookie' } : {},
     }),
   /** Confirm with the app's code. Self-service returns the recovery codes; a
    * pending login's activation completes the login (session + codes). */
   activate: (req: { code: string; mfa_token?: string }) =>
     http.post<TOTPActivationResponse>('/v1/auth/totp/activate', req, {
       anonymous: req.mfa_token !== undefined,
+      headers:
+        req.mfa_token !== undefined ? { 'X-Olivares-Session': 'cookie' } : {},
     }),
   /** Complete a factor-gated login with a code or a recovery code. */
   challenge: (req: {
@@ -421,6 +418,7 @@ export const totpApi = {
   }) =>
     http.post<LoginResponse>('/v1/auth/totp/challenge', req, {
       anonymous: true,
+      headers: { 'X-Olivares-Session': 'cookie' },
     }),
   /** The calling account's factor (non-secret). */
   status: () => http.get<TOTPStatusDTO>('/v1/auth/totp/status'),

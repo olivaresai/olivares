@@ -47,6 +47,54 @@ sits in the systemd env file — `olivares setup` writes those files for you.
 > (`REASSIGN OWNED BY olivares_app TO olivares_owner;` in the target database) before
 > pointing `--owner-dsn` at it.
 
+## Jobs that need the tenant inventory
+
+Some background jobs must cover every tenant: the retention sweep, the audit checkpoints,
+continuous audit archival and the long-horizon legal hold. The application role reads one
+tenant at a time (row-level security), so these jobs need a way to list every tenant:
+
+- the **tenant inventory**: a closed, attested database routine owned by a `NOLOGIN` role. It
+  lists tenant ids only and no tenant data. The application role can only execute it.
+- or the administration role (`--admin-dsn`, `NOSUPERUSER BYPASSRLS`), which is needed anyway
+  for DR backups, retirement and eventing egress.
+
+The routine reads tables the engine creates at its first start, so it is installed after that
+start, with a superuser DSN:
+
+- `olivares quickstart --postgres <superuser DSN>` installs it when it provisions a new database.
+- After `olivares db init` (or `olivares setup`) and the first start, install it once, then
+  restart the engine. `db init` reads the database and role names from the data directory it
+  saved; `setup` prints the command with its names:
+
+  ```sh
+  olivares db init --superuser-dsn "postgres://postgres@db:5432/postgres" \
+    --data-dir /var/lib/olivares --install-directory-inventory
+  ```
+
+  For a database provisioned by hand or by the Helm chart, name the database and roles
+  (`--database olivares --app-role olivares_app --owner-role olivares_owner`).
+
+This step only installs the routine. It grants nothing to the application or owner roles, so it
+is safe to run again.
+
+Without the inventory or the administration role, these jobs do not run, and they do not
+report a pass over tenants they did not see. The engine says so:
+
+- `GET /v1/server-info` lists them in `jobs_not_running` with the reason `no_tenant_inventory`;
+- the retention page in the console shows "Retention is not running: this database cannot list
+  every tenant.";
+- `olivares doctor` reports them in its `background-jobs` check;
+- the engine log names each job at start.
+
+Every other background job (scheduled reports, notifications, webhooks, SIEM forwarding,
+orchestration schedules) runs without the inventory.
+
+**Managed PostgreSQL without a superuser:** the install creates a `NOLOGIN BYPASSRLS` role,
+which only a superuser can create. If your provider refuses it, retention, the audit
+checkpoints, archival and the legal hold do not run, and the engine says so as above. If your
+provider lets you create a `NOSUPERUSER BYPASSRLS` login role, provision it and pass it as
+`--admin-dsn` (preferably `--admin-dsn=file:/etc/olivares/secrets/admin.dsn`) to enable them.
+
 ## Upgrades in the owner/app split: the effective-privilege preflight
 
 In the split the OWNER creates the tables and the APP role only holds DML on them, so an

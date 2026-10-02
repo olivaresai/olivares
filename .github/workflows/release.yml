@@ -37,7 +37,7 @@ on:
     # `2*` and `3*` admit it by its two-digit year (20-39) without a bracket class, which the
     # workflow minute census cannot parse, and without matching the chart-v*/terraform-provider-v*
     # tags; scripts/release-preflight.sh enforces the exact grammar
-    # ^[0-9]{2}\.([1-9]|1[0-2])\.(0|[1-9][0-9]*)$ and refuses everything else RED. `v*` is
+    # ^[0-9]{2}\.([1-9]|1[0-2])(\.[1-9][0-9]*)?$ and refuses everything else RED. `v*` is
     # KEPT ON PURPOSE: the internal rehearsal tags (v0.0.0-rehearsal.N) still trigger through
     # it, and a habitual v-prefixed release tag fails loudly in the preflight instead of
     # silently not running at all — a tag that does not trigger anything is the one failure
@@ -78,7 +78,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: "PUBLISH this draft release tag (YY.M.PATCH, bare CalVer — no v prefix). Approving the protected environment makes it public."
+        description: "PUBLISH this draft release tag (YY.M[.N], bare CalVer — no v prefix). Approving the protected environment makes it public."
         required: true
         type: string
       release_commit:
@@ -246,12 +246,27 @@ jobs:
           HOMEBREW_PREPROD_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_PREPROD_TAP_GITHUB_TOKEN }}
         run: bash scripts/release-preflight.sh
 
+  release-environment-policy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: environment admission policy — offline controls
+        run: bash scripts/test-release-environment-tag-policy.sh
+      - name: verify monthly and patch tag admission before protected signing
+        if: github.repository == 'olivaresai/olivares'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/check-release-environment-tag-policy.sh
+
   goreleaser:
     # PRODUCTION TARGET GUARD (design §E.1.1). Every mutation below targets
     # olivaresai/olivares through the preflight's validated outputs. A `v*` tag pushed in
     # ANY other repository — a fork, or the disposable rehearsal target — dies RED in the
     # preflight job above; this literal guard is the second fence on the mutating job.
-    needs: [preflight]
+    needs: [preflight, release-environment-policy]
     # ⛔ EL SEGUNDO DESTINO NO SE ESCRIBE, SE DECLARA POR VARIABLE, y no es estilo: este
     # fichero VIAJA al árbol público (`.github/workflows/` se exporta), así que escribir aquí
     # el nombre del repositorio que declara ese perfil lo publicaría — `lint:export` bloquea ese literal
@@ -753,6 +768,11 @@ jobs:
           # Production retains the existing optional token and `auto` semantics; preprod
           # requires a separately scoped token and forces the real publisher to run.
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ needs.preflight.outputs.release_mode == 'preprod' && secrets.HOMEBREW_PREPROD_TAP_GITHUB_TOKEN || secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+      - name: exact-version native packages and complete signed draft checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: bash scripts/publish-native-release-packages.sh
 
       - name: verify the preprod Homebrew publication by bytes, not API status
         if: needs.preflight.outputs.release_mode == 'preprod'
@@ -1830,6 +1850,7 @@ jobs:
   # stable-manifest draft upload in the goreleaser job; phase 2 only attaches a signature
   # to bytes phase 1 produced, and cannot exist without them.
   publish-ota-manifest:
+    needs: [release-environment-policy]
     # PRODUCTION TARGET GUARD (design §E.1.1). Every mutation below is hard-coded to
     # olivaresai/olivares: the GoReleaser release target, the GHCR image repository,
     # the Homebrew tap and the stable OTA assets. A `v*` tag pushed in ANY other
@@ -2458,10 +2479,10 @@ jobs:
           # message because the reflexive mistake is to paste the old shape, and "wrong
           # shape" alone sends the operator to the grammar instead of to the prefix.
           if [[ "${RELEASE_TAG}" =~ ^v[0-9] ]]; then
-            echo "ERROR: release_tag '${RELEASE_TAG}' carries a v prefix. Release tags are bare CalVer (YY.M.PATCH, e.g. 26.10.0) since the 2026-09-29 tag-name correction." >&2
+            echo "ERROR: release_tag '${RELEASE_TAG}' carries a v prefix. Release tags are bare CalVer (YY.M[.N], e.g. 26.10.0) since the 2026-09-29 tag-name correction." >&2
             exit 1
           fi
-          [[ "${RELEASE_TAG}" =~ ^[0-9]{2}\.([1-9]|1[0-2])\.(0|[1-9][0-9]*)$ ]] || { echo "ERROR: release_tag must be bare CalVer YY.M.PATCH with a real month 1-12 and no leading zeroes (e.g. 26.10.0), got '${RELEASE_TAG}'" >&2; exit 1; }
+          [[ "${RELEASE_TAG}" =~ ^[0-9]{2}\.([1-9]|1[0-2])(\.(0|[1-9][0-9]*))?$ ]] || { echo "ERROR: release_tag must be bare CalVer YY.M[.N] with a real month 1-12 and no leading zeroes (e.g. 26.10.0), got '${RELEASE_TAG}'" >&2; exit 1; }
           version="${RELEASE_TAG#v}"
           mkdir -p ota-dist
           # ALL platform archives, not just linux/amd64: the cross-check below binds

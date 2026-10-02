@@ -9,10 +9,8 @@
     "active": "アクティブ",
     "idle": "アイドル",
     "silentEvasion": "回避の可能性",
-    "total": "セッション",
-    "launched": "起動済み",
-    "discovered": "発見",
-    "attention": "要確認"
+    "sessions_other": "{{n}} 件のセッション",
+    "running": "{{n}} 件実行中"
   },
   "cols": {
     "session": "セッション",
@@ -91,7 +89,6 @@
   },
   "operateTitle": "Claude Code",
   "operateSubtitle": "Claude Code セッションの作成・接続・統制を SSH なしで。Olivares が観測しているだけのセッションも同じ一覧に並び、同じカードが開きます。",
-  "unifiedSubtitle": "このプレーン上のすべてのエージェントセッション（Olivares が発見したものと起動したもの）を一つの一覧に。各セッションが何をしていて、何ができるかを示します。",
   "launch": "新規セッション",
   "allSources": "すべての由来",
   "tabs": {
@@ -140,6 +137,7 @@
       "watch": "ライブのテレメトリとタイムラインを見る",
       "attach": "入出力をリアルタイムで見る",
       "drive": "入力を送る",
+      "interrupt": "実行中のターンを中断",
       "stop": "停止する",
       "resume": "再開する",
       "cleanup": "ワークスペースを片付ける",
@@ -156,6 +154,7 @@
     "actions": {
       "stop": "停止",
       "resume": "再開",
+      "startAgain": "もう一度開始",
       "cleanup": "片付け",
       "delete": "削除",
       "cleanupHint": "実行を終了し、その再開ハンドルを解放します。以後は再開できません。ライフサイクル台帳は保持されます。",
@@ -248,6 +247,8 @@
   },
   "surface": {
     "paneSwitcher": "ペインを選択",
+    "closeContext": "コンテキストを閉じる",
+    "backTo": "{{pane}} に戻る",
     "pane": {
       "rail": "セッション",
       "narrative": "作業",
@@ -258,22 +259,19 @@
     "noneTitle": "セッションを選択してください",
     "noneDescription": "レールでセッションを選ぶと、その作業内容と根拠が並んで表示されます。",
     "openDetail": "すべての操作",
-    "noObjective": "エンジンはこのセッションの目的を報告していません。",
     "notReadTitle": "このセッションを読み取れませんでした",
-    "menu": "{{name}} の操作"
+    "menu": "{{name}} の操作",
+    "terminal": "ターミナルで"
   },
   "evidence": {
     "checks": {
-      "title": "チェック",
-      "empty": "このセッションは所見を報告していません。"
+      "title": "チェック"
     },
     "activity": {
-      "title": "直近のやり取り",
-      "empty": "このセッションはツールや MCP の呼び出しを行っていません。"
+      "title": "直近のやり取り"
     },
     "resources": {
-      "title": "触れたリソース",
-      "empty": "リソースを示すエントリはありません。"
+      "title": "触れたリソース"
     },
     "forbiddenTitle": "根拠の閲覧は許可されていません",
     "forbiddenDescription": "あなたのロールにはセッションのテレメトリを読む権限が含まれていません。",
@@ -331,7 +329,9 @@
     "workRoles": {
       "worker": "ワーカー",
       "orchestrator": "オーケストレーター"
-    }
+    },
+    "details": "詳細",
+    "echoes": "別チャネルの記録"
   },
   "conversation": {
     "log": "会話",
@@ -349,6 +349,31 @@
     "args": "引数",
     "toolResult": "結果",
     "tokens": "入力 {{input}} · 出力 {{output}}",
-    "cwdWarning": "このセッションにはワークスペースがありません。ドライバーは作業ディレクトリを {{cwd}} と報告しました。"
+    "cwdWarning": "このセッションにはワークスペースがありません。ドライバーは作業ディレクトリを {{cwd}} と報告しました。",
+    "protocol": "プロトコルフレーム: {{count}}"
+  },
+  "changes": {
+    "title": "{{folder}} の変更",
+    "titleNoFolder": "変更",
+    "hint": "このセッションの開始以降にエージェントがフォルダー内で変更したファイル。",
+    "empty": "まだ変更されたファイルはありません。",
+    "none": "このセッションにはこのサーバー上のフォルダーがありません。",
+    "loading": "フォルダーを読み込んでいます…",
+    "error": "変更を読み込めませんでした。少し待ってからもう一度お試しください。",
+    "back": "すべての変更",
+    "binary": "バイナリファイル、{{size}}。",
+    "fileTruncated": "最初の 256 KB を表示しています。",
+    "truncated": "最新の {{count}} 件のファイルを表示しています。"
+  },
+  "peers": {
+    "button_other": "他の {{count}} 件のセッションにメッセージ可能",
+    "buttonNone": "他のセッションにはメッセージできません",
+    "template": "このテンプレートのセッションにメッセージ可能",
+    "title": "メッセージできるセッション",
+    "hint": "このセッションがメッセージや作業を渡せるセッションです。エンジンはそれ以外を拒否します。",
+    "sameTemplate": "このテンプレートのセッション",
+    "none": "このワークスペースに他の実行中セッションはありません。",
+    "save": "保存",
+    "saved": "メッセージの許可を保存しました。"
   }
 }

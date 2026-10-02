@@ -10,13 +10,16 @@ import { ApiError } from '@/lib/api/errors'
 import { queryKeys } from '@/lib/api/query'
 import './i18n'
 
-const { api, authState } = vi.hoisted(() => ({
+const { api, authState, restart } = vi.hoisted(() => ({
   api: {
     getLicense: vi.fn(),
     getActivation: vi.fn(),
     installLicense: vi.fn(),
     uninstallLicense: vi.fn(),
+    previewActivation: vi.fn(),
+    applyActivation: vi.fn(),
   },
+  restart: { resolve: (_ok: boolean) => {}, calls: 0 },
   authState: {
     isSuperadmin: true,
     principal: { aal: 3 } as { aal?: number } | null,
@@ -24,6 +27,11 @@ const { api, authState } = vi.hoisted(() => ({
   },
 }))
 
+const edition = vi.hoisted(() => ({ community: false }))
+vi.mock('@/lib/hooks/use-edition', () => ({
+  useCommunityBuild: () => edition.community,
+  useEdition: () => (edition.community ? 'community' : undefined),
+}))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('@/features/identity/assurance', () => ({
   AAL: { PASSWORD: 1, MFA: 2, HARDWARE: 3 },
@@ -32,6 +40,14 @@ vi.mock('@/features/identity/assurance', () => ({
 }))
 vi.mock('@/components/ui/toaster', () => ({
   toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() },
+}))
+vi.mock('./engine-restart', () => ({
+  waitForEngineRestart: () => {
+    restart.calls++
+    return new Promise<boolean>((r) => {
+      restart.resolve = r
+    })
+  },
 }))
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
@@ -128,12 +144,38 @@ describe('LicenseTab', () => {
     expect(help?.textContent).not.toMatch(/a verified license is shown/i)
   })
 
+  it('shows no module matrix on a Community build, where module activation answers 501', async () => {
+    edition.community = true
+    try {
+      api.getLicense.mockResolvedValue({
+        edition: 'community',
+        hot_apply: true,
+        status: 'none',
+        source: 'none',
+        managed_externally: false,
+        max_users: 0,
+        seat_limit: 0,
+        seat_limited: false,
+        active_users: 1,
+      })
+      wrap(<LicenseTab />)
+      expect(await screen.findByText('No license')).toBeInTheDocument()
+      expect(
+        screen.queryByText(/module information is unavailable/i),
+      ).toBeNull()
+      expect(screen.queryByText(/HTTP 501/)).toBeNull()
+      expect(api.getActivation).not.toHaveBeenCalled()
+    } finally {
+      edition.community = false
+    }
+  })
+
   it('renders the live edition, status and active-user usage', async () => {
     api.getLicense.mockResolvedValue(validLicense)
     wrap(<LicenseTab />)
     expect(await screen.findByText('Acme Corp')).toBeInTheDocument()
     expect(screen.getByText('Valid')).toBeInTheDocument()
-    expect(screen.getByText('Enterprise')).toBeInTheDocument()
+    expect(screen.getByText('Business')).toBeInTheDocument()
     // B10: usage, never a quota — the count stands alone, labelled "no limit".
     expect(screen.getByText('Active user accounts')).toBeInTheDocument()
     expect(screen.getByText('12')).toBeInTheDocument()
@@ -382,6 +424,82 @@ describe('LicenseTab', () => {
 
     await waitFor(() =>
       expect(qc.getQueryState(queryKeys.serverInfo)?.isInvalidated).toBe(true),
+    )
+  })
+
+  it('installing a license re-reads the modules, so their coverage is current (EU-06)', async () => {
+    api.getLicense.mockResolvedValue({ ...validLicense, status: 'none' })
+    api.installLicense.mockResolvedValue({ ...validLicense, status: 'valid' })
+    const user = userEvent.setup()
+    wrap(<LicenseTab />)
+    await user.click(await screen.findByRole('button', { name: /install/i }))
+    const dialog = await screen.findByRole('dialog')
+    await user.type(
+      await screen.findByPlaceholderText(/license-blob/i),
+      'some-blob',
+    )
+    const readsBefore = api.getActivation.mock.calls.length
+    await user.click(within(dialog).getByRole('button', { name: /^install/i }))
+    await waitFor(() =>
+      expect(api.getActivation.mock.calls.length).toBeGreaterThan(readsBefore),
+    )
+  })
+})
+
+describe('Business activation — an apply that restarts the engine', () => {
+  const staged = {
+    edition: 'enterprise',
+    restart_required: false,
+    presets: [{ name: 'regulated-operations', addons: ['incident-loop'] }],
+    addons: [
+      {
+        key: 'incident-loop',
+        title: 'Incident loop',
+        summary: 'Open and resolve incidents.',
+        env: '',
+        preset: 'regulated-operations',
+        state: 'pending',
+        reason:
+          'needs a secret — fill routing_key / api_key in the staged template, then promote.',
+        needs_secret: true,
+      },
+    ],
+  }
+
+  it('shows one quiet line while the engine restarts, then reloads the catalog by itself', async () => {
+    restart.calls = 0
+    api.getLicense.mockResolvedValue(validLicense)
+    api.getActivation.mockResolvedValue(staged)
+    api.applyActivation.mockResolvedValue({ ...staged, restarting: true })
+    const user = userEvent.setup()
+    wrap(<LicenseTab />)
+
+    // The staged module says what it waits for, not "pending restart".
+    const row = (await screen.findByText('Incident loop')).closest(
+      'tr',
+    ) as HTMLElement
+    expect(within(row).getByText('needs a secret')).toBeInTheDocument()
+    expect(within(row).queryByText('pending restart')).toBeNull()
+
+    await user.click(within(row).getByRole('button', { name: /^activate$/i }))
+    const dialog = await screen.findByRole('dialog')
+    await user.click(
+      within(dialog).getByRole('button', { name: /^activate$/i }),
+    )
+
+    expect(
+      await screen.findByText('Restarting the engine…'),
+    ).toBeInTheDocument()
+    expect(restart.calls).toBe(1)
+    const readsBefore = api.getActivation.mock.calls.length
+
+    // The engine is back: the catalog reloads without the operator doing anything.
+    await act(async () => restart.resolve(true))
+    await waitFor(() =>
+      expect(api.getActivation.mock.calls.length).toBeGreaterThan(readsBefore),
+    )
+    await waitFor(() =>
+      expect(screen.queryByText('Restarting the engine…')).toBeNull(),
     )
   })
 })

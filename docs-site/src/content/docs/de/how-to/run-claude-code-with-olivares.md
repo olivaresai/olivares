@@ -28,15 +28,15 @@ Topologien und ihre ehrlichen Einschränkungen stehen weiter unten.
 
 ## Zwei Prinzipien, bevor Sie beginnen
 
-1. **Opt-in.** Das Basis-Image von Olivares ist distroless und **enthält kein `claude`**.
-   Die Operate-Claude-Code-Schicht ist ein *separates* Artefakt — ein kombiniertes Image
-   (`Dockerfile.agentops`) oder ein nativer Install-Zusatz. Wenn Sie kein governtes Claude
-   Code betreiben, ziehen Sie es nie, und seine zusätzliche Oberfläche berührt nie Ihre
-   Control Plane.
+1. **Opt-in.** Das Olivares-Image **enthält kein `claude`**. In Docker installiert Olivares
+   die Agent-Tools in sein Daten-Volume und meldet sie über das Produkt an, wenn Sie sie
+   anfordern; nativ erledigt das der Install-Zusatz unten. Wenn Sie kein governtes Claude
+   Code betreiben, wird nichts installiert.
 2. **Offizielle Quelle, niemals weiterverteilt.** Anthropics Bedingungen erlauben die
    Weiterverteilung des `claude`-Binaries nicht, daher **installieren wir es aus Anthropics
-   offizieller, GPG-signierter Quelle** beim Build/ersten Start (die signierten
-   apt/dnf/apk-Repositories), gepinnt und mit deaktiviertem Auto-Updater. Wir liefern kein
+   offizieller, GPG-signierter Quelle** bei der Installation (nativ die signierten
+   apt/dnf/apk-Repositories; im Image Anthropics signiertes Release, gegen denselben
+   Schlüssel geprüft), gepinnt und mit deaktiviertem Auto-Updater. Wir liefern kein
    Drittanbieter-Binary aus. Sie können auch Ihr **eigenes** `claude` mitbringen und die
    Engine darauf zeigen lassen.
 
@@ -44,15 +44,15 @@ Topologien und ihre ehrlichen Einschränkungen stehen weiter unten.
 
 | # | Olivares | Claude Code | Wie die Engine es dirigiert | Status |
 |---|----------|-------------|----------------------------|--------|
-| 1 | Docker | Docker | **Derselbe Container** (kombiniertes Image), procRunner-Kind | **Empfohlen** (gleicher governter Pfad wie 2) |
+| 1 | Docker | Docker | **Derselbe Container** (das Standard-Image), procRunner-Kind | **Empfohlen** (gleicher governter Pfad wie 2) |
 | 2 | Nativ | Nativ | Derselbe Host (systemd), procRunner-Kind | **Empfohlen**, end-to-end smoke-getestet |
 | 3 | Docker | Nativ (Host) | Cross-Namespace — so nicht governbar | Stattdessen co-lokalisieren (siehe unten) |
 | 4 | Nativ | Docker (pro Session) | Container pro Session über die Docker-API | Follow-up (dokumentiert) |
 
 Die beiden **co-lokalisierten** Topologien (1, 2) sind der sichere Standard. Topologie 2
 (nativ) ist end-to-end durch [`scripts/smoke-agentops.sh`](https://github.com/olivaresai/olivares/blob/main/scripts/smoke-agentops.sh)
-getestet; Topologie 1 nutzt **denselben** governten procRunner-Pfad (der Build/Lauf des
-kombinierten Images ist noch nicht in einen automatisierten Test verdrahtet). Die
+getestet; Topologie 1 nutzt **denselben** governten procRunner-Pfad, und die CI führt die
+Prüfung der Agent-Laufzeit des Images aus (`scripts/qualify-container-agent-runtime.sh`). Die
 Topologien 3 und 4 wollen den Governor und das Governte in *verschiedenen* Containern;
 stdio über diese Grenze zu brücken erfordert Docker-API-Zugriff (ein Privileg, das die
 Engine bewusst standardmäßig **nicht** nimmt). Ihre ehrlichen Pfade sind in
@@ -62,56 +62,37 @@ Engine bewusst standardmäßig **nicht** nimmt). Ihre ehrlichen Pfade sind in
 
 ## Topologie 1 — beide in Docker (empfohlen)
 
-Ein gehärteter Container betreibt die Engine **und** `claude`; ein Workspace-Volume ist das
-gemeinsame Arbeitsverzeichnis. Nur-Loopback, non-root, schreibgeschütztes Root-Dateisystem
-— identische Haltung wie das Basis-Compose, zuzüglich der dirigierten Laufzeit.
-
-### Das kombinierte Image bauen
-
-`claude` wird zur Build-Zeit aus Anthropics **signiertem apt-Repository** installiert, mit
-gepinntem Signing-Key-Fingerprint (`31DD DE24 DDFA B679 F42D 7BD2 BAA9 29FF 1A7E CACE`) und
-deaktiviertem Auto-Update. Pinnen Sie die Engine-Basis per Digest und verifizieren Sie sie
-zuerst:
-
-```sh
-# verify the engine image you build FROM (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.10.0 \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com
-
-docker build -f Dockerfile.agentops \
-  --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
-  --build-arg CLAUDE_CHANNEL=stable \
-  -t olivares-agentops:26.10.0 .
-```
-
-Bringen Sie stattdessen Ihr eigenes `claude` mit `--build-arg CLAUDE_INSTALL=byo` mit (das
-Image wird ohne `claude` ausgeliefert; mounten Sie Ihres zur Laufzeit und setzen Sie
-`OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`).
+Der Standard-Engine-Container betreibt auch `claude`: Olivares installiert die Agent-Tools in
+sein Daten-Volume und meldet sie über das Produkt an. Non-root,
+schreibgeschütztes Root-Dateisystem — die Haltung des Basis-Compose, ohne zweites Image und
+ohne Override-Datei.
 
 ### Hochfahren
 
+Pinnen Sie die Engine per Digest und verifizieren Sie sie zuerst:
+
 ```sh
-export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.10.0
-docker compose -f deploy/compose/docker-compose.yml \
-               -f deploy/compose/docker-compose.agentops.yml up -d
+# verify the engine image you run (it is cosign-signed)
+cosign verify docker.io/olivaresai/olivares:26.10.1 \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+export OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
+export OLIVARES_BIND=127.0.0.1
+docker compose -f deploy/compose/docker-compose.yml up -d
 ```
 
-Das Override ändert nur, was Operate braucht: das kombinierte Image, vier beschreibbare
-Volumes (Engine-Daten, **Workspace**, claudes `~/.claude`-Home, das kurzlebige
-Inferenz-Token) und die Session-Runtime-Env. Alles andere — `127.0.0.1`-gebundene Ports,
-uid 65532, `read_only`-Root, `cap_drop: ALL`, `no-new-privileges` — wird von der Basis
-geerbt.
+### Claude Code installieren und anmelden
 
-:::caution[Die erste governte Session braucht eine Inferenz-Credential]
-Die Credential-Quelle ist **deny-closed**: Ein `stream-json`-Start liest ein *kurzlebiges*
-Bearer-Token aus `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` (`/run/olivares/session-token`, auf
-dem `olivares-runtime`-Volume) und verwirft es — nur eine nicht-sensible `credential_id`
-wird jemals gespeichert. Richten Sie Ihren WIF/SPIFFE/OIDC-Refresher auf dieses Volume.
-Solange kein Token vorhanden ist, schlagen `stream-json`-Starts **closed** fehl — die
-Engine läuft weiterhin und ist ansonsten governbar; das Verdrahten der Auth ist Ihr
-bewusster Schritt. (Der Live-In-Process-Token-Austausch wird separat verdrahtet.)
-:::
+Über **KI-Werkzeuge** in der Konsole oder mit der CLI:
+
+```sh
+olivares tool install claude
+olivares tool login claude
+```
+
+Das Tool liegt im Daten-Volume, und die Anmeldung gehört Ihrer Organisation; Sessions nutzen
+nie eine Anmeldung aus dem Home des Server-Kontos.
 
 ---
 
@@ -149,7 +130,7 @@ Dann, bewusst:
 
 ```sh
 sudo nano /etc/olivares/agentops.env     # wire the short-lived inference token (refresher)
-sudo systemctl enable --now olivares     # loopback-only by default
+sudo systemctl enable --now olivares     # listens on every interface by default
 ```
 
 :::note[Warum es keinen separaten `claude`-Service gibt]
@@ -198,7 +179,7 @@ noch nicht verdrahtet** (der Container-Runner pro Session ist das dokumentierte 
 [Topologie 4](#topologie-4--olivares-nativ-claude-in-einem-container-pro-session)). Der native
 Runner **verweigert** einen Container-/Sandbox-Start (ein klarer Fehler), statt stillschweigend
 `claude` ohne die von Ihnen angeforderte Isolation auszuführen. Verwenden Sie `native` — unter
-dem kombinierten Image / dem systemd-Co-Deployment ist das die eigene gehärtete
+dem Standard-Image / dem systemd-Co-Deployment ist das die eigene gehärtete
 Container-/Host-Grenze der Engine.
 :::
 
@@ -224,7 +205,7 @@ eines Prozesses in den Namespaces des Hosts nicht besitzen, und der governte Tra
 stdio. Ein Host-`claude` zu erreichen würde erfordern, den Host-PID-Namespace und Mounts in
 den Engine-Container zu teilen — eine große, bewusste De-Isolation, die den Sinn des
 Einschließens der Engine zunichtemacht. **Stattdessen co-lokalisieren**: Betreiben Sie
-beide im kombinierten Image (das *ist* Topologie 1) oder beide nativ (Topologie 2). Dies ist
+beide im Standard-Image (das *ist* Topologie 1) oder beide nativ (Topologie 2). Dies ist
 eine reale Grenze, benannt statt überdeckt.
 
 ### Topologie 4 — Olivares nativ, Claude in einem Container pro Session
@@ -241,7 +222,7 @@ Hinweis oben).
 **Es ist ein dokumentiertes Follow-up, nicht in diesem Release ausgeliefert.**
 Geschwister-Container zu steuern bedeutet, der Engine Docker-API-Zugriff zu geben
 (idealerweise über einen Least-Privilege-Socket-Proxy) — eine Vertrauensoberfläche, die
-dieses Release bewusst zugunsten des socket-freien kombinierten Images vermeidet. Diese
+dieses Release bewusst zugunsten des socket-freien Standard-Images vermeidet. Diese
 Topologie zu wählen heißt, stärkere Governor/Governte-Isolation zu wählen — *zum Preis* des
 Docker-API-Grants; sie wird hinter der bestehenden `isolation=container`-Naht eintreffen.
 Bis dahin ist der sichere Standard die Co-Lokation.
@@ -250,11 +231,11 @@ Bis dahin ist der sichere Standard die Co-Lokation.
 
 ## Sicherheitshaltung (alle Topologien)
 
-- **Loopback standardmäßig.** Host-Ports veröffentlichen nur auf `127.0.0.1`. In einem
-  Container lauscht die Engine *innerhalb* des Containers auf `0.0.0.0`, daher ist das
-  **Host-Port-Mapping die Expositionsgrenze** — veröffentlichen Sie es nie auf einer
-  Nicht-Loopback-Host-Adresse ohne Ihren eigenen TLS-terminierenden Auth-Proxy. Der
-  native/systemd-Standard-Bind ist Loopback. Exponieren Sie bewusst.
+- **Veröffentlichte Ports.** Docker Compose veröffentlicht HTTPS und gRPC standardmäßig
+  auf allen Host-Schnittstellen (`0.0.0.0`). Mit `OLIVARES_BIND=127.0.0.1`, wie im Befehl
+  oben, beschränken Sie sie auf diesen Host. Die Engine lauscht im Container auf
+  `0.0.0.0`; die Host-Port-Zuordnung steuert den Zugriff. Auch native/systemd-Listener
+  binden standardmäßig alle Schnittstellen; konfigurieren Sie ihre Listen-Adressen.
 - **Non-root, Least Privilege.** uid/gid 65532, schreibgeschütztes Root-Dateisystem,
   `cap_drop: ALL`, `no-new-privileges` (Docker) / der volle `Protect*`/`Restrict*`-Satz
   abzüglich der einen dokumentierten W^X-Lockerung (systemd).

@@ -37,7 +37,9 @@ import { RunStreamPanel } from './run-stream'
 import type { Output } from './types'
 import './i18n'
 
-const auth = vi.hoisted(() => ({ perms: new Set<string>(['sandbox:run:read']) }))
+const auth = vi.hoisted(() => ({
+  perms: new Set<string>(['sandbox:run:read']),
+}))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     activeTenant: 't1',
@@ -133,14 +135,15 @@ const cleanBody = (...outs: Output[]) =>
 const droppedBody = (...outs: Output[]) =>
   streamFrom(': connected\n\n', ...outs.map((o) => sse('output', o)))
 
-const ok = (body: ReadableStream<Uint8Array>) => ({ ok: true, body }) as Response
+const ok = (body: ReadableStream<Uint8Array>) =>
+  ({ ok: true, body }) as Response
 
 const run002 = runsFixture[1]
 
 beforeEach(() => {
   vi.clearAllMocks()
   useSessionStore.setState({
-    token: 'olvs_test',
+    csrfToken: 'olvs_test',
     sessionId: 's1',
     expiresAt: '2099-01-01T00:00:00Z',
   })
@@ -156,7 +159,11 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
-  useSessionStore.setState({ token: null, sessionId: null, expiresAt: null })
+  useSessionStore.setState({
+    csrfToken: null,
+    sessionId: null,
+    expiresAt: null,
+  })
 })
 
 describe('useRunStream — the replay, and what "ended" is allowed to mean', () => {
@@ -195,15 +202,17 @@ describe('useRunStream — the replay, and what "ended" is allowed to mean', () 
     // "Connection lost" together — with the lost-hint claiming the connection died
     // before a `done` the client had already seen. Nothing is missing here, so nothing
     // may say the view was lost.
-    const fetchMock = vi.fn().mockResolvedValue(
-      ok(
-        streamThenError(
-          sse('output', out(1)),
-          sse('summary', summaryFrame),
-          sse('done', {}),
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        ok(
+          streamThenError(
+            sse('output', out(1)),
+            sse('summary', summaryFrame),
+            sse('done', {}),
+          ),
         ),
-      ),
-    )
+      )
     vi.stubGlobal('fetch', fetchMock)
 
     const { result } = renderHook(() => useRunStream({ runId: 'run-002' }))
@@ -280,14 +289,16 @@ describe('useRunStream — the replay, and what "ended" is allowed to mean', () 
     // Legal: the engine only fills a BLANK key (scenarios.go:259-263). Deduping on
     // step_key would silently drop the second, which is the loss this hook exists to
     // avoid; this is the control that the dedupe is not over-eager.
-    const fetchMock = vi.fn().mockResolvedValue(
-      ok(
-        cleanBody(
-          out(1, { step_key: 'same', output: 'first' }),
-          out(2, { step_key: 'same', output: 'second' }),
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        ok(
+          cleanBody(
+            out(1, { step_key: 'same', output: 'first' }),
+            out(2, { step_key: 'same', output: 'second' }),
+          ),
         ),
-      ),
-    )
+      )
     vi.stubGlobal('fetch', fetchMock)
 
     const { result } = renderHook(() => useRunStream({ runId: 'run-002' }))
@@ -300,7 +311,11 @@ describe('useRunStream — the replay, and what "ended" is allowed to mean', () 
   })
 
   it('stays closed without a token — no anonymous stream open (the open is audited)', async () => {
-    useSessionStore.setState({ token: null, sessionId: null, expiresAt: null })
+    useSessionStore.setState({
+      csrfToken: null,
+      sessionId: null,
+      expiresAt: null,
+    })
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
 
@@ -377,12 +392,12 @@ describe('RunStreamPanel — the copy an operator reads', () => {
 
     renderIntel(<RunStreamPanel run={run002} />)
 
-    expect(
-      await screen.findByText(/not the whole record/i),
-    ).toBeInTheDocument()
+    expect(await screen.findByText(/not the whole record/i)).toBeInTheDocument()
     expect(screen.getByRole('alert')).toHaveTextContent(/could not read: 1/i)
     // "No outputs recorded" is a claim about the RUN and would be false here.
-    expect(screen.getByText(/No step output could be read/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/No step output could be read/i),
+    ).toBeInTheDocument()
     expect(screen.queryByText('No outputs recorded')).not.toBeInTheDocument()
     // NON-FIRING DIRECTION: the clean label must not appear alongside the partial one.
     expect(screen.queryByText('Replay complete')).not.toBeInTheDocument()
@@ -397,7 +412,9 @@ describe('RunStreamPanel — the copy an operator reads', () => {
       await screen.findByText(/Refund request classified/i),
     ).toBeInTheDocument()
     // The evidence is there, and it is NOT presented as the live view.
-    expect(screen.getByText(/a snapshot, not the live view/i)).toBeInTheDocument()
+    expect(
+      screen.getByText(/a snapshot, not the live view/i),
+    ).toBeInTheDocument()
     expect(api.outputs).toHaveBeenCalledWith('run-002')
     expect(screen.getByRole('alert')).toHaveTextContent(/Connection lost/i)
   })

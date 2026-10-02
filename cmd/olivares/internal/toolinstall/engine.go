@@ -44,15 +44,20 @@ type Engine struct {
 	// beforePlace runs after the receipt is written and before the staging
 	// directory is renamed into place. Tests use it to interrupt an install.
 	beforePlace func() error
+	// verified, when set, keeps the releases List found installed until what
+	// they are made of changes (verified_cache.go).
+	verified *VerifiedCache
 }
 
 type EngineOptions struct {
 	InstallerVersion string
 	Now              func() time.Time
+	// Verified is the process's cache of verified releases; nil checks every read.
+	Verified *VerifiedCache
 }
 
 func NewEngine(c *Catalog, o EngineOptions) *Engine {
-	e := &Engine{catalog: c, installerVersion: o.InstallerVersion, now: o.Now}
+	e := &Engine{catalog: c, installerVersion: o.InstallerVersion, now: o.Now, verified: o.Verified}
 	if e.now == nil {
 		e.now = func() time.Time { return time.Now().UTC() }
 	}
@@ -225,6 +230,7 @@ func (e *Engine) observe(plan *Plan) {
 // carry the same digest, otherwise the install is refused as plan_changed. The
 // returned plan is the one actually executed.
 func (e *Engine) Install(ctx context.Context, req Request, approved *Plan, progress io.Writer) (*Receipt, *Plan, error) {
+	defer e.verified.Forget(req.Driver)
 	if progress == nil {
 		progress = io.Discard
 	}
@@ -626,6 +632,7 @@ func fileSHA256(path string) (string, error) {
 }
 
 func hashReader(r io.Reader) (string, int64, error) {
+	fileHashes.Add(1)
 	h := sha256.New()
 	n, err := io.Copy(h, r)
 	if err != nil {

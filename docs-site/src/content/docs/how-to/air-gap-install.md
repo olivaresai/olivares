@@ -30,17 +30,17 @@ and emits a single tarball with a `VERIFY.md`:
 
 ```bash
 scripts/airgap-bundle.sh \
-  --version 26.10.0 \
-  --image ghcr.io/olivaresai/olivares:26.10.0-amd64 \
+  --version 26.10.1 \
+  --image ghcr.io/olivaresai/olivares:26.10.1-amd64 \
   --chart deploy/helm/olivares \
   --cosign-key cosign.key \
   [--collector-image <ref>] [--out dist/airgap] [--gpg-key <id>]
 ```
 
-The per-architecture tag (`26.10.0-amd64`) is published on `ghcr.io/olivaresai/olivares`, where
+The per-architecture tag (`26.10.1-amd64`) is published on `ghcr.io/olivaresai/olivares`, where
 the release builds and signs. Docker Hub (`docker.io/olivaresai/olivares`, the official pull)
-carries the multi-arch and hardened tags, identical by digest, but not `26.10.0-amd64`
-(`docs/releases/26.10.0-install-surfaces.json`). ghcr.io does not rate-limit anonymous pulls of
+carries the multi-arch and hardened tags, identical by digest, but not `26.10.1-amd64`
+(`docs/releases/26.10.1-install-surfaces.json`). ghcr.io does not rate-limit anonymous pulls of
 public images, which also helps when the build host is unauthenticated.
 
 :::caution[The SBOM/VEX/provenance are supplied, not generated]
@@ -99,7 +99,7 @@ and `cosign load` — **not** `oras`):
 
 ```bash
 scripts/airgap-mirror.sh \
-  --bundle olivares-airgap-26.10.0.tar.gz \
+  --bundle olivares-airgap-26.10.1.tar.gz \
   --registry registry.internal:5000 [--insecure]
 ```
 

@@ -85,7 +85,10 @@ beforeEach(() => {
   auth.principal = 'u1'
   auth.tenant = 't1'
   auth.canNhi = true
-  useSessionStore.setState({ token: 'fixture-human', credentialGeneration: 1 })
+  useSessionStore.setState({
+    csrfToken: 'fixture-human',
+    credentialGeneration: 1,
+  })
   api.listWorkspaces.mockResolvedValue({ items: [], has_more: false })
   api.listProfiles.mockResolvedValue({ items: [profile], has_more: false })
   api.profileLaunchReadiness.mockResolvedValue(

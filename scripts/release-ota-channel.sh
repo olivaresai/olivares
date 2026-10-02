@@ -80,14 +80,14 @@ case "$version" in
 esac
 case "$_v_rest" in
 *.*.*.*) _v_ok=0 ;;                  # four fields or more
-*.*.*) ;;
+*.*.* | *.*) ;;
 *) _v_ok=0 ;;                        # fewer than three
 esac
 if [ "$_v_ok" -eq 1 ]; then
 	_v_major="${_v_rest%%.*}"
 	_v_tail="${_v_rest#*.}"
 	_v_minor="${_v_tail%%.*}"
-	_v_patch="${_v_tail#*.}"
+	case "$_v_tail" in *.*) _v_patch="${_v_tail#*.}" ;; *) _v_patch=0 ;; esac
 	for _v_part in "$_v_major" "$_v_minor" "$_v_patch"; do
 		case "$_v_part" in
 		'' | *[!0-9]*) _v_ok=0 ;;    # empty, or carries a non-digit

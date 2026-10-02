@@ -29,6 +29,9 @@ package api
 //     authz:read.
 //   - searchConsole — authorized per result kind inside the handler
 //     (search.go), not at the route.
+//   - getBrowserSession / migrateBrowserSession — the signed-in user's own
+//     cookie session, from the same origin (browser_session.go); pure session
+//     plumbing like refreshToken.
 //
 // The four token operations ARE annotated with the tenant-path permission
 // (handlers_core.go: superadmin passes outright, everyone else needs
@@ -37,8 +40,11 @@ package api
 // for.
 var corePermissions = map[string]string{
 	"getMCPGateway": "tenant:admin", "addMCPGatewayServer": "tenant:admin", "updateMCPGatewayServer": "tenant:admin", "removeMCPGatewayServer": "tenant:admin", "testMCPGatewayServer": "tenant:admin", "setMCPGatewaySessionTools": "tenant:admin",
-	"getTOTPPolicy":     "system:admin",
-	"setTOTPPolicy":     "system:admin",
+	"getTOTPPolicy": "system:admin",
+	"setTOTPPolicy": "system:admin",
+	// Administrative step-up policy (handlers_stepup_policy.go: authzSystem system:admin).
+	"getStepUpPolicy":   "system:admin",
+	"setStepUpPolicy":   "system:admin",
 	"getUserTOTPStatus": "membership:read",
 	"resetUserTOTP":     "membership:write",
 	// Agents + access graph (handlers_core.go).
@@ -51,6 +57,7 @@ var corePermissions = map[string]string{
 
 	// Audit ledger (handlers_audit.go).
 	"listAuditEvents":       "audit:read",
+	"listRecentAuditEvents": "audit:read",
 	"verifyAuditChain":      "audit:read",
 	"exportAuditLedger":     "audit:read",
 	"getAuditPubkey":        "audit:read",
@@ -129,6 +136,9 @@ var corePermissionExempt = map[string]bool{
 	"whoami":           true,
 	"searchConsole":    true,
 	"authCapabilities": true,
+	// The signed-in user's own browser session (browser_session.go).
+	"getBrowserSession":     true,
+	"migrateBrowserSession": true,
 }
 
 // stampCorePermissions walks the built paths object and stamps

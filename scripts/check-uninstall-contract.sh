@@ -94,6 +94,8 @@ apk_preupgrade = read("packaging/nfpm/apk-preupgrade.sh")
 openrc_unit = read("packaging/openrc/olivares.sh")
 openrc_env = read("packaging/openrc/load-env.sh")
 goreleaser = read(".goreleaser.yaml")
+import json
+nfpm = json.loads(read("packaging/nfpm/packages.json"))["nfpms"]
 pkg_init_apk = read("packaging/nfpm/package-init-openrc.txt").strip()
 pkg_init_sysd = read("packaging/nfpm/package-init-systemd.txt").strip()
 dr_command = read("cmd/olivares/cmd_dr.go")
@@ -260,17 +262,9 @@ assert "ip link set lo up" in openrc_unit
 assert "/var/log/olivares.log" in postinstall
 assert ". \"$olivares_config\"" not in openrc_unit
 assert "source " not in openrc_env
-assert "packager: apk" in goreleaser
-assert "packaging/openrc/olivares.sh" in goreleaser
-assert "dst: /etc/init.d/olivares" in goreleaser
-assert "preupgrade: packaging/nfpm/apk-preupgrade.sh" in goreleaser
-assert "postupgrade: packaging/nfpm/postinstall.sh" in goreleaser
-# The systemd unit must not be an unscoped contents entry (that shipped it in APK).
-systemd_src = "src: packaging/systemd/olivares.service"
-assert goreleaser.count(systemd_src) == 3
-assert "packager: deb" in goreleaser and "packager: rpm" in goreleaser
-import yaml
-nfpm = yaml.safe_load(goreleaser)["nfpms"]
+assert all(entry["version_schema"] == "none" for entry in nfpm)
+assert "nfpms:" not in goreleaser, "the builtin packager would normalize monthly versions"
+assert sum(c.get("src") == "packaging/systemd/olivares.service" for entry in nfpm for c in entry["contents"]) == 3
 # Two entries: deb/rpm/apk from both base builds, and the Arch Linux package from the
 # linux/amd64 build only.
 assert len(nfpm) == 2

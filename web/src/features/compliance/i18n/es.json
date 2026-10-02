@@ -179,6 +179,8 @@
     "noAccessHint": "Los calendarios de retención deciden cuánto se conserva cada clase de registro. Pide a un administrador el permiso de lectura de retención.",
     "sweepNow": "Ejecutar barrido",
     "gateHint": "Un calendario es un documento hasta que una persona aprueba su purgado. Guardarlo no borra nada; un barrido sí.",
+    "notRunning": "La retención no se está ejecutando: esta base de datos no puede listar todos los tenants.",
+    "notRunningHow": "Cómo activarla",
     "noClasses": "El motor no ha devuelto ninguna clase de datos",
     "noClassesHint": "El registro de clases está fijado en el motor, así que una lista vacía no significa un tenant vacío: significa que esta respuesta no ha podido leerse como el registro. Recarga y repórtalo si persiste.",
     "disposition": {

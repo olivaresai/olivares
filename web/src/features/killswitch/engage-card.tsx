@@ -9,7 +9,7 @@
 // confirm step. A 409 means the scope is already stopped — the existing stop is
 // surfaced (state refetch + the engine's message naming it), never swallowed.
 import { OctagonAlert } from 'lucide-react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -35,9 +35,14 @@ import { toast } from '@/components/ui/toaster'
 import { ApiError } from '@/lib/api/errors'
 import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
 import { useAuth } from '@/lib/auth/context'
+import { usePendingCommandAction } from '@/features/navigation/command-actions'
+import { consoleApi, consoleKeys } from '@/features/console/api'
 import { killswitchApi, killswitchKeys } from './api'
 import './i18n'
 import type { EngageKillSwitchRequest, KillSwitchScopeKind } from './types'
+
+/** The mandatory reason field, which the ⌘K verb focuses. */
+const REASON_ID = 'ks-reason'
 
 export function EmergencyStopCard() {
   const { t } = useTranslation(['killswitch', 'common', 'errors'])
@@ -49,6 +54,27 @@ export function EmergencyStopCard() {
   const [agentRef, setAgentRef] = useState('')
   const [reason, setReason] = useState('')
   const [confirmOpen, setConfirmOpen] = useState(false)
+  // HU 047 (09b, one-admin install): starting the estate again needs two OTHER admin
+  // accounts to approve and one to review. With fewer than three active admin accounts
+  // the confirmation says so before the stop; a roster that cannot be read says it too.
+  const roster = useQuery({
+    queryKey: consoleKeys.members(activeTenant),
+    queryFn: () => consoleApi.listMembers(),
+    enabled: confirmOpen,
+    retry: false,
+  })
+  const activeAdmins = (roster.data?.items ?? []).filter(
+    (m) => m.status === 'active' && (m.role === 'admin' || m.role === 'owner'),
+  ).length
+  const fewAdmins = !roster.isSuccess || activeAdmins < 3
+  // ⌘K "Engage kill switch" (registry `killswitch.engage`, governance:killswitch:admin):
+  // bring the operator to the mandatory reason. Nothing is engaged here — the stop still
+  // goes through this form's own button and confirmation.
+  usePendingCommandAction('killswitch', 'engage', () => {
+    const reasonField = document.getElementById(REASON_ID)
+    reasonField?.scrollIntoView({ block: 'center' })
+    reasonField?.focus()
+  })
 
   // The reason is MANDATORY (the engine 400s without it) and an agent stop needs
   // its ref — the button stays disabled until the operator supplied both.
@@ -144,12 +170,12 @@ export function EmergencyStopCard() {
 
         <Field
           label={t('engage.reason')}
-          htmlFor="ks-reason"
+          htmlFor={REASON_ID}
           description={t('engage.reasonHint')}
           required
         >
           <Textarea
-            id="ks-reason"
+            id={REASON_ID}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
             rows={2}
@@ -177,15 +203,28 @@ export function EmergencyStopCard() {
             : t('engage.confirmTitleAgent')
         }
         description={
+          // With the two-admin line below, the body drops its own restart sentence: one
+          // clear sentence about starting again, not two (Root, 047 review).
           isEstate
-            ? t('engage.confirmBodyEstate')
+            ? fewAdmins
+              ? t('engage.confirmBodyEstateNoRestart')
+              : t('engage.confirmBodyEstate')
             : t('engage.confirmBodyAgent')
         }
         tone="danger"
         confirmLabel={t('engage.confirm')}
         pending={engage.isPending}
         onConfirm={() => engage.mutate(payload())}
-      />
+      >
+        {isEstate && fewAdmins ? (
+          <p
+            className="text-body text-warning"
+            data-slot="restart-needs-admins"
+          >
+            {t('engage.restartNeedsAdmins')}
+          </p>
+        ) : null}
+      </ConfirmDialog>
     </Card>
   )
 }

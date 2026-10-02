@@ -7,6 +7,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -20,13 +21,19 @@ import (
 // wedge shutdown forever.
 const stdioWaitDelay = 5 * time.Second
 
+// maxStdioFrame matches the 32 MiB HTTP response ceiling. It excludes CRLF.
+// Scanner stops at this ceiling plus framing bytes; excess is terminal.
+const maxStdioFrame = maxHTTPBody
+
 // stdioTransport speaks MCP over a subprocess's stdin/stdout as newline-delimited
 // JSON-RPC (the MCP stdio transport). The subprocess is bound to the context it
 // was created with, so a server-level timeout terminates it and unblocks reads.
 type stdioTransport struct {
-	cmd   *exec.Cmd
-	stdin io.WriteCloser
-	out   *bufio.Reader
+	cmd     *exec.Cmd
+	stdin   io.WriteCloser
+	out     *bufio.Reader
+	scanner *bufio.Scanner
+	readErr error
 
 	// obs records governance-relevant server-initiated messages the read loop
 	// skips while waiting for a response (deprecation posture, observer.go).
@@ -76,6 +83,9 @@ func (t *stdioTransport) roundTrip(ctx context.Context, req rpcRequest) (json.Ra
 	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.readErr != nil {
+		return nil, t.readErr
+	}
 	t.nextID++
 	req.ID = t.nextID
 	if err := t.write(req); err != nil {
@@ -88,6 +98,9 @@ func (t *stdioTransport) roundTrip(ctx context.Context, req rpcRequest) (json.Ra
 func (t *stdioTransport) notify(_ context.Context, method string, params any) error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
+	if t.readErr != nil {
+		return t.readErr
+	}
 	return t.write(rpcRequest{Method: method, Params: params, isNotification: true})
 }
 
@@ -127,17 +140,26 @@ func (t *stdioTransport) write(req rpcRequest) error {
 // Skipped server-initiated messages are OBSERVED (never answered) — the
 // deprecation-posture seam.
 func (t *stdioTransport) readResponse(id int64) (json.RawMessage, error) {
-	for {
-		line, err := t.out.ReadBytes('\n')
-		if len(line) == 0 && err != nil {
-			return nil, fmt.Errorf("mcp: read: %w", err)
+	if t.readErr != nil {
+		return nil, t.readErr
+	}
+	if t.scanner == nil {
+		t.scanner = bufio.NewScanner(t.out)
+		t.scanner.Buffer(make([]byte, 64*1024), maxStdioFrame+2)
+	}
+	for t.scanner.Scan() {
+		if err := t.scanner.Err(); err != nil {
+			t.readErr = fmt.Errorf("mcp: read: %w", err)
+			return nil, t.readErr
+		}
+		line := t.scanner.Bytes()
+		if len(line) > maxStdioFrame {
+			t.readErr = errors.New("mcp: stdio response line exceeds 32 MiB")
+			return nil, t.readErr
 		}
 		var msg rpcMessage
-		if jerr := json.Unmarshal(trimLine(line), &msg); jerr != nil {
-			if err != nil {
-				return nil, fmt.Errorf("mcp: read: %w", err)
-			}
-			continue // not a JSON-RPC message (stray stdout); skip
+		if err := json.Unmarshal(line, &msg); err != nil {
+			continue
 		}
 		t.obs.observe(msg)
 		if msg.isResponseTo(id) {
@@ -146,10 +168,13 @@ func (t *stdioTransport) readResponse(id int64) (json.RawMessage, error) {
 			}
 			return msg.Result, nil
 		}
-		if err != nil {
-			return nil, fmt.Errorf("mcp: stream ended before response: %w", err)
-		}
 	}
+	err := t.scanner.Err()
+	if err == nil {
+		err = io.EOF
+	}
+	t.readErr = fmt.Errorf("mcp: read: %w", err)
+	return nil, t.readErr
 }
 
 // trimLine drops a trailing CR/LF from a read line.

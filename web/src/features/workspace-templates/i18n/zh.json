@@ -46,14 +46,17 @@
       "permissionMode": "权限模式",
       "effort": "努力程度",
       "model": "模型",
-      "customInstructions": "自定义指令"
+      "customInstructions": "自定义指令",
+      "secretEnv": "作为环境变量的密钥",
+      "secretEnvHint": "VARIABLE=env/secret，以逗号分隔。来自此模板的会话会从对应变量读取每个保管库密钥；只有管理组织密钥的人可以启动它们。"
     },
     "policies": {
       "dlpMode": "DLP 模式",
       "maxDuration": "最大会话时长（分钟）",
       "allowedTools": "允许的工具",
       "allowedToolsPlaceholder": "例如：Bash,Read,Edit",
-      "recordIo": "记录 I/O"
+      "recordIo": "记录 I/O",
+      "peersSameTemplate": "此模板的会话可以互相发消息"
     }
   },
   "actions": {

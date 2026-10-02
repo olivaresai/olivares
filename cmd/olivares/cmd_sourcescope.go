@@ -84,7 +84,7 @@ func newSourceScopeCmd() *cobra.Command {
 			"Connection, credential and TLS values use the same resolution order and trust\n" +
 			"controls as `auth`.",
 		Example: `  olivares sourcescope bindings ls
-  olivares sourcescope --server https://plane.example.com --tenant tenant-a bindings ls`,
+  olivares sourcescope --server https://olivares.example.com --tenant tenant-a bindings ls`,
 		Args: cobra.NoArgs,
 	}
 	flags.addPersistent(cmd)
@@ -223,7 +223,7 @@ func newSourceScopeBindingsCmd(client datalaneClient) *cobra.Command {
 		Use:   "create",
 		Short: "Bind a source to a scope",
 		Long: "Create a binding. An allow added to an ALREADY confined source widens who can\n" +
-			"reach it, so the control plane answers 202 and records a dual-controlled proposal\n" +
+			"reach it, so the engine answers 202 and records a dual-controlled proposal\n" +
 			"instead of applying it. The first allow for a source, and every forbid, apply\n" +
 			"immediately.",
 		Example: `  olivares sourcescope bindings create --source-type knowledge --source-ref kb_123 --scope-tree workspace --scope-ref ws-1 --effect allow --enabled
@@ -254,13 +254,13 @@ func newSourceScopeBindingsCmd(client datalaneClient) *cobra.Command {
 		Use:   "set <binding-id>",
 		Short: "Replace a binding",
 		Long: "Replace a binding.\n\n" +
-			"THIS REPLACES, IT DOES NOT PATCH. The control plane re-resolves the scope from\n" +
+			"THIS REPLACES, IT DOES NOT PATCH. The engine re-resolves the scope from\n" +
 			"the payload and rewrites the stored row, so a field left out is reset. The\n" +
 			"command therefore refuses a partial invocation unless --replace states that the\n" +
 			"reset is intended. A relaxing update is answered 202 and applies only after a\n" +
 			"second approver.\n\n" +
 			"The SOURCE IDENTITY is the exception: --source-type and --source-ref are the\n" +
-			"immutable natural key and the control plane forces them back to the stored row,\n" +
+			"immutable natural key and the engine forces them back to the stored row,\n" +
 			"so passing them here changes nothing. They are therefore not part of what a\n" +
 			"complete replace has to name.",
 		Example: `  olivares sourcescope bindings set bnd_123 --source-type knowledge --source-ref kb_123 --scope-tree workspace --scope-ref ws-1 --effect forbid --enabled --note tightened
@@ -300,7 +300,7 @@ func newSourceScopeBindingsCmd(client datalaneClient) *cobra.Command {
 		Aliases: []string{"delete"},
 		Short:   "Delete a binding",
 		Long: "Delete a binding. Removing the LAST binding of a source unconfines it, which\n" +
-			"WIDENS who can reach it, so the control plane treats a relaxing delete as a\n" +
+			"WIDENS who can reach it, so the engine treats a relaxing delete as a\n" +
 			"dual-controlled proposal (202) rather than applying it.\n\n" +
 			"An endpoint answering 204 has no body: JSON output is then the CLI's own\n" +
 			"{\"ok\":true,\"http_status\":204}.",
@@ -413,7 +413,7 @@ func newSourceScopeSourcesCmd(client datalaneClient) *cobra.Command {
 			"sense that matters here even though it deletes nothing: it removes the\n" +
 			"confinement that decided who could reach the source. It therefore asks for\n" +
 			"confirmation and refuses an unattended session without --yes.\n\n" +
-			"It is ALWAYS dual-controlled: the control plane answers 202 and records a pending\n" +
+			"It is ALWAYS dual-controlled: the engine answers 202 and records a pending\n" +
 			"request. Nothing changes until a second approver approves it, and what the source\n" +
 			"becomes on approval depends on whether its reference carries connector assignment\n" +
 			"rows — the recorded reason says which.",
@@ -510,7 +510,7 @@ func newSourceScopeGuardPosturesCmd(client datalaneClient) *cobra.Command {
 		Use:   "set",
 		Short: "Set the guard posture of one source",
 		Long: "Set the retrieval guard posture of one source. The two directions are NOT\n" +
-			"symmetric and the control plane says which happened: acl_aware TIGHTENS and\n" +
+			"symmetric and the engine says which happened: acl_aware TIGHTENS and\n" +
 			"applies at once, while public_only RELAXES and is answered 202 — recorded for a\n" +
 			"second approver and not in effect until approved.",
 		Example: `  olivares sourcescope guard-postures set --source-ref kb_123 --profile acl_aware
@@ -534,7 +534,7 @@ func newSourceScopeGuardPosturesCmd(client datalaneClient) *cobra.Command {
 			return datalaneResult(cmd, raw, code, "")
 		},
 	}
-	set.Flags().StringVar(&setSourceType, "source-type", "", "source type (the control plane requires knowledge here)")
+	set.Flags().StringVar(&setSourceType, "source-type", "", "source type (the engine requires knowledge here)")
 	set.Flags().StringVar(&setSourceRef, "source-ref", "", "reference of the source the posture applies to")
 	set.Flags().StringVar(&setProfile, "profile", "", "acl_aware (tightens) or public_only (relaxes, dual-controlled)")
 	set.Flags().StringVar(&reason, "reason", "", "reason an approver will read")
@@ -1097,7 +1097,7 @@ func newSourceScopeWsConnectorsCmd(client datalaneClient) *cobra.Command {
 			"Two things CANNOT be lost here and are therefore not part of a complete replace:\n" +
 			"--name, --kind and --workspace-ref are the immutable natural key and are forced\n" +
 			"back from the stored row, and supplying no secrets KEEPS the sealed ones (that\n" +
-			"is the control plane's rule, not this command's). Secrets still come from\n" +
+			"is the engine's rule, not this command's). Secrets still come from\n" +
 			"--secrets-file only.",
 		Example: `  olivares sourcescope workspace-connectors set wc_123 --enabled --poll-seconds 300 --note nightly --config base_url=https://wiki.example.com
   olivares sourcescope workspace-connectors set wc_123 --enabled=false --replace`,

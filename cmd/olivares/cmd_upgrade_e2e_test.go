@@ -935,13 +935,31 @@ func TestUpgradeRefusesAnUnknownInstalledVersion(t *testing.T) {
 		f := newUpdFixture(t, "26.8.0", "", v2)
 		target := writeTarget(t, v1)
 		breakProbe(t, target)
-		for _, bad := range []string{"26.8", "banana", "   "} {
+		// "26.8" was in this list until the release grammar made MAJOR.MINOR a version
+		// (a1ea1c45, "accept monthly versions without a zero patch": 26.10, 26.11 have no
+		// .0). It is a version now, tested below; these are still not one.
+		for _, bad := range []string{"26", "26.8.0.1", "26.x", "banana", "   "} {
 			_, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,
 				"--current-version", bad,
 				"--target", target, "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", t.TempDir())
 			if err == nil {
 				t.Errorf("--current-version %q must not be accepted", bad)
 			}
+		}
+	})
+
+	t.Run("a monthly version without .0 is a version", func(t *testing.T) {
+		// a1ea1c45: "26.7" is the 26.7 release, the same as 26.7.0, so declaring it allows the
+		// same forward move.
+		f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
+		target := writeTarget(t, v1)
+		breakProbe(t, target)
+		if _, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64, "--current-version", "26.7",
+			"--target", target, "--os", "linux", "--arch", "amd64", "--yes", "--data-dir", t.TempDir()); err != nil {
+			t.Fatalf("a declared 26.7 -> 26.8.0 is a legitimate upgrade: %v", err)
+		}
+		if got := runsVersionMode(t, target); !strings.Contains(got, "26.8.0") {
+			t.Fatalf("target not upgraded: %q", got)
 		}
 	})
 

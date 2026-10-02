@@ -27,7 +27,10 @@ import (
 	"github.com/olivaresai/olivares/core/eventbus"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/governance"
+	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/sdk"
+	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
 // claudehookpep.go wires the GOVERNED Claude Code hooks PEP in the composition
@@ -47,19 +50,13 @@ import (
 // internals (it sees only a localhost decision endpoint). No genuinely-open design
 // question remained, so per the prompt we follow the pattern.
 //
-// Loaded from OLIVARES_HOOK_PEP_CONFIG (operator-provisioned, out of the store, same
-// pattern as OLIVARES_HITL_CONFIG / OLIVARES_AGENT_GATEWAY_CONFIG). Absent/invalid ⇒
-// nothing mounted (the safe default: an un-wired node serves no enforcement surface and
-// the agent runs ungoverned-but-observed exactly as before). Every governance seam stays
-// deny-closed.
+// Mounted for every engine on its own ephemeral loopback socket.
+// Unconfigured tenants use allow with audit.
 
-// loadHookPEPConfig reads the optional OLIVARES_HOOK_PEP_CONFIG JSON. A missing path
-// yields an empty config (nothing mounted); a supplied path must be readable and contain
-// valid JSON or startup fails closed.
 func loadHookPEPConfig(_ *slog.Logger) (hookPEPConfig, error) {
 	path := os.Getenv("OLIVARES_HOOK_PEP_CONFIG")
 	if path == "" {
-		return hookPEPConfig{}, nil
+		return hookPEPConfig{Listen: defaultHookPEPListen}, nil
 	}
 	var cfg hookPEPConfig
 	if err := loadOperatorJSONConfig("OLIVARES_HOOK_PEP_CONFIG", path, &cfg); err != nil {
@@ -263,8 +260,9 @@ type resolvedTenant struct {
 	policy          hookPolicyDoc
 }
 
-// defaultHookPEPListen is the loopback-default bind (secure default).
-const defaultHookPEPListen = "127.0.0.1:8447"
+// Each engine receives its own loopback socket; the acquired address is retained
+// in memory and pinned into the protected settings for each launched run.
+const defaultHookPEPListen = "127.0.0.1:0"
 
 // hookPEPPolicyVersionFallback labels a decision when the policy declares no version.
 const hookPEPPolicyVersionFallback = "olivares.hookpep/v1"
@@ -285,10 +283,9 @@ const (
 	tierUnknown     = "unknown"
 )
 
-// buildClaudeHookPEPServer constructs the governed hooks PEP server on its own socket, or
-// nil when no tenant is configured. It is built AFTER boot (in cmd_serve.go), so the
-// engine's API handler, authenticator, PDP evaluator and approval bridge are all live —
-// no late binding needed (unlike the bridge, which predates the API server).
+// buildClaudeHookPEPServer constructs the default governed hooks server after
+// boot. runEngine publishes its acquired listener address to the launch
+// provisioner before the announcement or any HTTP server starts.
 func buildClaudeHookPEPServer(eng *engine, log *slog.Logger) (*http.Server, error) {
 	cfg, err := loadHookPEPConfig(log)
 	if err != nil {
@@ -298,33 +295,30 @@ func buildClaudeHookPEPServer(eng *engine, log *slog.Logger) (*http.Server, erro
 	for _, tc := range cfg.Tenants {
 		tid, present, err := parseBusinessTenant("hook-PEP config: tenant", tc.Tenant)
 		if err != nil || !present {
-			log.Warn("hook-pep: tenant entry has an invalid tenant id; skipped", "tenant", tc.Tenant)
-			continue
+			return nil, errors.New("hook PEP tenant id is invalid")
 		}
 		if _, dup := tenants[tid]; dup {
 			log.Warn("hook-pep: duplicate tenant entry; later definition ignored", "tenant", tc.Tenant)
 			continue
 		}
 		if err := validateHookPolicy(tc.Policy); err != nil {
-			log.Warn("hook-pep: tenant policy has a relative path/subtree pattern; path patterns MUST be absolute — tenant NOT mounted (deny-closed)", "tenant", tc.Tenant, "err", err)
-			continue
+			return nil, fmt.Errorf("hook PEP tenant policy: %w", err)
 		}
 		mode, grant := resolveObserveGrant(tid, tc, time.Now(), log)
 		tenants[tid] = resolvedTenant{tenant: tid, requireFirm: tc.RequireFirm, enforceNHI: tc.EnforceNHILifecycle, mode: mode, observeUntil: grant.until, observeBootMono: grant.bootMono, observeWindow: grant.window, observeGrantID: grant.id, policy: tc.Policy}
 	}
-	if len(tenants) == 0 {
-		return nil, nil
-	}
 
 	dec := &claudeHookDecider{
-		tenants:     tenants,
-		authr:       eng.authr,
-		eval:        eng.policyEval,
-		scoped:      eng.scopedGrants,
-		nhiEnforcer: eng.nhiEnforcer,
-		stops:       eng.killSwitch,
-		stopRec:     eng.stopDeny,
-		store:       eng.store,
+		tenants:       tenants,
+		defaultPolicy: &hookPolicyDoc{Default: claude.DecisionAllow},
+		authr:         eng.hookCredentials(),
+		eval:          eng.policyEval,
+		scoped:        eng.scopedGrants,
+		nhiEnforcer:   eng.nhiEnforcer,
+		stops:         eng.killSwitch,
+		stopRec:       eng.stopDeny,
+		store:         eng.store,
+		approvals:     eng.engineApprovals,
 		// Hook content firewall: the real inspector under -tags enterprise WITH a config,
 		// else nil (no deep inspection, unchanged). Findings/metering ride the engine bus.
 		hookInspector: newHookContentInspector(os.Getenv, log),
@@ -332,19 +326,29 @@ func buildClaudeHookPEPServer(eng *engine, log *slog.Logger) (*http.Server, erro
 		clock:         time.Now,
 		log:           log,
 	}
+	if eng.sessionsMod != nil {
+		dec.approvalWait = eng.sessionsMod.BeginApprovalWait
+		dec.redactSecrets = eng.sessionsMod.RedactSessionSecretsWithSpans
+		dec.sessionObservation = eng.sessionsMod.RecordSessionObservation
+	}
 	// Assign the bridge only when one is configured: storing a nil *approvalBridge in the
 	// interface would make d.bridge != nil (typed-nil) and defeat the deny-closed guard.
 	if eng.approvalBridge != nil {
 		dec.bridge = eng.approvalBridge
 	}
-	pep := claude.NewHookPEP(dec, claudeHookAuditor{log: log}, time.Now)
+	pep := claude.NewHookPEP(dec, claudeHookAuditor{log: log, decider: dec}, time.Now)
 
 	mux := http.NewServeMux()
-	mux.Handle("/", pep)
+	mux.Handle("/", dec.withHookProof(pep))
+	// Reuse the existing local session edge. The same handler is mounted on the
+	// public API; neither edge creates an issuer, registry or child listener.
+	if eng.sessionMCP != nil {
+		mux.Handle("/session/mcp", http.HandlerFunc(eng.sessionMCP.ServeSessionHTTP))
+	}
 	// the Agent SDK permissionPromptToolName route — point a customer SDK program's
 	// permissionPromptToolName here and every permission request it raises runs through the
 	// SAME governed decider (deny-closed). The more specific pattern wins over "/".
-	mux.HandleFunc("/permission-prompt", pep.ServePermissionPrompt)
+	mux.Handle("/permission-prompt", dec.withHookProof(http.HandlerFunc(pep.ServePermissionPrompt)))
 	addr := strings.TrimSpace(cfg.Listen)
 	if addr == "" {
 		addr = defaultHookPEPListen
@@ -354,6 +358,7 @@ func buildClaudeHookPEPServer(eng *engine, log *slog.Logger) (*http.Server, erro
 	}
 	srv := eng.api.NewHTTPServer(addr)
 	srv.Handler = mux
+	srv.WriteTimeout = sessions.ClaudeHookPEPClientTimeout + 10*time.Second
 	log.Info("hook-pep: governed Claude Code hooks PEP mounted",
 		"addr", addr, "tenants", len(tenants), "hitl_bridge", eng.approvalBridge != nil, "pdp", eng.policyEval != nil)
 	return srv, nil
@@ -395,20 +400,28 @@ type hookApprovalOpener interface {
 // → live PDP hard-deny overlay → ask→HITL → rewrite. Every edge is
 // deny-closed.
 type claudeHookDecider struct {
-	tenants map[model.TenantID]resolvedTenant
-	authr   principalAuthenticator
-	eval    auth.PolicyEvaluator // nil ⇒ no external overlay (the disposition still governs)
+	tenants       map[model.TenantID]resolvedTenant
+	defaultPolicy *hookPolicyDoc
+	authr         principalAuthenticator
+	eval          auth.PolicyEvaluator // nil ⇒ no external overlay (the disposition still governs)
 	// scoped is the central scoped grant/forbid engine (F-03). The hook consults its
 	// FORBID contribution as a FURTHER-RESTRICT overlay so a central scoped forbid that
 	// targets the projected tool-call resource (an mcp_server) or the principal denies the
 	// call at the hook too — the same forbid-overrides-allow algebra REST/model/MCP run.
 	// nil ⇒ no scoped overlay (behavior unchanged). It never widens a disposition.
 	scoped      auth.ScopedAuthorizer
-	bridge      hookApprovalOpener // nil ⇒ the ask path denies (no HITL wired)
-	nhiEnforcer nhiEnforcer        // nil ⇒ no NHI-lifecycle deny gate
-	stops       killSwitchGuard    // nil ⇒ no kill-switch gate (boot always wires it)
-	stopRec     *stopDenyRecorder  // throttled tamper-evident deny evidence
-	store       store.Store        // terminal allow/deny evidence ledger
+	bridge      hookApprovalOpener // legacy external-hook compatibility
+	approvals   *governance.EngineApprovals
+	nhiEnforcer nhiEnforcer       // nil ⇒ no NHI-lifecycle deny gate
+	stops       killSwitchGuard   // nil ⇒ no kill-switch gate (boot always wires it)
+	stopRec     *stopDenyRecorder // throttled tamper-evident deny evidence
+	store       store.Store       // terminal allow/deny evidence ledger
+
+	// The shared human queue projects only an active wait onto the supervised run.
+	approvalWait       func(context.Context, auth.Principal, string, time.Time) (func(), error)
+	redactSecrets      func(model.TenantID, string, []byte) ([]byte, []sessions.SecretMaskSpan, bool)
+	sessionObservation func(context.Context, auth.Principal, sdkmodel.Observation) error
+
 	// hookInspector is the OPTIONAL commercial hooks-hardening DLP firewall (enterprise/hookhardening). nil in the default AGPL build ⇒ no deep tool_input
 	// inspection (the PEP behaves exactly as before — no rug-pull); under -tags enterprise
 	// WITH a config it runs DLP + structural detection over the tool arguments as a
@@ -470,18 +483,88 @@ func (d *claudeHookDecider) Decide(ctx context.Context, in claude.HookDecisionIn
 	// Resolve once and carry the same authenticated principal through authorization
 	// and evidence attribution. Re-authenticating only for the anchor could observe a
 	// different revocation state and mislabel the decision that was actually made.
-	principal, authErr := d.authr.Authenticate(ctx, bearer)
+
+	var principal auth.Principal
+	var scope auth.SessionScope
+	var authErr error
+	if credentials, ok := d.authr.(*sessionHookCredentials); ok && strings.HasPrefix(bearer, sessionHookTokenPrefix) {
+		proof, _ := ctx.Value(claudeHookProofKey{}).(*claudeHookProof)
+		if proof != nil && proof.bearer == bearer {
+			principal, scope, authErr = proof.principal, proof.scope, proof.err
+		} else {
+			principal, scope, authErr = credentials.Resolve(ctx, bearer)
+			proof = &claudeHookProof{bearer: bearer, principal: principal, scope: scope, err: authErr}
+			defer proof.closeRetention()
+			ctx = context.WithValue(ctx, claudeHookProofKey{}, proof)
+		}
+		if scope.TenantID.IsZero() || (in.Identity.Tenant != "" && in.Identity.Tenant != scope.TenantID.String()) {
+			authErr = auth.ErrUnauthenticated
+		}
+		if !scope.TenantID.IsZero() {
+			in.Identity.Tenant = scope.TenantID.String()
+			in.SessionID = scope.RunRef
+		}
+	} else {
+		proof, _ := ctx.Value(claudeHookProofKey{}).(*claudeHookProof)
+		if proof != nil && proof.bearer == bearer {
+			principal, authErr = proof.principal, proof.err
+		} else {
+			principal, authErr = d.authr.Authenticate(ctx, bearer)
+		}
+	}
+
+	if !scope.TenantID.IsZero() {
+		resolved := auth.Principal{}
+		if authErr == nil {
+			resolved = principal
+		}
+		ctx = context.WithValue(ctx, sessionObservationPrincipalKey{}, resolved)
+	}
+
+	if authErr == nil && principal.SessionIdentity != "" {
+		ctx = context.WithValue(ctx, sessionHookScopeKey{}, scope)
+	}
+
 	res, tenant, shadow, err := d.decide(ctx, in, principal, authErr)
 	if err != nil {
 		return res, err // the error from the inner decider is deny-closed in the connector
+	}
+	if res.Permission == claude.DecisionAllow && principal.SessionIdentity != "" {
+		if credentials, ok := d.authr.(*sessionHookCredentials); ok {
+			if _, _, err := credentials.Resolve(ctx, bearer); err != nil {
+				res = deny("session credential changed while deciding this tool-call", res.PrincipalActor, res.IdentityTier, res.PolicyVersion)
+				shadow = nil
+			}
+		}
+	}
+	if tenant.IsZero() && !scope.TenantID.IsZero() {
+		tenant = scope.TenantID
 	}
 	actAs, delegated := principal.ActAs()
 	if authErr != nil {
 		actAs, delegated = "", false
 	}
+	if res.PrincipalActor == "" && scope.SessionRef != "" {
+		// A known revoked bearer still has an immutable identity for attribution;
+		// the failed resolution conveys no permission to perform the tool call.
+		res.PrincipalActor = "session:" + scope.SessionRef
+	}
+	var projectedRefs []string
+	if projected, ok := projectHookScopedRequest(principal, tenant, in); ok {
+		projectedRefs = append(projectedRefs, projected.Resource.ID)
+	}
+	retain := d.hookEvidenceRedactor(ctx, in, projectedRefs...)
+	res.Reason = retain(res.Reason)
+	res.AdditionalContext = retain(res.AdditionalContext)
+	if shadow != nil {
+		retained := *shadow
+		retained.reason = retain(shadow.reason)
+		shadow = &retained
+	}
 	out := d.anchorDecision(ctx, tenant, in, res, shadow, auditDelegation{
-		isDelegated: delegated,
-		actAs:       actAs.String(),
+		isDelegated:  delegated,
+		actAs:        actAs.String(),
+		sessionScope: scope,
 	})
 	// B-05: the decision is now SAID, not only made. It is emitted after the
 	// anchor and after `out` is final, so a slow, full or absent bus can never turn
@@ -540,17 +623,23 @@ func (d *claudeHookDecider) decide(ctx context.Context, in claude.HookDecisionIn
 	if !tok.found {
 		return deny(tok.reason, "", tierUnknown, ""), model.TenantID(""), nil, nil
 	}
-	rt := d.tenants[tenant]
+	rt, configured := d.tenants[tenant]
+	if !configured && d.defaultPolicy != nil {
+		rt = resolvedTenant{tenant: tenant, policy: *d.defaultPolicy}
+	}
 	tier := firmnessTier(principal, tenant, authErr)
 	actor := ""
 	if authErr == nil {
 		actor = principal.Actor()
+		if principal.SessionIdentity != "" {
+			actor = "session:" + principal.SessionIdentity
+		}
 	}
 	version := firstNonEmptyStr(rt.policy.Version, hookPEPPolicyVersionFallback)
 	agent := resolveHookAgent(principal, authErr, in.Identity.Agent)
 	if agent.contradicted() && d.log != nil {
 		d.log.Warn("hook-pep: declared agent differs from the agent the credential proves; the credential's agent governs",
-			"tenant", tenant.String(), "agent", agent.proven, "declared_agent", ellipsis(agent.hint, maxLoggedHookAgentHint))
+			"tenant", tenant.String(), "agent", agent.proven, "declared_agent", ellipsis(d.retainedHookText(ctx, agent.hint), maxLoggedHookAgentHint))
 	}
 
 	// 2b. Non-enforceable events: context/observe events and the INVERTED
@@ -561,6 +650,19 @@ func (d *claudeHookDecider) decide(ctx context.Context, in claude.HookDecisionIn
 	//     An UNKNOWN event is enforceable (deny-closed), so it does NOT short-circuit here.
 	if !claude.HookEnforcementFor(in.Event).Enforceable {
 		return neutralHookVerdict(in.Event, actor, tier, version), tenant, nil, nil
+	}
+
+	// A launched agent cannot keep editing after its launcher loses that authority.
+	// Tool policy may further restrict the session's inherited role; it cannot widen it.
+	if authErr == nil && principal.SessionIdentity != "" {
+		verb := auth.VerbWrite
+		if in.Mode == "read" {
+			verb = auth.VerbRead
+		}
+		role, member := principal.RoleIn(tenant)
+		if !member || !auth.RoleGrants(role, auth.Permission("sessions:run:"+verb)) {
+			return deny("launcher's current authority does not permit this tool-call", actor, tier, version), tenant, nil, nil
+		}
 	}
 
 	// 2c. Governance-overlay dependency: a live PDP overlay is wired but the principal
@@ -612,7 +714,7 @@ func (d *claudeHookDecider) decide(ctx context.Context, in claude.HookDecisionIn
 		}
 		agentRef := agent.restrictRef()
 		if stopID, stopped := st.Stopped(agentRef); stopped {
-			d.stopRec.record(ctx, tenant, stopID, "hooks-pep", firstNonEmptyStr(agentRef, in.Tool), actor)
+			d.stopRec.record(ctx, tenant, stopID, "hooks-pep", firstNonEmptyStr(agentRef, d.retainedHookText(ctx, in.Tool)), actor)
 			return deny("emergency stop active (kill switch "+stopID.String()+"); all governed tool-calls are denied until a dual-control re-enable", actor, tier, version), tenant, nil, nil
 		}
 	}
@@ -634,6 +736,16 @@ func (d *claudeHookDecider) decide(ctx context.Context, in claude.HookDecisionIn
 	//     inspect the raw command and FURTHER-RESTRICT the disposition (never widen).
 	if in.ResourceKind == hookResourceKindShell {
 		disp = bashPathScan(rt.policy, in, "" /*root intentionally empty: unresolved traversal asks*/, disp)
+	}
+
+	// The person's launch preset can only restrict the tenant disposition. It is
+	// bound to the engine's credential, never supplied by the hook payload.
+	if authErr == nil && principal.SessionIdentity != "" {
+		var err error
+		disp, err = restrictSessionHookPreset(ctx, principal, tenant, in, disp)
+		if err != nil {
+			return deny("session permission preset is unavailable", actor, tier, version), tenant, nil, nil
+		}
 	}
 
 	// Constrained-observe. In observe mode an AUTHORED (ClassPolicy) deny/ask is
@@ -701,6 +813,28 @@ func (d *claudeHookDecider) decide(ctx context.Context, in claude.HookDecisionIn
 		}
 	}
 
+	// Stored tool-use review gates before acting. PostToolUse remains a classic
+	// gate for output policies, but must not request a second tool-use approval.
+	// Hard denies above still win, and post/lifecycle events retain their audit.
+	beforeToolUse := claude.HookEnforcementFor(in.Event).ClassicGate && in.Event != "PostToolUse"
+	if beforeToolUse && principal.SessionIdentity != "" && d.approvals != nil && disp.decision == claude.DecisionAllow {
+		ref, err := d.approvals.ReviewPolicy(ctx, tenant, hookActionCapability, "claude.tool")
+		if err != nil {
+			return deny("approval policy is unavailable", actor, tier, version), tenant, nil, nil
+		}
+		if ref != "" {
+			disp.decision = claude.DecisionAsk
+			disp.reason = "human approval required by policy"
+			disp.class = auth.ClassPolicy
+		}
+	}
+
+	// Review can gate a tool before it runs, never its completed output or a
+	// lifecycle notification. Retain output block/rewrite rules and their audit.
+	if !beforeToolUse && disp.decision == claude.DecisionAsk {
+		disp.decision = claude.DecisionAllow
+	}
+
 	// 6. Map the disposition to the governed verdict.
 	switch disp.decision {
 	case claude.DecisionDeny:
@@ -712,6 +846,11 @@ func (d *claudeHookDecider) decide(ctx context.Context, in claude.HookDecisionIn
 		}
 
 	case claude.DecisionAsk:
+		if grant, ok := ctx.Value(claudeReviewedCallKey{}).(claudeReviewedCall); ok && grant.run == in.SessionID && grant.plan == in.PlanHash {
+			res := claude.HookDecisionResult{Permission: claude.DecisionAllow, PolicyVersion: version, PrincipalActor: actor, IdentityTier: tier, Reason: "human review approved this tool-call"}
+			applyRewrite(&res, in, disp)
+			return res, tenant, shadow, nil
+		}
 		if observe && disp.class == auth.ClassPolicy {
 			// Business ask shadowed: record and fall through — NOT queued to HITL, so the pilot
 			// never consumes an approval nor perturbs the F-02 single-use state.
@@ -725,7 +864,12 @@ func (d *claudeHookDecider) decide(ctx context.Context, in claude.HookDecisionIn
 			// shadowed policy. A pending ask is anchored by the HITL bridge (not here) and a
 			// gated deny is a plain deny; attaching a shadow to a non-allow would record a
 			// would-be-allowed policy on a call that did not proceed.
-			res := d.gateViaHITL(ctx, tenant, in, disp, actor, tier, version)
+			var res claude.HookDecisionResult
+			if principal.SessionIdentity != "" {
+				res = d.gateViaSessionApproval(ctx, tenant, principal, in, disp, actor, tier, version)
+			} else {
+				res = d.gateViaHITL(ctx, tenant, in, disp, actor, tier, version)
+			}
 			if res.Permission != claude.DecisionAllow {
 				shadow = nil
 			}
@@ -789,7 +933,15 @@ func (d *claudeHookDecider) anchorDecision(ctx context.Context, tenant model.Ten
 	}
 	ph := hookDecisionHash(in.Event, in.Tool, in.ResourceKind, in.ResourceRef, in.Mode, in.PlanHash, decision, res.PrincipalActor, res.PolicyVersion)
 	binding := hookEvidenceBinding(tenant, attemptID, phase, ph, hookEffectiveResultDigest(res))
-	receipt := d.anchor(ctx, tenant, in, res, decision, actor, ph, shadow, delegation, attemptID, false, phase, binding)
+	anchorCtx := ctx
+	if decision != claude.DecisionAllow {
+		// A cancelled tool-call is still a governed denial. Its evidence must
+		// survive the helper disconnect, with a bounded store operation.
+		var cancel context.CancelFunc
+		anchorCtx, cancel = context.WithTimeout(context.WithoutCancel(ctx), reanchorTimeout)
+		defer cancel()
+	}
+	receipt := d.anchor(anchorCtx, tenant, in, res, decision, actor, ph, shadow, delegation, attemptID, false, phase, binding)
 	if !receipt.MustRefuse(binding) {
 		return res
 	}
@@ -799,7 +951,7 @@ func (d *claudeHookDecider) anchorDecision(ctx context.Context, tenant model.Ten
 	// gap is counted and will seal as a signed in-chain marker.
 	if decision != claude.DecisionAllow {
 		if d.log != nil {
-			d.log.Error("hook-pep: ledger anchor refused on DENY (evidence gap)", "fault", string(receipt.Fault), "tool", in.Tool)
+			d.log.Error("hook-pep: ledger anchor refused on DENY (evidence gap)", "fault", string(receipt.Fault), "tool", d.retainedHookText(ctx, in.Tool))
 		}
 		return res
 	}
@@ -815,7 +967,7 @@ func (d *claudeHookDecider) anchorDecision(ctx context.Context, tenant model.Ten
 	// verdict was DENY. It is a SINGLE best-effort attempt; the deny STANDS unconditionally
 	// whether or not it lands — NEVER an allow.
 	if d.log != nil {
-		d.log.Error("hook-pep: ledger anchor refused on ALLOW; downgrading to DENY (deny-closed)", "fault", string(receipt.Fault), "tool", in.Tool)
+		d.log.Error("hook-pep: ledger anchor refused on ALLOW; downgrading to DENY (deny-closed)", "fault", string(receipt.Fault), "tool", d.retainedHookText(ctx, in.Tool))
 	}
 	downgraded := deny("evidence unavailable (deny-closed)", res.PrincipalActor, res.IdentityTier, res.PolicyVersion)
 	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), reanchorTimeout)
@@ -823,7 +975,7 @@ func (d *claudeHookDecider) anchorDecision(ctx context.Context, tenant model.Ten
 	dph := hookDecisionHash(in.Event, in.Tool, in.ResourceKind, in.ResourceRef, in.Mode, in.PlanHash, claude.DecisionDeny, downgraded.PrincipalActor, downgraded.PolicyVersion)
 	dbinding := hookEvidenceBinding(tenant, attemptID, hookPhaseDowngradedDeny, dph, hookEffectiveResultDigest(downgraded))
 	if rreceipt := d.anchor(rctx, tenant, in, downgraded, claude.DecisionDeny, actor, dph, shadow, delegation, attemptID, true, hookPhaseDowngradedDeny, dbinding); rreceipt.MustRefuse(dbinding) && d.log != nil {
-		d.log.Error("hook-pep: re-anchor of downgraded DENY refused (evidence gap); deny stands", "fault", string(rreceipt.Fault), "tool", in.Tool)
+		d.log.Error("hook-pep: re-anchor of downgraded DENY refused (evidence gap); deny stands", "fault", string(rreceipt.Fault), "tool", d.retainedHookText(ctx, in.Tool))
 	}
 	return downgraded
 }
@@ -833,8 +985,9 @@ func (d *claudeHookDecider) anchorDecision(ctx context.Context, tenant model.Ten
 const reanchorTimeout = 5 * time.Second
 
 type auditDelegation struct {
-	isDelegated bool
-	actAs       string
+	isDelegated  bool
+	actAs        string
+	sessionScope auth.SessionScope
 }
 
 // addAuditDelegationMeta names both sides of an on-behalf-of decision. The fields
@@ -1010,9 +1163,10 @@ func (d *claudeHookDecider) anchor(ctx context.Context, tenant model.TenantID, i
 	if strings.TrimSpace(res.PrincipalActor) != "" {
 		actorKind = model.ActorAgent
 	}
+	retained := d.retainedHookInput(ctx, in)
 	meta := map[string]any{
-		"event": in.Event, "tool": in.Tool, "resource_kind": in.ResourceKind,
-		"resource_ref": in.ResourceRef, "mode": in.Mode, "plan_hash": in.PlanHash,
+		"event": retained.Event, "tool": retained.Tool, "resource_kind": in.ResourceKind,
+		"resource_ref": retained.ResourceRef, "mode": in.Mode, "plan_hash": in.PlanHash,
 		"decision": decision, "policy_version": res.PolicyVersion, "identity_tier": res.IdentityTier,
 		// Commit the evidence binding INTO the event's canonical meta (hashed by MetaDigest,
 		// Ed25519-signed): the ledger record itself proves which {operation, effect} it
@@ -1021,6 +1175,14 @@ func (d *claudeHookDecider) anchor(ctx context.Context, tenant model.TenantID, i
 		metaEvidenceOperationID:  string(binding.OperationID),
 		metaEvidencePhase:        phase,
 		metaEvidenceEffectDigest: string(binding.EffectDigest),
+	}
+	if in.SessionID != "" {
+		meta["session_ref"] = in.SessionID
+	}
+	if scope := delegation.sessionScope; scope.SessionRef != "" {
+		meta["session_ref"] = scope.SessionRef
+		meta["run_ref"] = scope.RunRef
+		meta["workspace_id"] = scope.WorkspaceID.String()
 	}
 	if attemptID != "" {
 		meta[metaDecisionAttemptID] = attemptID
@@ -1040,7 +1202,7 @@ func (d *claudeHookDecider) anchor(ctx context.Context, tenant model.TenantID, i
 			ActorKind:   actorKind,
 			Action:      "hook.tool." + decision,
 			TargetKind:  hookActionCapability,
-			TargetID:    model.ID(firstNonEmptyStr(in.ToolUseID, in.PlanHash)),
+			TargetID:    model.ID(firstNonEmptyStr(retained.ToolUseID, in.PlanHash)),
 			PayloadHash: ph,
 			Meta:        meta,
 		})
@@ -1073,7 +1235,7 @@ func (d *claudeHookDecider) resolveTenant(hint string, p auth.Principal, authErr
 		if err != nil || tid.IsZero() {
 			return model.TenantID(""), tenantResolution{reason: "invalid tenant in request"}
 		}
-		if _, ok := d.tenants[tid]; !ok {
+		if _, ok := d.tenants[tid]; !ok && d.defaultPolicy == nil {
 			return model.TenantID(""), tenantResolution{reason: "no governed hook policy configured for tenant"}
 		}
 		// F-01: the hint is client-supplied (header X-Olivares-Hook-Tenant).
@@ -1098,7 +1260,7 @@ func (d *claudeHookDecider) resolveTenant(hint string, p auth.Principal, authErr
 	// No hint: fall back to the principal's sole grant when unambiguous.
 	if authErr == nil {
 		if ts := p.Tenants(); len(ts) == 1 {
-			if _, ok := d.tenants[ts[0]]; ok {
+			if _, ok := d.tenants[ts[0]]; ok || d.defaultPolicy != nil {
 				return ts[0], tenantResolution{found: true}
 			}
 		}
@@ -1240,14 +1402,16 @@ func (d *claudeHookDecider) pdpForbids(ctx context.Context, p auth.Principal, te
 		Permission: auth.Permission(hookActionCapability + ":" + modeVerb(in.Mode)),
 		Tenant:     tenant,
 		Resource: auth.ResourceAttrs{
-			Kind: in.ResourceKind,
-			ID:   in.ResourceRef,
+			Kind:        in.ResourceKind,
+			ID:          in.ResourceRef,
+			WorkspaceID: p.SessionWorkspaceID,
 			Extra: map[string]string{
 				"tool": in.Tool,
 				"mode": in.Mode,
 			},
 		},
 	}
+	req.EvidenceRedactor = d.hookEvidenceRedactor(ctx, in, req.Resource.ID)
 	dec, err := d.eval.Evaluate(ctx, req)
 	if err != nil {
 		return true, "policy evaluation error", auth.ClassInvariant // fail closed
@@ -1276,6 +1440,7 @@ func (d *claudeHookDecider) scopedForbids(ctx context.Context, p auth.Principal,
 	if !projectable {
 		return false, "", auth.ClassInvariant
 	}
+	req.EvidenceRedactor = d.hookEvidenceRedactor(ctx, in, req.Resource.ID)
 	sd, err := d.scoped.Scoped(ctx, req)
 	if err != nil {
 		return true, "scoped policy evaluation unavailable (deny-closed)", auth.ClassInvariant
@@ -1312,7 +1477,7 @@ func projectHookScopedRequest(p auth.Principal, tenant model.TenantID, in claude
 		Principal:  p,
 		Tenant:     tenant,
 		Permission: auth.Permission("mcp_server:" + auth.VerbRead),
-		Resource:   auth.ResourceAttrs{Kind: "mcp_server", ID: server},
+		Resource:   auth.ResourceAttrs{Kind: "mcp_server", ID: server, WorkspaceID: p.SessionWorkspaceID},
 	}, true
 }
 
@@ -1688,9 +1853,15 @@ func hookDecisionHash(event, tool, resourceKind, resourceRef, mode, planHash, de
 // ledger keyed to the real approver; this captures the allow/deny of every call keyed to
 // the real agent principal. It carries NO raw tool arguments, no bearer, no secrets
 // (docs/SECURITY-HARDENING.md).
-type claudeHookAuditor struct{ log *slog.Logger }
+type claudeHookAuditor struct {
+	log     *slog.Logger
+	decider *claudeHookDecider
+}
 
-func (a claudeHookAuditor) Record(_ context.Context, in claude.HookDecisionInput, res claude.HookDecisionResult, denyClosed bool) {
+func (a claudeHookAuditor) Record(ctx context.Context, in claude.HookDecisionInput, res claude.HookDecisionResult, denyClosed bool) {
+	if a.decider != nil {
+		in = a.decider.retainedHookInput(ctx, in)
+	}
 	a.log.Info("hook-pep: governed tool-call decision",
 		"event", in.Event,
 		"tool", in.Tool,

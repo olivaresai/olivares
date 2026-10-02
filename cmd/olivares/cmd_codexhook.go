@@ -63,7 +63,7 @@ func newCodexHookCmd() *cobra.Command {
 	var resolveServer func() string
 	cmd := &cobra.Command{
 		Use:   "codex-hook",
-		Short: "Governed PEP hook client for Codex: forward a Codex hook to the control plane and relay the decision (deny-closed)",
+		Short: "Governed PEP hook client for Codex: forward a Codex hook to the engine and relay the decision (deny-closed)",
 		Long: "codex-hook is the managed Codex hook command.\n" +
 			"It reads the hook payload from stdin, forwards it to the governed PEP, and writes the\n" +
 			"decision to stdout IN THE SHAPE THAT EVENT HONORS — a PreToolUse deny is a\n" +

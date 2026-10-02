@@ -168,9 +168,11 @@ func TestTOTPHTTPJourney(t *testing.T) {
 func TestTOTPPolicyHTTP(t *testing.T) {
 	h := newHarness(t)
 	wireTOTPSealer(t, h)
+	h.requirePasskeyStepUp()
 	admin := h.adminLogin()
 
-	// Policy write demands a stepped-up session (the setup session is AAL1).
+	// Policy write demands a stepped-up session (the setup session is AAL1) under the
+	// passkey step-up; the default policy asks for none.
 	if r := h.do("PUT", "/v1/auth/totp/policy", admin, map[string]any{"require_for_admins": true}, nil); r.code != http.StatusForbidden {
 		t.Fatalf("policy write at AAL1 = %d, want 403: %s", r.code, r.raw)
 	}
@@ -227,6 +229,9 @@ func TestTOTPAdminResetHTTP(t *testing.T) {
 	}
 	boss := mkUser("reset-boss@totp.test", "bosspass1234", auth.RoleAdmin)
 	hand := mkUser("reset-hand@totp.test", "handpass1234", auth.RoleEditor)
+	// The reset below is asserted under the passkey step-up; the people exist first
+	// (adding a person asks for the same step-up, HU-28).
+	h.requirePasskeyStepUp()
 
 	// The victim enroles a factor.
 	r := h.do("POST", "/v1/auth/totp/enrol", hand, map[string]any{}, nil)
@@ -265,6 +270,7 @@ func TestTOTPAdminResetHTTP(t *testing.T) {
 // Removing your own factor is AAL3-gated, like removing a passkey.
 func TestTOTPRemoveRequiresAAL3(t *testing.T) {
 	h := newHarness(t)
+	h.requirePasskeyStepUp()
 	wireTOTPSealer(t, h)
 	admin := h.adminLogin()
 

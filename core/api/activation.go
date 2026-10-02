@@ -48,6 +48,10 @@ type ActivationStatusDTO struct {
 	RestartRequired bool                  `json:"restart_required"`
 	Addons          []ActivationAddonDTO  `json:"addons"`
 	Presets         []ActivationPresetDTO `json:"presets"`
+
+	// Restarting says the engine is restarting itself to apply the change; the
+	// console waits for it and reconnects.
+	Restarting bool `json:"restarting,omitempty"`
 }
 
 // ActivationAddonDTO is one add-on's console row.
@@ -60,6 +64,11 @@ type ActivationAddonDTO struct {
 	State       string `json:"state"`  // active | pending | available | console
 	Reason      string `json:"reason,omitempty"`
 	NeedsSecret bool   `json:"needs_secret,omitempty"`
+	// InBuild and LicenseCovered are independent facts from the edition's
+	// catalog and verified licence. Nil means the fact is not known; false is
+	// an observed absence. Neither field asserts operational readiness.
+	InBuild        *bool `json:"in_build,omitempty"`
+	LicenseCovered *bool `json:"license_covered,omitempty"`
 }
 
 // ActivationPresetDTO lists a preset's add-on keys for the "enable" chooser.
@@ -91,4 +100,10 @@ var (
 	// ErrActivationInvalidRequest: a malformed enable/disable/promote (bad preset or
 	// add-on). 400.
 	ErrActivationInvalidRequest = errors.New("api: activation request invalid")
+	// ErrActivationNotRecorded: the edition applied the change to this node's
+	// file, but the deployment settings could not be saved, so nothing restarts.
+	ErrActivationNotRecorded = errors.New("api: activation not recorded in the deployment settings")
+	// ErrActivationRestartUnavailable: the change is saved, but the engine could
+	// not restart itself to apply it.
+	ErrActivationRestartUnavailable = errors.New("api: the engine cannot restart itself to apply the activation")
 )

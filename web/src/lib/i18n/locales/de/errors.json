@@ -6,7 +6,11 @@
   },
   "forbidden": {
     "title": "Nicht autorisiert",
-    "description": "Sie haben keine Berechtigung, dies anzuzeigen. Bitten Sie einen Administrator um Zugriff."
+    "description": "Sie haben keine Berechtigung, dies anzuzeigen. Bitten Sie einen Administrator um Zugriff.",
+    "accessTo": "Sie haben keinen Zugriff auf {{subject}}.",
+    "accessToThis": "Sie haben hierauf keinen Zugriff.",
+    "nextStep": "Ihre Rollen oder eine Gruppenrichtlinie erlauben es nicht. Ein Eigentümer oder Administrator dieser Organisation kann es gewähren.",
+    "deniedByPolicy": "Die Richtlinie „{{policy}}“ verweigert es. Ein Eigentümer oder Administrator dieser Organisation kann sie ändern."
   },
   "serverError": {
     "title": "Etwas ist schiefgelaufen",
@@ -44,5 +48,15 @@
   "tenantAdmission": {
     "title": "Zulassung zur Organisation erforderlich",
     "description": "Melden Sie sich mit einer für die Organisation zugelassenen Verzeichnisidentität an. Globale Bootstrap-Berechtigungen erlauben keine Workspace-Kommunikation."
+  },
+  "moduleNotEnabled": {
+    "title": "Auf dieser Installation nicht aktiviert",
+    "description": "Dieser Teil von Olivares ist hier ausgeschaltet und hat nichts anzuzeigen.",
+    "named": "{{module}} ist in dieser Installation nicht aktiviert.",
+    "unnamed": "Dieses Modul ist in dieser Installation nicht aktiviert."
+  },
+  "notInEdition": {
+    "subject": "Diese Edition enthält {{subject}} nicht.",
+    "generic": "Diese Edition enthält dies nicht."
   }
 }

@@ -363,7 +363,7 @@ func newNotifyRoutesCreateCmd(flags *authClientFlags) *cobra.Command {
 			}
 			if strings.TrimSpace(r.ID) == "" {
 				return exitcode.New(exitcode.Server, fmt.Errorf(
-					"the control plane answered HTTP %d but returned no route id, so nothing can be confirmed as created",
+					"the engine answered HTTP %d but returned no route id, so nothing can be confirmed as created",
 					res.status))
 			}
 			return renderNotifyRoute(cmd, res.raw, r, "created route "+observeCell(r.ID))

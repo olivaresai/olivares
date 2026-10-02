@@ -9,6 +9,7 @@ import "github.com/olivaresai/olivares/core/model"
 // beforeExternalProvider preserves the historical federation table render.
 // The current descriptor retains these nullable columns so additive reconcile
 // adds them to fresh and upgraded stores without changing historical migrations.
+// Provider labels and assurance mappings use that same additive path.
 func beforeExternalProvider(d model.EntityDescriptor) model.EntityDescriptor {
 	if d.Kind != federationConfigDescriptor.Kind {
 		return d
@@ -16,7 +17,7 @@ func beforeExternalProvider(d model.EntityDescriptor) model.EntityDescriptor {
 	fields := make([]model.FieldSpec, 0, len(d.Fields))
 	for _, f := range d.Fields {
 		switch f.Name {
-		case "external_connector_ref", "external_connector_generation", "external_issuer":
+		case "external_connector_ref", "external_connector_generation", "external_issuer", "display_name", "assurance_mapping":
 		default:
 			fields = append(fields, f)
 		}

@@ -69,7 +69,8 @@ func TestEveryRouteRequiresSystemAdministrator(t *testing.T) {
 	defer m.Close()
 	r := &registrar{}
 	m.APIRoutes(r)
-	if len(r.routes) != 5 {
+	// 5 sign-in routes + 5 tool routes, and the 5 routes of the local Ollama (HU-R17).
+	if len(r.routes) != 15 {
 		t.Fatalf("routes = %d", len(r.routes))
 	}
 	for _, rt := range r.routes {
@@ -98,6 +99,49 @@ func TestInstallRejectsUnelevatedAdminBeforePlanLookup(t *testing.T) {
 			if w.Code != http.StatusForbidden || !strings.Contains(w.Body.String(), "step_up_required") {
 				t.Fatalf("%d %s", w.Code, w.Body.String())
 			}
+		}
+	}
+}
+
+// The install route follows the deployment's administrative step-up policy, not a
+// fixed assurance (its OpenAPI operation publishes none): a signed-in system
+// administrator passes under none (the default), needs an authenticator code under
+// totp and a passkey (AAL3) under passkey. Past the gate it reaches the body check.
+func TestInstallFollowsTheStepUpPolicy(t *testing.T) {
+	m, err := New(context.Background(), toolinstall.NewEngine(toolinstall.NewCatalog(), toolinstall.EngineOptions{}), filepath.Join(t.TempDir(), "tools"), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer m.Close()
+	r := &registrar{}
+	m.APIRoutes(r)
+	var install api.ModuleHandler
+	for _, rt := range r.routes {
+		if rt.method == "POST" && rt.pattern == "/installs" {
+			install = rt.handler
+		}
+	}
+	admin := func(aal int, amr ...string) auth.Principal {
+		return auth.Principal{Kind: auth.KindUser, Superadmin: true, AAL: aal, AMR: amr}
+	}
+	for _, tc := range []struct {
+		policy  string
+		who     auth.Principal
+		refused bool
+	}{
+		{auth.StepUpNone, admin(auth.AAL1, "pwd"), false},
+		{auth.StepUpTOTP, admin(auth.AAL1, "pwd"), true},
+		{auth.StepUpTOTP, admin(auth.AAL2, "pwd", "totp"), false},
+		{auth.StepUpPasskey, admin(auth.AAL2, "pwd", "totp"), true},
+		{auth.StepUpPasskey, admin(auth.AAL3, "pwd", "webauthn"), false},
+	} {
+		ctx := auth.WithStepUpSource(context.Background(), func(context.Context) (string, error) { return tc.policy, nil })
+		w := httptest.NewRecorder()
+		install(w, httptest.NewRequest("POST", "/", strings.NewReader(`{}`)).WithContext(ctx), api.ModuleContext{Principal: tc.who})
+		refused := w.Code == http.StatusForbidden && strings.Contains(w.Body.String(), "step_up_required")
+		admitted := w.Code == http.StatusBadRequest && strings.Contains(w.Body.String(), "bad_request")
+		if refused != tc.refused || refused == admitted {
+			t.Fatalf("policy %s, AAL%d %v: %d %s", tc.policy, tc.who.AAL, tc.who.AMR, w.Code, w.Body.String())
 		}
 	}
 }
@@ -205,6 +249,14 @@ func TestAPIAuthenticationPlanInstallAuditAndReplay(t *testing.T) {
 	defer st.Close()
 	err = st.System(ctx, func(s store.SystemScope) error { _, e := s.EnsureSystemTenant(ctx); return e })
 	if err != nil {
+		t.Fatal(err)
+	}
+	// This test pins the passkey step-up policy (the default asks for nothing
+	// beyond the sign-in; core/api covers it).
+	if err := st.AuthMutate(ctx, func(as store.AuthScope) error {
+		_, e := as.AuthPolicy().Create(ctx, model.AuthPolicy{AdminStepUp: auth.StepUpPasskey})
+		return e
+	}); err != nil {
 		t.Fatal(err)
 	}
 	_, priv, _ := ed25519.GenerateKey(nil)

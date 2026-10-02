@@ -9,6 +9,8 @@ import { StepUpHost } from '@/components/layout/step-up-host'
 import { apiFetch, configureApiClient } from '@/lib/api/client'
 import { createQueryClient } from '@/lib/api/query'
 import { isolateCacheOnTenantChange } from '@/lib/api/tenant-cache-isolation'
+import { restoreOnPageLoad } from '@/lib/auth/browser-session'
+import { serverInfoQuery } from '@/lib/hooks/use-server-info'
 import { AuthProvider } from '@/lib/auth/context'
 import { AuthBoundaryCustody } from '@/features/agentops/auth-boundary'
 import { useSessionStore } from '@/stores/session'
@@ -20,7 +22,8 @@ import { useWorkspaceStore } from '@/stores/workspace'
 // session — a route guard then redirects to /login (see AppLayout). Reading via
 // getState() keeps the client decoupled from React and trivially testable.
 configureApiClient({
-  getToken: () => useSessionStore.getState().token,
+  getToken: () => null,
+  getCSRFToken: () => useSessionStore.getState().csrfToken,
   getTenant: () => useTenantStore.getState().activeTenant,
   onUnauthorized: () => {
     useSessionStore.getState().clear()
@@ -39,13 +42,13 @@ configureApiClient({
   refreshSession: async () => {
     try {
       const s = await apiFetch<{
-        token: string
+        csrf_token: string
         session_id: string
         expires_at: string
       }>('/v1/auth/refresh', { method: 'POST' })
-      if (!s?.token) return false
+      if (!s?.csrf_token) return false
       useSessionStore.getState().setSession({
-        token: s.token,
+        csrfToken: s.csrf_token,
         sessionId: s.session_id,
         expiresAt: s.expires_at,
       })
@@ -81,6 +84,15 @@ export function Providers({ children }: { children: ReactNode }) {
   //    donde se enseñaria al volver, sin repedirla, porque `staleTime` son 30 s. La suscripcion de
   //    arriba no puede hacerlo: vive fuera de React y no alcanza a este cliente.
   useEffect(() => isolateCacheOnTenantChange(queryClient), [queryClient])
+  useEffect(() => {
+    // The same server-info read the shell makes (one request): a clean install with no
+    // administrator has no session to restore, so the restore is not sent (FH 034).
+    void restoreOnPageLoad(() => queryClient.fetchQuery(serverInfoQuery)).catch(
+      () => {
+        useSessionStore.setState({ ready: true })
+      },
+    )
+  }, [queryClient])
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>

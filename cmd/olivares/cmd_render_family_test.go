@@ -141,7 +141,7 @@ func TestProfileRecordPlainGolden(t *testing.T) {
 		"STATE            active\n" +
 		"AUTH SOURCE      provider_account_home\n" +
 		"PROVIDER         none (the host's own credential variables decide)\n" +
-		"TOOLS            not declared — sessions launch with NO built-in tools (deny-closed); declare them with `agent profile update --tools`\n" +
+		"TOOLS            not declared — sessions launch with the tool's default set; narrow it with `agent profile update --tools`\n" +
 		"PERMISSION MODE  not declared (each launch keeps its own)\n"
 	if got != want {
 		t.Errorf("the profile record's plain form changed.\n got: %q\nwant: %q", got, want)

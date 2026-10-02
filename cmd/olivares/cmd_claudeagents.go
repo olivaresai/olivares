@@ -58,7 +58,7 @@ func newClaudeAgentsSessionsCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "sessions",
 		Short:   "Inspect and answer one managed agent session",
-		Long:    "A managed agent session is one Claude Code thread the control plane governs: its events are readable, and its pending tool uses are answerable.",
+		Long:    "A managed agent session is one Claude Code thread the engine governs: its events are readable, and its pending tool uses are answerable.",
 		Example: "  olivares claude-agents sessions events sess-1",
 	}
 	cmd.AddCommand(

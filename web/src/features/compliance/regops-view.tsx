@@ -99,7 +99,6 @@ import {
   HashChip,
   SeamBadge,
   SectionCard,
-  SelfAuditNotice,
 } from '@/features/_intel'
 import {
   complianceApi,
@@ -580,7 +579,6 @@ function DoraRegisterPanel({ canAdmin }: { canAdmin: boolean }) {
         ) : null
       }
     >
-      <SelfAuditNotice className="mb-3" />
       <AsyncSection query={q} skeletonHeight={180}>
         {(list) =>
           (list.items ?? []).length === 0 ? (

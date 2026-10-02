@@ -1,10 +1,12 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# DIST-24-12 manual qualification on the existing self-hosted Linux x64 runner pool.
+# Compose and agent-runtime qualification on the self-hosted Linux x64 runner pool.
 # The explicit labels leave no GitHub-hosted fallback. It builds this checkout locally
 # and exercises the reference Compose files; it never logs into a registry or
 # publishes bytes.
+# A maintainer dispatches this workflow on the PR branch. Keep pull requests on
+# hosted runners, as pr-ci.yml requires; this shared Docker daemon is trusted CI.
 #
 # The runner's Docker daemon is shared with other runs, workflows and repositories. Both
 # Compose projects (with their volumes and networks) and the local image tag are owned by
@@ -31,7 +33,7 @@ jobs:
   qualify-compose-ready:
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
     runs-on: [self-hosted, linux, x64, "${{ vars.CI_RUNNER || 'self-hosted' }}"]
-    timeout-minutes: 75
+    timeout-minutes: 105
     # The owned identities, spelled once. Every step that touches Docker validates them with
     # `check-compose-ready.sh owner` first. Build metadata stays the source commit.
     env:
@@ -77,6 +79,13 @@ jobs:
             --build-arg COMMIT="${GITHUB_SHA}" \
             --build-arg SOURCE_DATE_EPOCH="$source_epoch" \
             --tag "$OLIVARES_IMAGE" .
+
+      - name: agent dependencies work with a read-only rootfs and fresh volume
+        timeout-minutes: 3
+        run: |
+          bash scripts/check-compose-ready.sh owner
+          bash scripts/qualify-container-agent-runtime.sh "$OLIVARES_IMAGE" \
+            "${GITHUB_REPOSITORY_ID}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-source"
 
       - name: reference SQLite Compose reaches healthy
         timeout-minutes: 4
@@ -163,9 +172,15 @@ jobs:
             -f deploy/compose/docker-compose.ready-no-ports.ci.yml \
             down --volumes --remove-orphans
 
-      # Only this run's exact local tag, after both owned projects are down. The tag names this
-      # repository, run and attempt, so an equal-source run elsewhere on the daemon keeps its own
-      # image. No force, no prune, no image ID: a tag still in use fails here and stays a
+      - name: release, FIPS and STIG contexts support agents (never publish)
+        timeout-minutes: 40
+        run: |
+          bash scripts/check-compose-ready.sh owner
+          bash scripts/qualify-container-release.sh "$OLIVARES_IMAGE" \
+            "${GITHUB_REPOSITORY_ID}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+
+      # Only this run's exact local tag, after both owned projects are down.
+      # No force, no prune, no image ID: a tag still in use fails here and stays a
       # failure, and an image that was never built is reported instead of removed.
       - name: remove this run's image tag
         if: ${{ always() }}

@@ -214,8 +214,8 @@ func TestComplianceSeamAnswerIsNotReportedAsFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("a 501 must still be an error")
 	}
-	if !strings.Contains(err.Error(), "add-on") {
-		t.Errorf("a 501 must be explained as an add-on boundary, got: %v", err)
+	if err.Error() != "Compliance Packs is a Business feature: "+pricingURL {
+		t.Errorf("a 501 must be explained as a Business feature, got: %v", err)
 	}
 	// It must NOT be classified as a server failure: the plane is healthy.
 	if got := exitcode.From(err); got == exitcode.Server {
@@ -441,8 +441,10 @@ func TestComplianceUnresolvedServerIsUsageNotServerFailure(t *testing.T) {
 	if got := exitcode.From(err); got != exitcode.Usage {
 		t.Fatalf("exit code = %d, want %d (usage): a missing server is a bad invocation, not a dead plane", got, exitcode.Usage)
 	}
-	if !strings.Contains(err.Error(), "use-context") {
-		t.Errorf("the message must mention client contexts, got: %v", err)
+	// The CLI audit of 09b made "not signed in" one sentence for every command; it no
+	// longer spells out "no context is active" or the config path.
+	if !strings.HasPrefix(err.Error(), "Not signed in.") || !strings.Contains(err.Error(), "olivares login") {
+		t.Errorf("the message must say the person is not signed in and how to sign in, got: %v", err)
 	}
 }
 

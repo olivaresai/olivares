@@ -1,7 +1,8 @@
 {
   "title": "Übersicht",
-  "description": "Ihr KI-Bestand auf einen Blick — 30-Tage-Aggregate über die Module, die Ihre Rolle öffnen kann.",
+  "description": "Was Ihre KI-Agenten in den letzten 30 Tagen getan haben, in den Bereichen, die Sie öffnen können.",
   "openReport": "Management-Bericht",
+  "aside": "Übersicht des Bestands",
   "range": "letzte 30 Tage",
   "next": {
     "title": "Nächster Schritt",
@@ -60,6 +61,16 @@
       "value": "{{healthy}}/{{total}} fehlerfrei",
       "caption": "{{breaches}} SLA-Verletzungen · {{incidents}} offene Vorfälle",
       "noChecks": "Noch keine Zustandsprüfungen"
+    },
+    "budgets": {
+      "label": "Budgets",
+      "none": "Noch keine Budgets",
+      "over_one": "{{count}} über dem Limit",
+      "over_other": "{{count}} über dem Limit",
+      "unknown_one": "{{count}} mit unbekanntem Betrag",
+      "unknown_other": "{{count}} mit unbekanntem Betrag",
+      "within": "Keines über dem Limit",
+      "partial": "{{n}} Budgets geladen; es gibt weitere"
     }
   },
   "state": {
@@ -78,5 +89,13 @@
   "empty": {
     "title": "Noch nichts anzuzeigen",
     "description": "Ihre Rolle gewährt keinen Lesezugriff auf ein Bestandsmodul. Bitten Sie einen Administrator um eine Lese-Gewährung, um die Übersicht zu sehen."
+  },
+  "start": {
+    "ready": "{{tool}} ist bereit.",
+    "signIn": "Melde {{tool}} an, um eine Sitzung zu starten.",
+    "signInAction": "Anmelden",
+    "install": "Installiere Claude Code oder Codex, um eine Sitzung zu starten.",
+    "installAction": "Tool einrichten",
+    "newSession": "Neue Sitzung"
   }
 }

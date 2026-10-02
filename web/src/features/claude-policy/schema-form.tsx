@@ -9,9 +9,11 @@
 // the same object). managed-only keys carry an explicit marker; every key links to
 // its authoritative source. No secret VALUE is ever collected here.
 import { ExternalLink } from 'lucide-react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Label } from '@/components/ui/label'
 import {
   Select,
@@ -192,6 +194,17 @@ function SchemaField({
     )
   }
 
+  if (descriptor.type === 'object[]') {
+    return (
+      <ObjectListInput
+        id={id}
+        disabled={disabled}
+        value={value}
+        onChange={onChange}
+      />
+    )
+  }
+
   if (descriptor.type === 'string[]') {
     const arr = Array.isArray(value) ? (value as unknown[]).map(String) : []
     return (
@@ -240,5 +253,65 @@ function SchemaField({
       value={typeof value === 'string' ? value : ''}
       onChange={(e) => onChange(e.target.value || undefined)}
     />
+  )
+}
+
+/** A list of objects, edited as JSON (the marketplace keys take source objects). The text
+ * is applied when it parses as a JSON array; until then the field says so. */
+function ObjectListInput({
+  id,
+  disabled,
+  value,
+  onChange,
+}: {
+  id: string
+  disabled?: boolean
+  value: unknown
+  onChange: (next: unknown) => void
+}) {
+  const { t } = useTranslation('claudePolicy')
+  const [text, setText] = useState(() =>
+    Array.isArray(value) ? JSON.stringify(value, null, 2) : '',
+  )
+  const [invalid, setInvalid] = useState(false)
+  return (
+    <div className="flex max-w-xl flex-col gap-1">
+      <Textarea
+        id={id}
+        disabled={disabled}
+        rows={3}
+        className="font-mono text-caption"
+        value={text}
+        placeholder='[{"source": "github", "repo": "your-org/*"}]'
+        aria-describedby={`${id}-summary`}
+        aria-invalid={invalid || undefined}
+        onChange={(e) => {
+          const next = e.target.value
+          setText(next)
+          if (!next.trim()) {
+            setInvalid(false)
+            onChange(undefined)
+            return
+          }
+          try {
+            const parsed: unknown = JSON.parse(next)
+            const ok =
+              Array.isArray(parsed) &&
+              parsed.every(
+                (v) => v && typeof v === 'object' && !Array.isArray(v),
+              )
+            setInvalid(!ok)
+            if (ok) onChange(parsed)
+          } catch {
+            setInvalid(true)
+          }
+        }}
+      />
+      {invalid && (
+        <p className="text-caption text-danger">
+          {t('form.objectListInvalid')}
+        </p>
+      )}
+    </div>
   )
 }

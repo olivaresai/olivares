@@ -42,7 +42,7 @@ func newProviderAccountCmd() *cobra.Command {
 			"an account and `account ls` does not list it.",
 		Example: "  olivares provider account add --driver claude\n" +
 			"  olivares provider account ls\n" +
-			"  olivares provider account adopt ppf_01J8... --name claude-b\n" +
+			"  olivares provider account adopt ppf_01J8... --name work\n" +
 			"  olivares provider account get ppf_01J8... -o json",
 		Args: cobra.NoArgs,
 	}
@@ -75,7 +75,7 @@ func newProviderAccountAddCmd() *cobra.Command {
 			"path is never printed in full — the account shows it relative to the accounts root,\n" +
 			"and the audit ledger is the one reader given the absolute path.",
 		Example: "  olivares provider account add --driver claude\n" +
-			"  olivares provider account add --driver claude --name claude-b\n" +
+			"  olivares provider account add --driver claude --name work\n" +
 			"  olivares provider account add --driver codex -o json",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -240,7 +240,7 @@ func newProviderAccountAdoptCmd() *cobra.Command {
 			"most 32 characters; the server refuses any other shape (exit 1).\n\n" +
 			"The home is the operator's own, so the account is recorded as shared isolation: the\n" +
 			"child runs as the engine's service user. Nothing on disk is moved, created or chowned.",
-		Example: "  olivares provider account adopt ppf_01J8ABCDEF --name claude-b\n" +
+		Example: "  olivares provider account adopt ppf_01J8ABCDEF --name work\n" +
 			"  olivares provider account adopt ppf_01J8ABCDEF",
 		Args: exactRef("profile-ref"),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -264,7 +264,7 @@ func newProviderAccountAdoptCmd() *cobra.Command {
 // built. It accepts 201 and nothing else: this verb makes a directory and a row,
 // and a plain 200 would mean the engine did something other than create.
 func providerAccountCreateCall(cmd *cobra.Command, cfg *agentClientConfig, body any) error {
-	status, b, err := cfg.do(cmd.Context(), "POST", providerAccountsPath, body)
+	status, b, err := cfg.do(cmd.Context(), "POST", providerAccountsPath, body, 201)
 	if err != nil {
 		return err
 	}

@@ -9,7 +9,9 @@ import (
 	"errors"
 	"time"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 // This file declares the OPERATE seams for — the governed Claude Code
@@ -75,12 +77,15 @@ func ValidIsolation(i Isolation) bool {
 // overlay, which stores no state because the cooperative stream carries no
 // end/failure signal; here the runtime OWNS the process so it knows).
 const (
-	statePending = "pending" // row created/resume reserved, process not yet started
-	stateRunning = "running" // process alive, I/O flowing
-	stateIdle    = "idle"    // alive but no activity within the idle window (derived)
-	stateStopped = "stopped" // terminated by request or clean exit; Claude transcript persists → resumable
-	stateFailed  = "failed"  // process died non-zero or launch failed
-	stateCleaned = "cleaned" // Claude session state released → not resumable
+	stateWaitingApproval = "waiting_approval"
+	stateDeclined        = "declined"
+	stateExpired         = "expired"
+	statePending         = "pending" // row created/resume reserved, process not yet started
+	stateRunning         = "running" // process alive, I/O flowing
+	stateIdle            = "idle"    // alive but no activity within the idle window (derived)
+	stateStopped         = "stopped" // terminated by request or clean exit; Claude transcript persists → resumable
+	stateFailed          = "failed"  // process died non-zero or launch failed
+	stateCleaned         = "cleaned" // Claude session state released → not resumable
 )
 
 // Permission modes accepted by Claude Code's --permission-mode (verified against
@@ -146,6 +151,20 @@ type LaunchSpec struct {
 	// the container hardened read-only. The HostPath is already canonicalized/jailed
 	// by the module — the runner never resolves a path.
 	Workspace *WorkspaceMount
+	// Confinement, when set, is where the child may write and read; the native
+	// runner starts it through package confine. Nil runs the child unconfined.
+	Confinement *confine.Policy
+	// ConfinementRequired refuses the launch when the host cannot confine.
+	ConfinementRequired bool
+}
+
+// AllowRead lets a confined child read path (a file the launch wrote for it,
+// such as hook settings under the engine data directory). It does nothing for
+// an unconfined launch.
+func (s *LaunchSpec) AllowRead(path string) {
+	if s.Confinement != nil && path != "" {
+		s.Confinement.ReadOnly = append(s.Confinement.ReadOnly, path)
+	}
 }
 
 // WorkspaceMount is one resolved workspace bind for a containerized launch.
@@ -197,7 +216,11 @@ type Process interface {
 	// Output returns the channel of output frames; it is closed when the process
 	// exits and the output pumps drain.
 	Output() <-chan OutputFrame
-	// Wait blocks until the process exits and returns its exit code.
+	// Wait blocks until the process exits and bounded output drain finishes.
+	// ErrOutputAbandoned reports incomplete output after confirmed reaping;
+	// ErrChildNotReaped takes precedence when collection is unconfirmed. Other
+	// errors leave collection unconfirmed unless they retain positive OS wait
+	// evidence. Ordinary nonzero exits are codes.
 	Wait() (exitCode int, err error)
 	// Stop gracefully terminates the process group (close stdin, SIGTERM, then
 	// SIGKILL after WaitDelay) so grandchildren holding the pipe cannot wedge it.
@@ -213,6 +236,10 @@ type Process interface {
 	// PID is the non-sensitive process id (0 when not applicable, e.g. a fake).
 	PID() int
 }
+
+// outputCompletionReporter is optional evidence available after Wait. It keeps
+// explicit Stop's successful-collection Wait contract while exposing output loss.
+type outputCompletionReporter interface{ OutputIncomplete() bool }
 
 // Runner launches a `claude` process and returns a live handle. The default
 // (unwiredRunner) denies; the composition root wires a real one.
@@ -250,10 +277,12 @@ type Credential struct {
 	// localModelEndpoint is non-secret first-party endpoint authority. Only a
 	// validated Ollama record sets it; it is never persisted or read from env.
 	localModelEndpoint string
-	ID                 string
-	Token              string
-	Scheme             string
-	NotAfter           time.Time
+	// localModels are the models that record's provider probe listed (non-secret).
+	localModels []string
+	ID          string
+	Token       string
+	Scheme      string
+	NotAfter    time.Time
 }
 
 // Expired reports whether the credential is past its lifetime (a zero NotAfter is
@@ -390,12 +419,25 @@ const (
 // determination reads. The workspace flags are derived by the module from the
 // RESOLVED workspace so the gate need not re-read the workspace table.
 type LaunchIntent struct {
+	// LauncherPrincipal is the authenticated current launch authority, carried
+	// only in memory to the single session credential issuer. A queued launch
+	// rebuilds it from its pinned initiating credential after approval.
+	LauncherPrincipal   auth.Principal `json:"-"`
+	ToolSurface         []string
+	ToolSurfaceDeclared bool
+	// ApprovalRef is server-owned and pins a queued launch to its original approval.
+	ApprovalRef    string
 	Action         LaunchAction
 	RunRef         string
 	Transport      Transport
 	PermissionMode string
 	Model          string
 	WorkspaceRef   string
+	// FolderPath is the RESOLVED folder the child works in, as the child sees it: the
+	// workspace's real host path for a native run, its mount target in a container, or
+	// the run's own directory when no workspace was named. The session credential's
+	// scope takes it from here (server-resolved launch state, never hook input).
+	FolderPath string
 	// Actor / ActorKind is the RBAC principal that requested the launch (the audit
 	// actor + the budget identity + the HITL requester).
 	Actor     string
@@ -422,6 +464,13 @@ type LaunchIntent struct {
 	TemplateRef     string
 	TemplateVersion int64
 	AllowedTools    []string
+	// TemplateBuiltin is true when that template is one of the engine's built-ins
+	// (resolved from the store), so its allowlist is the engine's own confinement.
+	TemplateBuiltin bool
+	// SecretEnv names the vault secrets the child will receive as environment
+	// variables: variable and secret NAMES, never values. Here for the same reason
+	// as AllowedTools: an approval opened for these secrets cannot be spent on more.
+	SecretEnv []SecretEnvRef `json:"SecretEnv,omitempty"`
 
 	// --- SG-02-b: the admission plane's three references. ---
 	//
@@ -493,6 +542,10 @@ type LaunchDecision struct {
 // (PEP env to inject, whether to record I/O). Wires budget + the
 // CRITICAL-launch HITL + the PEP provisioning behind this single seam; the
 // default allows with no instructions so the runtime works standalone.
+type LaunchApprovalReader interface {
+	ApprovalStatus(context.Context, model.TenantID, LaunchIntent, string) (string, error)
+}
+
 type LaunchGate interface {
 	Authorize(ctx context.Context, tenant model.TenantID, intent LaunchIntent) (LaunchDecision, error)
 }

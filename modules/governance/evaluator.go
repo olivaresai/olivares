@@ -41,8 +41,9 @@ type evaluator struct {
 // is never mutated, so concurrent Evaluate readers need no per-rule locking. err is
 // set when an enabled policy's spec was corrupt — the whole set then denies.
 type compiledSet struct {
-	rules []abacRule
-	err   error
+	rules    []abacRule
+	versions []retainedABACVersion
+	err      error
 }
 
 var _ auth.PolicyEvaluator = (*evaluator)(nil)
@@ -58,13 +59,16 @@ func allowDecision(reason string) auth.Decision { return auth.Decision{Allow: tr
 // a corrupt enabled policy (tamper defense).
 func (e *evaluator) Evaluate(ctx context.Context, req auth.Request) (auth.Decision, error) {
 	if req.Tenant.IsZero() || req.Tenant.IsSystem() {
+		auth.CaptureAuthorizationInputs(ctx, false, "none-v1", struct{}{})
 		return allowDecision("no policy restriction"), nil
 	}
 	if e.data == nil {
+		auth.CaptureAuthorizationInputs(ctx, false, "none-v1", struct{}{})
 		return allowDecision("no policy engine wired"), nil
 	}
 	set, loadErr := e.compiledFor(ctx, req.Tenant)
 	if loadErr != nil {
+		auth.IncompleteAuthorizationInputs(ctx)
 		// Store unavailable: ABAC only restricts, so leaving the restriction
 		// temporarily unenforced cannot grant anything the RBAC layer did not.
 		return allowDecision("policy load unavailable"), nil
@@ -72,6 +76,7 @@ func (e *evaluator) Evaluate(ctx context.Context, req auth.Request) (auth.Decisi
 	if set.err != nil {
 		return auth.Decision{}, set.err // -> Authorizer denies (fail closed)
 	}
+	auth.CaptureAuthorizationInputs(ctx, false, "abac-v1", retainedABAC{Rules: set.rules, Versions: set.versions})
 	for i := range set.rules {
 		if set.rules[i].matches(req) {
 			// An authored ABAC rule matched: business policy (shadowable). A store
@@ -130,6 +135,7 @@ func (e *evaluator) load(ctx context.Context, tenant model.TenantID) (*compiledS
 					return nil // stop compiling: the set already denies
 				}
 				cs.rules = append(cs.rules, spec.Rules...)
+				cs.versions = append(cs.versions, retainedABACVersion{ID: p.ID.String(), Version: p.Version})
 			}
 			if !page.HasMore || page.Cursor == "" {
 				return nil

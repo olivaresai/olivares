@@ -48,7 +48,7 @@ func newMembersCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	root := &cobra.Command{
 		Use:   "members",
-		Short: "List a tenant's member roster and grant accounts a role in it",
+		Short: "People in an organization and their roles",
 		Long: "Manage who belongs to a tenant and with which role. A grant is what turns a global\n" +
 			"account into somebody who can do work in one tenant; the roster is the resolved view of\n" +
 			"that tenant's members, their effective role, workspace confinement and directory groups.\n" +
@@ -184,7 +184,7 @@ func membersGrantCmd(client bootstrapClient) *cobra.Command {
 			if ws := strings.TrimSpace(workspaceID); ws != "" {
 				body["workspace_id"] = ws
 			}
-			raw, status, bearer, err := client.do(cmd, http.MethodPost, membershipsPath, body)
+			raw, status, bearer, err := client.do(cmd, http.MethodPost, membershipsPath, body, http.StatusCreated, http.StatusAccepted)
 			if err != nil {
 				return err
 			}
@@ -230,8 +230,7 @@ func membersInvitesCmd(client bootstrapClient) *cobra.Command {
 		Use:   "invites",
 		Short: "List and revoke the tenant's pending invitations",
 		Long: "Inspect the invitations issued from the console that nobody has redeemed yet, and\n" +
-			"revoke one. Issuing an invitation is a console operation — the engine gates it on a\n" +
-			"hardware step-up (AAL3) no CLI credential can carry; the browser-free equivalent is\n" +
+			"revoke one. Invitations are issued from the console; the browser-free equivalent is\n" +
 			"`users create` followed by `members grant`.",
 		Example: `  olivares members invites ls --tenant tenant-a
   olivares members invites revoke 018f2c2e-0000-7000-8000-000000000003 --yes`,

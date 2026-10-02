@@ -64,8 +64,8 @@ _olivares_git_env="${ROOT}/scripts/lib/git-env.sh"
 }
 unset _olivares_git_env
 
-TAG="26.9.0"
-VERSION="26.9.0"
+TAG="26.11"
+VERSION="26.11"
 REPO="olivaresai/olivares"
 REPO_ID="987654321"
 RUN_ID="5150515051"
@@ -76,6 +76,11 @@ blind() {
 	echo "test-release-finalize-stable: NO HE PODIDO MIRAR: $*" >&2
 	exit 2
 }
+
+# The default retains the full CI battery. Local release-format proof selects the
+# same real engine and adapters, bounded to monthly publication and reconciliation.
+case_mode="${1:-all}"
+case "$case_mode" in all | --monthly-delivery) ;; *) blind "usage: $0 [--monthly-delivery]" ;; esac
 
 for tool in git jq openssl tar sha256sum go cmp base64; do
 	command -v "$tool" >/dev/null 2>&1 || blind "missing required tool: $tool"
@@ -110,6 +115,21 @@ check() {
 		failed_names+=("$1")
 		printf 'FAIL  %-62s %s\n' "$1" "$2"
 	fi
+}
+
+summarize() {
+	echo ""
+	echo "== summary =="
+	printf 'pass=%d fail=%d\n' "$pass" "$fail"
+	if [ "$fail" -ne 0 ]; then
+		printf 'failed:'
+		for f in "${failed_names[@]}"; do printf ' %s' "$f"; done
+		printf '\n'
+		echo "test-release-finalize-stable: RED"
+		return 1
+	fi
+	echo "test-release-finalize-stable: OK — $pass cases, real signatures and a recording adapter"
+	return 0
 }
 
 echo "release finalization — the real verifier, real signatures, a recording GitHub adapter"
@@ -240,7 +260,7 @@ _y_goarch="$(yaml_flow_set "$GR" goarch)"
 check "the recipe's GOARCH set matches .goreleaser.yaml" "drift: '$_r_goarch' vs '$_y_goarch'" $?
 
 _r_fmt="$(sorted_words "$(recipe_const RECIPE_PACKAGE_FORMATS)")"
-_y_fmt="$(yaml_flow_set "$GR" formats | tr ' ' '\n' | command grep -v 'tar\.gz' | tr '\n' ' ' | command sed 's/ $//')"
+_y_fmt="$(python3 -c 'import json,sys; print(" ".join(sorted({fmt for entry in json.load(open(sys.argv[1]))["nfpms"] for fmt in entry["formats"]})))' "$ROOT/packaging/nfpm/packages.json")"
 [ -n "$_r_fmt" ] && [ "$_r_fmt" = "$_y_fmt" ]
 check "the recipe's package formats match nfpms" "drift: '$_r_fmt' vs '$_y_fmt'" $?
 
@@ -488,6 +508,11 @@ done
 	*) case "$url" in *"${CURL_FAIL_FOR}") echo "curl: (22) stub failure" >&2; exit 22 ;; esac ;;
 	esac
 }
+tag="$(jq -r .tag_name "${GH_STATE}/release.json")"
+case "$url" in
+https://github.com/*/releases/download/"${tag}"/*) ;;
+*) echo "curl: (22) stale or non-tag-scoped URL ${url}" >&2; exit 22 ;;
+esac
 name="${url##*/}"
 src="${GH_STATE}/assets/${name}"
 if [ -n "${CURL_SERVE_DIR:-}" ] && [ -f "${CURL_SERVE_DIR}/${name}" ]; then src="${CURL_SERVE_DIR}/${name}"; fi
@@ -619,7 +644,7 @@ rebuild_assets_json() { # every file in $ASSETS becomes an asset with a determin
 		d="$(sha256sum "$f")"
 		d="${d%% *}"
 		jq -nc --arg n "$n" --argjson id "$i" --argjson size "$sz" \
-			--arg url "https://example.invalid/download/${TAG}/${n}" --arg dg "sha256:${d}" \
+			--arg url "https://example.invalid/download/untagged-draft/${n}" --arg dg "sha256:${d}" \
 			'{name:$n,id:$id,size:$size,state:"uploaded",browser_download_url:$url,digest:$dg}' \
 			>>"$STATE/assets.ndjson"
 	done < <(find "$ASSETS" -maxdepth 1 -type f | LC_ALL=C sort)
@@ -857,6 +882,44 @@ patch_count() {
 says() { printf '%s' "$out" | command grep -F -- "$1" >/dev/null; }
 show() { printf '   last: rc=%s\n' "$rc"; printf '%s\n' "$out" | tail -6 | sed 's/^/   | /'; }
 
+publish_fixture() {
+	build_release_state || return 1
+	jq '.draft = false' "$STATE/release.json" >"$STATE/release.next" || return 1
+	mv "$STATE/release.next" "$STATE/release.json"
+}
+
+zero_draft_denials() {
+	build_release_state || blind "zero-patch fixture"
+	for _zero_tag in 26.11.0 26.10.0; do
+		TAG="$_zero_tag"
+		git -C "$TREE" tag "$TAG" "$COMMIT" || blind "zero-patch fixture tag"
+		jq --arg tag "$TAG" '.tag_name = $tag' "$STATE/release.json" >"$STATE/release.next" &&
+			mv "$STATE/release.next" "$STATE/release.json"
+		run_finalizer
+		[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'zero-patch tags are historical only'
+		check "a new zero-patch draft refuses: $TAG" "no publication" $?
+	done
+	TAG="26.11"
+}
+
+reconcile_historical_zero() {
+	# Historical zero-patch releases remain readable after publication, while the
+	# draft cases above refuse creating them. Reuse the same independently signed engine.
+	_previous_version="$VERSION"
+	TAG="26.10.0"
+	VERSION="26.10.0"
+	if ! git -C "$TREE" rev-parse --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+		git -C "$TREE" tag "$TAG" "$COMMIT" || blind "historical fixture tag"
+	fi
+	for _i in "${!BASE_ARCHIVES[@]}"; do BASE_ARCHIVES[_i]="${BASE_ARCHIVES[_i]/$_previous_version/$VERSION}"; done
+	for _i in "${!FIPS_ARCHIVES[@]}"; do FIPS_ARCHIVES[_i]="${FIPS_ARCHIVES[_i]/$_previous_version/$VERSION}"; done
+	publish_fixture || blind "historical zero-patch fixture"
+	run_finalizer
+	[ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 0 ] && says 'PUBLICATION_ALREADY_COMPLETE'
+	check "published 26.10.0 reconciles without a repeated effect" "historical reader compatibility" $?
+	[ "$rc" -eq 0 ] || show
+}
+
 build_release_state || blind "could not build the nominal release fixture"
 
 # ============================================================================================
@@ -895,7 +958,7 @@ check "the complete platform matrix was required" "not just the named artifacts"
 # verifying a download and would be wrong here. The finalizer's calls are the ones that carry
 # `--certificate-github-workflow-repository`, so the row is scoped to those and the battery
 # stops conflating two different callers' contracts.
-_tagpat="$(printf '@refs/tags/26\\.9\\.0$')"
+_tagpat="$(printf '@refs/tags/26\\.11$')"
 _fincalls="$(command grep -F -- '--certificate-github-workflow-repository' "$WORK/cosign.log.$n" 2>/dev/null || true)"
 [ -n "$_fincalls" ] && printf '%s\n' "$_fincalls" | command grep -F -- "$_tagpat" >/dev/null
 check "the certificate identity pins THIS exact tag" "not any SemVer release" $?
@@ -907,6 +970,18 @@ check "both the checksums and the manifest signature were re-verified" "two subj
 ! command grep -q '^ARG latest$' "$WORK/gh.log.$n"
 check "no request selected a candidate by 'latest'" "immutable identity only" $?
 
+if [ "$case_mode" = --monthly-delivery ]; then
+	publish_fixture || blind "published monthly fixture"
+	run_finalizer
+	[ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 0 ] && says 'PUBLICATION_ALREADY_COMPLETE'
+	check "published 26.11 reconciles without a repeated effect" "monthly delivery" $?
+	[ "$rc" -eq 0 ] || show
+	zero_draft_denials
+	reconcile_historical_zero
+	summarize
+	exit "$?"
+fi
+
 # An existing release with the same version must not be replaced by this draft.
 build_release_state || blind "fixture"
 jq --arg tag "$TAG" '.tag_name = $tag' "$STATE/origin.json" >"$STATE/origin.next" &&
@@ -917,36 +992,38 @@ check "an equal version cannot replace latest" "refused before publication" $?
 
 # --- the 2026-09-29 tag-name correction: the candidate grammar is BARE CalVer -------------
 # A v prefix is refused with its own message (the reflexive mistake is pasting the old
-# shape); two-part and three-digit-month shapes are refused by the grammar itself.
+# shape); missing-month and malformed-month shapes are refused by the grammar itself.
 _saved_tag="$TAG"
 TAG="v26.9.0"
 run_finalizer
 [ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'carries a v prefix'
 check "a v-prefixed candidate tag is refused with the correction message" "bare only" $?
-TAG="26.9"
+TAG="26"
 run_finalizer
-[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M.PATCH'
-check "a two-part candidate tag is refused" "26.9" $?
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M or YY.M.N'
+check "a candidate without a month is refused" "26" $?
 TAG="26.902.1"
 run_finalizer
-[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M.PATCH'
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M or YY.M.N'
 check "a three-digit-month candidate tag is refused" "26.902.1" $?
 TAG="26.13.0"
 run_finalizer
-[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M.PATCH'
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M or YY.M.N'
 check "a month-13 candidate tag is refused" "26.13.0" $?
 TAG="26.01.0"
 run_finalizer
-[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M.PATCH'
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M or YY.M.N'
 check "a leading-zero-month candidate tag is refused" "26.01.0" $?
 TAG="26.10.01"
 run_finalizer
-[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M.PATCH'
+[ "$rc" -eq 1 ] && [ "$(patch_count)" -eq 0 ] && says 'must be bare CalVer YY.M or YY.M.N'
 check "a leading-zero-patch candidate tag is refused" "26.10.01" $?
 TAG="$_saved_tag"
 
+zero_draft_denials
+
 # Order is numeric by component, including components too large for machine integers.
-for _origin in 26.10.0 27.0.0 26.9.1 26.9.9007199254740993 v26.10.0 v27.0.0 v26.9.1 v26.9.9007199254740993; do
+for _origin in 26.12 27.0.0 26.11.1 26.11.9007199254740993 v26.12.0 v27.0.0 v26.11.1 v26.11.9007199254740993; do
 	build_release_state || blind "fixture"
 	jq --arg tag "$_origin" '.tag_name = $tag' "$STATE/origin.json" >"$STATE/origin.next" &&
 		mv "$STATE/origin.next" "$STATE/origin.json"
@@ -955,7 +1032,7 @@ for _origin in 26.10.0 27.0.0 26.9.1 26.9.9007199254740993 v26.10.0 v27.0.0 v26.
 	check "latest $_origin prevents publishing an older candidate" "no pointer regression" $?
 done
 
-for _origin in 26.8.99 26.8.9007199254740993 25.99.99 v26.8.99 v26.8.9007199254740993 v25.99.99; do
+for _origin in 26.10.0 26.10.1 26.10.9007199254740993 25.99.99 v26.9.99 v26.9.9007199254740993 v25.99.99; do
 	build_release_state || blind "fixture"
 	jq --arg tag "$_origin" '.tag_name = $tag' "$STATE/origin.json" >"$STATE/origin.next" &&
 		mv "$STATE/origin.next" "$STATE/origin.json"
@@ -964,7 +1041,7 @@ for _origin in 26.8.99 26.8.9007199254740993 25.99.99 v26.8.99 v26.8.90071992547
 	check "a candidate newer than $_origin publishes" "numeric component order" $?
 done
 
-for _origin in v26.8 v26.08.0 v26.8.0-rc1 $'v26.8.0\n'; do
+for _origin in v26 v26.08.0 v26.8.0-rc1 $'v26.8.0\n'; do
 	build_release_state || blind "fixture"
 	jq --arg tag "$_origin" '.tag_name = $tag' "$STATE/origin.json" >"$STATE/origin.next" &&
 		mv "$STATE/origin.next" "$STATE/origin.json"
@@ -1685,11 +1762,6 @@ check "and the admitted recipe still publishes untouched" "the rule is not alway
 # and a published release whose required `.sig` answers 404 while every API-side check passes
 # is exactly the state QA2334 measured and the mode an operator is told to inspect it with.
 # ============================================================================================
-publish_fixture() {
-	build_release_state || return 1
-	jq '.draft = false' "$STATE/release.json" >"$STATE/release.next" || return 1
-	mv "$STATE/release.next" "$STATE/release.json"
-}
 publish_fixture || blind "fixture"
 run_finalizer CURL_FAIL_FOR="stable-manifest.json.sig"
 [ "$rc" -eq 4 ] && [ "$(patch_count)" -eq 0 ]
@@ -1972,14 +2044,6 @@ run_finalizer
 [ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ]
 check "the restored finalizer still publishes the good candidate" "the mutants were undone" $?
 
-echo ""
-echo "== summary =="
-printf 'pass=%d fail=%d\n' "$pass" "$fail"
-if [ "$fail" -ne 0 ]; then
-	printf 'failed:'
-	for f in "${failed_names[@]}"; do printf ' %s' "$f"; done
-	printf '\n'
-	echo "test-release-finalize-stable: RED"
-	exit 1
-fi
-echo "test-release-finalize-stable: OK — $pass cases, real signatures and a recording adapter"
+reconcile_historical_zero
+
+summarize

@@ -6,7 +6,11 @@
   },
   "forbidden": {
     "title": "Sin autorización",
-    "description": "No tienes permiso para ver esto. Solicita acceso a un administrador."
+    "description": "No tienes permiso para ver esto. Solicita acceso a un administrador.",
+    "accessTo": "No tienes acceso a {{subject}}.",
+    "accessToThis": "No tienes acceso a esto.",
+    "nextStep": "Tus roles o una política de grupo no lo permiten. Un propietario o administrador de esta organización puede concederlo.",
+    "deniedByPolicy": "La política «{{policy}}» lo deniega. Un propietario o administrador de esta organización puede cambiarla."
   },
   "serverError": {
     "title": "Algo ha salido mal",
@@ -44,5 +48,15 @@
   "tenantAdmission": {
     "title": "Se requiere admisión en la organización",
     "description": "Inicia sesión con una identidad del directorio admitida en la organización. La autoridad global de bootstrap no permite operar comunicaciones del workspace."
+  },
+  "moduleNotEnabled": {
+    "title": "No activado en esta instalación",
+    "description": "Esta parte de Olivares está apagada aquí, así que no hay nada que mostrar.",
+    "named": "{{module}} no está activado en esta instalación.",
+    "unnamed": "Este módulo no está activado en esta instalación."
+  },
+  "notInEdition": {
+    "subject": "Esta edición no incluye {{subject}}.",
+    "generic": "Esta edición no incluye esto."
   }
 }

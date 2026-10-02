@@ -8,9 +8,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
@@ -355,7 +357,7 @@ func dbInitPosture(pool, flag string, p *store.RolePosture, admin bool) dbInitVe
 
 func dbInitCmd() *cobra.Command {
 	var (
-		superuserDSN                          string
+		superuserDSN, dataDir                 string
 		database, sslmode                     string
 		appRole, appPassword, appPasswordFile string
 		ownerRole, ownerPassword, ownerPwFile string
@@ -374,7 +376,12 @@ func dbInitCmd() *cobra.Command {
 			"  • optionally the cross-tenant admin role (--admin-role, NOSUPERUSER BYPASSRLS) for --admin-dsn;\n" +
 			"  • the application database, owned by the owner role.\n\n" +
 			"It then reconnects as each provisioned role to verify the engine will accept it. Use\n" +
-			"--print-sql to preview the exact statements (passwords redacted) without connecting.",
+			"--print-sql to preview the exact statements (passwords redacted) without connecting.\n\n" +
+			"With --data-dir it prepares quickstart's PostgreSQL for that installation instead: it\n" +
+			"generates missing role names and passwords, splits the owner unless --owner-role is\n" +
+			"passed empty, saves private DSN files under --data-dir/postgres, and quickstart reuses\n" +
+			"them without the maintenance credential. There, local connections default to\n" +
+			"sslmode=prefer and remote ones to verify-full.",
 		Example: `  # Preview the SQL without connecting
   olivares db init --print-sql --app-password-file /run/secrets/app-pw
 
@@ -397,13 +404,26 @@ func dbInitCmd() *cobra.Command {
 			if err != nil {
 				return fmt.Errorf("--admin-password: %w", err)
 			}
+			// ⛔ RULE 1, WE DO NOT BREAK USERS (RM, 2026-10-02). Every invocation 26.10.0
+			// accepted has no --data-dir (the flag is new), and it keeps 26.10.0's result:
+			// database olivares and role olivares_app unless named, the app role owning the
+			// schema unless --owner-role names a different role, no generated password, no
+			// file written, and the same output. Preparing quickstart's private PostgreSQL
+			// files, with names generated for the installation, is what --data-dir asks for.
+			if !cmd.Flags().Changed("data-dir") {
+				return runDBInitClassic(cmd, classicDBInitSpec(cmd.Flags(), dbInitClassicFlags{
+					database: database, sslmode: sslmode, appRole: appRole, ownerRole: ownerRole, adminRole: adminRole,
+					appPassword: appPw, ownerPassword: ownerPw, adminPassword: adminPw, inventory: installDirectoryInventory,
+				}), superuserDSN, printSQL)
+			}
+			splitOwner := !(cmd.Flags().Changed("owner-role") && (ownerRole == "" || ownerRole == appRole))
 			spec := store.PgProvisionSpec{
 				InstallDirectoryInventory: installDirectoryInventory,
 				Database:                  database,
 				SSLMode:                   sslmode,
 				App:                       store.PgRole{Name: appRole, Password: appPw},
 			}
-			if ownerRole != "" && ownerRole != appRole {
+			if splitOwner {
 				spec.Owner = store.PgRole{Name: ownerRole, Password: ownerPw}
 			}
 			if adminRole != "" {
@@ -411,6 +431,18 @@ func dbInitCmd() *cobra.Command {
 			}
 
 			if printSQL {
+				// The preview names what the run will use: the data directory's saved names,
+				// or the names given. A new data directory's names are generated when the run
+				// prepares it, so a preview of unnamed roles would show names it never uses.
+				if dir, err := resolveCommandDataDir(dataDir); err == nil {
+					if saved, ok := readSavedPostgresNames(dir); ok {
+						spec = saved.over(spec, cmd.Flags().Changed("owner-role"))
+					}
+				}
+				if spec.Database == "" || spec.App.Name == "" || splitOwner && spec.Owner.Name == "" {
+					return errors.New("--print-sql with --data-dir: a new data directory's database and role names are generated when db init prepares it; " +
+						"name them with --database, --app-role and --owner-role to preview, or preview without --data-dir")
+				}
 				steps, err := coreengine.RenderProvisionSQL(spec)
 				if err != nil {
 					return err
@@ -425,43 +457,133 @@ func dbInitCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := coreengine.ProvisionPostgres(cmd.Context(), resolved, spec, true)
+			if installDirectoryInventory {
+				// Attest an existing schema without replacing its credentials. The names
+				// come from the data directory db init or quickstart saved, unless named.
+				if dir, err := resolveCommandDataDir(dataDir); err == nil {
+					dataDir = dir
+				}
+				if saved, ok := readSavedPostgresNames(dataDir); ok {
+					spec = saved.over(spec, cmd.Flags().Changed("owner-role"))
+				}
+				spec = postgresSpecNames(spec, splitOwner, "")
+				res, err := coreengine.ProvisionPostgres(cmd.Context(), resolved, spec, true)
+				if err != nil {
+					return err
+				}
+				return renderDBInitResult(cmd, spec, res, "")
+			}
+			dataDir, err = resolveCommandDataDir(dataDir)
 			if err != nil {
 				return err
 			}
-			return renderDBInitResult(cmd, spec, res)
+			dataDir, err = filepath.Abs(dataDir)
+			if err != nil {
+				return err
+			}
+			init, err := initPostgresConfig(cmd.Context(), dataDir, resolved, spec, splitOwner)
+			if err != nil {
+				return err
+			}
+			// A database provisioned now gets the engine's schema and the tenant
+			// inventory, so its first start runs every job that must cover every
+			// tenant. A refusal (managed PostgreSQL without a superuser) leaves those
+			// jobs off, which the engine says; provisioning itself succeeded.
+			if init.fresh && init.spec.HasSplitOwner() {
+				if err := applySchemaAndInstallTenantInventory(cmd.Context(), init); err != nil {
+					fmt.Fprintln(cmd.ErrOrStderr(), tenantInventoryNotInstalled(err))
+				} else {
+					init.result.DirectoryInventoryInstalled = true
+				}
+			}
+			return renderDBInitResult(cmd, init.spec, init.result, dataDir)
 		},
 	}
 	cmd.Flags().StringVar(&superuserDSN, "superuser-dsn", "", "superuser / maintenance DSN used ONLY to provision (e.g. postgres://postgres@host:5432/postgres). Accepts a file:/env: reference")
-	cmd.Flags().StringVar(&database, "database", "olivares", "application database name to create/own")
-	cmd.Flags().StringVar(&sslmode, "sslmode", "verify-full", "libpq sslmode for the printed DSN hints")
+	cmd.Flags().StringVar(&dataDir, "data-dir", "", "prepare quickstart's PostgreSQL for this installation data directory: names generated for it, private DSN files saved under it (without --data-dir, db init provisions as 26.10.0 did and writes no file)")
+	cmd.Flags().StringVar(&database, "database", "", "application database name to create/own (default olivares; with --data-dir, generated for that installation)")
+	cmd.Flags().StringVar(&sslmode, "sslmode", "", "libpq sslmode (default verify-full for the printed DSN hints; with --data-dir, prefer for local hosts/sockets and verify-full for remote hosts; preserves an explicit DSN mode)")
 	_ = cmd.RegisterFlagCompletionFunc("sslmode", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return []string{"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}, cobra.ShellCompDirectiveNoFileComp
 	})
-	cmd.Flags().StringVar(&appRole, "app-role", "olivares_app", "application role (runtime traffic; NOSUPERUSER NOBYPASSRLS)")
+	cmd.Flags().StringVar(&appRole, "app-role", "", "application role (runtime traffic; NOSUPERUSER NOBYPASSRLS; default olivares_app; with --data-dir, generated)")
 	cmd.Flags().StringVar(&appPassword, "app-password", "", "application role password (prefer --app-password-file)")
 	cmd.Flags().StringVar(&appPasswordFile, "app-password-file", "", "read the application role password from a file, or - for stdin")
-	cmd.Flags().StringVar(&ownerRole, "owner-role", "", "SEPARATE owner role that owns the schema and runs DDL (enables the least-privilege split). Empty = the app role owns the schema. Use on a FRESH database; adopting the split on an existing single-role db needs a manual REASSIGN OWNED first (see deploy/postgres/README.md)")
+	cmd.Flags().StringVar(&ownerRole, "owner-role", "", "SEPARATE owner role that owns the schema and runs DDL (enables the least-privilege split). Empty = the app role owns the schema; with --data-dir a separate owner is generated unless this is passed empty. Use on a FRESH database; adopting the split on an existing single-role db needs a manual REASSIGN OWNED first (see deploy/postgres/README.md)")
 	cmd.Flags().StringVar(&ownerPassword, "owner-password", "", "owner role password (prefer --owner-password-file)")
 	cmd.Flags().StringVar(&ownerPwFile, "owner-password-file", "", "read the owner role password from a file, or - for stdin")
 	cmd.Flags().StringVar(&adminRole, "admin-role", "", "cross-tenant admin role for --admin-dsn (NOSUPERUSER BYPASSRLS). Empty = not provisioned")
 	cmd.Flags().StringVar(&adminPassword, "admin-password", "", "admin role password (prefer --admin-password-file)")
 	cmd.Flags().StringVar(&adminPwFile, "admin-password-file", "", "read the admin role password from a file, or - for stdin")
 	cmd.Flags().BoolVar(&printSQL, "print-sql", false, "print the provisioning SQL (passwords redacted) and exit, without connecting")
-	cmd.Flags().BoolVar(&installDirectoryInventory, "install-directory-inventory", false, "install and attest the closed noAdmin inventory after core migrations; existing app/owner roles and product tables are required, no passwords or role memberships are changed")
+	cmd.Flags().BoolVar(&installDirectoryInventory, "install-directory-inventory", false, "install ONLY (no provisioning, no grants): install and attest the closed tenant inventory on a database the engine has already migrated, so retention, legal hold and audit checkpoints cover every tenant without --admin-dsn; the database and role names come from --data-dir's saved configuration unless named")
 	return cmd
+}
+
+// dbInitClassicFlags are db init's flags as 26.10.0 read them.
+type dbInitClassicFlags struct {
+	database, sslmode, appRole, ownerRole, adminRole string
+	appPassword, ownerPassword, adminPassword        string
+	inventory                                        bool
+}
+
+// classicDBInitSpec is the spec 26.10.0 built from the same flags: its defaults
+// (olivares, olivares_app, verify-full for the printed hints) where a flag was not
+// given, and a separate owner only when --owner-role names a role other than the
+// app role.
+func classicDBInitSpec(flags *pflag.FlagSet, f dbInitClassicFlags) store.PgProvisionSpec {
+	if !flags.Changed("database") {
+		f.database = "olivares"
+	}
+	if !flags.Changed("app-role") {
+		f.appRole = "olivares_app"
+	}
+	if !flags.Changed("sslmode") {
+		f.sslmode = "verify-full"
+	}
+	spec := store.PgProvisionSpec{
+		InstallDirectoryInventory: f.inventory,
+		Database:                  f.database,
+		SSLMode:                   f.sslmode,
+		App:                       store.PgRole{Name: f.appRole, Password: f.appPassword},
+	}
+	if f.ownerRole != "" && f.ownerRole != f.appRole {
+		spec.Owner = store.PgRole{Name: f.ownerRole, Password: f.ownerPassword}
+	}
+	if f.adminRole != "" {
+		spec.Admin = &store.PgRole{Name: f.adminRole, Password: f.adminPassword}
+	}
+	return spec
+}
+
+// runDBInitClassic is 26.10.0's db init: preview, or provision and verify, and the
+// same output. It reads and writes no data directory.
+func runDBInitClassic(cmd *cobra.Command, spec store.PgProvisionSpec, superuserDSN string, printSQL bool) error {
+	if printSQL {
+		steps, err := coreengine.RenderProvisionSQL(spec)
+		if err != nil {
+			return err
+		}
+		return renderDBInitPreview(cmd, spec, steps)
+	}
+	if superuserDSN == "" {
+		return fmt.Errorf("--superuser-dsn is required (a superuser / maintenance DSN, e.g. postgres://postgres@host:5432/postgres); or use --print-sql to preview without connecting")
+	}
+	resolved, err := resolveDSNRef(cmd.Context(), "--superuser-dsn", superuserDSN, osGetenv)
+	if err != nil {
+		return err
+	}
+	res, err := coreengine.ProvisionPostgres(cmd.Context(), resolved, spec, true)
+	if err != nil {
+		return err
+	}
+	return renderDBInitResult(cmd, spec, res, "")
 }
 
 // renderDBInitPreview and renderDBInitResult are the two render switches of
 // `db init`, named so they can be exercised directly.
 //
-// renderDBInitResult exists as a function for a reason worth stating: its input is
-// a store.PgProvisionResult that only a REAL Postgres superuser connection can
-// produce, so the only way to prove its two forms agree — and that the text one is
-// byte-identical to what this command printed before -o json existed — is to hand
-// it a fabricated result. Left inline in RunE it would have been unreachable
-// without a database, which is how a renderer ends up with no witness at all.
-// Called from exactly one place each (dbInitCmd's RunE, above).
+// Fixtures exercise both renderers without a live maintenance connection.
 func renderDBInitPreview(cmd *cobra.Command, spec store.PgProvisionSpec, steps []store.PgProvisionStep) error {
 	// printSteps stays the text formatter, untouched: the text form is then
 	// byte-identical BY CONSTRUCTION, not by a second rendering that happens to
@@ -478,9 +600,9 @@ func renderDBInitPreview(cmd *cobra.Command, spec store.PgProvisionSpec, steps [
 	})
 }
 
-func renderDBInitResult(cmd *cobra.Command, spec store.PgProvisionSpec, res store.PgProvisionResult) error {
+func renderDBInitResult(cmd *cobra.Command, spec store.PgProvisionSpec, res store.PgProvisionResult, dataDir string) error {
 	return renderOut(cmd, func(out io.Writer) error {
-		printInitResult(out, spec, res)
+		printInitResult(out, spec, res, dataDir)
 		return nil
 	}, newDBInitResult(spec, res))
 }
@@ -492,11 +614,19 @@ func printSteps(out io.Writer, steps []store.PgProvisionStep) {
 	}
 }
 
-func printInitResult(out io.Writer, spec store.PgProvisionSpec, res store.PgProvisionResult) {
+// dbInitInventoryInstalledLine is what db init says when it installed the tenant
+// inventory on the database it provisioned.
+const dbInitInventoryInstalledLine = "Tenant inventory installed and attested: the jobs that cover every tenant run without an administration role"
+
+func printInitResult(out io.Writer, spec store.PgProvisionSpec, res store.PgProvisionResult, dataDir string) {
 	if spec.InstallDirectoryInventory {
-		fmt.Fprintf(out, "directory inventory installed and attested on %q: %t; activate and reopen separately\n", spec.Database, res.DirectoryInventoryInstalled)
+		// The jobs that must cover every tenant read the inventory from the next
+		// start; activating the directory writer is its own command, which says so.
+		fmt.Fprintf(out, "directory inventory installed and attested on %q: %t; restart the engine to start these jobs: "+
+			"retention, legal hold, audit checkpoints and archival\n", spec.Database, res.DirectoryInventoryInstalled)
 		return
 	}
+
 	fmt.Fprintf(out, "provisioned database %q with %d step(s):\n", spec.Database, len(res.Steps))
 	for _, s := range res.Steps {
 		fmt.Fprintf(out, "  • %s\n", s.Label)
@@ -509,21 +639,26 @@ func printInitResult(out io.Writer, spec store.PgProvisionSpec, res store.PgProv
 	if res.AdminPosture != nil {
 		printPosture(out, "  admin", res.AdminPosture, true)
 	}
-	// NOT the next-step primitive, and not reworded either. TestDBInitProvisioned...
-	// asserts this block is BYTE-IDENTICAL to its pre-VER-06 form, because `db init`
-	// is scripted: its stdout is read by the setup flows that turn these three
-	// spellings into files. The presentation rule loses to a published contract, and
-	// this comment is here so the next person does not rediscover that with a red
-	// test.
-	fmt.Fprintln(out, "\nNext: store each password in a 0600 file and point serve at it (the password stays out of the env file):")
-	fmt.Fprintf(out, "  --dsn=file:/etc/olivares/secrets/app.dsn        # %s\n", res.AppDSNHint)
-	if res.OwnerDSNHint != "" {
-		fmt.Fprintf(out, "  --owner-dsn=file:/etc/olivares/secrets/owner.dsn  # %s\n", res.OwnerDSNHint)
+	if res.DirectoryInventoryInstalled {
+		fmt.Fprintf(out, "\n%s.\n", dbInitInventoryInstalledLine)
 	}
-	if res.AdminDSNHint != "" {
-		fmt.Fprintf(out, "  --admin-dsn=file:/etc/olivares/secrets/admin.dsn  # %s\n", res.AdminDSNHint)
+	if dataDir == "" {
+		// NOT the next-step primitive, and not reworded either: 26.10.0's block,
+		// byte for byte, because `db init` is scripted — its stdout is read by the
+		// setup flows that turn these three spellings into files (Rule 1).
+		fmt.Fprintln(out, "\nNext: store each password in a 0600 file and point serve at it (the password stays out of the env file):")
+		fmt.Fprintf(out, "  --dsn=file:/etc/olivares/secrets/app.dsn        # %s\n", res.AppDSNHint)
+		if res.OwnerDSNHint != "" {
+			fmt.Fprintf(out, "  --owner-dsn=file:/etc/olivares/secrets/owner.dsn  # %s\n", res.OwnerDSNHint)
+		}
+		if res.AdminDSNHint != "" {
+			fmt.Fprintf(out, "  --admin-dsn=file:/etc/olivares/secrets/admin.dsn  # %s\n", res.AdminDSNHint)
+		}
+		fmt.Fprintln(out, "`olivares setup` writes these files and the env file for you.")
+		return
 	}
-	fmt.Fprintln(out, "`olivares setup` writes these files and the env file for you.")
+	fmt.Fprintf(out, "\nPostgreSQL connection: sslmode=%s. Credentials saved privately.\n", spec.SSLMode)
+	fmt.Fprintf(out, "Next: olivares quickstart --data-dir '%s'\n", strings.ReplaceAll(dataDir, "'", "'\\''"))
 }
 
 func printPosture(out io.Writer, label string, p *store.RolePosture, admin bool) {

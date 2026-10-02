@@ -183,9 +183,9 @@ func (m *Module) handleActivateBreakGlass(w http.ResponseWriter, r *http.Request
 	// unconditionally (break-glass bypasses the approval quorum, so its own
 	// auth bar is the remaining preventive control). Composes with — never
 	// replaces — the identity, justification, recording and post-review checks.
-	if mc.Principal.AAL < auth.AAL3 {
+	if !auth.StepUpSatisfied(r.Context(), mc.Principal) {
 		writeJSON(w, http.StatusForbidden, errorBodyCode("step_up_required",
-			"break-glass activation requires a hardware-verified (AAL3) session; complete the WebAuthn/PIV step-up and retry"))
+			"break-glass activation needs the administrative step-up this deployment requires; complete it and retry"))
 		return
 	}
 	in.Reason = strings.TrimSpace(in.Reason)
@@ -620,27 +620,36 @@ func (m *Module) handleConsumeBreakGlass(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	type consumeResponse struct {
-		Granted   bool   `json:"granted"`
-		Grant     string `json:"grant,omitempty"`
-		ExpiresAt string `json:"expires_at,omitempty"`
+	resp, err := m.consumeEmergency(r.Context(), mc.Data, mc, in)
+	if err != nil {
+		writeStoreError(w, err)
+		return
 	}
+	writeJSON(w, http.StatusOK, resp)
+}
 
+type EmergencyConsumption struct {
+	Granted   bool   `json:"granted"`
+	Grant     string `json:"grant,omitempty"`
+	ExpiresAt string `json:"expires_at,omitempty"`
+}
+
+func (m *Module) consumeEmergency(ctx context.Context, data approvalData, mc api.ModuleContext, in consumeBreakGlassRequest) (EmergencyConsumption, error) {
 	for attempt := 0; attempt < maxConsumeRetries; attempt++ {
 		now := m.clock.Now()
 		var (
-			resp    consumeResponse
+			resp    EmergencyConsumption
 			grantID string
 			scope   string
 		)
-		err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+		err := data.Mutate(ctx, func(sc store.Scope) error {
 			repo, err := sc.Ext(breakGlassKind)
 			if err != nil {
 				return err
 			}
 			// Stored-active grants only (a small set: activation enforces one at a
 			// time); effective status re-derived per grant, deny-closed on expiry.
-			grants, err := listAll(r.Context(), repo, eq(colBGStatus, bgStatusActive))
+			grants, err := listAll(ctx, repo, eq(colBGStatus, bgStatusActive))
 			if err != nil {
 				return err
 			}
@@ -656,7 +665,7 @@ func (m *Module) handleConsumeBreakGlass(w http.ResponseWriter, r *http.Request,
 				break
 			}
 			if grant == nil {
-				resp = consumeResponse{Granted: false}
+				resp = EmergencyConsumption{Granted: false}
 				return nil
 			}
 			grantID, scope = grant.String(model.ColID), grant.String(colBGMatchAction)
@@ -666,7 +675,7 @@ func (m *Module) handleConsumeBreakGlass(w http.ResponseWriter, r *http.Request,
 			if err != nil {
 				return err
 			}
-			if _, err := useRepo.Create(r.Context(), model.Record{
+			if _, err := useRepo.Create(ctx, model.Record{
 				colBGUseGrant: grantID, colAction: in.Action,
 				colSubjectKind: in.SubjectKind, colSubjectRef: in.SubjectRef,
 				colBGUsedBy: mc.Principal.Actor(), colBGUsedByUser: mc.Principal.UserID.String(),
@@ -675,11 +684,11 @@ func (m *Module) handleConsumeBreakGlass(w http.ResponseWriter, r *http.Request,
 				return err
 			}
 			grant[colBGUseCount] = grant.Int(colBGUseCount) + 1
-			if _, err := repo.Update(r.Context(), grant); err != nil {
+			if _, err := repo.Update(ctx, grant); err != nil {
 				return err // ErrConflict -> retry
 			}
-			resp = consumeResponse{Granted: true, Grant: grantID, ExpiresAt: grant.String(colBGExpiresAt)}
-			return auditEvent(r.Context(), sc, mc, "governance.breakglass.use", breakGlassKind, model.ID(grantID), map[string]any{
+			resp = EmergencyConsumption{Granted: true, Grant: grantID, ExpiresAt: grant.String(colBGExpiresAt)}
+			return auditEvent(ctx, sc, mc, "governance.breakglass.use", breakGlassKind, model.ID(grantID), map[string]any{
 				"action": in.Action, "subject_kind": in.SubjectKind,
 			})
 		})
@@ -687,17 +696,15 @@ func (m *Module) handleConsumeBreakGlass(w http.ResponseWriter, r *http.Request,
 			if isConflict(err) {
 				continue // version race on the counter: reload and re-evaluate
 			}
-			writeStoreError(w, err)
-			return
+			return EmergencyConsumption{}, err
 		}
 		if resp.Granted {
-			m.emitBreakGlassFinding(r.Context(), mc.Tenant, findingBreakGlassUsed, grantID, scope, sdkmodel.SeverityHigh,
+			m.emitBreakGlassFinding(ctx, mc.Tenant, findingBreakGlassUsed, grantID, scope, sdkmodel.SeverityHigh,
 				"Action proceeded under BREAK-GLASS emergency access — included in the grant's forced post-review")
 		}
-		writeJSON(w, http.StatusOK, resp)
-		return
+		return resp, nil
 	}
-	writeJSON(w, http.StatusConflict, errorBody("break-glass consume conflicted repeatedly; please retry"))
+	return EmergencyConsumption{}, store.ErrConflict
 }
 
 // emitBreakGlassFinding publishes a break-glass lifecycle finding on the

@@ -218,6 +218,36 @@ describe('WorkRail — what a row says', () => {
     expect(within(row).getByText(/pinned/i)).toBeInTheDocument()
   })
 
+  it('a row pinned under its run name shows the pin, and `p` unpins that name', async () => {
+    // F1 09b sweep: the row is live:<ref> now; the pin was stored while it was run:<ref>.
+    const launched = row(
+      {
+        live_ref: 'lr-l',
+        session_ref: 'sess-l',
+        attribution: 'managed',
+        run_ref: 'run-l',
+      },
+      [
+        {
+          run_ref: 'run-l',
+          live_ref: 'lr-l',
+          provider_profile_ref: 'ppf_1',
+          state: 'running',
+        } as unknown as RunDTO,
+      ],
+    )
+    expect(addressOf(launched)).toBe('live:lr-l')
+    const user = userEvent.setup()
+    const { onTogglePin } = renderRail({
+      sessions: [launched],
+      pinned: new Set(['run:run-l']),
+    })
+    expect(within(rows()[0]).getByText(/pinned/i)).toBeInTheDocument()
+    await user.tab()
+    await user.keyboard('p')
+    expect(onTogglePin).toHaveBeenCalledWith('run:run-l')
+  })
+
   it('groups by what the session needs, and keeps an empty group', () => {
     renderRail({ sessions: [working] })
     // The three headings are always there. An empty one states its own sentence

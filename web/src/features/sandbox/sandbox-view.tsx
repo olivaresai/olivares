@@ -35,7 +35,6 @@ import {
   ListTruncationBadge,
   SectionCard,
   SeamBadge,
-  SelfAuditNotice,
 } from '@/features/_intel'
 import { sandboxApi, sandboxKeys } from './api'
 import {
@@ -280,7 +279,6 @@ export function SandboxView() {
           <SeamBadge label={t('seam.synthetic')} />
         </div>
       }
-      notices={<SelfAuditNotice />}
     >
       {/* CONTROLLED, so an empty state can carry its own next action. A run only
           exists once a scenario has been authored, and the author button lives in the

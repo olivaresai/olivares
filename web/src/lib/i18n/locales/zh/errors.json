@@ -6,7 +6,11 @@
   },
   "forbidden": {
     "title": "未获授权",
-    "description": "您无权查看此内容。请向管理员申请访问权限。"
+    "description": "您无权查看此内容。请向管理员申请访问权限。",
+    "accessTo": "你无权访问{{subject}}。",
+    "accessToThis": "你无权访问此内容。",
+    "nextStep": "你的角色或组策略不允许此操作。此组织的所有者或管理员可以授予权限。",
+    "deniedByPolicy": "策略“{{policy}}”拒绝了此操作。此组织的所有者或管理员可以更改它。"
   },
   "serverError": {
     "title": "出现问题",
@@ -44,5 +48,15 @@
   "tenantAdmission": {
     "title": "需要组织准入",
     "description": "请使用已获组织准入的目录身份登录。全局 bootstrap 权限不能操作工作区通信。"
+  },
+  "moduleNotEnabled": {
+    "title": "此安装未启用",
+    "description": "Olivares 的这一部分在这里已关闭，因此没有可显示的内容。",
+    "named": "此安装未启用 {{module}}。",
+    "unnamed": "此安装未启用该模块。"
+  },
+  "notInEdition": {
+    "subject": "此版本不包含{{subject}}。",
+    "generic": "此版本不包含此功能。"
   }
 }

@@ -104,7 +104,7 @@ PROD_SOURCE="https://github.com/olivaresai/olivares"
 # consumer-facing defaults (scripts/verify-release.sh, scripts/install*.sh) accept BOTH
 # shapes for the releases history actually serves; THIS gate admits only the current one,
 # because it decides what may be RELEASED, not what may be verified.
-PROD_TAG_RE='^[0-9]{2}\.([1-9]|1[0-2])\.(0|[1-9][0-9]*)$'
+PROD_TAG_RE='^[0-9]{2}\.([1-9]|1[0-2])(\.[1-9][0-9]*)?$'
 
 # NO rehearsal tuple here — see the header. The internal rehearsal caller injects it.
 REH_TAG_RE='^v0\.0\.0-rehearsal\.[0-9]+$'
@@ -229,7 +229,7 @@ case "$RELEASE_MODE" in
 production | preprod)
 	case "$RELEASE_TAG" in
 	v[0-9]*)
-		fail "tag '$RELEASE_TAG' carries a v prefix: release tags are bare CalVer (YY.M.PATCH, e.g. 26.10.0) since the 2026-09-29 tag-name correction (§C.4.3)"
+		fail "tag '$RELEASE_TAG' carries a v prefix: release tags are bare CalVer (YY.M or YY.M.N, e.g. 26.10.0) since the 2026-09-29 tag-name correction (§C.4.3)"
 		;;
 	esac
 	;;

@@ -70,7 +70,6 @@
     "truncated": "Partial data",
     "truncatedHint": "This aggregate reached the scan ceiling — it is partial, not an exact total.",
     "truncatedBrief": "scan ceiling reached",
-    "selfAudited": "Privileged read — recorded in the audit ledger.",
     "seam": "Not wired yet",
     "seamBody": "Declared contract — the {{what}} is not wired to the backend yet, so this shows the declared shape, not live data.",
     "minimalData": "Aggregates and metadata only — no prompts, outputs or secrets.",

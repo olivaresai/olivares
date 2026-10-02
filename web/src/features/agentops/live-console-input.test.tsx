@@ -132,6 +132,7 @@ beforeEach(() => {
   vi.mocked(toast.warning).mockClear()
   vi.mocked(http.post).mockReset()
   vi.mocked(http.post).mockResolvedValue({ accepted: true })
+  vi.mocked(http.get).mockReset()
 })
 
 describe('LiveConsole interrupt contract', () => {
@@ -261,9 +262,20 @@ describe('LiveConsole interrupt contract', () => {
     },
   )
 
+  // Claude Code turns are interrupted through its stream-json control request, so
+  // every bridged run offers it; only a relayed (remote-control) run cannot.
+  it.each([claudeRun, legacyRun])(
+    'offers interruption for a Claude Code run %o',
+    (run) => {
+      wrap(run)
+      expect(
+        screen.getByRole('button', { name: 'Interrupt turn' }),
+      ).toBeEnabled()
+    },
+  )
+
   it.each([
-    claudeRun,
-    legacyRun,
+    { ...claudeRun, transport: 'remote-control' as const },
     { ...codexRun, transport: 'remote-control' as const },
   ])('does not offer unsupported interruption for %o', (run) => {
     wrap(run)
@@ -298,7 +310,7 @@ describe('LiveConsole interrupt contract', () => {
 
   it('does not report a late response under a renewed credential with the same session id', async () => {
     useSessionStore.getState().setSession({
-      token: 'test-before',
+      csrfToken: 'test-before',
       sessionId: 'same-session',
       expiresAt: '2099-01-01',
     })
@@ -318,7 +330,7 @@ describe('LiveConsole interrupt contract', () => {
     ).toBeDisabled()
     act(() =>
       useSessionStore.getState().setSession({
-        token: 'test-after',
+        csrfToken: 'test-after',
         sessionId: 'same-session',
         expiresAt: '2099-01-01',
       }),
@@ -507,5 +519,73 @@ describe('LiveConsole send contract under a work lease', () => {
     await send('hello')
     await waitFor(() => expect(http.post).toHaveBeenCalled())
     expect(posted().body).toEqual({ text: 'hello' })
+  })
+})
+
+// THE STAMP IS PERMANENT, THE LEASE IS NOT (MC, Root 2026-10-02, F1's 09 defect). After a
+// peer work item is submitted its lease is released: the engine applies ordinary control
+// to the run and refuses an explicitly stale fence, so forwarding the stamp left the
+// session impossible to speak to or interrupt. The control reads the run as the engine
+// answers it at dispatch (its work_lease_state), and these cases assert the wire.
+describe('LiveConsole controls after the work item is submitted', () => {
+  const bound: RunDTO = {
+    ...codexRun,
+    work_item_id: 'work-a',
+    work_lease_fence: 7,
+    work_owner_epoch: 2,
+    work_dispatch_key: 'dispatch-a',
+  }
+  // GET /v1/m/sessions/runs/{ref} at dispatch: the run as the engine answers it now.
+  const now = (state: 'active' | 'ended'): RunDTO => ({
+    ...bound,
+    work_lease_state: state,
+  })
+
+  it('after submit, Send carries no fence and is accepted', async () => {
+    vi.mocked(http.get).mockResolvedValue(now('ended'))
+    wrap(bound)
+    await send('one more thing')
+    await waitFor(() => expect(http.post).toHaveBeenCalled())
+    expect(http.get).toHaveBeenCalledWith('/v1/m/sessions/runs/run_1')
+    expect(posted()).toEqual({
+      path: '/v1/m/sessions/runs/run_1/input',
+      body: { text: 'one more thing' },
+    })
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Session turn' })).toHaveValue(
+        '',
+      ),
+    )
+  })
+
+  it('after submit, Interrupt carries no fence', async () => {
+    vi.mocked(http.get).mockResolvedValue(now('ended'))
+    vi.mocked(http.post).mockResolvedValue({ ...bound })
+    wrap(bound)
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Interrupt turn' }),
+    )
+    await waitFor(() => expect(http.post).toHaveBeenCalled())
+    expect(posted()).toEqual({
+      path: '/v1/m/sessions/runs/run_1/interrupt',
+      body: undefined,
+    })
+  })
+
+  it('during an active lease, Send and Interrupt still carry the exact fence', async () => {
+    vi.mocked(http.get).mockResolvedValue(now('active'))
+    wrap(bound)
+    await send('keep going')
+    await waitFor(() => expect(http.post).toHaveBeenCalled())
+    expect(posted().body).toEqual({ text: 'keep going', work_lease_fence: 7 })
+    vi.mocked(http.post).mockClear()
+    await userEvent.click(
+      screen.getByRole('button', { name: 'Interrupt turn' }),
+    )
+    await waitFor(() => expect(http.post).toHaveBeenCalled())
+    expect(posted()).toEqual({
+      path: '/v1/m/sessions/runs/run_1/interrupt',
+      body: { work_lease_fence: 7 },
+    })
   })
 })

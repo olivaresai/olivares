@@ -48,8 +48,8 @@ func (r Readiness) Cause() string {
 
 // CompositionReaderRegistry is the OPTIONAL registry capability a composition
 // declares its retirement readers through: each declared module names the
-// counted columns (kind.column) its retirement step reads. Readiness requires
-// every counted column of the closed registry to be read by exactly one declared
+// counted or content columns (kind.column) its retirement step reads. Readiness requires
+// every counted or content column of the closed registry to be read by exactly one declared
 // module, so a registry without the capability, or a composition that declares
 // nothing, opens unready: the capability fails closed.
 type CompositionReaderRegistry interface {
@@ -64,7 +64,7 @@ type CompositionReaderRegistry interface {
 // declares, or copies, those columns.
 const AuthPartitionReader = "auth"
 
-// CompositionReaders is an OPTIONAL Store capability: the counted columns
+// CompositionReaders is an OPTIONAL Store capability: the counted or content columns
 // (kind.column) each declared reader covers, as the closed registry recorded
 // them, including the store's own AuthPartitionReader.
 type CompositionReaders interface {
@@ -85,7 +85,7 @@ type CompositionContribution struct {
 	// retirement reader, and the retirement must run its step.
 	Modules []string
 	// OutsideStores are the descriptors of the tables the edition keeps outside
-	// the registry. Every column must be declared, and every counted column read
+	// the registry. Every column must be declared, and every counted or content column read
 	// by exactly one declared module.
 	OutsideStores []model.EntityDescriptor
 }

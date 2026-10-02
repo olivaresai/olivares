@@ -109,6 +109,17 @@ function decodeDetailTab(raw: string | undefined): WorkDetailTab {
     : 'overview'
 }
 
+const PRIORITIES = ['p0', 'p1', 'p2', 'p3'] as const
+
+/** A filter value from the address, kept only when it is one of the choices offered: an
+ * unknown status left the filter blank over an empty list (SC 59 item 6). */
+function decodeChoice(
+  raw: string | undefined,
+  choices: readonly string[],
+): string {
+  return raw && choices.includes(raw) ? raw : ''
+}
+
 function decodeArchived(raw: string | undefined): ArchivedFilter {
   return raw === 'true' || raw === 'false' || raw === 'any' ? raw : 'any'
 }
@@ -123,8 +134,10 @@ export function WorkView() {
   const qc = useQueryClient()
 
   const [url, patchUrl] = useUrlState(WORK_URL_KEYS)
-  const status = url.status ?? ''
-  const priority = url.priority ?? ''
+  const status = decodeChoice(url.status, STATUSES)
+  const priority = decodeChoice(url.priority, PRIORITIES)
+  const invalidFilter =
+    (!!url.status && !status) || (!!url.priority && !priority)
   const archived = decodeArchived(url.archived)
   const openItem = decodeItemId(url.item)
   const invalidItem = Boolean(url.item && !openItem)
@@ -274,6 +287,15 @@ export function WorkView() {
               {t('url.invalidItem')}
             </p>
           ) : null}
+          {invalidFilter ? (
+            <p
+              role="status"
+              className="text-body text-muted-foreground"
+              data-slot="work-url-invalid-filter"
+            >
+              {t('url.invalidFilter')}
+            </p>
+          ) : null}
           {/* The stream told us it could not look. That is NOT a disconnect and must not
              be shown as one: the list on screen may be stale in ways nothing else will
              reveal. */}
@@ -349,7 +371,7 @@ export function WorkView() {
                     <SelectItem value="all">
                       {t('filters.allPriority')}
                     </SelectItem>
-                    {(['p0', 'p1', 'p2', 'p3'] as const).map((p) => (
+                    {PRIORITIES.map((p) => (
                       <SelectItem key={p} value={p}>
                         {p}
                       </SelectItem>

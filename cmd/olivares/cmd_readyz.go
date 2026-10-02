@@ -7,6 +7,8 @@ package main
 import (
 	"errors"
 	"fmt"
+	"net"
+	"net/url"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -43,6 +45,15 @@ func newReadyzCmd() *cobra.Command {
 			"    --ca-cert /var/lib/olivares/tls.crt --timeout 3s",
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if !cmd.Flags().Changed("server") {
+				origin, ca := readyzTarget()
+				if origin != "" {
+					o.server = origin
+				}
+				if !cmd.Flags().Changed("ca-cert") && ca != "" {
+					o.caCert = ca
+				}
+			}
 			result, err := readyzprobe.Check(cmd.Context(), readyzprobe.Config{
 				Origin: o.server, CACert: o.caCert, Timeout: o.timeout,
 			})
@@ -75,8 +86,30 @@ func newReadyzCmd() *cobra.Command {
 			}
 		},
 	}
-	cmd.Flags().StringVar(&o.server, "server", o.server, "local numeric-loopback HTTP(S) origin")
+	cmd.Flags().StringVar(&o.server, "server", o.server, "local numeric-loopback HTTP(S) origin (default: the active "+
+		"context's engine when it runs on this host, else the engine this host recorded)")
 	cmd.Flags().StringVar(&o.caCert, "ca-cert", "", "PEM trust anchor for HTTPS (Compose: <data-dir>/tls.crt)")
 	cmd.Flags().DurationVar(&o.timeout, "timeout", o.timeout, "whole-probe deadline")
 	return cmd
+}
+
+// readyzTarget is the origin readyz probes when --server is not given, and the CA
+// that goes with it: the active client context's engine when it runs on this host
+// (N1 RU-04: an engine on another port read as down), else the engine this host's
+// data directory recorded. readyz stays a numeric-loopback probe, so a context for
+// another host is not followed; localhost is read as 127.0.0.1.
+func readyzTarget() (origin, caCert string) {
+	resolved, err := resolveCLIConfig(cliResolutionOptions{SkipCredentials: true})
+	if err == nil && resolved.Server != "" {
+		if u, perr := url.Parse(resolved.Server); perr == nil && u.Port() != "" {
+			host := u.Hostname()
+			if host == "localhost" {
+				host = "127.0.0.1"
+			}
+			if ip := net.ParseIP(host); ip != nil && ip.IsLoopback() {
+				return u.Scheme + "://" + net.JoinHostPort(host, u.Port()), resolved.CACert
+			}
+		}
+	}
+	return localEngine()
 }

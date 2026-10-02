@@ -6,10 +6,8 @@ package sessions
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -180,7 +178,7 @@ func (m *Module) handleProtocolBindingReconcile(
 		writeProtocolBindingAPIError(w, protocolBindingNotFound("binding_not_found"))
 		return
 	}
-	body, err := decodeProtocolBindingReconcileBody(r)
+	body, err := decodeProtocolBindingReconcileBody(w, r)
 	if err != nil {
 		writeWorkError(w, broken(http.StatusBadRequest, "invalid_command"))
 		return
@@ -373,30 +371,14 @@ func protocolBindingQueryFromRequest(
 	return query, nil
 }
 
-func decodeProtocolBindingReconcileBody(r *http.Request) (protocolBindingReconcileBody, error) {
+func decodeProtocolBindingReconcileBody(w http.ResponseWriter, r *http.Request) (protocolBindingReconcileBody, error) {
 	var body protocolBindingReconcileBody
-	raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-	if err != nil {
+	// Optional: an empty reconcile body leaves the zero value, which the caller
+	// reads as "no command fields".
+	if err := api.DecodeRequestBody(w, r, &body, api.RequestBodySpec{MaxBytes: 1 << 20, Optional: true}); err != nil {
 		return body, err
-	}
-	if strings.TrimSpace(string(raw)) == "" {
-		return body, nil
-	}
-	decoder := jsonDecoder(strings.NewReader(string(raw)))
-	if err := decoder.Decode(&body); err != nil {
-		return body, err
-	}
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		return body, errors.New("sessions: trailing protocol binding reconcile body")
 	}
 	return body, nil
-}
-
-func jsonDecoder(reader io.Reader) *json.Decoder {
-	decoder := json.NewDecoder(reader)
-	decoder.DisallowUnknownFields()
-	return decoder
 }
 
 func reconcilePlanPrecondition(header, body string) (string, error) {

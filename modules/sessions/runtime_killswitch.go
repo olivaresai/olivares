@@ -6,8 +6,10 @@ package sessions
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -27,11 +29,12 @@ import (
 // is reclaimed within one sweep interval (the documented, bounded latency). Recovery is
 // the governed dual-control re-enable; the sweep never resurrects, only stops.
 
-// startStopSweep launches the active kill-switch sweep when enabled (interval > 0). It
+// startStopSweep launches the shared active lifecycle sweep when kill-switch
+// checking or the owner-standing check is bound. It
 // runs under a background context (NOT Start's ctx) so it outlives the boot call, and is
 // canceled by Stop. Idempotent: a second call without a Stop is a no-op.
 func (m *Module) startStopSweep() {
-	if m.rt == nil || m.rt.stopSweepInterval <= 0 {
+	if m.rt == nil || (m.rt.stopSweepInterval <= 0 && m.rt.sessionAccessCheck == nil) {
 		return
 	}
 	m.mu.Lock()
@@ -42,10 +45,15 @@ func (m *Module) startStopSweep() {
 	ctx, cancel := context.WithCancel(context.Background())
 	m.rt.sweepCancel = cancel
 	interval := m.rt.stopSweepInterval
+	// Owner passes are scheduled every five seconds even when emergency-stop
+	// sweeping is disabled. Keep one timer and preserve the kill-switch cadence.
+	if m.rt.sessionAccessCheck != nil && (interval <= 0 || interval > 5*time.Second) {
+		interval = 5 * time.Second
+	}
 	m.mu.Unlock()
 	go m.runStopSweep(ctx, interval)
 	if m.log != nil {
-		m.log.Info("sessions: active kill-switch sweep started", "interval", interval.String())
+		m.log.Info("sessions: active access and emergency-stop sweep started", "interval", interval.String())
 	}
 }
 
@@ -60,16 +68,92 @@ func (m *Module) stopStopSweep() {
 	}
 }
 
-// runStopSweep ticks until its context is canceled, sweeping live runs each tick.
+// runStopSweep uses one timer for both checks. It schedules their exact due
+// times, so the owner cadence never rounds or delays a configured emergency check.
 func (m *Module) runStopSweep(ctx context.Context, interval time.Duration) {
-	t := time.NewTicker(interval)
-	defer t.Stop()
+	now := time.Now()
+	var nextAccess, nextKill time.Time
+	if m.rt.sessionAccessCheck != nil {
+		nextAccess = now.Add(interval)
+	}
+	if m.rt.stopSweepInterval > 0 {
+		nextKill = now.Add(m.rt.stopSweepInterval)
+	}
+	timer := time.NewTimer(interval)
+	defer timer.Stop()
+	var ownerDone <-chan struct{}
 	for {
+		next := nextAccess
+		if next.IsZero() || (!nextKill.IsZero() && nextKill.Before(next)) {
+			next = nextKill
+		}
+		timer.Reset(time.Until(next))
 		select {
 		case <-ctx.Done():
 			return
-		case <-t.C:
-			m.sweepKillSwitch(ctx)
+		case <-ownerDone:
+			ownerDone = nil
+		case now = <-timer.C:
+			if !nextKill.IsZero() && !now.Before(nextKill) {
+				m.sweepKillSwitch(ctx)
+				nextKill = advanceStopSweep(nextKill, m.rt.stopSweepInterval)
+			}
+			if !nextAccess.IsZero() && !now.Before(nextAccess) {
+				// A slow owner read must not block an emergency deadline. At most
+				// one pass runs; missed owner ticks never accumulate queued work.
+				if ownerDone == nil {
+					done := make(chan struct{})
+					ownerDone = done
+					go func() {
+						defer close(done)
+						m.sweepSessionAccess(ctx)
+					}()
+				}
+				nextAccess = advanceStopSweep(nextAccess, interval)
+			}
+		}
+	}
+}
+
+// Skip missed deadlines without replacing either check's configured cadence.
+func advanceStopSweep(next time.Time, interval time.Duration) time.Time {
+	now := time.Now()
+	if !next.After(now) {
+		next = next.Add((now.Sub(next)/interval + 1) * interval)
+	}
+	return next
+}
+
+// sweepSessionAccess checks idle as well as active runs without holding registry
+// locks over store reads. StopForAccessEnded validates the issuer's exact scope;
+// unavailable standing fails closed through the existing credential-failure stop.
+func (m *Module) sweepSessionAccess(ctx context.Context) {
+	if m.rt.sessionAccessCheck == nil {
+		return
+	}
+	for _, lr := range m.rt.snapshotLive() {
+		lr.mu.Lock()
+		skip := lr.stopRequested || lr.finalized
+		lr.mu.Unlock()
+		if skip {
+			continue
+		}
+		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+		scope, user, err := m.rt.sessionAccessCheck(checkCtx, lr.tenant, lr.runRef)
+		cancel()
+		reason := "Session owner access could not be checked"
+		ended := errors.Is(err, auth.ErrSessionAccessEnded)
+		if ended {
+			reason = "Access ended for " + accessLossUser(user)
+			// A proven offboard is already a terminal cause. Give its exact
+			// generation bounded teardown admission after the read deadline;
+			// fallback must preserve that cause on the captured process too.
+			stopCtx, stopCancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+			err = m.StopForAccessEnded(stopCtx, scope, user)
+			stopCancel()
+		}
+		if err != nil && ctx.Err() == nil {
+			m.terminateForRuntimeAccessFailure(lr, reason, ended)
 		}
 	}
 }

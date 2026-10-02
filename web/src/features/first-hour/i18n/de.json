@@ -1,0 +1,98 @@
+{
+  "tools": {
+    "claude": "Claude Code",
+    "codex": "Codex",
+    "grok": "Grok Build"
+  },
+  "status": {
+    "installed": "Installiert",
+    "notInstalled": "Nicht installiert",
+    "signedIn": "Angemeldet",
+    "signedInAs": "Angemeldet als {{account}}",
+    "notSignedIn": "Nicht angemeldet",
+    "usesKey": "Verwendet Ihren API-Schlüssel: {{name}}"
+  },
+  "actions": {
+    "install": "Installieren",
+    "installing": "Wird installiert…",
+    "retry": "Erneut versuchen",
+    "cancel": "Abbrechen",
+    "signInClaude": "Mit Claude anmelden",
+    "signInChatGPT": "Mit ChatGPT anmelden",
+    "useApiKey": "Stattdessen einen API-Schlüssel verwenden",
+    "signInGrok": "Mit Ihrem xAI-Konto anmelden"
+  },
+  "signIn": {
+    "openLink": "Anmeldeseite öffnen",
+    "codeLabel": "Code von der Anmeldeseite",
+    "codeHint": "Nachdem Sie den Zugriff genehmigt haben, zeigt die Seite einen Code an. Fügen Sie ihn hier ein.",
+    "continue": "Weiter",
+    "enterCode": "Geben Sie auf der Anmeldeseite diesen Code ein:",
+    "waiting": "Es wird gewartet, bis Sie auf der Anmeldeseite fertig sind…",
+    "expires": "Der Code gilt 15 Minuten. „Abbrechen“ beendet die Anmeldung auf diesem Server."
+  },
+  "errors": {
+    "status": "Der Status des Werkzeugs konnte nicht gelesen werden.",
+    "install": "Die Installation wurde nicht abgeschlossen: {{error}}",
+    "signIn": "Die Anmeldung wurde nicht abgeschlossen. Starten Sie sie erneut.",
+    "start": "Die Sitzung wurde nicht gestartet: {{error}}",
+    "needsApproval": "Befehle ohne Rückfrage auszuführen erfordert in dieser Installation die Genehmigung einer zweiten Person. Beginnen Sie stattdessen nur mit Bearbeitungen:"
+  },
+  "steps": {
+    "install": {
+      "title": "Ein Agentenwerkzeug installieren",
+      "body": "Olivares führt das offizielle Claude Code oder Codex auf diesem Server aus. Eines genügt."
+    },
+    "signIn": {
+      "title": "Anmelden",
+      "body": "Verwenden Sie Ihr Claude- oder ChatGPT-Abonnement. Die Anmeldung bleibt auf diesem Server, wo das Werkzeug sie speichert.",
+      "waiting": "Installieren Sie zuerst ein Werkzeug."
+    },
+    "start": {
+      "title": "Eine Sitzung starten",
+      "body": "Wählen Sie einen Ordner und sagen Sie, wenn Sie möchten, was zuerst zu tun ist."
+    },
+    "progress": "{{done}} von 3 erledigt"
+  },
+  "start": {
+    "tool": "Werkzeug",
+    "notReady": "{{tool}} kann noch nicht starten.",
+    "folder": "Ordner",
+    "folderHint": "Ein Ordner auf diesem Server. Leer lassen, um in einem neuen Ordner zu beginnen.",
+    "prompt": "Erste Nachricht (optional)",
+    "promptPlaceholder": "Was soll es zuerst tun?",
+    "more": "Weitere Optionen",
+    "permission": "Was der Agent tun darf",
+    "start": "Starten",
+    "starting": "Wird gestartet…",
+    "needTool": "Installieren Sie zuerst ein Werkzeug und melden Sie es an.",
+    "dialogTitle": "Neue Sitzung",
+    "dialogDescription": "Wählen Sie einen Ordner und sagen Sie, was zu tun ist.",
+    "advanced": "Erweiterte Startoptionen",
+    "secrets": "Geheimnisse als Umgebungsvariablen",
+    "secretsHint": "Die Sitzung liest jedes gewählte Tresor-Geheimnis aus der Variablen, die Sie angeben. Der Wert wird nie angezeigt, protokolliert oder in den Ordner geschrieben.",
+    "secretsNone": "Noch keine Sitzungsgeheimnisse. Fügen Sie eines hinzu, dessen Name mit env/ beginnt.",
+    "secretUse": "{{name}} an diese Sitzung geben",
+    "secretVariable": "Variable für {{name}}",
+    "secretsManage": "Sitzungsgeheimnisse verwalten",
+    "openTools": "KI-Werkzeuge öffnen"
+  },
+  "permission": {
+    "editsOnly": "Nur Dateien bearbeiten",
+    "editsAndCommands": "Dateien bearbeiten und Befehle ausführen",
+    "readOnly": "Nur lesen",
+    "ask": "Vor jeder Aktion fragen"
+  },
+  "next": {
+    "title": "Als Nächstes, wenn Sie es brauchen",
+    "invite": "Personen einladen",
+    "identity": "Einen Identitätsanbieter verbinden",
+    "policies": "Richtlinien festlegen",
+    "mcp": "MCP-Server hinzufügen",
+    "budgets": "Budgets festlegen",
+    "cli": "Die olivares-Befehlszeile verwenden",
+    "cliHint": "Auf diesem Server ist der Befehl olivares bereits installiert. Auf einem anderen Computer installieren Sie ihn mit:",
+    "copy": "Kopieren",
+    "copied": "Kopiert"
+  }
+}

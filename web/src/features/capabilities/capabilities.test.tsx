@@ -23,6 +23,11 @@ const authState = vi.hoisted(() => ({
   activeTenant: 't1' as string | null,
   can: (_p: string): boolean => true,
 }))
+const edition = vi.hoisted(() => ({ community: false }))
+vi.mock('@/lib/hooks/use-edition', () => ({
+  useCommunityBuild: () => edition.community,
+  useEdition: () => (edition.community ? 'community' : undefined),
+}))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 
 const api = vi.hoisted(() => ({
@@ -202,6 +207,18 @@ describe('CapabilitiesView — el 403 de ceremonia en la pestaña de wiring', ()
 })
 
 describe('CapabilitiesView — tool pins', () => {
+  it('offers no Tool pins tab on a Community build', () => {
+    edition.community = true
+    try {
+      wrap(<CapabilitiesView />)
+      expect(screen.queryByRole('tab', { name: /tool pins/i })).toBeNull()
+      expect(screen.getByRole('tab', { name: /skills/i })).toBeInTheDocument()
+      expect(api.listToolPins).not.toHaveBeenCalled()
+    } finally {
+      edition.community = false
+    }
+  })
+
   it('renders current pins and highlights a pending fingerprint drift', async () => {
     api.listToolPins.mockResolvedValue({ items: [toolPinFixture] })
     const user = userEvent.setup()

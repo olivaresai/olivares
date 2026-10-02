@@ -2,7 +2,7 @@
 title: Mit Homebrew installieren
 description: >-
   Die macOS-Homebrew-Cask-Koordinate für Olivares AI, was das Cask mit
-  Gatekeeper tut, und der Veröffentlichungsstand des 26.10.0-Tap-Bumps.
+  Gatekeeper tut, und der Veröffentlichungsstand des 26.10.1-Tap-Bumps.
 draft: false
 ---
 
@@ -14,7 +14,7 @@ Docker ([Mit Docker bereitstellen](/how-to/docker-deployment/)).
 
 :::note[Beta — das 26.10-Cask ist veröffentlicht]
 `Casks/olivares.rb` im Tap wurde am 2026-10-01 für 26.10 aktualisiert: Es nennt Version
-26.10.0 und vier Plattform-Archive, deren SHA-256-Werte der signierten `checksums.txt` des
+26.10.1 und vier Plattform-Archive, deren SHA-256-Werte der signierten `checksums.txt` des
 Releases entsprechen. Der Producer ist
 `.goreleaser.yaml` `homebrew_casks:`; der Release-Job hebt das Tap-Cask an. Der Befehl
 unten ist die Koordinate, die `INSTALL.md` nennt (`brew install olivaresai/tap/olivares`).

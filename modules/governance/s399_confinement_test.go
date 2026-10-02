@@ -66,7 +66,7 @@ func TestWorkspaceConfinementEnforcesEntityAccess(t *testing.T) {
 		t.Errorf("a wa-confined admin must NOT reach the default workspace, got %d %s", r.code, r.raw)
 	}
 
-	// A superadmin is never confined — it deletes across workspaces.
+	// This superadmin has no confined membership and can delete across workspaces.
 	if r := h.do("DELETE", "/v1/agents/"+inB.ID.String(), admin, nil, hdr); r.code != http.StatusNoContent {
 		t.Errorf("superadmin must be unconfined, got %d %s", r.code, r.raw)
 	}

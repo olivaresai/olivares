@@ -106,14 +106,21 @@ func openCodeXDGMapping(userHome string) []EnvVar {
 }
 
 func refuseOpenCodeUnsupportedControls(p CreateRunParams) error {
-	if len(p.AllowedTools) > 0 {
+	if len(p.AllowedTools) > 0 && launchPreset(p) != PresetEditsAndCommands {
 		return badRequest("this OpenCode driver has no mapping for template tool restrictions; refusing the launch rather than discarding them")
 	}
 	if strings.TrimSpace(p.Instructions) != "" {
 		return badRequest("this OpenCode driver has no mapping for template instructions; refusing the launch rather than discarding them")
 	}
-	if mode := strings.TrimSpace(p.PermissionMode); mode != "" && mode != "default" {
-		return badRequest("this OpenCode driver has no mapping for permission mode " + mode + "; refusing the launch rather than discarding it")
+	if launchPreset(p) == PresetCustom {
+		return badRequest("this OpenCode driver cannot apply the session template's tool restrictions; choose a built-in permission preset")
+	}
+	return nil
+}
+
+func refuseNativeCustomPreset(p CreateRunParams, driver string) error {
+	if driver != providerDriverClaude && launchPreset(p) == PresetCustom {
+		return badRequest("this tool cannot apply the session template's tool restrictions; choose a built-in permission preset")
 	}
 	return nil
 }
@@ -193,6 +200,9 @@ func (m *Module) resolveLaunchProfileInto(ctx context.Context, tenant model.Tena
 		return err
 	}
 	if err := applySessionPolicy(p, snap.Driver, policy); err != nil {
+		return err
+	}
+	if err := refuseNativeCustomPreset(*p, snap.Driver); err != nil {
 		return err
 	}
 	if snap.Driver == providerDriverClaude && p.Effort != "" && !validEffortLevels[p.Effort] {
@@ -391,11 +401,14 @@ func (m *Module) captureRegisteredProfiledSessionID(ctx context.Context, lr *liv
 //     The measured alternative is what the golden path found: 34 tools including
 //     Bash, Write and Edit, handed to a child in a directory nobody chose.
 //
-//  2. THE DECLARED PERMISSION MODE DOES NOT OVERRIDE A TEMPLATE. A workspace
-//     template's terms are approval-bound and re-resolved per launch; a profile is
-//     an identity. Letting the identity rewrite an approved term would let a
-//     profile WIDEN a restriction somebody approved, so the profile's mode applies
-//     only to a launch that carries no template, and a template's own mode stands.
+//  2. THE DECLARED PERMISSION MODE NEVER REPLACES ONE THE LAUNCH NAMED. The
+//     person's preset at launch is the session's preset (TARGET §3, PEP
+//     2026-10-01): a profile "default" turned an explicit acceptEdits into default,
+//     and a wider profile mode could replace "ask". So the profile's mode applies
+//     only to a launch that named none (until the migration removes it), and never
+//     over a template: a template's terms are approval-bound and re-resolved per
+//     launch, and a profile is an identity. A bound that forbids the resulting mode
+//     refuses the launch (refuseUnrestrictedFor); nothing narrows it silently.
 //
 // A driver whose owned launch form cannot express a tool surface never receives
 // one: the declaration is refused when it is MADE (validateSessionPolicyInput), so
@@ -407,7 +420,7 @@ func applySessionPolicy(p *CreateRunParams, driver string, policy sessionPolicy)
 			return &runErr{http.StatusUnprocessableEntity,
 				"the provider profile declares a permission mode this runtime does not accept"}
 		}
-		if p.TemplateID == "" {
+		if p.TemplateID == "" && !p.permissionModeNamed {
 			p.PermissionMode = policy.PermissionMode
 		}
 	}

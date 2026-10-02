@@ -382,6 +382,7 @@ func TestWebAuthnCloneDetectionDenied(t *testing.T) {
 // session cannot bind the thief's own key next to the legitimate one.
 func TestWebAuthnAdditionalRegistrationRequiresStepUp(t *testing.T) {
 	h := newHarness(t)
+	h.requirePasskeyStepUp()
 	token := h.adminLogin()
 	first := newSoftAuthenticator(t)
 	registerOK(t, h, token, first) // bootstrap at AAL1
@@ -408,6 +409,7 @@ func TestWebAuthnAdditionalRegistrationRequiresStepUp(t *testing.T) {
 // and reopen the bootstrap), and a deleted credential no longer asserts.
 func TestWebAuthnCredentialLifecycle(t *testing.T) {
 	h := newHarness(t)
+	h.requirePasskeyStepUp()
 	token := h.adminLogin()
 	soft := newSoftAuthenticator(t)
 	registerOK(t, h, token, soft)

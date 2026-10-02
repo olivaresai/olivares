@@ -16,6 +16,18 @@ import "github.com/olivaresai/olivares/connectors/internal/redact"
 // and URL/DSN userinfo and query stripped — safe to emit.
 func Clean(s string) string { return redact.Clean(s) }
 
+// CleanJSON scrubs complete sensitive JSON values and secret-shaped strings.
+// Callers must bound the input before parsing; invalid JSON is refused.
+func CleanJSON(raw []byte) ([]byte, error) { return redact.CleanJSON(raw) }
+
+// ReviewableJSON produces an approval preview without hiding argument behavior.
+// It masks only complete recognized scalar secrets in credential fields. Mixed
+// text, opaque masked fields and masked containers are refused. Shell-like text
+// uses the same guard as provider approvals; execution retains the original.
+func ReviewableJSON(raw []byte) ([]byte, error) {
+	return redact.ReviewableJSON(raw, ReviewableShellCommand)
+}
+
 // Scrub returns the cleaned string and whether anything was redacted.
 func Scrub(s string) (string, bool) { return redact.Scrub(s) }
 

@@ -310,7 +310,9 @@ func oaTenantParam() map[string]any {
 		"schema", oaObj("type", "string", "format", "uuid"))
 }
 
-func oaBearer() []any { return []any{oaObj("bearerAuth", []any{})} }
+func oaBearer() []any {
+	return []any{oaObj("bearerAuth", []any{}), oaObj("browserSession", []any{})}
+}
 
 // moduleResponses is the response set of a module operation: the shared error
 // envelope plus a 200 that is JSON (the default) or the raw content type the route
@@ -739,6 +741,9 @@ func moduleRouteParameters(r moduleRoute) []any {
 	}
 	if sessionsLaunchReadinessRoute(r) {
 		return sessionsLaunchReadinessParameters()
+	}
+	if sessionsResolvePreviewRoute(r) {
+		return sessionsResolvePreviewParameters()
 	}
 	if params, ok := sessionsCommunicationParameters(r); ok {
 		return params

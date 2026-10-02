@@ -30,9 +30,9 @@ for this guide).
 
 - A Linux host with systemd and `curl`.
 - **Go 1.26+** to build the binary (the store is pure-Go SQLite, so no C
-  toolchain). The published release **26.10.0** ships signed archives and native
+  toolchain). The published release **26.10.1** ships signed archives and native
   packages: the install-surface witness records both as **published**
-  (`docs/releases/26.10.0-install-surfaces.json`). This tutorial builds from a
+  (`docs/releases/26.10.1-install-surfaces.json`). This tutorial builds from a
   checkout; the verified installer on `main` (`scripts/install.sh`) installs the
   published release instead. [Verify a release](/how-to/verify-a-release/) is the chain
   for those artifacts; [Install from a package](/how-to/install-from-packages/)
@@ -214,6 +214,7 @@ PostgreSQL **pgAudit** source (the clean-tier R/RW signal — see the
 [pgAudit guide](/how-to/connectors/pgaudit/) for the Postgres-side setup):
 
 ```bash
+sudo mkdir -p /etc/olivares
 sudo tee /etc/olivares/sources.json >/dev/null <<JSON
 {"sources":[{
   "name": "salesdb-pgaudit",

@@ -196,6 +196,10 @@ func (r *Renderer) paint(s string, role Role) string {
 	return seq + s + reset
 }
 
+// Paint is paint for a caller that composes its own lines (a session's
+// conversation view writes text, tool calls and footers in one stream).
+func (r *Renderer) Paint(s string, role Role) string { return r.paint(s, role) }
+
 // visibleWidth is the ONE width model of this package, by design. Every
 // primitive measures through it, so alignment agrees across primitives.
 //

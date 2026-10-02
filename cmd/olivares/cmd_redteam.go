@@ -264,7 +264,7 @@ func newRedteamTargetsAuthorizeCmd(flags *authClientFlags) *cobra.Command {
 			"product draws, so the CLI asks before crossing it.\n\n" +
 			"The confirmation guards against an UNATTENDED invocation reaching this verb: a\n" +
 			"pipe is answered by EOF, which is not consent. It is not proof a human is\n" +
-			"present — that belongs to the control plane's approval path — but a cron job\n" +
+			"present — that belongs to the engine's approval path — but a cron job\n" +
 			"does not authorize an attack by accident.\n\n" +
 			"--scope narrows what the consent covers. Withdraw it with `targets revoke`.",
 		Example: "  olivares redteam targets authorize rt-1 --yes\n" +

@@ -106,6 +106,9 @@ type orchWorkflowPump struct {
 // gates only advance when a phase-2 request happens to drain them, which
 // stalls paused runs, so the disable warns loudly.
 func newOrchWorkflowPump(getenv func(string) string, st store.Store, orch *orchestration.Module, log *slog.Logger) *orchWorkflowPump {
+	if orch == nil {
+		return nil // the orchestration module does not run on this node
+	}
 	interval, ok := orchWorkflowPumpInterval(getenv(orchWorkflowPumpIntervalEnv), log)
 	if !ok {
 		return nil
@@ -163,5 +166,5 @@ func (p *orchWorkflowPump) runOnce(ctx context.Context) error {
 // businessTenants enumerates the orgs to advance (the cadence-pump rule: the
 // reserved SYSTEM tenant is skipped — runs are tenant-scoped facts).
 func (p *orchWorkflowPump) businessTenants(ctx context.Context) ([]model.TenantID, error) {
-	return servedBusinessTenants(ctx, p.st)
+	return servedWorkTenants(ctx, p.st)
 }

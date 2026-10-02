@@ -46,7 +46,7 @@ redundant by construction (§1).
   **air-gapped** mode.
 - Builds are **reproducible** (`task build:repro` — two builds, identical SHA-256),
   so a third party can confirm the binary matches the source you'd be maintaining.
-- Distroless, single static Go binary on a conventional stack (Go, Postgres/SQLite,
+- A single static Go binary on a conventional stack (Go, Postgres/SQLite,
   React): the maintenance market for these skills is as deep as it gets.
 
 ## 4. No operational dependency on the vendor

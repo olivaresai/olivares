@@ -30,7 +30,7 @@
     "empty": "Ninguna vista coincide con «{{query}}»"
   },
   "items": {
-    "home": "Resumen",
+    "home": "Inicio",
     "onboarding": "Asistente de configuración",
     "inventory": "Inventario",
     "sessions": "Observar sesiones",
@@ -96,7 +96,8 @@
     "providerProfiles": "Perfiles de proveedor",
     "providerBindings": "Vínculos de fuentes",
     "providerAccounts": "Cuentas de proveedor",
-    "agent-tools": "Herramientas de agentes"
+    "agent-tools": "Herramientas de agentes",
+    "mcpServers": "Servidores MCP"
   },
   "workspace": {
     "open": "Abrir {{workspace}}",
@@ -104,7 +105,7 @@
     "all": "Todos los espacios",
     "allHint": "Sin filtro de espacio",
     "default": "predeterminado",
-    "tenantWide": "Toda la organización — sin filtro de espacio de trabajo",
+    "tenantWide": "Todos los espacios",
     "unresolved": "Workspace fuera de la lista",
     "truncated": "La lista está incompleta — hay más workspaces de los cargados"
   },
@@ -131,7 +132,7 @@
     "knowledge": "Bases de conocimiento, RAG y linaje de datos",
     "catalog": "Agentes y capacidades aprobados y curados",
     "killswitch": "Parada de emergencia, recuperación con doble control y contención guardiana",
-    "work": "El backlog durable entre sesiones: unidades, dependencias, aceptación y decisiones",
+    "work": "Trabajo compartido: unidades, dependencias, aceptación y decisiones",
     "agentops": "Crea, adjunta y gobierna sesiones de Claude Code — sin SSH; comparte pantalla con Observar sesiones",
     "agentArtifacts": "Skills, extensiones MCP y ficheros de instrucciones — registro, postura y BOM de cadena de suministro",
     "models": "Modelos, enrutado y claves de proveedor",
@@ -174,7 +175,8 @@
     "backups": "Instantáneas cifradas de recuperación ante desastres del control plane: crear, programar, descargar y restaurar",
     "logs": "El flujo de registros del motor en vivo, con filtros por nivel y módulo, búsqueda y pausa",
     "sourceDiff": "Compara una revisión base y una revisión head de un repositorio Git conectado, archivo por archivo",
-    "agent-tools": "Detecta, instala y actualiza las herramientas de agentes en este host y sigue cada instalación; solo para administradores del despliegue"
+    "agent-tools": "Detecta, instala y actualiza las herramientas de agentes en este host y sigue cada instalación; solo para administradores del despliegue",
+    "mcpServers": "Conecta servidores MCP remotos a esta organización, pruébalos y elige qué herramientas pueden usar las sesiones"
   },
   "commandActions": {
     "eventing": {
@@ -185,6 +187,12 @@
     },
     "orchestration": {
       "createSchedule": "Nueva programación"
+    },
+    "killswitch": {
+      "engage": "Activar kill switch"
+    },
+    "identity": {
+      "invite": "Invitar a personas"
     }
   },
   "aliases": {
@@ -283,7 +291,7 @@
     "modulesOf": "Módulos de {{area}}",
     "empty": "No hay entradas de esta área disponibles para ti",
     "emptyHint": "Las entradas aparecen aquí cuando tu rol en la organización actual da acceso a un módulo de esta área.",
-    "backHome": "Ir al Resumen",
+    "backHome": "Ir a Inicio",
     "area": "Área"
   },
   "personal": {
@@ -293,7 +301,8 @@
     "viewAll": "Ver todos ({{count}})",
     "manage": "Gestionar favoritos",
     "empty": "Marca un módulo con la estrella para guardarlo aquí.",
-    "scope": "Guardados en este navegador para tu cuenta y organización.",
+    "scope": "Guardados en tu cuenta, en cualquier navegador.",
+    "saveFailed": "No se pudieron guardar los favoritos en tu cuenta. Se conservan en este navegador y se guardarán con tu próximo cambio o inicio de sesión.",
     "temporary": "Los favoritos se mantienen en memoria por ahora.",
     "clear": "Borrar favoritos",
     "recents": "Recientes",
@@ -351,7 +360,25 @@
       "sessions": "Sesiones",
       "workspaceDashboard": "Espacios de trabajo",
       "providers": "Herramientas de IA",
-      "deploy": "Despliegue"
+      "deploy": "Despliegue",
+      "work": "Trabajo",
+      "approvals": "Aprobaciones",
+      "inventory": "Inventario",
+      "finops": "Coste y FinOps",
+      "accessMap": "Mapa de acceso",
+      "mcpServers": "Servidores MCP",
+      "knowledge": "Conocimiento",
+      "identity": "Identidad y NHI",
+      "claudePolicy": "Gobierno de Claude Code",
+      "audit": "Registro de auditoría",
+      "killswitch": "Kill switch",
+      "agent-tools": "Herramientas de IA"
+    },
+    "groups": {
+      "work": "Trabajo",
+      "manage": "Gestionar",
+      "integrate": "Integrar",
+      "secure": "Proteger"
     },
     "phoneBarLabel": "Principal",
     "newSession": "Nueva sesión",
@@ -388,7 +415,8 @@
       "hours": "{{count}} h",
       "days": "{{count}} d",
       "loading": "Leyendo las sesiones…",
-      "error": "No se han podido leer las sesiones."
+      "error": "No se han podido leer las sesiones.",
+      "approvalsError": "No se pudieron cargar las aprobaciones."
     },
     "engine": {
       "checking": "Comprobando el motor",
@@ -410,6 +438,15 @@
       "when": {
         "outsideField": "fuera de un campo"
       }
+    },
+    "killswitch": {
+      "estateStopped": "TODOS LOS AGENTES PARADOS",
+      "estateBody": "Los agentes no pueden actuar hasta que dos cuentas de usuario aprueben volver a arrancar.",
+      "agentStops": "{{count}} parada de agente activa",
+      "agentStops_one": "{{count}} parada de agente activa",
+      "agentStops_many": "{{count}} paradas de agente activas",
+      "agentStops_other": "{{count}} paradas de agente activas",
+      "none": "No hay nada parado. Las sesiones y los agentes funcionan con normalidad."
     }
   }
 }

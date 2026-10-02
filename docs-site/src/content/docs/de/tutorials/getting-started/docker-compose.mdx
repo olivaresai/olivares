@@ -24,14 +24,14 @@ Erststart-Ablauf, den sie steuern, ist derselbe, der im
 [Single-Node-Tutorial](/tutorials/getting-started/single-node/) end-to-end gegen
 das Binary verifiziert wird.
 
-<Aside type="caution" title="Das veröffentlichte 26.10.0-Image per Digest pinnen">
-Release **26.10.0** hat die signierten Images veröffentlicht: Der Install-Surface-Zeuge
-verzeichnet Docker Hub und GHCR für `26.10.0` als **published**
-(`docs/releases/26.10.0-install-surfaces.json`). Dieselbe Ehrlichkeit steht unter
+<Aside type="caution" title="Das veröffentlichte 26.10.1-Image per Digest pinnen">
+Release **26.10.1** hat die signierten Images veröffentlicht: Der Install-Surface-Zeuge
+verzeichnet Docker Hub und GHCR für `26.10.1` als **published**
+(`docs/releases/26.10.1-install-surfaces.json`). Dieselbe Ehrlichkeit steht unter
 [Mit Docker bereitstellen](/how-to/docker-deployment/). Setzen Sie
 `OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` und
 [verifizieren Sie es](/how-to/verify-a-release/) zuerst — per Digest, niemals per Tag. Um
-stattdessen den Entwicklungsbaum zu betreiben, bauen Sie das gehärtete distroless-Image aus dem
+stattdessen den Entwicklungsbaum zu betreiben, bauen Sie das gehärtete Image aus dem
 Quellcode und richten Sie den Stack darauf aus:
 
 ```bash
@@ -62,8 +62,8 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 2. Fragen Sie die Engine, wo sie ist, und lesen Sie das einmalige Setup-Token aus den Logs:
 
    ```bash
-   # where the console answers, and whether setup is still pending. The image is
-   # distroless: `docker exec … bash` has nothing to run, this needs no shell.
+   # where the console answers, and whether setup is still pending. It runs the binary
+   # directly and needs no shell.
    docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
 
    # the one-time setup token, printed once at first boot

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import {
   Background,
@@ -21,7 +22,6 @@ import { GateBadge } from '@/features/_intel'
 import { Badge, type BadgeVariant } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import {
   Sheet,
   SheetContent,
@@ -166,7 +166,8 @@ export function RunPanel({
           ) : null}
 
           {selectedRun.isError ? (
-            <ErrorState
+            <QueryErrorState
+              error={selectedRun.error}
               className="py-6"
               title={t('run.failed')}
               retry={() => void selectedRun.refetch()}
@@ -194,7 +195,8 @@ export function RunPanel({
                    no se pudo mirar: un operador que busca por qué falló anoche lee que no hubo
                    nada. Un 500 y un historial vacío son estados distintos y ahora se distinguen. */
             history.isError ? (
-              <ErrorState
+              <QueryErrorState
+                error={history.error}
                 className="py-6"
                 title={t('run.historyFailed')}
                 retry={() => void history.refetch()}

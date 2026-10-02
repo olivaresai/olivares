@@ -1,11 +1,12 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { History } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { PageHeader } from '@/components/ui/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -129,7 +130,10 @@ export function ApiPlaygroundView() {
     return (
       <div className="flex h-full flex-col">
         <PageHeader title={t('title')} />
-        <ErrorState retry={() => void specQuery.refetch()} />
+        <QueryErrorState
+          error={specQuery.error}
+          retry={() => void specQuery.refetch()}
+        />
       </div>
     )
   }

@@ -439,8 +439,8 @@ export async function fetchMemoryExport(params?: {
   if (params?.agent_ref) search.set('agent_ref', params.agent_ref)
 
   const headers = new Headers({ Accept: 'application/x-ndjson' })
-  const token = useSessionStore.getState().token
-  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const token = useSessionStore.getState().csrfToken
+  if (token) headers.set('X-CSRF-Token', token)
   const tenant = useTenantStore.getState().activeTenant
   if (tenant) headers.set('X-Olivares-Tenant', tenant)
 

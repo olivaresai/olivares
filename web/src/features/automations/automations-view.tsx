@@ -7,6 +7,8 @@
 // Deliberately an AGGREGATOR: each card summarizes one rail and links to its
 // own feature, where authoring (and its RBAC) lives. Every panel loads and
 // fails independently — a 403 on one rail never blanks the others.
+import { ModuleOffNotice } from '@/components/layout/query-error-state'
+import { useModuleOn } from '@/stores/modules'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import { CalendarClock, Bell, Siren, Zap } from 'lucide-react'
@@ -47,21 +49,29 @@ export function AutomationsView() {
     queryKey: automationsKeys.schedules(activeTenant),
     queryFn: () => automationsApi.schedules(listParams),
   })
+  // Subscriptions are the eventing module's and routes the notify module's: this page is
+  // orchestration's, so each rail reads its own module only where it runs (EU18).
+  const eventingOn = useModuleOn('eventing')
+  const notifyOn = useModuleOn('notify')
   const subscriptions = useQuery({
     queryKey: automationsKeys.subscriptions(activeTenant),
     queryFn: () => automationsApi.subscriptions(listParams),
+    enabled: eventingOn,
   })
   const routes = useQuery({
     queryKey: automationsKeys.routes(activeTenant),
     queryFn: () => automationsApi.routes(listParams),
+    enabled: notifyOn,
   })
   const eventTypes = useQuery({
     queryKey: automationsKeys.eventTypes(activeTenant),
     queryFn: () => automationsApi.eventTypes(),
+    enabled: eventingOn,
   })
   const matchTypes = useQuery({
     queryKey: automationsKeys.matchTypes(activeTenant),
     queryFn: () => automationsApi.matchTypes(),
+    enabled: notifyOn,
   })
 
   const scheduleItems = schedules.data?.items ?? []
@@ -140,6 +150,7 @@ export function AutomationsView() {
                 feature: t('rails.subscriptions.title'),
               })}
               query={subscriptions}
+              offModule={eventingOn ? undefined : 'eventing'}
               count={subscriptionItems.length}
               badges={[
                 {
@@ -167,6 +178,7 @@ export function AutomationsView() {
                 feature: t('rails.routes.title'),
               })}
               query={routes}
+              offModule={notifyOn ? undefined : 'notify'}
               count={routeItems.length}
               badges={[
                 {
@@ -193,7 +205,9 @@ export function AutomationsView() {
               <CardDescription>{t('triggers.description')}</CardDescription>
             </CardHeader>
             <CardContent>
-              {eventTypes.isPending ? (
+              {!eventingOn ? (
+                <ModuleOffNotice module="eventing" />
+              ) : eventTypes.isPending ? (
                 <Skeleton className="h-24 w-full" />
               ) : eventTypes.isError ? (
                 /* Este no aparecía en el censo porque el censo buscaba `isForbidden` y
@@ -301,6 +315,7 @@ function RailCard({
   query,
   count,
   badges,
+  offModule,
 }: {
   icon: React.ReactNode
   title: string
@@ -324,6 +339,8 @@ function RailCard({
     variant: 'success' | 'neutral' | 'danger'
     label: string
   }[]
+  /** The module this rail reads is off here: one line and the enable action, no link. */
+  offModule?: string
 }) {
   const { t } = useTranslation('automations')
   return (
@@ -344,7 +361,9 @@ function RailCard({
           label={t('rails.truncated', { n: count })}
           hint={t('rails.truncatedHint')}
         />
-        {query.isPending ? (
+        {offModule ? (
+          <ModuleOffNotice module={offModule} />
+        ) : query.isPending ? (
           <Skeleton className="h-12 w-full" />
         ) : query.isError ? (
           /* ⛔ ASEGURAMIENTO ANTES QUE ROL. `isForbidden` es SÓLO el status 403
@@ -389,11 +408,13 @@ function RailCard({
           </div>
         )}
       </CardContent>
-      <CardFooter>
-        <Button asChild variant="outline" size="sm">
-          <Link to={to}>{openLabel}</Link>
-        </Button>
-      </CardFooter>
+      {offModule ? null : (
+        <CardFooter>
+          <Button asChild variant="outline" size="sm">
+            <Link to={to}>{openLabel}</Link>
+          </Button>
+        </CardFooter>
+      )}
     </Card>
   )
 }

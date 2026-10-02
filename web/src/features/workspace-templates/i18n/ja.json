@@ -46,14 +46,17 @@
       "permissionMode": "権限モード",
       "effort": "努力レベル",
       "model": "モデル",
-      "customInstructions": "カスタム指示"
+      "customInstructions": "カスタム指示",
+      "secretEnv": "環境変数としてのシークレット",
+      "secretEnvHint": "VARIABLE=env/secret をカンマ区切りで指定します。このテンプレートのセッションは各保管庫シークレットをその変数から読み取ります。起動できるのは組織のシークレットを管理する人だけです。"
     },
     "policies": {
       "dlpMode": "DLPモード",
       "maxDuration": "最大セッション時間 (分)",
       "allowedTools": "許可ツール",
       "allowedToolsPlaceholder": "例: Bash,Read,Edit",
-      "recordIo": "I/Oを記録"
+      "recordIo": "I/Oを記録",
+      "peersSameTemplate": "このテンプレートのセッション同士でメッセージを送れる"
     }
   },
   "actions": {

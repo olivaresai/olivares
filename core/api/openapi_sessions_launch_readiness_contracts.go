@@ -127,6 +127,7 @@ func sessionsLaunchReadinessCodes() []string {
 		"claude_credential_source_configured", "claude_credential_source_not_configured",
 		"provider_credential_adapter_configured", "provider_credential_adapter_not_configured",
 		"credential_source_not_injected",
+		"provider_record_bound",
 		"runtime_credentials_wired", "runtime_credentials_not_requested",
 		"runtime_credential_wiring_incomplete", "runtime_readiness_unavailable",
 		"inspection_unavailable", "not_checked_in_this_environment",

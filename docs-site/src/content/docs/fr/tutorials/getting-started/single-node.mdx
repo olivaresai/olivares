@@ -30,9 +30,9 @@ pour ce guide).
 
 - Un hôte Linux avec systemd et `curl`.
 - **Go 1.26+** pour compiler le binaire (le store est du SQLite pur-Go, donc pas de
-  chaîne d'outils C). La version publiée **26.10.0** livre des archives signées et des paquets
+  chaîne d'outils C). La version publiée **26.10.1** livre des archives signées et des paquets
   natifs : le témoin des surfaces d’installation les enregistre comme **published**
-  (`docs/releases/26.10.0-install-surfaces.json`). Ce tutoriel compile depuis un checkout ;
+  (`docs/releases/26.10.1-install-surfaces.json`). Ce tutoriel compile depuis un checkout ;
   l’installateur vérifié sur `main` (`scripts/install.sh`) installe plutôt la version publiée.
   [Vérifier une version](/fr/how-to/verify-a-release/) est la chaîne pour ces artefacts.
 
@@ -213,6 +213,7 @@ source **pgAudit** PostgreSQL (le signal R/RW de palier propre — voir le
 [guide pgAudit](/fr/how-to/connectors/pgaudit/) pour la configuration côté Postgres) :
 
 ```bash
+sudo mkdir -p /etc/olivares
 sudo tee /etc/olivares/sources.json >/dev/null <<JSON
 {"sources":[{
   "name": "salesdb-pgaudit",

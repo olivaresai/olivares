@@ -8,6 +8,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -115,5 +116,36 @@ func TestReadyzCommandAppendsTheLocalDiagnosis(t *testing.T) {
 				t.Fatalf("output = %q, want diagnosis present=%v", printed, tc.wantHint)
 			}
 		})
+	}
+}
+
+// TestReadyzFollowsTheActiveContextOnThisHost: with no --server, readyz probes the
+// engine the active context names when it runs on this host (N1 RU-04: an engine
+// on another port than 8443 read as down), with localhost read as 127.0.0.1.
+func TestReadyzFollowsTheActiveContextOnThisHost(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+	config := filepath.Join(t.TempDir(), "config.yaml")
+	t.Setenv(cliConfigOverrideEnv, config)
+	t.Setenv("OLIVARES_SERVER_URL", "")
+	t.Setenv("OLIVARES_DATA_DIR", t.TempDir())
+	port := server.URL[strings.LastIndex(server.URL, ":")+1:]
+	if err := writeCLIConfig(config, cliConfig{CurrentContext: "local", Contexts: []cliContext{{
+		Name: "local", Server: "http://localhost:" + port, Token: "t",
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	var stdout bytes.Buffer
+	cmd := newReadyzCmd()
+	cmd.SetOut(&stdout)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"--timeout", "1s"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("readyz with a local context: %v", err)
+	}
+	if !strings.Contains(stdout.String(), "ready: http://127.0.0.1:"+port) {
+		t.Fatalf("stdout = %q, want the context's engine", stdout.String())
 	}
 }

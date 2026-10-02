@@ -60,6 +60,15 @@ type Claude struct {
 	probeGrace  time.Duration
 }
 
+// verificationPosture is what a full check of a Claude Code release trusts: the
+// signature verifier and the pinned release key (verified_cache.go).
+func (c *Claude) verificationPosture() string {
+	if c.verifier == nil {
+		return "claude no verifier " + c.fingerprint
+	}
+	return "claude " + c.verifier.Describe() + " " + c.fingerprint
+}
+
 // NewClaude is the production constructor: it trusts exactly the embedded
 // release key and its pinned fingerprint. No option can change either.
 func NewClaude(opts ClaudeOptions) *Claude {

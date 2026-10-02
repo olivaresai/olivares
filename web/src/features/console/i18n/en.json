@@ -1,5 +1,5 @@
 {
-  "title": "Control console",
+  "title": "Administration",
   "subtitle": "Configure who gets in and what they can administer: onboard users, connect SSO, and shape workspaces and agent-groups.",
   "tabs": {
     "people": "Users & groups",
@@ -67,7 +67,7 @@
     "edition": "Edition",
     "editions": {
       "community": "Community",
-      "enterprise": "Enterprise"
+      "enterprise": "Business"
     },
     "status": "License status",
     "statuses": {
@@ -112,7 +112,7 @@
   },
   "people": {
     "title": "Users",
-    "caption": "Onboard a person into this organization with an admin-set password or an email invitation. SSO users are provisioned automatically on first login.",
+    "caption": "Add a person to this organization, with a password you set or an email invitation.",
     "onboard": "Onboard user",
     "pendingTitle": "Pending invitations",
     "pendingCaption": "Invitations awaiting acceptance. The single-use link sets the password and activates the account.",
@@ -132,10 +132,10 @@
   },
   "members": {
     "title": "Active members",
-    "caption": "Tenant roster from SCIM and console onboarding. Shows roles, groups, status and whether sign-in is SSO-only.",
+    "caption": "Everyone in this organization, with their role, groups and status.",
     "readOnlyNotice": "You need user read access to view active members.",
     "none": "No active members.",
-    "noneHint": "Members appear here after onboarding, SCIM provisioning or first SSO login.",
+    "noneHint": "People appear here when you add them, or after their first sign-in through your identity provider.",
     "user": "User",
     "groups": "Groups",
     "status": "Status",
@@ -168,8 +168,8 @@
     "totpResetDone": "TOTP factor reset."
   },
   "superadmins": {
-    "title": "Superadmins",
-    "caption": "Enable or disable the internal superadmin accounts. Disabling is reversible and non-destructive — the account is marked inactive and its sessions and tokens are revoked, never deleted. The last active superadmin cannot be disabled.",
+    "title": "Installation administrators",
+    "caption": "Accounts that administer the whole installation. Turning one off signs it out and revokes its tokens; nothing is deleted, and the last one cannot be turned off.",
     "statusHeader": "Status",
     "active": "Active",
     "inactive": "Disabled",
@@ -184,10 +184,10 @@
   },
   "onboard": {
     "title": "Onboard user",
-    "body": "Create or add an account to this organization. A new account is never a superadmin, and the role can never exceed your own.",
+    "body": "Create an account in this organization. The role you give can never be higher than your own.",
     "displayName": "Display name",
     "displayNameHint": "A human label shown in the console.",
-    "emailHint": "The login identifier. SSO users sign in through the IdP instead.",
+    "emailHint": "The address they sign in with.",
     "roleHint": "The built-in role granted in this organization.",
     "mode": "How they sign in",
     "modePassword": "Set an initial password",
@@ -268,6 +268,8 @@
     "groups": {
       "title": "Group mapping & provisioning",
       "caption": "How directory groups from the IdP become roles, and whether SCIM is the sole authority for accounts. Configured here; mapped by the business build.",
+      "provisioningTitle": "Provisioning",
+      "provisioningCaption": "Whether SCIM is the sole authority for accounts.",
       "scimAuthoritative": "SCIM is authoritative",
       "scimAuthoritativeHint": "When on, an SSO login never creates an account or changes group membership — SCIM owns the directory. When off, first login provisions the user and adds (never removes) the groups the IdP asserts.",
       "unavailableBanner": "This build extracts groups from the assertion but does not map them to roles. The business build turns asserted groups into grants at login."
@@ -282,12 +284,16 @@
       "label": "Identity provider",
       "default": "Primary (default)",
       "add": "+ Add an identity provider…",
-      "hint": "A scope can federate several identity providers. Home-realm routing by email domain is configured below. Only a tenant scope can run several active providers at once — each extra one must claim its own domains, and your licence may still refuse it; the deployment-wide scope activates only the primary. The open build resolves the deployment-wide primary and nothing else.",
+      "hint": "A tenant can use several active providers; each extra one must claim its own email domains. The deployment-wide scope uses only its primary provider.",
       "addTitle": "Add an identity provider",
       "addBody": "Give the new IdP a short alias. It identifies this IdP within the scope and is its login routing key.",
       "aliasLabel": "Alias",
       "aliasHint": "Lowercase letters, digits and hyphens (e.g. \"okta\", \"azure-ad\"). 1–31 characters.",
-      "addConfirm": "Continue"
+      "addConfirm": "Continue",
+      "on": "on at sign-in",
+      "off": "off",
+      "activeNow": "Active at sign-in: {{names}}.",
+      "noneActive": "No identity provider is active at sign-in: people sign in with a password."
     },
     "domains": {
       "title": "Home-realm routing",
@@ -295,6 +301,29 @@
       "label": "Claimed email domains",
       "hint": "One domain per line (e.g. corp.com). Each domain is globally unique across IdPs; an email-first login for that domain routes here.",
       "unavailableBanner": "Domains are stored but this build does not route by them; home-realm routing requires the business edition."
+    },
+    "displayName": "Name on the sign-in button",
+    "displayNameHint": "People see “Sign in with <name>”. Leave it empty to show “Single sign-on”. 80 characters at most.",
+    "displayNameFallback": "Single sign-on",
+    "mapping": {
+      "title": "Values that count as MFA",
+      "caption": "Which values from this provider count as multi-factor sign-in. Federated MFA counts as AAL2 at most and never satisfies AAL3. Each exact value is an exception you trust.",
+      "amr": "AMR values (OIDC)",
+      "acr": "ACR values (OIDC)",
+      "samlContexts": "Authentication contexts (SAML)",
+      "mode": {
+        "default": "Protocol default",
+        "exact": "Only these values"
+      },
+      "values": "Values",
+      "valuesHint": "One value per line. Leave it empty to trust no value.",
+      "restore": "Restore protocol defaults",
+      "invalid": "Up to 32 values, each at most 512 bytes, with no wildcard (*) and no control characters.",
+      "summary": {
+        "default": "protocol default",
+        "none": "no value trusted",
+        "values": "only {{values}}"
+      }
     }
   },
   "secrets": {
@@ -323,7 +352,8 @@
     "rotated": "Secret saved.",
     "deleted": "Secret deleted.",
     "deleteTitle": "Delete secret",
-    "deleteBody": "The secret is removed from the store. Any connector config that references store:<name> will fail to resolve until you recreate it."
+    "deleteBody": "The secret is removed from the store. Any connector config that references store:<name> will fail to resolve until you recreate it.",
+    "sessionCaption": "Secrets a session can receive as environment variables. Names begin with env/. A value is never shown again."
   },
   "connectors": {
     "title": "Connectors",
@@ -584,7 +614,7 @@
     "readOnlyNoticeHint": "Roles, their permissions and who may delegate them are managed here. Ask an administrator for the governance RBAC permission.",
     "authority": {
       "title": "Your delegation authority",
-      "superadmin": "You are a superadmin — you can delegate any role within any scope.",
+      "superadmin": "You administer this installation: you can give any role, anywhere.",
       "none": "You have no delegation authority in this organization. An owner or admin must grant you a scoped-admin role first.",
       "caption": "You can only delegate within these scopes, and never more than these permissions. The engine re-checks every change.",
       "tenantWide": "Tenant-wide",
@@ -595,13 +625,13 @@
     },
     "grants": {
       "title": "Scoped grants",
-      "caption": "Assign a role to a user or a built-in role within a scope — this is how you make someone a workspace admin or a resource-class admin.",
+      "caption": "Give a person a role in one workspace or for one kind of resource, instead of the whole organization.",
       "create": "New grant",
       "subject": "Subject",
       "role": "Role",
       "scope": "Scope",
       "none": "No scoped grants yet.",
-      "noneHint": "A scoped grant gives a subject a role inside one workspace or resource, not across the tenant. Grant one to start.",
+      "noneHint": "No role is limited to a workspace or a kind of resource yet.",
       "revoke": "Revoke",
       "revokeTitle": "Revoke grant",
       "revokeBody": "The subject loses this scoped role immediately. Revoking is itself ceiling-checked.",
@@ -628,7 +658,7 @@
       "scopeRefWorkspace": "Workspace",
       "scopeRefGroup": "Agent-group",
       "scopeRefPlaceholder": "Select…",
-      "scopeClass": "Resource class",
+      "scopeClass": "Kind of resource",
       "scopeClassAny": "Any resource",
       "scopeClassHint": "Optional. Narrows the grant to one resource kind (e.g. only models).",
       "note": "Note",
@@ -672,13 +702,13 @@
       "excludesHint": "Subtracted after the base, the permissions above and every included group — so nothing can add them back. Excluding something the base does not grant today is valid: the exclusion still holds when it does."
     },
     "groups": {
-      "title": "Permission-groups",
-      "caption": "Named bundles of permissions you can include in several custom roles.",
+      "title": "Permission sets",
+      "caption": "Named sets of permissions you can reuse in several custom roles.",
       "create": "New group",
       "name": "Name",
       "permissions": "Permissions",
       "none": "No permission-groups yet.",
-      "noneHint": "A permission-group bundles permissions so a role can include them by name. Create one to start.",
+      "noneHint": "No permission sets yet. A permission set lets several roles share the same permissions.",
       "edit": "Edit",
       "delete": "Delete",
       "deleteTitle": "Delete permission-group",
@@ -710,8 +740,8 @@
       "managedBy": "Managed by {{provisioner}} · read-only",
       "title": "Group subjects & hierarchy",
       "caption": "Grant roles to provisioned user groups and shape the group hierarchy. A child group's members inherit the parent's grants.",
-      "noGroups": "No provisioned groups. Groups are pushed by the identity provider (SCIM).",
-      "noGroupsHint": "Groups arrive from your identity provider over SCIM; the console never creates them. Provision a group there and it appears here.",
+      "noGroups": "No groups yet. Groups come from your identity provider.",
+      "noGroupsHint": "The console does not create groups. Add a group in your identity provider and it appears here.",
       "colName": "Group",
       "colParent": "Parent",
       "colMembers": "Members",
@@ -875,7 +905,8 @@
     "enableHint": "Review the changes below. Staged modules need input before they activate.",
     "apply": "Apply",
     "enabled": "{{preset}} preset enabled.",
-    "enableFailed": "Could not enable the preset."
+    "enableFailed": "Could not enable the preset.",
+    "restarting": "Restarting the engine…"
   },
   "bindings": {
     "readOnlyNotice": "You need source-scope binding access to view bindings.",
@@ -1072,9 +1103,13 @@
       "active": "on",
       "pending": "pending restart",
       "available": "off",
-      "console": "console-only"
+      "console": "console-only",
+      "staged": "staged",
+      "needsSecret": "needs a secret",
+      "needsReview": "needs review",
+      "needsInput": "needs input"
     },
-    "binaryUnknownWhy": "This edition ({{edition}}) belongs to the running binary. The engine does not publish which modules that binary compiled, so this column stays not known per module. It is not inferred from packaging.",
+    "binaryUnknownWhy": "This edition ({{edition}}) belongs to the running binary. When the engine publishes whether a module is in this build, the column shows it; otherwise it stays not known. It is not inferred from packaging.",
     "catalogueSourceHelp": "The available module information depends on the installed build. License installation updates license details; module availability is reported separately.",
     "noAddons": "This installation returned an empty module catalog.",
     "loading": "Loading the module catalog…",
@@ -1092,7 +1127,10 @@
     "licenseRefreshFailedAction": "Retry to refresh license status.",
     "licenseRetry": "Retry license status",
     "technicalSummary": "Technical detail",
-    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}"
+    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}",
+    "inBuild": "in this edition",
+    "notInBuild": "not in this edition",
+    "notCovered": "not covered by the license"
   },
   "mcpGateway": {
     "title": "MCP gateway",
@@ -1115,37 +1153,35 @@
     "fileOwned": "The operator file governs MCP on its configured listener. This view is read-only. Stored configuration stays inactive; nothing is merged or overridden.",
     "storeOwned": "Tenant configuration governs MCP on this installation’s HTTP listener. No configuration file is required.",
     "sessionTitle": "Session tools",
-    "sessionHint": "Off by default. Enabling exposes work and exact-session communication only to independently authorized session tokens; it grants no new authority.",
+    "sessionHint": "Sessions can message each other and use their assigned work. It gives sessions no new permissions.",
     "tools": "Tools ({{count}})",
     "observationHint": "Discovery grants no authority. Allow each tool with an explicit scope and classify whether it needs destructive-action approval.",
     "destructive": "Destructive approval required",
-    "readTool": "No destructive approval required",
-    "deniedTool": "Denied by default",
     "credentials": "Manage credentials",
     "credentialCaption": "Tenant MCP secrets only (mcp/ names). Store the full upstream Authorization header value here, such as Bearer followed by its token. Values stay sealed and are never returned.",
-    "noCredential": "No upstream credential",
-    "name": "Server name",
-    "url": "Upstream URL",
-    "urlHint": "Streamable HTTP over HTTPS. Use the final URL without user credentials, query or fragment; redirects are refused. Stdio is available to observation connectors, not this gateway.",
-    "credential": "Credential reference",
-    "credentialHint": "Select an existing tenant store reference. Create or rotate it in Manage credentials; global secrets are not available.",
+    "noCredential": "No sign-in",
+    "name": "Name",
+    "url": "Server address",
+    "urlHint": "The server's HTTPS endpoint, usually ending in /mcp. Remote HTTPS servers only; redirects are not followed.",
+    "credential": "Sign-in",
+    "credentialHint": "The secret sent to the server as its Authorization header. Choose No sign-in when the server needs none; add a secret with Manage credentials.",
     "cidrs": "Allowed private address ranges",
-    "cidrsHint": "Optional canonical CIDRs, one per line. Private and loopback addresses require an explicit grant. DNS is checked and the approved addresses are pinned for each connection.",
-    "inboundTrust": "Inbound authentication",
-    "resource": "Public gateway resource URL",
-    "issuer": "Trusted token issuer",
-    "jwksURL": "Public JWKS URL",
-    "jwks": "Public JWKS JSON",
+    "cidrsHint": "Only for a server on a private network or on this machine, for example 10.0.0.0/8 or 127.0.0.1/32. One range per line.",
+    "inboundTrust": "Who may call this server through Olivares",
+    "resource": "This server's address on Olivares",
+    "issuer": "Token issuer",
+    "jwksURL": "Issuer's public keys address (JWKS URL)",
+    "jwks": "Issuer's public keys (JWKS)",
     "jwksHint": "Provide one JWKS URL or public asymmetric keys. Private keys and arbitrary credential fields are refused.",
     "invalidJWKS": "Provide public asymmetric keys only.",
-    "resourceHint": "Use this installation’s public HTTPS origin followed by {{path}}. Tokens must be issued for this exact resource.",
-    "resourceAfterCreate": "the path shown after creation",
+    "resourceHint": "Callers' tokens must be issued for this exact address. The default is this console's address; change it if callers reach Olivares by another public address.",
+    "resourceAfterCreate": "Shown after you save: callers' tokens must be issued for this server's address on Olivares.",
     "policy": "Tool permissions",
     "allowTool": "Allow {{name}}",
     "scope": "Required scope for {{name}}",
     "destructiveTool": "Require destructive approval for {{name}}",
-    "formHint": "Saving leaves the server disabled. Test the saved endpoint, review its tools, configure inbound trust, then explicitly enable it.",
-    "saveDisabled": "Save disabled",
+    "formHint": "A new server starts off. Save it, test the connection, review its tools and enable it.",
+    "saveDisabled": "Save",
     "removeTitle": "Remove MCP server",
     "removeHint": "Remove {{name}} from this tenant’s gateway? New requests will be refused; its sealed credential is kept in the secret manager.",
     "conflict": "Configuration changed. Refresh and review the current version before submitting again.",
@@ -1172,7 +1208,10 @@
       "redirects": "Redirects",
       "tool_policy": "Tool authorization",
       "tasks": "Durable tasks",
-      "subscriptions": "Subscriptions"
+      "subscriptions": "Subscriptions",
+      "local_execution": "Local commands",
+      "process_confinement": "Process confinement",
+      "network_confinement": "Network confinement"
     },
     "governanceValues": {
       "tenant_store": "Tenant store",
@@ -1188,7 +1227,68 @@
       "operator_file_not_returned": "File credentials are not returned",
       "operator_file_listener": "Operator-configured listener",
       "operator_provisioned": "Operator-provisioned policy",
-      "legacy_forwarder": "Legacy file forwarding"
-    }
+      "legacy_forwarder": "Legacy file forwarding",
+      "session_runner_engine_user_session_folder": "Session runner, as the engine user, in the session folder",
+      "reported_by_session_runner": "As the session runner reports it",
+      "not_supplied_for_local_commands": "Not supplied for local commands"
+    },
+    "nameHint": "Shown in the server list. Empty takes the server's host name.",
+    "advanced": "Advanced",
+    "advancedHint": "Private address ranges, and how callers prove who they are. A public server can be tested without them; enabling it needs the caller settings.",
+    "issuerHint": "The HTTPS address of the sign-in service that issues callers' tokens, such as your identity provider.",
+    "jwksURLHint": "Where the issuer publishes its public keys. Use this or paste the keys below, not both.",
+    "enableNeedsTrust": "To enable it, set who may call it under Configure > Advanced.",
+    "why": {
+      "dns": "The name {{host}} did not resolve. Check the address for a typo, and that this engine can resolve it.",
+      "tls": "The secure connection to {{host}} failed: its certificate is not trusted here or does not match the name. Use a certificate from a public authority.",
+      "timeout": "{{host}} did not answer within 10 seconds. Check that the server is running and that this engine can reach it.",
+      "connection_refused": "Nothing accepted the connection at {{host}}. Check the port and that the server is running.",
+      "http_status": "The server answered HTTP {{status}}. Check the path; MCP servers usually end in /mcp.",
+      "egress_denied": "{{host}} is a private or local address. Allow its range under Configure > Advanced.",
+      "refused": "The server refused the sign-in (HTTP 401 or 403). Check the secret chosen under Sign-in.",
+      "redirect_refused": "The server answered with a redirect. Use the final address.",
+      "invalid_response": "The server answered, but not as an MCP server. Check the address.",
+      "credential_unavailable": "The sign-in secret could not be read. Store it again in Manage credentials.",
+      "unreachable": "{{host}} could not be reached. Check the address and that the server is running.",
+      "stdio": "The command did not start an MCP server that answered. Check the command and its arguments.",
+      "stdioDetail": "Did not start: {{detail}}"
+    },
+    "kind": "How Olivares reaches it",
+    "kindUrl": "Address (HTTPS)",
+    "kindCommand": "Command on this server",
+    "command": "Command",
+    "commandHint": "The program that starts the server on this machine, for example npx. It runs with each session, in the session's folder.",
+    "args": "Arguments",
+    "argsHint": "One per line, for example -y and @modelcontextprotocol/server-everything.",
+    "env": "Environment",
+    "envHint": "One per line: NAME=value. Not for secrets.",
+    "envSecrets": "Secret environment",
+    "envSecretsHint": "One per line: NAME=mcp/secret-name, a secret stored in Manage credentials.",
+    "pairsInvalid": "Each line needs NAME=value.",
+    "policiesNotKept": "Not saved: the engine did not keep the permission for {{tools}}. Try again; if it persists, run olivares mcp ls.",
+    "scopeMissing": "Each allowed tool needs a scope (sessions use tools:call).",
+    "toolCallable": "Runs without approval",
+    "toolAsks": "Asks for approval first",
+    "toolNotCallable": "Not allowed",
+    "callableOff": "Off: sessions cannot call its tools.",
+    "trustPartial": "Who may call it needs the resource, the issuer and the keys, or none of them.",
+    "savedTestAgain": "Saved. Test the server again to turn it back on.",
+    "formHintEdit": "Saving keeps the server as it is. Changing its address, command, arguments, environment or secrets turns it off until you test it again.",
+    "trust": {
+      "allow": "Run without approval: {{tools}}",
+      "ask": "Ask first: {{tools}}",
+      "deny": "Not allowed: {{tools}}"
+    },
+    "enableDialog": {
+      "title": "Turn on {{name}}",
+      "body": "Choose the tools that run without approval. The tools the server says only read are selected for you; the choice is yours, not the server’s.",
+      "readOnlyHint": "the server says read-only",
+      "runWithout": "Run {{tool}} without approval",
+      "others": "Every other tool asks for approval first.",
+      "notAllowed": "not allowed (change it in Configure)",
+      "confirm": "Turn on"
+    },
+    "sessionOn": "On: turn it off to stop it.",
+    "sessionOff": "Off: sessions cannot message each other or use their assigned work."
   }
 }

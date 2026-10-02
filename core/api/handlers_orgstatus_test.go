@@ -111,7 +111,7 @@ func TestSetOrgStatusSurface(t *testing.T) {
 // step-up protects this route when nothing does.
 //
 // The check is anchored on a KNOWN POSITIVE in the same document — setOrgRegion,
-// whose handler really does call requireAAL3 — so it cannot pass by simply failing
+// whose handler really does call requireStepUp — so it cannot pass by simply failing
 // to find the string anywhere.
 func TestSetOrgStatusContractDoesNotPromiseAAL3(t *testing.T) {
 	h := newHarness(t)
@@ -158,6 +158,6 @@ func TestSetOrgStatusContractDoesNotPromiseAAL3(t *testing.T) {
 	}
 	if status := text("setOrgStatus"); strings.Contains(status, "AAL3") {
 		t.Fatalf("the published contract promises a control the handler does not enforce: setOrgStatus says %q, "+
-			"but handleSetOrgStatus deliberately does not call requireAAL3", status)
+			"but handleSetOrgStatus deliberately does not call requireStepUp", status)
 	}
 }

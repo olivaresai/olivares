@@ -108,7 +108,7 @@ func buildSAMLHarness(t *testing.T, encrypt bool) *samlHarness {
 
 // mint produces a base64 SAML Response for the given AuthnRequest id and session,
 // signed by the IdP — the same shape an IdP posts to the ACS.
-func (h *samlHarness) mint(t *testing.T, requestID string, session *saml.Session) string {
+func (h *samlHarness) mint(t *testing.T, requestID string, session *saml.Session, authnContext ...string) string {
 	t.Helper()
 	authnReq := fmt.Sprintf(`<AuthnRequest xmlns="urn:oasis:names:tc:SAML:2.0:protocol" `+
 		`AssertionConsumerServiceURL=%q Destination=%q ID=%q IssueInstant=%q Version="2.0">`+
@@ -123,6 +123,9 @@ func (h *samlHarness) mint(t *testing.T, requestID string, session *saml.Session
 	}
 	if err := (saml.DefaultAssertionMaker{}).MakeAssertion(&req, session); err != nil {
 		t.Fatalf("mint: make assertion: %v", err)
+	}
+	if len(authnContext) != 0 {
+		req.Assertion.AuthnStatements[0].AuthnContext.AuthnContextClassRef.Value = authnContext[0]
 	}
 	if err := req.MakeAssertionEl(); err != nil {
 		t.Fatalf("mint: sign assertion: %v", err)
@@ -161,6 +164,24 @@ func TestSAML_ValidResponse(t *testing.T) {
 	}
 	if id.Email != "alice@corp.example" || id.Subject != "alice-nameid" {
 		t.Errorf("identity = %+v, want alice@corp.example / alice-nameid", id)
+	}
+}
+
+func TestSAML_SignedMFAAssurance(t *testing.T) {
+	h := newSAMLHarness(t)
+	raw := h.mint(t, "mfa-request", session("mfa-user", "mfa@corp.example"), "https://refeds.org/profile/mfa")
+	id, err := h.validate(raw, "mfa-request")
+	if err != nil || id.AAL != auth.AAL2 || !id.AuthenticatedAt.Equal(samlFixedTime) {
+		t.Fatalf("signed SAML MFA = %d at %v, err %v; want 2 at upstream authentication", id.AAL, id.AuthenticatedAt, err)
+	}
+}
+
+func TestSAML_UnknownContextDoesNotElevate(t *testing.T) {
+	h := newSAMLHarness(t)
+	raw := h.mint(t, "unmapped-request", session("plain-user", "plain@corp.example"), "urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport")
+	id, err := h.validate(raw, "unmapped-request")
+	if err != nil || id.AAL != auth.AAL1 || !id.AuthenticatedAt.IsZero() {
+		t.Fatalf("unmapped signed SAML context = %d at %v, err %v; want AAL1", id.AAL, id.AuthenticatedAt, err)
 	}
 }
 

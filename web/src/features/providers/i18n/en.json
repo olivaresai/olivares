@@ -74,7 +74,7 @@
     "kind": "Provider",
     "kindPlaceholder": "Choose a provider",
     "name": "Name",
-    "nameHint": "Your own name for this credential. It is what a picker shows.",
+    "nameHint": "Optional. Leave it empty to use the provider's name.",
     "namePlaceholder": "Anthropic (production)",
     "baseURL": "Endpoint",
     "baseURLHint": "Leave empty for the provider's official endpoint. Must be https.",
@@ -88,7 +88,8 @@
     "success": "Provider registered. Test the connection to confirm it works.",
     "testNext": "Test connection now",
     "registering": "Registering…",
-    "localNameHint": "Your label for this endpoint. It is what a picker shows."
+    "localNameHint": "Optional. Leave it empty to use the provider's name.",
+    "advanced": "Advanced: custom endpoint"
   },
   "rotate": {
     "title": "Rotate this provider's key",

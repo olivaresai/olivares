@@ -81,10 +81,6 @@ func stringAttr(key, val string) otlpAttribute {
 	return otlpAttribute{Key: key, Value: otlpAnyValue{StringValue: val}}
 }
 
-func intAttr(key string, val int64) otlpAttribute {
-	return otlpAttribute{Key: key, Value: otlpAnyValue{IntValue: strconv.FormatInt(val, 10)}}
-}
-
 // handleExportTrace exports one trace as OTLP-compatible JSON so the
 // operator can import it into Jaeger, Grafana Tempo, Datadog, or any
 // OTLP-aware tool. The export is HONEST: span kind is INTERNAL (the

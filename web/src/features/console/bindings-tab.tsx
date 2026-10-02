@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import {
+  ModuleGate,
+  QueryErrorState,
+} from '@/components/layout/query-error-state'
 import { useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import type { QueryKey } from '@tanstack/react-query'
@@ -29,7 +33,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
@@ -116,6 +120,15 @@ const CREDENTIAL_PRECEDENCE: SourceScopeTree[] = [
 const STATUS_ALL = '__all__'
 
 export function BindingsTab() {
+  // Bindings are the sourcescope module’s (EU18): off here, one line and the enable action.
+  return (
+    <ModuleGate module="sourcescope">
+      <BindingsTabReads />
+    </ModuleGate>
+  )
+}
+
+function BindingsTabReads() {
   const { t } = useTranslation(['console', 'common'])
   const { activeTenant, can } = useAuth()
   const navigate = useNavigate()
@@ -253,6 +266,7 @@ export function BindingsTab() {
         bindings={rows}
         loading={bindings.isLoading}
         isError={bindings.isError}
+        error={bindings.error}
         refetch={() => void bindings.refetch()}
         canWrite={canWrite}
         onEdit={setEditing}
@@ -338,6 +352,7 @@ function BindingsTable({
   bindings,
   loading,
   isError,
+  error,
   refetch,
   canWrite,
   onEdit,
@@ -347,6 +362,8 @@ function BindingsTable({
   bindings: SourceScopeBindingDTO[]
   loading: boolean
   isError: boolean
+  /** The read's error, for the one error mapping (QueryErrorState). */
+  error?: unknown
   refetch: () => void
   canWrite: boolean
   onEdit: (binding: SourceScopeBindingDTO) => void
@@ -369,7 +386,7 @@ function BindingsTable({
       </div>
     )
   }
-  if (isError) return <ErrorState retry={refetch} />
+  if (isError) return <QueryErrorState error={error} retry={refetch} />
   if (bindings.length === 0) {
     return (
       <EmptyState
@@ -1745,7 +1762,10 @@ function PostureQueue({
           <Spinner />
         </div>
       ) : requests.isError ? (
-        <ErrorState retry={() => void requests.refetch()} />
+        <QueryErrorState
+          error={requests.error}
+          retry={() => void requests.refetch()}
+        />
       ) : items.length === 0 ? (
         <EmptyState
           icon={<ShieldCheck />}

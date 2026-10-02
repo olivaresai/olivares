@@ -9,10 +9,9 @@
 // a broken page.
 import type { ReactNode } from 'react'
 import type { UseQueryResult } from '@tanstack/react-query'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Skeleton } from '@/components/ui/skeleton'
-import { StepUpRequiredState } from '@/components/layout/step-up-state'
-import { ApiError, NetworkError } from '@/lib/api/errors'
+import { ApiError, isModuleNotEnabled } from '@/lib/api/errors'
 import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
@@ -47,39 +46,20 @@ export function AsyncSection<T>({
     )
   }
   if (query.isError) {
+    // The one mapping (components/layout/query-error-state.tsx): step-up, 403, a module that
+    // is off, and only then the failure with Retry. A 403 keeps its calm block here.
     const error = query.error
-    // ASSURANCE before ROLE — the engine sends two different 403s and only one of
-    // them means "you may not". Rendering a step-up demand as ForbiddenState told
-    // the operator they lacked a permission they hold; the honest answer is the
-    // ceremony that lifts the refusal (see components/layout/step-up-state.tsx).
-    if (error instanceof ApiError && error.isStepUpRequired) {
-      return (
-        <StepUpRequiredState
-          action="generic"
-          onElevated={() => void query.refetch()}
-        />
-      )
-    }
-    if (error instanceof ApiError && error.isForbidden) {
-      return (
-        <div className="flex min-h-40 items-center justify-center">
-          <ForbiddenState
-            title={t('forbidden.title')}
-            description={t('forbidden.description')}
-          />
-        </div>
-      )
-    }
-    const isNetwork = error instanceof NetworkError
-    return (
-      <ErrorState
-        title={isNetwork ? t('network.title') : t('serverError.title')}
-        description={
-          isNetwork ? t('network.description') : t('serverError.description')
-        }
-        retry={() => void query.refetch()}
-        requestId={error instanceof ApiError ? error.requestId : undefined}
-      />
+    const calm =
+      error instanceof ApiError &&
+      (error.isForbidden || isModuleNotEnabled(error)) &&
+      !error.isStepUpRequired
+    const state = (
+      <QueryErrorState error={error} retry={() => void query.refetch()} />
+    )
+    return calm ? (
+      <div className="flex min-h-40 items-center justify-center">{state}</div>
+    ) : (
+      state
     )
   }
   if (query.data === undefined) return null

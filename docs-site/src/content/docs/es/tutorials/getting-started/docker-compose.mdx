@@ -23,14 +23,14 @@ documentados del stack (`deploy/compose/*.yml`), y el flujo de primer arranque q
 es el mismo que se verifica de extremo a extremo contra el binario en el
 [tutorial de nodo único](/tutorials/getting-started/single-node/).
 
-<Aside type="caution" title="Fija por digest la imagen publicada de 26.10.0">
-La release **26.10.0** publicó las imágenes firmadas: el testigo de superficies de
-instalación registra Docker Hub y GHCR como **published** para `26.10.0`
-(`docs/releases/26.10.0-install-surfaces.json`). La misma nota está en
+<Aside type="caution" title="Fija por digest la imagen publicada de 26.10.1">
+La release **26.10.1** publicó las imágenes firmadas: el testigo de superficies de
+instalación registra Docker Hub y GHCR como **published** para `26.10.1`
+(`docs/releases/26.10.1-install-surfaces.json`). La misma nota está en
 [Desplegar con Docker](/how-to/docker-deployment/). Establece
 `OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` y
 [verifícala](/how-to/verify-a-release/) primero — por digest, nunca un tag. Para ejecutar el
-árbol de desarrollo en su lugar, compila la imagen distroless endurecida desde el código fuente
+árbol de desarrollo en su lugar, compila la imagen endurecida desde el código fuente
 y apunta el stack a ella:
 
 ```bash
@@ -61,8 +61,8 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 2. Pregunta al motor dónde está, y lee el token de configuración de un solo uso de los logs:
 
    ```bash
-   # where the console answers, and whether setup is still pending. The image is
-   # distroless: `docker exec … bash` has nothing to run, this needs no shell.
+   # where the console answers, and whether setup is still pending. It runs the binary
+   # directly and needs no shell.
    docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
 
    # the one-time setup token, printed once at first boot

@@ -155,23 +155,10 @@ func (m *Module) handleWorkOutboxReplay(w http.ResponseWriter, r *http.Request, 
 	var body struct {
 		PlanHash string `json:"plan_hash"`
 	}
-	raw, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
-	if err != nil {
+	// Optional body: a bare POST carries only the If-Plan-Hash header.
+	if err := api.DecodeRequestBody(w, r, &body, api.RequestBodySpec{MaxBytes: 1 << 20, Optional: true}); err != nil {
 		writeWorkError(w, broken(http.StatusBadRequest, "invalid_command"))
 		return
-	}
-	if trimmed := strings.TrimSpace(string(raw)); trimmed != "" {
-		dec := json.NewDecoder(strings.NewReader(trimmed))
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(&body); err != nil {
-			writeWorkError(w, broken(http.StatusBadRequest, "invalid_command"))
-			return
-		}
-		var extra any
-		if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
-			writeWorkError(w, broken(http.StatusBadRequest, "invalid_command"))
-			return
-		}
 	}
 	headerPlan := r.Header.Get("If-Plan-Hash")
 	if headerPlan != "" {
@@ -547,14 +534,7 @@ func canonicalWorkCommandScope(method, path string, cmd WorkCommand) string {
 }
 
 func decodeWorkJSON(w http.ResponseWriter, r *http.Request, dst any) bool {
-	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(dst); err != nil {
-		writeWorkError(w, broken(http.StatusBadRequest, "invalid_command"))
-		return false
-	}
-	var extra any
-	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+	if err := api.DecodeRequestBody(w, r, dst, api.RequestBodySpec{MaxBytes: 1 << 20}); err != nil {
 		writeWorkError(w, broken(http.StatusBadRequest, "invalid_command"))
 		return false
 	}

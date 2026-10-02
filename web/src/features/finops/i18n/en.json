@@ -428,7 +428,7 @@
     }
   },
   "seats": {
-    "title": "Seat utilisation",
+    "title": "Seat utilization",
     "description": "Assigned seats against the actors actually active, per day. A day with no seat snapshot reports nothing — it is not a day with zero usage.",
     "provider": "Provider",
     "empty": "No days reported",
@@ -474,7 +474,7 @@
     "budgets": "Budgets",
     "optimization": "Optimization",
     "value": "Cost per outcome",
-    "seats": "Seat utilisation",
+    "seats": "Seat utilization",
     "costCentres": "Cost centres"
   },
   "title": "Cost & FinOps",

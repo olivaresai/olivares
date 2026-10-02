@@ -1,6 +1,6 @@
 {
-  "title": "Permisos",
-  "subtitle": "Aprobaciones con intervención humana, política RBAC/ABAC y las identidades y vínculos de agente que hay detrás de cada acción.",
+  "title": "Aprobaciones y permisos",
+  "subtitle": "Solicitudes que esperan la decisión de una persona, las reglas que permiten o deniegan acciones y quién puede actuar.",
   "tabs": {
     "approvals": "Aprobaciones",
     "policies": "Políticas",
@@ -9,7 +9,7 @@
     "agentRisk": "Riesgo de agentes"
   },
   "breakGlass": {
-    "title": "Acceso de emergencia break-glass",
+    "title": "Acceso de emergencia",
     "caption": "Excepciones temporales al control dual. Cada activación, uso, revocación y revisión posterior constituye evidencia de auditoría permanente; esta superficie sirve para rendir cuentas, no para facilitar el acceso.",
     "forbiddenTitle": "No autorizado",
     "forbiddenBody": "No tienes permiso para ver los grants de emergencia ni sus rastros inmutables de uso.",
@@ -115,10 +115,8 @@
   },
   "approvals": {
     "title": "Cola de aprobaciones",
-    "caption": "Solicitudes pendientes con intervención humana. Cada aprobación, rechazo y cancelación es una decisión deliberada y auditada que queda registrada en el rastro inmutable de decisiones.",
+    "caption": "Solicitudes que esperan una decisión. Cada aprobación, rechazo y cancelación queda registrada.",
     "search": "Buscar solicitudes…",
-    "action": "Acción",
-    "subject": "Sujeto",
     "requestedBy": "Solicitada por",
     "status": "Estado",
     "progress": "Aprobaciones",
@@ -136,7 +134,7 @@
     "noSubject": "Sin sujeto",
     "filterStatus": "Estado",
     "statusAll": "Todos los estados",
-    "runSweep": "Ejecutar barrido",
+    "runSweep": "Caducar y escalar las solicitudes vencidas",
     "newRequest": "Nueva solicitud",
     "empty": "No hay solicitudes de aprobación",
     "emptyHint": "Cuando una acción requiere aprobación humana aparece aquí para su revisión.",
@@ -146,7 +144,9 @@
     "reject": "Rechazar",
     "cancel": "Cancelar",
     "viewDetail": "Ver detalle",
-    "actorHint": "Identificador de actor de auditoría — nunca una dirección de correo. La identidad se resuelve desde el directorio, no se muestra aquí."
+    "actorHint": "Identificador de actor de auditoría — nunca una dirección de correo. La identidad se resuelve desde el directorio, no se muestra aquí.",
+    "expiredAt": "Caducada {{time}}",
+    "request": "Solicitud"
   },
   "status": {
     "pending": "Pendiente",
@@ -157,17 +157,18 @@
   },
   "decide": {
     "approveTitle": "¿Aprobar esta solicitud?",
-    "approveBody": "Tu decisión queda registrada de forma permanente en el rastro inmutable de decisiones y cuenta para el umbral de aprobación.",
+    "approveBody": "Tu aprobación cuenta para las aprobaciones que necesita esta solicitud.",
     "rejectTitle": "¿Rechazar esta solicitud?",
-    "rejectBody": "Un único rechazo termina la solicitud y queda registrado de forma permanente en el rastro de decisiones.",
+    "rejectBody": "Un solo rechazo termina la solicitud.",
     "approveConfirm": "Aprobar",
     "rejectConfirm": "Rechazar",
     "note": "Nota",
-    "noteHint": "Opcional — se registra de forma permanente junto a tu decisión.",
+    "noteHint": "Opcional.",
     "notePlaceholder": "Por qué apruebas o rechazas (opcional)…",
     "approved": "Decisión registrada — aprobada",
     "rejected": "Decisión registrada — rechazada",
-    "sodHint": "No puedes decidir sobre una solicitud que tú mismo abriste, y un token sin un usuario estable no puede decidir."
+    "sodHint": "No puedes decidir sobre una solicitud que tú mismo abriste, y un token sin un usuario estable no puede decidir.",
+    "notPending": "Esta solicitud ya no espera una decisión."
   },
   "cancel": {
     "title": "¿Cancelar esta solicitud de aprobación?",
@@ -178,7 +179,7 @@
   "sweep": {
     "title": "¿Ejecutar el barrido de aprobaciones?",
     "body": "Marca como caducadas las solicitudes que superaron su plazo y escala las que superaron su ventana de escalado, y emite las alertas correspondientes. Es seguro repetirlo.",
-    "confirm": "Ejecutar barrido",
+    "confirm": "Caducar y escalar las solicitudes vencidas",
     "done": "Barrido completado",
     "result": "Examinadas {{scanned}} · escaladas {{escalated}} · caducadas {{expired}}.",
     "more": "Quedan solicitudes pendientes sin examinar — ejecuta el barrido de nuevo para terminar."
@@ -222,12 +223,13 @@
     "trailEmpty": "Todavía no hay decisiones registradas",
     "trailEmptyHint": "Aquí se registra cada decisión sobre esta aprobación: quién decidió, cuándo y por qué. Todavía no ha decidido nadie.",
     "decisionApprove": "Aprobada",
-    "decisionReject": "Rechazada"
+    "decisionReject": "Rechazada",
+    "reenableNeedsAdmins": "Dos cuentas de administrador distintas deben aprobarlo. Créalas en Identidad y NHI, o con `olivares users create`.",
+    "openIdentity": "Abrir Identidad y NHI"
   },
   "policies": {
     "title": "Políticas",
-    "caption": "Reglas de denegación ABAC y umbrales de aprobación. Una regla ABAC solo puede restringir más el acceso; es la intención declarada del autor, no una prueba de aplicación en tiempo de ejecución.",
-    "enforcementCaption": "Que una política se aplique realmente depende del despliegue — una política activada puede estar redactada y auditada pero inerte si su evaluador no está conectado.",
+    "caption": "Una política habilitada se aplica en cuanto se guarda. Las reglas de denegación solo quitan acceso; los umbrales de aprobación se aplican a las nuevas solicitudes que coincidan.",
     "search": "Buscar políticas…",
     "name": "Política",
     "kind": "Tipo",
@@ -254,7 +256,7 @@
     "kindHint": "El tipo de política. No se puede cambiar tras crearla.",
     "enabled": "Activada",
     "abacRules": "Reglas de denegación",
-    "abacRulesHint": "Cada regla restringe más el acceso. «Denegar» es implícito y no editable — v1 solo admite reglas de denegación. Una regla debe seleccionar al menos uno de: permiso, verbo, recurso o tipo de principal.",
+    "abacRulesHint": "Cada regla deniega las solicitudes que coinciden con ella y nunca concede acceso. Una regla necesita al menos una condición. Con un inicio de sesión mínimo, deniega solo a quien haya iniciado sesión por debajo de ese nivel; los tokens siempre cuentan como por debajo.",
     "addRule": "Añadir regla",
     "removeRule": "Quitar",
     "rulePermission": "Permiso",
@@ -263,14 +265,20 @@
     "ruleResource": "Recurso",
     "rulePrincipalKind": "Tipo de principal",
     "ruleAny": "Cualquiera",
+    "ruleMinAal": "Inicio de sesión mínimo",
+    "ruleMinAalNone": "Ninguno",
+    "aal1": "AAL1 (contraseña)",
+    "aal2": "AAL2 (multifactor)",
+    "aal3": "AAL3 (resistente al phishing)",
     "noRules": "Sin reglas de denegación",
     "denyImplicit": "Denegar (implícito)",
     "requiredApprovals": "Aprobaciones requeridas",
-    "requiredApprovalsHint": "0–64 — el umbral con autoridad.",
+    "requiredApprovalsHint": "De 0 a 64. Vacío o 0 usa el valor predeterminado del motor, que puede ser mayor en acciones críticas.",
     "expiresInSeconds": "Caduca en (segundos)",
     "expiresInSecondsHint": "0–31536000 (0 = nunca).",
     "escalateInSeconds": "Escala en (segundos)",
     "escalateInSecondsHint": "0–31536000 (0 = nunca).",
+    "countError": "Introduce un número entero de 0 a {{max}}.",
     "matchAction": "Acción coincidente",
     "matchActionHint": "Vacío = coincide con cualquier acción.",
     "matchSubjectKind": "Tipo de sujeto coincidente",
@@ -374,8 +382,8 @@
     "done": "Agente desvinculado"
   },
   "caveat": {
-    "deny": "Una regla de denegación es la intención declarada del autor de la política — no una prueba de que la regla se aplique en tiempo de ejecución.",
-    "enforcement": "Activada no siempre significa aplicada: el evaluador o los proveedores de directorio pueden no estar conectados en este despliegue."
+    "deny": "Una regla de denegación solo puede quitar acceso. Nunca da a nadie más de lo que permite su rol.",
+    "enforcement": "Una regla activada se comprueba; una regla desactivada se conserva y no se comprueba."
   },
   "computerUse": {
     "title": "Gobernanza de computer-use",
@@ -597,8 +605,8 @@
       "description": "Tras configurar una fuente de directorio, resincroniza el censo para reconciliar sus identidades humanas y no humanas en este tenant."
     },
     "policies": {
-      "title": "Aún no se han redactado políticas de gobernanza",
-      "description": "Redacta una regla de denegación ABAC o un umbral de aprobación; su aplicación en runtime sigue dependiendo de que el evaluador esté conectado en este despliegue."
+      "title": "Aún no hay reglas",
+      "description": "Añade una regla de denegación o un umbral de aprobación. Cada política se aplica en cuanto se guarda."
     },
     "routinePolicies": {
       "title": "Aún no se han redactado políticas de rutinas",
@@ -699,5 +707,21 @@
       "draft": "Borrador — no lo fijes en código",
       "stable": "Estable — una costura puede apuntarle"
     }
+  },
+  "preview": {
+    "title": "Qué se ejecutará",
+    "session": "Sesión",
+    "folder": "Carpeta",
+    "askedBy": "Lo pide",
+    "askedBySession": "La propia sesión",
+    "tool": "Herramienta",
+    "willRun": "Qué se ejecutará",
+    "noReview": "Esta solicitud no incluye qué se ejecutará.",
+    "showAll": "Ver todo",
+    "showLess": "Ver menos",
+    "details": "Detalles",
+    "id": "Id de la solicitud",
+    "untitled": "Sesión sin título",
+    "openToDecide": "Ábrela para aprobar o rechazar"
   }
 }

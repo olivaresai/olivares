@@ -156,6 +156,10 @@ type FederationConfig struct {
 	// ExternalIssuer is the exact canonical issuer the installed verifier must
 	// return with an immutable subject. The native account key qualifies both.
 	ExternalIssuer string
+	// DisplayName is the optional operator-entered label shown on the login page.
+	DisplayName string
+	// AssuranceMapping overrides the protocol defaults for this identity provider.
+	AssuranceMapping *FederationAssuranceMapping
 }
 
 // FederationDomainClaim is the DERIVED, unique-constrained home-realm routing index
@@ -183,4 +187,12 @@ type FederationDomainClaim struct {
 	// Domain is the normalized (NormalizeFederationDomain) claimed email domain — globally
 	// unique via the (tenant_id, domain) index.
 	Domain string
+}
+
+// FederationAssuranceMapping names exact assertion values trusted as upstream
+// MFA. Nil lists use the protocol defaults; empty lists explicitly trust none.
+type FederationAssuranceMapping struct {
+	AMR          []string `json:"amr"`
+	ACR          []string `json:"acr"`
+	SAMLContexts []string `json:"saml_contexts"`
 }

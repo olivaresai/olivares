@@ -148,6 +148,7 @@ func nondisclosureSameBodies(t *testing.T, response communicationHTTPTestRespons
 
 func TestCapabilityNonDisclosureHTTP(t *testing.T) {
 	estate := bootChannelAdministrationHTTPEstate(t, communicationHTTPTestSQLiteStore(t))
+	requirePasskeyStepUpForTest(t, estate.eng.store, estate.eng.authr)
 	eng, spy, module := nondisclosureTestEngine(t, estate)
 	ws, tenant := estate.workspace.String(), estate.tenant
 	owner := channelAdministrationGrant(channelAdministrationSubject("user", estate.owner.id), true, true, true)

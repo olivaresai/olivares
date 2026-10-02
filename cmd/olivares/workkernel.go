@@ -33,9 +33,18 @@ func (workContentGuard) Inspect(_ context.Context, _ model.TenantID, _ model.ID,
 	return sessions.ContentDecision{Allowed: true, Code: "clean"}, nil
 }
 
-type workEventSink struct{ eventing *eventing.Module }
+type workEventSink struct {
+	eventing *eventing.Module
+	// notRunning is set when the eventing module is outside this node's module
+	// profile: work events have no subscriber to reach, so they are accepted and
+	// dropped instead of queuing for a dispatcher that does not run.
+	notRunning bool
+}
 
 func (s workEventSink) IngestDurable(ctx context.Context, e sessions.WorkEventEnvelope) error {
+	if s.notRunning {
+		return nil
+	}
 	if s.eventing == nil {
 		return eventing.ErrDurableIntakeUnavailable
 	}

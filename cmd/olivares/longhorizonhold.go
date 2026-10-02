@@ -62,6 +62,7 @@ type longHorizonHoldLoop struct {
 	recon    longHorizonHold
 	interval time.Duration
 	log      *slog.Logger
+	skips    enumerationSkips
 }
 
 // newLongHorizonHoldLoop builds the loop. nil when there is no reconciler (the default
@@ -113,9 +114,10 @@ func (l *longHorizonHoldLoop) runOnce(ctx context.Context) error {
 	}
 	tenants, err := businessTenantIDs(ctx, l.st)
 	if err != nil {
-		l.log.Warn("audit-legalhold: cannot enumerate orgs; skipping this tick", "err", err)
+		l.skips.skip(l.log, "audit-legalhold", err)
 		return nil
 	}
+	l.skips.listed(l.log, "audit-legalhold")
 	for _, t := range tenants {
 		if err := ctx.Err(); err != nil {
 			return err

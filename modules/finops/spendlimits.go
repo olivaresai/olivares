@@ -355,7 +355,7 @@ func (m *Module) SpendLimitDelete(ctx context.Context, tenant model.TenantID, id
 	if m.data == nil {
 		return errors.New("finops: data unavailable")
 	}
-	return m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	return m.mutate(ctx, tenant, func(sc store.Scope) error {
 		p, err := sc.Policies().Get(ctx, id)
 		if err != nil {
 			return err

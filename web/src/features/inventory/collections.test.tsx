@@ -488,7 +488,9 @@ describe('CollectionCoverage failures', () => {
     const user = userEvent.setup()
     mount()
     await select(user)
-    expect(await screen.findByText('Not authorized')).toBeInTheDocument()
+    expect(
+      await screen.findByText('You do not have access to this.'),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('alert')).toBeNull()
   })
 })

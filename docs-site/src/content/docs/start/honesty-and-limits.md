@@ -35,7 +35,7 @@ cover something, the page says so rather than implying it does.
   in several SIEM formats.
 - **Releases are signed and verifiable.** Signatures, SLSA provenance, SBOM and OpenVEX can all be
   [verified](/how-to/verify-a-release/). Verification is not yet fully network-free: keyless checks need Sigstore trusted-root
-  material and the SLSA step has no offline mode. The product ships an [air-gap bundle](/how-to/air-gap-install/). The latest tagged release, **26.10.0**, is published with signed archives, native packages and container images; APIs, schemas and the module surface may still change before 1.0.
+  material and the SLSA step has no offline mode. The product ships an [air-gap bundle](/how-to/air-gap-install/). The latest tagged release, **26.10.1**, is published with signed archives, native packages and container images; APIs, schemas and the module surface may still change before 1.0.
 
 ## Open core — what is open vs enterprise
 
@@ -137,7 +137,7 @@ Treat module-level depth as **work in progress** unless a page states otherwise.
   Models you genuinely self-host (e.g. via vLLM/Ollama under module XXIII) can run
   air-gapped; brokered frontier models cannot.
 - **Module routes are a separate, beta contract.** The module endpoints (for
-  example the access-map graph and drift) are not part of the 67-path stable core
+  example the access-map graph and drift) are not part of the 70-path stable core
   contract; they are published as a separate **beta** document — the
   [module-route reference](/reference/api-beta/) (served at `/openapi.beta.json`).
   Beta means the shapes may change with notice, and field-level detail still lives

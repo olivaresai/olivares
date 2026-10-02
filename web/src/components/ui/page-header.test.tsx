@@ -200,7 +200,10 @@ describe('PageHeader', () => {
    * block from 28 px to 55, on a phone, which has LESS vertical room than a desktop, not
    * more. The budget is 40.
    */
-  it('is ONE row at every width: the controls never stack under the title', () => {
+  // The controls share the title's row while there is room, and wrap under it before the
+  // title gets narrower than 10rem. The old rule (never wrap) squeezed "Provider profiles"
+  // to 0 px at 1280 px, one letter per line (HU-18).
+  it('keeps the title readable: the controls wrap under it before it narrows past 10rem', () => {
     const { container } = render(
       <PageHeader
         title="Inventory"
@@ -211,17 +214,18 @@ describe('PageHeader', () => {
     const row = titleRow(container)
     const classes = row.className.split(/\s+/)
     expect(classes).toContain('flex')
+    expect(classes).toContain('flex-wrap')
     expect(classes).toContain('items-start')
-    // The two forms that reintroduce the second row, named rather than implied: a
-    // column at every width, and a column that becomes a row only at `sm`.
+    // A column at every width would stack the controls even when they fit.
     expect(classes).not.toContain('flex-col')
-    expect(classes).not.toContain('sm:flex-row')
     // Two children and no more: the title group and the control group. A third would be
     // something laid out beside them with nothing deciding which gives way.
     expect(row.children).toHaveLength(2)
     // The title can reflow beside its controls; the description has its own full-width row.
     const titleGroup = row.children[0] as HTMLElement
-    expect(titleGroup.className).toContain('min-w-0')
+    expect(titleGroup.className.split(/\s+/)).toContain(
+      'min-w-[min(100%,10rem)]',
+    )
     expect(titleGroup.querySelector('h1')!.className).toContain('break-words')
   })
 
@@ -244,7 +248,9 @@ describe('PageHeader', () => {
     expect(h1.className.split(/\s+/)).not.toContain('truncate')
     const titleGroup = h1.parentElement as HTMLElement
     expect(titleGroup.className.split(/\s+/)).not.toContain('overflow-hidden')
-    expect(titleGroup.className.split(/\s+/)).toContain('min-w-0')
+    expect(titleGroup.className.split(/\s+/)).toContain(
+      'min-w-[min(100%,10rem)]',
+    )
     const actions = container.querySelector('[data-slot="page-actions"]')!
       .parentElement as HTMLElement
     expect(actions.className.split(/\s+/)).toContain('min-w-0')
@@ -411,12 +417,16 @@ describe('PageHeader on a row shared with a tab strip', () => {
     )
   })
 
-  it('the shared row permits text height and phone reflow', () => {
+  it('the shared row permits text height and wraps the tabs instead of squeezing the title', () => {
     const classes = WORK_CHROME_ROW.split(/\s+/)
-    expect(classes).toContain('grid')
-    expect(classes).toContain('sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)]')
-    expect(classes).toContain('min-h-9')
-    expect(classes).toContain('grid-cols-1')
+    expect(classes).toEqual(
+      expect.arrayContaining([
+        'flex',
+        'flex-wrap',
+        'min-h-9',
+        '[&>:first-child]:flex-[1_1_20rem]',
+      ]),
+    )
   })
 
   // WHERE A PHONE'S PANEL OF COLLAPSED CONTROLS HANGS FROM. Beside a tab strip the header is

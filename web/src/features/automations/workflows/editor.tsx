@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { useModuleOn } from '@/stores/modules'
 import { useQuery } from '@tanstack/react-query'
 import {
   Background,
@@ -165,9 +166,12 @@ function LoadedWorkflowEditor({
     queryKey: workflowsKeys.schedules(activeTenant),
     queryFn: () => workflowsApi.schedules(optionParams),
   })
+  // Notification routes are the notify module's: none to offer while it is off.
+  const notifyOn = useModuleOn('notify')
   const routes = useQuery({
     queryKey: workflowsKeys.routes(activeTenant),
     queryFn: () => workflowsApi.routes(optionParams),
+    enabled: notifyOn,
   })
 
   const clientErrors = useMemo(() => validateGraphClient(steps), [steps])

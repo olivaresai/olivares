@@ -55,8 +55,8 @@ export const viewerApi = {
   /** Export as plain-text summary (raw fetch — http client has no getText). */
   exportSummary: async (id: string): Promise<string> => {
     const headers = new Headers({ Accept: 'text/plain' })
-    const token = useSessionStore.getState().token
-    if (token) headers.set('Authorization', `Bearer ${token}`)
+    const token = useSessionStore.getState().csrfToken
+    if (token) headers.set('X-CSRF-Token', token)
     const tenant = useTenantStore.getState().activeTenant
     if (tenant) headers.set('X-Olivares-Tenant', tenant)
     const res = await fetch(

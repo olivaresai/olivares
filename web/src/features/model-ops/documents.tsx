@@ -9,6 +9,7 @@
 // AIBOM's canonical sealed form is ALWAYS CycloneDX; SPDX is a read-only alternate
 // serialization that can never be sealed. Documents are opaque to the browser — fetched
 // and saved verbatim, never rebuilt here.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Download, FileText, ScrollText, Stamp } from 'lucide-react'
@@ -31,7 +32,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import { ListTruncationBadge, HashChip } from '@/features/_intel'
 import { KvList, KvRow } from '@/components/ui/kv'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -243,7 +243,8 @@ export function ModelDocuments({
           //    seguía pintándose, el aviso de recorte se ocultaba por el `!error` de arriba, y
           //    quedaba una lista VIEJA y RECORTADA sin marca ninguna. Lo devolvió el contraste
           //    externo; `VersionEvidence` ya tenía esta rama por la misma razón.
-          <ErrorState
+          <QueryErrorState
+            error={historyQ.error}
             title={t('documents.sealsLoadError')}
             retry={() => void historyQ.refetch()}
           />

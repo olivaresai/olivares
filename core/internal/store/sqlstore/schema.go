@@ -62,6 +62,11 @@ func buildCoreMigrations(
 		if totpRelation(d.Kind) {
 			continue
 		}
+		// The deployment settings singleton has no version of its own; the
+		// reconcile creates it on every database.
+		if deploymentSettingsRelation(d.Kind) {
+			continue
+		}
 		d = beforeExternalProvider(beforeGroupOrigin(beforeConsentCustody(beforeAuthenticationFreshness(d))))
 		entity = append(entity, dia.CreateTableStmts(d)...)
 	}

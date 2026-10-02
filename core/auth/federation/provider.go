@@ -108,12 +108,8 @@ func (p *Provider) ValidateAssertion(ctx context.Context, a auth.Assertion) (aut
 }
 
 // SAMLMetadata returns the SP's SAML metadata document (XML) for one-click IdP
-// onboarding, or an error for a non-SAML provider. This method is open-core (it
-// rides with the single-IdP SAML provider), but the unauthenticated SP-metadata
-// HTTP ENDPOINT stays enterprise-gated in the commercial composition root —
-// publishing SP metadata is an enterprise nicety, so the default build links the
-// method yet does not expose the route (it 404s there). A type assertion to the
-// optional metadata interface keeps that wiring honest.
+// onboarding, or an error for a non-SAML provider. The Community HTTP handler
+// exposes it through the optional metadata interface of the active provider.
 func (p *Provider) SAMLMetadata() ([]byte, error) {
 	if p.saml == nil {
 		return nil, fmt.Errorf("%w: SAML metadata requested but the active provider is not SAML", ErrNotConfigured)

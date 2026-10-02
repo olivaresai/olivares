@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"strings"
+	"time"
 	"unicode"
 	"unicode/utf8"
 )
@@ -101,6 +102,12 @@ type FederatedIdentity struct {
 	// operator-owned mapping resolves them (the IdP names the groups, the operator
 	// decides what they mean).
 	Groups []string
+	// AAL is at most AAL2, based only on the selected provider's verified
+	// assertion and its operator-owned mapping. Zero is legacy AAL1.
+	AAL int
+	// AuthenticatedAt is the upstream authentication event, never the token's
+	// issue time or the callback time. Missing/stale events confer no elevation.
+	AuthenticatedAt time.Time
 }
 
 // ssoSubjectSep joins the issuer and subject into the stored SsoSubject key. U+001F

@@ -111,14 +111,18 @@ func (r *Runtime) outputHandler(o *outputReg) event.Handler {
 func (r *Runtime) startModules(ctx context.Context) {
 	for _, m := range r.modules {
 		m.host = &moduleHost{
-			bus:   r.bus,
-			log:   r.log.With("module", m.name),
-			cfg:   m.cfg,
-			name:  m.name,
-			class: deliveryClassForModule(m.name),
+			bus:     r.bus,
+			log:     r.log.With("module", m.name),
+			cfg:     m.cfg,
+			name:    m.name,
+			class:   deliveryClassForModule(m.name),
+			dormant: m.dormant,
 		}
 		if err := safe(func() error { return m.mod.Init(ctx, m.host) }); err != nil {
 			r.fail(&m.status, &m.err, "module", m.name, "init", err)
+			continue
+		}
+		if m.dormant {
 			continue
 		}
 		if err := safe(func() error { return m.mod.Start(ctx) }); err != nil {
@@ -375,6 +379,9 @@ func (r *Runtime) Stop(ctx context.Context) error {
 	// Stop modules in reverse registration order.
 	for i := len(modules) - 1; i >= 0; i-- {
 		m := modules[i]
+		if m.dormant {
+			continue
+		}
 		if m.host != nil {
 			m.host.unsubscribeAll()
 		}

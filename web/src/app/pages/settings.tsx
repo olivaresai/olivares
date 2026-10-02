@@ -5,16 +5,16 @@ import { useEffect, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import {
-  Bell,
   Folder,
   Info,
+  KeyRound,
   Keyboard,
+  Package,
   Play,
   Server,
   Shield,
   SlidersHorizontal,
   Sparkles,
-  Zap,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
@@ -37,6 +37,9 @@ import {
 } from '@/lib/i18n'
 import { isTypingTarget } from '@/lib/keybindings/model'
 import { KEYBINDINGS } from '@/lib/keybindings/table'
+import { StepUpPolicySetting } from '@/features/identity/step-up-policy'
+import { ModulesSettings } from '@/features/settings/modules-settings'
+import { ReportSigningSettings } from '@/features/settings/report-signing-settings'
 import { viewById } from '@/features/navigation/model'
 import {
   CLIENT_SETTING_DEFAULTS,
@@ -73,7 +76,26 @@ type SectionId =
   | 'keyboard'
   | 'sessionDefaults'
   | 'signIn'
+  | 'edition'
+  | 'signing'
   | 'about'
+
+const SECTIONS: readonly SectionId[] = [
+  'general',
+  'notifications',
+  'keyboard',
+  'sessionDefaults',
+  'signIn',
+  'edition',
+  'signing',
+  'about',
+]
+
+/** A link can open one section (`/settings?section=signing`, from Reports). */
+function initialSection(): SectionId {
+  const wanted = new URLSearchParams(window.location.search).get('section')
+  return SECTIONS.find((s) => s === wanted) ?? 'general'
+}
 
 function ThemePreview({ kind }: { kind: Theme }) {
   if (kind === 'system') {
@@ -222,7 +244,7 @@ export function SettingsPage() {
   const setStartPage = useClientSettings((s) => s.setStartPage)
   const confirmStop = useClientSettings((s) => s.confirmStop)
   const setConfirmStop = useClientSettings((s) => s.setConfirmStop)
-  const [section, setSection] = useState<SectionId>('general')
+  const [section, setSection] = useState<SectionId>(initialSection)
   const [query, setQuery] = useState('')
   const lang = currentLanguage()
 
@@ -482,13 +504,8 @@ export function SettingsPage() {
             >
               {t('nav.general')}
             </NavButton>
-            <NavButton
-              current={section === 'notifications' && q.length === 0}
-              onClick={() => setSection('notifications')}
-              icon={<Bell aria-hidden className="size-3.5" />}
-            >
-              {t('nav.notifications')}
-            </NavButton>
+            {/* Notifications and Session defaults are not stored yet: no section is
+                offered until it does something (HU-14). */}
             <NavButton
               current={section === 'keyboard' && q.length === 0}
               onClick={() => setSection('keyboard')}
@@ -498,13 +515,6 @@ export function SettingsPage() {
             </NavButton>
           </NavGroup>
           <NavGroup label={t('groups.work')}>
-            <NavButton
-              current={section === 'sessionDefaults' && q.length === 0}
-              onClick={() => setSection('sessionDefaults')}
-              icon={<Zap aria-hidden className="size-3.5" />}
-            >
-              {t('nav.sessionDefaults')}
-            </NavButton>
             <RegistryLink
               id="providers"
               label={t('nav.aiTools')}
@@ -530,12 +540,28 @@ export function SettingsPage() {
               {t('nav.signIn')}
             </NavButton>
             <a
-              href="/setup"
+              href="/onboarding"
               className="flex h-8 items-center gap-2.5 rounded-[7px] px-2.5 text-caption font-medium text-text-2 hover:bg-hover hover:text-text"
             >
               <Play aria-hidden className="size-3.5" />
               {t('nav.setup')}
             </a>
+            <NavButton
+              current={section === 'edition' && q.length === 0}
+              onClick={() => setSection('edition')}
+              icon={<Package aria-hidden className="size-3.5" />}
+            >
+              {t('nav.edition')}
+            </NavButton>
+            {isSuperadmin ? (
+              <NavButton
+                current={section === 'signing' && q.length === 0}
+                onClick={() => setSection('signing')}
+                icon={<KeyRound aria-hidden className="size-3.5" />}
+              >
+                {t('nav.signing')}
+              </NavButton>
+            ) : null}
             <NavButton
               current={section === 'about' && q.length === 0}
               onClick={() => setSection('about')}
@@ -574,12 +600,34 @@ export function SettingsPage() {
               />
             ) : null}
             {q.length === 0 && section === 'signIn' ? (
-              <Unavailable
-                title={t('nav.signIn')}
-                reason={t('unavailable.signIn')}
-              />
+              isSuperadmin ? (
+                <>
+                  <PageHeader title={t('nav.signIn')} />
+                  <StepUpPolicySetting />
+                </>
+              ) : (
+                <Unavailable
+                  title={t('nav.signIn')}
+                  reason={t('unavailable.signIn')}
+                />
+              )
             ) : null}
             {q.length === 0 && section === 'keyboard' ? <KeyboardList /> : null}
+            {q.length === 0 && section === 'edition' ? (
+              <Edition
+                edition={serverInfo.data?.edition}
+                manageModules={isSuperadmin}
+              />
+            ) : null}
+            {q.length === 0 && section === 'signing' && isSuperadmin ? (
+              <>
+                <PageHeader
+                  title={t('nav.signing')}
+                  description={t('signing.description')}
+                />
+                <ReportSigningSettings heading={false} />
+              </>
+            ) : null}
             {q.length === 0 && section === 'about' ? (
               <About
                 version={serverInfo.data?.version}
@@ -703,6 +751,66 @@ function KeyboardList() {
   )
 }
 
+/** What a Business build adds, in the order the console places it. Each entry is a
+ * surface a Community build does not offer, because its engine routes answer 501 there
+ * or report the control unavailable (WEB slice 5, EDITION-CENSUS.md). */
+const BUSINESS_ADDS = [
+  'loginEnforcement',
+  'identityProviders',
+  'groupMapping',
+  'regulatory',
+  'reports',
+  'toolPins',
+] as const
+
+/** EDITION & MODULES: the one place that names the build's edition and, on a Community
+ * build, what a Business build adds — stated once, with no prompt elsewhere. The edition
+ * is the engine's own build fact from server-info, never the license. The engine's paid
+ * build string is "enterprise"; the product names that build Business (Enterprise is a
+ * negotiated scope, not a build). */
+function Edition({
+  edition,
+  manageModules,
+}: {
+  edition?: string
+  /** A system administrator turns modules on and off here (ARCH C1). */
+  manageModules: boolean
+}) {
+  const { t } = useTranslation('settings')
+  const name =
+    edition === 'community' || edition === 'enterprise'
+      ? t(`edition.editions.${edition}`)
+      : (edition ?? t('edition.unknown'))
+  return (
+    <>
+      <PageHeader title={t('edition.title')} description={t('edition.scope')} />
+      <dl className="divide-y divide-line">
+        <div className="flex items-center justify-between gap-4 py-2">
+          <dt className="text-body text-text-2">{t('edition.label')}</dt>
+          <dd className="min-w-0 truncate text-body text-text">{name}</dd>
+        </div>
+      </dl>
+      {/* Every optional module can be turned on and off from the product. */}
+      {manageModules ? <ModulesSettings /> : null}
+      {edition === 'community' ? (
+        <section
+          aria-labelledby="edition-adds"
+          className="mt-4 flex flex-col gap-2"
+        >
+          <h2 id="edition-adds" className="text-body font-medium text-text">
+            {t('edition.businessAdds')}
+          </h2>
+          <ul className="flex list-disc flex-col gap-1 pl-5 text-body text-text-2">
+            {BUSINESS_ADDS.map((key) => (
+              <li key={key}>{t(`edition.adds.${key}`)}</li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+    </>
+  )
+}
+
 function About({
   version,
   engine,
@@ -726,8 +834,14 @@ function About({
   const facts = [
     [t('about.version'), version ?? '—'],
     [t('about.engine'), engine ?? '—'],
-    [t('about.license'), license ?? '—'],
-    [t('about.licensee'), licensee || t('about.none')],
+    // Without a license this is Community: say so, instead of "License status none ·
+    // Licensed to None" (HU-27).
+    ...(!license || license === 'none'
+      ? [[t('about.edition'), t('about.community')]]
+      : [
+          [t('about.license'), license],
+          [t('about.licensee'), licensee || t('about.none')],
+        ]),
     displayName ? [t('about.displayName'), displayName] : null,
     [t('about.actor'), actor ?? '—'],
     [t('about.role'), role],

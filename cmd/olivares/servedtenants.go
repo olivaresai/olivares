@@ -6,6 +6,10 @@ package main
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"maps"
+	"slices"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -34,6 +38,12 @@ import (
 //
 // A tenant whose org read fails is not silently dropped: the error propagates, so
 // a pump skips its tick loudly instead of quietly pumping a subset of the estate.
+//
+// It reads ListOrgs, so it refuses on the default PostgreSQL install (no
+// BYPASSRLS admin pool). Only the jobs that certify coverage of every tenant use
+// it now (the retention sweep, the long-horizon legal hold): they must not claim
+// a pass over tenants they cannot see. The best-effort pumps use
+// servedWorkTenants, which every install can read.
 func servedBusinessTenants(ctx context.Context, st store.Store) ([]model.TenantID, error) {
 	var tenants []model.TenantID
 	err := st.System(ctx, func(sys store.SystemScope) error {
@@ -53,4 +63,103 @@ func servedBusinessTenants(ctx context.Context, st store.Store) ([]model.TenantI
 		return nil
 	})
 	return tenants, err
+}
+
+// servedWorkTenants enumerates the tenants for per-tenant work that is best
+// effort and must run on every supported install: the session approval recovery
+// at start and the sessions work outbox.
+//
+// servedBusinessTenants reads ListOrgs. On the default PostgreSQL install (the
+// application and owner roles, no BYPASSRLS admin pool) that read is RLS-limited
+// to nothing and refuses with store.ErrEnumerationNotAuthoritative. This one
+// reads what every install can:
+//
+//   - a store that can enumerate the estate (SQLite, or PostgreSQL with the admin
+//     pool) gives its org rows (ListOrgsVisible, authoritative);
+//   - otherwise, the tenants the auth partition grants access to: every business
+//     tenant a membership names. A user acts in a tenant through a membership, so
+//     a tenant that has sessions has one.
+//
+// Each candidate is then confirmed by its own org row in a tenant-scoped read,
+// which the application role may do. A tenant this node does not serve (another
+// region, service withdrawn, no longer present) is skipped; any other read error
+// is returned.
+//
+// ListOrgs keeps its guard: a ceremony that certifies coverage calls it and
+// fails closed.
+func servedWorkTenants(ctx context.Context, st store.Store) ([]model.TenantID, error) {
+	seen := map[model.TenantID]bool{}
+	authoritative := false
+	err := st.System(ctx, func(sys store.SystemScope) error {
+		orgs, complete, err := sys.ListOrgsVisible(ctx)
+		if err != nil {
+			return err
+		}
+		authoritative = complete
+		for _, o := range orgs {
+			seen[o.TenantID] = true
+		}
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("read the visible orgs: %w", err)
+	}
+	if !authoritative {
+		if err := st.AuthView(ctx, func(as store.AuthScope) error {
+			q := model.Query{Limit: 500}
+			for {
+				rows, page, err := as.Memberships().List(ctx, q)
+				if err != nil {
+					return err
+				}
+				for _, m := range rows {
+					seen[m.TargetTenantID] = true
+				}
+				if !page.HasMore || page.Cursor == "" || page.Cursor == q.Cursor {
+					return nil
+				}
+				q.Cursor = page.Cursor
+			}
+		}); err != nil {
+			return nil, fmt.Errorf("read the tenants the auth partition grants access to: %w", err)
+		}
+	}
+	candidates := slices.Sorted(maps.Keys(seen))
+	var tenants []model.TenantID
+	for _, tenant := range candidates {
+		served, err := servesTenant(ctx, st, tenant)
+		if err != nil {
+			return nil, err
+		}
+		if served {
+			tenants = append(tenants, tenant)
+		}
+	}
+	return tenants, nil
+}
+
+// servesTenant reports whether this node serves ONE business tenant, by that
+// tenant's own org row: the check servedWorkTenants makes for each candidate. A
+// request that names its tenant (a tool's login home, the local Ollama's
+// registration) asks this instead of enumerating every tenant, so it works on the
+// default PostgreSQL install, where ListOrgs refuses. The zero and system tenants,
+// a tenant of another region, a withdrawn or absent one are not served; any other
+// read error is returned.
+func servesTenant(ctx context.Context, st store.Store, tenant model.TenantID) (bool, error) {
+	if tenant.IsZero() || tenant.IsSystem() {
+		return false, nil
+	}
+	var status model.LifecycleStatus
+	err := st.View(ctx, tenant, func(sc store.Scope) error {
+		org, err := sc.Org(ctx)
+		status = org.Status
+		return err
+	})
+	switch {
+	case errors.Is(err, store.ErrResidencyViolation), errors.Is(err, store.ErrTenantSuspended), errors.Is(err, store.ErrNotFound):
+		return false, nil
+	case err != nil:
+		return false, fmt.Errorf("read the org of tenant %s: %w", tenant, err)
+	}
+	return status == model.StatusActive, nil
 }

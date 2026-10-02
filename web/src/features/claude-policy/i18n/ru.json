@@ -26,7 +26,8 @@
     "docs": "документация",
     "enabled": "Включено",
     "unset": "Не задано",
-    "listPlaceholder": "значения через запятую"
+    "listPlaceholder": "значения через запятую",
+    "objectListInvalid": "Введите JSON-список объектов, например [{\"source\": \"github\", \"repo\": \"your-org/*\"}]."
   },
   "panel": {
     "guided": "Направляемый",

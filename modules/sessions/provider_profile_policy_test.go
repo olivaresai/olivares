@@ -27,13 +27,12 @@ func argvValue(args []string, flag string) (string, bool) {
 	return "", false
 }
 
-// TestProfiledLaunchWithNoDeclaredPolicyGetsNoTools pins what a profile that
-// declares nothing may use. Measured 2026-09-18: under permission_mode=default
-// the governed child was handed
-// its full tool surface — 34 tools including Bash, Write, Edit and NotebookEdit —
-// and the product narrowed nothing. A profile that declares no policy is now
-// deny-closed: the child is launched with no built-in tools at all.
-func TestProfiledLaunchWithNoDeclaredPolicyGetsNoTools(t *testing.T) {
+// TestProfiledLaunchWithNoDeclaredPolicyGetsTheDefaultSurface pins what a profile
+// that declares nothing may use: the tool's own default surface ("default"). What
+// runs is then decided by the permission level, the hooks and the confinement
+// (TARGET §3, §5). Until 2026-10-01 an undeclared profile got no built-in tools at
+// all, and a session started from it could neither read nor edit its folder.
+func TestProfiledLaunchWithNoDeclaredPolicyGetsTheDefaultSurface(t *testing.T) {
 	t.Parallel()
 
 	fr := &fakeRunner{initSID: "sess-policy-none"}
@@ -51,8 +50,23 @@ func TestProfiledLaunchWithNoDeclaredPolicyGetsNoTools(t *testing.T) {
 	if !present {
 		t.Fatalf("no tool surface was decided for a profiled launch: %v", args)
 	}
-	if value != "" {
-		t.Fatalf("an undeclared profile handed the child %q; deny-closed means no built-in tools", value)
+	if value != "default" {
+		t.Fatalf("an undeclared profile handed the child %q; want the tool's default surface", value)
+	}
+
+	// A profile that declares an EMPTY list still disables every built-in tool.
+	none := []string{}
+	if _, err := m.PatchProfile(ctx, tenant, a.Ref, ProfilePatch{SessionTools: &none}); err != nil {
+		t.Fatalf("declare no tools: %v", err)
+	}
+	if _, err := m.createRun(ctx, tenant, CreateRunParams{
+		Transport: TransportStreamJSON, Isolation: IsolationNative,
+		ProviderProfileRef: a.Ref, Actor: "user:u1", ActorKind: "user",
+	}); err != nil {
+		t.Fatalf("createRun: %v", err)
+	}
+	if value, _ := argvValue(fr.lastSpec().Args, "--tools"); value != "" {
+		t.Fatalf("a profile that declared no tools handed the child %q", value)
 	}
 }
 
@@ -72,9 +86,11 @@ func TestProfiledLaunchAppliesTheDeclaredSurfaceAndMode(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("declare the policy: %v", err)
 	}
+	// The launch names no mode, so the profile's declared mode applies (PEP
+	// 2026-10-01: a mode the launch NAMES is the session's preset and stays;
+	// launch_preset_precedence_test.go).
 	dto, err := m.createRun(ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
-		PermissionMode:     "default", // what the CALLER asked for
 		ProviderProfileRef: a.Ref, Actor: "user:u1", ActorKind: "user",
 	})
 	if err != nil {
@@ -127,7 +143,7 @@ func TestADeclaredEmptySurfaceIsKeptApartFromAnUndeclaredOne(t *testing.T) {
 	if silent.SessionToolsDeclared {
 		t.Fatalf("a profile nobody declared for reads as declared: %+v", silent)
 	}
-	// Withdrawing a declaration returns the profile to deny-closed AND to silence.
+	// Withdrawing a declaration returns the profile to the default surface AND to silence.
 	var withdraw *[]string = new([]string)
 	*withdraw = nil
 	if _, err := m.PatchProfile(ctx, tenant, a.Ref, ProfilePatch{SessionTools: withdraw}); err != nil {
@@ -180,13 +196,22 @@ func TestAProfilePolicyDoesNotOverrideATemplate(t *testing.T) {
 	if p.PermissionMode != "plan" {
 		t.Fatalf("the profile widened a template's mode to %q", p.PermissionMode)
 	}
-	// Without a template, the profile's declaration is what governs.
+	// Without a template, the profile's declaration governs a launch that named no
+	// mode ("default" here is validateCreate's default, not a choice)...
 	q := &CreateRunParams{PermissionMode: "default"}
 	if err := applySessionPolicy(q, providerDriverClaude, sessionPolicy{PermissionMode: "plan"}); err != nil {
 		t.Fatalf("applySessionPolicy: %v", err)
 	}
 	if q.PermissionMode != "plan" {
 		t.Fatalf("the profile's declared mode was ignored: %q", q.PermissionMode)
+	}
+	// ...and never a mode the launch NAMED: the person's preset is the session's.
+	r := &CreateRunParams{PermissionMode: "acceptEdits", permissionModeNamed: true}
+	if err := applySessionPolicy(r, providerDriverClaude, sessionPolicy{PermissionMode: "default"}); err != nil {
+		t.Fatalf("applySessionPolicy: %v", err)
+	}
+	if r.PermissionMode != "acceptEdits" {
+		t.Fatalf("the profile replaced the person's acceptEdits with %q", r.PermissionMode)
 	}
 }
 

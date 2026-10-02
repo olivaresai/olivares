@@ -132,7 +132,7 @@ function mountAccountsRoute(permissions: string[]) {
   api.whoami.mockResolvedValue(principal(permissions))
   // Synthetic session only; no refresh timer or HTTP login in this fixture.
   useSessionStore.setState({
-    token: 'fixture-only-account-session',
+    csrfToken: 'fixture-only-account-session',
     sessionId: 'fixture-only-account-session-id',
     expiresAt: null,
   })
@@ -222,16 +222,18 @@ it('read is withdrawn while an adopt POST is parked: the committed late answer p
   api.adoptAccount.mockReturnValue(answer.promise)
   const { qc, ui } = mountAccountsRoute([READ, WRITE])
   await userEvent.click(
-    await screen.findByRole('button', { name: 'Adopt a profile' }),
+    await screen.findByRole('button', { name: 'Name a profile as an account' }),
   )
   const dialog = await screen.findByRole('dialog', {
-    name: 'Adopt a provider profile',
+    name: 'Name a profile as an account',
   })
   await userEvent.type(
     within(dialog).getByRole('textbox', { name: 'Profile reference' }),
     'ppf_b',
   )
-  await userEvent.click(within(dialog).getByRole('button', { name: 'Adopt' }))
+  await userEvent.click(
+    within(dialog).getByRole('button', { name: 'Name as account' }),
+  )
   await waitFor(() => expect(api.adoptAccount).toHaveBeenCalledOnce())
 
   // Write stays; read leaves. The guard refuses the whole page.
@@ -250,7 +252,9 @@ it('read is withdrawn while an adopt POST is parked: the committed late answer p
     expect(api.listAccounts.mock.calls.length).toBeGreaterThan(reads),
   )
   expect(
-    await screen.findByText('The outcome of adopting ppf_b is not known here.'),
+    await screen.findByText(
+      'Whether ppf_b became an account is not known here.',
+    ),
   ).toBeInTheDocument()
   expect(
     await screen.findByText('At this read, ppf_b is the account claude-b.'),

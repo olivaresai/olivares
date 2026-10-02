@@ -26,6 +26,12 @@ describe('CodeLine', () => {
     expect(screen.getByText('Same thing in a terminal')).toBeVisible()
   })
 
+  it('takes no heading when it sits under one of its own', () => {
+    render(<CodeLine command="olivares setup" label={null} />)
+    expect(screen.queryByText('Same thing in a terminal')).toBeNull()
+    expect(screen.getByText('olivares setup')).toBeInTheDocument()
+  })
+
   it('copies exactly the command and says so', async () => {
     const user = userEvent.setup()
     const write = vi

@@ -713,7 +713,12 @@ func buildAgentGatewayServer(eng *engine, log *slog.Logger) (*http.Server, error
 			return nil, errors.New("agent-gateway: session_tools requires the session authority and API")
 		}
 		scope := sessionOrchestrationWorkScope{st: eng.store, module: eng.sessionsMod}
-		mux.Handle("/session/mcp", &sessionMCPHandler{authr: eng.authr, api: eng.api.Handler(),
+		authenticator := sessionMCPAuthenticator(eng.authr)
+		issued := eng.sessionHooks != nil && eng.sessionHooks.SessionCredentials != nil
+		if issued {
+			authenticator = eng.sessionHooks.SessionCredentials
+		}
+		mux.Handle("/session/mcp", &sessionMCPHandler{authr: authenticator, issuedSessionOnly: issued, work: eng.sessionsMod.CallSessionWork,
 			checkOrchestration: func(ctx context.Context, p auth.Principal, tenant model.TenantID) error {
 				return scope.WithScope(ctx, p, tenant, false, func(store.Scope) error { return nil })
 			}})
@@ -1636,6 +1641,14 @@ func (a mcpGateAuditor) bestEffortAnchor(ctx context.Context, d mcpc.ToolDecisio
 		"mcp": d.MCPTag, "token_binding": d.TokenBinding, "decision": decision,
 	}
 	addAuditDelegationMeta(meta, auditDelegation{isDelegated: d.IsDelegated, actAs: d.ActAs})
+	if !d.Allowed {
+		// A refused call still needs its terminal evidence after disconnect,
+		// interrupt or stop. Detach only this bounded ledger write, never an
+		// authorization or effect; keep the caller's scope values.
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(context.WithoutCancel(ctx), reanchorTimeout)
+		defer cancel()
+	}
 	err := a.store.Mutate(ctx, tenant, func(sc store.Scope) error {
 		ev, aerr := sc.Audit().Append(ctx, model.AuditDraft{
 			Actor:       firstNonEmpty(d.Subject, model.ActorSystem),
@@ -1683,6 +1696,9 @@ type mcpUpstreamForwarder struct {
 	managed  bool
 	mu       sync.Mutex
 	sessions map[string]*managedMCPSession
+	// A session-owned forwarder uses this authenticated identity for both
+	// catalogue inspection and tool calls. Shared gateway forwarders leave it nil.
+	sessionIdentity *mcpc.SessionToolIdentity
 }
 
 var _ mcpc.SubscriptionUpstream = (*mcpUpstreamForwarder)(nil)
@@ -1703,6 +1719,11 @@ const mcpForwardMaxResponse = 8 << 20
 // nothing observed can confirm the outcome.
 func (f *mcpUpstreamForwarder) Forward(ctx context.Context, req mcpc.UpstreamRequest) (mcpc.UpstreamResult, error) {
 	if f.managed {
+		if f.sessionIdentity != nil {
+			req.Subject = f.sessionIdentity.Subject
+			req.ClientID = f.sessionIdentity.ClientID
+			req.Scopes = f.sessionIdentity.Scopes
+		}
 		f.mu.Lock()
 		defer f.mu.Unlock()
 		key := managedMCPSessionKey(req)

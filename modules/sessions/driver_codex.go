@@ -160,15 +160,14 @@ func (codexDriver) TransportProfile() DriverTransportProfile {
 
 // LaunchTerms declares what a Codex launch hands its child. The model travels on
 // thread/start (and thread/resume) and the effort on every turn/start. The
-// permission mode is Claude Code's own enum and reaches no Codex frame: the
-// approval policy and the sandbox this driver sends are its own controls, and
-// neither is derived from it (CodexPolicy). The models can be discovered by
+// permission preset selects Codex's native approval policy and sandbox. A
+// configured granular approval policy is retained. The models are discovered by
 // probing the credential a profile binds; the driver lists none.
 func (codexDriver) LaunchTerms() DriverLaunchTerms {
 	return DriverLaunchTerms{
 		Model:          TermCarried,
 		Effort:         TermCarried,
-		PermissionMode: TermNotCarried,
+		PermissionMode: TermCarried,
 		ModelDiscovery: ModelDiscoveryBoundCredentialProbe,
 	}
 }
@@ -179,8 +178,13 @@ func (codexDriver) LaunchTerms() DriverLaunchTerms {
 // The form itself is declared ONCE, in cliruntime, beside the transport it
 // requires (r3): a driver that kept its own copy would let the declaration and
 // the launch drift apart without a test going red.
-func (codexDriver) LaunchArgs(l DriverLaunch) []string {
+func (d codexDriver) LaunchArgs(l DriverLaunch) []string {
 	args := cliruntime.CodexArgs(l.cliRuntimeRequest())
+	if d.launchPolicy(l.Preset, l.CodexSandboxFallback).sandbox() == CodexSandboxDangerFull {
+		// Full is explicitly authorized, or the bounded native probe established
+		// that this host needs the required OS-confinement fallback.
+		args = append([]string{"-c", `sandbox_mode="danger-full-access"`}, args...)
+	}
 	if l.LocalModelEndpoint == "" {
 		return args
 	}
@@ -192,11 +196,35 @@ func (codexDriver) LaunchArgs(l DriverLaunch) []string {
 }
 
 func (d codexDriver) OpenSession(cfg DriverSessionConfig) DriverSession {
-	s := &codexSession{cfg: cfg, policy: d.policy, pending: map[string]*codexServerRequest{}}
+	s := &codexSession{cfg: cfg, policy: d.launchPolicy(cfg.Preset, cfg.CodexSandboxFallback), pending: map[string]*codexServerRequest{}}
 	s.conn = newRPCConn(cfg.Send, false)
 	s.conn.onRequest = s.onServerRequest
 	s.conn.onNotify = s.onNotification
 	return s
+}
+
+func (d codexDriver) launchPolicy(preset string, fallback bool) CodexPolicy {
+	policy := d.policy
+	switch preset {
+	case PresetReadOnly:
+		policy.Sandbox = CodexSandboxReadOnly
+		policy.Approval = CodexApprovalPolicy{Mode: CodexApprovalOnRequest}
+	case PresetAsk, PresetEditsOnly, PresetEditsAndCommands:
+		policy.Sandbox = CodexSandboxWorkspaceWrite
+		policy.Approval = CodexApprovalPolicy{Mode: CodexApprovalUntrusted}
+	case PresetFull:
+		// The runtime admitted full only with the launcher's current run-admin
+		// authority. Live tenant policy still answers each native approval.
+		policy.Sandbox = CodexSandboxDangerFull
+		policy.Approval = CodexApprovalPolicy{Mode: CodexApprovalUntrusted}
+	}
+	if fallback {
+		policy.Sandbox = CodexSandboxDangerFull
+	}
+	if d.policy.Approval.Granular != nil {
+		policy.Approval = d.policy.Approval
+	}
+	return policy
 }
 
 // codexSession is one owned conversation over one owned app-server child.
@@ -205,12 +233,13 @@ type codexSession struct {
 	policy CodexPolicy
 	conn   *rpcConn
 
-	mu        sync.Mutex
-	threadID  string
-	turnID    string
-	authState string
-	pending   map[string]*codexServerRequest
-	closed    bool
+	mu            sync.Mutex
+	threadID      string
+	turnID        string
+	authState     string
+	pending       map[string]*codexServerRequest
+	approvalFacts map[string]codexApprovalFacts
+	closed        bool
 	// finished holds turn ids whose completion arrived BEFORE we had recorded them
 	// as active. A fast provider can answer turn/start and complete the turn in the
 	// same breath, and the two are processed by different goroutines: the response
@@ -557,6 +586,23 @@ func (s *codexSession) Close(err error) {
 // nobody in particular, and a subagent or another client produces the same shape.
 func (s *codexSession) onNotification(method string, params json.RawMessage) {
 	switch method {
+	case "item/started":
+		s.observeApprovalItem(params)
+	case "item/completed":
+		var item struct {
+			ThreadID string `json:"threadId"`
+			TurnID   string `json:"turnId"`
+			Item     struct {
+				ID string `json:"id"`
+			} `json:"item"`
+		}
+		if json.Unmarshal(params, &item) == nil {
+			s.mu.Lock()
+			if item.ThreadID == s.threadID && item.TurnID == s.turnID {
+				delete(s.approvalFacts, item.Item.ID)
+			}
+			s.mu.Unlock()
+		}
 	case codexNotifyTurnCompleted:
 		var n codexTurnCompletedNotification
 		if err := json.Unmarshal(params, &n); err != nil {
@@ -667,6 +713,7 @@ func (s *codexSession) clearTurn(id string) {
 	defer s.mu.Unlock()
 	if id == "" || s.turnID == id {
 		s.turnID = ""
+		s.approvalFacts = nil
 	}
 	if id == "" {
 		return

@@ -106,8 +106,8 @@ SETUP_TOKENS="$(grep -oE 'olst_[A-Z0-9]+' "$WORK/boot1.log")" || token_rc=$?
 }
 SETUP_TOKEN="${SETUP_TOKENS%%$'\n'*}"
 [ -n "$SETUP_TOKEN" ] || fail "no one-time setup token on stdout"
-curl -sf -X POST "$BASE/v1/setup" -H 'Content-Type: application/json' \
-  -d "{\"token\":\"$SETUP_TOKEN\",\"email\":\"admin@local\",\"password\":\"correct-horse-battery-staple\"}" >/dev/null \
+printf '{"token":"%s","email":"admin@local","password":"correct-horse-battery-staple"}' "$SETUP_TOKEN" \
+  | curl -sf -X POST "$BASE/v1/setup" -H 'Content-Type: application/json' --data-binary @- >/dev/null \
   || fail "setup failed"
 TOKEN="$(curl -sf -X POST "$BASE/v1/auth/login" -H 'Content-Type: application/json' \
   -d '{"email":"admin@local","password":"correct-horse-battery-staple"}' \
@@ -118,6 +118,26 @@ TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "$BASE
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
 [ -n "$TENANT" ] || fail "could not create the first-hour tenant"
 note "tenant: $TENANT"
+
+# The first-hour docs describe the deployment's actual default, not a mandatory
+# AAL3 ceremony. Check both the policy and this fresh password session.
+printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE/v1/auth/step-up-policy" -H @- \
+  | python3 -c 'import sys,json; p=json.load(sys.stdin); assert p["admin_step_up"] == "none", p; print("    ok: administrative step-up default = none")'
+printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE/v1/auth/whoami" -H @- \
+  | python3 -c 'import sys,json; p=json.load(sys.stdin); assert p["aal"] == 1 and p["admin_step_up"] == "none" and p["step_up_satisfied"] is True, p; print("    ok: fresh AAL1 administrator satisfies the default policy")'
+POLICY_STATUS="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sS -X PUT "$BASE/v1/auth/step-up-policy" -H @- \
+  -H 'Content-Type: application/json' -d '{"admin_step_up":"passkey"}' \
+  -o "$WORK/step-up-refusal.json" -w '%{http_code}')"
+assert_eq "unproven passkey policy → conflict" "$POLICY_STATUS" "409"
+python3 - "$WORK/step-up-refusal.json" <<'PY'
+import json, sys
+with open(sys.argv[1]) as stream:
+    body = json.load(stream)
+assert body["error"]["code"] == "passkey_not_enrolled", body
+print("    ok: policy raise requires a working enrolled factor")
+PY
+printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE/v1/auth/step-up-policy" -H @- \
+  | python3 -c 'import sys,json; p=json.load(sys.stdin); assert p["admin_step_up"] == "none", p; print("    ok: refused policy raise keeps none")'
 
 # ---------------------------------------------------------------------------
 # 2. Register ONE coding agent in the control-plane inventory.
@@ -149,26 +169,28 @@ kill "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; PID=""
 # ---------------------------------------------------------------------------
 # 3. Restart with the governed hooks PEP (deny-closed: allow Read, deny Bash).
 # ---------------------------------------------------------------------------
-note "write deny-closed hook policy and restart with the PEP mounted"
-cat >"$WORK/hook-pep.json" <<JSON
-{
-  "listen": "127.0.0.1:$PEP_PORT",
-  "tenants": [
-    {
-      "tenant": "$TENANT",
-      "require_firm_identity": false,
-      "policy": {
-        "version": "first-hour/v1",
-        "default": "deny",
-        "rules": [
-          { "tool": "Read", "decision": "allow", "reason": "reads are permitted in the first hour" },
-          { "tool": "Bash", "decision": "deny", "reason": "shell execution is blocked in the first hour" }
-        ]
-      }
-    }
-  ]
-}
-JSON
+note "read the published deny-closed hook policy and restart with the PEP mounted"
+python3 - "$ROOT/docs-site/src/content/docs" "$TENANT" "$PEP_PORT" "$WORK/hook-pep.json" <<'PY'
+import json, re, sys
+from pathlib import Path
+root, tenant, port, output = sys.argv[1:]
+policy = None
+for locale in ("", "de", "es", "fr", "ja", "ru", "zh"):
+    page = (Path(root) / locale / "how-to/first-hour.md").read_text()
+    blocks = re.findall(r'^cat > \./hook-pep\.json <<JSON\n(.*?)\nJSON$', page, re.M | re.S)
+    if len(blocks) != 1:
+        raise SystemExit("first-hour docs must contain exactly one hook-pep.json block: " + (locale or "en"))
+    current = json.loads(blocks[0])
+    if current["tenants"][0]["tenant"] != "$TENANT" or current["listen"] != "127.0.0.1:8447":
+        raise SystemExit("first-hour tenant/listen placeholders differ: " + (locale or "en"))
+    if policy is not None and policy != current:
+        raise SystemExit("first-hour policy differs between locales: " + locale)
+    policy = current
+policy["tenants"][0]["tenant"] = tenant
+policy["listen"] = "127.0.0.1:" + port
+Path(output).write_text(json.dumps(policy) + "\n")
+print("    ok: all seven locales publish the same executable hook policy")
+PY
 
 OLIVARES_HOOK_PEP_CONFIG="$WORK/hook-pep.json" \
 TMPDIR="${EXEC_TMP:-${TMPDIR:-/tmp}}" \
@@ -200,6 +222,7 @@ hook_decision() {
 
 assert_eq "Read → allow" "$(hook_decision Read '{"file_path":"/repo/README.md"}')" "allow"
 assert_eq "Bash → deny" "$(hook_decision Bash '{"command":"rm -rf /"}')" "deny"
+assert_eq "Write → deny (default)" "$(hook_decision Write '{"file_path":"/repo/new.txt","content":"blocked"}')" "deny"
 
 # ---------------------------------------------------------------------------
 # 5. Evidence rows on the tenant ledger.
@@ -226,6 +249,20 @@ grep -q 'hook.tool.allow' <<<"$ALLOW_EV" || fail "no hook.tool.allow evidence ro
 grep -q 'hook.tool.deny' <<<"$DENY_EV" || fail "no hook.tool.deny evidence row"
 grep -q 'count 0' <<<"$ALLOW_EV" && fail "allow evidence count is 0"
 grep -q 'count 0' <<<"$DENY_EV" && fail "deny evidence count is 0"
+
+python3 - "$WORK/data/olivares.db" "$TENANT" <<'PY'
+import json, sqlite3, sys
+from pathlib import Path
+with sqlite3.connect(Path(sys.argv[1]).as_uri() + "?mode=ro", uri=True) as db:
+    counts = dict(db.execute(
+        "SELECT action, COUNT(*) FROM audit_events WHERE tenant_id = ? "
+        "AND action IN ('hook.tool.allow', 'hook.tool.deny') GROUP BY action",
+        (sys.argv[2],),
+    ))
+if counts.get("hook.tool.allow", 0) < 1 or counts.get("hook.tool.deny", 0) < 2:
+    raise SystemExit("hook decisions missing from the persisted ledger: " + json.dumps(counts))
+print("    ok: persisted hook ledger " + json.dumps(counts, sort_keys=True))
+PY
 
 # ---------------------------------------------------------------------------
 # 6. doctor first-hour next-step is present (optional; does not have to be healthy).

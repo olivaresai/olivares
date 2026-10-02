@@ -535,7 +535,7 @@ func (m *Module) auditAdmissionDeny(ctx context.Context, tenant model.TenantID, 
 	if res.BudgetID != "" {
 		meta["budget_id"] = res.BudgetID
 	}
-	return m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	return m.mutate(ctx, tenant, func(sc store.Scope) error {
 		_, err := sc.Audit().Append(ctx, model.AuditDraft{
 			Actor:      auditActorFinOps,
 			ActorKind:  model.ActorSystem,

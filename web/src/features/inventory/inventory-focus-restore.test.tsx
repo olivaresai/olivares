@@ -156,7 +156,7 @@ const switchTenant = (tenant: string) =>
 beforeEach(() => {
   whoamiMock.mockReset().mockResolvedValue(FULL)
   useSessionStore.setState({
-    token: 'olvs_test',
+    csrfToken: 'olvs_test',
     sessionId: 's1',
     expiresAt: null,
   })

@@ -328,6 +328,8 @@ export function TabsList({
         className={cn(
           'relative flex h-9 min-w-0 flex-1 items-center gap-1 border-b border-border',
           'overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden',
+          // A VERTICAL list (a section list beside the work): no strip, no rule, rows.
+          'data-[orientation=vertical]:h-auto data-[orientation=vertical]:flex-col data-[orientation=vertical]:items-stretch data-[orientation=vertical]:gap-px data-[orientation=vertical]:border-b-0 data-[orientation=vertical]:overflow-visible',
           // Fade the strip at the edge that hides tabs. A mask (not a painted gradient)
           // reads correctly on `background` and `surface` alike.
           overflow === 'start' &&
@@ -410,6 +412,9 @@ export function TabsTrigger({
         'data-[state=active]:text-text data-[state=active]:border-accent-strong',
         'outline-none focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-focus',
         'disabled:pointer-events-none disabled:text-text-3',
+        // In a vertical list a tab is a row: no underline, the selected row is filled.
+        'data-[orientation=vertical]:mb-0 data-[orientation=vertical]:h-8 data-[orientation=vertical]:justify-start data-[orientation=vertical]:rounded-ctl data-[orientation=vertical]:border-b-0 data-[orientation=vertical]:px-2.5',
+        'data-[orientation=vertical]:hover:bg-hover data-[orientation=vertical]:data-[state=active]:bg-active',
         className,
       )}
       {...props}

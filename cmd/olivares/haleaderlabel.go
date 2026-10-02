@@ -228,8 +228,8 @@ func (p *haLeaderPublisher) publish(ctx context.Context, role string) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode/100 != 2 {
-		snippet, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("patch pod label: %s: %s", resp.Status, strings.TrimSpace(string(snippet)))
+		snippet, readErr := readCLIResponse(resp, req, 512, false)
+		return guardCLIRefusalError(fmt.Errorf("patch pod label: %s: %s", resp.Status, strings.TrimSpace(string(snippet))), resp.StatusCode, cliRequestSecrets(req), readErr)
 	}
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
 	p.mu.Lock()

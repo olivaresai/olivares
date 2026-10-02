@@ -9,6 +9,7 @@
 // side. There is deliberately NO "test against sample text" for DLP: the engine
 // exposes no such route, and the console never fabricates one — classification runs
 // server-side at egress, which the section states honestly.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import './i18n'
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -26,7 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/ui/page-header'
@@ -41,7 +42,12 @@ import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { Textarea } from '@/components/ui/textarea'
 import { toast } from '@/components/ui/toaster'
-import { AAL, StepUpPanel, useAssurance } from '@/features/identity/assurance'
+import {
+  AAL,
+  StepUpPanel,
+  useAssurance,
+  useStepUpSatisfied,
+} from '@/features/identity/assurance'
 import { ListTruncationBadge } from '@/features/_intel'
 import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
@@ -151,7 +157,10 @@ function ContentFirewallCard() {
             <Spinner />
           </div>
         ) : firewallQ.isError ? (
-          <ErrorState retry={() => void firewallQ.refetch()} />
+          <QueryErrorState
+            error={firewallQ.error}
+            retry={() => void firewallQ.refetch()}
+          />
         ) : malformed || state === null ? (
           <div className="flex flex-col gap-2">
             <Badge variant="outline">{t('firewall.states.unreadable')}</Badge>
@@ -197,8 +206,9 @@ function ConfigSection() {
   const { t } = useTranslation(['inferenceProxy', 'common'])
   const { can, activeTenant } = useAuth()
   const { aal } = useAssurance()
+  const stepUpSatisfied = useStepUpSatisfied()
   const canWrite = can('inferenceproxy:config:admin')
-  const stepUpNeeded = canWrite && aal < AAL.HARDWARE
+  const stepUpNeeded = canWrite && !stepUpSatisfied
 
   const configQ = useQuery({
     queryKey: inferenceProxyKeys.config(activeTenant),
@@ -268,7 +278,10 @@ function ConfigSection() {
             <Spinner />
           </div>
         ) : configQ.isError ? (
-          <ErrorState retry={() => void configQ.refetch()} />
+          <QueryErrorState
+            error={configQ.error}
+            retry={() => void configQ.refetch()}
+          />
         ) : effective ? (
           <>
             <div className="flex flex-col divide-y">
@@ -461,10 +474,11 @@ function DLPSection() {
   const { t } = useTranslation(['inferenceProxy', 'common', 'intel'])
   const { can, activeTenant } = useAuth()
   const { aal } = useAssurance()
+  const stepUpSatisfied = useStepUpSatisfied()
   const canRead = can('inferenceproxy:dlp:read')
   const canAdmin = can('inferenceproxy:dlp:admin')
-  const stepUpNeeded = canAdmin && aal < AAL.HARDWARE
-  const canEdit = canAdmin && aal >= AAL.HARDWARE
+  const stepUpNeeded = canAdmin && !stepUpSatisfied
+  const canEdit = canAdmin && stepUpSatisfied
   const qc = useQueryClient()
 
   const [editing, setEditing] = useState<DLPRule | null>(null)
@@ -536,7 +550,10 @@ function DLPSection() {
             <Spinner />
           </div>
         ) : rulesQ.isError ? (
-          <ErrorState retry={() => void rulesQ.refetch()} />
+          <QueryErrorState
+            error={rulesQ.error}
+            retry={() => void rulesQ.refetch()}
+          />
         ) : (rulesQ.data?.items.length ?? 0) === 0 ? (
           <EmptyState
             title={t('dlp.empty')}
@@ -778,9 +795,10 @@ function DeviceSection() {
   const { t } = useTranslation(['inferenceProxy', 'common'])
   const { can } = useAuth()
   const { aal } = useAssurance()
+  const stepUpSatisfied = useStepUpSatisfied()
   const canApprove = can('inferenceproxy:config:admin')
-  const stepUpNeeded = canApprove && aal < AAL.HARDWARE
-  const canAct = canApprove && aal >= AAL.HARDWARE
+  const stepUpNeeded = canApprove && !stepUpSatisfied
+  const canAct = canApprove && stepUpSatisfied
   const [code, setCode] = useState('')
 
   const decide = useMutation({

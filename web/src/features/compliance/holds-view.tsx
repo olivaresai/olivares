@@ -54,7 +54,6 @@ import {
   CaveatNotice,
   HashChip,
   SectionCard,
-  SelfAuditNotice,
 } from '@/features/_intel'
 import {
   approvalRefOf,
@@ -137,7 +136,6 @@ export function HoldsTab({
           ) : null
         }
       >
-        <SelfAuditNotice className="mb-3" />
         {/* The asymmetry is the product rule, so it is stated where the operator
             acts, not buried in docs. */}
         <CaveatNotice tone="info" className="mb-3">

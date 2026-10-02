@@ -154,22 +154,29 @@ func (grokDriver) TransportProfile() DriverTransportProfile {
 
 // LaunchTerms declares what a Grok launch hands its child. The model and the
 // effort travel on the argv as `--model` and `--reasoning-effort`. The permission
-// mode is Claude Code's own enum: no flag of this agent and no ACP frame this
-// driver sends carries it. The models can be discovered by probing the
+// preset reaches the native sandbox and an advertised ACP mode. Current policy
+// still answers every native permission request. The models are discovered from the
 // credential a profile binds; the driver lists none.
 func (grokDriver) LaunchTerms() DriverLaunchTerms {
 	return DriverLaunchTerms{
 		Model:          TermCarried,
 		Effort:         TermCarried,
-		PermissionMode: TermNotCarried,
+		PermissionMode: TermCarried,
 		ModelDiscovery: ModelDiscoveryBoundCredentialProbe,
 	}
 }
 
-// LaunchEnv pins the child's version. Nothing else: authentication is resolved by
+// LaunchEnv pins the child's version and native sandbox. Authentication is resolved by
 // the runtime and a driver never sees a credential value.
-func (grokDriver) LaunchEnv(DriverLaunch) []EnvVar {
-	return []EnvVar{{Name: envGrokDisableAutoUpdate, Value: "1"}}
+func (grokDriver) LaunchEnv(l DriverLaunch) []EnvVar {
+	env := []EnvVar{{Name: envGrokDisableAutoUpdate, Value: "1"}}
+	switch l.Preset {
+	case PresetReadOnly:
+		env = append(env, EnvVar{Name: "GROK_SANDBOX", Value: "read-only"})
+	case PresetAsk, PresetEditsOnly, PresetEditsAndCommands:
+		env = append(env, EnvVar{Name: "GROK_SANDBOX", Value: "workspace"})
+	}
+	return env
 }
 
 func (grokDriver) OpenSession(cfg DriverSessionConfig) DriverSession {
@@ -323,6 +330,12 @@ type grokResumeSessionParams struct {
 // answer to a request that NAMED the id.
 type grokSessionIDResponse struct {
 	SessionID string `json:"sessionId"`
+	Modes     *struct {
+		CurrentID string `json:"currentModeId"`
+		Available []struct {
+			ID string `json:"id"`
+		} `json:"availableModes"`
+	} `json:"modes"`
 }
 
 type grokContentBlock struct {
@@ -509,6 +522,9 @@ func (s *grokSession) newConversation(ctx context.Context, state string) (Driver
 	s.mu.Lock()
 	s.sessionID = id
 	s.mu.Unlock()
+	if err := s.selectPresetMode(ctx, id, resp); err != nil {
+		return DriverHandshake{}, err
+	}
 	return DriverHandshake{ConversationID: id, AuthState: state}, nil
 }
 
@@ -579,7 +595,37 @@ func (s *grokSession) resumeConversation(ctx context.Context, resume, state stri
 	s.mu.Lock()
 	s.sessionID = resume
 	s.mu.Unlock()
+	if err := s.selectPresetMode(ctx, resume, resp); err != nil {
+		return DriverHandshake{}, err
+	}
 	return DriverHandshake{ConversationID: resume, AuthState: state}, nil
+}
+
+func (s *grokSession) selectPresetMode(ctx context.Context, id string, response grokSessionIDResponse) error {
+	want := ""
+	switch s.cfg.Preset {
+	case PresetReadOnly:
+		want = "plan"
+	case PresetAsk, PresetEditsOnly, PresetEditsAndCommands, PresetFull:
+		want = "default"
+	}
+	if want == "" || response.Modes == nil {
+		return nil // No native mode equivalent: the live provider gate still applies.
+	}
+	for _, offered := range response.Modes.Available {
+		if offered.ID != want {
+			continue
+		}
+		_, err := s.conn.call(ctx, "session/set_mode", map[string]string{"sessionId": id, "modeId": want}, s.cfg.CallTimeout)
+		if err != nil {
+			return &runErr{http.StatusBadGateway, "Grok could not apply the chosen session permission preset"}
+		}
+		return nil
+	}
+	if response.Modes.CurrentID != "" && response.Modes.CurrentID != want {
+		return &runErr{http.StatusBadGateway, "Grok cannot apply the chosen session permission preset; the session was not started"}
+	}
+	return nil // A legacy response may have no native mode; never invent one.
 }
 
 func (s *grokSession) endReplay() {

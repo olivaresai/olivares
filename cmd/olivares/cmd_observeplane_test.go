@@ -188,7 +188,7 @@ func TestMissingClientValuesNameWhereTheyAreConfigured(t *testing.T) {
 		args []string
 		want string
 	}{
-		{"server", []string{"health", "status", "--server", "", "--token", "tok", "--tenant", "t"}, "no server:"},
+		{"server", []string{"health", "status", "--server", "", "--token", "tok", "--tenant", "t"}, "no server"},
 		{"tenant", []string{"health", "status", "--server", "http://127.0.0.1:1", "--token", "tok", "--tenant", ""}, "no tenant:"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -291,15 +291,12 @@ func TestNotWiredIsReportedAsAProductBoundaryNotAFailure(t *testing.T) {
 	if err == nil {
 		t.Fatal("a 501 must not exit 0: the command did not do what was asked")
 	}
-	if got := exitcode.From(err); got != exitcode.Err {
-		t.Errorf("exit = %d, want %d — matching the identical decision in cmd_compliance.go", got, exitcode.Err)
+	if got := exitcode.From(err); got != exitcode.Edition {
+		t.Errorf("exit = %d, want %d: a Business feature the engine does not have", got, exitcode.Edition)
 	}
 	msg := err.Error()
-	if !strings.Contains(msg, "report scheduling") {
-		t.Errorf("the engine's own reason must survive, got: %s", msg)
-	}
-	if !strings.Contains(msg, "not wired in this build") {
-		t.Errorf("the message must name this as a build boundary, got: %s", msg)
+	if msg != "Report scheduling is a Business feature: "+pricingURL {
+		t.Errorf("the answer must name the feature and where it is described, got: %s", msg)
 	}
 	if strings.Contains(msg, "request failed") {
 		t.Errorf("a 501 must NOT read as a generic failure, got: %s", msg)
@@ -667,6 +664,9 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 		{"olivares reporting schedules rm", false, false},
 		{"olivares reporting schedules run", false, false},
 		{"olivares reporting schedules runs", false, false},
+		{"olivares reporting signing disable", false, false},
+		{"olivares reporting signing enable", false, false},
+		{"olivares reporting signing status", false, false},
 		{"olivares reporting templates get", false, false},
 		{"olivares reporting templates rm", false, false},
 		{"olivares reporting templates set", false, false},
@@ -686,6 +686,8 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 		{"olivares notify routes update", false, false},
 		{"olivares governance approvals decisions", false, false},
 		{"olivares governance approvals get", false, false},
+		{"olivares governance approvals approve", false, false},
+		{"olivares governance approvals reject", false, false},
 		{"olivares governance approvals ls", true, true},
 		{"olivares governance breakglass get", false, false},
 		{"olivares governance breakglass ls", true, true},
@@ -766,8 +768,10 @@ func TestPagingFlagsExistOnlyWhereTheEngineReadsThem(t *testing.T) {
 	// observability/traces.go:324 traceListParams, inventory/api.go:211), and each
 	// is wired to the handlers named below. limit-without-cursor is adoption's
 	// top-N (dto.go:207) at its two call sites. Everything else reads neither.
-	if len(cases) != 104 {
-		t.Fatalf("the table has %d rows, not the 104 leaves the lot exposes", len(cases))
+	// 109 since `governance approvals approve`/`reject` and `reporting signing
+	// status`/`enable`/`disable`; none of the five reads a cursor or a limit.
+	if len(cases) != 109 {
+		t.Fatalf("the table has %d rows, not the 109 leaves the lot exposes", len(cases))
 	}
 	cursorN, limitN := 0, 0
 	for _, tc := range cases {
@@ -896,7 +900,10 @@ func TestAdoptionDevelopersCanAskForItsTopN(t *testing.T) {
 		// flag that does not exist. Both exit 2 at zero requests, so without
 		// this line the subtest passes just as well BEFORE the flag is added —
 		// green for the neighboring reason.
-		if msg := err.Error(); strings.Contains(msg, "unknown flag") || !strings.Contains(msg, "--limit must not be negative") {
+		// Since the CLI audit of 09b the check is the command tree's (limitflag.go): every
+		// int --limit refuses a value below 1 while the flags are parsed.
+		if msg := err.Error(); strings.Contains(msg, "unknown flag") || !strings.Contains(msg, "--limit") ||
+			!strings.Contains(msg, "must be 1 or more") {
 			t.Errorf("the refusal must come from the limit check, got: %s", msg)
 		}
 	})
@@ -1843,13 +1850,14 @@ func TestEveryFamilyInTheLotIsRegistered(t *testing.T) {
 	}
 }
 
-// TestLaneVerbCountMatchesTheRouteCensus pins the surface at the 73 routes the
-// census counted, so a verb silently lost in a merge is a failing test rather
-// than a quietly smaller CLI.
+// TestLaneVerbCountMatchesTheRouteCensus pins the surface at the 76 routes the
+// census counts, so a verb silently lost in a merge is a failing test rather
+// than a quietly smaller CLI. Reporting is 18 since `reporting signing status`,
+// `enable` and `disable` (1df5479c): the census of 73 had 15.
 func TestLaneVerbCountMatchesTheRouteCensus(t *testing.T) {
 	root := newRootCmd()
 	want := map[string]int{
-		"reporting": 15, "notify": 14, "health": 14, "accessmap": 7,
+		"reporting": 18, "notify": 14, "health": 14, "accessmap": 7,
 		"observability": 5, "consoleviews": 5, "adoption": 5,
 		"identity": 4, "inventory": 3, "posture": 1,
 	}
@@ -1866,8 +1874,8 @@ func TestLaneVerbCountMatchesTheRouteCensus(t *testing.T) {
 		}
 		total += n
 	}
-	if total != 73 {
-		t.Fatalf("the census table itself sums to %d, not the 73 routes it describes", total)
+	if total != 76 {
+		t.Fatalf("the census table itself sums to %d, not the 76 routes it describes", total)
 	}
 }
 
