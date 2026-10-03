@@ -17,6 +17,16 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
+type toolLoginWaitingInput struct {
+	io.Reader
+	ready func()
+}
+
+func (in toolLoginWaitingInput) Read(p []byte) (int, error) {
+	in.ready()
+	return in.Reader.Read(p)
+}
+
 // TestToolLoginCancelsTheSignInOnASignal: Ctrl-C (SIGINT) or SIGTERM during `tool
 // login` cancels the sign-in on the engine before the CLI exits, so the tool's own
 // login process does not keep waiting there, and the CLI says so in one line. Claude
@@ -42,6 +52,12 @@ func TestToolLoginCancelsTheSignInOnASignal(t *testing.T) {
 			}
 			stdin, w := io.Pipe() // nothing is ever pasted
 			t.Cleanup(func() { _ = w.Close() })
+			input := io.Reader(stdin)
+			if tc.driver == "claude" {
+				input = toolLoginWaitingInput{Reader: stdin, ready: func() {
+					f.startedOnce.Do(func() { close(f.started) })
+				}}
+			}
 			go func() {
 				for _, ch := range []chan struct{}{listening, f.started} {
 					select {
@@ -52,7 +68,7 @@ func TestToolLoginCancelsTheSignInOnASignal(t *testing.T) {
 				}
 				_ = syscall.Kill(os.Getpid(), tc.sig)
 			}()
-			_, errb, err := execSessionCLI(t, stdin, append([]string{"tool", "login", tc.driver}, sessionCreds(f.URL)...)...)
+			_, errb, err := execSessionCLI(t, input, append([]string{"tool", "login", tc.driver}, sessionCreds(f.URL)...)...)
 			close(done)
 			if exitcode.From(err) != exitcode.Err || !exitcode.Silent(err) {
 				t.Fatalf("err = %v, want a silent exit 1", err)

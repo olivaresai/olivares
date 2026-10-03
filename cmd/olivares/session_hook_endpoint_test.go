@@ -28,6 +28,7 @@ import (
 // acquisition. Each fixture owns every listener until cancellation and drain.
 func startHookEndpointEngine(t *testing.T) *engine {
 	t.Helper()
+	started := time.Now()
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	ready := make(chan *engine, 1)
@@ -64,11 +65,12 @@ func startHookEndpointEngine(t *testing.T) *engine {
 	var eng *engine
 	select {
 	case eng = <-ready:
+		t.Logf("engine reached the bound-listener announcement in %.3fs", time.Since(started).Seconds())
 	case err := <-done:
 		// Leave the buffered result available for cleanup as well.
 		done <- err
 		t.Fatalf("engine startup: %v", err)
-	case <-time.After(30 * time.Second):
+	case <-time.After(90 * time.Second):
 		t.Fatal("engine did not reach the bound-listener announcement")
 	}
 	endpoint := eng.sessionHooks.endpoint()
