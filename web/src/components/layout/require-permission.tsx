@@ -6,9 +6,11 @@ import { useRouterState } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/ui/empty-state'
+import { PageHeader } from '@/components/ui/page-header'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { Spinner } from '@/components/ui/spinner'
 import { useRouteAccess } from '@/features/navigation/authorization'
+import { viewLabel } from '@/features/navigation/model'
 import { PermittedVisit } from '@/features/navigation/permitted-visit'
 import type { FeatureView } from '@/features/registry'
 import { moduleOfView, useModuleEnabled } from '@/stores/modules'
@@ -54,6 +56,7 @@ export function RequirePermission({
   view: FeatureView
   children: ReactNode
 }) {
+  const { t } = useTranslation()
   const search = useRouterState({ select: (s) => s.location.searchStr })
   const access = useRouteAccess(view, search)
   const moduleOn = useModuleEnabled()(view.permission, view.id)
@@ -73,14 +76,9 @@ export function RequirePermission({
   //
   //    A view that declares nothing renders exactly what it rendered before.
   const Continuity = view.continuity
-  const body = !moduleOn ? (
+  const notice = !moduleOn ? (
     <NotEnabledNotice module={moduleOfView(view.permission, view.id)} />
-  ) : access.kind === 'permitted' ? (
-    <>
-      {children}
-      <PermittedVisit id={view.id} />
-    </>
-  ) : access.kind === 'checking' ? (
+  ) : access.kind === 'permitted' ? null : access.kind === 'checking' ? (
     <CheckingNotice />
   ) : access.kind === 'forbidden' ? (
     <ForbiddenNotice />
@@ -88,6 +86,19 @@ export function RequirePermission({
     <GlobalAccountNotice />
   ) : (
     <NeutralNotice undisclosed={access.kind === 'undisclosed'} />
+  )
+  // A notice stands in for the whole view, so it keeps the page's one heading: the view's own
+  // label, as the sidebar and the breadcrumb name it. Without it the page had no h1 at all.
+  const body = notice ? (
+    <>
+      <PageHeader title={viewLabel(t, view.id)} />
+      {notice}
+    </>
+  ) : (
+    <>
+      {children}
+      <PermittedVisit id={view.id} />
+    </>
   )
   return Continuity ? (
     <Continuity admitted={access.kind === 'permitted'} access={access.observed}>

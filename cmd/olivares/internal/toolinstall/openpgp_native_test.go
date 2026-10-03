@@ -41,6 +41,21 @@ func TestNativeOpenPGPVerifiesTheOfficialClaudeManifest(t *testing.T) {
 	if _, err := v.Verify(context.Background(), []byte(claudeReleaseKey), "0000000000000000000000000000000000000000", sig, data); KindOf(err) != KindVerificationUnavailable {
 		t.Fatalf("wrong pin = %v, want verification unavailable", err)
 	}
+	raw := rawSignature(sig)
+	for _, tc := range []struct {
+		name      string
+		signature []byte
+	}{
+		{"binary", raw},
+		{"binary_trailing_whitespace", append(bytes.Clone(raw), []byte(" \t\r\n")...)},
+		{"armored_trailing_whitespace", append(bytes.Clone(sig), []byte(" \t\r\n")...)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := v.Verify(context.Background(), []byte(claudeReleaseKey), ClaudeReleaseKeyFingerprint, tc.signature, data); err != nil {
+				t.Fatalf("single valid detached signature = %v", err)
+			}
+		})
+	}
 }
 
 func TestNativeOpenPGPRefusesASignatureByAnotherKey(t *testing.T) {
@@ -55,5 +70,33 @@ func TestNativeOpenPGPRefusesASignatureByAnotherKey(t *testing.T) {
 	}
 	if _, err := (NativeOpenPGPVerifier{}).Verify(context.Background(), []byte(claudeReleaseKey), ClaudeReleaseKeyFingerprint, sig.Bytes(), data); KindOf(err) != KindSignatureInvalid {
 		t.Fatalf("other key = %v, want signature invalid", err)
+	}
+}
+
+func TestNativeOpenPGPRefusesMultipleSignatures(t *testing.T) {
+	data, err := os.ReadFile(filepath.Join("testdata", "claude-manifest-2.1.286.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	sig, err := os.ReadFile(filepath.Join("testdata", "claude-manifest-2.1.286.sig.txt"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw := rawSignature(sig)
+	for _, tc := range []struct {
+		name      string
+		signature []byte
+	}{
+		{"binary", append(bytes.Clone(raw), raw...)},
+		{"armored", append(bytes.Clone(sig), sig...)},
+		{"armored_then_binary", append(bytes.Clone(sig), raw...)},
+		{"binary_then_armored", append(append(bytes.Clone(raw), '\n'), sig...)},
+		{"binary_after_bad_armor_preamble", append(append(append([]byte("-----BEGIN PGP SIGNATURE-----\n"), raw...), '\n'), sig...)},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if _, err := (NativeOpenPGPVerifier{}).Verify(context.Background(), []byte(claudeReleaseKey), ClaudeReleaseKeyFingerprint, tc.signature, data); KindOf(err) != KindSignatureInvalid {
+				t.Fatalf("two valid detached signatures = %v, want signature invalid", err)
+			}
+		})
 	}
 }

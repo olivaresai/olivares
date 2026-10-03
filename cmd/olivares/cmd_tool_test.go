@@ -27,7 +27,8 @@ type fakeToolEngine struct {
 	onPath    map[string]bool
 	jobPolls  int
 	code      string
-	// pending keeps a Codex device login waiting; started closes once a sign-in began.
+	// pending keeps a Codex device login waiting; started closes when the CLI
+	// reaches its input wait (Claude) or status poll (Codex).
 	pending     bool
 	started     chan struct{}
 	startedOnce sync.Once
@@ -114,7 +115,6 @@ func (f *fakeToolEngine) serve(w http.ResponseWriter, r *http.Request) {
 			reply(400, map[string]any{"error": map[string]any{"code": "bad_request", "message": "Name the organization the login is for (tenant_id)."}})
 			return
 		}
-		defer f.startedOnce.Do(func() { close(f.started) })
 		if body["driver"] == "claude" {
 			reply(202, map[string]any{"id": "s1", "driver": "claude", "state": "needs_code", "url": "https://claude.ai/oauth/authorize?x=1"})
 			return
@@ -134,6 +134,7 @@ func (f *fakeToolEngine) serve(w http.ResponseWriter, r *http.Request) {
 			reply(200, map[string]any{})
 			return
 		}
+		f.startedOnce.Do(func() { close(f.started) })
 		if f.pending {
 			reply(200, map[string]any{"id": "s2", "state": "waiting"})
 			return

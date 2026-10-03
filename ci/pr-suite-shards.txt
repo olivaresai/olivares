@@ -81,14 +81,29 @@
 shard root-a
 shard root-b
 shard root-c
+shard root-d
+shard root-e
+shard root-f
+shard root-g
+shard root-h
 shard root-rest
+shard root-core
 shard store-a
 shard store-b
 shard store-rest
 shard sessions
 shard modules
 
-# --- the four shards of the root package ------------------------------------------------
+# October 3: the functional remainder still ran at 42m18s when its shared
+# 55m step expired, after core/auth (686.023s) and core/api (277.038s).
+# Keep the prior three root groups; divide only the remainder into six turns.
+# Placement uses retained hosted race-full 37124606369 parent elapsed times,
+# with 20% margin and 3m startup, each <=45m. Raced timings are conservative
+# estimates, not completed functional durations. Core/operator/private legs
+# now run separately in root-core. Future unmatched names remain in root-rest.
+# The unchanged 45m Go / 55m step / 65m job clocks still yield a panic before
+# the step ends; measure the new turns in the next official functional run.
+# --- historical four-group root calibration ------------------------------------------
 # REBALANCED 2026-09-29 after public PR #184. In the September 28 functional run,
 # cmd/olivares selected 2584 names: old A/B/C selected 719 and exhausted its 1800 s
 # timeout; D-K selected 654 and took 501.876 s; L-R selected 701 and took 212.237 s;
@@ -104,12 +119,17 @@ shard modules
 # Incoming beside D-K, and Handoff/Messaging stay beside A/B. Other C names join the
 # dynamic remainder, whose whole-package phase also took about 549 s on September 28.
 #
-# The next official runs must measure this partition. No job, timeout, test, subtest
-# or package is added or removed. Every selected top-level test keeps all its subtests;
+# The measurements above are historical. The six-turn remainder split is described
+# above. Every selected top-level test keeps all its subtests;
 # fuzz targets, examples and future unmatched names remain in the computed complement.
 group root-a    github.com/olivaresai/olivares/cmd/olivares a    A B CommunicationHandoff CommunicationMessaging
 group root-b    github.com/olivaresai/olivares/cmd/olivares b    D E F G H I J K CommunicationIncoming
 group root-c    github.com/olivaresai/olivares/cmd/olivares c    L M N O P Q R CommunicationChannel
+group root-d github.com/olivaresai/olivares/cmd/olivares d Catalog Classify Community Compliance Connect Core Cross SR Seat Security Semantic SessionClaude SessionIO SessionStop Static Step Store Template Tenant Transport Un Verify Warn What Wildcard Write
+group root-e github.com/olivaresai/olivares/cmd/olivares e CLI CRL CSP Calendar Campaign Canonical Claude Command CommunicationCursor CommunicationGlobal CommunicationGuard CommunicationReady Complete Completion Composition Confirm Container Coverage Credential Custody SDK Sandbox Sealed Seam Self SessionRemove SessionState SessionTool SessionTurn SessionUnknown SessionView SessionWIF Sessions Setup Signing Slack Sorted Source Split Stale Standing Subject Sweepable TOTP Used Vector Version
+group root-f github.com/olivaresai/olivares/cmd/olivares f Clean Console Copy SLA Schedule SessionGroup SessionIs SessionLaunch SessionList SessionProvider SessionRuntime SessionShow Stamped Status TLS Target Test Token Tool Two Valid Wrap
+group root-g github.com/olivaresai/olivares/cmd/olivares g Cada Capability Check CommunicationCommit CommunicationContent CommunicationResume Counted Schema Secrets Seed Send SessionHook SessionName SessionStart Shadow Shared Teams Third Users Verbs Voice Web
+group root-h github.com/olivaresai/olivares/cmd/olivares h Chat Codex Collector Commit CommunicationLineage CommunicationStore Config Creates SQ Same Save SessionAccess SessionCredential SessionInterrupt SessionWorkspace Strict Success Support Text The Upgrade Whoami Wire
 group root-rest github.com/olivaresai/olivares/cmd/olivares rest *
 
 # The eight sibling packages of cmd/olivares and the 178 connector packages ride with the
@@ -118,13 +138,12 @@ group root-rest github.com/olivaresai/olivares/cmd/olivares rest *
 pkg root-a github.com/olivaresai/olivares/cmd/...
 pkg root-a github.com/olivaresai/olivares/connectors/...
 
-# The rest of core, the operator and the control plane retain their remainder-group
-# placement. The historical sweep measured 674.6 s of test time (337 s at two lanes);
+# The rest of core, the operator and the control plane now have their own shard. The historical sweep measured 674.6 s of test time (337 s at two lanes);
 # the September 28 public run spent about 549 s in the whole-package/build phase.
-# These packages and the new name group share the step clock and must be timed together.
-pkg root-rest github.com/olivaresai/olivares/core/...
-pkg root-rest github.com/olivaresai/olivares/operator/...
-pkg root-rest github.com/olivaresai/olivares-cloud-cp/...
+# These packages have their own step clock, separate from the root name groups.
+pkg root-core github.com/olivaresai/olivares/core/...
+pkg root-core github.com/olivaresai/olivares/operator/...
+pkg root-core github.com/olivaresai/olivares-cloud-cp/...
 
 # --- the three shards of the store package ------------------------------------------------
 # Same arithmetic on the same basis: 2700 s, the floor left by the 45-minute timeout of
@@ -173,15 +192,15 @@ optional github.com/olivaresai/olivares-cloud-cp/...
 # scripts/private-leg.sh legs: where cloud/ and commercial/ exist they run, and in the
 # published tree they answer NOT APPLICABLE and exit 0. They are named here so that
 # "the union of the shards is the whole suite" is a claim about the whole suite. They ride
-# with the shard that owns the control plane's packages.
+# with root-core, which owns the control plane's packages.
 #
 # These private legs are NOT included in the public measurements. In the published
 # tree they answer NOT APPLICABLE; where cloud/ and commercial/ exist, they run.
 # Qualification of the private arm must include their time under the same 55-minute
 # step ceiling. A public timing cannot establish that the private arm fits.
-leg root-rest test:cloud:norace
-leg root-rest test:commerce
-leg root-rest test:commerce-core:norace
+leg root-core test:cloud:norace
+leg root-core test:commerce
+leg root-core test:commerce-core:norace
 
 # --- the clocks -------------------------------------------------------------------
 # The September 20 calibration predicted 12-17 minutes per shard by multiplying test
@@ -193,7 +212,7 @@ leg root-rest test:commerce-core:norace
 # 1186.6s in the previous run; observed package variation reached 1.8x. Allow 55m for
 # builds, whole packages and private legs, and 65m for the job including setup.
 # Go's 45m timeout remains PER TEST BINARY and yields a goroutine dump and package name.
-# Both workflows use these clocks; the nine jobs and exact test partition stay the same.
+# Both workflows use these clocks; the clocks stay the same while the remainder is split into smaller turns.
 #
 # THE MATRIX IS NOT DERIVED FROM THIS FILE, IT IS COMPARED WITH IT. The reader has a `matrix`
 # subcommand and no workflow calls it: deriving the list would need a setup job, and a job

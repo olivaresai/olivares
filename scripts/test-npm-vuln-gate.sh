@@ -225,6 +225,11 @@ R="$(repo highok "pnpm-lock.yaml")"; B="$(fixture high2 "${HIGH}")"
 row "the same advisory, allowlisted and unexpired, passes" 0 "temporarily accepted" -- \
 	env NPM_VULN_PNPM="${B}" NPM_VULN_ALLOW="${WORK}/live.yaml" bash "${R}/scripts/npm-vuln-gate.sh"
 
+CANONICAL='{"advisories":{"1":{"severity":"high","references":"https://github.com/advisories/GHSA-aaaa-bbbb-cccc","github_advisory_id":"GHSA-1111-2222-3333"}}}'
+R="$(repo canonical "pnpm-lock.yaml")"; B="$(fixture canonical "${CANONICAL}")"
+row "the canonical advisory ID wins over another advisory in its references" 1 "GHSA-1111-2222-3333 is not allowlisted" -- \
+	env NPM_VULN_PNPM="${B}" NPM_VULN_ALLOW="${WORK}/live.yaml" bash "${R}/scripts/npm-vuln-gate.sh"
+
 R="$(repo mod "pnpm-lock.yaml")"; B="$(fixture mod "${MOD}")"
 row "a MODERATE advisory is reported, not blocked" 0 "moderate=1" -- \
 	env NPM_VULN_PNPM="${B}" NPM_VULN_ALLOW=/nonexistent bash "${R}/scripts/npm-vuln-gate.sh"

@@ -89,6 +89,39 @@ describe('modules not enabled on this installation (ARCH C1)', () => {
     expect(screen.queryByText('Spend screen')).toBeNull()
   })
 
+  // The notice stands in for the whole view, so it carries the page's one h1. On an installation
+  // without the communication plane, the five communication pages had none (accessibility run).
+  it('a page of a module that is not enabled keeps its one heading', () => {
+    useModulesStore.getState().setOff(['finops'])
+    const view = {
+      id: 'finops',
+      permission: 'finops:spend:read',
+    } as FeatureView
+    renderIntel(
+      <RequirePermission view={view}>
+        <p>Spend screen</p>
+      </RequirePermission>,
+    )
+    const headings = screen.getAllByRole('heading', { level: 1 })
+    expect(headings).toHaveLength(1)
+    expect(headings[0]).toHaveTextContent('Cost & FinOps')
+  })
+
+  it('a permitted page brings its own heading; the gate adds none', () => {
+    useModulesStore.getState().setOff(undefined)
+    const view = {
+      id: 'finops',
+      permission: 'finops:spend:read',
+    } as FeatureView
+    renderIntel(
+      <RequirePermission view={view}>
+        <p>Spend screen</p>
+      </RequirePermission>,
+    )
+    expect(screen.getByText('Spend screen')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull()
+  })
+
   it('an administrator turns the module on from its page (EU)', async () => {
     const { modulesApi } = await import('@/features/settings/modules-settings')
     vi.spyOn(modulesApi, 'get').mockResolvedValue({

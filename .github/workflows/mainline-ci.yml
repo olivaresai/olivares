@@ -2179,7 +2179,7 @@ jobs:
   # budget alone, with no failing test and no race: run 36043808854 (cmd/olivares timed out at
   # 2700.1 s, and the step was cut inside ./modules, so the operator, the SDKs and the provider
   # never ran) and run 36066051228 (cmd/olivares timed out at 2700.7 s). Pull-request CI already
-  # runs the same suite as the nine shards of ci/pr-suite-shards.txt, where the four cmd/olivares
+  # runs the same suite as the declared shards of ci/pr-suite-shards.txt, where the cmd/olivares
   # name groups summed 1739-1834 s over three runs. This job runs exactly those shards, so no
   # single per-binary or per-step ceiling can cut main's verdict: a slow runner costs one shard
   # its headroom instead of costing the whole suite its answer.
@@ -2188,7 +2188,7 @@ jobs:
   # proves it: every test-bearing package of the workspace in exactly one shard, every test of a
   # package split by name in exactly one group, and this matrix equal to the spec's shard list,
   # in order. The three legs test:functional runs after its sweep (test:cloud:norace,
-  # test:commerce, test:commerce-core:norace) ride in root-rest. The environment is the one
+  # test:commerce, test:commerce-core:norace) ride in root-core. The environment is the one
   # control-plane's functional step had: both Postgres clusters, the strict posture, the full
   # history, the Go caches, node, the pinned go-task, the short executable TMPDIR, the core
   # roles, and the cloud control-plane roles with their eleven capability DSNs. Every shard gets
@@ -2211,10 +2211,10 @@ jobs:
       # aggregate in control-plane is red either way.
       fail-fast: false
       matrix:
-        shard: [root-a, root-b, root-c, root-rest, store-a, store-b, store-rest, sessions, modules]
+        shard: [root-a, root-b, root-c, root-d, root-e, root-f, root-g, root-h, root-rest, root-core, store-a, store-b, store-rest, sessions, modules]
     name: functional-shard (${{ matrix.shard }})
     # The group names the shard, and without that the matrix cancels itself: a job-level group
-    # is per job instance, so nine legs sharing one string with cancel-in-progress would
+    # is per job instance, so the legs sharing one string with cancel-in-progress would
     # supersede each other. The run_id keeps a run from cancelling its own legs across pushes.
     concurrency:
       group: mainline-ci-functional-shard-${{ matrix.shard }}-${{ github.ref }}-${{ github.run_id }}
@@ -2686,7 +2686,7 @@ jobs:
       # reading.
       #
       # The log carries the shard in its name, because .github/actions/pr-failure-report titles
-      # its report with the job id, the same in all nine shards, and attaches the tail of every
+      # its report with the job id, the same in every shard, and attaches the tail of every
       # $RUNNER_TEMP/ci-fail-*.log. A shard keeps running after a red package, so the tail alone
       # may end on later green lines: on a failure the step appends this log's FAIL, panic and
       # refusal lines to its end, so the report names the failing packages.

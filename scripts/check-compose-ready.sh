@@ -146,7 +146,7 @@ battery = read("scripts/test-compose-ready.sh")
 goreleaser = read(".goreleaser.yaml")
 
 assert "newReadyzCmd()" in main
-assert '"readyz": "observe"' in main
+assert '"readyz": "engine"' in main
 for token in (
     'readyzprobe.Check(', 'exitcode.New(exitcode.Err, nil)',
     'exitcode.New(exitcode.Usage, nil)', 'cannot inspect readiness:',

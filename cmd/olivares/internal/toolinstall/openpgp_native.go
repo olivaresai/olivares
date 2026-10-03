@@ -5,6 +5,7 @@
 package toolinstall
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"encoding/hex"
@@ -14,10 +15,10 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/crypto/openpgp"                  //nolint:staticcheck // frozen but complete for RSA v4 detached signatures
-	"golang.org/x/crypto/openpgp/armor"            //nolint:staticcheck
-	pgperrors "golang.org/x/crypto/openpgp/errors" //nolint:staticcheck
-	"golang.org/x/crypto/openpgp/packet"           //nolint:staticcheck
+	"github.com/ProtonMail/go-crypto/openpgp"
+	"github.com/ProtonMail/go-crypto/openpgp/armor"
+	pgperrors "github.com/ProtonMail/go-crypto/openpgp/errors"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 )
 
 // NativeOpenPGPVerifier checks a detached OpenPGP signature in process, for a
@@ -49,7 +50,8 @@ func (NativeOpenPGPVerifier) Verify(ctx context.Context, key []byte, wantFingerp
 	}
 	now := time.Now()
 	for _, identity := range entity.Identities {
-		if identity.SelfSignature != nil && identity.SelfSignature.KeyExpired(now) {
+		if sig := identity.SelfSignature; sig != nil && sig.KeyLifetimeSecs != nil &&
+			now.After(sig.CreationTime.Add(time.Duration(*sig.KeyLifetimeSecs)*time.Second)) {
 			return SignatureReport{}, refuse(KindSignatureInvalid, "the signing key has expired; an expired key is not accepted")
 		}
 	}
@@ -64,7 +66,7 @@ func (NativeOpenPGPVerifier) Verify(ctx context.Context, key []byte, wantFingerp
 		now.After(sig.CreationTime.Add(time.Duration(*sig.SigLifetimeSecs)*time.Second)) {
 		return SignatureReport{}, refuse(KindSignatureInvalid, "the manifest signature has expired")
 	}
-	if _, err := openpgp.CheckDetachedSignature(ring, bytes.NewReader(data), bytes.NewReader(rawSignature(signature))); err != nil {
+	if _, err := openpgp.CheckDetachedSignature(ring, bytes.NewReader(data), bytes.NewReader(rawSignature(signature)), nil); err != nil {
 		if errors.Is(err, pgperrors.ErrUnknownIssuer) {
 			return SignatureReport{}, refuse(KindSignatureInvalid, "the signature was made by a key that is not the pinned release key")
 		}
@@ -90,20 +92,26 @@ func (NativeOpenPGPVerifier) Verify(ctx context.Context, key []byte, wantFingerp
 
 // rawSignature dearmors an armored signature; binary input is returned as is.
 func rawSignature(signature []byte) []byte {
-	if block, err := armorDecode(signature); err == nil {
-		return block
+	if bytes.HasPrefix(bytes.TrimSpace(signature), []byte("-----BEGIN ")) {
+		if block, err := armorDecode(signature); err == nil {
+			return block
+		}
 	}
 	return signature
 }
 
 func readDetachedSignature(signature []byte) (*packet.Signature, error) {
-	p, err := packet.Read(bytes.NewReader(rawSignature(signature)))
+	reader := bytes.NewReader(rawSignature(signature))
+	p, err := packet.Read(reader)
 	if err != nil {
 		return nil, err
 	}
 	sig, ok := p.(*packet.Signature)
 	if !ok {
 		return nil, errors.New("first packet is not a v4 signature")
+	}
+	if tail, err := io.ReadAll(reader); err != nil || len(bytes.TrimSpace(tail)) != 0 {
+		return nil, errors.New("expected exactly one signature packet")
 	}
 	return sig, nil
 }
@@ -119,9 +127,35 @@ func hashID(sig *packet.Signature) int {
 }
 
 func armorDecode(b []byte) ([]byte, error) {
-	block, err := armor.Decode(bytes.NewReader(b))
+	reader := bufio.NewReader(bytes.NewReader(b))
+	block, err := armor.Decode(reader)
 	if err != nil {
 		return nil, err
 	}
-	return io.ReadAll(io.LimitReader(block.Body, 1<<20))
+	blocks := 0
+	for _, line := range bytes.Split(b, []byte{'\n'}) {
+		line = bytes.TrimSpace(line)
+		if bytes.HasPrefix(line, []byte("-----BEGIN ")) {
+			blocks++
+		}
+		if bytes.HasPrefix(line, []byte("-----END ")) && !bytes.Equal(line, []byte("-----END "+block.Type+"-----")) {
+			return nil, errors.New("expected exactly one armored signature block")
+		}
+	}
+	if blocks != 1 {
+		return nil, errors.New("expected exactly one armored signature block")
+	}
+	data, err := io.ReadAll(io.LimitReader(block.Body, 1<<20))
+	if err != nil {
+		return nil, err
+	}
+	tail, err := io.ReadAll(reader)
+	if err != nil {
+		return nil, err
+	}
+	tail = bytes.TrimPrefix(bytes.TrimSpace(tail), []byte("-----END "+block.Type+"-----"))
+	if len(bytes.TrimSpace(tail)) != 0 {
+		return nil, errors.New("expected exactly one armored signature block")
+	}
+	return data, nil
 }

@@ -11,7 +11,8 @@
 # and fails unless each is covered by a dated, justified entry in
 # .govulncheck-allow.yaml. An EXPIRED allowlist entry also fails, so a temporary
 # exception can never become a silent forever-exception. A vulnerability WITH an
-# upstream fix is never allowlisted — the dependency is bumped instead.
+# upstream fix is never allowlisted — the dependency is bumped instead. Reviewed
+# scanner false positives require an exact, dated scope for EVERY called finding.
 #
 # go.work caveat (golang/go#50745): govulncheck ./... only covers the current
 # module, so this runs it per workspace module plus cloud/control-plane.
@@ -102,11 +103,11 @@ for extra in cloud/control-plane commercial/commerce commercial/commerce-lint; d
 done
 
 python3 - "${tmp}" "${ALLOW}" "${TODAY}" <<'PY'
-import sys, json, glob, os, re
+import sys, json, glob, os, re, hashlib, datetime
 tmp, allowf, today = sys.argv[1], sys.argv[2], sys.argv[3]
 
 # Parse the dated allowlist without a YAML dependency (controlled, simple format).
-allow = {}  # osv id -> expires (YYYY-MM-DD)
+allow = {}  # osv id -> dated entry, optionally scoped to a scanner false positive
 cur = None
 if os.path.exists(allowf):
     for line in open(allowf):
@@ -116,10 +117,43 @@ if os.path.exists(allowf):
         m = re.match(r'-?\s*id:\s*(\S+)', s)
         if m:
             cur = m.group(1)
+            if cur in allow:
+                print(f"vuln:gate: duplicate exception {cur}; refusing.", file=sys.stderr)
+                sys.exit(2)
+            allow[cur] = {}
             continue
-        m = re.match(r'expires:\s*(\S+)', s)
+        m = re.match(r'(expires|kind|scan|module|version|packages|osv-sha256|reason|added):\s*(.+)', s)
         if m and cur:
-            allow[cur] = m.group(1).strip('"\'')
+            allow[cur][m.group(1)] = m.group(2).strip('"\'')
+
+scope_fields = {'scan', 'module', 'version', 'packages', 'osv-sha256'}
+for osv, entry in allow.items():
+    kind = entry.get('kind', '')
+    if kind or scope_fields.intersection(entry):
+        try:
+            valid = (kind == 'false-positive'
+                     and all(entry.get(k) for k in scope_fields | {'reason', 'added', 'expires'})
+                     and re.fullmatch(r'[0-9a-f]{64}', entry['osv-sha256'])
+                     and all(entry['packages'].split(','))
+                     and datetime.date.fromisoformat(entry['added']) <= datetime.date.fromisoformat(entry['expires']))
+        except ValueError:
+            valid = False
+        if not valid:
+            print(f"vuln:gate: invalid false-positive scope for {osv}; refusing.", file=sys.stderr)
+            sys.exit(2)
+
+def in_scope(record, entry):
+    label, finding, advisory = record
+    trace = finding.get('trace') or []
+    packages = entry['packages'].split(',')
+    first = trace[0] if trace else {}
+    return (label == entry['scan'] and advisory is not None
+            and hashlib.sha256(json.dumps(advisory, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
+            == entry['osv-sha256']
+            and first.get('function') and first.get('module') == entry['module']
+            and first.get('version') == entry['version'] and first.get('package') in packages
+            and all(fr.get('version') == entry['version'] and fr.get('package') in packages
+                    for fr in trace if fr.get('module') == entry['module']))
 
 # Collect CALLED vulnerabilities from the govulncheck JSON streams.
 #
@@ -143,7 +177,7 @@ for f in streams:
             label = fh.read().strip() or f
     txt = open(f).read()
     idx, n = 0, len(txt)
-    summaries, findings, kinds = {}, [], set()
+    advisories, findings, kinds = {}, [], set()
     while idx < n:
         while idx < n and txt[idx] in ' \t\r\n':
             idx += 1
@@ -158,7 +192,7 @@ for f in streams:
         kinds.update(obj.keys())
         if isinstance(obj.get('osv'), dict):
             o = obj['osv']
-            summaries[o.get('id', '')] = (o.get('summary') or '').strip()
+            advisories[o.get('id', '')] = o
         if isinstance(obj.get('finding'), dict):
             findings.append(obj['finding'])
     if 'config' not in kinds:
@@ -169,23 +203,29 @@ for f in streams:
         trace = fd.get('trace') or []
         if any(fr.get('function') for fr in trace):  # reaches a vulnerable symbol
             osv = fd.get('osv', '')
-            called[osv] = summaries.get(osv, '')
+            called.setdefault(osv, []).append((label, fd, advisories.get(osv)))
 
 fail = False
 if not called:
     print(f"vuln:gate: no called vulnerabilities across {len(streams)} scanned modules.")
-for osv, summ in sorted(called.items()):
-    exp = allow.get(osv)
+for osv, records in sorted(called.items()):
+    summ = ((records[0][2] or {}).get('summary') or '').strip()
+    entry = allow.get(osv, {})
+    exp = entry.get('expires')
     if not exp:
         print(f"vuln:gate: BLOCKING — called vulnerability {osv} is not allowlisted: {summ}")
         fail = True
     elif exp < today:
         print(f"vuln:gate: BLOCKING — allowlist entry {osv} EXPIRED {exp} (today {today}); re-review.")
         fail = True
+    elif entry.get('kind') == 'false-positive' and not all(in_scope(r, entry) for r in records):
+        print(f"vuln:gate: BLOCKING — {osv} has a called finding outside its reviewed false-positive scope.")
+        fail = True
     else:
         print(f"vuln:gate: {osv} temporarily accepted (allowlist expires {exp}).")
 
-for osv, exp in sorted(allow.items()):
+for osv, entry in sorted(allow.items()):
+    exp = entry.get('expires', '')
     if osv not in called and exp < today:
         print(f"vuln:gate: note — allowlist entry {osv} expired {exp} and is no longer needed; remove it.")
 

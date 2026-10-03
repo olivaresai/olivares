@@ -211,6 +211,9 @@ function GatewayInner({ titled }: { titled: boolean }) {
     setActionError('')
     mutation.mutate({ kind, row, version: data.version, allowed })
   }
+  // The sections sit one level under whatever names the surface: this tab's own h2, or the
+  // page's h1 where the page already names it.
+  const Section = titled ? 'h3' : 'h2'
   return (
     <div className="flex min-w-0 flex-col gap-4 pt-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -254,9 +257,9 @@ function GatewayInner({ titled }: { titled: boolean }) {
         aria-label={t('console:mcpGateway.sessionTitle')}
       >
         <div className="min-w-0 flex-1">
-          <h3 className="text-body font-medium">
+          <Section className="text-body font-medium">
             {t('console:mcpGateway.sessionTitle')}
-          </h3>
+          </Section>
           <p className="text-body text-muted-foreground">
             {t('console:mcpGateway.sessionHint')}
           </p>
@@ -300,7 +303,9 @@ function GatewayInner({ titled }: { titled: boolean }) {
               aria-label={row.name}
             >
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h3 className="text-body font-semibold">{row.name}</h3>
+                <Section className="text-body font-semibold">
+                  {row.name}
+                </Section>
                 <div className="flex flex-wrap gap-2">
                   <Badge variant={row.enabled ? 'success' : 'neutral'}>
                     {t(
@@ -465,9 +470,9 @@ function GatewayInner({ titled }: { titled: boolean }) {
         className="rounded-lg border border-border p-3"
         aria-label={t('console:mcpGateway.governance')}
       >
-        <h3 className="text-body font-medium">
+        <Section className="text-body font-medium">
           {t('console:mcpGateway.governance')}
-        </h3>
+        </Section>
         <div className="mt-2 grid gap-2 text-caption sm:grid-cols-2">
           {Object.entries(data.governance).map(([name, value]) => (
             <p key={name}>

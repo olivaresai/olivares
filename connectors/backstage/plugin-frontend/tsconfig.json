@@ -1,8 +1,9 @@
 {
   "extends": "@backstage/cli/config/tsconfig.json",
   "include": ["src"],
-  "exclude": ["node_modules", "dist", ".test-out"],
+  "exclude": ["node_modules", "dist", "dist-types", ".test-out", "**/*.test.ts"],
   "compilerOptions": {
+    "types": ["node"],
     "outDir": "dist",
     "rootDir": "."
   }

@@ -4,21 +4,28 @@
 # Dated, justified allowlist for the fail-closed dependency-vulnerability gate
 # (scripts/govulncheck-gate.sh/E4).
 #
-# Each entry TEMPORARILY accepts a CALLED vulnerability that has no upstream fix
-# yet. Rules the gate enforces:
+# A vulnerability acceptance requires no upstream fix yet; a reviewed scanner
+# false positive additionally requires exact finding scope. Rules the gate enforces:
 #   - A vulnerability that IS called and is NOT listed here fails the gate.
 #   - Every entry MUST carry an `expires` date (YYYY-MM-DD, UTC); once that date
 #     passes the gate fails, forcing a re-review (no silent forever-exceptions).
-#   - A vulnerability WITH an available fix is never allowlisted — bump the
-#     dependency instead. The allowlist is only for "no fix upstream yet".
+#   - An actual vulnerability WITH an available fix is never allowlisted — bump the
+#     dependency instead. False positives require the exact scope below.
 #
 # Keep this list empty whenever possible. It is audited by the adversarial
 # campaign and surfaced in docs/security/gate-report.md.
-allow: []
-#  - id: GO-2026-XXXX          # the govulncheck / OSV identifier
-#    reason: >-
-#      No upstream fix as of listing; the vulnerable symbol is not reachable with
-#      our inputs (link the analysis). Re-evaluate before expiry.
-#    added: 2026-07-19
-#    expires: 2026-09-01
-#    by:
+# Reviewed scanner false positives also require an exact scan/module/version,
+# package set and govulncheck OSV-record hash. Every called finding must match.
+# Expiry or a changed scope/record forces re-review; real affected calls still block.
+allow:
+  - id: GO-2026-6596
+    kind: false-positive
+    scan: ./connectors
+    module: github.com/cilium/cilium
+    version: v1.20.2
+    packages: github.com/cilium/cilium/api/v1/flow,github.com/cilium/cilium/api/v1/observer,github.com/cilium/cilium/api/v1/relay
+    # SHA-256 of the govulncheck OSV object's sorted, compact JSON, not HTTP bytes.
+    osv-sha256: eafdceb9be67f66c3590e101074d5e6aa67382f6ca435dbbbd841fb7c95b1d5b
+    reason: Generated Hubble APIs do not reconcile Gateway routes; the unreviewed OSV custom-range fallback marks every package, including unaffected v1.20.2. https://github.com/cilium/cilium/security/advisories/GHSA-w7c2-w76w-5hmj
+    added: 2026-10-03
+    expires: 2026-10-10

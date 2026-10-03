@@ -132,34 +132,59 @@ func TestLocalTLSRenewalKeepsCAAndClientTrust(t *testing.T) {
 	}
 }
 
-func TestLegacyLocalTLSUpgradeKeepsSPKIPin(t *testing.T) {
+func TestLegacyLocalTLSUpgradeKeepsPublishedClientTrust(t *testing.T) {
 	dir := t.TempDir()
 	cert, key := filepath.Join(dir, "tls.crt"), filepath.Join(dir, "tls.key")
 	writeOldTLSFixture(t, cert, key, "olivares", "Olivares AI", 825*24*time.Hour)
+	before, keyBefore := readTLSFixture(t, cert), readTLSFixture(t, key)
+	clientCA := filepath.Join(dir, "published-client-ca.crt")
+	if err := os.WriteFile(clientCA, before, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	pin, err := SPKIPin(cert)
 	if err != nil {
 		t.Fatal(err)
 	}
-	changed, _, err := ensureTLSCert(cert, key, []string{"localhost"}, []net.IP{net.ParseIP("192.168.1.20")})
-	if err != nil || !changed {
-		t.Fatalf("legacy upgrade: %v, %v", changed, err)
-	}
-	after, err := SPKIPin(cert)
-	if err != nil || pin != after {
-		t.Fatalf("legacy pin changed: %s -> %s, %v", pin, after, err)
+	changed, _, err := EnsureTLSCert(cert, key)
+	if err != nil {
+		t.Fatal(err)
 	}
 	pair, err := tls.LoadX509KeyPair(cert, key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	leaf, err := x509.ParseCertificate(pair.Certificate[0])
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) }))
+	server.TLS = &tls.Config{Certificates: []tls.Certificate{pair}, MinVersion: tls.VersionTLS12}
+	server.StartTLS()
+	defer server.Close()
+	clientTLS, err := ClientTLSConfig(clientCA, "", "", "localhost")
 	if err != nil {
 		t.Fatal(err)
 	}
-	roots := x509.NewCertPool()
-	roots.AppendCertsFromPEM(readTLSFixture(t, cert+".ca"))
-	if _, err := leaf.Verify(x509.VerifyOptions{Roots: roots, DNSName: "192.168.1.20"}); err != nil {
-		t.Fatal(err)
+	client := &http.Client{Transport: &http.Transport{TLSClientConfig: clientTLS}}
+	defer client.CloseIdleConnections()
+	response, err := client.Get(server.URL)
+	if err != nil {
+		t.Fatalf("26.10.0 client's unchanged published CA refuses upgraded server: %v", err)
+	}
+	response.Body.Close()
+	if response.StatusCode != http.StatusNoContent {
+		t.Fatal(response.Status)
+	}
+	after, err := SPKIPin(cert)
+	if err != nil || pin != after {
+		t.Fatalf("legacy pin changed: %s -> %s, %v", pin, after, err)
+	}
+	if changed || !bytes.Equal(before, readTLSFixture(t, cert)) || !bytes.Equal(keyBefore, readTLSFixture(t, key)) {
+		t.Fatal("upgrade replaced the published certificate/key pair")
+	}
+	if !bytes.Equal(before, readTLSFixture(t, clientCA)) {
+		t.Fatal("client trust file was changed")
+	}
+	for _, path := range []string{cert + ".ca", key + ".ca"} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("upgrade created a replacement trust anchor: %s: %v", path, err)
+		}
 	}
 }
 

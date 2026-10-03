@@ -16,6 +16,9 @@ export const serverInfo = {
   engine: 'olivares',
   setup_required: false,
   license: { status: 'active', licensee: 'Demo Org' },
+  // The communication plane is ready, so the five communication pages render themselves
+  // rather than the module-off notice the console shows without this field.
+  communication_ready: true,
 }
 
 // ⛔ SIN ESTE FIXTURE EL ARNÉS SE DESAUTENTICA SOLO, y lo hace EN SILENCIO — medido el 2026-08-18.
@@ -32,6 +35,39 @@ export const refresh = {
   expires_at: '2030-01-01T00:00:00Z',
 }
 
+// The session the engine returns when the console migrates its stored bearer (see at-run.ts).
+export const browserSession = {
+  csrf_token: 'synthetic-ui-csrf',
+  session_id: 's1',
+  expires_at: '2030-01-01T00:00:00Z',
+}
+
+// GET /v1/console/mcp-gateway for a tenant with no stored configuration, as the engine answers it
+// (cmd/olivares/mcpmanagement.go Get): session tools on, no servers, the managed governance.
+export const mcpGateway = {
+  version: 0,
+  source: 'store',
+  read_only: false,
+  session_tools: true,
+  session_endpoint: '/session/mcp',
+  servers: [],
+  governance: {
+    configuration: 'tenant_store',
+    credential: 'tenant_sealed_reference',
+    session_listener: 'control_plane_http_listener',
+    content_gate: 'declared_inventory_and_consent',
+    deep_content_inspection: 'not_configured',
+    egress: 'exact_https_destination_and_pinned_addresses',
+    redirects: 'refused',
+    tool_policy: 'explicit_scope_and_destructive_approval',
+    tasks: 'not_provisioned',
+    subscriptions: 'not_provisioned',
+    local_execution: 'session_runner_engine_user_session_folder',
+    process_confinement: 'reported_by_session_runner',
+    network_confinement: 'not_supplied_for_local_commands',
+  },
+}
+
 export const whoami = {
   kind: 'user',
   user_id: 'u-demo',
@@ -39,6 +75,35 @@ export const whoami = {
   display_name: 'Demo Admin',
   superadmin: true,
   grants: [{ tenant: 't-demo', role: 'owner' }],
+}
+
+// A tenant member, not a global administrator, whose grant names the communication permissions.
+// The AT harness measures the communication pages as this principal: a global account gets no
+// tenant-member admission there.
+export const memberWhoami = {
+  kind: 'user',
+  user_id: 'u-member',
+  actor: 'user:member@demo',
+  display_name: 'Demo Member',
+  superadmin: false,
+  grants: [
+    {
+      tenant: 't-demo',
+      role: 'owner',
+      permissions: [
+        'sessions:channel:read',
+        'sessions:channel:write',
+        'sessions:channel:admin',
+        'sessions:delivery:read',
+        'sessions:delivery:write',
+        'sessions:message:read',
+        'sessions:message-send:write',
+        'sessions:handoff-response:write',
+        'user:read',
+        'agent:read',
+      ],
+    },
+  ],
 }
 
 // ---- Access map ------------------------------------------------------
@@ -2455,6 +2520,7 @@ export function fixtureFor(pathname: string): unknown | null {
   if (pathname.endsWith('/v1/m/finops/spend/trend')) return finopsTrend
   if (pathname.endsWith('/v1/m/finops/spend')) return finopsSpendTeam
   if (pathname.endsWith('/v1/m/finops/forecast')) return finopsForecast
+  if (pathname.endsWith('/v1/console/mcp-gateway')) return mcpGateway
   if (pathname.endsWith('/v1/m/models/models')) return modelsList
   if (pathname.endsWith('/v1/m/security/findings')) return securityFindings
   if (pathname.endsWith('/v1/m/redteam/runs')) return redteamRuns
