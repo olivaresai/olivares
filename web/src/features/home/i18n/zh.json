@@ -65,6 +65,7 @@
     "budgets": {
       "label": "预算",
       "none": "尚无预算",
+      "nonePartial": "此页没有已启用的预算；还有更多",
       "over_other": "{{count}} 项超出限额",
       "unknown_other": "{{count}} 项金额未知",
       "within": "没有超出限额",

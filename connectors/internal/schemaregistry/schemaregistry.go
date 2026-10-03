@@ -40,6 +40,8 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 // magicByte is the first byte of the classic Confluent value-prefix wire format.
@@ -300,16 +302,11 @@ func (c *Client) fetch(ctx context.Context, path string) (Schema, error) {
 		return Schema{}, err
 	}
 	defer resp.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, c.maxBody))
 	if resp.StatusCode != http.StatusOK {
-		// A bounded excerpt for diagnostics; the registry error never carries our
-		// credential. Keep it short.
-		excerpt := string(body)
-		if len(excerpt) > 200 {
-			excerpt = excerpt[:200]
-		}
+		excerpt := redact.ReadHTTPError(resp.Body, 200, req)
 		return Schema{}, fmt.Errorf("schemaregistry: GET %s: %s: %s", path, resp.Status, excerpt)
 	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, c.maxBody))
 	var sr schemaResponse
 	if err := json.Unmarshal(body, &sr); err != nil {
 		return Schema{}, fmt.Errorf("schemaregistry: decode %s: %w", path, err)

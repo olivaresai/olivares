@@ -23,6 +23,7 @@ COPY olivares /usr/bin/olivares
 COPY olivares.service /usr/lib/systemd/system/olivares.service
 COPY package-init-systemd.txt /usr/lib/olivares/package-init
 COPY olivares.env.example /etc/olivares/olivares.env
+COPY --chmod=0755 migrate-agentops-dropin.sh /usr/share/olivares/migrate-agentops-dropin.sh
 COPY postinstall.sh /tmp/olivares-postinstall.sh
 RUN sh /tmp/olivares-postinstall.sh && rm /tmp/olivares-postinstall.sh
 COPY olivares-appliance-base.rpm /tmp/olivares-appliance-base.rpm

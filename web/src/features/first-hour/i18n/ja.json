@@ -10,7 +10,10 @@
     "signedIn": "サインイン済み",
     "signedInAs": "{{account}} としてサインイン済み",
     "notSignedIn": "未サインイン",
-    "usesKey": "API キーを使用: {{name}}"
+    "usesKey": "API キーを使用: {{name}}",
+    "usesLocal": "ローカルのモデルサーバーを使用: {{name}}",
+    "keyRefused": "API キー {{name}} が拒否されました。プロバイダーで置き換えてください。",
+    "keyUnchecked": "{{name}} のキーを確認できませんでした。プロバイダーでテストしてください。"
   },
   "actions": {
     "install": "インストール",

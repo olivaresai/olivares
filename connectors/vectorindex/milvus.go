@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 // milvus backend — Milvus v2 (2.3+) via the HTTP REST API. It follows the same
@@ -252,8 +254,8 @@ func (m *milvus) call(ctx context.Context, method, path string, body, out any) e
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("vectorindex: milvus %s %s: status %d: %s", method, path, resp.StatusCode, strings.TrimSpace(string(excerpt)))
+		excerpt := redact.ReadHTTPError(resp.Body, 512, req, m.apiKey)
+		return fmt.Errorf("vectorindex: milvus %s %s: status %d: %s", method, path, resp.StatusCode, excerpt)
 	}
 	if out == nil {
 		_, _ = io.Copy(io.Discard, resp.Body)

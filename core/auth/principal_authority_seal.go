@@ -150,7 +150,7 @@ func validPrincipalReadAuthorityShape(p Principal) bool {
 	case principalHumanAuthority:
 		return p.Kind == KindUser && validPrincipalEvidenceID(p.UserID) &&
 			p.evidence.userAuthority.UserID == p.UserID && p.evidence.userAuthority.Version > 0 &&
-			validAuthenticationInstant(p.evidence.authenticatedAt) && !p.evidence.authenticatedAt.After(p.evidence.observedAt)
+			validAuthenticationInstant(p.evidence.authenticatedAt) && !afterTransactionClock(p.evidence.authenticatedAt, model.NewTimestamp(p.evidence.observedAt))
 	case principalTokenDirectoryOnly:
 		return p.Kind == KindToken && p.evidence.userAuthority == (store.UserAuthorityFactRef{}) && p.evidence.authenticatedAt.IsZero()
 	default:

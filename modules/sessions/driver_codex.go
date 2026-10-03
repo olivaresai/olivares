@@ -180,19 +180,49 @@ func (codexDriver) LaunchTerms() DriverLaunchTerms {
 // the launch drift apart without a test going red.
 func (d codexDriver) LaunchArgs(l DriverLaunch) []string {
 	args := cliruntime.CodexArgs(l.cliRuntimeRequest())
+	// Native config overrides apply before startup work as well as to resumed
+	// threads. Olivares owns installs; a session does not sync the plugin catalog
+	// or export analytics, feedback or telemetry from its authorized home.
+	args = append([]string{"-c", "analytics.enabled=false", "-c", "features.plugins=false",
+		"-c", "feedback.enabled=false", "-c", `otel.exporter="none"`, "-c", `otel.trace_exporter="none"`}, args...)
 	if d.launchPolicy(l.Preset, l.CodexSandboxFallback).sandbox() == CodexSandboxDangerFull {
 		// Full is explicitly authorized, or the bounded native probe established
 		// that this host needs the required OS-confinement fallback.
 		args = append([]string{"-c", `sandbox_mode="danger-full-access"`}, args...)
 	}
-	if l.LocalModelEndpoint == "" {
+	endpoint, providerID := l.BoundProvider.Endpoint, codexBoundProviderID(l.BoundProvider)
+	if providerID == "" && l.LocalModelEndpoint != "" {
+		endpoint, providerID = l.LocalModelEndpoint, "olivares_ollama"
+	}
+	if providerID == "" {
 		return args
 	}
-	// Use an owned provider id: Codex ignores overrides to its built-in Ollama
-	// provider. Fixed direct-argv config overrides the authorized home without
-	// modifying it, and requires no OpenAI credential or cloud fallback.
-	provider := `{name="Ollama",base_url=` + strconv.Quote(l.LocalModelEndpoint) + `,wire_api="responses",requires_openai_auth=false}`
-	return append([]string{"-c", `model_provider="olivares_ollama"`, "-c", "model_providers.olivares_ollama=" + provider}, args...)
+	if l.BoundProvider.Kind != "" {
+		// Native table merging retains saved catalog URLs. Disable their startup
+		// discovery before they can receive the bound record's credential.
+		args = append([]string{"-c", "features.api_key_model_discovery=false", "-c", `cli_auth_credentials_store="ephemeral"`}, args...)
+	}
+	// Codex ignores overrides to its built-in providers. An owned provider id and
+	// direct-argv config pin the endpoint without changing the authorized home.
+	provider := `{name="Olivares record",base_url=` + strconv.Quote(endpoint) + `,wire_api="responses",requires_openai_auth=false`
+	if l.BoundProvider.Kind != "" {
+		provider += `,model_catalog_url=` + strconv.Quote(strings.TrimRight(endpoint, "/")+"/models")
+	}
+	if providerID != "olivares_ollama" {
+		provider += `,env_key="OPENAI_API_KEY"`
+	}
+	provider += `}`
+	return append([]string{"-c", "model_provider=" + strconv.Quote(providerID), "-c", "model_providers." + providerID + "=" + provider}, args...)
+}
+
+func codexBoundProviderID(bound BoundProvider) string {
+	if bound.Kind == "" {
+		return ""
+	}
+	if bound.Kind == ProviderKindOllama {
+		return "olivares_ollama"
+	}
+	return "olivares_record"
 }
 
 func (d codexDriver) OpenSession(cfg DriverSessionConfig) DriverSession {
@@ -289,6 +319,7 @@ type codexThreadStartParams struct {
 	ApprovalPolicy CodexApprovalPolicy `json:"approvalPolicy"`
 	Sandbox        string              `json:"sandbox"`
 	Model          *string             `json:"model,omitempty"`
+	ModelProvider  *string             `json:"modelProvider,omitempty"`
 }
 
 type codexThreadResumeParams struct {
@@ -297,6 +328,7 @@ type codexThreadResumeParams struct {
 	ApprovalPolicy CodexApprovalPolicy `json:"approvalPolicy"`
 	Sandbox        string              `json:"sandbox"`
 	Model          *string             `json:"model,omitempty"`
+	ModelProvider  *string             `json:"modelProvider,omitempty"`
 }
 
 // codexThread is the subset of Thread this driver reads. `parentThreadId` and
@@ -309,7 +341,8 @@ type codexThread struct {
 }
 
 type codexThreadResponse struct {
-	Thread codexThread `json:"thread"`
+	Thread        codexThread `json:"thread"`
+	ModelProvider string      `json:"modelProvider"`
 }
 
 type codexUserInputText struct {
@@ -396,9 +429,11 @@ func (s *codexSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 	var err error
 	cwd := codexOptionalString(s.cfg.WorkDir)
 	model := codexOptionalString(s.cfg.Model)
+	providerID := codexBoundProviderID(s.cfg.BoundProvider)
+	modelProvider := codexOptionalString(providerID)
 	if resume := strings.TrimSpace(s.cfg.ResumeConversationID); resume != "" {
 		raw, err = s.conn.call(ctx, codexMethodThreadResume, codexThreadResumeParams{
-			ThreadID: resume, Cwd: cwd, ApprovalPolicy: s.policy.approval(), Sandbox: s.policy.sandbox(), Model: model,
+			ThreadID: resume, Cwd: cwd, ApprovalPolicy: s.policy.approval(), Sandbox: s.policy.sandbox(), Model: model, ModelProvider: modelProvider,
 		}, s.cfg.CallTimeout)
 		if err != nil {
 			// REFUSE. A resume that failed is not an invitation to start a different
@@ -411,7 +446,7 @@ func (s *codexSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 		}
 	} else {
 		raw, err = s.conn.call(ctx, codexMethodThreadStart, codexThreadStartParams{
-			Cwd: cwd, ApprovalPolicy: s.policy.approval(), Sandbox: s.policy.sandbox(), Model: model,
+			Cwd: cwd, ApprovalPolicy: s.policy.approval(), Sandbox: s.policy.sandbox(), Model: model, ModelProvider: modelProvider,
 		}, s.cfg.CallTimeout)
 		if err != nil {
 			return DriverHandshake{}, codexHandshakeErr("thread/start", err)
@@ -420,6 +455,9 @@ func (s *codexSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 	var resp codexThreadResponse
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		return DriverHandshake{}, &runErr{http.StatusBadGateway, "the provider's conversation response could not be read"}
+	}
+	if providerID != "" && resp.ModelProvider != providerID {
+		return DriverHandshake{}, &runErr{http.StatusConflict, "Codex did not confirm this session's bound provider; refusing to send input"}
 	}
 	id := strings.TrimSpace(resp.Thread.ID)
 	if id == "" {

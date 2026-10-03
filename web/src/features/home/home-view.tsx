@@ -86,6 +86,7 @@ import { useKillSwitchState } from '@/components/layout/use-killswitch-state'
 import { usePendingApprovals } from '@/features/governance/use-pending-approvals'
 import { NowStart } from './now-start'
 import { useModuleEnabled } from '@/stores/modules'
+import { useComplianceOpened } from '@/features/compliance/compliance-opened'
 import { RecentWork } from './recent-work'
 import './i18n'
 
@@ -220,6 +221,7 @@ export function HomeView() {
   const canSecurity = may('security:finding:read')
   const canCompliance = may('compliance:framework:read')
   const canHealth = may('health:status:read')
+  const complianceOpened = useComplianceOpened()
 
   // The estate overview reads the last 30 days, computed once on mount so the query key
   // is stable across re-renders (the executive view derives its own 30d window the same way).
@@ -364,10 +366,87 @@ export function HomeView() {
   // mounted and gets no reason.
   const inventoryPending = canInventory ? pendingReason(inventoryQ) : null
   const sessionsPending = canSessions ? pendingReason(sessionsQ) : null
+
+  // A TILE ONLY WHEN IT HAS SOMETHING TO SAY (HU2-25, Root 19:53Z). An upgraded install
+  // kept 26.10's modules, and Now drew a tile per module: "0", "—", "No health checks
+  // yet", and a compliance score nobody asked for. A tile hides ONLY after a successful,
+  // complete, empty answer from every source it reads (SR4C on ea62fad5): a read that is
+  // loading, paused or not started, a page with more behind it, a truncated aggregate and
+  // a failure all keep the tile, since each is true and none proves "nothing". The
+  // compliance score waits until the person opened Compliance.
+  const answeredEmpty = (
+    queries: readonly { isSuccess: boolean }[],
+    complete: boolean,
+    nothing: boolean,
+  ) => queries.every((q) => q.isSuccess) && complete && nothing
+  const showInventory =
+    canInventory &&
+    !answeredEmpty(
+      [inventoryQ],
+      !usage.truncated,
+      (usage.totalEntities ?? 0) === 0,
+    )
+  const showSessions =
+    canSessions &&
+    !answeredEmpty(
+      [sessionsQ],
+      !usage.livePartial,
+      (usage.liveNow ?? 0) === 0 &&
+        (usage.liveIdle ?? 0) === 0 &&
+        !(usage.silentEvasion && usage.silentEvasion > 0),
+    )
+  const showSecurity =
+    canSecurity &&
+    !answeredEmpty(
+      [findingsQ],
+      !findingsQ.data?.has_more,
+      !risk || risk.openFindings === 0,
+    )
+  const showCompliance =
+    canCompliance &&
+    complianceOpened &&
+    !answeredEmpty([complianceQ], true, !compliance || compliance.total === 0)
+  const showSpend =
+    canFinops &&
+    !answeredEmpty(
+      [costSummaryQ, costTrendQ, forecastQ],
+      !cost?.truncated,
+      !cost || cost.totalMicroUsd === 0,
+    )
+  const showHealth =
+    canHealth &&
+    !answeredEmpty(
+      [healthStatusQ, incidentsQ],
+      !healthStatusQ.data?.has_more && !incidentsQ.data?.has_more,
+      !health || (health.total === 0 && health.openIncidents === 0),
+    )
+  const showKillSwitch =
+    killSwitch.permitted &&
+    !answeredEmpty(
+      [killSwitch.query],
+      true,
+      !killSwitch.posture ||
+        (!killSwitch.posture.estate && killSwitch.posture.active === 0),
+    )
+
   const pendingText = (reason: Exclude<PendingReason, null>) =>
     reason === 'pendingPaused'
       ? t('state.pendingPaused')
       : t('state.pendingIdle')
+  // The first source of a tile that has no answer yet and is not fetching (paused or not
+  // started): its tile says so, with "—", instead of words no answer backs (SR4C on
+  // ea62fad5: "No open findings" or "$0" while the read was paused).
+  const pendingOf = (...queries: SourceQuery[]) =>
+    queries.map(pendingReason).find((r) => r !== null) ?? null
+  const securityPending = canSecurity ? pendingOf(findingsQ) : null
+  const compliancePending = canCompliance ? pendingOf(complianceQ) : null
+  const spendPending = canFinops
+    ? pendingOf(costSummaryQ, costTrendQ, forecastQ)
+    : null
+  const healthPending = canHealth ? pendingOf(healthStatusQ, incidentsQ) : null
+  const killSwitchPending = killSwitch.permitted
+    ? pendingOf(killSwitch.query)
+    : null
 
   // THE AVAILABILITY ANNOUNCEMENT — one sentence per permitted usage source, in tile
   // order, naming the source with the same noun its partial marker uses. Composed from
@@ -536,7 +615,7 @@ export function HomeView() {
           2026-09-17. `StatGrid`'s own default stays as it is for the views that lead
           with four figures. */}
           <StatGrid className="grid-cols-1 sm:grid-cols-2 lg:grid-cols-1">
-            {canInventory ? (
+            {showInventory ? (
               <EstateTile
                 compact
                 to="/inventory"
@@ -596,7 +675,7 @@ export function HomeView() {
               />
             ) : null}
 
-            {canSessions ? (
+            {showSessions ? (
               <EstateTile
                 compact
                 to="/sessions"
@@ -673,27 +752,33 @@ export function HomeView() {
               />
             ) : null}
 
-            {canSecurity ? (
+            {showSecurity ? (
               <EstateTile
                 compact
                 to="/security"
                 icon={<ShieldAlert />}
                 label={t('tiles.security.label')}
                 state={tileState(findingsQ)}
-                value={formatInt(risk?.openFindings ?? 0)}
+                value={
+                  securityPending ? '—' : formatInt(risk?.openFindings ?? 0)
+                }
                 tone={
-                  risk && risk.criticalHigh > 0
-                    ? 'danger'
-                    : risk && risk.openFindings > 0
-                      ? 'warning'
-                      : 'success'
+                  securityPending
+                    ? undefined
+                    : risk && risk.criticalHigh > 0
+                      ? 'danger'
+                      : risk && risk.openFindings > 0
+                        ? 'warning'
+                        : 'success'
                 }
                 caption={
-                  risk && risk.openFindings > 0
-                    ? t('tiles.security.caption', {
-                        count: formatInt(risk.criticalHigh),
-                      })
-                    : t('tiles.security.clear')
+                  securityPending
+                    ? pendingText(securityPending)
+                    : risk && risk.openFindings > 0
+                      ? t('tiles.security.caption', {
+                          count: formatInt(risk.criticalHigh),
+                        })
+                      : t('tiles.security.clear')
                 }
                 trend={
                   risk ? (
@@ -703,7 +788,7 @@ export function HomeView() {
               />
             ) : null}
 
-            {canCompliance ? (
+            {showCompliance ? (
               <EstateTile
                 compact
                 to="/compliance"
@@ -716,12 +801,14 @@ export function HomeView() {
                     : '—'
                 }
                 caption={
-                  compliance && compliance.total > 0
-                    ? t('tiles.compliance.caption', {
-                        gap: formatInt(compliance.gap),
-                        unmapped: formatInt(compliance.unmapped),
-                      })
-                    : t('tiles.compliance.noControls')
+                  compliancePending
+                    ? pendingText(compliancePending)
+                    : compliance && compliance.total > 0
+                      ? t('tiles.compliance.caption', {
+                          gap: formatInt(compliance.gap),
+                          unmapped: formatInt(compliance.unmapped),
+                        })
+                      : t('tiles.compliance.noControls')
                 }
                 trend={
                   compliance ? (
@@ -735,17 +822,23 @@ export function HomeView() {
               />
             ) : null}
 
-            {canFinops ? (
+            {showSpend ? (
               <EstateTile
                 compact
                 to="/finops"
                 icon={<Coins />}
                 label={t('tiles.spend.label')}
                 state={tileState(costSummaryQ, costTrendQ, forecastQ)}
-                value={formatMicroUsd(cost?.totalMicroUsd ?? 0, {
-                  compact: true,
-                })}
-                tone={cost?.projectedOver ? 'warning' : undefined}
+                value={
+                  spendPending
+                    ? '—'
+                    : formatMicroUsd(cost?.totalMicroUsd ?? 0, {
+                        compact: true,
+                      })
+                }
+                tone={
+                  !spendPending && cost?.projectedOver ? 'warning' : undefined
+                }
                 /* ⛔ THE STATE IS IN THE WORDS, NOT ONLY IN THE TOKEN (WCAG 2.1 AA 1.4.1).
                  The tone above tints this caption and nothing else changed: the same
                  estate at 90 % and at 140 % of its run-rate printed the SAME sentence,
@@ -757,18 +850,20 @@ export function HomeView() {
                  so the second caption says exactly that and not "over budget", which
                  is a different fact this screen does not read. */
                 caption={
-                  cost && cost.projectedMicroUsd !== null
-                    ? t(
-                        cost.projectedOver
-                          ? 'tiles.spend.projectedOver'
-                          : 'tiles.spend.projected',
-                        {
-                          amount: formatMicroUsd(cost.projectedMicroUsd, {
-                            compact: true,
-                          }),
-                        },
-                      )
-                    : t('tiles.spend.caption', { range: t('range') })
+                  spendPending
+                    ? pendingText(spendPending)
+                    : cost && cost.projectedMicroUsd !== null
+                      ? t(
+                          cost.projectedOver
+                            ? 'tiles.spend.projectedOver'
+                            : 'tiles.spend.projected',
+                          {
+                            amount: formatMicroUsd(cost.projectedMicroUsd, {
+                              compact: true,
+                            }),
+                          },
+                        )
+                      : t('tiles.spend.caption', { range: t('range') })
                 }
                 trend={
                   cost && cost.trend.length > 1 ? (
@@ -793,7 +888,7 @@ export function HomeView() {
                 (budgets-tile.tsx states the financial rule). */}
             {canBudgets ? <BudgetsTile /> : null}
 
-            {canHealth ? (
+            {showHealth ? (
               <EstateTile
                 compact
                 to="/health"
@@ -818,19 +913,21 @@ export function HomeView() {
                         : undefined
                 }
                 caption={
-                  health && health.total > 0
-                    ? t('tiles.health.caption', {
-                        breaches: formatInt(health.slaBreaches),
-                        incidents: formatInt(health.openIncidents),
-                      })
-                    : t('tiles.health.noChecks')
+                  healthPending
+                    ? pendingText(healthPending)
+                    : health && health.total > 0
+                      ? t('tiles.health.caption', {
+                          breaches: formatInt(health.slaBreaches),
+                          incidents: formatInt(health.openIncidents),
+                        })
+                      : t('tiles.health.noChecks')
                 }
               />
             ) : null}
             {/* THE KILL SWITCH (CONCEPT-IA, Now's aside): how many stops are active and what
                 that means, from the kill switch page's own read. Engaging stays on that
                 page, behind its own confirmation and step-up. */}
-            {killSwitch.permitted ? (
+            {showKillSwitch ? (
               <EstateTile
                 compact
                 to="/killswitch"
@@ -846,13 +943,15 @@ export function HomeView() {
                       : undefined
                 }
                 caption={
-                  killSwitch.posture?.estate
-                    ? t('nav:shell.killswitch.estateStopped')
-                    : killSwitch.posture && killSwitch.posture.agentStops > 0
-                      ? t('nav:shell.killswitch.agentStops', {
-                          count: killSwitch.posture.agentStops,
-                        })
-                      : t('nav:shell.killswitch.none')
+                  killSwitchPending
+                    ? pendingText(killSwitchPending)
+                    : killSwitch.posture?.estate
+                      ? t('nav:shell.killswitch.estateStopped')
+                      : killSwitch.posture && killSwitch.posture.agentStops > 0
+                        ? t('nav:shell.killswitch.agentStops', {
+                            count: killSwitch.posture.agentStops,
+                          })
+                        : t('nav:shell.killswitch.none')
                 }
               />
             ) : null}

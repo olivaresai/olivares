@@ -353,9 +353,21 @@
     "inspect": "Show in inspector",
     "args": "Arguments",
     "toolResult": "Result",
+    "toolFailed": "Failed",
     "tokens": "{{input}} in · {{output}} out",
     "cwdWarning": "This session has no workspace. The driver reported its working directory as {{cwd}}.",
-    "protocol": "Protocol frames: {{count}}"
+    "protocol": "Protocol frames: {{count}}",
+    "stop": {
+      "cancelled": "Cancelled",
+      "refusal": "Refused by the model",
+      "maxTokens": "Stopped at the token limit",
+      "maxTurnRequests": "Stopped at the turn limit"
+    },
+    "turnFailed": "The turn failed: {{message}}",
+    "retrying": "Retrying ({{count}}): {{message}}",
+    "keyRefused": "The provider refused the API key. Replace it under API keys.",
+    "output": "Tool output ({{count}}): {{first}}",
+    "notSent": "Not sent: {{reason}}"
   },
   "changes": {
     "title": "Changes in {{folder}}",

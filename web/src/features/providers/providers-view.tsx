@@ -3,7 +3,6 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { firstHourKeys } from '@/features/first-hour/api'
 import { useQuery } from '@tanstack/react-query'
-import { Link } from '@tanstack/react-router'
 import { KeyRound, PlugZap, Plus, RefreshCw, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -25,7 +24,8 @@ import { useProviderBoundary } from './auth-boundary'
 import { ProviderCreateDialog } from './provider-create-dialog'
 import { ProviderBindDialog } from './provider-bind-dialog'
 import { ProviderRotateDialog } from './provider-rotate-dialog'
-import type { ProbeState, ProviderRecordDTO } from './types'
+import { PROVIDER_KINDS } from './kinds'
+import type { ProbeState, ProviderKind, ProviderRecordDTO } from './types'
 import './i18n'
 
 /**
@@ -61,6 +61,14 @@ function probeHintKey(record: ProviderRecordDTO) {
   return `probe.${record.kind === 'ollama' ? 'local.' : ''}${state}Hint`
 }
 
+/** The provider `?add=<kind>` asks for: "Use an API key instead" under a tool opens the
+ * form on the provider that tool runs on (HU2-18). Read once, like the other views'
+ * `?tab=`; anything else opens nothing. */
+function addFromURL(): ProviderKind | undefined {
+  const want = new URLSearchParams(window.location.search).get('add')
+  return PROVIDER_KINDS.find((k) => k === want)
+}
+
 function Inner() {
   const { t, i18n } = useTranslation('providers')
   const { activeTenant, can } = useAuth()
@@ -70,7 +78,8 @@ function Inner() {
   const canWrite = can('sessions:provider:write')
   const canAdmin = can('sessions:provider:admin')
 
-  const [createOpen, setCreateOpen] = useState(false)
+  const [addKind] = useState(addFromURL)
+  const [createOpen, setCreateOpen] = useState(!!addKind)
   const [binding, setBinding] = useState<ProviderRecordDTO | null>(null)
   const [rotating, setRotating] = useState<ProviderRecordDTO | null>(null)
   const [revoking, setRevoking] = useState<ProviderRecordDTO | null>(null)
@@ -373,14 +382,11 @@ function Inner() {
         />
       )}
 
-      {rows.some((r) => r.state === 'active' && r.probe_state === 'ok') ? (
-        <NextStep />
-      ) : null}
-
       {canWrite && (
         <ProviderCreateDialog
           open={createOpen}
           onOpenChange={setCreateOpen}
+          initialKind={addKind}
           onCreated={(record) => {
             // The screen does not stop at "registered". The next question an
             // operator has is whether it works, so the answer is offered as the
@@ -463,25 +469,6 @@ function Inner() {
             })}
           </span>
         ) : null}
-      </div>
-    )
-  }
-
-  /** The action after provider registration. A provider on its own launches nothing;
-   * the profile it is bound to is what launches. */
-  function NextStep() {
-    return (
-      <div className="rounded-lg border border-border bg-muted/30 p-4">
-        <p className="text-sm font-medium text-foreground">{t('next.title')}</p>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {t('next.description')}
-        </p>
-        <Button asChild variant="secondary" size="sm" className="mt-3">
-          {/* `as never`: the router's generated union covers the shells, not the
-              registry-driven feature routes. It is the convention the onboarding
-              wizard and the governance panel already use for the same reason. */}
-          <Link to={'/provider-profiles' as never}>{t('next.action')}</Link>
-        </Button>
       </div>
     )
   }

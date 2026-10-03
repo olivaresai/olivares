@@ -51,6 +51,22 @@ import (
 // by being named in a list here.
 const providerDriverCodex = "codex"
 
+// A SESSION BOUND TO A PROVIDER RECORD REACHES ONLY THAT RECORD'S ENDPOINT, OR IT DOES
+// NOT START (Root 2026-10-02 21:16Z, HU2 019: an OpenCode session on an Anthropic key
+// answered on OpenCode's own hosted model, because nothing told the tool which provider
+// it was bound to).
+//
+// BoundProvider is that launch authority, typed and non-secret: the record's validated
+// kind and the endpoint its traffic may reach, which is the record's base_url, else that
+// vendor's own API, and never a deployment URL the launch would otherwise inherit. The
+// record mint is its only source and refuses a record it cannot give an endpoint. A
+// driver confines its child to it and never reconstructs it from the credential
+// environment, which carries only the key. A launch with no record has none (Kind "").
+type BoundProvider struct {
+	Kind     string
+	Endpoint string
+}
+
 // DriverLaunch is the non-secret launch context a driver turns into argv. It
 // carries references and choices, never a credential: the authentication source
 // is resolved separately (runtime_provider_auth.go) and only the child's
@@ -65,6 +81,9 @@ type DriverLaunch struct {
 	LocalModelEndpoint string
 	// LocalModels are the endpoint's models, as its record's probe listed them.
 	LocalModels []string
+	// BoundProvider is the record this launch is bound to and the one endpoint it may
+	// reach (zero when the launch has no record).
+	BoundProvider BoundProvider
 	// WorkDir is the resolved, governed workspace cwd ("" ⇒ the process cwd).
 	WorkDir string
 	// ConfigHome / UserHome are the profile's canonical homes. A driver uses them
@@ -127,6 +146,7 @@ type DriverSessionConfig struct {
 	Effort               string
 	Preset               string
 	CodexSandboxFallback bool
+	BoundProvider        BoundProvider
 
 	// ResumeConversationID is the EXACT stored conversation this launch continues.
 	// Non-empty makes the handshake a resume, and a failed resume is a REFUSAL:
@@ -884,6 +904,7 @@ func (m *Module) openDriverSession(lr *liveRun, d ProviderDriver, p CreateRunPar
 		Effort:               p.Effort,
 		Preset:               launchPreset(p),
 		CodexSandboxFallback: p.codexSandboxFallback,
+		BoundProvider:        lr.companion.BoundProvider,
 		ResumeConversationID: resumeID,
 		AuthSource:           authSource,
 		CallTimeout:          m.rt.driverCallTimeout,
@@ -1087,7 +1108,16 @@ func (m *Module) driverInputAdmitted(ctx context.Context, lr *liveRun, text stri
 			return false, err
 		}
 	}
-	return lr.session.Input(ctx, text)
+	var prompt *acpPrompt
+	if acpEchoDriver(lr.driver) {
+		prompt = lr.acpEcho.queue(lr.session.ConversationID(), text)
+	}
+	attempted, err := lr.session.Input(ctx, text)
+	if prompt != nil {
+		// Published only when the driver accepted it (acp_prompt_echo.go).
+		lr.acpEcho.decide(prompt, attempted && err == nil)
+	}
+	return attempted, err
 }
 
 // interruptDriverTurn cancels the ACTIVE provider turn and leaves the owned

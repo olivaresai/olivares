@@ -25,6 +25,9 @@ func TestApplyRequiresStepUp(t *testing.T) {
 	h := newHarness(t)
 	requirePasskeyStepUp(t, h.st)
 	root := h.adminLogin()
+	// Adding a person asks for the deployment's step-up (HU-28, 5ef7ef98): the
+	// administrator who sets the test up steps up first; the session under test does not.
+	h.stepUp(root)
 	tid := h.createOrg(root, "acme")
 	elevated := h.roleToken(root, tid, "ops@acme.io", "admin")
 	defID := h.createDef(elevated, tid, "billing-agent", agentSpec("img:1", "agent:billing"))

@@ -27,6 +27,9 @@ type sessionView struct {
 	r *termrender.Renderer
 	// driver is the run's tool, so a sign-in hint can name its command.
 	driver string
+	// engineSupplied is set when the engine supplies the run's credential: signing the tool
+	// in would not fix its refusal.
+	engineSupplied bool
 	// lastText is the last assistant text shown, so a result that only repeats it
 	// (an API error arrives as both) is not printed twice.
 	lastText string
@@ -38,6 +41,11 @@ type sessionView struct {
 	readyShown bool
 	// tools are the tool calls already on screen, so their progress stays quiet.
 	tools map[string]bool
+	// acpText gathers an ACP message's chunks (acpKind, acpMessage) until it ends.
+	acpText             strings.Builder
+	acpKind, acpMessage string
+	// retries are the API retry causes already on screen, so a cause is said once.
+	retries map[string]bool
 }
 
 func newSessionView(w io.Writer) *sessionView {
@@ -84,7 +92,10 @@ func (v *sessionView) render(line string) bool {
 			v.quiet("· rate limit: " + strings.ReplaceAll(str(info, "status"), "_", " "))
 		}
 	case "":
-		// Codex (and the other drivers' JSON-RPC peers): no "type", a method or an id.
+		// Codex, OpenCode and Grok Build: JSON-RPC peers with no "type", a method or an id.
+		if ended, ok := v.acp(frame); ok {
+			return ended
+		}
 		return v.codex(frame, line)
 	default:
 		if t := str(frame, "type"); t != "" {
@@ -197,6 +208,156 @@ func (v *sessionView) codex(frame map[string]any, line string) bool {
 	return false
 }
 
+// acp reads an Agent Client Protocol frame (OpenCode, Grok Build) by the same rules:
+// the agent_message_chunk texts of one message joined into the reply, a tool call one
+// line, a failed tool call its error, a permission request the line that says the
+// session waits, and the session/prompt result (stopReason, usage) the turn's footer.
+// The person's own message (user_message_chunk, sent when a conversation is replayed)
+// is shown after "›". Private reasoning, command lists, mode, configuration and plan
+// updates stay quiet; an update it cannot name is one quiet line. HU2-01: follow
+// printed only "· session/update" and the reply was never shown.
+func (v *sessionView) acp(frame map[string]any) (ended, handled bool) {
+	method := str(frame, "method")
+	params, _ := frame["params"].(map[string]any)
+	switch {
+	case method == "session/update":
+		v.acpUpdate(params["update"])
+		return false, true
+	case method == "session/request_permission":
+		v.flushACP()
+		what := " is waiting for approval"
+		if call, _ := params["toolCall"].(map[string]any); str(call, "title") != "" {
+			what += " to run " + truncateSummary(str(call, "title"))
+		}
+		v.say("! "+toolName(v.driver)+what, termrender.RoleWarn)
+		return false, true
+	case method != "":
+		return false, false
+	}
+	if e, ok := frame["error"].(map[string]any); ok && (v.driver == "opencode" || v.driver == "grok") {
+		// An ACP prompt that fails is answered with an error instead of a stopReason.
+		v.flushACP()
+		v.say("✗ "+str(e, "message"), termrender.RoleFail)
+		v.say("— turn failed", termrender.RoleFail)
+		v.failed, v.lastText = true, ""
+		return true, true
+	}
+	result, _ := frame["result"].(map[string]any)
+	reason := str(result, "stopReason")
+	if reason == "" {
+		return false, false
+	}
+	v.flushACP()
+	footer, role := "— turn finished", termrender.RoleMuted
+	switch reason {
+	case "end_turn":
+	case "cancelled":
+		footer = "— turn interrupted"
+	case "refusal":
+		footer, role = "— turn refused by the model", termrender.RoleFail
+	default:
+		footer, role = "— turn stopped: "+strings.ReplaceAll(reason, "_", " "), termrender.RoleWarn
+	}
+	if usage, _ := result["usage"].(map[string]any); usage != nil {
+		if n, ok := usage["totalTokens"].(float64); ok && n > 0 {
+			footer += fmt.Sprintf(" · %.0f tokens", n)
+		}
+	}
+	v.say(footer, role)
+	v.failed, v.lastText = reason == "refusal", ""
+	return true, true
+}
+
+func (v *sessionView) acpUpdate(raw any) {
+	u, _ := raw.(map[string]any)
+	switch kind := str(u, "sessionUpdate"); kind {
+	case "agent_message_chunk", "user_message_chunk":
+		if id := str(u, "messageId"); kind != v.acpKind || id != v.acpMessage {
+			v.flushACP()
+			v.acpKind, v.acpMessage = kind, id
+		}
+		if content, _ := u["content"].(map[string]any); str(content, "type") == "text" {
+			v.acpText.WriteString(str(content, "text"))
+		}
+	case "agent_thought_chunk", "plan", "available_commands_update", "current_mode_update",
+		"config_option_update", "session_info_update", "usage_update":
+		// Reasoning and the session's own bookkeeping: the reply and the turn's end tell it.
+	case "tool_call":
+		v.flushACP()
+		v.seenTool(str(u, "toolCallId"))
+		line := "→ " + acpToolTitle(u)
+		if args := summariseArgs(u["rawInput"]); args != "" && !strings.Contains(line, args) {
+			line += " " + args
+		}
+		v.say(line, termrender.RoleMuted)
+		if str(u, "status") == "failed" {
+			v.say("  ✗ failed", termrender.RoleFail)
+		}
+	case "tool_call_update":
+		if str(u, "status") != "failed" {
+			return
+		}
+		v.flushACP()
+		msg := acpToolText(u["content"])
+		if msg == "" {
+			msg = acpToolTitle(u) + " failed"
+		}
+		v.say("  ✗ "+truncateSummary(msg), termrender.RoleFail)
+	case "":
+		v.flushACP()
+		v.quiet("· session/update")
+	default:
+		v.flushACP()
+		v.quiet("· " + truncateSummary(strings.ReplaceAll(kind, "_", " ")))
+	}
+}
+
+// finish shows what the view still holds when the stream stops before a turn's end
+// (it ended, failed, or the command was cancelled): an ACP reply already received is
+// never dropped (SR2C on cfa80204).
+func (v *sessionView) finish() { v.flushACP() }
+
+// flushACP shows the ACP message gathered so far: the agent's reply as text, the
+// person's own message after "›".
+func (v *sessionView) flushACP() {
+	text, kind := strings.TrimSpace(v.acpText.String()), v.acpKind
+	v.acpText.Reset()
+	v.acpKind, v.acpMessage = "", ""
+	switch {
+	case text == "":
+	case kind == "user_message_chunk":
+		v.say("› "+text, termrender.RoleMuted)
+	default:
+		v.say(text, termrender.RoleNone)
+		v.lastText = text
+	}
+}
+
+func acpToolTitle(u map[string]any) string {
+	for _, k := range []string{"title", "kind", "toolCallId"} {
+		if s := strings.TrimSpace(str(u, k)); s != "" {
+			return truncateSummary(s)
+		}
+	}
+	return "a tool"
+}
+
+// acpToolText is the first text of a tool call's content ({"type":"content",
+// "content":{"type":"text",...}}).
+func acpToolText(raw any) string {
+	items, _ := raw.([]any)
+	for _, it := range items {
+		m, _ := it.(map[string]any)
+		inner, _ := m["content"].(map[string]any)
+		if str(inner, "type") == "text" {
+			if s := strings.TrimSpace(str(inner, "text")); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
 // codexProgressPrefixes are the Codex 0.153.4 notifications (ServerNotification
 // schema) that report progress or host state the reply and the turn's end already
 // tell, or that the operator does not act on.
@@ -241,9 +402,48 @@ func (v *sessionView) system(frame map[string]any) {
 		if status := str(frame, "status"); status != "" {
 			v.quiet("· task " + strings.ReplaceAll(status, "_", " "))
 		}
+	case sub == "api_retry":
+		v.apiRetry(frame)
 	case sub != "":
 		v.quiet("· " + strings.ReplaceAll(sub, "_", " "))
 	}
+}
+
+// apiRetry says why the tool retries its provider call, once per cause (HU2-13): a
+// refused API key printed "· api retry" up to ten times and never the 401 every frame
+// carried. A refused credential is a failure with what fixes it; another cause is one
+// warning with its status.
+func (v *sessionView) apiRetry(frame map[string]any) {
+	cause := str(frame, "error")
+	status, _ := frame["error_status"].(float64)
+	key := fmt.Sprintf("%s/%.0f", cause, status)
+	if v.retries[key] {
+		return
+	}
+	if v.retries == nil {
+		v.retries = map[string]bool{}
+	}
+	v.retries[key] = true
+	name := toolName(v.driver)
+	if name == "" {
+		name = "The tool"
+	}
+	if cause == "authentication_failed" || status == 401 || status == 403 {
+		v.say(fmt.Sprintf("✗ %s's provider refused its credential (HTTP %.0f). Replace the API key in AI tools › API keys, "+
+			"or sign it in: olivares tool login %s", name, status, v.driver), termrender.RoleFail)
+		return
+	}
+	what := strings.ReplaceAll(cause, "_", " ")
+	if what == "" {
+		what = "the provider did not answer"
+	}
+	if status > 0 {
+		what += fmt.Sprintf(" (HTTP %.0f)", status)
+	}
+	if limit, ok := frame["max_retries"].(float64); ok && limit > 0 {
+		what += fmt.Sprintf("; retrying, up to %.0f times", limit)
+	}
+	v.say("! "+name+": "+what, termrender.RoleWarn)
 }
 
 func (v *sessionView) assistant(frame map[string]any) {
@@ -327,9 +527,12 @@ func (v *sessionView) result(frame map[string]any) {
 	}
 	v.r.Line(v.r.Paint("— "+strings.Join(parts, " · "), role))
 	if failed && v.signedOut {
-		if toolSignsIn(v.driver) {
+		switch {
+		case v.engineSupplied:
+			v.r.Line("The credential the engine supplies for this session was refused by the provider. Ask the engine's operator to replace it (a key from Providers is replaced in Providers), then send again.")
+		case toolSignsIn(v.driver):
 			v.r.Line(fmt.Sprintf("%s is not signed in. Sign it in: olivares tool login %s", toolName(v.driver), v.driver))
-		} else {
+		default:
 			v.r.Line("The tool is not signed in on the engine's host: sign it in there, then send again.")
 		}
 	}

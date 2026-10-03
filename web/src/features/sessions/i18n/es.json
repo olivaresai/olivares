@@ -358,9 +358,21 @@
     "inspect": "Mostrar en el inspector",
     "args": "Argumentos",
     "toolResult": "Resultado",
+    "toolFailed": "Falló",
     "tokens": "{{input}} entrada · {{output}} salida",
     "cwdWarning": "Esta sesión no tiene espacio de trabajo. El controlador ha informado de su directorio de trabajo como {{cwd}}.",
-    "protocol": "Tramas de protocolo: {{count}}"
+    "protocol": "Tramas de protocolo: {{count}}",
+    "stop": {
+      "cancelled": "Cancelado",
+      "refusal": "Rechazado por el modelo",
+      "maxTokens": "Detenido en el límite de tokens",
+      "maxTurnRequests": "Detenido en el límite de turnos"
+    },
+    "turnFailed": "El turno falló: {{message}}",
+    "retrying": "Reintentando ({{count}}): {{message}}",
+    "keyRefused": "El proveedor rechazó la clave de API. Reemplázala en Proveedores.",
+    "output": "Salida de la herramienta ({{count}}): {{first}}",
+    "notSent": "No se envió: {{reason}}"
   },
   "changes": {
     "title": "Cambios en {{folder}}",

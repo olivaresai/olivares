@@ -436,10 +436,10 @@ print("^Test(" + "|".join(fams) + ")")
     return
   fi
   tests="$(package_tests "$pkg")" || exit $?
-  NAMED="$(named_of "$pkg")" TESTS="$tests" python3 -c '
-import os
+  printf '%s\n' "$tests" | NAMED="$(named_of "$pkg")" python3 -c '
+import os, sys
 named = [f.split() for f in os.environ["NAMED"].splitlines() if f.strip()]
-tests = [t for t in os.environ["TESTS"].split() if t]
+tests = sys.stdin.read().split()
 rest = [t for t in tests
         if not any(t.startswith("Test" + fam) for fams in named for fam in fams)]
 print("^(" + "|".join(sorted(rest)) + ")$" if rest else "")

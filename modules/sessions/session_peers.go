@@ -72,11 +72,11 @@ func (m *Module) handleSetRunPeers(w http.ResponseWriter, r *http.Request, mc ap
 			return &runErr{http.StatusUnprocessableEntity, "same-template requires a run launched from a template"}
 		}
 		for _, sid := range peers {
-			peer, err := m.findSessionPeer(r.Context(), mc.Tenant, mc.Principal, repo, rec, sid)
+			peer, err := m.findSessionPeer(r.Context(), mc.Tenant, repo, rec, sid)
 			if err != nil {
 				return err
 			}
-			if peer == nil || sid == rec.String(colRunClaimSID) {
+			if peer == nil || sid == rec.String(colRunClaimSID) || !m.sessionPeerReadable(r.Context(), mc.Tenant, mc.Principal, peer) {
 				return &runErr{http.StatusUnprocessableEntity, "peer must be another readable live session in this authorization workspace"}
 			}
 		}
@@ -134,8 +134,8 @@ func runPeers(rec model.Record) []string {
 
 // findSessionPeer keeps peers in the sender's tenant and authorization workspace.
 // Each peer keeps its own folder and live generation; messages convey no file access.
-// The caller must be able to read the recipient at selection and again at send.
-func (m *Module) findSessionPeer(ctx context.Context, tenant model.TenantID, p auth.Principal, repo store.GenericRepo, sender model.Record, sid string) (model.Record, error) {
+// The caller separately authorizes the recipient at selection and again at send.
+func (m *Module) findSessionPeer(ctx context.Context, tenant model.TenantID, repo store.GenericRepo, sender model.Record, sid string) (model.Record, error) {
 	if !validCanonicalSID(sid) || sender.String(colRunWorkspacePath) == "" || sender.String(colRunAuthzWorkspaceID) == "" {
 		return nil, nil
 	}
@@ -149,16 +149,17 @@ func (m *Module) findSessionPeer(ctx context.Context, tenant model.TenantID, p a
 	if m.workAuthz == nil || peer.String(colRunWorkspacePath) == "" || !m.runPeerLive(tenant, peer) {
 		return nil, nil
 	}
+	return peer, nil
+}
+
+func (m *Module) sessionPeerReadable(ctx context.Context, tenant model.TenantID, p auth.Principal, peer model.Record) bool {
 	workspace, err := model.ParseID(peer.String(colRunAuthzWorkspaceID))
 	if err != nil {
-		return nil, nil
+		return false
 	}
 	resource := auth.ResourceFor(permRunRead)
 	resource.Kind, resource.ID, resource.WorkspaceID = string(runKind), peer.String(model.ColID), workspace
-	if !m.workAuthz.Authorize(ctx, auth.Request{Principal: p, Tenant: tenant, Permission: permRunRead, Resource: resource}).Allow {
-		return nil, nil
-	}
-	return peer, nil
+	return m.workAuthz.Authorize(ctx, auth.Request{Principal: p, Tenant: tenant, Permission: permRunRead, Resource: resource}).Allow
 }
 
 func (m *Module) runPeerLive(tenant model.TenantID, rec model.Record) bool {
@@ -177,6 +178,7 @@ func (m *Module) runPeerLive(tenant model.TenantID, rec model.Record) bool {
 // so a completed peer revocation cannot race with a later send.
 func (m *Module) sessionPeerAllowed(ctx context.Context, tenant model.TenantID, p auth.Principal, companion RuntimeCompanion, sid string) (bool, error) {
 	allowed := false
+	var peer model.Record
 	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
@@ -196,12 +198,18 @@ func (m *Module) sessionPeerAllowed(ctx context.Context, tenant model.TenantID, 
 		if !valid || (rule != "" && (rule != sameTemplatePeerRule || len(peers) != 0)) {
 			return nil
 		}
-		peer, err := m.findSessionPeer(ctx, tenant, p, repo, sender, sid)
+		peer, err = m.findSessionPeer(ctx, tenant, repo, sender, sid)
 		if err != nil || peer == nil {
 			return err
 		}
 		allowed = slices.Contains(peers, sid) || (rule == sameTemplatePeerRule && sender.String(colTemplateID) != "" && sender.String(colTemplateID) == peer.String(colTemplateID) && sid != p.SessionIdentity)
 		return nil
 	})
+	// The composed authorizer resolves persisted workspace/policy facts in its
+	// own View. Release this snapshot first: SQLite has a single connection.
+	// The caller still holds the sender's run exclusion through the mutation.
+	if err == nil && peer != nil {
+		allowed = m.sessionPeerReadable(ctx, tenant, p, peer) && allowed
+	}
 	return allowed, err
 }

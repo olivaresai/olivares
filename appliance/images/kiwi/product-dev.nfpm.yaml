@@ -32,6 +32,7 @@
   "license": "AGPL-3.0-only",
   "contents": [
     {"src": "bin/olivares", "dst": "/usr/bin/olivares", "file_info": {"mode": 493}},
+    {"src": "packaging/service/migrate-agentops-dropin.sh", "dst": "/usr/share/olivares/migrate-agentops-dropin.sh", "file_info": {"mode": 493}},
     {"src": "packaging/systemd/olivares.service", "dst": "/usr/lib/systemd/system/olivares.service", "file_info": {"mode": 420}},
     {"src": "packaging/nfpm/package-init-systemd.txt", "dst": "/usr/lib/olivares/package-init", "file_info": {"mode": 420}},
     {"src": "packaging/olivares.env.example", "dst": "/etc/olivares/olivares.env", "type": "config|noreplace", "file_info": {"mode": 420}},

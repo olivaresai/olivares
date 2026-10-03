@@ -348,9 +348,21 @@
     "inspect": "インスペクターに表示",
     "args": "引数",
     "toolResult": "結果",
+    "toolFailed": "失敗",
     "tokens": "入力 {{input}} · 出力 {{output}}",
     "cwdWarning": "このセッションにはワークスペースがありません。ドライバーは作業ディレクトリを {{cwd}} と報告しました。",
-    "protocol": "プロトコルフレーム: {{count}}"
+    "protocol": "プロトコルフレーム: {{count}}",
+    "stop": {
+      "cancelled": "キャンセルされました",
+      "refusal": "モデルが拒否しました",
+      "maxTokens": "トークン上限で停止しました",
+      "maxTurnRequests": "ターン上限で停止しました"
+    },
+    "turnFailed": "ターンが失敗しました: {{message}}",
+    "retrying": "再試行中（{{count}}）: {{message}}",
+    "keyRefused": "プロバイダーが API キーを拒否しました。プロバイダーで置き換えてください。",
+    "output": "ツールの出力（{{count}}）: {{first}}",
+    "notSent": "送信されませんでした: {{reason}}"
   },
   "changes": {
     "title": "{{folder}} の変更",

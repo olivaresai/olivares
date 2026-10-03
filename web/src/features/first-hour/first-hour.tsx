@@ -33,6 +33,10 @@ import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import type { ProfilePreviewDTO } from '@/features/agentops/types'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { providerKeys, providersApi } from '@/features/providers/api'
+import type {
+  ProviderKind,
+  ProviderRecordDTO,
+} from '@/features/providers/types'
 import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
 import { useTenantStore } from '@/stores/tenant'
@@ -171,6 +175,55 @@ function useOpenCodeRecordFact(): boolean | undefined {
   return firstAnswer(records, (d) => d.items.length > 0)
 }
 
+/** The most provider pages the readiness read follows (100 keys a page). */
+const MAX_PROVIDER_PAGES = 20
+
+/** What is known of a key the engine would run a tool on (HU2-17): `refused` when its
+ * last connection test was refused (it runs nothing), `clear` when it was not, and
+ * `unknown` while the read is out, when it failed, or when the key is on no page read. An
+ * unknown key is not ready yet (SR4C on b569f2e8: a pending read, or a selected key on
+ * page 2, read as ready). The read follows every page. Without Providers access every
+ * key is `clear` and the engine's answer stands, as before. */
+type KeyVerdict = 'refused' | 'clear' | 'unknown'
+
+function useKeyVerdicts(): {
+  verdict: (providerRef: string) => KeyVerdict
+  checking: boolean
+} {
+  const tenant = useTenantStore((s) => s.activeTenant)
+  const { can } = useAuth()
+  const { epoch } = useAuthBoundary()
+  const readable = can('sessions:provider:read')
+  const params = { state: 'active' }
+  const records = useQuery({
+    queryKey: providerKeys.list(tenant, epoch, params),
+    queryFn: async ({ signal }) => {
+      const items: ProviderRecordDTO[] = []
+      let cursor: string | undefined
+      for (let page = 0; page < MAX_PROVIDER_PAGES; page++) {
+        const answer = await providersApi.list(
+          cursor ? { ...params, cursor } : params,
+          { signal },
+        )
+        items.push(...answer.items)
+        if (!answer.has_more || !answer.cursor) break
+        cursor = answer.cursor
+      }
+      return items
+    },
+    enabled: readable,
+  })
+  if (!readable) return { verdict: () => 'clear', checking: false }
+  return {
+    verdict: (providerRef) => {
+      const record = records.data?.find((r) => r.provider_ref === providerRef)
+      if (!record) return 'unknown'
+      return record.probe_state === 'refused' ? 'refused' : 'clear'
+    },
+    checking: records.isPending && records.fetchStatus === 'fetching',
+  }
+}
+
 /** Which tools can start a session: every tool the engine drives (Claude Code, Codex,
  * Grok Build, OpenCode), each ready when the engine has something to run it on (its own
  * login, or a key or local model from Providers). Now and the New session dialog both
@@ -194,12 +247,30 @@ export function useReadyTools() {
       staleTime: runsOnStaleTime,
     })),
   })
+  const keys = useKeyVerdicts()
+  const { t } = useTranslation('firstHour')
+  // The verdict of the key a tool would run on; `clear` for a tool that runs on its own
+  // login or a local model.
+  const keyVerdict = (data: RunsOn | undefined): KeyVerdict =>
+    data?.reason === 'api_key' && data.provider
+      ? keys.verdict(data.provider.provider_ref)
+      : 'clear'
   const ready = SESSION_TOOLS.filter(
-    (_, i) => answers[i].isSuccess && answers[i].data.reason !== 'none',
+    (_, i) =>
+      answers[i].isSuccess &&
+      answers[i].data.reason !== 'none' &&
+      keyVerdict(answers[i].data) === 'clear',
   )
   const refusal = (driver: SessionTool): string | undefined => {
     const answer = answers[SESSION_TOOLS.indexOf(driver)]
     if (answer?.data?.reason === 'none') return answer.data.refusal
+    const key =
+      answer?.data?.reason === 'api_key' ? answer.data.provider : undefined
+    const verdict = keyVerdict(answer?.data)
+    if (key && verdict === 'refused')
+      return t('status.keyRefused', { name: key.display_name || key.kind })
+    if (key && verdict === 'unknown' && !keys.checking)
+      return t('status.keyUnchecked', { name: key.display_name || key.kind })
     return answer?.isError ? errorText(answer.error) : undefined
   }
   // Only the FIRST answer is waited for. A refused tool (an error, no data) is asked
@@ -209,7 +280,9 @@ export function useReadyTools() {
   const isLoading =
     SESSION_TOOLS.some((driver) => worthAsking[driver] === undefined) ||
     answers.some((q) => q.isLoading && !q.isFetched)
-  return { ready, refusal, isLoading }
+  // `checking`: a key's verdict is still being read. Its tool is not ready yet; a screen
+  // waits rather than say no tool is ready.
+  return { ready, refusal, isLoading, checking: keys.checking }
 }
 
 function StatusLine({ ok, children }: { ok: boolean; children: ReactNode }) {
@@ -241,12 +314,16 @@ export function ToolCard({
       qc.invalidateQueries({ queryKey: firstHourKeys.signIn(tenant, driver) }),
   })
   const runsOn = useRunsOn(driver)
+  const keys = useKeyVerdicts()
   const installed = status.data?.installed ?? false
   const signedIn = status.data?.signed_in ?? false
   const key =
     !signedIn && runsOn.data?.reason === 'api_key'
       ? runsOn.data.provider
       : undefined
+  // The provider refused this key at its last test: the tool runs on nothing (HU2-17).
+  const verdict = key ? keys.verdict(key.provider_ref) : 'clear'
+  const keyRefused = verdict === 'refused'
   const failedJob =
     install.data && install.data.state !== 'succeeded'
       ? install.data
@@ -270,15 +347,22 @@ export function ToolCard({
               </StatusLine>
             ) : null}
             {installed && part !== 'install' ? (
-              <StatusLine ok={signedIn || !!key}>
+              <StatusLine ok={signedIn || (!!key && verdict === 'clear')}>
                 {signedIn
                   ? status.data?.account
                     ? t('status.signedInAs', { account: status.data.account })
                     : t('status.signedIn')
                   : key
-                    ? t('status.usesKey', {
-                        name: key.display_name || key.kind,
-                      })
+                    ? t(
+                        keyRefused
+                          ? 'status.keyRefused'
+                          : // A local model server has no key (EU on RC10: "Uses your
+                            // API key: EU local Ollama").
+                            key.kind === 'ollama'
+                            ? 'status.usesLocal'
+                            : 'status.usesKey',
+                        { name: key.display_name || key.kind },
+                      )
                     : t('status.notSignedIn')}
               </StatusLine>
             ) : null}
@@ -330,6 +414,13 @@ export function ToolCard({
 
 /** The tool's own login, relayed: a link, and the code (Claude) or the device
  * code (Codex, Grok Build). The login is stored where the tool keeps it, on the server. */
+/** The API key each sign-in tool can run on instead of its own login (HU2-18). */
+const KEY_KIND: Record<SignInTool, ProviderKind> = {
+  claude: 'anthropic',
+  codex: 'openai',
+  grok: 'xai',
+}
+
 export function SignIn({ driver }: { driver: SignInTool }) {
   const { t } = useTranslation('firstHour')
   const qc = useQueryClient()
@@ -397,7 +488,7 @@ export function SignIn({ driver }: { driver: SignInTool }) {
                 : t('actions.signInChatGPT')}
           </Button>
           <a
-            href="/providers"
+            href={`/providers?add=${KEY_KIND[driver]}`}
             className="text-caption text-text-2 underline underline-offset-2"
           >
             {t('actions.useApiKey')}
@@ -735,8 +826,8 @@ export function SessionReady({
   onAdvanced?: () => void
 }) {
   const { t } = useTranslation('firstHour')
-  const { ready, isLoading } = useReadyTools()
-  if (isLoading)
+  const { ready, isLoading, checking } = useReadyTools()
+  if (isLoading || checking)
     return <Loader2 aria-hidden className="size-5 animate-spin text-text-3" />
   if (ready.length > 0)
     return <StartSessionForm onStarted={onStarted} onAdvanced={onAdvanced} />
@@ -794,6 +885,9 @@ function Step({
   )
 }
 
+/** How many recent sessions the "Start a session" step looks at for one that ran. */
+const STARTED_WINDOW = 20
+
 /** The three steps of the setup wizard. */
 export function FirstHourSteps() {
   const { t } = useTranslation('firstHour')
@@ -804,13 +898,17 @@ export function FirstHourSteps() {
   const boundary = useAuthBoundary()
   const runs = useQuery({
     queryKey: agentOpsKeys.runsScoped(boundary.tenant, boundary.epoch, {
-      limit: 1,
+      limit: STARTED_WINDOW,
     }),
     queryFn: ({ signal }) =>
-      agentOpsApi.listRuns({ limit: 1 }, { tenant: boundary.tenant, signal }),
+      agentOpsApi.listRuns(
+        { limit: STARTED_WINDOW },
+        { tenant: boundary.tenant, signal },
+      ),
     enabled: !!boundary.tenant,
   })
-  const started = (runs.data?.items.length ?? 0) > 0
+  // A session that failed did not start (Root 19:15Z): the step is done when one ran.
+  const started = (runs.data?.items ?? []).some((r) => r.state !== 'failed')
   const done = [installed, signedIn, started].filter(Boolean).length
   return (
     <div className="flex flex-col gap-4">

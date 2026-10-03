@@ -247,9 +247,10 @@ func newAgentSessionCreateCmd() *cobra.Command {
 		Short: "Launch a governed Claude Code session",
 		Long: "create launches a Claude Code session through the Olivares sessions API, applying the\n" +
 			"selected transport, permission mode, workspace, isolation, model, effort, environment\n" +
-			"allowlist and, when given, provider profile. Current engines require\n" +
-			"--provider-profile; omitting it keeps the older request body, and the live API still\n" +
-			"refuses the launch rather than selecting a profile, home or environment implicitly.",
+			"allowlist and, when given, provider profile. Without --provider-profile the engine\n" +
+			"launches under the profile it resolves for Claude Code (its own login, or a key or\n" +
+			"local model from Providers), when the caller may write provider profiles; otherwise\n" +
+			"the launch is refused and asks for a profile.",
 		Example: `  # Create a governed session with stream-json transport under a selected profile
   olivares agent session create --name "feature-work" --workspace ws-123 --provider-profile prof-123
 
@@ -265,8 +266,8 @@ func newAgentSessionCreateCmd() *cobra.Command {
 				"effort": effort, "model": model, "workspace_ref": workspace, "isolation": isolation,
 				"env_allow": envAllow,
 			}
-			// Only an explicit flag becomes provider_profile_ref. An omitted option
-			// keeps the older transport; the current server still refuses it honestly.
+			// Only an explicit flag becomes provider_profile_ref. Without it the engine
+			// resolves the profile, or refuses a caller who may not write profiles.
 			if cmd.Flags().Changed("provider-profile") {
 				body["provider_profile_ref"] = providerProfile
 			}
@@ -285,7 +286,7 @@ func newAgentSessionCreateCmd() *cobra.Command {
 	cmd.Flags().StringVar(&model, "model", "", "model alias (opus) or id (claude-opus-4-8)")
 	cmd.Flags().StringVar(&workspace, "workspace", "", "workspace reference (the session's working directory)")
 	cmd.Flags().StringVar(&providerProfile, "provider-profile", "",
-		"provider profile reference to launch under (current servers require it; omit to keep the older request body, which this API still refuses)")
+		"provider profile reference to launch under (default: the profile the engine resolves for Claude Code, for a caller who may write profiles)")
 	// E6: the accepted values and the WIRED values are not the same set, and
 	// the help used to name all three as if they were. The only runner in this
 	// release is the native one, and it refuses container/sandbox deny-closed

@@ -30,7 +30,11 @@ import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { RelTimeLabel } from '@/features/shared'
 import { governanceApi, governanceKeys } from './api'
-import { ApprovalDetails, ApprovalPreview } from './approval-preview'
+import {
+  ApprovalDetails,
+  ApprovalPreview,
+  approvalCommandUnknown,
+} from './approval-preview'
 import { DecisionDialog } from './decision-dialog'
 import './i18n'
 import { canDecideOnRequest } from './types'
@@ -335,7 +339,17 @@ function Overview({ detail }: { detail: ApprovalDTO }) {
       )}
       {detail.reason && (
         <KvRow label={t('detail.reason')} align="start">
-          {isToolCall(detail.subject_kind) ? (
+          {approvalCommandUnknown(detail) ? (
+            // No command and no path in it (HU-R32): no command block, and it says so.
+            <span className="flex flex-col gap-1">
+              <span className="text-warning">
+                {t('preview.commandUnknown')}
+              </span>
+              <span className="whitespace-pre-wrap break-all text-caption text-text-2">
+                {detail.reason}
+              </span>
+            </span>
+          ) : isToolCall(detail.subject_kind) ? (
             // A tool call's reason carries the command the reviewer approves:
             // shown whole, as code, wrapped at any character, scrolled when long.
             <pre

@@ -42,7 +42,7 @@
     "locked_out": "Too many attempts. Try again in a moment.",
     "setup_required": "The control plane needs first-boot setup.",
     "setup_complete": "Setup is already complete.",
-    "cross_tenant_admin_pool_not_configured": "This deployment has no cross-tenant admin database pool. Provision a NOSUPERUSER BYPASSRLS role with `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (see deploy/postgres/README.md) and restart the server with --admin-dsn pointing at that role.",
+    "cross_tenant_admin_pool_not_configured": "This database cannot list every organization. Run `olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` and restart the engine. Or provision a NOSUPERUSER BYPASSRLS role with `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (see deploy/postgres/README.md) and restart the server with --admin-dsn pointing at that role.",
     "internal": "An internal error occurred."
   },
   "tenantAdmission": {

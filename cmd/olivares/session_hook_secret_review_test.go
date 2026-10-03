@@ -577,7 +577,7 @@ func TestSessionClaudeHookRefusesMaskedSecretOperations(t *testing.T) {
 }
 
 func TestSessionClaudeHookRedactsEscapedPathAndOmitsFileContents(t *testing.T) {
-	const value = "synthetic-vault-\"quoted\nvalue"
+	const value = "synthetic-vault-\"quoted\nvalue-line"
 	fixture := newHookSecretTestRun(t, value, nil)
 	reviewHookSecretInput(t, fixture, "Write", map[string]any{"file_path": "/tmp/" + value, "content": "contents must not be reviewed: " + value}, "Claude Code requests Write\npath: /tmp/[secret env/test]")
 	assertHookSecretNotRetained(t, fixture, value)

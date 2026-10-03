@@ -10,7 +10,10 @@
     "signedIn": "Signed in",
     "signedInAs": "Signed in as {{account}}",
     "notSignedIn": "Not signed in",
-    "usesKey": "Uses your API key: {{name}}"
+    "usesKey": "Uses your API key: {{name}}",
+    "usesLocal": "Uses the local model server: {{name}}",
+    "keyRefused": "The API key {{name}} was refused. Replace it under API keys.",
+    "keyUnchecked": "The API key {{name}} could not be checked. Test it under API keys."
   },
   "actions": {
     "install": "Install",

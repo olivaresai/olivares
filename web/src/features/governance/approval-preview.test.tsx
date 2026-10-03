@@ -44,6 +44,7 @@ vi.mock('./api', async (importOriginal) => {
 import { agentOpsApi } from '@/features/agentops/api'
 import { sessionsApi } from '@/features/sessions/api'
 import GovernanceView from './governance-view'
+import { approvalCommandUnknown } from './approval-preview'
 
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -179,6 +180,96 @@ describe('Approvals: what will run, before Approve', () => {
     ).closest('tr')!
     expect(within(row).queryByText(/rm -rf build/)).toBeNull()
     expect(await within(row).findByText('Fix the build')).toBeInTheDocument()
+  })
+
+  // HU-R32 (RC10): OpenCode's permission request carries no command and no path, and the
+  // review showed the raw struct as if it were the command. The reason is HU's, verbatim.
+  it('says the command is not shown for a request with an empty command and no paths', async () => {
+    const user = userEvent.setup()
+    const { review: _none, ...base } = hookRequest
+    void _none
+    const blind: ApprovalDTO = {
+      ...base,
+      action: 'sessions.provider.approval',
+      subject_kind: 'sessions.provider',
+      reason:
+        'Provider permission: driver=opencode method=session/request_permission kind=tool_call_permission\n' +
+        'run=01a0fe5c-b4d7-745c-ad0d-0fcf7a7abe98 turn=4\n' +
+        'permissions={"Permissions":["once","always","reject"],"CommandLine":"","FilePaths":null}',
+    }
+    api.listApprovals.mockResolvedValue({ items: [blind], has_more: false })
+    wrap(<GovernanceView />)
+    const note = await screen.findByText('Command not shown for this tool yet')
+    const row = note.closest('tr')!
+    expect(row.querySelector('[data-slot="approval-review"]')).toBeNull()
+    // Approve and Reject are unchanged.
+    expect(
+      within(row).getByRole('button', { name: /^approve$/i }),
+    ).toBeEnabled()
+    expect(within(row).getByRole('button', { name: /^reject$/i })).toBeEnabled()
+    await user.click(within(row).getByRole('button', { name: /^approve$/i }))
+    const dialog = await screen.findByRole('dialog')
+    expect(
+      within(dialog).getByText('Command not shown for this tool yet'),
+    ).toBeInTheDocument()
+    expect(dialog.querySelector('[data-slot="approval-review"]')).toBeNull()
+  })
+
+  // The engine's own shape on RC10: a one-line reason, and a review that lists the
+  // permission options (tool "Provider permission"), which is not what will run.
+  it('labels the RC10 shape too: options in the review, no command in the scope', async () => {
+    const rc10: ApprovalDTO = {
+      ...hookRequest,
+      action: 'sessions.provider.approval',
+      subject_kind: 'session_run',
+      reason:
+        'Provider permission: driver=opencode method=session/request_permission kind=tool_call_permission run=r1 turn=4 permissions={"Permissions":["once","always","reject"],"CommandLine":"","FilePaths":null}',
+      review: { tool: 'Provider permission', text: 'once\nalways\nreject' },
+    }
+    api.listApprovals.mockResolvedValue({ items: [rc10], has_more: false })
+    wrap(<GovernanceView />)
+    const note = await screen.findByText('Command not shown for this tool yet')
+    const row = note.closest('tr')!
+    expect(row.querySelector('[data-slot="approval-review"]')).toBeNull()
+  })
+
+  // SR4C on 912c4d15: only the structured provider scope decides, never the text of a
+  // reviewed command.
+  it('decides from the provider scope only, never from a reviewed command', () => {
+    const provider = (scope: string, review?: ApprovalDTO['review']) =>
+      approvalCommandUnknown({
+        ...hookRequest,
+        action: 'sessions.provider.approval',
+        reason: `Provider permission: driver=opencode method=session/request_permission kind=tool_call_permission run=r1 turn=4 permissions=${scope}`,
+        review,
+      })
+    expect(
+      approvalCommandUnknown({
+        ...hookRequest,
+        review: {
+          tool: 'Bash',
+          text: `printf '%s\\n' '{"CommandLine":"","FilePaths":null}'`,
+        },
+      }),
+    ).toBe(false)
+    expect(
+      provider('{"Permissions":["once"],"CommandLine":"","FilePaths":null}'),
+    ).toBe(true)
+    expect(
+      provider('{"Permissions":["once"],"CommandLine":"ls","FilePaths":null}'),
+    ).toBe(false)
+    expect(
+      provider(
+        '{"Permissions":["once"],"CommandLine":"","FilePaths":["/srv/a"]}',
+      ),
+    ).toBe(false)
+    expect(
+      provider('{"Permissions":["once"],"CommandLine":"","FilePaths":null}', {
+        tool: 'Command',
+        text: 'ls',
+      }),
+    ).toBe(false)
+    expect(provider('[secret masked]')).toBe(false)
   })
 
   it('a request from a person names the person, and no session is looked up', async () => {

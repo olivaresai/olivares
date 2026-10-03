@@ -7,9 +7,12 @@ package sessions
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
@@ -349,6 +352,59 @@ func validateProviderCredentialEnv(env []EnvVar) error {
 // on an account the operator did not select for it — the exact failure the profile
 // plane's §5 was written to prevent, arriving through a door that did not exist
 // when §5 was written.
+// localModelProbeTimeout bounds the launch's look at a local model endpoint.
+const localModelProbeTimeout = 3 * time.Second
+
+// localModelAnswers refuses a launch on a local model provider whose endpoint does not
+// answer (HU2-23): with the product's Ollama stopped, an OpenCode turn failed with the
+// tool's raw connection errors and nothing said Ollama was stopped. One look at the
+// endpoint, the one a provider test makes; a node with no probe wired launches as before.
+//
+// SR2C on 58f72367: that look reads the whole catalog, and a slow listing is not a
+// stopped server. A failed look refuses the launch only when the endpoint is clearly
+// down (localEndpointDown); slowness, a timeout or any other failure launches as before.
+func (m *Module) localModelAnswers(ctx context.Context, rec ProviderRecord) error {
+	if m.rt.providerProbe == nil {
+		return nil
+	}
+	pctx, cancel := context.WithTimeout(ctx, localModelProbeTimeout)
+	defer cancel()
+	_, err := m.rt.providerProbe.Probe(pctx, ProviderProbeRequest{Kind: rec.Kind, BaseURL: rec.BaseURL})
+	if err == nil || errors.Is(err, ErrProviderRefused) || !localEndpointDown(ctx, rec.BaseURL) {
+		return nil
+	}
+	return &runErr{http.StatusConflict, "the local model provider " + strconv.Quote(rec.DisplayName) + " does not answer at " +
+		strings.TrimRight(rec.BaseURL, "/") + ": start it (olivares tool start ollama, or AI tools › Ollama › Start), then start the session again"}
+}
+
+// localEndpointDown reports whether a local model endpoint is clearly down: its name
+// does not resolve, or a TCP connection to it is refused or has no route. A
+// connection that is accepted, or one that only times out, is not "down".
+func localEndpointDown(ctx context.Context, baseURL string) bool {
+	u, err := url.Parse(strings.TrimSpace(baseURL))
+	if err != nil || u.Hostname() == "" {
+		return false
+	}
+	port := u.Port()
+	if port == "" {
+		port = map[bool]string{true: "443", false: "80"}[u.Scheme == "https"]
+	}
+	d := net.Dialer{Timeout: localEndpointDialTimeout}
+	conn, err := d.DialContext(ctx, "tcp", net.JoinHostPort(u.Hostname(), port))
+	if err == nil {
+		_ = conn.Close()
+		return false
+	}
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) && dnsErr.IsNotFound {
+		return true
+	}
+	return errors.Is(err, syscall.ECONNREFUSED) || errors.Is(err, syscall.EHOSTUNREACH) || errors.Is(err, syscall.ENETUNREACH)
+}
+
+// localEndpointDialTimeout bounds that connection attempt.
+const localEndpointDialTimeout = time.Second
+
 func (m *Module) mintFromProviderRecord(
 	ctx context.Context,
 	tenant model.TenantID,
@@ -364,16 +420,28 @@ func (m *Module) mintFromProviderRecord(
 			"the provider this profile is bound to is revoked; bind an active provider before launching",
 		}
 	}
-	if !recordServesDriver(rec.Kind, driver) {
+	if !recordServesDriver(rec.Kind, rec.BaseURL, driver) {
 		// Re-checked HERE and not only when the binding was written: a driver's
 		// operability and a record's kind are read at different times, and a check
 		// that only runs at write time is a check that expires.
-		return Credential{}, nil, &runErr{
-			http.StatusUnprocessableEntity,
-			"the provider bound to this profile is a " + rec.Kind + " credential, which driver " + driver + " does not read",
+		name := rec.DisplayName
+		if name == "" {
+			name = rec.Kind
 		}
+		return Credential{}, nil, &runErr{http.StatusUnprocessableEntity, recordDriverRefusal(driver, name, rec.Kind)}
 	}
-	if driver == providerDriverClaude && m.rt.baseURL != "" && rec.BaseURL != "" {
+	if rec.ProbeState == ProbeRefused {
+		// HU2-27: Codex launched on an OpenAI key the provider test had refused never
+		// started its first turn (80 s and more, the process alive). The last test is
+		// the provider's own answer about this key; a launch on it is refused with the
+		// words the console's readiness uses. Unreachable or never tested is no verdict.
+		name := rec.DisplayName
+		if name == "" {
+			name = rec.Kind
+		}
+		return Credential{}, nil, &runErr{http.StatusConflict, "The API key " + name + " was refused. Replace it under API keys."}
+	}
+	if driver == providerDriverClaude && m.rt.baseURL != "" {
 		// Two endpoints were configured for one launch: the deployment's inference
 		// gateway and this record's own. Neither is wrong and this layer cannot rank
 		// them, so the conflict is REFUSED rather than ordered — the same answer
@@ -388,9 +456,34 @@ func (m *Module) mintFromProviderRecord(
 		// collision that cannot occur would be a rule that OVER-blocks, and an
 		// over-blocking rule costs an operator a launch for a conflict that does not
 		// exist just as surely as an under-blocking one costs them a wrong identity.
+		//
+		// A record with NO base_url is the same conflict (Root 21:21Z, SR5C): the key is
+		// held to its vendor's own API, and the launch would send it through the gateway
+		// by inheritance. Routing a key through the gateway is a choice made on the
+		// record, never one a launch inherits.
 		return Credential{}, nil, &runErr{
 			http.StatusConflict,
-			"this launch has two endpoints: the deployment inference gateway and the bound provider's own base_url; clear one of them",
+			"this node sends Claude Code sessions through its deployment inference gateway, and a session on a key from Providers reaches only that provider's own address; launch without the key, or remove the gateway from this node",
+		}
+	}
+	endpoint, ok := recordEndpoint(rec)
+	if !ok {
+		name := rec.DisplayName
+		if name == "" {
+			name = rec.Kind
+		}
+		return Credential{}, nil, &runErr{http.StatusConflict,
+			"the provider " + strconv.Quote(name) + " has no address this session can be held to; set its base_url in Providers"}
+	}
+	bound := BoundProvider{Kind: rec.Kind, Endpoint: endpoint}
+	if driver == providerDriverOpenCode {
+		if path, present := openCodeManagedConfigPresent(); present {
+			// OpenCode merges the host's managed configuration after the launch's own, so
+			// that file, not this record, would decide where the key and the prompt go
+			// (SR5C on 06a18e46). It is the administrator's to keep; the session does not
+			// start on top of it.
+			return Credential{}, nil, &runErr{http.StatusConflict,
+				"OpenCode has a managed configuration on this host (" + path + ") that a session on a provider from Providers cannot be held against; remove the file, or use OpenCode's own sign-in"}
 		}
 	}
 	if rec.Kind == ProviderKindOllama {
@@ -404,7 +497,10 @@ func (m *Module) mintFromProviderRecord(
 				"the local model provider " + strconv.Quote(rec.DisplayName) + " lists no model; download a model in Ollama, then test the provider in Providers so its models are read",
 			}
 		}
-		return Credential{localModelEndpoint: strings.TrimRight(rec.BaseURL, "/") + "/v1", localModels: models}, nil, nil
+		if err := m.localModelAnswers(ctx, rec); err != nil {
+			return Credential{}, nil, err
+		}
+		return Credential{localModelEndpoint: endpoint, localModels: models, bound: bound}, nil, nil
 	}
 
 	if m.rt.providerVault == nil {
@@ -416,7 +512,16 @@ func (m *Module) mintFromProviderRecord(
 		return Credential{}, nil, openFailure(err)
 	}
 
-	env := providerRecordEnv(rec.Kind, rec.BaseURL, string(key))
+	baseURL := rec.BaseURL
+	if driver == providerDriverClaude {
+		// Claude Code is told its endpoint by name, the vendor's own API included, so
+		// nothing else it reads can route it (claudeBoundProviderEnv).
+		baseURL = endpoint
+		if err := CheckClaudeQuietHostPolicy(); err != nil {
+			return Credential{}, nil, &runErr{http.StatusConflict, err.Error()}
+		}
+	}
+	env := providerRecordEnv(rec.Kind, baseURL, string(key))
 	if len(env) == 0 {
 		return Credential{}, nil, &runErr{
 			http.StatusUnprocessableEntity,
@@ -428,8 +533,9 @@ func (m *Module) mintFromProviderRecord(
 	}
 	// Nothing about the value reaches the run row. The record ref already travels in
 	// the launch snapshot and the K4 digest, so "which credential authorized this
-	// session" is answerable without a credential stamp of its own.
-	return Credential{}, env, nil
+	// session" is answerable without a credential stamp of its own. The non-secret
+	// launch authority (kind and endpoint) goes beside the key to the driver.
+	return Credential{bound: bound}, env, nil
 }
 
 // validateRecordCredentialEnv checks a record-backed injection against the CLOSED

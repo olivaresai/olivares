@@ -10,6 +10,8 @@ import (
 	"errors"
 	"net/http"
 	"os"
+	"os/exec"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -62,6 +64,12 @@ const providerDriverGrok = "grok"
 // flag form (`--no-auto-update`) is documented for `grok -p`, is absent from
 // `grok agent --help`, and is therefore not what this driver relies on.
 const envGrokDisableAutoUpdate = "GROK_DISABLE_AUTOUPDATER"
+
+// Grok Build's endpoint variables for a record-bound launch (LaunchEnv).
+const (
+	envGrokXAIAPIBaseURL = "GROK_XAI_API_BASE_URL"
+	envGrokModelsBaseURL = "GROK_MODELS_BASE_URL"
+)
 
 // ACP methods, exactly as the pinned 1.0.13 binary names them.
 const (
@@ -168,15 +176,54 @@ func (grokDriver) LaunchTerms() DriverLaunchTerms {
 
 // LaunchEnv pins the child's version and native sandbox. Authentication is resolved by
 // the runtime and a driver never sees a credential value.
+//
+// A session on a key from Providers is held to that key's endpoint (Root 2026-10-02 21:22Z)
+// by Grok Build's documented variables (docs.x.ai/build/settings/reference): the API it
+// authenticates against with the key, and the base its other models are listed and called
+// from (session summaries, image description, web search, subagents). Both are the
+// carrier's endpoint.
 func (grokDriver) LaunchEnv(l DriverLaunch) []EnvVar {
 	env := []EnvVar{{Name: envGrokDisableAutoUpdate, Value: "1"}}
-	switch l.Preset {
-	case PresetReadOnly:
-		env = append(env, EnvVar{Name: "GROK_SANDBOX", Value: "read-only"})
-	case PresetAsk, PresetEditsOnly, PresetEditsAndCommands:
-		env = append(env, EnvVar{Name: "GROK_SANDBOX", Value: "workspace"})
+	if l.BoundProvider.Kind != "" {
+		env = append(env,
+			EnvVar{Name: envGrokXAIAPIBaseURL, Value: l.BoundProvider.Endpoint},
+			EnvVar{Name: envGrokModelsBaseURL, Value: l.BoundProvider.Endpoint})
+	}
+	if sandbox := grokSandboxFor(l.Preset); sandbox != "" {
+		env = append(env, EnvVar{Name: "GROK_SANDBOX", Value: sandbox})
 	}
 	return env
+}
+
+// grokSandboxFor is the native sandbox a permission preset turns on ("" for none).
+func grokSandboxFor(preset string) string {
+	switch preset {
+	case PresetReadOnly:
+		return "read-only"
+	case PresetAsk, PresetEditsOnly, PresetEditsAndCommands:
+		return "workspace"
+	}
+	return ""
+}
+
+// GROK BUILD'S SANDBOX NEEDS BUBBLEWRAP ON LINUX (HU2-34). Without bwrap Grok exits during
+// initialize ("bwrap exec failed ... Install bubblewrap"), and all a person saw was "the owned
+// provider process ended during initialize". So a launch whose preset turns the sandbox on is
+// refused first with the reason, and the resolve rule does not offer Grok for its default
+// preset on such a server.
+const grokSandboxMissing = "Grok Build runs its sandbox with bubblewrap (bwrap), which is not installed on this server; install the bubblewrap package, then start again"
+
+// grokLookPath finds bwrap the way the child's PATH would; a variable only so tests can stand in.
+var grokLookPath = exec.LookPath
+
+// grokSandboxUnavailable reports whether a Grok launch under preset needs bubblewrap here and
+// it cannot be found.
+func grokSandboxUnavailable(preset string) bool {
+	if runtime.GOOS != "linux" || grokSandboxFor(preset) == "" {
+		return false
+	}
+	_, err := grokLookPath("bwrap")
+	return err != nil
 }
 
 func (grokDriver) OpenSession(cfg DriverSessionConfig) DriverSession {

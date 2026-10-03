@@ -65,6 +65,7 @@
     "budgets": {
       "label": "予算",
       "none": "予算はまだありません",
+      "nonePartial": "このページに有効な予算はありません。さらにあります",
       "over_other": "{{count}} 件が上限超過",
       "unknown_other": "{{count}} 件は金額不明",
       "within": "上限超過なし",

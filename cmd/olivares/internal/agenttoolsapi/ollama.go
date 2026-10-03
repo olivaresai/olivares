@@ -12,7 +12,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	"os"
 	"os/exec"
@@ -27,6 +26,7 @@ import (
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/sdk/netbind"
 )
 
 // OLLAMA ON THIS SERVER (HU-R17, refresh 06). The console installed Ollama, and the
@@ -77,6 +77,22 @@ type OllamaConfig struct {
 	// record's model list follows what the service holds (FH 087). A failure at start
 	// is reported on the row; the service keeps running.
 	Register func(ctx context.Context, actor auth.Principal, tenant model.TenantID, endpoint string) error
+	// StateFile remembers that a person started the service, and for which tenant, so
+	// an engine restart starts it again (RestartOllama). It is the engine's own file,
+	// outside ModelsDir and HomeDir, which the child writes. Empty: nothing is kept.
+	StateFile string
+	// Audit records a start the engine makes by itself (RestartOllama) as a system
+	// action; the composition writes it into the audit log. Without it, or when the
+	// write fails, the engine starts nothing by itself: no start goes unrecorded.
+	Audit func(ctx context.Context, draft model.AuditDraft) error
+}
+
+// ollamaRemembered is what StateFile holds while the service should run: for which
+// tenant, and who started it when (the restart's audit row names them).
+type ollamaRemembered struct {
+	TenantID  string `json:"tenant_id,omitempty"`
+	StartedBy string `json:"started_by,omitempty"`
+	StartedAt string `json:"started_at,omitempty"`
 }
 
 // OllamaStatus is the row's view of the service.
@@ -203,6 +219,7 @@ func (m *Module) handleOllamaStart(w http.ResponseWriter, r *http.Request, mc ap
 			fail(w, 409, "not_started", err.Error())
 			return
 		}
+		m.rememberOllama(tenant, mc.Principal.Actor())
 		write(w, 202, m.ollamaStatus(r.Context()))
 	})(w, r, mc)
 }
@@ -214,9 +231,95 @@ func (m *Module) handleOllamaStop(w http.ResponseWriter, r *http.Request, mc api
 			unavailable(w)
 			return
 		}
+		m.forgetOllama()
 		m.stopOllama()
 		write(w, 200, m.ollamaStatus(r.Context()))
 	})(w, r, mc)
+}
+
+// RestartOllama starts the service again at engine start when a person started it and
+// did not stop it (HU2-14): after a restart it stayed "Not running" until someone
+// pressed Start, and the tools it serves failed meanwhile. The engine starts it as
+// itself, for the tenant the person named; a failure is shown on the row.
+func (m *Module) RestartOllama() {
+	m.mu.Lock()
+	cfg := m.ollama.cfg
+	m.mu.Unlock()
+	if m.readOnly || cfg.StateFile == "" || cfg.ModelsDir == "" || cfg.HomeDir == "" || cfg.Audit == nil {
+		return
+	}
+	raw, err := os.ReadFile(cfg.StateFile)
+	if err != nil {
+		return
+	}
+	var was ollamaRemembered
+	if json.Unmarshal(raw, &was) != nil {
+		return
+	}
+	var tenant model.TenantID
+	if was.TenantID != "" {
+		if tenant, err = model.ParseTenantID(was.TenantID); err != nil {
+			return
+		}
+	}
+	program := m.program("ollama")
+	if program == "" {
+		return
+	}
+	actor, err := auth.NewSystemOperator("engine start", "restart the Ollama a person started before the engine stopped")
+	if err != nil {
+		return
+	}
+	// The person's Start was audited (handleOllamaStart); this start is the engine's,
+	// once per boot, and is recorded as such before it happens.
+	reason := "restarted with the engine; started by " + was.StartedBy + " at " + was.StartedAt
+	if err := cfg.Audit(m.ctx, model.AuditDraft{
+		Actor: actor.Actor(), ActorKind: actor.ActorKind(), Action: "agenttools.ollama.restart", TargetKind: "agenttools.job",
+		Meta: map[string]any{"reason": reason, "register_in": was.TenantID, "endpoint": m.ollamaEndpoint()},
+	}); err != nil {
+		m.mu.Lock()
+		m.ollama.state = ollamaFailed
+		m.ollama.message = "Ollama was running before the engine restarted; it was not started again because its audit record could not be written."
+		m.mu.Unlock()
+		return
+	}
+	if err := m.startOllama(program, actor, tenant); err != nil {
+		m.mu.Lock()
+		m.ollama.state = ollamaFailed
+		m.ollama.message = "Ollama was running before the engine restarted and could not start again: " + err.Error()
+		m.mu.Unlock()
+	}
+}
+
+// rememberOllama keeps the person's start in StateFile; forgetOllama drops it on Stop.
+func (m *Module) rememberOllama(tenant model.TenantID, startedBy string) {
+	m.mu.Lock()
+	path := m.ollama.cfg.StateFile
+	m.mu.Unlock()
+	if path == "" {
+		return
+	}
+	was := ollamaRemembered{StartedBy: startedBy, StartedAt: time.Now().UTC().Format(time.RFC3339)}
+	if !tenant.IsZero() {
+		was.TenantID = tenant.String()
+	}
+	raw, err := json.Marshal(was)
+	if err != nil {
+		return
+	}
+	tmp := path + ".tmp"
+	if os.WriteFile(tmp, raw, 0o600) == nil {
+		_ = os.Rename(tmp, path)
+	}
+}
+
+func (m *Module) forgetOllama() {
+	m.mu.Lock()
+	path := m.ollama.cfg.StateFile
+	m.mu.Unlock()
+	if path != "" {
+		_ = os.Remove(path)
+	}
 }
 
 // handleOllamaPull downloads a model into the running Ollama and returns the
@@ -290,7 +393,12 @@ func (m *Module) startOllama(program string, actor auth.Principal, tenant model.
 		}
 	}
 	// One service per address: another Ollama (or anything else) there is said, not raced.
-	l, err := net.Listen("tcp", cfg.Addr)
+	// The probe goes through the admission point, which admits only a loopback address:
+	// Ollama answers without authentication.
+	l, err := netbind.Listen(m.ctx, "tcp", cfg.Addr, netbind.Policy{Component: "Ollama", Purpose: "local model service"})
+	if errors.Is(err, netbind.ErrPublicPlaintextBind) {
+		return err
+	}
 	if err != nil {
 		return fmt.Errorf("something else already listens on %s; stop it first", cfg.Addr)
 	}
@@ -309,9 +417,13 @@ func (m *Module) startOllama(program string, actor auth.Principal, tenant model.
 		cancel()
 		return errors.New("Ollama could not be prepared on this node")
 	}
+	// OLLAMA_NO_CLOUD is Ollama's own switch for its cloud features (cloud models, web
+	// search, the ollama.com connection): HU2 saw the product-started Ollama reach
+	// ollama.com on start. The model a person asks to download still comes from the
+	// registry.
 	cmd.Env = []string{
 		"HOME=" + cfg.HomeDir, "TMPDIR=" + tmp, "PATH=" + os.Getenv("PATH"), "LANG=C.UTF-8",
-		"OLLAMA_HOST=" + cfg.Addr, "OLLAMA_MODELS=" + cfg.ModelsDir,
+		"OLLAMA_HOST=" + cfg.Addr, "OLLAMA_MODELS=" + cfg.ModelsDir, "OLLAMA_NO_CLOUD=1",
 	}
 	cmd.Dir = cfg.HomeDir
 	tail := &tailBuffer{max: maxOllamaTail}

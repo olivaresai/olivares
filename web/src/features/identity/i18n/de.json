@@ -525,11 +525,15 @@
   },
   "login": {
     "statusTitle": "Sitzungs-Assurance",
-    "statusDescription": "Das Authenticator-Assurance-Level Ihrer aktuellen Sitzung. Sensible Ansichten erfordern ein Hardware-Step-up.",
+    "statusDescription": "Wie Sie sich für diese Sitzung angemeldet haben.",
     "currentAal": "Aktuelles Level",
     "methods": "Methoden",
     "methodsUnknown": "Nicht gemeldet",
-    "targetStandardsNote": "AAL3 (NIST SP 800-63B-4) und PIV/CAC (FIPS 201-3) sind die Zielstandards für die privilegierte Anmeldung. Das Panel spiegelt wider, was das Backend durchsetzt; es beansprucht keine Zertifizierung.",
+    "policy": {
+      "none": "Diese Bereitstellung verlangt vor administrativen Aktionen keine zusätzliche Prüfung. Ein Systemadministrator kann sie unter Einstellungen › Anmeldung und Sicherheit einschalten.",
+      "totp": "Administrative Aktionen verlangen in dieser Bereitstellung eine Anmeldung mit einem Code aus der Authenticator-App.",
+      "passkey": "Administrative Aktionen verlangen in dieser Bereitstellung einen Passkey."
+    },
     "passkeyTitle": "Passkey registrieren",
     "passkeyDescription": "Registrieren Sie einen Hardware-Sicherheitsschlüssel oder Plattform-Authentifikator (WebAuthn / FIDO2) für eine phishing-resistente privilegierte Anmeldung.",
     "registerPasskey": "Passkey registrieren",

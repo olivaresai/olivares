@@ -43,14 +43,14 @@ description: >-
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-控制台发布 **80 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
+控制台发布 **81 条路由**。以下表格列出了每一条路由、所需权限，以及产品内帮助链接
 打开的参考页面。
 
 ### 运维
 
 | 屏幕 | 路径 | 用途 | 需要 | 参考 |
 |---|---|---|---|---|
-| 概览 | `/` | 基础设施总览和健康情况 | 任何已登录用户 | [文档主页](/zh/) |
+| 主页 | `/` | 基础设施总览和健康情况 | 任何已登录用户 | [文档主页](/zh/) |
 | 智能体工具 | `/agent-tools` | 检测、安装和更新此主机上的智能体工具，并跟踪每次安装；仅限部署管理员 | `system:admin` | [how-to/add-a-provider](/zh/how-to/add-a-provider/) |
 | 运营会话 | `/agentops` | 创建、附加并治理 Claude Code 会话 — 无需 SSH；与“观测会话”共用同一界面 | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/zh/how-to/run-claude-code-with-olivares/) |
 | 备份 | `/backups` | 触发、计划、下载和恢复备份，并在破坏性路径上进行第二次确认。 | `system:admin` | [how-to/backup-and-restore](/zh/how-to/backup-and-restore/) |
@@ -66,12 +66,12 @@ description: >-
 | 提供商账户 | `/provider-accounts` | 列出已命名的提供商账户，并将现有提供商配置文件采纳为账户 | `sessions:account:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 来源绑定 | `/provider-bindings` | 将已配置的来源，以本节点应用的修订版本，专用于提供商配置文件 | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 提供商配置文件 | `/provider-profiles` | 登记并管理会话启动所依据的提供商主目录，并按需读取其配置 | `sessions:profile:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
-| 提供商 | `/providers` | 注册会话启动时使用的 API 密钥与端点；可测试、更换和吊销 | `sessions:provider:read` | [how-to/add-a-provider](/zh/how-to/add-a-provider/) |
+| 提供方 | `/providers` | 注册会话启动时使用的 API 密钥与端点；可测试、更换和吊销 | `sessions:provider:read` | [how-to/add-a-provider](/zh/how-to/add-a-provider/) |
 | 沙箱 | `/sandbox` | 隔离的 Agent 测试与重放 | `sandbox:run:read` | [reference/modules/xvii-sandbox](/zh/reference/modules/xvii-sandbox/) |
 | 观测会话 | `/sessions` | 观测实时和已发现的会话及其时间线；与“运营会话”共用同一界面 | `sessions:live:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 租户 | `/tenants` | 撤销或恢复租户服务 | `system:admin` | [how-to/troubleshooting](/zh/how-to/troubleshooting/) |
 | 语音 | `/voice` | 语音和实时会话 | `voice:session:read` | [reference/modules/xvi-voice](/zh/reference/modules/xvi-voice/) |
-| 工作 | `/work` | 跨会话持久 backlog：项目、依赖、验收和决定 | `sessions:work:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
+| 工作 | `/work` | 共享工作：工作项、依赖关系、验收和决定 | `sessions:work:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 | 工作区 | `/workspace` | 限定在一个工作区内的 Agent、会话、资源和活动 | `tenant:read` | [reference/modules/xx-multi-tenancy](/zh/reference/modules/xx-multi-tenancy/) |
 | 工作区模板 | `/workspace-templates` | 可复用的会话配置快照：hook、设置、连接器和策略。 | `sessions:template:read` | [reference/modules/ii-sessions](/zh/reference/modules/ii-sessions/) |
 
@@ -96,6 +96,7 @@ description: >-
 | Git 发布 | `/git-publication` | 通过已批准的 Git 目标推送提交、创建拉取请求并合并 | `gitpublish:target:read` | [reference/modules/gitpublish](/zh/reference/modules/gitpublish/) |
 | 清单 | `/inventory` | 发现并编目连接器观察到的智能体、MCP 服务器与模型。 | `inventory:catalog:read` | [reference/modules/i-inventory](/zh/reference/modules/i-inventory/) |
 | 知识 | `/knowledge` | 知识库、RAG 和数据沿袭 | `knowledge:kb:read` | [reference/modules/viii-knowledge](/zh/reference/modules/viii-knowledge/) |
+| MCP 服务器 | `/mcp-servers` | 将远程 MCP 服务器连接到此组织，测试它们，并选择会话可以使用哪些工具 | `tenant:admin` | [how-to/connectors/mcp-governance](/zh/how-to/connectors/mcp-governance/) |
 | 模型运维 | `/model-operations` | 自有模型、准入和部署 | `models:registry:read` | [reference/modules/xxiii-model-operations](/zh/reference/modules/xxiii-model-operations/) |
 | 模型 | `/models` | 模型、路由和提供商密钥 | `models:catalog:read` | [reference/modules/x-models](/zh/reference/modules/x-models/) |
 | 设置向导 | `/onboarding` | 分步部署配置 | `system:admin` | [start/quickstart](/zh/start/quickstart/) |

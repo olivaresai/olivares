@@ -43,6 +43,7 @@ vi.mock('@/features/first-hour/api', async (orig) => {
 })
 
 import { agentOpsApi } from '@/features/agentops/api'
+import { providersApi } from '@/features/providers/api'
 import { ApiError } from '@/lib/api/errors'
 import { NewSessionDialog } from '@/features/first-hour/first-hour'
 import { OnboardingView } from './onboarding-view'
@@ -89,7 +90,11 @@ describe('the setup wizard', () => {
     expect(
       await screen.findByRole('button', { name: 'Sign in with Claude' }),
     ).toBeInTheDocument()
-    expect(screen.getByText('Use an API key instead')).toBeInTheDocument()
+    // HU2-18: the key form opens on the provider this tool runs on.
+    expect(screen.getByText('Use an API key instead')).toHaveAttribute(
+      'href',
+      '/providers?add=anthropic',
+    )
   })
 
   it('names the key the engine will use when the tool is not signed in (HU 030)', async () => {
@@ -112,6 +117,20 @@ describe('the setup wizard', () => {
         )
       },
     )
+    // Changed, stated (SR4C on b569f2e8): a key is ready once its last test is read and
+    // was not refused, so the key's record is read here too.
+    vi.spyOn(providersApi, 'list').mockResolvedValue({
+      items: [
+        {
+          provider_ref: 'prv_a',
+          kind: 'anthropic',
+          display_name: 'Team key',
+          state: 'active',
+          probe_state: 'ok',
+        },
+      ],
+      has_more: false,
+    } as never)
     wrap(<OnboardingView />)
     expect(
       await screen.findByText('Uses your API key: Team key'),
@@ -119,6 +138,164 @@ describe('the setup wizard', () => {
     expect(
       await screen.findByRole('button', { name: 'Start' }),
     ).toBeInTheDocument()
+  })
+
+  // EU on RC10: a keyless local Ollama endpoint read "Uses your API key: EU local Ollama".
+  it('names a local model server as one, not as an API key', async () => {
+    status.codex = { driver: 'codex', installed: true, signed_in: false }
+    vi.spyOn(agentOpsApi, 'previewProfile').mockImplementation(
+      async (driver) => {
+        if (driver === 'codex')
+          return {
+            reason: 'api_key',
+            provider: {
+              provider_ref: 'prv_local',
+              kind: 'ollama',
+              display_name: 'EU local Ollama',
+            },
+          }
+        throw new ApiError(
+          409,
+          'conflict',
+          `${driver} has nothing to run on yet.`,
+        )
+      },
+    )
+    vi.spyOn(providersApi, 'list').mockResolvedValue({
+      items: [
+        {
+          provider_ref: 'prv_local',
+          kind: 'ollama',
+          display_name: 'EU local Ollama',
+          state: 'active',
+          probe_state: 'ok',
+        },
+      ],
+      has_more: false,
+    } as never)
+    wrap(<OnboardingView />)
+    expect(
+      await screen.findByText('Uses the local model server: EU local Ollama'),
+    ).toBeInTheDocument()
+    expect(screen.queryByText(/Uses your API key/)).toBeNull()
+  })
+
+  // SR4C on b569f2e8: the readiness read stopped at the first page of 100, so a refused
+  // key on page 2 read as ready. The engine pages with cursor and has_more.
+  it('reads every provider page before it says a key is ready', async () => {
+    status.claude = { driver: 'claude', installed: true, signed_in: false }
+    vi.spyOn(agentOpsApi, 'previewProfile').mockImplementation(
+      async (driver) => {
+        if (driver === 'claude')
+          return {
+            reason: 'api_key',
+            provider: {
+              provider_ref: 'prv_a',
+              kind: 'anthropic',
+              display_name: 'Team key',
+            },
+          }
+        throw new ApiError(
+          409,
+          'conflict',
+          `${driver} has nothing to run on yet.`,
+        )
+      },
+    )
+    const list = vi
+      .spyOn(providersApi, 'list')
+      .mockImplementation(async (params) =>
+        params?.cursor === 'c2'
+          ? ({
+              items: [
+                {
+                  provider_ref: 'prv_a',
+                  kind: 'anthropic',
+                  display_name: 'Team key',
+                  state: 'active',
+                  probe_state: 'refused',
+                },
+              ],
+              has_more: false,
+            } as never)
+          : ({
+              items: [
+                {
+                  provider_ref: 'prv_other',
+                  kind: 'openai',
+                  display_name: 'Other',
+                  state: 'active',
+                  probe_state: 'ok',
+                },
+              ],
+              has_more: true,
+              cursor: 'c2',
+            } as never),
+      )
+    wrap(<OnboardingView />)
+    expect(
+      await screen.findByText(
+        'The API key Team key was refused. Replace it under API keys.',
+      ),
+    ).toBeInTheDocument()
+    expect(list.mock.calls.some(([p]) => p?.cursor === 'c2')).toBe(true)
+    expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
+  })
+
+  // HU2-17: after the key test said "Refused", the wizard counted step 2 as done and the
+  // row said "Uses your API key".
+  it('says the key was refused, and does not count it as signed in', async () => {
+    status.claude = { driver: 'claude', installed: true, signed_in: false }
+    vi.spyOn(agentOpsApi, 'previewProfile').mockImplementation(
+      async (driver) => {
+        if (driver === 'claude')
+          return {
+            reason: 'api_key',
+            provider: {
+              provider_ref: 'prv_a',
+              kind: 'anthropic',
+              display_name: 'Team key',
+            },
+          }
+        throw new ApiError(
+          409,
+          'conflict',
+          `${driver} has nothing to run on yet.`,
+        )
+      },
+    )
+    vi.spyOn(providersApi, 'list').mockResolvedValue({
+      items: [
+        {
+          provider_ref: 'prv_a',
+          kind: 'anthropic',
+          display_name: 'Team key',
+          state: 'active',
+          probe_state: 'refused',
+        },
+      ],
+      has_more: false,
+    } as never)
+    wrap(<OnboardingView />)
+    expect(
+      await screen.findByText(
+        'The API key Team key was refused. Replace it under API keys.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByText('Uses your API key: Team key')).toBeNull()
+    expect(screen.getByText('1 of 3 done')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
+  })
+
+  // Root 19:15Z (HU2 003): a session that failed counted as "Start a session" done.
+  it('does not count a failed session as started', async () => {
+    status.codex = { driver: 'codex', installed: true, signed_in: true }
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue({
+      items: [{ run_ref: 'r1', state: 'failed' }],
+      has_more: false,
+    } as never)
+    wrap(<OnboardingView />)
+    expect(await screen.findByText('2 of 3 done')).toBeInTheDocument()
   })
 
   it('starts a session once a tool is signed in', async () => {

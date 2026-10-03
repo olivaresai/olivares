@@ -26,8 +26,8 @@ import './i18n'
 export function useReadyTool(): SessionTool | null | undefined {
   // The first-hour rule, the one the New session dialog uses: installed and signed in
   // with the tool's own login, or with an API key saved in Providers (HU 029).
-  const { ready, isLoading } = useReadyTools()
-  if (isLoading) return undefined
+  const { ready, isLoading, checking } = useReadyTools()
+  if (isLoading || checking) return undefined
   return ready[0] ?? null
 }
 
@@ -40,7 +40,13 @@ export function NowStart() {
   const codex = useToolStatus('codex')
   const readyTools = useReadyTools()
   if (!can('sessions:run:write')) return null
-  if (claude.isLoading || codex.isLoading || readyTools.isLoading) return null
+  if (
+    claude.isLoading ||
+    codex.isLoading ||
+    readyTools.isLoading ||
+    readyTools.checking
+  )
+    return null
   const tools: [ToolKey, typeof claude.data][] = [
     ['claude', claude.data],
     ['codex', codex.data],

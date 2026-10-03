@@ -22,8 +22,10 @@ import type { AttachFrame, RunDTO } from './types'
 import { currentControlFence } from './work-fence'
 import {
   mapConversationFrames,
+  stripAnsi,
   type ConversationItem,
 } from '@/features/sessions/conversation-frames'
+import { systemFailed, systemText } from '@/features/sessions/conversation-text'
 import './i18n'
 import '@/features/sessions/i18n'
 
@@ -307,6 +309,9 @@ function LiveConversationLine({ item }: { item: ConversationItem }) {
         <span className="font-medium">
           {item.toolName ?? t('conversation.tool')}
         </span>
+        {item.toolFailed ? (
+          <span className="text-danger">{t('conversation.toolFailed')}</span>
+        ) : null}
         {item.toolArgsSummary ? (
           <span className="truncate text-muted-foreground">
             {item.toolArgsSummary}
@@ -315,14 +320,37 @@ function LiveConversationLine({ item }: { item: ConversationItem }) {
       </div>
     )
   }
+  // A tool's own output in the terminal view: every line, as it came, without escape
+  // codes. The conversation folds these lines into one quiet line (HU2-23); a terminal
+  // shows what the tool printed.
+  if (item.kind === 'system' && item.systemKind === 'output') {
+    return (
+      <div
+        data-testid="conversation-item"
+        data-kind="output"
+        className="whitespace-pre-wrap break-words py-0.5 font-mono text-caption"
+      >
+        {item.raw.map((line, i) => (
+          <div key={i}>{stripAnsi(line)}</div>
+        ))}
+      </div>
+    )
+  }
   if (item.kind === 'system' || item.kind === 'result') {
     return (
       <div
         data-testid="conversation-item"
         data-kind={item.kind}
-        className="py-0.5 text-caption text-muted-foreground"
+        className={cn(
+          'py-0.5 text-caption',
+          systemFailed(item) ? 'text-danger' : 'text-muted-foreground',
+        )}
       >
-        {item.summary}
+        {item.kind === 'system'
+          ? systemText(t, item)
+          : item.resultFailed && item.text
+            ? `${item.summary}: ${item.text}`
+            : item.summary}
       </div>
     )
   }

@@ -7,6 +7,7 @@ package sessions
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -17,6 +18,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/core/suspension"
@@ -795,71 +797,64 @@ func TestRuntimeDualResumeReservationIsCrossModuleAtomic(t *testing.T) {
 func TestRuntimeCommunicationCredentialUsesExplicitIdentityWorkspace(t *testing.T) {
 	t.Parallel()
 
+	ctx := context.Background()
 	runner := &fakeRunner{initSID: "provider-workspace"}
-	m, _, tenant, clk := newRuntimeHarness(
-		t, WithRunner(runner), WithCredentialSource(staticCred()),
-	)
+	m, st, tenant, clk := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()))
 	probe := &dualCredentialProbe{now: clk.get}
 	wireDualCredentialProbe(m, probe)
-	created, err := m.createRun(context.Background(), tenant, CreateRunParams{
-		Transport: TransportStreamJSON, Isolation: IsolationNative,
+	var defaultWorkspace, explicitWorkspace model.ID
+	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		workspace, err := sc.DefaultWorkspace(ctx)
+		if err != nil {
+			return err
+		}
+		defaultWorkspace = workspace.ID
+		createdWorkspace, err := sc.Workspaces().Create(ctx, model.Workspace{
+			Name: "Explicit", Slug: "explicit", Status: model.StatusActive,
+		})
+		if err == nil {
+			explicitWorkspace = createdWorkspace.ID
+		}
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	// Select the workspace through the operator-owned profile before the first
+	// Claim. Retargeting an already-claimed identity violates its fixed lineage.
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	m.UseWorkAuthorizer(auth.NewAuthorizer(nil))
+	operator, err := auth.NewSystemOperator("test:explicit-workspace", "set fixture session work workspace")
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(map[string]any{"role": "orchestrator", "workspace_id": explicitWorkspace, "capabilities": []string{"work.read"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: "claude", ConfigHome: t.TempDir(), UserHome: t.TempDir(), AuthSource: AuthSourceAccountHome})
+	if _, err := m.PatchProfile(ctx, tenant, profile.Ref, ProfilePatch{SessionWorkGrant: raw, WorkGrantActor: operator}); err != nil {
+		t.Fatal(err)
+	}
+	created, err := m.createRun(ctx, tenant, CreateRunParams{
+		Transport: TransportStreamJSON, Isolation: IsolationNative, ProviderProfileRef: profile.Ref,
 		Actor: "agent:workspace", ActorKind: model.ActorAgent, AgentRef: "agent:workspace",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
 	waitFor(t, "workspace fixture provider session capture", func() bool {
-		dto, getErr := m.getRun(context.Background(), tenant, created.RunRef)
+		dto, getErr := m.getRun(ctx, tenant, created.RunRef)
 		return getErr == nil && dto.ClaudeSessionID == "provider-workspace"
 	})
-	if _, err := m.stopRun(context.Background(), tenant, created.RunRef, "test", "user"); err != nil {
+	if _, err := m.stopRun(ctx, tenant, created.RunRef, "test", "user"); err != nil {
 		t.Fatal(err)
-	}
-	record, err := m.loadRun(context.Background(), tenant, created.RunRef)
-	if err != nil {
-		t.Fatal(err)
-	}
-	sid := record.String(colRunClaimSID)
-	var defaultWorkspace, explicitWorkspace model.ID
-	if err := m.data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
-		workspace, err := sc.DefaultWorkspace(context.Background())
-		if err != nil {
-			return err
-		}
-		defaultWorkspace = workspace.ID
-		createdWorkspace, err := sc.Workspaces().Create(context.Background(), model.Workspace{
-			Name: "Explicit", Slug: "explicit", Status: model.StatusActive,
-		})
-		if err != nil {
-			return err
-		}
-		explicitWorkspace = createdWorkspace.ID
-		identity, found, err := findIdentity(context.Background(), sc, sid)
-		if err != nil {
-			return err
-		}
-		if !found {
-			return errors.New("canonical session identity is absent")
-		}
-		identity[colIDWorkspaceID] = explicitWorkspace.String()
-		repo, err := sc.Ext(identityKind)
-		if err != nil {
-			return err
-		}
-		_, err = repo.Update(context.Background(), identity)
-		return err
-	}); err != nil {
-		t.Fatalf("scope canonical identity: %v", err)
 	}
 	probe.reset()
-	resumed, err := m.resumeRun(
-		context.Background(), tenant, created.RunRef,
-		"agent:workspace", model.ActorAgent, "agent:workspace",
-	)
+	resumed, err := m.resumeRun(ctx, tenant, created.RunRef, "agent:workspace", model.ActorAgent, "agent:workspace")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _, _ = m.stopRun(context.Background(), tenant, resumed.RunRef, "test", "user") })
+	t.Cleanup(func() { _, _ = m.stopRun(ctx, tenant, resumed.RunRef, "test", "user") })
 	calls := probe.snapshot()
 	if len(calls.commMintRequests) != 1 {
 		t.Fatalf("communication mint requests = %v", calls.commMintRequests)

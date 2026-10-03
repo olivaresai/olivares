@@ -714,6 +714,7 @@
     "tool": "Tool",
     "willRun": "What will run",
     "noReview": "This request does not include what will run.",
+    "commandUnknown": "Command not shown for this tool yet",
     "showAll": "Show all",
     "showLess": "Show less",
     "details": "Details",

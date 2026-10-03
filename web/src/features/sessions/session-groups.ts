@@ -36,11 +36,11 @@ export interface WorkGroup {
   sessions: UnifiedSession[]
 }
 
-/** A run is asking for a person: it failed, its provider says it needs a login, or a
- * tool call of it waits on an approval (HU-R12). */
+/** A run is asking for a person: its provider says it needs a login, or a tool call of
+ * it waits on an approval (HU-R12). A failed run waits for nothing: it is settled, with
+ * its Failed state on the row, as the sidebar files it under Earlier (Root 19:15Z). */
 function runWantsAPerson(run: RunDTO): boolean {
   return (
-    run.state === 'failed' ||
     run.provider_auth_state === 'required' ||
     (!!run.pending_approval_ref && isLiveRun(run))
   )

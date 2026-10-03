@@ -2671,7 +2671,7 @@ export interface paths {
       parameters: {
         query: {
           driver: string
-          /** @description Exact detected path selected for a bounded --version execution; requires AAL3 and a writable control plane. */
+          /** @description Exact detected path selected for a bounded --version execution; requires the administrative step-up and a writable control plane. */
           probe_path?: string
         }
         header?: never
@@ -3729,6 +3729,8 @@ export interface paths {
           driver: 'claude' | 'codex' | 'grok'
           /** @description The organization whose own login is read: each keeps its own, in a home the product creates under the data directory. */
           tenant_id: string
+          /** @description An existing provider account or profile in this organization; omitted, read the tenant's default login. */
+          account_ref?: string
         }
         header?: never
         path?: never
@@ -3744,6 +3746,7 @@ export interface paths {
           content: {
             'application/json': {
               account?: string
+              account_ref?: string
               driver: string
               installed: boolean
               method?: string
@@ -3822,6 +3825,8 @@ export interface paths {
       requestBody: {
         content: {
           'application/json': {
+            /** @description An existing provider account or profile in this organization; omitted, use the tenant's default login. */
+            account_ref?: string
             /** @enum {string} */
             driver: 'claude' | 'codex' | 'grok'
             /**
@@ -3840,6 +3845,7 @@ export interface paths {
           }
           content: {
             'application/json': {
+              account_ref?: string
               driver: string
               /** Format: uuid */
               id: string
@@ -3949,6 +3955,7 @@ export interface paths {
           }
           content: {
             'application/json': {
+              account_ref?: string
               driver: string
               /** Format: uuid */
               id: string
@@ -4150,6 +4157,7 @@ export interface paths {
           }
           content: {
             'application/json': {
+              account_ref?: string
               driver: string
               /** Format: uuid */
               id: string
@@ -85095,7 +85103,10 @@ export interface components {
           | 'audit_archive'
           | 'directory_synchronization'
         /** @enum {string} */
-        reason: 'no_tenant_inventory' | 'addon_requires_license' | 'directory_unavailable'
+        reason:
+          | 'no_tenant_inventory'
+          | 'addon_requires_license'
+          | 'directory_unavailable'
       }[]
       license?: {
         licensee?: string
@@ -85117,6 +85128,8 @@ export interface components {
         label: string
         start_url: string
       }[]
+      /** @description The --pin-sha256 value of the certificate this engine serves (base64 SHA-256 of its SubjectPublicKeyInfo). Absent when the engine serves plain HTTP. */
+      tls_pin_sha256?: string
       version: string
     }
     SessionResponse:

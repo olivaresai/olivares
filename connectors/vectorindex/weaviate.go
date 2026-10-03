@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 // weaviate backend — Weaviate v4 via REST (batch CRUD) and GraphQL (nearVector
@@ -290,8 +292,8 @@ func (w *weaviate) call(ctx context.Context, method, path string, body, out any)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("vectorindex: weaviate %s %s: status %d: %s", method, path, resp.StatusCode, strings.TrimSpace(string(excerpt)))
+		excerpt := redact.ReadHTTPError(resp.Body, 512, req, w.apiKey, w.oidcToken)
+		return fmt.Errorf("vectorindex: weaviate %s %s: status %d: %s", method, path, resp.StatusCode, excerpt)
 	}
 	if out == nil {
 		_, _ = io.Copy(io.Discard, resp.Body)

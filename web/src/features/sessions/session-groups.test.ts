@@ -64,7 +64,6 @@ describe('groupOf — membership is a field the engine sent', () => {
   it.each<[string, UnifiedSession]>([
     ['the connector caught a discrepancy', row({ cc_state: 'silent_evasion' })],
     ['the session holds no live claim', row({ unclaimed: true })],
-    ['a run failed', row(undefined, { state: 'failed' })],
     [
       'the provider says it needs a login',
       row(undefined, { state: 'running', provider_auth_state: 'required' }),
@@ -82,6 +81,8 @@ describe('groupOf — membership is a field the engine sent', () => {
     ['it is quiet within tolerance', row({ cc_state: 'idle' })],
     ['its run stopped', row(undefined, { state: 'stopped' })],
     ['its run was cleaned', row(undefined, { state: 'cleaned' })],
+    // Root 19:15Z: a failed run is not waiting for anyone; the sidebar says Earlier.
+    ['its run failed', row(undefined, { state: 'failed' })],
     [
       // Stop -> reload: the observed row still says active; the run decides (EU, 06).
       'its run stopped while the observed row still says active',

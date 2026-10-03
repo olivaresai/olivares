@@ -643,20 +643,6 @@ func createCommunicationHTTPTestSession(
 	ctx := context.Background()
 	runRef := model.NewID().String()
 	agentRef := "agent:k3-http-" + label
-	if err := eng.store.Mutate(ctx, tenant, func(sc store.Scope) error {
-		repo, err := sc.Ext("sessions.run")
-		if err != nil {
-			return err
-		}
-		_, err = repo.Create(ctx, model.Record{
-			"run_ref": runRef, "transport": "stream-json", "permission_mode": "default",
-			"isolation": "native", "state": "running", "last_event_seq": int64(0),
-			"agent_ref": agentRef,
-		})
-		return err
-	}); err != nil {
-		t.Fatalf("create operated %s run evidence: %v", label, err)
-	}
 	sid, err := eng.sessionsMod.ResolveSession(ctx, tenant, sessions.SessionBinding{
 		Provider: sessions.ProviderOperated, ExternalID: runRef,
 		Origin: sessions.OriginOperated, WorkspaceID: workspace, At: time.Now().UTC(),
@@ -667,6 +653,24 @@ func createCommunicationHTTPTestSession(
 	claim, err := eng.sessionsMod.Claim(ctx, tenant, sid, agentRef, time.Hour)
 	if err != nil {
 		t.Fatalf("claim operated %s session: %v", label, err)
+	}
+	// Match native runtime persistence: the canonical identity and its Claim
+	// are bound into the run before any session credential is issued.
+	if err := eng.store.Mutate(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext("sessions.run")
+		if err != nil {
+			return err
+		}
+		_, err = repo.Create(ctx, model.Record{
+			"run_ref": runRef, "transport": "stream-json", "permission_mode": "default",
+			"isolation": "native", "state": "running", "last_event_seq": int64(0),
+			"agent_ref": agentRef,
+			"claim_sid": sid, "claim_fence": claim.Fence,
+			"authz_workspace_id": workspace.String(),
+		})
+		return err
+	}); err != nil {
+		t.Fatalf("create operated %s run evidence: %v", label, err)
 	}
 	issuer, err := auth.NewSystemOperator(
 		"test:k3-http-runtime", "issue exact test runtime credentials",

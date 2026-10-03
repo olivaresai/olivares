@@ -526,11 +526,15 @@
   },
   "login": {
     "statusTitle": "Garantía de la sesión",
-    "statusDescription": "El nivel de garantía del autenticador de tu sesión actual. Las vistas sensibles requieren reautenticación por hardware.",
+    "statusDescription": "Cómo iniciaste sesión en esta sesión.",
     "currentAal": "Nivel actual",
     "methods": "Métodos",
     "methodsUnknown": "No reportado",
-    "targetStandardsNote": "AAL3 (NIST SP 800-63B-4) y PIV/CAC (FIPS 201-3) son los estándares objetivo del acceso privilegiado. El panel refleja lo que aplica el backend; no afirma ninguna certificación.",
+    "policy": {
+      "none": "Esta implantación no pide ninguna comprobación adicional antes de las acciones administrativas. Un administrador del sistema puede activarla en Ajustes › Inicio de sesión y seguridad.",
+      "totp": "Las acciones administrativas de esta implantación piden iniciar sesión con un código de la app de autenticación.",
+      "passkey": "Las acciones administrativas de esta implantación piden una llave de acceso."
+    },
     "passkeyTitle": "Registrar una passkey",
     "passkeyDescription": "Da de alta una llave de seguridad por hardware o un autenticador de plataforma (WebAuthn / FIDO2) para un acceso privilegiado resistente al phishing.",
     "registerPasskey": "Registrar una passkey",

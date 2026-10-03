@@ -500,7 +500,7 @@ func dbInitCmd() *cobra.Command {
 		},
 	}
 	cmd.Flags().StringVar(&superuserDSN, "superuser-dsn", "", "superuser / maintenance DSN used ONLY to provision (e.g. postgres://postgres@host:5432/postgres). Accepts a file:/env: reference")
-	cmd.Flags().StringVar(&dataDir, "data-dir", "", "prepare quickstart's PostgreSQL for this installation data directory: names generated for it, private DSN files saved under it (without --data-dir, db init provisions as 26.10.0 did and writes no file)")
+	cmd.Flags().StringVar(&dataDir, "data-dir", "", "prepare quickstart's PostgreSQL for this installation data directory: names generated for it, private DSN files saved under it (without --data-dir, db init keeps the classic result: database olivares, role olivares_app, nothing saved)")
 	cmd.Flags().StringVar(&database, "database", "", "application database name to create/own (default olivares; with --data-dir, generated for that installation)")
 	cmd.Flags().StringVar(&sslmode, "sslmode", "", "libpq sslmode (default verify-full for the printed DSN hints; with --data-dir, prefer for local hosts/sockets and verify-full for remote hosts; preserves an explicit DSN mode)")
 	_ = cmd.RegisterFlagCompletionFunc("sslmode", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {

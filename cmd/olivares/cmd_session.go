@@ -23,6 +23,7 @@ import (
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 // cmd_session.go is `olivares session`: the one path a person takes to work with an
@@ -100,9 +101,10 @@ func newSessionStartCmd() *cobra.Command {
 		Long: "start runs the agent tool in the folder (default: the current folder) and names the\n" +
 			"session after it. With a prompt, it sends the prompt and shows the reply.\n\n" +
 			"The first time, it registers the folder for sessions; a folder it registers carries no\n" +
-			"DLP label unless you pass --dlp. Without --profile the engine picks how the tool runs,\n" +
-			"as the console does (its own login, or a key or local model from Providers), and one\n" +
-			"line says which.",
+			"DLP label unless you pass --dlp. Without --tool it runs the first tool that is ready\n" +
+			"(Claude Code, Codex, Grok Build, OpenCode), as the console's New session does. Without\n" +
+			"--profile the engine picks how the tool runs (its own login, or a key or local model\n" +
+			"from Providers), and one line says which.",
 		Example: "  olivares session start\n" +
 			"  olivares session start ~/code/my-app \"explain this repository\"\n" +
 			"  olivares session start . --tool codex --name review",
@@ -117,7 +119,7 @@ func newSessionStartCmd() *cobra.Command {
 				return err
 			}
 			tool = strings.ToLower(strings.TrimSpace(tool))
-			if driverConfigHome(tool, "/") == "" {
+			if tool != "" && driverConfigHome(tool, "/") == "" {
 				return sentence(exitcode.Usage, "Unknown tool %q. Use claude, codex, grok or opencode.", tool)
 			}
 			if _, ok := permissionModes[permission]; !ok {
@@ -127,6 +129,12 @@ func newSessionStartCmd() *cobra.Command {
 				return err
 			}
 			ctx := cmd.Context()
+			if tool == "" {
+				tool = "claude"
+				if strings.TrimSpace(profile) == "" {
+					tool = cfg.readyTool(ctx)
+				}
+			}
 			// The profile first: a start the engine refuses registers no folder.
 			profileRef, err := cfg.toolProfile(ctx, cmd.ErrOrStderr(), tool, profile)
 			if err != nil {
@@ -198,7 +206,7 @@ func newSessionStartCmd() *cobra.Command {
 		},
 	}
 	cfg.addFlags(cmd)
-	cmd.Flags().StringVar(&tool, "tool", "claude", "agent tool: claude, codex, grok or opencode")
+	cmd.Flags().StringVar(&tool, "tool", "", "agent tool: claude, codex, grok or opencode (default: the first one that is ready)")
 	cmd.Flags().StringVar(&name, "name", "", "session name (default: the folder's name; -2, -3 … when taken)")
 	cmd.Flags().StringVar(&profile, "profile", "", "provider profile to launch under (default: the one the engine picks, as in the console)")
 	cmd.Flags().StringVar(&model, "model", "", "model alias or id (default: the tool's own)")
@@ -282,6 +290,42 @@ func (c *agentClientConfig) folderWorkspace(ctx context.Context, root, dlp strin
 	}
 	ws := map[string]any{}
 	return ws, json.Unmarshal(b, &ws)
+}
+
+// sessionToolOrder is the console's order of the tools a session runs
+// (SESSION_TOOLS in web/src/features/agentops/tool-names.ts).
+var sessionToolOrder = []string{"claude", "codex", "grok", "opencode"}
+
+// readyTool is the tool a start without --tool runs (HU2-22): the first, in the
+// console's order, that the engine can run now, by the preview the console's New
+// session reads (GET provider-profiles/resolve). It was always Claude Code, even with
+// only OpenCode and a local model set up. With none ready it is Claude Code, whose
+// refusal says what to set up.
+func (c *agentClientConfig) readyTool(ctx context.Context) string {
+	if tool, ok := c.firstReadyTool(ctx); ok {
+		return tool
+	}
+	return "claude"
+}
+
+// firstReadyTool is the first tool, in the console's order, the engine's preview
+// says can run a session now; false when none can. `olivares`, `tool ls` and
+// `session start` read readiness here, so they cannot disagree.
+func (c *agentClientConfig) firstReadyTool(ctx context.Context) (string, bool) {
+	for _, tool := range sessionToolOrder {
+		status, b, err := c.do(ctx, "GET", profilesPath+"/resolve?driver="+url.QueryEscape(tool), nil,
+			http.StatusOK, http.StatusConflict, http.StatusServiceUnavailable, http.StatusNotFound)
+		if err != nil || status != http.StatusOK {
+			continue
+		}
+		var res struct {
+			Reason string `json:"reason"`
+		}
+		if json.Unmarshal(b, &res) == nil && res.Reason != "" && res.Reason != "none" {
+			return tool, true
+		}
+	}
+	return "", false
 }
 
 // toolProfile returns the profile a session of this tool launches under: the one
@@ -582,7 +626,9 @@ func (c *agentClientConfig) sendTurn(cmd *cobra.Command, run map[string]any, tex
 		return err
 	}
 	view := newSessionView(cmd.OutOrStdout())
-	view.driver, view.readyShown = sessionDriver(run), true
+	view.driver, view.engineSupplied, view.readyShown = sessionDriver(run), engineSupplied(run), true
+	// A reply received before the stream stopped is shown before any failure sentence.
+	defer view.finish()
 	for {
 		select {
 		case f, ok := <-frames:
@@ -614,12 +660,16 @@ func (c *agentClientConfig) sendTurn(cmd *cobra.Command, run map[string]any, tex
 }
 
 // sessionShowsTurns reports whether this CLI can tell when a turn of this run ends:
-// a Claude stream-json run emits a `result` frame, a Codex run `turn/completed`.
-// Other drivers' frames are their own protocol, so send returns once the engine
+// a Claude stream-json run emits a `result` frame, a Codex run `turn/completed`, an
+// OpenCode or Grok Build run (ACP) the session/prompt result with its stopReason.
+// Another driver's frames are its own protocol, so send returns once the engine
 // accepts the message.
 func sessionShowsTurns(run map[string]any) bool {
-	d := strings.TrimSpace(str(run, "provider_driver"))
-	return (d == "" || d == "claude" || d == "codex") && str(run, "transport") != "remote-control"
+	switch d := strings.TrimSpace(str(run, "provider_driver")); d {
+	case "", "claude", "codex", "opencode", "grok":
+		return str(run, "transport") != "remote-control"
+	}
+	return false
 }
 
 // sessionFrame is one output frame of the attach stream.
@@ -770,7 +820,8 @@ func newSessionFollowCmd() *cobra.Command {
 			}
 			raw := outputIsJSON(cmd)
 			view := newSessionView(cmd.OutOrStdout())
-			view.driver = sessionDriver(run)
+			view.driver, view.engineSupplied = sessionDriver(run), engineSupplied(run)
+			defer view.finish()
 			frames, errs := cfg.openFrames(cmd.Context(), str(run, "run_ref"), from)
 			for {
 				select {
@@ -813,9 +864,9 @@ func newSessionListCmd() *cobra.Command {
 		Use:     "ls",
 		Aliases: []string{"list"},
 		Short:   "List sessions, newest first",
-		Long: "ls prints one row per session: name, state, tool, folder and when it started, newest\n" +
-			"first. Stopped and failed sessions are listed until you remove them. Use the name with\n" +
-			"the other session commands.",
+		Long: "ls prints one row per session: name, state, tool, folder, when it started and its id,\n" +
+			"newest first. Stopped and failed sessions are listed until you remove them. Use the name,\n" +
+			"the start of the name or the id with the other session commands.",
 		Example: "  olivares session ls\n  olivares session ls --state running -o json",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -835,7 +886,7 @@ func newSessionListCmd() *cobra.Command {
 				shown = append(shown, r)
 			}
 			table := termrender.Table{
-				Header: []string{"name", "state", "tool", "folder", "started"},
+				Header: []string{"name", "state", "tool", "folder", "started", "id"},
 				Empty:  "No sessions yet. Start one: olivares session start <folder>",
 			}
 			// A name that two rows carry gets the short tail of each row's id, as the
@@ -862,7 +913,7 @@ func newSessionListCmd() *cobra.Command {
 					name += " " + termSafe(refTail(str(r, "run_ref")))
 				}
 				table.Rows = append(table.Rows, []string{name, s, sessionDriver(r),
-					folder, sinceText(str(r, "created_at"), now)})
+					folder, sinceText(str(r, "created_at"), now), termSafe(sessionShortID(r))})
 				table.Roles = append(table.Roles, []termrender.Role{termrender.RoleNone, sessionStateRole(s)})
 			}
 			return renderOut(cmd, func(out io.Writer) error {
@@ -1185,10 +1236,41 @@ func (c *agentClientConfig) findSession(ctx context.Context, arg string) (map[st
 		}
 	}
 	if len(matches) == 0 {
+		matches = sessionsMatching(runs, arg)
+	}
+	if len(matches) == 0 {
 		return nil, sentence(exitcode.NotFound, "No session is named %q. List them: olivares session ls", arg)
+	}
+	for _, r := range matches[1:] {
+		if str(r, "name") != str(matches[0], "name") {
+			return nil, sentence(exitcode.Usage, "%d sessions match %q. Name one by its id: olivares session ls", len(matches), arg)
+		}
 	}
 	sort.SliceStable(matches, func(i, j int) bool { return str(matches[i], "created_at") > str(matches[j], "created_at") })
 	return matches[0], nil
+}
+
+// sessionsMatching is what a person types for a session whose name is long (HU2-09):
+// the start of its name, with the "…" a narrow `session ls` cell ends with ignored,
+// or the id `session ls` shows (the end of its reference, 4 characters or more).
+func sessionsMatching(runs []map[string]any, arg string) []map[string]any {
+	prefix := strings.TrimSpace(strings.TrimSuffix(arg, "…"))
+	tail := strings.ToLower(strings.TrimPrefix(prefix, "…"))
+	var out []map[string]any
+	for _, r := range runs {
+		byName := prefix != "" && strings.HasPrefix(str(r, "name"), prefix)
+		byID := len(tail) >= 4 && strings.HasSuffix(strings.ToLower(str(r, "run_ref")), tail)
+		if byName || byID {
+			out = append(out, r)
+		}
+	}
+	return out
+}
+
+// sessionShortID is the id `session ls` shows: the short tail of the reference
+// (refTail), which names the session wherever a name does.
+func sessionShortID(run map[string]any) string {
+	return strings.TrimPrefix(refTail(str(run, "run_ref")), "…")
 }
 
 // sessionLabel is how a session is named on screen: its name, else its id.
@@ -1219,6 +1301,13 @@ func refTail(reference string) string {
 		return "…" + m[1]
 	}
 	return id
+}
+
+// engineSupplied reports whether the engine supplies the run's credential (a key from Providers,
+// a workload identity or an adapter) rather than the tool's own sign-in. It reads only the run:
+// the profile can be rebound after launch, and the run's readers may not read profiles.
+func engineSupplied(run map[string]any) bool {
+	return str(run, "provider_auth_source") == sessions.AuthSourceManagedInjection
 }
 
 func sessionDriver(run map[string]any) string {

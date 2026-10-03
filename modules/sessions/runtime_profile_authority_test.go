@@ -7,6 +7,7 @@ package sessions
 import (
 	"context"
 	"net/http"
+	"strings"
 	"testing"
 	"time"
 
@@ -33,9 +34,17 @@ func TestProfileAuthority_RequiresProfileForNewAndUnprovenResume(t *testing.T) {
 	})
 	m.EnableProfiledLaunches()
 	before := countRows(t, m, model.TenantID(tenant), runKind)
+	// Automatic profile selection (b756268f) lets profile writers omit the profile.
+	// Claude is installed, but has no own login or usable provider to resolve.
+	login := &loginStub{installed: map[string]bool{"claude": true}}
+	m.UseToolLoginStatus(login.status)
 	refused := h.doJSON("POST", "/v1/m/sessions/runs", admin, body, tenantHdr(tenant))
-	if refused.code != http.StatusBadRequest || launchCount(fr) != 1 || countRows(t, m, model.TenantID(tenant), runKind) != before {
+	if refused.code != http.StatusConflict || launchCount(fr) != 1 || countRows(t, m, model.TenantID(tenant), runKind) != before {
 		t.Fatalf("unprofiled B2 launch status=%d effects=%d", refused.code, launchCount(fr))
+	}
+	refusal, _ := refused.body["error"].(map[string]any)
+	if refusal["code"] != "nothing_to_run_on" || !strings.Contains(refused.raw, "add an Anthropic key in Providers") {
+		t.Fatalf("profile resolution refusal = %s", refused.raw)
 	}
 	if got := h.do("GET", "/v1/m/sessions/runs/"+ref, admin, tenantHdr(tenant)); got.code != http.StatusOK {
 		t.Fatalf("legacy read=%d", got.code)

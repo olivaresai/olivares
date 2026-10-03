@@ -5,6 +5,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -117,8 +118,8 @@ func TestABusinessFeatureIsOneSentenceWithItsOwnExitCode(t *testing.T) {
 	}
 }
 
-// TestSeatUtilizationSendsWhatTheRouteNeeds is N1 RU-03: the route needs provider,
-// from and to, and the command sent none of them.
+// TestSeatUtilizationSendsWhatTheRouteNeeds keeps provider selection and explicit
+// date ranges available without changing the published no-flag invocation.
 func TestSeatUtilizationSendsWhatTheRouteNeeds(t *testing.T) {
 	var got string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -132,15 +133,64 @@ func TestSeatUtilizationSendsWhatTheRouteNeeds(t *testing.T) {
 	if !strings.Contains(got, "provider=anthropic") || !strings.Contains(got, "from=") || !strings.Contains(got, "to=") {
 		t.Fatalf("query = %q, want provider, from and to", got)
 	}
-	got = ""
-	// classifyOutcome is what turns a missing required flag into exit 2 (main.go).
-	root := newRootCmd()
-	root.SetArgs(append([]string{"finops", "seats", "utilization"}, sessionCreds(srv.URL)...))
-	root.SetOut(io.Discard)
-	root.SetErr(io.Discard)
-	code, err := classifyOutcome(root.ExecuteC())
-	if code != exitcode.Usage || err == nil || !strings.Contains(err.Error(), "provider") || got != "" {
-		t.Fatalf("without --provider: exit %d, err %v, request %q; want a local usage error", code, err, got)
+	for _, tc := range []struct {
+		flags []string
+		query string
+	}{
+		{[]string{"--provider", "anthropic", "--from", "2026-09-01", "--to", "2026-09-30"}, "from=2026-09-01&provider=anthropic&to=2026-09-30"},
+		{[]string{"--from", "2026-09-01", "--to", "2026-09-30"}, "from=2026-09-01&to=2026-09-30"},
+	} {
+		got = ""
+		args := append([]string{"finops", "seats", "utilization"}, tc.flags...)
+		if _, _, err := execRoot(t, withConnect(srv.URL, args...)...); err != nil {
+			t.Fatalf("utilization %v: %v", tc.flags, err)
+		}
+		if got != tc.query {
+			t.Fatalf("utilization %v: query %q, want %q", tc.flags, got, tc.query)
+		}
+	}
+}
+
+// TestSeatUtilizationPublishedInvocation preserves 26.10.0's query-free GET
+// and lets the server's response determine the exit, without requiring new flags.
+func TestSeatUtilizationPublishedInvocation(t *testing.T) {
+	for _, tc := range []struct {
+		name         string
+		status, exit int
+		body         string
+	}{
+		{"report", http.StatusOK, exitcode.OK, `{"provider":"anthropic","days":[]}`},
+		{"server refusal", http.StatusBadRequest, exitcode.Usage, `{"error":{"message":"provider required"}}`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			prepareModelstackCLITest(t)
+			var requests []string
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests = append(requests, r.Method+" "+r.RequestURI)
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(tc.status)
+				_, _ = w.Write([]byte(tc.body))
+			}))
+			defer srv.Close()
+			root := newRootCmd()
+			var stdout bytes.Buffer
+			root.SetOut(&stdout)
+			root.SetErr(io.Discard)
+			root.SetArgs(withConnect(srv.URL, "finops", "seats", "utilization"))
+			code, err := classifyOutcome(root.ExecuteC())
+			if len(requests) != 1 || requests[0] != "GET /v1/m/finops/seats/utilization" {
+				t.Fatalf("published invocation sent %v, want one query-free GET (exit %d, err %v)", requests, code, err)
+			}
+			if code != tc.exit {
+				t.Fatalf("exit %d, want published exit %d (err %v)", code, tc.exit, err)
+			}
+			if tc.exit == exitcode.OK && stdout.Len() == 0 {
+				t.Fatal("successful report printed no output")
+			}
+			if tc.exit != exitcode.OK && (err == nil || stdout.Len() != 0) {
+				t.Fatalf("server refusal: err %v, stdout %q; want an error and empty stdout", err, stdout.String())
+			}
+		})
 	}
 }
 

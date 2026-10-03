@@ -28,7 +28,7 @@ import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { providerKeys } from './api'
 import { useProviderBoundary } from './auth-boundary'
-import { KIND_DRIVERS } from './kinds'
+import { recordServesDriver } from './kinds'
 import type { ProviderRecordDTO } from './types'
 import './i18n'
 
@@ -66,7 +66,7 @@ export function ProviderBindDialog({
   ).filter(
     (profile) =>
       profile.state === 'active' &&
-      KIND_DRIVERS[record.kind].includes(profile.driver),
+      recordServesDriver(record.kind, record.base_url, profile.driver),
   )
   const bind = usePrivilegedMutation<void, ProviderProfileDTO>({
     mutationFn: async (_vars, authority) => {
@@ -81,7 +81,7 @@ export function ProviderBindDialog({
       })
       if (
         profile.state !== 'active' ||
-        !KIND_DRIVERS[record.kind].includes(profile.driver)
+        !recordServesDriver(record.kind, record.base_url, profile.driver)
       )
         throw Error(t('bind.unavailable'))
       authority.dispatchGuard()

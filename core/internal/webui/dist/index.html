@@ -86,35 +86,104 @@
         }
       })()
     </script>
+    <!--
+      Load guard (Root, 2026-10-02: seen three times on 09b). Over the engine's self-signed TLS,
+      Chromium can fail module chunks on first load with ERR_CERT_VERIFIER_CHANGED; the module
+      graph then never runs and the console stays blank, with no /v1 call. When the entry, a
+      preloaded module or a lazy chunk fails to load, this says so in one line and reloads ONCE:
+      a second failure within two minutes is left alone, so it can never loop. It runs before
+      any bundle, under the same per-response nonce as the theme bootstrap above.
+    -->
+    <script nonce="__CSP_NONCE__" data-load-guard>
+      ;(function () {
+        var KEY = 'olivares.console.reloadedAt'
+        var WINDOW_MS = 120000
+        var LINES = {
+          en: 'Reloading the console…',
+          es: 'Recargando la consola…',
+          de: 'Die Konsole wird neu geladen…',
+          fr: 'Rechargement de la console…',
+          ja: 'コンソールを再読み込みしています…',
+          ru: 'Консоль перезагружается…',
+          zh: '正在重新加载控制台…',
+        }
+        function line() {
+          var lang = ''
+          try {
+            lang = (
+              localStorage.getItem('olivares.lang') ||
+              navigator.language ||
+              'en'
+            ).slice(0, 2)
+          } catch (e) {
+            lang = 'en'
+          }
+          return LINES[lang] || LINES.en
+        }
+        function reloadOnce() {
+          try {
+            var last = Number(sessionStorage.getItem(KEY) || 0)
+            if (Date.now() - last < WINDOW_MS) return false
+            sessionStorage.setItem(KEY, String(Date.now()))
+          } catch (e) {
+            return false
+          }
+          var root = document.getElementById('root')
+          if (root) {
+            var p = document.createElement('p')
+            p.setAttribute('role', 'status')
+            p.setAttribute('data-load-guard-line', '')
+            p.style.cssText = 'margin:2rem;font:14px/1.5 system-ui,sans-serif'
+            p.textContent = line()
+            root.replaceChildren(p)
+          }
+          window.location.reload()
+          return true
+        }
+        window.addEventListener(
+          'error',
+          function (event) {
+            var el = event.target
+            if (!el || el === window || !el.tagName) return
+            var isModule = el.tagName === 'SCRIPT' && el.type === 'module'
+            var isPreload = el.tagName === 'LINK' && el.rel === 'modulepreload'
+            if (isModule || isPreload) reloadOnce()
+          },
+          true,
+        )
+        window.addEventListener('vite:preloadError', function (event) {
+          if (reloadOnce()) event.preventDefault()
+        })
+      })()
+    </script>
     <meta property="csp-nonce" nonce="__CSP_NONCE__">
-    <script type="module" crossorigin src="/assets/index-D4R7nKmb.js" nonce="__CSP_NONCE__"></script>
+    <script type="module" crossorigin src="/assets/index-BhC027qm.js" nonce="__CSP_NONCE__"></script>
     <link rel="modulepreload" crossorigin href="/assets/client-CQNZRXOQ.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/button-D2OITmUr.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/utils-1r3zFwna.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/with-selector-Cszyc0W-.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/useStore-DypUqx_p.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/useStore-C2DMSRxU.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/useRouter-CHJPeUEU.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/shield-check-BesJSIH3.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/preload-helper-Czpn1I53.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/i18n-BrS_3vKX.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/i18n-BvJ-05iA.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/step-up-DkrXsjCE.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/useMutation-zu3UlYYr.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/badge-BlEPWcYU.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/modules-rqZt48Dm.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/badge-g7QDLSH9.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/triangle-alert-CKSBs65D.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/context-DpM5_Iwt.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/error-state-CMMPlV4Y.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/dist-DLQ90g3N.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/dist-F_v_Deo0.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/query-error-state-B0Ox1UWe.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/dist-CZkyx_LI.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/toaster-zRd2scV2.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/es2015-DQsBqNgu.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/dist-CYZ8Lc-k.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/es2015-BLbdiIHw.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/dist-xKIYRsnM.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/activity-GFVdA4_X.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/audio-lines-CNm-RUZ_.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/badge-check-BJ6EEJau.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/bell-3UDv_DlZ.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/loader-circle-BmnmFDHN.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/x-CGwElaXF.js" nonce="__CSP_NONCE__">
-    <link rel="modulepreload" crossorigin href="/assets/dist-BA-3idNO.js" nonce="__CSP_NONCE__">
+    <link rel="modulepreload" crossorigin href="/assets/dist-Bvqjnix1.js" nonce="__CSP_NONCE__">
     <link rel="modulepreload" crossorigin href="/assets/api-DmIhnAMx.js" nonce="__CSP_NONCE__">
-    <link rel="stylesheet" crossorigin href="/assets/index-DQqozxQ8.css" nonce="__CSP_NONCE__">
+    <link rel="stylesheet" crossorigin href="/assets/index-CKTh7BvI.css" nonce="__CSP_NONCE__">
   </head>
   <body>
     <div id="root"></div>

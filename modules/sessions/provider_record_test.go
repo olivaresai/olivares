@@ -494,15 +494,19 @@ func TestRecordServesDriver(t *testing.T) {
 		{ProviderKindOllama, providerDriverOpenCode, true},
 		{ProviderKindOllama, providerDriverClaude, false},
 		{ProviderKindOllama, providerDriverGrok, false},
-		// openai_compatible names what it injects, so it serves anything.
-		{ProviderKindOpenAICompatible, providerDriverClaude, true},
-		{ProviderKindOpenAICompatible, "some-future-driver", true},
+		// openai_compatible holds only Codex to its address (Root 2026-10-02 21:16Z:
+		// a bound session reaches only its record's endpoint, or it does not start).
+		{ProviderKindOpenAICompatible, providerDriverCodex, true},
+		{ProviderKindOpenAICompatible, providerDriverClaude, false},
+		{ProviderKindOpenAICompatible, providerDriverGrok, false},
+		{ProviderKindOpenAICompatible, providerDriverOpenCode, false},
+		{ProviderKindOpenAICompatible, "some-future-driver", false},
 		// An unknown driver gets NOTHING else. A derivation would have said yes.
 		{ProviderKindAnthropic, "some-future-driver", false},
 		{ProviderKindOpenAI, "some-future-driver", false},
 	}
 	for _, tc := range cases {
-		if got := recordServesDriver(tc.kind, tc.driver); got != tc.want {
+		if got := recordServesDriver(tc.kind, "", tc.driver); got != tc.want {
 			t.Fatalf("recordServesDriver(%q, %q) = %v, want %v", tc.kind, tc.driver, got, tc.want)
 		}
 	}

@@ -1,1 +1,0 @@
-import{kn as e}from"./index-D4R7nKmb.js";function t(){return e().data?.edition}function n(){return t()===`community`}export{n as t};

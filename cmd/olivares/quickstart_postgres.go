@@ -73,46 +73,9 @@ func postgresMaintenanceURL(raw string) (*url.URL, error) {
 	if strings.HasPrefix(strings.ToLower(raw), "postgres://") || strings.HasPrefix(strings.ToLower(raw), "postgresql://") {
 		return url.Parse(raw)
 	}
-	settings := url.Values{}
-	for raw != "" {
-		key, rest, found := strings.Cut(raw, "=")
-		key = strings.TrimSpace(key)
-		if !found || key == "" || strings.ContainsAny(key, " \t\n\r\v\f") {
-			return nil, errors.New("invalid PostgreSQL maintenance DSN")
-		}
-		raw = strings.TrimLeft(rest, " \t\n\r\v\f")
-		quoted := strings.HasPrefix(raw, "'")
-		if quoted {
-			raw = raw[1:]
-		}
-		var value strings.Builder
-		closed := !quoted
-		for raw != "" {
-			ch := raw[0]
-			raw = raw[1:]
-			if ch == '\\' {
-				if raw == "" {
-					break
-				}
-				value.WriteByte(raw[0])
-				raw = raw[1:]
-			} else if quoted && ch == '\'' {
-				closed = true
-				break
-			} else if !quoted && strings.ContainsRune(" \t\n\r\v\f", rune(ch)) {
-				break
-			} else {
-				value.WriteByte(ch)
-			}
-		}
-		if !closed {
-			return nil, errors.New("invalid PostgreSQL maintenance DSN")
-		}
-		if key == "dbname" {
-			key = "database" // libpq alias; the last spelling wins.
-		}
-		settings.Set(key, value.String())
-		raw = strings.TrimLeft(raw, " \t\n\r\v\f")
+	settings, err := postgresKeywordSettings(raw, "database")
+	if err != nil {
+		return nil, err
 	}
 	host, port := settings.Get("host"), settings.Get("port")
 	u := &url.URL{Scheme: "postgres", Path: "/" + settings.Get("dbname")}
@@ -399,4 +362,50 @@ func postgresSpecNames(spec store.PgProvisionSpec, splitOwner bool, suffix strin
 		spec.Owner.Name = "olivares_owner" + suffix
 	}
 	return spec
+}
+
+// postgresKeywordSettings shares libpq quoting with the bootstrap URL adapter.
+func postgresKeywordSettings(raw, databaseKey string) (url.Values, error) {
+	settings := url.Values{}
+	for raw != "" {
+		key, rest, found := strings.Cut(raw, "=")
+		key = strings.TrimSpace(key)
+		if !found || key == "" || strings.ContainsAny(key, " \t\n\r\v\f") {
+			return nil, errors.New("invalid PostgreSQL maintenance DSN")
+		}
+		raw = strings.TrimLeft(rest, " \t\n\r\v\f")
+		quoted := strings.HasPrefix(raw, "'")
+		if quoted {
+			raw = raw[1:]
+		}
+		var value strings.Builder
+		closed := !quoted
+		for raw != "" {
+			ch := raw[0]
+			raw = raw[1:]
+			if ch == '\\' {
+				if raw == "" {
+					return nil, errors.New("invalid PostgreSQL maintenance DSN")
+				}
+				value.WriteByte(raw[0])
+				raw = raw[1:]
+			} else if quoted && ch == '\'' {
+				closed = true
+				break
+			} else if !quoted && strings.ContainsRune(" \t\n\r\v\f", rune(ch)) {
+				break
+			} else {
+				value.WriteByte(ch)
+			}
+		}
+		if !closed {
+			return nil, errors.New("invalid PostgreSQL maintenance DSN")
+		}
+		if key == "dbname" {
+			key = databaseKey // preserve the caller's database spelling.
+		}
+		settings.Set(key, value.String())
+		raw = strings.TrimLeft(raw, " \t\n\r\v\f")
+	}
+	return settings, nil
 }

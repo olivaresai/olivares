@@ -526,11 +526,15 @@
   },
   "login": {
     "statusTitle": "Assurance de session",
-    "statusDescription": "Le niveau d’assurance d’authentificateur de votre session actuelle. Les vues sensibles requièrent une authentification renforcée matérielle.",
+    "statusDescription": "Comment vous vous êtes connecté pour cette session.",
     "currentAal": "Niveau actuel",
     "methods": "Méthodes",
     "methodsUnknown": "Non signalé",
-    "targetStandardsNote": "AAL3 (NIST SP 800-63B-4) et PIV/CAC (FIPS 201-3) sont les normes cibles pour la connexion privilégiée. Le panneau reflète ce que le backend applique ; il ne revendique aucune certification.",
+    "policy": {
+      "none": "Ce déploiement ne demande aucune vérification supplémentaire avant les actions d’administration. Un administrateur système peut en activer une dans Réglages › Connexion et sécurité.",
+      "totp": "Sur ce déploiement, les actions d’administration demandent une connexion avec un code d’application d’authentification.",
+      "passkey": "Sur ce déploiement, les actions d’administration demandent une clé d’accès."
+    },
     "passkeyTitle": "Enregistrer une clé d’accès",
     "passkeyDescription": "Inscrivez une clé de sécurité matérielle ou un authentificateur de plateforme (WebAuthn / FIDO2) pour une connexion privilégiée résistante à l’hameçonnage.",
     "registerPasskey": "Enregistrer une clé d’accès",

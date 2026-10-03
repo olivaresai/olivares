@@ -92,19 +92,23 @@ export interface GovernedModel {
 
 export type RoutingStrategy = 'cost' | 'latency' | 'capability' | 'pinned'
 
+/** A routing policy as the engine sends it (modules/models/api.go routingPolicyDTO). The
+ * spec fields are `omitempty` there: an empty list, a zero and an empty string are ABSENT
+ * on the wire, so a policy with only a strategy arrives as {id, name, enabled, strategy}
+ * (Root 20:12Z: Models > Routing crashed reading `.length` of an absent list). */
 export interface RoutingPolicy {
   id: string
   name: string
   enabled: boolean
   strategy: RoutingStrategy
-  required_capabilities: ModelCapability[]
-  preferred_providers: string[]
-  min_context_window: number
+  required_capabilities?: ModelCapability[]
+  preferred_providers?: string[]
+  min_context_window?: number
   /** Only under strategy=pinned. */
-  pinned_model: string
-  allow_deprecated: boolean
+  pinned_model?: string
+  allow_deprecated?: boolean
   /** If set, resolved targets are marked via_gateway. */
-  gateway_endpoint: string
+  gateway_endpoint?: string
 }
 
 export interface RoutingPolicyInput {

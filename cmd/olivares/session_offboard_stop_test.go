@@ -8,6 +8,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync/atomic"
@@ -53,7 +54,12 @@ func TestOwnerStandingSweepStaysActiveWithEmergencySweepDisabled(t *testing.T) {
 }
 
 func TestOwnerStandingFailureDoesNotPoisonOtherLiveChecks(t *testing.T) {
-	runSessionOwnerOffboard(t, "unavailable", 5*time.Millisecond, 7*time.Second)
+	t.Run("transient recovery", func(t *testing.T) {
+		runSessionOwnerOffboard(t, "unavailable", 5*time.Millisecond, 12*time.Second)
+	})
+	t.Run("persistent failure beyond grace", func(t *testing.T) {
+		runSessionOwnerOffboard(t, "unavailable_persistent", 5*time.Millisecond, 12*time.Second)
+	})
 }
 
 func TestOwnerSweepPreservesNonMultipleEmergencyStopCadence(t *testing.T) {
@@ -66,6 +72,10 @@ func TestOwnerStandingReadCannotDelayEmergencyStopCheck(t *testing.T) {
 
 func TestOwnerOffboardReasonSurvivesExpiredCheckContext(t *testing.T) {
 	runSessionOwnerOffboard(t, "ended_deadline", 5*time.Millisecond, 7*time.Second)
+}
+
+func TestOwnerWithdrawalStopsLiveRunAfterBearerExpiryAndMintCleanup(t *testing.T) {
+	runSessionOwnerOffboard(t, "expired_binding", 5*time.Millisecond, 2*time.Second)
 }
 
 type ownerCadenceStopGate struct {
@@ -84,7 +94,8 @@ func (g *ownerCadenceStopGate) Check(context.Context, model.TenantID, sessions.S
 }
 
 func runSessionOwnerOffboard(t *testing.T, cause string, interval, wait time.Duration) {
-	h := newHarness(t)
+	logs := &loopLog{}
+	h := newHarnessWithRecorder(t, nil, slog.New(logs))
 	ownerToken := h.newUser("offboard-owner@e2e.test", "offboard-owner-password", h.tenantA, auth.RoleAdmin)
 	owner, err := h.authr.Authenticate(t.Context(), ownerToken)
 	if err != nil {
@@ -92,6 +103,12 @@ func runSessionOwnerOffboard(t *testing.T, cause string, interval, wait time.Dur
 	}
 	otherToken := h.newUser("offboard-other@e2e.test", "offboard-other-password", h.tenantA, auth.RoleAdmin)
 	m := h.set.sessions
+	unavailable := cause == "unavailable" || cause == "unavailable_persistent"
+	var sweepClock *nondisclosureClock
+	if unavailable {
+		sweepClock = &nondisclosureClock{}
+		sessions.WithClock(sweepClock)(m)
+	}
 	sessions.WithRunner(approvalProjectionRunner{})(m)
 	sessions.WithKillSwitchSweep(interval)(m)
 	m.EnableProfiledLaunches()
@@ -101,9 +118,38 @@ func runSessionOwnerOffboard(t *testing.T, cause string, interval, wait time.Dur
 		gate = &ownerCadenceStopGate{seen: make(chan time.Time, 1)}
 		sessions.WithStopGate(gate)(m)
 	}
-	credentials := newSessionHookCredentials(h.authr, h.st, m, h.set.gov)
+	issuerAuth := h.authr
+	var issuerClock *nondisclosureClock
+	if cause == "expired_binding" {
+		issuerClock = &nondisclosureClock{}
+		issuerAuth = auth.NewAuthenticator(h.st, issuerClock)
+		// Keep the native launcher logins valid beyond the child's 24-hour TTL.
+		// Update before launch so mint captures the current credential versions.
+		for _, token := range []string{ownerToken, otherToken} {
+			principal, err := h.authr.Authenticate(t.Context(), token)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := h.st.AuthMutate(t.Context(), func(as store.AuthScope) error {
+				row, err := as.Sessions().Get(t.Context(), principal.CredID)
+				if err != nil {
+					return err
+				}
+				row.ExpiresAt = model.NewTimestamp(time.Now().Add(72 * time.Hour))
+				_, err = as.Sessions().Update(t.Context(), row)
+				return err
+			}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	credentials := newSessionHookCredentials(issuerAuth, h.st, m, h.set.gov)
+	var expiredBearer string
 	m.UseLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
-		_, err := credentials.mint(ctx, tenant, intent)
+		token, err := credentials.mint(ctx, tenant, intent)
+		if cause == "expired_binding" && expiredBearer == "" {
+			expiredBearer = token
+		}
 		return sessions.LaunchDecision{Allowed: err == nil}, err
 	}))
 	var profile struct {
@@ -125,18 +171,39 @@ func runSessionOwnerOffboard(t *testing.T, cause string, interval, wait time.Dur
 	}
 	owned := []string{launch(ownerToken), launch(ownerToken)}
 	other := launch(otherToken)
+	if issuerClock != nil {
+		issuerClock.advance.Store(int64(25 * time.Hour))
+		launch(otherToken) // An unrelated Mint runs the expired-entry cleanup.
+		if _, _, err := credentials.Resolve(t.Context(), expiredBearer); !errors.Is(err, auth.ErrUnauthenticated) {
+			t.Fatalf("expired session bearer retained authority: %v", err)
+		}
+	}
 
 	var selected chan string
-	if cause == "unavailable" {
+	var recovered chan struct{}
+	if unavailable {
 		selected = make(chan string, 1)
+		recovered = make(chan struct{}, 1)
 		var first atomic.Bool
+		var failedRef string // only the one serialized owner-sweep pass accesses it
 		m.UseSessionAccessCheck(func(ctx context.Context, tenant model.TenantID, ref string) (auth.SessionScope, string, error) {
 			if first.CompareAndSwap(false, true) {
+				failedRef = ref
 				selected <- ref
 				<-ctx.Done()
 				return auth.SessionScope{}, "", ctx.Err()
 			}
-			return credentials.CheckOwnerAccess(ctx, tenant, ref)
+			if ref == failedRef && cause == "unavailable_persistent" {
+				return auth.SessionScope{}, "", context.DeadlineExceeded
+			}
+			scope, user, err := credentials.CheckOwnerAccess(ctx, tenant, ref)
+			if ref == failedRef && err == nil {
+				select {
+				case recovered <- struct{}{}:
+				default:
+				}
+			}
+			return scope, user, err
 		})
 	}
 	if gate != nil {
@@ -188,19 +255,56 @@ func runSessionOwnerOffboard(t *testing.T, cause string, interval, wait time.Dur
 		}
 		return
 	}
-	if cause == "unavailable" {
+	if unavailable {
 		failed := <-selected
 		deadline := time.Now().Add(wait)
 		for {
-			var view map[string]any
-			h.reqInto(http.MethodGet, "/v1/m/sessions/runs/"+failed, h.adminToken, h.tenantA, nil, &view)
-			if view["state"] == "stopped" {
+			warning, found := logs.find("sessions: owner access check failed", "")
+			if found {
+				if warning.attrs["run_ref"] != failed || warning.attrs["attempt"] != int64(1) || warning.attrs["cause"] != "deadline_exceeded" {
+					t.Fatalf("owner timeout log lacks cause/run/attempt: %v", warning.attrs)
+				}
 				break
 			}
 			if time.Now().After(deadline) {
-				t.Fatal("unavailable standing did not fail closed")
+				t.Fatal("owner read timeout was not logged")
 			}
 			time.Sleep(10 * time.Millisecond)
+		}
+		var view map[string]any
+		h.reqInto(http.MethodGet, "/v1/m/sessions/runs/"+failed, h.adminToken, h.tenantA, nil, &view)
+		if view["process_state"] != "running" {
+			t.Fatal("owner read timeout stopped the live session within grace")
+		}
+		if cause == "unavailable" {
+			select {
+			case <-recovered:
+			case <-time.After(wait):
+				t.Fatal("transient owner read did not recover through a retry")
+			}
+			view = nil
+			h.reqInto(http.MethodGet, "/v1/m/sessions/runs/"+failed, h.adminToken, h.tenantA, nil, &view)
+			if view["process_state"] != "running" {
+				t.Fatal("recovered owner read stopped the live session")
+			}
+		} else {
+			// Advance only the existing module clock; no five-minute wall sleep.
+			sweepClock.advance.Store(int64(5 * time.Minute))
+			deadline = time.Now().Add(wait)
+			for {
+				view = nil
+				h.reqInto(http.MethodGet, "/v1/m/sessions/runs/"+failed, h.adminToken, h.tenantA, nil, &view)
+				if view["state"] == "stopped" {
+					if view["reason"] != "owner access could not be checked for 5 minutes" {
+						t.Fatalf("persistent owner read stop reason=%v", view["reason"])
+					}
+					break
+				}
+				if time.Now().After(deadline) {
+					t.Fatal("persistent owner read errors outlived the five-minute grace")
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
 		}
 		time.Sleep(30 * time.Millisecond)
 		for _, ref := range append(owned, other) {
@@ -239,7 +343,7 @@ func runSessionOwnerOffboard(t *testing.T, cause string, interval, wait time.Dur
 		}); err != nil {
 			t.Fatal(err)
 		}
-	case "standing_revoke":
+	case "standing_revoke", "expired_binding":
 		admin, err := h.authr.Authenticate(t.Context(), h.adminToken)
 		if err != nil {
 			t.Fatal(err)

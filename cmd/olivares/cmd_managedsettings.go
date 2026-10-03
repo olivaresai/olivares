@@ -41,14 +41,15 @@ import (
 // newAgentManagedSettingsCmd renders the managed-settings.json for governed sessions.
 func newAgentManagedSettingsCmd() *cobra.Command {
 	var (
-		pepCommand   string
-		out          string
-		matcher      string
-		timeoutSecs  int
-		redact       bool
-		noHook       bool
-		otelEndpoint string
-		gatewayURL   string
+		pepCommand    string
+		out           string
+		matcher       string
+		timeoutSecs   int
+		redact        bool
+		noHook        bool
+		pinHookEvents bool
+		otelEndpoint  string
+		gatewayURL    string
 	)
 	cmd := &cobra.Command{
 		Use:   "managed-settings",
@@ -82,10 +83,6 @@ func newAgentManagedSettingsCmd() *cobra.Command {
 						_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "WARNING: approvals needing longer than the explicit %ds hook timeout are denied (client deadline %s).\n", hookTimeout, clientTimeout)
 					}
 				}
-				if !defaultClient && !cmd.Flags().Changed("timeout") {
-					// Explicit custom PEP commands keep their existing timeout.
-					hookTimeout = 5
-				}
 				hooks, err := managedsettings.PEPHook(managedsettings.PEPHookConfig{
 					Command:     pepCommand,
 					Matcher:     matcher, // "" = every tool (deny-closed coverage)
@@ -95,7 +92,7 @@ func newAgentManagedSettingsCmd() *cobra.Command {
 				if err != nil {
 					return err
 				}
-				if defaultClient {
+				if pinHookEvents || (defaultClient && cmd.Flags().Changed("timeout")) {
 					for event, matchers := range hooks {
 						for i := range matchers {
 							// PEPHook shares its command slice between events.
@@ -144,10 +141,11 @@ func newAgentManagedSettingsCmd() *cobra.Command {
 			return os.WriteFile(out, b, 0o644)
 		},
 	}
-	cmd.Flags().StringVar(&pepCommand, "pep-command", "olivares claude-hook --timeout "+sessions.ClaudeHookPEPClientTimeout.String(), "the managed PEP-client command (explicit custom commands are preserved)")
+	cmd.Flags().StringVar(&pepCommand, "pep-command", "olivares claude-hook", "the managed PEP-client command (explicit custom commands are preserved)")
 	cmd.Flags().StringVar(&out, "out", "-", "output path ('-' = stdout)")
 	cmd.Flags().StringVar(&matcher, "matcher", "", "tool-name matcher for the PEP hook (\"\" = all tools)")
-	cmd.Flags().IntVar(&timeoutSecs, "timeout", int(sessions.ClaudeHookPEPCommandTimeout/time.Second), "outer hook timeout in seconds (omitted: 180s with a 120s client; explicit: published 5s client shortened if needed)")
+	cmd.Flags().IntVar(&timeoutSecs, "timeout", 5, "outer hook timeout in seconds (explicit: published 5s client shortened if needed)")
+	cmd.Flags().BoolVar(&pinHookEvents, "pin-hook-events", false, "pin each hook's event; for longer approvals use --pep-command 'olivares claude-hook --timeout 120s' --timeout 180")
 	cmd.Flags().BoolVar(&redact, "redact", true, "also install the paired PostToolUse output-redaction hook")
 	cmd.Flags().BoolVar(&noHook, "no-hook", false, "render env/telemetry only, no PEP hook")
 	cmd.Flags().StringVar(&otelEndpoint, "otel-endpoint", "", "managed OTEL collector endpoint (enables the sanctioned telemetry env)")

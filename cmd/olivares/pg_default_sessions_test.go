@@ -61,7 +61,9 @@ func TestDefaultPostgresSessionsStartAndTheKillSwitchStopsASession(t *testing.T)
 	if got := moduleStatus(eng, "olivares.sessions"); got != runtime.StatusRunning {
 		t.Fatalf("sessions runtime status = %q, want running", got)
 	}
-	if _, ok := logs.find("active kill-switch sweep started", ""); !ok {
+	// The sweep also stops a run whose owner lost access since d211141b, and its start line
+	// says so: "active access and emergency-stop sweep started".
+	if _, ok := logs.find("active access and emergency-stop sweep started", ""); !ok {
 		t.Fatal("the active kill-switch sweep did not start")
 	}
 	pep, err := buildClaudeHookPEPServer(eng, discardLogger())

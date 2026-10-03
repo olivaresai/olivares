@@ -1251,7 +1251,7 @@
             }
           },
           {
-            "description": "Exact detected path selected for a bounded --version execution; requires AAL3 and a writable control plane.",
+            "description": "Exact detected path selected for a bounded --version execution; requires the administrative step-up and a writable control plane.",
             "in": "query",
             "name": "probe_path",
             "required": false,
@@ -2602,6 +2602,15 @@
               "format": "uuid",
               "type": "string"
             }
+          },
+          {
+            "description": "An existing provider account or profile in this organization; omitted, read the tenant's default login.",
+            "in": "query",
+            "name": "account_ref",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
           }
         ],
         "responses": {
@@ -2611,6 +2620,9 @@
                 "schema": {
                   "properties": {
                     "account": {
+                      "type": "string"
+                    },
+                    "account_ref": {
                       "type": "string"
                     },
                     "driver": {
@@ -2720,6 +2732,10 @@
               "schema": {
                 "additionalProperties": false,
                 "properties": {
+                  "account_ref": {
+                    "description": "An existing provider account or profile in this organization; omitted, use the tenant's default login.",
+                    "type": "string"
+                  },
                   "driver": {
                     "enum": [
                       "claude",
@@ -2750,6 +2766,9 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "account_ref": {
+                      "type": "string"
+                    },
                     "driver": {
                       "type": "string"
                     },
@@ -2993,6 +3012,9 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "account_ref": {
+                      "type": "string"
+                    },
                     "driver": {
                       "type": "string"
                     },
@@ -3147,6 +3169,9 @@
               "application/json": {
                 "schema": {
                   "properties": {
+                    "account_ref": {
+                      "type": "string"
+                    },
                     "driver": {
                       "type": "string"
                     },

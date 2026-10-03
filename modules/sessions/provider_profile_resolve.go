@@ -102,6 +102,15 @@ func (tool resolveTool) nothingToRunOn() error {
 		"Sign it in under AI tools, or add " + tool.keyPhrase + " in Providers."), resolveCodeNothingToRunOn}
 }
 
+// resolveSkips is a record the rule never picks by itself for a tool, though a profile
+// may still name it: a local Ollama for Codex. Codex 0.160 sends additional_tools, which
+// the Ollama the product installs (0.35) rejects, so every turn failed while the
+// console said "Codex is ready" (HU2-04). OpenCode is the local default; Codex is
+// refused with its sign-in or OpenAI-key sentence.
+func resolveSkips(driver, kind string) bool {
+	return driver == providerDriverCodex && kind == ProviderKindOllama
+}
+
 // pickRecord applies the fixed order to the active records, oldest first.
 func pickRecord(driver string, tool resolveTool, records []ProviderRecord) *ProviderRecord {
 	rank := func(kind string) int {
@@ -116,11 +125,20 @@ func pickRecord(driver string, tool resolveTool, records []ProviderRecord) *Prov
 	}
 	var usable []ProviderRecord
 	for _, rec := range records {
-		if rec.State == ProviderRecordActive && recordServesDriver(rec.Kind, driver) {
+		if rec.State == ProviderRecordActive && recordServesDriver(rec.Kind, rec.BaseURL, driver) && !resolveSkips(driver, rec.Kind) {
 			usable = append(usable, rec)
 		}
 	}
-	sort.SliceStable(usable, func(a, b int) bool { return rank(usable[a].Kind) < rank(usable[b].Kind) })
+	// A key whose last provider test was refused comes after every other option
+	// (Root on FH 099): it is the answer only when nothing else can run the tool,
+	// and the launch then says the key was refused.
+	refused := func(rec ProviderRecord) bool { return rec.ProbeState == ProbeRefused }
+	sort.SliceStable(usable, func(a, b int) bool {
+		if refused(usable[a]) != refused(usable[b]) {
+			return !refused(usable[a])
+		}
+		return rank(usable[a].Kind) < rank(usable[b].Kind)
+	})
 	if len(usable) == 0 {
 		return nil
 	}
@@ -156,6 +174,10 @@ func (m *Module) chooseProfileSource(ctx context.Context, tenant model.TenantID,
 	}
 	if !installed {
 		return resolveChoice{}, &codedRunErr{conflictErr("Install " + tool.name + " first, under AI tools."), resolveCodeToolNotInstalled}
+	}
+	if driver == providerDriverGrok && grokSandboxUnavailable(PresetAsk) {
+		// A new session starts on the ask preset, which runs Grok's sandbox (HU2-34).
+		return resolveChoice{}, &codedRunErr{conflictErr(grokSandboxMissing + "."), resolveCodeToolNotInstalled}
 	}
 	c := resolveChoice{driver: driver, tool: tool, source: AuthSourceAccountHome, out: ResolvedProfile{Reason: ResolveOwnLogin}}
 	if signedIn && tool.signsIn {

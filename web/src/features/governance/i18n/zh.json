@@ -711,6 +711,7 @@
     "tool": "工具",
     "willRun": "将要运行的内容",
     "noReview": "此请求未包含将要运行的内容。",
+    "commandUnknown": "此工具暂不显示命令",
     "showAll": "显示全部",
     "showLess": "收起",
     "details": "详情",

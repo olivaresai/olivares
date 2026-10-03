@@ -116,6 +116,24 @@ it('requires explicit managed binding and offers only active compatible records'
     }),
   )
 })
+// Root 22:12Z (FH d4af6c7a): an OpenAI-compatible endpoint served every tool here; the
+// engine holds only Codex to its address now, and refuses the others.
+it('offers an OpenAI-compatible endpoint to Codex only', async () => {
+  mount()
+  const user = await homes()
+  await user.selectOptions(
+    screen.getByLabelText('Authentication source'),
+    'managed_injection',
+  )
+  await screen.findByRole('option', { name: /Claude fixture/ })
+  expect(
+    screen.queryByRole('option', { name: /Compatible fixture/ }),
+  ).toBeNull()
+  await user.selectOptions(screen.getByLabelText('Driver'), 'codex')
+  expect(
+    await screen.findByRole('option', { name: /Compatible fixture/ }),
+  ).toBeInTheDocument()
+})
 it('clears incompatible selection on driver change and never substitutes another record', async () => {
   mount()
   const user = await homes()

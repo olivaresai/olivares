@@ -302,7 +302,15 @@ describe('the content-free personal handoff page', () => {
         onOpenHandoff={() => {}}
       />
     ))
-    expect(await screen.findByText(/not authorized/i)).toBeVisible()
+    expect(
+      await screen.findByText('You do not have access to this.'),
+    ).toBeVisible()
+    expect(
+      screen.getByText(
+        'Your roles or a group policy do not allow it. An owner or administrator of this organization can grant it.',
+      ),
+    ).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(
       screen.queryByText('No Offered handoffs in this workspace'),

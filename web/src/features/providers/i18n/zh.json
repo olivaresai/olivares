@@ -36,7 +36,7 @@
     "openai": "Codex。注入 OPENAI_API_KEY。",
     "xai": "Grok。注入 XAI_API_KEY。",
     "openai_compatible": "任何 OpenAI 形态的端点。注入 OPENAI_API_KEY 和 OPENAI_BASE_URL；端点为必填。",
-    "ollama": "用于 Codex 的本地模型。无需 API 密钥。请使用 Ollama 原生端点；测试读取模型元数据。"
+    "ollama": "用于 OpenCode 的本地模型。无需 API 密钥。请使用 Ollama 原生端点；测试读取模型元数据。"
   },
   "states": {
     "active": "有效",
@@ -122,11 +122,6 @@
   "vaultUnavailable": {
     "title": "此部署无法保存提供方凭据",
     "description": "没有接入封存式凭据保管库，因此引擎拒绝保存密钥，而不是保存一份它无法保护的密钥。需要管理员配置机密封存器。"
-  },
-  "next": {
-    "title": "下一步：部署一个代理",
-    "description": "注册提供方本身不会启动会话。将它绑定到提供方配置档案，让新会话使用它。",
-    "action": "前往提供方配置档案"
   },
   "truncation": {
     "label": "正在显示 {{n}} 个提供方；还有更多",

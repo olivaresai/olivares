@@ -7,6 +7,7 @@ package main
 import (
 	"context"
 	"errors"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -19,6 +20,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
@@ -41,9 +44,10 @@ const (
 )
 
 type workLaunchAuthorityEstate struct {
-	eng    *engine
-	tenant model.TenantID
-	marker string
+	eng      *engine
+	tenant   model.TenantID
+	marker   string
+	launcher auth.Principal
 }
 
 type workLaunchAuthorityOwner struct {
@@ -84,6 +88,19 @@ func bootWorkLaunchAuthorityEstate(
 	if eng.sessionsMod == nil {
 		t.Fatal("boot composed no sessions module")
 	}
+	pep, err := buildClaudeHookPEPServer(eng, discardLogger())
+	if err != nil {
+		t.Fatal(err)
+	}
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = pep.Close() })
+	if err := eng.hookCredentials().bindEndpoint(listener.Addr().String()); err != nil {
+		t.Fatal(err)
+	}
+	go func() { _ = pep.Serve(listener) }()
 
 	setupToken, _, err := eng.setupTok.Ensure()
 	if err != nil {
@@ -112,7 +129,14 @@ func bootWorkLaunchAuthorityEstate(
 	if tenantID == "" {
 		t.Fatalf("created tenant has no id: %s", raw)
 	}
-	return workLaunchAuthorityEstate{eng: eng, tenant: model.TenantID(tenantID), marker: marker}
+	// Use the real login's current, credential-bound principal. A bare agent
+	// label cannot mint the engine-managed hook credential for a work launch.
+	launcher, err := eng.authr.Authenticate(t.Context(), adminToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return workLaunchAuthorityEstate{eng: eng, tenant: model.TenantID(tenantID), marker: marker,
+		launcher: launcher}
 }
 
 // seedWorkLaunchAuthorityOwner writes the legitimate authority facts the real
@@ -239,6 +263,11 @@ func launchWorkWithinBound(
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), workLaunchAuthorityBound)
 	defer cancel()
+	ctx, _, err := api.NewReadRowAuthorizationPort(e.eng.authz, e.eng.authr).
+		RefreshReadPrincipal(ctx, e.launcher, e.tenant)
+	if err != nil {
+		return workLaunchAuthorityOutcome{err: err}
+	}
 	done := make(chan workLaunchAuthorityOutcome, 1)
 	started := time.Now()
 	go func() {
@@ -330,18 +359,18 @@ func exerciseBootWorkLaunchAuthority(t *testing.T, backing communicationHTTPTest
 	owner := seedWorkLaunchAuthorityOwner(t, e, "wla-launch")
 	ctx := context.Background()
 	profile, err := e.eng.sessionsMod.CreateProfile(ctx, e.tenant, sessions.CreateProfileInput{
-		Driver: "claude", ConfigHome: t.TempDir(), UserHome: t.TempDir(),
+		Driver: "claude", ConfigHome: t.TempDir(), UserHome: filepath.Dir(e.marker),
 		DisplayName: "work launch authority", AuthSource: sessions.AuthSourceAccountHome,
 	})
 	if err != nil {
 		t.Fatalf("provider profile: %v", err)
 	}
 	spec := sessions.WorkLaunchSpec{
-		WorkItemID: owner.item, AuditActorRef: owner.ownerExternal,
+		WorkItemID: owner.item, AuditActorRef: e.launcher.UserID.String(),
 		Runtime: sessions.CreateRunParams{
 			Name: "wla-managed", Transport: sessions.TransportStreamJSON,
-			Isolation: sessions.IsolationNative, Actor: owner.ownerExternal,
-			ActorKind: model.ActorAgent, AgentRef: owner.ownerExternal,
+			Isolation: sessions.IsolationNative, Actor: e.launcher.Actor(),
+			ActorKind: e.launcher.ActorKind(), AgentRef: owner.ownerExternal,
 			ProviderProfileRef: profile.Ref,
 		},
 	}

@@ -46,7 +46,13 @@ import {
   isPivNotConfigured,
 } from './api'
 import type { WebAuthnCredentialItem } from './types'
-import { AAL, StepUpPanel, aalLabel, useAssurance } from './assurance'
+import {
+  AAL,
+  StepUpPanel,
+  aalLabel,
+  useAssurance,
+  useStepUpSatisfied,
+} from './assurance'
 import {
   AuthorityLink,
   ContractPendingNotice,
@@ -78,6 +84,12 @@ export function PrivilegedLoginTab() {
 function AssuranceStatusSection() {
   const { t } = useTranslation('identity')
   const { aal, amr } = useAssurance()
+  // What this deployment asks for before administrative actions (off by default), and
+  // whether this session meets it: the engine says both in whoami. The section used to
+  // say a hardware step-up and AAL3 were required whatever the policy (Root 19:15Z).
+  const { principal } = useAuth()
+  const policy = principal?.admin_step_up
+  const satisfied = useStepUpSatisfied()
   return (
     <SectionCard
       title={t('login.statusTitle')}
@@ -85,7 +97,7 @@ function AssuranceStatusSection() {
     >
       <KvList>
         <KvRow label={t('login.currentAal')}>
-          <Badge variant={aal >= AAL.HARDWARE ? 'success' : 'warning'}>
+          <Badge variant={satisfied ? 'success' : 'warning'}>
             {aalLabel(aal, t)}
           </Badge>
         </KvRow>
@@ -105,10 +117,12 @@ function AssuranceStatusSection() {
           )}
         </KvRow>
       </KvList>
-      <p className="mt-2 text-caption text-muted-foreground">
-        {t('login.targetStandardsNote')}
-      </p>
-      {aal < AAL.HARDWARE ? (
+      {policy ? (
+        <p className="mt-2 text-caption text-muted-foreground">
+          {t(`login.policy.${policy}`)}
+        </p>
+      ) : null}
+      {!satisfied ? (
         <div className="mt-3">
           <StepUpPanel
             minAal={AAL.HARDWARE}

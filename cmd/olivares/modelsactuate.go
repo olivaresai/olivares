@@ -47,6 +47,11 @@ var _ models.Executor = (*modelsExecutor)(nil)
 func (e *modelsExecutor) Execute(ctx context.Context, req models.ExecuteRequest) (models.ExecuteResult, error) {
 	var lastErr error
 	for i, target := range req.Chain {
+		// This adapter holds only the Anthropic credential and Messages transport.
+		// Check every attempted target, including fallbacks, before constructing a send.
+		if target.ProviderRef != modelprovider.ProviderAnthropic {
+			return models.ExecuteResult{}, models.ErrExecutionTargetUnsupported
+		}
 		cfg := e.cfg
 		cfg.Doer = e.doer
 		cfg.DefaultModel = target.ModelRef

@@ -717,6 +717,7 @@
     "tool": "Outil",
     "willRun": "Ce qui sera exécuté",
     "noReview": "Cette demande n’indique pas ce qui sera exécuté.",
+    "commandUnknown": "Commande pas encore affichée pour cet outil",
     "showAll": "Tout afficher",
     "showLess": "Afficher moins",
     "details": "Détails",

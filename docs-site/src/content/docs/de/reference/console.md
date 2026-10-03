@@ -62,14 +62,14 @@ Beobachtbarkeit & Nachweise, dann System & Einstellungen.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-Die Konsole veröffentlicht **80 Routen**. Jede steht mit der erforderlichen
+Die Konsole veröffentlicht **81 Routen**. Jede steht mit der erforderlichen
 Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen unten.
 
 ### Betreiben
 
 | Bildschirm | Pfad | Funktion | Erforderlich | Referenz |
 |---|---|---|---|---|
-| Übersicht | `/` | Estate-Übersicht und Zustand auf einen Blick | any signed-in user | [Dokumentationsstart](/de/) |
+| Start | `/` | Estate-Übersicht und Zustand auf einen Blick | any signed-in user | [Dokumentationsstart](/de/) |
 | Agentenwerkzeuge | `/agent-tools` | Erkennen, installieren und aktualisieren Sie die Agentenwerkzeuge auf diesem Host und verfolgen Sie jede Installation; nur für Deployment-Administratoren | `system:admin` | [how-to/add-a-provider](/de/how-to/add-a-provider/) |
 | Sitzungen betreiben | `/agentops` | Claude-Code-Sitzungen erstellen, anhängen und steuern — ohne SSH; teilt sich den Bildschirm mit „Sitzungen beobachten“ | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/de/how-to/run-claude-code-with-olivares/) |
 | Backups | `/backups` | Backups auslösen, planen, herunterladen und wiederherstellen, mit einer zweiten Bestätigung auf dem destruktiven Pfad. | `system:admin` | [how-to/backup-and-restore](/de/how-to/backup-and-restore/) |
@@ -90,7 +90,7 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 | Sitzungen beobachten | `/sessions` | Live- und entdeckte Sitzungen mit ihren Zeitleisten beobachten; teilt sich den Bildschirm mit „Sitzungen betreiben“ | `sessions:live:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
 | Tenants | `/tenants` | Dienst eines Tenants entziehen oder wiederherstellen | `system:admin` | [how-to/troubleshooting](/de/how-to/troubleshooting/) |
 | Voice | `/voice` | Voice- und Realtime-Sessions | `voice:session:read` | [reference/modules/xvi-voice](/de/reference/modules/xvi-voice/) |
-| Work | `/work` | Dauerhafter Session-übergreifender Backlog: Elemente, Abhängigkeiten, Abnahme und Entscheidungen | `sessions:work:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
+| Work | `/work` | Gemeinsame Arbeit: Einheiten, Abhängigkeiten, Abnahme und Entscheidungen | `sessions:work:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
 | Workspace | `/workspace` | Agenten, Sessions, Ressourcen und Aktivität im Scope eines Workspace | `tenant:read` | [reference/modules/xx-multi-tenancy](/de/reference/modules/xx-multi-tenancy/) |
 | Workspace-Vorlagen | `/workspace-templates` | Wiederverwendbare Snapshots der Session-Konfiguration: Hooks, Einstellungen, Connectors und Policies. | `sessions:template:read` | [reference/modules/ii-sessions](/de/reference/modules/ii-sessions/) |
 
@@ -115,6 +115,7 @@ Berechtigung und der vom Hilfe-Link geöffneten Referenzseite in den Tabellen un
 | Git-Veröffentlichung | `/git-publication` | Commits pushen, Pull Requests öffnen und über freigegebene Git-Ziele mergen | `gitpublish:target:read` | [reference/modules/gitpublish](/de/reference/modules/gitpublish/) |
 | Inventar | `/inventory` | Agenten, MCP-Server und Modelle, die Konnektoren beobachtet haben, erkennen und katalogisieren. | `inventory:catalog:read` | [reference/modules/i-inventory](/de/reference/modules/i-inventory/) |
 | Wissen | `/knowledge` | Wissensbasen, RAG und Data Lineage | `knowledge:kb:read` | [reference/modules/viii-knowledge](/de/reference/modules/viii-knowledge/) |
+| MCP-Server | `/mcp-servers` | Entfernte MCP-Server mit dieser Organisation verbinden, testen und festlegen, welche Tools Sitzungen nutzen dürfen | `tenant:admin` | [how-to/connectors/mcp-governance](/de/how-to/connectors/mcp-governance/) |
 | Modellbetrieb | `/model-operations` | Eigene Modelle, Zulassung und Deployments | `models:registry:read` | [reference/modules/xxiii-model-operations](/de/reference/modules/xxiii-model-operations/) |
 | Modelle | `/models` | Modelle, Routing und Provider-Schlüssel | `models:catalog:read` | [reference/modules/x-models](/de/reference/modules/x-models/) |
 | Einrichtungsassistent | `/onboarding` | Schrittweise Konfiguration der Bereitstellung | `system:admin` | [start/quickstart](/de/start/quickstart/) |

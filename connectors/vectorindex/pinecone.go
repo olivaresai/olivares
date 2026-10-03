@@ -13,6 +13,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 // pinecone backend — Pinecone Serverless and pod-based indexes via the REST API.
@@ -171,8 +173,8 @@ func (p *pinecone) call(ctx context.Context, method, path string, body, out any)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("vectorindex: pinecone %s %s: status %d: %s", method, path, resp.StatusCode, strings.TrimSpace(string(excerpt)))
+		excerpt := redact.ReadHTTPError(resp.Body, 512, req, p.apiKey)
+		return fmt.Errorf("vectorindex: pinecone %s %s: status %d: %s", method, path, resp.StatusCode, excerpt)
 	}
 	if out == nil {
 		_, _ = io.Copy(io.Discard, resp.Body)

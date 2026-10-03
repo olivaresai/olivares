@@ -13,6 +13,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 // InferenceClient is the model-INVOCATION sibling of the read-only Client. Where
@@ -50,8 +52,7 @@ func NewInferenceClient(base string, doer Doer, scheme AuthScheme, cred string, 
 	}
 }
 
-// maxInferenceErrBody bounds an error response body excerpt (provider error
-// messages, which do not carry prompts/PII).
+// maxInferenceErrBody bounds a redacted provider rejection diagnostic.
 const maxInferenceErrBody = 4 << 10 // 4 KiB
 
 // maxResultsBody bounds a results download (a batch results JSONL can be large but
@@ -97,7 +98,7 @@ func (c *InferenceClient) PostJSON(ctx context.Context, path string, body, out a
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+path, bytes.NewReader(buf))
 	if err != nil {
-		return fmt.Errorf("modelprovider: build POST %s: %w", path, err)
+		return fmt.Errorf("modelprovider: build POST %s: %w", redactURL(path), redactTransportError(err))
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
@@ -117,20 +118,20 @@ func (c *InferenceClient) PostJSONRaw(ctx context.Context, path string, body any
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+path, bytes.NewReader(buf))
 	if err != nil {
-		return nil, fmt.Errorf("modelprovider: build POST %s: %w", path, err)
+		return nil, fmt.Errorf("modelprovider: build POST %s: %w", redactURL(path), redactTransportError(err))
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 	c.setHeaders(req, extra)
 	resp, err := c.doer.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("modelprovider: POST %s: %w", path, err)
+		return nil, fmt.Errorf("modelprovider: POST %s: %w", redactURL(path), redactTransportError(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxResultsBody))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, &APIError{Method: req.Method, Path: path, Status: resp.StatusCode, Body: strings.TrimSpace(string(truncate(raw, maxInferenceErrBody)))}
+		return nil, &APIError{Method: req.Method, Path: path, Status: resp.StatusCode, Body: redact.ReadHTTPError(resp.Body, maxInferenceErrBody, req, c.cred)}
 	}
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, maxResultsBody))
 	return raw, nil
 }
 
@@ -148,19 +149,19 @@ func (c *InferenceClient) PostStream(ctx context.Context, path string, body any,
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+path, bytes.NewReader(buf))
 	if err != nil {
-		return nil, fmt.Errorf("modelprovider: build POST %s: %w", path, err)
+		return nil, fmt.Errorf("modelprovider: build POST %s: %w", redactURL(path), redactTransportError(err))
 	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "text/event-stream")
 	c.setHeaders(req, extra)
 	resp, err := c.doer.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("modelprovider: POST %s: %w", path, err)
+		return nil, fmt.Errorf("modelprovider: POST %s: %w", redactURL(path), redactTransportError(err))
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, maxInferenceErrBody))
+		excerpt := redact.ReadHTTPError(resp.Body, maxInferenceErrBody, req, c.cred)
 		_ = resp.Body.Close()
-		return nil, &APIError{Method: req.Method, Path: path, Status: resp.StatusCode, Body: strings.TrimSpace(string(excerpt))}
+		return nil, &APIError{Method: req.Method, Path: path, Status: resp.StatusCode, Body: excerpt}
 	}
 	return resp.Body, nil
 }
@@ -175,7 +176,7 @@ func (c *InferenceClient) GetJSON(ctx context.Context, path string, query url.Va
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return fmt.Errorf("modelprovider: build GET %s: %w", path, err)
+		return fmt.Errorf("modelprovider: build GET %s: %w", redactURL(path), redactTransportError(err))
 	}
 	req.Header.Set("Accept", "application/json")
 	c.setHeaders(req, extra)
@@ -194,7 +195,7 @@ func (c *InferenceClient) DeleteJSON(ctx context.Context, path string, query url
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, u, nil)
 	if err != nil {
-		return fmt.Errorf("modelprovider: build DELETE %s: %w", path, err)
+		return fmt.Errorf("modelprovider: build DELETE %s: %w", redactURL(path), redactTransportError(err))
 	}
 	req.Header.Set("Accept", "application/json")
 	c.setHeaders(req, extra)
@@ -211,18 +212,29 @@ func (c *InferenceClient) GetBytes(ctx context.Context, rawURL string, extra map
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return nil, fmt.Errorf("modelprovider: build GET %s: %w", redactURL(rawURL), err)
+		return nil, fmt.Errorf("modelprovider: build GET %s: %w", redactURL(rawURL), redactTransportError(err))
 	}
 	c.setHeaders(req, extra)
 	resp, err := c.doer.Do(req)
 	if err != nil {
-		return nil, fmt.Errorf("modelprovider: GET %s: %w", redactURL(rawURL), err)
+		return nil, fmt.Errorf("modelprovider: GET %s: %w", redactURL(rawURL), redactTransportError(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxResultsBody))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return nil, fmt.Errorf("modelprovider: GET %s: status %d: %s", redactURL(rawURL), resp.StatusCode, strings.TrimSpace(string(truncate(body, maxInferenceErrBody))))
+		// Results URLs may carry signatures independent of the API credential.
+		// Their whole query is confidential, just as it is in redactURL.
+		credentials := []string{c.cred, req.URL.RawQuery}
+		for _, values := range req.URL.Query() {
+			credentials = append(credentials, values...)
+		}
+		for _, field := range strings.Split(req.URL.RawQuery, "&") {
+			if _, value, ok := strings.Cut(field, "="); ok {
+				credentials = append(credentials, value)
+			}
+		}
+		return nil, fmt.Errorf("modelprovider: GET %s: status %d: %s", redactURL(rawURL), resp.StatusCode, redact.ReadHTTPError(resp.Body, maxInferenceErrBody, req, credentials...))
 	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxResultsBody))
 	return body, nil
 }
 
@@ -249,7 +261,7 @@ func (c *InferenceClient) PostMultipart(ctx context.Context, path string, fields
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.base+path, &buf)
 	if err != nil {
-		return fmt.Errorf("modelprovider: build POST %s: %w", path, err)
+		return fmt.Errorf("modelprovider: build POST %s: %w", redactURL(path), redactTransportError(err))
 	}
 	req.Header.Set("Content-Type", w.FormDataContentType())
 	req.Header.Set("Accept", "application/json")
@@ -262,12 +274,11 @@ func (c *InferenceClient) PostMultipart(ctx context.Context, path string, fields
 func (c *InferenceClient) do(req *http.Request, path string, out any) error {
 	resp, err := c.doer.Do(req)
 	if err != nil {
-		return fmt.Errorf("modelprovider: %s %s: %w", req.Method, path, err)
+		return fmt.Errorf("modelprovider: %s %s: %w", req.Method, redactURL(path), redactTransportError(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, maxInferenceErrBody))
-		return &APIError{Method: req.Method, Path: path, Status: resp.StatusCode, Body: strings.TrimSpace(string(excerpt))}
+		return &APIError{Method: req.Method, Path: path, Status: resp.StatusCode, Body: redact.ReadHTTPError(resp.Body, maxInferenceErrBody, req, c.cred)}
 	}
 	if out == nil {
 		_, _ = io.Copy(io.Discard, resp.Body)
@@ -294,13 +305,19 @@ func (e *APIError) Error() string {
 	return fmt.Sprintf("modelprovider: %s %s: status %d: %s", e.Method, e.Path, e.Status, e.Body)
 }
 
-// redactURL strips the query string from a URL for error messages (a results_url or
-// a signed download URL can carry a short-lived token in the query — never log it).
+// redactURL keeps only the public URL location in an error. Signed queries,
+// userinfo and fragments are confidential even when the request never succeeds.
 func redactURL(raw string) string {
-	if i := strings.IndexByte(raw, '?'); i >= 0 {
-		return raw[:i] + "?[redacted]"
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "[redacted URL]"
 	}
-	return raw
+	u.User = nil
+	u.RawQuery = ""
+	u.ForceQuery = false
+	u.Fragment = ""
+	u.RawFragment = ""
+	return u.String()
 }
 
 // truncate caps b at n bytes for a bounded error excerpt.

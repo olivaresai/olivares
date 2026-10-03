@@ -51,7 +51,10 @@ func newQuickstartCmd() *cobra.Command {
   olivares quickstart --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444
 
   # Start with a custom data directory
-  olivares quickstart --data-dir /var/lib/olivares`,
+  olivares quickstart --data-dir /var/lib/olivares
+
+  # Use PostgreSQL: roles, passwords, TLS and keys are generated (the URL stays out of argv)
+  olivares quickstart --postgres env:PG_MAINTENANCE_URL`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if postgresRef != "" {

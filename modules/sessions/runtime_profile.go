@@ -118,6 +118,15 @@ func refuseOpenCodeUnsupportedControls(p CreateRunParams) error {
 	return nil
 }
 
+// refuseGrokWithoutItsSandbox refuses a Grok launch whose preset needs bubblewrap on a server
+// without it, with the reason (HU2-34), before anything is spawned.
+func refuseGrokWithoutItsSandbox(p CreateRunParams, driver string) error {
+	if driver == providerDriverGrok && grokSandboxUnavailable(launchPreset(p)) {
+		return conflictErr(grokSandboxMissing)
+	}
+	return nil
+}
+
 func refuseNativeCustomPreset(p CreateRunParams, driver string) error {
 	if driver != providerDriverClaude && launchPreset(p) == PresetCustom {
 		return badRequest("this tool cannot apply the session template's tool restrictions; choose a built-in permission preset")
@@ -203,6 +212,9 @@ func (m *Module) resolveLaunchProfileInto(ctx context.Context, tenant model.Tena
 		return err
 	}
 	if err := refuseNativeCustomPreset(*p, snap.Driver); err != nil {
+		return err
+	}
+	if err := refuseGrokWithoutItsSandbox(*p, snap.Driver); err != nil {
 		return err
 	}
 	if snap.Driver == providerDriverClaude && p.Effort != "" && !validEffortLevels[p.Effort] {

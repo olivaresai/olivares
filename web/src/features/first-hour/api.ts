@@ -11,7 +11,12 @@ import { http } from '@/lib/api'
 import { ApiError } from '@/lib/api/errors'
 import { agentToolsApi, type ToolJob } from '@/features/agent-tools/api'
 import { agentOpsApi } from '@/features/agentops/api'
+import { stoppedAtStartReason } from '@/features/agentops/launch-readiness'
 import { sessionTurnBody } from '@/features/agentops/session-turn'
+import {
+  sentTurnsPartition,
+  useSentTurns,
+} from '@/features/sessions/sent-turns'
 import type {
   RunDTO,
   SecretEnvRef,
@@ -185,6 +190,8 @@ export type SecretEnvChoice = SecretEnvRef
  * or a key from Providers), the folder, the permission choice and, when given,
  * the first prompt. Returns the run. */
 export async function startSession(input: StartSessionInput): Promise<RunDTO> {
+  // The sign-in and organization this start belongs to, before anything is awaited.
+  const partition = sentTurnsPartition()
   const { profile } = await agentOpsApi.resolveProfile(input.driver)
   const folder = input.folder.trim()
   const workspace = folder ? await ensureFolder(folder) : undefined
@@ -203,7 +210,22 @@ export async function startSession(input: StartSessionInput): Promise<RunDTO> {
     ...(input.secretEnv?.length ? { secret_env: input.secretEnv } : {}),
   })
   const prompt = input.prompt.trim()
-  if (prompt) await sendFirstPrompt(run, prompt)
+  if (!prompt) return run
+  const { note } = useSentTurns.getState()
+  try {
+    await sendFirstPrompt(run, prompt)
+    note(partition, run.run_ref, { text: prompt })
+  } catch (err) {
+    // A tool that stopped as it started did not start: the dialog says why.
+    if (stoppedAtStartReason(err) !== null) throw err
+    // The session runs and its first message did not reach it (HU2-27: a refused key,
+    // "auth_required"). The session opens with the message and the engine's reason,
+    // instead of a dialog saying it did not start while it runs on.
+    note(partition, run.run_ref, {
+      text: prompt,
+      refused: err instanceof Error ? err.message : String(err),
+    })
+  }
   return run
 }
 

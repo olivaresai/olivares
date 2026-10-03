@@ -51,11 +51,12 @@ func TestSessionMCPPeerToolsPinSenderAndInboxToSharedPrincipal(t *testing.T) {
 		}
 		switch r.Method {
 		case http.MethodPost:
+			key, keyErr := model.ParseID(r.Header.Get("Idempotency-Key"))
 			var cmd sessions.WorkCommand
 			if err := json.NewDecoder(r.Body).Decode(&cmd); err != nil {
 				t.Fatal(err)
 			}
-			if r.URL.Path != "/v1/m/sessions/work-items" || r.URL.Query().Get("mode") != "apply" || r.Header.Get("Idempotency-Key") != "reply-1" ||
+			if r.URL.Path != "/v1/m/sessions/work-items" || r.URL.Query().Get("mode") != "apply" || keyErr != nil || key.String() != r.Header.Get("Idempotency-Key") ||
 				cmd.Command != "item.create" || cmd.WorkspaceID != workspace || cmd.WorkKind != "message" || cmd.OwnerKind != "session" || cmd.OwnerRef != recipient ||
 				cmd.ProvenanceKind != "mcp" || cmd.ProvenanceRef != sender || cmd.Title != "Review reply" || cmd.BriefMD != "Please review the change." || cmd.Priority != "p2" ||
 				len(cmd.Acceptance) != 1 || !cmd.Acceptance[0].Required {

@@ -358,9 +358,21 @@
     "inspect": "Afficher dans l’inspecteur",
     "args": "Arguments",
     "toolResult": "Résultat",
+    "toolFailed": "Échec",
     "tokens": "{{input}} entrées · {{output}} sorties",
     "cwdWarning": "Cette session n’a pas d’espace de travail. Le pilote a déclaré son répertoire de travail comme {{cwd}}.",
-    "protocol": "Trames de protocole : {{count}}"
+    "protocol": "Trames de protocole : {{count}}",
+    "stop": {
+      "cancelled": "Annulé",
+      "refusal": "Refusé par le modèle",
+      "maxTokens": "Arrêté à la limite de jetons",
+      "maxTurnRequests": "Arrêté à la limite de tours"
+    },
+    "turnFailed": "Le tour a échoué : {{message}}",
+    "retrying": "Nouvelle tentative ({{count}}) : {{message}}",
+    "keyRefused": "Le fournisseur a refusé la clé d’API. Remplacez-la dans Fournisseurs.",
+    "output": "Sortie de l’outil ({{count}}) : {{first}}",
+    "notSent": "Non envoyé : {{reason}}"
   },
   "changes": {
     "title": "Modifications dans {{folder}}",

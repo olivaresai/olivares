@@ -45,7 +45,7 @@
 import { ProviderAccent } from '@/features/agentops/provider-accent'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { IdCard, Layers, Plus, Send } from 'lucide-react'
+import { IdCard, Layers, Send } from 'lucide-react'
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
@@ -63,8 +63,6 @@ import { toast } from '@/components/ui/toaster'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import '@/features/agentops/i18n'
-// The no-profile action says what Home's first-step line says (home:start), in one place.
-import '@/features/home/i18n'
 import { launchFailureMessage } from '@/features/agentops/launch-readiness'
 import { sessionTurnBody } from '@/features/agentops/session-turn'
 import type { CreateRunRequest, RunDTO } from '@/features/agentops/types'
@@ -659,6 +657,11 @@ export function WorkComposer({
     )
   }
 
+  // No provider profile and no session in hand: nothing here (HU2-05). The page's own New
+  // session starts one, resolving a profile per tool, so "a session cannot start without
+  // one" was false beside it, and so was its scope line.
+  if (blocked === 'no-profiles') return null
+
   const draftScope = {
     workspace: workspace?.name || workspace?.workspace_ref || null,
     workspaceId: workspace?.workspace_ref || null,
@@ -794,30 +797,6 @@ export function WorkComposer({
                 : 'launcher.noProfileRead',
           )}
         </p>
-      ) : blocked === 'no-profiles' ? (
-        // THE HONEST STATE: not a disabled field, and not an invented reason. The engine makes
-        // the profile mandatory, so there is one thing to do and this is it.
-        <div className="flex min-w-0 items-center gap-2">
-          <p
-            className="min-w-0 flex-1 whitespace-normal text-caption text-muted-foreground [overflow-wrap:anywhere]"
-            title={t('nav:launcher.noProfiles')}
-          >
-            {t('nav:launcher.noProfiles')}
-          </p>
-          {/* The setup that makes a session possible: install Claude Code, sign it in,
-              start (HU-19). Provider profiles could do none of that for a new person. */}
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() =>
-              void navigate({ to: '/onboarding' as never } as never)
-            }
-            data-testid="launcher-add-provider"
-          >
-            <Plus className="size-3.5" />
-            {t('home:start.installAction')}
-          </Button>
-        </div>
       ) : (
         /* ⛔ ONE ROW, AND THE MINIMUM WIDTHS ARE GONE. A `min-w` on a flex item is a
             floor the row cannot go under, so three of them turned "narrow pane" into

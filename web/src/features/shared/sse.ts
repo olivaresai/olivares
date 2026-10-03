@@ -8,10 +8,10 @@ import { useTenantStore } from '@/stores/tenant'
 /**
  * Server-Sent Events over fetch — the live-operation transport consumes.
  *
- * WHY NOT native EventSource: the engine authenticates with a bearer token and a
- * tenant header (Authorization + X-Olivares-Tenant), and EventSource cannot set
- * request headers. So we read the SSE stream with fetch + a ReadableStream reader,
- * which lets us attach auth, pin the tenant, abort cleanly on unmount, and
+ * The engine authenticates the browser with its HttpOnly session cookie. Native
+ * EventSource cannot set the tenant or CSRF headers, so we read the SSE stream
+ * with fetch + a ReadableStream reader, which sends same-origin cookies, pins
+ * the tenant, aborts cleanly on unmount, and
  * reconnect with backoff. The frame parser is a pure, testable function; the React
  * hook wraps it with the connection lifecycle. The web adds NO logic (ARCHITECTURE.md) —
  * it renders the same `liveDTO`/`statusDTO` snapshots the modules already push.
@@ -60,6 +60,7 @@ export function createSSEParser(
 export interface SubscribeOptions {
   /** Absolute API path, e.g. `/v1/m/sessions/stream`. */
   path: string
+  /** In-memory CSRF token; authentication uses the HttpOnly cookie. */
   token: string | null
   tenant: string | null
   signal: AbortSignal

@@ -157,16 +157,18 @@ func (o *Output) notifyWebhook(ctx context.Context, n sdk.Notification) error {
 		return fmt.Errorf("slack: marshal payload: %w", err)
 	}
 	res, err := o.client.Send(ctx, delivery.Request{
-		URL:    o.webhookURL,
-		Header: map[string]string{"Content-Type": "application/json"},
-		Body:   body,
+		URL:         o.webhookURL,
+		Header:      map[string]string{"Content-Type": "application/json"},
+		Body:        body,
+		Credentials: []string{o.webhookURL},
 	})
 	if err != nil {
 		// The webhook URL IS the secret credential and delivery interpolates the
 		// request URL into its error string — so we must NOT wrap that error with
 		// %w (it would carry the URL out of Notify). Surface only the status and
-		// a bounded body excerpt, both of which are non-sensitive.
-		return fmt.Errorf("slack: webhook delivery failed: status %d: %s", res.StatusCode, res.Body)
+		// the status. A webhook response can reflect its credential in arbitrary
+		// encodings, so no provider body text belongs in a logged error.
+		return fmt.Errorf("slack: webhook delivery failed: status %d", res.StatusCode)
 	}
 	return nil
 }

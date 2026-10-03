@@ -124,16 +124,19 @@ func advanceStopSweep(next time.Time, interval time.Duration) time.Time {
 	return next
 }
 
+const ownerAccessReadGrace = 5 * time.Minute
+
 // sweepSessionAccess checks idle as well as active runs without holding registry
-// locks over store reads. StopForAccessEnded validates the issuer's exact scope;
-// unavailable standing fails closed through the existing credential-failure stop.
+// locks over store reads. A proven withdrawal stops immediately; read failures
+// retry with backoff for a bounded grace. Admission still requires a valid read.
 func (m *Module) sweepSessionAccess(ctx context.Context) {
 	if m.rt.sessionAccessCheck == nil {
 		return
 	}
 	for _, lr := range m.rt.snapshotLive() {
+		startedAt := m.now()
 		lr.mu.Lock()
-		skip := lr.stopRequested || lr.finalized
+		skip := lr.stopRequested || lr.finalized || startedAt.Before(lr.ownerAccessRetryAt)
 		lr.mu.Unlock()
 		if skip {
 			continue
@@ -141,19 +144,67 @@ func (m *Module) sweepSessionAccess(ctx context.Context) {
 		checkCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 		scope, user, err := m.rt.sessionAccessCheck(checkCtx, lr.tenant, lr.runRef)
 		cancel()
-		reason := "Session owner access could not be checked"
-		ended := errors.Is(err, auth.ErrSessionAccessEnded)
-		if ended {
-			reason = "Access ended for " + accessLossUser(user)
+		if ctx.Err() != nil {
+			return
+		}
+		if errors.Is(err, auth.ErrSessionAccessEnded) {
 			// A proven offboard is already a terminal cause. Give its exact
 			// generation bounded teardown admission after the read deadline;
 			// fallback must preserve that cause on the captured process too.
 			stopCtx, stopCancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
 			err = m.StopForAccessEnded(stopCtx, scope, user)
 			stopCancel()
+			if err != nil {
+				m.terminateForRuntimeAccessFailure(lr, "Access ended for "+accessLossUser(user), true)
+			}
+			continue
 		}
-		if err != nil && ctx.Err() == nil {
-			m.terminateForRuntimeAccessFailure(lr, reason, ended)
+		lr.mu.Lock()
+		if lr.stopRequested || lr.finalized {
+			lr.mu.Unlock()
+			continue
+		}
+		// An external PEP or a legacy run may have no owner scope in this
+		// issuer. That is neither an unavailable standing read nor withdrawal.
+		// Credential admission still refuses this unauthenticated result.
+		if err == nil || errors.Is(err, auth.ErrSessionOwnerUnbound) {
+			lr.ownerAccessFailureSince = time.Time{}
+			lr.ownerAccessRetryAt = time.Time{}
+			lr.ownerAccessAttempts = 0
+			lr.mu.Unlock()
+			continue
+		}
+		now := m.now()
+		if lr.ownerAccessFailureSince.IsZero() {
+			lr.ownerAccessFailureSince = now
+		}
+		lr.ownerAccessAttempts++
+		attempt := lr.ownerAccessAttempts
+		graceEnd := lr.ownerAccessFailureSince.Add(ownerAccessReadGrace)
+		expired := !now.Before(graceEnd)
+		backoff := 5 * time.Second
+		for n := 1; n < attempt && backoff < 30*time.Second; n++ {
+			backoff *= 2
+		}
+		if backoff > 30*time.Second {
+			backoff = 30 * time.Second
+		}
+		lr.ownerAccessRetryAt = now.Add(backoff)
+		if lr.ownerAccessRetryAt.After(graceEnd) {
+			lr.ownerAccessRetryAt = graceEnd
+		}
+		lr.mu.Unlock()
+		// The reader may carry store paths or credentials in its error text.
+		// Log the cause class, never that untrusted text.
+		cause := "read_failed"
+		if errors.Is(err, context.DeadlineExceeded) {
+			cause = "deadline_exceeded"
+		} else if errors.Is(err, context.Canceled) {
+			cause = "canceled"
+		}
+		m.warnf("sessions: owner access check failed", "run_ref", lr.runRef, "attempt", attempt, "cause", cause)
+		if expired {
+			m.terminateForRuntimeAccessFailure(lr, "owner access could not be checked for 5 minutes", false)
 		}
 	}
 }

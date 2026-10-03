@@ -161,7 +161,7 @@ traduction humaine. Le guide éditorial qui les entoure est localisé.
 
 ## Complete command reference
 
-This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 898 command nodes — the root command and 897 subcommands, of which 191 are groups that carry subcommands and 17 are hidden diagnostics — together with the 3264 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
+This section is generated from the command tree of the community (AGPL) build of the `olivares` binary at this commit. It covers 899 command nodes — the root command and 898 subcommands, of which 191 are groups that carry subcommands and 17 are hidden diagnostics — together with the 3276 flags they declare. It is regenerated from the binary rather than kept by hand, so a command or flag added without a documentation change fails the push gate.
 
 Nothing here is a stability promise: see [Stability](#stability) below for what may still change.
 
@@ -194,7 +194,7 @@ Command groups declare further flags that their own subcommands inherit. A flag 
 
 ### Command index
 
-All 898 commands, in alphabetical order.
+All 899 commands, in alphabetical order.
 
 | Command | Summary |
 |---|---|
@@ -381,7 +381,7 @@ All 898 commands, in alphabetical order.
 | [`olivares db`](#command-olivares-db) | Prepare and verify the database before serving (Postgres roles, RLS posture) |
 | [`olivares db activate-directory-writer`](#command-olivares-db-activate-directory-writer) | Activate the User authority writer protocol on a stopped store (reopen required) |
 | [`olivares db check`](#command-olivares-db-check) | Probe a DSN's role posture and report whether the engine will accept it (read-only) |
-| [`olivares db init`](#command-olivares-db-init) | Prepare PostgreSQL and save private credentials for quickstart |
+| [`olivares db init`](#command-olivares-db-init) | Provision the least-privilege Postgres roles + database idempotently (no psql by hand) |
 | [`olivares ddil`](#command-olivares-ddil) | Air-gap DDIL bundles: export, verify and import governance state across a disconnected gap |
 | [`olivares ddil export`](#command-olivares-ddil-export) | Assemble and sign a DDIL bundle from the local governance store |
 | [`olivares ddil import`](#command-olivares-ddil-import) | Verify, reconcile and apply a DDIL courier bundle fail-closed |
@@ -1053,6 +1053,7 @@ All 898 commands, in alphabetical order.
 | [`olivares tool install`](#command-olivares-tool-install) | Install an agent tool on the engine's host from its official signed release |
 | [`olivares tool login`](#command-olivares-tool-login) | Sign an agent tool in with its own login (Claude, ChatGPT or xAI account) |
 | [`olivares tool ls`](#command-olivares-tool-ls) | List the agent tools on the engine's host and whether each is signed in |
+| [`olivares tool start`](#command-olivares-tool-start) | Start Ollama on the engine's host as the engine's own service |
 | [`olivares uninstall`](#command-olivares-uninstall) | Plan or remove a local installation without crossing its signed-release layout |
 | [`olivares upgrade`](#command-olivares-upgrade) | Upgrade this binary in place to a newer signed release (verified, atomic, reversible) |
 | [`olivares users`](#command-olivares-users) | User accounts: list, create, disable, enable |
@@ -1137,15 +1138,15 @@ Aliases: `access-map`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares accessmap attack-paths
 
@@ -1267,15 +1268,15 @@ olivares adoption
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares adoption developers
 
@@ -1367,20 +1368,20 @@ olivares agent deploy <claude|codex|grok|opencode>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--config-home` | `string` | — | the CLI's configuration home (default: this driver's own under $HOME) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--config-home` | `string` | — | the CLI's configuration home (default: the engine makes and keeps it) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--install` | `bool` | `false` | install the official CLI from its signed release when none is found |
 | `--name` | `string` | — | label for the profile (default: the driver's name) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--provider` | `string` | — | registered provider to bind; without it the host's own credential variables decide |
 | `--root` | `string` | — | absolute directory that owns installed tools (default &lt;data-dir&gt;/tools, with data-dir from $OLIVARES_DATA_DIR or the installation default) |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
-| `--user-home` | `string` | — | the child's user home (default: $HOME) |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
+| `--user-home` | `string` | — | the child's user home (default: the engine makes and keeps it; with --config-home, $HOME) |
 | `--yes` | `bool` | `false` | with --install, approve the installation plan without a second prompt |
 
 #### Command: olivares agent managed-settings
@@ -1398,9 +1399,10 @@ olivares agent managed-settings
 | `--no-hook` | `bool` | `false` | render env/telemetry only, no PEP hook |
 | `--otel-endpoint` | `string` | — | managed OTEL collector endpoint (enables the sanctioned telemetry env) |
 | `--out` | `string` | `-` | output path ('-' = stdout) |
-| `--pep-command` | `string` | `olivares claude-hook` | the managed PreToolUse PEP-client command (deny-closed: required unless --no-hook) |
+| `--pep-command` | `string` | `olivares claude-hook` | the managed PEP-client command (explicit custom commands are preserved) |
+| `--pin-hook-events` | `bool` | `false` | pin each hook's event; for longer approvals use --pep-command 'olivares claude-hook --timeout 120s' --timeout 180 |
 | `--redact` | `bool` | `true` | also install the paired PostToolUse output-redaction hook |
-| `--timeout` | `int` | `5` | PEP hook timeout in seconds (a hung engine must fail fast, deny-closed) |
+| `--timeout` | `int` | `5` | outer hook timeout in seconds (explicit: published 5s client shortened if needed) |
 
 #### Command: olivares agent profile
 
@@ -1423,20 +1425,20 @@ olivares agent profile create
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--auth-source` | `string` | — | provider_account_home (the login saved in the homes) or managed_injection (a credential the engine supplies) |
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--config-home` | `string` | — | **required**. absolute path of the CLI's configuration home on the engine host |
 | `--driver` | `string` | — | **required**. official CLI this profile launches: claude, codex, grok or opencode |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--name` | `string` | — | your own label for this profile |
 | `--permission-mode` | `string` | — | permission mode those sessions run under: default \| acceptEdits \| plan \| auto \| dontAsk \| bypassPermissions |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--provider` | `string` | — | registered provider reference to bind in the same call (needs --auth-source managed_injection) |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--tools` | `stringSlice` | `[]` | the built-in tools sessions under this profile may use (repeatable or comma-separated; --tools "" declares NONE). Undeclared launches the tool's default set |
 | `--user-home` | `string` | — | **required**. absolute path of the child's user home on the engine host |
 
@@ -1450,15 +1452,15 @@ olivares agent profile get <profile-ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent profile ls
 
@@ -1472,16 +1474,16 @@ Aliases: `list`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--state` | `string` | — | only profiles in this state (active, disabled or retired) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent profile rm
 
@@ -1495,15 +1497,15 @@ Aliases: `retire`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--yes` | `bool` | `false` | confirm the irreversible retirement |
 
 #### Command: olivares agent profile update
@@ -1517,19 +1519,19 @@ olivares agent profile update <profile-ref>
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--auth-source` | `string` | — | provider_account_home, managed_injection, or "" to withdraw the authorization |
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--name` | `string` | — | your own label for this profile |
 | `--permission-mode` | `string` | — | permission mode those sessions run under, or "" to withdraw the declaration |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--provider` | `string` | — | registered provider reference this profile's managed launches use |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--state` | `string` | — | active or disabled (a disabled profile refuses new launches; running children keep theirs) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--tools` | `stringSlice` | `[]` | the built-in tools sessions under this profile may use (repeatable or comma-separated; --tools "" declares NONE) |
 | `--unbind-provider` | `bool` | `false` | clear the bound provider record only (the auth source stays; provider bind --unbind also returns the profile to the tool's own sign-in) |
 
@@ -1555,15 +1557,15 @@ olivares agent session attach <run-ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--from` | `int64` | `0` | replay from this output sequence number |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent session cleanup
 
@@ -1575,14 +1577,14 @@ olivares agent session cleanup <run-ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent session create
 
@@ -1594,22 +1596,22 @@ olivares agent session create
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--effort` | `string` | — | low\|medium\|high\|xhigh\|max |
 | `--env-allow` | `stringSlice` | `[]` | host env var NAMES to forward to the session (allowlist; nothing else is inherited) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--isolation` | `string` | `native` | native (the only runner wired this release) \| container \| sandbox — container and sandbox are accepted by the API but refused by the launcher until their runner ships |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--model` | `string` | — | model alias (opus) or id (claude-opus-4-8) |
 | `--name` | `string` | — | display name for the session |
 | `--permission-mode` | `string` | `default` | default\|acceptEdits\|plan\|auto\|dontAsk\|bypassPermissions |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--provider-profile` | `string` | — | provider profile reference to launch under (current servers require it; omit to keep the older request body, which this API still refuses) |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--provider-profile` | `string` | — | provider profile reference to launch under (default: the profile the engine resolves for Claude Code, for a caller who may write profiles) |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--transport` | `string` | `stream-json` | transport: stream-json (governed) \| remote-control (lifecycle-only) |
 | `--workspace` | `string` | — | workspace reference (the session's working directory) |
 
@@ -1623,14 +1625,14 @@ olivares agent session events <run-ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent session get
 
@@ -1642,14 +1644,14 @@ olivares agent session get <run-ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent session input
 
@@ -1661,16 +1663,16 @@ olivares agent session input <run-ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--line` | `string` | — | raw NDJSON line (empty or '-' reads stdin; mutually exclusive with --text) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
 | `--text` | `string` | — | driver text (use '-' to read stdin; mutually exclusive with --line) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--work-lease-fence` | `int64` | `0` | positive work-lease fence; omitted from the request when unset |
 
 #### Command: olivares agent session interrupt
@@ -1683,14 +1685,14 @@ olivares agent session interrupt <run-ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--work-lease-fence` | `int64` | `0` | positive work-lease fence; omitted from the request when unset |
 
 #### Command: olivares agent session ls
@@ -1705,16 +1707,16 @@ Aliases: `list`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--state` | `string` | — | filter by state (pending\|running\|idle\|stopped\|failed\|cleaned) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent session resume
 
@@ -1726,14 +1728,14 @@ olivares agent session resume <run-ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent session rm
 
@@ -1747,14 +1749,14 @@ Aliases: `delete`, `remove`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent session stop
 
@@ -1766,14 +1768,14 @@ olivares agent session stop <run-ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent tool
 
@@ -1871,21 +1873,21 @@ olivares agent workspace add <root-path>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--dlp` | `string` | `label` | DLP posture on reads: label\|deny\|off |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--max-read` | `int64` | `0` | per-read size cap in bytes (0 = default 5 MiB) |
 | `--mode` | `string` | `rw` | mount mode: rw\|ro |
 | `--name` | `string` | — | display name |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--subpath` | `stringSlice` | `[]` | restrict the file API to these relative subpaths (repeatable) |
 | `--target` | `string` | `/workspace` | container mount target path |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent workspace files
 
@@ -1897,16 +1899,16 @@ olivares agent workspace files <ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--path` | `string` | — | relative directory path (default: workspace root) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent workspace get
 
@@ -1918,14 +1920,14 @@ olivares agent workspace get <ref> <path>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent workspace ls
 
@@ -1939,15 +1941,15 @@ Aliases: `list`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent workspace mkdir
 
@@ -1959,14 +1961,14 @@ olivares agent workspace mkdir <ref> <path>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent workspace mv
 
@@ -1978,14 +1980,14 @@ olivares agent workspace mv <ref> <from> <to>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent workspace put
 
@@ -1997,15 +1999,15 @@ olivares agent workspace put <ref> <path>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--from` | `string` | `-` | source: a local file path, or '-' for stdin |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent workspace rm
 
@@ -2017,15 +2019,15 @@ olivares agent workspace rm <ref> <path>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--recursive` | `bool` | `false` | delete a directory and its contents |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `-y`, `--yes` | `bool` | `false` | proceed without the confirmation prompt (required in a non-interactive session) |
 
 #### Command: olivares agent workspace rm-workspace
@@ -2038,14 +2040,14 @@ olivares agent workspace rm-workspace <ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares agent workspace stat
 
@@ -2057,14 +2059,14 @@ olivares agent workspace stat <ref> <path>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares audit
 
@@ -2182,16 +2184,16 @@ Aliases: `list`, `recent`
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--all` | `bool` | `false` | include the ledger's own read events (audit.read) |
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--limit` | `int` | `20` | how many events (1 to 200) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--system` | `bool` | `false` | the system ledger (installs, sign-ins, deployment-wide actions) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares audit observe-report
 
@@ -2273,23 +2275,23 @@ olivares auth bootstrap
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | PEM file containing an additional trusted root CA (default: current context) |
+| `--allow-cleartext` | `bool` | `false` | _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | _hidden_. PEM file containing an additional trusted root CA (default: current context) |
 | `--context` | `string` | — | context name to create or update with --save-context (default: server hostname) |
 | `--email` | `string` | — | email address of the first superadmin (required) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (DANGEROUS; development only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
 | `--organization` | `string` | — | name of the first organization (default: "Default Organization") |
 | `--password` | `string` | — | password of the first superadmin (prefer --password-file) |
 | `--password-file` | `string` | — | read the first superadmin's password from a file, or - for stdin |
-| `--pin-sha256` | `stringArray` | `[]` | trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
 | `--save-context` | `bool` | `false` | log in as the new superadmin and save the session in a client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--setup-token` | `string` | — | the one-time first-boot token (prefer --setup-token-file: this form is visible in the process table) |
 | `--setup-token-file` | `string` | — | read the one-time first-boot token from a file, or - for stdin |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | request timeout |
-| `--token` | `string` | — | API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares auth login
 
@@ -2338,15 +2340,15 @@ olivares auth status
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | request timeout |
-| `--token` | `string` | — | API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares auth totp-policy
 
@@ -2358,15 +2360,15 @@ olivares auth totp-policy
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares auth totp-policy get
 
@@ -2410,15 +2412,15 @@ olivares capabilities
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares capabilities servers
 
@@ -2508,15 +2510,15 @@ olivares catalog
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares catalog connector-admission
 
@@ -2888,15 +2890,15 @@ olivares claude-agents
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares claude-agents sessions
 
@@ -2964,15 +2966,15 @@ olivares claude-policy
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares claude-policy artifact
 
@@ -3215,15 +3217,15 @@ olivares compliance
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares compliance aims
 
@@ -3724,15 +3726,15 @@ Aliases: `views`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares consoleviews create
 
@@ -3856,7 +3858,7 @@ olivares db check
 
 #### Command: olivares db init
 
-Prepare PostgreSQL and save private credentials for quickstart
+Provision the least-privilege Postgres roles + database idempotently (no psql by hand)
 
 ```
 olivares db init
@@ -3869,15 +3871,15 @@ olivares db init
 | `--admin-role` | `string` | — | cross-tenant admin role for --admin-dsn (NOSUPERUSER BYPASSRLS). Empty = not provisioned |
 | `--app-password` | `string` | — | application role password (prefer --app-password-file) |
 | `--app-password-file` | `string` | — | read the application role password from a file, or - for stdin |
-| `--app-role` | `string` | — | application role (default: generated; runtime traffic, NOSUPERUSER NOBYPASSRLS) |
-| `--data-dir` | `string` | — | installation data directory (same default and private PostgreSQL files as quickstart) |
-| `--database` | `string` | — | application database name (default: generated for this installation) |
+| `--app-role` | `string` | — | application role (runtime traffic; NOSUPERUSER NOBYPASSRLS; default olivares_app; with --data-dir, generated) |
+| `--data-dir` | `string` | — | prepare quickstart's PostgreSQL for this installation data directory: names generated for it, private DSN files saved under it (without --data-dir, db init keeps the classic result: database olivares, role olivares_app, nothing saved) |
+| `--database` | `string` | — | application database name to create/own (default olivares; with --data-dir, generated for that installation) |
 | `--install-directory-inventory` | `bool` | `false` | install ONLY (no provisioning, no grants): install and attest the closed tenant inventory on a database the engine has already migrated, so retention, legal hold and audit checkpoints cover every tenant without --admin-dsn; the database and role names come from --data-dir's saved configuration unless named |
 | `--owner-password` | `string` | — | owner role password (prefer --owner-password-file) |
 | `--owner-password-file` | `string` | — | read the owner role password from a file, or - for stdin |
-| `--owner-role` | `string` | — | separate owner role (default: generated); explicitly pass an empty value to let the app role own the schema. Adopting the split on an existing single-role database requires REASSIGN OWNED first |
+| `--owner-role` | `string` | — | SEPARATE owner role that owns the schema and runs DDL (enables the least-privilege split). Empty = the app role owns the schema; with --data-dir a separate owner is generated unless this is passed empty. Use on a FRESH database; adopting the split on an existing single-role db needs a manual REASSIGN OWNED first (see deploy/postgres/README.md) |
 | `--print-sql` | `bool` | `false` | print the provisioning SQL (passwords redacted) and exit, without connecting |
-| `--sslmode` | `string` | — | connection sslmode (default: prefer for local hosts/sockets, verify-full for remote hosts; preserves an explicit DSN mode) |
+| `--sslmode` | `string` | — | libpq sslmode (default verify-full for the printed DSN hints; with --data-dir, prefer for local hosts/sockets and verify-full for remote hosts; preserves an explicit DSN mode) |
 | `--superuser-dsn` | `string` | — | superuser / maintenance DSN used ONLY to provision (e.g. postgres://postgres@host:5432/postgres). Accepts a file:/env: reference |
 
 #### Command: olivares ddil
@@ -3972,15 +3974,15 @@ olivares deploy
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares deploy apply
 
@@ -4381,23 +4383,23 @@ olivares evals gate
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--baseline` | `string` | — | explicit baseline run id (default: pinned baseline or latest prior run) |
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine |
 | `--check-id` | `string` | — | re-check an existing gate id (after a governed override) |
 | `--comparison-mode` | `string` | `same_candidate` | comparison v1: same_candidate or candidate_change (requires --baseline) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--model` | `string` | — | declared candidate model (distinct from the suite judge) |
 | `--outputs` | `string` | — | JSON file mapping case_key → candidate output ('-' = stdin) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate |
 | `--sample-size` | `int` | `0` | judge at most N cases (deterministic subset; 0 = all) |
 | `--seed` | `string` | — | deterministic sample seed (default: derived from the suite version) |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL) |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL) |
 | `--subject` | `string` | — | subject ref (e.g. the agent/model under test) |
 | `--subject-kind` | `string` | — | subject kind (defaults to the suite's) |
 | `--suite` | `string` | — | suite id to gate against |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT) |
-| `--timeout` | `duration` | `10m0s` | request timeout (a judged gate can take a while) |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT) |
+| `--timeout` | `duration` | `10m0s` | _hidden_. request timeout (a judged gate can take a while) |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN) |
 | `--variant` | `string` | — | declared candidate prompt variant |
 
 #### Command: olivares evals label
@@ -4410,16 +4412,16 @@ olivares evals label
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine |
 | `--criterion` | `string` | — | default criterion for items that carry none |
 | `--in` | `string` | — | JSONL file of candidate items to label |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL) |
 | `--set` | `string` | `default` | calibration set name |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT) |
-| `--timeout` | `duration` | `10m0s` | request timeout (a judged gate can take a while) |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT) |
+| `--timeout` | `duration` | `10m0s` | _hidden_. request timeout (a judged gate can take a while) |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN) |
 
 #### Command: olivares eventing
 
@@ -4811,15 +4813,15 @@ olivares findings
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares findings export
 
@@ -4844,15 +4846,15 @@ olivares finops
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares finops admission
 
@@ -5360,7 +5362,7 @@ olivares finops seats utilization
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--from` | `string` | — | first day, YYYY-MM-DD (UTC; default 30 days ago, counting today) |
-| `--provider` | `string` | — | **required**. provider whose seats to compare, as recorded by `seats ingest` (for example anthropic) |
+| `--provider` | `string` | — | provider whose seats to compare, as recorded by 'seats ingest' (for example anthropic) |
 | `--to` | `string` | — | last day, YYYY-MM-DD (UTC; default today) |
 
 #### Command: olivares finops spend
@@ -5615,15 +5617,15 @@ olivares governance
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares governance approvals
 
@@ -6104,15 +6106,15 @@ olivares health
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares health checks
 
@@ -6528,15 +6530,15 @@ olivares identity
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares identity external-keys
 
@@ -6600,15 +6602,15 @@ Aliases: `inferenceproxy`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares inference-proxy config
 
@@ -6748,15 +6750,15 @@ olivares inventory
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares inventory entities
 
@@ -6910,15 +6912,15 @@ olivares knowledge
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares knowledge context-policies
 
@@ -8198,15 +8200,15 @@ olivares mcp
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares mcp add
 
@@ -8350,15 +8352,15 @@ olivares members
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares members grant
 
@@ -8444,15 +8446,15 @@ olivares message ack delivery-id
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--idempotency-key` | `string` | — | canonical UUIDv7 key retained for exact retries |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--version` | `int64` | `0` | current delivery version |
 
 #### Command: olivares message get
@@ -8465,14 +8467,14 @@ olivares message get delivery-id
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares message handoff
 
@@ -8494,14 +8496,14 @@ olivares message handoff get delivery-id
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares message handoff inbox
 
@@ -8513,17 +8515,17 @@ olivares message handoff inbox
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--continuation` | `string` | — | opaque continuation from the previous inbox page |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--limit` | `int` | `50` | page size (1..200) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--state` | `string` | `offered` | one handoff state: offered, accepted, rejected, withdrawn or expired |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--workspace-id` | `string` | — | exact session workspace UUID |
 
 #### Command: olivares message handoff offer
@@ -8537,19 +8539,19 @@ olivares message handoff offer
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--ack-deadline` | `string` | — | future acknowledgment deadline in RFC3339 |
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--channel-id` | `string` | — | operator-authorized channel UUID |
 | `--context-file` | `string` | — | HandoffContent JSON file, or - for stdin |
 | `--idempotency-key` | `string` | — | canonical UUIDv7 key retained for exact retries |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--owner-epoch` | `int64` | `0` | owner epoch from the current work read |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
 | `--to-sid` | `string` | — | exact recipient canonical SID (osn_UUID) |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--version` | `int64` | `0` | current work item version |
 | `--work-item-id` | `string` | — | owned work item UUID |
 
@@ -8563,16 +8565,16 @@ olivares message handoff respond handoff-id
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--idempotency-key` | `string` | — | canonical UUIDv7 key retained for exact retries |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--reason-file` | `string` | — | CommunicationReasonContent JSON required for reject; file or - for stdin |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--transition` | `string` | — | accept or reject |
 | `--version` | `int64` | `0` | current handoff version from the protected detail |
 
@@ -8586,16 +8588,16 @@ olivares message inbox
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--continuation` | `string` | — | opaque continuation from the previous inbox page |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--limit` | `int` | `50` | page size (1..200) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--workspace-id` | `string` | — | exact session workspace UUID |
 
 #### Command: olivares message send
@@ -8608,19 +8610,19 @@ olivares message send
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--channel-id` | `string` | — | operator-authorized channel UUID |
 | `--idempotency-key` | `string` | — | stable key retained for exact retries |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--subject` | `string` | — | message subject |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
 | `--text-file` | `string` | — | plain-text file, or - for stdin |
-| `--timeout` | `duration` | `30s` | request timeout |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
 | `--to-sid` | `string` | — | exact recipient canonical SID (osn_UUID) |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_COMMUNICATION_TOKEN, then normal client resolution) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares migrate
 
@@ -8681,15 +8683,15 @@ olivares models
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares models access
 
@@ -9736,15 +9738,15 @@ olivares notify
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares notify deliveries
 
@@ -9994,15 +9996,15 @@ Aliases: `obs`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares observability attestation
 
@@ -10093,15 +10095,15 @@ olivares orchestration
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares orchestration decisions
 
@@ -10462,15 +10464,15 @@ olivares policy
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares policy replay
 
@@ -10501,15 +10503,15 @@ olivares posture
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares posture export
 
@@ -10557,18 +10559,18 @@ olivares provider account add
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--driver` | `string` | — | **required**. the provider driver this account's sessions launch |
 | `--idempotency-key` | `string` | — | stable create intention; reuse this key after an uncertain result |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--name` | `string` | — | the account's name; omit it and the server generates one |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares provider account adopt
 
@@ -10580,16 +10582,16 @@ olivares provider account adopt <profile-ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--name` | `string` | — | the account's name; omit it and the server generates one |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares provider account edit
 
@@ -10602,16 +10604,16 @@ olivares provider account edit <account-ref>
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--accent` | `string` | — | accent: orange, green, amber, red or blue; empty clears it |
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--display-name` | `string` | — | display label; an explicit empty string clears it |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares provider account get
 
@@ -10623,15 +10625,15 @@ olivares provider account get <account-ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares provider account ls
 
@@ -10645,18 +10647,18 @@ Aliases: `list`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--driver` | `string` | — | only accounts of this driver |
 | `--environment` | `string` | — | only accounts of this execution environment |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--state` | `string` | — | only accounts in this state (active, disabled or retired) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares provider add
 
@@ -10669,18 +10671,19 @@ olivares provider add
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--base-url` | `string` | — | https endpoint override (required for openai_compatible) |
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--key-env` | `string` | — | read the credential from this environment variable instead of stdin (never pass the key as a flag value) |
-| `--kind` | `string` | — | **required**. anthropic \| openai \| xai \| openai_compatible |
-| `--name` | `string` | — | **required**. your own name for this credential; it is what a picker shows |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--kind` | `string` | — | anthropic \| openai \| xai \| openai_compatible (default: from the key, or openai_compatible with --base-url) |
+| `--name` | `string` | — | your own name for this credential; it is what a picker shows (default: the kind's name) |
+| `--no-test` | `bool` | `false` | add the key without testing it |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--profile` | `string` | — | provider profile reference to bind this credential to in the same run |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares provider bind
 
@@ -10692,16 +10695,16 @@ olivares provider bind <provider-ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--profile` | `string` | — | **required**. provider profile reference |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--unbind` | `bool` | `false` | clear the profile's binding instead of setting one |
 
 #### Command: olivares provider get
@@ -10714,15 +10717,15 @@ olivares provider get <provider-ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares provider ls
 
@@ -10736,17 +10739,17 @@ Aliases: `list`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--kind` | `string` | — | only providers of this kind |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--state` | `string` | — | only providers in this state (active or revoked) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares provider rm
 
@@ -10760,15 +10763,15 @@ Aliases: `revoke`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--yes` | `bool` | `false` | confirm the irreversible withdrawal |
 
 #### Command: olivares provider rotate
@@ -10781,16 +10784,16 @@ olivares provider rotate <provider-ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--key-env` | `string` | — | read the credential from this environment variable instead of stdin (never pass the key as a flag value) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares provider test
 
@@ -10802,15 +10805,15 @@ olivares provider test <provider-ref>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares quickstart
 
@@ -10896,15 +10899,15 @@ olivares recording
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares recording ack
 
@@ -11091,15 +11094,15 @@ olivares redteam
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares redteam catalog
 
@@ -11369,15 +11372,15 @@ Aliases: `reports`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares reporting branding
 
@@ -11675,15 +11678,15 @@ olivares sandbox
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares sandbox compare
 
@@ -12117,14 +12120,14 @@ olivares session events <session>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares session follow
 
@@ -12136,15 +12139,15 @@ olivares session follow <session>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--from` | `int64` | `0` | start from this output sequence number |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares session interrupt
 
@@ -12156,14 +12159,14 @@ olivares session interrupt <session>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares session ls
 
@@ -12178,15 +12181,15 @@ Aliases: `list`
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--all` | `bool` | `false` | include released (cleaned) sessions |
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--state` | `string` | — | only sessions in this state (pending\|waiting_approval\|running\|idle\|stopped\|failed\|cleaned) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares session resume
 
@@ -12198,14 +12201,14 @@ olivares session resume <session>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares session rm
 
@@ -12219,14 +12222,14 @@ Aliases: `delete`, `remove`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares session send
 
@@ -12238,15 +12241,15 @@ olivares session send <session> [text]
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--detach` | `bool` | `false` | return once the message is accepted, without showing the reply |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares session show
 
@@ -12260,14 +12263,14 @@ Aliases: `get`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares session start
 
@@ -12279,22 +12282,22 @@ olivares session start [folder] [prompt]
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--detach` | `bool` | `false` | with a prompt, send it and return without showing the reply |
 | `--dlp` | `string` | `off` | DLP posture for a folder this command registers: off, label or deny |
 | `--effort` | `string` | — | low\|medium\|high\|xhigh\|max |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--model` | `string` | — | model alias or id (default: the tool's own) |
 | `--name` | `string` | — | session name (default: the folder's name; -2, -3 … when taken) |
 | `--permission` | `string` | `edits-and-commands` | what the agent may do without asking: edits-and-commands, edits-only, read-only, or ask |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--profile` | `string` | — | provider profile to launch under (default: the one the engine picks, as in the console) |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
-| `--tool` | `string` | `claude` | agent tool: claude, codex, grok or opencode |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
+| `--tool` | `string` | — | agent tool: claude, codex, grok or opencode (default: the first one that is ready) |
 
 #### Command: olivares session stop
 
@@ -12306,14 +12309,14 @@ olivares session stop <session>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares setup
 
@@ -12499,15 +12502,15 @@ Aliases: `source-scope`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares sourcescope assignments
 
@@ -12965,12 +12968,12 @@ olivares status
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--timeout` | `duration` | `10s` | request timeout |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--timeout` | `duration` | `10s` | _hidden_. request timeout |
 
 #### Command: olivares superadmin
 
@@ -13054,7 +13057,7 @@ olivares support bundle
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine |
 | `--config` | `string` | `/etc/olivares/olivares.env` | effective systemd env file to redact |
 | `--data-dir` | `string` | — | data directory (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares) |
 | `--dr-bundle` | `stringArray` | `[]` | DR bundle whose non-secret manifest to include (repeatable) |
@@ -13062,15 +13065,15 @@ olivares support bundle
 | `--engine` | `string` | `sqlite` | store engine: sqlite or postgres |
 | `--exclude` | `stringSlice` | `[]` | sections to exclude after --include selection |
 | `--include` | `stringSlice` | `[]` | sections to include: config,status,logs,manifests,verify,secrets (default all) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification for the status request |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification for the status request |
 | `--journal` | `bool` | `false` | collect journalctl output for the olivares unit |
 | `--logs` | `string` | — | engine log file to redact line by line |
 | `--offline` | `bool` | `false` | skip the live GET /status request |
 | `--out` | `string` | — | output tar.gz path (default olivares-support-&lt;UTC timestamp&gt;.tar.gz) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL) |
 | `--since` | `string` | `24 hours ago` | journalctl --since value (used with --journal) |
-| `--timeout` | `duration` | `10s` | status request timeout |
+| `--timeout` | `duration` | `10s` | _hidden_. status request timeout |
 | `--verify-report` | `stringArray` | `[]` | JSON output from audit verify or dr.RestoreVerify to redact and include (repeatable) |
 
 #### Command: olivares tenants
@@ -13085,15 +13088,15 @@ Aliases: `orgs`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares tenants create
 
@@ -13240,15 +13243,15 @@ olivares tokens
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares tokens issue
 
@@ -13326,14 +13329,14 @@ olivares tool install <claude|codex|grok|opencode|ollama>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `2m0s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `2m0s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--version` | `string` | `latest` | release version, or the vendor's channel (latest; stable for Grok Build) |
 
 #### Command: olivares tool login
@@ -13346,14 +13349,15 @@ olivares tool login <claude|codex|grok>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--account` | `string` | — | sign in an existing provider account (name or profile reference) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares tool ls
 
@@ -13363,18 +13367,38 @@ List the agent tools on the engine's host and whether each is signed in
 olivares tool ls
 ```
 
-Aliases: `list`
+Aliases: `list`, `status`
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--account` | `string` | — | read an existing provider account's own login (name or profile reference) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
+
+#### Command: olivares tool start
+
+Start Ollama on the engine's host as the engine's own service
+
+```
+olivares tool start <tool>
+```
+
+| Flag | Type | Default | Description |
+|---|---|---|---|
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares uninstall
 
@@ -13437,15 +13461,15 @@ olivares users
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares users create
 
@@ -13554,15 +13578,15 @@ olivares voice
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--allow-cleartext` | `bool` | `false` | **inherited**. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
-| `--ca-cert` | `string` | — | **inherited**. PEM file containing an additional trusted root CA (default: current context) |
-| `--insecure` | `bool` | `false` | **inherited**. skip TLS certificate verification (DANGEROUS; development only) |
-| `--pin-sha256` | `stringArray` | `[]` | **inherited**. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
-| `--server` | `string` | — | **inherited**. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | **inherited**. tenant id (default $OLIVARES_TENANT, then current context) |
-| `--timeout` | `duration` | `10s` | **inherited**. request timeout |
-| `--token` | `string` | — | **inherited**. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
-| `--token-file` | `string` | — | **inherited**. read the API bearer token from a file, or - for stdin |
+| `--allow-cleartext` | `bool` | `false` | **inherited**, _hidden_. allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable) |
+| `--ca-cert` | `string` | — | **inherited**, _hidden_. PEM file containing an additional trusted root CA (default: current context) |
+| `--insecure` | `bool` | `false` | **inherited**, _hidden_. skip TLS certificate verification (DANGEROUS; development only) |
+| `--pin-sha256` | `stringArray` | `[]` | **inherited**, _hidden_. trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context) |
+| `--server` | `string` | — | **inherited**, _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | **inherited**, _hidden_. tenant id (default $OLIVARES_TENANT, then current context) |
+| `--timeout` | `duration` | `10s` | **inherited**, _hidden_. request timeout |
+| `--token` | `string` | — | **inherited**, _hidden_. API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context) |
+| `--token-file` | `string` | — | **inherited**, _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares voice decisions
 
@@ -13725,7 +13749,7 @@ olivares work apply <command>
 | `--blocked-code` | `string` | — | WorkCommand blocked_code |
 | `--blocked-reason` | `string` | — | WorkCommand blocked_reason |
 | `--brief` | `string` | — | WorkCommand brief_md |
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--changes-requested` | `bool` | `false` | WorkCommand changes_requested |
 | `--code` | `string` | — | WorkCommand code |
 | `--criterion-id` | `string` | — | WorkCommand criterion_id |
@@ -13745,13 +13769,13 @@ olivares work apply <command>
 | `--holder-run-ref` | `string` | — | WorkCommand holder_run_ref |
 | `--holder-sid` | `string` | — | WorkCommand holder_sid |
 | `--idempotency-key` | `string` | — | UUID reused for an unambiguous retry (generated and printed when omitted) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--ordinal` | `int` | `0` | acceptance criterion display order |
 | `--owner-kind` | `string` | — | WorkCommand owner_kind |
 | `--owner-ref` | `string` | — | WorkCommand owner_ref |
 | `--parent-id` | `string` | — | WorkCommand parent_id |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--plan` | `string` | — | replay a work-plan artifact instead of -f or inline fields |
 | `--plan-hash` | `string` | — | bind the request to this plan hash |
 | `--priority` | `string` | — | WorkCommand priority |
@@ -13761,7 +13785,7 @@ olivares work apply <command>
 | `--rationale` | `string` | — | WorkCommand rationale_md |
 | `--reason` | `string` | — | WorkCommand reason |
 | `--required` | `bool` | `false` | make an acceptance criterion required |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--state` | `string` | — | WorkCommand state |
 | `--statement` | `string` | — | WorkCommand statement |
 | `--statement-md` | `string` | — | WorkCommand statement_md |
@@ -13769,13 +13793,13 @@ olivares work apply <command>
 | `--subject-ref` | `string` | — | WorkCommand subject_ref |
 | `--supersedes-id` | `string` | — | WorkCommand supersedes_id |
 | `--target-id` | `string` | — | WorkCommand target_id |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
 | `--terminal-code` | `string` | — | WorkCommand terminal_code |
 | `--terminal-reason` | `string` | — | WorkCommand terminal_reason |
-| `--timeout` | `duration` | `30s` | request timeout |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
 | `--title` | `string` | — | WorkCommand title |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--transition` | `string` | — | WorkCommand transition |
 | `--ttl-seconds` | `int64` | `0` | WorkCommand ttl_seconds |
 | `--unblock` | `bool` | `false` | WorkCommand unblock |
@@ -13795,15 +13819,15 @@ olivares work get item|decision|lease <id>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares work list
 
@@ -13820,7 +13844,7 @@ Aliases: `ls`
 | `--actor-kind` | `string` | — | filter by actor kind |
 | `--actor-ref` | `string` | — | filter by actor ref |
 | `--archived` | `bool` | `false` | filter work items by archived state |
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--cursor` | `string` | — | opaque UUIDv7 keyset cursor |
 | `--decision-key` | `string` | — | filter by decision key |
 | `--due-before` | `string` | — | filter by due before |
@@ -13828,26 +13852,26 @@ Aliases: `ls`
 | `--expires-before` | `string` | — | filter by expires before |
 | `--filter` | `stringArray` | `[]` | additional allowlisted filter as key=value (repeatable) |
 | `--holder-sid` | `string` | — | filter by holder sid |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--limit` | `int` | `100` | page size (1..200) |
 | `--owner-kind` | `string` | — | filter by owner kind |
 | `--owner-ref` | `string` | — | filter by owner ref |
 | `--parent-id` | `string` | — | filter by parent id |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--priority` | `string` | — | filter by priority |
 | `--provenance-kind` | `string` | — | filter by provenance kind |
 | `--provenance-ref` | `string` | — | filter by provenance ref |
 | `--revoked` | `bool` | `false` | filter decisions by revoked head state |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--state` | `string` | — | filter by state |
 | `--status` | `string` | — | filter by status |
 | `--subject-kind` | `string` | — | filter by subject kind |
 | `--subject-ref` | `string` | — | filter by subject ref |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--updated-after` | `string` | — | filter by updated after |
 | `--work-item-id` | `string` | — | filter by work item id |
 | `--work-kind` | `string` | — | filter by work kind |
@@ -13866,7 +13890,7 @@ olivares work plan <command>
 | `--blocked-code` | `string` | — | WorkCommand blocked_code |
 | `--blocked-reason` | `string` | — | WorkCommand blocked_reason |
 | `--brief` | `string` | — | WorkCommand brief_md |
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--changes-requested` | `bool` | `false` | WorkCommand changes_requested |
 | `--code` | `string` | — | WorkCommand code |
 | `--criterion-id` | `string` | — | WorkCommand criterion_id |
@@ -13885,14 +13909,14 @@ olivares work plan <command>
 | `--holder-agent-ref` | `string` | — | WorkCommand holder_agent_ref |
 | `--holder-run-ref` | `string` | — | WorkCommand holder_run_ref |
 | `--holder-sid` | `string` | — | WorkCommand holder_sid |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--ordinal` | `int` | `0` | acceptance criterion display order |
 | `--out` | `string` | — | atomically write a reusable 0600 work-plan artifact |
 | `--owner-kind` | `string` | — | WorkCommand owner_kind |
 | `--owner-ref` | `string` | — | WorkCommand owner_ref |
 | `--parent-id` | `string` | — | WorkCommand parent_id |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--plan-hash` | `string` | — | bind the request to this plan hash |
 | `--priority` | `string` | — | WorkCommand priority |
 | `--provenance-hash` | `string` | — | WorkCommand provenance_hash |
@@ -13901,7 +13925,7 @@ olivares work plan <command>
 | `--rationale` | `string` | — | WorkCommand rationale_md |
 | `--reason` | `string` | — | WorkCommand reason |
 | `--required` | `bool` | `false` | make an acceptance criterion required |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--state` | `string` | — | WorkCommand state |
 | `--statement` | `string` | — | WorkCommand statement |
 | `--statement-md` | `string` | — | WorkCommand statement_md |
@@ -13909,13 +13933,13 @@ olivares work plan <command>
 | `--subject-ref` | `string` | — | WorkCommand subject_ref |
 | `--supersedes-id` | `string` | — | WorkCommand supersedes_id |
 | `--target-id` | `string` | — | WorkCommand target_id |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
 | `--terminal-code` | `string` | — | WorkCommand terminal_code |
 | `--terminal-reason` | `string` | — | WorkCommand terminal_reason |
-| `--timeout` | `duration` | `30s` | request timeout |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
 | `--title` | `string` | — | WorkCommand title |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--transition` | `string` | — | WorkCommand transition |
 | `--ttl-seconds` | `int64` | `0` | WorkCommand ttl_seconds |
 | `--unblock` | `bool` | `false` | WorkCommand unblock |
@@ -13955,15 +13979,15 @@ olivares work protocol-binding binding get <binding-id>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares work protocol-binding binding list
 
@@ -13978,24 +14002,24 @@ Aliases: `ls`
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--binding-spec-id` | `string` | — | exact binding specification UUID |
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--cursor` | `string` | — | opaque keyset cursor |
 | `--external-id` | `string` | — | remote resource ID |
 | `--external-kind` | `string` | — | remote resource kind |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--limit` | `int` | `0` | page size |
 | `--owner-kind` | `string` | — | binding owner kind |
 | `--owner-ref` | `string` | — | binding owner reference |
 | `--peer-authority` | `string` | — | canonical peer authority |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--protocol` | `string` | — | protocol: a2a or mcp |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
 | `--terminal` | `string` | — | terminal filter: true or false |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--verdict` | `string` | — | observation verdict |
 | `--work-item-id` | `string` | — | exact work item UUID |
 | `--workspace-id` | `string` | — | workspace UUID (optional for a confined principal) |
@@ -14010,18 +14034,18 @@ olivares work protocol-binding binding reconcile <binding-id>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--idempotency-key` | `string` | — | UUID reused for an exact apply retry |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--mode` | `string` | `test` | operation phase: validate, plan, test, or apply |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--plan-hash` | `string` | — | SHA-256 plan hash required by apply |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--version` | `uint64` | `0` | expected resource version N |
 
 #### Command: olivares work protocol-binding spec
@@ -14044,18 +14068,18 @@ olivares work protocol-binding spec activate <spec-id>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--idempotency-key` | `string` | — | UUID reused for an exact apply retry |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--mode` | `string` | `plan` | operation phase: validate, plan, test, or apply |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--plan-hash` | `string` | — | SHA-256 plan hash required by apply |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--version` | `uint64` | `0` | expected resource version N |
 
 #### Command: olivares work protocol-binding spec create
@@ -14068,19 +14092,19 @@ olivares work protocol-binding spec create
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `-f`, `--file` | `string` | — | YAML or JSON protocol binding spec ('-' reads stdin) |
 | `--idempotency-key` | `string` | — | UUID reused for an exact apply retry |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--mode` | `string` | `plan` | operation phase: validate, plan, test, or apply |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--plan-hash` | `string` | — | SHA-256 plan hash required by apply |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares work protocol-binding spec disable
 
@@ -14092,18 +14116,18 @@ olivares work protocol-binding spec disable <spec-id>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--idempotency-key` | `string` | — | UUID reused for an exact apply retry |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--mode` | `string` | `plan` | operation phase: validate, plan, test, or apply |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--plan-hash` | `string` | — | SHA-256 plan hash required by apply |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--version` | `uint64` | `0` | expected resource version N |
 
 #### Command: olivares work protocol-binding spec get
@@ -14116,15 +14140,15 @@ olivares work protocol-binding spec get <spec-id>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 #### Command: olivares work protocol-binding spec list
 
@@ -14139,23 +14163,23 @@ Aliases: `ls`
 | Flag | Type | Default | Description |
 |---|---|---|---|
 | `--binding-key` | `string` | — | stable binding specification key |
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--cursor` | `string` | — | opaque keyset cursor |
 | `--direction` | `string` | — | binding direction |
 | `--generation` | `int64` | `0` | exact specification generation |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--limit` | `int` | `0` | page size |
 | `--local-kind` | `string` | — | local resource kind |
 | `--peer-authority` | `string` | — | canonical peer authority |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--protocol` | `string` | — | protocol: a2a or mcp |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--state` | `string` | — | specification state |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--workspace-id` | `string` | — | workspace UUID (optional for a confined principal) |
 
 #### Command: olivares work replay
@@ -14178,18 +14202,18 @@ olivares work replay event <event-id>
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--idempotency-key` | `string` | — | UUID reused for an exact apply retry |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--mode` | `string` | `apply` | command phase: validate, plan, or apply |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--plan-hash` | `string` | — | required replay plan hash for apply |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--version` | `uint64` | `0` | outbox row version from replay plan ETag (required for apply) |
 
 #### Command: olivares work validate
@@ -14206,7 +14230,7 @@ olivares work validate <command>
 | `--blocked-code` | `string` | — | WorkCommand blocked_code |
 | `--blocked-reason` | `string` | — | WorkCommand blocked_reason |
 | `--brief` | `string` | — | WorkCommand brief_md |
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--changes-requested` | `bool` | `false` | WorkCommand changes_requested |
 | `--code` | `string` | — | WorkCommand code |
 | `--criterion-id` | `string` | — | WorkCommand criterion_id |
@@ -14225,13 +14249,13 @@ olivares work validate <command>
 | `--holder-agent-ref` | `string` | — | WorkCommand holder_agent_ref |
 | `--holder-run-ref` | `string` | — | WorkCommand holder_run_ref |
 | `--holder-sid` | `string` | — | WorkCommand holder_sid |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
 | `--ordinal` | `int` | `0` | acceptance criterion display order |
 | `--owner-kind` | `string` | — | WorkCommand owner_kind |
 | `--owner-ref` | `string` | — | WorkCommand owner_ref |
 | `--parent-id` | `string` | — | WorkCommand parent_id |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
 | `--plan-hash` | `string` | — | bind the request to this plan hash |
 | `--priority` | `string` | — | WorkCommand priority |
 | `--provenance-hash` | `string` | — | WorkCommand provenance_hash |
@@ -14240,7 +14264,7 @@ olivares work validate <command>
 | `--rationale` | `string` | — | WorkCommand rationale_md |
 | `--reason` | `string` | — | WorkCommand reason |
 | `--required` | `bool` | `false` | make an acceptance criterion required |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
 | `--state` | `string` | — | WorkCommand state |
 | `--statement` | `string` | — | WorkCommand statement |
 | `--statement-md` | `string` | — | WorkCommand statement_md |
@@ -14248,13 +14272,13 @@ olivares work validate <command>
 | `--subject-ref` | `string` | — | WorkCommand subject_ref |
 | `--supersedes-id` | `string` | — | WorkCommand supersedes_id |
 | `--target-id` | `string` | — | WorkCommand target_id |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
 | `--terminal-code` | `string` | — | WorkCommand terminal_code |
 | `--terminal-reason` | `string` | — | WorkCommand terminal_reason |
-| `--timeout` | `duration` | `30s` | request timeout |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
 | `--title` | `string` | — | WorkCommand title |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 | `--transition` | `string` | — | WorkCommand transition |
 | `--ttl-seconds` | `int64` | `0` | WorkCommand ttl_seconds |
 | `--unblock` | `bool` | `false` | WorkCommand unblock |
@@ -14274,16 +14298,16 @@ olivares work watch
 
 | Flag | Type | Default | Description |
 |---|---|---|---|
-| `--ca-cert` | `string` | — | PEM CA bundle used to verify the engine (default: the active client context) |
+| `--ca-cert` | `string` | — | _hidden_. PEM CA bundle used to verify the engine (default: the active client context) |
 | `--cursor` | `string` | — | resume after this persisted WorkEvent cursor |
-| `--insecure` | `bool` | `false` | skip TLS certificate verification (self-signed development engines only) |
+| `--insecure` | `bool` | `false` | _hidden_. skip TLS certificate verification (self-signed development engines only) |
 | `--json` | `bool` | `false` | _hidden_. deprecated alias for -o json |
-| `--pin-sha256` | `stringArray` | `[]` | pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
-| `--server` | `string` | — | the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
-| `--tenant` | `string` | — | tenant id (default $OLIVARES_TENANT or the active client context) |
-| `--timeout` | `duration` | `30s` | request timeout |
-| `--token` | `string` | — | API bearer token (default $OLIVARES_TOKEN or the active client context) |
-| `--token-file` | `string` | — | read the API bearer token from a file, or - for stdin |
+| `--pin-sha256` | `stringArray` | `[]` | _hidden_. pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate; default: the active client context |
+| `--server` | `string` | — | _hidden_. the engine's address, https://&lt;host&gt;:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in) |
+| `--tenant` | `string` | — | _hidden_. tenant id (default $OLIVARES_TENANT or the active client context) |
+| `--timeout` | `duration` | `30s` | _hidden_. request timeout |
+| `--token` | `string` | — | _hidden_. API bearer token (default $OLIVARES_TOKEN or the active client context) |
+| `--token-file` | `string` | — | _hidden_. read the API bearer token from a file, or - for stdin |
 
 <!-- END GENERATED olivares-cli-reference -->
 

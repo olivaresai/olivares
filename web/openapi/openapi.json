@@ -2324,6 +2324,10 @@
             },
             "type": "array"
           },
+          "tls_pin_sha256": {
+            "description": "The --pin-sha256 value of the certificate this engine serves (base64 SHA-256 of its SubjectPublicKeyInfo). Absent when the engine serves plain HTTP.",
+            "type": "string"
+          },
           "version": {
             "type": "string"
           }

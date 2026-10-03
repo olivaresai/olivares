@@ -170,8 +170,9 @@ func TestSanitizeDSN(t *testing.T) {
 	if !strings.Contains(got, "db.internal") || !strings.Contains(got, "orders") {
 		t.Errorf("SanitizeDSN dropped resource identity: %q", got)
 	}
-	if !strings.Contains(got, "app") {
-		t.Errorf("SanitizeDSN dropped username (useful identity): %q", got)
+	// URL userinfo is confidential even when its password has already been removed.
+	if strings.Contains(got, "app") || !strings.Contains(got, Placeholder) {
+		t.Errorf("SanitizeDSN must redact userinfo while retaining the resource identity: %q", got)
 	}
 }
 

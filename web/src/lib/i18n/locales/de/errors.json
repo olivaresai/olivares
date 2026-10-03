@@ -42,7 +42,7 @@
     "locked_out": "Zu viele Versuche. Versuchen Sie es in einem Moment erneut.",
     "setup_required": "Die Control Plane benötigt eine Ersteinrichtung.",
     "setup_complete": "Die Einrichtung ist bereits abgeschlossen.",
-    "cross_tenant_admin_pool_not_configured": "Diese Bereitstellung hat keinen mandantenübergreifenden Admin-Datenbankpool. Stellen Sie eine NOSUPERUSER BYPASSRLS-Rolle mit `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` bereit (siehe deploy/postgres/README.md) und starten Sie den Server mit --admin-dsn neu, das auf diese Rolle zeigt.",
+    "cross_tenant_admin_pool_not_configured": "Diese Datenbank kann nicht alle Organisationen auflisten. Führen Sie `olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` aus und starten Sie die Engine neu. Oder stellen Sie eine NOSUPERUSER BYPASSRLS-Rolle mit `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` bereit (siehe deploy/postgres/README.md) und starten Sie den Server mit --admin-dsn neu, das auf diese Rolle zeigt.",
     "internal": "Ein interner Fehler ist aufgetreten."
   },
   "tenantAdmission": {

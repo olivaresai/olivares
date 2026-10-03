@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,6 +19,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
@@ -28,7 +30,10 @@ import (
 	"github.com/olivaresai/olivares/modules/sessions"
 )
 
-const sessionMCPRevision = "2025-11-25"
+const (
+	sessionMCPRevision     = "2025-11-25"
+	maxSessionPeerKeyChars = 256
+)
 
 var sessionWorkCommands = map[string]bool{
 	"item.create": true, "item.update": true, "item.assign": true, "item.ready": true,
@@ -400,6 +405,8 @@ func sessionTool(name, description string, input any, required []string, read bo
 	if name == "olivares_peer_send" {
 		properties["priority"].(map[string]any)["enum"] = []string{"p0", "p1", "p2", "p3"}
 		properties["priority"].(map[string]any)["default"] = "p2"
+		key := properties["idempotency_key"].(map[string]any)
+		key["minLength"], key["maxLength"] = 1, maxSessionPeerKeyChars
 	}
 	if limit, ok := properties["limit"].(map[string]any); ok {
 		limit["minimum"], limit["maximum"] = 1, 200
@@ -440,7 +447,7 @@ func sessionMCPTools(p auth.Principal, issued bool) []mcpc.Tool {
 		}
 		if issued {
 			if writable {
-				tools = append(tools, sessionTool("olivares_peer_send", "Send a message or work request to an allowed live peer using its canonical osn_ session ID. Creates a draft work item owned by that peer; the sender and workspace are supplied by the server. Use a stable idempotency_key. The peer can ready, lease and complete it with olivares_work_command and reply with this tool. Permission refusals are audited.", sessionPeerSendArgs{}, []string{"to_sid", "title", "brief_md", "idempotency_key"}, false))
+				tools = append(tools, sessionTool("olivares_peer_send", "Send a message or work request to an allowed live peer using its canonical osn_ session ID. Creates a draft work item owned by that peer; the sender and workspace are supplied by the server. Reuse a stable idempotency_key of 1 to 256 characters for retries. The peer can ready, lease and complete it with olivares_work_command and reply with this tool. Permission refusals are audited.", sessionPeerSendArgs{}, []string{"to_sid", "title", "brief_md", "idempotency_key"}, false))
 			}
 			tools = append(tools, sessionTool("olivares_peer_inbox", "Check between tasks for work and messages addressed to this session. The server supplies the recipient; limit 1..200 and cursor paginate. Draft items can be read, readied, leased and completed with the work tools when your grant permits it.", sessionPeerInboxArgs{}, nil, true))
 		}
@@ -506,15 +513,18 @@ func sessionToolRequest(ctx context.Context, p auth.Principal, name string, raw 
 		if !confined || workspace.IsZero() || !validSessionPeerSID(p.SessionIdentity) || !validSessionPeerSID(args.ToSID) {
 			return nil, errors.New("to_sid must name a canonical session in this session's workspace")
 		}
-		if args.IdempotencyKey == "" {
-			return nil, errors.New("Send requires a stable idempotency_key")
+		if args.IdempotencyKey == "" || utf8.RuneCountInString(args.IdempotencyKey) > maxSessionPeerKeyChars {
+			return nil, errors.New("Use a stable idempotency_key with 1 to 256 characters")
 		}
 		if args.Priority == "" {
 			args.Priority = "p2"
 		}
 		method, path = http.MethodPost, "/work-items"
 		query.Set("mode", "apply")
-		headers.Set("Idempotency-Key", args.IdempotencyKey)
+		// Keep work apply's UUID contract while isolating retries by the
+		// authenticated sender. The domain and SID cannot contain a separator.
+		key := []byte("olivares_peer_send\x00" + p.SessionIdentity + "\x00" + args.IdempotencyKey)
+		headers.Set("Idempotency-Key", uuid.NewHash(sha256.New(), uuid.NameSpaceURL, key, 8).String())
 		body = sessions.WorkCommand{
 			Command: "item.create", WorkspaceID: workspace, WorkKind: "message", Title: args.Title, BriefMD: args.BriefMD, Priority: args.Priority,
 			OwnerKind: "session", OwnerRef: args.ToSID, ProvenanceKind: "mcp", ProvenanceRef: p.SessionIdentity,

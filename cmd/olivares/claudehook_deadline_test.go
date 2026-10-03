@@ -111,3 +111,29 @@ func TestClaudeHookCommandDeadlineIncludesInvocationSetup(t *testing.T) {
 		t.Fatalf("expired command did not deny: %s", out.Bytes())
 	}
 }
+
+func TestClaudeHookPublishedDefaultDeniesBeforeManagedOuterDeadline(t *testing.T) {
+	root := newRootCmd()
+	root.SetArgs([]string{"claude-hook"})
+	release := make(chan struct{})
+	root.SetIn(commandBlockedHookInput{release: release, source: strings.NewReader(`{"hook_event_name":"PreToolUse"}`)})
+	var out bytes.Buffer
+	root.SetOut(&out)
+	root.SetErr(io.Discard)
+	done := make(chan error, 1)
+	go func() { done <- root.Execute() }()
+	select {
+	case err := <-done:
+		close(release)
+		if err != nil {
+			t.Fatal(err)
+		}
+	case <-time.After(4 * time.Second):
+		close(release)
+		<-done
+		t.Fatal("published hook cannot deliver its denial before the 5s managed timeout")
+	}
+	if !bytes.Contains(out.Bytes(), []byte(`"permissionDecision":"deny"`)) || !bytes.Contains(out.Bytes(), []byte("timed out")) {
+		t.Fatalf("published default hook did not deny stalled input: %s", out.Bytes())
+	}
+}

@@ -134,6 +134,12 @@ func rootStatus(ctx context.Context) rootStatusReport {
 	report.Next = "olivares session start <folder>"
 	cfg := agentClientConfig{resolved: resolved, server: resolved.Server, token: resolved.Token,
 		tenant: resolved.Tenant, timeout: rootProbeTimeout}
+	// A tool that can run a session now (its own login, a key or a local model) makes
+	// the session the next step, as `session start` would pick it; only with none ready
+	// do the tool rows say what to install or sign in.
+	if _, ok := cfg.firstReadyTool(ctx); ok {
+		return report
+	}
 	if rows, err := cfg.toolRows(ctx); err == nil {
 		report.Next = rootNextFromTools(rows)
 	}

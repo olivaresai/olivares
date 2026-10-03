@@ -53,6 +53,10 @@ type SessionValidator func(context.Context, SessionScope) error
 // no longer permits a live run. It conveys no authority to resume.
 var ErrSessionAccessEnded = fmt.Errorf("%w: session owner access ended", ErrUnauthenticated)
 
+// ErrSessionOwnerUnbound means this issuer has no owner scope for the run. It
+// grants no credential authority and is not evidence of an owner withdrawal.
+var ErrSessionOwnerUnbound = fmt.Errorf("%w: session owner is not bound to this issuer", ErrUnauthenticated)
+
 // ErrSessionAccessChanged refuses a generation whose current directory subjects
 // differ from its launch. Resuming must mint from the current launcher authority.
 var ErrSessionAccessChanged = fmt.Errorf("%w: session group closure changed", ErrUnauthenticated)
@@ -125,12 +129,12 @@ func (c *SessionCredentials) Mint(ctx context.Context, launcher Principal, scope
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for hash, item := range c.entries {
-		if !now.Before(item.expires) {
+		rk := sessionRunKey{item.scope.TenantID, item.scope.RunRef}
+		// The current generation also captures the live run's owner. Bearer
+		// expiry refuses credential use in resolve; it must not erase the owner
+		// that CheckOwnerAccess still monitors. Prune only superseded entries.
+		if !now.Before(item.expires) && c.runs[rk] != hash {
 			delete(c.entries, hash)
-			rk := sessionRunKey{item.scope.TenantID, item.scope.RunRef}
-			if c.runs[rk] == hash {
-				delete(c.runs, rk)
-			}
 		}
 	}
 	if previous, ok := c.runs[key]; ok {
@@ -178,7 +182,10 @@ func (c *SessionCredentials) CheckOwnerAccess(ctx context.Context, tenant model.
 	hash, ok := c.runs[key]
 	item, exists := c.entries[hash]
 	c.mu.Unlock()
-	if !ok || !exists || c.authr == nil {
+	if !ok || !exists {
+		return SessionScope{}, "", ErrSessionOwnerUnbound
+	}
+	if c.authr == nil {
 		return SessionScope{}, "", ErrUnauthenticated
 	}
 	scope := item.scope

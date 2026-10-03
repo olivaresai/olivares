@@ -267,6 +267,9 @@ describe('SetupPage', () => {
     // end to end, so following the screen got you nothing (F8).
     const shown = await screen.findByText(/--admin-dsn/)
     expect(shown.textContent).toMatch(/olivares db init/)
+    // The engine's own first remedy (core/api/errors.go): install the tenant inventory on
+    // the database it already uses; the admin role stays the alternative.
+    expect(shown.textContent).toMatch(/--install-directory-inventory/)
     expect(shown.textContent).toMatch(/--admin-role/)
     expect(shown.textContent).toMatch(/NOSUPERUSER BYPASSRLS/)
     expect(screen.queryByText(/Something went wrong/i)).toBeNull()

@@ -714,6 +714,7 @@
     "tool": "Werkzeug",
     "willRun": "Was ausgeführt wird",
     "noReview": "Diese Anfrage enthält nicht, was ausgeführt wird.",
+    "commandUnknown": "Befehl wird für dieses Tool noch nicht angezeigt",
     "showAll": "Alles anzeigen",
     "showLess": "Weniger anzeigen",
     "details": "Details",

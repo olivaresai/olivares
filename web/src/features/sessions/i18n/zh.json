@@ -348,9 +348,21 @@
     "inspect": "在检查器中显示",
     "args": "参数",
     "toolResult": "结果",
+    "toolFailed": "失败",
     "tokens": "输入 {{input}} · 输出 {{output}}",
     "cwdWarning": "此会话没有工作区。驱动程序将其工作目录报告为 {{cwd}}。",
-    "protocol": "协议帧：{{count}}"
+    "protocol": "协议帧：{{count}}",
+    "stop": {
+      "cancelled": "已取消",
+      "refusal": "被模型拒绝",
+      "maxTokens": "已在令牌上限处停止",
+      "maxTurnRequests": "已在轮次上限处停止"
+    },
+    "turnFailed": "本轮失败：{{message}}",
+    "retrying": "正在重试（{{count}}）：{{message}}",
+    "keyRefused": "提供方拒绝了该 API 密钥。请在“提供方”中替换它。",
+    "output": "工具输出（{{count}}）：{{first}}",
+    "notSent": "未发送：{{reason}}"
   },
   "changes": {
     "title": "{{folder}} 中的更改",

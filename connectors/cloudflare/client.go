@@ -12,6 +12,8 @@ import (
 	"net/url"
 	"strconv"
 	"strings"
+
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 // maxPages caps pagination so a hostile or buggy API can never spin the
@@ -161,6 +163,9 @@ func (c *client) fetch(ctx context.Context, path string, q url.Values) (*envelop
 		}
 	}
 	if resp.StatusCode >= http.StatusBadRequest || !env.Success {
+		for i := range env.Errors {
+			env.Errors[i].Message = redact.HTTPError([]byte(env.Errors[i].Message), 2<<10, req, c.token)
+		}
 		return nil, &apiFault{status: resp.StatusCode, errs: env.Errors}
 	}
 	return &env, nil

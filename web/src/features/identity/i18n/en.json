@@ -525,11 +525,15 @@
   },
   "login": {
     "statusTitle": "Session assurance",
-    "statusDescription": "The authenticator assurance level of your current session. Sensitive views require a hardware step-up.",
+    "statusDescription": "How you signed in to this session.",
     "currentAal": "Current level",
     "methods": "Methods",
     "methodsUnknown": "Not reported",
-    "targetStandardsNote": "AAL3 (NIST SP 800-63B-4) and PIV/CAC (FIPS 201-3) are the target standards for privileged login. The panel reflects what the backend enforces; it claims no certification.",
+    "policy": {
+      "none": "This deployment asks for no extra check before administrative actions. A system administrator can turn one on under Settings › Sign-in and security.",
+      "totp": "Administrative actions on this deployment ask for a sign-in with an authenticator code.",
+      "passkey": "Administrative actions on this deployment ask for a passkey."
+    },
     "passkeyTitle": "Register a passkey",
     "passkeyDescription": "Enroll a hardware security key or platform authenticator (WebAuthn / FIDO2) for phishing-resistant privileged login.",
     "registerPasskey": "Register a passkey",

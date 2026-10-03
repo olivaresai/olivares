@@ -83,6 +83,19 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 		writeJSON(w, http.StatusUnprocessableEntity, errorBody("provider_profile_ref is not accepted on this deployment: profiled launches are not enabled until every session reader understands profile-scoped rows"))
 		return
 	}
+	// "The default works" (NEXT-COMMON): a launch that names no profile runs under the
+	// one the engine resolves for Claude Code, the default tool, exactly as `session
+	// start` and the console's first session do (provider_profile_resolve.go). Resolving
+	// may create that profile, so it needs the caller's profile write; without it the
+	// refusal below stands.
+	if body.ProviderProfileRef == "" && m.rt.profiledLaunchesEnabled && m.mayWriteProfiles(r.Context(), mc) {
+		got, err := m.ResolveProfile(r.Context(), mc.Tenant, providerDriverClaude)
+		if err != nil {
+			writeRunErr(w, err)
+			return
+		}
+		body.ProviderProfileRef = got.Profile.Ref
+	}
 	credential, _ := auth.QueuedCredentialFrom(mc.Principal)
 	dto, err := m.createRun(r.Context(), mc.Tenant, CreateRunParams{
 		queuedCredential: credential,
@@ -117,6 +130,18 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 		return
 	}
 	writeJSON(w, http.StatusCreated, dto)
+}
+
+// mayWriteProfiles reports whether the authenticated caller may create provider
+// profiles in this tenant. No authorizer wired is a no.
+func (m *Module) mayWriteProfiles(ctx context.Context, mc api.ModuleContext) bool {
+	if m.workAuthz == nil {
+		return false
+	}
+	return m.workAuthz.Authorize(ctx, auth.Request{
+		Principal: mc.Principal, Tenant: mc.Tenant,
+		Permission: permProfileWrite, Resource: auth.ResourceFor(permProfileWrite),
+	}).Allow
 }
 
 // mayRunUnrestricted reports whether the authenticated caller administers runs

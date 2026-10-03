@@ -92,6 +92,48 @@ function askedBy(a: ApprovalDTO, t: (k: string) => string): string {
     : a.requested_by
 }
 
+/** The action of a tool's own permission request (cmd/olivares/providerapproval.go). */
+const PROVIDER_APPROVAL = 'sessions.provider.approval'
+/** Its reason, as the engine writes it: "Provider permission: driver=… method=… kind=…
+ * run=… turn=… permissions=<JSON scope>". The fields before the scope are identifiers,
+ * so the scope is what follows the first "permissions=". */
+const PROVIDER_REASON =
+  /^Provider permission: driver=\S+\s+method=\S+\s+kind=\S+\s+run=\S*\s+turn=\S*\s+permissions=/
+
+/** The permission scope of a provider permission request, read from its structured reason;
+ * null for any other request, or when the scope does not parse (a masked reason). */
+function providerScope(
+  approval: ApprovalDTO,
+): { CommandLine?: unknown; FilePaths?: unknown } | null {
+  if (approval.action !== PROVIDER_APPROVAL) return null
+  const head = PROVIDER_REASON.exec(approval.reason ?? '')
+  if (!head) return null
+  try {
+    const scope: unknown = JSON.parse(approval.reason!.slice(head[0].length))
+    return scope && typeof scope === 'object' ? scope : null
+  } catch {
+    return null
+  }
+}
+
+/** A provider permission request that names no command and no path (HU-R32: OpenCode
+ * sends "CommandLine":"","FilePaths":null today, and its review lists the permission
+ * options, not an operation). It cannot show what will run, and must not look as if it
+ * did. Only the structured scope decides: a reviewed command is always shown as it is,
+ * whatever it prints (SR4C on 912c4d15). */
+export function approvalCommandUnknown(approval: ApprovalDTO): boolean {
+  const scope = providerScope(approval)
+  if (!scope) return false
+  const tool = approval.review?.tool
+  if (tool === 'Command' || tool === 'File change') return false
+  const noCommand =
+    typeof scope.CommandLine !== 'string' || scope.CommandLine === ''
+  const noPaths =
+    scope.FilePaths == null ||
+    (Array.isArray(scope.FilePaths) && scope.FilePaths.length === 0)
+  return noCommand && noPaths
+}
+
 /** The reviewed text, verbatim and monospace; long text opens in full on demand. */
 export function ReviewText({
   text,
@@ -143,6 +185,7 @@ export function ApprovalPreview({ approval }: { approval: ApprovalDTO }) {
   const { t } = useTranslation('governance')
   const session = useApprovalSession(approval)
   const review = approval.review
+  const unknown = approvalCommandUnknown(approval)
   return (
     <section
       className="flex min-w-0 flex-col gap-2"
@@ -168,7 +211,14 @@ export function ApprovalPreview({ approval }: { approval: ApprovalDTO }) {
           <KvRow label={t('preview.tool')}>{review.tool}</KvRow>
         ) : null}
       </KvList>
-      {review?.text ? (
+      {unknown ? (
+        <p
+          className="text-body text-warning"
+          data-slot="approval-command-unknown"
+        >
+          {t('preview.commandUnknown')}
+        </p>
+      ) : review?.text ? (
         <div className="flex min-w-0 flex-col gap-1">
           <span className="text-overline text-text-3">
             {t('preview.willRun')}
@@ -248,7 +298,14 @@ export function ApprovalRequestCell({ approval }: { approval: ApprovalDTO }) {
       {head ? (
         <span className="truncate font-medium text-foreground">{head}</span>
       ) : null}
-      {review?.text ? (
+      {approvalCommandUnknown(approval) ? (
+        <span
+          className="text-caption text-warning"
+          data-slot="approval-command-unknown"
+        >
+          {t('preview.commandUnknown')}
+        </span>
+      ) : review?.text ? (
         <ReviewText text={review.text} compact />
       ) : (
         <span className="text-caption text-text-2">

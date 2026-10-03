@@ -36,7 +36,7 @@
     "openai": "Codex. Setzt OPENAI_API_KEY.",
     "xai": "Grok. Setzt XAI_API_KEY.",
     "openai_compatible": "Jeder Endpunkt in OpenAI-Form. Setzt OPENAI_API_KEY und OPENAI_BASE_URL; der Endpunkt ist erforderlich.",
-    "ollama": "Lokale Modelle für Codex. Kein API-Schlüssel. Verwenden Sie den nativen Ollama-Endpunkt; der Test liest Modellmetadaten."
+    "ollama": "Lokale Modelle für OpenCode. Kein API-Schlüssel. Verwenden Sie den nativen Ollama-Endpunkt; der Test liest Modellmetadaten."
   },
   "states": {
     "active": "Aktiv",
@@ -122,11 +122,6 @@
   "vaultUnavailable": {
     "title": "Diese Installation kann keine Anbieter-Zugangsdaten speichern",
     "description": "Es ist kein versiegelter Tresor verdrahtet, daher verweigert die Engine das Speichern eines Schlüssels, statt einen zu speichern, den sie nicht schützen kann. Eine Administratorin muss den Secret-Sealer konfigurieren."
-  },
-  "next": {
-    "title": "Als Nächstes: einen Agenten bereitstellen",
-    "description": "Ein registrierter Anbieter startet von sich aus keine Sitzung. Binden Sie ihn an ein Anbieterprofil, damit neue Sitzungen ihn verwenden.",
-    "action": "Zu den Anbieterprofilen"
   },
   "truncation": {
     "label": "{{n}} Anbieter angezeigt; es gibt mehr",

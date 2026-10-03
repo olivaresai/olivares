@@ -7,6 +7,7 @@ package api
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -95,11 +96,25 @@ func (s *Server) accessLog(next http.Handler) http.Handler {
 		dur := time.Since(start)
 		s.mInflight.Dec()
 		s.recordRequest(r.Method, rec.status, dur)
-		s.log.Info("api request",
+		s.log.Log(r.Context(), accessLogLevel(r.Method, rec.status), "api request",
 			"method", r.Method, "path", r.URL.Path, "status", rec.status,
 			"dur_ms", dur.Milliseconds(), "actor", holder.actor,
 			"request_id", requestID(r.Context()))
 	})
+}
+
+// accessLogLevel is DEBUG for a read that succeeded and INFO for everything else: a
+// write, a refusal, an error. The console polls (GET /v1/m/sessions/runs about
+// twice a second with a session open), and one INFO line per poll filled
+// olivares.log with polling (HU2-11). The request metrics still count every read.
+func accessLogLevel(method string, status int) slog.Level {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		if status < http.StatusBadRequest {
+			return slog.LevelDebug
+		}
+	}
+	return slog.LevelInfo
 }
 
 // authenticate resolves an explicit bearer or browser cookie into the request context. A present

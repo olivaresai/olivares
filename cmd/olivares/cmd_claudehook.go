@@ -60,6 +60,12 @@ func newClaudeHookCmd() *cobra.Command {
   printf '%s\n' '{"hook_event_name":"PreToolUse","tool_name":"Read","tool_input":{"file_path":"/repo/README.md"}}' | olivares claude-hook`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			clientTimeout := timeout
+			if !cmd.Flags().Changed("timeout") {
+				// The published managed command has no flags and a 5s outer
+				// timeout. Leave headroom for its denial to reach stdout.
+				clientTimeout /= 2
+			}
 			cfg := claude.HookClientConfig{
 				Endpoint:      resolveServer(),
 				Token:         firstNonEmptyEnv(token, "OLIVARES_HOOK_PEP_TOKEN"),
@@ -67,7 +73,7 @@ func newClaudeHookCmd() *cobra.Command {
 				Agent:         firstNonEmptyEnv(agent, "OLIVARES_HOOK_PEP_AGENT"),
 				Org:           firstNonEmptyEnv(org, "OLIVARES_HOOK_PEP_ORG"),
 				Account:       firstNonEmptyEnv(account, "OLIVARES_HOOK_PEP_ACCOUNT"),
-				Timeout:       timeout,
+				Timeout:       clientTimeout,
 				StartedAt:     startedAt,
 				ExpectedEvent: hookEvent,
 				// La causa del deny-closed va a STDERR, nunca a stdout: stdout lleva el JSON que Claude

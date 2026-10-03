@@ -42,7 +42,7 @@ no `v` prefix; the latest release is tagged `26.10.1`.
 Pending for the next release. Nothing below is published until that release is, and the
 section is dated only then.
 
-## [26.10.1] - 2026-10-02
+## [26.10.1] - 2026-10-03
 
 ### Before you upgrade
 
@@ -55,6 +55,11 @@ section is dated only then.
 - If managed Claude Code settings on this host set `disableAllHooks` or `allowManagedHooksOnly`, Claude Code sessions
   are refused until both are `false` or removed. `olivares doctor` names the file.
 - `olivares upgrade` on 26.10.0 finds 26.10.1 by itself.
+- A session bound to a provider key now starts only when Olivares can keep it to that provider's endpoint. Some
+  combinations that started on 26.10.0 are refused before start (see **Security**). Sessions on your own tool sign-in
+  are not affected.
+- If this host has a non-empty system-wide OpenCode config (`/etc/opencode/opencode.json` or `.jsonc`), OpenCode
+  sessions on a provider key are refused until it is removed. OpenCode's own sign-in is not affected.
 
 ### New
 
@@ -80,6 +85,11 @@ section is dated only then.
   says which.
 - A Claude Code turn can be interrupted without stopping the session.
 - API: additions only. No operation was removed; some requests gained optional fields.
+- Adding a provider key, or replacing its key or address, follows the step-up policy set for administrative actions.
+  With the default policy (none), nothing changes.
+- The Ollama that Olivares starts runs with its cloud features (cloud models, web search) off. Model downloads you
+  request still work.
+- Codex plugins are off in every session Olivares runs, including sessions on your own Codex sign-in.
 
 ### Security
 
@@ -91,6 +101,19 @@ section is dated only then.
 - A session stops when its owner's directory groups change; a resume uses the owner's current access.
 - Offboarding stops late SSO and SCIM changes from restoring access.
 - Policy decision evidence is redacted before it is stored.
+- A session bound to a provider key reaches only that provider's endpoint, or it does not start. Supported: Claude Code
+  on Anthropic keys; Codex on OpenAI, OpenAI-compatible and Ollama; Grok Build on xAI; OpenCode on first-party keys and
+  Ollama. Claude Code or Grok Build on an OpenAI-compatible key, and a Claude key on a node whose sessions run through
+  the deployment gateway, are refused.
+- A session on a provider key runs each tool with its own off switches: Claude Code non-essential traffic and
+  marketplace auto-install; Codex analytics, feedback, OpenTelemetry, plugins and self-update; Grok Build self-update;
+  OpenCode self-update, model catalogue fetch, language-server downloads and sharing.
+- A bound session stops before it starts when the host's managed policy for the tool could redirect it, turn its off
+  switches back on, or cannot be read. The message names the file: Claude Code managed settings in `/etc/claude-code`;
+  Codex host requirements or managed configuration; any non-empty system-wide OpenCode config.
+- Models routing sends a request only to the provider it selected. With Models enabled and an Anthropic key configured,
+  a request routed to another provider could reach Anthropic. Default installs were not affected.
+- `olivares dr` dump and restore and the backup scripts no longer put database passwords in process arguments.
 
 ### Fixed
 
@@ -103,6 +126,18 @@ section is dated only then.
 - The installer prints commands that work when its directory is not on `PATH`.
 - The Git publish push API refuses a body with trailing content.
 - Report signing says when a license is needed, and its refusal carries an error code.
+- A launch on a local model that is not running names `olivares tool start ollama`.
+- Grok Build on Linux without bubblewrap, with Grok's sandbox on (the default for new sessions), stops before start and
+  asks to install bubblewrap instead of failing with HTTP 502. Grok is not offered on such a host.
+- When the engine supplied the credential, a refusal by the provider says so and asks the operator to replace it.
+
+### Known limits
+
+- The Helm chart and Compose deployments still expand database URLs into process arguments. Fixed in the next release.
+- `olivares quickstart --postgres` refuses a Unix-socket URL that carries the port as a query parameter;
+  `olivares serve --dsn` accepts it.
+- OpenCode approvals show "Command not shown for this tool yet" when the tool does not send the command.
+- Host managed-policy checks for macOS are implemented but not yet verified on a Mac.
 
 ## [26.10.0] - 2026-10-01
 

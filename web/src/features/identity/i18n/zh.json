@@ -524,11 +524,15 @@
   },
   "login": {
     "statusTitle": "会话保证",
-    "statusDescription": "当前会话的认证器保证级别。敏感视图需要硬件升级认证。",
+    "statusDescription": "您登录此会话的方式。",
     "currentAal": "当前级别",
     "methods": "方法",
     "methodsUnknown": "未报告",
-    "targetStandardsNote": "AAL3（NIST SP 800-63B-4）与 PIV/CAC（FIPS 201-3）是特权登录的目标标准。本面板反映后端所强制执行的内容；它不声称获得任何认证。",
+    "policy": {
+      "none": "此部署在执行管理操作前不要求额外验证。系统管理员可以在“设置 › 登录与安全”中开启。",
+      "totp": "此部署中的管理操作需要使用身份验证器应用的验证码登录。",
+      "passkey": "此部署中的管理操作需要通行密钥。"
+    },
     "passkeyTitle": "注册通行密钥",
     "passkeyDescription": "注册硬件安全密钥或平台认证器（WebAuthn / FIDO2），用于抗钓鱼的特权登录。",
     "registerPasskey": "注册通行密钥",

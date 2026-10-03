@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 // fakeSessionEngine serves the session endpoints `olivares session` uses, with
@@ -55,6 +56,9 @@ type fakeSessionEngine struct {
 	// the sentence "template lookup unavailable"; noTemplates answers it with no items.
 	templatesStatus int
 	noTemplates     bool
+	// ready are the tools GET provider-profiles/resolve (the preview) answers 200 for;
+	// the others are refused with 409. Nil: the preview is not served (404).
+	ready map[string]bool
 }
 
 func newFakeSessionEngine(t *testing.T) *fakeSessionEngine {
@@ -102,6 +106,12 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 		writeJSON(200, map[string]any{"items": f.profiles})
 	case r.Method == "POST" && path == profilesPath:
 		writeJSON(201, map[string]any{"profile_ref": "ppf-new", "driver": body["driver"]})
+	case r.Method == "GET" && path == profilesPath+"/resolve" && f.ready != nil:
+		if f.ready[r.URL.Query().Get("driver")] {
+			writeJSON(200, map[string]any{"reason": "api_key"})
+		} else {
+			writeJSON(409, map[string]any{"error": map[string]any{"message": "not ready"}})
+		}
 	case r.Method == "POST" && path == profilesPath+"/resolve":
 		switch {
 		case f.resolveRefusal != "":
@@ -435,6 +445,40 @@ func TestSessionViewTellsTheTurnOnce(t *testing.T) {
 		"Claude Code is not signed in. Sign it in: olivares tool login claude\n"
 	if b.String() != want {
 		t.Fatalf("view =\n%s\nwant\n%s", b.String(), want)
+	}
+}
+
+// HU2 025 / SR2C 067: a refusal of a credential the engine supplies (a key from Providers, a
+// workload identity, an adapter) is said honestly in one sentence; telling the person to sign the
+// tool in would send them the wrong way.
+func TestSessionViewNamesAnEngineSuppliedCredentialHonestly(t *testing.T) {
+	var b strings.Builder
+	v := newSessionView(&b)
+	v.driver, v.engineSupplied = "claude", true
+	for _, line := range []string{claudeInitFrame, claudeLoginFrame, claudeLoginResult} {
+		v.render(line)
+	}
+	got := b.String()
+	if !strings.Contains(got, "The credential the engine supplies for this session was refused by the provider. Ask the engine's operator to replace it (a key from Providers is replaced in Providers), then send again.") ||
+		strings.Contains(got, "olivares tool login") {
+		t.Fatalf("view =\n%s\nwant the engine-supplied credential named, not a sign-in", got)
+	}
+}
+
+// The sentence is chosen from the run alone: a profile rebound after launch and a profile the
+// reader may not read get the same answer, because nothing reads the profile.
+func TestEngineSuppliedReadsOnlyTheRun(t *testing.T) {
+	for name, tc := range map[string]struct {
+		run  map[string]any
+		want bool
+	}{
+		"profile rebound after launch": {map[string]any{"provider_auth_source": sessions.AuthSourceManagedInjection, "provider_profile_ref": "ppf_rebound"}, true},
+		"profile read denied":          {map[string]any{"provider_auth_source": sessions.AuthSourceManagedInjection, "provider_profile_ref": "ppf_denied"}, true},
+		"the tool's own sign-in":       {map[string]any{"provider_auth_source": sessions.AuthSourceAccountHome}, false},
+	} {
+		if got := engineSupplied(tc.run); got != tc.want {
+			t.Errorf("%s: engineSupplied = %v, want %v", name, got, tc.want)
+		}
 	}
 }
 

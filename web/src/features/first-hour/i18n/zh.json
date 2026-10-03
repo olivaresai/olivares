@@ -10,7 +10,10 @@
     "signedIn": "已登录",
     "signedInAs": "已以 {{account}} 登录",
     "notSignedIn": "未登录",
-    "usesKey": "使用你的 API 密钥：{{name}}"
+    "usesKey": "使用你的 API 密钥：{{name}}",
+    "usesLocal": "使用本地模型服务器：{{name}}",
+    "keyRefused": "API 密钥 {{name}} 被拒绝。请在“提供方”中替换它。",
+    "keyUnchecked": "无法检查 {{name}} 密钥。请在“提供方”中测试它。"
   },
   "actions": {
     "install": "安装",

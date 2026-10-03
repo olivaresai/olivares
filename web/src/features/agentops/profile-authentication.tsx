@@ -15,7 +15,7 @@ import {
   PROVIDER_PAGE,
 } from '@/features/providers/api'
 import { useProviderBoundary } from '@/features/providers/auth-boundary'
-import { KIND_DRIVERS } from '@/features/providers/kinds'
+import { recordServesDriver } from '@/features/providers/kinds'
 import { agentOpsApi, agentOpsKeys } from './api'
 import { AuthorityLostError } from './auth-boundary'
 import type { ProviderProfileDTO } from './types'
@@ -27,8 +27,9 @@ export interface ProfileAuthenticationValue {
 const selectClass =
   'h-9 w-full min-w-0 rounded-md border border-border bg-background px-3 text-body focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
-/** Mirrors the closed engine mapping, including compatible records for extensible drivers.
- * The server revalidates record state, tenant and compatibility at write and launch. */
+/** The active records this driver can run on, by the engine's one rule (recordServesDriver
+ * in providers/kinds.ts). The server revalidates record state, tenant and compatibility at
+ * write and launch. */
 export function useProfileProviders(driver: string, enabled: boolean) {
   const { activeTenant, can } = useAuth()
   const boundary = useProviderBoundary()
@@ -56,8 +57,7 @@ export function useProfileProviders(driver: string, enabled: boolean) {
       ? (query.data?.pages.flatMap((page) => page.items) ?? []).filter(
           (r) =>
             r.state === 'active' &&
-            (r.kind === 'openai_compatible' ||
-              KIND_DRIVERS[r.kind]?.includes(driver.trim().toLowerCase())),
+            recordServesDriver(r.kind, r.base_url, driver),
         )
       : []
   return { query, records, allowed }

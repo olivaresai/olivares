@@ -38,6 +38,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/connectors/internal/delivery"
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 	"github.com/olivaresai/olivares/connectors/internal/siemfmt"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/model"
@@ -203,6 +204,11 @@ func (o *Output) Notify(ctx context.Context, n sdk.Notification) error {
 	// is the one we must inspect: a successful HTTP 200 still carries {"code":N}
 	// where N!=0 means the event was rejected (bad token, disabled index, ...).
 	if o.dest == destSplunk {
+		if res.Body == redact.OmittedHTTPError {
+			return sdk.NewDeliveryError(
+				sdk.DeliveryReport{Outcome: sdk.OutcomeIndeterminate, Sent: 1, Rejected: -1},
+				fmt.Errorf("siem: splunk HEC response unavailable; delivery cannot be confirmed"))
+		}
 		if err := checkSplunkBody(res.Body); err != nil {
 			return fmt.Errorf("siem: splunk HEC rejected event: %w", err)
 		}

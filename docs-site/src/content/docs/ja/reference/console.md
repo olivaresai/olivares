@@ -54,14 +54,14 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-コンソールは **80 ルート**を公開します。以下の表に、必要な権限と、製品内
+コンソールは **81 ルート**を公開します。以下の表に、必要な権限と、製品内
 ヘルプリンクが開くリファレンスページとともに、すべて掲載されています。
 
 ### 運用
 
 | 画面 | パス | 内容 | 必要な権限 | リファレンス |
 |---|---|---|---|---|
-| 概要 | `/` | 環境全体の概要と健全性を一覧表示 | any signed-in user | [ドキュメントホーム](/ja/) |
+| ホーム | `/` | 環境全体の概要と健全性を一覧表示 | any signed-in user | [ドキュメントホーム](/ja/) |
 | エージェントツール | `/agent-tools` | このホスト上のエージェントツールを検出・インストール・更新し、各インストールの状況を確認します（デプロイ管理者のみ） | `system:admin` | [how-to/add-a-provider](/ja/how-to/add-a-provider/) |
 | セッションを運用 | `/agentops` | Claude Code セッションを作成・接続・統制します（SSH 不要）。「セッションを観測」と画面を共有します | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/ja/how-to/run-claude-code-with-olivares/) |
 | バックアップ | `/backups` | バックアップの実行、スケジュール、ダウンロード、リストア。破壊的経路では 2 回目の確認を行う。 | `system:admin` | [how-to/backup-and-restore](/ja/how-to/backup-and-restore/) |
@@ -82,7 +82,7 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | セッションを観測 | `/sessions` | ライブおよび検出されたセッションとそのタイムラインを観測します。「セッションを運用」と画面を共有します | `sessions:live:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | テナント | `/tenants` | テナントのサービスを停止または復旧 | `system:admin` | [how-to/troubleshooting](/ja/how-to/troubleshooting/) |
 | 音声 | `/voice` | 音声およびリアルタイムセッション | `voice:session:read` | [reference/modules/xvi-voice](/ja/reference/modules/xvi-voice/) |
-| 作業 | `/work` | セッションをまたぐ永続的なバックログ: 項目、依存関係、受け入れ、決定 | `sessions:work:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
+| 作業 | `/work` | 共有作業：項目、依存関係、受け入れ、決定 | `sessions:work:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 | ワークスペース | `/workspace` | 1 つのワークスペースにスコープされたエージェント、セッション、リソース、アクティビティ | `tenant:read` | [reference/modules/xx-multi-tenancy](/ja/reference/modules/xx-multi-tenancy/) |
 | ワークスペーステンプレート | `/workspace-templates` | 再利用可能なセッション設定スナップショット: フック、設定、コネクタ、ポリシー。 | `sessions:template:read` | [reference/modules/ii-sessions](/ja/reference/modules/ii-sessions/) |
 
@@ -107,6 +107,7 @@ append-only な一覧であり、画面が追加、移動、消失すれば、�
 | Git 公開 | `/git-publication` | 承認済みの Git ターゲットを通じてコミットのプッシュ、プルリクエストの作成、マージを行う | `gitpublish:target:read` | [reference/modules/gitpublish](/ja/reference/modules/gitpublish/) |
 | インベントリ | `/inventory` | コネクタが観察したエージェント、MCP サーバー、モデルを検出してカタログ化 | `inventory:catalog:read` | [reference/modules/i-inventory](/ja/reference/modules/i-inventory/) |
 | ナレッジ | `/knowledge` | ナレッジベース、RAG、データリネージ | `knowledge:kb:read` | [reference/modules/viii-knowledge](/ja/reference/modules/viii-knowledge/) |
+| MCP サーバー | `/mcp-servers` | リモートの MCP サーバーをこの組織に接続してテストし、セッションが使えるツールを選びます | `tenant:admin` | [how-to/connectors/mcp-governance](/ja/how-to/connectors/mcp-governance/) |
 | モデル運用 | `/model-operations` | 所有モデル、admission、デプロイメント | `models:registry:read` | [reference/modules/xxiii-model-operations](/ja/reference/modules/xxiii-model-operations/) |
 | モデル | `/models` | モデル、ルーティング、プロバイダー鍵 | `models:catalog:read` | [reference/modules/x-models](/ja/reference/modules/x-models/) |
 | セットアップウィザード | `/onboarding` | 段階的なデプロイメント設定 | `system:admin` | [start/quickstart](/ja/start/quickstart/) |

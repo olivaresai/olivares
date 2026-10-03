@@ -167,11 +167,11 @@ func TestLaunchTerms_DeclarationMatchesWhatTheLaunchCarries(t *testing.T) {
 			case ModelDiscoveryBoundCredentialProbe:
 				// The probe lists the models of the provider record a profile binds, so
 				// a driver discovers them this way only if a record can be bound to it.
-				// An openai_compatible record serves every driver by construction and
-				// proves nothing about this one, so it is not asked.
+				// An openai_compatible record is not a named vendor kind and proves
+				// nothing about this one, so it is not asked.
 				served := false
 				for _, kind := range []string{ProviderKindAnthropic, ProviderKindOpenAI, ProviderKindXAI} {
-					served = served || recordServesDriver(kind, tc.driver)
+					served = served || recordServesDriver(kind, "", tc.driver)
 				}
 				if !served {
 					t.Errorf("%s declares model discovery %q, but no provider record of a named kind can be bound to it",

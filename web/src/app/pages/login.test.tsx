@@ -164,6 +164,16 @@ describe('sign-in returns to the requested console page', () => {
       replace: true,
     })
   })
+  // RC10 (SC on 6e97de81): the exact deep link SC signed in from.
+  it('returns to /settings?tab=appearance#appearance after the password', async () => {
+    loginSearch.returnTo = '/settings?tab=appearance#appearance'
+    await signIn()
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/settings',
+      href: '/settings?tab=appearance#appearance',
+      replace: true,
+    })
+  })
   it.each([
     '//attacker.example',
     '/\\attacker.example',

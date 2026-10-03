@@ -28,7 +28,7 @@
 # single-role posture the app role owns the schema, so leave it unset.
 #
 # Verify both roles first, without booting anything:
-#   olivares db check --dsn "$OLIVARES_DSN" --owner-dsn "$OLIVARES_OWNER_DSN" --strict
+#   olivares db check --dsn=env:OLIVARES_DSN --owner-dsn=env:OLIVARES_OWNER_DSN --strict
 #
 # Usage:
 #   OLIVARES_DSN=postgres://olivares_app:***@host:5432/olivares \
@@ -45,31 +45,19 @@ OUT="${1:?usage: pg-dump.sh <out.drbundle>}"
 : "${OLIVARES_DATA_DIR:=/var/lib/olivares}"
 : "${OLIVARES_DR_PASSPHRASE_FILE:?set OLIVARES_DR_PASSPHRASE_FILE (the backup KEK passphrase)}"
 
-# POSIX sh has no arrays, so `set --` rebuilds the positional parameters — the
-# portable way to carry an OPTIONAL argument (the same shape pg-restore.sh uses
-# for OLIVARES_ADMIN_DSN). OUT was captured above, so overwriting $1 is safe.
+# The existing DR path runs pg_dump with a private libpq service file and then
+# wraps its consistent snapshot, signing keys and chain-tip manifest.
 set --
 if [ -n "${OLIVARES_OWNER_DSN:-}" ]; then
-  set -- "$@" --owner-dsn="$OLIVARES_OWNER_DSN"
+  set -- "$@" --owner-dsn=env:OLIVARES_OWNER_DSN
 fi
 
-TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
-
-echo "pg_dump (custom format, single consistent snapshot)…"
-# pg_dump disables row_security and fails on FORCE-RLS tables through the app
-# role. The read-only BYPASSRLS role sees every tenant and has no write grants.
-pg_dump --format=custom --no-owner --no-privileges \
-  --file="$TMP/dump.pgcustom" --dbname="$OLIVARES_ADMIN_DSN"
-
-echo "wrapping into a DR bundle (signing keys + chain-tip manifest + dump)…"
 olivares dr backup \
   --engine=postgres \
-  --dsn="$OLIVARES_DSN" \
-  --admin-dsn="$OLIVARES_ADMIN_DSN" \
+  --dsn=env:OLIVARES_DSN \
+  --admin-dsn=env:OLIVARES_ADMIN_DSN \
   "$@" \
   --data-dir="$OLIVARES_DATA_DIR" \
-  --snapshot-file="$TMP/dump.pgcustom" \
   --out="$OUT" \
   --passphrase-file="$OLIVARES_DR_PASSPHRASE_FILE"
 

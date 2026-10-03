@@ -7,6 +7,7 @@ package agenttoolsapi
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -31,6 +32,10 @@ func TestFakeOllamaProcess(t *testing.T) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/api/version", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write([]byte(`{"version":"0.35.0"}`))
+	})
+	// Test-only: what the module put in this server's environment.
+	mux.HandleFunc("/fake/no-cloud", func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(os.Getenv("OLLAMA_NO_CLOUD")))
 	})
 	mux.HandleFunc("/api/tags", func(w http.ResponseWriter, _ *http.Request) {
 		entries, _ := os.ReadDir(dir)
@@ -62,6 +67,8 @@ func TestFakeOllamaProcess(t *testing.T) {
 type ollamaFixture struct {
 	addr      string
 	models    string
+	bin       string
+	cfg       OllamaConfig
 	mu        sync.Mutex
 	endpoint  string
 	tenant    model.TenantID
@@ -92,9 +99,10 @@ func newOllamaServer(t *testing.T) (call func(string, string, any) (int, map[str
 		if err := os.WriteFile(filepath.Join(bin, "ollama"), []byte(wrapper), 0o755); err != nil {
 			t.Fatal(err)
 		}
-		f.mod = m
-		m.UseOllama(OllamaConfig{
+		f.mod, f.bin = m, bin
+		f.cfg = OllamaConfig{
 			Addr: f.addr, ModelsDir: f.models, HomeDir: filepath.Join(t.TempDir(), "home"),
+			StateFile: filepath.Join(t.TempDir(), "started.json"),
 			Register: func(_ context.Context, _ auth.Principal, tenant model.TenantID, endpoint string) error {
 				f.mu.Lock()
 				f.endpoint, f.tenant = endpoint, tenant
@@ -102,7 +110,8 @@ func newOllamaServer(t *testing.T) (call func(string, string, any) (int, map[str
 				f.mu.Unlock()
 				return nil
 			},
-		})
+		}
+		m.UseOllama(f.cfg)
 	})
 	return call, f
 }
@@ -297,5 +306,24 @@ func TestOllamaDownloadRegistersAgainForTheStartingTenant(t *testing.T) {
 	f.mu.Unlock()
 	if n != 2 || tenant.String() != org["tenant_id"] || endpoint != "http://"+f.addr {
 		t.Fatalf("after the download: %d registrations, tenant %q, endpoint %q", n, tenant, endpoint)
+	}
+}
+
+// The product-started Ollama runs with its cloud features off (OLLAMA_NO_CLOUD): HU2 saw it
+// reach ollama.com on start, which no local session needs.
+func TestOllamaStartsWithItsCloudFeaturesOff(t *testing.T) {
+	call, f := newOllamaServer(t)
+	if code, st := call("POST", "/v1/m/agenttools/ollama/start", nil); code != 202 {
+		t.Fatalf("start = %d %v", code, st)
+	}
+	waitOllama(t, call, "running")
+	resp, err := http.Get("http://" + f.addr + "/fake/no-cloud")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer resp.Body.Close()
+	got, _ := io.ReadAll(resp.Body)
+	if string(got) != "1" {
+		t.Fatalf("OLLAMA_NO_CLOUD = %q in the started Ollama, want 1", got)
 	}
 }

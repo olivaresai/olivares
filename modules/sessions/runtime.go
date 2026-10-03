@@ -388,6 +388,9 @@ type liveRun struct {
 	// that nil is what keeps that path byte-identical.
 	driver  ProviderDriver
 	session DriverSession
+	// acpEcho holds the person's accepted ACP prompts until the bridge writes them
+	// into the output stream (acp_prompt_echo.go).
+	acpEcho acpPromptEcho
 	// workCredentialID is the non-sensitive revocation handle of the exact-SID
 	// kernel bearer injected at launch. The bearer itself never leaves LaunchSpec.
 	workCredentialID                model.ID
@@ -422,11 +425,18 @@ type liveRun struct {
 	claudePendingTurns int
 	stopReason         string
 	ownerAccessEnded   bool // exact-generation lifecycle cause, never parsed from text
-	launchFailed       bool
-	finalized          bool
-	finalizedCh        chan struct{}
-	lastActivityWrite  time.Time
-	sessionIDCaptured  bool
+
+	// Consecutive owner-read failures belong to this supervised generation.
+	// A successful read resets the grace and backoff; no durable state is added.
+	ownerAccessFailureSince time.Time
+	ownerAccessRetryAt      time.Time
+	ownerAccessAttempts     int
+
+	launchFailed      bool
+	finalized         bool
+	finalizedCh       chan struct{}
+	lastActivityWrite time.Time
+	sessionIDCaptured bool
 	// conversationID is the provider conversation the correlated root response
 	// nominated for this launch, and authState the readiness the provider itself
 	// reported. Both are in-memory facts: the durable ones are the scoped alias and
@@ -1559,6 +1569,9 @@ func (m *Module) resumeRunInternal(ctx context.Context, tenant model.TenantID, r
 	if err := refuseNativeCustomPreset(p, launchDriverKey(p)); err != nil {
 		return runDTO{}, err
 	}
+	if err := refuseGrokWithoutItsSandbox(p, launchDriverKey(p)); err != nil {
+		return runDTO{}, err
+	}
 	// OpenCode has no mapping for template instructions or custom tool restrictions.
 	// Create already refuses those after the
 	// server resolves the driver. Resume re-resolves the CURRENT template above,
@@ -2149,11 +2162,33 @@ func (m *Module) sendTextInputLoaded(
 	runRef, text string,
 	rec model.Record,
 ) (bool, error) {
+	if line, ok := claudeTextTurn(rec, text); ok {
+		if lr, live := m.rt.getLive(tenant, runRef); live && lr.session == nil {
+			return m.sendInputLoaded(ctx, tenant, runRef, line, rec)
+		}
+	}
 	lr, err := m.textInputLive(tenant, runRef, rec)
 	if err != nil {
 		return false, err
 	}
 	return m.driverInput(ctx, lr, text)
+}
+
+// claudeTextTurn is text as the one user-message line a Claude Code stream-json
+// child reads. Claude Code has no protocol driver, so text sent to it was refused
+// and the caller had to hand-write the frame (HU-12). The frame is encoded here,
+// never taken from the caller: JSON escapes every newline, so the text stays one
+// turn. A run with no profile driver recorded is a Claude run (launchDriverKey).
+func claudeTextTurn(rec model.Record, text string) ([]byte, bool) {
+	driver := rec.String(colRunProfileDriver)
+	if Transport(rec.String(colTransport)) != TransportStreamJSON || (driver != "" && driver != providerDriverClaude) {
+		return nil, false
+	}
+	line, err := json.Marshal(map[string]any{
+		"type":    "user",
+		"message": map[string]any{"role": "user", "content": text},
+	})
+	return line, err == nil
 }
 
 func (m *Module) textInputLive(tenant model.TenantID, runRef string, rec model.Record) (*liveRun, error) {
@@ -3784,8 +3819,15 @@ func redactErr(err error) string {
 
 // launchFailedErr is the refusal for a launch the runner could not start. The
 // runner's own text is never shown (it saw the launch's bearers), but a missing
-// or unrunnable program is classified, so the one sentence says what to do.
+// or unrunnable program is classified, so the one sentence says what to do. A
+// refusal this module already wrote (a *runErr, such as the Codex sandbox
+// check's) is kept as written: its fixed sentence carries no runner text, and
+// replacing it hid why the session did not start (HU-06).
 func launchFailedErr(what string, lerr error) *runErr {
+	var own *runErr
+	if errors.As(lerr, &own) {
+		return own
+	}
 	switch {
 	case errors.Is(lerr, exec.ErrNotFound), errors.Is(lerr, fs.ErrNotExist):
 		return &runErr{http.StatusBadGateway, what + ": the tool is not installed on this server; install it from AI tools, then start the session again"}

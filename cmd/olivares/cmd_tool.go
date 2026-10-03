@@ -60,7 +60,7 @@ func newToolCmd() *cobra.Command {
 			"with its own login (your Claude or ChatGPT subscription), and see what is installed.",
 		Example: "  olivares tool install claude\n  olivares tool login claude\n  olivares tool ls",
 	}
-	cmd.AddCommand(newToolListCmd(), newToolInstallCmd(), newToolLoginCmd())
+	cmd.AddCommand(newToolListCmd(), newToolInstallCmd(), newToolLoginCmd(), newToolStartCmd())
 	return cmd
 }
 
@@ -145,6 +145,13 @@ func newToolListCmd() *cobra.Command {
 				}
 				table.Rows = append(table.Rows, []string{label, version, status})
 				table.Roles = append(table.Roles, []termrender.Role{termrender.RoleNone, termrender.RoleNone, role})
+			}
+			// A tool that can run a session now makes the session the next step, as in
+			// `olivares` and `session start` (an OpenCode on a local model needs no login).
+			if !cmd.Flags().Changed("account") {
+				if _, ok := cfg.firstReadyTool(cmd.Context()); ok {
+					next = "olivares session start <folder>"
+				}
 			}
 			return renderOut(cmd, func(w io.Writer) error {
 				rr := renderTo(w)
@@ -285,12 +292,16 @@ func newToolInstallCmd() *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			driver := strings.ToLower(strings.TrimSpace(args[0]))
+			requestedVersion := version
+			if driver == "grok" && !cmd.Flags().Changed("version") {
+				requestedVersion = "stable"
+			}
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
 			ctx := cmd.Context()
 			w := cmd.ErrOrStderr()
-			status, b, err := cfg.do(ctx, "POST", agentToolsPath+"/plans", map[string]any{"driver": driver, "version": version}, http.StatusOK, http.StatusNotFound)
+			status, b, err := cfg.do(ctx, "POST", agentToolsPath+"/plans", map[string]any{"driver": driver, "version": requestedVersion}, http.StatusOK, http.StatusNotFound)
 			if err != nil {
 				return err
 			}
@@ -331,8 +342,12 @@ func newToolInstallCmd() *cobra.Command {
 			}
 			return renderOut(cmd, func(out io.Writer) error {
 				_, err := fmt.Fprintf(out, "Installed %s %s.\n", toolName(driver), job.Version)
-				if err == nil && toolSignsIn(driver) {
+				switch {
+				case err != nil:
+				case toolSignsIn(driver):
 					renderTo(out).Next("olivares tool login " + driver)
+				case driver == "ollama":
+					renderTo(out).Next("olivares tool start ollama")
 				}
 				return err
 			}, job)
@@ -682,4 +697,88 @@ func toolHTTPErr(status int, b []byte) error {
 		}
 	}
 	return httpErr(status, b)
+}
+
+// ollamaStartWait bounds how long `tool start ollama` waits for the service to answer.
+var ollamaStartWait = 75 * time.Second
+
+// newToolStartCmd starts the installed Ollama as the engine's own service, the CLI
+// side of AI tools › Ollama › Start (Root on FH 108: the CLI could not start it).
+func newToolStartCmd() *cobra.Command {
+	var cfg agentClientConfig
+	cmd := &cobra.Command{
+		Use:   "start <tool>",
+		Short: "Start Ollama on the engine's host as the engine's own service",
+		Long: "start runs the installed Ollama as a service of the engine, as AI tools › Ollama ›\n" +
+			"Start does, and registers its endpoint in your organization's Providers once it\n" +
+			"answers, so OpenCode sessions can run on its models. The engine starts it again after a\n" +
+			"restart until it is stopped in AI tools. Ollama is the only tool that runs as a service.",
+		Example: "  olivares tool start ollama",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			driver := strings.ToLower(strings.TrimSpace(args[0]))
+			if driver != "ollama" {
+				return sentence(exitcode.Usage, "Only Ollama runs as a service. Start a session instead: olivares session start <folder>")
+			}
+			if err := cfg.resolve(); err != nil {
+				return err
+			}
+			ctx := cmd.Context()
+			body := map[string]any{}
+			if t := strings.TrimSpace(cfg.tenant); t != "" {
+				body["tenant_id"] = t
+			}
+			status, b, err := cfg.do(ctx, "POST", agentToolsPath+"/ollama/start", body, http.StatusAccepted)
+			if err != nil {
+				return err
+			}
+			if status != http.StatusAccepted {
+				return toolHTTPErr(status, b)
+			}
+			var st struct {
+				State    string   `json:"state"`
+				Message  string   `json:"message"`
+				Endpoint string   `json:"endpoint"`
+				Models   []string `json:"models"`
+			}
+			deadline := time.Now().Add(ollamaStartWait)
+			for {
+				status, b, err := cfg.do(ctx, "GET", agentToolsPath+"/ollama", nil, http.StatusOK)
+				if err != nil {
+					return err
+				}
+				if status != http.StatusOK || json.Unmarshal(b, &st) != nil {
+					return toolHTTPErr(status, b)
+				}
+				if st.State == "running" {
+					break
+				}
+				if st.State == "failed" || st.State == "stopped" {
+					return sentence(exitcode.Err, "Ollama did not start: %s", termSafe(firstNonEmptyCLI(st.Message, st.State)))
+				}
+				if time.Now().After(deadline) {
+					return sentence(exitcode.Err, "Ollama has not answered yet. See it: olivares tool ls")
+				}
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(500 * time.Millisecond):
+				}
+			}
+			return renderOut(cmd, func(w io.Writer) error {
+				r := renderTo(w)
+				r.Line(fmt.Sprintf("Ollama is running at %s.", termSafe(st.Endpoint)))
+				if msg := strings.TrimSpace(st.Message); msg != "" {
+					r.Line(termSafe(msg))
+				}
+				if len(st.Models) == 0 {
+					r.Line("It holds no model yet: download one in AI tools › Ollama, then start a session.")
+				}
+				r.Next("olivares session start <folder>")
+				return nil
+			}, st)
+		},
+	}
+	cfg.addFlags(cmd)
+	return cmd
 }

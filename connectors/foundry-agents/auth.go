@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/olivaresai/olivares/connectors/internal/httpx"
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 const (
@@ -45,11 +46,7 @@ func (s *Source) token(ctx context.Context, scope string) (string, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<10))
-		msg := strings.TrimSpace(string(excerpt))
-		if s.clientSecret != "" {
-			msg = strings.ReplaceAll(msg, s.clientSecret, "[REDACTED]")
-		}
+		msg := redact.ReadHTTPError(resp.Body, 2<<10, req, s.clientSecret)
 		return "", fmt.Errorf("foundry-agents: token endpoint status %d: %s", resp.StatusCode, msg)
 	}
 	var tr struct {

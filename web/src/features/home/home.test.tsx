@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { ReactNode } from 'react'
+import { onlineManager } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel, screen, waitFor } from '@/test/intel'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
@@ -16,6 +17,8 @@ import { governanceApi } from '@/features/governance/api'
 import { killswitchApi } from '@/features/killswitch/api'
 import { securityApi } from '@/features/security/api'
 import { healthApi } from '@/features/health/api'
+import { complianceApi } from '@/features/compliance/api'
+import { providersApi } from '@/features/providers/api'
 import { signInApi } from '@/features/first-hour/api'
 import { sessionsApi } from '@/features/sessions/api'
 import { agentOpsApi } from '@/features/agentops/api'
@@ -24,6 +27,7 @@ import {
   finopsForecastFixture,
   finopsSummaryFixture,
   finopsTrendFixture,
+  complianceSummary,
   healthIncidentsFixture,
   healthStatusFixture,
   securityFindingsFixture,
@@ -42,6 +46,12 @@ vi.mock('@tanstack/react-router', () => ({
   Link: ({ children, to }: { children: ReactNode; to: string }) => (
     <a href={to}>{children}</a>
   ),
+}))
+
+// Whether the person opened Compliance (compliance-opened.test.ts covers the record).
+const compliance = vi.hoisted(() => ({ opened: false }))
+vi.mock('@/features/compliance/compliance-opened', () => ({
+  useComplianceOpened: () => compliance.opened,
 }))
 
 // A mutable auth value the container reads — flip `can` per test to assert RBAC gating.
@@ -297,6 +307,94 @@ describe('HomeView (RBAC gating + honest states)', () => {
     expect(page!.className).not.toMatch(/\bgap-4\b/)
   })
 
+  // HU2-25: an upgraded install drew a tile per module, "No health checks yet" and a
+  // compliance score nobody asked for among them. A tile now hides when its answer is in
+  // and empty; the compliance score waits until the person opened Compliance.
+  it('draws no tile for a module whose answer is empty', async () => {
+    authState.can = (p) =>
+      p === 'health:status:read' || p === 'governance:killswitch:read'
+    const status = vi
+      .spyOn(healthApi, 'status')
+      .mockResolvedValue({ items: [], has_more: false } as never)
+    // No subject and no open incident: an open incident is something to say.
+    vi.spyOn(healthApi, 'incidents').mockResolvedValue({
+      items: [],
+      has_more: false,
+    } as never)
+    vi.spyOn(killswitchApi, 'state').mockResolvedValue({
+      estate_stopped: false,
+      active: [],
+    })
+    renderIntel(<HomeView />)
+    await waitFor(() => expect(status).toHaveBeenCalled())
+    await waitFor(() => expect(screen.queryByText('Health & SLA')).toBeNull())
+    expect(screen.queryByText('No health checks yet')).toBeNull()
+    expect(screen.queryByText('Kill switch')).toBeNull()
+  })
+
+  // SR4C on ea62fad5: only a successful, complete, empty answer hides a tile.
+  it('keeps a tile whose first read is paused, and says so instead of "no checks"', async () => {
+    authState.can = (p) => p === 'health:status:read'
+    vi.spyOn(healthApi, 'status').mockResolvedValue({
+      items: [],
+      has_more: false,
+    } as never)
+    vi.spyOn(healthApi, 'incidents').mockResolvedValue(healthIncidentsFixture)
+    onlineManager.setOnline(false)
+    try {
+      renderIntel(<HomeView />)
+      expect(await screen.findByText('Health & SLA')).toBeInTheDocument()
+      expect(
+        screen.getByText('Query paused — waiting to resume'),
+      ).toBeInTheDocument()
+      expect(screen.queryByText('No health checks yet')).toBeNull()
+    } finally {
+      onlineManager.setOnline(true)
+    }
+  })
+
+  it('keeps a tile whose answer is a first page with more behind it', async () => {
+    authState.can = (p) => p === 'security:finding:read'
+    const findings = vi.spyOn(securityApi, 'findings').mockResolvedValue({
+      items: [],
+      has_more: true,
+    } as never)
+    renderIntel(<HomeView />)
+    await waitFor(() => expect(findings).toHaveBeenCalled())
+    // The answered tile is a link (a loading tile is not): it stays after the answer.
+    await waitFor(() =>
+      expect(screen.getByText('Security').closest('a')).toHaveAttribute(
+        'href',
+        '/security',
+      ),
+    )
+  })
+
+  it('keeps a tile whose source could not be read', async () => {
+    authState.can = (p) => p === 'health:status:read'
+    vi.spyOn(healthApi, 'status').mockRejectedValue(
+      new ApiError(500, 'server_error', 'boom'),
+    )
+    vi.spyOn(healthApi, 'incidents').mockResolvedValue(healthIncidentsFixture)
+    renderIntel(<HomeView />)
+    expect(await screen.findByText('Health & SLA')).toBeInTheDocument()
+  })
+
+  it('shows the compliance score only after Compliance was opened', async () => {
+    authState.can = (p) => p === 'compliance:framework:read'
+    const summary = vi
+      .spyOn(complianceApi, 'summary')
+      .mockResolvedValue(complianceSummary)
+    const first = renderIntel(<HomeView />)
+    await waitFor(() => expect(summary).toHaveBeenCalled())
+    await waitFor(() => expect(screen.queryByText('Compliance')).toBeNull())
+    first.unmount()
+    compliance.opened = true
+    renderIntel(<HomeView />)
+    expect(await screen.findByText('Compliance')).toBeInTheDocument()
+    compliance.opened = false
+  })
+
   it('renders a source error as unavailable, never a fabricated 0', async () => {
     authState.can = (p) => p === 'health:status:read'
     vi.spyOn(healthApi, 'status').mockRejectedValue(
@@ -447,6 +545,19 @@ describe('Now — the next step once a coding tool is ready (HU 022)', () => {
         provider: { provider_ref: 'prv_1', kind: 'anthropic' },
       },
     })
+    // Changed, stated (SR4C on b569f2e8): a key is ready once its last test is read and
+    // was not refused, so the key's record is read here too.
+    vi.spyOn(providersApi, 'list').mockResolvedValue({
+      items: [
+        {
+          provider_ref: 'prv_1',
+          kind: 'anthropic',
+          state: 'active',
+          probe_state: 'ok',
+        },
+      ],
+      has_more: false,
+    } as never)
     renderIntel(<HomeView />)
     expect(await screen.findByTestId('now-start')).toHaveTextContent(
       'Claude Code is ready.',

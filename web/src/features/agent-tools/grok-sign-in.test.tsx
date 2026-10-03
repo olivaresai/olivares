@@ -22,6 +22,9 @@ const { api, auth, signIn } = vi.hoisted(() => ({
   },
   auth: {
     isSuperadmin: true,
+    // The tool card asks can('sessions:provider:read') (the refused-key read). These
+    // cases are about the install and sign-in rows, so the role reads no providers.
+    can: () => false,
     activeTenant: null,
     principal: { user_id: 'root' },
   },
@@ -81,9 +84,10 @@ it('offers Grok Build its own sign-in and relays the link and the code', async (
   )
   const card = await screen.findByTestId('tool-grok')
   expect(await within(card).findByText('Not signed in')).toBeInTheDocument()
+  // Changed, stated (ca0e828c, HU2-18): the key form opens on Grok's own provider.
   expect(
     within(card).getByRole('link', { name: 'Use an API key instead' }),
-  ).toHaveAttribute('href', '/providers')
+  ).toHaveAttribute('href', '/providers?add=xai')
   // Each tool card carries the API key link; the page adds no copy of it (Root's capture
   // review, 26.10.1).
   for (const link of screen.getAllByRole('link', {

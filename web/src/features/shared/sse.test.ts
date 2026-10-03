@@ -62,7 +62,7 @@ describe('subscribeStream', () => {
     })
   }
 
-  it('attaches bearer + tenant headers and pumps frames to onMessage', async () => {
+  it('uses same-origin cookies with CSRF + tenant headers, no bearer, and pumps frames to onMessage', async () => {
     const fetchMock = vi.fn(
       async (_url: string, _init?: RequestInit) =>
         new Response(streamOf(['event: session\ndata: {"n":1}\n\n']), {
@@ -75,15 +75,18 @@ describe('subscribeStream', () => {
     const controller = new AbortController()
     await subscribeStream({
       path: '/v1/m/sessions/stream',
-      token: 'olvs_test',
+      token: 'csrf-test',
       tenant: 'tenant-1',
       signal: controller.signal,
       onMessage: (m) => seen.push(m),
     })
 
     expect(seen).toEqual([{ event: 'session', data: '{"n":1}' }])
-    const headers = fetchMock.mock.calls[0]![1]!.headers as Headers
-    expect(headers.get('Authorization')).toBe('Bearer olvs_test')
+    const init = fetchMock.mock.calls[0]![1]!
+    const headers = init.headers as Headers
+    expect(init.credentials).toBe('same-origin')
+    expect(headers.get('Authorization')).toBeNull()
+    expect(headers.get('X-CSRF-Token')).toBe('csrf-test')
     expect(headers.get('X-Olivares-Tenant')).toBe('tenant-1')
     vi.unstubAllGlobals()
   })

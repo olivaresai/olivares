@@ -72,6 +72,16 @@ func (m *Module) bridge(lr *liveRun) {
 	sequenceExhausted := false
 	for frame := range lr.proc.Output() {
 		at := m.now()
+		if frame.Stream == streamStdout {
+			// The person's accepted ACP prompt, ahead of the child's next frame and
+			// redacted like it; it is not the child's, so it skips onStdout.
+			for _, prompt := range lr.acpEcho.before(frame.Data) {
+				prompt = lr.redact.apply(prompt)
+				if seq := lr.ring.append(streamStdout, prompt, at); seq != 0 && lr.recordIO {
+					_ = m.rt.recorder.Record(ctx, lr.tenant, lr.runRef, RecordedFrame{Seq: seq, Stream: streamStdout, Data: prompt, At: at})
+				}
+			}
+		}
 		// A session's vault secret values never leave it through its output: they
 		// are withheld before the ring (the attach stream), the recorder and the
 		// frame parser see the line (session_secret_env.go).
@@ -541,6 +551,37 @@ func conservaElSelloMasNuevo(rec model.Record, antes string) {
 	}
 }
 
+// claudeBoundProviderEnv holds a Claude Code session on a key from Providers to that key's
+// endpoint and keeps it quiet (Root 2026-10-02 21:22Z and 21:33Z, HU2 019 and 023), with
+// Claude Code's own documented switches (code.claude.com/docs/en/env-vars):
+//   - CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: the endpoint and key the launch sets win over any
+//     settings file, and managed model pins cannot re-route it;
+//   - CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: no telemetry (HU2 023 saw Claude Code's
+//     log intake), error reporting, release notes or feature-flag fetches;
+//   - CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL: the plugin marketplace install
+//     the previous switch does not cover.
+//
+// The endpoint itself is ANTHROPIC_BASE_URL from the record mint. Only a record-bound launch
+// gets these: a session on the person's own sign-in keeps its own settings, and Remote
+// Control (never record-bound) needs the feature flags.
+var claudeBoundProviderEnv = []EnvVar{
+	{Name: "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST", Value: "1"},
+	{Name: "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", Value: "1"},
+	{Name: "CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL", Value: "1"},
+}
+
+// claudeSettingsFlag is Claude Code's flag for settings that outrank the user's and the
+// project's (a file path or inline JSON).
+const claudeSettingsFlag = "--settings"
+
+// claudeBoundSettings repeats the two quiet switches as flag settings. Claude Code applies
+// a saved user or project settings env over the launch environment, so a saved
+// CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="" would turn the traffic back on (SR2C, SR5C
+// on 3c130b50; measured on 2.1.288: 5 requests to api.anthropic.com came back). Flag
+// settings outrank both, and with them those requests stay at 0. The host pin needs no
+// repeat: Claude Code already ignores settings files for routing under it.
+var claudeBoundSettings = `{"env":{"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":"1","CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL":"1"}}`
+
 // buildLaunchSpec constructs the neutral launch spec from a run's parameters: the
 // argv (a proper []string — never a shell-split string), the EXPLICIT env (the minted
 // inference token by value, used and discarded; optional gateway base URL; the
@@ -581,7 +622,7 @@ func (m *Module) buildLaunchSpec(
 		// protocol, and the correlated root response is the only thing allowed to
 		// nominate the conversation.
 		program = m.driverProgram(drv)
-		driverLaunch = DriverLaunch{WorkDir: dir, Model: p.Model, Effort: p.Effort, Preset: launchPreset(p), CodexSandboxFallback: p.codexSandboxFallback, LocalModelEndpoint: cred.localModelEndpoint, LocalModels: cred.localModels}
+		driverLaunch = DriverLaunch{WorkDir: dir, Model: p.Model, Effort: p.Effort, Preset: launchPreset(p), CodexSandboxFallback: p.codexSandboxFallback, LocalModelEndpoint: cred.localModelEndpoint, LocalModels: cred.localModels, BoundProvider: cred.bound}
 		if p.ProviderHome != nil {
 			driverLaunch.ConfigHome = p.ProviderHome.ConfigHome
 			driverLaunch.UserHome = p.ProviderHome.UserHome
@@ -625,6 +666,9 @@ func (m *Module) buildLaunchSpec(
 			// argv with no form flag at all — that would launch the vendor CLI
 			// INTERACTIVELY under a row that claims a bridged session.
 			args = cliruntime.ClaudeArgs(claude)
+			if cred.bound.Kind != "" {
+				args = append(args, claudeSettingsFlag, claudeBoundSettings)
+			}
 		}
 	}
 
@@ -721,6 +765,9 @@ func (m *Module) buildLaunchSpec(
 		// so inject it explicitly here, where it actually reaches `claude`. It is Claude's
 		// own variable and is not invented for another provider's CLI.
 		env = append(env, EnvVar{Name: "DISABLE_AUTOUPDATER", Value: "1"})
+		if cred.bound.Kind != "" {
+			env = append(env, claudeBoundProviderEnv...)
+		}
 	}
 
 	// the governance env the LaunchGate wants on the child — the OLIVARES_HOOK_PEP_*
@@ -731,14 +778,15 @@ func (m *Module) buildLaunchSpec(
 
 	preset := launchPreset(p)
 	return LaunchSpec{
-		Program:   program,
-		Args:      args,
-		Dir:       dir,
-		Env:       env,
-		EnvAllow:  p.EnvAllow,
-		Isolation: p.Isolation,
-		WaitDelay: m.rt.waitDelay,
-		Workspace: mount,
+		Program:       program,
+		Args:          args,
+		Dir:           dir,
+		Env:           env,
+		BoundProvider: cred.bound,
+		EnvAllow:      p.EnvAllow,
+		Isolation:     p.Isolation,
+		WaitDelay:     m.rt.waitDelay,
+		Workspace:     mount,
 		// The child may write its folder and its account homes, and nothing of
 		// the engine (runtime_confinement.go).
 		Confinement: m.sessionConfinement(dir, p.ProviderHome, preset),

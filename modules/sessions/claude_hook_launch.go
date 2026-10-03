@@ -42,21 +42,15 @@ func ConfigureClaudeHookPEP(spec *LaunchSpec, dataDir, runRef, olivaresBinary st
 	if err := CheckClaudeHookHostPolicy(); err != nil {
 		return err
 	}
-	if dir := strings.TrimSpace(os.Getenv("CLAUDE_CODE_MANAGED_SETTINGS_PATH")); dir != "" {
-		// This startup-only vendor override must name the same directory in
-		// preflight and the child, whose cwd may differ from the engine's.
-		absolute, err := filepath.Abs(dir)
-		if err != nil {
-			return err
+	// The child reads its managed settings from the system directory, the one the check above
+	// read (claudeManagedSettingsDir). CLAUDE_CODE_MANAGED_SETTINGS_PATH is never handed to it:
+	// a Claude Code that honoured the variable would read a directory the check never saw
+	// (Root 2026-10-03 00:5xZ).
+	for i := 0; i < len(spec.Env); i++ {
+		if spec.Env[i].Name == "CLAUDE_CODE_MANAGED_SETTINGS_PATH" {
+			spec.Env = append(spec.Env[:i], spec.Env[i+1:]...)
+			i--
 		}
-		for i := range spec.Env {
-			if spec.Env[i].Name == "CLAUDE_CODE_MANAGED_SETTINGS_PATH" {
-				spec.Env = append(spec.Env[:i], spec.Env[i+1:]...)
-				break
-			}
-		}
-		spec.Env = append(spec.Env, EnvVar{Name: "CLAUDE_CODE_MANAGED_SETTINGS_PATH", Value: absolute})
-		spec.AllowRead(absolute)
 	}
 	// User/account settings remain writable and can set the child environment.
 	// Pin the public endpoint here so those settings cannot redirect the hook;
@@ -69,7 +63,25 @@ func ConfigureClaudeHookPEP(spec *LaunchSpec, dataDir, runRef, olivaresBinary st
 		eventCommand := command + " --hook-event " + quote(event)
 		hooks[event] = []any{map[string]any{"matcher": "*", "hooks": []any{map[string]any{"type": "command", "command": eventCommand, "timeout": int(ClaudeHookPEPCommandTimeout / time.Second)}}}}
 	}
-	body, err := json.Marshal(map[string]any{"disableAllHooks": false, "hooks": hooks})
+	settings := map[string]any{"disableAllHooks": false, "hooks": hooks}
+	// A launch may already carry inline flag settings (a record-bound launch's quiet
+	// switches, claudeBoundSettings). Claude Code takes one --settings, so they join this
+	// file rather than being replaced by it.
+	for i := 0; i+1 < len(spec.Args); i++ {
+		if spec.Args[i] != claudeSettingsFlag {
+			continue
+		}
+		inline := map[string]any{}
+		if err := json.Unmarshal([]byte(spec.Args[i+1]), &inline); err != nil {
+			return errors.New("the launch's own Claude settings could not be read")
+		}
+		for key, value := range inline {
+			settings[key] = value
+		}
+		spec.Args = append(spec.Args[:i], spec.Args[i+2:]...)
+		break
+	}
+	body, err := json.Marshal(settings)
 	if err != nil {
 		return err
 	}
@@ -95,6 +107,6 @@ func ConfigureClaudeHookPEP(spec *LaunchSpec, dataDir, runRef, olivaresBinary st
 	// updatedInput after PEP approval, so mutable setting sources cannot join
 	// this governed launch. An empty value keeps managed and explicit settings.
 	// https://code.claude.com/docs/en/cli-reference
-	spec.Args = append(spec.Args, "--settings", path, "--setting-sources", "")
+	spec.Args = append(spec.Args, claudeSettingsFlag, path, "--setting-sources", "")
 	return nil
 }

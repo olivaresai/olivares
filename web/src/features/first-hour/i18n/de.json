@@ -10,7 +10,10 @@
     "signedIn": "Angemeldet",
     "signedInAs": "Angemeldet als {{account}}",
     "notSignedIn": "Nicht angemeldet",
-    "usesKey": "Verwendet Ihren API-Schlüssel: {{name}}"
+    "usesKey": "Verwendet Ihren API-Schlüssel: {{name}}",
+    "usesLocal": "Verwendet den lokalen Modellserver: {{name}}",
+    "keyRefused": "Der API-Schlüssel {{name}} wurde abgelehnt. Ersetzen Sie ihn unter Anbieter.",
+    "keyUnchecked": "Der Schlüssel {{name}} konnte nicht geprüft werden. Testen Sie ihn unter Anbieter."
   },
   "actions": {
     "install": "Installieren",

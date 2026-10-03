@@ -68,12 +68,15 @@ import type {
   RiskTier,
 } from './types'
 import './i18n'
+import { useMarkComplianceOpened } from './compliance-opened'
 
 const RISK_TIERS: RiskTier[] = ['unacceptable', 'high', 'limited', 'minimal']
 
 export function ComplianceView() {
   const { t } = useTranslation('compliance')
   const { activeTenant, can } = useAuth()
+  // From here on Now may show the compliance score (HU2-25).
+  useMarkComplianceOpened()
   const [framework, setFramework] = useState<string | null>(null)
   // RegOps and NIS 2 incident classification are served by a Business build only:
   // every generator answers 501 in a Community build, and their lists hold only what

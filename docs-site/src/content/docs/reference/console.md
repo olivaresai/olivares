@@ -53,14 +53,14 @@ identity, Deployment, Observability & evidence, then System & settings.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-The console publishes **80 routes**. Every one of them is in the tables below, with the
+The console publishes **81 routes**. Every one of them is in the tables below, with the
 permission it requires and the reference page its in-product help link opens.
 
 ### Operate
 
 | Screen | Path | What it is | Requires | Reference |
 |---|---|---|---|---|
-| Overview | `/` | Estate overview and health at a glance | any signed-in user | [docs home](/) |
+| Now | `/` | Estate overview and health at a glance | any signed-in user | [docs home](/) |
 | Agent tools | `/agent-tools` | Detect, install and update the agent tools on this host and follow each install; deployment administrators only | `system:admin` | [how-to/add-a-provider](/how-to/add-a-provider/) |
 | Operate sessions | `/agentops` | Create, attach to and govern Claude Code sessions — no SSH; shares its screen with Observe sessions | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/how-to/run-claude-code-with-olivares/) |
 | Backups | `/backups` | Encrypted disaster-recovery snapshots of the control plane: create, schedule, download and restore | `system:admin` | [how-to/backup-and-restore](/how-to/backup-and-restore/) |
@@ -76,12 +76,12 @@ permission it requires and the reference page its in-product help link opens.
 | Provider accounts | `/provider-accounts` | List named provider accounts and adopt an existing provider profile as an account | `sessions:account:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 | Source bindings | `/provider-bindings` | Dedicate configured sources, at the revision this node applied, to provider profiles | `sessions:profile-binding:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 | Provider profiles | `/provider-profiles` | Register and administer the provider homes sessions launch under, and read their configuration on demand | `sessions:profile:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
-| Providers | `/providers` | Register the API keys and endpoints sessions launch with; test, rotate and revoke them | `sessions:provider:read` | [how-to/add-a-provider](/how-to/add-a-provider/) |
+| API keys | `/providers` | Register the API keys and endpoints sessions launch with; test, rotate and revoke them | `sessions:provider:read` | [how-to/add-a-provider](/how-to/add-a-provider/) |
 | Sandbox | `/sandbox` | Isolated agent testing and replay | `sandbox:run:read` | [reference/modules/xvii-sandbox](/reference/modules/xvii-sandbox/) |
 | Observe sessions | `/sessions` | Observe live and discovered sessions with their timelines; shares its screen with Operate sessions | `sessions:live:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 | Tenants | `/tenants` | Withdraw or restore a tenant's service | `system:admin` | [how-to/troubleshooting](/how-to/troubleshooting/) |
 | Voice | `/voice` | Voice and realtime sessions | `voice:session:read` | [reference/modules/xvi-voice](/reference/modules/xvi-voice/) |
-| Work | `/work` | The durable cross-session backlog: items, dependencies, acceptance and decisions | `sessions:work:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
+| Work | `/work` | Shared work: items, dependencies, acceptance and decisions | `sessions:work:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 | Workspace | `/workspace` | Agents, sessions, resources and activity scoped to one workspace | `tenant:read` | [reference/modules/xx-multi-tenancy](/reference/modules/xx-multi-tenancy/) |
 | Workspace templates | `/workspace-templates` | Reusable snapshots of hooks, settings, connectors and policies for workspace sessions | `sessions:template:read` | [reference/modules/ii-sessions](/reference/modules/ii-sessions/) |
 
@@ -106,6 +106,7 @@ permission it requires and the reference page its in-product help link opens.
 | Git publication | `/git-publication` | Push commits, open pull requests and merge through approved Git targets | `gitpublish:target:read` | [reference/modules/gitpublish](/reference/modules/gitpublish/) |
 | Inventory | `/inventory` | Discover and catalog the agents, MCP servers and models that connectors observed. | `inventory:catalog:read` | [reference/modules/i-inventory](/reference/modules/i-inventory/) |
 | Knowledge | `/knowledge` | Knowledge bases, RAG and data lineage | `knowledge:kb:read` | [reference/modules/viii-knowledge](/reference/modules/viii-knowledge/) |
+| MCP servers | `/mcp-servers` | Connect remote MCP servers to this organization, test them and choose which tools sessions may use | `tenant:admin` | [how-to/connectors/mcp-governance](/how-to/connectors/mcp-governance/) |
 | Model Operations | `/model-operations` | Owned models, admission and deployments | `models:registry:read` | [reference/modules/xxiii-model-operations](/reference/modules/xxiii-model-operations/) |
 | Models | `/models` | Models, routing and provider keys | `models:catalog:read` | [reference/modules/x-models](/reference/modules/x-models/) |
 | Setup wizard | `/onboarding` | Step-by-step deployment configuration | `system:admin` | [start/quickstart](/start/quickstart/) |
@@ -118,9 +119,9 @@ permission it requires and the reference page its in-product help link opens.
 | Access map | `/access-map` | What each agent reads and writes (R/RW) | `accessmap:graph:read` | [reference/modules/iii-access-map](/reference/modules/iii-access-map/) |
 | AgentCore export | `/agentcore-export` | Plan, review and apply the projection of this tenant's governance rules onto AWS AgentCore as Cedar policies; planning writes nothing | `governance:agentcore-export:admin` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
 | Claude Code governance | `/claude-policy` | Managed policy, hooks, MCP, sandbox and policy-as-code | `governance:claude-policy:read` | [how-to/connectors/claude-code-hooks-pep](/how-to/connectors/claude-code-hooks-pep/) |
-| Administration | `/console` | Users, SSO/IdP, workspaces, agent groups, roles, secrets, connectors, API keys and this installation's licence | `tenant:admin` | [reference/modules/xx-multi-tenancy](/reference/modules/xx-multi-tenancy/) |
+| Administration | `/console` | Users, SSO/IdP, workspaces, agent groups, roles, secrets, connectors, API keys and this installation's license | `tenant:admin` | [reference/modules/xx-multi-tenancy](/reference/modules/xx-multi-tenancy/) |
 | Source diff | `/console/sources/diff` | Compare a base and a head revision of a connected Git repository, file by file | `system:admin` | [reference/console](/reference/console/) |
-| Identity & NHI | `/identity` | SSO, SCIM, the NHI roster and the WIF graph | `governance:identity:read` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
+| Identity & access | `/identity` | SSO, SCIM, the NHI roster and the WIF graph | `governance:identity:read` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
 | Inference proxy | `/inference-proxy` | Proxy gates, egress DLP rules and device approvals | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/reference/modules/inferenceproxy/) |
 | Permissions | `/permissions` | Identity, roles and approvals | `governance:identity:read` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
 | Rate limits | `/rate-limits` | Anthropic rate-limit inventory and its availability (read-only reference) | `models:ratelimits:read` | [reference/modules/x-models](/reference/modules/x-models/) |

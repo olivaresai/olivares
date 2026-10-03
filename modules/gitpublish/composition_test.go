@@ -36,6 +36,7 @@ type server struct {
 	setup  string
 	tenant model.TenantID
 	st     store.Store
+	authr  *auth.Authenticator
 }
 
 func newServer(t *testing.T) *server {
@@ -71,7 +72,7 @@ func newServer(t *testing.T) *server {
 	}
 	m.UseData(api.NewModuleData(st))
 	m.UseAuthority(authr, authz)
-	return &server{t: t, srv: srv, m: m, host: host, git: g, setup: plaintext, st: st}
+	return &server{t: t, srv: srv, m: m, host: host, git: g, setup: plaintext, st: st, authr: authr}
 }
 
 // requirePasskeyStepUp turns on the strictest administrative step-up policy
@@ -115,6 +116,18 @@ func (s *server) login(email, password string) string {
 	return out["token"].(string)
 }
 
+// stepUp elevates a session as a verified passkey ceremony would.
+func (s *server) stepUp(token string) {
+	s.t.Helper()
+	p, err := s.authr.Authenticate(context.Background(), token)
+	if err != nil {
+		s.t.Fatalf("authenticate for step-up: %v", err)
+	}
+	if _, err := s.authr.ElevateSession(context.Background(), p, "webauthn", auth.AAL3); err != nil {
+		s.t.Fatalf("elevate session: %v", err)
+	}
+}
+
 func (s *server) member(root string, role string) string {
 	s.t.Helper()
 	email := role + "@acme.io"
@@ -132,6 +145,9 @@ func TestProductionCompositionThroughTheSealedDoor(t *testing.T) {
 		t.Fatalf("setup = %d %s", code, raw)
 	}
 	root := s.login("root@x.io", "supersecret1")
+	// Adding a person asks for the deployment's step-up (HU-28, 5ef7ef98): the
+	// administrator who adds the members steps up; the members under test do not.
+	s.stepUp(root)
 	code, out, raw := s.do("POST", "/v1/system/orgs", root, map[string]any{"name": "acme", "slug": "acme"}, "")
 	if code != http.StatusCreated {
 		t.Fatalf("org = %d %s", code, raw)

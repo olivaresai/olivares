@@ -31,6 +31,12 @@ type fakeToolEngine struct {
 	pending     bool
 	started     chan struct{}
 	startedOnce sync.Once
+	// ready are the tools the resolve preview answers 200 for (others 409); ollama is
+	// the product's Ollama service: started by POST /ollama/start, for ollamaTenant.
+	ready         map[string]bool
+	ollamaStarted bool
+	ollamaTenant  any
+	planRequest   map[string]any
 }
 
 func newFakeToolEngine(t *testing.T) *fakeToolEngine {
@@ -57,6 +63,21 @@ func (f *fakeToolEngine) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	p := strings.TrimPrefix(r.URL.Path, agentToolsPath)
 	switch {
+	case r.URL.Path == profilesPath+"/resolve" && r.Method == "GET":
+		if f.ready[r.URL.Query().Get("driver")] {
+			reply(200, map[string]any{"reason": "api_key"})
+			return
+		}
+		reply(409, map[string]any{"error": map[string]any{"code": "nothing_to_run_on", "message": "not ready"}})
+	case p == "/ollama/start" && r.Method == "POST":
+		f.ollamaStarted, f.ollamaTenant = true, body["tenant_id"]
+		reply(202, map[string]any{"installed": true, "state": "starting"})
+	case p == "/ollama" && r.Method == "GET":
+		if f.ollamaStarted {
+			reply(200, map[string]any{"installed": true, "state": "running", "endpoint": "http://127.0.0.1:11434", "models": []string{}})
+			return
+		}
+		reply(200, map[string]any{"installed": true, "state": "stopped", "models": []string{}})
 	case p == "/inventory":
 		reply(200, map[string]any{
 			"drivers": []string{"claude", "codex", "grok", "ollama", "opencode"},
@@ -66,6 +87,7 @@ func (f *fakeToolEngine) serve(w http.ResponseWriter, r *http.Request) {
 			}},
 		})
 	case p == "/plans":
+		f.planRequest = body
 		reply(200, map[string]any{"digest": "d1", "driver": body["driver"], "version": "0.159.3", "verification": "sigstore-cosign"})
 	case p == "/installs":
 		if body["plan_digest"] != "d1" || body["request_id"] == "" {
@@ -162,6 +184,34 @@ func TestToolInstallGoesThroughTheEnginesPlanAndJob(t *testing.T) {
 	if !strings.Contains(errb, "Installing Codex 0.159.3 (verified: sigstore-cosign)") || !strings.Contains(out, "Installed Codex 0.159.3.") ||
 		!strings.Contains(out, "next: olivares tool login codex") {
 		t.Fatalf("stdout=%q stderr=%q", out, errb)
+	}
+}
+
+func TestToolInstallUsesTheConsoleReleaseDefaultAndKeepsExplicitVersions(t *testing.T) {
+	for _, tool := range []struct{ driver, defaultVersion string }{
+		{"claude", "latest"}, {"codex", "latest"}, {"grok", "stable"}, {"opencode", "latest"}, {"ollama", "latest"},
+	} {
+		for _, version := range []string{"", "latest", "stable", "0.159.3"} {
+			name, want := version, version
+			args := []string{"tool", "install", tool.driver}
+			if version == "" {
+				name, want = "default", tool.defaultVersion
+			} else {
+				args = append(args, "--version", version)
+			}
+			t.Run(tool.driver+"/"+name, func(t *testing.T) {
+				f := newFakeToolEngine(t)
+				_, errb, err := execSessionCLI(t, nil, append(args, sessionCreds(f.URL)...)...)
+				if err != nil {
+					t.Fatalf("tool install: %v\n%s", err, errb)
+				}
+				f.mu.Lock()
+				defer f.mu.Unlock()
+				if f.planRequest["driver"] != tool.driver || f.planRequest["version"] != want {
+					t.Fatalf("plan request = %v, want driver %q version %q", f.planRequest, tool.driver, want)
+				}
+			})
+		}
 	}
 }
 

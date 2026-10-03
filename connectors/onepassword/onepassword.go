@@ -65,6 +65,7 @@ import (
 
 	"github.com/olivaresai/olivares/connectors/identitysource"
 	"github.com/olivaresai/olivares/connectors/internal/httpx"
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/model"
 )
@@ -334,8 +335,8 @@ func (s *Source) postJSON(ctx context.Context, path string, body usagesRequest, 
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrExcerpt))
-		return fmt.Errorf("onepassword: POST %s: status %d: %s", path, resp.StatusCode, strings.TrimSpace(string(excerpt)))
+		excerpt := redact.ReadHTTPError(resp.Body, maxErrExcerpt, req, s.token)
+		return fmt.Errorf("onepassword: POST %s: status %d: %s", path, resp.StatusCode, excerpt)
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, maxBody)).Decode(out); err != nil {
 		return fmt.Errorf("onepassword: decode %s: %w", path, err)

@@ -92,3 +92,76 @@ it('rechecks profile state before changing a binding', async () => {
   await waitFor(() => expect(api.getProfile).toHaveBeenCalled())
   expect(api.patchProfile).not.toHaveBeenCalled()
 })
+
+// HU-R33: the console offered a local Ollama endpoint to Codex only, while OpenCode is the
+// local default and the engine binds both (recordServesDriver).
+it('offers an OpenCode profile for a local endpoint, and still a Codex one', async () => {
+  api.listProfiles.mockResolvedValue({
+    items: [
+      profile,
+      {
+        ...profile,
+        profile_ref: 'pp_opencode',
+        driver: 'opencode',
+        display_name: 'OpenCode agent',
+      },
+    ],
+    has_more: false,
+  })
+  show()
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('combobox'))
+  expect(
+    await screen.findByRole('option', { name: /OpenCode agent/ }),
+  ).toBeInTheDocument()
+  expect(
+    screen.getByRole('option', { name: /Local agent/ }),
+  ).toBeInTheDocument()
+})
+
+// Root 22:12Z (FH d4af6c7a): OpenCode is held to a vendor key only at the vendor's own
+// address, so a key with a custom base URL is not offered to an OpenCode profile.
+it('offers an OpenCode profile for a vendor key only at its own address', async () => {
+  const opencode = {
+    ...profile,
+    profile_ref: 'pp_opencode',
+    driver: 'opencode',
+    display_name: 'OpenCode agent',
+  }
+  api.listProfiles.mockResolvedValue({ items: [opencode], has_more: false })
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  })
+  const key = {
+    provider_ref: 'prv_key',
+    kind: 'anthropic' as const,
+    display_name: 'Anthropic key',
+    state: 'active' as const,
+  }
+  const view = render(
+    <QueryClientProvider client={client}>
+      <ProviderBindDialog record={key} open onOpenChange={() => {}} />
+    </QueryClientProvider>,
+  )
+  const user = userEvent.setup()
+  await user.click(await screen.findByRole('combobox'))
+  expect(
+    await screen.findByRole('option', { name: /OpenCode agent/ }),
+  ).toBeInTheDocument()
+  view.unmount()
+  render(
+    <QueryClientProvider client={client}>
+      <ProviderBindDialog
+        record={{ ...key, base_url: 'https://gateway.example/v1' }}
+        open
+        onOpenChange={() => {}}
+      />
+    </QueryClientProvider>,
+  )
+  expect(
+    await screen.findByText(
+      'No compatible active profile. Create one on Provider profiles.',
+    ),
+  ).toBeInTheDocument()
+  expect(screen.queryByRole('option', { name: /OpenCode agent/ })).toBeNull()
+})

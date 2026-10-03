@@ -579,6 +579,10 @@ export function ModelsView() {
 
 function PolicyCard({ policy }: { policy: RoutingPolicy }) {
   const { t } = useTranslation('models')
+  // Absent on the wire when empty (types.ts RoutingPolicy).
+  const capabilities = policy.required_capabilities ?? []
+  const providers = policy.preferred_providers ?? []
+  const minContext = policy.min_context_window ?? 0
   const [decision, setDecision] = useState<Decision | null>(null)
   const resolve = useMutation({
     mutationFn: () => modelsApi.resolve(policy.id),
@@ -610,24 +614,22 @@ function PolicyCard({ policy }: { policy: RoutingPolicy }) {
                 mono
               />
             ) : null}
-            {policy.required_capabilities.length > 0 ? (
+            {capabilities.length > 0 ? (
               <Meta
                 label={t('routing.requiredCapabilities')}
-                value={policy.required_capabilities.join(', ')}
+                value={capabilities.join(', ')}
               />
             ) : null}
-            {policy.preferred_providers.length > 0 ? (
+            {providers.length > 0 ? (
               <Meta
                 label={t('routing.preferredProviders')}
-                value={policy.preferred_providers.join(', ')}
+                value={providers.join(', ')}
               />
             ) : null}
-            {policy.min_context_window > 0 ? (
+            {minContext > 0 ? (
               <Meta
                 label={t('routing.minContext')}
-                value={policy.min_context_window.toLocaleString(
-                  currentLanguage(),
-                )}
+                value={minContext.toLocaleString(currentLanguage())}
                 mono
               />
             ) : null}

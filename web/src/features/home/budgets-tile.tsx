@@ -57,9 +57,24 @@ export function BudgetsTile() {
   // The list itself may be a page; with more on the server, no "none over" is claimed.
   const partial = enabled.length > read.length || !!budgetsQ.data?.has_more
 
-  const caption =
-    enabled.length === 0
-      ? t('tiles.budgets.none')
+  // A tile only when it has something to say (HU2-25), and only a successful, complete,
+  // empty answer says "nothing" (SR4C on ea62fad5): a first read that is paused or not
+  // started, and a first page with more behind it, keep the tile with what is true.
+  if (budgetsQ.isSuccess && !budgetsQ.data.has_more && enabled.length === 0)
+    return null
+  const pending =
+    budgetsQ.isPending &&
+    !budgetsQ.isError &&
+    budgetsQ.fetchStatus !== 'fetching'
+
+  const caption = pending
+    ? t(
+        budgetsQ.fetchStatus === 'paused'
+          ? 'state.pendingPaused'
+          : 'state.pendingIdle',
+      )
+    : enabled.length === 0
+      ? t(partial ? 'tiles.budgets.nonePartial' : 'tiles.budgets.none')
       : over > 0
         ? t('tiles.budgets.over', { count: over })
         : unknown > 0
@@ -75,7 +90,7 @@ export function BudgetsTile() {
       icon={<Wallet />}
       label={t('tiles.budgets.label')}
       state={state}
-      value={formatInt(enabled.length)}
+      value={formatInt(pending ? null : enabled.length)}
       tone={over > 0 ? 'danger' : unknown > 0 ? 'warning' : undefined}
       caption={caption}
     />

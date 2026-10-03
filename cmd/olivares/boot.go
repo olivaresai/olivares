@@ -2336,7 +2336,16 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 		HomeDir:   filepath.Join(ollamaDir, "home"),
 		Command:   confinedOllamaCommand(cfg.DataDir),
 		Register:  registerLocalOllama(set.sessions, st),
+		StateFile: filepath.Join(ollamaDir, "started.json"),
+		Audit: func(ctx context.Context, draft model.AuditDraft) error {
+			return st.Mutate(ctx, model.SystemTenantID, func(sc store.Scope) error {
+				_, err := sc.Audit().Append(ctx, draft)
+				return err
+			})
+		},
 	})
+	// HU2-14: the Ollama a person started comes back with the engine.
+	agentTools.RestartOllama()
 	defer func() {
 		if !bootOK {
 			agentTools.Close()

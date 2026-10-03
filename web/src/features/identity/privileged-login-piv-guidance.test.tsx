@@ -125,6 +125,43 @@ describe('the PIV callout when the deployment has no PIV', () => {
   })
 })
 
+// Root 19:15Z: the section said a hardware step-up and AAL3 were required whatever this
+// deployment asked for; the administrative step-up is off by default (FH 33f41d5e).
+describe('what this deployment asks for before administrative actions', () => {
+  const signedIn = (policy: string, satisfied: boolean) => ({
+    aal: 1,
+    amr: ['pwd'],
+    kind: 'user',
+    user_id: 'u1',
+    actor: 'u1',
+    admin_step_up: policy,
+    step_up_satisfied: satisfied,
+    authentication_configuration: { piv_configured: false },
+  })
+
+  it('says no extra check is asked, and offers no step-up, when it is off', async () => {
+    authState.principal = signedIn('none', true)
+    wrap()
+    expect(await screen.findByText(en.login.policy.none)).toBeInTheDocument()
+    expect(screen.queryByText(en.assurance.stepUpTitle)).toBeNull()
+    expect(screen.queryByText(/AAL3 \(NIST|hardware step-up/)).toBeNull()
+  })
+
+  it('offers the step-up when it asks for a passkey this session has not given', async () => {
+    authState.principal = signedIn('passkey', false)
+    wrap()
+    expect(await screen.findByText(en.login.policy.passkey)).toBeInTheDocument()
+    expect(screen.getByText(en.assurance.stepUpTitle)).toBeInTheDocument()
+  })
+
+  it('names the authenticator code when that is what it asks for', async () => {
+    authState.principal = signedIn('totp', true)
+    wrap()
+    expect(await screen.findByText(en.login.policy.totp)).toBeInTheDocument()
+    expect(screen.queryByText(en.assurance.stepUpTitle)).toBeNull()
+  })
+})
+
 describe('the copy itself', () => {
   it('stays complete in all seven locales', () => {
     for (const [code, bundle] of Object.entries(LOCALES)) {

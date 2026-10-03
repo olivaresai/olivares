@@ -15,6 +15,7 @@ import (
 
 	"github.com/olivaresai/olivares/connectors/internal/awssig"
 	"github.com/olivaresai/olivares/connectors/internal/httpx"
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 // awsReader resolves `aws-secretsmanager:<SecretId>` (a name or ARN, optional
@@ -80,11 +81,11 @@ func (r *awsReader) Resolve(ctx context.Context, locator string) ([]byte, error)
 		return nil, fmt.Errorf("aws-secretsmanager: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		// The error body carries an AWS __type/message — non-secret diagnostics.
-		return nil, fmt.Errorf("aws-secretsmanager: status %d: %s", resp.StatusCode, strings.TrimSpace(string(raw)))
+		return nil, fmt.Errorf("aws-secretsmanager: status %d: %s", resp.StatusCode,
+			redact.ReadHTTPError(resp.Body, 2<<10, req, r.creds.AKID, r.creds.Secret, r.creds.Token))
 	}
+	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
 	var out struct {
 		SecretString string `json:"SecretString"`
 		SecretBinary string `json:"SecretBinary"`

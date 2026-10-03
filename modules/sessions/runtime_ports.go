@@ -136,6 +136,8 @@ type LaunchSpec struct {
 	// Env is the EXPLICIT environment (the governed token by value) the runner sets
 	// on the child; it is authoritative over any host value.
 	Env []EnvVar
+	// BoundProvider is the non-secret provider authority resolved for this spawn.
+	BoundProvider BoundProvider
 	// EnvAllow is the operator-chosen ALLOWLIST of host environment variable NAMES
 	// to pass through to the child, ON TOP of the runner's minimal safe base. Nothing
 	// else is inherited — the control-plane's OLIVARES_* secrets never reach the child.
@@ -279,10 +281,14 @@ type Credential struct {
 	localModelEndpoint string
 	// localModels are the models that record's provider probe listed (non-secret).
 	localModels []string
-	ID          string
-	Token       string
-	Scheme      string
-	NotAfter    time.Time
+	// bound is the launch authority of a record-bound launch (non-secret): the
+	// record's kind and the one endpoint the session may reach. Only the record
+	// mint sets it.
+	bound    BoundProvider
+	ID       string
+	Token    string
+	Scheme   string
+	NotAfter time.Time
 }
 
 // Expired reports whether the credential is past its lifetime (a zero NotAfter is

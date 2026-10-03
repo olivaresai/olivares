@@ -63,6 +63,7 @@ import (
 
 	"github.com/olivaresai/olivares/connectors/identitysource"
 	"github.com/olivaresai/olivares/connectors/internal/httpx"
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 	"github.com/olivaresai/olivares/sdk"
 )
 
@@ -529,10 +530,10 @@ func (s *Source) token(ctx context.Context) (string, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<10))
+		excerpt := redact.ReadHTTPError(resp.Body, 2<<10, req, s.clientSecret)
 		// The excerpt is the provider's error body; the request form (which holds the
 		// secret) is never included.
-		return "", fmt.Errorf("keycloak: token endpoint status %d: %s", resp.StatusCode, strings.TrimSpace(string(excerpt)))
+		return "", fmt.Errorf("keycloak: token endpoint status %d: %s", resp.StatusCode, excerpt)
 	}
 	var tr struct {
 		AccessToken string `json:"access_token"`

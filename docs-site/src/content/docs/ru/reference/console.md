@@ -56,14 +56,14 @@ description: >-
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-Консоль публикует **80 маршрутов**. Каждый из них приведён в таблицах ниже вместе с требуемым
+Консоль публикует **81 маршрутов**. Каждый из них приведён в таблицах ниже вместе с требуемым
 разрешением и справочной страницей, которую открывает встроенная ссылка помощи.
 
 ### Эксплуатация
 
 | Экран | Путь | Назначение | Требуется | Справка |
 |---|---|---|---|---|
-| Обзор | `/` | Обзор инфраструктуры и её здоровья | любой вошедший пользователь | [главная документации](/ru/) |
+| Главная | `/` | Обзор инфраструктуры и её здоровья | любой вошедший пользователь | [главная документации](/ru/) |
 | Инструменты агентов | `/agent-tools` | Находите, устанавливайте и обновляйте инструменты агентов на этом хосте и отслеживайте каждую установку; только для администраторов развёртывания | `system:admin` | [how-to/add-a-provider](/ru/how-to/add-a-provider/) |
 | Управление сессиями | `/agentops` | Создание, подключение и управление сессиями Claude Code — без SSH; экран общий с «Наблюдение за сессиями» | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/ru/how-to/run-claude-code-with-olivares/) |
 | Резервные копии | `/backups` | Запуск, планирование, загрузка и восстановление резервных копий со вторым подтверждением разрушающего действия. | `system:admin` | [how-to/backup-and-restore](/ru/how-to/backup-and-restore/) |
@@ -84,7 +84,7 @@ description: >-
 | Наблюдение за сессиями | `/sessions` | Наблюдение за живыми и обнаруженными сессиями и их хронологией; экран общий с «Управление сессиями» | `sessions:live:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Арендаторы | `/tenants` | Приостановка и восстановление обслуживания арендатора | `system:admin` | [how-to/troubleshooting](/ru/how-to/troubleshooting/) |
 | Голос | `/voice` | Голосовые сессии и сессии реального времени | `voice:session:read` | [reference/modules/xvi-voice](/ru/reference/modules/xvi-voice/) |
-| Работа | `/work` | Долговечный межсессионный backlog: элементы, зависимости, приёмка и решения | `sessions:work:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
+| Работа | `/work` | Общая работа: единицы, зависимости, приемка и решения | `sessions:work:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 | Рабочее пространство | `/workspace` | Агенты, сессии, ресурсы и активность в пределах одного рабочего пространства | `tenant:read` | [reference/modules/xx-multi-tenancy](/ru/reference/modules/xx-multi-tenancy/) |
 | Шаблоны рабочих пространств | `/workspace-templates` | Повторно используемые снимки конфигурации сессии: hooks, настройки, коннекторы и политики. | `sessions:template:read` | [reference/modules/ii-sessions](/ru/reference/modules/ii-sessions/) |
 
@@ -109,6 +109,7 @@ description: >-
 | Публикация в Git | `/git-publication` | Отправка коммитов, открытие pull request и слияние через одобренные цели Git | `gitpublish:target:read` | [reference/modules/gitpublish](/ru/reference/modules/gitpublish/) |
 | Инвентаризация | `/inventory` | Обнаружение и каталогизация агентов, MCP-серверов и моделей, которые наблюдали коннекторы. | `inventory:catalog:read` | [reference/modules/i-inventory](/ru/reference/modules/i-inventory/) |
 | Знания | `/knowledge` | Базы знаний, RAG и родословная данных | `knowledge:kb:read` | [reference/modules/viii-knowledge](/ru/reference/modules/viii-knowledge/) |
+| MCP-серверы | `/mcp-servers` | Подключайте удалённые MCP-серверы к этой организации, проверяйте их и выбирайте, какие инструменты могут использовать сессии | `tenant:admin` | [how-to/connectors/mcp-governance](/ru/how-to/connectors/mcp-governance/) |
 | Операции с моделями | `/model-operations` | Собственные модели, допуск и развёртывания | `models:registry:read` | [reference/modules/xxiii-model-operations](/ru/reference/modules/xxiii-model-operations/) |
 | Модели | `/models` | Модели, маршрутизация и ключи провайдеров | `models:catalog:read` | [reference/modules/x-models](/ru/reference/modules/x-models/) |
 | Мастер настройки | `/onboarding` | Пошаговая настройка развёртывания | `system:admin` | [start/quickstart](/ru/start/quickstart/) |

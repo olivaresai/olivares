@@ -167,29 +167,19 @@ func TestLaneRefusesWithoutACredentialBeforeOpeningAConnection(t *testing.T) {
 	}
 }
 
-// TestMissingClientValuesNameWhereTheyAreConfigured is the OTHER half of the
-// precondition, and it exists because a mutation run found the first half blind.
-//
-// Deleting the `resolved.Server == ""` arm did NOT fail the credential test
-// above: cliTransport refuses a missing server too, also with exit 2. So the
-// precondition buys nothing in EXIT CODE — what it buys is the MESSAGE. Its
-// missingCLIValueError names the flag, the environment variable, whether a
-// client context is active, and where the config file lives (clitransport.go,
-// the E7 fix); cliTransport's fallback says only "set --server,
-// OLIVARES_SERVER_URL, or an active client context".
-//
-// That difference is the whole point: "no server: set --server" after a
-// successful `olivares auth login` is how an operator concludes the CLI is
-// broken. So this witness asserts the DIAGNOSTIC, which is the thing that would
-// actually be lost — and it is what makes the removal of that arm detectable.
+// Missing server configuration directs the user to sign in, with flag/environment
+// alternatives for scripts. An incomplete tenant configuration still identifies
+// its client context and config file so the user can repair the saved values.
 func TestMissingClientValuesNameWhereTheyAreConfigured(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		args []string
-		want string
+		want []string
 	}{
-		{"server", []string{"health", "status", "--server", "", "--token", "tok", "--tenant", "t"}, "no server"},
-		{"tenant", []string{"health", "status", "--server", "http://127.0.0.1:1", "--token", "tok", "--tenant", ""}, "no tenant:"},
+		{"server", []string{"health", "status", "--server", "", "--token", "tok", "--tenant", "t"},
+			[]string{"Not signed in.", "olivares login", "--server", "OLIVARES_SERVER_URL"}},
+		{"tenant", []string{"health", "status", "--server", "http://127.0.0.1:1", "--token", "tok", "--tenant", ""},
+			[]string{"no tenant:", "--tenant", "OLIVARES_TENANT", "context", "config:"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, _, err := execRoot(t, tc.args...)
@@ -200,17 +190,10 @@ func TestMissingClientValuesNameWhereTheyAreConfigured(t *testing.T) {
 				t.Errorf("exit = %d, want %d (usage)", got, exitcode.Usage)
 			}
 			msg := err.Error()
-			if !strings.Contains(msg, tc.want) {
-				t.Errorf("the message must name what is missing (%q), got: %s", tc.want, msg)
-			}
-			// The two halves of the richer diagnostic: whether a context is
-			// active, and where the config that would supply one lives. Losing
-			// either is losing the reason this check exists.
-			if !strings.Contains(msg, "context") {
-				t.Errorf("the message must say whether a client context is active, got: %s", msg)
-			}
-			if !strings.Contains(msg, "config:") {
-				t.Errorf("the message must name the config file that would supply the value, got: %s", msg)
+			for _, want := range tc.want {
+				if !strings.Contains(msg, want) {
+					t.Errorf("the message must name the recovery step or configuration (%q), got: %s", want, msg)
+				}
 			}
 		})
 	}

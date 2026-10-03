@@ -29,11 +29,22 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const auth = vi.hoisted(() => ({ status: 'authenticated' }))
 // The router's LIVE location and its last COMMITTED one. A pending redirect moves
-// the first; only the second may decide where sign-in returns to.
+// the first; the second decides where sign-in returns to, and the first only before the
+// router has committed any location.
 const router = vi.hoisted(() => ({
   live: '/audit?from=2026-09-30#entry-7',
-  committed: '/audit?from=2026-09-30#entry-7',
+  // undefined until the router commits its first location.
+  committed: '/audit?from=2026-09-30#entry-7' as string | undefined,
   navigate: vi.fn(),
+}))
+const routerInstance = vi.hoisted(() => ({
+  get state() {
+    return {
+      location: { href: router.live },
+      resolvedLocation:
+        router.committed === undefined ? undefined : { href: router.committed },
+    }
+  },
 }))
 const server = vi.hoisted(() => ({ setupRequired: false, pending: false }))
 beforeEach(() => {
@@ -50,14 +61,18 @@ vi.mock('@tanstack/react-router', () => ({
   }: {
     select: (s: {
       location: { pathname: string; href: string }
-      resolvedLocation: { href: string }
+      resolvedLocation: { href: string } | undefined
     }) => unknown
   }) =>
     select({
       location: { pathname: router.live.split(/[?#]/)[0], href: router.live },
-      resolvedLocation: { href: router.committed },
+      resolvedLocation:
+        router.committed === undefined ? undefined : { href: router.committed },
     }),
   useNavigate: () => router.navigate,
+  // The guard reads the requested page from the router's state in its effect. One
+  // router instance, as the real hook returns.
+  useRouter: () => routerInstance,
   Outlet: () => <div data-testid="routed-content">routed content</div>,
   Link: ({ children, to, ...props }: ComponentProps<'a'> & { to?: string }) => (
     <a href={to} {...props}>
@@ -201,6 +216,39 @@ it('redirects once, whatever the pending navigation does to the live location', 
     rerender(<AppLayout />)
   }
   expect(router.navigate).toHaveBeenCalledTimes(1)
+})
+
+// RC10 (SC on 6e97de81): a signed-out deep link reached /login with no returnTo and the
+// person landed on Home after signing in. The signed-out answer came before the router
+// committed its first location, and only the committed one was read.
+it('returns a deep link to its page when the router has not committed a location yet', () => {
+  auth.status = 'anonymous'
+  router.committed = undefined
+  router.live = '/settings?tab=appearance#appearance'
+  render(<AppLayout />)
+  expect(router.navigate).toHaveBeenCalledTimes(1)
+  expect(router.navigate).toHaveBeenCalledWith({
+    to: '/login',
+    search: { returnTo: '/settings?tab=appearance#appearance' },
+    replace: true,
+  })
+})
+
+it('still redirects once when the live location moves before the first commit', () => {
+  auth.status = 'anonymous'
+  router.committed = undefined
+  router.live = '/settings?tab=appearance#appearance'
+  const { rerender } = render(<AppLayout />)
+  for (let i = 0; i < 5; i++) {
+    router.live = `/login?returnTo=${encodeURIComponent(router.live)}`
+    rerender(<AppLayout />)
+  }
+  expect(router.navigate).toHaveBeenCalledTimes(1)
+  expect(router.navigate).toHaveBeenCalledWith({
+    to: '/login',
+    search: { returnTo: '/settings?tab=appearance#appearance' },
+    replace: true,
+  })
 })
 
 it('sends a first boot straight to the setup wizard, once', () => {

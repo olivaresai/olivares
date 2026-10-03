@@ -190,24 +190,18 @@ describe('WorkComposer — what it offers, and to whom', () => {
     expect(screen.queryByTestId('composer-advanced')).toBeNull()
   })
 
-  it('says WHY there is nothing to type into, and offers the one action', async () => {
-    // Never a disabled field with no reason: the engine makes the profile mandatory
-    // server-side, so with none registered there is exactly one thing to do: the setup
-    // that installs Claude Code, signs it in and starts (HU-19), in Home's words.
+  it('with no provider profile and no session in hand, says nothing', async () => {
+    // HU2-05: "a session cannot start without one" sat beside the page's own New session,
+    // which starts a session with no profile (it resolves one per tool). The composer has
+    // nothing true to add here, so it renders nothing, scope line included.
     api.listProfiles.mockResolvedValue({ items: [], has_more: false })
-    const user = userEvent.setup()
     renderIntel(<WorkComposer />)
-    expect(
-      await screen.findByText(/No provider profile is registered/i),
-    ).toBeInTheDocument()
-    expect(screen.queryByTestId('launcher-input')).toBeNull()
-    expect(screen.getByTestId('launcher-add-provider')).toHaveTextContent(
-      'Set up a tool',
+    await waitFor(() => expect(api.listProfiles).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(screen.queryByTestId('work-composer')).toBeNull(),
     )
-    await user.click(screen.getByTestId('launcher-add-provider'))
-    expect(navigateMock).toHaveBeenCalledWith(
-      expect.objectContaining({ to: '/onboarding' }),
-    )
+    expect(screen.queryByText(/No provider profile is registered/i)).toBeNull()
+    expect(screen.queryByTestId('work-scope-line')).toBeNull()
   })
 
   it('will not start without the one field the server cannot default', async () => {
@@ -566,18 +560,11 @@ describe('WorkComposer — it does not offer a control it is about to remove', (
     expect(screen.queryByTestId('launcher-add-provider')).toBeNull()
 
     settle({ items: [], has_more: false })
-    // …and once it HAS answered, the honest state appears.
-    expect(
-      await screen.findByTestId('launcher-add-provider'),
-    ).toBeInTheDocument()
+    // …and once it HAS answered with none, the composer has nothing to offer (HU2-05).
+    await waitFor(() =>
+      expect(screen.queryByTestId('work-composer')).toBeNull(),
+    )
     expect(screen.queryByTestId('launcher-input')).toBeNull()
-    const truncated = [
-      ...screen.getByTestId('work-composer').querySelectorAll('.truncate'),
-    ]
-    expect(truncated.length).toBeGreaterThan(0)
-    for (const el of truncated) {
-      expect(el.getAttribute('title')).toBeTruthy()
-    }
   })
 
   it('says a FAILED read failed, rather than calling it an empty plane', async () => {

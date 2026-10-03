@@ -65,6 +65,7 @@
     "budgets": {
       "label": "Budgets",
       "none": "No budgets yet",
+      "nonePartial": "None enabled on this page; there are more",
       "over_one": "{{count}} over limit",
       "over_other": "{{count}} over limit",
       "unknown_one": "{{count}} amount unknown",

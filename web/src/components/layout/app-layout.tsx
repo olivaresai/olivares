@@ -5,7 +5,12 @@ import { NewSessionHost } from '@/features/first-hour/new-session-host'
 import { SettingsVisit } from '@/features/navigation/permitted-visit'
 import { PersonalNavigationProvider } from '@/features/navigation/personal-navigation'
 import { engineFavorites } from '@/features/saved-views/api'
-import { Outlet, useNavigate, useRouterState } from '@tanstack/react-router'
+import {
+  Outlet,
+  useNavigate,
+  useRouter,
+  useRouterState,
+} from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
 import { PageActionsProvider } from '@/components/ui/page-actions'
 import { Spinner } from '@/components/ui/spinner'
@@ -86,8 +91,9 @@ function Splash() {
  * otherwise sign-in, carrying the page that was asked for (never a sign-in page,
  * which would bring the person back to sign-in after signing in). Returns the
  * destination while one is pending, so the shell paints nothing else. */
-function useSignedOutRoute(status: string, requestedPath: string | undefined) {
+function useSignedOutRoute(status: string) {
   const navigate = useNavigate()
+  const router = useRouter()
   const signedOut = status === 'anonymous' || status === 'error'
   const serverInfo = useServerInfo()
   const decided = signedOut && !serverInfo.isPending
@@ -96,19 +102,28 @@ function useSignedOutRoute(status: string, requestedPath: string | undefined) {
     : serverInfo.data?.setup_required
       ? '/setup'
       : '/login'
-  const returnTo =
-    requestedPath && !isSignInPath(requestedPath) ? requestedPath : undefined
-  const returnRef = useRef(returnTo)
-  returnRef.current = returnTo
   useEffect(() => {
     if (target === '/setup') navigate({ to: '/setup', replace: true })
-    else if (target === '/login')
+    else if (target === '/login') {
+      // The page the person asked for, read ONCE, when the decision is made (this effect
+      // runs once per signed-out state). The committed location, or before the router
+      // commits its first one, the live one: with the HttpOnly cookie restore the
+      // signed-out answer can come first, and RC10 sent a deep link to /login with no
+      // returnTo (SC on 6e97de81). Read here and not at render: the guard's own
+      // redirect moves the live location, and re-reading it on render redirected again
+      // with a longer returnTo, forever (refresh 02, HU 016). A sign-in page is never
+      // returned to.
+      const { resolvedLocation, location } = router.state
+      const requested = resolvedLocation?.href ?? location.href
+      const returnTo =
+        requested && !isSignInPath(requested) ? requested : undefined
       navigate({
         to: '/login',
-        search: returnRef.current ? { returnTo: returnRef.current } : {},
+        search: returnTo ? { returnTo } : {},
         replace: true,
       })
-  }, [target, navigate])
+    }
+  }, [target, navigate, router])
   return signedOut ? (target ?? 'pending') : null
 }
 
@@ -120,14 +135,9 @@ export function AppLayout() {
   // The frame is a function of the ROUTE, resolved here and not declared by each view:
   // how the viewport is divided is the shell's decision (page-frames.tsx).
   const pathname = useRouterState({ select: (s) => s.location.pathname })
-  // The page the person asked for, as last COMMITTED. Not the live location: this
-  // guard's own redirect moves the live location while it is pending, and reading it
-  // re-rendered this guard into another redirect with a longer returnTo, forever
-  // (refresh 02: a signed-out browser froze on its first page, HU 016).
-  const requestedPath = useRouterState({
-    select: (s) => s.resolvedLocation?.href,
-  })
-  const signInRoute = useSignedOutRoute(status, requestedPath)
+  // Where a signed-out browser goes, and the page it returns to (read in the guard's
+  // effect, once).
+  const signInRoute = useSignedOutRoute(status)
   const sidebarHidden = usePreferencesStore((s) => s.sidebarCollapsed)
   const [areasOpen, setAreasOpen] = useState(false)
   const areasReturnRef = useRef<HTMLElement | null>(null)

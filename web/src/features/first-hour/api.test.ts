@@ -28,10 +28,13 @@ vi.mock('@/features/agent-tools/api', () => ({ agentToolsApi: tools }))
 vi.mock('@/lib/api', () => ({ http }))
 
 import { ApiError } from '@/lib/api/errors'
+import { sentTurnsOf, useSentTurns } from '@/features/sessions/sent-turns'
+import { useSessionStore } from '@/stores/session'
 import { installLatest, startSession } from './api'
 
 beforeEach(() => {
   vi.clearAllMocks()
+  useSentTurns.setState({ byRun: {} })
   ops.resolveProfile.mockResolvedValue({
     profile: { profile_ref: 'ppf_new', driver: 'claude', state: 'active' },
     reason: 'own_login',
@@ -202,6 +205,90 @@ describe('the first-hour launch', () => {
     })
     expect(ops.input).not.toHaveBeenCalled()
     expect(ops.createRun.mock.calls[0][0].permission_mode).toBe('default')
+  })
+
+  // HU2-27: the engine refused Codex's first turn (a refused key) and the dialog said
+  // "The session did not start" while the session ran on, with no trace of the message.
+  it('opens a session whose first message was refused, with the message and the reason', async () => {
+    vi.useFakeTimers()
+    const reason =
+      'the provider reports that this profile is not authenticated (auth_required); a turn cannot be started'
+    ops.createRun.mockResolvedValue({
+      run_ref: 'run_3',
+      provider_driver: 'codex',
+    })
+    ops.inputText.mockRejectedValue(new ApiError(409, 'conflict', reason))
+    const started = startSession({
+      driver: 'codex',
+      folder: '',
+      prompt: 'Say hi.',
+      permission: 'editsAndCommands',
+    })
+    await vi.runAllTimersAsync()
+    expect((await started).run_ref).toBe('run_3')
+    expect(sentTurnsOf('run_3')).toEqual([{ text: 'Say hi.', refused: reason }])
+    vi.useRealTimers()
+  })
+
+  it('notes a first message the engine took', async () => {
+    await startSession({
+      driver: 'claude',
+      folder: '',
+      prompt: ' hello ',
+      permission: 'ask',
+    })
+    expect(sentTurnsOf('run_1')).toEqual([{ text: 'hello' }])
+  })
+
+  // SR4C on 3cf9f18a: a start that completes after a sign-out notes nothing.
+  it('notes nothing when the sign-in changed while the start was out', async () => {
+    // Claude Code takes its first message as a stream-json line (agentOpsApi.input).
+    ops.input.mockImplementation(async () => {
+      useSessionStore.setState((s) => ({
+        credentialGeneration: s.credentialGeneration + 1,
+      }))
+      return { accepted: true }
+    })
+    await startSession({
+      driver: 'claude',
+      folder: '',
+      prompt: 'hello',
+      permission: 'ask',
+    })
+    expect(sentTurnsOf('run_1')).toBeUndefined()
+    expect(useSentTurns.getState().byRun).toEqual({})
+  })
+
+  it('still fails when the tool stopped as it started', async () => {
+    vi.useFakeTimers()
+    ops.inputText.mockRejectedValue(
+      new ApiError(
+        409,
+        'conflict',
+        'stopped',
+        undefined,
+        {},
+        {
+          run_ref: 'run_2',
+          reason: 'codex exited',
+        },
+      ),
+    )
+    ops.createRun.mockResolvedValue({
+      run_ref: 'run_2',
+      provider_driver: 'codex',
+    })
+    const started = startSession({
+      driver: 'codex',
+      folder: '',
+      prompt: 'hello',
+      permission: 'ask',
+    })
+    const failed = expect(started).rejects.toThrow('stopped')
+    await vi.runAllTimersAsync()
+    await failed
+    expect(sentTurnsOf('run_2')).toBeUndefined()
+    vi.useRealTimers()
   })
 })
 

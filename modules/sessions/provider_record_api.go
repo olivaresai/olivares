@@ -124,6 +124,10 @@ func (m *Module) handleListProviderRecords(w http.ResponseWriter, r *http.Reques
 
 // handleCreateProviderRecord registers one provider credential; the engine seals the value and returns only a four-character hint.
 func (m *Module) handleCreateProviderRecord(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	if err := providerStepUp(r, mc.Principal); err != nil {
+		writeRunErr(w, err)
+		return
+	}
 	var body createProviderRecordRequest
 	if !decodeJSONBody(w, r, &body) {
 		return
@@ -159,6 +163,14 @@ func (m *Module) handlePatchProviderRecord(w http.ResponseWriter, r *http.Reques
 		writeJSON(w, http.StatusBadRequest, errorBody("nothing to change: provide display_name, base_url and/or api_key"))
 		return
 	}
+	if body.BaseURL != nil || body.APIKey != nil {
+		// Replacing the key or the address changes what every bound session sends, so it
+		// asks for the same step-up as adding the provider; a rename does not (Root 01:0xZ).
+		if err := providerStepUp(r, mc.Principal); err != nil {
+			writeRunErr(w, err)
+			return
+		}
+	}
 	rec, err := m.PatchProviderRecord(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), ProviderRecordPatch{
 		DisplayName: body.DisplayName, BaseURL: body.BaseURL, APIKey: body.APIKey,
 		Actor: mc.Principal,
@@ -192,4 +204,17 @@ func (m *Module) handleRevokeProviderRecord(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	writeJSON(w, http.StatusOK, toProviderRecordDTO(rec))
+}
+
+// providerStepUp is HU-28 (Root 2026-10-02 19:20Z): adding a provider key, or replacing its key
+// or address, asks for the deployment's administrative step-up, as adding a person does
+// (5ef7ef98); revoking narrows access and does not. The policy is none by
+// default, so nothing changes until an operator turns it on. A token is not a person and passes,
+// as for a deployment (modules/deploy requireStepUp): automation that adds providers through the
+// API keeps working, under its own grant.
+func providerStepUp(r *http.Request, p auth.Principal) error {
+	if p.Kind != auth.KindUser || auth.StepUpSatisfied(r.Context(), p) {
+		return nil
+	}
+	return &codedRunErr{&runErr{http.StatusForbidden, auth.StepUpRequiredFor(auth.StepUpPolicyFrom(r.Context())).Error()}, "step_up_required"}
 }

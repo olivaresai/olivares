@@ -54,9 +54,13 @@ export function ProviderCreateDialog({
   open,
   onOpenChange,
   onCreated,
+  initialKind = PROVIDER_KINDS[0],
 }: {
   open: boolean
   onOpenChange: (o: boolean) => void
+  /** The provider chosen when the form opens: the first one offered, or the one the
+   * tool that sent the person here runs on (HU2-18). The form never opens on nothing. */
+  initialKind?: ProviderKind
   /** Called with the new record so the caller can offer the next action — testing
    * it — instead of leaving the operator on a list with nothing to do. */
   onCreated?: (record: ProviderRecordDTO) => void
@@ -65,14 +69,14 @@ export function ProviderCreateDialog({
   const { activeTenant } = useAuth()
   const boundary = useProviderBoundary()
 
-  const [kind, setKind] = useState<ProviderKind | ''>('')
+  const [kind, setKind] = useState<ProviderKind | ''>(initialKind)
   const [displayName, setDisplayName] = useState('')
   const [baseURL, setBaseURL] = useState('')
   const [apiKey, setApiKey] = useState('')
   const [advanced, setAdvanced] = useState(false)
 
   const reset = () => {
-    setKind('')
+    setKind(initialKind)
     setDisplayName('')
     setBaseURL('')
     setApiKey('')

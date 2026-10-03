@@ -42,7 +42,7 @@
     "locked_out": "Trop de tentatives. Réessayez dans un instant.",
     "setup_required": "Le plan de contrôle nécessite une configuration au premier démarrage.",
     "setup_complete": "La configuration est déjà terminée.",
-    "cross_tenant_admin_pool_not_configured": "Ce déploiement n’a pas de pool de base de données d’administration inter-tenants. Provisionnez un rôle NOSUPERUSER BYPASSRLS avec `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (voir deploy/postgres/README.md) puis redémarrez le serveur avec --admin-dsn pointant vers ce rôle.",
+    "cross_tenant_admin_pool_not_configured": "Cette base de données ne peut pas lister toutes les organisations. Exécutez `olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` puis redémarrez le moteur. Ou provisionnez un rôle NOSUPERUSER BYPASSRLS avec `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (voir deploy/postgres/README.md) puis redémarrez le serveur avec --admin-dsn pointant vers ce rôle.",
     "internal": "Une erreur interne est survenue."
   },
   "tenantAdmission": {

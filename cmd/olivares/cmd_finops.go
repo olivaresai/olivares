@@ -264,26 +264,40 @@ func newFinOpsSeatsCmd(c modelstackClient) *cobra.Command {
 			Target:  modelstackTarget{Collection: "/seats"},
 			Body:    modelstackBodyRequired,
 		}),
-		newModelstackGetCmd(c, modelstackGetSpec{
-			Use:   "utilization",
-			Short: "Show seat utilization",
-			Long: "Show how one provider's recorded seats compare with observed activity, per day.\n" +
-				"The range defaults to the last 30 days (UTC).",
-			Example: `  olivares finops seats utilization --provider anthropic
-  olivares finops seats utilization --provider anthropic --from 2026-09-01 --to 2026-09-30 -o json`,
-			Target: modelstackTarget{Collection: "/seats", Nested: "utilization"},
-			// N1 RU-03 (2026-10-01): the route needs provider, from and to; without
-			// them every call was a 400 the help never explained.
-			Filters: []modelstackFilterSpec{
-				{Flag: "provider", Query: "provider", Required: true,
-					Usage: "provider whose seats to compare, as recorded by `seats ingest` (for example anthropic)"},
-				{Flag: "from", Query: "from", AtRun: func() string { return time.Now().UTC().AddDate(0, 0, -29).Format("2006-01-02") },
-					Usage: "first day, YYYY-MM-DD (UTC; default 30 days ago, counting today)"},
-				{Flag: "to", Query: "to", AtRun: func() string { return time.Now().UTC().Format("2006-01-02") },
-					Usage: "last day, YYYY-MM-DD (UTC; default today)"},
-			},
-		}),
 	)
+	// Keep 26.10.0's query-free invocation; date defaults belong to explicit selections.
+	rangeRequested := false
+	utilization := newModelstackGetCmd(c, modelstackGetSpec{
+		Use:   "utilization",
+		Short: "Show seat utilization",
+		Long: "Show how recorded seats compare with observed activity.\n" +
+			"Selecting a provider or range defaults missing dates to the last 30 days (UTC).",
+		Example: `  olivares finops seats utilization --provider anthropic
+  olivares finops seats utilization --provider anthropic --from 2026-09-01 --to 2026-09-30 -o json`,
+		Target: modelstackTarget{Collection: "/seats", Nested: "utilization"},
+		Filters: []modelstackFilterSpec{
+			{Flag: "provider", Query: "provider",
+				Usage: "provider whose seats to compare, as recorded by 'seats ingest' (for example anthropic)"},
+			{Flag: "from", Query: "from", AtRun: func() string {
+				if !rangeRequested {
+					return ""
+				}
+				return time.Now().UTC().AddDate(0, 0, -29).Format("2006-01-02")
+			},
+				Usage: "first day, YYYY-MM-DD (UTC; default 30 days ago, counting today)"},
+			{Flag: "to", Query: "to", AtRun: func() string {
+				if !rangeRequested {
+					return ""
+				}
+				return time.Now().UTC().Format("2006-01-02")
+			},
+				Usage: "last day, YYYY-MM-DD (UTC; default today)"},
+		},
+	})
+	utilization.PreRun = func(cmd *cobra.Command, _ []string) {
+		rangeRequested = cmd.Flags().Changed("provider") || cmd.Flags().Changed("from") || cmd.Flags().Changed("to")
+	}
+	cmd.AddCommand(utilization)
 	return cmd
 }
 

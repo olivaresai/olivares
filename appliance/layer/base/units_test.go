@@ -204,19 +204,19 @@ func TestUnits_FirstBootJobGraphHasNoOrderingCycleWithCloudInit(t *testing.T) {
 	}
 }
 
-// hardening returns the product unit's hardening directives: every [Service] key after its
-// "--- hardening" marker, except the unit-specific paths.
+// hardening returns the product unit's hardening directives, starting with
+// NoNewPrivileges, except the unit-specific paths.
 func hardening(t *testing.T) (keys []string, values unitFile) {
 	t.Helper()
 	data, err := os.ReadFile(filepath.Join(repoRoot, productUnitPath))
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, block, ok := strings.Cut(string(data), "--- hardening")
+	_, block, ok := strings.Cut(string(data), "\nNoNewPrivileges=")
 	if !ok {
 		t.Fatal("the product unit has no hardening block")
 	}
-	values = parseUnit(block)
+	values = parseUnit("NoNewPrivileges=" + block)
 	for key := range values {
 		if key != "StateDirectory" && key != "ReadWritePaths" && key != "WantedBy" {
 			keys = append(keys, key)

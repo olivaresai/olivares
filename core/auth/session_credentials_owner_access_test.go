@@ -9,6 +9,7 @@ import (
 	"errors"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -69,6 +70,82 @@ func newOwnerAccessFixture(t *testing.T, wrap func(store.Store) store.Store) own
 		}
 	}
 	return f
+}
+
+func TestSessionOwnerAccessCheckMissingBindingIsNotWithdrawal(t *testing.T) {
+	f := newOwnerAccessFixture(t, nil)
+	scope, user, err := f.issuer.CheckOwnerAccess(t.Context(), f.tenants[0], "ordinary-unbound-run")
+	if !errors.Is(err, auth.ErrSessionOwnerUnbound) || !errors.Is(err, auth.ErrUnauthenticated) ||
+		errors.Is(err, auth.ErrSessionAccessEnded) || scope.RunRef != "" || scope.TenantID != "" || scope.Fence != 0 || user != "" {
+		t.Fatalf("missing owner binding must convey no authority or withdrawal: scope=%+v user=%q err=%v", scope, user, err)
+	}
+	if _, _, err = f.issuer.ResolveRun(t.Context(), f.tenants[0], "ordinary-unbound-run"); !errors.Is(err, auth.ErrUnauthenticated) {
+		t.Fatalf("unbound run obtained credential authority: %v", err)
+	}
+	if _, _, err = f.issuer.Resolve(t.Context(), f.tokens[0]); err != nil {
+		t.Fatalf("checking an unbound run affected the bound run: %v", err)
+	}
+}
+
+func TestSessionOwnerAccessCheckRetainsExpiredBindingAfterMintCleanup(t *testing.T) {
+	f := newOwnerAccessFixture(t, nil)
+	clock := &stepClock{t: time.Now()}
+	a := auth.NewAuthenticator(f.st, clock)
+	login, _, err := a.Login(t.Context(), f.user.Email, "owner-access-password", "long-lived launcher fixture")
+	if err != nil {
+		t.Fatal(err)
+	}
+	launcher, err := a.Authenticate(t.Context(), login)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = f.st.AuthMutate(t.Context(), func(as store.AuthScope) error {
+		row, err := as.Sessions().Get(t.Context(), launcher.CredID)
+		if err != nil {
+			return err
+		}
+		row.ExpiresAt = model.NewTimestamp(clock.Now().Time().Add(72 * time.Hour))
+		_, err = as.Sessions().Update(t.Context(), row)
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	launcher, err = a.Authenticate(t.Context(), login)
+	if err != nil {
+		t.Fatal(err)
+	}
+	issuer := auth.NewSessionCredentials(a, func(context.Context, auth.SessionScope) error { return nil })
+	expired, err := issuer.Mint(t.Context(), launcher, f.scopes[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	clock.advance(25 * time.Hour)
+	current, err := issuer.Mint(t.Context(), launcher, f.scopes[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = issuer.Resolve(t.Context(), expired); !errors.Is(err, auth.ErrUnauthenticated) {
+		t.Fatalf("expired bearer granted authority: %v", err)
+	}
+	if _, _, err = issuer.ResolveRun(t.Context(), f.tenants[0], "run"); !errors.Is(err, auth.ErrUnauthenticated) {
+		t.Fatalf("expired run granted in-process authority: %v", err)
+	}
+	if _, _, err = issuer.CheckOwnerAccess(t.Context(), f.tenants[0], "run"); err != nil {
+		t.Fatalf("expired bearer cleanup lost the live owner: %v", err)
+	}
+	if err = f.st.AuthMutate(t.Context(), func(as store.AuthScope) error {
+		_, err := f.a.OffboardFromTenant(t.Context(), as, f.admin, f.user.ID, f.tenants[0], "expired-owner-withdrawal")
+		return err
+	}); err != nil {
+		t.Fatal(err)
+	}
+	scope, _, err := issuer.CheckOwnerAccess(t.Context(), f.tenants[0], "run")
+	if !errors.Is(err, auth.ErrSessionAccessEnded) || scope.TenantID != f.tenants[0] || scope.Fence != f.scopes[0].Fence {
+		t.Fatalf("expired live generation lost withdrawal attribution: scope=%+v err=%v", scope, err)
+	}
+	if _, _, err = issuer.Resolve(t.Context(), current); err != nil {
+		t.Fatalf("withdrawal affected another tenant's current bearer: %v", err)
+	}
 }
 
 func TestSessionOwnerAccessCheckScopedWithdrawalKeepsOtherTenant(t *testing.T) {

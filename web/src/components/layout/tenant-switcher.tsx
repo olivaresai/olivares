@@ -9,8 +9,10 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
 import { grantName, shortId, useOrgs } from './tenant-label'
@@ -28,10 +30,18 @@ interface TenantOption {
  * org NAMES to non-superadmins — minimum data — so members see a short id + role.)
  */
 export function TenantSwitcher({ className }: { className?: string } = {}) {
-  const { t } = useTranslation(['auth', 'common'])
+  const { t } = useTranslation(['auth', 'common', 'errors'])
   const { grants, activeTenant, setActiveTenant, isSuperadmin } = useAuth()
 
   const orgs = useOrgs()
+  // A PostgreSQL install without the tenant inventory (an upgrade, typically) answers the
+  // organization list 501 cross_tenant_admin_pool_not_configured. The read is asked once
+  // per session (useOrgs); the switcher says once, where the list would be, how to enable
+  // it, instead of the bare failure on every screen.
+  const listUnavailable =
+    isSuperadmin &&
+    orgs.error instanceof ApiError &&
+    orgs.error.code === 'cross_tenant_admin_pool_not_configured'
 
   const options: TenantOption[] =
     isSuperadmin && orgs.data
@@ -119,6 +129,17 @@ export function TenantSwitcher({ className }: { className?: string } = {}) {
             )}
           </DropdownMenuItem>
         ))}
+        {listUnavailable ? (
+          <>
+            <DropdownMenuSeparator />
+            <p
+              className="max-w-80 px-2 py-1.5 text-caption text-muted-foreground"
+              data-slot="org-list-unavailable"
+            >
+              {t('errors:codes.cross_tenant_admin_pool_not_configured')}
+            </p>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -50,6 +50,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 	"github.com/olivaresai/olivares/connectors/modelprovider"
 )
 
@@ -587,8 +588,8 @@ func (e *ComplianceEraser) do(ctx context.Context, path string) error {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		slice, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<10))
-		return fmt.Errorf("claude-compliance: DELETE %s: status %d: %s", path, resp.StatusCode, strings.TrimSpace(string(slice)))
+		detail := redact.ReadHTTPError(resp.Body, 2<<10, req, e.deleteKey)
+		return fmt.Errorf("claude-compliance: DELETE %s: status %d: %s", path, resp.StatusCode, detail)
 	}
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	return nil

@@ -10,7 +10,10 @@
     "signedIn": "Sesión iniciada",
     "signedInAs": "Sesión iniciada como {{account}}",
     "notSignedIn": "Sin iniciar sesión",
-    "usesKey": "Usa tu clave de API: {{name}}"
+    "usesKey": "Usa tu clave de API: {{name}}",
+    "usesLocal": "Usa el servidor de modelos local: {{name}}",
+    "keyRefused": "Se rechazó la clave de API {{name}}. Reemplázala en Proveedores.",
+    "keyUnchecked": "No se pudo comprobar la clave {{name}}. Pruébala en Proveedores."
   },
   "actions": {
     "install": "Instalar",

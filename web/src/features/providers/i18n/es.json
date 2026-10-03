@@ -36,7 +36,7 @@
     "openai": "Codex. Inyecta OPENAI_API_KEY.",
     "xai": "Grok. Inyecta XAI_API_KEY.",
     "openai_compatible": "Cualquier endpoint con forma de OpenAI. Inyecta OPENAI_API_KEY y OPENAI_BASE_URL; el endpoint es obligatorio.",
-    "ollama": "Modelos locales para Codex. Sin clave API. Usa el endpoint nativo de Ollama; la prueba lee los metadatos de modelos."
+    "ollama": "Modelos locales para OpenCode. Sin clave API. Usa el endpoint nativo de Ollama; la prueba lee los metadatos de modelos."
   },
   "states": {
     "active": "Activo",
@@ -122,11 +122,6 @@
   "vaultUnavailable": {
     "title": "Este despliegue no puede guardar una credencial de proveedor",
     "description": "No hay ningún almacén sellado de credenciales conectado, así que el motor se niega a guardar una clave en vez de guardar una que no puede proteger. Una administradora tiene que configurar el sellador de secretos."
-  },
-  "next": {
-    "title": "Siguiente: despliega un agente",
-    "description": "Un proveedor registrado no inicia sesiones por sí solo. Vincúlalo a un perfil de proveedor para que las nuevas sesiones lo usen.",
-    "action": "Ir a los perfiles de proveedor"
   },
   "truncation": {
     "label": "Se muestran {{n}} proveedores; hay más",

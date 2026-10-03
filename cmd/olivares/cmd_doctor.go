@@ -1410,13 +1410,7 @@ func doctorFirstHourCodingAgent(deps doctorDeps, dataDir string) doctorCheck {
 func doctorFirstHourHookPEP(deps doctorDeps, ready doctorCheck) doctorCheck {
 	c := doctorCheck{Name: "first-hour-hook-pep", Required: false}
 	if err := checkClaudeHookHostPolicy(); err != nil {
-		dir := "/etc/claude-code"
-		if deps.goos == "darwin" {
-			dir = "/Library/Application Support/ClaudeCode"
-		}
-		if override := strings.TrimSpace(os.Getenv("CLAUDE_CODE_MANAGED_SETTINGS_PATH")); override != "" {
-			dir = override
-		}
+		dir := sessions.ClaudeManagedSettingsDir()
 		c.Status, c.Detail = "fail", err.Error()
 		c.Remediation = "in " + dir + "/managed-settings.json and " + dir + "/managed-settings.d/*.json, " +
 			"enable hooks (disableAllHooks=false); when allowManagedHooksOnly=true, install the Olivares managed PEP hook"

@@ -11,7 +11,18 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
+
+// useClaudeManagedSettingsDir points the managed-settings checks at dir for one test (Claude
+// Code itself reads only the system directory).
+func useClaudeManagedSettingsDir(t *testing.T, dir string) {
+	t.Helper()
+	old := claudeManagedSettingsDir
+	claudeManagedSettingsDir = dir
+	t.Cleanup(func() { claudeManagedSettingsDir = old })
+}
 
 func TestClaudeHookHostPolicyRefusesSuppression(t *testing.T) {
 	for _, body := range []string{`{"disableAllHooks":true}`, `{"allowManagedHooksOnly":true}`, `{"disableAllHooks":"invalid"}`, `{`} {
@@ -61,7 +72,7 @@ func TestClaudeHookHostPolicyAcceptsPublishedManagedPEP(t *testing.T) {
 	if err := os.WriteFile(path, legacy, 0600); err != nil {
 		t.Fatal(err)
 	}
-	t.Setenv("CLAUDE_CODE_MANAGED_SETTINGS_PATH", dir)
+	useClaudeManagedSettingsDir(t, dir)
 	if err := CheckClaudeHookHostPolicy(); err != nil {
 		t.Fatalf("published managed PEP must keep launching after upgrade: %v", err)
 	}
@@ -72,14 +83,33 @@ func TestClaudeHookHostPolicyAcceptsPublishedManagedPEP(t *testing.T) {
 	if err := ConfigureClaudeHookPEP(&spec, t.TempDir(), "legacy", "/opt/olivares"); err != nil {
 		t.Fatal(err)
 	}
-	found := false
+}
+
+// The child reads managed settings from the directory the check read: the variable that could
+// move it is never handed to the child, and its path is never made readable (Root 2026-10-03
+// 00:5xZ). Before, the engine forwarded its own value, so a Claude Code that honoured it would
+// have read a directory the check never saw.
+func TestClaudeHookLaunchNeverHandsTheManagedSettingsPathToTheChild(t *testing.T) {
+	useClaudeManagedSettingsDir(t, t.TempDir())
+	elsewhere := t.TempDir()
+	t.Setenv("CLAUDE_CODE_MANAGED_SETTINGS_PATH", elsewhere)
+	spec := LaunchSpec{Confinement: &confine.Policy{}, Env: []EnvVar{
+		{Name: "OLIVARES_HOOK_PEP_URL", Value: "http://127.0.0.1:45678/"},
+		{Name: "OLIVARES_HOOK_PEP_TOKEN", Value: "test-launch-bearer"},
+		{Name: "CLAUDE_CODE_MANAGED_SETTINGS_PATH", Value: "/somewhere/else"},
+	}}
+	if err := ConfigureClaudeHookPEP(&spec, t.TempDir(), "checked", "/opt/olivares"); err != nil {
+		t.Fatal(err)
+	}
 	for _, env := range spec.Env {
-		if env.Name == "CLAUDE_CODE_MANAGED_SETTINGS_PATH" && env.Value == dir {
-			found = true
+		if env.Name == "CLAUDE_CODE_MANAGED_SETTINGS_PATH" {
+			t.Fatalf("the child is handed CLAUDE_CODE_MANAGED_SETTINGS_PATH=%s", env.Value)
 		}
 	}
-	if !found {
-		t.Fatal("vendor launch would read a different host policy than preflight")
+	for _, path := range spec.Confinement.ReadOnly {
+		if path == elsewhere {
+			t.Fatalf("the child may read %s, a managed directory the check never read", path)
+		}
 	}
 }
 
@@ -101,7 +131,7 @@ func TestClaudeHookHostPolicyRejectsManagedOnlyWithoutFullPEP(t *testing.T) {
 }
 
 func TestConfigureClaudeHookPEPExcludesMutableHookSources(t *testing.T) {
-	t.Setenv("CLAUDE_CODE_MANAGED_SETTINGS_PATH", t.TempDir())
+	useClaudeManagedSettingsDir(t, t.TempDir())
 	spec := LaunchSpec{Env: []EnvVar{
 		{Name: "OLIVARES_HOOK_PEP_URL", Value: "http://127.0.0.1:45678/"},
 		{Name: "OLIVARES_HOOK_PEP_TOKEN", Value: "test-launch-bearer"},
@@ -117,5 +147,26 @@ func TestConfigureClaudeHookPEPExcludesMutableHookSources(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("user/project/local hook sources can rewrite PEP-approved input")
+	}
+}
+
+// Claude Code 2.1.288 reads only the system managed directory, so the check does too: a
+// CLAUDE_CODE_MANAGED_SETTINGS_PATH in the engine's environment does not move it (SR2C 071).
+func TestClaudeManagedSettingsCheckIgnoresTheOverrideVariable(t *testing.T) {
+	system := t.TempDir()
+	useClaudeManagedSettingsDir(t, system)
+	elsewhere := t.TempDir()
+	if err := os.WriteFile(filepath.Join(elsewhere, "managed-settings.json"), []byte(`{"disableAllHooks":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("CLAUDE_CODE_MANAGED_SETTINGS_PATH", elsewhere)
+	if err := CheckClaudeHookHostPolicy(); err != nil {
+		t.Fatalf("the check read the override directory: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(system, "managed-settings.json"), []byte(`{"disableAllHooks":true}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := CheckClaudeHookHostPolicy(); err == nil {
+		t.Fatal("the check did not read the system directory")
 	}
 }

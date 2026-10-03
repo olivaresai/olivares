@@ -6,8 +6,13 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { FIRST_HOUR_TOOLS, type ToolKey } from '@/features/first-hour/api'
-import { ToolCard } from '@/features/first-hour/first-hour'
+import {
+  FIRST_HOUR_TOOLS,
+  firstHourKeys,
+  type ToolKey,
+} from '@/features/first-hour/api'
+import { useTenantStore } from '@/stores/tenant'
+import { ToolCard, useToolStatus } from '@/features/first-hour/first-hour'
 import { OllamaService } from './ollama-service'
 import '@/features/first-hour/i18n'
 import { ForbiddenState } from '@/components/ui/error-state'
@@ -43,6 +48,7 @@ function Tools({ epoch }: { epoch: number }) {
   const { t } = useTranslation('agentTools')
   const { isSuperadmin } = useAuth()
   const qc = useQueryClient()
+  const tenant = useTenantStore((s) => s.activeTenant)
   const scope = ['agent-tools', epoch]
   const inventoryKey = [...scope, 'inventory']
   const inventory = useQuery({
@@ -84,9 +90,14 @@ function Tools({ epoch }: { epoch: number }) {
       query.state.data?.state === 'running' ? 1000 : false,
   })
   useEffect(() => {
-    if (job.data && job.data.state !== 'running')
+    if (job.data && job.data.state !== 'running') {
       void qc.invalidateQueries({ queryKey: inventoryKey })
-  }, [job.data?.state, qc, epoch])
+      // The tool cards above read the tool's own status and what it runs on: a finished
+      // install changes both (HU2-30: "Not installed" stayed next to "Installed" until a
+      // reload).
+      void qc.invalidateQueries({ queryKey: firstHourKeys.all(tenant) })
+    }
+  }, [job.data?.state, qc, epoch, tenant])
   useEffect(
     () => () => {
       void qc.cancelQueries({ queryKey: scope })
@@ -250,6 +261,20 @@ function Tools({ epoch }: { epoch: number }) {
     </div>
   )
 }
+
+/** The managed-install line of Claude Code or Codex when Olivares installed no release:
+ * the tool's own status says whether it is on this server anyway. EU on RC10: the card
+ * said "Installed" and, below it, "No managed installation". */
+function UnmanagedLabel({ driver }: { driver: ToolKey }) {
+  const { t } = useTranslation('agentTools')
+  const status = useToolStatus(driver)
+  return (
+    <span className="text-sm text-muted-foreground">
+      {status.data?.installed ? t('installedOutside') : t('notInstalled')}
+    </span>
+  )
+}
+
 function ToolRow({
   driver,
   verification,
@@ -308,9 +333,13 @@ function ToolRow({
       <div className="flex flex-wrap items-baseline gap-2">
         <h2 className="text-heading">{name}</h2>
         {installs.length === 0 ? (
-          <span className="text-sm text-muted-foreground">
-            {t('notInstalled')}
-          </span>
+          firstHour ? (
+            <UnmanagedLabel driver={driver as ToolKey} />
+          ) : (
+            <span className="text-sm text-muted-foreground">
+              {t('notInstalled')}
+            </span>
+          )
         ) : (
           installs.map((row) => (
             <Badge

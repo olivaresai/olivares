@@ -70,4 +70,15 @@ describe('BudgetsTile', () => {
     expect(await screen.findByText('1 amount unknown')).toBeInTheDocument()
     expect(screen.queryByText('None over limit')).toBeNull()
   })
+
+  // HU2-25: "Budgets · No budgets yet" on an upgraded install's Now.
+  it('draws no tile while no budget is enabled', async () => {
+    const budgets = vi
+      .spyOn(finopsApi, 'budgets')
+      .mockResolvedValue({ items: [], has_more: false })
+    const { container } = renderIntel(<BudgetsTile />)
+    await vi.waitFor(() => expect(budgets).toHaveBeenCalled())
+    await vi.waitFor(() => expect(screen.queryByText('Budgets')).toBeNull())
+    expect(container.querySelector('a')).toBeNull()
+  })
 })

@@ -1436,7 +1436,13 @@ var pgDumpRunner = runPgDump
 // at one instant. NOT exercised by CI here (no live Postgres); the mechanism is
 // the standard, supported one (docs/DR-RUNBOOK.md).
 func runPgDump(ctx context.Context, bin, dsn, out string) error {
-	cmd := exec.CommandContext(ctx, bin, "--format=custom", "--no-owner", "--no-privileges", "--file", out, "--dbname", dsn) // #nosec G204 -- bin is the operator-configured pg_dump path; all other args are fixed flags
+	serviceFile, cleanup, err := postgresServiceFile(dsn)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	cmd := exec.CommandContext(ctx, bin, "--format=custom", "--no-owner", "--no-privileges", "--file", out, "--dbname", "service=olivares") // #nosec G204 -- bin is the operator-configured pg_dump path; all other args are fixed flags
+	cmd.Env = append(os.Environ(), "PGSERVICEFILE="+serviceFile)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("pg_dump: %w (is %q on PATH?)", err, bin)
@@ -1479,7 +1485,13 @@ func runPgDump(ctx context.Context, bin, dsn, out string) error {
 // ledger it produces is neither the old estate nor the backup. It also rules out
 // parallel restore (--jobs), which this wrapper never asked for.
 func runPgRestore(ctx context.Context, bin, dsn, in string) error {
-	cmd := exec.CommandContext(ctx, bin, "--no-owner", "--no-privileges", "--single-transaction", "--dbname", dsn, in) // #nosec G204 -- bin is the operator-configured pg_restore path; all other args are fixed flags
+	serviceFile, cleanup, err := postgresServiceFile(dsn)
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	cmd := exec.CommandContext(ctx, bin, "--no-owner", "--no-privileges", "--single-transaction", "--dbname", "service=olivares", in) // #nosec G204 -- bin is the operator-configured pg_restore path; all other args are fixed flags
+	cmd.Env = append(os.Environ(), "PGSERVICEFILE="+serviceFile)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("pg_restore: %w (is %q on PATH?). "+

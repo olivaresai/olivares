@@ -25,7 +25,7 @@
 # single-role posture, where the app role owns the schema.
 #
 # Check both roles before restoring anything (read-only, boots nothing):
-#   olivares db check --dsn "$OLIVARES_DSN" --owner-dsn "$OLIVARES_OWNER_DSN" --strict
+#   olivares db check --dsn=env:OLIVARES_DSN --owner-dsn=env:OLIVARES_OWNER_DSN --strict
 #
 # `olivares dr restore` re-checks them itself and refuses BEFORE it installs the
 # bundle's signing keys or runs pg_restore, leaving the target and the data dir
@@ -70,10 +70,10 @@ set --
 # portable way and for the same reason as the admin DSN below; it is genuinely
 # optional, because the single-role posture has no owner to point at.
 if [ -n "${OLIVARES_OWNER_DSN:-}" ]; then
-  set -- "$@" --owner-dsn="$OLIVARES_OWNER_DSN"
+  set -- "$@" --owner-dsn=env:OLIVARES_OWNER_DSN
 fi
 if [ -n "${OLIVARES_ADMIN_DSN:-}" ]; then
-  set -- "$@" --admin-dsn="$OLIVARES_ADMIN_DSN"
+  set -- "$@" --admin-dsn=env:OLIVARES_ADMIN_DSN
 else
   echo "NOTE: OLIVARES_ADMIN_DSN is not set, so the extra-tenant check (foreign bundle / unclean" >&2
   echo "      target) CANNOT RUN and this restore will be reported NOT-OK for that reason alone." >&2
@@ -83,7 +83,7 @@ fi
 echo "restoring + verifying ledger continuity from $IN…"
 olivares dr restore \
   --engine=postgres \
-  --dsn="$OLIVARES_DSN" \
+  --dsn=env:OLIVARES_DSN \
   --data-dir="$OLIVARES_DATA_DIR" \
   "$@" \
   --in="$IN" \

@@ -17,7 +17,13 @@ import (
 // injected secret, MCP configuration or inherited account home reaches the probe.
 // Other runners keep the native sandbox: absence of a probe never disables it.
 func (m *Module) prepareCodexSandbox(ctx context.Context, p *CreateRunParams, spec *LaunchSpec) error {
-	if launchDriverKey(*p) != providerDriverCodex || runtime.GOOS != "linux" || launchPreset(*p) == PresetFull {
+	if launchDriverKey(*p) != providerDriverCodex {
+		return nil
+	}
+	if err := checkCodexBoundProviderConfig(ctx, spec); err != nil {
+		return err
+	}
+	if runtime.GOOS != "linux" || launchPreset(*p) == PresetFull {
 		return nil
 	}
 	runner, native := m.rt.runner.(*procRunner)
@@ -37,7 +43,7 @@ func (m *Module) prepareCodexSandbox(ctx context.Context, p *CreateRunParams, sp
 	defer cancel()
 	proc, err := runner.Launch(probeCtx, probe)
 	if proc == nil {
-		return launchFailedErr("Codex sandbox check failed", err)
+		return launchFailedErr("Codex sandbox check", err)
 	}
 	drained := make(chan struct{})
 	go func() {
@@ -75,7 +81,9 @@ func (m *Module) prepareCodexSandbox(ctx context.Context, p *CreateRunParams, sp
 	p.codexSandboxFallback = true
 	spec.ConfinementRequired = true
 	spec.Args = append([]string{"-c", `sandbox_mode="danger-full-access"`}, spec.Args...)
-	return nil
+	// The fallback changes an effective pin; a required host sandbox policy
+	// must still agree before the session process can start.
+	return checkCodexBoundProviderConfig(ctx, spec)
 }
 
 func codexSandboxDetail(p CreateRunParams) string {

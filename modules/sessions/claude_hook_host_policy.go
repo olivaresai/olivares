@@ -21,29 +21,93 @@ import (
 // This checks the documented file source, not remote policies or OS MDM stores.
 // https://code.claude.com/docs/en/managed-settings
 func CheckClaudeHookHostPolicy() error {
-	if dir := strings.TrimSpace(os.Getenv("CLAUDE_CODE_MANAGED_SETTINGS_PATH")); dir != "" {
-		return checkClaudeHookHostPolicyDir(dir)
-	}
-	dir := "/etc/claude-code"
-	switch runtime.GOOS {
-	case "darwin":
-		dir = "/Library/Application Support/ClaudeCode"
-	case "windows":
-		dir = `C:\Program Files\ClaudeCode`
-	}
-	return checkClaudeHookHostPolicyDir(dir)
+	return checkClaudeHookHostPolicyDir(claudeManagedSettingsDir)
 }
 
-func checkClaudeHookHostPolicyDir(dir string) error {
+// claudeManagedSettingsDir is the directory Claude Code reads its managed (policy-tier)
+// settings from: the system one. The pinned Claude Code 2.1.288 does not honour
+// CLAUDE_CODE_MANAGED_SETTINGS_PATH (SR2C 071 traced it to an empty override), so neither does
+// this check. A variable only so tests can move it.
+var claudeManagedSettingsDir = func() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "/Library/Application Support/ClaudeCode"
+	case "windows":
+		return `C:\Program Files\ClaudeCode`
+	}
+	return "/etc/claude-code"
+}()
+
+// ClaudeManagedSettingsDir is that directory, for the doctor's remedy text.
+func ClaudeManagedSettingsDir() string { return claudeManagedSettingsDir }
+
+// claudeManagedSettingsFiles lists the managed settings documents in dir, in the order Claude
+// Code merges them: managed-settings.json, then the managed-settings.d fragments sorted.
+func claudeManagedSettingsFiles(dir string) ([]string, error) {
 	files := []string{filepath.Join(dir, "managed-settings.json")}
 	fragments, err := os.ReadDir(filepath.Join(dir, "managed-settings.d"))
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
-		return fmt.Errorf("this host's Claude Code managed settings cannot be checked at %s; Olivares hooks require readable host policy", filepath.Join(dir, "managed-settings.d"))
+		return nil, fmt.Errorf("this host's Claude Code managed settings cannot be checked at %s; Olivares hooks require readable host policy", filepath.Join(dir, "managed-settings.d"))
 	}
 	for _, file := range fragments { // ReadDir is sorted: later scalar values win.
 		if !file.IsDir() && !strings.HasPrefix(file.Name(), ".") && strings.HasSuffix(file.Name(), ".json") {
 			files = append(files, filepath.Join(dir, "managed-settings.d", file.Name()))
 		}
+	}
+	return files, nil
+}
+
+// CheckClaudeQuietHostPolicy refuses a Claude Code session on a key from Providers when this
+// host's managed settings leave either quiet switch (claudeBoundSettings) at anything but "1".
+// Managed settings are Claude Code's policy tier; whether they can undo the launch's switches
+// was not reproduced on 2.1.288, so this is a fail-closed policy refusal, not a measured leak.
+// Each switch is judged on its effective value: the documents in merge order
+// (claudeManagedSettingsFiles), env keys merging with the later document winning, naming the
+// document that set it. An unreadable document refuses too. The administrator's files are not
+// touched, and a session on the tool's own sign-in never asks.
+func CheckClaudeQuietHostPolicy() error {
+	unreadable := func(path string) error {
+		return fmt.Errorf("this host's Claude Code managed settings cannot be read at %s, so a session on a key from Providers cannot be kept to its provider's endpoint under this host policy: fix its permissions or contents, or remove it, or use Claude Code's own sign-in", path)
+	}
+	files, err := claudeManagedSettingsFiles(claudeManagedSettingsDir)
+	if err != nil {
+		return unreadable(filepath.Join(claudeManagedSettingsDir, "managed-settings.d"))
+	}
+	type setting struct {
+		value any
+		path  string
+	}
+	effective := map[string]setting{}
+	quiet := []string{"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", "CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL"}
+	for _, path := range files {
+		raw, err := os.ReadFile(path)
+		if errors.Is(err, os.ErrNotExist) {
+			continue
+		}
+		var policy struct {
+			Env map[string]any `json:"env"`
+		}
+		if err != nil || json.Unmarshal(raw, &policy) != nil {
+			return unreadable(path)
+		}
+		for _, name := range quiet {
+			if value, set := policy.Env[name]; set {
+				effective[name] = setting{value, path}
+			}
+		}
+	}
+	for _, name := range quiet {
+		if s, set := effective[name]; set && s.value != "1" {
+			return fmt.Errorf("this host's Claude Code managed settings (%s) set %s, so a session on a key from Providers cannot be kept to its provider's endpoint under this host policy; remove the switch from the file, or use Claude Code's own sign-in", s.path, name)
+		}
+	}
+	return nil
+}
+
+func checkClaudeHookHostPolicyDir(dir string) error {
+	files, err := claudeManagedSettingsFiles(dir)
+	if err != nil {
+		return err
 	}
 	var disabled, managedOnly, managedPEP bool
 	for _, path := range files {

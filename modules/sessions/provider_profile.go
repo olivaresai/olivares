@@ -697,13 +697,8 @@ func validateRecordBinding(ctx context.Context, sc store.Scope, driver, ref stri
 	if rec.String(colPRState) != ProviderRecordActive {
 		return ErrProviderRecordRevoked
 	}
-	kind := rec.String(colPRKind)
-	if !recordServesDriver(kind, driver) {
-		return &runErr{
-			http.StatusUnprocessableEntity,
-			"a " + kind + " credential is not readable by driver " + driver +
-				"; bind a provider of a kind this driver reads, or register an openai_compatible provider with its endpoint",
-		}
+	if !recordServesDriver(rec.String(colPRKind), rec.String(colPRBaseURL), driver) {
+		return &runErr{http.StatusUnprocessableEntity, recordDriverRefusal(driver, rec.String(colPRDisplayName), rec.String(colPRKind))}
 	}
 	return nil
 }

@@ -116,6 +116,7 @@ func newProviderAddCmd() *cobra.Command {
 		kind, name, baseURL   string
 		keyEnv                string
 		bindProfile           string
+		noTest                bool
 		errNotAProviderRecord = "the engine did not return a provider record"
 	)
 	cmd := &cobra.Command{
@@ -123,10 +124,15 @@ func newProviderAddCmd() *cobra.Command {
 		Short: "Register a provider credential with the engine",
 		Long: "add seals one provider credential in the engine and returns its reference and a\n" +
 			"four-character hint. The value is never returned, logged or printed again.\n\n" +
+			"Without --kind the kind comes from the key (sk-ant-… Anthropic, xai-… xAI, sk-… OpenAI;\n" +
+			"with --base-url, OpenAI-compatible); without --name the name is the kind's, as in the\n" +
+			"console. The new key is then tested like `olivares provider test` (one model-list call,\n" +
+			"nothing spent) and the result shown; --no-test skips that.\n\n" +
 			"With --profile the new provider is bound to that provider profile in the same run, so\n" +
 			"the next session launched under it uses this credential. Without it, bind later with\n" +
 			"`olivares provider bind`.",
-		Example: "  olivares provider add --kind anthropic --name \"Anthropic (prod)\" < key.txt\n" +
+		Example: "  olivares provider add < key.txt\n" +
+			"  olivares provider add --kind anthropic --name \"Anthropic (prod)\" < key.txt\n" +
 			"  OPENAI_KEY=sk-... olivares provider add --kind openai --name Codex --key-env OPENAI_KEY\n" +
 			"  olivares provider add --kind openai_compatible --name Local --base-url https://llm.example.com < key.txt",
 		Args: cobra.NoArgs,
@@ -137,6 +143,16 @@ func newProviderAddCmd() *cobra.Command {
 			key, err := readProviderKey(cmd, keyEnv)
 			if err != nil {
 				return err
+			}
+			// HU2-24: the console needs neither; the kind is the key's, the name the kind's.
+			if kind = strings.TrimSpace(kind); kind == "" {
+				if kind = providerKindFromKey(key, baseURL); kind == "" {
+					return exitcode.New(exitcode.Usage, fmt.Errorf(
+						"the key does not say which provider it is for: pass --kind anthropic, openai, xai or openai_compatible"))
+				}
+			}
+			if strings.TrimSpace(name) == "" {
+				name = providerKindLabel(kind)
 			}
 			status, b, err := cfg.do(cmd.Context(), "POST", providersPath, map[string]any{
 				"kind": kind, "display_name": name, "base_url": baseURL, "api_key": key,
@@ -157,23 +173,67 @@ func newProviderAddCmd() *cobra.Command {
 					return berr
 				}
 			}
+			// Tested at once, as the console does after adding (HU2-24). The add stands
+			// whatever the test says: the result and the next step are shown, and a test
+			// that could not run leaves the record as added, untested.
+			if !noTest && ref != "" {
+				if tstatus, tb, terr := cfg.do(cmd.Context(), "POST", providersPath+"/"+ref+"/test", nil, 200); terr == nil && tstatus == 200 {
+					var tested map[string]any
+					if json.Unmarshal(tb, &tested) == nil && str(tested, "provider_ref") == ref {
+						rec = tested
+					}
+				}
+			}
 			return renderOut(cmd, func(w io.Writer) error {
 				return printProviderRecord(w, rec, bindProfile)
 			}, rec)
 		},
 	}
 	cfg.addFlags(cmd)
-	cmd.Flags().StringVar(&kind, "kind", "", "anthropic | openai | xai | openai_compatible")
-	cmd.Flags().StringVar(&name, "name", "", "your own name for this credential; it is what a picker shows")
+	cmd.Flags().StringVar(&kind, "kind", "", "anthropic | openai | xai | openai_compatible (default: from the key, or openai_compatible with --base-url)")
+	cmd.Flags().StringVar(&name, "name", "", "your own name for this credential; it is what a picker shows (default: the kind's name)")
+	cmd.Flags().BoolVar(&noTest, "no-test", false, "add the key without testing it")
 	cmd.Flags().StringVar(&baseURL, "base-url", "", "https endpoint override (required for openai_compatible)")
 	cmd.Flags().StringVar(&bindProfile, "profile", "", "provider profile reference to bind this credential to in the same run")
 	addProviderKeyFlags(cmd, &keyEnv)
-	_ = cmd.MarkFlagRequired("kind")
-	_ = cmd.MarkFlagRequired("name")
 	_ = cmd.RegisterFlagCompletionFunc("kind", func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return providerKindChoices, cobra.ShellCompDirectiveNoFileComp
 	})
 	return cmd
+}
+
+// providerKindFromKey is the provider a key belongs to by its own prefix, or
+// openai_compatible when an endpoint is named; "" when neither says.
+func providerKindFromKey(key, baseURL string) string {
+	switch {
+	case strings.TrimSpace(baseURL) != "":
+		return "openai_compatible"
+	case strings.HasPrefix(key, "sk-ant-"):
+		return "anthropic"
+	case strings.HasPrefix(key, "xai-"):
+		return "xai"
+	case strings.HasPrefix(key, "sk-"):
+		return "openai"
+	}
+	return ""
+}
+
+// providerKindLabel is a kind's own name, the console's default label
+// (web/src/features/providers/i18n/en.json "kinds").
+func providerKindLabel(kind string) string {
+	switch kind {
+	case "anthropic":
+		return "Anthropic"
+	case "openai":
+		return "OpenAI"
+	case "xai":
+		return "xAI"
+	case "openai_compatible":
+		return "OpenAI-compatible"
+	case "ollama":
+		return "Ollama"
+	}
+	return kind
 }
 
 func newProviderListCmd() *cobra.Command {

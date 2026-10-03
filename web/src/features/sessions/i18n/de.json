@@ -353,9 +353,21 @@
     "inspect": "Im Inspektor zeigen",
     "args": "Argumente",
     "toolResult": "Ergebnis",
+    "toolFailed": "Fehlgeschlagen",
     "tokens": "{{input}} ein · {{output}} aus",
     "cwdWarning": "Diese Sitzung hat keinen Arbeitsbereich. Der Treiber hat sein Arbeitsverzeichnis als {{cwd}} gemeldet.",
-    "protocol": "Protokoll-Frames: {{count}}"
+    "protocol": "Protokoll-Frames: {{count}}",
+    "stop": {
+      "cancelled": "Abgebrochen",
+      "refusal": "Vom Modell abgelehnt",
+      "maxTokens": "Am Token-Limit gestoppt",
+      "maxTurnRequests": "Am Durchgangslimit gestoppt"
+    },
+    "turnFailed": "Der Durchgang ist fehlgeschlagen: {{message}}",
+    "retrying": "Neuer Versuch ({{count}}): {{message}}",
+    "keyRefused": "Der Anbieter hat den API-Schlüssel abgelehnt. Ersetzen Sie ihn unter Anbieter.",
+    "output": "Ausgabe des Tools ({{count}}): {{first}}",
+    "notSent": "Nicht gesendet: {{reason}}"
   },
   "changes": {
     "title": "Änderungen in {{folder}}",

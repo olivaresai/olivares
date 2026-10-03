@@ -10,7 +10,10 @@
     "signedIn": "Connecté",
     "signedInAs": "Connecté en tant que {{account}}",
     "notSignedIn": "Non connecté",
-    "usesKey": "Utilise votre clé API : {{name}}"
+    "usesKey": "Utilise votre clé API : {{name}}",
+    "usesLocal": "Utilise le serveur de modèles local : {{name}}",
+    "keyRefused": "La clé d’API {{name}} a été refusée. Remplacez-la dans Fournisseurs.",
+    "keyUnchecked": "La clé {{name}} n’a pas pu être vérifiée. Testez-la dans Fournisseurs."
   },
   "actions": {
     "install": "Installer",
