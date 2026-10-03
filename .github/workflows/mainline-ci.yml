@@ -2220,10 +2220,10 @@ jobs:
       group: mainline-ci-functional-shard-${{ matrix.shard }}-${{ github.ref }}-${{ github.run_id }}
       cancel-in-progress: true
     runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
-    # The spec's job ceiling: the 35-minute step plus checkout, toolchain setup, role
+    # The spec's job ceiling: the 55-minute step plus checkout, toolchain setup, role
     # provisioning and the two services (under a minute of those on control-plane in run
     # 36066051228).
-    timeout-minutes: 45
+    timeout-minutes: 65
     # pull-requests/issues write is ONLY for the on-failure pr-failure-report step.
     permissions:
       contents: read
@@ -2675,10 +2675,10 @@ jobs:
             echo "DATABASE_IDEMPOTENCY_URL=postgres://cloud_cp_webhook_idempotency_ro:${PW_webhook_idempotency}@${PGHOSTPORT}/${CP_DB}?sslmode=disable"
           } >> "$GITHUB_ENV"
       # ONE SHARD, through the one reader of ci/pr-suite-shards.txt: its whole packages, then its
-      # name groups, then its legs, each `go test` under the spec's 30-minute binary timeout. The
-      # 35-minute step ceiling is the spec's too, and scripts/check-pr-suite-shards.sh pins both
+      # name groups, then its legs, each `go test` under the spec's 45-minute binary timeout. The
+      # 55-minute step ceiling is the spec's too, and scripts/check-pr-suite-shards.sh pins both
       # numbers and this matrix to the spec, so Go's timeout (a goroutine dump naming the package)
-      # always fires before the step is cancelled mute.
+      # retains its own goroutine dump while the step bounds the whole shard.
       #
       # Sampled host resources are recorded on EXIT/TERM when the shell and log transport remain
       # available. These samples are host memory use, not process RSS, and can miss intervening
@@ -2692,7 +2692,7 @@ jobs:
       # refusal lines to its end, so the report names the failing packages.
       - name: test (functional shard ${{ matrix.shard }}, no -race)
         id: test-functional
-        timeout-minutes: 35
+        timeout-minutes: 55
         env:
           OLIVARES_TEST_SHARD: ${{ matrix.shard }}
         run: |

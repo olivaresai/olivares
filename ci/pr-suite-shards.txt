@@ -177,7 +177,7 @@ optional github.com/olivaresai/olivares-cloud-cp/...
 #
 # These private legs are NOT included in the public measurements. In the published
 # tree they answer NOT APPLICABLE; where cloud/ and commercial/ exist, they run.
-# Qualification of the private arm must include their time under the same 35-minute
+# Qualification of the private arm must include their time under the same 55-minute
 # step ceiling. A public timing cannot establish that the private arm fits.
 leg root-rest test:cloud:norace
 leg root-rest test:commerce
@@ -189,12 +189,11 @@ leg root-rest test:commerce-core:norace
 # numbers retained above for store and modules are historical calibration, not a
 # current bound. This repartition changes family placement without raising ceilings.
 #
-# go-timeout 30m is PER TEST BINARY. It yields a goroutine dump and the package name;
-# the 35m step ceiling also includes builds, whole packages and private legs. The 45m
-# job ceiling additionally covers checkout, tool setup and both Postgres services.
-# All three clocks remain unchanged. Keeping nine jobs also preserves the number of
-# runners, tool setups and database service pairs; no new job overhead is introduced.
-# A completed official run must establish the candidate's duration and headroom.
+# On October 3, hosted root-rest exhausted the 35m step twice. Its cmd group took
+# 1186.6s in the previous run; observed package variation reached 1.8x. Allow 55m for
+# builds, whole packages and private legs, and 65m for the job including setup.
+# Go's 45m timeout remains PER TEST BINARY and yields a goroutine dump and package name.
+# Both workflows use these clocks; the nine jobs and exact test partition stay the same.
 #
 # THE MATRIX IS NOT DERIVED FROM THIS FILE, IT IS COMPARED WITH IT. The reader has a `matrix`
 # subcommand and no workflow calls it: deriving the list would need a setup job, and a job
@@ -208,6 +207,6 @@ leg root-rest test:commerce-core:norace
 # group exceeds the 20-minute sizing target, or its measured duration varies by more
 # than 30 %, inspect the costly families and redistribute within this partition.
 # Preserve exact coverage and measure again; counts alone do not establish a budget.
-go-timeout-minutes 30
-step-ceiling-minutes 35
-job-ceiling-minutes 45
+go-timeout-minutes 45
+step-ceiling-minutes 55
+job-ceiling-minutes 65

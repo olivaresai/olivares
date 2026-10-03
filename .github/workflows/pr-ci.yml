@@ -397,11 +397,10 @@ jobs:
       matrix:
         shard: [root-a, root-b, root-c, root-rest, store-a, store-b, store-rest, sessions, modules]
     runs-on: ubuntu-latest
-    # The gate pins these ceilings to ci/pr-suite-shards.txt. The September 28 root-a
-    # timeout disproved its count-based 730 s prediction; expensive communication
-    # families now share the existing jobs. Keep the 30m Go, 35m step and 45m job
-    # ceilings while the next official runs measure the new groups and whole steps.
-    timeout-minutes: 45
+    # The gate pins these ceilings to ci/pr-suite-shards.txt. Hosted root-rest
+    # exhausted 35m twice; allow the measured 1.8x variation over its 19.8m cmd group
+    # plus whole packages: 45m per Go binary, 55m per step, 65m per job.
+    timeout-minutes: 65
     # `task test:functional` is fail-closed on the Postgres posture (scripts/pg-test-env.sh):
     # without the DSN pair it refuses rather than skipping. The first real run of this job on
     # the public repository (PR #31, 2026-09-17) died exactly there, because the job had no
@@ -470,7 +469,7 @@ jobs:
           PGPASSWORD: postgres
         run: bash scripts/ci-postgres-service.sh provision
       - name: one shard of the Go suite, without the race detector
-        timeout-minutes: 35
+        timeout-minutes: 55
         env:
           OLIVARES_TEST_SHARD: ${{ matrix.shard }}
         # Record sampled host resources after normal exit or TERM when the shell can run
