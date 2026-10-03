@@ -43,7 +43,8 @@
             "Register",
             "Route",
             "Test",
-            "Web"
+            "Web",
+            "Queued"
           ]
         },
         {
@@ -107,7 +108,8 @@
             "Trusted",
             "Two",
             "Witness",
-            "Zero"
+            "Zero",
+            "Federated"
           ]
         },
         {
@@ -133,7 +135,8 @@
             "Unwired",
             "Validate",
             "Verify",
-            "Work"
+            "Work",
+            "Retained"
           ]
         },
         {
@@ -213,7 +216,15 @@
             "Verify",
             "Web",
             "Whoami",
-            "Workspace"
+            "Workspace",
+            "Browser",
+            "Community",
+            "Directory",
+            "Fresh",
+            "LDAP",
+            "Native",
+            "SAML",
+            "StepUpPolicy"
           ]
         },
         {
@@ -313,7 +324,10 @@
             "Validate",
             "Voice",
             "Worst",
-            "Zero"
+            "Zero",
+            "Decode",
+            "Duplicate",
+            "Oversized"
           ]
         }
       ]
@@ -679,7 +693,9 @@
             "Thread",
             "To",
             "Unconditional",
-            "Write"
+            "Write",
+            "LiveAuthorization",
+            "NHIActions"
           ]
         },
         {
@@ -730,7 +746,12 @@
             "Valid",
             "Whoami",
             "Wif",
-            "Workspace", "MondayAllow", "Reconstruct", "HelperProcessReconstruct"]
+            "Workspace", "MondayAllow", "Reconstruct", "HelperProcessReconstruct",
+  "EngineApproval",
+  "PDP",
+  "Retained",
+  "SR2",
+  "Superadmin"]
         }
       ]
     },
@@ -792,7 +813,22 @@
             "WorkEffective",
             "WorkIllegal", "PTYRunner",
             "ADeclared", "ADriver", "AProfilePolicy", "ASessionWorkspace", "ASymlinked", "BoundRecord", "CumulativeFrames", "FlatUsage", "GovernedTurn", "RecordBinding",
-            "RecordServes", "RemoveRunWorkspace", "ResultFrameUsage", "TokensWithoutMoney", "UseSessionWorkspace"]
+            "RecordServes", "RemoveRunWorkspace", "ResultFrameUsage", "TokensWithoutMoney", "UseSessionWorkspace",
+  "ACPPrompt",
+  "AKey",
+  "ALaunch",
+  "APolicy",
+  "AProfileMode",
+  "AProfileOn",
+  "AQueued",
+  "ARecord",
+  "AResume",
+  "ATemplate",
+  "Configure",
+  "Native",
+  "ProgramResolver",
+  "Real",
+  "RecordMint"]
         },
         {
           "name": "b",
@@ -847,7 +883,10 @@
             "WorkPersists",
             "WorkSchema",
             "WorkValidate",
-            "WorkWire"
+            "WorkWire",
+            "FullPreset",
+            "Grant",
+            "Superadmin"
           ]
         },
         {
@@ -896,7 +935,11 @@
             "WorkDependency",
             "WorkLease",
             "WorkRequired",
-            "Write"
+            "Write",
+            "Claude",
+            "Confined",
+            "ExitCause",
+            "Unconfined"
           ]
         },
         {
@@ -957,7 +1000,10 @@
             "WorkNo",
             "WorkOwner",
             "WorkSemantic",
-            "WorkStream"
+            "WorkStream",
+            "Policy",
+            "ValidProvider",
+            "Adding"
           ]
         },
         {
@@ -984,7 +1030,8 @@
             "WorkAPIOutbox",
             "WorkExact",
             "WorkIdempotency",
-            "WorkReceipt"
+            "WorkReceipt",
+            "SecretEnv"
           ]
         },
         {
@@ -1013,7 +1060,10 @@
             "WorkContent",
             "WorkOutbox",
             "WorkPlan",
-            "WorkStore"
+            "WorkStore",
+            "MCPProbe",
+            "ProductCause",
+            "Start"
           ]
         }
       ],
@@ -1095,7 +1145,13 @@
         "Support",
         "TLSCertificate",
         "Wrap",
-        "Wrapper"
+        "Wrapper",
+        "ABusiness",
+        "Bare",
+        "COMPATB",
+        "LoginAsks",
+        "LoginOn",
+        "LoginWith"
       ]
     },
     {
@@ -1155,7 +1211,12 @@
         "Verbs",
         "Work",
         "Workflow",
-        "Workspace"
+        "Workspace",
+        "CountedReader",
+        "CoverageJobs",
+        "Enumeration",
+        "JobNotRunning",
+        "SQLiteServerInfo"
       ]
     },
     {
@@ -1244,7 +1305,19 @@
         "Unreadable",
         "Unsafe",
         "Unstamped",
-        "Users"
+        "Users",
+        "ARefusal",
+        "CLIBoot",
+        "CLIDuplicate",
+        "CLIErrorSafety",
+        "CLIProductCA",
+        "CLIUser",
+        "MCPConcurrent",
+        "MCPEnable",
+        "MCPTest",
+        "RefTail",
+        "SR2Provider",
+        "SRCLI"
       ]
     },
     {
@@ -1332,7 +1405,14 @@
         "HTTPErr",
         "NextCommand",
         "ProfileRecord",
-        "Relaxation"
+        "Relaxation",
+        "Disabling",
+        "Dormant",
+        "EnablingReporting",
+        "FamilyRestart",
+        "ReportingSigning",
+        "SeatUtilization",
+        "SelfRestart"
       ]
     },
     {
@@ -1410,7 +1490,15 @@
         "Tenants",
         "Version",
         "What",
-        "Zero"
+        "Zero",
+        "RetirementActive",
+        "RetirementFactory",
+        "RetirementHold",
+        "RetirementLegal",
+        "RetirementStore",
+        "ThirdPartyText",
+        "UsedModules",
+        "Whoami"
       ]
     },
     {
@@ -1475,7 +1563,9 @@
         "The",
         "There",
         "Tool",
-        "Transport"
+        "Transport",
+        "SendTo",
+        "SharedSessionCredential"
       ]
     },
     {
@@ -1616,7 +1706,12 @@
         "Warn",
         "Wire",
         "Wired",
-        "Write"
+        "Write",
+        "Owner",
+        "QueuedSession",
+        "SCIMDelete",
+        "StandingRevoke",
+        "SubjectExcluded"
       ]
     }
   ],
