@@ -1,6 +1,13 @@
 {
   "title": "Identität & NHI",
   "subtitle": "SSO, SCIM, Identitätsinventar, NHI-Lebenszyklus, WIF-Graph und privilegierte Anmeldung — beobachtet, gesteuert und auditiert.",
+  "sections": "Identitätsbereiche",
+  "groups": {
+    "people": "Personen",
+    "signIn": "Anmeldung",
+    "machines": "Maschinenidentitäten",
+    "posture": "Lage"
+  },
   "tabs": {
     "federation": "SSO & SCIM",
     "inventory": "Identitätsinventar",
@@ -42,7 +49,10 @@
       "nhiLifecycleFinalize": "Endgültiger Abschluss der NHI-Außerbetriebnahme",
       "providers": "Anbieter-Zugangsdaten registrieren oder widerrufen",
       "generic": "Diese Aktion",
-      "console": "Verwalten von Konnektoren"
+      "console": "Verwalten von Konnektoren",
+      "stepUpPolicy": "Changing the extra check for administrative actions",
+      "modules": "Module ein- oder ausschalten",
+      "signing": "Berichtssignierung ein- oder ausschalten"
     },
     "aal": {
       "aal1": "AAL1 (Passwort)",
@@ -63,7 +73,12 @@
     "verificationFailed": "Die Sitzung konnte für diese Aktion nicht bestätigt werden. Die Authentifizierung wurde möglicherweise abgeschlossen; die Aktion wurde nicht fortgesetzt.",
     "cancelled": "Der Passkey-Vorgang wurde abgebrochen oder ist abgelaufen. Sie können einen neuen Versuch starten. Die Aktion wurde nicht fortgesetzt.",
     "cancelHint": "Schließen bricht diese Aktion ab. Eine bereits gesendete Registrierung oder Authentifizierung kann dennoch abgeschlossen werden.",
-    "registrationUnknownElsewhere": "Die Registrierung konnte nicht bestätigt werden. Der Passkey wurde möglicherweise gespeichert. Schließen Sie diesen Dialog und prüfen Sie Ihre Passkeys, bevor Sie eine weitere Registrierung starten."
+    "registrationUnknownElsewhere": "Die Registrierung konnte nicht bestätigt werden. Der Passkey wurde möglicherweise gespeichert. Schließen Sie diesen Dialog und prüfen Sie Ihre Passkeys, bevor Sie eine weitere Registrierung starten.",
+    "code": {
+      "title": "Sign in with your authenticator code",
+      "body": "{{action}} needs a sign-in with your authenticator code on this deployment. Sign in again and enter your code.",
+      "signInAgain": "Sign in again"
+    }
   },
   "references": {
     "note": "Standards, die dieses Panel widerspiegelt. Das Panel beobachtet und verifiziert; es beansprucht keine Zertifizierung.",
@@ -101,7 +116,7 @@
   },
   "sso": {
     "title": "Single Sign-on (OIDC / SAML)",
-    "description": "Föderierte Anmeldung ist im Business-Build implementiert und wird beim Start über die Umgebung konfiguriert. Dieses Panel dokumentiert die Konfiguration, prüft die exakte Redirect-URI und stellt den Verbindungsstatus dar — es schreibt die Konfiguration nicht.",
+    "description": "Föderierte Anmeldung wird unter SSO / IdP oder beim Start über die Umgebung konfiguriert. Dieses Panel dokumentiert die Konfiguration, prüft die exakte Redirect-URI und stellt den Verbindungsstatus dar — es schreibt die Konfiguration nicht.",
     "notConfigured": "Nicht konfiguriert",
     "notConfiguredHint": "Es ist kein Identitätsanbieter konfiguriert, daher liefern Föderationsanfragen 501 zurück. Setzen Sie die unten stehenden Umgebungsschlüssel und starten Sie die Engine neu, um SSO zu aktivieren.",
     "seamWhat": "Die Zusammenfassung des SSO-Verbindungsstatus",
@@ -281,9 +296,9 @@
       "title": "Lebenszyklusaktionen",
       "reason": "Begründung",
       "critical": {
-        "twoAccountsAal3": "Diese KRITISCHE Aktion erfordert die Freigabe durch zwei verschiedene Benutzerkonten, jeweils über eine AAL3-Sitzung, bevor sie ausgeführt werden kann. Die Engine erzwingt verschiedene KONTEN: Sie kann nicht nachweisen, dass zwei Konten zwei verschiedene Personen sind. Beide Bedingungen richten sich nach der aktuellen Risikostufe, die eine Genehmigungsrichtlinie herabsetzen kann.",
-        "breakGlassPossible": "Es läuft nichts, bis zwei verschiedene Benutzerkonten zustimmen, jeweils über eine hardwareverifizierte Sitzung. Eine aktive Break-Glass-Notfallfreigabe kann es stattdessen autorisieren — diese Nutzung wird protokolliert und nachträglich geprüft. Beide Bedingungen richten sich nach der aktuellen Risikostufe, die eine Genehmigungsrichtlinie herabsetzen kann.",
-        "noBreakGlass": "Es läuft nichts, bis zwei verschiedene Benutzerkonten zustimmen, jeweils über eine hardwareverifizierte Sitzung. Break-Glass kann dies nicht autorisieren: Es gibt keinen Notfallweg am zweiten Freigebenden vorbei. Beide Bedingungen richten sich nach der aktuellen Risikostufe, die eine Genehmigungsrichtlinie herabsetzen kann."
+        "twoAccountsAal3": "Diese KRITISCHE Aktion erfordert die Freigabe durch zwei verschiedene Benutzerkonten, bevor sie ausgeführt werden kann. Die Engine erzwingt verschiedene KONTEN: Sie kann nicht nachweisen, dass zwei Konten zwei verschiedene Personen sind. Dies richtet sich nach der aktuellen Risikostufe, die eine Genehmigungsrichtlinie herabsetzen kann.",
+        "breakGlassPossible": "Es läuft nichts, bis zwei verschiedene Benutzerkonten zustimmen. Eine aktive Break-Glass-Notfallfreigabe kann es stattdessen autorisieren — diese Nutzung wird protokolliert und nachträglich geprüft. Dies richtet sich nach der aktuellen Risikostufe, die eine Genehmigungsrichtlinie herabsetzen kann.",
+        "noBreakGlass": "Es läuft nichts, bis zwei verschiedene Benutzerkonten zustimmen. Break-Glass kann dies nicht autorisieren: Es gibt keinen Notfallweg am zweiten Freigebenden vorbei. Dies richtet sich nach der aktuellen Risikostufe, die eine Genehmigungsrichtlinie herabsetzen kann."
       },
       "ownership": {
         "button": "Verantwortung zuweisen",
@@ -503,33 +518,6 @@
       "inferenceGeos": "Gestattete Inferenzregionen",
       "unrestricted": "Unbeschränkt / nicht gemeldet"
     },
-    "tls": {
-      "title": "Panel-TLS (cert-manager)",
-      "description": "Die TLS-Sicherheitslage des Panels selbst: Issuer, Ablauf, Rotation und Kette.",
-      "seamWhat": "Die cert-manager-TLS-Sicherheitslage des Panels",
-      "issuer": "Issuer",
-      "notAfter": "Läuft ab",
-      "autoRenew": "Automatische Erneuerung",
-      "chain": "Kette"
-    },
-    "crypto": {
-      "title": "Krypto-Agilität / PQC-Inventar",
-      "description": "Klassische gegenüber Post-Quantum-Algorithmen über den gesamten Identitätsbestand und welche Slots auf PQC rotiert werden können (NIST SP 800-57 r6).",
-      "seamWhat": "Das Krypto-Agilität- / PQC-Inventar",
-      "ready": "PQC-bereit",
-      "notReady": "Nur klassisch",
-      "family": {
-        "classic": "Klassisch",
-        "pqc": "Post-Quantum",
-        "hybrid": "Hybrid"
-      },
-      "col": {
-        "usage": "Verwendung",
-        "algorithm": "Algorithmus",
-        "family": "Familie",
-        "pqcReady": "PQC-Agilität"
-      }
-    },
     "unavailable": {
       "badge": "Nicht lesbar",
       "fallback": "Diese Sicherheitslage konnte in dieser Installation nicht gelesen werden."
@@ -537,11 +525,15 @@
   },
   "login": {
     "statusTitle": "Sitzungs-Assurance",
-    "statusDescription": "Das Authenticator-Assurance-Level Ihrer aktuellen Sitzung. Sensible Ansichten erfordern ein Hardware-Step-up.",
+    "statusDescription": "Wie Sie sich für diese Sitzung angemeldet haben.",
     "currentAal": "Aktuelles Level",
     "methods": "Methoden",
     "methodsUnknown": "Nicht gemeldet",
-    "targetStandardsNote": "AAL3 (NIST SP 800-63B-4) und PIV/CAC (FIPS 201-3) sind die Zielstandards für die privilegierte Anmeldung. Das Panel spiegelt wider, was das Backend durchsetzt; es beansprucht keine Zertifizierung.",
+    "policy": {
+      "none": "Diese Bereitstellung verlangt vor administrativen Aktionen keine zusätzliche Prüfung. Ein Systemadministrator kann sie unter Einstellungen › Anmeldung und Sicherheit einschalten.",
+      "totp": "Administrative Aktionen verlangen in dieser Bereitstellung eine Anmeldung mit einem Code aus der Authenticator-App.",
+      "passkey": "Administrative Aktionen verlangen in dieser Bereitstellung einen Passkey."
+    },
     "passkeyTitle": "Passkey registrieren",
     "passkeyDescription": "Registrieren Sie einen Hardware-Sicherheitsschlüssel oder Plattform-Authentifikator (WebAuthn / FIDO2) für eine phishing-resistente privilegierte Anmeldung.",
     "registerPasskey": "Passkey registrieren",
@@ -574,6 +566,8 @@
       "registerHint": "Geben Sie Ihrem Passkey einen Namen zur Identifikation.",
       "nameLabel": "Passkey-Name",
       "namePlaceholder": "z.B. YubiKey 5C, MacBook Touch ID",
+      "defaultName": "Passkey auf {{device}}",
+      "defaultNameNoDevice": "Passkey",
       "registering": "Zeremonie wird durchgeführt…",
       "registered": "Passkey registriert.",
       "registerFailed": "Registrierung fehlgeschlagen. Ihr Browser unterstützt möglicherweise kein WebAuthn oder die Zeremonie wurde abgebrochen.",
@@ -597,10 +591,6 @@
     }
   },
   "empty": {
-    "cryptoInventory": {
-      "title": "Keine kryptografischen Assets inventarisiert",
-      "description": "Dieser Build deklariert den Vertrag zur TLS-/Post-Quanten-Sicherheitslage, stellt ihn aber nicht bereit; bis seine Implementierung antwortet, ersetzt ein Hinweis auf den ausstehenden Vertrag dieses Panel."
-    },
     "externalKeys": {
       "title": "Noch keine externen Schlüsselreferenzen gemeldet",
       "description": "Für diese Organisation wurden keine kundenverwalteten Verschlüsselungsschlüssel gemeldet. Das Inventar wurde erfolgreich gelesen — eine echte Null, kein fehlendes Backend."
@@ -644,5 +634,21 @@
     "policyConfirmOn": "Bestätigen: verpflichten",
     "policyDisable": "Deaktivieren",
     "policyAal3Note": "Das Ändern dieser Richtlinie erfordert eine AAL3-Sitzung. Konten ohne Faktor werden bei der nächsten Anmeldung zur Registrierung geführt — nie ausgesperrt."
+  },
+  "stepUpPolicy": {
+    "title": "Extra check for administrative actions",
+    "description": "Off by default. Turn it on to ask for an authenticator code or a passkey before administrative changes such as users, identity providers, secrets or tool installs.",
+    "options": {
+      "none": "Off",
+      "totp": "Authenticator code",
+      "passkey": "Passkey"
+    },
+    "saved": "Saved.",
+    "loadFailed": "This setting could not be read. Refresh the page to try again.",
+    "note": "To require a passkey, sign in with your passkey here first. To require an authenticator code, sign in with your code first. You can always turn it off. A change takes effect within a few seconds on every server.",
+    "refused": {
+      "passkey_not_enrolled": "Add a passkey to your account first (Identity > Passkeys), then turn this on.",
+      "totp_sign_in_required": "Set up an authenticator app and sign in with its code first, then turn this on."
+    }
   }
 }

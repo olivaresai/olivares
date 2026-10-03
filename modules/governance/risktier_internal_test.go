@@ -45,8 +45,10 @@ func TestDefaultActionRiskTier(t *testing.T) {
 		{"data.store.delete", RiskTierCritical},
 		{"inventory.asset.wipe", RiskTierCritical},
 		{"tenant.org.destroy", RiskTierCritical},
-		// mcp.tool.call only ever gates server-classified DESTRUCTIVE tools → critical.
-		{"mcp.tool.call", RiskTierCritical},
+		// A destructive MCP tool call and a privileged session launch default to HIGH
+		// (one approval); a policy may raise them.
+		{"mcp.tool.call", RiskTierHigh},
+		{"sessions.run.launch", RiskTierHigh},
 		// archiving an Anthropic workspace is irreversible (revokes all keys) → critical
 		// (explicit map entry; ".archive" is deliberately NOT a critical suffix). The
 		// recoverable admin actions stay HIGH (single approval).

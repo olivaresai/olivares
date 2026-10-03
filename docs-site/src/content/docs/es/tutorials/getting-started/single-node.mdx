@@ -31,9 +31,9 @@ cableado de pgAudit y el grafo de abajo se ejercitan con
 
 - Un host Linux con systemd y `curl`.
 - **Go 1.26+** para compilar el binario (el almacén es SQLite puro en Go, así que
-  no hace falta toolchain de C). La versión publicada **26.10.0** incluye archivos firmados y
+  no hace falta toolchain de C). La versión publicada **26.10.1** incluye archivos firmados y
   paquetes nativos: el testigo de superficies de instalación registra ambos como **published**
-  (`docs/releases/26.10.0-install-surfaces.json`). Este tutorial compila desde un checkout; el
+  (`docs/releases/26.10.1-install-surfaces.json`). Este tutorial compila desde un checkout; el
   instalador verificado en `main` (`scripts/install.sh`) instala en su lugar la versión
   publicada. [Verificar una versión](/es/how-to/verify-a-release/) es la cadena para esos
   artefactos.
@@ -215,6 +215,7 @@ fuente **pgAudit** de PostgreSQL (la señal R/RW de nivel limpio — consulta la
 Postgres):
 
 ```bash
+sudo mkdir -p /etc/olivares
 sudo tee /etc/olivares/sources.json >/dev/null <<JSON
 {"sources":[{
   "name": "salesdb-pgaudit",

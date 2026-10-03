@@ -114,7 +114,7 @@ async function renderBudgets(budgetRead: boolean) {
   api.budgetStatus.mockResolvedValue(undefined)
   api.alerts.mockResolvedValue({ items: [], has_more: false })
   useSessionStore.setState({
-    token: 'fixture-only-admission-session',
+    csrfToken: 'fixture-only-admission-session',
     sessionId: 'fixture-only-admission-session-id',
     expiresAt: null,
   })

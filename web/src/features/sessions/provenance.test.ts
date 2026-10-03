@@ -7,6 +7,7 @@ import {
   capabilities,
   controlLevel,
   isResumableRun,
+  startsAgain,
   mergeSessions,
   primaryRun,
   runMatchesObserved,
@@ -16,6 +17,7 @@ import {
   sessionTitle,
   sessionSearchKey,
   sessionTarget,
+  sharedNames,
   type Grants,
 } from './provenance'
 import type { LiveDTO } from './types'
@@ -190,8 +192,8 @@ describe('controlLevel — what the PLANE can do, never what the caller can', ()
     ).toBe('lifecycle')
   })
 
-  it('is observe for a stopped stream-json run with no id to resume into', () => {
-    expect(controlLevel([run('r', { state: 'stopped' })])).toBe('observe')
+  it('is lifecycle for a stopped stream-json run that never started: it starts again', () => {
+    expect(controlLevel([run('r', { state: 'stopped' })])).toBe('lifecycle')
   })
 
   it('is observe for a cleaned run', () => {
@@ -210,11 +212,15 @@ describe('controlLevel — what the PLANE can do, never what the caller can', ()
 })
 
 describe('isResumableRun', () => {
-  it('needs a captured id for stream-json (there is nothing to --resume into)', () => {
-    expect(isResumableRun(run('r', { state: 'stopped' }))).toBe(false)
+  it('continues a stream-json run with or without a captured id', () => {
+    expect(isResumableRun(run('r', { state: 'failed' }))).toBe(true)
+    expect(startsAgain(run('r', { state: 'failed' }))).toBe(true)
     expect(
       isResumableRun(run('r', { state: 'stopped', claude_session_id: 'x' })),
     ).toBe(true)
+    expect(
+      startsAgain(run('r', { state: 'stopped', claude_session_id: 'x' })),
+    ).toBe(false)
   })
 
   it('does not need one for remote-control', () => {
@@ -309,6 +315,35 @@ describe('capabilities — "you cannot" and "nobody can" are different answers',
     expect(capOf(caps, 'stop').available).toBe(true)
   })
 
+  // HU 025 (refresh 05, real Claude Code): the turn interrupt worked from the CLI and
+  // the console never offered it where the person works. It is a capability of the
+  // model like stop, so the header and the drawer show it from the same answer.
+  it('offers interrupt only for a running bridged run the caller may write to', () => {
+    const at = (over: Partial<RunDTO>, grants: Grants = ALL_GRANTS) =>
+      capOf(
+        capabilities({ runs: [run('r', over)], sessionRef: 'sess-x' }, grants),
+        'interrupt',
+      )
+    expect(at({ state: 'running' })).toEqual({
+      id: 'interrupt',
+      available: true,
+    })
+    expect(at({ state: 'idle' }).reason).toBe('state')
+    expect(at({ state: 'stopped' }).reason).toBe('state')
+    expect(at({ state: 'running', transport: 'remote-control' }).reason).toBe(
+      'transport',
+    )
+    expect(
+      at({ state: 'running' }, { ...ALL_GRANTS, runWrite: false }).reason,
+    ).toBe('permission')
+    expect(
+      capOf(
+        capabilities({ runs: [], sessionRef: 'sess-x' }, ALL_GRANTS),
+        'interrupt',
+      ).reason,
+    ).toBe('no-run')
+  })
+
   it('reports state for a capability the run is simply not eligible for', () => {
     const caps = capabilities(
       { runs: [run('r', { state: 'running' })], sessionRef: 'sess-x' },
@@ -374,12 +409,13 @@ describe('capabilities — "you cannot" and "nobody can" are different answers',
     expect(capOf(admin, 'cleanup').available).toBe(true)
   })
 
-  it('explains an unresumable stopped run by its TRANSPORT, not by permission', () => {
+  it('offers to start again and to delete a run that failed before it started', () => {
     const caps = capabilities(
-      { runs: [run('r', { state: 'stopped' })], sessionRef: 'sess-x' },
+      { runs: [run('r', { state: 'failed' })], sessionRef: 'sess-x' },
       ALL_GRANTS,
     )
-    expect(capOf(caps, 'resume').reason).toBe('transport')
+    expect(capOf(caps, 'resume').available).toBe(true)
+    expect(capOf(caps, 'delete').available).toBe(true)
   })
 })
 
@@ -599,6 +635,18 @@ describe('profile-scoped rows and profiled runs', () => {
     expect(own.profileRef).toBe('ppf_a')
   })
 
+  it('joins a profiled run to the managed row that names it before the run carries its id', () => {
+    const unproven = { ...runA, live_ref: undefined }
+    const named = { ...managedA, run_ref: runA.run_ref }
+    const rows = mergeSessions([named], [unproven])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.key).toBe('live:lr-a')
+    expect(rows[0]!.runs.map((r) => r.run_ref)).toEqual([runA.run_ref])
+    // An observed row naming the run proves nothing: it keeps its own row.
+    const claimed = { ...observedA, run_ref: runA.run_ref }
+    expect(mergeSessions([claimed], [unproven])).toHaveLength(2)
+  })
+
   it('an observed row of the same profile never borrows the managed run', () => {
     const rows = mergeSessions([managedA, observedA], [runA])
     const obs = rows.find((r) => r.key === 'live:lr-obs-a')!
@@ -721,5 +769,121 @@ describe('sessionNaming — what a ONE-LINE row is called', () => {
     // a reader could have searched for.
     const bare = mergeSessions([live('sess-coder-7a3f')], [])[0]!
     expect(sessionShortId(bare)).toBe('coder-7a3f')
+  })
+})
+
+// J5 on R1 05 (WEB stub that runs the PEP hooks, 2026-10-01): ONE console launch wrote
+// three live rows. Besides the managed row, the hook's tool edges landed in a legacy row
+// keyed by the RUN REFERENCE (claudehookpep.go sets SessionID = the bearer's run) and the
+// turn's usage in a legacy row keyed by the CANONICAL SESSION ID (sessioncostsink.go). Both
+// identifiers are minted by the plane for that run, so those rows are the run's session
+// reported on another channel — the list showed "1 Launched · 2 Discovered".
+describe('one launch is one row (J5): legacy rows keyed by the run’s own identifiers', () => {
+  const RUN = '01a0f8bd-e094-7cfd-ace2-5e36665dca8b'
+  const OSN = 'osn_01a0f8bd-e095-7203-b4fa-2b332c008029'
+  const SID = '8fb0fd6a-bb5c-4345-af60-e656c093244f'
+  const managed = live(SID, {
+    live_ref: 'lr-managed',
+    attribution: 'managed',
+    provider_profile_ref: 'ppf_1',
+    provider: 'claude',
+    engine: 'claude',
+    canonical_sid: OSN,
+    run_ref: RUN,
+    last_event_at: '2026-10-01T18:33:08Z',
+  })
+  const hookEdges = live(RUN, {
+    live_ref: 'lr-hook',
+    engine: 'claude',
+    current_action: 'Bash',
+    current_resource: 'echo',
+    event_count: 2,
+    tool_call_count: 2,
+    last_event_at: '2026-10-01T18:33:09Z',
+  })
+  const turnUsage = live(OSN, {
+    live_ref: 'lr-usage',
+    input_tokens: 12,
+    output_tokens: 40,
+    last_event_at: '2026-10-01T18:33:10Z',
+  })
+  const launched = run(RUN, {
+    claude_session_id: SID,
+    provider_profile_ref: 'ppf_1',
+    provider_driver: 'claude',
+    live_ref: 'lr-managed',
+    name: 'List the files in this folder',
+  })
+
+  it('start with a first message: one row, launched, with the other channels as echoes', () => {
+    const rows = mergeSessions([managed, hookEdges, turnUsage], [launched])
+    expect(rows).toHaveLength(1)
+    const [row] = rows
+    expect(row!.key).toBe('live:lr-managed')
+    expect(row!.provenance).toBe('launched')
+    expect(row!.live?.live_ref).toBe('lr-managed')
+    expect(row!.echoes?.map((e) => e.live_ref).sort()).toEqual([
+      'lr-hook',
+      'lr-usage',
+    ])
+    // The echoes add activity, never control: control comes from the run alone.
+    expect(row!.control).toBe('full')
+    expect(row!.lastActivityMs).toBe(Date.parse('2026-10-01T18:33:10Z'))
+    expect(sessionSearchKey(row!)).toContain('lr-hook')
+  })
+
+  it('send a second message, Stop, Resume: still one row, its state from the run', () => {
+    const later = { ...hookEdges, event_count: 4, tool_call_count: 4 }
+    for (const state of ['running', 'stopped', 'running'] as const) {
+      const rows = mergeSessions(
+        [managed, later, turnUsage],
+        [{ ...launched, state }],
+      )
+      expect(rows).toHaveLength(1)
+      expect(primaryRun(rows[0]!.runs)?.state).toBe(state)
+    }
+  })
+
+  it('folds by the managed row’s identifiers when the run is not on the page', () => {
+    const rows = mergeSessions([managed, hookEdges, turnUsage], [])
+    expect(rows).toHaveLength(1)
+    expect(rows[0]!.echoes).toHaveLength(2)
+  })
+
+  it('a scoped row or an unrelated legacy id is never folded', () => {
+    const scoped = live(RUN, {
+      live_ref: 'lr-scoped',
+      attribution: 'observed',
+      provider_profile_ref: 'ppf_1',
+    })
+    const stranger = live('sess-other', { live_ref: 'lr-other' })
+    const rows = mergeSessions([managed, scoped, stranger], [launched])
+    expect(rows.map((r) => r.key).sort()).toEqual([
+      'live:lr-managed',
+      'live:lr-scoped',
+      'sess:sess-other',
+    ])
+  })
+})
+
+describe('sharedNames — one list, distinct names (HU 029)', () => {
+  it('gives every row whose name another row carries its distinguishing tail', () => {
+    const name =
+      'Read the repository and write a short summary of what each package'
+    const rows = mergeSessions(
+      [],
+      [
+        run('01a0f8bd-0000-7000-8000-00000000aaa1', { name }),
+        run('01a0f8bd-0000-7000-8000-00000000bbb2', { name }),
+        run('01a0f8bd-0000-7000-8000-00000000ccc3', { name: 'Other' }),
+      ],
+    )
+    const shared = sharedNames(rows, 'Untitled session')
+    const named = rows.map((s) => sessionNaming(s, 'Untitled session', shared))
+    const twins = named.filter((n) => n.name === name)
+    expect(twins).toHaveLength(2)
+    expect(twins.every((n) => !!n.shortId)).toBe(true)
+    expect(twins[0]!.shortId).not.toBe(twins[1]!.shortId)
+    expect(named.find((n) => n.name === 'Other')!.shortId).toBeNull()
   })
 })

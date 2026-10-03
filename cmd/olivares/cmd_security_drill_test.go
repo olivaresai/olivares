@@ -11,9 +11,14 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == confine.HelperArg {
+		os.Exit(confine.RunHelper(os.Args[2:]))
+	}
 	if os.Getenv("OLIVARES_CLI_TRAMPOLINE") == "1" {
 		os.Exit(runMain())
 	}

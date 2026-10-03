@@ -202,6 +202,7 @@ func TestConsoleSupportBundleAAL3RedactionIntegrityAndAudit(t *testing.T) {
 		o.SupportBundleRedact = wave2TestRedact
 		o.SupportBundleContainsSensitive = wave2TestContainsSensitive
 	})
+	h.requirePasskeyStepUp()
 	admin := h.adminLogin()
 
 	refused := doWave2Binary(h, http.MethodPost, "/v1/console/support-bundle", admin)

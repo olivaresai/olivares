@@ -135,9 +135,12 @@ export function plainText(node: ReactNode): string | undefined {
   return undefined
 }
 
-/** Shared title/tab chrome reflows instead of imposing a fixed line height. */
+/** Shared title/tab chrome reflows instead of imposing a fixed line height. The title
+ * keeps at least 20rem and the tab strip takes the rest of the line, or wraps below it
+ * when there is no room. A fixed 1fr:2fr grid squeezed a header with actions to 0 px at
+ * 1280 px ("Provider profiles", one letter per line). */
 export const WORK_CHROME_ROW =
-  'relative grid min-h-9 min-w-0 grid-cols-1 items-start gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)] sm:gap-3'
+  'relative flex min-h-9 min-w-0 flex-wrap items-start gap-x-3 gap-y-2 [&>*]:min-w-0 [&>:first-child]:flex-[1_1_20rem] [&>:last-child]:flex-[1_1_auto]'
 
 export function PageHeader({
   title,
@@ -165,8 +168,9 @@ export function PageHeader({
       data-slot="page-header"
       className={cn('flex flex-col gap-2', className)}
     >
-      <Tag className="flex min-w-0 items-start justify-between gap-2 sm:gap-4">
-        <div className="min-w-0 flex-1">
+      {/* The actions wrap below the title before the title gets narrower than 10rem. */}
+      <Tag className="flex min-w-0 flex-wrap items-start justify-between gap-x-2 gap-y-2 sm:gap-x-4">
+        <div className="min-w-[min(100%,10rem)] flex-1">
           <h1 className="min-w-0 break-words font-display text-title text-foreground">
             {title}
           </h1>

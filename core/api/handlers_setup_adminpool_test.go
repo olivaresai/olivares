@@ -58,56 +58,70 @@ func blindFromTheStart() *atomic.Bool {
 	return b
 }
 
-// THE WHOLE PATH, THROUGH THE REAL ROUTER. The unit tests next door pin
-// statusFor and writeError; this one pins what an operator receives, because the
-// defect was only ever visible from there.
-//
-// Reproduced against Postgres 16.14 on 2026-08-08 before the fix, on a throwaway
-// database whose only role was NOSUPERUSER NOBYPASSRLS:
-//
-//	POST /v1/setup → 500 {"error":{"code":"internal","message":"internal error"}}
-//
-// Note the envelope: the body is nested under "error". The report this session was
-// given quoted a flat {"code":…,"message":…}, which is not what the server has ever
-// sent (core/api/errors.go, errorBody) — asserting the flat shape here would have
-// passed against a body that does not exist.
-func TestFirstBootWithoutAdminPoolTellsTheOperatorWhatToProvision(t *testing.T) {
+// First setup needs one organization, not full-estate enumeration. The default
+// application pool must support setup and a usable owner sign-in on its own.
+func TestFirstBootWithoutAdminPoolCreatesTheOrganization(t *testing.T) {
 	h := newHarnessOpts(t, func(o *api.Options) {
 		o.Store = enumerationBlindStore{Store: o.Store, blind: blindFromTheStart()}
 	})
-
 	r := h.do("POST", "/v1/setup", "", map[string]any{
 		"token": h.setupTok, "email": "root@x.io", "password": "supersecret1",
 	}, nil)
+	if r.code != http.StatusCreated {
+		t.Fatalf("setup = %d %s, want 201 without an admin pool", r.code, r.raw)
+	}
+	org, _ := r.body["organization"].(map[string]any)
+	tenant, _ := org["tenant_id"].(string)
+	if tenant == "" {
+		t.Fatalf("setup did not return its organization: %s", r.raw)
+	}
+	login := h.do("POST", "/v1/auth/login", "", map[string]any{
+		"email": "root@x.io", "password": "supersecret1",
+	}, nil)
+	if login.code != http.StatusOK {
+		t.Fatalf("sign-in = %d %s", login.code, login.raw)
+	}
+	token, _ := login.body["token"].(string)
+	workspaces := h.do("GET", "/v1/workspaces", token, nil, map[string]string{"X-Olivares-Tenant": tenant})
+	if workspaces.code != http.StatusOK || !strings.Contains(workspaces.raw, `"slug":"default"`) {
+		t.Fatalf("first organization is not usable: %d %s", workspaces.code, workspaces.raw)
+	}
+}
 
-	if r.code == http.StatusInternalServerError {
-		t.Fatalf("first boot still fails MUTE: %d %s", r.code, r.raw)
+// A failed estate read does not mean the requested slug is free. The database
+// constraint must protect an unseen tenant without creating a first user.
+func TestFirstBootWithoutAdminPoolDoesNotAdoptAnUnseenOrganization(t *testing.T) {
+	var underlying store.Store
+	h := newHarnessOpts(t, func(o *api.Options) {
+		underlying = o.Store
+		o.Store = enumerationBlindStore{Store: o.Store, blind: blindFromTheStart()}
+	})
+	ctx := context.Background()
+	var tenant model.TenantID
+	if err := underlying.System(ctx, func(sys store.SystemScope) error {
+		org, err := sys.CreateOrg(ctx, model.Org{Name: "Existing", Slug: "default", Status: model.StatusActive})
+		tenant = org.TenantID
+		return err
+	}); err != nil {
+		t.Fatal(err)
 	}
-	if r.code != http.StatusNotImplemented {
-		t.Fatalf("setup = %d %s, want %d", r.code, r.raw, http.StatusNotImplemented)
+	r := h.do("POST", "/v1/setup", "", map[string]any{
+		"token": h.setupTok, "email": "root@x.io", "password": "supersecret1",
+	}, nil)
+	if r.code != http.StatusNotImplemented || !strings.Contains(r.raw, "cross_tenant_admin_pool_not_configured") {
+		t.Fatalf("setup over an unseen organization = %d %s, want the authoritative-lookup remedy", r.code, r.raw)
 	}
-
-	errObj, _ := r.body["error"].(map[string]any)
-	if errObj == nil {
-		t.Fatalf("response is not the standard error envelope: %s", r.raw)
+	if has, err := h.authr.HasAnyUser(ctx); err != nil || has {
+		t.Fatalf("refused setup created a user: has=%t err=%v", has, err)
 	}
-	code, _ := errObj["code"].(string)
-	msg, _ := errObj["message"].(string)
-	if code != "cross_tenant_admin_pool_not_configured" {
-		t.Errorf("error.code = %q, want cross_tenant_admin_pool_not_configured", code)
-	}
-	if msg == "internal error" {
-		t.Fatalf("the operator is still told %q — the diagnosis stayed in the server log", msg)
-	}
-	for _, want := range []string{"BYPASSRLS", "olivares db init", "--admin-role", "--admin-dsn"} {
-		if !strings.Contains(msg, want) {
-			t.Errorf("the reply does not tell the operator about %q: %q", want, msg)
+	if err := underlying.System(ctx, func(sys store.SystemScope) error {
+		org, err := sys.GetOrg(ctx, tenant)
+		if err == nil && org.Name != "Existing" {
+			t.Fatalf("unseen organization was changed: %+v", org)
 		}
-	}
-	// The remedy is a constant keyed on the code, so nothing the store wrapped into
-	// its error can ride out on it.
-	if strings.Contains(msg, "postgres://") || strings.Contains(msg, "RLS-limited") {
-		t.Errorf("the store's own error text reached the client: %q", msg)
+		return err
+	}); err != nil {
+		t.Fatalf("unseen organization was lost: %v", err)
 	}
 }
 
@@ -158,7 +172,7 @@ func TestListOrgsWithoutAdminPoolRefusesLegiblyAndIsNotCacheable(t *testing.T) {
 		t.Errorf("error.code = %q", code)
 	}
 	msg, _ := errObj["message"].(string)
-	if msg == "internal error" || !strings.Contains(msg, "--admin-dsn") {
+	if msg == "internal error" || !strings.Contains(msg, "--install-directory-inventory") {
 		t.Errorf("the operator gets no remedy from the org list: %q", msg)
 	}
 	if strings.Contains(msg, "RLS-limited") {

@@ -5,16 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project uses [CalVer](https://calver.org/): a monthly release is `YY.M` (two-digit
 year and month, such as 26.10), and a patch release adds a third number, `YY.M.N`. Tags have
-no `v` prefix; the 26.10 release is tagged `26.10.0`.
+no `v` prefix; the latest release is tagged `26.10.1`.
 
-> **Status: beta.** The latest published release is **26.10**; its dated section below is the
+> **Status: beta.** The latest published release is **26.10.1**; its dated section below is the
 > record of what it shipped. Changes for the next release are recorded under **[Unreleased]**,
 > with no release date until it is published. The
 > [releases page](https://github.com/olivaresai/olivares/releases) lists every published release.
 > Release notes and artifacts become authoritative when the corresponding release is published.
 > Every earlier release keeps its own dated section, unchanged.
-> APIs, schemas and the module surface MAY still change before a
-> stability commitment. Because CalVer does not encode breaking changes in the version number,
+> Published CLI commands and flags, API routes and fields, configuration keys, defaults,
+> paths and stored data stay compatible in later releases, also during beta. A removal is
+> first announced as a deprecation in an earlier release and comes with an automatic
+> migration. CalVer names the release month; it never permits a regression.
+> Because CalVer does not encode breaking changes in the version number,
 > every breaking change is called out explicitly under **Changed**/**Removed** here. No
 > versions, tags, or dates are invented here (see [`SECURITY.md`](SECURITY.md) *Supported
 > versions*).
@@ -39,11 +42,112 @@ no `v` prefix; the 26.10 release is tagged `26.10.0`.
 Pending for the next release. Nothing below is published until that release is, and the
 section is dated only then.
 
+## [26.10.1] - 2026-10-03
+
+### Before you upgrade
+
+- Back up first. The database gains nullable columns (session runs, approvals, session claims) and a deployment
+  settings record; no data is rewritten. Rolling back to 26.10.0 is not supported.
+- On its first start, the engine records which modules this installation runs: the standard set plus every module that
+  already holds data. It then restarts itself once, in the same process, to apply that selection.
+- Agent tools no longer use a sign-in stored in the server account's home. Sign each tool in once from **AI tools** or
+  with `olivares tool login <tool>`; the sign-in belongs to your organization.
+- If managed Claude Code settings on this host set `disableAllHooks` or `allowManagedHooksOnly`, Claude Code sessions
+  are refused until both are `false` or removed. `olivares doctor` names the file.
+- `olivares upgrade` on 26.10.0 finds 26.10.1 by itself.
+- A session bound to a provider key now starts only when Olivares can keep it to that provider's endpoint. Some
+  combinations that started on 26.10.0 are refused before start (see **Security**). Sessions on your own tool sign-in
+  are not affected.
+- If this host has a non-empty system-wide OpenCode config (`/etc/opencode/opencode.json` or `.jsonc`), OpenCode
+  sessions on a provider key are refused until it is removed. OpenCode's own sign-in is not affected.
+
+- The engine re-issues its self-signed certificate with the same key. A CLI pinned to the key keeps working; a browser
+  that trusted the old certificate asks once more.
+
+### New
+
+- Modules: an installation runs only the modules it selects (**Settings > Edition & modules**). A module that is off
+  keeps its data and runs no work; its routes answer `404 module_not_enabled`.
+- Sessions run confined to their folder (Linux Landlock); stdio MCP servers too. Without Landlock, every run says so.
+- Sign in Claude Code, Codex and Grok Build through the engine. Start Ollama and pull its models from the console.
+- Sessions can message each other and hand work to the sessions they may reach.
+- Vault secrets as environment variables for a session or a template. Values reach only the session's environment;
+  output, approvals and audit show `[secret <name>]`.
+- One approval queue: approve or reject in **Approvals** or with `olivares governance approvals approve|reject`.
+- MCP servers: add, test and turn on a server, and choose which of its tools run without approval. By default every
+  tool asks.
+- CLI: `olivares session`, `olivares tool`, `olivares mcp`, `olivares login`/`logout`, `olivares audit ls`,
+  `olivares reporting signing`. `olivares` alone shows this installation and the next step. No command was removed.
+- Each session's turn cost is recorded.
+
+### Changed
+
+- The console opens on **Now** (approvals, budgets, kill switch). Setup is three steps: install a tool, sign it in,
+  start a session. One **New session** dialog everywhere.
+- A new session picks how it runs by itself: your tool sign-in first, then the provider key, then a local model, and
+  says which.
+- A Claude Code turn can be interrupted without stopping the session.
+- API: additions only. No operation was removed; some requests gained optional fields.
+- Adding a provider key, or replacing its key or address, follows the step-up policy set for administrative actions.
+  With the default policy (none), nothing changes.
+- The Ollama that Olivares starts runs with its cloud features (cloud models, web search) off. Model downloads you
+  request still work.
+- Codex plugins are off in every session Olivares runs, including sessions on your own Codex sign-in.
+
+### Security
+
+- The console keeps its sign-in in HttpOnly cookies.
+- Approval reviews show the full command; a command or MCP argument that masking would hide is refused, not shown
+  partly.
+- An approval cannot be granted after its session's turn ended, was interrupted or stopped.
+- An organization's tool sign-in cannot be used by another organization.
+- A session stops when its owner's directory groups change; a resume uses the owner's current access.
+- Offboarding stops late SSO and SCIM changes from restoring access.
+- Policy decision evidence is redacted before it is stored.
+- A session bound to a provider key reaches only that provider's endpoint, or it does not start. Supported: Claude Code
+  on Anthropic keys; Codex on OpenAI, OpenAI-compatible and Ollama; Grok Build on xAI; OpenCode on first-party keys and
+  Ollama. Claude Code or Grok Build on an OpenAI-compatible key, and a Claude key on a node whose sessions run through
+  the deployment gateway, are refused.
+- A session on a provider key runs each tool with its own off switches: Claude Code non-essential traffic and
+  marketplace auto-install; Codex analytics, feedback, OpenTelemetry, plugins and self-update; Grok Build self-update;
+  OpenCode self-update, model catalogue fetch, language-server downloads and sharing.
+- A bound session stops before it starts when the host's managed policy for the tool could redirect it, turn its off
+  switches back on, or cannot be read. The message names the file: Claude Code managed settings in `/etc/claude-code`;
+  Codex host requirements or managed configuration; any non-empty system-wide OpenCode config.
+- Models routing sends a request only to the provider it selected. With Models enabled and an Anthropic key configured,
+  a request routed to another provider could reach Anthropic. Default installs were not affected.
+- `olivares dr` dump and restore and the backup scripts no longer put database passwords in process arguments.
+
 ### Fixed
 
-- The Git publish push API refuses a request body followed by anything other than whitespace (a
-  second JSON value or a stray bracket) with `400 invalid_request`, before it records or pushes
-  anything. Before, it applied the first value.
+- Tool sign-in, profile resolution and background work on a default PostgreSQL installation.
+- `olivares quickstart` on PostgreSQL; running `olivares db init` again no longer breaks the next start.
+- The New session dialog with one tool ready and another not signed in.
+- `olivares mcp enable` and `olivares reporting signing`.
+- `olivares serve --seed-demo` restarts on the data it seeded.
+- Native package upgrades keep hand-edited service overrides.
+- The installer prints commands that work when its directory is not on `PATH`.
+- The Git publish push API refuses a body with trailing content.
+- Report signing says when a license is needed, and its refusal carries an error code.
+- A launch on a local model that is not running names `olivares tool start ollama`.
+- Grok Build on Linux without bubblewrap, with Grok's sandbox on (the default for new sessions), stops before start and
+  asks to install bubblewrap instead of failing with HTTP 502. Grok is not offered on such a host.
+- When the engine supplied the credential, a refusal by the provider says so and asks the operator to replace it.
+
+- A Codex session on a provider key or local model starts with the session's model, or Codex's own default; with no
+  model to use, it stops before start and says where to choose one.
+
+### Known limits
+
+- The Helm chart and Compose deployments still expand database URLs into process arguments. Fixed in the next release.
+- `olivares quickstart --postgres` refuses a Unix-socket URL that carries the port as a query parameter;
+  `olivares serve --dsn` accepts it.
+- OpenCode approvals show "Command not shown for this tool yet" when the tool does not send the command.
+- Host managed-policy checks for macOS are implemented but not yet verified on a Mac.
+
+- A Codex session on a provider key or local model needs a model chosen when it is created (with `--model` on `olivares session start`, in
+  the console's advanced launch options, or in its Codex profile configuration). Without one it stops before start and says so. A default model per
+  provider key comes in a later release.
 
 ## [26.10.0] - 2026-10-01
 

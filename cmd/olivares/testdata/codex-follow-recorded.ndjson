@@ -1,0 +1,9 @@
+{"id": 1, "result": {"userAgent": "codex_stub/0.159.3", "codexHome": "/home/ana/.codex", "platformFamily": "unix", "platformOs": "linux"}}
+{"id": 2, "result": {"account": {"type": "chatgpt", "email": "ana@example.test", "planType": "pro"}, "requiresOpenaiAuth": false}}
+{"id": 3, "result": {"thread": {"id": "bf0aac4f-77c4-4621-a528-939f789edf48", "model": "gpt-stub", "cliVersion": "0.159.3", "modelProvider": "openai"}, "model": "gpt-stub", "modelProvider": "openai", "cwd": "/home/ana/projects/notes", "approvalPolicy": "never", "sandbox": {"mode": "workspace-write"}, "approvalsReviewer": "user"}}
+{"id": 4, "result": {"turn": {"id": "turn-1", "status": "inProgress", "items": []}}}
+{"method": "item/completed", "params": {"threadId": "bf0aac4f-77c4-4621-a528-939f789edf48", "turnId": "turn-1", "item": {"type": "agentMessage", "id": "msg-1", "text": "(FH stub of Codex) You asked: 'hello codex'. I work in /home/ana/projects/notes with sandbox workspace-write."}}}
+{"method": "turn/completed", "params": {"threadId": "bf0aac4f-77c4-4621-a528-939f789edf48", "turn": {"id": "turn-1", "status": "completed", "items": []}}}
+{"id": 5, "result": {"turn": {"id": "turn-2", "status": "inProgress", "items": []}}}
+{"method": "item/completed", "params": {"threadId": "bf0aac4f-77c4-4621-a528-939f789edf48", "turnId": "turn-2", "item": {"type": "agentMessage", "id": "msg-2", "text": "(FH stub of Codex) You asked: 'now list the files'. I work in /home/ana/projects/notes with sandbox workspace-write."}}}
+{"method": "turn/completed", "params": {"threadId": "bf0aac4f-77c4-4621-a528-939f789edf48", "turn": {"id": "turn-2", "status": "completed", "items": []}}}

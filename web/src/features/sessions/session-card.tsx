@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
 import {
   Activity,
   Boxes,
+  CirclePause,
   Disc3,
   Eye,
   HelpCircle,
@@ -21,7 +21,6 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AccessModeBadge } from '@/components/data/badges'
 import { Button } from '@/components/ui/button'
-import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { KvList, KvRow } from '@/components/ui/kv'
 import { Separator } from '@/components/ui/separator'
 import {
@@ -33,23 +32,17 @@ import {
 } from '@/components/ui/sheet'
 import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { toast } from '@/components/ui/toaster'
-import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { GovernancePanel } from '@/features/agentops/governance-panel'
 import { LiveConsole } from '@/features/agentops/live-console'
 import { EventsPanel, RunInfo } from '@/features/agentops/run-detail'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
-import type { RunDTO } from '@/features/agentops/types'
 import { sessionNameLadder } from '@/features/home/work-line'
 import { LiveDot, RelTimeLabel, humanDurationSeconds } from '@/features/shared'
 import { NamedRef } from '@/features/shared/named-ref'
-import { ApiError } from '@/lib/api/errors'
-import { useAuth } from '@/lib/auth/context'
 import { formatInt, formatMicroUsd, formatTokens } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { sessionsKeys } from './api'
 import { AttributionChip } from './attribution-chip'
-import { CcStateBadge } from './cc-state-badge'
+import { SessionStateBadge, showsLiveDot } from './session-state-badge'
 import {
   capabilities,
   controlLevel,
@@ -63,6 +56,7 @@ import {
 } from './provenance'
 import type { SessionTarget } from './session-target'
 import type { SessionResolution } from './use-session-resolution'
+import { RunActions } from './run-actions'
 import { SessionTimeline } from './timeline'
 import type { Attribution, LiveDTO } from './types'
 import './i18n'
@@ -218,12 +212,11 @@ function CardBody({
           </span>
         </SheetTitle>
         <SheetDescription className="flex flex-wrap items-center gap-2">
-          {live && <CcStateBadge state={live.cc_state} />}
-          {run && <RunStateBadge state={run.state} />}
+          <SessionStateBadge run={run} live={live} />
           {live && isScopedRow(live) && (
             <AttributionChip attribution={live.attribution} />
           )}
-          {live && <LiveDot status={streamStatus} />}
+          {showsLiveDot(run, live) && <LiveDot status={streamStatus} />}
         </SheetDescription>
       </SheetHeader>
 
@@ -522,6 +515,7 @@ const CAP_ICON = {
   watch: Eye,
   attach: Radio,
   drive: Terminal,
+  interrupt: CirclePause,
   stop: Square,
   resume: Play,
   cleanup: Disc3,
@@ -596,135 +590,6 @@ function ControlBlock({
         </p>
       )}
     </section>
-  )
-}
-
-/** The real lifecycle controls, driven by the SAME capability model shown above, so a
- * button can never appear that the block just said was unavailable. */
-function RunActions({
-  run,
-  caps,
-  onClose,
-}: {
-  run?: RunDTO
-  caps: Capability[]
-  onClose: () => void
-}) {
-  const { t } = useTranslation('sessions')
-  const { activeTenant } = useAuth()
-  const qc = useQueryClient()
-  const [confirm, setConfirm] = useState<null | 'cleanup' | 'delete'>(null)
-
-  const invalidate = () => {
-    void qc.invalidateQueries({ queryKey: agentOpsKeys.all(activeTenant) })
-    void qc.invalidateQueries({ queryKey: sessionsKeys.all(activeTenant) })
-  }
-  const onErr = (err: unknown) =>
-    toast.error(err instanceof ApiError ? err.message : t('card.actionFailed'))
-
-  const stop = useMutation({
-    mutationFn: () => agentOpsApi.stop(run?.run_ref as string),
-    onSuccess: invalidate,
-    onError: onErr,
-  })
-  const resume = useMutation({
-    mutationFn: () => agentOpsApi.resume(run?.run_ref as string),
-    onSuccess: invalidate,
-    onError: onErr,
-  })
-  const cleanup = useMutation({
-    mutationFn: () => agentOpsApi.cleanup(run?.run_ref as string),
-    onSuccess: () => {
-      setConfirm(null)
-      invalidate()
-    },
-    onError: onErr,
-  })
-  const del = useMutation({
-    mutationFn: () => agentOpsApi.deleteRun(run?.run_ref as string),
-    onSuccess: () => {
-      setConfirm(null)
-      invalidate()
-      onClose()
-    },
-    onError: onErr,
-  })
-
-  const allow = (id: Capability['id']) =>
-    caps.some((c) => c.id === id && c.available)
-  if (!run) return null
-  if (
-    !allow('stop') &&
-    !allow('resume') &&
-    !allow('cleanup') &&
-    !allow('delete')
-  )
-    return null
-
-  return (
-    <div className="flex flex-wrap items-center gap-2">
-      {allow('stop') && (
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => stop.mutate()}
-          disabled={stop.isPending}
-        >
-          <Square className="size-3.5" />
-          {t('card.actions.stop')}
-        </Button>
-      )}
-      {allow('resume') && (
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => resume.mutate()}
-          disabled={resume.isPending}
-        >
-          <Play className="size-3.5" />
-          {t('card.actions.resume')}
-        </Button>
-      )}
-      {allow('cleanup') && (
-        <Button
-          variant="secondary"
-          size="sm"
-          onClick={() => setConfirm('cleanup')}
-        >
-          <Disc3 className="size-3.5" />
-          {t('card.actions.cleanup')}
-        </Button>
-      )}
-      {allow('delete') && (
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => setConfirm('delete')}
-        >
-          <Trash2 className="size-3.5" />
-          {t('card.actions.delete')}
-        </Button>
-      )}
-      <ConfirmDialog
-        open={confirm === 'cleanup'}
-        onOpenChange={(o) => !o && setConfirm(null)}
-        title={t('card.actions.cleanup')}
-        description={t('card.actions.cleanupHint')}
-        confirmLabel={t('card.actions.cleanup')}
-        pending={cleanup.isPending}
-        onConfirm={() => cleanup.mutate()}
-      />
-      <ConfirmDialog
-        open={confirm === 'delete'}
-        onOpenChange={(o) => !o && setConfirm(null)}
-        tone="danger"
-        title={t('card.actions.delete')}
-        description={t('card.actions.deleteHint')}
-        confirmLabel={t('card.actions.delete')}
-        pending={del.isPending}
-        onConfirm={() => del.mutate()}
-      />
-    </div>
   )
 }
 

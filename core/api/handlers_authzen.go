@@ -15,6 +15,7 @@ import (
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/sdk"
 )
 
 // the OpenID AuthZEN Authorization API 1.0 surface: a conformant WIRE
@@ -399,7 +400,7 @@ func (s *Server) handleAuthzenSearchSubject(w http.ResponseWriter, r *http.Reque
 	}
 	for i := offset; i < end; i++ {
 		p := cands[i]
-		if s.authz.Authorize(r.Context(), auth.Request{Principal: p, Permission: perm, Tenant: tenant, Resource: res}).Allow {
+		if s.authorizeAndRetain(r.Context(), auth.Request{Principal: p, Permission: perm, Tenant: tenant, Resource: res, Purpose: sdk.PurposeCurrentWhatIf}).Allow {
 			t, id := authzenSubjectRef(p)
 			results = append(results, azEntityResult{Type: t, ID: id})
 		}
@@ -498,7 +499,7 @@ func (s *Server) handleAuthzenSearchResource(w http.ResponseWriter, r *http.Requ
 	results := []azEntityResult{}
 	for _, id := range ids {
 		res := auth.ResourceAttrs{Kind: kind, ID: id.String()}
-		if s.authz.Authorize(r.Context(), auth.Request{Principal: p, Permission: perm, Tenant: tenant, Resource: res}).Allow {
+		if s.authorizeAndRetain(r.Context(), auth.Request{Principal: p, Permission: perm, Tenant: tenant, Resource: res, Purpose: sdk.PurposeCurrentWhatIf}).Allow {
 			results = append(results, azEntityResult{Type: kind, ID: id.String()})
 		}
 	}
@@ -551,7 +552,7 @@ func (s *Server) handleAuthzenSearchAction(w http.ResponseWriter, r *http.Reques
 		res := authzenResource(*in.Resource)
 		for _, verb := range []string{auth.VerbRead, auth.VerbWrite, auth.VerbAdmin} {
 			perm := auth.Permission(res.Kind + ":" + verb)
-			if s.authz.Authorize(r.Context(), auth.Request{Principal: p, Permission: perm, Tenant: tenant, Resource: res}).Allow {
+			if s.authorizeAndRetain(r.Context(), auth.Request{Principal: p, Permission: perm, Tenant: tenant, Resource: res, Purpose: sdk.PurposeCurrentWhatIf}).Allow {
 				results = append(results, azEntityResult{Name: string(perm)})
 			}
 		}
@@ -592,7 +593,7 @@ func (s *Server) authzenDecide(ctx context.Context, tenant model.TenantID, subj 
 		// the wording does not claim "not found" so it stays honest in the error case.
 		return azDecision{Decision: false, Context: azContext{"reason": "subject could not be resolved (deny-closed)", "aal": aal}}
 	}
-	d := s.authz.Authorize(ctx, auth.Request{Principal: p, Permission: perm, Tenant: tenant, Resource: authzenResource(res)})
+	d := s.authorizeAndRetain(ctx, auth.Request{Principal: p, Permission: perm, Tenant: tenant, Resource: authzenResource(res)})
 	// `reason` is the Authorizer's NON-SENSITIVE reason (authorizer.go: it never leaks
 	// which other tenant/resource exists); `aal` surfaces the assurance evaluated at so
 	// a caller sees that evaluation is conservative (AAL1) vs a review's maximal (AAL3).
@@ -601,6 +602,16 @@ func (s *Server) authzenDecide(ctx context.Context, tenant model.TenantID, subj 
 
 // resolveSubjectCached resolves a subject once per (type,id,assurance) and caches it.
 // A store error is treated as unresolved (deny-closed) and logged — it never caches.
+// authorizeAndRetain runs outside store callbacks. Flush each completed question
+// so AuthZEN batches, searches and access reviews do not overflow the request buffer.
+func (s *Server) authorizeAndRetain(ctx context.Context, req auth.Request) auth.Decision {
+	d := s.authz.Authorize(ctx, req)
+	if flush, ok := ctx.Value(authorizationRecordingKey{}).(func()); ok {
+		flush()
+	}
+	return d
+}
+
 func (s *Server) resolveSubjectCached(ctx context.Context, cache authzenSubjectCache, subj azSubject, aal int) (auth.Principal, bool) {
 	key := subj.Type + "\x00" + subj.ID + "\x00" + strconv.Itoa(aal)
 	if e, hit := cache[key]; hit {

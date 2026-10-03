@@ -22,6 +22,7 @@ func newSecretsHarness(t *testing.T) *harness {
 
 func TestSecretsConsoleLifecycle(t *testing.T) {
 	h := newSecretsHarness(t)
+	h.requirePasskeyStepUp()
 	admin := h.adminLogin()
 
 	// GET (superadmin, no AAL3 for a read) before any secret.
@@ -131,6 +132,9 @@ func TestSecretsTenantScopeDoesNotGrantGlobalAuthority(t *testing.T) {
 	foreign := h.createOrg(root, "mcp-secrets-foreign")
 	admin := h.mkMember(root, "mcp-secret-admin@test.io", "fixturepass1", auth.RoleAdmin, tenant)
 	viewer := h.mkMember(root, "mcp-secret-viewer@test.io", "fixturepass1", auth.RoleViewer, tenant)
+	// The AAL1 refusal below is the passkey step-up's (the default policy asks for none);
+	// members are added first because adding a person asks for the same step-up.
+	h.requirePasskeyStepUp()
 	path := "/v1/console/secrets?scope=tenant"
 	body := map[string]any{"name": "mcp/example", "value": "Bearer fixture-tenant-only"}
 	if got := h.do("PUT", path, admin, body, tenantHdr(tenant)); got.code != 403 {
@@ -166,5 +170,32 @@ func TestSecretsTenantScopeDoesNotGrantGlobalAuthority(t *testing.T) {
 	}
 	if got := h.do("GET", "/v1/console/secrets?scope=unknown", admin, nil, tenantHdr(tenant)); got.code != 400 {
 		t.Fatalf("unknown scope=%d", got.code)
+	}
+}
+
+// Design FH 016: the tenant scope also holds the secrets sessions receive as
+// environment variables (env/…), managed by the same tenant administrator. Every
+// other tenant namespace (provider records under an internal design note (not shipped)) stays out.
+func TestSecretsTenantScopeHoldsSessionEnvSecrets(t *testing.T) {
+	h := newSecretsHarness(t)
+	root := h.adminLogin()
+	tenant := h.createOrg(root, "env-secrets")
+	admin := h.mkMember(root, "env-secret-admin@test.io", "fixturepass1", auth.RoleAdmin, tenant)
+	h.elevate(admin)
+	path := "/v1/console/secrets?scope=tenant"
+	put := h.do("PUT", path, admin, map[string]any{"name": "env/github", "value": "ghp_fixture_not_a_token_0123"}, tenantHdr(tenant))
+	if put.code != 200 {
+		t.Fatalf("env/ put=%d %s", put.code, put.raw)
+	}
+	if got := h.do("PUT", path, admin, map[string]any{"name": "sessions/provider/x", "value": "v-0123456789"}, tenantHdr(tenant)); got.code != 400 {
+		t.Fatalf("provider namespace put=%d, want 400", got.code)
+	}
+	listed := h.do("GET", path, admin, nil, tenantHdr(tenant))
+	items, _ := listed.body["secrets"].([]any)
+	if listed.code != 200 || len(items) != 1 || items[0].(map[string]any)["name"] != "env/github" {
+		t.Fatalf("tenant list=%d %s", listed.code, listed.raw)
+	}
+	if _, leaked := items[0].(map[string]any)["value"]; leaked {
+		t.Fatal("secret value returned")
 	}
 }

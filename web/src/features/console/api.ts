@@ -169,8 +169,21 @@ function ssoConfigPath(scope?: string, alias?: string): string {
     : base
 }
 
+/** Which asserted values count as MFA for a provider (ID, core/model/federation.go). A
+ * null list uses the protocol's default rule; an empty list trusts no value; a list trusts
+ * exactly those values. Federated MFA is AAL2 at most: it never satisfies AAL3. */
+export interface AssuranceMapping {
+  amr: string[] | null
+  acr: string[] | null
+  saml_contexts: string[] | null
+}
+
 export interface SSOConfigDTO {
   configured: boolean
+  /** The administrator's name for this provider, shown on the sign-in button. */
+  display_name?: string
+  /** Absent or null: the protocol defaults. */
+  assurance_mapping?: AssuranceMapping | null
   provider_available: boolean
   protocol?: string
   status?: string
@@ -232,6 +245,10 @@ export interface SSOConfigDTO {
 export interface SSOConfigInput {
   protocol: string
   enabled: boolean
+  /** Omitted keeps the stored name; "" restores "Single sign-on". 80 characters at most. */
+  display_name?: string
+  /** Omitted keeps the stored mapping; three null lists restore the protocol defaults. */
+  assurance_mapping?: AssuranceMapping
   oidc_issuer?: string
   oidc_client_id?: string
   oidc_client_secret?: string
@@ -853,6 +870,8 @@ export interface ActivationStatusDTO {
   edition: string
   preset?: string
   restart_required: boolean
+  /** The engine is restarting itself to apply the change; the console reconnects. */
+  restarting?: boolean
   addons: ActivationAddonDTO[]
   presets: ActivationPresetDTO[]
 }
@@ -1069,8 +1088,8 @@ export async function fetchSupportBundle(): Promise<FetchedSupportBundle> {
   const tenant = useTenantStore.getState().activeTenant
   await ensureFreshSession()
   const headers = new Headers({ Accept: 'application/octet-stream' })
-  const token = useSessionStore.getState().token
-  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const token = useSessionStore.getState().csrfToken
+  if (token) headers.set('X-CSRF-Token', token)
   if (tenant) headers.set('X-Olivares-Tenant', tenant)
 
   let response: Response

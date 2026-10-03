@@ -1,14 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { useModuleName } from '@/features/settings/module-names'
 import { useRouterState } from '@tanstack/react-router'
 import type { ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
+import { EmptyState } from '@/components/ui/empty-state'
 import { ForbiddenState } from '@/components/ui/error-state'
 import { Spinner } from '@/components/ui/spinner'
 import { useRouteAccess } from '@/features/navigation/authorization'
 import { PermittedVisit } from '@/features/navigation/permitted-visit'
 import type { FeatureView } from '@/features/registry'
+import { moduleOfView, useModuleEnabled } from '@/stores/modules'
+import { ModuleEnableAction } from '@/components/layout/query-error-state'
 // ⛔ THE MODULE THAT TRANSLATES REGISTERS ITS NAMESPACE. This gate renders four
 //    `communications:capability.*` sentences and never loaded their bundle, so in a chunk
 //    that had not already pulled the feature in they resolved to raw dotted keys — the
@@ -52,6 +56,7 @@ export function RequirePermission({
 }) {
   const search = useRouterState({ select: (s) => s.location.searchStr })
   const access = useRouteAccess(view, search)
+  const moduleOn = useModuleEnabled()(view.permission, view.id)
   // ⛔ ONE POSITION, ALWAYS THE SAME ONE, AND ALWAYS AROUND THE ANSWER THIS GATE ALREADY
   //    DECIDED. A view may declare a continuity boundary (registry `continuity`); it is
   //    mounted here, wrapping `body` below — the protected children when they are
@@ -68,27 +73,52 @@ export function RequirePermission({
   //
   //    A view that declares nothing renders exactly what it rendered before.
   const Continuity = view.continuity
-  const body =
-    access.kind === 'permitted' ? (
-      <>
-        {children}
-        <PermittedVisit id={view.id} />
-      </>
-    ) : access.kind === 'checking' ? (
-      <CheckingNotice />
-    ) : access.kind === 'forbidden' ? (
-      <ForbiddenNotice />
-    ) : access.globalAccount ? (
-      <GlobalAccountNotice />
-    ) : (
-      <NeutralNotice undisclosed={access.kind === 'undisclosed'} />
-    )
+  const body = !moduleOn ? (
+    <NotEnabledNotice module={moduleOfView(view.permission, view.id)} />
+  ) : access.kind === 'permitted' ? (
+    <>
+      {children}
+      <PermittedVisit id={view.id} />
+    </>
+  ) : access.kind === 'checking' ? (
+    <CheckingNotice />
+  ) : access.kind === 'forbidden' ? (
+    <ForbiddenNotice />
+  ) : access.globalAccount ? (
+    <GlobalAccountNotice />
+  ) : (
+    <NeutralNotice undisclosed={access.kind === 'undisclosed'} />
+  )
   return Continuity ? (
     <Continuity admitted={access.kind === 'permitted'} access={access.observed}>
       {body}
     </Continuity>
   ) : (
     body
+  )
+}
+
+/** The view's engine module is switched off on this installation (ARCH C1): a plain
+ * statement, never an error and never a refusal. */
+function NotEnabledNotice({ module }: { module?: string }) {
+  const { t } = useTranslation('errors')
+  const name = useModuleName(module)
+  return (
+    <div
+      data-slot="module-not-enabled"
+      className="flex min-h-[60vh] items-center justify-center"
+    >
+      <EmptyState
+        title={
+          name
+            ? t('moduleNotEnabled.named', { module: name })
+            : t('moduleNotEnabled.title')
+        }
+        description={t('moduleNotEnabled.description')}
+        // An administrator turns it on from here (EU): the same selection and restart.
+        action={<ModuleEnableAction module={module} />}
+      />
+    </div>
   )
 }
 

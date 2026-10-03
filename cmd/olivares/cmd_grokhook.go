@@ -59,7 +59,7 @@ func newGrokHookCmd() *cobra.Command {
 	var resolveServer func() string
 	cmd := &cobra.Command{
 		Use:   "grok-hook",
-		Short: "Governed PEP hook client for Grok Build: forward a Grok hook to the control plane and relay the decision (deny-closed)",
+		Short: "Governed PEP hook client for Grok Build: forward a Grok hook to the engine and relay the decision (deny-closed)",
 		Long: "grok-hook is the managed Grok Build hook command.\n" +
 			"It reads the hook payload from stdin, forwards it to the governed PEP and writes the\n" +
 			"decision in the shape THAT EVENT honors: a pre_tool_use deny is a decision body with\n" +

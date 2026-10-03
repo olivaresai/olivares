@@ -36,11 +36,10 @@ import { useScrollEdges } from '@/lib/hooks/use-scroll-edges'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { EmptyState } from '@/components/ui/empty-state'
-import { StepUpRequiredState } from '@/components/layout/step-up-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { ApiError, NetworkError, isEvidenceUnavailable } from '@/lib/api/errors'
+import { isEvidenceUnavailable } from '@/lib/api/errors'
 import { DENSITY_ROW, usePreferencesStore } from '@/stores/preferences'
 
 /**
@@ -1022,65 +1021,17 @@ function TableError({
   unavailableTitle?: string
   unavailableDescription?: string
 }) {
-  const { t } = useTranslation('errors')
-  // ⛔ ASEGURAMIENTO ANTES QUE ROL, y aquí importa más que en ningún otro sitio: esta tabla
-  // la comparten 52 ficheros y 87 usos productivos —de los que 45 pasan `error`, que son los
-  // que pueden llegar aquí—, así que la rama de abajo decidía por TODA la
-  // consola. `ApiError.isForbidden` es SÓLO el status (lib/api/errors.ts:59) y
-  // `isStepUpRequired` es el código (:77): un `step_up_required` satisface los dos, de modo
-  // que leyendo el status primero cualquier tabla que el motor refuse por aseguramiento
-  // acusaba al operador de no tener un permiso que SÍ tiene, y sin salida. La costura es la
-  // misma que ya usa la lectura de _intel/async.tsx:55-62.
-  if (error instanceof ApiError && error.isStepUpRequired) {
-    return <StepUpRequiredState action="generic" onElevated={onRetry} />
-  }
-  if (
-    error instanceof ApiError &&
-    error.isForbidden &&
-    error.code === 'tenant_admission_required'
-  ) {
-    return (
-      <ForbiddenState
-        title={t('tenantAdmission.title')}
-        description={t('tenantAdmission.description')}
-      />
-    )
-  }
-  // A 403 is NOT a failure — it's a permission boundary. Render it calmly, never red.
-  if (error instanceof ApiError && error.isForbidden) {
-    return (
-      <ForbiddenState
-        title={t('forbidden.title')}
-        description={t('forbidden.description')}
-      />
-    )
-  }
-  // Typed unknown: the engine could not look. Bound to the code, never to 503.
-  if (isEvidenceUnavailable(error)) {
-    return (
-      <ErrorState
-        title={unavailableTitle ?? t('evidenceUnavailable.title')}
-        description={
-          unavailableDescription ?? t('evidenceUnavailable.description')
-        }
-        retry={onRetry}
-        requestId={error.requestId}
-      />
-    )
-  }
-  const isNetwork = error instanceof NetworkError
+  // The one mapping (components/layout/query-error-state.tsx), shared with AsyncSection and
+  // every query-backed panel: step-up before role, tenant admission, 403, a module that is
+  // off, then the failure with Retry and its X-Request-ID. A table only words its own
+  // "could not look".
+  const unknown = isEvidenceUnavailable(error)
   return (
-    <ErrorState
-      title={isNetwork ? t('network.title') : t('serverError.title')}
-      description={
-        isNetwork ? t('network.description') : t('serverError.description')
-      }
+    <QueryErrorState
+      error={error}
       retry={onRetry}
-      // ⛔ EL SEGUNDO CAMINO DEL ERROR, y me lo perdí al medir. `AsyncSection` cubre 31 vistas;
-      //    ÉSTE cubre 36 — la mitad más grande. Lo destapó una prueba de extremo a extremo sobre
-      //    `/catalog`, que no monta `AsyncSection`: el 500 traía su `X-Request-ID` y la pantalla
-      //    no lo enseñaba. Un error de red no trae id, y aquí tampoco se inventa ninguno.
-      requestId={error instanceof ApiError ? error.requestId : undefined}
+      title={unknown ? unavailableTitle : undefined}
+      description={unknown ? unavailableDescription : undefined}
     />
   )
 }

@@ -140,6 +140,7 @@ func (d *claudeHookDecider) publishDecisionSignal(ctx context.Context, tenant mo
 	}
 	pctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), claudePublishTimeout)
 	defer cancel()
+	in = d.retainedHookInput(pctx, in)
 	if edge, ok := claudeEdgeFor(in, allowed, d.clock()); ok {
 		d.publishHookObs(pctx, tenant, edge)
 	}

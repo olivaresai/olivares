@@ -15,6 +15,7 @@ import { join, resolve } from 'node:path'
 import i18n from 'i18next'
 import { describe, expect, it } from 'vitest'
 import { LANGUAGE_CODES } from '@/lib/i18n'
+import { FEATURE_EXTENSIONS } from '@/features/extensions'
 import {
   FEATURE_VIEWS,
   NAV_AREAS,
@@ -48,6 +49,7 @@ const RATIFIED: Record<string, [AreaId, string] | 'root'> = {
   providerBindings: ['ai', 'environments'],
   providerAccounts: ['ai', 'environments'],
   'agent-tools': ['ai', 'environments'],
+  mcpServers: ['ai', 'environments'],
   'workspace-templates': ['ai', 'environments'],
   models: ['ai', 'models'],
   modelOps: ['ai', 'models'],
@@ -115,9 +117,12 @@ const allow = permissionGate(() => true)
 const deny = permissionGate(() => false)
 
 describe('route map — every route sits where root ratified it', () => {
-  it('places every registered view exactly as ratified, and knows no other', () => {
+  it('keeps every Community placement exact while extensions add views', () => {
     const actual: Record<string, [string, string] | 'root'> = {}
+    const extensionIds = new Set(FEATURE_EXTENSIONS.map((view) => view.id))
     for (const v of FEATURE_VIEWS) {
+      // Extensions may add views; they cannot move or replace a Community pin.
+      if (extensionIds.has(v.id)) continue
       actual[v.id] =
         v.navigation.kind === 'root'
           ? 'root'
@@ -211,9 +216,10 @@ describe('directory descriptions (regression)', () => {
 
   it('describes every listed view in every language', () => {
     for (const lng of LANGUAGE_CODES) {
-      const d = nav(lng).descriptions
       const missing = FEATURE_VIEWS.filter(
-        (v) => !v.hideInNav && !(d[v.id] ?? '').trim(),
+        (v) =>
+          !v.hideInNav &&
+          !(i18n.getResource(lng, 'nav', `descriptions.${v.id}`) ?? '').trim(),
       ).map((v) => v.id)
       expect(missing, lng).toEqual([])
     }
@@ -266,9 +272,9 @@ describe('resolveLocation and the trail', () => {
   it('builds the trails the proposal names, ancestors linked and the page not', () => {
     const labels = (path: string) =>
       breadcrumbTrail(t, resolveLocation(path)).map((c) => [c.label, c.to])
-    expect(labels('/')).toEqual([['Overview', undefined]])
+    expect(labels('/')).toEqual([['Now', undefined]])
     expect(labels('/areas/ai')).toEqual([
-      ['Overview', '/'],
+      ['Now', '/'],
       ['AI', undefined],
     ])
     expect(labels('/agentops')).toEqual([

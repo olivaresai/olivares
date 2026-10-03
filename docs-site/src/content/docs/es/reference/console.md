@@ -58,14 +58,14 @@ Seguridad e identidad, Despliegue, Observabilidad y evidencias, y Sistema y ajus
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-La consola publica **80 rutas**. Todas figuran en las tablas siguientes, con el permiso que
+La consola publica **81 rutas**. Todas figuran en las tablas siguientes, con el permiso que
 requieren y la página de referencia que abre su enlace de ayuda dentro del producto.
 
 ### Operar
 
 | Pantalla | Ruta | Qué es | Requiere | Referencia |
 |---|---|---|---|---|
-| Resumen | `/` | Visión general del estado y la salud del estate | cualquier usuario autenticado | [inicio de la documentación](/es/) |
+| Inicio | `/` | Visión general del estado y la salud del estate | cualquier usuario autenticado | [inicio de la documentación](/es/) |
 | Herramientas de agentes | `/agent-tools` | Detecta, instala y actualiza las herramientas de agentes en este host y sigue cada instalación; solo para administradores del despliegue | `system:admin` | [how-to/add-a-provider](/es/how-to/add-a-provider/) |
 | Operar sesiones | `/agentops` | Crea, adjunta y gobierna sesiones de Claude Code — sin SSH; comparte pantalla con Observar sesiones | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/es/how-to/run-claude-code-with-olivares/) |
 | Copias de seguridad | `/backups` | Inicia, programa, descarga y restaura copias de seguridad, con una segunda confirmación en la vía destructiva. | `system:admin` | [how-to/backup-and-restore](/es/how-to/backup-and-restore/) |
@@ -86,7 +86,7 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Observar sesiones | `/sessions` | Observa sesiones vivas y descubiertas con sus cronologías; comparte pantalla con Operar sesiones | `sessions:live:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Tenants | `/tenants` | Retira o restaura el servicio de un tenant | `system:admin` | [how-to/troubleshooting](/es/how-to/troubleshooting/) |
 | Voz | `/voice` | Sesiones de voz y tiempo real | `voice:session:read` | [reference/modules/xvi-voice](/es/reference/modules/xvi-voice/) |
-| Trabajo | `/work` | El backlog duradero entre sesiones: elementos, dependencias, aceptación y decisiones | `sessions:work:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
+| Trabajo | `/work` | Trabajo compartido: unidades, dependencias, aceptación y decisiones | `sessions:work:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 | Espacio de trabajo | `/workspace` | Agentes, sesiones, recursos y actividad con scope de un espacio de trabajo | `tenant:read` | [reference/modules/xx-multi-tenancy](/es/reference/modules/xx-multi-tenancy/) |
 | Plantillas de workspace | `/workspace-templates` | Snapshots reutilizables de configuración de sesión: hooks, settings, connectors y policies. | `sessions:template:read` | [reference/modules/ii-sessions](/es/reference/modules/ii-sessions/) |
 
@@ -111,6 +111,7 @@ requieren y la página de referencia que abre su enlace de ayuda dentro del prod
 | Publicación Git | `/git-publication` | Publicar commits, abrir pull requests y fusionar mediante destinos Git aprobados | `gitpublish:target:read` | [reference/modules/gitpublish](/es/reference/modules/gitpublish/) |
 | Inventario | `/inventory` | Descubre y cataloga los agentes, servidores MCP y modelos que los conectores observaron. | `inventory:catalog:read` | [reference/modules/i-inventory](/es/reference/modules/i-inventory/) |
 | Conocimiento | `/knowledge` | Bases de conocimiento, RAG y linaje de datos | `knowledge:kb:read` | [reference/modules/viii-knowledge](/es/reference/modules/viii-knowledge/) |
+| Servidores MCP | `/mcp-servers` | Conecta servidores MCP remotos a esta organización, pruébalos y elige qué herramientas pueden usar las sesiones | `tenant:admin` | [how-to/connectors/mcp-governance](/es/how-to/connectors/mcp-governance/) |
 | Operaciones de modelos | `/model-operations` | Modelos propios, admisión y despliegues | `models:registry:read` | [reference/modules/xxiii-model-operations](/es/reference/modules/xxiii-model-operations/) |
 | Modelos | `/models` | Modelos, enrutado y claves de proveedor | `models:catalog:read` | [reference/modules/x-models](/es/reference/modules/x-models/) |
 | Asistente de configuración | `/onboarding` | Configuración del despliegue paso a paso | `system:admin` | [start/quickstart](/es/start/quickstart/) |

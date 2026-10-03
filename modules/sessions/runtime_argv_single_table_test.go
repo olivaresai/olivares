@@ -107,7 +107,7 @@ func TestUnknownTransportStillLaunchesTheGovernedForm(t *testing.T) {
 	p.Transport = Transport("not-a-transport")
 	spec := m.buildLaunchSpec(p, Credential{}, WorkSessionCredential{}, CommunicationSessionCredential{},
 		"", nil, nil, nil)
-	if !argvHasFlag(spec.Args, "--print") || !argvHasFlag(spec.Args, "--input-format") {
+	if !argvHasFlag(spec.Args, "--print") || !argvHasFlag(spec.Args, "--input-format") || !argvHasFlag(spec.Args, "--replay-user-messages") {
 		t.Fatalf("an unrecognized transport produced an argv with no governed form flag: %v", spec.Args)
 	}
 	if argvHasFlag(spec.Args, "--remote-control") {

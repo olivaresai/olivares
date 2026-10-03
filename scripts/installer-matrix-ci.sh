@@ -33,7 +33,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 [[ -n "$family" ]] || { usage >&2; exit 2; }
-[[ "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+[[ "$release_version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || {
 	printf 'installer-matrix: invalid release version: %s\n' "$release_version" >&2
 	exit 2
 }
@@ -319,4 +319,8 @@ bash "$lib" redacted "$all_log" "$secret_value"
 bash "$lib" redacted "$MATRIX_ENGINE_LOG" "$secret_value"
 bash "$lib" no-sudo "$sudo_sentinel"
 bash "$lib" binary "$installed" "$(id -u)"
-printf 'installer-matrix: LIVE OK — %s, public v%s + candidate service/doctor\n' "$family" "$release_version"
+# The core journey on the installed candidate: a session in a folder to a reply, a stop and
+# a resume, with a protocol stub as the agent CLI; on Linux the session process must also be
+# denied the engine data directory (scripts/session-journey-smoke.sh says what it measured).
+bash "$root/scripts/session-journey-smoke.sh" --binary "$installed" --label "$family" 2>&1 | tee -a "$all_log"
+printf 'installer-matrix: LIVE OK — %s, public v%s + candidate service/doctor + session journey\n' "$family" "$release_version"

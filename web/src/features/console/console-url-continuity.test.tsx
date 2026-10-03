@@ -38,6 +38,9 @@ vi.mock('./bindings-tab', () => ({
 vi.mock('./secrets-tab', () => ({
   SecretsTab: () => <div>SecretsTab mounted</div>,
 }))
+vi.mock('./mcp-gateway-tab', () => ({
+  MCPGatewayTab: () => <div>MCPGatewayTab mounted</div>,
+}))
 vi.mock('./connectors-tab', () => ({
   ConnectorsTab: () => <div>ConnectorsTab mounted</div>,
 }))
@@ -61,6 +64,7 @@ const ALL_TABS = [
   ['roles', 'RolesTab mounted'],
   ['bindings', 'BindingsTab mounted'],
   ['secrets', 'SecretsTab mounted'],
+  ['mcpGateway', 'MCPGatewayTab mounted'],
   ['connectors', 'ConnectorsTab mounted'],
   ['wsConnectors', 'WorkspaceConnectorsTab mounted'],
   ['apiKeys', 'ApiKeysTab mounted'],
@@ -133,7 +137,7 @@ describe('ConsoleView — mounted URL continuity (real router)', () => {
   it('follows PUSH ?tab=people then ?tab=license while still mounted; Back/Forward match', async () => {
     const router = await mount(['/console?tab=roles'])
     expect(screen.getByText('RolesTab mounted')).toBeInTheDocument()
-    expect(screen.getAllByRole('tab')).toHaveLength(11)
+    expect(screen.getAllByRole('tab')).toHaveLength(12)
 
     let done = rendered(router, '/console', 'tab=people')
     await act(async () => {
@@ -245,7 +249,7 @@ describe('ConsoleView — mounted URL continuity (real router)', () => {
     expect(loc.hash === '#panel-x' || loc.hash === 'panel-x').toBe(true)
     // Cleanup is a replace: staying on /console, not bouncing through another entry.
     expect(loc.pathname).toBe('/console')
-    expect(screen.getAllByRole('tab')).toHaveLength(11)
+    expect(screen.getAllByRole('tab')).toHaveLength(12)
   })
 
   it.each(ALL_TABS)(
@@ -262,7 +266,7 @@ describe('ConsoleView — mounted URL continuity (real router)', () => {
         await done
       })
       expect(screen.getByText(mounted)).toBeInTheDocument()
-      expect(screen.getAllByRole('tab')).toHaveLength(11)
+      expect(screen.getAllByRole('tab')).toHaveLength(12)
     },
   )
 })

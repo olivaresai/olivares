@@ -293,6 +293,17 @@ rm -f "$R/PUBLIC-EXPORT.md"
 expect_says "F10d a non-export tree without the subject reports the D-2 exception STALE" \
 	"$R" "$GATE" "named licence debt D-2 whose subject no longer exists"
 
+# ------------------------------------------ F11 REUSE sidecars carry the companion licence
+R="$(mkrepo sidecar)" || exit 2
+printf '{}\n' >"$R/web/config.json"
+printf 'SPDX-FileCopyrightText: 2026 Olivares.AI\nSPDX-License-Identifier: AGPL-3.0-only\n' >"$R/web/config.json.license"
+expect_silent "F11 a REUSE sidecar is classified" "$R" "$GATE" "UNCLASSIFIED web/config.json.license"
+expect_silent "F11a the companion's licence is accepted" "$R" "$GATE" "MISMATCH web/config.json.license"
+printf 'SPDX-License-Identifier: LicenseRef-Olivares-Commercial\n' >"$R/web/config.json.license"
+expect_says "F11b a wrong companion licence is rejected" "$R" "$GATE" "MISMATCH web/config.json.license"
+printf 'SPDX-FileCopyrightText: 2026 Olivares.AI\n' >"$R/web/config.json.license"
+expect_says "F11c a sidecar without a licence identifier is rejected" "$R" "$GATE" "MISSING  web/config.json.license"
+
 # ================================ MUTANTS =================================================
 # Each names the witness that kills it. A witness that could be killed by another mutant is
 # not a witness, so they are deliberately different legs.

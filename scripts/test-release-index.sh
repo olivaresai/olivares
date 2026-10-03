@@ -22,7 +22,7 @@ W="$(mktemp -d "${TMPDIR:-/tmp}/test-release-index.XXXXXX")" || blind "cannot cr
 trap 'rm -rf "$W"' EXIT
 DIST="$W/dist"
 mkdir -p "$DIST"
-VER=26.9.0
+VER="${OLIVARES_INDEX_TEST_VERSION:-26.11}"
 COMMIT=0123456789abcdef0123456789abcdef01234567
 IMAGE_DIGEST=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 printf '%s\n' "$COMMIT" >"$W/release-commit.txt"

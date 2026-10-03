@@ -2,7 +2,7 @@
 title: Homebrew でインストール
 description: >-
   Olivares AI の macOS Homebrew cask 座標、cask が Gatekeeper に対して行うこと、および
-  26.10.0 の tap bump の公開状態。
+  26.10.1 の tap bump の公開状態。
 draft: false
 ---
 
@@ -13,7 +13,7 @@ Linux パッケージ経路
 （[Docker でデプロイ](/how-to/docker-deployment/)）でもありません。
 
 :::note[ベータ — 26.10 の cask は公開済み]
-tap の `Casks/olivares.rb` は 2026-10-01 に 26.10 向けに更新されました。バージョン 26.10.0 と、
+tap の `Casks/olivares.rb` は 2026-10-01 に 26.10 向けに更新されました。バージョン 26.10.1 と、
 SHA-256 がリリースの署名済み `checksums.txt` と一致する 4 つのプラットフォーム向けアーカイブを示しています。プロデューサーは
 `.goreleaser.yaml` `homebrew_casks:` で、tap の cask はリリースジョブが上げます。下のコマンドは
 `INSTALL.md` が名付ける座標です（`brew install olivaresai/tap/olivares`）。

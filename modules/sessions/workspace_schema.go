@@ -42,11 +42,11 @@ const (
 	mountRO = "ro"
 )
 
-// DLP read postures (2026-06-16: label+audit default, hard-deny opt-in).
+// DLP read postures. Folder registration defaults to off (Root, 2026-10-01).
 const (
-	dlpLabel = "label" // classify + label + audit, always return (default)
+	dlpLabel = "label" // classify + label + audit, always return
 	dlpDeny  = "deny"  // deny-closed: a classified-sensitive read fails without a grant
-	dlpOff   = "off"   // no classification
+	dlpOff   = "off"   // no classification (default for an unlabeled folder)
 )
 
 // Workspace lifecycle states.

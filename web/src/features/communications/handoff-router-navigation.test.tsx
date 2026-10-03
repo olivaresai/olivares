@@ -132,7 +132,7 @@ beforeEach(() => {
     activeWorkspaceName: 'Billing',
   })
   useSessionStore.setState({
-    token: 'test-session',
+    csrfToken: 'test-session',
     sessionId: 'sid',
     expiresAt: '2030-01-01T00:00:00Z',
   })

@@ -2,7 +2,7 @@
 title: 使用 Homebrew 安装
 description: >-
   Olivares AI 的 macOS Homebrew cask 坐标、cask 对 Gatekeeper 的处理，以及
-  26.10.0 tap 提升的发布状态。
+  26.10.1 tap 提升的发布状态。
 draft: false
 ---
 
@@ -12,7 +12,7 @@ draft: false
 （[用 Docker 部署](/how-to/docker-deployment/)）。
 
 :::note[测试版 — 26.10 cask 已发布]
-tap 的 `Casks/olivares.rb` 已于 2026-10-01 为 26.10 更新：它标明版本 26.10.0，以及四个平台归档，
+tap 的 `Casks/olivares.rb` 已于 2026-10-01 为 26.10 更新：它标明版本 26.10.1，以及四个平台归档，
 其 SHA-256 与该发布签名的 `checksums.txt` 一致。生产者是 `.goreleaser.yaml` `homebrew_casks:`；tap 的 cask
 由发布作业提升。下面的命令是 `INSTALL.md` 命名的坐标（`brew install olivaresai/tap/olivares`）。
 :::

@@ -1,7 +1,8 @@
 {
-  "title": "Overview",
-  "description": "Your AI estate at a glance — 30-day aggregates across the modules your role can open.",
+  "title": "Now",
+  "description": "What your AI agents did in the last 30 days, in the areas you can open.",
   "openReport": "Executive report",
+  "aside": "Estate summary",
   "range": "last 30 days",
   "next": {
     "title": "Next step",
@@ -60,6 +61,17 @@
       "value": "{{healthy}}/{{total}} healthy",
       "caption": "{{breaches}} SLA breaches · {{incidents}} open incidents",
       "noChecks": "No health checks yet"
+    },
+    "budgets": {
+      "label": "Budgets",
+      "none": "No budgets yet",
+      "nonePartial": "None enabled on this page; there are more",
+      "over_one": "{{count}} over limit",
+      "over_other": "{{count}} over limit",
+      "unknown_one": "{{count}} amount unknown",
+      "unknown_other": "{{count}} amount unknown",
+      "within": "None over limit",
+      "partial": "Loaded {{n}} budgets; there are more"
     }
   },
   "state": {
@@ -78,5 +90,13 @@
   "empty": {
     "title": "Nothing to show yet",
     "description": "Your role doesn't grant read access to any estate module. Ask an administrator for a read grant to see the overview."
+  },
+  "start": {
+    "ready": "{{tool}} is ready.",
+    "signIn": "Sign {{tool}} in to start a session.",
+    "signInAction": "Sign in",
+    "install": "Install Claude Code or Codex to start a session.",
+    "installAction": "Set up a tool",
+    "newSession": "New session"
   }
 }

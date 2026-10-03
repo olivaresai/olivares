@@ -120,6 +120,11 @@ func TestLaunchTerms_DeclarationMatchesWhatTheLaunchCarries(t *testing.T) {
 					AuthSource: AuthSourceAccountHome,
 				},
 			}
+			if tc.driver != providerDriverClaude {
+				// Native tools translate a valid preset; an invented Claude enum
+				// cannot prove that translation. Model/effort retain unique probes.
+				p.PermissionMode = "plan"
+			}
 			spec, frames := launchTermsLaunch(t, m, p, tc.answer)
 
 			for _, term := range []struct {
@@ -132,6 +137,14 @@ func TestLaunchTerms_DeclarationMatchesWhatTheLaunchCarries(t *testing.T) {
 				{"permission mode", terms.PermissionMode, p.PermissionMode},
 			} {
 				where, found := launchTermsFind(spec, frames, term.value)
+				if term.name == "permission mode" && tc.driver != providerDriverClaude {
+					readOnly := nativeLaunchPermission(t, tc.driver, spec, frames)
+					p.PermissionMode = "default"
+					askSpec, askFrames := launchTermsLaunch(t, m, p, tc.answer)
+					ask := nativeLaunchPermission(t, tc.driver, askSpec, askFrames)
+					found = readOnly != "" && ask != "" && readOnly != ask
+					where = "translated native permission controls"
+				}
 				switch term.declared {
 				case TermCarried:
 					if !found {
@@ -154,11 +167,11 @@ func TestLaunchTerms_DeclarationMatchesWhatTheLaunchCarries(t *testing.T) {
 			case ModelDiscoveryBoundCredentialProbe:
 				// The probe lists the models of the provider record a profile binds, so
 				// a driver discovers them this way only if a record can be bound to it.
-				// An openai_compatible record serves every driver by construction and
-				// proves nothing about this one, so it is not asked.
+				// An openai_compatible record is not a named vendor kind and proves
+				// nothing about this one, so it is not asked.
 				served := false
 				for _, kind := range []string{ProviderKindAnthropic, ProviderKindOpenAI, ProviderKindXAI} {
-					served = served || recordServesDriver(kind, tc.driver)
+					served = served || recordServesDriver(kind, "", tc.driver)
 				}
 				if !served {
 					t.Errorf("%s declares model discovery %q, but no provider record of a named kind can be bound to it",
@@ -603,4 +616,31 @@ func launchTermsOpenCodeOptions(model, effort string) []any {
 			},
 		},
 	}
+}
+
+// Extract the actual native control, independently of the preset mapper.
+func nativeLaunchPermission(t *testing.T, driver string, spec LaunchSpec, frames []launchTermsFrame) string {
+	t.Helper()
+	if driver == providerDriverCodex {
+		for _, frame := range frames {
+			if frame.method == codexMethodThreadStart {
+				params := frame.body.(map[string]any)["params"].(map[string]any)
+				return fmt.Sprint(params["sandbox"], "/", params["approvalPolicy"])
+			}
+		}
+	}
+	for _, item := range spec.Env {
+		if driver == providerDriverGrok && item.Name == "GROK_SANDBOX" {
+			return item.Value
+		}
+		if driver == providerDriverOpenCode && item.Name == envOpenCodeConfigContent {
+			var cfg map[string]any
+			if err := json.Unmarshal([]byte(item.Value), &cfg); err != nil {
+				t.Fatal(err)
+			}
+			rules, _ := cfg["permission"].(map[string]any)
+			return fmt.Sprint(rules["bash"], "/", rules["edit"])
+		}
+	}
+	return ""
 }

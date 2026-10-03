@@ -26,7 +26,8 @@
     "docs": "ドキュメント",
     "enabled": "有効",
     "unset": "未設定",
-    "listPlaceholder": "カンマ区切りの値"
+    "listPlaceholder": "カンマ区切りの値",
+    "objectListInvalid": "オブジェクトの JSON リストを入力してください。例: [{\"source\": \"github\", \"repo\": \"your-org/*\"}]"
   },
   "panel": {
     "guided": "ガイド付き",

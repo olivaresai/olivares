@@ -8,7 +8,7 @@ draft: false
 ---
 
 :::note[已发布的软件包名称]
-GitHub 的 26.10.0 发行发布 `amd64` 与 `arm64` 的 `.deb`、`.rpm` 和 `.apk`，并附带
+GitHub 的 26.10.1 发行发布 `amd64` 与 `arm64` 的 `.deb`、`.rpm` 和 `.apk`，并附带
 `checksums.txt`、`checksums.txt.sig` 和 `checksums.txt.pem`。下面的命令使用该发行的字面
 `amd64` 名称；在 64 位 ARM 主机上将 `amd64` 换成 `arm64`。请从这些已验证的发行产物安装。
 源码树中的仓库元数据生成器不是本指南的安装说明。
@@ -60,13 +60,13 @@ Sigstore 信任根材料，尚未缓存时由 cosign 获取。`--offline` 只去
 
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_26.10.0_linux_amd64.deb
+sudo dpkg -i olivares_26.10.1_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_26.10.0_linux_amd64.rpm
+sudo rpm -Uvh olivares_26.10.1_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_26.10.0_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk
 ```
 
 安装会 **创建系统用户和组 `olivares`**（shell 为 `/usr/sbin/nologin`，家目录为

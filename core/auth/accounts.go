@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/mail"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -28,6 +29,10 @@ var (
 	ErrCoordinationUnavailable = errors.New("auth: coordination unavailable")
 	// ErrWeakPassword means a password is shorter than the minimum length.
 	ErrWeakPassword = errors.New("auth: password too short")
+	// ErrInvalidEmail refuses an address that cannot identify a bare mailbox.
+	ErrInvalidEmail = errors.New("Enter a valid email address.")
+	// ErrAccountExists reports a native account collision without storage details.
+	ErrAccountExists = errors.New("An account with that email already exists in this organization.")
 	// ErrInvalidRole means a role name is not a built-in role.
 	ErrInvalidRole = errors.New("auth: invalid role")
 	// ErrInvalidToken means a token specification is internally inconsistent
@@ -45,10 +50,10 @@ var (
 	ErrWorkspaceConfined = errors.New("auth: a workspace-confined principal cannot perform this tenant-wide action")
 )
 
-// checkRoleCeiling enforces that a non-superadmin actor may not grant/mint a role
-// that outranks its own role in tenant. A superadmin (the system role) is exempt.
+// checkRoleCeiling refuses roles above the actor's role in the target tenant.
+// Only an account-wide superadmin is exempt; tenant entry carries the owner role.
 func checkRoleCeiling(actor Principal, tenant model.TenantID, role string) error {
-	if actor.Superadmin {
+	if actor.Superadmin && actor.SessionScope().IsZero() {
 		return nil
 	}
 	actorRole, ok := actor.RoleIn(tenant)
@@ -167,6 +172,9 @@ func (a *Authenticator) BootstrapSuperadmin(ctx context.Context, email, password
 // its id here (the auth partition holds no cross-tenant foreign key, so this
 // method does not — and cannot — verify the org row exists).
 func (a *Authenticator) BootstrapSuperadminOwning(ctx context.Context, email, password string, tenant model.TenantID) (model.User, model.Membership, error) {
+	if err := ValidateEmail(email); err != nil {
+		return model.User{}, model.Membership{}, err
+	}
 	if len(password) < MinPasswordLen {
 		return model.User{}, model.Membership{}, ErrWeakPassword
 	}
@@ -268,6 +276,9 @@ func (a *Authenticator) CreateUser(ctx context.Context, actor Principal, in NewU
 // set, grants its first membership in the same transaction. The deployment
 // created the account, so its credentials are the deployment's.
 func (a *Authenticator) CreateUserWithMembership(ctx context.Context, actor Principal, in NewUser) (model.User, model.Membership, error) {
+	if err := ValidateEmail(in.Email); err != nil {
+		return model.User{}, model.Membership{}, err
+	}
 	if in.Password != "" && len(in.Password) < MinPasswordLen {
 		return model.User{}, model.Membership{}, ErrWeakPassword
 	}
@@ -307,6 +318,9 @@ func (a *Authenticator) CreateUserWithMembership(ctx context.Context, actor Prin
 			CredentialCustody: model.CustodyDeployment,
 		})
 		if err != nil {
+			if errors.Is(err, store.ErrConflict) {
+				return ErrAccountExists
+			}
 			return err
 		}
 		out = u
@@ -323,6 +337,18 @@ func (a *Authenticator) CreateUserWithMembership(ctx context.Context, actor Prin
 		return model.User{}, model.Membership{}, err
 	}
 	return out, mem, nil
+}
+
+// ValidateEmail accepts a bare mailbox after the existing account normalization.
+// Internal domains remain valid; display names, address lists and malformed
+// mailboxes cannot become native login identifiers. It does not check delivery.
+func ValidateEmail(email string) error {
+	email = normalizeEmail(email)
+	address, err := mail.ParseAddress(email)
+	if err != nil || address.Name != "" || address.Address != email {
+		return ErrInvalidEmail
+	}
+	return nil
 }
 
 // SetPassword sets a user's password (admin reset or self-service), re-hashing
@@ -459,7 +485,7 @@ func (a *Authenticator) IssueToken(ctx context.Context, actor Principal, spec To
 			return "", model.APIToken{}, fmt.Errorf("%w: superadmin token must be unbound", ErrInvalidToken)
 		}
 		// Only a superadmin may mint a superadmin (system-role) token.
-		if !actor.Superadmin {
+		if !actor.Superadmin || !actor.SessionScope().IsZero() {
 			return "", model.APIToken{}, ErrRoleCeiling
 		}
 	} else {

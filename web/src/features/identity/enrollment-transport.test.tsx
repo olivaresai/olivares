@@ -86,11 +86,14 @@ beforeEach(() => {
   unauthorized.mockReset()
   refresh.mockReset().mockResolvedValue(true)
   useTenantStore.setState({ activeTenant: 't1' })
-  useSessionStore
-    .getState()
-    .setSession({ token: 'fixture-one', sessionId: 'fixture', expiresAt: '' })
+  useSessionStore.getState().setSession({
+    csrfToken: 'fixture-one',
+    sessionId: 'fixture',
+    expiresAt: '',
+  })
   configureApiClient({
-    getToken: () => useSessionStore.getState().token,
+    getToken: () => null,
+    getCSRFToken: () => useSessionStore.getState().csrfToken,
     getTenant: () => useTenantStore.getState().activeTenant,
     getExpiresAt: () => expires,
     refreshSession: refresh,
@@ -135,7 +138,7 @@ describe('owned ceremony transport reuses actual dispatch and session isolation'
       const result = call(attempt).catch((err: unknown) => err)
       expect(fetch).toHaveBeenCalledTimes(1)
       useSessionStore.getState().setSession({
-        token: 'fixture-two',
+        csrfToken: 'fixture-two',
         sessionId: 'fixture',
         expiresAt: '',
       })
@@ -143,7 +146,7 @@ describe('owned ceremony transport reuses actual dispatch and session isolation'
       expect(await result).toMatchObject({ name: 'AbortError' })
       expect(refresh).not.toHaveBeenCalled()
       expect(unauthorized).not.toHaveBeenCalled()
-      expect(useSessionStore.getState().token).toBe('fixture-two')
+      expect(useSessionStore.getState().csrfToken).toBe('fixture-two')
       expect(fetch).toHaveBeenCalledTimes(1)
     })
   }
@@ -158,9 +161,11 @@ describe('owned ceremony transport reuses actual dispatch and session isolation'
     const attempt = owner().begin()
     const result = identityApi.pivElevate(attempt).catch((err: unknown) => err)
     await Promise.resolve()
-    useSessionStore
-      .getState()
-      .setSession({ token: 'fixture-two', sessionId: 'fixture', expiresAt: '' })
+    useSessionStore.getState().setSession({
+      csrfToken: 'fixture-two',
+      sessionId: 'fixture',
+      expiresAt: '',
+    })
     body.resolve(JSON.stringify({ error: { code: 'unauthenticated' } }))
     expect(await result).toMatchObject({ name: 'AbortError' })
     expect(unauthorized).not.toHaveBeenCalled()
@@ -225,9 +230,7 @@ describe('owned ceremony transport reuses actual dispatch and session isolation'
     }
     await identityApi.webauthnRegister({ id: 'fixture' }, 'Laptop', opts)
     const [, init] = vi.mocked(fetch).mock.calls[0]
-    expect(new Headers(init?.headers).get('Authorization')).toBe(
-      'Bearer fixture-one',
-    )
+    expect(new Headers(init?.headers).get('X-CSRF-Token')).toBe('fixture-one')
     expect(new Headers(init?.headers).get('X-Olivares-Tenant')).toBe('t1')
     expect(JSON.parse(String(init?.body))).toEqual({
       credential: { id: 'fixture' },

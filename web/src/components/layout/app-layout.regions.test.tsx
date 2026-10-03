@@ -25,15 +25,54 @@
 // the regions.
 import { render, screen } from '@testing-library/react'
 import type { ComponentProps, ReactNode } from 'react'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const auth = vi.hoisted(() => ({ status: 'authenticated' }))
+// The router's LIVE location and its last COMMITTED one. A pending redirect moves
+// the first; the second decides where sign-in returns to, and the first only before the
+// router has committed any location.
+const router = vi.hoisted(() => ({
+  live: '/audit?from=2026-09-30#entry-7',
+  // undefined until the router commits its first location.
+  committed: '/audit?from=2026-09-30#entry-7' as string | undefined,
+  navigate: vi.fn(),
+}))
+const routerInstance = vi.hoisted(() => ({
+  get state() {
+    return {
+      location: { href: router.live },
+      resolvedLocation:
+        router.committed === undefined ? undefined : { href: router.committed },
+    }
+  },
+}))
+const server = vi.hoisted(() => ({ setupRequired: false, pending: false }))
+beforeEach(() => {
+  auth.status = 'authenticated'
+  router.live = router.committed = '/audit?from=2026-09-30#entry-7'
+  router.navigate.mockReset()
+  server.setupRequired = false
+  server.pending = false
+})
 
 vi.mock('@tanstack/react-router', () => ({
   useRouterState: ({
     select,
   }: {
-    select: (s: { location: { pathname: string } }) => unknown
-  }) => select({ location: { pathname: '/audit' } }),
-  Navigate: ({ to }: { to: string }) => <div data-testid="redirect">{to}</div>,
+    select: (s: {
+      location: { pathname: string; href: string }
+      resolvedLocation: { href: string } | undefined
+    }) => unknown
+  }) =>
+    select({
+      location: { pathname: router.live.split(/[?#]/)[0], href: router.live },
+      resolvedLocation:
+        router.committed === undefined ? undefined : { href: router.committed },
+    }),
+  useNavigate: () => router.navigate,
+  // The guard reads the requested page from the router's state in its effect. One
+  // router instance, as the real hook returns.
+  useRouter: () => routerInstance,
   Outlet: () => <div data-testid="routed-content">routed content</div>,
   Link: ({ children, to, ...props }: ComponentProps<'a'> & { to?: string }) => (
     <a href={to} {...props}>
@@ -43,7 +82,13 @@ vi.mock('@tanstack/react-router', () => ({
 }))
 
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ status: 'authenticated' }),
+  useAuth: () => auth,
+}))
+vi.mock('@/lib/hooks/use-server-info', () => ({
+  useServerInfo: () =>
+    server.pending
+      ? { isPending: true, data: undefined }
+      : { isPending: false, data: { setup_required: server.setupRequired } },
 }))
 
 vi.mock('./app-sidebar', () => ({
@@ -62,6 +107,8 @@ vi.mock('./command-menu', () => ({
   CommandMenu: () => <div data-testid="palette" />,
 }))
 vi.mock('./shortcuts', () => ({ GlobalShortcuts: () => null }))
+// The destination's section row is its own unit (registry.shell-destinations.test.tsx).
+vi.mock('./destination-sections', () => ({ DestinationSections: () => null }))
 vi.mock('./tenant-gate', () => ({
   TenantGate: ({ children }: { children: ReactNode }) => <>{children}</>,
 }))
@@ -143,5 +190,91 @@ describe('the shell has three regions and nothing else', () => {
     // No padding and no max width: the frame is the ROUTE's choice (page-frames.tsx),
     // and a shell that imposed one made every route a document.
     expect(main.className).not.toMatch(/\b(p|px|py|max-w)-/)
+  })
+})
+
+it('carries the requested page to sign-in before mounting private content', () => {
+  auth.status = 'anonymous'
+  render(<AppLayout />)
+  expect(router.navigate).toHaveBeenCalledTimes(1)
+  expect(router.navigate).toHaveBeenCalledWith({
+    to: '/login',
+    search: { returnTo: '/audit?from=2026-09-30#entry-7' },
+    replace: true,
+  })
+  expect(screen.queryByTestId('routed-content')).not.toBeInTheDocument()
+})
+
+// Refresh 02 froze every signed-out browser on its first page (HU 016): the guard read
+// the LIVE location, its own pending redirect moved it, and each re-render redirected
+// again with a longer returnTo. It now navigates once per signed-out state.
+it('redirects once, whatever the pending navigation does to the live location', () => {
+  auth.status = 'anonymous'
+  const { rerender } = render(<AppLayout />)
+  for (let i = 0; i < 5; i++) {
+    router.live = `/login?returnTo=${encodeURIComponent(router.live)}`
+    rerender(<AppLayout />)
+  }
+  expect(router.navigate).toHaveBeenCalledTimes(1)
+})
+
+// RC10 (SC on 6e97de81): a signed-out deep link reached /login with no returnTo and the
+// person landed on Home after signing in. The signed-out answer came before the router
+// committed its first location, and only the committed one was read.
+it('returns a deep link to its page when the router has not committed a location yet', () => {
+  auth.status = 'anonymous'
+  router.committed = undefined
+  router.live = '/settings?tab=appearance#appearance'
+  render(<AppLayout />)
+  expect(router.navigate).toHaveBeenCalledTimes(1)
+  expect(router.navigate).toHaveBeenCalledWith({
+    to: '/login',
+    search: { returnTo: '/settings?tab=appearance#appearance' },
+    replace: true,
+  })
+})
+
+it('still redirects once when the live location moves before the first commit', () => {
+  auth.status = 'anonymous'
+  router.committed = undefined
+  router.live = '/settings?tab=appearance#appearance'
+  const { rerender } = render(<AppLayout />)
+  for (let i = 0; i < 5; i++) {
+    router.live = `/login?returnTo=${encodeURIComponent(router.live)}`
+    rerender(<AppLayout />)
+  }
+  expect(router.navigate).toHaveBeenCalledTimes(1)
+  expect(router.navigate).toHaveBeenCalledWith({
+    to: '/login',
+    search: { returnTo: '/settings?tab=appearance#appearance' },
+    replace: true,
+  })
+})
+
+it('sends a first boot straight to the setup wizard, once', () => {
+  auth.status = 'anonymous'
+  server.setupRequired = true
+  const { rerender } = render(<AppLayout />)
+  rerender(<AppLayout />)
+  expect(router.navigate).toHaveBeenCalledTimes(1)
+  expect(router.navigate).toHaveBeenCalledWith({ to: '/setup', replace: true })
+  expect(screen.queryByTestId('routed-content')).not.toBeInTheDocument()
+})
+
+it('waits for the server to say whether setup is needed before deciding', () => {
+  auth.status = 'anonymous'
+  server.pending = true
+  render(<AppLayout />)
+  expect(router.navigate).not.toHaveBeenCalled()
+})
+
+it('never sends sign-in back to a sign-in page', () => {
+  auth.status = 'anonymous'
+  router.live = router.committed = '/login?returnTo=%2Faudit'
+  render(<AppLayout />)
+  expect(router.navigate).toHaveBeenCalledWith({
+    to: '/login',
+    search: {},
+    replace: true,
   })
 })

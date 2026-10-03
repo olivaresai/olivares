@@ -4,13 +4,17 @@
 package modelprovider
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 // Doer is the minimal HTTP capability a connector needs to read a provider API.
@@ -76,6 +80,15 @@ func NewClient(base string, doer Doer, scheme AuthScheme, cred string, headers m
 // maxErrBody bounds how much of an error response body is read for diagnostics.
 const maxErrBody = 2 << 10 // 2 KiB
 
+// maxJSONBody bounds complete metadata pages and liveness bodies to 16 MiB,
+// matching the shared directory client. Existing catalog/usage fixtures fit this
+// bound; no endpoint exception is currently needed. Inference/batch downloads
+// have their own limits and do not use this read-only client.
+const maxJSONBody = 16 << 20
+
+// ErrResponseTooLarge identifies a provider response that exceeded its byte bound.
+var ErrResponseTooLarge = errors.New("modelprovider: JSON response exceeds 16 MiB")
+
 // maxTextBody bounds a GetText body (a /metrics exposition can be large but not
 // unbounded — protect memory against a hostile or runaway endpoint).
 const maxTextBody = 4 << 20 // 4 MiB
@@ -92,7 +105,7 @@ func (c *Client) GetJSON(ctx context.Context, path string, query url.Values, out
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return fmt.Errorf("modelprovider: build request %s: %w", path, err)
+		return fmt.Errorf("modelprovider: build request %s: %w", redactURL(path), redactTransportError(err))
 	}
 	req.Header.Set("Accept", "application/json")
 	for k, v := range c.headers {
@@ -102,23 +115,36 @@ func (c *Client) GetJSON(ctx context.Context, path string, query url.Values, out
 
 	resp, err := c.doer.Do(req)
 	if err != nil {
-		return fmt.Errorf("modelprovider: GET %s: %w", path, err)
+		return fmt.Errorf("modelprovider: GET %s: %w", redactURL(path), redactTransportError(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrBody))
+		excerpt := redact.ReadHTTPError(resp.Body, maxErrBody, req, c.cred)
 		// Typed *APIError so a caller can route on the status (403 vs 404 vs 5xx) without
 		// substring-matching a string that includes a server-controlled body excerpt. Its
-		// Error() is byte-identical to the prior fmt.Errorf, so string-matching callers and
-		// existing tests are unaffected.
-		return &APIError{Method: http.MethodGet, Path: path, Status: resp.StatusCode, Body: strings.TrimSpace(string(excerpt))}
+		// Safe provider reasons retain their spelling; reflected secrets are masked.
+		return &APIError{Method: http.MethodGet, Path: path, Status: resp.StatusCode, Body: excerpt}
 	}
+	limited := io.LimitReader(resp.Body, maxJSONBody+1)
 	if out == nil {
-		_, _ = io.Copy(io.Discard, resp.Body)
+		n, err := io.Copy(io.Discard, limited)
+		if n > maxJSONBody {
+			err = errors.Join(ErrResponseTooLarge, err)
+		}
+		if err != nil {
+			return fmt.Errorf("modelprovider: read %s: %w", path, err)
+		}
 		return nil
 	}
-	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
+	raw, err := io.ReadAll(limited)
+	if len(raw) > maxJSONBody {
+		err = errors.Join(ErrResponseTooLarge, err)
+	}
+	if err != nil {
+		return fmt.Errorf("modelprovider: read %s: %w", path, err)
+	}
+	if err := json.NewDecoder(bytes.NewReader(raw)).Decode(out); err != nil {
 		return fmt.Errorf("modelprovider: decode %s: %w", path, err)
 	}
 	return nil
@@ -136,7 +162,7 @@ func (c *Client) GetText(ctx context.Context, path string, query url.Values) (st
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
 	if err != nil {
-		return "", fmt.Errorf("modelprovider: build request %s: %w", path, err)
+		return "", fmt.Errorf("modelprovider: build request %s: %w", redactURL(path), redactTransportError(err))
 	}
 	for k, v := range c.headers {
 		req.Header.Set(k, v)
@@ -145,17 +171,28 @@ func (c *Client) GetText(ctx context.Context, path string, query url.Values) (st
 
 	resp, err := c.doer.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("modelprovider: GET %s: %w", path, err)
+		return "", fmt.Errorf("modelprovider: GET %s: %w", redactURL(path), redactTransportError(err))
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxTextBody))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		// Typed *APIError (Error() is byte-identical to the prior fmt.Errorf) so a caller can
-		// route on the status without substring-matching a server-controlled body excerpt.
-		return "", &APIError{Method: http.MethodGet, Path: path, Status: resp.StatusCode, Body: strings.TrimSpace(string(body))}
+		return "", &APIError{Method: http.MethodGet, Path: path, Status: resp.StatusCode, Body: redact.ReadHTTPError(resp.Body, maxErrBody, req, c.cred)}
 	}
+	body, _ := io.ReadAll(io.LimitReader(resp.Body, maxTextBody))
 	return string(body), nil
+}
+
+// redactTransportError keeps the standard HTTP failure kind and cause while
+// removing confidential URL components. Copy it rather than changing the input.
+func redactTransportError(err error) error {
+	var failure *url.Error
+	if !errors.As(err, &failure) {
+		return err
+	}
+	safe := *failure
+	safe.URL = redactURL(failure.URL)
+	safe.Err = redactTransportError(failure.Err)
+	return &safe
 }
 
 // applyAuth sets the credential header for the configured scheme. It is a no-op

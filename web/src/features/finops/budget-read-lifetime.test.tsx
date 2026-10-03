@@ -101,7 +101,7 @@ it('retires budget content and observers on read withdrawal within the same tena
   )
   // Synthetic session only; no refresh timer or HTTP login in this fixture.
   useSessionStore.setState({
-    token: 'fixture-only-budget-session',
+    csrfToken: 'fixture-only-budget-session',
     sessionId: 'fixture-only-budget-session-id',
     expiresAt: null,
   })

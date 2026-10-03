@@ -79,7 +79,7 @@ chmod 0700 "$scratch"
 
 pacman_key_rel=keys/olivares-pacman-repository.gpg
 pacman_channels=(stable security)
-pacman_object_re='^(stable|security)/pacman/x86_64/(olivares\.(db|files)(\.sig)?|olivares_[0-9]+\.[0-9]+\.[0-9]+_linux_amd64\.pkg\.tar\.zst(\.sig)?)$'
+pacman_object_re='^(stable|security)/pacman/x86_64/(olivares\.(db|files)(\.sig)?|olivares_[0-9]+\.[0-9]+(\.[0-9]+)?_linux_amd64\.pkg\.tar\.zst(\.sig)?)$'
 
 # pacman_key_primaries KEYRING: the primary fingerprints of the keys in KEYRING, one per
 # line, read without importing them anywhere.
@@ -181,7 +181,7 @@ pacman_render() {
 	pacman_fpr="${OLIVARES_PACMAN_SIGNING_FINGERPRINT:-}"
 	[[ "$pacman_packages" == /* && -d "$pacman_packages" && ! -L "$pacman_packages" ]] ||
 		blind '--pacman-packages must be an existing absolute directory'
-	[[ "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || blind '--version must be MAJOR.MINOR.PATCH'
+	[[ "$release_version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || blind '--version must be YY.M or YY.M.N'
 	[[ "$source_date_epoch" =~ ^[0-9]+$ ]] || blind '--source-date-epoch must be a Unix time'
 	if [[ -z "$repo_add" ]]; then repo_add="$(command -v repo-add || true)"; fi
 	[[ "$repo_add" == /* && -x "$repo_add" ]] || blind 'repo-add is not an absolute executable'

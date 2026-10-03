@@ -9,6 +9,8 @@
 // remain Console-only, so the panel VISUALISES + LINTS + shows drift — NO create/edit, at
 // most a deep link to the Anthropic Console. Viewing it is a privileged, audited action
 // gated at AAL3.
+import { useModuleOn } from '@/stores/modules'
+import { ModuleGate } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import {
   CircleAlert,
@@ -19,12 +21,7 @@ import {
 } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
-import {
-  AsyncSection,
-  SectionCard,
-  SelfAuditNotice,
-  SeverityBadge,
-} from '@/features/_intel'
+import { AsyncSection, SectionCard, SeverityBadge } from '@/features/_intel'
 import { SigmaGraph } from '@/features/shared'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -50,7 +47,10 @@ export function WifGraphTab() {
   const { t } = useTranslation('identity')
   return (
     <RequireAssurance minAal={AAL.HARDWARE} action="wif">
-      <WifGraphContent />
+      {/* The WIF graph is the identity module's (EU18). */}
+      <ModuleGate module="identity">
+        <WifGraphContent />
+      </ModuleGate>
       <p className="sr-only">{t('wif.gatedNote')}</p>
     </RequireAssurance>
   )
@@ -59,6 +59,8 @@ export function WifGraphTab() {
 function WifGraphContent() {
   const { t } = useTranslation(['identity', 'common'])
   const { activeTenant } = useAuth()
+  // The footgun finding is the security module's; without it the banner has nothing to say.
+  const securityOn = useModuleOn('security')
 
   // REAL: the key-shadow footgun is emitted as a governance Finding on the
   // anthropic.federation subject (it shows TODAY, independent of the WIF graph).
@@ -69,6 +71,7 @@ function WifGraphContent() {
         kind: 'governance',
         subject_kind: 'anthropic.federation',
       }),
+    enabled: securityOn,
     retry: false,
   })
   // LIVE (flip): the rich WIF objects (CEL/lifetime/scope) the linter renders over,
@@ -103,8 +106,6 @@ function WifGraphContent() {
 
   return (
     <div className="flex flex-col gap-6">
-      <SelfAuditNotice />
-
       {/* Console-only writes: VISUALISE/LINT/reconcile, never CRUD. */}
       <div
         className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-muted/30 px-3 py-2"

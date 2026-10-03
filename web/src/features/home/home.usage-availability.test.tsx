@@ -262,23 +262,20 @@ describe('HomeView usage tiles — one source not established', () => {
     expect(live).not.toHaveBeenCalled()
   })
 
-  it('both valid and genuinely empty: real zeros on both tiles', async () => {
+  // Changed, stated (HU2-25): a valid empty answer drew "0" tiles; Now draws no tile for
+  // it. It is still an answer: no pending reason, and the region says figures came.
+  it('both valid and genuinely empty: no tile, no pending reason', async () => {
     live.mockResolvedValue(EMPTY_PAGE)
     summary.mockResolvedValue(EMPTY_INVENTORY)
 
     renderIntel(<HomeView />)
     await waitFor(() =>
-      expect(within(tile('Inventory')).getByText('0')).toBeInTheDocument(),
+      expect(liveRegion()).toHaveTextContent(INITIAL_ANNOUNCEMENT),
     )
-    await waitFor(() =>
-      expect(within(tile('Live sessions')).getByText('0')).toBeInTheDocument(),
-    )
-    expect(
-      within(tile('Inventory')).getByText('0 agents · 0 active'),
-    ).toBeInTheDocument()
-    expect(
-      within(tile('Live sessions')).getByText('0 idle now'),
-    ).toBeInTheDocument()
+    await waitFor(() => expect(screen.queryByText('Inventory')).toBeNull())
+    expect(screen.queryByText('Live sessions')).toBeNull()
+    expect(screen.queryByTestId('home-inventory-pending-reason')).toBeNull()
+    expect(screen.queryByTestId('home-sessions-pending-reason')).toBeNull()
   })
 })
 
@@ -335,10 +332,10 @@ describe('HomeView usage tiles — leaving a successful state', () => {
     )
     expect(within(tile('Live sessions')).queryByText('3')).toBeNull()
 
+    // Changed, stated (HU2-25): the new tenant's empty page draws no tile (it was a 0).
     pending.resolve(EMPTY_PAGE)
-    await waitFor(() =>
-      expect(within(tile('Live sessions')).getByText('0')).toBeInTheDocument(),
-    )
+    await waitFor(() => expect(screen.queryByText('Live sessions')).toBeNull())
+    expect(screen.queryByText('3')).toBeNull()
   })
 })
 
@@ -405,7 +402,7 @@ describe('HomeView inventory tile — a truncated summary', () => {
     // The scope disclosure is a different statement and stays exactly as accepted.
     expect(
       within(inventory).getByTestId('home-inventory-scope-note'),
-    ).toHaveTextContent('Tenant-wide — not filtered by workspace')
+    ).toHaveTextContent('All workspaces')
     // Sessions is another source, with its own read: it is never marked partial.
     expect(screen.getAllByTestId('home-inventory-partial-note')).toHaveLength(1)
     expect(screen.queryByTestId('home-sessions-partial-details')).toBeNull()
@@ -551,7 +548,7 @@ describe('HomeView sessions tile — a page with more rows', () => {
     // The scope disclosure is a different statement and stays exactly as accepted.
     expect(
       within(sessions).getByTestId('home-sessions-scope-note'),
-    ).toHaveTextContent('Tenant-wide — not filtered by workspace')
+    ).toHaveTextContent('All workspaces')
     // Inventory is another source with its own read: it is never marked by this page.
     expect(within(tile('Inventory')).getByText('25')).toBeInTheDocument()
     expect(screen.queryByTestId('home-inventory-partial-note')).toBeNull()
@@ -721,11 +718,10 @@ describe('HomeView sessions tile — a page with more rows', () => {
     expect(screen.queryByTestId('home-sessions-partial-note')).toBeNull()
     expect(within(tile('Live sessions')).queryByText('3')).toBeNull()
 
-    // The new tenant's own answer is a complete empty page: a real 0, no marker.
+    // The new tenant's own answer is a complete empty page: no marker, and (changed,
+    // stated, HU2-25) no tile, where it was a 0.
     pending.resolve(EMPTY_PAGE)
-    await waitFor(() =>
-      expect(within(tile('Live sessions')).getByText('0')).toBeInTheDocument(),
-    )
+    await waitFor(() => expect(screen.queryByText('Live sessions')).toBeNull())
     expect(screen.queryByTestId('home-sessions-partial-note')).toBeNull()
   })
 })
@@ -764,7 +760,7 @@ describe('HomeView usage tiles — pending reasons (pure flag fixture)', () => {
     expect(screen.queryByTestId('home-sessions-partial-note')).toBeNull()
     expect(
       within(sessions).getByTestId('home-sessions-scope-note'),
-    ).toHaveTextContent('Tenant-wide — not filtered by workspace')
+    ).toHaveTextContent('All workspaces')
     expect(
       within(tile('Inventory')).getByText('4 agents · 3 active'),
     ).toBeInTheDocument()
@@ -873,7 +869,8 @@ describe('HomeView usage tiles — a real pause and resume (QueryClient onlineMa
     )
   })
 
-  it('paused → resumed into an EMPTY page: a real 0, not "—" and not a leftover reason', async () => {
+  // Changed, stated (HU2-25): the empty page drew a 0 tile; it draws no tile now.
+  it('paused → resumed into an EMPTY page: no tile, not "—" and not a leftover reason', async () => {
     const queryClient = createTestQueryClient()
     queryClient.setQueryData(
       inventoryKeys.summary('demo'),
@@ -891,13 +888,8 @@ describe('HomeView usage tiles — a real pause and resume (QueryClient onlineMa
     expect(within(tile('Live sessions')).queryByText('0')).toBeNull()
 
     act(() => onlineManager.setOnline(true))
-    await waitFor(() =>
-      expect(within(tile('Live sessions')).getByText('0')).toBeInTheDocument(),
-    )
+    await waitFor(() => expect(screen.queryByText('Live sessions')).toBeNull())
     expect(screen.queryByTestId('home-sessions-pending-reason')).toBeNull()
-    expect(
-      within(tile('Live sessions')).getByText('0 idle now'),
-    ).toBeInTheDocument()
     expect(screen.queryByTestId('home-sessions-partial-note')).toBeNull()
     expect(liveRegion()).toHaveTextContent(INITIAL_ANNOUNCEMENT)
   })
@@ -1169,7 +1161,8 @@ describe('HomeView usage tiles — tenant and permission transitions while pendi
     expect(liveRegion()).toHaveTextContent(INITIAL_ANNOUNCEMENT)
   })
 
-  it('tenant change while paused: nothing of the previous tenant remains — no figure, no marker, no sentence — and only the new tenant is read when online, with real zeros', async () => {
+  // Changed, stated (HU2-25): the new tenant's empty answers drew 0 tiles; no tile now.
+  it('tenant change while paused: nothing of the previous tenant remains — no figure, no marker, no sentence — and only the new tenant is read when online, empty, so no tile', async () => {
     const queryClient = createTestQueryClient()
     queryClient.setQueryData(inventoryKeys.summary('demo'), TRUNCATED_INVENTORY)
     onlineManager.setOnline(false)
@@ -1207,12 +1200,8 @@ describe('HomeView usage tiles — tenant and permission transitions while pendi
     live.mockResolvedValue(EMPTY_PAGE)
     summary.mockResolvedValue(EMPTY_INVENTORY)
     act(() => onlineManager.setOnline(true))
-    await waitFor(() =>
-      expect(within(tile('Live sessions')).getByText('0')).toBeInTheDocument(),
-    )
-    await waitFor(() =>
-      expect(within(tile('Inventory')).getByText('0')).toBeInTheDocument(),
-    )
+    await waitFor(() => expect(screen.queryByText('Live sessions')).toBeNull())
+    await waitFor(() => expect(screen.queryByText('Inventory')).toBeNull())
     // Sessions: ONE read, for the new tenant. The old tenant's dispatch was PENDING
     // and paused, and query-core cancelled and reverted it when its only observer
     // moved to the new key (`Query.removeObserver`).
@@ -1223,13 +1212,10 @@ describe('HomeView usage tiles — tenant and permission transitions while pendi
     // retry, so the paused refresh completes in the background under the OLD key when
     // the client comes back online. It is a read the role still holds for that tenant,
     // it lands in that tenant's cache entry, and — the point of this case — it is
-    // never shown under the new tenant: the screen has the new tenant's real zeros.
+    // never shown under the new tenant: the screen has the new tenant's empty answer.
     expect(summary).toHaveBeenCalledTimes(2)
     expect(screen.queryByText('25')).toBeNull()
     expect(screen.queryByTestId('home-inventory-partial-note')).toBeNull()
-    expect(
-      within(tile('Inventory')).getByText('0 agents · 0 active'),
-    ).toBeInTheDocument()
     expect(screen.queryByTestId('home-inventory-pending-reason')).toBeNull()
     expect(screen.queryByTestId('home-sessions-pending-reason')).toBeNull()
     expect(liveRegion()).toHaveTextContent(INITIAL_ANNOUNCEMENT)

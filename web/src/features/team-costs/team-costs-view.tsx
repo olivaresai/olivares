@@ -13,6 +13,7 @@
 // expanded-rows set deliberately is NOT — it holds literal team names and the
 // DTO carries no opaque id, so serialising it would leak the org chart into the
 // address bar, browser history and any link store on the way.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronDown, ChevronRight, DollarSign, Download } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -20,7 +21,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { PageHeader } from '@/components/ui/page-header'
 import { Skeleton } from '@/components/ui/skeleton'
 import { SavedViewsMenu } from '@/features/saved-views'
@@ -224,7 +225,10 @@ export function TeamCostsView() {
       ) : query.error instanceof ApiError && query.error.isForbidden ? (
         <ForbiddenState />
       ) : query.error ? (
-        <ErrorState retry={() => void query.refetch()} />
+        <QueryErrorState
+          error={query.error}
+          retry={() => void query.refetch()}
+        />
       ) : teams.length === 0 ? (
         <EmptyState
           icon={<DollarSign />}

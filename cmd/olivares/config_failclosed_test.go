@@ -40,9 +40,10 @@ func TestOperatorConfigLoadersFailClosed(t *testing.T) {
 		{name: "Claude Files", envName: "OLIVARES_CLAUDE_FILES_CONFIG", load: func() (any, error) {
 			return loadClaudeFilesConfig(log)
 		}, empty: zero(claudeFilesConfig{})},
+		// The built-in hook listener binds an ephemeral loopback port without a config file.
 		{name: "hook PEP", envName: "OLIVARES_HOOK_PEP_CONFIG", load: func() (any, error) {
 			return loadHookPEPConfig(log)
-		}, empty: zero(hookPEPConfig{})},
+		}, empty: zero(hookPEPConfig{Listen: "127.0.0.1:0"})},
 		{name: "deploy executor", envName: "OLIVARES_DEPLOY_EXECUTOR_CONFIG", load: func() (any, error) {
 			return loadDeployExecutorConfig(log)
 		}, empty: zero(deployExecutorConfig{})},

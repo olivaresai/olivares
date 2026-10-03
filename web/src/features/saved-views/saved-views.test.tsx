@@ -197,34 +197,58 @@ describe('SavedViewsMenu', () => {
       ['an editor', { activeRole: 'editor' }, false],
       ['a tenant-wide admin', { activeRole: 'admin' }, true],
       ['a tenant-wide owner', { activeRole: 'owner' }, true],
-      ['a workspace-CONFINED admin', { activeRole: 'admin', confinedWorkspace: 'ws-payments' }, false],
-      ['a workspace-CONFINED owner', { activeRole: 'owner', confinedWorkspace: 'ws-payments' }, false],
+      [
+        'a workspace-CONFINED admin',
+        { activeRole: 'admin', confinedWorkspace: 'ws-payments' },
+        false,
+      ],
+      [
+        'a workspace-CONFINED owner',
+        { activeRole: 'owner', confinedWorkspace: 'ws-payments' },
+        false,
+      ],
       // A superadmin is never confined server-side, so the flag wins whatever else says.
-      ['a superadmin, even confined', { activeRole: 'viewer', confinedWorkspace: 'ws-payments', isSuperadmin: true }, true],
+      [
+        'a superadmin, even confined',
+        {
+          activeRole: 'viewer',
+          confinedWorkspace: 'ws-payments',
+          isSuperadmin: true,
+        },
+        true,
+      ],
     ]
 
-    it.each(cases)('%s is offered Delete: %j -> %s', async (_name, patch, offered) => {
-      Object.assign(auth, patch)
-      api.list.mockResolvedValue({ items: [shared] })
-      wrap(<SavedViewsMenu featureId="audit" params={{}} onApply={() => {}} />)
+    it.each(cases)(
+      '%s is offered Delete: %j -> %s',
+      async (_name, patch, offered) => {
+        Object.assign(auth, patch)
+        api.list.mockResolvedValue({ items: [shared] })
+        wrap(
+          <SavedViewsMenu featureId="audit" params={{}} onApply={() => {}} />,
+        )
 
-      await userEvent.click(
-        await screen.findByRole('button', { name: 'Saved views' }),
-      )
-      // The view itself must render, or the absence of Delete below proves nothing.
-      expect(
-        await screen.findByRole('menuitem', { name: 'Team investigation' }),
-      ).toBeInTheDocument()
-      const del = screen.queryByRole('menuitem', {
-        name: 'Delete saved view Team investigation',
-      })
-      expect(!!del).toBe(offered)
-    })
+        await userEvent.click(
+          await screen.findByRole('button', { name: 'Saved views' }),
+        )
+        // The view itself must render, or the absence of Delete below proves nothing.
+        expect(
+          await screen.findByRole('menuitem', { name: 'Team investigation' }),
+        ).toBeInTheDocument()
+        const del = screen.queryByRole('menuitem', {
+          name: 'Delete saved view Team investigation',
+        })
+        expect(!!del).toBe(offered)
+      },
+    )
 
     it('still offers Delete on MY OWN view to a confined admin', async () => {
       // Confinement removes the tenant-wide override, never ownership. Without this the
       // case above could pass by hiding Delete from everyone.
-      Object.assign(auth, { activeRole: 'admin', confinedWorkspace: 'ws-payments' })
+      Object.assign(auth, {
+        activeRole: 'admin',
+        confinedWorkspace: 'ws-payments',
+      })
       api.list.mockResolvedValue({ items: [mine] })
       wrap(<SavedViewsMenu featureId="audit" params={{}} onApply={() => {}} />)
 

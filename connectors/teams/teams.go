@@ -154,17 +154,18 @@ func (o *Output) Notify(ctx context.Context, n sdk.Notification) error {
 		return fmt.Errorf("teams: render card: %w", err)
 	}
 	res, err := o.client.Send(ctx, delivery.Request{
-		URL:    o.webhookURL,
-		Header: map[string]string{"Content-Type": "application/json"},
-		Body:   body,
+		URL:         o.webhookURL,
+		Header:      map[string]string{"Content-Type": "application/json"},
+		Body:        body,
+		Credentials: []string{o.webhookURL},
 	})
 	if err != nil {
 		// SECURITY: do NOT wrap the delivery error verbatim — for Teams the webhook URL
 		// is itself the secret credential and delivery's error string embeds the request
-		// URL. Surface only the non-sensitive outcome (status, attempt count, bounded
-		// body excerpt) so the webhook secret never reaches a log or the engine.
+		// URL. Surface only status and attempt count. A provider body can reflect
+		// the URL credential in arbitrary encodings and must not reach a log.
 		if res.StatusCode != 0 {
-			return fmt.Errorf("teams: delivery failed after %d attempt(s): status %d: %s", res.Attempts, res.StatusCode, res.Body)
+			return fmt.Errorf("teams: delivery failed after %d attempt(s): status %d", res.Attempts, res.StatusCode)
 		}
 		return fmt.Errorf("teams: delivery failed after %d attempt(s): no response from webhook", res.Attempts)
 	}

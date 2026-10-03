@@ -112,7 +112,9 @@ describe('TemplatesView', () => {
 
     // Open the filter Select and choose 'Built-in'.
     await userEvent.click(screen.getByRole('combobox'))
-    await userEvent.click(await screen.findByRole('option', { name: 'Built-in' }))
+    await userEvent.click(
+      await screen.findByRole('option', { name: 'Built-in' }),
+    )
 
     // The query must be re-issued with builtin: true.
     await waitFor(() =>
@@ -125,7 +127,13 @@ describe('TemplatesView', () => {
 
 describe('TemplateCard', () => {
   it('shows lock icon for built-in', () => {
-    wrap(<TemplateCard template={builtinTemplate} onEdit={vi.fn()} onApply={vi.fn()} />)
+    wrap(
+      <TemplateCard
+        template={builtinTemplate}
+        onEdit={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    )
 
     // The Lock SVG carries aria-label="Built-in" (from t('catalog.builtin')).
     expect(screen.getByLabelText('Built-in')).toBeInTheDocument()
@@ -137,7 +145,13 @@ describe('TemplateCard', () => {
   it('apply asks for confirmation, then opens the launch dialog for this template', async () => {
     const onApply = vi.fn()
     api.apply.mockResolvedValue({ applied: true, conflicts: [] })
-    wrap(<TemplateCard template={customTemplate} onEdit={vi.fn()} onApply={onApply} />)
+    wrap(
+      <TemplateCard
+        template={customTemplate}
+        onEdit={vi.fn()}
+        onApply={onApply}
+      />,
+    )
 
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
     await userEvent.click(
@@ -162,9 +176,17 @@ describe('TemplateCard', () => {
     api.apply.mockResolvedValue({
       applied: false,
       conflicts: [],
-      unenforceable: ['hooks: the session launch does not provision hooks into the child'],
+      unenforceable: [
+        'hooks: the session launch does not provision hooks into the child',
+      ],
     })
-    wrap(<TemplateCard template={customTemplate} onEdit={vi.fn()} onApply={onApply} />)
+    wrap(
+      <TemplateCard
+        template={customTemplate}
+        onEdit={vi.fn()}
+        onApply={onApply}
+      />,
+    )
 
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
     await userEvent.click(
@@ -176,14 +198,22 @@ describe('TemplateCard', () => {
     // The reason is shown, and no launch is offered for a template whose terms the
     // launch would refuse — the operator is not sent to fill in a doomed form.
     await waitFor(() =>
-      expect(toast.error).toHaveBeenCalledWith(expect.stringContaining('hooks')),
+      expect(toast.error).toHaveBeenCalledWith(
+        expect.stringContaining('hooks'),
+      ),
     )
     expect(onApply).not.toHaveBeenCalled()
   })
 
   it('apply failure reports an error toast', async () => {
     api.apply.mockRejectedValue(new Error('boom'))
-    wrap(<TemplateCard template={customTemplate} onEdit={vi.fn()} onApply={vi.fn()} />)
+    wrap(
+      <TemplateCard
+        template={customTemplate}
+        onEdit={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    )
 
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
     await userEvent.click(
@@ -198,7 +228,13 @@ describe('TemplateCard', () => {
 
   it('duplicate creates new template', async () => {
     api.duplicate.mockResolvedValue({ ...customTemplate, id: 'tpl-copy' })
-    wrap(<TemplateCard template={customTemplate} onEdit={vi.fn()} onApply={vi.fn()} />)
+    wrap(
+      <TemplateCard
+        template={customTemplate}
+        onEdit={vi.fn()}
+        onApply={vi.fn()}
+      />,
+    )
 
     // The DropdownMenuTrigger button uses aria-label="Edit".
     await userEvent.click(screen.getByRole('button', { name: 'Edit' }))
@@ -248,5 +284,48 @@ describe('TemplateEditor', () => {
         expect.objectContaining({ name: 'My New Template' }),
       ),
     )
+  })
+
+  it('a template can let its sessions message each other (peers_rule, MC)', async () => {
+    api.create.mockResolvedValue(customTemplate)
+    wrap(<TemplateEditor open={true} onOpenChange={vi.fn()} />)
+    await userEvent.type(
+      screen.getByPlaceholderText('e.g. Secure coding session'),
+      'Peers',
+    )
+    await userEvent.click(
+      screen.getByRole('checkbox', {
+        name: 'Sessions from this template can message each other',
+      }),
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() =>
+      expect(api.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({ peers_rule: 'same-template' }),
+        }),
+      ),
+    )
+  })
+
+  // Design FH 016: a template names vault secrets (env/…) its sessions receive as
+  // environment variables, by name only.
+  it('saves the vault secrets a session receives, by name', async () => {
+    api.create.mockResolvedValue(customTemplate)
+    wrap(<TemplateEditor open={true} onOpenChange={vi.fn()} />)
+    await userEvent.type(
+      screen.getByPlaceholderText('e.g. Secure coding session'),
+      'With GitHub',
+    )
+    await userEvent.type(
+      screen.getByLabelText('Secrets as environment variables'),
+      'GITHUB_TOKEN=env/github, AWS_KEY=env/aws',
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.create).toHaveBeenCalled())
+    expect(api.create.mock.calls[0][0].body.settings.secret_env).toEqual([
+      { env: 'GITHUB_TOKEN', secret: 'env/github' },
+      { env: 'AWS_KEY', secret: 'env/aws' },
+    ])
   })
 })

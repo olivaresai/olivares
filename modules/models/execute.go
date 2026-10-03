@@ -35,6 +35,10 @@ import (
 // maps it to 503 so an un-provisioned control plane actuates nothing.
 var errNoExecutor = errors.New("models: no routing execution backend wired")
 
+// ErrExecutionTargetUnsupported refuses a target the wired executor cannot serve.
+// The handler returns this fixed message without exposing a wrapped transport error.
+var ErrExecutionTargetUnsupported = errors.New("The legacy routing executor supports only Anthropic targets; use a bound execution profile for another provider.")
+
 // ExecuteRequest is what the Executor needs to run one resolved routing decision: the
 // ordered target chain to try (primary first, then fallbacks), the user input, a token
 // bound, and an optional session ref for cost attribution.
@@ -480,6 +484,10 @@ func (m *Module) handleExecuteRouting(w http.ResponseWriter, r *http.Request, mc
 	res, eerr := m.executor.Execute(r.Context(), ExecuteRequest{
 		Tenant: mc.Tenant, Chain: chain, Input: in.Input, MaxTokens: maxTokens, SessionRef: in.SessionRef,
 	})
+	if errors.Is(eerr, ErrExecutionTargetUnsupported) {
+		writeJSON(w, http.StatusUnprocessableEntity, errorBody(ErrExecutionTargetUnsupported.Error()))
+		return
+	}
 	if errors.Is(eerr, errNoExecutor) {
 		writeJSON(w, http.StatusServiceUnavailable, errorBody("routing execution is not configured (deny-closed): no execution backend is wired — the control plane can resolve a routing decision but will not spend against a provider until an executor is provisioned"))
 		return

@@ -1,15 +1,15 @@
 {
-  "title": "Permissions",
-  "subtitle": "Human-in-the-loop approvals, RBAC/ABAC policy, and the identities and agent bindings behind every action.",
+  "title": "Approvals and permissions",
+  "subtitle": "Requests waiting for a person's decision, the rules that allow or deny actions, and who can act.",
   "tabs": {
     "approvals": "Approvals",
     "policies": "Policies",
     "identities": "Identities & groups",
-    "breakGlass": "Break-glass",
+    "breakGlass": "Emergency access",
     "agentRisk": "Agent risk"
   },
   "breakGlass": {
-    "title": "Break-glass emergency access",
+    "title": "Emergency access",
     "caption": "Time-boxed exceptions to dual-control. Every activation, use, revocation and post-review is permanent audit evidence; this surface is for accountability, not convenience.",
     "forbiddenTitle": "Not authorized",
     "forbiddenBody": "You do not have permission to view break-glass grants or their immutable use trails.",
@@ -17,7 +17,7 @@
     "activationStateUnknown": "Activation is unavailable until the console can verify the current grant and review state.",
     "activationBlockedUnreviewed": "A previous grant is still unreviewed. Close it if active, then have a different user account complete its post-review before opening another emergency window.",
     "activationHumanRequired": "A system token cannot activate emergency access. Sign in as a human administrator with a stable identity.",
-    "activationHardwareRequired": "Break-glass activation needs a hardware-verified (AAL3) session. Complete the WebAuthn or PIV step-up from Identity → Privileged login, then return here.",
+    "activationHardwareRequired": "Break-glass needs the extra check this deployment asks for before administrative changes. Complete it, then return here.",
     "currentTitle": "Emergency access now",
     "currentCaption": "Who can bypass dual-control at this moment, for which actions, and until when.",
     "noActive": "No active emergency access",
@@ -115,10 +115,8 @@
   },
   "approvals": {
     "title": "Approval queue",
-    "caption": "Pending human-in-the-loop requests. Each approve, reject and cancel is a deliberate, audited decision recorded in the immutable decision trail.",
+    "caption": "Requests waiting for a decision. Every approve, reject and cancel is recorded.",
     "search": "Search requests…",
-    "action": "Action",
-    "subject": "Subject",
     "requestedBy": "Requested by",
     "status": "Status",
     "progress": "Approvals",
@@ -135,7 +133,7 @@
     "noSubject": "No subject",
     "filterStatus": "Status",
     "statusAll": "All statuses",
-    "runSweep": "Run sweep",
+    "runSweep": "Expire and escalate overdue requests",
     "newRequest": "New request",
     "empty": "No approval requests",
     "emptyHint": "When an action requires human approval it appears here for review.",
@@ -145,7 +143,9 @@
     "reject": "Reject",
     "cancel": "Cancel",
     "viewDetail": "View detail",
-    "actorHint": "Audit actor handle — never an email address. Identity is resolved from the directory, not shown here."
+    "actorHint": "Audit actor handle — never an email address. Identity is resolved from the directory, not shown here.",
+    "expiredAt": "Expired {{time}}",
+    "request": "Request"
   },
   "status": {
     "pending": "Pending",
@@ -156,17 +156,18 @@
   },
   "decide": {
     "approveTitle": "Approve this request?",
-    "approveBody": "Your decision is recorded permanently in the immutable decision trail and counts toward the approval threshold.",
+    "approveBody": "Your approval counts toward the approvals this request needs.",
     "rejectTitle": "Reject this request?",
-    "rejectBody": "A single rejection terminates the request and is recorded permanently in the decision trail.",
+    "rejectBody": "One rejection ends the request.",
     "approveConfirm": "Approve",
     "rejectConfirm": "Reject",
     "note": "Note",
-    "noteHint": "Optional — recorded permanently alongside your decision.",
+    "noteHint": "Optional.",
     "notePlaceholder": "Why you are approving or rejecting (optional)…",
     "approved": "Decision recorded — approved",
     "rejected": "Decision recorded — rejected",
-    "sodHint": "You cannot decide on a request you opened, and a token without a stable user cannot decide."
+    "sodHint": "You cannot decide on a request you opened, and a token without a stable user cannot decide.",
+    "notPending": "This request is no longer waiting for a decision."
   },
   "cancel": {
     "title": "Cancel this approval request?",
@@ -177,7 +178,7 @@
   "sweep": {
     "title": "Run the approval sweep?",
     "body": "It marks past-deadline requests expired and escalates requests past their escalation window, then emits the corresponding findings. Safe to re-run.",
-    "confirm": "Run sweep",
+    "confirm": "Expire and escalate overdue requests",
     "done": "Sweep complete",
     "result": "Scanned {{scanned}} · escalated {{escalated}} · expired {{expired}}.",
     "more": "Pending requests remain unscanned — run the sweep again to finish."
@@ -221,12 +222,13 @@
     "trailEmpty": "No decisions recorded yet",
     "trailEmptyHint": "Every decision on this approval — who decided, when and why — is recorded here. Nobody has decided yet.",
     "decisionApprove": "Approved",
-    "decisionReject": "Rejected"
+    "decisionReject": "Rejected",
+    "reenableNeedsAdmins": "Two other admin accounts must approve this. Create them in Identity & access, or with `olivares users create`.",
+    "openIdentity": "Open Identity & access"
   },
   "policies": {
     "title": "Policies",
-    "caption": "ABAC deny rules and approval thresholds. An ABAC rule can only further-restrict access; it is the author’s declared intent, not proof of runtime enforcement.",
-    "enforcementCaption": "Whether a policy is actually enforced depends on the deployment — an enabled policy may be authored and audited but inert if its evaluator is not wired.",
+    "caption": "An enabled policy applies as soon as it is saved. Deny rules only take access away; approval thresholds apply to new matching requests.",
     "search": "Search policies…",
     "name": "Policy",
     "kind": "Kind",
@@ -252,7 +254,7 @@
     "kindHint": "The policy type. It cannot be changed after creation.",
     "enabled": "Enabled",
     "abacRules": "Deny rules",
-    "abacRulesHint": "Each rule further-restricts access. “Deny” is implicit and not editable — v1 only supports deny rules. A rule must select at least one of permission, verb, resource or principal kind.",
+    "abacRulesHint": "Each rule denies the requests it matches and never grants access. A rule needs at least one condition. With a minimum sign-in, it denies only callers signed in below that level; tokens always count as below.",
     "addRule": "Add rule",
     "removeRule": "Remove",
     "rulePermission": "Permission",
@@ -261,14 +263,20 @@
     "ruleResource": "Resource",
     "rulePrincipalKind": "Principal kind",
     "ruleAny": "Any",
+    "ruleMinAal": "Minimum sign-in",
+    "ruleMinAalNone": "None",
+    "aal1": "AAL1 (password)",
+    "aal2": "AAL2 (multi-factor)",
+    "aal3": "AAL3 (phishing-resistant)",
     "noRules": "No deny rules",
     "denyImplicit": "Deny (implicit)",
     "requiredApprovals": "Required approvals",
-    "requiredApprovalsHint": "0–64 — the authoritative threshold.",
+    "requiredApprovalsHint": "0 to 64. Empty or 0 uses the engine default, which can be higher for critical actions.",
     "expiresInSeconds": "Expires in (seconds)",
     "expiresInSecondsHint": "0–31536000 (0 = never).",
     "escalateInSeconds": "Escalates in (seconds)",
     "escalateInSecondsHint": "0–31536000 (0 = never).",
+    "countError": "Enter a whole number from 0 to {{max}}.",
     "matchAction": "Match action",
     "matchActionHint": "Empty = matches any action.",
     "matchSubjectKind": "Match subject kind",
@@ -371,8 +379,8 @@
     "done": "Agent unbound"
   },
   "caveat": {
-    "deny": "A deny rule is the policy author’s declared intent — not proof that the rule is enforced at runtime.",
-    "enforcement": "Enabled does not always mean enforced: the evaluator or directory providers may be unwired in this deployment."
+    "deny": "A deny rule can only remove access. It never gives anyone more than their role allows.",
+    "enforcement": "An enabled rule is checked; a disabled rule is kept and not checked."
   },
   "computerUse": {
     "title": "Computer-use governance",
@@ -594,8 +602,8 @@
       "description": "After a directory source is configured, resync the roster to reconcile its human and non-human identities for this tenant."
     },
     "policies": {
-      "title": "No governance policies authored yet",
-      "description": "Author an ABAC deny rule or approval threshold; runtime enforcement still depends on the evaluator wiring in this deployment."
+      "title": "No rules yet",
+      "description": "Add a deny rule or an approval threshold. Each policy applies as soon as it is saved."
     },
     "routinePolicies": {
       "title": "No routine policies authored yet",
@@ -696,5 +704,22 @@
       "draft": "Draft — do not hard-code",
       "stable": "Stable — a seam may target it"
     }
+  },
+  "preview": {
+    "title": "What will run",
+    "session": "Session",
+    "folder": "Folder",
+    "askedBy": "Asked by",
+    "askedBySession": "The session itself",
+    "tool": "Tool",
+    "willRun": "What will run",
+    "noReview": "This request does not include what will run.",
+    "commandUnknown": "Command not shown for this tool yet",
+    "showAll": "Show all",
+    "showLess": "Show less",
+    "details": "Details",
+    "id": "Request id",
+    "untitled": "Untitled session",
+    "openToDecide": "Open to approve or reject"
   }
 }

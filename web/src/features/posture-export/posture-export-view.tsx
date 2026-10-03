@@ -39,7 +39,7 @@ import {
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
 import { toast } from '@/components/ui/toaster'
-import { CaveatNotice, SelfAuditNotice } from '@/features/_intel'
+import { CaveatNotice } from '@/features/_intel'
 import { SavedViewsMenu } from '@/features/saved-views'
 import { UrlStateNotice } from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
@@ -335,7 +335,6 @@ export function PostureExportView() {
             </Field>
           </div>
           <CaveatNotice tone="info">{t('notes.pull')}</CaveatNotice>
-          <SelfAuditNotice />
           <div>
             <Button
               variant="primary"

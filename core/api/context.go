@@ -37,11 +37,11 @@ type moduleRequestBoundary struct {
 }
 
 // withModuleRequestBoundary marks ctx with p's workspace confinement in tenant,
-// if any. A principal that is not confined (or is superadmin) returns ctx
-// unchanged, so every existing path stays byte-identical.
+// if any. An unconfined principal returns ctx unchanged. Superadmin attribution
+// does not lift a stored workspace boundary when acting inside a tenant.
 func withModuleRequestBoundary(ctx context.Context, tenant model.TenantID, p auth.Principal) context.Context {
 	ws, confined := p.ConfinedWorkspaceIn(tenant)
-	if !confined || p.Superadmin {
+	if !confined {
 		return ctx
 	}
 	return context.WithValue(ctx, ctxKeyModuleBoundary, moduleRequestBoundary{tenant: tenant, workspace: ws})
@@ -92,7 +92,7 @@ func principalFrom(ctx context.Context) (auth.Principal, bool) {
 }
 
 // DetachRequestContext strips this package's REQUEST-SCOPED authority from ctx —
-// the authenticated principal and the access-log actor cell — while preserving
+// the authenticated principal, access-log actor and module boundary — preserving
 // everything else, including cancellation, deadline and the request id (so a
 // loopback's log line still correlates with the request that caused it).
 //
@@ -110,7 +110,8 @@ func DetachRequestContext(ctx context.Context) context.Context {
 	if ctx == nil {
 		return nil
 	}
-	return context.WithValue(context.WithValue(ctx, ctxKeyPrincipal, nil), ctxKeyActor, nil)
+	ctx = context.WithValue(context.WithValue(ctx, ctxKeyPrincipal, nil), ctxKeyActor, nil)
+	return context.WithValue(ctx, ctxKeyModuleBoundary, nil)
 }
 
 // withRequestID returns a context carrying the request id.

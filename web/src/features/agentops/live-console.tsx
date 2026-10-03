@@ -10,23 +10,22 @@ import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import { toast } from '@/components/ui/toaster'
 import { LiveDot } from '@/features/shared'
-import { isUnknownVerdict, workErrorCode } from '@/features/work/api'
 import { ApiError } from '@/lib/api/errors'
-import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
 import { useSessionStore } from '@/stores/session'
 import { useTenantStore } from '@/stores/tenant'
 import { useRunAttach } from './attach'
 import { agentOpsApi } from './api'
-import { AuthorityLostError, useAuthBoundary } from './auth-boundary'
-import { runInputMode } from './provider-contract'
 import { sessionTurnBody } from './session-turn'
+import { useTurnInterrupt } from './turn-interrupt'
 import type { AttachFrame, RunDTO } from './types'
-import { isWorkBound, workLeaseFenceFor } from './work-fence'
+import { currentControlFence } from './work-fence'
 import {
   mapConversationFrames,
+  stripAnsi,
   type ConversationItem,
 } from '@/features/sessions/conversation-frames'
+import { systemFailed, systemText } from '@/features/sessions/conversation-text'
 import './i18n'
 import '@/features/sessions/i18n'
 
@@ -69,8 +68,6 @@ export function LiveConsole({ run }: { run: RunDTO }) {
 
 function LiveConsoleSession({ run }: { run: RunDTO }) {
   const { t } = useTranslation('agentops')
-  const { can } = useAuth()
-  const boundary = useAuthBoundary()
   const isRemote = run.transport === 'remote-control'
   const isLive = run.state === 'running' || run.state === 'idle'
 
@@ -117,90 +114,15 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
 
   const [line, setLine] = useState('')
   const [wire, setWire] = useState('')
-  const inputMode = runInputMode(run)
   const items = mapConversationFrames(frames.map((f) => f.line))
-  const workBound = isWorkBound(run)
-  const workFenceValid =
-    !workBound ||
-    (Number.isSafeInteger(run.work_lease_fence) &&
-      (run.work_lease_fence ?? 0) > 0)
-  const interruptSupported = inputMode === 'text' && !isRemote
-  const canInterrupt =
-    can('sessions:run:write') &&
-    interruptSupported &&
-    run.state === 'running' &&
-    workFenceValid
-  // Recheck the current permission and target at dispatch. An intent captured
-  // before a tenant, credential, run or fence change must not address its successor.
-  const interruptIntent = `${boundary.epoch}:${run.run_ref}:${run.work_lease_fence ?? '-'}`
-  const isAuthorized = () => can('sessions:run:write')
-  const currentInterrupt = useRef({
-    isAuthorized,
-    allowed: canInterrupt,
-    intent: interruptIntent,
-  })
-  useEffect(() => {
-    currentInterrupt.current = {
-      isAuthorized,
-      allowed: canInterrupt,
-      intent: interruptIntent,
-    }
-  })
-  const mounted = useRef(true)
-  useEffect(() => {
-    mounted.current = true
-    return () => {
-      mounted.current = false
-    }
-  }, [])
-  const interruptMutation = useMutation({
-    mutationFn: (intent: string) => {
-      const current = currentInterrupt.current
-      if (
-        !mounted.current ||
-        !current.allowed ||
-        !current.isAuthorized() ||
-        current.intent !== intent
-      ) {
-        throw new AuthorityLostError()
-      }
-      return agentOpsApi.interrupt(
-        run.run_ref,
-        workBound ? run.work_lease_fence : undefined,
-      )
-    },
-    onSuccess: (_, intent) => {
-      if (mounted.current && currentInterrupt.current.intent === intent)
-        toast.success(t('live.interrupted'))
-    },
-    onError: (err, intent) => {
-      if (
-        !mounted.current ||
-        currentInterrupt.current.intent !== intent ||
-        err instanceof AuthorityLostError
-      )
-        return
-      if (isUnknownVerdict(err)) {
-        toast.warning(t('live.interruptUnknown'))
-        return
-      }
-      const code = workErrorCode(err)
-      if (code === 'stale_fence' || code === 'dispatch_conflict') {
-        toast.warning(t('live.interruptWorkConflict'))
-        return
-      }
-      toast.error(
-        err instanceof ApiError ? err.message : t('live.interruptFailed'),
-      )
-    },
-  })
+  const turn = useTurnInterrupt(run)
   const inputMutation = useMutation({
-    mutationFn: (payload: { value: string; asWire: boolean }) => {
+    mutationFn: async (payload: { value: string; asWire: boolean }) => {
       const body = sessionTurnBody(run, payload.value, payload.asWire)
       // The SAME fence the interrupt above presents. A work-bound run has one
       // control plane, and a turn is a control on it: sent unfenced it is refused
-      // with 409 before the child sees a byte.
-      const fence = workLeaseFenceFor(run)
+      // with 409 before the child sees a byte. Once its lease has ended, nothing.
+      const fence = await currentControlFence(run)
       return 'text' in body
         ? agentOpsApi.inputText(run.run_ref, body.text, fence)
         : agentOpsApi.input(run.run_ref, body.line, fence)
@@ -258,13 +180,13 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
           )}
         </div>
         <div className="flex items-center gap-3">
-          {can('sessions:run:write') && interruptSupported && (
+          {turn.offered && (
             <Button
               variant="secondary"
               size="sm"
               title={t('live.interruptHint')}
-              onClick={() => interruptMutation.mutate(interruptIntent)}
-              disabled={!canInterrupt || interruptMutation.isPending}
+              onClick={turn.interrupt}
+              disabled={!turn.allowed || turn.pending}
             >
               <CirclePause className="size-3.5" />
               {t('live.interrupt')}
@@ -289,7 +211,7 @@ function LiveConsoleSession({ run }: { run: RunDTO }) {
         </div>
       </div>
 
-      {interruptSupported && can('sessions:run:write') && !workFenceValid && (
+      {turn.fenceUnavailable && (
         <p className="text-caption text-muted-foreground">
           {t('live.interruptFenceUnavailable')}
         </p>
@@ -387,6 +309,9 @@ function LiveConversationLine({ item }: { item: ConversationItem }) {
         <span className="font-medium">
           {item.toolName ?? t('conversation.tool')}
         </span>
+        {item.toolFailed ? (
+          <span className="text-danger">{t('conversation.toolFailed')}</span>
+        ) : null}
         {item.toolArgsSummary ? (
           <span className="truncate text-muted-foreground">
             {item.toolArgsSummary}
@@ -395,14 +320,37 @@ function LiveConversationLine({ item }: { item: ConversationItem }) {
       </div>
     )
   }
+  // A tool's own output in the terminal view: every line, as it came, without escape
+  // codes. The conversation folds these lines into one quiet line (HU2-23); a terminal
+  // shows what the tool printed.
+  if (item.kind === 'system' && item.systemKind === 'output') {
+    return (
+      <div
+        data-testid="conversation-item"
+        data-kind="output"
+        className="whitespace-pre-wrap break-words py-0.5 font-mono text-caption"
+      >
+        {item.raw.map((line, i) => (
+          <div key={i}>{stripAnsi(line)}</div>
+        ))}
+      </div>
+    )
+  }
   if (item.kind === 'system' || item.kind === 'result') {
     return (
       <div
         data-testid="conversation-item"
         data-kind={item.kind}
-        className="py-0.5 text-caption text-muted-foreground"
+        className={cn(
+          'py-0.5 text-caption',
+          systemFailed(item) ? 'text-danger' : 'text-muted-foreground',
+        )}
       >
-        {item.summary}
+        {item.kind === 'system'
+          ? systemText(t, item)
+          : item.resultFailed && item.text
+            ? `${item.summary}: ${item.text}`
+            : item.summary}
       </div>
     )
   }

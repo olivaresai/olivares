@@ -8,6 +8,7 @@
 // evidence for the ONE selected version (never a verdict fetch per row). Deployments,
 // datasets and fine-tune jobs are NOT nested here — they have independent lifecycles and
 // live in their own top-level tabs.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Plus, ShieldCheck, Trash2 } from 'lucide-react'
@@ -26,7 +27,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { KvList, KvRow } from '@/components/ui/kv'
@@ -432,7 +432,8 @@ function VersionsSection({
         //    viejo en caché quedaba una lista vieja y recortada sin marca, porque el aviso se
         //    oculta con `!error`. Es el mismo defecto que el contraste devolvió en el panel de
         //    documentos, en la misma feature y con la misma forma.
-        <ErrorState
+        <QueryErrorState
+          error={query.error}
           title={t('versions.loadError')}
           retry={() => void query.refetch()}
         />

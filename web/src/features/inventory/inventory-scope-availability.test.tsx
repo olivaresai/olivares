@@ -261,7 +261,9 @@ describe('Inventory summary: error, pending, refusal and refetch', () => {
     vi.mocked(inventoryApi.summary).mockRejectedValue(forbidden())
     vi.mocked(inventoryApi.entities).mockRejectedValue(forbidden())
     renderView()
-    const refusals = await screen.findAllByText('Not authorized')
+    const refusals = await screen.findAllByText(
+      'You do not have access to this.',
+    )
     expect(refusals.length).toBeGreaterThanOrEqual(1)
     expect(screen.queryByText('Entities')).toBeNull()
     expect(screen.queryAllByText('0')).toHaveLength(0)
@@ -313,7 +315,9 @@ describe('Inventory summary: error, pending, refusal and refetch', () => {
 
     await user.click(screen.getByRole('button', { name: 'Refresh' }))
 
-    expect(await screen.findByText('Not authorized')).toBeInTheDocument()
+    expect(
+      await screen.findByText('You do not have access to this.'),
+    ).toBeInTheDocument()
     expect(screen.queryByText('Entities')).toBeNull()
     expect(screen.queryByText('4')).toBeNull()
   })
@@ -358,7 +362,7 @@ describe('Inventory summary: error, pending, refusal and refetch', () => {
     expect(await screen.findAllByText('0')).toHaveLength(4)
     expect(screen.getByText('Entities')).toBeInTheDocument()
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.queryByText('Not authorized')).toBeNull()
+    expect(screen.queryByText('You do not have access to this.')).toBeNull()
     expect(
       await screen.findByText('No estate entities discovered yet'),
     ).toBeInTheDocument()
@@ -441,7 +445,9 @@ describe('Inventory point: the detail sheet', () => {
     const user = userEvent.setup()
     renderView()
     const sheet = await openSheet(user)
-    expect(await within(sheet).findByText('Not authorized')).toBeInTheDocument()
+    expect(
+      await within(sheet).findByText('You do not have access to this.'),
+    ).toBeInTheDocument()
     expect(within(sheet).queryByRole('alert')).toBeNull()
     // The catalog fields the row already carried stay visible: the refusal is
     // about the projection, not about the entry.

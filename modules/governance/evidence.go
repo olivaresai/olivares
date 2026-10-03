@@ -93,6 +93,11 @@ func (e *evaluator) EvaluateEvidence(
 			return readErr
 		}
 		scan, listErr := scanCanonicalABACEvidenceRules(ctx, sc, req.Tenant, req)
+		if listErr == nil {
+			auth.CaptureAuthorizationInputs(ctx, false, "abac-v1", retainedABAC{Rules: scan.rules, Versions: scan.versions})
+		} else {
+			auth.IncompleteAuthorizationInputs(ctx)
+		}
 		if listErr != nil {
 			// Continue draining/validating after a match, but a canonical matched
 			// deny is independently established and dominates a later ordinary
@@ -148,6 +153,9 @@ func (c *chainEvaluator) EvaluateEvidence(
 		unknown             bool
 	)
 	for _, member := range c.members {
+		if !retainedMember(member) {
+			auth.IncompleteAuthorizationInputs(ctx)
+		}
 		producer, ok := member.(auth.PolicyEvidenceEvaluator)
 		if !ok {
 			// Keep scanning: a legacy member is UNKNOWN, not an excuse to hide a
@@ -338,18 +346,21 @@ func (e *scopedEngine) ScopedEvidence(
 		}
 
 		if before.set == nil {
+			auth.CaptureAuthorizationInputs(ctx, true, "none-v1", struct{}{})
 			return nil
 		}
 		em, resource, principal, _, scopeErr := governanceEvidenceScope(ctx, lineage, e.resolver, req)
 		if scopeErr != nil {
 			return scopeErr
 		}
-		cedarDecision, diag = cedar.Authorize(before.set.policies, em, cedar.Request{
+		creq := cedar.Request{
 			Principal: principal,
 			Action:    actionUID(req),
 			Resource:  resource,
 			Context:   scopedContext(req, observedAt),
-		})
+		}
+		captureScopedCedar(ctx, before, em, creq, scopedGrantAboveFloor(req.Principal, req.Tenant, before.generation) && !e.grantExpiredState(before, ready, observedAt))
+		cedarDecision, diag = cedar.Authorize(before.set.policies, em, creq)
 		return nil
 	})
 	after, afterLoaded := e.tenantState(req.Tenant)
@@ -447,7 +458,9 @@ func governanceEvidenceWitness(
 }
 
 type canonicalABACEvidenceScan struct {
-	matched bool
+	matched  bool
+	rules    []abacRule
+	versions []retainedABACVersion
 }
 
 func scanCanonicalABACEvidenceRules(
@@ -503,6 +516,8 @@ func scanCanonicalABACEvidenceRules(
 				recordErr(policyErr)
 				continue
 			}
+			scan.rules = append(scan.rules, canonicalRules...)
+			scan.versions = append(scan.versions, retainedABACVersion{ID: policy.ID.String(), Version: policy.Version})
 			// A match is recorded only after this whole row proved canonical. Keep
 			// reading later pages: a later ordinary error cannot erase this explicit
 			// deny, but an ambiguous duplicate still can (above).
@@ -683,7 +698,7 @@ func governanceEvidenceConfinement(
 	req auth.Request,
 ) (auth.CheckEvidence, error) {
 	confinedWorkspace, confined := req.Principal.ConfinedWorkspaceIn(req.Tenant)
-	if !confined || req.Principal.Superadmin {
+	if !confined {
 		return auth.CheckEvidence{Verdict: auth.CheckClean, Code: evidenceCodeScopedGuardClean}, nil
 	}
 

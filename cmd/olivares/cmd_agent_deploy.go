@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
@@ -59,8 +60,11 @@ func newAgentDeployCmd() *cobra.Command {
 			"  installed          an executable was found and classified (registered, observed, …)\n" +
 			"  profile ready      a profile exists for these homes on this node\n" +
 			"  launchable         the profile also names a credential\n\n" +
+			"Without --config-home and --user-home the engine keeps the homes itself: without\n" +
+			"--provider it chooses the profile a session would use (the tool's own login, or a key\n" +
+			"or local model from Providers), and with --provider it makes that profile's own homes.\n\n" +
 			"What it never does: run a vendor login, read or copy the provider's configuration or\n" +
-			"credentials, create a missing home, or install anything unless you pass --install.",
+			"credentials, or install anything unless you pass --install.",
 		Example: "  olivares agent deploy claude\n" +
 			"  olivares agent deploy claude --provider prv_01J8ABCDEF\n" +
 			"  olivares agent deploy claude --install --yes",
@@ -70,9 +74,20 @@ func newAgentDeployCmd() *cobra.Command {
 			if driver == "" {
 				return sessionCLIUsage("name the driver to deploy: claude, codex, grok or opencode")
 			}
-			homes, err := resolveDeployHomes(driver, configHome, userHome)
-			if err != nil {
-				return err
+			// HU-07: homes are typed only when the operator names one. Otherwise the
+			// engine makes and keeps them; $HOME/.claude was the engine user's own
+			// login, refused when missing and never launched when present.
+			homesGiven := strings.TrimSpace(configHome) != "" || strings.TrimSpace(userHome) != ""
+			if !homesGiven && driverConfigHome(driver, "/") == "" {
+				return exitcode.New(exitcode.Usage, fmt.Errorf(
+					"there is no default configuration home for driver %s: pass --config-home with the directory that CLI already uses", driver))
+			}
+			var homes deployHomes
+			if homesGiven {
+				var err error
+				if homes, err = resolveDeployHomes(driver, configHome, userHome); err != nil {
+					return err
+				}
 			}
 			// 1. LOCAL: what is on this host. No server is needed for this half, which
 			// is why it runs first — an operator with no control plane reachable still
@@ -117,24 +132,19 @@ func newAgentDeployCmd() *cobra.Command {
 			// Leaving the field out did not keep the choice open; it made the
 			// profile unusable and said nothing.
 			body := map[string]any{
-				"driver": driver, "config_home": homes.config, "user_home": homes.user,
-				"display_name": deployProfileName(name, driver),
-				"auth_source":  "provider_account_home",
+				"driver": driver, "display_name": deployProfileName(name, driver),
+				"auth_source": "provider_account_home",
+			}
+			if homesGiven {
+				body["config_home"], body["user_home"] = homes.config, homes.user
 			}
 			if providerRef != "" {
 				body["auth_source"] = "managed_injection"
 				body["provider_record_ref"] = providerRef
 			}
-			status, b, err := cfg.do(cmd.Context(), "POST", profilesPath, body)
+			rec, err := deployProfile(cmd, &cfg, body, homesGiven)
 			if err != nil {
 				return err
-			}
-			if status != 201 {
-				return httpErr(status, b)
-			}
-			rec := map[string]any{}
-			if uerr := json.Unmarshal(b, &rec); uerr != nil {
-				return uerr
 			}
 			return renderOut(cmd, func(w io.Writer) error {
 				return printDeploy(w, driver, found, rec, homes)
@@ -142,8 +152,8 @@ func newAgentDeployCmd() *cobra.Command {
 		},
 	}
 	cfg.addFlags(cmd)
-	cmd.Flags().StringVar(&configHome, "config-home", "", "the CLI's configuration home (default: this driver's own under $HOME)")
-	cmd.Flags().StringVar(&userHome, "user-home", "", "the child's user home (default: $HOME)")
+	cmd.Flags().StringVar(&configHome, "config-home", "", "the CLI's configuration home (default: the engine makes and keeps it)")
+	cmd.Flags().StringVar(&userHome, "user-home", "", "the child's user home (default: the engine makes and keeps it; with --config-home, $HOME)")
 	cmd.Flags().StringVar(&name, "name", "", "label for the profile (default: the driver's name)")
 	cmd.Flags().StringVar(&providerRef, "provider", "", "registered provider to bind; without it the host's own credential variables decide")
 	addAgentToolRootFlag(cmd, &root)
@@ -155,8 +165,45 @@ func newAgentDeployCmd() *cobra.Command {
 	return cmd
 }
 
-// deployHomes is the pair a profile is identified by.
+// deployHomes is the pair a profile is identified by; empty when the engine keeps them.
 type deployHomes struct{ config, user string }
+
+// deployProfile registers the profile deploy reports. With no home named and no
+// provider it is the engine's choice for a new session of this driver (the resolve
+// rule `session start` and the console use): reused when it exists, made when it
+// does not. Otherwise it is created as `agent profile create` does, the engine
+// making the homes nobody named.
+func deployProfile(cmd *cobra.Command, cfg *agentClientConfig, body map[string]any, homesGiven bool) (map[string]any, error) {
+	path, want := profilesPath, http.StatusCreated
+	if !homesGiven && body["provider_record_ref"] == nil {
+		path, want = profilesPath+"/resolve", http.StatusOK
+		body = map[string]any{"driver": body["driver"]}
+	}
+	status, b, err := cfg.do(cmd.Context(), "POST", path, body, want)
+	if err != nil {
+		return nil, err
+	}
+	if status != want {
+		return nil, httpErr(status, b)
+	}
+	if want == http.StatusOK {
+		var res struct {
+			Profile map[string]any `json:"profile"`
+		}
+		if err := json.Unmarshal(b, &res); err != nil {
+			return nil, err
+		}
+		if res.Profile == nil {
+			return nil, fmt.Errorf("the engine chose no profile for %s", body["driver"])
+		}
+		return res.Profile, nil
+	}
+	rec := map[string]any{}
+	if err := json.Unmarshal(b, &rec); err != nil {
+		return nil, err
+	}
+	return rec, nil
+}
 
 // driverConfigHome is each driver's own configuration home under a user's home. It is
 // the vendor's documented default and nothing is guessed from it: an operator whose
@@ -270,11 +317,18 @@ func deployFields(driver string, found []toolinstall.Candidate, profile map[stri
 	}
 	fields = append(fields,
 		termrender.Field{Key: "profile", Value: str(profile, "profile_ref")},
-		termrender.Field{Key: "config home", Value: homes.config},
-		termrender.Field{Key: "user home", Value: homes.user},
+		termrender.Field{Key: "config home", Value: orEngineKept(homes.config)},
+		termrender.Field{Key: "user home", Value: orEngineKept(homes.user)},
 		termrender.Field{Key: "provider", Value: provider},
 	)
 	return fields
+}
+
+func orEngineKept(home string) string {
+	if home == "" {
+		return "kept by the engine"
+	}
+	return home
 }
 
 func printDeploy(w io.Writer, driver string, found []toolinstall.Candidate, profile map[string]any, homes deployHomes) error {

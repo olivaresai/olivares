@@ -1,14 +1,18 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Field } from '@/components/ui/field'
 import { Textarea } from '@/components/ui/textarea'
+import { toast } from '@/components/ui/toaster'
+import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { governanceApi, governanceKeys } from './api'
+import { ApprovalDetails, ApprovalPreview } from './approval-preview'
 import './i18n'
 import type { ApprovalDTO, DecisionInput, DecisionVerb } from './types'
 
@@ -16,6 +20,9 @@ export interface DecisionDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   approvalId: string
+  /** The request as the list or the sheet holds it: what will run is shown above the
+   * note, before Approve or Reject (SC sweep, 09b). */
+  approval?: ApprovalDTO
   /** 'approve' | 'reject' — both are HIGH risk (danger tone) and recorded permanently. */
   verb: DecisionVerb | null
   onDone?: () => void
@@ -37,6 +44,7 @@ export function DecisionDialog({
   open,
   onOpenChange,
   approvalId,
+  approval,
   verb,
   onDone,
 }: DecisionDialogProps) {
@@ -46,6 +54,7 @@ export function DecisionDialog({
       open={open}
       onOpenChange={onOpenChange}
       approvalId={approvalId}
+      approval={approval}
       verb={verb}
       onDone={onDone}
     />
@@ -56,12 +65,14 @@ function DecisionBody({
   open,
   onOpenChange,
   approvalId,
+  approval,
   verb,
   onDone,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
   approvalId: string
+  approval?: ApprovalDTO
   verb: DecisionVerb
   onDone?: () => void
 }) {
@@ -69,8 +80,23 @@ function DecisionBody({
   const { activeTenant } = useAuth()
   const [note, setNote] = useState('')
 
+  const queryClient = useQueryClient()
   const mutation = usePrivilegedMutation<DecisionInput, ApprovalDTO>({
     mutationFn: (input) => governanceApi.decide(approvalId, input),
+    // A request that expired or was decided meanwhile answers 409. The dialog then has
+    // nothing left to decide: it closes, says so, and the queue is read again (SC 59
+    // item 1: it stayed open with its Approve button after the refusal).
+    onError: (err) => {
+      if (!(err instanceof ApiError) || err.status !== 409) return false
+      toast.warning(t('decide.notPending'), {
+        description: err.message || undefined,
+      })
+      void queryClient.invalidateQueries({
+        queryKey: governanceKeys.approvals(activeTenant),
+      })
+      onOpenChange(false)
+      return true
+    },
     invalidateKeys: () => [
       governanceKeys.approvals(activeTenant),
       governanceKeys.approval(activeTenant, approvalId),
@@ -92,7 +118,9 @@ function DecisionBody({
       onOpenChange={onOpenChange}
       title={isApprove ? t('decide.approveTitle') : t('decide.rejectTitle')}
       description={isApprove ? t('decide.approveBody') : t('decide.rejectBody')}
-      tone="danger"
+      // Red is for Reject, Stop and delete; Approve is the primary action (Root, 09b
+      // capture review). Both stay recorded and confirmed.
+      tone={isApprove ? 'default' : 'danger'}
       confirmLabel={
         isApprove ? t('decide.approveConfirm') : t('decide.rejectConfirm')
       }
@@ -104,6 +132,12 @@ function DecisionBody({
         })
       }
     >
+      {approval ? (
+        <div className="flex min-w-0 flex-col gap-3">
+          <ApprovalPreview approval={approval} />
+          <ApprovalDetails approval={approval} />
+        </div>
+      ) : null}
       <Field
         label={t('decide.note')}
         htmlFor="decision-note"

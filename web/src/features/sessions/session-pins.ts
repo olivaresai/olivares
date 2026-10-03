@@ -24,6 +24,7 @@
 //    ever cleans; past the ceiling the oldest pin is dropped, which is what an operator
 //    means by pinning a twenty-first thing.
 import type { Whoami } from '@/lib/api/types'
+import type { UnifiedSession } from './provenance'
 import { isSessionAddress } from './session-address'
 
 /** How many sessions one person may keep pinned, per tenant. */
@@ -93,4 +94,25 @@ export function togglePin(
   if (pins.includes(address)) return pins.filter((p) => p !== address)
   const next = [...pins, address]
   return next.length > MAX_PINS ? next.slice(next.length - MAX_PINS) : next
+}
+
+/**
+ * Which of this session's names holds its pin, if any.
+ *
+ * ⛔ ONE SESSION, TWO NAMES. A launched session is `run:<ref>` until the plane proves its
+ *    managed live row and `live:<ref>` after (`provenance.ts`), and a reload can land on
+ *    either. A pin stored under one name was lost under the other: pinned, reloaded, and
+ *    the row was no longer pinned, or the list said Pinned while the menu offered Pin
+ *    (F1 09b sweep). Unpinning removes the name that is stored; pinning stores the key.
+ */
+export function pinnedAddress(
+  pinned: ReadonlySet<string>,
+  session: Pick<UnifiedSession, 'key' | 'liveRef' | 'runs'>,
+): string | undefined {
+  const names = [
+    session.key,
+    ...(session.liveRef ? [`live:${session.liveRef}`] : []),
+    ...session.runs.map((run) => `run:${run.run_ref}`),
+  ]
+  return names.find((name) => pinned.has(name))
 }

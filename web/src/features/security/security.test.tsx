@@ -16,12 +16,19 @@ const { findingsMock, exportMock, toastMock, authState } = vi.hoisted(() => ({
 }))
 
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
-vi.mock('@/components/ui/toaster', () => ({ toast: toastMock, Toaster: () => null }))
+vi.mock('@/components/ui/toaster', () => ({
+  toast: toastMock,
+  Toaster: () => null,
+}))
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   return {
     ...actual,
-    securityApi: { ...actual.securityApi, findings: findingsMock, exportFindings: exportMock },
+    securityApi: {
+      ...actual.securityApi,
+      findings: findingsMock,
+      exportFindings: exportMock,
+    },
   }
 })
 import {
@@ -61,7 +68,10 @@ beforeEach(() => {
   downloadedBlob = null
   anchorClicks = 0
   authState.can = () => true
-  findingsMock.mockResolvedValue({ items: findingsFixture, total: findingsFixture.length })
+  findingsMock.mockResolvedValue({
+    items: findingsFixture,
+    total: findingsFixture.length,
+  })
   exportMock.mockResolvedValue({
     filename: 'olivares-findings.sarif.json',
     content_type: 'application/json',
@@ -122,7 +132,8 @@ describe('FindingsTable — evidence is a fingerprint, never a payload', () => {
       subject_ref: 'llama3:8b',
       title:
         'Ollama model resident on split gpu/cpu: llama3:8b (3221225472 of 8589934592 bytes in VRAM)',
-      detail_hash: 'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90',
+      detail_hash:
+        'a1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90',
       occurred_at: '2026-08-09T10:00:00Z',
     }
     renderIntel(<FindingsTable findings={[resident]} />)
@@ -130,7 +141,9 @@ describe('FindingsTable — evidence is a fingerprint, never a payload', () => {
 
     // Painted, not dumped.
     expect(within(table).getByText(/Resident local model/i)).toBeInTheDocument()
-    expect(within(table).queryByText(/^local\.residency:/)).not.toBeInTheDocument()
+    expect(
+      within(table).queryByText(/^local\.residency:/),
+    ).not.toBeInTheDocument()
 
     // The severity is the connector's — PAINTED, never recomputed here. A `split
     // gpu/cpu` placement is medium; rendering it as informational would erase exactly
@@ -159,7 +172,8 @@ describe('FindingsTable — evidence is a fingerprint, never a payload', () => {
       subject_kind: 'local',
       subject_ref: 'host-1',
       title: 'A posture whose subject kind is the bare prefix',
-      detail_hash: 'c1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90',
+      detail_hash:
+        'c1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90',
       occurred_at: '2026-08-09T10:00:00Z',
     }
     renderIntel(<FindingsTable findings={[bare]} />)
@@ -182,7 +196,8 @@ describe('FindingsTable — evidence is a fingerprint, never a payload', () => {
       subject_kind: 'future.thing',
       subject_ref: 'widget-7',
       title: 'A posture from a connector this console predates',
-      detail_hash: 'b1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90',
+      detail_hash:
+        'b1b2c3d4e5f60718293a4b5c6d7e8f90a1b2c3d4e5f60718293a4b5c6d7e8f90',
       occurred_at: '2026-08-09T10:00:00Z',
     }
     renderIntel(<FindingsTable findings={[unknown]} />)
@@ -323,7 +338,9 @@ describe('Findings SARIF export — the server bytes, and an honest cap', () => 
     const user = userEvent.setup()
     wrapView(<SecurityView />)
 
-    await user.click(await screen.findByRole('button', { name: /Export SARIF/i }))
+    await user.click(
+      await screen.findByRole('button', { name: /Export SARIF/i }),
+    )
 
     await waitFor(() => expect(exportMock).toHaveBeenCalled())
     // The blob carries the server's body verbatim — the client never re-encodes
@@ -343,7 +360,9 @@ describe('Findings SARIF export — the server bytes, and an honest cap', () => 
     })
     wrapView(<SecurityView />)
 
-    await user.click(await screen.findByRole('button', { name: /Export SARIF/i }))
+    await user.click(
+      await screen.findByRole('button', { name: /Export SARIF/i }),
+    )
 
     await waitFor(() => expect(toastMock.warning).toHaveBeenCalled())
     expect(toastMock.success).not.toHaveBeenCalled()

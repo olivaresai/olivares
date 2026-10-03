@@ -98,6 +98,10 @@ func extractReleaseArchive(ctx context.Context, driver string, root *os.Root, pr
 		if driver == DriverOpenCode && name == "opencode" {
 			name = "bin/opencode"
 		}
+		// The Codex archive holds one binary named after its platform target.
+		if driver == DriverCodex && strings.HasPrefix(name, "codex-") && strings.HasSuffix(name, "-unknown-linux-musl") && !strings.Contains(name, "/") {
+			name = "bin/codex"
+		}
 		if !releaseArchiveMember(driver, name) || seen[name] {
 			return nil, refuse(KindManifestInvalid, "unexpected or duplicate archive member %q", name)
 		}

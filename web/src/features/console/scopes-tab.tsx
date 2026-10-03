@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import {
   Archive,
@@ -26,7 +27,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
@@ -140,7 +141,10 @@ export function ScopesTab() {
             <Spinner />
           </div>
         ) : workspaces.isError ? (
-          <ErrorState retry={() => void workspaces.refetch()} />
+          <QueryErrorState
+            error={workspaces.error}
+            retry={() => void workspaces.refetch()}
+          />
         ) : wsItems.length === 0 ? (
           <EmptyState
             action={
@@ -245,7 +249,10 @@ export function ScopesTab() {
             <Spinner />
           </div>
         ) : groups.isError ? (
-          <ErrorState retry={() => void groups.refetch()} />
+          <QueryErrorState
+            error={groups.error}
+            retry={() => void groups.refetch()}
+          />
         ) : groupItems.length === 0 ? (
           <EmptyState
             action={
@@ -810,7 +817,10 @@ function AgentGroupMembersDialog({
             <Spinner />
           </div>
         ) : members.isError ? (
-          <ErrorState retry={() => void members.refetch()} />
+          <QueryErrorState
+            error={members.error}
+            retry={() => void members.refetch()}
+          />
         ) : rows.length === 0 ? (
           <EmptyState
             icon={<Users />}

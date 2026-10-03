@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 	"github.com/olivaresai/olivares/connectors/modelprovider"
 )
 
@@ -175,12 +176,14 @@ func (e *Exchanger) Exchange(ctx context.Context, assertion string, p ExchangePa
 		return MintedToken{}, fmt.Errorf("claude-wif: exchange: post: %w", err)
 	}
 	defer resp.Body.Close()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		resp.Request = req
+		detail := redact.ReadHTTPError(resp.Body, 2<<10, req, assertion)
+		return MintedToken{}, exchangeError(resp, []byte(detail), assertion)
+	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxOAuthBody))
 	if err != nil {
 		return MintedToken{}, fmt.Errorf("claude-wif: exchange: read response: %w", err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return MintedToken{}, exchangeError(resp, raw)
 	}
 
 	var out exchangeResponse
@@ -206,8 +209,9 @@ func (e *Exchanger) Exchange(ctx context.Context, assertion string, p ExchangePa
 // status, the OAuth error code and the Anthropic request id when present. It never
 // echoes the assertion. The specific invalid_grant cause is intentionally opaque
 // server-side, so the error surfaces the request id for support correlation.
-func exchangeError(resp *http.Response, raw []byte) error {
-	reqID := resp.Header.Get("request-id")
+func exchangeError(resp *http.Response, raw []byte, credentials ...string) error {
+	raw = []byte(redact.HTTPError(raw, 2<<10, resp.Request, credentials...))
+	reqID := redact.HTTPError([]byte(resp.Header.Get("request-id")), 256, resp.Request, credentials...)
 	// "error" is a string in the OAuth error shape ({"error":"invalid_grant"}) and an
 	// object in the Anthropic API error shape ({"error":{"type":...}}), so decode it
 	// as raw and try both forms.

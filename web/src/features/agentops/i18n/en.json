@@ -79,13 +79,15 @@
     "create": "New session",
     "stop": "Stop",
     "resume": "Resume",
+    "startAgain": "Start again",
     "cleanup": "Clean up",
     "delete": "Delete",
     "attach": "Attach",
     "detach": "Detach"
   },
   "create": {
-    "title": "New Claude Code session",
+    "title": "New session",
+    "titleTool": "New {{tool}} session",
     "description": "Olivares launches and governs the process — the visual equivalent of the CLI launch, with policy in line.",
     "name": "Name",
     "namePlaceholder": "A display label (optional)",
@@ -164,7 +166,7 @@
     "none": "None",
     "providerProfile": "Provider profile",
     "providerDriver": "Driver",
-    "providerEnvironment": "Execution environment",
+    "providerEnvironment": "Server",
     "liveRef": "Live row"
   },
   "live": {
@@ -346,7 +348,7 @@
   },
   "profiles": {
     "title": "Provider profiles",
-    "subtitle": "The durable identity of one configured provider instance on one execution environment: which driver serves it and the configuration home a launched session runs under. A profile registers homes that already exist — it installs nothing and logs nothing in.",
+    "subtitle": "How a tool runs for a session: which tool, and the settings folder it signs in from. A profile points at a tool installation that already exists on this server; it installs nothing and signs nothing in.",
     "register": "Register profile",
     "nextAction": "Register a profile",
     "rowMenu": "Row actions for {{name}}",
@@ -355,7 +357,7 @@
     "cols": {
       "name": "Profile",
       "driver": "Driver",
-      "environment": "Execution environment",
+      "environment": "Server",
       "state": "State",
       "launch": "Enabled here",
       "created": "Created"
@@ -368,8 +370,9 @@
     "environment": {
       "local": "this node",
       "foreign": "another environment",
-      "foreignHint": "This profile belongs to another execution environment. It is shown as such and is never launched from this node."
+      "foreignHint": "This profile belongs to another server. It is shown here but never started from this server."
     },
+    "serverUserLogin": "Uses this server's user login; sign in again to use a product login",
     "operable": {
       "yes": "Enabled in this environment",
       "no": "Not enabled in this environment",
@@ -377,8 +380,8 @@
     },
     "empty": {
       "title": "No provider profiles",
-      "registerHint": "Use “{{control}}” above to register the configuration home of an existing provider installation on this node; sessions then launch and are attributed under a stable identity.",
-      "noWrite": "Registering the configuration home of an existing provider installation needs sessions:profile:write, which your role does not include."
+      "registerHint": "Register a profile to add a tool installation that already exists on this server. Sessions then run with its settings and sign-in.",
+      "noWrite": "Adding a profile needs the sessions:profile:write permission, which your role does not include."
     },
     "filteredEmpty": {
       "title": "No profiles match this state",
@@ -403,23 +406,26 @@
     },
     "create": {
       "title": "Register a provider profile",
-      "description": "Registers the homes of an existing provider installation on this execution environment. The server validates each path on this node — absolute, symlinks resolved, existing and a directory. Nothing is created, installed or logged in, and no credential is sent.",
+      "description": "Adds a tool installation that already exists on this server. The server checks that each folder exists here; nothing is created, installed or signed in, and no credential is sent.",
       "driver": "Driver",
-      "driverPlaceholder": "claude",
-      "driverHint": "Lowercase driver key (letters, digits, - _ .). Whether this node can launch the profile is reported by the server after registration; it is not decided by the name.",
-      "configHome": "Configuration home",
+      "configHome": "Settings folder",
       "configHomePlaceholder": "/home/agent/.claude-work",
       "configHomeHint": "Absolute path of the provider’s configuration directory (for Claude Code, its CLAUDE_CONFIG_DIR). Validated on this node; a missing directory is refused, never created.",
       "userHome": "User home",
       "userHomePlaceholder": "/home/agent",
       "userHomeHint": "Absolute path the launched session runs under as HOME. Validated on this node.",
+      "homesOptional": "With the tool's own login, leave both homes empty to use the tool's own folders on this server.",
       "displayName": "Display name",
       "displayNamePlaceholder": "A label (optional)",
-      "environmentKnown": "Registered on this node’s execution environment {{env}}, which validates the paths. A profile for another environment is registered from that environment.",
-      "environmentUnknown": "Registered on this node’s execution environment, which validates the paths. A profile for another environment is registered from that environment.",
+      "environmentKnown": "Added on this server ({{env}}), which checks the folders. A profile for another server is added on that server.",
+      "environmentUnknown": "Added on this server, which checks the folders. A profile for another server is added on that server.",
       "submit": "Register",
       "submitting": "Registering…",
-      "success": "Provider profile registered"
+      "success": "Provider profile registered",
+      "homesOptionalManaged": "With an API key from Providers, leave both homes empty: this server makes the profile’s own folders.",
+      "missingProvider": "Choose the API key this profile uses.",
+      "missingHomesOrNone": "Name both folders, or leave both empty.",
+      "missingHomes": "Name both folders. They must already exist on this server."
     },
     "rename": {
       "title": "Rename profile",
@@ -445,7 +451,7 @@
     "details": {
       "ref": "Reference",
       "driver": "Driver",
-      "environment": "Execution environment",
+      "environment": "Server",
       "state": "State",
       "launch": "Enabled here",
       "created": "Created",
@@ -456,20 +462,20 @@
     "configuration": {
       "title": "Configuration",
       "hint": "The stored homes are an admin-only read, fetched only when you ask and never shown in the list. No credential value is ever returned.",
-      "configHome": "Configuration home",
+      "configHome": "Settings folder",
       "userHome": "User home",
-      "validatedOn": "Paths as validated and stored by execution environment {{env}}.",
+      "validatedOn": "Folders as checked and stored by server {{env}}.",
       "loading": "Reading configuration…",
       "failed": "The configuration could not be read."
     },
     "bindings": {
       "title": "Source bindings",
-      "subtitle": "Dedicates one configured source, at the exact revision this node applied, to one profile, so the sessions that source observes are attributed to it. The identity is the source’s persistent id and revision — never its name.",
+      "subtitle": "Links a source that this server reads to one profile, so the sessions that source finds are counted under that profile.",
       "cols": {
         "source": "Source",
         "revision": "Applied revision",
         "profile": "Profile",
-        "environment": "Execution environment",
+        "environment": "Server",
         "state": "State",
         "bound": "Bound"
       },
@@ -482,7 +488,7 @@
         "description": "Bind a configured source to a profile to attribute the sessions it observes."
       },
       "noRead": "Source bindings are not shown: your role does not include sessions:profile-binding:read.",
-      "notBindable": "Only an active profile of this execution environment can take a binding.",
+      "notBindable": "Only an active profile on this server can be linked.",
       "revoke": {
         "title": "Revoke binding",
         "description": "Sessions already attributed under this binding keep their provenance; later observations through this source are no longer attributed to the profile. This cannot be undone — a new binding is a new row.",
@@ -491,16 +497,16 @@
       },
       "create": {
         "title": "Bind a source to a profile",
-        "description": "The engine binds the source’s persistent id at the revision this node applied. Both are read from the source roster — never typed, never derived from a name.",
+        "description": "The engine links the source as this server last applied it, read from the source list. It never matches a source by its name.",
         "profile": "Profile",
         "profileNone": "Select a profile",
         "profileNotBindable": "not bindable here",
-        "profileHint": "Only an active profile of this execution environment can take a binding.",
+        "profileHint": "Only an active profile on this server can be linked.",
         "profilesNotRead": "Profiles could not be read, so none can be selected.",
         "source": "Source",
         "sourceNone": "Select a source",
         "sourceNotApplied": "not applied on this node",
-        "sourceHint": "Sources of the deployment roster, with the revision this node applied. A source this node has not applied cannot be bound here.",
+        "sourceHint": "Sources this server has applied. A source it has not applied yet cannot be linked here.",
         "needsSourceAdmin": "Binding a source also requires deployment-wide source administration (system admin). Your account cannot read the source roster, so no source can be selected here.",
         "rosterFailed": "The source roster could not be read.",
         "rosterEmpty": "No sources are configured on this deployment.",
@@ -525,7 +531,7 @@
         "revision": "Applied revision",
         "profile": "Profile",
         "driver": "Driver",
-        "environment": "Execution environment",
+        "environment": "Server",
         "selector": "Selector",
         "state": "State",
         "bound": "Bound",
@@ -605,20 +611,20 @@
     }
   },
   "accounts": {
-    "subtitle": "Named provider accounts in this tenant. Adopting names an existing provider profile once; its home stays where it is.",
-    "adopt": "Adopt a profile",
+    "subtitle": "Tool accounts in this organization, such as a second Claude subscription. Sessions use the account their profile names. Naming an existing profile as an account keeps its settings folder where it is.",
+    "adopt": "Name a profile as an account",
     "cols": {
       "name": "Account",
       "driver": "Driver",
-      "environment": "Execution environment",
+      "environment": "Server",
       "state": "State",
       "isolation": "Isolation",
       "created": "Created"
     },
     "empty": {
       "title": "No provider accounts",
-      "adoptHint": "Create a managed account, or use “{{control}}” to name an existing provider profile as an account.",
-      "noWrite": "Adopting a provider profile as an account needs sessions:account:write, which your role does not include."
+      "adoptHint": "Create an account, or name a profile you already have as an account.",
+      "noWrite": "Naming a profile as an account needs the sessions:account:write permission, which your role does not include."
     },
     "more": "Shown so far: {{shown}}. More accounts exist; load more to see them.",
     "moreFailed": "The next page of accounts could not be read. The accounts shown are not the complete list.",
@@ -629,7 +635,7 @@
       "dedicatedMeaning": "Dedicated: the server records this home as reserved for this account."
     },
     "home": {
-      "adopted": "Adopted (an existing home)",
+      "adopted": "From an existing profile",
       "managed": "Managed by the server"
     },
     "authSource": {
@@ -641,7 +647,7 @@
       "name": "Name",
       "ref": "Reference",
       "driver": "Driver",
-      "environment": "Execution environment",
+      "environment": "Server",
       "state": "State",
       "home": "Home",
       "isolation": "Isolation",
@@ -662,8 +668,8 @@
       "empty": "Nothing reported (source: {{source}})"
     },
     "adoptDialog": {
-      "title": "Adopt a provider profile",
-      "description": "Name an existing provider profile as an account. Its home stays where it is and is recorded as shared, not dedicated. Nothing is installed and nobody is signed in.",
+      "title": "Name a profile as an account",
+      "description": "Gives an existing profile an account name. Its settings folder stays where it is and is shared, not dedicated to this account. Nothing is installed and nobody is signed in.",
       "profile": "Profile",
       "profilePlaceholder": "Choose a profile",
       "profileOption": "{{name}} ({{ref}})",
@@ -678,19 +684,19 @@
       "referenceHintNoList": "Your role cannot list provider profiles. Enter the reference of an existing one; it starts with ppf_.",
       "name": "Account name (optional)",
       "nameHint": "Lowercase letters, digits and hyphens, starting with a letter, up to 32 characters. Leave it empty and the server generates one, such as claude or claude-b.",
-      "submit": "Adopt",
-      "submitting": "Adopting…",
-      "pendingStatus": "Adopting {{ref}}. Waiting for the server's answer.",
-      "success": "Adopted as {{name}}",
-      "failedTitle": "The profile was not adopted",
-      "forbidden": "Your role cannot adopt accounts in this tenant. Nothing was changed."
+      "submit": "Name as account",
+      "submitting": "Naming…",
+      "pendingStatus": "Naming {{ref}} as an account. Waiting for the server's answer.",
+      "success": "Named as {{name}}",
+      "failedTitle": "The profile was not named as an account",
+      "forbidden": "Your role cannot add accounts in this organization. Nothing was changed."
     },
     "adoption": {
-      "pending": "Adopting {{ref}}. The server has not answered yet.",
-      "adopted": "{{ref}} was adopted as {{name}}.",
-      "refused": "{{ref}} was not adopted:",
-      "forbidden": "{{ref}} was not adopted: your role cannot adopt accounts in this tenant. Nothing was changed.",
-      "unknown": "The outcome of adopting {{ref}} is not known here.",
+      "pending": "Naming {{ref}} as an account. The server has not answered yet.",
+      "adopted": "{{ref}} is now the account {{name}}.",
+      "refused": "{{ref}} was not named as an account:",
+      "forbidden": "{{ref}} was not named as an account: your role cannot add accounts in this organization. Nothing was changed.",
+      "unknown": "Whether {{ref}} became an account is not known here.",
       "checking": "Checking whether {{ref}} is an account now…",
       "isAccount": "At this read, {{ref}} is the account {{name}}.",
       "notAccount": "At this read, {{ref}} is not an account.",
@@ -760,6 +766,8 @@
     "transport": "Transport",
     "isolation": "Isolation",
     "failedInline": "The launch request was refused. Your choices are unchanged.",
+    "stoppedAtStart": "The tool started and stopped at once. What it said:",
+    "stoppedSilently": "It printed nothing. Check on AI tools that it is installed and signed in, then start again.",
     "state": {
       "ready": "Local requirements checked",
       "not_configured": "Missing configuration",
@@ -789,8 +797,8 @@
       "profile_disabled": "The profile is disabled. Enable requires sessions:profile:write; a retired profile cannot be reactivated.",
       "profile_retired": "The profile is retired and cannot be used for a new launch.",
       "environment_local": "This profile belongs to this node.",
-      "other_environment": "This profile belongs to another execution environment. Select a local profile or use the environment that administers it. There is no automatic remote execution.",
-      "environment_unavailable": "The execution environment that administers this profile is not available here.",
+      "other_environment": "This profile belongs to another server. Choose a profile on this server, or use the server that manages it. Sessions are never started on another server automatically.",
+      "environment_unavailable": "The server that manages this profile is not available here.",
       "driver_operable": "A driver path is registered on this runtime.",
       "driver_not_registered": "This driver is not registered on this runtime. For Codex set OLIVARES_SESSION_RUNTIME_CODEX_BIN; for Grok set OLIVARES_SESSION_RUNTIME_GROK_BIN.",
       "transport_unsupported": "This transport is not a contract of the selected driver.",
@@ -810,10 +818,11 @@
       "auth_source_required": "This driver needs an explicit authentication source: account-home or managed injection. That choice is made on the profile, not from this inspection.",
       "managed_injection_not_applied_for_transport": "Managed injection is selected, but this transport does not apply it.",
       "claude_credential_source_configured": "The Claude inference credential source is wired.",
-      "claude_credential_source_not_configured": "The Claude inference credential source is not wired. Configure OLIVARES_SESSION_RUNTIME_WIF or OLIVARES_SESSION_RUNTIME_TOKEN_FILE. Names only, never values.",
+      "claude_credential_source_not_configured": "No credential for Claude Code here: sign it in with its own login on AI tools, or use an API key saved in Providers. A deployment with its own inference gateway sets OLIVARES_SESSION_RUNTIME_WIF or OLIVARES_SESSION_RUNTIME_TOKEN_FILE.",
       "provider_credential_adapter_configured": "This driver’s credential adapter is wired.",
       "provider_credential_adapter_not_configured": "This driver’s governed credential adapter is not wired. Do not reuse another provider’s bearer or fall back to account-home.",
       "credential_source_not_injected": "This combination does not inject an inference credential.",
+      "provider_record_bound": "This profile runs on an API key saved in Providers; that key is its credential.",
       "runtime_credentials_wired": "Work and K3 runtime credentials are wired.",
       "runtime_credentials_not_requested": "This composition does not request work/K3 runtime credentials.",
       "runtime_credential_wiring_incomplete": "Work/K3 runtime credential wiring is incomplete. An operator reviews that composition; this read does not request commercial credentials.",
@@ -830,7 +839,7 @@
       "configure_provider_program": "Configure the official provider CLI on this runtime.",
       "review_profile_homes": "Review the stored homes through the admin configuration read.",
       "authorize_auth_source": "Authorize account-home or managed injection on the profile (sessions:profile:write).",
-      "configure_claude_credential_source": "Wire OLIVARES_SESSION_RUNTIME_WIF or OLIVARES_SESSION_RUNTIME_TOKEN_FILE.",
+      "configure_claude_credential_source": "Sign Claude Code in on AI tools, or use an API key from Providers.",
       "configure_provider_credential_adapter": "Wire this driver’s governed credential adapter.",
       "review_runtime_credential_composition": "Review the work/K3 runtime credential composition.",
       "select_supported_selection": "Choose a transport and isolation this runtime demonstrates.",

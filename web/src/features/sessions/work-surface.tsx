@@ -41,6 +41,7 @@
 //    starts. `frame="docked"` is a top hairline rather than a card, because a rounded
 //    panel floating at the foot of a pane reads as a separate thing rather than as that
 //    pane's own input.
+import { ArrowLeft, PanelRight, X } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { WorkComposer } from '@/components/layout/work-composer'
@@ -56,6 +57,7 @@ import {
   type WorkPane,
 } from './session-address'
 import { SessionContextPane } from './session-context-pane'
+import { pinnedAddress } from './session-pins'
 import { groupOf } from './session-groups'
 import { SessionNarrative } from './session-narrative'
 import type { SessionResolution } from './use-session-resolution'
@@ -77,6 +79,10 @@ export interface WorkSurfaceProps {
   emptyAction?: React.ReactNode
 }
 
+/** A phone pane control: 44 px tall, the frequent target size the remake keeps. */
+const PHONE_PANE_BUTTON =
+  'inline-flex h-11 items-center gap-1.5 rounded-ctl px-2.5 text-body font-medium text-text outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus'
+
 /** The id of a pane's region, so the switcher can name what it controls. */
 const paneId = (pane: WorkPane) => `work-pane-${pane}`
 
@@ -96,7 +102,47 @@ export function WorkSurface({
   const { t } = useTranslation('sessions')
   const selected = address.address
   const run = primaryRun(resolution.session.runs)
+  // The name this session's pin is stored under, if any (it has two: session-pins.ts).
+  const pinAt = pinnedAddress(pinned, resolution.session)
   const [inspected, setInspected] = useState<ConversationItem | null>(null)
+  /**
+   * THE CONTEXT PANE OPENS ON DEMAND at the widths where it would sit beside the work
+   * (console remake 26.10, AU5-05). Closed, the trace takes its width; open, it is the
+   * third column. The address bar still owns which ONE pane a narrow screen shows, and an
+   * address that names the context pane opens it here too, so a shared link lands on what
+   * its author was reading.
+   */
+  const [contextOpen, setContextOpen] = useState(address.pane === 'context')
+  // Adjusted during render, not in an effect: when the address starts naming the
+  // context pane, the pane opens in the same render.
+  const [seenPane, setSeenPane] = useState(address.pane)
+  if (seenPane !== address.pane) {
+    setSeenPane(address.pane)
+    if (address.pane === 'context') setContextOpen(true)
+  }
+  useEffect(() => {
+    if (!contextOpen) return
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || isTypingTarget(e.target)) return
+      if (document.querySelector('[role="dialog"][data-state="open"]')) return
+      setContextOpen(false)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [contextOpen])
+  const contextToggle = (
+    <button
+      type="button"
+      aria-pressed={contextOpen}
+      aria-controls={paneId('context')}
+      data-testid="context-toggle"
+      onClick={() => setContextOpen((open) => !open)}
+      className="hidden h-7 shrink-0 items-center gap-1.5 rounded-ctl border border-line-strong px-2.5 text-[13px] font-medium text-text outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus aria-pressed:bg-active xl:inline-flex"
+    >
+      <PanelRight aria-hidden className="size-3.5" />
+      {t('surface.pane.context')}
+    </button>
+  )
 
   /**
    * MOVING BETWEEN PANES FROM THE KEYBOARD. The two chords are table rows under
@@ -129,38 +175,66 @@ export function WorkSurface({
       data-testid="work-surface"
     >
       {/* Below `xl` only one pane fits, and which one is in the address bar — so a
-          link shared from a laptop opens on the pane its author was reading. */}
-      <div
-        className="flex shrink-0 gap-1 xl:hidden"
-        role="group"
-        aria-label={t('surface.paneSwitcher')}
-      >
-        {WORK_PANES.map((pane) => (
-          <button
-            key={pane}
-            type="button"
-            aria-pressed={address.pane === pane}
-            aria-controls={paneId(pane)}
-            data-testid={`pane-button-${pane}`}
-            onClick={() => onPane(pane)}
-            className={cn(
-              'flex-1 rounded-md border px-2 py-1.5 text-caption font-medium outline-none transition-colors',
-              'focus-visible:ring-2 focus-visible:ring-ring',
-              address.pane === pane
-                ? 'border-accent-line bg-accent-soft text-accent-text'
-                : 'border-border text-muted-foreground hover:bg-muted',
-            )}
-          >
-            {t(`surface.pane.${pane}`)}
-          </button>
-        ))}
-      </div>
+          link shared from a laptop opens on the pane its author was reading. ONE way
+          back and, from the work, ONE way to its context (AU5-06): the list needs no strip
+          of its own, because opening a row brings its work forward. */}
+      {address.pane !== 'rail' ? (
+        <div
+          className="flex shrink-0 items-center gap-2 xl:hidden"
+          role="group"
+          aria-label={t('surface.paneSwitcher')}
+        >
+          {address.pane === 'context' ? (
+            <button
+              type="button"
+              aria-controls={paneId('narrative')}
+              data-testid="pane-button-narrative"
+              onClick={() => onPane('narrative')}
+              className={PHONE_PANE_BUTTON}
+            >
+              <ArrowLeft aria-hidden className="size-4" />
+              {t('surface.backTo', { pane: t('surface.pane.narrative') })}
+            </button>
+          ) : (
+            <button
+              type="button"
+              aria-controls={paneId('rail')}
+              data-testid="pane-button-rail"
+              onClick={() => onPane('rail')}
+              className={PHONE_PANE_BUTTON}
+            >
+              <ArrowLeft aria-hidden className="size-4" />
+              {t('surface.backTo', { pane: t('surface.pane.rail') })}
+            </button>
+          )}
+          {address.pane === 'narrative' ? (
+            <button
+              type="button"
+              aria-controls={paneId('context')}
+              data-testid="pane-button-context"
+              onClick={() => onPane('context')}
+              className={cn(PHONE_PANE_BUTTON, 'ml-auto')}
+            >
+              <PanelRight aria-hidden className="size-4" />
+              {t('surface.pane.context')}
+            </button>
+          ) : null}
+        </div>
+      ) : null}
 
       {/* THE THREE REGIONS: rail · work · inspector, at the widths the shell's own
           tokens name. Each pane scrolls on its own so reading the trace does not move
           the rail. `min-h-0` on the grid AND on each pane, or a pane refuses to shrink
           below its content and the whole surface grows a second scrollbar instead. */}
-      <div className="grid min-h-0 flex-1 gap-2 xl:grid-cols-[minmax(0,var(--console-rail-width))_minmax(0,1fr)_minmax(0,var(--console-inspector-width))]">
+      <div
+        data-context={contextOpen ? 'open' : 'closed'}
+        className={cn(
+          'grid min-h-0 flex-1 gap-2',
+          contextOpen
+            ? 'xl:grid-cols-[minmax(0,var(--console-rail-width))_minmax(0,1fr)_minmax(0,var(--console-inspector-width))]'
+            : 'xl:grid-cols-[minmax(0,var(--console-rail-width))_minmax(0,1fr)]',
+        )}
+      >
         <section
           id={paneId('rail')}
           aria-label={t('surface.pane.rail')}
@@ -196,14 +270,18 @@ export function WorkSurface({
           <div className="min-h-0 flex-1 overflow-y-auto p-4">
             <SessionNarrative
               resolution={resolution}
-              pinned={!!selected && pinned.has(selected)}
-              onTogglePin={onTogglePin}
+              pinned={pinAt !== undefined}
+              onTogglePin={
+                onTogglePin && ((address) => onTogglePin(pinAt ?? address))
+              }
               onOpenDetail={onOpenDetail}
               evidence={address.evidence}
               onExpandEvidence={onEvidence}
               emptyAction={emptyAction}
               inspectedId={inspected?.id ?? null}
               onInspect={setInspected}
+              contextToggle={contextToggle}
+              peerSessions={sessions}
             />
           </div>
           <WorkComposer
@@ -217,9 +295,21 @@ export function WorkSurface({
           aria-label={t('surface.pane.context')}
           className={cn(
             'min-h-0 overflow-y-auto rounded-lg border border-border bg-surface p-4',
-            address.pane !== 'context' && 'hidden xl:block',
+            address.pane !== 'context' && 'hidden',
+            contextOpen ? 'xl:block' : 'xl:hidden',
           )}
         >
+          <div className="mb-2 hidden justify-end xl:flex">
+            <button
+              type="button"
+              onClick={() => setContextOpen(false)}
+              aria-label={t('surface.closeContext')}
+              data-testid="context-close"
+              className="grid size-7 place-items-center rounded-ctl text-text-2 outline-none hover:bg-hover hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
+            >
+              <X aria-hidden className="size-4" />
+            </button>
+          </div>
           <SessionContextPane resolution={resolution} inspected={inspected} />
         </section>
       </div>

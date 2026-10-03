@@ -1,0 +1,25 @@
+{
+ "tag_name": "rust-v0.159.3",
+ "draft": false,
+ "prerelease": false,
+ "assets": [
+  {
+   "name": "codex-aarch64-unknown-linux-musl.tar.gz",
+   "size": 100965888,
+   "digest": "sha256:cd5f307b3fcd6080773e684b86c3114a67d4f1c61dc447be09876b552eb4bea7",
+   "browser_download_url": "https://github.com/openai/codex/releases/download/rust-v0.159.3/codex-aarch64-unknown-linux-musl.tar.gz"
+  },
+  {
+   "name": "codex-x86_64-unknown-linux-musl.sigstore",
+   "size": 8585,
+   "digest": "sha256:db0b167444d067a6e277f71cc05820ac14fca40669bd3aa988aadedfb28cff97",
+   "browser_download_url": "https://github.com/openai/codex/releases/download/rust-v0.159.3/codex-x86_64-unknown-linux-musl.sigstore"
+  },
+  {
+   "name": "codex-x86_64-unknown-linux-musl.tar.gz",
+   "size": 108495560,
+   "digest": "sha256:b48ca1b2d6b1bf42b944e02c3d937c898e24651916684cdc35fdedf31b291bcb",
+   "browser_download_url": "https://github.com/openai/codex/releases/download/rust-v0.159.3/codex-x86_64-unknown-linux-musl.tar.gz"
+  }
+ ]
+}

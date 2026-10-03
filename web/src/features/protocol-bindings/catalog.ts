@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { moduleOn } from '@/stores/modules'
 import { consoleApi } from '@/features/console/api'
 import { modelsApi } from '@/features/models/api'
 import { listWorkItems } from '@/features/work/api'
@@ -76,6 +77,9 @@ export async function listProtocolLocalResourceCatalog(
       }
     }
     case 'model': {
+      // The model catalog is the models module's: off here, nothing to choose from.
+      if (!moduleOn('models'))
+        return { available: false, options: [], hasMore: false }
       const page = await modelsApi.models(options)
       return {
         available: true,

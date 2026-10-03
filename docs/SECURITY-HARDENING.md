@@ -252,7 +252,7 @@ Boot the product with no flags and you get: **no credentials** (setup token prin
 | **SBOM** | syft, SPDX-JSON, per release artifact | `task sbom` / `.goreleaser.yaml` `sboms` |
 | **Checksums** | SHA-256 over every artifact | `checksums.txt` (goreleaser `checksum`) |
 | **Signed releases** | cosign — keyless/Sigstore by default (GitHub OIDC → Fulcio/Rekor); key-based path documented for air-gap | `.goreleaser.yaml` `signs`/`docker_signs`; user verifies with `scripts/verify-release.sh` |
-| **Distroless images** | `gcr.io/distroless/static-debian12:nonroot`, non-root 65532, no shell/pkg-mgr | `Dockerfile`, `Dockerfile.release`, `Dockerfile.ebpf-source` |
+| **Minimal non-root images** | Engine: `node:24-trixie-slim` pinned by digest (Debian 13 slim with Node.js 24, git, python3 and CA certificates), non-root 65532. eBPF backstop: `gcr.io/distroless/static-debian12:nonroot` | `Dockerfile`, `Dockerfile.release`, `Dockerfile.fips`; `Dockerfile.ebpf-source` |
 | **Dependency CVE gate** | `govulncheck` per module, blocking | CI `govulncheck` job |
 | **Secret scanning gate** | gitleaks (pinned v8.30.1) over full HEAD history, blocking; whole-repository audit is explicit `OLIVARES_SECRETS_SCOPE=all` | CI `secrets` job; `task lint:secrets`; config `.gitleaks.toml` |
 | **No `curl\|bash` without checksum** | dev tools installed via `go install @version` (go.sum-checksummed) | `Taskfile.yml` `tools`; CI lint/secrets jobs |
@@ -304,7 +304,7 @@ Live, per-tenant evidence for these is produced by `modules/compliance` (`framew
 - [x] Threat model verified point-by-point against code with `file:line` evidence (§1).
 - [x] Adversarial security tests (real, not smoke): ledger tamper / checkpoint anchor, cross-tenant RLS deny + privileged-role refusal, insecure-default refusal, forged license rejected, mTLS no-cleartext + client-cert required, secret-in-path / Redact-field not persisted, telemetry-gap alerted.
 - [x] Secure defaults blinded by tests; every dangerous mode is an explicit named opt-in.
-- [x] Supply chain: reproducible build (demonstrated), SBOM, checksums, cosign signing, distroless, blocking `govulncheck` + gitleaks, no `curl|bash`, pinned deps.
+- [x] Supply chain: reproducible build (demonstrated), SBOM, checksums, cosign signing, digest-pinned non-root images, blocking `govulncheck` + gitleaks, no `curl|bash`, pinned deps.
 - [x] Attack surface documented (ports, processes, privileges, on-disk secrets).
 - [x] `SECURITY.md` + coordinated-disclosure policy (channel, timelines, safe harbor) published.
 - [x] Compliance control mapping (SOC2 / ISO 27001 / EU AI Act).

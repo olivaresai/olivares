@@ -1071,6 +1071,12 @@ func (m *Module) renewDualRuntimeCredentials(ctx context.Context, lr *liveRun) {
 // Process.Stop may wait for output pumps to drain; keeping the bridge available
 // avoids the Stop<->pump deadlock while preserving stop-before-revoke ordering.
 func (m *Module) terminateForRuntimeCredentialFailure(lr *liveRun, reason string) {
+	m.terminateForRuntimeAccessFailure(lr, reason, false)
+}
+
+// A proven owner withdrawal keeps its typed cause even when scoped graceful-stop
+// admission is unavailable. Both paths stop only the captured live generation.
+func (m *Module) terminateForRuntimeAccessFailure(lr *liveRun, reason string, ownerAccessEnded bool) {
 	lr.mu.Lock()
 	if lr.finalized || lr.stopRequested {
 		lr.mu.Unlock()
@@ -1078,6 +1084,7 @@ func (m *Module) terminateForRuntimeCredentialFailure(lr *liveRun, reason string
 	}
 	lr.stopRequested = true
 	lr.stopReason = reason
+	lr.ownerAccessEnded = ownerAccessEnded
 	lr.mu.Unlock()
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 2*m.rt.waitDelay+30*time.Second)

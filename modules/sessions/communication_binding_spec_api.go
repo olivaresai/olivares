@@ -246,7 +246,7 @@ func (m *Module) handleProtocolBindingSpecCreate(w http.ResponseWriter, r *http.
 		return
 	}
 	var input ProtocolBindingSpecInput
-	if err := decodeProtocolBindingSpecJSON(r, &input); err != nil {
+	if err := decodeProtocolBindingSpecJSON(w, r, &input); err != nil {
 		writeWorkError(w, broken(http.StatusBadRequest, "invalid_command"))
 		return
 	}
@@ -327,7 +327,7 @@ func (m *Module) handleProtocolBindingSpecState(
 		return
 	}
 	body := protocolBindingReconcileBody{}
-	if err := decodeProtocolBindingSpecJSON(r, &body); err != nil && !errors.Is(err, errEmptyProtocolBindingSpecBody) {
+	if err := decodeProtocolBindingSpecJSON(w, r, &body); err != nil && !errors.Is(err, errEmptyProtocolBindingSpecBody) {
 		writeWorkError(w, broken(http.StatusBadRequest, "invalid_command"))
 		return
 	}
@@ -430,21 +430,14 @@ func protocolBindingSpecMode(r *http.Request) (ExecutionMode, bool) {
 
 var errEmptyProtocolBindingSpecBody = errors.New("sessions: empty protocol binding spec body")
 
-func decodeProtocolBindingSpecJSON(r *http.Request, target any) error {
+func decodeProtocolBindingSpecJSON(w http.ResponseWriter, r *http.Request, target any) error {
 	if r.Body == nil || r.ContentLength == 0 {
 		return errEmptyProtocolBindingSpecBody
 	}
-	decoder := jsonDecoder(io.LimitReader(r.Body, 1<<20))
-	if err := decoder.Decode(target); err != nil {
+	if err := api.DecodeRequestBody(w, r, target, api.RequestBodySpec{MaxBytes: 1 << 20}); err != nil {
 		if errors.Is(err, io.EOF) {
 			return errEmptyProtocolBindingSpecBody
 		}
-		return err
-	}
-	var extra any
-	if err := decoder.Decode(&extra); err == nil {
-		return errors.New("sessions: trailing protocol binding spec body")
-	} else if !errors.Is(err, io.EOF) {
 		return err
 	}
 	return nil

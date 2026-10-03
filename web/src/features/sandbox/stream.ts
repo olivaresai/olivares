@@ -73,7 +73,7 @@ export function useRunStream({
   runId,
   enabled = true,
 }: UseRunStreamOptions): UseRunStreamResult {
-  const token = useSessionStore((s) => s.token)
+  const token = useSessionStore((s) => s.csrfToken)
   const credentialGeneration = useSessionStore((s) => s.credentialGeneration)
   const tenant = useTenantStore((s) => s.activeTenant)
   const [outputs, setOutputs] = useState<Output[]>([])

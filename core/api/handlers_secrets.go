@@ -71,8 +71,10 @@ func (s *Server) secretSvc(w http.ResponseWriter, r *http.Request) (*auth.Secret
 	return s.secretStore, true
 }
 
-// The explicit tenant scope serves only MCP credential handles. It cannot
-// inventory or replace provider, federation, or deployment-wide secrets.
+// The explicit tenant scope serves MCP credential handles (mcp/) and the secrets
+// sessions receive as environment variables (env/, modules/sessions
+// session_secret_env.go). It cannot inventory or replace provider, federation, or
+// deployment-wide secrets.
 func (s *Server) secretScope(w http.ResponseWriter, r *http.Request) (auth.Principal, model.TenantID, bool) {
 	values, present := r.URL.Query()["scope"]
 	if !present {
@@ -93,9 +95,15 @@ func (s *Server) secretScope(w http.ResponseWriter, r *http.Request) (auth.Princ
 	return p, tenant, ok
 }
 
+// tenantSecretName is the tenant scope's namespace: MCP credential handles and
+// session environment secrets.
+func tenantSecretName(name string) bool {
+	return strings.HasPrefix(name, "mcp/") || strings.HasPrefix(name, "env/")
+}
+
 func (s *Server) secretNameInScope(w http.ResponseWriter, r *http.Request, scope model.TenantID, name string) bool {
-	if scope != auth.GlobalSecretScope && !strings.HasPrefix(name, "mcp/") {
-		s.badRequest(w, r, "tenant secret names must begin with mcp/")
+	if scope != auth.GlobalSecretScope && !tenantSecretName(name) {
+		s.badRequest(w, r, "tenant secret names must begin with mcp/ or env/")
 		return false
 	}
 	return true
@@ -117,7 +125,7 @@ func (s *Server) handleListSecrets(w http.ResponseWriter, r *http.Request) {
 	}
 	out := secretsListDTO{Secrets: make([]secretDTO, 0, len(views)), SealerAvailable: svc.SealerWired()}
 	for _, v := range views {
-		if scope != auth.GlobalSecretScope && !strings.HasPrefix(v.Name, "mcp/") {
+		if scope != auth.GlobalSecretScope && !tenantSecretName(v.Name) {
 			continue
 		}
 		out.Secrets = append(out.Secrets, toSecretDTO(v))
@@ -131,7 +139,7 @@ func (s *Server) handlePutSecret(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	svc, ok := s.secretSvc(w, r)
@@ -159,7 +167,7 @@ func (s *Server) handleDeleteSecret(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	svc, ok := s.secretSvc(w, r)

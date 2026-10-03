@@ -7,12 +7,15 @@ package sourcescope
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/secret"
 	"github.com/olivaresai/olivares/core/store"
@@ -32,8 +35,8 @@ import (
 // path. A nil sealer means workspace connector secrets are not available (the module
 // operates in reference-only mode).
 type WorkspaceConnectorSealer interface {
-	SealWorkspaceSecret(ctx context.Context, workspace, connector, field, value, actor string) (ref string, err error)
-	DeleteWorkspaceSecrets(ctx context.Context, workspace, connector, actor string) error
+	SealWorkspaceSecret(ctx context.Context, tenant model.TenantID, workspace, connector, field, value string, actor auth.Principal) (ref string, err error)
+	DeleteWorkspaceSecrets(ctx context.Context, tenant model.TenantID, workspace, connector string, refs map[string]string, actor auth.Principal) error
 }
 
 // wsConnectorDTO is the wire shape of a workspace-scoped connector definition.
@@ -84,7 +87,10 @@ func (d *wsConnectorDTO) validate() string {
 			return "config values must not contain inline credentials; supply them through secrets"
 		}
 	}
-	for _, val := range d.Secrets {
+	for field, val := range d.Secrets {
+		if field == "" || field != strings.TrimSpace(field) {
+			return "secret field names must not be blank or padded"
+		}
 		if containsInlineCredential(val) {
 			return "secrets values must be references or inline literals, never URLs with embedded credentials"
 		}
@@ -215,17 +221,28 @@ func (m *Module) handleCreateWsConnector(w http.ResponseWriter, r *http.Request,
 		writeJSON(w, http.StatusBadRequest, errorBody(msg))
 		return
 	}
+	// The vault uses the auth partition; never open it inside this module's
+	// transaction (SQLite has one connection). Check the workspace before sealing,
+	// then re-resolve it in the write transaction. Each sealed reference is new.
+	if err := mc.Data.View(r.Context(), func(sc store.Scope) error {
+		_, _, err := resolveScope(r.Context(), sc, scopeWorkspace, &in.WorkspaceRef)
+		return err
+	}); err != nil {
+		writeWsConnectorError(w, err)
+		return
+	}
+	sealed, created, err := m.sealWsSecrets(r.Context(), mc, in.WorkspaceRef, in.Name, in.Secrets, nil)
+	if err != nil {
+		writeWsConnectorError(w, err)
+		return
+	}
+	in.Secrets = sealed
 	var out wsConnectorDTO
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err = mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		wsID, _, err := resolveScope(r.Context(), sc, scopeWorkspace, &in.WorkspaceRef)
 		if err != nil {
 			return err
 		}
-		sealedSecrets, err := m.sealWsSecrets(r.Context(), in.WorkspaceRef, in.Name, in.Secrets, nil, mc.Principal.Actor())
-		if err != nil {
-			return err
-		}
-		in.Secrets = sealedSecrets
 		in.Status = "pending"
 		repo, err := sc.Ext(wsConnectorKind)
 		if err != nil {
@@ -238,6 +255,9 @@ func (m *Module) handleCreateWsConnector(w http.ResponseWriter, r *http.Request,
 		out = toWsConnectorDTO(rec)
 		return auditWsConnector(r.Context(), sc, mc, "create", in)
 	})
+	if err != nil && !errors.Is(err, store.ErrCommitOutcomeUnknown) {
+		m.deleteWsSecrets(r.Context(), mc, in.WorkspaceRef, in.Name, created)
+	}
 	if verr, ok := err.(validationError); ok {
 		writeJSON(w, http.StatusBadRequest, errorBody(string(verr)))
 		return
@@ -288,39 +308,71 @@ func (m *Module) handleUpdateWsConnector(w http.ResponseWriter, r *http.Request,
 	if !decodeJSON(w, r, &in) {
 		return
 	}
-	var out wsConnectorDTO
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	var original model.Record
+	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(wsConnectorKind)
 		if err != nil {
 			return err
 		}
-		rec, err := repo.Get(r.Context(), id)
+		original, err = repo.Get(r.Context(), id)
+		return err
+	})
+	if err != nil {
+		writeStoreError(w, err)
+		return
+	}
+	in.Name = original.String(colWCName)
+	in.Kind = original.String(colWCKind)
+	in.WorkspaceRef = original.String(colWCWorkspace)
+	if msg := in.validate(); msg != "" {
+		writeWsConnectorError(w, validationError(msg))
+		return
+	}
+	existing := parseMap(original.String(colWCSecretsRef))
+	sealed, created, err := m.sealWsSecrets(r.Context(), mc, in.WorkspaceRef, in.Name, in.Secrets, existing)
+	if err != nil {
+		writeWsConnectorError(w, err)
+		return
+	}
+	in.Secrets = sealed
+	var out wsConnectorDTO
+	err = mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+		repo, err := sc.Ext(wsConnectorKind)
 		if err != nil {
 			return err
 		}
-		in.Name = rec.String(colWCName)
-		in.Kind = rec.String(colWCKind)
-		in.WorkspaceRef = rec.String(colWCWorkspace)
-		if msg := in.validate(); msg != "" {
-			return validationError(msg)
+		// Keep the version from the pre-seal read. A concurrent update refuses
+		// through the repository's optimistic version check, rather than losing it.
+		for k, v := range in.fields(model.ID(original.String(colWCWsID)), original.String(colWCCreatedBy)) {
+			original[k] = v
 		}
-		existingSecrets := parseMap(rec.String(colWCSecretsRef))
-		sealedSecrets, err := m.sealWsSecrets(r.Context(), in.WorkspaceRef, in.Name, in.Secrets, existingSecrets, mc.Principal.Actor())
-		if err != nil {
-			return err
-		}
-		in.Secrets = sealedSecrets
-		wsID := model.ID(rec.String(colWCWsID))
-		for k, v := range in.fields(wsID, rec.String(colWCCreatedBy)) {
-			rec[k] = v
-		}
-		rec, err = repo.Update(r.Context(), rec)
+		rec, err := repo.Update(r.Context(), original)
 		if err != nil {
 			return err
 		}
 		out = toWsConnectorDTO(rec)
 		return auditWsConnector(r.Context(), sc, mc, "update", in)
 	})
+	if err != nil {
+		// An unknown commit may have published these references. Keep both
+		// generations until the store outcome is known; never break a live row.
+		if !errors.Is(err, store.ErrCommitOutcomeUnknown) {
+			m.deleteWsSecrets(r.Context(), mc, in.WorkspaceRef, in.Name, created)
+		}
+	} else {
+		retained := map[string]bool{}
+		for _, ref := range sealed {
+			retained[canonicalSecretRef(ref)] = true
+		}
+		obsolete := map[string]string{}
+		for field, ref := range existing {
+			if !retained[canonicalSecretRef(ref)] {
+				obsolete[field] = ref
+			}
+		}
+		m.deleteWsSecrets(r.Context(), mc, in.WorkspaceRef, in.Name, obsolete)
+	}
+
 	if verr, ok := err.(validationError); ok {
 		writeJSON(w, http.StatusBadRequest, errorBody(string(verr)))
 		return
@@ -340,12 +392,18 @@ func (m *Module) handleDeleteWsConnector(w http.ResponseWriter, r *http.Request,
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid id"))
 		return
 	}
+	var removed wsConnectorDTO
+	var refs map[string]string
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(wsConnectorKind)
 		if err != nil {
 			return err
 		}
-		rec, err := repo.Get(r.Context(), id)
+		locker, ok := repo.(store.RowLocker[model.Record])
+		if !ok {
+			return store.ErrStoreUnavailable
+		}
+		rec, err := locker.Lock(r.Context(), id)
 		if err != nil {
 			return err
 		}
@@ -353,13 +411,14 @@ func (m *Module) handleDeleteWsConnector(w http.ResponseWriter, r *http.Request,
 		if err := repo.Delete(r.Context(), id); err != nil {
 			return err
 		}
-		m.deleteWsSecrets(r.Context(), snap.WorkspaceRef, snap.Name, mc.Principal.Actor())
+		removed, refs = snap, parseMap(rec.String(colWCSecretsRef))
 		return auditWsConnector(r.Context(), sc, mc, "delete", snap)
 	})
 	if err != nil {
 		writeStoreError(w, err)
 		return
 	}
+	m.deleteWsSecrets(r.Context(), mc, removed.WorkspaceRef, removed.Name, refs)
 	writeJSON(w, http.StatusNoContent, nil)
 }
 
@@ -367,57 +426,78 @@ func (m *Module) handleDeleteWsConnector(w http.ResponseWriter, r *http.Request,
 // reference; a reference value (env:…, vault:…, store:…) is stored verbatim; any
 // other literal is sealed through the WorkspaceConnectorSealer. If no sealer is
 // wired, literals are rejected (reference-only mode).
-func (m *Module) sealWsSecrets(ctx context.Context, workspace, connector string, incoming, existing map[string]string, actor string) (map[string]string, error) {
+func (m *Module) sealWsSecrets(ctx context.Context, mc api.ModuleContext, workspace, connector string, incoming, existing map[string]string) (map[string]string, map[string]string, error) {
 	if len(incoming) == 0 {
 		if existing != nil {
-			return existing, nil
+			return existing, nil, nil
 		}
-		return map[string]string{}, nil
+		return map[string]string{}, nil, nil
 	}
 	out := make(map[string]string, len(incoming))
+	created := map[string]string{}
 	for field, val := range incoming {
-		field = strings.TrimSpace(field)
-		if field == "" {
-			continue
-		}
 		switch {
 		case val == "":
-			if existing != nil {
-				if ref, ok := existing[field]; ok {
-					out[field] = ref
-				}
+			if ref, ok := existing[field]; ok {
+				out[field] = ref
 			}
 		case isSecretReference(val):
-			out[field] = val
+			out[field] = canonicalSecretRef(val)
 		default:
 			m.mu.RLock()
 			sealer := m.wsSealer
 			m.mu.RUnlock()
-			if sealer == nil {
-				return nil, validationError("inline secrets require a workspace secret sealer (not configured)")
+			var ref string
+			err := auth.ErrNoSecretSealer
+			if sealer != nil {
+				ref, err = sealer.SealWorkspaceSecret(ctx, mc.Tenant, workspace, connector, field, val, mc.Principal)
 			}
-			ref, err := sealer.SealWorkspaceSecret(ctx, workspace, connector, field, val, actor)
 			if err != nil {
-				return nil, err
+				m.deleteWsSecrets(ctx, mc, workspace, connector, created)
+				if errors.Is(err, auth.ErrNoSecretSealer) {
+					err = validationError("inline secrets require a workspace secret sealer (not configured)")
+				}
+				return nil, nil, err
 			}
-			out[field] = ref
+			out[field], created[field] = ref, ref
 		}
 	}
-	return out, nil
+	return out, created, nil
 }
 
-// deleteWsSecrets cascade-deletes workspace-owned sealed secrets (best-effort).
-func (m *Module) deleteWsSecrets(ctx context.Context, workspace, connector, actor string) {
+// deleteWsSecrets runs only after the module transaction has ended. Cleanup has
+// a short independent deadline so an HTTP cancellation cannot leave new secrets
+// behind. The adapter deletes only owned references, never caller-supplied ones.
+func (m *Module) deleteWsSecrets(ctx context.Context, mc api.ModuleContext, workspace, connector string, refs map[string]string) {
+	if len(refs) == 0 {
+		return
+	}
 	m.mu.RLock()
 	sealer := m.wsSealer
 	m.mu.RUnlock()
 	if sealer == nil {
 		return
 	}
-	if err := sealer.DeleteWorkspaceSecrets(ctx, workspace, connector, actor); err != nil && m.log != nil {
-		m.log.Warn("workspace connector: could not delete workspace secrets after removal",
-			"workspace", workspace, "connector", connector, "err", err)
+	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	if err := sealer.DeleteWorkspaceSecrets(cleanup, mc.Tenant, workspace, connector, refs, mc.Principal); err != nil && m.log != nil {
+		m.log.Warn("workspace connector: workspace secret cleanup failed", "workspace", workspace, "connector", connector)
 	}
+}
+
+func writeWsConnectorError(w http.ResponseWriter, err error) {
+	if verr, ok := err.(validationError); ok {
+		writeJSON(w, http.StatusBadRequest, errorBody(string(verr)))
+		return
+	}
+	writeStoreError(w, err)
+}
+
+func canonicalSecretRef(value string) string {
+	if ref, ok := secret.ParseReference(value); ok {
+		return ref.Scheme + ":" + ref.Locator
+	}
+	return value
 }
 
 // isSecretReference reports whether val looks like a secret reference (scheme:locator)

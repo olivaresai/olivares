@@ -133,12 +133,15 @@ func TestConsoleSupportBundleSecretInventoryOmitsFingerprints(t *testing.T) {
 func TestConsoleSupportBundleSecretInventoryRequiresAdminAndAAL3(t *testing.T) {
 	h := newSecretsHarness(t)
 	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "privacy-fixture")
+	member := h.mkMember(admin, "privacy@example.invalid", "SyntheticMemberPassword1", auth.RoleAdmin, tenant)
+	// Members are added before the passkey step-up is required: adding a person asks
+	// for the same step-up (HU-28).
+	h.requirePasskeyStepUp()
 	refused := doWave2Binary(h, http.MethodPost, "/v1/console/support-bundle", admin)
 	if refused.Code != http.StatusForbidden || !strings.Contains(refused.Body.String(), "step_up_required") {
 		t.Fatalf("admin at AAL1 = %d %s, want 403 step_up_required", refused.Code, refused.Body.String())
 	}
-	tenant := h.createOrg(admin, "privacy-fixture")
-	member := h.mkMember(admin, "privacy@example.invalid", "SyntheticMemberPassword1", auth.RoleAdmin, tenant)
 	h.elevate(member)
 	refused = doWave2Binary(h, http.MethodPost, "/v1/console/support-bundle", member)
 	if refused.Code != http.StatusForbidden || strings.Contains(refused.Body.String(), "step_up_required") {

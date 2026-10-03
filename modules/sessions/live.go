@@ -71,44 +71,7 @@ func (m *Module) foldEdge(ctx context.Context, tenantRef string, reg *event.Sour
 			return err
 		}
 		rec, err := m.upsertLiveScoped(ctx, sc, ref, scope, at, func(rec model.Record, _ bool) {
-			rec[colEventCount] = rec.Int(colEventCount) + 1
-			advanceLast(rec, at)
-			if edge.ToolRef != "" {
-				rec[colToolCalls] = rec.Int(colToolCalls) + 1
-				rec[colCurrentTool] = edge.ToolRef
-				rec[colCurrentRes] = edge.ResourceRef
-				rec[colCurrentMode] = string(edge.Mode)
-			}
-			// SG-01: the engine and the enforcement posture the producing connector
-			// declared. Labels are the SDK's attribution channel and are explicitly not
-			// part of any dedup key, which is what makes them safe to fold here.
-			//
-			// An absent label NEVER clears a known value: a connector that does not
-			// declare its engine leaves the session's engine as it was, so one
-			// unlabelled fact cannot erase what an earlier labeled one established.
-			// The posture takes the WEAKEST value seen: a session with one merely
-			// observed action is not an enforced session, and rounding it up would be
-			// the overstatement this column exists to prevent.
-			//
-			// B2: a PROFILE fixes the driver. On an observed row the engine is the
-			// binding's driver and a contradicting payload label does not move it.
-			if scope.profileID != "" {
-				rec[colEngine] = scope.provider
-			} else if v := edge.Labels[labelEngine]; v != "" {
-				rec[colEngine] = v
-			}
-			if v := edge.Labels[labelPosture]; v != "" {
-				if rec.String(colPosture) != postureObserved {
-					rec[colPosture] = v
-				}
-			}
-			// agent_ref (was a dead column, schema.go:colAgentRef): written from the
-			// connector's identity-attribution edge, never guessed. The session is
-			// linked to its Claude agent once (OBS-09); the ref is already redacted
-			// (an opaque agent name, not content).
-			if edge.ResourceKind == resIdentityAgent && edge.ResourceRef != "" {
-				rec[colAgentRef] = edge.ResourceRef
-			}
+			applyLiveEdge(rec, scope, edge, at)
 		})
 		if err != nil {
 			return err
@@ -155,13 +118,7 @@ func (m *Module) foldCost(ctx context.Context, tenantRef string, reg *event.Sour
 			return err
 		}
 		rec, err := m.upsertLiveScoped(ctx, sc, cost.SessionRef, scope, at, func(rec model.Record, _ bool) {
-			rec[colInputTokens] = rec.Int(colInputTokens) + cost.InputTokens
-			rec[colOutputTokens] = rec.Int(colOutputTokens) + cost.OutputTokens
-			rec[colCostMicroUSD] = rec.Int(colCostMicroUSD) + cost.CostMicroUSD
-			if cost.ModelRef != "" {
-				rec[colModelRef] = cost.ModelRef
-			}
-			advanceLast(rec, at)
+			applyLiveCost(rec, cost, at)
 		})
 		if err != nil {
 			return err
@@ -205,18 +162,7 @@ func (m *Module) foldFinding(ctx context.Context, tenantRef string, reg *event.S
 			return err
 		}
 		rec, err := m.upsertLiveScoped(ctx, sc, f.SubjectRef, scope, at, func(rec model.Record, _ bool) {
-			if f.Kind == "anti_evasion" {
-				rec[colEvasionAt] = model.NewTimestamp(at).String()
-			}
-			// summary (was a dead column, schema.go:colSummary): derived from the
-			// cooperative close/compaction metadata (a forensic-continuity finding,
-			// e.g. a context compaction), bounded and non-sensitive — the finding
-			// Title is a safe-to-display summary by contract, never raw transcript.
-			// Empty until such metadata arrives; NEVER an LLM-fabricated summary.
-			if f.Kind == forensicFindingKind && f.Title != "" {
-				rec[colSummary] = clampSummary(f.Title)
-			}
-			advanceLast(rec, at)
+			applyLiveFinding(rec, f, at)
 		})
 		if err != nil {
 			return err
@@ -409,4 +355,71 @@ func setIf(rec model.Record, col, v string) {
 // eq is a shorthand for an equality filter.
 func eq(col, val string) model.Filter {
 	return model.Filter{Column: col, Op: model.OpEq, Value: val}
+}
+
+// Shared live reducers keep connector and authenticated managed observations consistent.
+func applyLiveEdge(rec model.Record, scope liveScope, edge sdkmodel.EdgeObservation, at time.Time) {
+	rec[colEventCount] = rec.Int(colEventCount) + 1
+	advanceLast(rec, at)
+	if edge.ToolRef != "" {
+		rec[colToolCalls] = rec.Int(colToolCalls) + 1
+		rec[colCurrentTool] = edge.ToolRef
+		rec[colCurrentRes] = edge.ResourceRef
+		rec[colCurrentMode] = string(edge.Mode)
+	}
+	// SG-01: the engine and the enforcement posture the producing connector
+	// declared. Labels are the SDK's attribution channel and are explicitly not
+	// part of any dedup key, which is what makes them safe to fold here.
+	//
+	// An absent label NEVER clears a known value: a connector that does not
+	// declare its engine leaves the session's engine as it was, so one
+	// unlabelled fact cannot erase what an earlier labeled one established.
+	// The posture takes the WEAKEST value seen: a session with one merely
+	// observed action is not an enforced session, and rounding it up would be
+	// the overstatement this column exists to prevent.
+	//
+	// B2: a PROFILE fixes the driver. On an observed row the engine is the
+	// binding's driver and a contradicting payload label does not move it.
+	if scope.profileID != "" {
+		rec[colEngine] = scope.provider
+	} else if v := edge.Labels[labelEngine]; v != "" {
+		rec[colEngine] = v
+	}
+	if v := edge.Labels[labelPosture]; v != "" {
+		if rec.String(colPosture) != postureObserved {
+			rec[colPosture] = v
+		}
+	}
+	// agent_ref (was a dead column, schema.go:colAgentRef): written from the
+	// connector's identity-attribution edge, never guessed. The session is
+	// linked to its Claude agent once (OBS-09); the ref is already redacted
+	// (an opaque agent name, not content).
+	if edge.ResourceKind == resIdentityAgent && edge.ResourceRef != "" {
+		rec[colAgentRef] = edge.ResourceRef
+	}
+}
+
+func applyLiveCost(rec model.Record, cost sdkmodel.CostSample, at time.Time) {
+	rec[colInputTokens] = rec.Int(colInputTokens) + cost.InputTokens
+	rec[colOutputTokens] = rec.Int(colOutputTokens) + cost.OutputTokens
+	rec[colCostMicroUSD] = rec.Int(colCostMicroUSD) + cost.CostMicroUSD
+	if cost.ModelRef != "" {
+		rec[colModelRef] = cost.ModelRef
+	}
+	advanceLast(rec, at)
+}
+
+func applyLiveFinding(rec model.Record, f sdkmodel.FindingReport, at time.Time) {
+	if f.Kind == "anti_evasion" {
+		rec[colEvasionAt] = model.NewTimestamp(at).String()
+	}
+	// summary (was a dead column, schema.go:colSummary): derived from the
+	// cooperative close/compaction metadata (a forensic-continuity finding,
+	// e.g. a context compaction), bounded and non-sensitive — the finding
+	// Title is a safe-to-display summary by contract, never raw transcript.
+	// Empty until such metadata arrives; NEVER an LLM-fabricated summary.
+	if f.Kind == forensicFindingKind && f.Title != "" {
+		rec[colSummary] = clampSummary(f.Title)
+	}
+	advanceLast(rec, at)
 }

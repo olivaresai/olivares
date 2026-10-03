@@ -150,6 +150,33 @@ export function formatDateTime(
   }).format(d)
 }
 
+/** RFC3339 timestamp → the shortest absolute time a table cell needs: the time alone
+ * today, the day and time this year, the full date and time otherwise. `now` is for tests. */
+export function formatShortDateTime(
+  iso: string | null | undefined,
+  locale: string = currentLanguage(),
+  now: Date = new Date(),
+): string {
+  if (!iso) return DASH
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return DASH
+  const hourCycle = displayHourCycle()
+  if (d.toDateString() === now.toDateString())
+    return new Intl.DateTimeFormat(locale, {
+      timeStyle: 'short',
+      hourCycle,
+    }).format(d)
+  if (d.getFullYear() === now.getFullYear())
+    return new Intl.DateTimeFormat(locale, {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      hourCycle,
+    }).format(d)
+  return formatDateTime(iso, locale)
+}
+
 /** RFC3339 timestamp → just the date (axis ticks, evidence dates). */
 export function formatDate(
   iso: string | null | undefined,

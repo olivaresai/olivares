@@ -121,12 +121,43 @@ curl -sf "$BASE/v1/agents" \
 ./bin/olivares agent managed-settings --out ./managed-settings.json
 ```
 
-`POST /v1/agents` **не** требует AAL3. Создание источников, коннекторов,
-рабочих пространств и секретов **требует**.
+`POST /v1/agents` не требует дополнительной административной проверки. Для
+источников, коннекторов, рабочих пространств и секретов она определяется
+`admin_step_up`; значение по умолчанию — `none`. Как потребовать AAL3,
+описано ниже в разделе политики.
 
 ### 4. Управляемая сессия: разрешить Read, запретить Bash
 
-Перезапустите с `OLIVARES_HOOK_PEP_CONFIG` и политикой deny-closed. Затем:
+Остановите движок из шага 1. Выполните следующие команды в том же рабочем
+каталоге, сохранив `DATA` и `TENANT` из шагов 1 и 2. Это создаёт политику с
+отказом по умолчанию и перезапускает движок с подключённым PEP:
+
+```bash
+# TENANT is the tenant_id returned in step 2.
+: "${TENANT:?Set TENANT to the tenant_id from step 2}"
+cat > ./hook-pep.json <<JSON
+{
+  "listen": "127.0.0.1:8447",
+  "tenants": [
+    {
+      "tenant": "$TENANT",
+      "require_firm_identity": false,
+      "policy": {
+        "version": "first-hour/v1",
+        "default": "deny",
+        "rules": [
+          { "tool": "Read", "decision": "allow", "reason": "reads are permitted in the first hour" },
+          { "tool": "Bash", "decision": "deny", "reason": "shell execution is blocked in the first hour" }
+        ]
+      }
+    }
+  ]
+}
+JSON
+OLIVARES_HOOK_PEP_CONFIG=./hook-pep.json \
+  ./bin/olivares serve --insecure --data-dir "$DATA" \
+  --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444
+```
 
 ```bash
 export OLIVARES_HOOK_PEP_URL=http://127.0.0.1:8447/
@@ -170,11 +201,22 @@ docker compose -f deploy/compose/docker-compose.yml \
 станции, где уже есть `claude`. Живая сессия официального CLI (PTY) — это
 дело рантайма Community, не этой страницы.
 
-## Барьер AAL3 (по-прежнему верен)
+## Политика дополнительной административной проверки
 
-Создание источников, коннекторов, рабочих пространств и секретов
-**отклоняется** до AAL3. PIV/CAC отвечает **501** на стандартной установке.
-Откройте `https://localhost:PORT`, затем **Identity → Privileged login**.
+Значение `admin_step_up` по умолчанию — `none`: вошедший администратор
+работает с текущим уровнем своей сессии. Поэтому создание источников,
+коннекторов, рабочих пространств и секретов по умолчанию не требует AAL3.
+Аутентификация, разрешения, изоляция tenants и аудит продолжают действовать;
+API-токены не удовлетворяют этой проверке.
+
+Чтобы потребовать свежую AAL3 для этих действий, зарегистрируйте passkey на
+`https://localhost:PORT` и выполните свежую проверку passkey/PIV по этому
+адресу консоли. В **Settings → Sign-in → Extra check for administrative
+actions** выберите **Passkey**. Эквивалент через API —
+`PUT /v1/auth/step-up-policy` с `{"admin_step_up":"passkey"}`. Движок
+отклоняет усиление политики, пока администратор не докажет, что выбранный
+фактор работает. `POST /v1/agents` остаётся вне этой дополнительной проверки.
+
 
 ## 3. Запуск сессии Claude Code из консоли
 

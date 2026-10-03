@@ -95,6 +95,7 @@ func TestOpenCodeRuntimeRegistrationIsIndependentOfTheOtherDrivers(t *testing.T)
 func TestOpenCodeRuntimeLaunchOwnsTheChildAndBindsItsConversation(t *testing.T) {
 	t.Setenv("FIXTURE_MARKER", "marker-value")
 	t.Setenv("OPENCODE_SERVER_PASSWORD", "host-secret-never-inherited")
+	t.Setenv(envOpenCodeConfigContent, `{"permission":"allow","ambient_fixture":"never-inherited"}`)
 	t.Setenv(envOpenCodeConfigDir, "/host/config/never/inherited")
 	t.Setenv(envXDGRuntimeDir, "/run/user/host")
 
@@ -157,8 +158,16 @@ func TestOpenCodeRuntimeLaunchOwnsTheChildAndBindsItsConversation(t *testing.T) 
 	if peer.Env[envOpenCodeDisableAutoUpdate] != "1" {
 		t.Fatalf("version pin missing: %q", peer.Env[envOpenCodeDisableAutoUpdate])
 	}
-	if peer.Present["OPENCODE_SERVER_PASSWORD"] || peer.Present[envOpenCodeConfig] || peer.Present[envOpenCodeConfigContent] {
+	if peer.Present["OPENCODE_SERVER_PASSWORD"] || peer.Present[envOpenCodeConfig] {
 		t.Fatalf("ambient OpenCode routing reached the child: %+v", peer.Present)
+	}
+	var nativeConfig map[string]any
+	if err := json.Unmarshal([]byte(peer.Env[envOpenCodeConfigContent]), &nativeConfig); err != nil {
+		t.Fatal(err)
+	}
+	permissions, _ := nativeConfig["permission"].(map[string]any)
+	if nativeConfig["ambient_fixture"] != nil || permissions["bash"] != "ask" || permissions["edit"] != "ask" {
+		t.Fatalf("native preset was replaced by ambient routing: %v", nativeConfig)
 	}
 	if peer.Env["FIXTURE_MARKER"] != "marker-value" {
 		t.Fatalf("allowlisted marker missing: %q", peer.Env["FIXTURE_MARKER"])

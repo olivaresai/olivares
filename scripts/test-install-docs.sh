@@ -40,6 +40,7 @@ copy_one() {
 }
 fixed=(
 	RELEASE-VERSION .goreleaser.yaml .github/workflows/release.yml
+	packaging/nfpm/packages.json scripts/build-native-release-packages.py
 	.github/workflows/release-chart.yml scripts/install.sh
 	"$WITNESS" deploy/helm/README.md deploy/helm/olivares/Chart.yaml
 	deploy/helm/olivares/templates/NOTES.txt docs/UPGRADE-AND-ROLLBACK.md
@@ -160,6 +161,20 @@ cp "$TREE/.goreleaser.yaml" "$W/goreleaser.good"
 sed -i '0,/^archives:$/s//# archives:/' "$TREE/.goreleaser.yaml"
 expect "mutant: commented producer is not active" 1 'producer active anchor is absent'
 cp "$W/goreleaser.good" "$TREE/.goreleaser.yaml"
+
+# The native packages are produced by the release-archive package builder with the formats that
+# packaging/nfpm/packages.json declares. Both halves are bound: a format dropped from the data
+# and a renamed package file are each a finding, not a pass.
+cp "$TREE/packaging/nfpm/packages.json" "$W/packages.good"
+jq '(.nfpms[] | select(.formats == ["deb","rpm","apk"]) | .formats) = ["deb","rpm"]' \
+	"$W/packages.good" >"$TREE/packaging/nfpm/packages.json" || blind "cannot write the formats mutant"
+expect "mutant: a native format dropped from the package data" 1 'native-package format producer'
+cp "$W/packages.good" "$TREE/packaging/nfpm/packages.json"
+cp "$TREE/scripts/build-native-release-packages.py" "$W/native-builder.good"
+sed -i 's/olivares_{version}_linux_{arch}[.]{ext}/olivares-{version}-linux-{arch}.{ext}/' \
+	"$TREE/scripts/build-native-release-packages.py"
+expect "mutant: the native package file name changed" 1 'native-package name producer anchor is absent'
+cp "$W/native-builder.good" "$TREE/scripts/build-native-release-packages.py"
 
 cp "$TREE/docs-site/astro.config.mjs" "$W/astro.good"
 sed -i "/{ label: 'Install from a package'/s#^#// #" "$TREE/docs-site/astro.config.mjs"

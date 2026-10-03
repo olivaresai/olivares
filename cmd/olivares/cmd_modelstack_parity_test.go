@@ -172,7 +172,7 @@ func modelstackRoutes() []modelstackRoute {
 		get(f, fb+"/outcomes", "finops", "outcomes", "ls"),
 		post(f, fb+"/outcomes", "finops", "outcomes", "ingest", "--data", "{}"),
 		post(f, fb+"/seats", "finops", "seats", "ingest", "--data", "{}"),
-		get(f, fb+"/seats/utilization", "finops", "seats", "utilization"),
+		get(f, fb+"/seats/utilization", "finops", "seats", "utilization", "--provider", "anthropic"),
 		post(f, fb+"/cost", "finops", "cost", "ingest", "--data", "{}"),
 		// --- finops: budgets and alerts (7) ---
 		get(f, fb+"/budgets", "finops", "budgets", "ls"),

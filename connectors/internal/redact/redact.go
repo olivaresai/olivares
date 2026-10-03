@@ -42,6 +42,7 @@ type secretPattern struct {
 // shapes (a fixed prefix + charset) so false positives are rare; order does not
 // matter because the shapes do not overlap in practice.
 var wholeMatchPatterns = []secretPattern{
+	{"olivares-token", regexp.MustCompile(`(?:olvsess_|olvs_|olvk_)[0-9A-Za-z._~+/=-]{8,}`)},
 	{"aws-access-key", regexp.MustCompile(`(?:AKIA|ASIA|AGPA|AIDA|AROA|ANPA|ANVA)[0-9A-Z]{16}`)},
 	{"github-token", regexp.MustCompile(`gh[pousr]_[0-9A-Za-z]{36,255}`)},
 	{"github-pat", regexp.MustCompile(`github_pat_[0-9A-Za-z_]{22,255}`)},
@@ -54,17 +55,25 @@ var wholeMatchPatterns = []secretPattern{
 	{"bearer-token", regexp.MustCompile(`(?i)bearer\s+[0-9A-Za-z._~+/=-]{8,}`)},
 }
 
+// urlUserInfoRe removes credentials from URLs embedded in shell commands or notes,
+// before any text reaches the approval queue or audit. The authority stops at a
+// path/query/fragment delimiter; every userinfo form is confidential, even when
+// the password is percent-encoded or absent.
+var urlUserInfoRe = regexp.MustCompile(`(?i)([a-z][a-z0-9+.-]*://)[^/\s?#"'\\]*@`)
+
 // keyValueRe matches a sensitive key followed by its value (in =, :, or
 // key="value" form). Submatch 1 is the key+separator to preserve; submatch 2 is
 // the value to redact, so the cleaned string keeps the structure
 // ("api_key=[REDACTED]") while losing the secret. The value charset stops at
 // whitespace and common delimiters so only the secret token is taken.
+const sensitiveKeyPattern = `(?:api[_-]?key|secret|token|password|passwd|pwd|access[_-]?key|auth|client[_-]?secret)`
+
 var keyValueRe = regexp.MustCompile(
-	`(?i)((?:api[_-]?key|secret|token|password|passwd|pwd|access[_-]?key|auth|client[_-]?secret)["']?\s*[:=]\s*["']?)([^\s"'&;]{4,})`)
+	`(?i)(` + sensitiveKeyPattern + `["']?\s*[:=]\s*["']?)([^\s"'&;]{4,})`)
 
 // Scrub returns s with every recognized secret replaced by a labeled
-// placeholder, and reports whether anything was redacted. It applies the
-// key=value rule first (so a value that also looks like a token is removed once,
+// placeholder, and reports whether anything was redacted. It removes URL userinfo, then applies the
+// key=value rule (so a value that also looks like a token is removed once,
 // keeping its key) then the standalone shapes. It never returns the raw secret.
 func Scrub(s string) (string, bool) {
 	if s == "" {
@@ -72,7 +81,11 @@ func Scrub(s string) (string, bool) {
 	}
 	redacted := false
 
-	out := keyValueRe.ReplaceAllStringFunc(s, func(m string) string {
+	out := urlUserInfoRe.ReplaceAllString(s, "${1}"+Placeholder+"@")
+	if out != s {
+		redacted = true
+	}
+	out = keyValueRe.ReplaceAllStringFunc(out, func(m string) string {
 		sub := keyValueRe.FindStringSubmatch(m)
 		if len(sub) != 3 {
 			return m
@@ -100,7 +113,7 @@ func Clean(s string) string {
 // ContainsSecret reports whether s contains a recognized secret shape. It is the
 // detection half of Scrub, used to flag (not just clean) a value.
 func ContainsSecret(s string) bool {
-	if keyValueRe.MatchString(s) {
+	if urlUserInfoRe.MatchString(s) || keyValueRe.MatchString(s) {
 		return true
 	}
 	for _, p := range wholeMatchPatterns {

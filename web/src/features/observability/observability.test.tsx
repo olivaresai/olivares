@@ -190,7 +190,9 @@ describe('TraceWaterfall', () => {
     expect(row.className).toContain('text-accent-foreground')
     // La regresión que esto guarda, y es la real: que una fila seleccionada vuelva a heredar las
     // tintas del lienzo, que sobre el accent son ilegibles (2.97:1 y 1.45:1 en claro).
-    expect(row.className).not.toMatch(/(^|\s)text-(foreground|muted-foreground)(\s|$)/)
+    expect(row.className).not.toMatch(
+      /(^|\s)text-(foreground|muted-foreground)(\s|$)/,
+    )
   })
 
   it('shows a legend when multiple actors are present', () => {

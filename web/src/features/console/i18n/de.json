@@ -1,5 +1,5 @@
 {
-  "title": "Steuerungskonsole",
+  "title": "Verwaltung",
   "subtitle": "Konfigurieren Sie, wer Zugang erhält und was verwaltet werden darf: Onboarding von Benutzern, Anbindung von SSO sowie Gestaltung von Arbeitsbereichen und Agent-Gruppen.",
   "tabs": {
     "people": "Benutzer & Gruppen",
@@ -67,7 +67,7 @@
     "edition": "Edition",
     "editions": {
       "community": "Community",
-      "enterprise": "Enterprise"
+      "enterprise": "Business"
     },
     "status": "Lizenzstatus",
     "statuses": {
@@ -112,7 +112,7 @@
   },
   "people": {
     "title": "Benutzer",
-    "caption": "Nehmen Sie eine Person mit einem vom Administrator festgelegten Passwort oder einer E-Mail-Einladung in diese Organisation auf. SSO-Benutzer werden bei der ersten Anmeldung automatisch bereitgestellt.",
+    "caption": "Fügen Sie dieser Organisation eine Person hinzu, mit einem von Ihnen gesetzten Passwort oder einer E-Mail-Einladung.",
     "onboard": "Benutzer aufnehmen",
     "pendingTitle": "Ausstehende Einladungen",
     "pendingCaption": "Einladungen, die auf Annahme warten. Der einmalig nutzbare Link legt das Passwort fest und aktiviert das Konto.",
@@ -132,10 +132,10 @@
   },
   "members": {
     "title": "Aktive Mitglieder",
-    "caption": "Mandanten-Roster aus SCIM und Konsolen-Onboarding. Zeigt Rollen, Gruppen, Status und ob die Anmeldung nur per SSO möglich ist.",
+    "caption": "Alle Personen dieser Organisation, mit Rolle, Gruppen und Status.",
     "readOnlyNotice": "Sie benötigen Leserechte für Benutzer, um aktive Mitglieder anzuzeigen.",
     "none": "Keine aktiven Mitglieder.",
-    "noneHint": "Mitglieder erscheinen hier nach dem Onboarding, der SCIM-Bereitstellung oder der ersten SSO-Anmeldung.",
+    "noneHint": "Personen erscheinen hier, wenn Sie sie hinzufügen, oder nach ihrer ersten Anmeldung über Ihren Identitätsanbieter.",
     "user": "Benutzer",
     "groups": "Gruppen",
     "status": "Status",
@@ -168,8 +168,8 @@
     "totpResetDone": "TOTP-Faktor zurückgesetzt."
   },
   "superadmins": {
-    "title": "Superadministratoren",
-    "caption": "Aktivieren oder deaktivieren Sie die internen Superadministrator-Konten. Das Deaktivieren ist umkehrbar und nicht destruktiv: Das Konto wird als inaktiv markiert und seine Sitzungen und Token werden widerrufen, niemals gelöscht. Der letzte aktive Superadministrator kann nicht deaktiviert werden.",
+    "title": "Administratoren der Installation",
+    "caption": "Konten, die die gesamte Installation verwalten. Das Deaktivieren meldet das Konto ab und widerruft seine Tokens; nichts wird gelöscht, und das letzte kann nicht deaktiviert werden.",
     "statusHeader": "Status",
     "active": "Aktiv",
     "inactive": "Deaktiviert",
@@ -184,10 +184,10 @@
   },
   "onboard": {
     "title": "Benutzer aufnehmen",
-    "body": "Erstellen Sie ein Konto oder fügen Sie es dieser Organisation hinzu. Ein neues Konto ist niemals ein Superadministrator, und die Rolle kann Ihre eigene niemals überschreiten.",
+    "body": "Erstellen Sie ein Konto in dieser Organisation. Die vergebene Rolle kann nie höher sein als Ihre eigene.",
     "displayName": "Anzeigename",
     "displayNameHint": "Eine menschenlesbare Bezeichnung, die in der Konsole angezeigt wird.",
-    "emailHint": "Die Anmeldekennung. SSO-Benutzer melden sich stattdessen über den IdP an.",
+    "emailHint": "Die Adresse, mit der sich die Person anmeldet.",
     "roleHint": "Die in dieser Organisation gewährte integrierte Rolle.",
     "mode": "Wie sie sich anmelden",
     "modePassword": "Ein anfängliches Passwort festlegen",
@@ -268,6 +268,8 @@
     "groups": {
       "title": "Gruppen-Mapping & Bereitstellung",
       "caption": "Wie Verzeichnisgruppen des IdP zu Rollen werden und ob SCIM die alleinige Autorität für Konten ist. Hier konfiguriert; von der Business-Version zugeordnet.",
+      "provisioningTitle": "Bereitstellung",
+      "provisioningCaption": "Ob SCIM die alleinige Autorität für Konten ist.",
       "scimAuthoritative": "SCIM ist maßgeblich",
       "scimAuthoritativeHint": "Wenn aktiv, legt ein SSO-Login nie ein Konto an und ändert keine Gruppenmitgliedschaft — SCIM verwaltet das Verzeichnis. Wenn inaktiv, stellt der erste Login den Nutzer bereit und fügt die vom IdP genannten Gruppen hinzu (entfernt sie nie).",
       "unavailableBanner": "Diese Version extrahiert Gruppen aus der Assertion, ordnet sie aber keinen Rollen zu. Die Business-Version macht aus genannten Gruppen beim Login Berechtigungen."
@@ -282,12 +284,16 @@
       "label": "Identitätsanbieter",
       "default": "Primär (Standard)",
       "add": "+ Identitätsanbieter hinzufügen…",
-      "hint": "Ein Geltungsbereich kann mehrere Identitätsanbieter föderieren. Das Home-Realm-Routing per E-Mail-Domäne wird weiter unten konfiguriert. Nur ein Mandanten-Geltungsbereich kann mehrere Anbieter gleichzeitig aktiv haben: Jeder weitere muss eigene Domänen beanspruchen, und Ihre Lizenz kann es dennoch ablehnen; der bereitstellungsweite Bereich aktiviert nur den Primäranbieter. Der offene Build löst ausschließlich den bereitstellungsweiten Primäranbieter auf.",
+      "hint": "Eine Organisation kann mehrere aktive Anbieter nutzen; jeder weitere muss eigene E-Mail-Domains beanspruchen. Der bereitstellungsweite Bereich nutzt nur seinen primären Anbieter.",
       "addTitle": "Identitätsanbieter hinzufügen",
       "addBody": "Geben Sie dem neuen IdP einen kurzen Alias. Er identifiziert diesen IdP im Geltungsbereich und ist sein Routing-Schlüssel bei der Anmeldung.",
       "aliasLabel": "Alias",
       "aliasHint": "Kleinbuchstaben, Ziffern und Bindestriche (z. B. „okta“, „azure-ad“). 1–31 Zeichen.",
-      "addConfirm": "Weiter"
+      "addConfirm": "Weiter",
+      "on": "bei der Anmeldung aktiv",
+      "off": "aus",
+      "activeNow": "Bei der Anmeldung aktiv: {{names}}.",
+      "noneActive": "Kein Identitätsanbieter ist bei der Anmeldung aktiv: Die Anmeldung erfolgt mit Passwort."
     },
     "domains": {
       "title": "Home-Realm-Routing",
@@ -295,6 +301,29 @@
       "label": "Beanspruchte E-Mail-Domänen",
       "hint": "Eine Domäne pro Zeile (z. B. corp.com). Jede Domäne ist global über alle IdPs eindeutig; eine E-Mail-first-Anmeldung für diese Domäne wird hierher geleitet.",
       "unavailableBanner": "Domänen werden gespeichert, aber dieser Build leitet nicht danach; Home-Realm-Routing erfordert die Business-Edition."
+    },
+    "displayName": "Name auf der Anmeldeschaltfläche",
+    "displayNameHint": "Angezeigt wird „Anmelden mit <Name>“. Leer lassen, um „Single Sign-on“ anzuzeigen. Höchstens 80 Zeichen.",
+    "displayNameFallback": "Single Sign-on",
+    "mapping": {
+      "title": "Werte, die als MFA gelten",
+      "caption": "Welche Werte dieses Anbieters als Mehrfaktor-Anmeldung gelten. Föderierte MFA gilt höchstens als AAL2 und erfüllt nie AAL3. Jeder exakte Wert ist eine Ausnahme, der Sie vertrauen.",
+      "amr": "AMR-Werte (OIDC)",
+      "acr": "ACR-Werte (OIDC)",
+      "samlContexts": "Authentifizierungskontexte (SAML)",
+      "mode": {
+        "default": "Protokollstandard",
+        "exact": "Nur diese Werte"
+      },
+      "values": "Werte",
+      "valuesHint": "Ein Wert pro Zeile. Leer lassen, um keinem Wert zu vertrauen.",
+      "restore": "Protokollstandards wiederherstellen",
+      "invalid": "Bis zu 32 Werte, je höchstens 512 Byte, ohne Platzhalter (*) und ohne Steuerzeichen.",
+      "summary": {
+        "default": "Protokollstandard",
+        "none": "kein Wert vertrauenswürdig",
+        "values": "nur {{values}}"
+      }
     }
   },
   "secrets": {
@@ -323,7 +352,8 @@
     "rotated": "Secret gespeichert.",
     "deleted": "Secret gelöscht.",
     "deleteTitle": "Secret löschen",
-    "deleteBody": "Das Secret wird aus dem Speicher entfernt. Jede Connector-Konfiguration, die store:<name> referenziert, schlägt bei der Auflösung fehl, bis Sie es neu anlegen."
+    "deleteBody": "Das Secret wird aus dem Speicher entfernt. Jede Connector-Konfiguration, die store:<name> referenziert, schlägt bei der Auflösung fehl, bis Sie es neu anlegen.",
+    "sessionCaption": "Geheimnisse, die eine Sitzung als Umgebungsvariablen erhalten kann. Namen beginnen mit env/. Ein Wert wird nie wieder angezeigt."
   },
   "connectors": {
     "title": "Connectors",
@@ -584,7 +614,7 @@
     "readOnlyNoticeHint": "Rollen, ihre Berechtigungen und wer sie delegieren darf, werden hier verwaltet. Bitten Sie eine Administratorin um die Governance-RBAC-Berechtigung.",
     "authority": {
       "title": "Ihre Delegationsbefugnis",
-      "superadmin": "Sie sind Superadministrator — Sie können jede Rolle innerhalb jedes Geltungsbereichs delegieren.",
+      "superadmin": "Sie verwalten diese Installation: Sie können jede Rolle überall vergeben.",
       "none": "Sie haben in dieser Organisation keine Delegationsbefugnis. Ein Eigentümer oder Administrator muss Ihnen zunächst eine geltungsbereichsbezogene Administratorrolle gewähren.",
       "caption": "Sie können nur innerhalb dieser Geltungsbereiche und niemals über diese Berechtigungen hinaus delegieren. Die Engine prüft jede Änderung erneut.",
       "tenantWide": "Mandantenweit",
@@ -595,13 +625,13 @@
     },
     "grants": {
       "title": "Geltungsbereichsbezogene Gewährungen",
-      "caption": "Weisen Sie einem Benutzer oder einer integrierten Rolle eine Rolle innerhalb eines Geltungsbereichs zu — so machen Sie jemanden zum Administrator eines Arbeitsbereichs oder einer Ressourcenklasse.",
+      "caption": "Geben Sie einer Person eine Rolle in einem Arbeitsbereich oder für eine Ressourcenart statt für die ganze Organisation.",
       "create": "Neue Gewährung",
       "subject": "Subjekt",
       "role": "Rolle",
       "scope": "Geltungsbereich",
       "none": "Noch keine geltungsbereichsbezogenen Gewährungen.",
-      "noneHint": "Eine begrenzte Zuweisung gibt einem Subjekt eine Rolle innerhalb eines Workspaces oder einer Ressource, nicht mandantenweit. Weisen Sie eine zu, um zu beginnen.",
+      "noneHint": "Noch keine Rolle ist auf einen Arbeitsbereich oder eine Ressourcenart beschränkt.",
       "revoke": "Widerrufen",
       "revokeTitle": "Gewährung widerrufen",
       "revokeBody": "Das Subjekt verliert diese geltungsbereichsbezogene Rolle sofort. Der Widerruf selbst wird gegen die Delegationsobergrenze geprüft.",
@@ -628,7 +658,7 @@
       "scopeRefWorkspace": "Arbeitsbereich",
       "scopeRefGroup": "Agent-Gruppe",
       "scopeRefPlaceholder": "Auswählen…",
-      "scopeClass": "Ressourcenklasse",
+      "scopeClass": "Ressourcenart",
       "scopeClassAny": "Beliebige Ressource",
       "scopeClassHint": "Optional. Schränkt die Gewährung auf eine Ressourcenart ein (z. B. nur Modelle).",
       "note": "Notiz",
@@ -672,13 +702,13 @@
       "excludesHint": "Werden nach der Basis, den obigen Berechtigungen und jeder eingebundenen Gruppe abgezogen — nichts kann sie wieder hinzufügen. Etwas auszuschließen, das die Basis heute nicht gewährt, ist zulässig: Der Ausschluss gilt weiterhin, sobald sie es tut."
     },
     "groups": {
-      "title": "Berechtigungsgruppen",
-      "caption": "Benannte Berechtigungsbündel, die Sie in mehrere benutzerdefinierte Rollen einbinden können.",
+      "title": "Berechtigungssätze",
+      "caption": "Benannte Berechtigungssätze, die Sie in mehreren eigenen Rollen wiederverwenden können.",
       "create": "Neue Gruppe",
       "name": "Name",
       "permissions": "Berechtigungen",
       "none": "Noch keine Berechtigungsgruppen.",
-      "noneHint": "Eine Berechtigungsgruppe bündelt Berechtigungen, sodass eine Rolle sie namentlich einschließen kann. Legen Sie eine an, um zu beginnen.",
+      "noneHint": "Noch keine Berechtigungssätze. Mit einem Satz teilen sich mehrere Rollen dieselben Berechtigungen.",
       "edit": "Bearbeiten",
       "delete": "Löschen",
       "deleteTitle": "Berechtigungsgruppe löschen",
@@ -710,8 +740,8 @@
       "managedBy": "Verwaltet von {{provisioner}} · schreibgeschützt",
       "title": "Gruppensubjekte & Hierarchie",
       "caption": "Weisen Sie bereitgestellten Benutzergruppen Rollen zu und gestalten Sie die Gruppenhierarchie. Mitglieder einer Kindgruppe erben die Gewährungen des Elternteils.",
-      "noGroups": "Keine bereitgestellten Gruppen. Gruppen werden vom Identitätsanbieter (SCIM) übertragen.",
-      "noGroupsHint": "Gruppen kommen per SCIM von Ihrem Identitätsanbieter; die Konsole legt keine an. Stellen Sie dort eine Gruppe bereit, dann erscheint sie hier.",
+      "noGroups": "Noch keine Gruppen. Gruppen kommen von Ihrem Identitätsanbieter.",
+      "noGroupsHint": "Die Konsole erstellt keine Gruppen. Legen Sie eine Gruppe bei Ihrem Identitätsanbieter an, dann erscheint sie hier.",
       "colName": "Gruppe",
       "colParent": "Elternteil",
       "colMembers": "Mitglieder",
@@ -875,7 +905,8 @@
     "enableHint": "Überprüfen Sie die folgenden Änderungen. Vorbereitete Module benötigen Eingaben, bevor sie aktiviert werden.",
     "apply": "Anwenden",
     "enabled": "Preset {{preset}} aktiviert.",
-    "enableFailed": "Preset konnte nicht aktiviert werden."
+    "enableFailed": "Preset konnte nicht aktiviert werden.",
+    "restarting": "Engine wird neu gestartet…"
   },
   "bindings": {
     "readOnlyNotice": "Zum Anzeigen von Bindungen benötigen Sie Zugriff auf Quellen-Scope-Bindungen.",
@@ -1072,9 +1103,13 @@
       "active": "an",
       "pending": "Neustart ausstehend",
       "available": "aus",
-      "console": "nur Konsole"
+      "console": "nur Konsole",
+      "staged": "bereitgestellt",
+      "needsSecret": "braucht ein Geheimnis",
+      "needsReview": "braucht Prüfung",
+      "needsInput": "braucht Eingaben"
     },
-    "binaryUnknownWhy": "Diese Edition ({{edition}}) gehört zur laufenden Binärdatei. Die Engine veröffentlicht nicht, welche Module diese Binärdatei kompiliert hat, daher bleibt diese Spalte je Modul nicht bekannt. Sie wird nicht aus der Paketierung abgeleitet.",
+    "binaryUnknownWhy": "Diese Edition ({{edition}}) gehört zur laufenden Binärdatei. Wenn die Engine veröffentlicht, ob ein Modul in diesem Build enthalten ist, zeigt die Spalte es; sonst bleibt sie nicht bekannt. Sie wird nicht aus der Paketierung abgeleitet.",
     "catalogueSourceHelp": "Die verfügbaren Modul-Angaben hängen vom installierten Build ab. Eine Lizenzinstallation aktualisiert die Lizenzdaten; die Modul-Verfügbarkeit wird getrennt gemeldet.",
     "noAddons": "Diese Installation hat einen leeren Modul-Katalog geliefert.",
     "loading": "Modul-Katalog wird geladen…",
@@ -1092,7 +1127,10 @@
     "licenseRefreshFailedAction": "Erneut versuchen, um den Lizenzstatus zu aktualisieren.",
     "licenseRetry": "Lizenzstatus erneut versuchen",
     "technicalSummary": "Technisches Detail",
-    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}"
+    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}",
+    "inBuild": "in dieser Edition",
+    "notInBuild": "nicht in dieser Edition",
+    "notCovered": "nicht von der Lizenz abgedeckt"
   },
   "mcpGateway": {
     "title": "MCP-Gateway",
@@ -1115,37 +1153,35 @@
     "fileOwned": "Die Betreiberdatei steuert MCP auf ihrem konfigurierten Listener. Diese Ansicht ist schreibgeschützt. Gespeicherte Konfiguration bleibt inaktiv und wird weder zusammengeführt noch ersetzt.",
     "storeOwned": "Die Mandantenkonfiguration steuert MCP auf dem HTTP-Listener dieser Installation. Eine Konfigurationsdatei ist nicht erforderlich.",
     "sessionTitle": "Sitzungstools",
-    "sessionHint": "Standardmäßig deaktiviert. Arbeit und Kommunikation zwischen Sitzungen sind nur mit unabhängig autorisierten Sitzungstokens zugänglich; neue Rechte werden nicht gewährt.",
+    "sessionHint": "Sitzungen können einander Nachrichten senden und ihre zugewiesene Arbeit nutzen. Sitzungen erhalten dadurch keine neuen Berechtigungen.",
     "tools": "Tools ({{count}})",
     "observationHint": "Die Erkennung gewährt keine Rechte. Erlauben Sie jedes Tool mit einem expliziten Scope und legen Sie fest, ob destruktive Aktionen genehmigt werden müssen.",
     "destructive": "Genehmigung destruktiver Aktionen erforderlich",
-    "readTool": "Keine Genehmigung destruktiver Aktionen",
-    "deniedTool": "Standardmäßig verweigert",
     "credentials": "Zugangsdaten verwalten",
     "credentialCaption": "Nur MCP-Geheimnisse dieses Mandanten (Namen mcp/). Speichern Sie den vollständigen Authorization-Wert des Servers, etwa Bearer gefolgt vom Token. Werte werden versiegelt und niemals zurückgegeben.",
-    "noCredential": "Keine Server-Zugangsdaten",
-    "name": "Servername",
-    "url": "Server-URL",
-    "urlHint": "Streamable HTTP über HTTPS. Verwenden Sie die endgültige URL ohne Zugangsdaten, Query oder Fragment; Weiterleitungen werden verweigert. Stdio ist in Beobachtungs-Connectors verfügbar, nicht in diesem Gateway.",
-    "credential": "Referenz der Zugangsdaten",
-    "credentialHint": "Wählen Sie eine Referenz aus dem Mandantenspeicher. Erstellen oder rotieren Sie sie unter Zugangsdaten verwalten; globale Geheimnisse werden nicht angeboten.",
+    "noCredential": "Keine Anmeldung",
+    "name": "Name",
+    "url": "Serveradresse",
+    "urlHint": "Der HTTPS-Endpunkt des Servers, meist mit /mcp am Ende. Nur entfernte HTTPS-Server; Weiterleitungen werden nicht verfolgt.",
+    "credential": "Anmeldung",
+    "credentialHint": "Das Geheimnis, das als Authorization-Header an den Server gesendet wird. Wähle Keine Anmeldung, wenn der Server keine braucht; lege ein Geheimnis unter Zugangsdaten verwalten an.",
     "cidrs": "Erlaubte private Netzbereiche",
-    "cidrsHint": "Optionale kanonische CIDRs, eines pro Zeile. Private und Loopback-Adressen benötigen eine explizite Erlaubnis. DNS wird geprüft und zugelassene Adressen werden bei jeder Verbindung festgelegt.",
-    "inboundTrust": "Eingehende Authentifizierung",
-    "resource": "Öffentliche Ressourcen-URL des Gateways",
-    "issuer": "Vertrauenswürdiger Token-Aussteller",
-    "jwksURL": "Öffentliche JWKS-URL",
-    "jwks": "Öffentliches JWKS-JSON",
+    "cidrsHint": "Nur für einen Server in einem privaten Netz oder auf diesem Rechner, zum Beispiel 10.0.0.0/8 oder 127.0.0.1/32. Ein Bereich pro Zeile.",
+    "inboundTrust": "Wer diesen Server über Olivares aufrufen darf",
+    "resource": "Adresse dieses Servers in Olivares",
+    "issuer": "Token-Aussteller",
+    "jwksURL": "Adresse der öffentlichen Schlüssel des Ausstellers (JWKS-URL)",
+    "jwks": "Öffentliche Schlüssel des Ausstellers (JWKS)",
     "jwksHint": "Geben Sie eine JWKS-URL oder öffentliche asymmetrische Schlüssel an. Private Schlüssel und beliebige Zugangsdatenfelder werden verweigert.",
     "invalidJWKS": "Geben Sie nur öffentliche asymmetrische Schlüssel an.",
-    "resourceHint": "Verwenden Sie den öffentlichen HTTPS-Ursprung dieser Installation gefolgt von {{path}}. Tokens müssen für genau diese Ressource ausgestellt sein.",
-    "resourceAfterCreate": "den nach der Erstellung angezeigten Pfad",
+    "resourceHint": "Die Tokens der Aufrufer müssen für genau diese Adresse ausgestellt sein. Standard ist die Adresse dieser Konsole; ändere sie, wenn Aufrufer Olivares über eine andere öffentliche Adresse erreichen.",
+    "resourceAfterCreate": "Wird nach dem Speichern angezeigt: Die Tokens der Aufrufer müssen für die Adresse dieses Servers in Olivares ausgestellt sein.",
     "policy": "Tool-Berechtigungen",
     "allowTool": "{{name}} erlauben",
     "scope": "Erforderlicher Scope für {{name}}",
     "destructiveTool": "Genehmigung destruktiver Aktionen für {{name}} verlangen",
-    "formHint": "Beim Speichern wird der Server deaktiviert. Testen Sie den gespeicherten Endpunkt, prüfen Sie seine Tools, konfigurieren Sie eingehendes Vertrauen und aktivieren Sie ihn ausdrücklich.",
-    "saveDisabled": "Deaktiviert speichern",
+    "formHint": "Ein neuer Server ist zunächst aus. Speichere ihn, teste die Verbindung, prüfe seine Tools und aktiviere ihn.",
+    "saveDisabled": "Speichern",
     "removeTitle": "MCP-Server entfernen",
     "removeHint": "{{name}} aus dem Gateway dieses Mandanten entfernen? Neue Anfragen werden verweigert; seine versiegelten Zugangsdaten bleiben im Geheimnisspeicher.",
     "conflict": "Die Konfiguration hat sich geändert. Aktualisieren und prüfen Sie die aktuelle Version vor einem erneuten Senden.",
@@ -1172,7 +1208,10 @@
       "redirects": "Weiterleitungen",
       "tool_policy": "Tool-Autorisierung",
       "tasks": "Dauerhafte Aufgaben",
-      "subscriptions": "Abonnements"
+      "subscriptions": "Abonnements",
+      "local_execution": "Lokale Befehle",
+      "process_confinement": "Prozessabschottung",
+      "network_confinement": "Netzwerkabschottung"
     },
     "governanceValues": {
       "tenant_store": "Mandantenspeicher",
@@ -1188,7 +1227,68 @@
       "operator_file_not_returned": "Zugangsdaten der Datei werden nicht zurückgegeben",
       "operator_file_listener": "Vom Betreiber konfigurierter Listener",
       "operator_provisioned": "Vom Betreiber bereitgestellte Richtlinie",
-      "legacy_forwarder": "Bestehende Dateiweiterleitung"
-    }
+      "legacy_forwarder": "Bestehende Dateiweiterleitung",
+      "session_runner_engine_user_session_folder": "Sitzungsausführung als Engine-Benutzer im Sitzungsordner",
+      "reported_by_session_runner": "Wie von der Sitzungsausführung gemeldet",
+      "not_supplied_for_local_commands": "Für lokale Befehle nicht bereitgestellt"
+    },
+    "nameHint": "Wird in der Serverliste angezeigt. Leer übernimmt den Hostnamen des Servers.",
+    "advanced": "Erweitert",
+    "advancedHint": "Private Adressbereiche und wie Aufrufer sich ausweisen. Ein öffentlicher Server lässt sich ohne sie testen; zum Aktivieren braucht es die Aufrufer-Einstellungen.",
+    "issuerHint": "Die HTTPS-Adresse des Anmeldedienstes, der die Tokens der Aufrufer ausstellt, etwa dein Identitätsanbieter.",
+    "jwksURLHint": "Wo der Aussteller seine öffentlichen Schlüssel veröffentlicht. Nutze dies oder füge die Schlüssel unten ein, nicht beides.",
+    "enableNeedsTrust": "Zum Aktivieren lege unter Konfigurieren > Erweitert fest, wer ihn aufrufen darf.",
+    "why": {
+      "dns": "Der Name {{host}} ließ sich nicht auflösen. Prüfe die Adresse auf Tippfehler und ob diese Engine sie auflösen kann.",
+      "tls": "Die sichere Verbindung zu {{host}} ist fehlgeschlagen: Das Zertifikat ist hier nicht vertrauenswürdig oder passt nicht zum Namen. Nutze ein Zertifikat einer öffentlichen Stelle.",
+      "timeout": "{{host}} hat nicht innerhalb von 10 Sekunden geantwortet. Prüfe, ob der Server läuft und diese Engine ihn erreichen kann.",
+      "connection_refused": "Unter {{host}} hat nichts die Verbindung angenommen. Prüfe den Port und ob der Server läuft.",
+      "http_status": "Der Server hat mit HTTP {{status}} geantwortet. Prüfe den Pfad; MCP-Server enden meist auf /mcp.",
+      "egress_denied": "{{host}} ist eine private oder lokale Adresse. Erlaube ihren Bereich unter Konfigurieren > Erweitert.",
+      "refused": "Der Server hat die Anmeldung abgelehnt (HTTP 401 oder 403). Prüfe das unter Anmeldung gewählte Geheimnis.",
+      "redirect_refused": "Der Server hat mit einer Weiterleitung geantwortet. Nutze die endgültige Adresse.",
+      "invalid_response": "Der Server hat geantwortet, aber nicht als MCP-Server. Prüfe die Adresse.",
+      "credential_unavailable": "Das Anmeldegeheimnis konnte nicht gelesen werden. Speichere es unter Zugangsdaten verwalten erneut.",
+      "unreachable": "{{host}} war nicht erreichbar. Prüfe die Adresse und ob der Server läuft.",
+      "stdio": "Der Befehl hat keinen MCP-Server gestartet, der geantwortet hat. Prüfe den Befehl und seine Argumente.",
+      "stdioDetail": "Nicht gestartet: {{detail}}"
+    },
+    "kind": "Wie Olivares ihn erreicht",
+    "kindUrl": "Adresse (HTTPS)",
+    "kindCommand": "Befehl auf diesem Server",
+    "command": "Befehl",
+    "commandHint": "Das Programm, das den Server auf diesem Rechner startet, zum Beispiel npx. Es läuft mit jeder Sitzung, im Ordner der Sitzung.",
+    "args": "Argumente",
+    "argsHint": "Eins pro Zeile, zum Beispiel -y und @modelcontextprotocol/server-everything.",
+    "env": "Umgebung",
+    "envHint": "Eine pro Zeile: NAME=Wert. Nicht für Geheimnisse.",
+    "envSecrets": "Geheime Umgebung",
+    "envSecretsHint": "Eine pro Zeile: NAME=mcp/geheimnis-name, ein unter Zugangsdaten verwalten gespeichertes Geheimnis.",
+    "pairsInvalid": "Jede Zeile braucht NAME=Wert.",
+    "policiesNotKept": "Nicht gespeichert: Die Engine hat die Berechtigung für {{tools}} nicht übernommen. Erneut versuchen; bleibt es so, olivares mcp ls ausführen.",
+    "scopeMissing": "Jedes erlaubte Tool braucht einen Scope (Sitzungen nutzen tools:call).",
+    "toolCallable": "Läuft ohne Freigabe",
+    "toolAsks": "Fragt vorher nach Freigabe",
+    "toolNotCallable": "Nicht erlaubt",
+    "callableOff": "Aus: Sitzungen können seine Tools nicht aufrufen.",
+    "trustPartial": "Wer es aufrufen darf, braucht Ressource, Aussteller und Schlüssel – oder nichts davon.",
+    "savedTestAgain": "Gespeichert. Testen Sie den Server erneut, um ihn wieder einzuschalten.",
+    "formHintEdit": "Speichern lässt den Server, wie er ist. Wer Adresse, Befehl, Argumente, Umgebung oder Geheimnisse ändert, schaltet ihn aus, bis er erneut getestet wird.",
+    "trust": {
+      "allow": "Ohne Freigabe: {{tools}}",
+      "ask": "Fragen vorher: {{tools}}",
+      "deny": "Nicht erlaubt: {{tools}}"
+    },
+    "enableDialog": {
+      "title": "{{name}} einschalten",
+      "body": "Wählen Sie die Tools, die ohne Freigabe laufen. Tools, die laut Server nur lesen, sind vorausgewählt; die Entscheidung liegt bei Ihnen, nicht beim Server.",
+      "readOnlyHint": "laut Server nur lesend",
+      "runWithout": "{{tool}} ohne Freigabe ausführen",
+      "others": "Alle anderen Tools fragen vorher nach Freigabe.",
+      "notAllowed": "nicht erlaubt (in Konfigurieren ändern)",
+      "confirm": "Einschalten"
+    },
+    "sessionOn": "Ein: zum Beenden ausschalten.",
+    "sessionOff": "Aus: Sitzungen können einander keine Nachrichten senden und ihre zugewiesene Arbeit nicht nutzen."
   }
 }

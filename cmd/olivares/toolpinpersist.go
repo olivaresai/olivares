@@ -97,7 +97,7 @@ func tpTenant(server string) (model.TenantID, error) {
 
 // Load returns every stored pin across business tenants (boot-time rebuild).
 func (p *toolPinPersistence) Load(ctx context.Context) ([]mcpc.PinSnapshot, error) {
-	tenants, err := servedBusinessTenants(ctx, p.st)
+	tenants, err := servedWorkTenants(ctx, p.st)
 	if err != nil {
 		return nil, err
 	}

@@ -10,7 +10,7 @@ import { RouterProvider } from '@tanstack/react-router'
 // Tokens, the self-hosted faces (styles/fonts.css) and the base layer; Vite bundles the
 // font files and serves them from the same origin (no CDN; air-gap-ready, CSP-clean).
 import './index.css'
-import '@/lib/i18n' // initialize i18next (side-effect) before the first render
+import { i18nReady } from '@/lib/i18n'
 import { Providers } from '@/app/providers'
 import { router } from '@/app/router'
 import { installTrustedTypes } from '@/security/trusted-types'
@@ -19,10 +19,13 @@ import { installTrustedTypes } from '@/security/trusted-types'
 // any DOM sink is governed from the first paint under `require-trusted-types-for`.
 installTrustedTypes()
 
-createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <Providers>
-      <RouterProvider router={router} />
-    </Providers>
-  </StrictMode>,
-)
+// Do not paint an untranslated login while the selected auth dictionary loads.
+void i18nReady.then(() => {
+  createRoot(document.getElementById('root')!).render(
+    <StrictMode>
+      <Providers>
+        <RouterProvider router={router} />
+      </Providers>
+    </StrictMode>,
+  )
+})

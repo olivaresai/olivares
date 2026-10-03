@@ -147,11 +147,21 @@ while IFS=$'\t' read -r producer_path producer_pattern prose_path prose_anchor; 
 	contains "$ROOT/$prose_path" "$prose_anchor" "prose"
 done < <(jq -r '.surfaces[] | [.producer.path,.producer.matches,.prose.path,.prose.contains] | @tsv' "$STATE")
 
-# The package command is derived from the producer's literal GoReleaser naming
-# template, then checked against the filenames that the dated release witness
-# says were measured. A generic wildcard cannot hide a wrong public filename.
+# The package command is derived from the producers' literal naming templates, then checked
+# against the filenames that the dated release witness says were measured. A generic wildcard
+# cannot hide a wrong public filename. GoReleaser names the archives. The native packages have
+# no GoReleaser section any more: scripts/build-native-release-packages.py builds them from the
+# release archives with the formats that packaging/nfpm/packages.json declares, so those two
+# files are the producer, and the formats are read as data, not matched as text.
 contains "$ROOT/.goreleaser.yaml" '{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}' "archive name producer"
-contains "$ROOT/.goreleaser.yaml" 'formats: [deb, rpm, apk]' "native-package format producer"
+contains "$ROOT/scripts/build-native-release-packages.py" "olivares_{version}_linux_{arch}.{ext}" "native-package name producer"
+[ -r "$ROOT/packaging/nfpm/packages.json" ] || blind "native-package format producer file is unreadable: $ROOT/packaging/nfpm/packages.json"
+native_formats="$(jq -c '[.nfpms[]?.formats]' "$ROOT/packaging/nfpm/packages.json")" \
+	|| blind "jq failed while reading the native-package formats in packaging/nfpm/packages.json"
+case "$native_formats" in
+*'["deb","rpm","apk"]'*) ;;
+*) fail "native-package format producer: packaging/nfpm/packages.json declares $native_formats, not deb, rpm and apk" ;;
+esac
 package_doc="$ROOT/docs-site/src/content/docs/how-to/install-from-packages.md"
 contains "$package_doc" "olivares_${plain_version}_linux_amd64.deb" "package command"
 contains "$package_doc" "olivares_${plain_version}_linux_amd64.rpm" "package command"

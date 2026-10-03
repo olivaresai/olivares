@@ -25,19 +25,19 @@ func newModelsCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "models",
 		Short: "Govern the model estate, routing, registry and model access",
-		Long: "Govern the models this control plane knows about: the live estate and the declared\n" +
+		Long: "Govern the models this engine knows about: the live estate and the declared\n" +
 			"reference catalog, routing policies and their resolution, the own-model registry with\n" +
 			"its versions, datasets and AIBOM evidence, and the access grants that decide who may\n" +
 			"use what.\n\n" +
 			"Connection, credential and TLS values use the same resolution order and trust controls\n" +
 			"as `auth`. Every verb carries the caller's credential and the tenant header and takes NO\n" +
 			"authorization decision of its own: the engine's permission checks are the only ones.\n\n" +
-			"Exit codes follow the contract in `olivares --help`. Two are worth naming here: a\n" +
+			"Exit codes follow the contract in `olivares help exit-codes`. Two are worth naming here: a\n" +
 			"routing resolve or execute denied by an enforcing budget exits 5 (conflict), not 6 —\n" +
-			"the control plane is healthy and refusing — and a rejected --data document exits 2.",
+			"the engine is healthy and refusing — and a rejected --data document exits 2.",
 		Example: `  olivares models ls
   olivares models routing ls -o json
-  olivares models --server https://plane.example.com --tenant tenant-a owned ls`,
+  olivares models --server https://olivares.example.com --tenant tenant-a owned ls`,
 		Args: cobra.NoArgs,
 	}
 	flags.addPersistent(cmd)
@@ -329,7 +329,7 @@ func newModelsKeysCmd(c modelstackClient) *cobra.Command {
 			Use:   "rm <ref-id>",
 			Short: "Remove a key or workspace reference",
 			Long: "Remove one governed reference. The provider-side credential is not touched: this\n" +
-				"removes the control plane's knowledge of it, and with it the governance that used it.",
+				"removes the engine's knowledge of it, and with it the governance that used it.",
 			Example: `  olivares models keys rm 018f2a10-0000-7000-8000-000000000001 --yes`,
 			Target:  modelstackTarget{Collection: "/keys", IDs: 1},
 			Noun:    "provider key reference",
@@ -576,7 +576,7 @@ func newModelsDeploymentsCmd(c modelstackClient) *cobra.Command {
 		Use:   "deployments",
 		Short: "Govern local inference deployments",
 		Long: "Govern the inference deployments that serve owned models: their runtime, endpoint\n" +
-			"reference, status and whether they are governed by this control plane.",
+			"reference, status and whether they are governed by this engine.",
 		Example: `  olivares models deployments ls
   olivares models deployments ls --runtime vllm -o json`,
 		Args: cobra.NoArgs,
@@ -641,7 +641,7 @@ func newModelsFinetuneCmd(c modelstackClient) *cobra.Command {
 		Use:   "finetune",
 		Short: "Record fine-tune jobs and their outcome",
 		Long: "Record the fine-tune jobs this organization runs: base model, dataset, runtime,\n" +
-			"status and the version they produced. The control plane INVENTORIES these jobs; it\n" +
+			"status and the version they produced. The engine INVENTORIES these jobs; it\n" +
 			"does not run them.",
 		Example: `  olivares models finetune ls
   olivares models finetune get 018f2a10-0000-7000-8000-000000000004`,
@@ -923,7 +923,7 @@ func newModelsAIBOMCmd(c modelstackClient) *cobra.Command {
 			Use:   "card <owned-id>",
 			Short: "Render the model card for one owned model",
 			Long: "Render the model card generated from the same governed inventory as the AIBOM.\n" +
-				"--format md asks for Markdown, which the control plane serves as text: stdout then\n" +
+				"--format md asks for Markdown, which the engine serves as text: stdout then\n" +
 				"carries it verbatim so it can be redirected to a file.",
 			Example: `  olivares models aibom card 018f2a10-0000-7000-8000-000000000001 --format md
   olivares models aibom card 018f2a10-0000-7000-8000-000000000001 -o json`,

@@ -42,7 +42,7 @@ dit plutôt que de laisser entendre le contraire.
 - **Les versions sont signées et vérifiables.** La signature, la provenance SLSA, le SBOM et l'OpenVEX peuvent tous être
   [vérifiés](/fr/how-to/verify-a-release/). La vérification n'est pas encore entièrement hors ligne : les vérifications sans clé
   ont besoin du matériel de racine de confiance Sigstore et l'étape SLSA n'a pas de mode hors ligne. Le produit livre un
-  [bundle air-gap](/fr/how-to/air-gap-install/). La dernière version taguée, **26.10.0**, est publiée avec des archives signées, des paquets natifs et des images de conteneur ; les API, les schémas et la surface des modules peuvent encore changer avant la 1.0.
+  [bundle air-gap](/fr/how-to/air-gap-install/). La dernière version taguée, **26.10.1**, est publiée avec des archives signées, des paquets natifs et des images de conteneur ; les API, les schémas et la surface des modules peuvent encore changer avant la 1.0.
 
 ## Open core — ce qui est ouvert vs entreprise
 
@@ -168,7 +168,7 @@ sur une page.
   frontier brokés ne le peuvent pas.
 - **Les routes de module sont un contrat séparé, en bêta.** Les endpoints de
   module (par exemple le graphe d'access map et la dérive) ne font pas partie du
-  contrat de cœur stable (67 chemins de cœur) ; ils sont publiés comme un document
+  contrat de cœur stable (70 chemins de cœur) ; ils sont publiés comme un document
   **bêta** séparé — la
   [référence des routes de module](/reference/api-beta/) (servie sur
   `/openapi.beta.json`). Bêta signifie que les formes peuvent changer avec

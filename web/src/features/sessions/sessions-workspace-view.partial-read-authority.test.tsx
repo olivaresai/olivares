@@ -356,30 +356,28 @@ function renderView(qc = makeClient()) {
 }
 
 /**
- * The figure the summary reports for one count (`—` when it reports "not read").
+ * The figure the summary reports for one count.
  *
- * ⛔ THE TILES ARE GONE AND THE FOUR FACTS ARE NOT. Until the candidate folded the
- *    counts onto the title line, each count was a `.tabular-nums` figure beside a muted
- *    caption, and this helper found it by that SHAPE. The surface now paints one
- *    sentence inside `sessions-summary` —
- *    `2 Sessions · 1 Launched · 0 Discovered · 0 Needs attention` — with the same `—`
- *    for a half nobody read. The READER moved; not one assertion below changed its
- *    claim, which is the point: these cases are about which counts the view is entitled
- *    to state, not about the element that states them.
+ * ⛔ THE HEADER STATES TWO FIGURES NOW (Root review, 09: counts only):
+ *    `2 sessions · 2 running`. The launched, discovered and attention figures and the
+ *    scope note left the header; a row's origin is still asserted on the row itself.
+ *    Every fixture session here is active, so where the run half was read, running
+ *    equals the session count. Where the launched half was not read, a launched
+ *    session's state is not known and running is NOT STATED (undefined), never `0`:
+ *    missing metadata is not zero inventory.
  *
  * ⚠ Undefined means the summary does not report that count AT ALL, which is a different
- *   failure from reporting the wrong one — and the label is matched on a whole segment
- *   so a count cannot be read out of the scope note that shares the line.
+ *   failure from reporting the wrong one — and the label is matched on a whole segment.
  */
 function summaryText(): string {
   return screen.queryByTestId('sessions-summary')?.textContent ?? ''
 }
 
-function tileValue(label: string): string | undefined {
+function tileValue(label: 'Sessions' | 'Running'): string | undefined {
+  const whole = label === 'Sessions' ? /^(.+?) sessions?$/ : /^(.+?) running$/
   for (const segment of summaryText().split('·')) {
-    const trimmed = segment.trim()
-    if (trimmed.endsWith(` ${label}`))
-      return trimmed.slice(0, -label.length).trim()
+    const match = segment.trim().match(whole)
+    if (match) return match[1]
   }
   return undefined
 }
@@ -530,11 +528,8 @@ describe('SessionsWorkspaceView — both halves admitted (controls)', () => {
       .toBeInTheDocument()
     expect.soft(tileValue('Sessions'), 'spr-auth/healthy/total-count').toBe('2')
     expect
-      .soft(tileValue('Launched'), 'spr-auth/healthy/launched-count')
-      .toBe('1')
-    expect
-      .soft(tileValue('Discovered'), 'spr-auth/healthy/discovered-count')
-      .toBe('1')
+      .soft(tileValue('Running'), 'spr-auth/healthy/running-count')
+      .toBe('2')
     expect
       .soft(
         screen.queryByText(/could not be read/i),
@@ -662,13 +657,10 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
       .toBe('1')
     expect
       .soft(
-        tileValue('Launched'),
-        'spr-auth/live-403/launched-count-healthy-only',
+        tileValue('Running'),
+        'spr-auth/live-403/running-count-healthy-only',
       )
       .toBe('1')
-    expect
-      .soft(tileValue('Discovered'), 'spr-auth/live-403/discovered-count-zero')
-      .toBe('0')
 
     // …and the half that was never refused is untouched, down to its row action.
     const runRow = await rowFor(
@@ -686,7 +678,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     // ForbiddenState the replacement would render.
     expect
       .soft(
-        screen.queryByText('Not authorized'),
+        screen.queryByText('You do not have access to this.'),
         'spr-auth/live-403/table-not-replaced',
       )
       .not.toBeInTheDocument()
@@ -769,25 +761,17 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
       .toBeInTheDocument()
     // ⛔ MISSING METADATA IS NOT ZERO INVENTORY (a design rule). An earlier
     //    fixture expected `0` here; `0` would report an empty inventory of launches
-    //    when the truth is that the half nobody read cannot be counted.
+    //    when the truth is that the half nobody read cannot be counted. Running is
+    //    left out of the header (no dash: Root review, 09), never stated as `0`.
     expect
       .soft(
-        tileValue('Launched'),
-        'spr-auth/run-stepup/launched-count-not-read',
+        tileValue('Running'),
+        'spr-auth/run-stepup/running-count-not-stated',
       )
-      .toBe('—')
-    expect
-      .soft(
-        tileValue('Discovered'),
-        'spr-auth/run-stepup/discovered-count-not-read',
-      )
-      .toBe('—')
-    // ⛔ THE DASH STILL EXPLAINS ITSELF, AND THE READER MOVED WITH IT. The explanation
-    //    used to be a `title=` on the tile's figure; the counts are plain text on the
-    //    title line now and text carries no tooltip. What says why is the partial notice
-    //    above the table — the same sentence, painted permanently instead of on hover —
-    //    so the pairing is asserted HERE, at the same moment as the dash, rather than
-    //    left to the setup that waited for it.
+      .toBeUndefined()
+    // ⛔ THE MISSING FIGURE STILL EXPLAINS ITSELF. What says why is the partial notice
+    //    above the table, painted permanently, so the pairing is asserted HERE, at the
+    //    same moment as the absence, rather than left to the setup that waited for it.
     expect
       .soft(
         screen.getByText(/launched half could not be read/i),
@@ -803,7 +787,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
       .toBe('1')
     expect
       .soft(
-        screen.queryByText('Not authorized'),
+        screen.queryByText('You do not have access to this.'),
         'spr-auth/run-stepup/table-not-replaced',
       )
       .not.toBeInTheDocument()
@@ -863,13 +847,13 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
       .toBeInTheDocument()
     expect
       .soft(
-        screen.queryByText('Not authorized'),
+        screen.queryByText('You do not have access to this.'),
         'spr-auth/live-5xx/table-not-replaced',
       )
       .not.toBeInTheDocument()
     expect
-      .soft(tileValue('Launched'), 'spr-auth/live-5xx/launched-count-still-one')
-      .toBe('1')
+      .soft(tileValue('Running'), 'spr-auth/live-5xx/running-count-kept')
+      .toBe('2')
     await user.click(runRow)
     expect
       .soft(
@@ -891,13 +875,13 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     // The body becomes a STATE (the table element and its grid role stay).
     await waitFor(() => {
       expect(
-        screen.getByText('Not authorized'),
+        screen.getByText('You do not have access to this.'),
         'spr-auth/dual/grid-replaced-by-a-state',
       ).toBeInTheDocument()
     })
     // The grid paints NOTHING here, and that is the control: the case has no sibling
     // half to name because both were refused, so the assertion is paired with the
-    // state that replaced them (`Not authorized`, asserted above) and with an empty
+    // state that replaced them (`You do not have access to this.`, asserted above) and with an empty
     // row census rather than with an unmounted screen.
     expect
       .soft(
@@ -971,7 +955,7 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
       .soft(tileValue('Sessions'), 'spr-auth/live-bit/total-count-run-only')
       .toBe('1')
     expect
-      .soft(tileValue('Launched'), 'spr-auth/live-bit/launched-count-one')
+      .soft(tileValue('Running'), 'spr-auth/live-bit/running-count-one')
       .toBe('1')
     expect
       .soft(
@@ -1070,8 +1054,8 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
       )
       .not.toBeInTheDocument()
     expect
-      .soft(tileValue('Launched'), 'spr-auth/run-bit/launched-count-not-read')
-      .toBe('—')
+      .soft(tileValue('Running'), 'spr-auth/run-bit/running-count-not-stated')
+      .toBeUndefined()
     expect
       .soft(tileValue('Sessions'), 'spr-auth/run-bit/total-count-live-only')
       .toBe('1')
@@ -1199,10 +1183,10 @@ describe('SessionsWorkspaceView — a JOINED row loses exactly the half that lef
       .toBe('1')
     expect
       .soft(
-        tileValue('Launched'),
-        'spr-auth/joined-run-out/launched-count-not-read',
+        tileValue('Running'),
+        'spr-auth/joined-run-out/running-count-not-stated',
       )
-      .toBe('—')
+      .toBeUndefined()
     await user.click(row)
     expect
       .soft(
@@ -1265,10 +1249,7 @@ describe('SessionsWorkspaceView — a JOINED row loses exactly the half that lef
       .soft(tileValue('Sessions'), 'spr-auth/joined-live-out/total-still-one')
       .toBe('1')
     expect
-      .soft(
-        tileValue('Launched'),
-        'spr-auth/joined-live-out/launched-count-one',
-      )
+      .soft(tileValue('Running'), 'spr-auth/joined-live-out/running-count-one')
       .toBe('1')
     await user.click(row)
     // Opened by the id the RUN captured (`claude_session_id`), which is the run half's
@@ -1377,7 +1358,7 @@ describe('SessionsWorkspaceView — the boundary moves under the same tenant', (
     // so only the store's generation moves (stores/session.ts).
     act(() => {
       useSessionStore.getState().setSession({
-        token: `tok-${Date.now()}`,
+        csrfToken: `tok-${Date.now()}`,
         sessionId: 'session-same',
         expiresAt: '2026-09-08T00:00:00Z',
       })
@@ -1434,12 +1415,8 @@ describe('SessionsWorkspaceView — the boundary moves under the same tenant', (
     const runReadsBefore = harness.listRuns.mock.calls.length
     const episodeBefore = harness.stream.contextKey
 
-    // The scope is stated, not implied — the already translated nav string.
-    expect(
-      screen.getByTestId('sessions-scope-note').textContent,
-      'R3/1/scope-is-declared',
-    ).toMatch(/not filtered by workspace/i)
-    // …and no workspace ever went out with the read.
+    // The scope note left the header (Root review, 09: counts only); what this case
+    // still holds is that no workspace ever went out with the read.
     expect
       .soft(harness.live.mock.calls[0]?.[0], 'R3/1/no-workspace-parameter-sent')
       .not.toHaveProperty('workspace_id')
@@ -2257,16 +2234,16 @@ describe('SessionsWorkspaceView — a stream frame is a hint, never a row', () =
     ).toBeInTheDocument()
   })
 
-  it('R3/6 the scope note does not displace the page disclosure or any global action', async () => {
+  it('R3/6 the header counts do not displace the page disclosure or any global action', async () => {
     const user = userEvent.setup()
     harness.live.mockResolvedValue({ items: [LIVE_ONLY], has_more: true })
     renderView()
     await rowFor(LIVE_ONLY_AT, 'R3/6/setup-row')
     await rowFor(RUN_ONLY_AT, 'R3/6/setup-run-row')
     expect(
-      screen.getByTestId('sessions-scope-note').textContent,
-      'R3/6/scope-note-present',
-    ).toMatch(/not filtered by workspace/i)
+      screen.getByTestId('sessions-summary').textContent,
+      'R3/6/counts-present',
+    ).toMatch(/^\d+ sessions?( · \d+ running)?$/)
     expect
       .soft(
         screen.queryByText(/most recent page, not the whole estate/i),

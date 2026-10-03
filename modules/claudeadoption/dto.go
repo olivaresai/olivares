@@ -198,8 +198,8 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		// divergence this belongs to is named in core/api/moduleerrors.go.
 		writeJSON(w, http.StatusServiceUnavailable, errorBody("adoption store not ready"))
 	default:
-		status, msg, _ := api.StoreErrorStatus(err)
-		writeJSON(w, status, errorBody(msg))
+		status, body, _ := api.StoreErrorBody(err)
+		writeJSON(w, status, body)
 	}
 }
 

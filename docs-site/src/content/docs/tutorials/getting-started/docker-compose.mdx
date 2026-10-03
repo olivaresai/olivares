@@ -22,15 +22,15 @@ points (`deploy/compose/*.yml`), and the first-run flow they drive is the same
 one verified end-to-end against the binary in the
 [single-node tutorial](/tutorials/getting-started/single-node/).
 
-<Aside type="caution" title="Pin the published 26.10.0 image by digest">
-Release **26.10.0** published the signed images: the install-surface witness records Docker
-Hub and GHCR as **published** for `26.10.0` (`docs/releases/26.10.0-install-surfaces.json`). The
+<Aside type="caution" title="Pin the published 26.10.1 image by digest">
+Release **26.10.1** published the signed images: the install-surface witness records Docker
+Hub and GHCR as **published** for `26.10.1` (`docs/releases/26.10.1-install-surfaces.json`). The
 same note is on [Deploy with Docker](/how-to/docker-deployment/). They are built and signed on
 `ghcr.io/olivaresai/olivares` first and then copied to Docker Hub by digest, so the ghcr.io
 coordinate serves the identical image as a fallback. Set
 `OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` and
 [verify it](/how-to/verify-a-release/) first — by digest, never a tag. To run the development
-tree instead, build the hardened distroless image from source and point the stack at it:
+tree instead, build the hardened image from source and point the stack at it:
 
 ```bash
 task image                                   # builds olivares:dev
@@ -60,8 +60,8 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
 2. Ask the engine where it is, and read the one-time setup token from the logs:
 
    ```bash
-   # where the console answers, and whether setup is still pending. The image is
-   # distroless: `docker exec … bash` has nothing to run, this needs no shell.
+   # where the console answers, and whether setup is still pending. It runs the binary
+   # directly and needs no shell.
    docker compose -f deploy/compose/docker-compose.yml exec olivares olivares first-boot
 
    # the one-time setup token, printed once at first boot

@@ -16,6 +16,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 // procRunner is the NATIVE host-process Runner — the v1 default (choice)
@@ -67,43 +69,73 @@ func (pr *procRunner) Launch(ctx context.Context, spec LaunchSpec) (Process, err
 	if spec.Isolation == IsolationContainer || spec.Isolation == IsolationSandbox {
 		return nil, fmt.Errorf("sessions: native runner cannot honor isolation %q — only native is wired this release (the container/sandbox runner is a documented follow-up); relaunch with isolation=native", spec.Isolation)
 	}
-	cmd := exec.CommandContext(ctx, spec.Program, spec.Args...) // #nosec G204 -- spec.Program/Args are operator-configured session runtime; env is sanitized and container/sandbox isolation is refused deny-closed
+	cmd, env, state, release, err := pr.command(ctx, spec)
+	if err != nil {
+		return nil, err
+	}
 	cmd.Dir = spec.Dir
-	cmd.Env = sanitizedEnv(spec.EnvAllow, spec.Env)
+	cmd.Env = sanitizedEnv(spec.EnvAllow, env)
 	if spec.WaitDelay > 0 {
 		cmd.WaitDelay = spec.WaitDelay
 	}
+	var p *procProcess
 	if pr.usePTY {
-		return pr.launchPTY(cmd, spec.WaitDelay)
+		p, err = pr.launchPTY(cmd, spec.WaitDelay, release)
+	} else {
+		p, err = pr.launchPipes(cmd, spec.WaitDelay, release)
 	}
-	return pr.launchPipes(cmd, spec.WaitDelay)
+	if err != nil {
+		release()
+		return nil, err
+	}
+	p.confinement = state
+	return p, nil
 }
 
-func (pr *procRunner) launchPipes(cmd *exec.Cmd, waitDelay time.Duration) (Process, error) {
+func (pr *procRunner) launchPipes(cmd *exec.Cmd, waitDelay time.Duration, release func()) (*procProcess, error) {
 	// Own process group so a graceful/hard stop reaches grandchildren that would
 	// otherwise hold the stdout pipe open and wedge teardown.
 	configureProcGroup(cmd)
-
-	stdin, err := cmd.StdinPipe()
+	// Own both pipe ends instead of StdoutPipe/StderrPipe. Cmd.Wait must be able
+	// to reap the child without closing readers that still contain final output.
+	stdinRead, stdin, err := os.Pipe()
 	if err != nil {
 		return nil, fmt.Errorf("sessions: stdin pipe: %w", err)
 	}
-	stdout, err := cmd.StdoutPipe()
+	defer stdinRead.Close()
+	started := false
+	defer func() {
+		if !started {
+			_ = stdin.Close()
+		}
+	}()
+	stdout, stdoutWrite, err := os.Pipe()
 	if err != nil {
 		return nil, fmt.Errorf("sessions: stdout pipe: %w", err)
 	}
-	stderr, err := cmd.StderrPipe()
+	defer stdoutWrite.Close()
+	defer func() {
+		if !started {
+			_ = stdout.Close()
+		}
+	}()
+	stderr, stderrWrite, err := os.Pipe()
 	if err != nil {
 		return nil, fmt.Errorf("sessions: stderr pipe: %w", err)
 	}
+	defer stderrWrite.Close()
+	defer func() {
+		if !started {
+			_ = stderr.Close()
+		}
+	}()
+	cmd.Stdin, cmd.Stdout, cmd.Stderr = stdinRead, stdoutWrite, stderrWrite
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("sessions: start %q: %w", specProgram(cmd), err)
 	}
-	// exec has copied the environment into the started child. Do not retain the
-	// raw slice (which includes short-lived inference/work bearers) for the
-	// process lifetime and closed-handle retention window.
+	started = true
 	cmd.Env = nil
-	return pr.watch(cmd, stdin, stdout, stderr, waitDelay), nil
+	return pr.watch(cmd, stdin, stdout, stderr, waitDelay, release), nil
 }
 
 func specProgram(cmd *exec.Cmd) string {
@@ -113,13 +145,12 @@ func specProgram(cmd *exec.Cmd) string {
 	return cmd.Path
 }
 
-func (pr *procRunner) watch(cmd *exec.Cmd, stdin io.WriteCloser, stdout, stderr io.ReadCloser, waitDelay time.Duration) *procProcess {
+func (pr *procRunner) watch(cmd *exec.Cmd, stdin io.WriteCloser, stdout, stderr io.ReadCloser, waitDelay time.Duration, release func()) *procProcess {
 	p := &procProcess{
 		cmd:   cmd,
 		stdin: stdin,
-		// The PARENT read ends are retained because teardown may have to close
-		// them: a descendant that left the process group keeps the write ends open,
-		// the pumps never see EOF, and cmd.Wait is therefore never reached (Stop).
+		// Retain the owned read ends to bound final drain even when a descendant
+		// keeps a writer open after the direct child exits.
 		stdout:    stdout,
 		stderr:    stderr,
 		out:       make(chan OutputFrame, 256),
@@ -128,17 +159,55 @@ func (pr *procRunner) watch(cmd *exec.Cmd, stdin io.WriteCloser, stdout, stderr 
 		waitDelay: waitDelay,
 	}
 
-	// Two pumps (stdout, stderr); a coordinator waits for both to drain (EOF on
-	// process exit) and ONLY THEN calls cmd.Wait (the pipe ordering exec requires),
-	// stores the result, and closes the output channel.
+	// Reaping and output drain have separate ownership. Wait does not own these
+	// readers, so it can collect the direct child while the pumps preserve final
+	// output. After exit, WaitDelay (or five seconds) bounds the remaining drain.
 	var pumps sync.WaitGroup
 	pumps.Add(2)
 	go pr.pump(&pumps, p, stdout, streamStdout)
 	go pr.pump(&pumps, p, stderr, streamStderr)
+	drained := make(chan struct{})
+	go func() { pumps.Wait(); close(drained) }()
 	go func() {
-		pumps.Wait()
 		err := cmd.Wait()
+		p.closeStdin()
+		delay := waitDelay
+		if delay <= 0 {
+			delay = defaultWaitDelay
+		}
+		timer := time.NewTimer(delay)
+		defer timer.Stop()
+		var drainErr error
+		select {
+		case <-drained:
+		case <-timer.C:
+			// Give an already completed drain precedence over the expired timer.
+			select {
+			case <-drained:
+			default:
+				p.drainAbandoned.Store(true)
+				if !p.stopping.Load() {
+					drainErr = ErrOutputAbandoned
+				}
+				_ = procGroupKill(cmd)
+				p.abandonOutput()
+				p.closeOutputPipes()
+				<-drained
+			}
+		}
+		p.closeOutputPipes()
 		p.exit, p.waitErr = exitCodeOf(err)
+		if p.waitErr != nil {
+			if cmd.ProcessState != nil {
+				// exec may return a context error after OS Wait collected the child.
+				p.exit = cmd.ProcessState.ExitCode()
+				p.waitErr = &reapedWaitError{cause: p.waitErr}
+			} else {
+				p.waitErr = errors.Join(ErrChildNotReaped, p.waitErr)
+			}
+		}
+		p.waitErr = errors.Join(p.waitErr, p.outputErr, drainErr)
+		release()
 		close(p.out)
 		close(p.waitDone)
 	}()
@@ -166,9 +235,23 @@ func validateExplicitEnv(env []EnvVar) error {
 // forced teardown ends the pump — see deliver.
 func (pr *procRunner) pump(wg *sync.WaitGroup, p *procProcess, r io.Reader, stream string) {
 	defer wg.Done()
+	if stream == streamStderr {
+		pr.pumpDiagnostics(p, r)
+		return
+	}
 	br := bufio.NewReaderSize(r, 64*1024)
 	for {
 		line, err := readBoundedLine(br, pr.lineCap)
+		if errors.Is(err, ErrOutputLineTooLong) {
+			p.outputFailure.Do(func() {
+				p.outputErr = errors.Join(ErrOutputLineTooLong, ErrOutputAbandoned)
+				p.closeStdin()
+				_ = procGroupKill(p.cmd)
+				p.abandonOutput()
+				p.closeOutputPipes()
+			})
+			return
+		}
 		if len(line) > 0 {
 			if !p.deliver(OutputFrame{Stream: stream, Data: line}) {
 				return // a forced teardown gave up on delivery; it reports the loss
@@ -176,6 +259,58 @@ func (pr *procRunner) pump(wg *sync.WaitGroup, p *procProcess, r io.Reader, stre
 		}
 		if err != nil {
 			return // EOF (process exited) or a read error; the pipe is done
+		}
+	}
+}
+
+// diagnosticTruncatedMark ends a stderr line cut at the line cap. The secret
+// redactor reads it: the text right before it may be the beginning of a value.
+const diagnosticTruncatedMark = " [diagnostic truncated]"
+
+// pumpDiagnostics retains a bounded stderr prefix, marks truncation once, then
+// discards fragments without growing storage. Closing the owned reader releases
+// an unterminated discard during Stop or an expired natural-exit drain. Diagnostic
+// prefixes never enter the stdout protocol parser.
+func (pr *procRunner) pumpDiagnostics(p *procProcess, r io.Reader) {
+	limit := pr.lineCap
+	if limit <= 0 {
+		limit = maxOutputLine
+	}
+	br := bufio.NewReaderSize(r, min(64*1024, limit+2))
+	var prefix []byte
+	truncated := false
+	for {
+		fragment, err := br.ReadSlice('\n')
+		complete := !errors.Is(err, bufio.ErrBufferFull)
+		if !truncated {
+			size := len(prefix) + len(fragment)
+			keep := min(len(fragment), limit+2-len(prefix))
+			if len(prefix)+keep > cap(prefix) {
+				grown := make([]byte, len(prefix), min(limit+2, max(len(prefix)+keep, 2*cap(prefix))))
+				copy(grown, prefix)
+				prefix = grown
+			}
+			prefix = append(prefix, fragment[:keep]...)
+			if size > limit+2 || (complete && len(trimCRLF(prefix)) > limit) {
+				diagnostic := append(append([]byte(nil), prefix[:min(limit, len(prefix))]...), diagnosticTruncatedMark...)
+				if !p.deliver(OutputFrame{Stream: streamStderr, Data: diagnostic}) {
+					return
+				}
+				truncated = true
+				prefix = nil
+			} else if complete && (err == nil || errors.Is(err, io.EOF)) {
+				line := trimCRLF(prefix)
+				if len(line) > 0 && !p.deliver(OutputFrame{Stream: streamStderr, Data: line}) {
+					return
+				}
+				prefix = nil
+			}
+		}
+		if complete {
+			if err != nil {
+				return
+			}
+			truncated = false
 		}
 	}
 }
@@ -203,16 +338,23 @@ func (p *procProcess) deliver(frame OutputFrame) bool {
 
 // procProcess is a live native process and its bridged streams.
 type procProcess struct {
-	cmd       *exec.Cmd
-	stdin     io.WriteCloser
-	stdout    io.ReadCloser
-	stderr    io.ReadCloser
-	out       chan OutputFrame
-	waitDone  chan struct{}
-	waitDelay time.Duration
+	cmd            *exec.Cmd
+	stdin          io.WriteCloser
+	stdout         io.ReadCloser
+	stderr         io.ReadCloser
+	out            chan OutputFrame
+	waitDone       chan struct{}
+	waitDelay      time.Duration
+	outputFailure  sync.Once
+	outputErr      error // written once by a pump, read after both pumps join
+	stopping       atomic.Bool
+	drainAbandoned atomic.Bool
 
 	exit    int
 	waitErr error
+
+	// confinement is how the child runs (Landlock, or none and why).
+	confinement confine.State
 
 	// mu guards the stdin LIFECYCLE state and the lazily built write gate. It is
 	// held for state decisions ONLY and NEVER across a write to the child.
@@ -231,22 +373,14 @@ type procProcess struct {
 	// sync.Mutex has no bounded acquire.
 	writeGate chan struct{}
 
-	// abandon is closed by the LAST rung of a forced teardown, and it is the only
-	// thing that can release a pump blocked DELIVERING a frame.
-	//
-	// ⛔ CLOSING THE PIPES IS NOT ENOUGH, and that gap kept a dead child alive on
-	// the process table. A pump blocked in `p.out <- frame` is not reading a pipe,
-	// so closing the read ends does not touch it; the coordinator waits for both
-	// pumps before cmd.Wait, so the child is never reaped. The consumer that
-	// blocks is not hypothetical: Module.bridge calls the governed recorder and
-	// the store synchronously between receives, and the independent review
-	// reproduced this with the REAL bridge and a paused recorder.
+	// abandon releases pumps blocked on delivery after a forced Stop or an
+	// expired natural-exit drain. The ordinary EOF path never abandons output.
 	abandon         chan struct{}
 	abandonOnce     sync.Once
 	abandonedFrames atomic.Int64
 }
 
-// ErrOutputAbandoned classifies a stop that DID reap the child but had to give up
+// ErrOutputAbandoned classifies a Wait or Stop that DID reap the child but had to give up
 // on output to get there. It is additive and fixed: the runtime wraps a Stop error
 // in a credential-safe wrapper whose text is deliberately generic, and that wrapper
 // preserves Unwrap — so this sentinel is what survives for errors.Is, while nothing
@@ -476,9 +610,9 @@ func (p *procProcess) Wait() (int, error) {
 	return p.exit, p.waitErr
 }
 
-// Stop closes stdin, signals the process group to terminate, escalates to a hard
-// kill after WaitDelay, and — only if that STILL leaves the run unfinished —
-// takes the output pipes away so the child can be reaped at all.
+// Stop closes stdin, signals the process group, and escalates after WaitDelay.
+// If output still cannot finish, it forces pipe closure and joins the pumps.
+// The child is reaped independently; incomplete output is reported by Stop.
 //
 // The context is deliberately IGNORED. Callers reach Stop with a request context
 // and one of them already passes context.WithoutCancel: honouring cancellation
@@ -486,6 +620,15 @@ func (p *procProcess) Wait() (int, error) {
 // waited for it, which is how a session leaks a live child and its group. The
 // bound is the ladder itself (at most three WaitDelay steps), not the caller.
 func (p *procProcess) Stop(_ context.Context) error {
+	select {
+	case <-p.waitDone:
+		// The direct child and its output are finished, but other group members
+		// may have closed their descriptors and continued running.
+		_ = procGroupKill(p.cmd)
+		return p.completedStopReport()
+	default:
+	}
+	p.stopping.Store(true)
 	p.closeStdin()                // EOF for a child that reads stdin, and it unblocks any writer
 	_ = procGroupTerminate(p.cmd) // SIGTERM the group: let claude flush its transcript
 	delay := p.waitDelay
@@ -493,30 +636,16 @@ func (p *procProcess) Stop(_ context.Context) error {
 		delay = defaultWaitDelay
 	}
 	if p.finishedWithin(delay) {
-		return nil
+		return p.completedStopReport()
 	}
 	_ = procGroupKill(p.cmd) // escalate to SIGKILL
 	if p.finishedWithin(delay) {
-		return nil
+		return p.completedStopReport()
 	}
-	// ⛔ SIGKILL REACHED THE GROUP AND THE RUN IS STILL NOT FINISHED, so something
-	// holding the output pipes open is NOT in the group — a descendant that called
-	// setsid, or a process that inherited the write end elsewhere. The pumps never
-	// see EOF, so pumps.Wait never returns, so cmd.Wait is NEVER CALLED and the
-	// child stays unreaped: the wait here used to be unbounded, and Stop is called
-	// under the per-run operation lock, so it took /input, /interrupt, /stop and
-	// /resume down with it.
-	//
-	// Ending the pumps is what lets Wait reap the child, and a pump can be stuck in
-	// EITHER of two places, so the last rung releases both: `abandon` for one that
-	// is blocked handing a frame to a consumer that stopped receiving, and the
-	// parent read ends for one that is blocked on a pipe somebody outside the group
-	// still holds open. Closing pipes alone leaves the first case wedged for ever,
-	// which is exactly how a killed child stayed unreaped.
-	//
-	// It costs whatever could not be delivered, so it is the LAST step and it is
-	// REPORTED: abandoned output is a fact the caller records, never a silent drop,
-	// and Stop returning nil has to keep meaning "the child was reaped".
+	// A holder outside the group or a blocked consumer survived both signals.
+	// Close readers and release blocked deliveries, then join the owned work. This
+	// last rung reports incomplete output separately from an unreaped child.
+	p.drainAbandoned.Store(true)
 	p.abandonOutput()
 	p.closeOutputPipes()
 	if p.finishedWithin(delay) {
@@ -525,7 +654,19 @@ func (p *procProcess) Stop(_ context.Context) error {
 	return fmt.Errorf("sessions: the process did not finish after SIGTERM, SIGKILL, a forced close of its output pipes and abandoning its output: %w", ErrChildNotReaped)
 }
 
-// childWasReaped reads a Stop error for the ONE question a caller's lifecycle
+// completedStopReport preserves incomplete-output evidence after a natural drain
+// timeout or a previous Stop. The closed waitDone guarantees the child was reaped.
+func (p *procProcess) completedStopReport() error {
+	if errors.Is(p.waitErr, ErrChildNotReaped) {
+		return p.waitErr
+	}
+	if p.drainAbandoned.Load() || errors.Is(p.waitErr, ErrOutputAbandoned) {
+		return p.forcedTeardownReport()
+	}
+	return p.waitErr
+}
+
+// childWasReaped reads a Wait or Stop error for the ONE question a caller's lifecycle
 // decision turns on: is that process gone?
 //
 // ⛔ AN ERROR ABOUT OUTPUT IS NOT AN ANSWER OF "NO". A forced teardown that
@@ -538,12 +679,29 @@ func childWasReaped(err error) bool {
 	if err == nil {
 		return true
 	}
-	return errors.Is(err, ErrOutputAbandoned) && !errors.Is(err, ErrChildNotReaped)
+	if errors.Is(err, ErrChildNotReaped) {
+		return false
+	}
+	var observed *reapedWaitError
+	return errors.As(err, &observed) || errors.Is(err, ErrOutputAbandoned)
 }
 
-// abandonOutput releases pumps blocked delivering to a consumer. It is idempotent
-// and it is never reached by an ordinary stop: an EOF that drains normally ends
-// the pumps by itself, two rungs earlier.
+// reapedWaitError retains a non-exit exec error and the independent positive
+// ProcessState evidence. Only the native wait coordinator constructs it.
+type reapedWaitError struct{ cause error }
+
+func (e *reapedWaitError) Error() string { return e.cause.Error() }
+func (e *reapedWaitError) Unwrap() error { return e.cause }
+
+// OutputIncomplete is read after Wait. It retains forced-drain evidence even
+// when explicit Stop keeps the existing successful-collection Wait result.
+func (p *procProcess) OutputIncomplete() bool {
+	<-p.waitDone
+	return p.drainAbandoned.Load() || p.abandonedFrames.Load() > 0 || errors.Is(p.outputErr, ErrOutputAbandoned)
+}
+
+// abandonOutput releases blocked deliveries after a forced output drain.
+// It is idempotent; healthy EOF delivery never reaches it.
 func (p *procProcess) abandonOutput() {
 	if p.abandon == nil {
 		return // a handle built without pumps (no Launch); nothing can be blocked
@@ -557,13 +715,15 @@ func (p *procProcess) abandonOutput() {
 // fixed sentinel, nothing provider-controlled.
 func (p *procProcess) forcedTeardownReport() error {
 	if dropped := p.abandonedFrames.Load(); dropped > 0 {
-		return fmt.Errorf("sessions: the child was reaped, but %d output frame(s) could not be delivered and were abandoned, and the output pipes were closed, to finish the teardown: %w", dropped, ErrOutputAbandoned)
+		return fmt.Errorf("sessions: the child was reaped, but %d output frame(s) could not be delivered and were abandoned, and the output pipes were closed, to finish the teardown: %w", dropped, errors.Join(ErrOutputAbandoned, p.waitErr))
 	}
-	return fmt.Errorf("sessions: the child was reaped, but a process outside its group held the output pipes open; they were closed to finish the teardown, so any further output from that process is not bridged: %w", ErrOutputAbandoned)
+	if errors.Is(p.waitErr, ErrOutputLineTooLong) {
+		return fmt.Errorf("sessions: the child was reaped after an oversized protocol record was refused; output was abandoned: %w", p.waitErr)
+	}
+	return fmt.Errorf("sessions: the child was reaped, but output did not finish within the drain bound; its pipes were closed and further output is not bridged: %w", ErrOutputAbandoned)
 }
 
-// finishedWithin reports whether the run completed (pumps drained AND cmd.Wait
-// returned) within d.
+// finishedWithin reports whether the child was reaped and both pumps joined within d.
 func (p *procProcess) finishedWithin(d time.Duration) bool {
 	timer := time.NewTimer(d)
 	defer timer.Stop()
@@ -575,9 +735,7 @@ func (p *procProcess) finishedWithin(d time.Duration) bool {
 	}
 }
 
-// closeOutputPipes closes the PARENT ends of stdout/stderr. cmd.Wait closes them
-// too when it eventually runs, and closing an os.File twice is a no-op error that
-// nothing reads.
+// closeOutputPipes closes the owned readers. Closing an os.File twice is harmless.
 func (p *procProcess) closeOutputPipes() {
 	if p.stdout != nil {
 		_ = p.stdout.Close()
@@ -613,15 +771,42 @@ func (p *procProcess) closeStdin() {
 // defaultWaitDelay bounds a graceful stop before SIGKILL when no spec delay is set.
 const defaultWaitDelay = 5 * time.Second
 
-// readBoundedLine reads up to and including a newline, capping the line at cap
-// bytes (a longer line is truncated and the rest of it is discarded up to the
-// newline). It returns the line WITHOUT the trailing CR/LF.
-func readBoundedLine(br *bufio.Reader, cap int) ([]byte, error) {
-	line, err := br.ReadBytes('\n')
-	if len(line) > cap {
-		line = line[:cap]
+// ErrOutputLineTooLong means a native output record exceeded its byte ceiling.
+// No prefix is delivered: it could otherwise become a different valid JSON record.
+var ErrOutputLineTooLong = errors.New("sessions: native output line exceeds its byte limit")
+
+// readBoundedLine retains at most limit bytes plus two bytes for CRLF. ReadSlice
+// adds at most the reader's fixed buffer as read-ahead; it never collects a whole
+// oversized record. Excess is terminal, so no unbounded discard is needed.
+func readBoundedLine(br *bufio.Reader, limit int) ([]byte, error) {
+	if limit <= 0 {
+		limit = maxOutputLine
 	}
-	return trimCRLF(line), err
+	var line []byte
+	for {
+		fragment, err := br.ReadSlice('\n')
+		size := len(line) + len(fragment)
+		if size > limit+2 {
+			return nil, ErrOutputLineTooLong
+		}
+		if size > cap(line) {
+			grown := make([]byte, len(line), min(limit+2, max(size, 2*cap(line))))
+			copy(grown, line)
+			line = grown
+		}
+		line = append(line, fragment...)
+		if errors.Is(err, bufio.ErrBufferFull) {
+			continue
+		}
+		if err != nil && !errors.Is(err, io.EOF) {
+			return nil, err
+		}
+		line = trimCRLF(line)
+		if len(line) > limit {
+			return nil, ErrOutputLineTooLong
+		}
+		return line, err
+	}
 }
 
 // trimCRLF drops a trailing CR/LF from a line.

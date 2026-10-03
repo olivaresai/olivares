@@ -26,6 +26,9 @@ func TestCoreOpenAPIPermissionAnnotations(t *testing.T) {
 		"whoami":           true,
 		"searchConsole":    true,
 		"authCapabilities": true,
+		// The signed-in user's own browser session (browser_session.go).
+		"getBrowserSession":     true,
+		"migrateBrowserSession": true,
 	}
 
 	h := newHarness(t)
@@ -89,6 +92,8 @@ func TestCoreOpenAPIPermissionAnnotations(t *testing.T) {
 		"createWorkspace":       "tenant:admin",
 		"listMembers":           "user:read",
 		"getConnectorHealth":    "health:status:read",
+		"getStepUpPolicy":       "system:admin",
+		"setStepUpPolicy":       "system:admin",
 	}
 	found := map[string]string{}
 	for _, item := range doc.Paths {

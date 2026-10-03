@@ -6,9 +6,6 @@ package governance
 
 import (
 	"context"
-	"encoding/json"
-	"errors"
-	"io"
 	"net/http"
 	"strings"
 	"time"
@@ -28,12 +25,10 @@ import (
 // optional reason/target, so a bare POST is valid. Unknown fields are still
 // rejected. Returns false (and writes a 400) on a malformed non-empty body.
 func decodeOptionalJSON(w http.ResponseWriter, r *http.Request, v any) bool {
-	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		if errors.Is(err, io.EOF) {
-			return true
-		}
+	// A non-empty body is exactly one JSON document, like every other route —
+	// the previous copy returned success after the first document and never
+	// rejected a trailing value or a stray-bracket tail.
+	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 1 << 20, Optional: true}); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
 		return false
 	}

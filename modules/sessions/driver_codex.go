@@ -55,6 +55,7 @@ const (
 	codexMethodInitialize        = "initialize"
 	codexMethodInitialized       = "initialized"
 	codexMethodAccountRead       = "account/read"
+	codexMethodConfigRead        = "config/read"
 	codexMethodThreadStart       = "thread/start"
 	codexMethodThreadResume      = "thread/resume"
 	codexMethodThreadUnsubscribe = "thread/unsubscribe"
@@ -160,15 +161,14 @@ func (codexDriver) TransportProfile() DriverTransportProfile {
 
 // LaunchTerms declares what a Codex launch hands its child. The model travels on
 // thread/start (and thread/resume) and the effort on every turn/start. The
-// permission mode is Claude Code's own enum and reaches no Codex frame: the
-// approval policy and the sandbox this driver sends are its own controls, and
-// neither is derived from it (CodexPolicy). The models can be discovered by
+// permission preset selects Codex's native approval policy and sandbox. A
+// configured granular approval policy is retained. The models are discovered by
 // probing the credential a profile binds; the driver lists none.
 func (codexDriver) LaunchTerms() DriverLaunchTerms {
 	return DriverLaunchTerms{
 		Model:          TermCarried,
 		Effort:         TermCarried,
-		PermissionMode: TermNotCarried,
+		PermissionMode: TermCarried,
 		ModelDiscovery: ModelDiscoveryBoundCredentialProbe,
 	}
 }
@@ -179,24 +179,78 @@ func (codexDriver) LaunchTerms() DriverLaunchTerms {
 // The form itself is declared ONCE, in cliruntime, beside the transport it
 // requires (r3): a driver that kept its own copy would let the declaration and
 // the launch drift apart without a test going red.
-func (codexDriver) LaunchArgs(l DriverLaunch) []string {
+func (d codexDriver) LaunchArgs(l DriverLaunch) []string {
 	args := cliruntime.CodexArgs(l.cliRuntimeRequest())
-	if l.LocalModelEndpoint == "" {
+	if d.launchPolicy(l.Preset, l.CodexSandboxFallback).sandbox() == CodexSandboxDangerFull {
+		// Full is explicitly authorized, or the bounded native probe established
+		// that this host needs the required OS-confinement fallback.
+		args = append([]string{"-c", `sandbox_mode="danger-full-access"`}, args...)
+	}
+	endpoint, providerID := l.BoundProvider.Endpoint, codexBoundProviderID(l.BoundProvider)
+	if providerID == "" && l.LocalModelEndpoint != "" {
+		endpoint, providerID = l.LocalModelEndpoint, "olivares_ollama"
+	}
+	if providerID == "" {
 		return args
 	}
-	// Use an owned provider id: Codex ignores overrides to its built-in Ollama
-	// provider. Fixed direct-argv config overrides the authorized home without
-	// modifying it, and requires no OpenAI credential or cloud fallback.
-	provider := `{name="Ollama",base_url=` + strconv.Quote(l.LocalModelEndpoint) + `,wire_api="responses",requires_openai_auth=false}`
-	return append([]string{"-c", `model_provider="olivares_ollama"`, "-c", "model_providers.olivares_ollama=" + provider}, args...)
+	if l.BoundProvider.Kind != "" {
+		// Native table merging retains saved catalog URLs. Disable their startup
+		// discovery before they can receive the bound record's credential.
+		args = append([]string{"-c", "features.api_key_model_discovery=false", "-c", `cli_auth_credentials_store="ephemeral"`}, args...)
+	}
+	// Codex ignores overrides to its built-in providers. An owned provider id and
+	// direct-argv config pin the endpoint without changing the authorized home.
+	provider := `{name="Olivares record",base_url=` + strconv.Quote(endpoint) + `,wire_api="responses",requires_openai_auth=false`
+	if l.BoundProvider.Kind != "" {
+		provider += `,model_catalog_url=` + strconv.Quote(strings.TrimRight(endpoint, "/")+"/models")
+	}
+	if providerID != "olivares_ollama" {
+		provider += `,env_key="OPENAI_API_KEY"`
+	}
+	provider += `}`
+	return append([]string{"-c", "model_provider=" + strconv.Quote(providerID), "-c", "model_providers." + providerID + "=" + provider}, args...)
+}
+
+func codexBoundProviderID(bound BoundProvider) string {
+	if bound.Kind == "" {
+		return ""
+	}
+	if bound.Kind == ProviderKindOllama {
+		return "olivares_ollama"
+	}
+	return "olivares_record"
 }
 
 func (d codexDriver) OpenSession(cfg DriverSessionConfig) DriverSession {
-	s := &codexSession{cfg: cfg, policy: d.policy, pending: map[string]*codexServerRequest{}}
-	s.conn = newRPCConn(cfg.Send, false)
+	s := &codexSession{cfg: cfg, policy: d.launchPolicy(cfg.Preset, cfg.CodexSandboxFallback), pending: map[string]*codexServerRequest{}}
+	s.conn = newRPCConn(s.send, false)
 	s.conn.onRequest = s.onServerRequest
 	s.conn.onNotify = s.onNotification
 	return s
+}
+
+func (d codexDriver) launchPolicy(preset string, fallback bool) CodexPolicy {
+	policy := d.policy
+	switch preset {
+	case PresetReadOnly:
+		policy.Sandbox = CodexSandboxReadOnly
+		policy.Approval = CodexApprovalPolicy{Mode: CodexApprovalOnRequest}
+	case PresetAsk, PresetEditsOnly, PresetEditsAndCommands:
+		policy.Sandbox = CodexSandboxWorkspaceWrite
+		policy.Approval = CodexApprovalPolicy{Mode: CodexApprovalUntrusted}
+	case PresetFull:
+		// The runtime admitted full only with the launcher's current run-admin
+		// authority. Live tenant policy still answers each native approval.
+		policy.Sandbox = CodexSandboxDangerFull
+		policy.Approval = CodexApprovalPolicy{Mode: CodexApprovalUntrusted}
+	}
+	if fallback {
+		policy.Sandbox = CodexSandboxDangerFull
+	}
+	if d.policy.Approval.Granular != nil {
+		policy.Approval = d.policy.Approval
+	}
+	return policy
 }
 
 // codexSession is one owned conversation over one owned app-server child.
@@ -205,12 +259,14 @@ type codexSession struct {
 	policy CodexPolicy
 	conn   *rpcConn
 
-	mu        sync.Mutex
-	threadID  string
-	turnID    string
-	authState string
-	pending   map[string]*codexServerRequest
-	closed    bool
+	mu            sync.Mutex
+	configReadID  string
+	threadID      string
+	turnID        string
+	authState     string
+	pending       map[string]*codexServerRequest
+	approvalFacts map[string]codexApprovalFacts
+	closed        bool
 	// finished holds turn ids whose completion arrived BEFORE we had recorded them
 	// as active. A fast provider can answer turn/start and complete the turn in the
 	// same breath, and the two are processed by different goroutines: the response
@@ -255,11 +311,23 @@ type codexAccountReadResponse struct {
 	RequiresOpenaiAuth bool            `json:"requiresOpenaiAuth"`
 }
 
+type codexConfigReadParams struct {
+	Cwd           *string `json:"cwd,omitempty"`
+	IncludeLayers bool    `json:"includeLayers"`
+}
+
+type codexConfigReadResponse struct {
+	Config struct {
+		Model string `json:"model"`
+	} `json:"config"`
+}
+
 type codexThreadStartParams struct {
 	Cwd            *string             `json:"cwd,omitempty"`
 	ApprovalPolicy CodexApprovalPolicy `json:"approvalPolicy"`
 	Sandbox        string              `json:"sandbox"`
 	Model          *string             `json:"model,omitempty"`
+	ModelProvider  *string             `json:"modelProvider,omitempty"`
 }
 
 type codexThreadResumeParams struct {
@@ -268,6 +336,7 @@ type codexThreadResumeParams struct {
 	ApprovalPolicy CodexApprovalPolicy `json:"approvalPolicy"`
 	Sandbox        string              `json:"sandbox"`
 	Model          *string             `json:"model,omitempty"`
+	ModelProvider  *string             `json:"modelProvider,omitempty"`
 }
 
 // codexThread is the subset of Thread this driver reads. `parentThreadId` and
@@ -280,7 +349,8 @@ type codexThread struct {
 }
 
 type codexThreadResponse struct {
-	Thread codexThread `json:"thread"`
+	Thread        codexThread `json:"thread"`
+	ModelProvider string      `json:"modelProvider"`
 }
 
 type codexUserInputText struct {
@@ -329,6 +399,43 @@ type codexTurnCompletedNotification struct {
 
 // --- session ------------------------------------------------------------------
 
+// Keep the config/read identity before sending: its reply can contain saved
+// provider secrets, even with includeLayers=false. The bridge projects that one
+// response before any attach, recording or protocol consumer sees it.
+func (s *codexSession) send(ctx context.Context, data []byte) error {
+	var request requestOut
+	if json.Unmarshal(data, &request) == nil && request.Method == codexMethodConfigRead {
+		s.mu.Lock()
+		s.configReadID = strconv.FormatInt(request.ID, 10)
+		s.mu.Unlock()
+	}
+	return s.cfg.Send(ctx, data)
+}
+
+func (s *codexSession) projectProfileModelResponse(data []byte) []byte {
+	s.mu.Lock()
+	id := s.configReadID
+	s.mu.Unlock()
+	if id == "" {
+		return data
+	}
+	var frame struct {
+		ID, Method, Result, Error json.RawMessage
+	}
+	decodeErr := json.Unmarshal(data, &frame)
+	if decodeErr == nil && ((len(frame.Method) != 0 && string(frame.Method) != "null" && string(frame.Method) != `""`) || string(frame.ID) != id) {
+		return data
+	}
+	var model codexConfigReadResponse
+	var reply any = responseOut{ID: frame.ID, Result: &model}
+	if decodeErr != nil || (len(frame.Error) != 0 && string(frame.Error) != "null") || json.Unmarshal(frame.Result, &model) != nil {
+		// Native errors or an unterminated EOF prefix can quote saved values.
+		reply = errorOut{ID: json.RawMessage(id), Error: rpcError{Code: -32603, Message: "Codex's configured model could not be read"}}
+	}
+	projected, _ := json.Marshal(reply)
+	return projected
+}
+
 func (s *codexSession) Deliver(frame OutputFrame) {
 	if frame.Stream != streamStdout {
 		return
@@ -367,9 +474,30 @@ func (s *codexSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 	var err error
 	cwd := codexOptionalString(s.cfg.WorkDir)
 	model := codexOptionalString(s.cfg.Model)
+	providerID := codexBoundProviderID(s.cfg.BoundProvider)
+	modelProvider := codexOptionalString(providerID)
+	if model == nil && providerID != "" && strings.TrimSpace(s.cfg.ResumeConversationID) == "" {
+		// Bound catalogs cannot discover a default. Let the native tool resolve
+		// its profile layers, then carry that configured model explicitly. Resume
+		// keeps the stored conversation's model when none was selected here.
+		config, err := s.conn.call(ctx, codexMethodConfigRead, codexConfigReadParams{
+			Cwd: cwd, IncludeLayers: false,
+		}, s.cfg.CallTimeout)
+		if err != nil {
+			return DriverHandshake{}, codexHandshakeErr("profile model read", err)
+		}
+		var reply codexConfigReadResponse
+		if err := json.Unmarshal(config, &reply); err != nil {
+			return DriverHandshake{}, &runErr{http.StatusBadGateway, "Codex's configured model could not be read"}
+		}
+		model = codexOptionalString(reply.Config.Model)
+		if model == nil {
+			return DriverHandshake{}, &runErr{http.StatusConflict, "Choose a model in this session's settings or in its Codex profile configuration before starting it"}
+		}
+	}
 	if resume := strings.TrimSpace(s.cfg.ResumeConversationID); resume != "" {
 		raw, err = s.conn.call(ctx, codexMethodThreadResume, codexThreadResumeParams{
-			ThreadID: resume, Cwd: cwd, ApprovalPolicy: s.policy.approval(), Sandbox: s.policy.sandbox(), Model: model,
+			ThreadID: resume, Cwd: cwd, ApprovalPolicy: s.policy.approval(), Sandbox: s.policy.sandbox(), Model: model, ModelProvider: modelProvider,
 		}, s.cfg.CallTimeout)
 		if err != nil {
 			// REFUSE. A resume that failed is not an invitation to start a different
@@ -382,7 +510,7 @@ func (s *codexSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 		}
 	} else {
 		raw, err = s.conn.call(ctx, codexMethodThreadStart, codexThreadStartParams{
-			Cwd: cwd, ApprovalPolicy: s.policy.approval(), Sandbox: s.policy.sandbox(), Model: model,
+			Cwd: cwd, ApprovalPolicy: s.policy.approval(), Sandbox: s.policy.sandbox(), Model: model, ModelProvider: modelProvider,
 		}, s.cfg.CallTimeout)
 		if err != nil {
 			return DriverHandshake{}, codexHandshakeErr("thread/start", err)
@@ -391,6 +519,9 @@ func (s *codexSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 	var resp codexThreadResponse
 	if err := json.Unmarshal(raw, &resp); err != nil {
 		return DriverHandshake{}, &runErr{http.StatusBadGateway, "the provider's conversation response could not be read"}
+	}
+	if providerID != "" && resp.ModelProvider != providerID {
+		return DriverHandshake{}, &runErr{http.StatusConflict, "Codex did not confirm this session's bound provider; refusing to send input"}
 	}
 	id := strings.TrimSpace(resp.Thread.ID)
 	if id == "" {
@@ -557,6 +688,23 @@ func (s *codexSession) Close(err error) {
 // nobody in particular, and a subagent or another client produces the same shape.
 func (s *codexSession) onNotification(method string, params json.RawMessage) {
 	switch method {
+	case "item/started":
+		s.observeApprovalItem(params)
+	case "item/completed":
+		var item struct {
+			ThreadID string `json:"threadId"`
+			TurnID   string `json:"turnId"`
+			Item     struct {
+				ID string `json:"id"`
+			} `json:"item"`
+		}
+		if json.Unmarshal(params, &item) == nil {
+			s.mu.Lock()
+			if item.ThreadID == s.threadID && item.TurnID == s.turnID {
+				delete(s.approvalFacts, item.Item.ID)
+			}
+			s.mu.Unlock()
+		}
 	case codexNotifyTurnCompleted:
 		var n codexTurnCompletedNotification
 		if err := json.Unmarshal(params, &n); err != nil {
@@ -667,6 +815,7 @@ func (s *codexSession) clearTurn(id string) {
 	defer s.mu.Unlock()
 	if id == "" || s.turnID == id {
 		s.turnID = ""
+		s.approvalFacts = nil
 	}
 	if id == "" {
 		return

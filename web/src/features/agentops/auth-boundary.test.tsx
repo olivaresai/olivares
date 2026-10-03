@@ -34,7 +34,9 @@ import { useAuthBoundary } from './auth-boundary'
 const EXP = '2030-01-01T00:00:00Z'
 const SID = 'sid-fixed'
 const setSession = (token: string, sessionId = SID, expiresAt = EXP) =>
-  useSessionStore.getState().setSession({ token, sessionId, expiresAt })
+  useSessionStore
+    .getState()
+    .setSession({ csrfToken: token, sessionId, expiresAt })
 
 function mount() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -69,7 +71,7 @@ beforeEach(() => {
   auth.tenant = 't1'
   auth.principal = 'u1'
   useSessionStore.setState({
-    token: 'olvs_first',
+    csrfToken: 'olvs_first',
     sessionId: SID,
     expiresAt: EXP,
   })

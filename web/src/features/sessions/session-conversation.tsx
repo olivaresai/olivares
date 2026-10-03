@@ -7,6 +7,7 @@
 // raw line is one click away (inspect), never the row itself.
 import { ChevronDown, Wrench } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { LiveDot } from '@/features/shared'
 import { useRunAttach } from '@/features/agentops/attach'
@@ -18,9 +19,28 @@ import {
   mapConversationFrames,
   type ConversationItem,
 } from './conversation-frames'
+import { systemFailed, systemText } from './conversation-text'
+import { unechoedTurns, useRunSentTurns, type SentTurn } from './sent-turns'
 import './i18n'
 
 const MAX_FRAMES = 5000
+
+/** How an ACP turn stopped, in words; an outcome this console does not know is shown as
+ * the agent sent it. */
+function stopText(t: TFunction, reason: string): string {
+  switch (reason) {
+    case 'cancelled':
+      return t('conversation.stop.cancelled')
+    case 'refusal':
+      return t('conversation.stop.refusal')
+    case 'max_tokens':
+      return t('conversation.stop.maxTokens')
+    case 'max_turn_requests':
+      return t('conversation.stop.maxTurnRequests')
+    default:
+      return reason
+  }
+}
 
 export function SessionConversation({
   run,
@@ -65,6 +85,12 @@ export function SessionConversation({
   const items = useMemo(
     () => mapConversationFrames(frames.map((f) => f.line)),
     [frames],
+  )
+  // The first message the console sent, until the tool shows it itself (HU2-27).
+  const sent = useRunSentTurns(run.run_ref)
+  const pending = useMemo(
+    () => (sent ? unechoedTurns(items, sent) : []),
+    [items, sent],
   )
   const cwd = conversationCwd(items)
   const showCwdWarning = !workspaceRef && !!cwd
@@ -112,7 +138,7 @@ export function SessionConversation({
         aria-label={t('conversation.log')}
         className="min-h-0 flex-1 overflow-auto focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
       >
-        {items.length === 0 ? (
+        {items.length === 0 && pending.length === 0 ? (
           <p className="px-1 py-2 text-caption text-muted-foreground">
             {status === 'open'
               ? t('conversation.waiting')
@@ -127,6 +153,9 @@ export function SessionConversation({
                 selected={selectedId === item.id}
                 onInspect={onInspect}
               />
+            ))}
+            {pending.map((turn, i) => (
+              <SentTurnRow key={`sent-${i}`} turn={turn} />
             ))}
           </ol>
         )}
@@ -178,14 +207,42 @@ function ConversationRow({
             <span className="min-w-0 flex-1 truncate font-medium">
               {item.toolName ?? t('conversation.tool')}
             </span>
-            {item.toolArgsSummary ? (
+            {item.toolFailed ? (
+              <span className="shrink-0 text-danger">
+                {t('conversation.toolFailed')}
+              </span>
+            ) : null}
+            {item.toolCommand ? (
+              // A command reads as itself, in one line; the whole of it is below.
+              <span
+                className="min-w-0 max-w-[60%] truncate font-mono text-muted-foreground"
+                title={item.toolCommand}
+              >
+                {item.toolCommand}
+              </span>
+            ) : item.toolArgsSummary ? (
               <span className="min-w-0 max-w-[50%] truncate text-muted-foreground">
                 {item.toolArgsSummary}
               </span>
             ) : null}
+            {item.toolElapsedSeconds !== undefined ? (
+              <span className="shrink-0 tabular-nums text-muted-foreground">
+                {formatDuration(item.toolElapsedSeconds * 1000)}
+              </span>
+            ) : null}
           </summary>
           <div className="space-y-1 px-8 pb-2 text-caption text-muted-foreground">
-            {item.toolArgsSummary ? (
+            {item.toolCommand ? (
+              <>
+                <pre
+                  data-slot="tool-command"
+                  className="m-0 whitespace-pre-wrap font-mono text-caption text-foreground [overflow-wrap:anywhere]"
+                >
+                  {item.toolCommand}
+                </pre>
+                {item.toolDescription ? <p>{item.toolDescription}</p> : null}
+              </>
+            ) : item.toolArgsSummary ? (
               <p>
                 <span className="text-overline uppercase">
                   {t('conversation.args')}{' '}
@@ -218,12 +275,13 @@ function ConversationRow({
           onClick={inspect}
           className={cn(
             'flex w-full min-h-7 items-center gap-2 border-l-2 border-transparent px-2 py-0.5 text-left',
-            'text-caption text-muted-foreground outline-none',
+            'text-caption outline-none',
+            systemFailed(item) ? 'text-danger' : 'text-muted-foreground',
             'hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
             selected && 'border-l-accent bg-accent-soft text-foreground',
           )}
         >
-          <span className="min-w-0 truncate">{item.summary}</span>
+          <span className="min-w-0 truncate">{systemText(t, item)}</span>
         </button>
       </li>
     )
@@ -231,6 +289,7 @@ function ConversationRow({
 
   if (item.kind === 'result') {
     const facts = [
+      item.stopReason ? stopText(t, item.stopReason) : null,
       item.model,
       item.inputTokens !== undefined || item.outputTokens !== undefined
         ? t('conversation.tokens', {
@@ -261,12 +320,28 @@ function ConversationRow({
             selected && 'border-l-accent bg-accent-soft text-foreground',
           )}
         >
-          <span className="font-medium text-foreground">
+          <span
+            className={cn(
+              'font-medium',
+              item.resultFailed ? 'text-danger' : 'text-foreground',
+            )}
+          >
             {t('conversation.result')}
           </span>
           {facts.map((fact) => (
             <span key={String(fact)}>· {fact}</span>
           ))}
+          {/* A failed result's text IS the failure (F1C: a failed start showed only
+              "Result" while the run's stored reason and the CLI had the sentence). A
+              successful result's text repeats the last reply, so it stays out. */}
+          {item.resultFailed && item.text ? (
+            <span
+              data-slot="result-failure"
+              className="basis-full whitespace-pre-wrap break-words text-danger"
+            >
+              {item.text}
+            </span>
+          ) : null}
         </button>
       </li>
     )
@@ -303,6 +378,30 @@ function ConversationRow({
           {item.text || item.summary}
         </span>
       </button>
+    </li>
+  )
+}
+
+/** The person's message as the console sent it: there is no frame to inspect. A message
+ * the engine refused says so, with the engine's reason, in the danger color. */
+function SentTurnRow({ turn }: { turn: SentTurn }) {
+  const { t } = useTranslation('sessions')
+  return (
+    <li
+      className="flex flex-col items-end gap-0.5 px-2 py-1"
+      data-testid="conversation-sent"
+    >
+      <span className="text-overline uppercase text-muted-foreground">
+        {t('conversation.operator')}
+      </span>
+      <p className="max-w-[42rem] rounded-md bg-accent-soft px-2.5 py-1.5 text-body leading-snug text-foreground">
+        <span className="whitespace-pre-wrap break-words">{turn.text}</span>
+      </p>
+      {turn.refused !== undefined ? (
+        <p className="max-w-[42rem] text-caption text-danger">
+          {t('conversation.notSent', { reason: turn.refused })}
+        </p>
+      ) : null}
     </li>
   )
 }

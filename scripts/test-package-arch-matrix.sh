@@ -350,14 +350,14 @@ docker image inspect "$arch_image" >/dev/null 2>&1 || docker pull "$arch_image" 
 printf 'image %s = %s\n' "$arch_image" "$(docker image inspect --format '{{index .RepoDigests 0}}' "$arch_image" 2>/dev/null || echo unknown)"
 
 # Two package sets from the real nfpms block and a test-double binary.
-python3 - "$root/.goreleaser.yaml" "$scratch/nfpms.yaml" <<'PY' || could_not_look 'could not extract the nfpms block'
+python3 - "$root/packaging/nfpm/packages.json" "$scratch/nfpms.yaml" <<'PY' || could_not_look 'could not extract the nfpms block'
 from pathlib import Path
-import sys
-src = Path(sys.argv[1]).read_text(encoding="utf-8")
-start, end = src.find("\nnfpms:\n"), src.find("\nhomebrew_casks:\n")
-if start < 0 or end <= start:
-    raise SystemExit("nfpms block not found")
-Path(sys.argv[2]).write_text(src[start + 1 : end], encoding="utf-8")
+import sys, json
+recipe = json.loads(Path(sys.argv[1]).read_text())
+for entry in recipe["nfpms"]:
+    entry.pop("version_schema", None)
+out = "nfpms: " + json.dumps(recipe["nfpms"]) + "\n"
+Path(sys.argv[2]).write_text(out)
 PY
 build_set() { # LABEL VERSION
 	local label=$1 version=$2 proj="$scratch/proj-$1" f a

@@ -8,16 +8,26 @@
 // resource indicator → concrete server, PRM → AS discovery (RFC 8414) → PKCE S256
 // (RFC 7636) + resource-bound token (RFC 8707). DEFENSIVE: the panel documents the
 // posture; it NEVER exposes token passthrough (prohibited by design).
+import { ModuleGate } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { ShieldCheck } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { SectionCard, SelfAuditNotice } from '@/features/_intel'
+import { SectionCard } from '@/features/_intel'
 import { useAuth } from '@/lib/auth/context'
 import { identityApi, identityKeys } from './api'
 import { DeclaredSection, FindingList } from './components'
 import { AuthorityReferences } from './references'
 
 export function McpAuthTab() {
+  // The MCP authorization findings are the security module's (EU18).
+  return (
+    <ModuleGate module="security">
+      <McpAuthReads />
+    </ModuleGate>
+  )
+}
+
+function McpAuthReads() {
   const { t } = useTranslation(['identity', 'common'])
   const { activeTenant } = useAuth()
   const findings = useQuery({
@@ -39,7 +49,6 @@ export function McpAuthTab() {
     <div className="flex flex-col gap-6">
       <SectionCard title={t('mcp.title')} description={t('mcp.description')}>
         <div className="flex flex-col gap-4">
-          <SelfAuditNotice />
           <DeclaredSection
             query={findings}
             what={t('mcp.seamWhat')}

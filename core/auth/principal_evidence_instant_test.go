@@ -41,3 +41,56 @@ func TestSessionInstantWithinTheTransactionClockPrecisionIsEvidence(t *testing.T
 		})
 	}
 }
+
+func TestResolvePrincipalScopeSealsAuthenticationWithinTransactionClockPrecision(t *testing.T) {
+	for _, clock := range []struct {
+		name      string
+		precision time.Duration
+	}{
+		{"sqlite_milliseconds", time.Millisecond},
+		{"postgres_microseconds", time.Microsecond},
+	} {
+		t.Run(clock.name, func(t *testing.T) {
+			f := newPrincipalEvidenceFixture(t)
+			ref := f.sessionRef()
+			now := f.now.Truncate(clock.precision)
+			f.hooks.now = model.NewTimestamp(now)
+			for _, tc := range []struct {
+				name  string
+				after time.Duration
+				ok    bool
+			}{
+				{"same_clock_step", clock.precision - time.Nanosecond, true},
+				// Both readers use the existing coarsest clock ceiling: a full
+				// millisecond ahead is refused even for the finer PG witness.
+				{"coarsest_clock_boundary", time.Millisecond, false},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					instant := now.Add(tc.after)
+					f.hooks.rewriteSession = func(session model.AuthSession) model.AuthSession {
+						session.CreatedAt = model.NewTimestamp(instant)
+						return session
+					}
+					p, err := f.a.ResolvePrincipalScope(f.deadline(time.Minute), ref, f.tenant)
+					if !tc.ok {
+						if !errors.Is(err, ErrPrincipalEvidenceUnavailable) {
+							t.Fatalf("future authentication instant: %v, want unavailable evidence", err)
+						}
+						return
+					}
+					if err != nil {
+						t.Fatalf("resolve same-clock-step authentication: %v", err)
+					}
+					evidence, ok := p.AuthenticationEvidence()
+					if !ok || !evidence.AuthenticatedAt.Equal(instant) {
+						t.Fatalf("sealed authentication instant = %v (valid=%t), want %v", evidence.AuthenticatedAt, ok, instant)
+					}
+					got := NewAuthorizer(nil).AuthorizeEvidence(f.ctx, principalAuthorityEvidenceRequest(p, f.tenant))
+					if got.Outcome != EvidenceAllow {
+						t.Fatalf("same-clock-step authority = %+v, want ALLOW", got)
+					}
+				})
+			}
+		})
+	}
+}

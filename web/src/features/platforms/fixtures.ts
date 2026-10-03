@@ -20,11 +20,7 @@
 // HONESTY: nothing here is invented — every date/status traces to the Go registry;
 // rows whose date the authority did not publish carry retires_on "" and are
 // rendered "date not published / to-confirm", never "never retires".
-import type {
-  ModelLifecycle,
-  PlatformsReference,
-  Surface,
-} from './types'
+import type { ModelLifecycle, PlatformsReference, Surface } from './types'
 
 const SURFACES_AS_OF = '2026-06-06'
 const LIFECYCLE_AS_OF = '2026-06-09'

@@ -159,6 +159,23 @@ describe('WorkView address state', () => {
     )
   })
 
+  // SC 59 item 6: /work?status=not-a-status left the filter blank over an empty list.
+  it('ignores an unknown status in the address: says so, shows every item, asks for none', async () => {
+    urlHarness.initial = { status: 'not-a-status' }
+    renderIntel(<WorkView />)
+    expect(
+      await screen.findByText(
+        /address names a filter this screen does not offer/i,
+      ),
+    ).toBeVisible()
+    expect(screen.getByRole('combobox', { name: 'Status' })).toHaveTextContent(
+      'Any status',
+    )
+    await waitFor(() => expect(api.listWorkItems).toHaveBeenCalled())
+    for (const call of api.listWorkItems.mock.calls)
+      expect(JSON.stringify(call)).not.toContain('not-a-status')
+  })
+
   it('ignores a non-id item in the address and does not fetch it', async () => {
     urlHarness.initial = { item: 'not-an-id' }
     renderIntel(<WorkView />)

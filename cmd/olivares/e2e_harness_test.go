@@ -81,11 +81,14 @@ func newHarness(t *testing.T) *harness {
 // newHarnessWithRecorder allows a test-only decorator around the production
 // recorder before api.New captures it. The underlying recording module and all
 // HTTP/store/runtime wiring remain real.
-func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.SessionRecorder) *harness {
+func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.SessionRecorder, capturedLog ...*slog.Logger) *harness {
 	t.Helper()
 	ctx := context.Background()
 	dir := t.TempDir()
 	log := slog.New(slog.NewTextHandler(io.Discard, &slog.HandlerOptions{Level: slog.LevelError}))
+	if len(capturedLog) > 0 {
+		log = capturedLog[0]
+	}
 	now := time.Now()
 
 	// --- assemble (mirrors boot.go:54-153, reusing the production module set) ---
@@ -99,7 +102,8 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 	}
 
 	rt := runtime.New(runtime.Options{Logger: log})
-	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, EditionConfig{}, t.TempDir(), log)
+	editionCfg := EditionConfig{DataDir: dir}
+	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, editionCfg, dir, log)
 	if err != nil {
 		t.Fatalf("build modules: %v", err)
 	}
@@ -140,6 +144,35 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 	// wire the production-equivalent authorizer (deny-overlay + per-tenant scoped
 	// grants) so e2e tests exercise the real authorization path, not only the overlay.
 	authz := auth.NewAuthorizer(set.gov.RequestEvaluator(), auth.WithScopedGrants(set.gov.ScopedGrants()))
+	// Bind the same live edition dependencies as boot before routes or modules start.
+	fedSealer, err := newFederationSealer(dir, osGetenv)
+	if err != nil {
+		t.Fatalf("federation sealer: %v", err)
+	}
+	fedSvc := auth.NewFederationService(st, fedSealer, newFederationBuilder(), newFederation(osGetenv, log), newFederationMultiIDP())
+	secretSealer, err := newSecretSealer(dir, osGetenv)
+	if err != nil {
+		t.Fatalf("secret sealer: %v", err)
+	}
+	secretStore := auth.NewSecretStore(st, secretSealer)
+	secretResolver := newSecretResolver(secretStore, osGetenv, log)
+	editionResources, err := editionBindModuleDependencies(ctx, editionCfg, set.all, EditionDependencies{
+		Store: st, Sessions: set.sessions, RuntimeLaunches: set.sessions,
+		Rows: api.NewReadRowAuthorizationPort(authz, authr), Mutations: authz,
+		Principals: authr, Governance: set.gov, Secrets: secretResolver,
+		Authenticator: authr, FederationService: fedSvc, SecretStore: secretStore,
+		ProductSettings: newProductSettings(st, dir),
+	}, log)
+	if err != nil {
+		t.Fatalf("bind edition module dependencies: %v", err)
+	}
+	t.Cleanup(func() {
+		stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = rt.Stop(stopCtx)
+		closeEditionResources(editionResources, log)
+		_ = st.Close()
+	})
 	// wire the eventing engine's late-bound seams exactly as production
 	// boot() does, so e2e tests can exercise webhook and SIEM-sink subscriptions.
 	// The sink renderer is wired at construction (buildModules); the authorizer and
@@ -189,6 +222,7 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 	apiSrv, err := api.New(api.Options{
 		Store: st, Authenticator: authr, Authorizer: authz, Signer: signer,
 		PrincipalEvidenceProducer: authr,
+		CoreEntityResolver:        coreEntityResolver{st: st},
 		SetupToken:                setupTok, Logger: log, Version: "e2e", Modules: set.all,
 		KnowledgeStatus: set.knowledgeStatus,
 		// mirror production — module routes are recorded through the wired
@@ -200,12 +234,6 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 	}
 
 	h := &harness{t: t, h: apiSrv.Handler(), rt: rt, st: st, authr: authr, now: now, set: set}
-	t.Cleanup(func() {
-		stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = rt.Stop(stopCtx)
-		_ = st.Close()
-	})
 
 	// --- API bootstrap over the real handler (setup token → admin → login) ---
 	tok, _, err := setupTok.Ensure()

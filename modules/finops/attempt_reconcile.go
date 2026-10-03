@@ -95,7 +95,7 @@ func businessTenant(t model.TenantID) error {
 // and never a retry that would import twice.
 func (m *Module) mutateAttempt(ctx context.Context, tenant model.TenantID, fn func(sc store.Scope) error) error {
 	completed := false
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.mutate(ctx, tenant, func(sc store.Scope) error {
 		completed = false
 		if ferr := fn(sc); ferr != nil {
 			return ferr

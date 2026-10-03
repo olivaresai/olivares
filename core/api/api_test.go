@@ -36,6 +36,31 @@ type harness struct {
 	setupTokFile *secure.SetupToken
 }
 
+// requirePasskeyStepUp turns on the strictest administrative step-up policy
+// (passkey) for this harness, the behavior every deployment had before the
+// policy existed. Tests that assert step_up_required at AAL1 run under it; the
+// default (none) is covered by stepup_policy_http_test.go.
+func (h *harness) requirePasskeyStepUp() {
+	h.t.Helper()
+	ctx := context.Background()
+	if err := h.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		rows, _, err := as.AuthPolicy().List(ctx, model.Query{})
+		if err != nil {
+			return err
+		}
+		if len(rows) == 0 {
+			_, err = as.AuthPolicy().Create(ctx, model.AuthPolicy{AdminStepUp: auth.StepUpPasskey})
+			return err
+		}
+		rows[0].AdminStepUp = auth.StepUpPasskey
+		_, err = as.AuthPolicy().Update(ctx, rows[0])
+		return err
+	}); err != nil {
+		h.t.Fatalf("require passkey step-up: %v", err)
+	}
+	h.authr.ReloadStepUp()
+}
+
 func newHarness(t *testing.T, modules ...api.Module) *harness {
 	return newHarnessOpts(t, nil, modules...)
 }

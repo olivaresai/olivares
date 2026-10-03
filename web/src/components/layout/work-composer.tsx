@@ -45,7 +45,7 @@
 import { ProviderAccent } from '@/features/agentops/provider-accent'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from '@tanstack/react-router'
-import { IdCard, Layers, Plus, Send } from 'lucide-react'
+import { IdCard, Layers, Send } from 'lucide-react'
 import { useRef, useState, type KeyboardEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
@@ -66,7 +66,7 @@ import '@/features/agentops/i18n'
 import { launchFailureMessage } from '@/features/agentops/launch-readiness'
 import { sessionTurnBody } from '@/features/agentops/session-turn'
 import type { CreateRunRequest, RunDTO } from '@/features/agentops/types'
-import { workLeaseFenceFor } from '@/features/agentops/work-fence'
+import { currentControlFence } from '@/features/agentops/work-fence'
 import { SESSION_PARAM } from '@/features/sessions/session-address'
 import type { WorkGroupId } from '@/features/sessions/session-groups'
 import { useAuth } from '@/lib/auth/context'
@@ -186,11 +186,17 @@ function scopeFacts(
       value: org.name || t('scope.noTenant'),
       identifier: !org.named,
     },
-    {
-      label: t('scope.workspace'),
-      value: workspace || t('scope.noWorkspace'),
-      identifier: Boolean(workspaceId && workspace === workspaceId),
-    },
+    // No workspace chosen: the line says nothing about one. "Workspace: No workspace"
+    // sat beside the workspace the installation already has (HU-19).
+    ...(workspace
+      ? [
+          {
+            label: t('scope.workspace'),
+            value: workspace,
+            identifier: Boolean(workspaceId && workspace === workspaceId),
+          },
+        ]
+      : []),
     {
       label: t('scope.environment'),
       value: environment || t('scope.noEnvironment'),
@@ -402,7 +408,7 @@ export function WorkComposer({
   const [turn, setTurn] = useState('')
   const [wire, setWire] = useState('')
   const sendTurn = useMutation({
-    mutationFn: (payload: { value: string; asWire: boolean }) => {
+    mutationFn: async (payload: { value: string; asWire: boolean }) => {
       const run = attached?.run
       if (!run) throw new Error('no attached run')
       const body = sessionTurnBody(run, payload.value, payload.asWire)
@@ -410,7 +416,9 @@ export function WorkComposer({
       //    Sent without the fence stamped on the run, the turn is refused with 409
       //    before the child sees a byte — so the composer that started the session
       //    could not speak to it, while the CLI's `--work-lease-fence` could.
-      const fence = workLeaseFenceFor(run)
+      //    Only while that lease is active: once the work item is submitted the
+      //    stamp is stale and the engine applies ordinary control.
+      const fence = await currentControlFence(run)
       return 'text' in body
         ? agentOpsApi.inputText(run.run_ref, body.text, fence)
         : agentOpsApi.input(run.run_ref, body.line, fence)
@@ -649,6 +657,11 @@ export function WorkComposer({
     )
   }
 
+  // No provider profile and no session in hand: nothing here (HU2-05). The page's own New
+  // session starts one, resolving a profile per tool, so "a session cannot start without
+  // one" was false beside it, and so was its scope line.
+  if (blocked === 'no-profiles') return null
+
   const draftScope = {
     workspace: workspace?.name || workspace?.workspace_ref || null,
     workspaceId: workspace?.workspace_ref || null,
@@ -784,28 +797,6 @@ export function WorkComposer({
                 : 'launcher.noProfileRead',
           )}
         </p>
-      ) : blocked === 'no-profiles' ? (
-        // THE HONEST STATE: not a disabled field, and not an invented reason. The engine makes
-        // the profile mandatory, so there is one thing to do and this is it.
-        <div className="flex min-w-0 items-center gap-2">
-          <p
-            className="min-w-0 flex-1 whitespace-normal text-caption text-muted-foreground [overflow-wrap:anywhere]"
-            title={t('nav:launcher.noProfiles')}
-          >
-            {t('nav:launcher.noProfiles')}
-          </p>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={() =>
-              void navigate({ to: '/provider-profiles' as never } as never)
-            }
-            data-testid="launcher-add-provider"
-          >
-            <Plus className="size-3.5" />
-            {t('nav:launcher.addProvider')}
-          </Button>
-        </div>
       ) : (
         /* ⛔ ONE ROW, AND THE MINIMUM WIDTHS ARE GONE. A `min-w` on a flex item is a
             floor the row cannot go under, so three of them turned "narrow pane" into

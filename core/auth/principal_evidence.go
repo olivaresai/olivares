@@ -33,9 +33,7 @@ var ErrPrincipalScopeAdmissionRequired = errors.New("auth: tenant scope admissio
 
 // principalEvidenceProvenance binds a successful reconstruction to the exact
 // credential reference, business tenant, directory generation, finite
-// database-time window, and canonical authority seal. AuthorizeEvidence may
-// consume it, while product routes and readiness remain OFF until the later K3
-// composition cut.
+// database-time window, and canonical authority seal used by governed routes.
 type principalEvidenceProvenance struct {
 	tenant          model.TenantID
 	ref             PrincipalRef
@@ -60,9 +58,9 @@ const (
 // groups, AAL, expiry, or provenance carried by a previously authenticated
 // Principal, and it never substitutes the application's clock for database time.
 //
-// The returned Principal carries private provenance only. K3 consumers remain
-// deliberately unwired, so this method changes no authorization or readiness
-// behavior by itself.
+// A human superadmin explicitly selecting a tenant enters as its owner. The
+// resolved principal retains superadmin attribution and is confined to that
+// selected tenant; global API tokens remain ineligible for this admission.
 func (a *Authenticator) ResolvePrincipalScope(
 	ctx context.Context,
 	ref PrincipalRef,
@@ -226,7 +224,7 @@ func (m principalEvidenceMaterial) finalize(
 		p.AAL = aal
 		p.AMR = defensiveAMR(m.session.AMR)
 		authenticatedAt = m.session.CreatedAt.Time()
-		if aal == AAL3 {
+		if aal > AAL1 {
 			authenticatedAt = m.session.AALAuthenticatedAt.Time()
 		}
 		if !validAuthenticationInstant(authenticatedAt) || afterTransactionClock(authenticatedAt, now) {
@@ -283,16 +281,14 @@ func resolveSessionEvidenceMaterial(
 		}
 		return principalEvidenceMaterial{}, ErrUnauthenticated
 	}
-	if user.IsSuperadmin {
-		return principalEvidenceMaterial{}, fmt.Errorf("%w: %w", ErrPrincipalEvidenceUnavailable, ErrPrincipalScopeAdmissionRequired)
-	}
-	grants, groups, confined, err := loadPrincipalEvidenceGrants(ctx, as, user.ID, tenant)
+	grants, groups, confined, err := loadPrincipalEvidenceGrants(ctx, as, user.ID, tenant, user.IsSuperadmin)
 	if err != nil {
 		return principalEvidenceMaterial{}, principalEvidenceUnavailable("reconstruct session grants", err)
 	}
 	// A directory epoch is tenant-local. A session user without a direct
-	// membership in this tenant is not fenced by that epoch: a later Cedar cut
-	// may grant User::<id> directly while credential revocation has no reason to
+	// membership or explicit superadmin admission is not fenced by that epoch:
+	// a later Cedar cut may grant User::<id> directly while credential revocation
+	// has no reason to
 	// bump this tenant's directory generation. Keep that edge unavailable until
 	// a fact that covers both authorities is composed explicitly.
 	if _, admitted := grants[tenant]; !admitted {
@@ -314,12 +310,17 @@ func resolveSessionEvidenceMaterial(
 		KindUser,
 		user.ID,
 		session.ID,
-		false,
+		user.IsSuperadmin,
 		user.DisplayName,
 		grants,
 		groups,
 	).withConfinements(confined).withStanding(standing)
-	if !session.TenantScope.IsZero() {
+	if user.IsSuperadmin {
+		// Grants and policy subjects were reconstructed for exactly this tenant.
+		// withSessionScope deliberately removes the account's superadmin flag for
+		// ordinary scoped credentials; explicit owner admission retains it for audit.
+		principal.sessionScope = tenant
+	} else if !session.TenantScope.IsZero() {
 		principal = principal.withSessionScope(tenant)
 	}
 	return principalEvidenceMaterial{
@@ -504,7 +505,7 @@ func effectiveEvidenceAAL(session model.AuthSession, now model.Timestamp) (int, 
 	switch session.AAL {
 	case 0, AAL1:
 		return AAL1, model.Timestamp{}, nil
-	case AAL3:
+	case 2, AAL3:
 		if session.AALAuthenticatedAt == nil {
 			return AAL1, model.Timestamp{}, nil
 		}
@@ -514,10 +515,10 @@ func effectiveEvidenceAAL(session model.AuthSession, now model.Timestamp) (int, 
 		if session.AALExpiresAt == nil || !now.Time().Before(session.AALExpiresAt.Time()) {
 			return AAL1, model.Timestamp{}, nil
 		}
-		if !containsElevatedAMR(session.AMR) {
+		if !validEvidenceAALAMR(session.AAL, session.AMR) {
 			return 0, model.Timestamp{}, principalEvidenceUnavailable("elevated session lacks verified AMR", nil)
 		}
-		return AAL3, *session.AALExpiresAt, nil
+		return session.AAL, *session.AALExpiresAt, nil
 	default:
 		return 0, model.Timestamp{}, principalEvidenceUnavailable("session AAL is malformed", nil)
 	}
@@ -547,10 +548,19 @@ func defensiveAMRValid(methods []string) bool {
 	return true
 }
 
-func containsElevatedAMR(methods []string) bool {
-	for _, method := range methods {
-		if method == "webauthn" || method == "piv" {
-			return true
+// validEvidenceAALAMR keeps the session reader and authority seal on the same
+// assurance contract. Federated MFA supplies AAL2; AAL3 needs a local ceremony.
+func validEvidenceAALAMR(aal int, methods []string) bool {
+	switch aal {
+	case AAL1:
+		return true
+	case 2:
+		return containsString(methods, "sso") && containsString(methods, "mfa")
+	case AAL3:
+		for _, method := range methods {
+			if method == "webauthn" || method == "piv" {
+				return true
+			}
 		}
 	}
 	return false
@@ -583,6 +593,7 @@ func loadPrincipalEvidenceGrants(
 	as store.AuthScope,
 	userID model.ID,
 	tenant model.TenantID,
+	superadmin bool,
 ) (map[model.TenantID]string, map[model.TenantID][]string, map[model.TenantID]model.ID, error) {
 	if !validPrincipalEvidenceID(userID) || !validPrincipalEvidenceTenant(tenant) {
 		return nil, nil, nil, principalEvidenceUnavailable("grant subject id is malformed", nil)
@@ -636,6 +647,12 @@ func loadPrincipalEvidenceGrants(
 		}
 	}
 
+	// Durable superadmin authority admits the tenant owner before the group fold.
+	// Its policy subjects apply even without a membership row. Ordinary users
+	// still need their direct membership before a group can contribute authority.
+	if superadmin {
+		grants[tenant] = RoleOwner
+	}
 	groupMembers, err := drainList(ctx, as.GroupMembers().List, model.Query{})
 	if err != nil {
 		return nil, nil, nil, principalEvidenceUnavailable("list group memberships", err)

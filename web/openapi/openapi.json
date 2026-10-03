@@ -216,6 +216,27 @@
         ],
         "type": "object"
       },
+      "BrowserSessionResponse": {
+        "properties": {
+          "csrf_token": {
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "type": "string"
+          },
+          "session_id": {
+            "format": "uuid",
+            "type": "string"
+          }
+        },
+        "required": [
+          "csrf_token",
+          "session_id",
+          "expires_at"
+        ],
+        "type": "object"
+      },
       "BusBridge": {
         "properties": {
           "connected": {
@@ -939,6 +960,10 @@
               },
               "message": {
                 "type": "string"
+              },
+              "module": {
+                "description": "With code module_not_enabled: the namespace of the module this node does not run.",
+                "type": "string"
               }
             },
             "required": [
@@ -951,6 +976,39 @@
         "required": [
           "error"
         ],
+        "type": "object"
+      },
+      "FederationAssuranceMapping": {
+        "description": "Exact upstream MFA values. Omitted/null amr accepts mfa or a signed combination of knowledge (pwd/pin) and possession (otp/hwk/swk); a single method never counts by default. Explicit amr lists replace these defaults with operator-owned exact matches. Omitted/null saml_contexts defaults to https://refeds.org/profile/mfa. ACR has no implicit values. Empty lists trust none. An empty object restores defaults; omission preserves the stored mapping.",
+        "properties": {
+          "acr": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "amr": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          },
+          "saml_contexts": {
+            "items": {
+              "type": "string"
+            },
+            "type": [
+              "array",
+              "null"
+            ]
+          }
+        },
         "type": "object"
       },
       "GrantMembershipInput": {
@@ -1269,10 +1327,22 @@
         "additionalProperties": false,
         "properties": {
           "allowed_tools": {
+            "description": "Explicit administrator-authored tool authority. Enabling with this field omitted gives every tested tool tools:call scope and requires approval, regardless of server annotations. Only an explicit policy can allow a call without approval. An explicit empty array permits no tools.",
             "items": {
               "$ref": "#/components/schemas/MCPGatewayToolPolicy"
             },
             "type": "array"
+          },
+          "args": {
+            "description": "Existing script and file arguments receive exact read/execute grants without opening their parents. Existing named code directories are read-only. The session folder is the only writable user directory; the runner supplies a private home and temp. Engine protected files remain denied; managed code below data/tools is readable.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "command": {
+            "description": "Executable on the engine node. No shell is used. Infer stdio when supplied; omit URL. Runs as the engine user in the session folder with the session runner; process confinement follows the runner's reported state. MCP does not add network egress confinement.",
+            "type": "string"
           },
           "credential_ref": {
             "description": "Own tenant store:mcp/\u003cname\u003e reference; empty means no upstream authentication. Never a value or global fallback.",
@@ -1287,6 +1357,20 @@
           "enabled": {
             "type": "boolean"
           },
+          "env": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Public environment values only; credentials belong in env_secret_refs. HOME, TMPDIR, TMP and TEMP are reserved: the runner supplies private child directories, removed at exit.",
+            "type": "object"
+          },
+          "env_secret_refs": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Environment names mapped to own-tenant store:mcp/ references. Values resolve at launch and never enter arguments or logs.",
+            "type": "object"
+          },
           "id": {
             "type": "string"
           },
@@ -1296,6 +1380,30 @@
           "probe": {
             "additionalProperties": false,
             "properties": {
+              "detail": {
+                "description": "One redacted stderr line or OS error explaining a local server failure. Also present in the server's stored status. Credentials and terminal control characters are removed.",
+                "maxLength": 512,
+                "type": "string"
+              },
+              "http_status": {
+                "description": "The HTTP status the server answered, with reason http_status.",
+                "maximum": 599,
+                "minimum": 400,
+                "type": "integer"
+              },
+              "reason": {
+                "description": "Why an unreachable test failed. Local servers report process_start or process_exit and a redacted one-line detail; remote failures report their connection class or HTTP status.",
+                "enum": [
+                  "dns",
+                  "tls",
+                  "timeout",
+                  "connection_refused",
+                  "http_status",
+                  "process_start",
+                  "process_exit"
+                ],
+                "type": "string"
+              },
               "state": {
                 "type": "string"
               },
@@ -1311,6 +1419,9 @@
                     },
                     "name": {
                       "type": "string"
+                    },
+                    "read_only": {
+                      "type": "boolean"
                     }
                   },
                   "required": [
@@ -1328,8 +1439,18 @@
             ],
             "type": "object"
           },
+          "proposed_allow": {
+            "description": "Registered tool names whose current successful catalogue declares read-only behavior. A proposal for administrator review, never authority: Test observes declarations without proving tool safety. Empty when no current proposal exists.",
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 128,
+            "readOnly": true,
+            "type": "array"
+          },
           "transport": {
             "enum": [
+              "stdio",
               "streamable_http"
             ],
             "type": "string"
@@ -1351,6 +1472,7 @@
           "trust",
           "enabled",
           "probe",
+          "proposed_allow",
           "egress_cidrs",
           "allowed_tools"
         ],
@@ -1360,10 +1482,22 @@
         "additionalProperties": false,
         "properties": {
           "allowed_tools": {
+            "description": "Explicit administrator-authored tool authority. Enabling with this field omitted gives every tested tool tools:call scope and requires approval, regardless of server annotations. Only an explicit policy can allow a call without approval. An explicit empty array permits no tools.",
             "items": {
               "$ref": "#/components/schemas/MCPGatewayToolPolicy"
             },
             "type": "array"
+          },
+          "args": {
+            "description": "Existing script and file arguments receive exact read/execute grants without opening their parents. Existing named code directories are read-only. The session folder is the only writable user directory; the runner supplies a private home and temp. Engine protected files remain denied; managed code below data/tools is readable.",
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "command": {
+            "description": "Executable on the engine node. No shell is used. Infer stdio when supplied; omit URL. Runs as the engine user in the session folder with the session runner; process confinement follows the runner's reported state. MCP does not add network egress confinement.",
+            "type": "string"
           },
           "credential_ref": {
             "description": "Own tenant store:mcp/\u003cname\u003e reference; empty means no upstream authentication. Never a value or global fallback.",
@@ -1378,11 +1512,26 @@
           "enabled": {
             "type": "boolean"
           },
+          "env": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Public environment values only; credentials belong in env_secret_refs. HOME, TMPDIR, TMP and TEMP are reserved: the runner supplies private child directories, removed at exit.",
+            "type": "object"
+          },
+          "env_secret_refs": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Environment names mapped to own-tenant store:mcp/ references. Values resolve at launch and never enter arguments or logs.",
+            "type": "object"
+          },
           "name": {
             "type": "string"
           },
           "transport": {
             "enum": [
+              "stdio",
               "streamable_http"
             ],
             "type": "string"
@@ -1397,11 +1546,7 @@
           }
         },
         "required": [
-          "name",
-          "transport",
-          "url",
-          "trust",
-          "enabled"
+          "name"
         ],
         "type": "object"
       },
@@ -1460,6 +1605,7 @@
             "type": "array"
           },
           "session_endpoint": {
+            "description": "One /session/mcp endpoint aggregates the session’s enabled servers and Olivares work tools. It accepts the launch-issued session credential and calls internal module APIs with the resolved principal; it never forwards that bearer into the admin API. Message and communication tools are not exposed in 26.10.1. Server tool aliases are stable and server-scoped.",
             "type": "string"
           },
           "session_tools": {
@@ -1755,6 +1901,9 @@
           "alias": {
             "type": "string"
           },
+          "assurance_mapping": {
+            "$ref": "#/components/schemas/FederationAssuranceMapping"
+          },
           "claimed_domains": {
             "items": {
               "type": "string"
@@ -1763,6 +1912,10 @@
           },
           "configured": {
             "type": "boolean"
+          },
+          "display_name": {
+            "maxLength": 80,
+            "type": "string"
           },
           "enforced_by": {
             "type": "string"
@@ -1864,11 +2017,18 @@
       },
       "SSOConfigInput": {
         "properties": {
+          "assurance_mapping": {
+            "$ref": "#/components/schemas/FederationAssuranceMapping"
+          },
           "claimed_domains": {
             "items": {
               "type": "string"
             },
             "type": "array"
+          },
+          "display_name": {
+            "maxLength": 80,
+            "type": "string"
           },
           "enabled": {
             "type": "boolean"
@@ -2054,8 +2214,45 @@
       },
       "ServerInfo": {
         "properties": {
+          "communication_ready": {
+            "type": "boolean"
+          },
+          "edition": {
+            "type": "string"
+          },
           "engine": {
             "type": "string"
+          },
+          "jobs_not_running": {
+            "description": "Background jobs this node does not run, and why. Absent when every job runs.",
+            "items": {
+              "properties": {
+                "job": {
+                  "enum": [
+                    "retention",
+                    "legal_hold_archive",
+                    "audit_checkpoints",
+                    "audit_archive",
+                    "directory_synchronization"
+                  ],
+                  "type": "string"
+                },
+                "reason": {
+                  "enum": [
+                    "no_tenant_inventory",
+                    "addon_requires_license",
+                    "directory_unavailable"
+                  ],
+                  "type": "string"
+                }
+              },
+              "required": [
+                "job",
+                "reason"
+              ],
+              "type": "object"
+            },
+            "type": "array"
           },
           "license": {
             "properties": {
@@ -2073,6 +2270,12 @@
               }
             },
             "type": "object"
+          },
+          "modules_not_enabled": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
           },
           "protocol_currency": {
             "properties": {
@@ -2103,6 +2306,28 @@
           "setup_required": {
             "type": "boolean"
           },
+          "sso_providers": {
+            "items": {
+              "properties": {
+                "label": {
+                  "type": "string"
+                },
+                "start_url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "label",
+                "start_url"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "tls_pin_sha256": {
+            "description": "The --pin-sha256 value of the certificate this engine serves (base64 SHA-256 of its SubjectPublicKeyInfo). Absent when the engine serves plain HTTP.",
+            "type": "string"
+          },
           "version": {
             "type": "string"
           }
@@ -2113,6 +2338,16 @@
           "setup_required"
         ],
         "type": "object"
+      },
+      "SessionResponse": {
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/LoginResponse"
+          },
+          {
+            "$ref": "#/components/schemas/BrowserSessionResponse"
+          }
+        ]
       },
       "SetOrgRegionInput": {
         "properties": {
@@ -2341,6 +2576,22 @@
         ],
         "type": "object"
       },
+      "StepUpPolicy": {
+        "properties": {
+          "admin_step_up": {
+            "enum": [
+              "none",
+              "totp",
+              "passkey"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "admin_step_up"
+        ],
+        "type": "object"
+      },
       "TOTPActivateInput": {
         "properties": {
           "code": {
@@ -2357,6 +2608,9 @@
       },
       "TOTPActivationResponse": {
         "properties": {
+          "csrf_token": {
+            "type": "string"
+          },
           "expires_at": {
             "format": "date-time",
             "type": "string"
@@ -2727,6 +2981,10 @@
                 },
                 "tenant": {
                   "type": "string"
+                },
+                "tenant_name": {
+                  "description": "The display name of this tenant's organization, read from the principal's own tenant (no cross-tenant read). Absent when it cannot be read.",
+                  "type": "string"
                 }
               },
               "required": [
@@ -2824,6 +3082,12 @@
         "description": "Opaque session (olvs_) or API (olvk_) token.",
         "scheme": "bearer",
         "type": "http"
+      },
+      "browserSession": {
+        "description": "HttpOnly browser session. Mutations require the per-session X-CSRF-Token header.",
+        "in": "cookie",
+        "name": "__Host-olivares-session",
+        "type": "apiKey"
       }
     }
   },
@@ -3590,6 +3854,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "List access edges (R/RW map); self-audited",
@@ -3730,6 +3997,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "List agents in the resolved tenant",
@@ -3839,6 +4109,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Create an agent",
@@ -3943,6 +4216,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Delete an agent",
@@ -4052,6 +4328,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Get an agent by ID",
@@ -4171,6 +4450,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Update an agent",
@@ -4329,6 +4611,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Read the tenant evidence ledger",
@@ -4454,6 +4739,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Export the ledger (cef|leef|syslog|otlp|otlp_envelope|otlp_log_record|ocsf)",
@@ -4563,9 +4851,144 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "The Ed25519 checkpoint verification key (PEM)",
+        "tags": [
+          "audit"
+        ],
+        "x-required-permission": "audit:read",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/audit/recent": {
+      "get": {
+        "description": "Returns the newest ledger events, newest first, leaving out the ledger's own audit.read events. It is the console's notification read: it is not itself recorded, so polling it does not grow the chain. Searching, exporting and verifying the ledger stay recorded.",
+        "operationId": "listRecentAuditEvents",
+        "parameters": [
+          {
+            "description": "Target tenant id; required when the principal can act in more than one tenant.",
+            "in": "header",
+            "name": "X-Olivares-Tenant",
+            "required": false,
+            "schema": {
+              "format": "uuid",
+              "type": "string"
+            }
+          },
+          {
+            "description": "How many events, 1 to 50 (default 10).",
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 10,
+              "maximum": 50,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "head_seq": {
+                      "description": "The ledger head the events were read at; 0 when the ledger is empty.",
+                      "type": "integer"
+                    },
+                    "items": {
+                      "items": {
+                        "$ref": "#/components/schemas/AuditEvent"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "items",
+                    "head_seq"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "The newest ledger events, newest first, without audit reads (not itself recorded)",
         "tags": [
           "audit"
         ],
@@ -4711,6 +5134,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Read the system-tenant evidence ledger (cross-tenant ops; superadmin only)",
@@ -4871,6 +5297,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Verify the chain and its signed checkpoints",
@@ -4878,6 +5307,186 @@
           "audit"
         ],
         "x-required-permission": "audit:read",
+        "x-stability": "stable"
+      }
+    },
+    "/v1/auth/browser-session": {
+      "get": {
+        "description": "Restores the browser session's metadata after a reload: its id, expiry and CSRF token, from the HttpOnly session cookie. Signed-in users only.",
+        "operationId": "getBrowserSession",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowserSessionResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Restore cookie session metadata",
+        "tags": [
+          "auth"
+        ],
+        "x-stability": "stable"
+      },
+      "post": {
+        "description": "Moves a legacy bearer session into the HttpOnly cookie once, rotating the bearer without extending the session's expiry. Needs the bearer and X-Olivares-Session: cookie.",
+        "operationId": "migrateBrowserSession",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BrowserSessionResponse"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Bad request"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Forbidden"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Not found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Conflict / setup required"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Rate limited"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Rotate a legacy bearer into a cookie without extending expiry",
+        "tags": [
+          "auth"
+        ],
         "x-stability": "stable"
       }
     },
@@ -4992,6 +5601,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Project the CALLING credential's authority over registered operations",
@@ -5023,7 +5635,7 @@
                 "schema": {
                   "oneOf": [
                     {
-                      "$ref": "#/components/schemas/LoginResponse"
+                      "$ref": "#/components/schemas/SessionResponse"
                     },
                     {
                       "$ref": "#/components/schemas/TOTPLoginChallenge"
@@ -5177,6 +5789,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Revoke the calling session",
@@ -5195,7 +5810,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LoginResponse"
+                  "$ref": "#/components/schemas/SessionResponse"
                 }
               }
             },
@@ -5265,12 +5880,227 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Renew the calling session token (rotates the credential, extends expiry)",
         "tags": [
           "auth"
         ],
+        "x-stability": "stable"
+      }
+    },
+    "/v1/auth/step-up-policy": {
+      "get": {
+        "description": "Returns what administrative actions demand beyond the sign-in: nothing (the default), an authenticator code or a passkey. Requires system administration authority.",
+        "operationId": "getStepUpPolicy",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepUpPolicy"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Read what administrative actions demand beyond the sign-in",
+        "tags": [
+          "auth"
+        ],
+        "x-required-permission": "system:admin",
+        "x-stability": "stable"
+      },
+      "put": {
+        "description": "Sets what administrative actions demand beyond the sign-in. Lowering it always works; raising it needs the caller's session to meet the new level. Requires system administration authority.",
+        "operationId": "setStepUpPolicy",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StepUpPolicy"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StepUpPolicy"
+                }
+              }
+            },
+            "description": "OK"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "429": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            },
+            "description": "Request refused"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "browserSession": []
+          }
+        ],
+        "summary": "Set what administrative actions demand beyond the sign-in",
+        "tags": [
+          "auth"
+        ],
+        "x-required-permission": "system:admin",
         "x-stability": "stable"
       }
     },
@@ -5363,9 +6193,12 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
-        "summary": "Remove the calling account's factor with AAL3",
+        "summary": "Remove the calling account's factor behind the administrative step-up",
         "tags": [
           "auth"
         ],
@@ -5472,6 +6305,9 @@
           {
             "bearerAuth": []
           },
+          {
+            "browserSession": []
+          },
           {}
         ],
         "summary": "Prove possession and reveal recovery codes once",
@@ -5500,7 +6336,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LoginResponse"
+                  "$ref": "#/components/schemas/SessionResponse"
                 }
               }
             },
@@ -5687,6 +6523,9 @@
           {
             "bearerAuth": []
           },
+          {
+            "browserSession": []
+          },
           {}
         ],
         "summary": "Start a TOTP enrolment with a session or a pending login",
@@ -5785,6 +6624,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Read the administrator factor policy",
@@ -5892,9 +6734,12 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
-        "summary": "Set the administrator factor policy with AAL3",
+        "summary": "Set the administrator factor policy behind the administrative step-up",
         "tags": [
           "auth"
         ],
@@ -5991,6 +6836,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Read the calling account's factor status",
@@ -6079,6 +6927,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "The calling principal and its tenant grants",
@@ -6179,6 +7030,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Per-connector health metrics and fleet summary",
@@ -6268,6 +7122,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Event-bus subscriber, saturation, loss, and optional bridge snapshot",
@@ -6357,6 +7214,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Live effective configuration with secret-bearing values redacted",
@@ -6456,6 +7316,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Remove a connector instance",
@@ -6551,6 +7414,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "List available connector types with their configuration fields",
@@ -6648,6 +7514,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Onboard or update a connector instance",
@@ -6755,6 +7624,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Test connectivity for a connector configuration",
@@ -6844,6 +7716,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Operational health summary for the console dashboard",
@@ -6933,6 +7808,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Non-secret signing-key and sealer custody inventory",
@@ -7015,6 +7893,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Remove the installed license (revert to community)",
@@ -7102,6 +7983,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Current license status and entitlements",
@@ -7208,6 +8092,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Install a commercial license",
@@ -7973,6 +8860,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Delete a sealed secret",
@@ -8060,6 +8950,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "List sealed secrets (names and hints, never values)",
@@ -8189,6 +9082,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Create or update a sealed secret",
@@ -8278,6 +9174,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "First-run setup wizard progress",
@@ -8377,6 +9276,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Remove a source connector",
@@ -8472,6 +9374,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "List configured source connectors and their status",
@@ -8569,6 +9474,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Create or update a source connector",
@@ -8651,6 +9559,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Remove SSO/IdP configuration",
@@ -8738,6 +9649,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Current SSO/IdP configuration",
@@ -8835,6 +9749,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Create or update SSO/IdP configuration",
@@ -8942,6 +9859,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Test SSO/IdP connectivity",
@@ -9031,6 +9951,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Build and download a redacted support bundle (AAL3 step-up)",
@@ -9120,6 +10043,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Check the configured signed update channel now",
@@ -9239,6 +10165,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "List the resolved tenant's member roster (role, workspace scoping, groups)",
@@ -9375,6 +10304,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Grant a user a role in a tenant",
@@ -9485,6 +10417,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Federated console search: fan out to every searchable kind, deny-closed per kind on its own read permission",
@@ -9773,6 +10708,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "List tenant orgs (superadmin)",
@@ -9870,6 +10808,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Provision a tenant (superadmin)",
@@ -9964,6 +10905,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Hard-delete a tenant org after the cloud grace period (superadmin)",
@@ -10075,6 +11019,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Set or clear a tenant residency pin (superadmin, AAL3 step-up)",
@@ -10186,6 +11133,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Withdraw or restore a tenant's service without deleting its data (superadmin)",
@@ -10275,6 +11225,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Get the configured data-residency registry (superadmin)",
@@ -10382,6 +11335,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "List API tokens for the calling user",
@@ -10492,6 +11448,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Issue an API token",
@@ -10586,6 +11545,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Revoke an API token",
@@ -10697,6 +11659,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Rotate an API token (issue new secret, revoke old)",
@@ -10827,6 +11792,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "List users (superadmin)",
@@ -10924,6 +11892,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Create a user (superadmin)",
@@ -11031,6 +12002,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "List superadmin accounts and their active/inactive status (superadmin)",
@@ -11125,6 +12099,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Disable a superadmin account — non-destructive, reversible (superadmin, AAL3 step-up)",
@@ -11219,6 +12196,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Enable a previously disabled superadmin account (superadmin, AAL3 step-up)",
@@ -11339,6 +12319,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Read a member's factor status in the selected tenant",
@@ -11459,9 +12442,12 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
-        "summary": "Reset a tenant-governed member's factor with AAL3",
+        "summary": "Reset a tenant-governed member's factor behind the administrative step-up",
         "tags": [
           "auth"
         ],
@@ -11599,6 +12585,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "List workspaces in the resolved tenant",
@@ -11708,6 +12697,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Create a workspace (tenant admin, AAL3 step-up)",
@@ -11819,6 +12811,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Get a workspace by ID",
@@ -11938,6 +12933,9 @@
         "security": [
           {
             "bearerAuth": []
+          },
+          {
+            "browserSession": []
           }
         ],
         "summary": "Update a workspace",
@@ -11952,6 +12950,9 @@
   "security": [
     {
       "bearerAuth": []
+    },
+    {
+      "browserSession": []
     }
   ],
   "servers": [

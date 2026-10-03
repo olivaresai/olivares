@@ -92,6 +92,7 @@ func newReportingCmd() *cobra.Command {
 		newReportingSchedulesCmd(&flags),
 		newReportingBrandingCmd(&flags),
 		newReportingTemplatesCmd(&flags),
+		newReportingSigningCmd(&flags),
 	)
 	return root
 }
@@ -490,7 +491,7 @@ func newReportingSchedulesCreateCmd(flags *authClientFlags) *cobra.Command {
 				return err
 			}
 			return renderReportingSchedules(cmd, res.raw, list,
-				"schedule accepted — the control plane answers with the full schedule list:")
+				"schedule accepted — the engine answers with the full schedule list:")
 		},
 	}
 	cmd.Flags().StringVar(&reportType, "report-type", "", "the report to generate (required)")
@@ -838,7 +839,7 @@ func newReportingTemplatesSetCmd(flags *authClientFlags) *cobra.Command {
 				if !stored.Stored {
 					// Do not claim a store the engine did not confirm.
 					_, werr := fmt.Fprintf(w,
-						"the control plane answered HTTP %d but did not confirm the template was stored\n", res.status)
+						"the engine answered HTTP %d but did not confirm the template was stored\n", res.status)
 					return werr
 				}
 				_, werr := fmt.Fprintf(w, "stored a %d-byte custom template for %s\n",
@@ -857,7 +858,7 @@ func newReportingTemplatesRemoveCmd(flags *authClientFlags) *cobra.Command {
 		Short:   "Remove the custom template for one report type",
 		Long: "rm deletes the stored custom template. The report goes back to rendering with its\n" +
 			"built-in template — reports keep working, they just look different.\n\n" +
-			"The template itself is not recoverable from the control plane afterwards, so\n" +
+			"The template itself is not recoverable from the engine afterwards, so\n" +
 			"fetch a copy with `templates get --out` first if it is not in version control.\n\n" +
 			"Requires --yes in any non-interactive session.",
 		Example: "  olivares reporting templates rm audit-summary --yes\n  olivares reporting templates rm audit-summary",
@@ -868,7 +869,7 @@ func newReportingTemplatesRemoveCmd(flags *authClientFlags) *cobra.Command {
 					"unknown report type %q: this build offers %v", args[0], reportingTypes))
 			}
 			if err := confirmDestructive(cmd, yes, fmt.Sprintf(
-				"delete the custom %s template, which is not recoverable from the control plane afterwards", args[0])); err != nil {
+				"delete the custom %s template, which is not recoverable from the engine afterwards", args[0])); err != nil {
 				return err
 			}
 			res, err := observeCall{

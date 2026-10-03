@@ -22,11 +22,15 @@ import {
 import { Field } from '@/components/ui/field'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
+import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { killswitchApi, killswitchKeys } from './api'
 import './i18n'
 import type { KillSwitchDTO } from './types'
+
+/** The engine refused the review (not a step-up): its own sentence is shown. */
+class ReviewRefused extends Error {}
 
 export interface ReviewDialogProps {
   stop: KillSwitchDTO
@@ -55,8 +59,32 @@ function ReviewForm({
   const { activeTenant } = useAuth()
   const [note, setNote] = useState('')
 
+  // HU 047: a 403 (whoever engaged, requested or executed may not review) left the
+  // dialog open with nothing said. The shared hook reports any 403 as a missing role
+  // before a dialog can answer, so the refusal becomes this dialog's own error and the
+  // engine's sentence is shown here (a step-up still goes to the hook).
+  const [refused, setRefused] = useState('')
   const review = usePrivilegedMutation<string, KillSwitchDTO>({
-    mutationFn: (n) => killswitchApi.review(stop.id, { note: n }),
+    mutationFn: async (n) => {
+      setRefused('')
+      try {
+        return await killswitchApi.review(stop.id, { note: n })
+      } catch (err) {
+        if (
+          err instanceof ApiError &&
+          err.isForbidden &&
+          !err.isStepUpRequired &&
+          err.message
+        )
+          throw new ReviewRefused(err.message)
+        throw err
+      }
+    },
+    onError: (err) => {
+      if (!(err instanceof ReviewRefused)) return false
+      setRefused(err.message)
+      return true
+    },
     invalidateKeys: () => [killswitchKeys.all(activeTenant)],
     successMessage: t('review.done'),
     onDone: onClose,
@@ -84,6 +112,12 @@ function ReviewForm({
           rows={3}
         />
       </Field>
+
+      {refused ? (
+        <p role="alert" className="text-body text-warning">
+          {refused}
+        </p>
+      ) : null}
 
       <p className="flex items-center gap-1.5 text-caption text-muted-foreground">
         <ScrollText className="size-3.5 shrink-0" aria-hidden />

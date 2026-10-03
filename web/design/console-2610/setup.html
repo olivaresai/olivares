@@ -1,0 +1,118 @@
+<!doctype html>
+<!-- SPDX-FileCopyrightText: 2026 Olivares.AI -->
+<!-- SPDX-License-Identifier: AGPL-3.0-only -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex" />
+    <title>Set up — Olivares AI</title>
+    <link rel="stylesheet" href="console.css" />
+    <script src="console.js" defer></script>
+  </head>
+  <body>
+    <div class="auth">
+      <main class="auth-main">
+        <div class="auth-card">
+          <div style="color: var(--mark-ink)">
+            <svg
+              class="mark"
+              viewBox="3.5 2 28 28"
+              fill="none"
+              stroke-linecap="round"
+              aria-hidden="true"
+            >
+              <path
+                d="M16 5.5A10.5 10.5 0 0 1 16 26.5"
+                stroke="currentColor"
+                stroke-width="3"
+              />
+              <path
+                d="M8.4 10.5H13.2"
+                stroke="currentColor"
+                stroke-width="2.6"
+              />
+              <path d="M8.4 14.5H15.4" stroke="#f08000" stroke-width="3.1" />
+              <path d="M8.4 18.5H15" stroke="currentColor" stroke-width="2.6" />
+              <path
+                d="M8.4 22.5H13.4"
+                stroke="currentColor"
+                stroke-width="2.6"
+              />
+            </svg>
+          </div>
+          <h1><span class="need">Create the first administrator</span></h1>
+          <p class="lead">
+            <span class="need"
+              >This deployment has no users yet. The setup token proves you run
+              it.</span
+            >
+          </p>
+          <form class="form" action="start.html">
+            <label
+              ><span class="need">Setup token</span>
+              <span class="hint"
+                ><span class="need"
+                  >Printed in the engine log at first start.</span
+                ></span
+              ><input
+                class="input mono"
+                placeholder="Paste the setup token"
+                aria-label="Setup token"
+            /></label>
+            <label>Name<input class="input" value="Grace Hopper" /></label>
+            <label
+              >Email<input class="input" value="grace@example.com"
+            /></label>
+            <label
+              >Password <span class="hint">At least 8 UTF-8 bytes.</span
+              ><input
+                class="input"
+                type="password"
+                value="correct horse battery"
+            /></label>
+            <label
+              >Organization name
+              <span class="hint"
+                ><span class="need"
+                  >Optional. If empty, it is called Default Organization.</span
+                ></span
+              ><input class="input" placeholder="Default Organization"
+            /></label>
+            <button class="btn btn-primary btn-lg" type="submit">
+              <span class="need">Create administrator and sign in</span>
+            </button>
+            <div class="note">
+              <svg class="ico ico-sm" viewBox="0 0 16 16" aria-hidden="true">
+                <rect x="3" y="7" width="10" height="7" rx="1.5" />
+                <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" /></svg
+              ><span
+                ><span class="need"
+                  >The token works once. You stay signed in; add a passkey next
+                  for protected settings.</span
+                ></span
+              >
+            </div>
+          </form>
+        </div>
+      </main>
+      <footer class="auth-foot">
+        <span>Olivares AI 26.10.0 · Community</span
+        ><button
+          class="icon-btn"
+          type="button"
+          data-theme-toggle
+          aria-label="Switch theme"
+          style="width: 24px; height: 24px"
+        >
+          <svg class="ico ico-sm" viewBox="0 0 16 16" aria-hidden="true">
+            <circle cx="8" cy="8" r="3" />
+            <path
+              d="M8 1v1.5M8 13.5V15M1 8h1.5M13.5 8H15M3 3l1 1M12 12l1 1M3 13l1-1M12 4l1-1"
+            />
+          </svg>
+        </button>
+      </footer>
+    </div>
+  </body>
+</html>

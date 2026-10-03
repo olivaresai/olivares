@@ -1,6 +1,6 @@
 {
-  "title": "Berechtigungen",
-  "subtitle": "Genehmigungen mit Mensch in der Schleife, RBAC/ABAC-Richtlinien sowie die Identitäten und Agent-Bindungen hinter jeder Aktion.",
+  "title": "Genehmigungen und Berechtigungen",
+  "subtitle": "Anfragen, die auf die Entscheidung einer Person warten, die Regeln, die Aktionen erlauben oder verweigern, und wer handeln darf.",
   "tabs": {
     "approvals": "Genehmigungen",
     "policies": "Richtlinien",
@@ -9,7 +9,7 @@
     "agentRisk": "Agentenrisiko"
   },
   "breakGlass": {
-    "title": "Break-Glass-Notfallzugriff",
+    "title": "Notfallzugriff",
     "caption": "Zeitlich begrenzte Ausnahmen vom Vier-Augen-Prinzip. Jede Aktivierung, Nutzung, Aufhebung und Nachprüfung bleibt dauerhaftes Auditbeweismaterial; diese Oberfläche dient der Rechenschaft, nicht der Bequemlichkeit.",
     "forbiddenTitle": "Nicht autorisiert",
     "forbiddenBody": "Sie sind nicht berechtigt, Break-Glass-Freigaben oder deren unveränderliche Nutzungsspuren einzusehen.",
@@ -115,10 +115,8 @@
   },
   "approvals": {
     "title": "Genehmigungswarteschlange",
-    "caption": "Ausstehende Anfragen mit Mensch in der Schleife. Jede Genehmigung, Ablehnung und Stornierung ist eine bewusste, auditierte Entscheidung, die im unveränderlichen Entscheidungspfad festgehalten wird.",
+    "caption": "Anfragen, die auf eine Entscheidung warten. Jede Genehmigung, Ablehnung und Stornierung wird festgehalten.",
     "search": "Anfragen suchen…",
-    "action": "Aktion",
-    "subject": "Gegenstand",
     "requestedBy": "Angefragt von",
     "status": "Status",
     "progress": "Genehmigungen",
@@ -135,7 +133,7 @@
     "noSubject": "Kein Gegenstand",
     "filterStatus": "Status",
     "statusAll": "Alle Status",
-    "runSweep": "Durchlauf starten",
+    "runSweep": "Überfällige Anfragen ablaufen lassen und eskalieren",
     "newRequest": "Neue Anfrage",
     "empty": "Keine Genehmigungsanfragen",
     "emptyHint": "Wenn eine Aktion eine menschliche Genehmigung erfordert, erscheint sie hier zur Prüfung.",
@@ -145,7 +143,9 @@
     "reject": "Ablehnen",
     "cancel": "Abbrechen",
     "viewDetail": "Details anzeigen",
-    "actorHint": "Audit-Akteurkennung — niemals eine E-Mail-Adresse. Die Identität wird aus dem Verzeichnis aufgelöst und hier nicht angezeigt."
+    "actorHint": "Audit-Akteurkennung — niemals eine E-Mail-Adresse. Die Identität wird aus dem Verzeichnis aufgelöst und hier nicht angezeigt.",
+    "expiredAt": "Abgelaufen {{time}}",
+    "request": "Anfrage"
   },
   "status": {
     "pending": "Ausstehend",
@@ -156,17 +156,18 @@
   },
   "decide": {
     "approveTitle": "Diese Anfrage genehmigen?",
-    "approveBody": "Ihre Entscheidung wird dauerhaft im unveränderlichen Entscheidungspfad festgehalten und zählt auf den Genehmigungsschwellenwert an.",
+    "approveBody": "Ihre Genehmigung zählt zu den Genehmigungen, die diese Anfrage braucht.",
     "rejectTitle": "Diese Anfrage ablehnen?",
-    "rejectBody": "Eine einzige Ablehnung beendet die Anfrage und wird dauerhaft im Entscheidungspfad festgehalten.",
+    "rejectBody": "Eine einzige Ablehnung beendet die Anfrage.",
     "approveConfirm": "Genehmigen",
     "rejectConfirm": "Ablehnen",
     "note": "Notiz",
-    "noteHint": "Optional — wird dauerhaft zusammen mit Ihrer Entscheidung festgehalten.",
+    "noteHint": "Optional.",
     "notePlaceholder": "Warum Sie genehmigen oder ablehnen (optional)…",
     "approved": "Entscheidung festgehalten — genehmigt",
     "rejected": "Entscheidung festgehalten — abgelehnt",
-    "sodHint": "Sie können nicht über eine von Ihnen selbst eröffnete Anfrage entscheiden, und ein Token ohne stabilen Benutzer kann nicht entscheiden."
+    "sodHint": "Sie können nicht über eine von Ihnen selbst eröffnete Anfrage entscheiden, und ein Token ohne stabilen Benutzer kann nicht entscheiden.",
+    "notPending": "Diese Anfrage wartet nicht mehr auf eine Entscheidung."
   },
   "cancel": {
     "title": "Diese Genehmigungsanfrage stornieren?",
@@ -177,7 +178,7 @@
   "sweep": {
     "title": "Den Genehmigungsdurchlauf starten?",
     "body": "Er markiert Anfragen nach Fristablauf als abgelaufen und eskaliert Anfragen, die ihr Eskalationsfenster überschritten haben, und gibt anschließend die entsprechenden Befunde aus. Kann gefahrlos erneut ausgeführt werden.",
-    "confirm": "Durchlauf starten",
+    "confirm": "Überfällige Anfragen ablaufen lassen und eskalieren",
     "done": "Durchlauf abgeschlossen",
     "result": "{{scanned}} geprüft · {{escalated}} eskaliert · {{expired}} abgelaufen.",
     "more": "Es bleiben ungeprüfte ausstehende Anfragen — führen Sie den Durchlauf erneut aus, um ihn abzuschließen."
@@ -221,12 +222,13 @@
     "trailEmpty": "Noch keine Entscheidungen festgehalten",
     "trailEmptyHint": "Jede Entscheidung zu dieser Freigabe — wer, wann und warum — wird hier festgehalten. Es hat noch niemand entschieden.",
     "decisionApprove": "Genehmigt",
-    "decisionReject": "Abgelehnt"
+    "decisionReject": "Abgelehnt",
+    "reenableNeedsAdmins": "Zwei andere Administratorkonten müssen dies genehmigen. Legen Sie sie unter Identität & NHI an oder mit `olivares users create`.",
+    "openIdentity": "Identität & NHI öffnen"
   },
   "policies": {
     "title": "Richtlinien",
-    "caption": "ABAC-Verweigerungsregeln und Genehmigungsschwellenwerte. Eine ABAC-Regel kann den Zugriff nur weiter einschränken; sie ist die erklärte Absicht des Autors, kein Nachweis der Durchsetzung zur Laufzeit.",
-    "enforcementCaption": "Ob eine Richtlinie tatsächlich durchgesetzt wird, hängt von der Bereitstellung ab — eine aktivierte Richtlinie kann verfasst und auditiert, aber wirkungslos sein, wenn ihr Auswerter nicht verkabelt ist.",
+    "caption": "Eine aktivierte Richtlinie gilt, sobald sie gespeichert ist. Verweigerungsregeln entziehen nur Zugriff; Genehmigungsschwellenwerte gelten für neue passende Anfragen.",
     "search": "Richtlinien suchen…",
     "name": "Richtlinie",
     "kind": "Art",
@@ -252,7 +254,7 @@
     "kindHint": "Der Richtlinientyp. Er kann nach der Erstellung nicht mehr geändert werden.",
     "enabled": "Aktiviert",
     "abacRules": "Verweigerungsregeln",
-    "abacRulesHint": "Jede Regel schränkt den Zugriff weiter ein. „Verweigern“ ist implizit und nicht editierbar — v1 unterstützt nur Verweigerungsregeln. Eine Regel muss mindestens eines von Berechtigung, Verb, Ressource oder Prinzipalart auswählen.",
+    "abacRulesHint": "Jede Regel verweigert die Anfragen, auf die sie zutrifft, und gewährt nie Zugriff. Eine Regel braucht mindestens eine Bedingung. Mit einer Mindestanmeldung verweigert sie nur Aufrufern, die unter dieser Stufe angemeldet sind; Tokens gelten immer als darunter.",
     "addRule": "Regel hinzufügen",
     "removeRule": "Entfernen",
     "rulePermission": "Berechtigung",
@@ -261,14 +263,20 @@
     "ruleResource": "Ressource",
     "rulePrincipalKind": "Prinzipalart",
     "ruleAny": "Beliebig",
+    "ruleMinAal": "Mindestanmeldung",
+    "ruleMinAalNone": "Keine",
+    "aal1": "AAL1 (Passwort)",
+    "aal2": "AAL2 (Mehrfaktor)",
+    "aal3": "AAL3 (phishing-resistent)",
     "noRules": "Keine Verweigerungsregeln",
     "denyImplicit": "Verweigern (implizit)",
     "requiredApprovals": "Erforderliche Genehmigungen",
-    "requiredApprovalsHint": "0–64 — der maßgebliche Schwellenwert.",
+    "requiredApprovalsHint": "0 bis 64. Leer oder 0 verwendet den Standard der Engine, der bei kritischen Aktionen höher sein kann.",
     "expiresInSeconds": "Läuft ab in (Sekunden)",
     "expiresInSecondsHint": "0–31536000 (0 = nie).",
     "escalateInSeconds": "Eskaliert in (Sekunden)",
     "escalateInSecondsHint": "0–31536000 (0 = nie).",
+    "countError": "Geben Sie eine ganze Zahl von 0 bis {{max}} ein.",
     "matchAction": "Aktion abgleichen",
     "matchActionHint": "Leer = passt auf jede Aktion.",
     "matchSubjectKind": "Gegenstandsart abgleichen",
@@ -371,8 +379,8 @@
     "done": "Bindung des Agenten gelöst"
   },
   "caveat": {
-    "deny": "Eine Verweigerungsregel ist die erklärte Absicht des Richtlinienautors — kein Nachweis, dass die Regel zur Laufzeit durchgesetzt wird.",
-    "enforcement": "Aktiviert bedeutet nicht immer durchgesetzt: Der Auswerter oder die Verzeichnisanbieter sind in dieser Bereitstellung möglicherweise nicht verkabelt."
+    "deny": "Eine Verweigerungsregel kann Zugriff nur entziehen. Sie gibt niemandem mehr, als seine Rolle erlaubt.",
+    "enforcement": "Eine aktivierte Regel wird geprüft; eine deaktivierte Regel bleibt gespeichert und wird nicht geprüft."
   },
   "computerUse": {
     "title": "Computer-Use-Governance",
@@ -594,8 +602,8 @@
       "description": "Konfigurieren Sie eine Verzeichnisquelle und gleichen Sie deren menschliche und nicht-menschliche Identitäten für diesen Mandanten erneut ab."
     },
     "policies": {
-      "title": "Noch keine Governance-Richtlinien",
-      "description": "Verfassen Sie eine ABAC-Verweigerungsregel oder einen Genehmigungsschwellenwert; die Laufzeitdurchsetzung hängt davon ab, ob der Auswerter in dieser Bereitstellung verkabelt ist."
+      "title": "Noch keine Regeln",
+      "description": "Fügen Sie eine Verweigerungsregel oder einen Genehmigungsschwellenwert hinzu. Jede Richtlinie gilt, sobald sie gespeichert ist."
     },
     "routinePolicies": {
       "title": "Noch keine Routine-Richtlinien verfasst",
@@ -696,5 +704,22 @@
       "draft": "Entwurf — nicht fest verdrahten",
       "stable": "Stabil — eine Schnittstelle darf darauf zielen"
     }
+  },
+  "preview": {
+    "title": "Was ausgeführt wird",
+    "session": "Sitzung",
+    "folder": "Ordner",
+    "askedBy": "Angefragt von",
+    "askedBySession": "Die Sitzung selbst",
+    "tool": "Werkzeug",
+    "willRun": "Was ausgeführt wird",
+    "noReview": "Diese Anfrage enthält nicht, was ausgeführt wird.",
+    "commandUnknown": "Befehl wird für dieses Tool noch nicht angezeigt",
+    "showAll": "Alles anzeigen",
+    "showLess": "Weniger anzeigen",
+    "details": "Details",
+    "id": "Anfrage-ID",
+    "untitled": "Sitzung ohne Titel",
+    "openToDecide": "Öffnen zum Genehmigen oder Ablehnen"
   }
 }

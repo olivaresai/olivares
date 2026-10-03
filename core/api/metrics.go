@@ -151,9 +151,6 @@ func (s *Server) handlePodReadyz(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// readinessAdminPoolCode matches the setup ceremony's capability refusal.
-const readinessAdminPoolCode = "cross_tenant_admin_pool_not_configured"
-
 // readinessProbeUnavailableCode reports a failed capability observation.
 const readinessProbeUnavailableCode = "setup_probe_unavailable"
 
@@ -194,15 +191,6 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.probeFirstSetupReadCapability(ctx); err != nil {
-		if errors.Is(err, store.ErrEnumerationNotAuthoritative) {
-			// Use the setup ceremony's fixed remedy, without wrapped provider text.
-			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
-				"status": "setup_blocked", "store": "up", "leader": true,
-				"setup_required": true, "code": readinessAdminPoolCode,
-				"remedy": honestSeamMessage[readinessAdminPoolCode],
-			})
-			return
-		}
 		s.log.Error("api: first-boot setup capability probe failed", "err", err)
 		writeJSON(w, http.StatusServiceUnavailable, map[string]any{
 			"status": "setup_unavailable", "store": "up", "leader": true,
@@ -215,11 +203,16 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// probeFirstSetupReadCapability checks the same enumeration authority as firstOrg.
+// probeFirstSetupReadCapability checks the same read path as firstOrg.
 // It discards the rows and does not create an organization or consume a setup token.
 func (s *Server) probeFirstSetupReadCapability(ctx context.Context) error {
 	return s.st.System(ctx, func(sys store.SystemScope) error {
 		_, err := sys.ListOrgs(ctx)
+		// firstOrg can provision through the application pool when full-estate
+		// enumeration is unavailable. Do not require its optional admin pool.
+		if errors.Is(err, store.ErrEnumerationNotAuthoritative) {
+			return nil
+		}
 		return err
 	})
 }

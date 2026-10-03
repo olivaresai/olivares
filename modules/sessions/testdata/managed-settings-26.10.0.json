@@ -1,0 +1,27 @@
+{
+  "allowManagedHooksOnly": true,
+  "hooks": {
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "olivares claude-hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "olivares claude-hook",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

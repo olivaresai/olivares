@@ -1918,6 +1918,11 @@ func buildClaudeMessagesProxyServer(eng *engine, log *slog.Logger) (*http.Server
 		eng.contentFirewall.record(nil)
 		return nil, nil // not provisioned
 	}
+	if !eng.moduleProfile.Active("inferenceproxy") {
+		log.Warn("inference-proxy: configured, but the inferenceproxy module is not enabled on this node; NOT mounted")
+		eng.contentFirewall.record(nil)
+		return nil, nil
+	}
 	// the fixed tenant is validated FIRST, before anything else this config drives,
 	// and deny-closed like the five sibling readers of a configured tenant. Until an
 	// operator typo here only produced a startup log.Warn and the proxy kept going with an

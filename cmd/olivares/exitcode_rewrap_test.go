@@ -69,7 +69,7 @@ var theFourRewrapSites = map[string][]string{
 // C08-03, and the defect the row exists to close.
 //
 // cliTransport classifies every refusal about the CALLER'S ARGUMENTS as exit 2
-// ("the invocation itself is wrong" — the contract `olivares --help` publishes),
+// ("the invocation itself is wrong" — the contract `olivares help exit-codes` publishes),
 // and TestTransportArgumentErrorsAreUsageErrors in tlspin_test.go proves it at
 // the unit level. Four command clients then threw that classification away:
 // they wrapped the returned error in exitcode.New(exitcode.Server, …), so a

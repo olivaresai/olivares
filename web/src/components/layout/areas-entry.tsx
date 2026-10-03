@@ -18,9 +18,13 @@ import {
   resolveLocation,
 } from '@/features/navigation/model'
 import { SHELL_ROW_CLASS } from './shell-row'
-import { JOURNEY_IDS, authorizedAreas } from './shell-destinations'
+import {
+  DESTINATION_VIEW_IDS,
+  authorizedAreas,
+  coveredByDestination,
+} from './shell-destinations'
 
-const JOURNEYS: ReadonlySet<string> = new Set(JOURNEY_IDS)
+const JOURNEYS: ReadonlySet<string> = new Set(DESTINATION_VIEW_IDS)
 
 export function AreasEntry({
   open,
@@ -32,10 +36,14 @@ export function AreasEntry({
   const { t } = useTranslation('nav')
   const { navigable } = useViewAccess()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const search = useRouterState({
+    select: (s) => (s.location.search ?? {}) as Record<string, unknown>,
+  })
   const location = resolveLocation(pathname)
   const inJourney =
     (location.kind === 'view' || location.kind === 'home') &&
-    JOURNEYS.has(location.view.id)
+    (JOURNEYS.has(location.view.id) ||
+      coveredByDestination(location.view.id, search))
   const area = inJourney ? null : activeAreaId(location)
   const count = authorizedAreas(navigable).length
   if (count === 0) return null
@@ -48,7 +56,8 @@ export function AreasEntry({
       data-branch={area ? 'active' : undefined}
       className={cn(
         SHELL_ROW_CLASS,
-        'w-full text-left',
+        // Its own row below the session rail, never squeezed into it (EU-17).
+        'w-full shrink-0 text-left',
         'data-[branch=active]:bg-active data-[branch=active]:text-text',
       )}
     >

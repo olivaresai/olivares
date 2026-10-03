@@ -13,7 +13,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/runtime"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
@@ -114,19 +113,11 @@ func (p *workOutboxPump) runOnce(ctx context.Context) error {
 	if !p.st.Leader().Active() {
 		return nil
 	}
-	var tenants []model.TenantID
-	if err := p.st.System(ctx, func(sc store.SystemScope) error {
-		orgs, err := sc.ListOrgs(ctx)
-		if err != nil {
-			return err
-		}
-		for _, org := range orgs {
-			if !org.TenantID.IsZero() && !org.TenantID.IsSystem() {
-				tenants = append(tenants, org.TenantID)
-			}
-		}
-		return nil
-	}); err != nil {
+	// The tenants every install can enumerate (servedWorkTenants): on the default
+	// PostgreSQL install ListOrgs refuses every tick, and a tick with nothing to
+	// do must be quiet, not a failure.
+	tenants, err := servedWorkTenants(ctx, p.st)
+	if err != nil {
 		p.log.Warn("sessions-work-outbox: cannot enumerate tenants", "err", err)
 		return fmt.Errorf("sessions-work-outbox: enumerate tenants: %w", err)
 	}

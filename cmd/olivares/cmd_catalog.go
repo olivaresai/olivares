@@ -78,7 +78,7 @@ func newCatalogCmd() *cobra.Command {
 			"controls as `auth`. These routes are served by the catalog module: an engine\n" +
 			"built without it answers 404 for the whole namespace, and this command says so.",
 		Example: `  olivares catalog entries ls
-  olivares catalog --server https://plane.example.com --tenant tenant-a entries ls`,
+  olivares catalog --server https://olivares.example.com --tenant tenant-a entries ls`,
 		Args: cobra.NoArgs,
 	}
 	flags.addPersistent(cmd)
@@ -206,7 +206,7 @@ func newCatalogEntriesCmd(client datalaneClient) *cobra.Command {
 		Short: "Author a draft catalog entry",
 		Long: "Author a draft entry. It is not admissible yet: it must be submitted and then\n" +
 			"approved, and approval is what computes its content hash and signature. The\n" +
-			"control plane refuses a specification carrying an inline credential — reference\n" +
+			"engine refuses a specification carrying an inline credential — reference\n" +
 			"secrets by name instead.",
 		Example: `  olivares catalog entries create --kind mcp --name "GitHub MCP" --slug github-mcp --version 1.0.0
   olivares catalog entries create --kind agent --name Triage --slug triage --version 0.1.0 --spec-file ./agent.json`,
@@ -242,7 +242,7 @@ func newCatalogEntriesCmd(client datalaneClient) *cobra.Command {
 		Long: "Replace the authored fields of an entry. Only a DRAFT can be edited: an entry\n" +
 			"that has been approved carries a signature over its content, and rewriting it in\n" +
 			"place would break that.\n\n" +
-			"THIS REPLACES, IT DOES NOT PATCH: the control plane rewrites kind, name, slug,\n" +
+			"THIS REPLACES, IT DOES NOT PATCH: the engine rewrites kind, name, slug,\n" +
 			"version, summary, specification and owner from the request, so a field left out\n" +
 			"is cleared — including the whole --spec. The command refuses a partial invocation\n" +
 			"unless --replace states that the reset is intended.",
@@ -495,7 +495,7 @@ func newCatalogPubkeyCmd(client datalaneClient) *cobra.Command {
 	return &cobra.Command{
 		Use:   "pubkey",
 		Short: "Show the public key catalog approvals are signed with",
-		Long: "Show the public half of the key this control plane signs catalog approvals with,\n" +
+		Long: "Show the public half of the key this engine signs catalog approvals with,\n" +
 			"so a third party can verify an entry's signature without trusting the API that\n" +
 			"produced it.",
 		Example: "  olivares catalog pubkey -o json",
@@ -527,7 +527,7 @@ func newCatalogAdmissionCmd(client datalaneClient, group, listRoute, subject str
 			"signature is required at all, whether the subject digest must be covered, and\n"+
 			"which identities, issuers, keys, roots and predicate types are trusted.\n\n"+
 			"It is deny-closed by construction: an ENFORCING policy with no trust anchor is\n"+
-			"refused by the control plane rather than silently admitting everything.", subject),
+			"refused by the engine rather than silently admitting everything.", subject),
 		Example: fmt.Sprintf("  olivares catalog %s policy get", group),
 		Args:    cobra.NoArgs,
 	}
@@ -582,9 +582,9 @@ func newCatalogAdmissionCmd(client datalaneClient, group, listRoute, subject str
 			"REMOVED, and dropping --require-signed opens admission to unsigned artifacts, so\n"+
 			"the command refuses a partial invocation unless --replace states that the reset\n"+
 			"is intended, and asks for confirmation because the effect is a change to what\n"+
-			"this control plane will accept.\n\n"+
+			"this engine will accept.\n\n"+
 			"Only PUBLIC material belongs here: identities, issuers, public keys and roots.\n"+
-			"The control plane refuses private key material.", subject),
+			"The engine refuses private key material.", subject),
 		Example: fmt.Sprintf("  olivares catalog %s policy set --require-signed --require-subject-digest --allowed-issuer https://token.actions.githubusercontent.com --trusted-root ./root.pem --yes\n"+
 			"  olivares catalog %s policy set --require-signed --replace --yes", group, group),
 		Args: cobra.NoArgs,
@@ -596,7 +596,7 @@ func newCatalogAdmissionCmd(client datalaneClient, group, listRoute, subject str
 				return err
 			}
 			if err := confirmDestructive(cmd, yes, fmt.Sprintf(
-				"replace the %s admission policy, changing what this control plane will accept",
+				"replace the %s admission policy, changing what this engine will accept",
 				subject)); err != nil {
 				return err
 			}

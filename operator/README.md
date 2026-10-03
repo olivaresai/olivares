@@ -143,8 +143,8 @@ How each L3 capability is realized here:
 
 The backup CronJob runs the **real** `olivares dr backup` (the same
 ledger-continuity-safe path the chart's DR runbook uses), invoked **shell-free**:
-the release engine image is based on `gcr.io/distroless/static-debian12:nonroot` — it has **no shell,
-`date` or `find`** — so the job invokes the `olivares` entrypoint directly. The
+the job calls the `olivares` entrypoint directly, with no shell, `date` or `find` in
+between. The
 unique per-run bundle name comes from the downward-API `POD_NAME` (`--out=…-$(POD_NAME).drbundle`),
 local retention from `dr backup --retain-days`, and the data volume is the
 operand's StatefulSet PVC (`data-<name>-0`, pinned to that pod's node by

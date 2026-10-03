@@ -79,10 +79,11 @@ func DefaultDecoders() map[event.Type]PayloadDecoder {
 // once, and the event.ID travels for dedup either way.
 func EncodeEvent(e event.Event) ([]byte, error) {
 	pe := &pb.Event{
-		Id:     e.ID,
-		Type:   string(e.Type),
-		Tenant: e.Tenant,
-		Source: e.Source,
+		Id:                e.ID,
+		Type:              string(e.Type),
+		Tenant:            e.Tenant,
+		Source:            e.Source,
+		SessionProjection: e.SessionProjection,
 	}
 	if !e.Time.IsZero() {
 		pe.Time = timestamppb.New(e.Time)
@@ -143,10 +144,11 @@ func DecodeEvent(data []byte, decoders map[event.Type]PayloadDecoder) (event.Eve
 		return event.Event{}, fmt.Errorf("natsbus: unmarshal event: %w", err)
 	}
 	e := event.Event{
-		ID:     pe.GetId(),
-		Type:   event.Type(pe.GetType()),
-		Tenant: pe.GetTenant(),
-		Source: pe.GetSource(),
+		ID:                pe.GetId(),
+		Type:              event.Type(pe.GetType()),
+		Tenant:            pe.GetTenant(),
+		Source:            pe.GetSource(),
+		SessionProjection: pe.GetSessionProjection(),
 	}
 	if ts := pe.GetTime(); ts != nil {
 		e.Time = ts.AsTime()

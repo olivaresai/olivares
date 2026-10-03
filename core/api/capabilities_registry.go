@@ -156,7 +156,7 @@ func (s *Server) corroborateActiveWorkspace(
 	if err != nil || workspace.IsZero() || workspace.String() != raw {
 		return "", workspaceAdmissionInvalid
 	}
-	if confined, ok := p.ConfinedWorkspaceIn(tenant); ok && !p.Superadmin && confined != workspace {
+	if confined, ok := p.ConfinedWorkspaceIn(tenant); ok && confined != workspace {
 		return "", workspaceAdmissionNotAdmissible
 	}
 	admission := workspaceAdmissionUnknown

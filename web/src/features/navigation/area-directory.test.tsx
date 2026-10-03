@@ -47,7 +47,10 @@ describe('AreaDirectoryView', () => {
     const aiPaths = FEATURE_VIEWS.filter(
       (v) => v.navigation.kind === 'feature' && v.navigation.areaId === 'ai',
     ).map((v) => v.path)
-    expect(hrefs).toEqual(aiPaths)
+    // Extensions can append views to an earlier section in the registry.
+    // Every authorized leaf appears once; section order is checked above.
+    expect(hrefs).toHaveLength(aiPaths.length)
+    expect(hrefs).toEqual(expect.arrayContaining(aiPaths))
     // Two doors into one screen stay two entries, each with its own name.
     expect(
       screen.getByRole('link', { name: 'Observe sessions' }),
@@ -79,7 +82,7 @@ describe('AreaDirectoryView', () => {
       within(status).getByText('No entries in this area are available to you'),
     ).toBeInTheDocument()
     expect(
-      within(status).getByRole('link', { name: 'Go to Overview' }),
+      within(status).getByRole('link', { name: 'Go to Now' }),
     ).toHaveAttribute('href', '/')
     expect(screen.queryByText('Operate sessions')).toBeNull()
     expect(screen.queryByText('/agentops')).toBeNull()

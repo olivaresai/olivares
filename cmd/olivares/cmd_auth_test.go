@@ -307,7 +307,7 @@ func TestAuthLoginWarnsThatInsecureIsNotPersisted(t *testing.T) {
 	if err != nil {
 		t.Fatalf("login: %v\n%s", err, stderr)
 	}
-	if !strings.Contains(out, "login validated") {
+	if !strings.Contains(out, "The next commands use it.") {
 		t.Fatalf("expected the success line on stdout, got %q", out)
 	}
 	// It must say the flag did NOT stick, that the next command therefore fails,

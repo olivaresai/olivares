@@ -243,6 +243,9 @@ message Event {
   // (IngestEnvelope) deliberately has no such field.
   SourceRegistration source_registration = 11;
   InventoryMember inventory_member = 12;
+  // Internal engine bus only: the sessions host committed the managed projection.
+  // Collector Observation/IngestEnvelope deliberately has no such field.
+  bool session_projection = 13;
 }
 
 // SourceRegistration mirrors event.SourceRegistration: the durable roster row's

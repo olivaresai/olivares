@@ -5,7 +5,6 @@
 package main
 
 import (
-	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -31,9 +30,8 @@ import (
 // `threatintel sign` when --key is not given (a base64-std Ed25519 private key).
 const envThreatIntelSigningKey = "OLIVARES_THREATINTEL_SIGNING_KEY"
 
-var errThreatIntelNotActive = errors.New(
-	"threat-intel feed not active: " + enterpriseEditionHint +
-		", and it also needs a valid OLIVARES_THREATINTEL_CONFIG (see server logs for any config error)")
+// errThreatIntelNotActive is a Business capability this build does not have.
+var errThreatIntelNotActive = notInEdition()
 
 // resolveThreatIntelSource builds the source from the operator environment, or
 // returns an honest error when the add-on is not available in this build/config.

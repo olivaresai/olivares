@@ -9,10 +9,8 @@
     "active": "活跃",
     "idle": "空闲",
     "silentEvasion": "可能存在规避",
-    "total": "会话",
-    "launched": "已启动",
-    "discovered": "已发现",
-    "attention": "需要关注"
+    "sessions_other": "{{n}} 个会话",
+    "running": "{{n}} 个运行中"
   },
   "cols": {
     "session": "会话",
@@ -91,7 +89,6 @@
   },
   "operateTitle": "Claude Code",
   "operateSubtitle": "创建、接入并治理 Claude Code 会话，无需 SSH。Olivares 仅观察到的会话也在同一个列表里，并打开同一张卡片。",
-  "unifiedSubtitle": "本平面上的全部智能体会话——Olivares 发现的与它启动的——同列一处，显示每个会话正在做什么，以及你能对它做什么。",
   "launch": "新建会话",
   "allSources": "全部来源",
   "tabs": {
@@ -140,6 +137,7 @@
       "watch": "查看实时遥测与时间线",
       "attach": "实时查看其输入输出",
       "drive": "向它发送输入",
+      "interrupt": "中断当前轮次",
       "stop": "停止它",
       "resume": "恢复它",
       "cleanup": "清理它的工作区",
@@ -156,6 +154,7 @@
     "actions": {
       "stop": "停止",
       "resume": "恢复",
+      "startAgain": "重新开始",
       "cleanup": "清理",
       "delete": "删除",
       "cleanupHint": "结束该运行并释放其恢复句柄，此后将无法再恢复。生命周期账本予以保留。",
@@ -248,6 +247,8 @@
   },
   "surface": {
     "paneSwitcher": "选择面板",
+    "closeContext": "关闭上下文",
+    "backTo": "返回{{pane}}",
     "pane": {
       "rail": "会话",
       "narrative": "工作",
@@ -258,22 +259,19 @@
     "noneTitle": "请选择一个会话",
     "noneDescription": "在工作栏中选择一个会话，即可查看它做了什么，旁边附有证据。",
     "openDetail": "完整控制项",
-    "noObjective": "引擎未报告该会话的目标。",
     "notReadTitle": "无法读取该会话",
-    "menu": "{{name}} 的操作"
+    "menu": "{{name}} 的操作",
+    "terminal": "在终端中"
   },
   "evidence": {
     "checks": {
-      "title": "检查",
-      "empty": "该会话没有报告任何发现。"
+      "title": "检查"
     },
     "activity": {
-      "title": "最近的轮次",
-      "empty": "该会话没有进行工具或 MCP 调用。"
+      "title": "最近的轮次"
     },
     "resources": {
-      "title": "涉及的资源",
-      "empty": "没有条目指明资源。"
+      "title": "涉及的资源"
     },
     "forbiddenTitle": "无权查看证据",
     "forbiddenDescription": "您的角色不包含读取会话遥测数据的权限。",
@@ -331,7 +329,9 @@
     "workRoles": {
       "worker": "工作代理",
       "orchestrator": "编排代理"
-    }
+    },
+    "details": "详情",
+    "echoes": "也记录为"
   },
   "conversation": {
     "log": "对话",
@@ -348,7 +348,44 @@
     "inspect": "在检查器中显示",
     "args": "参数",
     "toolResult": "结果",
+    "toolFailed": "失败",
     "tokens": "输入 {{input}} · 输出 {{output}}",
-    "cwdWarning": "此会话没有工作区。驱动程序将其工作目录报告为 {{cwd}}。"
+    "cwdWarning": "此会话没有工作区。驱动程序将其工作目录报告为 {{cwd}}。",
+    "protocol": "协议帧：{{count}}",
+    "stop": {
+      "cancelled": "已取消",
+      "refusal": "被模型拒绝",
+      "maxTokens": "已在令牌上限处停止",
+      "maxTurnRequests": "已在轮次上限处停止"
+    },
+    "turnFailed": "本轮失败：{{message}}",
+    "retrying": "正在重试（{{count}}）：{{message}}",
+    "keyRefused": "提供方拒绝了该 API 密钥。请在“提供方”中替换它。",
+    "output": "工具输出（{{count}}）：{{first}}",
+    "notSent": "未发送：{{reason}}"
+  },
+  "changes": {
+    "title": "{{folder}} 中的更改",
+    "titleNoFolder": "更改",
+    "hint": "自本次会话开始以来，代理在其文件夹中更改的文件。",
+    "empty": "还没有文件被更改。",
+    "none": "此会话在此服务器上没有文件夹。",
+    "loading": "正在读取文件夹…",
+    "error": "无法读取更改。请稍后重试。",
+    "back": "全部更改",
+    "binary": "二进制文件，{{size}}。",
+    "fileTruncated": "显示前 256 KB。",
+    "truncated": "显示最新的 {{count}} 个文件。"
+  },
+  "peers": {
+    "button_other": "可发消息给另外 {{count}} 个会话",
+    "buttonNone": "不能给其他会话发消息",
+    "template": "可发消息给此模板的会话",
+    "title": "可发消息的会话",
+    "hint": "此会话可以发消息或移交工作的会话。引擎会拒绝其他任何会话。",
+    "sameTemplate": "此模板的会话",
+    "none": "此工作区中没有其他活动会话。",
+    "save": "保存",
+    "saved": "消息权限已保存。"
   }
 }

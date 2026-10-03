@@ -45,7 +45,7 @@ func newFindingsExportCmd(flags *authClientFlags) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "export",
 		Short: "Export all matching findings as SARIF 2.1.0",
-		Long: "export requests the tenant-scoped findings export from the running control plane and\n" +
+		Long: "export requests the tenant-scoped findings export from the running engine and\n" +
 			"writes the exact SARIF response to stdout or --out. The server caps one run at 25,000\n" +
 			"results and the CLI warns when that interoperability cap truncates the response.\n" +
 			"Findings whose metadata carries artifact_uri anchor to that committed file; the rest\n" +
@@ -88,7 +88,7 @@ func newFindingsExportCmd(flags *authClientFlags) *cobra.Command {
 			}
 			defer func() { _ = resp.Body.Close() }()
 			if resp.StatusCode != http.StatusOK {
-				raw, readErr := io.ReadAll(io.LimitReader(resp.Body, maxFindingsErrorBodySize))
+				raw, readErr := readCLIResponse(resp, req, maxFindingsErrorBodySize, false)
 				if readErr != nil {
 					return exitcode.New(exitcode.Server,
 						fmt.Errorf("read findings export error response: %w", readErr))
@@ -99,7 +99,7 @@ func newFindingsExportCmd(flags *authClientFlags) *cobra.Command {
 				// choice between "keep the code" and "scrub the bearer" no longer
 				// exists — redactCoded does both — so the body of a route that DOES
 				// carry an Authorization header is no longer embedded verbatim.
-				return redactCoded(httpErr(resp.StatusCode, raw), resolved.Token)
+				return guardCLIRefusalError(redactCoded(httpErr(resp.StatusCode, raw), resolved.Token), resp.StatusCode, cliRequestSecrets(req))
 			}
 			if err := writeFindingsExport(cmd.OutOrStdout(), outPath, resp.Body); err != nil {
 				return err

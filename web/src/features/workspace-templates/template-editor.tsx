@@ -87,6 +87,7 @@ interface FormState {
     effort: string
     model: string
     custom_instructions: string
+    secret_env: string // "VARIABLE=env/secret", comma-separated
   }
   connectors: string // comma-separated, split on submit
   policies: {
@@ -95,6 +96,8 @@ interface FormState {
     allowed_tools: string // comma-separated
     record_io: boolean
   }
+  /** Sessions of this template may message each other (peers_rule same-template). */
+  peers_same_template: boolean
 }
 
 const HOOK_KINDS: HookKind[] = [
@@ -114,6 +117,7 @@ function emptyFormState(): FormState {
       effort: '',
       model: '',
       custom_instructions: '',
+      secret_env: '',
     },
     connectors: '',
     policies: {
@@ -122,6 +126,7 @@ function emptyFormState(): FormState {
       allowed_tools: '',
       record_io: false,
     },
+    peers_same_template: false,
   }
 }
 
@@ -143,6 +148,9 @@ function dtoToFormState(dto: TemplateDTO): FormState {
       effort: s.effort ?? '',
       model: s.model ?? '',
       custom_instructions: s.custom_instructions ?? '',
+      secret_env: (s.secret_env ?? [])
+        .map((r) => `${r.env}=${r.secret}`)
+        .join(', '),
     },
     connectors: (dto.body.connectors ?? []).join(', '),
     policies: {
@@ -154,6 +162,7 @@ function dtoToFormState(dto: TemplateDTO): FormState {
       allowed_tools: (p.allowed_tools ?? []).join(', '),
       record_io: p.record_io ?? false,
     },
+    peers_same_template: dto.body.peers_rule === 'same-template',
   }
 }
 
@@ -183,6 +192,18 @@ function formStateToBody(f: FormState): TemplateBody {
   if (f.settings.model.trim()) settings.model = f.settings.model.trim()
   if (f.settings.custom_instructions.trim())
     settings.custom_instructions = f.settings.custom_instructions.trim()
+  // The server validates each name (reserved variables, the env/ namespace).
+  const secretEnv = f.settings.secret_env
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((pair) => {
+      const at = pair.indexOf('=')
+      return at < 0
+        ? { env: pair, secret: '' }
+        : { env: pair.slice(0, at).trim(), secret: pair.slice(at + 1).trim() }
+    })
+  if (secretEnv.length) settings.secret_env = secretEnv
 
   const connectors = f.connectors
     .split(',')
@@ -207,6 +228,7 @@ function formStateToBody(f: FormState): TemplateBody {
     ...(Object.keys(settings).length ? { settings } : {}),
     ...(connectors.length ? { connectors } : {}),
     ...(Object.keys(policies).length ? { policies } : {}),
+    ...(f.peers_same_template ? { peers_rule: 'same-template' as const } : {}),
   }
 }
 
@@ -472,6 +494,25 @@ export function TemplateEditor({
                 disabled={isPending}
               />
             </Field>
+            <Field
+              label={t('editor.settings.secretEnv')}
+              htmlFor="template-secret-env"
+              description={t('editor.settings.secretEnvHint')}
+            >
+              <Input
+                id="template-secret-env"
+                value={form.settings.secret_env}
+                onChange={(e) =>
+                  set('settings', {
+                    ...form.settings,
+                    secret_env: e.target.value,
+                  })
+                }
+                placeholder="GITHUB_TOKEN=env/github"
+                disabled={isPending}
+                mono
+              />
+            </Field>
           </section>
 
           <Separator />
@@ -577,6 +618,22 @@ export function TemplateEditor({
               />
               <Label htmlFor="record-io" className="cursor-pointer text-body">
                 {t('editor.policies.recordIo')}
+              </Label>
+            </div>
+            <div className="flex items-center gap-2">
+              <Checkbox
+                id="peers-same-template"
+                checked={form.peers_same_template}
+                onCheckedChange={(checked) =>
+                  set('peers_same_template', checked === true)
+                }
+                disabled={isPending}
+              />
+              <Label
+                htmlFor="peers-same-template"
+                className="cursor-pointer text-body"
+              >
+                {t('editor.policies.peersSameTemplate')}
               </Label>
             </div>
           </section>

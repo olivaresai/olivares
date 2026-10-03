@@ -14,8 +14,8 @@
 //
 // ⛔ AND THE SENTENCE STATES ITS OWN PROVENANCE. `workLine` reports which field it came
 //    from, and the bottom rung — the session's own reference — is not a summary of
-//    anything. When that is the rung, the pane says the engine reported no objective,
-//    rather than letting a reference look like a description of the work.
+//    anything. When that is the rung, the pane prints no sentence at all, rather than
+//    letting a reference look like a description of the work (or a line saying so).
 //
 // ⛔ THE THREE ANSWERS STAY THREE ANSWERS. Nothing here, a read that
 //    failed, and a permission boundary are three different screens, and the cheapest
@@ -29,6 +29,7 @@ import {
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
+import { CodeLine } from '@/components/ui/code-line'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,7 +38,8 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Kbd } from '@/components/ui/kbd'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { RunStateBadge } from '@/features/agentops/run-state-badge'
 import { workLine } from '@/features/home/work-line'
@@ -46,8 +48,12 @@ import { formatDuration, formatMicroUsd } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { AttributionChip } from './attribution-chip'
 import { CcStateBadge } from './cc-state-badge'
+import { runFolder } from './folder'
+import { CanMessage } from './can-message'
+import type { UnifiedSession } from './provenance'
 import type { ConversationItem } from './conversation-frames'
 import {
+  capabilities,
   isScopedRow,
   operatorName,
   primaryRun,
@@ -55,12 +61,16 @@ import {
   sessionShortId,
 } from './provenance'
 import { addressOf, type EvidenceBlock } from './session-address'
+import { RunActions } from './run-actions'
 import { SessionConversation } from './session-conversation'
 import { SessionEvidence } from './session-evidence'
 import type { SessionResolution } from './use-session-resolution'
 import { WorkClause } from './work-clause'
 import { workFacts } from './work-facts'
 import './i18n'
+
+/** The lifecycle actions the header offers; the rest stay in the full controls. */
+const HEADER_ACTIONS = ['interrupt', 'stop', 'resume'] as const
 
 export function SessionNarrative({
   resolution,
@@ -72,6 +82,8 @@ export function SessionNarrative({
   emptyAction,
   inspectedId,
   onInspect,
+  contextToggle,
+  peerSessions,
 }: {
   resolution: SessionResolution
   pinned: boolean
@@ -84,10 +96,22 @@ export function SessionNarrative({
   emptyAction?: React.ReactNode
   inspectedId?: string | null
   onInspect?: (item: ConversationItem) => void
+  /** The work surface's Context control, shown beside the session's own actions. */
+  contextToggle?: React.ReactNode
+  /** The sessions on the surface, from which "Can message" offers this one's peers. */
+  peerSessions?: readonly UnifiedSession[]
 }) {
   const { t, i18n } = useTranslation('sessions')
   const lang = i18n.language
-  const { target, session, live, loading, observeUnknown, grants } = resolution
+  const {
+    target,
+    session,
+    live,
+    loading,
+    observeUnknown,
+    observeError,
+    grants,
+  } = resolution
 
   if (!target)
     return (
@@ -117,6 +141,8 @@ export function SessionNarrative({
     )
 
   const run = primaryRun(session.runs)
+  const caps = capabilities({ ...session, runs: run ? [run] : [] }, grants)
+  const folder = runFolder(run)
   const line = live ? workLine(live) : null
   const facts = live
     ? workFacts(live, t, {
@@ -187,17 +213,75 @@ export function SessionNarrative({
             {t('narrative.openDetail')}
             <ArrowUpRight className="size-3.5" />
           </Button>
+          {contextToggle}
         </div>
 
+        {/* ONE STATE. A launched session's state is its run's; the observed state is
+            for sessions Olivares did not start. Three badges read "Active · Stopped ·
+            Live" after a stop (HU-11). The live dot shows only while the run works. */}
         <div className="flex flex-wrap items-center gap-2">
-          {live ? <CcStateBadge state={live.cc_state} /> : null}
-          {run ? <RunStateBadge state={run.state} /> : null}
+          {run ? (
+            <RunStateBadge state={run.state} />
+          ) : live ? (
+            <CcStateBadge state={live.cc_state} />
+          ) : null}
           {live && isScopedRow(live) ? (
             <AttributionChip attribution={live.attribution} />
           ) : null}
-          {live ? <LiveDot status={resolution.streamStatus} /> : null}
+          {live && (!run || run.state === 'running' || run.state === 'idle') ? (
+            <LiveDot status={resolution.streamStatus} />
+          ) : null}
+          {folder ? (
+            <span
+              className="font-mono text-caption text-muted-foreground"
+              title={run?.workspace_path}
+              data-testid="narrative-folder"
+            >
+              {folder}
+            </span>
+          ) : null}
+          {session && peerSessions ? (
+            <CanMessage session={session} sessions={peerSessions} />
+          ) : null}
+          <span className="ml-auto">
+            <RunActions
+              run={run}
+              caps={caps}
+              only={HEADER_ACTIONS}
+              onClose={() => {}}
+            />
+          </span>
         </div>
       </div>
+
+      {/* MC: a Grok Build or OpenCode run can reach MCP servers named in the tool's own
+          settings, outside Olivares. The engine says so; the sentence is shown as-is. */}
+      {run?.mcp_governance_warning ? (
+        <p
+          role="note"
+          className="text-caption text-warning"
+          data-slot="mcp-governance-warning"
+        >
+          {run.mcp_governance_warning}
+        </p>
+      ) : null}
+
+      {/* THE SAME IN A TERMINAL (Pomerium concept): the exact olivares commands for this
+          session, each with Copy. The id is used because a name can hold spaces. */}
+      {run ? (
+        <details className="text-caption" data-testid="narrative-cli">
+          <summary className="cursor-pointer text-muted-foreground">
+            {t('narrative.terminal')}
+          </summary>
+          <div className="mt-2 flex flex-col gap-1.5">
+            <CodeLine command={`olivares session follow ${run.run_ref}`} />
+            <CodeLine command={`olivares session send ${run.run_ref} "…"`} />
+            <CodeLine
+              command={`olivares session ${run.state === 'running' || run.state === 'idle' || run.state === 'pending' ? 'stop' : 'resume'} ${run.run_ref}`}
+            />
+          </div>
+        </details>
+      ) : null}
 
       {/* WHAT IT DID. Three answers, never merged: a read that failed is not an
           absence of work, and an absence of telemetry is not a failure. */}
@@ -211,11 +295,7 @@ export function SessionNarrative({
             <p className="text-body text-foreground">
               <WorkClause text={line.text} live={live} />
             </p>
-          ) : (
-            <p className="text-caption text-muted-foreground">
-              {t('narrative.noObjective')}
-            </p>
-          )}
+          ) : null}
           {facts.length > 0 ? (
             <p
               className="text-caption text-muted-foreground"
@@ -226,10 +306,20 @@ export function SessionNarrative({
           ) : null}
         </div>
       ) : observeUnknown ? (
-        <ErrorState
-          title={t('narrative.notReadTitle')}
-          description={t('card.observedNotRead')}
-        />
+        // Not read: without sessions:live:read that is a boundary, not a failure; a failed
+        // read goes through the one error mapping.
+        grants.liveRead ? (
+          <QueryErrorState
+            error={observeError}
+            title={t('narrative.notReadTitle')}
+            description={t('card.observedNotRead')}
+          />
+        ) : (
+          <ForbiddenState
+            title={t('narrative.notReadTitle')}
+            description={t('card.observedNotRead')}
+          />
+        )
       ) : (
         <p className="text-body text-muted-foreground">
           {t('card.noObservationYet')}
@@ -240,6 +330,7 @@ export function SessionNarrative({
         <SessionEvidence
           liveRef={live.live_ref || undefined}
           sessionRef={live.session_ref}
+          echoRefs={session?.echoes?.map((e) => e.live_ref)}
           expanded={evidence}
           onExpand={onExpandEvidence}
         />

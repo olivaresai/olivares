@@ -44,7 +44,7 @@ func (s *Server) NewGRPCServer(opts ...grpc.ServerOption) *grpc.Server {
 	// SLIs); then authentication; then — only in the HA leader-routing layout —
 	// the leader gate, so an invalid credential still reports Unauthenticated
 	// rather than Unavailable (the REST chain orders them the same way).
-	unary := []grpc.UnaryServerInterceptor{s.grpcMetricsUnaryInterceptor, s.grpcAuthInterceptor}
+	unary := []grpc.UnaryServerInterceptor{s.grpcMetricsUnaryInterceptor, s.grpcAuthInterceptor, s.grpcAuthorizationRecordingInterceptor}
 	stream := []grpc.StreamServerInterceptor{s.grpcMetricsStreamInterceptor, s.grpcStreamAuthInterceptor}
 	if s.leaderRouteGate {
 		unary = append(unary, s.grpcLeaderGateUnaryInterceptor)
@@ -80,7 +80,7 @@ func (s *Server) grpcAuthInterceptor(ctx context.Context, req any, _ *grpc.Unary
 			if err != nil {
 				return nil, grpcError(auth.ErrUnauthenticated)
 			}
-			ctx = withPrincipal(ctx, p)
+			ctx = s.withStepUpPolicy(withPrincipal(ctx, p))
 		}
 	}
 	return handler(ctx, req)
@@ -103,7 +103,7 @@ func (s *Server) grpcStreamAuthInterceptor(srv any, ss grpc.ServerStream, _ *grp
 			if err != nil {
 				return grpcError(auth.ErrUnauthenticated)
 			}
-			ctx = withPrincipal(ctx, p)
+			ctx = s.withStepUpPolicy(withPrincipal(ctx, p))
 		}
 	}
 	return handler(srv, &wrappedServerStream{ServerStream: ss, ctx: ctx})
@@ -215,6 +215,10 @@ func (s *Server) grpcAuthorizeResource(ctx context.Context, perm auth.Permission
 			return auth.Principal{}, "", errRateLimited
 		}
 	}
+	// Unary RPCs share the handler's buffer. A long-lived stream has no request
+	// buffer: retain this question here, before its caller opens store callbacks.
+	ctx, flush := s.beginAuthorizationRecording(ctx)
+	defer flush()
 	if dec := s.authz.Authorize(ctx, auth.Request{Principal: p, Permission: perm, Tenant: tenant, Resource: res}); !dec.Allow {
 		return auth.Principal{}, "", errForbidden
 	}

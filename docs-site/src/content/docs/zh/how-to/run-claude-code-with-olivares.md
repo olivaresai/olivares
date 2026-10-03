@@ -24,12 +24,12 @@ description: "在一台 Linux 主机上联合部署 Olivares 控制平面与 Cla
 
 ## 开始前的两条原则
 
-1. **可选启用（Opt-in）。** Olivares 基础镜像是 distroless 的，且**不携带 `claude`**。
-   Operate-Claude-Code 层是一个*独立的*工件——一个组合镜像
-   （`Dockerfile.agentops`）或一个原生安装附加项。如果你不运行受治理的 Claude Code，就永远不会拉取它，
-   它额外的攻击面也永远不会触及你的控制平面。
+1. **可选启用（Opt-in）。** Olivares 镜像**不携带 `claude`**。在 Docker 中，当你需要时，Olivares
+   会把代理工具安装到其数据卷，并通过产品完成登录；原生安装时由下文的安装附加项完成。如果你不运行
+   受治理的 Claude Code，就不会安装任何东西。
 2. **官方来源，绝不二次分发。** Anthropic 的条款不允许二次分发 `claude` 二进制文件，因此我们
-   **从 Anthropic 官方的、经 GPG 签名的来源**在构建/首次运行时安装它（签名的 apt/dnf/apk 仓库），
+   **从 Anthropic 官方的、经 GPG 签名的来源**在安装时安装它（原生安装时为签名的 apt/dnf/apk 仓库；
+   镜像中为用同一把密钥校验的 Anthropic 签名发布），
    做了固定（pin）并禁用了自动更新器。我们不附带任何第三方二进制文件。你也可以
    **自带（BYO）** `claude` 并让引擎指向它。
 
@@ -37,14 +37,14 @@ description: "在一台 Linux 主机上联合部署 Olivares 控制平面与 Cla
 
 | # | Olivares | Claude Code | 引擎如何指挥它 | 状态 |
 |---|----------|-------------|----------------------------|--------|
-| 1 | Docker | Docker | **同一容器**（组合镜像），procRunner 子进程 | **推荐**（与 2 相同的受治理路径） |
+| 1 | Docker | Docker | **同一容器**（标准镜像），procRunner 子进程 | **推荐**（与 2 相同的受治理路径） |
 | 2 | 原生 | 原生 | 同一主机（systemd），procRunner 子进程 | **推荐**，已做端到端冒烟测试 |
 | 3 | Docker | 原生（主机） | 跨命名空间——按现状无法治理 | 改为同址部署（见下文） |
 | 4 | 原生 | Docker（每会话） | 通过 Docker API 的每会话容器 | 后续工作（已记录） |
 
 两种**同址（co-located）**拓扑（1、2）是安全的默认选项。拓扑 2（原生）由
 [`scripts/smoke-agentops.sh`](https://github.com/olivaresai/olivares/blob/main/scripts/smoke-agentops.sh)
-做了端到端测试；拓扑 1 复用**同一条**受治理的 procRunner 路径（组合镜像的构建/运行尚未接入自动化测试）。
+做了端到端测试；拓扑 1 复用**同一条**受治理的 procRunner 路径，CI 会运行镜像的代理运行时检查（`scripts/qualify-container-agent-runtime.sh`）。
 拓扑 3 和 4 要求治理者与被治理者位于*不同*的容器中；跨该边界桥接 stdio 需要 Docker-API 访问权限
 （这是引擎默认有意**不**获取的特权）。它们诚实的路径在
 [混合拓扑](#混合拓扑3-和-4) 中阐明。
@@ -53,49 +53,33 @@ description: "在一台 Linux 主机上联合部署 Olivares 控制平面与 Cla
 
 ## 拓扑 1 — 两者都在 Docker 中（推荐）
 
-一个经过加固的容器同时运行引擎**和** `claude`；一个工作区卷作为共享的工作目录。仅回环、非 root、
-只读根文件系统——与基础 compose 完全相同的姿态，外加被指挥的运行时。
-
-### 构建组合镜像
-
-`claude` 在构建时从 Anthropic 的**签名 apt 仓库**安装，签名密钥指纹被固定
-（`31DD DE24 DDFA B679 F42D 7BD2 BAA9 29FF 1A7E CACE`）且禁用自动更新。先按摘要固定引擎基础镜像并验证它：
-
-```sh
-# verify the engine image you build FROM (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.10.0 \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
-  --certificate-oidc-issuer https://token.actions.githubusercontent.com
-
-docker build -f Dockerfile.agentops \
-  --build-arg OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest> \
-  --build-arg CLAUDE_CHANNEL=stable \
-  -t olivares-agentops:26.10.0 .
-```
-
-也可改用 `--build-arg CLAUDE_INSTALL=byo` 自带 `claude`（镜像不携带 `claude`；在运行时挂载你自己的，
-并设置 `OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`）。
+标准引擎容器同样运行 `claude`：Olivares 把代理工具安装到其数据卷，并通过产品完成登录。非 root、只读根文件系统——与基础 compose 相同的姿态，没有第二个镜像，也没有 override 文件。
 
 ### 启动它
 
+先按 digest 固定引擎并校验它：
+
 ```sh
-export OLIVARES_AGENTOPS_IMAGE=olivares-agentops:26.10.0
-docker compose -f deploy/compose/docker-compose.yml \
-               -f deploy/compose/docker-compose.agentops.yml up -d
+# verify the engine image you run (it is cosign-signed)
+cosign verify docker.io/olivaresai/olivares:26.10.1 \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+export OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
+export OLIVARES_BIND=127.0.0.1
+docker compose -f deploy/compose/docker-compose.yml up -d
 ```
 
-该 override 只改动 Operate 所需的部分：组合镜像、四个可写卷
-（引擎数据、**工作区**、claude 的 `~/.claude` 主目录、短期推理令牌），以及会话运行时环境变量。
-其余一切——绑定到 `127.0.0.1` 的端口、uid 65532、`read_only` 根、`cap_drop: ALL`、
-`no-new-privileges`——都从基础配置继承。
+### 安装并登录 Claude Code
 
-:::caution[首个受治理会话需要一份推理凭据]
-凭据来源是**默认关闭（deny-closed）**的：一次 `stream-json` 启动会从
-`OLIVARES_SESSION_RUNTIME_TOKEN_FILE`（`/run/olivares/session-token`，位于 `olivares-runtime` 卷上）
-读取一个*短期* bearer 令牌并将其丢弃——存储下来的只有一个非敏感的 `credential_id`。
-让你的 WIF/SPIFFE/OIDC 刷新器指向该卷。在令牌就位之前，`stream-json` 启动会以**关闭**态失败——
-引擎仍在运行，并在其他方面可被治理；接入认证是你刻意为之的一步。（实时的进程内令牌交换另行接入。）
-:::
+在控制台的 **AI 工具** 中，或使用 CLI：
+
+```sh
+olivares tool install claude
+olivares tool login claude
+```
+
+该工具位于数据卷中，登录归属于你的组织；会话绝不会使用保存在服务器账户 home 中的登录。
 
 ---
 
@@ -128,7 +112,7 @@ curl -fsSL https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/in
 
 ```sh
 sudo nano /etc/olivares/agentops.env     # wire the short-lived inference token (refresher)
-sudo systemctl enable --now olivares     # loopback-only by default
+sudo systemctl enable --now olivares     # listens on every interface by default
 ```
 
 :::note[为什么没有单独的 `claude` 服务]
@@ -172,7 +156,7 @@ olivares agent session stop   <run-ref>
 `--isolation container` 与 `--isolation sandbox` 是**前向兼容的接缝值，尚未接入**
 （每会话容器 Runner 是 [拓扑 4](#拓扑-4--olivares-原生claude-在每会话容器中) 中记录的后续工作）。
 原生 runner 会**拒绝**容器/沙箱启动（给出明确的错误），而不是悄悄地在缺少你所要求的隔离的情况下运行
-`claude`。请使用 `native`——在组合镜像 / systemd 联合部署之下，那就是引擎自身经过加固的容器/主机边界。
+`claude`。请使用 `native`——在标准镜像 / systemd 联合部署之下，那就是引擎自身经过加固的容器/主机边界。
 :::
 
 :::caution[`bypassPermissions` 应处于治理之后]
@@ -191,7 +175,7 @@ olivares agent session stop   <run-ref>
 
 **不存在干净的受治理路径**：容器化的引擎无法掌握主机命名空间中某个进程的 stdio，而受治理的传输是 stdio。
 要触及主机上的 `claude` 就得共享主机 PID 命名空间并把挂载映射进引擎容器——这是一次范围很大、刻意为之的
-去隔离，违背了把引擎封装起来的初衷。**请改为同址部署**：把两者都放进组合镜像（那*就是*拓扑 1），
+去隔离，违背了把引擎封装起来的初衷。**请改为同址部署**：把两者都放进标准镜像（那*就是*拓扑 1），
 或都原生运行（拓扑 2）。这是一个真实的限制，是被明说出来而非被掩盖的。
 
 ### 拓扑 4 — Olivares 原生，Claude 在每会话容器中
@@ -203,7 +187,7 @@ Docker attach/hijack 桥接。数据模型接缝已经**建模**了它（`--isol
 （见上文的提示）。
 
 **这是一项已记录的后续工作，并未在本次发布中交付。** 驱动同级容器意味着授予引擎 Docker-API 访问权限
-（理想情况下通过一个最小权限的 socket 代理）——本次发布有意回避的一个信任面，转而采用无 socket 的组合镜像。
+（理想情况下通过一个最小权限的 socket 代理）——本次发布有意回避的一个信任面，转而采用无 socket 的标准镜像。
 选择这一拓扑就是选择更强的治理者/被治理者隔离，*代价是*那项 Docker-API 授权；它将在现有的
 `isolation=container` 接缝之后到来。在那之前，安全的默认选项是同址部署。
 
@@ -211,9 +195,10 @@ Docker attach/hijack 桥接。数据模型接缝已经**建模**了它（`--isol
 
 ## 安全姿态（所有拓扑）
 
-- **默认仅回环。** 主机端口仅在 `127.0.0.1` 上发布。在容器中，引擎在容器*内部*监听 `0.0.0.0`，
-  因此**主机端口映射才是暴露边界**——在没有你自己的 TLS 终结认证代理的情况下，绝不要把它发布到非回环的
-  主机地址上。原生/systemd 的默认绑定是回环。要刻意地暴露。
+- **公开端口。** Docker Compose 默认在主机的所有接口 (`0.0.0.0`) 上公开 HTTPS 和 gRPC。
+  按上面的命令设置 `OLIVARES_BIND=127.0.0.1`，可将访问限制为本机。引擎在容器内监听
+  `0.0.0.0`；主机端口映射控制公开范围。原生/systemd 监听器也默认使用所有接口；
+  请配置其监听地址以限制访问。
 - **非 root，最小权限。** uid/gid 65532、只读根文件系统、`cap_drop: ALL`、`no-new-privileges`（Docker）/
   完整的 `Protect*`/`Restrict*` 集合，减去那一项已记录的 W^X 放宽（systemd）。
 - **最小数据、白名单环境。** 子进程 `claude` 仅继承一个明确的白名单（PATH、HOME、locale……）外加内存中的

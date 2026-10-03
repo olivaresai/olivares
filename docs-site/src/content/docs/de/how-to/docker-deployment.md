@@ -8,16 +8,17 @@ description: >-
 ---
 
 Dieser Leitfaden richtet sich an Engineers und SREs, die die Olivares-AI-Control-Plane in
-Produktion mit Docker bringen. Das gesamte Produkt ist ein einziges Distroless-Image — die Engine
+Produktion mit Docker bringen. Das gesamte Produkt ist ein einziges Image — die Engine
 mit eingebetteter Web-UI — sodass ein einzelner Host die SQLite-Topologie ohne
 externe Abhängigkeiten betreiben kann, und ein Postgres-Override Ihnen die mandantenfähige Topologie gibt,
-wenn Sie sie brauchen. Jeder Pfad behält dieselben sicheren Standardwerte: keine Standard-Anmeldedaten,
+wenn Sie sie brauchen. Container-Images basieren auf Debian 13 slim (mit Node.js 24 für die
+Agent-Tools) und laufen als Nicht-Root-Benutzer. Jeder Pfad behält dieselben sicheren Standardwerte: keine Standard-Anmeldedaten,
 ein einmaliges Setup-Token und TLS standardmäßig aktiv. Der Host-Port wird auf allen
 Schnittstellen veröffentlicht, denn dies ist ein Server — beschränken Sie ihn bewusst, wie unten.
 
-:::note[Beta — Images für 26.10.0 veröffentlicht]
-Olivares AI ist **Beta**. Die Image-Koordinaten unten lösen sich auf: Release `26.10.0` hat sie auf
-Docker Hub und `ghcr.io` veröffentlicht (Install-Surface-Zeuge `docs/releases/26.10.0-install-surfaces.json`).
+:::note[Beta — Images für 26.10.1 veröffentlicht]
+Olivares AI ist **Beta**. Die Image-Koordinaten unten lösen sich auf: Release `26.10.1` hat sie auf
+Docker Hub und `ghcr.io` veröffentlicht (Install-Surface-Zeuge `docs/releases/26.10.1-install-surfaces.json`).
 Behandeln Sie dies als die Deployment-Form, die Sie verwenden werden, nicht als produktionsreife Garantie.
 :::
 
@@ -31,7 +32,7 @@ den Kubernetes/Helm-Pfad unten.
 Der primäre Container-Pull ist **Docker Hub**:
 
 ```bash
-docker pull docker.io/olivaresai/olivares:26.10.0
+docker pull docker.io/olivaresai/olivares:26.10.1
 ```
 
 Derselbe Inhalt wird auch auf `ghcr.io/olivaresai/olivares` veröffentlicht — identisch per
@@ -39,7 +40,7 @@ Digest, verwendet als Backup und als Build-Registry. Docker Hub begrenzt die Rat
 Pulls; ghcr.io begrenzt anonyme Pulls öffentlicher Images nicht — `docker login` oder die
 ghcr.io-Koordinate ist daher der Ausweg, wenn ein CI-Knoten oder eine große Flotte an die
 Grenze stößt. Tags tragen **kein führendes `v`**:
-`:26.10.0` pinnt ein Release, `:latest` floatet, und `:26.10.0-fips` / `:26.10.0-stig` sind
+`:26.10.1` pinnt ein Release, `:latest` floatet, und `:26.10.1-fips` / `:26.10.1-stig` sind
 die gehärteten Varianten. Die Basis- und `:latest`-Tags sind multi-arch
 (`linux/amd64`, `linux/arm64`); `fips`/`stig` sind ausschließlich `amd64`.
 
@@ -50,14 +51,14 @@ identisch gegen beide Registries — die Signaturen und Attestierungen werden pe
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.10.0")"
+DIGEST="$(crane digest "$IMAGE:26.10.1")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type spdxjson \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -85,7 +86,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:26.10.0 \
+  docker.io/olivaresai/olivares:26.10.1 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -95,7 +96,7 @@ docker run -d --name olivares \
 
 | Flag | Warum |
 |---|---|
-| `--user 65532:65532` | läuft als die in das Distroless-Image eingebackene Non-Root-`nonroot`-UID |
+| `--user 65532:65532` | läuft als die in das Image eingebackene Non-Root-`nonroot`-UID |
 | `--read-only` | das Root-Dateisystem ist unveränderlich; nur das Daten-Volume und `/tmp` sind beschreibbar |
 | `--tmpfs /tmp` | ein beschreibbares Scratch-tmpfs, erforderlich, weil das Rootfs read-only ist |
 | `--cap-drop ALL` | die Engine benötigt keine Linux-Capabilities |
@@ -179,7 +180,7 @@ Image** gehalten wird, dann führen Sie das einmalige `backup`-Profil aus:
 
 ```bash
 printf 'a strong DR passphrase' > deploy/compose/dr-pass
-# the host stamps the bundle name (the distroless image has no `date`):
+# the host stamps the bundle name:
 BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
@@ -187,7 +188,7 @@ docker compose -f deploy/compose/docker-compose.yml \
 ```
 
 Der Job teilt sich das Daten-Volume der Engine, schreibt das Bundle in das `olivares-backups`-
-Volume und überlässt — weil das Image distroless ist — die Aufbewahrung dem Host: Bereinigen Sie alte
+Volume und überlässt die Aufbewahrung dem Host: Bereinigen Sie alte
 Bundles mit einem Host-Cron (`find <backups> -name '*.drbundle' -mtime +14 -delete`). Verpacken Sie
 den Lauf in Host-Cron für ein geplantes RPO und **spiegeln Sie das `olivares-backups`-Volume
 offsite** — ein Backup auf demselben Host ist keine Disaster Recovery. Wiederherstellen und verifizieren mit:
@@ -201,8 +202,8 @@ Runbook des Repositorys; der übergeordnete Walkthrough ist [Sichern und wiederh
 
 ## 5. Betriebshinweise
 
-**Prüfen Sie die Health vom Host aus, nicht vom Container.** Das Image ist **distroless** — es
-hat keine Shell und kein `curl`, sodass es absichtlich keinen In-Container-`HEALTHCHECK` gibt.
+**Prüfen Sie die Health vom Host aus, nicht vom Container.** Das Image
+definiert absichtlich keinen In-Container-`HEALTHCHECK`.
 Die Engine stellt `/livez` und `/readyz` auf dem HTTPS-Port bereit; prüfen Sie sie vom Host aus
 (oder von Ihrem Orchestrator):
 
@@ -297,7 +298,7 @@ Image erneut, bevor Sie es neu erstellen.
 
 ## 8. Für die Produktion per Digest pinnen
 
-Veränderbare Tags (`:26.10.0`, `:latest`) sind für die Evaluierung. In Produktion pinnen Sie den
+Veränderbare Tags (`:26.10.1`, `:latest`) sind für die Evaluierung. In Produktion pinnen Sie den
 **Digest**, den Sie verifiziert haben — ein Digest ist unveränderlich und ist genau das, was Sie abgesegnet haben:
 
 ```bash

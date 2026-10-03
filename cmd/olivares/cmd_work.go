@@ -185,7 +185,7 @@ func newWorkCmd() *cobra.Command {
 		Use:   "work",
 		Short: "Manage durable cross-session work, leases, decisions, and acceptance",
 		Long: "work is the durable operator surface for backlog, ownership, leases, dependencies,\n" +
-			"acceptance criteria, and decisions. Mutations always cross the control-plane\n" +
+			"acceptance criteria, and decisions. Mutations always cross the engine\n" +
 			"REST API through validate, plan, or apply; this CLI holds no local work state.",
 		Example: "  olivares work list items --status ready\n" +
 			"  olivares work get lease 01989d7d-32ac-7bb0-878d-3254f349a102\n" +
@@ -862,9 +862,9 @@ func workDo(ctx context.Context, cfg *agentClientConfig, method, path string, bo
 		return workResponse{}, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxWorkResponseSize+1))
+	raw, err := readCLIHTTPResponse(resp, req, maxWorkResponseSize+1, resp.StatusCode == http.StatusOK || (method != http.MethodGet && resp.StatusCode >= 200 && resp.StatusCode < 300), workHTTPError)
 	if err != nil {
-		return workResponse{}, err
+		return workResponse{status: resp.StatusCode, header: resp.Header.Clone(), body: raw}, err
 	}
 	if len(raw) > maxWorkResponseSize {
 		return workResponse{}, fmt.Errorf("work response exceeds %d bytes", maxWorkResponseSize)
@@ -958,7 +958,7 @@ func newWorkGetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "get item|decision|lease <id>",
 		Short: "Get one durable work item, decision, or lease",
-		Long:  "get retrieves one tenant-visible work item snapshot, append-only decision, or WorkItem lease from the control plane.",
+		Long:  "get retrieves one tenant-visible work item snapshot, append-only decision, or WorkItem lease from the engine.",
 		Example: "  olivares work get item 01989d7d-32ac-7bb0-878d-3254f349a102\n" +
 			"  olivares work get decision 01989d7d-4221-7429-ac66-d118af429159 -o json\n" +
 			"  olivares work get lease 01989d7d-32ac-7bb0-878d-3254f349a102",
@@ -1050,7 +1050,7 @@ func newWorkListCmd() *cobra.Command {
 		Use:     "list items|decisions|leases",
 		Aliases: []string{"ls"},
 		Short:   "List durable work items, decisions, or leases with keyset pagination",
-		Long: "list returns one tenant-visible keyset page. Filters are an allowlist and are combined with AND by the control plane. " +
+		Long: "list returns one tenant-visible keyset page. Filters are an allowlist and are combined with AND by the engine. " +
 			"Decision lists are append-only history unless --effective or --revoked selects the current-head projection.",
 		Example: "  olivares work list items --status ready --limit 50\n" +
 			"  olivares work list decisions --work-item-id 01989d7d-32ac-7bb0-878d-3254f349a102 -o json\n" +
@@ -1270,8 +1270,8 @@ func runWorkWatch(cmd *cobra.Command, cfg *agentClientConfig, opts workWatchOpti
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, maxWorkCommandFileSize))
-		return workHTTPError(resp.StatusCode, body)
+		body, readErr := readCLIResponse(resp, req, maxWorkCommandFileSize, false)
+		return guardCLIRefusalError(workHTTPError(resp.StatusCode, body), resp.StatusCode, cliRequestSecrets(req), readErr)
 	}
 	format, err := selectedOutput(cmd)
 	if err != nil {

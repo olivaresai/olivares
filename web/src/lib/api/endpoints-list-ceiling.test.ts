@@ -57,7 +57,7 @@ function peticion(mock: ReturnType<typeof stubFetch>, call = 0) {
 
 beforeEach(() => {
   vi.unstubAllGlobals()
-  useSessionStore.setState({ token: 'tok' } as never)
+  useSessionStore.setState({ csrfToken: 'tok' } as never)
   useTenantStore.setState({ activeTenant: 'acme' } as never)
 })
 

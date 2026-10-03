@@ -214,7 +214,9 @@ export function SessionRailView({
     <section
       aria-labelledby={headingId}
       aria-busy={status === 'loading' || undefined}
-      className="flex min-h-0 flex-1 flex-col"
+      // A floor and a clip: when the journeys above are long, the rail keeps room for its
+      // heading and a row, and nothing it holds is drawn under All areas below it (SC 03b).
+      className="flex min-h-[5.5rem] flex-1 flex-col overflow-hidden"
     >
       <div className="flex items-center justify-between px-2.5 pt-3 pb-1">
         <h2 id={headingId} className="text-overline font-semibold text-text-3">

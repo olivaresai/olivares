@@ -30,7 +30,7 @@
     "empty": "没有视图匹配“{{query}}”"
   },
   "items": {
-    "home": "概览",
+    "home": "主页",
     "onboarding": "配置向导",
     "inventory": "清单",
     "sessions": "观测会话",
@@ -96,7 +96,8 @@
     "providerProfiles": "提供商配置文件",
     "providerBindings": "来源绑定",
     "providerAccounts": "提供商账户",
-    "agent-tools": "智能体工具"
+    "agent-tools": "智能体工具",
+    "mcpServers": "MCP 服务器"
   },
   "workspace": {
     "open": "打开 {{workspace}}",
@@ -104,7 +105,7 @@
     "all": "所有工作区",
     "allHint": "无工作区筛选",
     "default": "默认",
-    "tenantWide": "全租户 — 不按工作区筛选",
+    "tenantWide": "所有工作区",
     "unresolved": "工作区不在列表中",
     "truncated": "列表不完整——存在多于已加载数量的工作区"
   },
@@ -131,7 +132,7 @@
     "knowledge": "知识库、RAG 与数据血缘",
     "catalog": "经审核批准的智能体与能力",
     "killswitch": "紧急停止、双人控制恢复与守护遏制",
-    "work": "跨会话的持久待办：工作项、依赖、验收与决定",
+    "work": "共享工作：工作项、依赖关系、验收和决定",
     "agentops": "创建、附加并治理 Claude Code 会话 — 无需 SSH；与“观测会话”共用同一界面",
     "agentArtifacts": "Skills、MCP 扩展与指令文件——注册表、态势与供应链 BOM",
     "models": "模型、路由与提供商密钥",
@@ -174,7 +175,8 @@
     "backups": "控制平面的加密灾难恢复快照：创建、计划、下载和恢复",
     "logs": "引擎实时日志流，支持按级别和模块筛选、搜索和暂停",
     "sourceDiff": "逐个文件比较已连接 Git 仓库的基准修订与 head 修订",
-    "agent-tools": "检测、安装和更新此主机上的智能体工具，并跟踪每次安装；仅限部署管理员"
+    "agent-tools": "检测、安装和更新此主机上的智能体工具，并跟踪每次安装；仅限部署管理员",
+    "mcpServers": "将远程 MCP 服务器连接到此组织，测试它们，并选择会话可以使用哪些工具"
   },
   "commandActions": {
     "eventing": {
@@ -185,6 +187,12 @@
     },
     "orchestration": {
       "createSchedule": "新建计划任务"
+    },
+    "killswitch": {
+      "engage": "触发紧急关停开关"
+    },
+    "identity": {
+      "invite": "邀请成员"
     }
   },
   "aliases": {
@@ -283,7 +291,7 @@
     "modulesOf": "{{area}}的模块",
     "empty": "此区域没有您可用的条目",
     "emptyHint": "当您在当前组织中的角色获得此区域某个模块的访问权限时，条目会显示在这里。",
-    "backHome": "前往概览",
+    "backHome": "前往主页",
     "area": "区域"
   },
   "personal": {
@@ -293,7 +301,8 @@
     "viewAll": "查看全部（{{count}}）",
     "manage": "管理收藏",
     "empty": "点击模块的星标，将其保存在这里。",
-    "scope": "按账户和组织保存在此浏览器中。",
+    "scope": "保存在你的账户中，任何浏览器都可使用。",
+    "saveFailed": "无法将收藏保存到你的账户。它们保留在此浏览器中，并会在你下次更改或登录时再次保存。",
     "temporary": "收藏目前仅保留在内存中。",
     "clear": "清空收藏",
     "recents": "最近访问",
@@ -351,7 +360,25 @@
       "sessions": "会话",
       "workspaceDashboard": "工作区",
       "providers": "AI 工具",
-      "deploy": "部署"
+      "deploy": "部署",
+      "work": "工作",
+      "approvals": "审批",
+      "inventory": "清单",
+      "finops": "成本与 FinOps",
+      "accessMap": "访问映射",
+      "mcpServers": "MCP 服务器",
+      "knowledge": "知识库",
+      "identity": "身份与 NHI",
+      "claudePolicy": "Claude Code 治理",
+      "audit": "审计账本",
+      "killswitch": "紧急关停开关",
+      "agent-tools": "AI 工具"
+    },
+    "groups": {
+      "work": "工作",
+      "manage": "管理",
+      "integrate": "集成",
+      "secure": "安全"
     },
     "phoneBarLabel": "主导航",
     "newSession": "新建会话",
@@ -388,7 +415,8 @@
       "hours": "{{count}} 小时",
       "days": "{{count}} 天",
       "loading": "正在读取会话…",
-      "error": "无法读取会话。"
+      "error": "无法读取会话。",
+      "approvalsError": "无法加载审批。"
     },
     "engine": {
       "checking": "正在检查引擎",
@@ -410,6 +438,13 @@
       "when": {
         "outsideField": "不在输入框中"
       }
+    },
+    "killswitch": {
+      "estateStopped": "所有智能体已停止",
+      "estateBody": "在两个用户账户批准重新启动之前，智能体无法执行操作。",
+      "agentStops": "{{count}} 项智能体停止生效中",
+      "agentStops_other": "{{count}} 项智能体停止生效中",
+      "none": "没有任何停止。会话和智能体正常运行。"
     }
   }
 }

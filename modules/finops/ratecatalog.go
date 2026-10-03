@@ -135,7 +135,7 @@ func (m *Module) handleCreateModelRate(w http.ResponseWriter, r *http.Request, m
 		return
 	}
 	var out modelRateDTO
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := m.mutate(r.Context(), mc.Tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(modelRateKind)
 		if err != nil {
 			return err
@@ -229,7 +229,7 @@ func (m *Module) handleUpdateModelRate(w http.ResponseWriter, r *http.Request, m
 		return
 	}
 	var out modelRateDTO
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := m.mutate(r.Context(), mc.Tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(modelRateKind)
 		if err != nil {
 			return err
@@ -276,7 +276,7 @@ func (m *Module) handleDeleteModelRate(w http.ResponseWriter, r *http.Request, m
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid id"))
 		return
 	}
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := m.mutate(r.Context(), mc.Tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(modelRateKind)
 		if err != nil {
 			return err

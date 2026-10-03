@@ -144,8 +144,8 @@ func execUnavailable(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusServiceUnavailable, errorBody(errNoExecutor.Error()))
 		return
 	}
-	if status, msg, ok := api.StoreErrorStatus(err); ok {
-		writeJSON(w, status, errorBody(msg))
+	if status, body, ok := api.StoreErrorBody(err); ok {
+		writeJSON(w, status, body)
 		return
 	}
 	writeJSON(w, http.StatusBadGateway, errorBody("runtime executor error: "+err.Error()))
@@ -216,7 +216,7 @@ func (m *Module) handlePlan(w http.ResponseWriter, r *http.Request, mc api.Modul
 // applied version and records the operation + a ledger self-audit (what/version/
 // who-approved/result). The wiring edges are published only AFTER commit.
 func (m *Module) handleApply(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	if !requireStepUp(w, mc) {
+	if !requireStepUp(w, r, mc) {
 		return
 	}
 	id := model.ID(chi.URLParam(r, "id"))
@@ -446,7 +446,7 @@ func (m *Module) handleVerify(w http.ResponseWriter, r *http.Request, mc api.Mod
 // the same two-phase, deny-by-default gating as apply. On success it marks the
 // definition retired, revokes its wirings and updates the snapshot. Admin-tier.
 func (m *Module) handleRetire(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	if !requireStepUp(w, mc) {
+	if !requireStepUp(w, r, mc) {
 		return
 	}
 	id := model.ID(chi.URLParam(r, "id"))

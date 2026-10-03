@@ -17,7 +17,6 @@ import (
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/sdk"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
@@ -25,14 +24,14 @@ import (
 func TestSessionMCPDenyOrdinaryOriginAndWorkerEscalation(t *testing.T) {
 	a, tenant, ordinary, _, worker, _ := workSessionEdgePrincipals(t)
 	calls := 0
-	h := &sessionMCPHandler{authr: a, api: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	h := &sessionMCPHandler{authr: a, work: func(w http.ResponseWriter, r *http.Request, p auth.Principal, got model.TenantID) {
 		calls++
-		if r.Header.Get("Authorization") != "Bearer "+worker || r.Header.Get("X-Olivares-Tenant") != tenant.String() {
+		if r.Header.Get("Authorization") != "" || got != tenant || p.SessionRunRef == "" {
 			t.Error("session authority was substituted")
 		}
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte(`{"code":"forbidden"}`))
-	})}
+	}}
 	request := func(token, origin, body string) *httptest.ResponseRecorder {
 		r := httptest.NewRequest(http.MethodPost, "/session/mcp", strings.NewReader(body))
 		r.Header.Set("Authorization", "Bearer "+token)
@@ -66,7 +65,7 @@ func TestSessionMCPDenyOrdinaryOriginAndWorkerEscalation(t *testing.T) {
 	}
 	w = request(worker, "", `{"jsonrpc":"2.0","id":"bounded","method":"tools/call","params":{"name":"olivares_work_command","arguments":{"mode":"apply","idempotency_key":"fixture","command":{"command":"item.create"}}}}`)
 	if w.Code != http.StatusOK || !strings.Contains(w.Body.String(), `"isError":true`) || calls != 1 {
-		t.Fatalf("REST denial lost: %d %s calls=%d", w.Code, w.Body.String(), calls)
+		t.Fatalf("module denial lost: %d %s calls=%d", w.Code, w.Body.String(), calls)
 	}
 	if bytes.Contains(w.Body.Bytes(), []byte(worker)) {
 		t.Fatal("bearer exposed")
@@ -77,6 +76,51 @@ func TestSessionMCPDenyOrdinaryOriginAndWorkerEscalation(t *testing.T) {
 	}
 }
 
+func TestSessionMCPSharedCredentialUsesPrincipalWithoutRESTBearer(t *testing.T) {
+	a, tenant, ordinary, launcher, _, _ := workSessionEdgePrincipals(t)
+	issuer := auth.NewSessionCredentials(a, func(context.Context, auth.SessionScope) error { return nil })
+	workspace := model.NewID()
+	bearer, err := issuer.Mint(t.Context(), launcher, auth.SessionScope{
+		TenantID: tenant, WorkspaceID: workspace, FolderRef: "fixture", SessionRef: "osn_" + model.NewID().String(),
+		RunRef: model.NewID().String(), Fence: 1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	calls := 0
+	h := &sessionMCPHandler{authr: issuer, issuedSessionOnly: true, work: func(w http.ResponseWriter, r *http.Request, p auth.Principal, got model.TenantID) {
+		calls++
+		bounded, ok := p.ConfinedWorkspaceIn(got)
+		_, ordinary := p.Ref()
+		if got != tenant || !ok || bounded != workspace || ordinary || p.SessionRunRef == "" || r.Header.Get("Authorization") != "" {
+			t.Error("work port lost the shared session principal or received a bearer")
+		}
+		_, _ = w.Write([]byte(`{"items":[]}`))
+	}}
+	request := func(token, method, params string) *httptest.ResponseRecorder {
+		r := httptest.NewRequest("POST", "/session/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"`+method+`","params":`+params+`}`))
+		r.Header.Set("Authorization", "Bearer "+token)
+		r.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, r)
+		return w
+	}
+	if w := request(ordinary, "tools/list", `{}`); w.Code != http.StatusUnauthorized {
+		t.Fatal("shared service fell back to an ordinary credential")
+	}
+	if w := request(bearer, "tools/list", `{}`); w.Code != 200 || !strings.Contains(w.Body.String(), "olivares_work_list") || strings.Contains(w.Body.String(), "olivares_session_") || strings.Contains(w.Body.String(), "olivares_work_command") {
+		t.Fatalf("viewer session catalog: %d %s", w.Code, w.Body.String())
+	}
+	if w := request(bearer, "tools/call", `{"name":"olivares_work_list","arguments":{}}`); w.Code != 200 || calls != 1 || strings.Contains(w.Body.String(), bearer) {
+		t.Fatalf("shared session work call: %d %s", w.Code, w.Body.String())
+	}
+	for _, name := range []string{"olivares_session_send", "olivares_session_inbox", "olivares_session_handoff_offer", "olivares_work_command"} {
+		if w := request(bearer, "tools/call", `{"name":"`+name+`","arguments":{}}`); !strings.Contains(w.Body.String(), `"error"`) || calls != 1 {
+			t.Fatalf("unavailable %s reached the work port", name)
+		}
+	}
+}
+
 type sessionMCPObservationSink struct{ observations []sdkmodel.Observation }
 
 func (s *sessionMCPObservationSink) Emit(_ context.Context, o sdkmodel.Observation) error {
@@ -84,7 +128,7 @@ func (s *sessionMCPObservationSink) Emit(_ context.Context, o sdkmodel.Observati
 	return nil
 }
 
-func TestSessionMCPNativeConnectorIntrospectionAndCommunicationBinding(t *testing.T) {
+func TestSessionMCPCommunicationPlaneOff(t *testing.T) {
 	a, tenant, _, _, _, worker := workSessionEdgePrincipals(t)
 	actor, err := auth.NewSystemOperator("test:session-mcp", "exercise native session communication tools")
 	if err != nil {
@@ -95,14 +139,9 @@ func TestSessionMCPNativeConnectorIntrospectionAndCommunicationBinding(t *testin
 	if err != nil {
 		t.Fatal(err)
 	}
-	var path string
-	h := &sessionMCPHandler{authr: a, api: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		path = r.URL.String()
-		if r.Header.Get("Authorization") != "Bearer "+c.Token || r.Header.Get("X-Olivares-Tenant") != tenant.String() {
-			t.Error("communication credential substituted")
-		}
-		_, _ = w.Write([]byte(`{"items":[]}`))
-	})}
+	h := &sessionMCPHandler{authr: a, work: func(http.ResponseWriter, *http.Request, auth.Principal, model.TenantID) {
+		t.Error("communication reached the work port")
+	}}
 	srv := httptest.NewServer(h)
 	defer srv.Close()
 	spec, _ := json.Marshal([]any{map[string]any{"name": "session-messages", "url": srv.URL + "/session/mcp", "headers": map[string]string{"Authorization": "Bearer " + c.Token}, "next_revision": false}})
@@ -124,16 +163,16 @@ func TestSessionMCPNativeConnectorIntrospectionAndCommunicationBinding(t *testin
 			}
 		}
 	}
-	if edges != 8 {
-		t.Fatalf("native connector introspected %d tools, want 8", edges)
+	if edges != 0 {
+		t.Fatalf("communication plane exposed %d tools, want 0", edges)
 	}
 	r := httptest.NewRequest(http.MethodPost, "/session/mcp", strings.NewReader(`{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"olivares_session_inbox","arguments":{"limit":5}}}`))
 	r.Header.Set("Authorization", "Bearer "+c.Token)
 	r.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, r)
-	if w.Code != 200 || !strings.Contains(path, "workspace_id="+workspace.String()) || strings.Contains(w.Body.String(), c.Token) {
-		t.Fatal("inbox lost exact authenticated workspace")
+	if w.Code != 200 || !strings.Contains(w.Body.String(), `"error"`) || strings.Contains(w.Body.String(), c.Token) {
+		t.Fatal("hidden inbox was callable")
 	}
 	if err := a.RevokeCommunicationSessionCredential(t.Context(), actor, c.ID, auth.CommunicationSessionCredentialSpec{Tenant: tenant, WorkspaceID: workspace, SessionRef: worker.SessionIdentity, RunRef: worker.SessionRunRef, ClaimFence: 1}); err != nil {
 		t.Fatal(err)
@@ -156,7 +195,9 @@ func TestSessionMCPOrchestratorCatalogAndCurrentGrantDenial(t *testing.T) {
 		t.Fatal(err)
 	}
 	live := true
-	h := &sessionMCPHandler{authr: a, api: http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("catalog called domain API") }), checkOrchestration: func(context.Context, auth.Principal, model.TenantID) error {
+	h := &sessionMCPHandler{authr: a, work: func(http.ResponseWriter, *http.Request, auth.Principal, model.TenantID) {
+		t.Error("catalog called work API")
+	}, checkOrchestration: func(context.Context, auth.Principal, model.TenantID) error {
 		if !live {
 			return auth.ErrUnauthenticated
 		}
@@ -184,10 +225,10 @@ func TestSessionMCPOrchestratorCatalogAndCurrentGrantDenial(t *testing.T) {
 	}
 }
 
-func TestSessionMCPWorkLeaseAndMessageEnvelope(t *testing.T) {
+func TestSessionMCPWorkLeaseEnvelope(t *testing.T) {
 	workspace := model.NewID()
 	p := auth.Principal{SessionWorkspaceID: workspace}
-	item, channel, sid := model.NewID(), model.NewID(), "osn_"+model.NewID().String()
+	item, sid := model.NewID(), "osn_"+model.NewID().String()
 	command, _ := json.Marshal(map[string]any{"mode": "apply", "version": 3, "idempotency_key": "stable-command", "command": map[string]any{"command": "lease.acquire", "work_item_id": item, "holder_sid": sid, "holder_run_ref": model.NewID(), "ttl_seconds": 60}})
 	r, err := sessionToolRequest(t.Context(), p, "olivares_work_command", command)
 	if err != nil {
@@ -204,95 +245,13 @@ func TestSessionMCPWorkLeaseAndMessageEnvelope(t *testing.T) {
 	if _, err := sessionToolRequest(t.Context(), p, "olivares_work_command", bad); err == nil {
 		t.Fatal("lease unrelated field discarded silently")
 	}
-	send, _ := json.Marshal(sessionSendArgs{ChannelID: channel, ToSID: sid, Subject: "progress", Text: "fixture result", IdempotencyKey: "stable-message"})
-	r, err = sessionToolRequest(t.Context(), p, "olivares_session_send", send)
-	if err != nil {
-		t.Fatal(err)
-	}
-	body, _ = io.ReadAll(r.Body)
-	var out sessions.DirectNoticePublishCommand
-	if err := json.Unmarshal(body, &out); err != nil {
-		t.Fatal(err)
-	}
-	if r.URL.Path != "/v1/m/sessions/messages/send" || out.Recipient.Kind != sessions.RecipientSession || out.Recipient.Ref != sid || out.Content.Blocks[0].Text != "fixture result" {
-		t.Fatal("exact-session message was retargeted")
-	}
-	for _, raw := range []string{`{"channel_id":"x","to_sid":"all","subject":"broad","text":"x","idempotency_key":"x"}`, `{"limit":5,"workspace_id":"caller-controlled"}`, `{} {}`} {
-		if _, err := sessionToolRequest(t.Context(), p, "olivares_session_inbox", []byte(raw)); err == nil {
-			t.Fatal("untrusted inbox selector admitted")
-		}
-	}
 }
 
-func TestSessionMCPHandoffExactEnvelopesAndDenials(t *testing.T) {
-	p := auth.Principal{SessionWorkspaceID: model.NewID()}
-	item, channel, delivery, handoff, key := model.NewID(), model.NewID(), model.NewID(), model.NewID(), model.NewID()
-	sid := "osn_" + model.NewID().String()
-	offer := map[string]any{"channel_id": channel, "work_item_id": item, "to_sid": sid, "handoff": map[string]any{"summary": "Fixture result", "next_action": "Review evidence"}, "ack_deadline": "2026-10-01T12:00:00Z", "expected_owner_epoch": 2, "version": 3, "idempotency_key": key}
-	respond := map[string]any{"id": handoff, "transition": "accept", "version": 1, "idempotency_key": key}
-	for _, tc := range []struct {
-		name, method, path string
-		args               map[string]any
-	}{
-		{"olivares_session_handoff_offer", "POST", "/handoffs", offer},
-		{"olivares_session_handoff_respond", "POST", "/handoffs/" + handoff.String() + "/responses", respond},
-		{"olivares_session_handoff_get", "GET", "/deliveries/" + delivery.String() + "/handoff", map[string]any{"id": delivery}},
-		{"olivares_session_handoff_inbox", "GET", "/inbox/handoffs", map[string]any{"state": "offered", "limit": 5}},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			raw, _ := json.Marshal(tc.args)
-			r, err := sessionToolRequest(t.Context(), p, tc.name, raw)
-			if err != nil {
-				t.Fatal(err)
-			}
-			if r.Method != tc.method || r.URL.Path != workAPIBase+tc.path {
-				t.Fatal("handoff endpoint changed")
-			}
-			if tc.name == "olivares_session_handoff_offer" {
-				var body sessions.WorkItemHandoffOfferCommand
-				if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-					t.Fatal(err)
-				}
-				if body.Recipient.Kind != sessions.RecipientSession || body.Recipient.Ref != sid || body.WorkItemID != item || body.ExpectedOwnerEpoch != 2 || body.Content.NextAction != "Review evidence" || r.Header.Get("If-Match") != `"v3"` || r.Header.Get("Idempotency-Key") != key.String() {
-					t.Fatal("offer retargeted or lost its observed owner/version/key")
-				}
-			}
-			if tc.name == "olivares_session_handoff_respond" && (r.Header.Get("If-Match") != `"v1"` || r.Header.Get("Idempotency-Key") != key.String()) {
-				t.Fatal("response lost handoff preconditions")
-			}
-			if tc.name == "olivares_session_handoff_inbox" && (r.URL.Query().Get("workspace_id") != p.SessionWorkspaceID.String() || r.URL.Query().Get("state") != "offered") {
-				t.Fatal("handoff inbox lost exact authenticated workspace")
-			}
-		})
-	}
-	for _, tc := range []struct {
-		name, field string
-		args        map[string]any
-		value       any
-	}{
-		{"olivares_session_handoff_offer", "to_sid", offer, "all"},
-		{"olivares_session_handoff_offer", "version", offer, 0},
-		{"olivares_session_handoff_offer", "expected_owner_epoch", offer, 0},
-		{"olivares_session_handoff_offer", "ack_deadline", offer, "tomorrow"},
-		{"olivares_session_handoff_offer", "workspace_id", offer, model.NewID()},
-		{"olivares_session_handoff_respond", "transition", respond, "withdraw"},
-		{"olivares_session_handoff_respond", "reason", respond, map[string]any{"code": "unexpected"}},
-		{"olivares_session_handoff_respond", "transition", respond, "reject"},
-		{"olivares_session_handoff_inbox", "state", map[string]any{}, "offered,accepted"},
-	} {
-		args := map[string]any{}
-		for k, v := range tc.args {
-			args[k] = v
+func TestSessionMCPCommunicationEnvelopesUnavailable(t *testing.T) {
+	for _, name := range []string{"olivares_session_inbox", "olivares_session_delivery", "olivares_session_send", "olivares_session_ack", "olivares_session_handoff_inbox", "olivares_session_handoff_get", "olivares_session_handoff_offer", "olivares_session_handoff_respond"} {
+		if _, err := sessionToolRequest(t.Context(), auth.Principal{}, name, []byte(`{}`)); err == nil {
+			t.Fatalf("%s retained a callable envelope", name)
 		}
-		args[tc.field] = tc.value
-		raw, _ := json.Marshal(args)
-		if _, err := sessionToolRequest(t.Context(), p, tc.name, raw); err == nil {
-			t.Fatalf("%s accepted invalid %s", tc.name, tc.field)
-		}
-	}
-	ack, _ := json.Marshal(map[string]any{"id": delivery, "version": 1, "idempotency_key": "b2d502f4-a938-4842-9066-3614c98cd3c1"})
-	if _, err := sessionToolRequest(t.Context(), p, "olivares_session_ack", ack); err == nil {
-		t.Fatal("Ack advertised an invalid UUIDv4 key")
 	}
 }
 
@@ -301,7 +260,9 @@ func TestSessionMCPManagedSwitchDefaultOffAndRevocation(t *testing.T) {
 	enabled := false
 	unavailable := false
 	checks := 0
-	h := &sessionMCPHandler{authr: a, api: http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Error("catalog called REST") }), enabled: func(ctx context.Context, got model.TenantID) (bool, error) {
+	h := &sessionMCPHandler{authr: a, work: func(http.ResponseWriter, *http.Request, auth.Principal, model.TenantID) {
+		t.Error("catalog called work API")
+	}, enabled: func(ctx context.Context, got model.TenantID) (bool, error) {
 		checks++
 		if got != tenant {
 			t.Error("switch read wrong tenant")

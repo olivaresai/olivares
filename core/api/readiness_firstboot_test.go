@@ -20,22 +20,8 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 )
 
-// QA05 — first-boot readiness. The subject of this file is ONE question: does
-// GET /readyz report a state the engine actually observed?
-//
-// The defect it closes was measured on the source: a store Ping and the leader
-// predicate both succeed on a Postgres deployment with no --admin-dsn, while
-// POST /v1/setup — the only thing such an install can usefully do — refuses with
-// 501 cross_tenant_admin_pool_not_configured, because firstOrg resolves the first
-// organization through Store.System + SystemScope.ListOrgs and that read is not
-// authoritative without a BYPASSRLS pool. Readiness answered
-// 200 {"setup_required":true}: "ready to be set up", about an install that could
-// not be set up.
-//
-// These cases go through the REAL router over REAL sqlstore fixtures, because
-// that is the only place the answer an operator (or a kubelet) receives exists.
-// The Postgres halves of the same journeys are qualified against a real server in
-// readiness_firstboot_pg_test.go; a decorator is NOT equated to that.
+// Readiness observes first-setup prerequisites without mutating installation state.
+// Full-estate enumeration is optional: firstOrg can provision on the app pool.
 
 // readyz is one probe of the readiness surface, decoded.
 type readyzResult struct {
@@ -93,61 +79,21 @@ func TestReadyzFreshSQLiteInstallIsReadyToReceiveSetup(t *testing.T) {
 	}
 }
 
-// TestReadyzRefusesFirstBootWithoutAdministrativeEnumeration is the defect itself.
-// The deployment is the one an operator actually has on a first boot: Postgres on
-// the application pool alone, whose ListOrgs answers the WRAPPED sentinel
-// (enumerationBlindStore, handlers_setup_adminpool_test.go — a decorator, so every
-// other path keeps real sqlstore behavior).
-//
-// Both halves are asserted in one test on purpose: readiness must now refuse, AND
-// POST /v1/setup must keep the exact 501 contract it already had. A readiness
-// change that quietly moved the setup refusal would be a different product.
-func TestReadyzRefusesFirstBootWithoutAdministrativeEnumeration(t *testing.T) {
+func TestReadyzAllowsFirstBootWithoutAdministrativeEnumeration(t *testing.T) {
 	h := newHarnessOpts(t, func(o *api.Options) {
 		o.Store = enumerationBlindStore{Store: o.Store, blind: blindFromTheStart()}
 	})
-
-	r := probeReadyz(t, h)
-	if r.code != http.StatusServiceUnavailable {
-		t.Fatalf("/readyz on a first boot that cannot enumerate = %d %s, want 503", r.code, r.raw)
-	}
-	if r.body["status"] != "setup_blocked" {
-		t.Errorf("/readyz status = %v, want setup_blocked", r.body["status"])
-	}
-	if r.body["store"] != "up" || r.body["leader"] != true {
-		t.Errorf("/readyz body = %s, want store=up leader=true (neither is what failed)", r.raw)
-	}
-	if r.body["setup_required"] != true {
-		t.Errorf("/readyz setup_required = %v, want true", r.body["setup_required"])
-	}
-	if r.body["code"] != "cross_tenant_admin_pool_not_configured" {
-		t.Errorf("/readyz code = %v, want cross_tenant_admin_pool_not_configured", r.body["code"])
-	}
-	remedy, _ := r.body["remedy"].(string)
-	for _, want := range []string{"BYPASSRLS", "olivares db init", "--admin-role", "--admin-dsn"} {
-		if !strings.Contains(remedy, want) {
-			t.Errorf("the readiness remedy does not name %q: %q", want, remedy)
+	for i := 0; i < 2; i++ {
+		r := probeReadyz(t, h)
+		if r.code != http.StatusOK || r.body["setup_required"] != true || r.body["status"] != "ok" {
+			t.Fatalf("/readyz without an admin pool = %d %s, want 200 setup_required=true", r.code, r.raw)
 		}
 	}
-	requireNoRawStoreText(t, r.raw)
-
-	// The setup ceremony is UNCHANGED: readiness observes, it does not authorize.
 	sr := h.do(http.MethodPost, "/v1/setup", "", map[string]any{
 		"token": h.setupTok, "email": "root@x.io", "password": "supersecret1",
 	}, nil)
-	if sr.code != http.StatusNotImplemented {
-		t.Fatalf("POST /v1/setup = %d %s, want 501 (its contract is untouched)", sr.code, sr.raw)
-	}
-	errObj, _ := sr.body["error"].(map[string]any)
-	if errObj == nil || errObj["code"] != "cross_tenant_admin_pool_not_configured" {
-		t.Fatalf("POST /v1/setup no longer answers the admin-pool code: %s", sr.raw)
-	}
-
-	// And nothing was cached by either call: the condition is a deployment
-	// configuration, so the next probe must observe it again and answer the same.
-	again := probeReadyz(t, h)
-	if again.code != http.StatusServiceUnavailable || again.body["status"] != "setup_blocked" {
-		t.Fatalf("second /readyz = %d %s, want the same 503 setup_blocked", again.code, again.raw)
+	if sr.code != http.StatusCreated {
+		t.Fatalf("POST /v1/setup = %d %s, want 201", sr.code, sr.raw)
 	}
 }
 
@@ -171,8 +117,8 @@ func TestReadyzWithWorkingEnumerationCompletesTheFirstBootJourney(t *testing.T) 
 	// longer has. The same server, the next probe, must observe the loss.
 	blind.Store(true)
 	lost := probeReadyz(t, h)
-	if lost.code != http.StatusServiceUnavailable || lost.body["status"] != "setup_blocked" {
-		t.Fatalf("/readyz after the admin pool went away = %d %s, want 503 setup_blocked", lost.code, lost.raw)
+	if lost.code != http.StatusOK || lost.body["setup_required"] != true {
+		t.Fatalf("/readyz after the optional admin pool went away = %d %s, want 200 setup_required=true", lost.code, lost.raw)
 	}
 	blind.Store(false)
 

@@ -6,7 +6,11 @@
   },
   "forbidden": {
     "title": "Non autorisé",
-    "description": "Vous n’avez pas la permission de consulter ceci. Demandez l’accès à un administrateur."
+    "description": "Vous n’avez pas la permission de consulter ceci. Demandez l’accès à un administrateur.",
+    "accessTo": "Vous n’avez pas accès à {{subject}}.",
+    "accessToThis": "Vous n’avez pas accès à ceci.",
+    "nextStep": "Vos rôles ou une politique de groupe ne le permettent pas. Un propriétaire ou un administrateur de cette organisation peut l’accorder.",
+    "deniedByPolicy": "La politique « {{policy}} » le refuse. Un propriétaire ou un administrateur de cette organisation peut la modifier."
   },
   "serverError": {
     "title": "Une erreur est survenue",
@@ -38,11 +42,21 @@
     "locked_out": "Trop de tentatives. Réessayez dans un instant.",
     "setup_required": "Le plan de contrôle nécessite une configuration au premier démarrage.",
     "setup_complete": "La configuration est déjà terminée.",
-    "cross_tenant_admin_pool_not_configured": "Ce déploiement n’a pas de pool de base de données d’administration inter-tenants. Provisionnez un rôle NOSUPERUSER BYPASSRLS avec `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (voir deploy/postgres/README.md) puis redémarrez le serveur avec --admin-dsn pointant vers ce rôle.",
+    "cross_tenant_admin_pool_not_configured": "Cette base de données ne peut pas lister toutes les organisations. Exécutez `olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` puis redémarrez le moteur. Ou provisionnez un rôle NOSUPERUSER BYPASSRLS avec `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (voir deploy/postgres/README.md) puis redémarrez le serveur avec --admin-dsn pointant vers ce rôle.",
     "internal": "Une erreur interne est survenue."
   },
   "tenantAdmission": {
     "title": "Admission dans l’organisation requise",
     "description": "Connectez-vous avec une identité d’annuaire admise dans l’organisation. L’autorité globale de bootstrap ne permet pas de gérer les communications du workspace."
+  },
+  "moduleNotEnabled": {
+    "title": "Non activé sur cette installation",
+    "description": "Cette partie d'Olivares est désactivée ici ; il n'y a rien à afficher.",
+    "named": "{{module}} n’est pas activé sur cette installation.",
+    "unnamed": "Ce module n’est pas activé sur cette installation."
+  },
+  "notInEdition": {
+    "subject": "Cette édition n’inclut pas {{subject}}.",
+    "generic": "Cette édition n’inclut pas cette fonction."
   }
 }

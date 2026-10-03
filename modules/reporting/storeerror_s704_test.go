@@ -155,3 +155,24 @@ func reportingMessage(t *testing.T, rec *httptest.ResponseRecorder) string {
 	}
 	return env.Error.Message
 }
+
+// THE CONSOLE TELLS A LICENSE FROM A ROLE BY THE CODE. This refusal carried the code
+// "Forbidden", the HTTP status text, which a role refusal reads the same; it carries
+// core's addon_requires_license. A real fault keeps the route's own answer.
+func TestEnterpriseReportRefusalCarriesTheLicenseCode(t *testing.T) {
+	m := &Module{log: slog.New(slog.DiscardHandler),
+		enterprise: refusingEngine{err: license.AddonRequired("reporting", "reporting.posture")}}
+	rec := httptest.NewRecorder()
+	m.handleEnterprisePosture(rec, httptest.NewRequest(http.MethodGet, "/x", nil), coreapi.ModuleContext{})
+	var env struct {
+		Error struct {
+			Code string `json:"code"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &env); err != nil {
+		t.Fatalf("body %q is not the module error envelope: %v", rec.Body.String(), err)
+	}
+	if rec.Code != http.StatusForbidden || env.Error.Code != "addon_requires_license" {
+		t.Fatalf("license refusal = %d code %q, want 403 code addon_requires_license; body = %s", rec.Code, env.Error.Code, rec.Body.String())
+	}
+}

@@ -224,7 +224,8 @@
     },
     "server": {
       "title": "No MCP servers discovered yet",
-      "description": "MCP servers appear when connector observations identify them in the tenant’s inventory."
+      "description": "MCP servers appear when connector observations identify them in the tenant’s inventory.",
+      "action": "Add or test a server in MCP servers"
     },
     "skill": {
       "title": "No skills discovered yet",

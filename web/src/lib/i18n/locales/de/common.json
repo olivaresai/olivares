@@ -195,7 +195,47 @@
   "notifications": {
     "title": "Letzte Aktivität",
     "empty": "Keine aktuelle Aktivität.",
-    "viewAll": "Alles im Audit-Ledger anzeigen"
+    "viewAll": "Alles im Audit-Ledger anzeigen",
+    "events": {
+      "auditCheckpoint": "Audit-Prüfpunkt erstellt",
+      "orgCreated": "Organisation erstellt",
+      "loginBlocked": "Eine Anmeldung von {{actor}} wurde blockiert",
+      "loginBlocked_you": "Eine deiner Anmeldungen wurde blockiert",
+      "ssoLogin": "{{actor}} hat sich mit SSO angemeldet",
+      "ssoLogin_you": "Du hast dich mit SSO angemeldet",
+      "userInvited": "{{actor}} hat jemanden eingeladen",
+      "userInvited_you": "Du hast jemanden eingeladen",
+      "userJoined": "{{actor}} ist beigetreten",
+      "userJoined_you": "Du bist beigetreten",
+      "sessionStarted": "{{actor}} hat eine Sitzung gestartet",
+      "sessionStarted_you": "Du hast eine Sitzung gestartet",
+      "sessionStopped": "{{actor}} hat eine Sitzung gestoppt",
+      "sessionStopped_you": "Du hast eine Sitzung gestoppt",
+      "sessionResumed": "{{actor}} hat eine Sitzung fortgesetzt",
+      "sessionResumed_you": "Du hast eine Sitzung fortgesetzt",
+      "sessionFailed": "Eine Sitzung konnte nicht starten",
+      "approvalRequested": "Die Sitzung von {{actor}} bittet um Freigabe",
+      "approvalRequested_you": "Deine Sitzung bittet um Freigabe",
+      "killswitchEngaged": "Not-Aus von {{actor}} ausgelöst",
+      "killswitchEngaged_you": "Du hast den Not-Aus ausgelöst",
+      "killswitchReleased": "Not-Aus von {{actor}} aufgehoben",
+      "killswitchReleased_you": "Du hast den Not-Aus aufgehoben",
+      "killswitchDenied": "Der Not-Aus hat eine Sitzung gestoppt",
+      "toolInstalled": "Ein Agent-Tool wurde installiert",
+      "secretStored": "Ein Geheimnis wurde gespeichert",
+      "viewSaved": "{{actor}} hat eine Ansicht gespeichert",
+      "viewSaved_you": "Du hast eine Ansicht gespeichert",
+      "workspaceCreated": "{{actor}} hat einen Arbeitsbereich erstellt",
+      "workspaceCreated_you": "Du hast einen Arbeitsbereich erstellt",
+      "workspaceUpdated": "{{actor}} hat einen Arbeitsbereich geändert",
+      "workspaceUpdated_you": "Du hast einen Arbeitsbereich geändert"
+    },
+    "actors": {
+      "you": "Du",
+      "member": "Ein Mitglied",
+      "token": "Ein API-Token",
+      "system": "Olivares"
+    }
   },
   "passphrase": {
     "tooShort": "Die Passphrase muss mindestens {{min}} Zeichen lang sein",
@@ -257,6 +297,15 @@
         "first": "Erstes Modul",
         "last": "Letztes Modul",
         "pin": "Dieses Modul anheften oder lösen"
+      },
+      "session": {
+        "new": "Neue Sitzung"
+      },
+      "sourceDiff": {
+        "nextFile": "Nächste Datei",
+        "previousFile": "Vorherige Datei",
+        "nextHunk": "Nächste Änderung",
+        "previousHunk": "Vorherige Änderung"
       }
     },
     "when": {

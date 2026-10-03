@@ -19,8 +19,8 @@ import (
 //   - "operator": a local group managed from the console. The console may
 //     write it; SCIM and the login-time reconcile may not.
 //   - any other value: the slug of the provisioner that owns the group (each
-//     one names itself). ONLY that provisioner may write the group; for
-//     everyone else the membership is read-only.
+//     one names itself). ONLY that provisioner may write its identity and
+//     roster; the operator manages MappedRole under the tenant role ceiling.
 //
 // No writer may move a group between claimed origins: adoption is possible
 // only while a row is unclaimed (""), and only by the writer claiming it.

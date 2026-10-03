@@ -1,0 +1,1 @@
+import{p as e}from"./modules-rqZt48Dm.js";function t(){return e().data?.edition}function n(){return t()===`community`}export{n as t};

@@ -142,6 +142,10 @@ func (a *authScope) TOTPRecoveryCodes() store.Repository[model.TOTPRecoveryCode]
 	return totpRecoveryCodeAuthorityRepo(a.ts, inner)
 }
 
+func (a *authScope) DeploymentSettings() store.Repository[model.DeploymentSettings] {
+	return newTypedRepo(a.ts.repo(deploymentSettingsDescriptor), deploymentSettingsCodec)
+}
+
 func (a *authScope) AuthPolicy() store.Repository[model.AuthPolicy] {
 	return newTypedRepo(a.ts.repo(authPolicyDescriptor), authPolicyCodec)
 }

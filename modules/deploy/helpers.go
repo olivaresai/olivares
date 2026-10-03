@@ -10,7 +10,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -62,19 +61,19 @@ func errorBody(msg string) map[string]any {
 }
 
 // requireStepUp gates a CRITICAL infrastructure mutation (apply/retire)
-// on the operator's session assurance: a HUMAN session must carry a fresh
-// hardware step-up (WebAuthn/PIV, AAL3) or the call is refused with the
-// machine-readable step_up_required denial. A non-session principal
+// on the operator's session assurance: a HUMAN session must meet the
+// deployment's administrative step-up policy (auth.StepUpSatisfied) or the call
+// is refused with the machine-readable step_up_required denial. A non-session principal
 // (automation: Terraform/GitOps tokens) passes THIS gate — its authority is
 // still the plan-bound dual-control approval, whose CRITICAL decisions are
 // themselves AAL3-gated in the governance engine, so a human cannot launder an
 // under-assured mutation through a token: two OTHER step-up-verified humans
 // must still approve the plan.
-func requireStepUp(w http.ResponseWriter, mc api.ModuleContext) bool {
-	if mc.Principal.Kind == auth.KindUser && mc.Principal.AAL < auth.AAL3 {
+func requireStepUp(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) bool {
+	if mc.Principal.Kind == auth.KindUser && !auth.StepUpSatisfied(r.Context(), mc.Principal) {
 		writeJSON(w, http.StatusForbidden, map[string]any{"error": map[string]string{
 			"code":    "step_up_required",
-			"message": "this deployment mutation requires a hardware-verified (AAL3) session; complete the WebAuthn/PIV step-up and retry",
+			"message": "this deployment mutation needs the administrative step-up this deployment requires; complete it and retry",
 		}})
 		return false
 	}
@@ -99,8 +98,8 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusOK, nil)
 		return
 	}
-	status, msg, _ := api.StoreErrorStatus(err)
-	writeJSON(w, status, errorBody(msg))
+	status, body, _ := api.StoreErrorBody(err)
+	writeJSON(w, status, body)
 }
 
 // isNotFound reports the store's not-found sentinel.
@@ -110,20 +109,7 @@ func isNotFound(err error) bool { return errors.Is(err, store.ErrNotFound) }
 // body cannot exhaust memory, and rejecting unknown fields so a client cannot
 // smuggle a value into a field the typed DTO does not declare.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
-	dec := json.NewDecoder(io.LimitReader(r.Body, maxSpecBytes))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
-		return false
-	}
-	// A BODY IS ONE JSON DOCUMENT (2026-08-06). Decode reads the FIRST value and stops,
-	// so `{...}{...}` used to decode the first, silently discard the rest and perform a
-	// durable mutation returning 201. Measured against a live engine on the models route,
-	// with the created row read back by a separate GET; core/api/render.go has rejected
-	// this since it was written, and 21 of the 22 copies of this helper had drifted from
-	// it. A concatenation error becomes an apparently correct action, and two layers can
-	// disagree about which document the request meant.
-	if dec.More() {
+	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: maxSpecBytes}); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
 		return false
 	}

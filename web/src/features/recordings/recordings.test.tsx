@@ -86,6 +86,18 @@ const api = vi.hoisted(() => ({
   getConfig: vi.fn(),
   updateConfig: vi.fn(),
 }))
+// server-info as the shell holds it: Recording runs unless a case says otherwise.
+const serverInfo = vi.hoisted(() => ({
+  state: {
+    isSuccess: true,
+    data: { modules_not_enabled: [] as string[] } as
+      { modules_not_enabled?: string[] } | undefined,
+  },
+}))
+vi.mock('@/lib/hooks/use-server-info', () => ({
+  useServerInfo: () => serverInfo.state,
+}))
+
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   return { ...actual, recordingApi: api }
@@ -515,6 +527,40 @@ describe('RecordingsView — deep-linkable filter state', () => {
   })
 })
 
+// EU-CB02 and SC 59 item 4: with Recording off (a default install) six ordinary views
+// read /v1/m/recording/notice and got 404 module_not_enabled, 18 per walk.
+describe('RecordingNotice — reads nothing while Recording is off', () => {
+  afterEach(() => {
+    serverInfo.state = { isSuccess: true, data: { modules_not_enabled: [] } }
+  })
+
+  it('makes no request before server-info has answered', async () => {
+    serverInfo.state = { isSuccess: false, data: undefined }
+    wrap(<RecordingNotice namespace="governance" />)
+    await new Promise((r) => setTimeout(r, 50))
+    expect(api.notice).not.toHaveBeenCalled()
+  })
+
+  it('makes no request when server-info says Recording is not enabled', async () => {
+    serverInfo.state = {
+      isSuccess: true,
+      data: { modules_not_enabled: ['recording'] },
+    }
+    wrap(<RecordingNotice namespace="governance" />)
+    await new Promise((r) => setTimeout(r, 50))
+    expect(api.notice).not.toHaveBeenCalled()
+    expect(screen.queryByText(/recorded privileged surface/i)).toBeNull()
+  })
+
+  it('makes one request when Recording runs, and keeps the strip', async () => {
+    wrap(<RecordingNotice namespace="governance" />)
+    expect(
+      await screen.findByText(/recorded privileged surface/i),
+    ).toBeInTheDocument()
+    expect(api.notice).toHaveBeenCalledTimes(1)
+  })
+})
+
 describe('RecordingNotice — AC-8 strip + blocking consent', () => {
   it('renders the quiet strip when the namespace is recorded', async () => {
     wrap(<RecordingNotice namespace="governance" />)
@@ -757,7 +803,10 @@ describe('RecordingsView — who the subject is', () => {
     const cell = screen.getByText('Unknown user').closest('td')!
     expect(cell.textContent?.startsWith('Unknown user')).toBe(true)
     expect(
-      screen.getByText('Unknown user').closest('[title]')?.getAttribute('title'),
+      screen
+        .getByText('Unknown user')
+        .closest('[title]')
+        ?.getAttribute('title'),
     ).toBe('user:alice')
   })
 

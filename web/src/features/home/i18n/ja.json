@@ -1,7 +1,8 @@
 {
   "title": "概要",
-  "description": "AIエステートを一目で — ロールで開けるモジュールの30日間の集計です。",
+  "description": "AI エージェントが過去 30 日間に行ったことを、あなたが開ける範囲で表示します。",
   "openReport": "エグゼクティブレポート",
+  "aside": "環境の概要",
   "range": "過去30日間",
   "next": {
     "title": "次のステップ",
@@ -60,6 +61,15 @@
       "value": "{{healthy}}/{{total}}が正常",
       "caption": "{{breaches}}件のSLA違反 · {{incidents}}件の未対応インシデント",
       "noChecks": "ヘルスチェックがまだありません"
+    },
+    "budgets": {
+      "label": "予算",
+      "none": "予算はまだありません",
+      "nonePartial": "このページに有効な予算はありません。さらにあります",
+      "over_other": "{{count}} 件が上限超過",
+      "unknown_other": "{{count}} 件は金額不明",
+      "within": "上限超過なし",
+      "partial": "{{n}} 件の予算を読み込みました。さらに存在します"
     }
   },
   "state": {
@@ -78,5 +88,13 @@
   "empty": {
     "title": "まだ表示できるものがありません",
     "description": "お使いのロールには、いずれのエステートモジュールに対する読み取りアクセスも付与されていません。概要を表示するには、管理者に読み取りの付与を依頼してください。"
+  },
+  "start": {
+    "ready": "{{tool}} の準備ができています。",
+    "signIn": "セッションを始めるには {{tool}} にサインインしてください。",
+    "signInAction": "サインイン",
+    "install": "セッションを始めるには Claude Code か Codex をインストールしてください。",
+    "installAction": "ツールを設定",
+    "newSession": "新しいセッション"
   }
 }

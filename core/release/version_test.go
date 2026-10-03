@@ -18,7 +18,8 @@ func TestParseVersion(t *testing.T) {
 		{in: "1.2.3+build.5", maj: 1, min: 2, pat: 3}, // build metadata dropped
 		{in: "dev"}, // zero version, no error
 		{in: ""},    // zero version, no error
-		{in: "26.7", wantErr: true},
+		{in: "26.7", maj: 26, min: 7},
+		{in: "26", wantErr: true},
 		{in: "26.7.0.1", wantErr: true},
 		{in: "26.x.0", wantErr: true},
 		{in: "26.7.-1", wantErr: true},

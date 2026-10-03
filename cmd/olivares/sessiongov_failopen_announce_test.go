@@ -10,6 +10,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/olivaresai/olivares/modules/finops"
+	"github.com/olivaresai/olivares/modules/knowledge"
 	"github.com/olivaresai/olivares/modules/sessions"
 )
 
@@ -17,7 +19,13 @@ import (
 // wireSessionGovernance returns early on a nil sessions module, and the first version of
 // this fixture passed moduleSet{} — every assertion below would have been vacuous, and the
 // vacuity guard at the bottom is what caught it rather than a green.
-func announceFixture() moduleSet { return moduleSet{sessions: sessions.New()} }
+//
+// finops and knowledge run here: since 71b4989b a control whose module is not enabled is
+// "off (module not enabled)" and has no read-error posture to warn about, so a fixture
+// without them would leave the warning nothing to name.
+func announceFixture() moduleSet {
+	return moduleSet{sessions: sessions.New(), finops: finops.New(), knowledge: knowledge.New()}
+}
 
 // A FAIL-OPEN POSTURE IS NOT PART OF "WIRED" (2026-08-06).
 //

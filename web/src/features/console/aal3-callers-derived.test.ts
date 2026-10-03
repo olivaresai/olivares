@@ -7,7 +7,7 @@
 // `step-up-behind-a-stale-pregate.test.tsx` comprueba cuatro ficheros que YO enumeré. Eso vale
 // mientras la lista esté al día y deja de valer en silencio en cuanto alguien añade un llamante:
 // convertir mañana el onboarding en una mutación manual no pondría nada en rojo. Aquí la lista se
-// CALCULA: se lee qué handlers de `core/api` llaman `requireAAL3`, con qué rutas están
+// CALCULA: se lee qué handlers de `core/api` llaman `requireStepUp`, con qué rutas están
 // registrados, y qué método de la consola pide cada una de esas rutas.
 //
 // Lo que se fija es la CONTABILIDAD, no la implementación: toda ruta gateada por el motor tiene
@@ -44,7 +44,7 @@ function cuerposDeHandler(src: string): Map<string, string> {
  * Handlers gateados por AAL3.
  *
  * ⛔ DOS NIVELES, Y LOS DOS SALIERON DE MEDIR, no de suponer:
- *  · DIRECTO — el cuerpo llama `s.requireAAL3(...)`.
+ *  · DIRECTO — el cuerpo llama `s.requireStepUp(...)`.
  *  · HEREDADO (un nivel) — `handleSetSuperadminActive` NO se registra en ninguna ruta: lo llaman
  *    `handleEnableSuperadmin` y `handleDisableSuperadmin`, que sí. Sin este paso, dos rutas
  *    gateadas de verdad quedaban fuera del censo y nadie lo notaba.
@@ -58,7 +58,8 @@ function handlersGateados(): { directos: Set<string>; todos: Set<string> } {
     for (const [n, c] of cuerposDeHandler(src)) cuerpos.set(n, c)
 
   const directos = new Set<string>()
-  for (const [n, c] of cuerpos) if (c.includes('.requireAAL3(')) directos.add(n)
+  for (const [n, c] of cuerpos)
+    if (c.includes('.requireStepUp(')) directos.add(n)
 
   const todos = new Set(directos)
   for (const [n, c] of cuerpos) {
@@ -171,7 +172,7 @@ describe('el censo de escrituras gateadas por AAL3 se DERIVA del motor', () => {
   const consola = rutasDeLaConsola()
 
   it('el motor gatea handlers, y la derivación los encuentra', () => {
-    // ⛔ Anti-vacuidad: si `requireAAL3` se renombrara o la ruta de `core/api` cambiara, todo lo
+    // ⛔ Anti-vacuidad: si `requireStepUp` se renombrara o la ruta de `core/api` cambiara, todo lo
     //    demás daría verde sobre CERO handlers. El número exacto no se fija —crecerá— pero un
     //    censo que cae a cero no es un censo.
     expect(directos.size).toBeGreaterThanOrEqual(20)

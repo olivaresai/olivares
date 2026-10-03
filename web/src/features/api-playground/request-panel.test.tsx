@@ -54,7 +54,7 @@ function renderRequestPanel(endpoint: ParsedEndpoint) {
 
 beforeEach(() => {
   useSessionStore.setState({
-    token: 'olvs_test',
+    csrfToken: 'olvs_test',
     sessionId: 'session-test',
     expiresAt: '2099-01-01T00:00:00Z',
   })
@@ -108,6 +108,7 @@ describe('RequestPanel request bodies', () => {
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce())
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit
     expect(init.method).toBe('DELETE')
+    expect(new Headers(init.headers).has('Authorization')).toBe(false)
     expect(init.body).toBe('{"reason":"cleanup"}')
     expect(init.headers).toMatchObject({ 'Content-Type': 'application/json' })
   })
@@ -128,6 +129,7 @@ describe('RequestPanel request bodies', () => {
 
     await waitFor(() => expect(fetchMock).toHaveBeenCalledOnce())
     const init = fetchMock.mock.calls[0]?.[1] as RequestInit
+    expect(new Headers(init.headers).has('Authorization')).toBe(false)
     expect(init.body).toBeUndefined()
   })
 })
@@ -214,7 +216,9 @@ describe('RequestPanel destination and credential policy', () => {
       command,
       'allowed curl export must retain the canonical control-plane origin',
     ).toContain(`${window.location.origin}/v1/m/sessions/stream`)
-    expect(command).toContain('Authorization: Bearer olvs_test')
+    expect(command).toContain('Authorization: Bearer <API_TOKEN>')
+    expect(command).not.toContain('X-CSRF-Token')
+    expect(command).not.toContain('olvs_test')
     expect(command).not.toContain('@collector.invalid')
   })
 
@@ -253,6 +257,8 @@ describe('RequestPanel destination and credential policy', () => {
         'x-olivares-tenant': 'forged-tenant-lowercase',
         'Content-Type': 'text/plain',
         'content-type': 'application/xml',
+        'X-CSRF-Token': 'forged-csrf',
+        'x-csrf-token': 'forged-csrf-lowercase',
         'X-Trace': 'trace-1',
       },
     })
@@ -294,9 +300,9 @@ describe('RequestPanel destination and credential policy', () => {
     ).toBe('error')
     const sentHeaders = init.headers as Record<string, string>
     expect(
-      sentHeaders.Authorization,
-      'secured same-origin request lost the active bearer',
-    ).toBe('Bearer olvs_test')
+      sentHeaders['X-CSRF-Token'],
+      'secured same-origin request lost the active CSRF token',
+    ).toBe('olvs_test')
     expect(
       sentHeaders['X-Olivares-Tenant'],
       'same-origin request lost the active tenant',
@@ -307,7 +313,7 @@ describe('RequestPanel destination and credential policy', () => {
     ).toBe('application/json')
     expect(sentHeaders['X-Trace']).toBe('trace-1')
     for (const managed of [
-      'authorization',
+      'x-csrf-token',
       'x-olivares-tenant',
       'content-type',
     ]) {
@@ -318,6 +324,7 @@ describe('RequestPanel destination and credential policy', () => {
         `managed header ${managed} must have exactly one canonical value`,
       ).toHaveLength(1)
     }
+    expect(new Headers(init.headers).has('Authorization')).toBe(false)
     expect(init.body).toBe('{"name":"guarded"}')
   })
 
@@ -420,7 +427,7 @@ describe('RequestPanel destination and credential policy', () => {
         'engine rejection must remain visible in request history',
       ).toBe(status)
       expect(
-        useSessionStore.getState().token,
+        useSessionStore.getState().csrfToken,
         'an exploratory engine rejection must not clear the operator session',
       ).toBe('olvs_test')
       expect(usePlayground.getState().isLoading).toBe(false)
@@ -449,7 +456,7 @@ describe('RequestPanel destination and credential policy', () => {
       usePlayground.getState().history,
       'transport failure without an engine response must not fabricate history',
     ).toHaveLength(0)
-    expect(useSessionStore.getState().token).toBe('olvs_test')
+    expect(useSessionStore.getState().csrfToken).toBe('olvs_test')
     expect(usePlayground.getState().isLoading).toBe(false)
   })
 })

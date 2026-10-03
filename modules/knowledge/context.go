@@ -257,6 +257,25 @@ type contextPolicyRow struct {
 	spec              map[string]any
 }
 
+// HasContextPolicies reports whether this tenant has configured context policy.
+// A launch with none needs neither policy resolution nor managed context settings.
+func (m *Module) HasContextPolicies(ctx context.Context, tenant model.TenantID) (bool, error) {
+	if m.data == nil {
+		return false, errContextPolicyNotReady
+	}
+	var configured bool
+	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(ctxPolicyKind)
+		if err != nil {
+			return err
+		}
+		rows, _, err := repo.List(ctx, model.Query{Limit: 1})
+		configured = len(rows) != 0
+		return err
+	})
+	return configured, err
+}
+
 // Apply resolves the effective context policy for one tenant-scoped model call.
 // It mirrors source-scope's subject-axis precedence and forbid-absolute algebra,
 // but only returns policy metadata; enforcement is intentionally owned by later

@@ -144,7 +144,7 @@ func (m *Module) ingestOutcome(ctx context.Context, tenant model.TenantID, in ou
 	if at.IsZero() {
 		at = m.clock.Now().Time()
 	}
-	return m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	return m.mutate(ctx, tenant, func(sc store.Scope) error {
 		if audit != nil {
 			if err := audit(ctx, sc); err != nil {
 				return err

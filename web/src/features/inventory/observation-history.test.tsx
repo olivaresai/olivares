@@ -229,7 +229,9 @@ describe('ObservationHistory projection and paging', () => {
       new ApiError(403, 'forbidden', 'no', 'req-403'),
     )
     const { unmount } = mount()
-    expect(await screen.findByText('Not authorized')).toBeInTheDocument()
+    expect(
+      await screen.findByText('You do not have access to this.'),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('alert')).toBeNull()
     unmount()
 
@@ -381,7 +383,9 @@ describe('ObservationHistory projection and paging', () => {
     mount()
     expect(await screen.findByText(rid(0))).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Refresh history' }))
-    expect(await screen.findByText('Not authorized')).toBeInTheDocument()
+    expect(
+      await screen.findByText('You do not have access to this.'),
+    ).toBeInTheDocument()
     expect(screen.queryByText(rid(0))).toBeNull()
     expect(screen.queryByRole('alert')).toBeNull()
   })

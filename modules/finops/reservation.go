@@ -38,6 +38,69 @@ const maxReserveRetries = 64
 // and the caller unwraps it into a normal Allowed:false result — never an error.
 var errReservationDenied = errors.New("finops: reservation denied")
 
+// HasAdmissionTargets answers the launch gate's cheap question (CUTS B2,
+// 2026-10-01): does this tenant have ANY admission target — an enabled budget,
+// a spend-limit policy, or the lifecycle activation frontier row? With none,
+// Reserve cannot deny anything and the gate skips it entirely, saving the full
+// target enumeration, the per-target spend aggregation and the writer-lock
+// transaction of the zero-target path on every launch.
+//
+// The probe reads LIVE state on every call: there is no cache, so there is no
+// invalidation that could answer "no targets" one launch after a budget was
+// created. A wrong "yes" costs one ordinary Reserve (today's behavior on every
+// launch); a wrong "no" would let a launch run unbudgeted, which is the one
+// answer this function must never give — so the check errs toward yes: any
+// doubt (a store error) is an error back to the caller, and the gate falls
+// through to Reserve, which owns the unreachable postures.
+func (m *Module) HasAdmissionTargets(ctx context.Context, tenant model.TenantID) (bool, error) {
+	if m.data == nil {
+		return false, attemptErr(errCodeCapabilityUnavailable, nil)
+	}
+	if cached, ok := m.targetsCache.Load(tenant); ok {
+		return cached.(bool), nil
+	}
+	has := false
+	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+		enabled, _, err := sc.Policies().List(ctx, model.Query{
+			Filters: []model.Filter{eq("kind", policyKindBudget), {Column: "enabled", Op: model.OpEq, Value: true}},
+			Limit:   1,
+		})
+		if err != nil {
+			return err
+		}
+		if len(enabled) > 0 {
+			has = true
+			return nil
+		}
+		limits, _, err := sc.Policies().List(ctx, model.Query{
+			Filters: []model.Filter{eq("kind", policyKindSpendLimit)},
+			Limit:   1,
+		})
+		if err != nil {
+			return err
+		}
+		if len(limits) > 0 {
+			has = true
+			return nil
+		}
+		// The frontier row's PRESENCE is the condition the legacy-reservation
+		// guard refuses on; with one, the reserve must run so the guard can
+		// answer. The read is the guard's own, so the two cannot disagree about
+		// what a frontier row is.
+		_, found, err := readLifecycleScope(ctx, sc)
+		if err != nil {
+			return err
+		}
+		has = found
+		return nil
+	})
+	if err != nil {
+		return false, err
+	}
+	m.targetsCache.Store(tenant, has)
+	return has, nil
+}
+
 // errReservationScanIncomplete is returned by a SETTLEMENT (commit/release) or a
 // sweep whose row enumeration could not be completed. The admission paths answer
 // the same fact with an explicit denial, because they have a "no" to give;
@@ -97,7 +160,7 @@ func (m *Module) guardCoveredMutation(ctx context.Context, tenant model.TenantID
 	if m.data == nil {
 		return attemptErr(errCodeCapabilityUnavailable, nil)
 	}
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.mutate(ctx, tenant, func(sc store.Scope) error {
 		if err := lockFinOpsWriter(ctx, sc); err != nil {
 			// Typed here rather than raw: the caller classifies this refusal, and an
 			// untyped store error would be indistinguishable from a frontier verdict.
@@ -606,7 +669,7 @@ func (m *Module) reserve(ctx context.Context, tenant model.TenantID, targets []r
 		// failure arriving afterwards cannot be mistaken for "nothing was decided".
 		// It is reset with result at the top of the attempt, never carried across one.
 		decided := false
-		err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+		err := m.mutate(ctx, tenant, func(sc store.Scope) error {
 			result = BudgetReservation{Allowed: true, EstimateMicroUSD: estimate}
 			decided = false
 			guardErr = nil
@@ -960,7 +1023,7 @@ func (m *Module) settleReservation(ctx context.Context, tenant model.TenantID, h
 	// classified nothing — including a transaction that never opened, whose error
 	// used to come back raw from Mutate.
 	confirmed := false
-	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err = m.mutate(ctx, tenant, func(sc store.Scope) error {
 		confirmed = false
 		// The same key, before the enumeration this settlement decides on: the rows it
 		// is about to read are the ones a concurrent sweep or a second settlement of
@@ -1069,7 +1132,7 @@ func (m *Module) SweepExpiredReservations(ctx context.Context, tenant model.Tena
 	now := m.clock.Now()
 	swept := 0
 	confirmed := false
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.mutate(ctx, tenant, func(sc store.Scope) error {
 		swept = 0
 		confirmed = false
 		// The same key, before the enumeration whose size becomes the reported count.

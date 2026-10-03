@@ -23,7 +23,7 @@ contrato general.
 
 | Área | Qué documenta | Fuente de verdad |
 |---|---|---|
-| **[API REST](/reference/api/)** | La API HTTP del control plane: auth, setup, tenancy, agentes, el access map R/RW, tokens y el audit ledger. | El contrato **OpenAPI 3.1** del producto (67 paths core), renderizado en tiempo de build desde el fichero real — no una copia. |
+| **[API REST](/reference/api/)** | La API HTTP del control plane: auth, setup, tenancy, agentes, el access map R/RW, tokens y el audit ledger. | El contrato **OpenAPI 3.1** del producto (70 paths core), renderizado en tiempo de build desde el fichero real — no una copia. |
 | **[Rutas de módulos (beta)](/reference/api-beta/)** | Las rutas de módulos del producto (`/v1/m/<ns>/…`) — FinOps, compliance, gobernanza, sesiones, modelos, knowledge, … — como documento OpenAPI **beta** separado. | El mismo contrato OpenAPI 3.1, reflejado en tiempo de build a partir de las rutas que registran los módulos. |
 | **[Política de estabilidad](/es/reference/api-stability/)** | Versionado, niveles de estabilidad, señalización de deprecación/sunset y las ventanas de soporte mínimas para la API, el proveedor y los SDKs cliente. | La tabla de deprecación en código y sus tests de ventana que hacen fallar el build. |
 | **[gRPC](/es/reference/grpc/)** | El espejo gRPC del motor y el contrato de wire versionado para plugins que usa todo conector y módulo fuera de proceso. | Las tablas de registro `grpc.ServiceDesc` que los servidores entregan a gRPC. |
@@ -46,7 +46,7 @@ identidad y tenancy, agentes, el access map de lectura/escritura
 módulo de access-map en lugar de la superficie core), gestión de tokens y el audit
 ledger.
 
-El contrato describe **67 paths core**. Eso es deliberado: es la superficie estable,
+El contrato describe **70 paths core**. Eso es deliberado: es la superficie estable,
 versionada, del control plane, no toda ruta que el motor pueda responder.
 A qué se compromete "estable" — versionado, señalización de deprecación y ventanas de
 soporte mínimas — es la [política de estabilidad de la API](/es/reference/api-stability/).

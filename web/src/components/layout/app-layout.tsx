@@ -1,18 +1,29 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { NewSessionHost } from '@/features/first-hour/new-session-host'
 import { SettingsVisit } from '@/features/navigation/permitted-visit'
 import { PersonalNavigationProvider } from '@/features/navigation/personal-navigation'
-import { Navigate, Outlet, useRouterState } from '@tanstack/react-router'
-import { useRef, useState } from 'react'
+import { engineFavorites } from '@/features/saved-views/api'
+import {
+  Outlet,
+  useNavigate,
+  useRouter,
+  useRouterState,
+} from '@tanstack/react-router'
+import { useEffect, useRef, useState } from 'react'
 import { PageActionsProvider } from '@/components/ui/page-actions'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/lib/auth/context'
+import { isSignInPath } from '@/lib/auth/return-path'
+import { useServerInfo } from '@/lib/hooks/use-server-info'
+import { useSyncModulesNotEnabled } from '@/stores/modules'
 import { usePreferencesStore } from '@/stores/preferences'
 import { AppFrame } from './app-frame'
 import { AppSidebar } from './app-sidebar'
 import { BrandMark } from './brand'
 import { CommandMenu } from './command-menu'
+import { DestinationSections } from './destination-sections'
 import { GlobalShortcuts } from './shortcuts'
 import { RouteFrame } from './page-frames'
 import { PhoneBar } from './phone-bar'
@@ -75,11 +86,58 @@ function Splash() {
  *    frames are now declared, and a route picks one: `ConsolePage` (document) or
  *    `WorkPane` (work). See components/layout/page-frames.tsx.
  */
+/** The ONE guard for a signed-out browser: it decides once per signed-out state
+ * where to go, and navigates once. First boot goes straight to the setup wizard;
+ * otherwise sign-in, carrying the page that was asked for (never a sign-in page,
+ * which would bring the person back to sign-in after signing in). Returns the
+ * destination while one is pending, so the shell paints nothing else. */
+function useSignedOutRoute(status: string) {
+  const navigate = useNavigate()
+  const router = useRouter()
+  const signedOut = status === 'anonymous' || status === 'error'
+  const serverInfo = useServerInfo()
+  const decided = signedOut && !serverInfo.isPending
+  const target = !decided
+    ? null
+    : serverInfo.data?.setup_required
+      ? '/setup'
+      : '/login'
+  useEffect(() => {
+    if (target === '/setup') navigate({ to: '/setup', replace: true })
+    else if (target === '/login') {
+      // The page the person asked for, read ONCE, when the decision is made (this effect
+      // runs once per signed-out state). The committed location, or before the router
+      // commits its first one, the live one: with the HttpOnly cookie restore the
+      // signed-out answer can come first, and RC10 sent a deep link to /login with no
+      // returnTo (SC on 6e97de81). Read here and not at render: the guard's own
+      // redirect moves the live location, and re-reading it on render redirected again
+      // with a longer returnTo, forever (refresh 02, HU 016). A sign-in page is never
+      // returned to.
+      const { resolvedLocation, location } = router.state
+      const requested = resolvedLocation?.href ?? location.href
+      const returnTo =
+        requested && !isSignInPath(requested) ? requested : undefined
+      navigate({
+        to: '/login',
+        search: returnTo ? { returnTo } : {},
+        replace: true,
+      })
+    }
+  }, [target, navigate, router])
+  return signedOut ? (target ?? 'pending') : null
+}
+
 export function AppLayout() {
   const { status } = useAuth()
+  // Which engine modules run here (server-info modules_not_enabled, ARCH C1): read once
+  // for the navigation gate, the route gate and the Home tiles.
+  useSyncModulesNotEnabled()
   // The frame is a function of the ROUTE, resolved here and not declared by each view:
   // how the viewport is divided is the shell's decision (page-frames.tsx).
   const pathname = useRouterState({ select: (s) => s.location.pathname })
+  // Where a signed-out browser goes, and the page it returns to (read in the guard's
+  // effect, once).
+  const signInRoute = useSignedOutRoute(status)
   const sidebarHidden = usePreferencesStore((s) => s.sidebarCollapsed)
   const [areasOpen, setAreasOpen] = useState(false)
   const areasReturnRef = useRef<HTMLElement | null>(null)
@@ -91,12 +149,10 @@ export function AppLayout() {
     setAreasOpen(true)
   }
 
-  if (status === 'loading') return <Splash />
-  if (status === 'anonymous' || status === 'error')
-    return <Navigate to="/login" />
+  if (status === 'loading' || signInRoute) return <Splash />
 
   return (
-    <PersonalNavigationProvider>
+    <PersonalNavigationProvider engineFavorites={engineFavorites}>
       <SidePanelProvider>
         <AppFrame
           sidebarHidden={sidebarHidden}
@@ -112,6 +168,7 @@ export function AppLayout() {
               />
               <CommandMenu />
               <GlobalShortcuts />
+              <NewSessionHost />
             </>
           }
         >
@@ -124,6 +181,7 @@ export function AppLayout() {
           <PageActionsProvider>
             <RouteFrame pathname={pathname}>
               <TenantGate>
+                <DestinationSections />
                 <Outlet />
                 <SettingsVisit />
               </TenantGate>

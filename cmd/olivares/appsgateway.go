@@ -20,6 +20,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -458,10 +459,7 @@ func (h *appsGatewayHandler) handleSpendLimitUpsert(w http.ResponseWriter, r *ht
 		Currency string                 `json:"currency,omitempty"`
 		Period   string                 `json:"period"`
 	}
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	// dec.More(): a body is ONE JSON document (scripts/check-json-decoders.sh).
-	if err := dec.Decode(&wire); err != nil || dec.More() || len(wire.Amount) == 0 {
+	if err := api.DecodeRequestBody(w, r, &wire, api.RequestBodySpec{}); err != nil || len(wire.Amount) == 0 {
 		writeSpendError(w, http.StatusBadRequest, "invalid_request_error", "invalid spend-limit body", requestID)
 		return
 	}

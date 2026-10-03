@@ -1,33 +1,14 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# Olivares AI control plane — hardened, distroless, single static binary.
+# Olivares AI agent runtime: Debian 13, libc, shell, git, Node LTS, Python and uvx.
+# The engine remains a reproducible static Go binary. No compilers or agent CLIs
+# ship in the runtime; managed tools and account homes live in the data volume.
+# Runs as uid/gid 65532. Compose adds a read-only rootfs, dropped capabilities
+# and no-new-privileges. Child confinement is enforced by the engine.
 #
-# Security posture (docs/SECURITY-HARDENING.md, §2):
-#   - Final image is gcr.io/distroless/static — NO shell, NO package manager, NO
-#     libc beyond the static binary's own. Whole classes of "exec into the
-#     container" and "pull a tool at runtime" attacks are simply not possible.
-#   - Runs as NON-ROOT (uid 65532, the distroless `nonroot` user).
-#   - CGO_ENABLED=0 → a fully static, memory-safe Go binary (modernc.org/sqlite is
-#     pure Go, so no libc is required even for the embedded single-node store).
-#   - Reproducible-leaning build: -trimpath, pinned toolchain (go.work toolchain
-#     go1.26.4), build id stripped, and the build date derived from
-#     SOURCE_DATE_EPOCH so the same commit yields a byte-identical binary
-#     (digest-stable verifiable — see docs/SECURITY-HARDENING.md §"Reproducible builds").
-#
-# Build (from the repo root, so the go.work workspace + web/ are in context):
-#   docker build \
-#     --build-arg VERSION="$(git describe --tags --always --dirty)" \
-#     --build-arg COMMIT="$(git rev-parse --short HEAD)" \
-#     --build-arg SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)" \
-#     -t olivares:dev .
-#
-# Run (bind to all interfaces INSIDE the container; the host controls exposure):
-#   docker run --rm -p 8443:8443 -p 8444:8444 -v olivares-data:/data \
-#     olivares:dev serve --listen 0.0.0.0:8443 --grpc-listen 0.0.0.0:8444 --data-dir /data
-#
-# This Dockerfile is also driven by .goreleaser.yaml for signed releases (the
-# binary is prebuilt by goreleaser and only COPYed in that path).
+# Build from the repository root; signed releases use Dockerfile.release with
+# GoReleaser's prebuilt binary. See deploy/compose/docker-compose.yml for startup.
 
 # ---- web stage: build the React/Vite UI into the Go embed dir -----------------
 # Pin the digest in production; the tag is a readable default (matches the project
@@ -77,10 +58,23 @@ RUN BUILD_DATE="$(date -u -d "@${SOURCE_DATE_EPOCH}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/
       -ldflags "-s -w -buildid= -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${BUILD_DATE}" \
       -o /out/olivares ./cmd/olivares
 
-# ---- final stage: distroless, non-root, static -------------------------------
-# Runtime base PINNED BY DIGEST (SCP-11) — kept in sync with Dockerfile.release and
-# bumped by the scheduled patch-velocity workflow. `crane digest …:nonroot` resolves it.
-FROM gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+# ---- final stage: non-root agent runtime ----------------------------------
+# Runtime support only; agent CLIs are installed by Olivares into the data volume.
+# Node 24 is LTS; this official image uses Debian 13 (trixie) and includes npm/npx.
+FROM node:24-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe
+# hadolint ignore=DL3008
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates git python3 python3-venv \
+    && rm -rf /var/lib/apt/lists/* /usr/local/include/node \
+    && groupadd --gid 65532 nonroot \
+    && useradd --uid 65532 --gid 65532 --home-dir /var/lib/olivares/home --no-create-home nonroot \
+    && install -d -o 65532 -g 65532 -m 0700 /var/lib/olivares /var/lib/olivares/home
+COPY --from=ghcr.io/astral-sh/uv:0.12.21@sha256:a7aed3216253ee804de3e2d8afa5073baa1a177335345d43845cd4165e43b711 /uv /uvx /usr/local/bin/
+COPY packaging/container/uv-LICENSE-MIT.txt /usr/share/doc/uv/LICENSE-MIT
+# A writable home is required for npm/npx and uvx on Compose's read-only rootfs.
+# Per-account homes are set by the product when launching subscription tools.
+ENV HOME=/var/lib/olivares/home
+WORKDIR /var/lib/olivares
 # OCI labels for provenance (cosign/SBOM tooling and registries read these).
 LABEL org.opencontainers.image.title="olivares" \
       org.opencontainers.image.description="Olivares AI — self-hosted control plane for AI agents" \
@@ -103,11 +97,10 @@ COPY --chown=65532:65532 --chmod=0700 packaging/container/data-dir/ /backups/
 # is metadata; AGPL sections 4 and 5 ask for the document.
 COPY LICENSE NOTICE LICENSING.md DISCLAIMER.md /usr/share/doc/olivares/
 COPY LICENSES /usr/share/doc/olivares/LICENSES
-# distroless `nonroot` is uid/gid 65532. The data dir is provided by a volume the
-# operator chowns to 65532; we never run as root.
+# The seeded volume and engine use the same non-root uid/gid.
 USER 65532:65532
 # Documented surface only — the engine binds 127.0.0.1 by DEFAULT (docs/SECURITY-HARDENING.md); a
 # container operator must opt into 0.0.0.0 explicitly. EXPOSE is a hint, not a bind.
 EXPOSE 8443 8444
 ENTRYPOINT ["/usr/local/bin/olivares"]
-CMD ["serve", "--listen", "0.0.0.0:8443", "--grpc-listen", "0.0.0.0:8444", "--data-dir", "/data"]
+CMD ["serve", "--listen", "0.0.0.0:8443", "--grpc-listen", "0.0.0.0:8444", "--data-dir", "/var/lib/olivares"]

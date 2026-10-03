@@ -27,6 +27,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 // Doer is the minimal HTTP capability the client needs. *http.Client satisfies
@@ -158,8 +160,8 @@ func (c *Client) GetJSON(ctx context.Context, path string, query url.Values, out
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrBody))
-		return &StatusError{Path: displayPath(path), Status: resp.StatusCode, Excerpt: strings.TrimSpace(string(excerpt))}
+		excerpt := redact.ReadHTTPError(resp.Body, maxErrBody, resp.Request)
+		return &StatusError{Path: displayPath(path), Status: resp.StatusCode, Excerpt: excerpt}
 	}
 	if out == nil {
 		_, _ = io.Copy(io.Discard, resp.Body)
@@ -181,9 +183,9 @@ func (c *Client) GetRaw(ctx context.Context, path string, query url.Values) (*ht
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrBody))
+		excerpt := redact.ReadHTTPError(resp.Body, maxErrBody, resp.Request)
 		_ = resp.Body.Close()
-		return resp, &StatusError{Path: displayPath(path), Status: resp.StatusCode, Excerpt: strings.TrimSpace(string(excerpt))}
+		return resp, &StatusError{Path: displayPath(path), Status: resp.StatusCode, Excerpt: excerpt}
 	}
 	return resp, nil
 }
@@ -217,6 +219,9 @@ func (c *Client) get(ctx context.Context, path string, query url.Values) (*http.
 		if err != nil {
 			return nil, fmt.Errorf("httpx: GET %s: %w", displayPath(path), stripURLUserinfo(err))
 		}
+		// Custom Doers need not populate Response.Request. Keep the actual
+		// authenticated request available only to the diagnostic scrubber.
+		resp.Request = req
 		return resp, nil
 	}
 	resp, err := issue()

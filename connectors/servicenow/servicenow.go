@@ -30,6 +30,7 @@
 package servicenow
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -39,6 +40,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/connectors/internal/delivery"
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/model"
 )
@@ -366,6 +368,11 @@ type snErrorBody struct {
 // 2xx-with-error-body. The returned error never contains the credential (the body
 // does not echo it).
 func resultError(res delivery.Result) error {
+	if res.Body == redact.OmittedHTTPError {
+		return sdk.NewDeliveryError(
+			sdk.DeliveryReport{Outcome: sdk.OutcomeIndeterminate, Sent: 1, Rejected: -1},
+			fmt.Errorf("response body unavailable; delivery cannot be confirmed"))
+	}
 	if res.Body == "" {
 		return nil
 	}
@@ -374,6 +381,15 @@ func resultError(res delivery.Result) error {
 		return nil // not a recognized error shape; the HTTP status already said 2xx
 	}
 	if e.Status != "failure" && e.Error.Message == "" {
+		// RawBody is the complete successful wire payload, never diagnostic
+		// text. Consult only its public status to avoid inferring acceptance
+		// from a credential replacement, and never return its raw value.
+		var verdict struct {
+			Status string `json:"status"`
+		}
+		if json.Unmarshal(bytes.TrimPrefix(bytes.TrimSpace(res.RawBody), []byte("\xef\xbb\xbf")), &verdict) == nil && verdict.Status == "failure" {
+			return fmt.Errorf("provider reported a logical rejection")
+		}
 		return nil
 	}
 	msg := e.Error.Message

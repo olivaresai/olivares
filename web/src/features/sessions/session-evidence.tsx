@@ -28,11 +28,12 @@
 //    between an infinite query and a plain one, and a second facet-filtered WALK here
 //    would be the worse duplicate of the two. The page is bounded and SAYS SO when it
 //    fills: a count taken from a truncated page is a floor, and it is labelled as one.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { AlertTriangle, ChevronDown, Coins, Plug, Wrench } from 'lucide-react'
-import { useQuery } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { useMemo, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { RelTimeLabel } from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
@@ -97,7 +98,6 @@ function Block({
   expanded,
   onToggle,
   children,
-  emptySentence,
 }: {
   id: EvidenceBlock
   count: number
@@ -105,7 +105,6 @@ function Block({
   expanded: boolean
   onToggle: () => void
   children: ReactNode
-  emptySentence: string
 }) {
   const { t } = useTranslation('sessions')
   return (
@@ -141,11 +140,7 @@ function Block({
           is an invalid attribute value — a gate finding, and a screen reader following
           a reference to nothing. `hidden` is the state; the reference stays real. */}
       <div id={`evidence-${id}`} hidden={!expanded} className="px-1 pb-2">
-        {count === 0 ? (
-          <p className="text-caption text-muted-foreground">{emptySentence}</p>
-        ) : (
-          children
-        )}
+        {children}
       </div>
     </section>
   )
@@ -154,11 +149,16 @@ function Block({
 export function SessionEvidence({
   liveRef,
   sessionRef,
+  echoRefs = [],
   expanded,
   onExpand,
 }: {
   liveRef?: string
   sessionRef?: string
+  /** Rows the plane wrote for this session on other channels (its PEP hook's tool calls,
+   * its turns' usage): read with it, or a finished session shows "Last turns 0" and
+   * "Resources touched 0" (HU 029). */
+  echoRefs?: readonly string[]
   /** Which block is open — it lives in the URL, so a shared link opens the same one. */
   expanded: EvidenceBlock
   onExpand: (block: EvidenceBlock) => void
@@ -187,10 +187,29 @@ export function SessionEvidence({
     retry: false,
   })
 
-  const split = useMemo(
-    () => splitEvidence(query.data?.items ?? [], query.data?.has_more ?? false),
-    [query.data],
-  )
+  const echoed = useQueries({
+    queries: echoRefs.map((echo) => ({
+      queryKey: [
+        ...sessionsKeys.timelineById(activeTenant, echo, {
+          limit: EVIDENCE_PAGE,
+        }),
+        'evidence',
+      ],
+      queryFn: () => sessionsApi.timelineById(echo, { limit: EVIDENCE_PAGE }),
+      enabled: canRead,
+      retry: false,
+    })),
+    combine: (results) => ({
+      items: results.flatMap((r) => r.data?.items ?? []),
+      more: results.some((r) => r.data?.has_more === true),
+    }),
+  })
+  const split = useMemo(() => {
+    const items = [...(query.data?.items ?? []), ...echoed.items].sort(
+      (a, b) => Date.parse(b.at) - Date.parse(a.at),
+    )
+    return splitEvidence(items, (query.data?.has_more ?? false) || echoed.more)
+  }, [query.data, echoed])
 
   if (!canRead)
     return (
@@ -213,7 +232,8 @@ export function SessionEvidence({
     return (
       // NEVER an empty list in place of a read that failed: "nothing happened" and
       // "nobody could look" are different answers and must not share a screen.
-      <ErrorState
+      <QueryErrorState
+        error={query.error}
         title={t('evidence.errorTitle')}
         description={t('evidence.errorDescription')}
         retry={() => void query.refetch()}
@@ -255,9 +275,13 @@ export function SessionEvidence({
     resources: split.resources.length,
   }
 
+  // A block is shown only when it has something in it (Root, 09): "Checks 0 / no
+  // findings" was empty noise. Nothing at all when every block is empty.
+  const shown = EVIDENCE_BLOCKS.filter((id) => counts[id] > 0)
+  if (shown.length === 0) return null
   return (
     <div data-testid="session-evidence">
-      {EVIDENCE_BLOCKS.map((id) => (
+      {shown.map((id) => (
         <Block
           key={id}
           id={id}
@@ -265,7 +289,6 @@ export function SessionEvidence({
           bounded={split.bounded}
           expanded={expanded === id}
           onToggle={() => onExpand(id)}
-          emptySentence={t(`evidence.${id}.empty`)}
         >
           {rows[id]}
         </Block>

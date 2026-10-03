@@ -19,15 +19,24 @@ import { cn } from '@/lib/utils'
 import {
   breadcrumbTrail,
   currentViewId as resolveViewId,
+  SETTINGS_UTILITY,
   resolveLocation,
+  viewById,
   type Crumb,
 } from '@/features/navigation/model'
 import { useCommandStore } from '@/stores/command'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { BrandMark } from './brand'
+import { KillSwitchStatus } from './killswitch-status'
 import { NotificationBell } from './notification-bell'
-import { JOURNEY_IDS } from './shell-destinations'
+import {
+  DESTINATION_DOORS,
+  DESTINATION_VIEW_IDS,
+  SETTINGS_DESTINATION,
+  destinationOf,
+  sectionAt,
+} from './shell-destinations'
 import { SidePanelToggle } from './side-panel'
 import { UserMenu } from './user-menu'
 
@@ -72,7 +81,7 @@ export function currentViewId(pathname: string): string | null {
   return resolveViewId(pathname)
 }
 
-const JOURNEYS: ReadonlySet<string> = new Set(JOURNEY_IDS)
+const JOURNEYS: ReadonlySet<string> = new Set(DESTINATION_VIEW_IDS)
 
 /**
  * THE TRAIL. On a journey it reads as the design draws it — the workspace, then the
@@ -84,8 +93,48 @@ const JOURNEYS: ReadonlySet<string> = new Set(JOURNEY_IDS)
 function useTrail(): Crumb[] {
   const { t } = useTranslation(['nav', 'common'])
   const pathname = useRouterState({ select: (s) => s.location.pathname })
+  const search = useRouterState({
+    select: (s) => (s.location.search ?? {}) as Record<string, unknown>,
+  })
   const workspaceName = useWorkspaceStore((s) => s.activeWorkspaceName)
   const location = resolveLocation(pathname)
+  // A section address reads as the destination the sidebar marks: "workspace / Approvals".
+  const section =
+    location.kind === 'view' ? sectionAt(location.view.id, search) : null
+  if (section) {
+    return [
+      { label: workspaceName ?? t('nav:workspace.all') },
+      { label: t(`nav:shell.journeys.${section.key}`) },
+    ]
+  }
+  // Another member of a destination that spans several views reads "Policies / Routine
+  // policies", the destination linking back to its own view (the footer's Settings for
+  // its members). The destination's own view keeps the journey trail below.
+  const destination =
+    location.kind === 'view' ? destinationOf(location.view.id) : null
+  if (location.kind === 'view' && destination === SETTINGS_DESTINATION) {
+    return [
+      { label: t('nav:items.settings'), to: SETTINGS_UTILITY.path },
+      { label: t(`nav:items.${location.view.id}`) },
+    ]
+  }
+  const home = destination ? viewById(destination) : undefined
+  if (
+    location.kind === 'view' &&
+    home &&
+    DESTINATION_DOORS.has(location.view.id)
+  ) {
+    return [
+      { label: workspaceName ?? t('nav:workspace.all') },
+      { label: t(`nav:shell.journeys.${home.id}`) },
+    ]
+  }
+  if (location.kind === 'view' && home && home.id !== location.view.id) {
+    return [
+      { label: t(`nav:shell.journeys.${home.id}`), to: home.path },
+      { label: t(`nav:items.${location.view.id}`) },
+    ]
+  }
   if (
     (location.kind === 'view' || location.kind === 'home') &&
     JOURNEYS.has(location.view.id)
@@ -220,6 +269,8 @@ export function Topbar() {
         data-slot="page-actions"
         className="flex shrink-0 items-center gap-2 empty:hidden"
       />
+
+      <KillSwitchStatus />
 
       <button
         type="button"

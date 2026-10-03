@@ -175,7 +175,7 @@ describe('ProviderAdminView — the accounts door', () => {
     expect(api.listRuns).not.toHaveBeenCalled()
     // Reading is not adopting: the verb is the write tier's.
     expect(
-      screen.queryByRole('button', { name: 'Adopt a profile' }),
+      screen.queryByRole('button', { name: 'Name a profile as an account' }),
     ).not.toBeInTheDocument()
   })
 

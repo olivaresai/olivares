@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 // Launch acceptance: a profile BOUND to a provider record resolves its
@@ -171,22 +172,47 @@ func TestBoundRecord_TwoEndpointsAreRefusedRatherThanOrdered(t *testing.T) {
 
 // A profile whose auth source is the account HOME is not affected by a bound
 // record: nothing is injected, because the authorized home IS the credential.
-// Binding a record and then authorizing the home is contradictory, and the
-// authorization wins — it is the narrower statement.
+// HU030 (037483f8f7, from 779c3b8d1b) refuses new own-login + key bindings.
+// Existing pre-HU030 rows keep their own-login behavior, so the fixture writes
+// that legacy binding directly instead of creating it through today's API.
 func TestBoundRecord_AccountHomeStillInjectsNothing(t *testing.T) {
 	t.Parallel()
-	m, tenant, runner, _, _, rec, _ := boundHarness(t)
+	m, tenant, runner, host, vault, rec, _ := boundHarness(t)
 	configHome, userHome, _, _ := twoHomes(t)
 	prof := mustCreateProfile(t, m, tenant, CreateProfileInput{
 		Driver: "claude", ConfigHome: configHome, UserHome: userHome, DisplayName: "home-auth",
-		AuthSource: AuthSourceAccountHome, ProviderRecordRef: rec.Ref,
+		AuthSource: AuthSourceAccountHome,
 	})
+	if err := m.data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(providerProfileKind)
+		if err != nil {
+			return err
+		}
+		legacy, err := findProfileRec(context.Background(), sc, prof.Ref)
+		if err != nil {
+			return err
+		}
+		legacy[colPPProviderRecordRef] = rec.Ref
+		_, err = repo.Update(context.Background(), legacy)
+		return err
+	}); err != nil {
+		t.Fatalf("persist pre-HU030 profile: %v", err)
+	}
+	vault.openErr = errors.New("an own-login launch must not open a provider key")
 	if _, err := launchBound(m, tenant, prof); err != nil {
 		t.Fatalf("createRun: %v", err)
 	}
 	spec := runner.lastSpec()
 	if _, ok := envValue(spec, "ANTHROPIC_API_KEY"); ok {
 		t.Fatal("an account-home launch must receive no injected credential")
+	}
+	if _, ok := envValue(spec, "ANTHROPIC_AUTH_TOKEN"); ok {
+		t.Fatal("an account-home launch must receive no host bearer")
+	}
+	host.mu.Lock()
+	defer host.mu.Unlock()
+	if host.calls != 0 {
+		t.Fatal("an account-home launch consulted the host-wide credential source")
 	}
 }
 
@@ -223,7 +249,8 @@ func TestRecordBinding_ValidatedOnWrite(t *testing.T) {
 	if !errors.As(err, &re) || re.status != http.StatusUnprocessableEntity {
 		t.Fatalf("binding an openai credential to a claude profile = %v, want 422", err)
 	}
-	if !strings.Contains(re.msg, ProviderKindOpenAI) || !strings.Contains(re.msg, "claude") {
+	// The one sentence names the tool as a person knows it (Root 2026-10-02 21:16Z).
+	if !strings.Contains(re.msg, ProviderKindOpenAI) || !strings.Contains(re.msg, "Claude Code") {
 		t.Fatalf("the refusal must name both the kind and the driver, got %q", re.msg)
 	}
 	// None of the refusals changed the row.

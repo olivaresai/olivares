@@ -131,11 +131,12 @@ beforeEach(() => {
   useTenantStore.setState({ activeTenant: 't1' })
   useSessionStore
     .getState()
-    .setSession({ token: 'fixture', sessionId: 'fixture', expiresAt: '' })
+    .setSession({ csrfToken: 'fixture', sessionId: 'fixture', expiresAt: '' })
   refresh.mockReset().mockImplementation(() => renewing.promise)
   unauthorized.mockReset()
   configureApiClient({
-    getToken: () => useSessionStore.getState().token,
+    getToken: () => null,
+    getCSRFToken: () => useSessionStore.getState().csrfToken,
     getTenant: () => useTenantStore.getState().activeTenant,
     getExpiresAt: () => expires,
     onUnauthorized: unauthorized,
@@ -337,7 +338,7 @@ describe('IR2: the consumed Save retains its original dispatch authority', () =>
               useTenantStore.getState().setActiveTenant('t1')
             } else if (movement === 'credential generation') {
               useSessionStore.getState().setSession({
-                token: 'fixture-new',
+                csrfToken: 'fixture-new',
                 sessionId: 'fixture',
                 expiresAt: '',
               })

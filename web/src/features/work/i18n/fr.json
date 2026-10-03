@@ -106,7 +106,7 @@
   },
   "decisions": {
     "title": "Décisions",
-    "subtitle": "Le registre des décisions en ajout seul et sa projection de l'état actuel.",
+    "subtitle": "Chaque décision telle qu'elle a été enregistrée, et celles qui sont en vigueur maintenant.",
     "view": {
       "effective": "En vigueur",
       "revoked": "Révoquées",
@@ -125,11 +125,11 @@
     "empty": {
       "effective": {
         "title": "Aucune décision en vigueur",
-        "body": "Le moteur a lu la projection de l'état actuel et n'en a trouvé aucune en vigueur."
+        "body": "Aucune décision n'est en vigueur."
       },
       "revoked": {
         "title": "Aucune décision révoquée",
-        "body": "Le moteur a lu la projection de l'état actuel et n'en a trouvé aucune révoquée."
+        "body": "Aucune décision n'a été révoquée."
       },
       "history": {
         "title": "Aucune décision enregistrée",
@@ -175,12 +175,12 @@
   },
   "items": {
     "title": "Unités de travail",
-    "subtitle": "Les filtres restreignent l'ensemble du magasin, pas seulement la page affichée.",
+    "subtitle": "Les filtres portent sur toutes les unités de travail, pas seulement sur cette page.",
     "empty": {
       "title": "Aucune unité ne correspond",
-      "body": "Rien dans le magasin ne correspond à ces filtres. C'est une réponse réelle et complète : le moteur a lu le magasin et n'en a trouvé aucune.",
+      "body": "Aucune unité de travail ne correspond à ces filtres.",
       "allTitle": "Aucune unité de travail pour le moment",
-      "allBody": "Les unités de travail apparaissent ici à mesure que les sessions, les agents et les opérateurs les enregistrent. C'est une réponse réelle et complète : le moteur a lu le magasin et n'en a trouvé aucune.",
+      "allBody": "Les unités de travail apparaissent ici à mesure que les sessions, les agents et les personnes les enregistrent.",
       "start": "Démarrer une session"
     }
   },
@@ -228,7 +228,7 @@
     "error": "Flux interrompu",
     "unavailableBody": "La liste affichée peut être obsolète, et rien d'autre ne vous en avertira. Actualisez pour lire directement le magasin."
   },
-  "subtitle": "Le backlog durable entre sessions : unités de travail, responsabilité, dépendances, critères d'acceptation et décisions. Toute modification est planifiée avant d'être appliquée.",
+  "subtitle": "Le travail que partagent les sessions et les personnes : unités, responsables, dépendances, critères d'acceptation et décisions. Chaque modification est affichée avant d'être appliquée.",
   "tabs": {
     "items": "Unités de travail",
     "decisions": "Décisions"
@@ -276,6 +276,7 @@
     "noPermission": "Votre rôle ne peut pas proposer un transfert. Cet acte exige sessions:message-send:write."
   },
   "url": {
-    "invalidItem": "L'adresse nomme un identifiant d'élément que cet écran ne peut pas utiliser, il a donc été ignoré."
+    "invalidItem": "L'adresse nomme un identifiant d'élément que cet écran ne peut pas utiliser, il a donc été ignoré.",
+    "invalidFilter": "L’adresse indique un filtre que cet écran ne propose pas : tous les éléments sont affichés."
   }
 }

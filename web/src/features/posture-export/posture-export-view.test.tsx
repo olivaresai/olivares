@@ -110,7 +110,9 @@ describe('PostureExportView', () => {
   it('forbids a reader without the permission', () => {
     authState.can = () => false
     wrap(<PostureExportView />)
-    expect(screen.queryByRole('button', { name: /export posture/i })).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /export posture/i }),
+    ).not.toBeInTheDocument()
   })
 
   it('exports through the real endpoint, downloads, and summarizes', async () => {
@@ -135,7 +137,9 @@ describe('PostureExportView', () => {
     const user = userEvent.setup()
     wrap(<PostureExportView />)
 
-    await user.click(screen.getByRole('combobox', { name: /minimum severity/i }))
+    await user.click(
+      screen.getByRole('combobox', { name: /minimum severity/i }),
+    )
     await user.click(await screen.findByRole('option', { name: /high/i }))
     await user.click(screen.getByRole('button', { name: /export posture/i }))
 
@@ -320,7 +324,9 @@ describe('PostureExportView — the empty history', () => {
       name: 'Export the posture now',
     })
     // Two controls, one mutation, two names: a query for either finds exactly one.
-    expect(screen.getAllByRole('button', { name: /export posture/i })).toHaveLength(1)
+    expect(
+      screen.getAllByRole('button', { name: /export posture/i }),
+    ).toHaveLength(1)
     await user.click(fromEmpty)
     await waitFor(() => expect(fetchMock).toHaveBeenCalled())
   })

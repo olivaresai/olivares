@@ -10,7 +10,7 @@
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
 [![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md)
-[![Release: 26.10](https://img.shields.io/badge/release-26.10-28282B)](https://github.com/olivaresai/olivares/releases/tag/26.10.0)
+[![Release: 26.10](https://img.shields.io/badge/release-26.10-28282B)](https://github.com/olivaresai/olivares/releases/tag/26.10.1)
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
@@ -47,7 +47,7 @@ curl -fsSL https://olivares.ai/olivares/install.sh | sh
 olivares quickstart
 ```
 
-**Docker.** Multi-arquitectura, distroless, sin root. Escucha en todas las interfaces del host; añade `127.0.0.1:` antes de cada `-p` para limitarlo al equipo local.
+**Docker.** Multi-arquitectura. Las imágenes de contenedor se basan en Debian 13 slim (con Node.js 24 para las herramientas de agente) y se ejecutan como usuario no root. Escucha en todas las interfaces del host; añade `127.0.0.1:` antes de cada `-p` para limitarlo al equipo local.
 
 ```sh
 docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
@@ -80,25 +80,25 @@ kubectl create namespace olivares-system && kubectl apply -n olivares-system -f 
 **Debian y Ubuntu.** El paquete añade un usuario `olivares` sin inicio de sesión y un servicio reforzado; tú lo inicias.
 
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.deb
-sudo dpkg -i olivares_26.10.0_linux_amd64.deb && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.deb
+sudo dpkg -i olivares_26.10.1_linux_amd64.deb && sudo systemctl enable --now olivares
 ```
 
 **RHEL, Fedora y SUSE.**
 
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.rpm
-sudo rpm -i olivares_26.10.0_linux_amd64.rpm && sudo systemctl enable --now olivares
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.rpm
+sudo rpm -i olivares_26.10.1_linux_amd64.rpm && sudo systemctl enable --now olivares
 ```
 
 **Alpine.**
 
 ```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_26.10.0_linux_amd64.apk && sudo rc-service olivares start
+curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk && sudo rc-service olivares start
 ```
 
-En servidores ARM, usa `arm64` en lugar de `amd64`. Todos los archivos de la versión: [página de la versión](https://github.com/olivaresai/olivares/releases/tag/26.10.0).
+En servidores ARM, usa `arm64` en lugar de `amd64`. Todos los archivos de la versión: [página de la versión](https://github.com/olivaresai/olivares/releases/tag/26.10.1).
 
 **Homebrew.** macOS y Linux.
 

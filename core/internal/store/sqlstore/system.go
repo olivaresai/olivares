@@ -10,6 +10,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -525,12 +526,16 @@ func (sys *systemScope) GetOrg(ctx context.Context, tenant model.TenantID) (mode
 // an invitation: the supported way to tolerate a partial list is ListOrgsVisible,
 // which names the tolerance.
 func (sys *systemScope) ListOrgs(ctx context.Context) ([]model.Org, error) {
-	orgs, authoritative, err := sys.ListOrgsVisible(ctx)
+	orgs, authoritative, inventoryErr, err := sys.listOrgs(ctx)
 	if err != nil {
 		return nil, err
 	}
 	if !authoritative {
-		return orgs, fmt.Errorf("%w: engine %q holds no BYPASSRLS admin pool, so this System read is RLS-limited to the cleared tenant GUC and returned %d row(s) that CANNOT be read as the whole estate; provision a NOSUPERUSER BYPASSRLS role (deploy/postgres/01-app-role.sql) and pass --admin-dsn",
+		if inventoryErr != nil {
+			return orgs, fmt.Errorf("%w: engine %q holds no BYPASSRLS admin pool and its closed directory inventory routine fails attestation (%v); this System read is RLS-limited and returned %d row(s) that CANNOT be read as the whole estate",
+				store.ErrEnumerationNotAuthoritative, sys.s.engine, inventoryErr, len(orgs))
+		}
+		return orgs, fmt.Errorf("%w: engine %q holds no BYPASSRLS admin pool and no closed directory inventory routine, so this System read is RLS-limited to the cleared tenant GUC and returned %d row(s) that CANNOT be read as the whole estate; install the routine (olivares db init --install-directory-inventory) or pass --admin-dsn",
 			store.ErrEnumerationNotAuthoritative, sys.s.engine, len(orgs))
 	}
 	return orgs, nil
@@ -541,7 +546,8 @@ func (sys *systemScope) ListOrgs(ctx context.Context) ([]model.Org, error) {
 // whose work is legitimately best-effort per tenant.
 //
 // On a successful call, authoritative is false in exactly one configuration:
-// Postgres with no dedicated BYPASSRLS admin pool. There the System transaction
+// Postgres with no dedicated BYPASSRLS admin pool and no attested closed directory
+// inventory routine (listOrgsThroughInventory). There the System transaction
 // runs on the application pool,
 // which is FORCE-RLS-scoped to a tenant GUC the System path has cleared, so the
 // query matches nothing — fail-closed-empty, never a cross-tenant leak, but also
@@ -552,12 +558,31 @@ func (sys *systemScope) ListOrgs(ctx context.Context) ([]model.Org, error) {
 // the inventory through that same transaction. The Open-time fact alone is not
 // sufficient evidence for a later pooled connection.
 func (sys *systemScope) ListOrgsVisible(ctx context.Context) ([]model.Org, bool, error) {
+	orgs, authoritative, _, err := sys.listOrgs(ctx)
+	return orgs, authoritative, err
+}
+
+// listOrgs is ListOrgsVisible plus, when the result is not authoritative because
+// the installed closed inventory routine failed attestation, that failure.
+func (sys *systemScope) listOrgs(ctx context.Context) (orgs []model.Org, authoritative bool, inventoryErr, err error) {
 	adminPool := sys.s.adminDB != nil && sys.s.adminDB != sys.s.db
 	if !adminPool {
+		if sys.s.engine == store.EnginePostgres {
+			orgs, present, err := sys.listOrgsThroughInventory(ctx)
+			switch {
+			case err != nil:
+				// An installed routine that fails attestation is never a source; the
+				// RLS-limited read below stays non-authoritative and says why.
+				inventoryErr = err
+			case present:
+				return orgs, true, nil, nil
+			}
+		}
 		orgs, err := sys.listOrgsVisibleRows(ctx, sys.tx)
 		// Postgres is the only engine with roles and RLS. Without the distinct
-		// admin pool its cleared app transaction is deliberately non-authoritative.
-		return orgs, sys.s.engine != store.EnginePostgres, err
+		// admin pool or the closed inventory routine its cleared app transaction
+		// is deliberately non-authoritative.
+		return orgs, sys.s.engine != store.EnginePostgres, inventoryErr, err
 	}
 
 	adminTx, err := sys.s.adminDB.BeginTx(ctx, &sql.TxOptions{
@@ -565,7 +590,7 @@ func (sys *systemScope) ListOrgsVisible(ctx context.Context) ([]model.Org, bool,
 		ReadOnly:  true,
 	})
 	if err != nil {
-		return nil, false, fmt.Errorf(
+		return nil, false, nil, fmt.Errorf(
 			"%w: begin pinned AdminDSN inventory snapshot: %v",
 			store.ErrEnumerationNotAuthoritative, err,
 		)
@@ -574,13 +599,13 @@ func (sys *systemScope) ListOrgsVisible(ctx context.Context) ([]model.Org, bool,
 
 	posture, err := sys.s.dia.ConnRolePosture(ctx, adminTx)
 	if err != nil {
-		return nil, false, fmt.Errorf(
+		return nil, false, nil, fmt.Errorf(
 			"%w: attest live AdminDSN inventory posture: %v",
 			store.ErrEnumerationNotAuthoritative, err,
 		)
 	}
 	if err := requirePinnedDirectoryAdminPosture(posture, sys.s.directoryAdminRole); err != nil {
-		return nil, false, err
+		return nil, false, nil, err
 	}
 	// The exact live role is necessary but not sufficient: a same-role DSN can
 	// still address another database, or a database with the same name on another
@@ -590,24 +615,77 @@ func (sys *systemScope) ListOrgsVisible(ctx context.Context) ([]model.Org, bool,
 	if err := verifyDirectoryActivationDatabaseIdentity(
 		ctx, sys.tx, directoryActivationWitnesses{admin: adminTx},
 	); err != nil {
-		return nil, false, fmt.Errorf(
+		return nil, false, nil, fmt.Errorf(
 			"%w: pinned AdminDSN inventory identity: %v",
 			store.ErrEnumerationNotAuthoritative, err,
 		)
 	}
-	orgs, err := sys.listOrgsVisibleRows(ctx, adminTx)
+	orgs, err = sys.listOrgsVisibleRows(ctx, adminTx)
 	if err != nil {
-		return nil, false, fmt.Errorf(
+		return nil, false, nil, fmt.Errorf(
 			"%w: query pinned AdminDSN inventory snapshot: %v",
 			store.ErrEnumerationNotAuthoritative, err,
 		)
 	}
 	if err := adminTx.Commit(); err != nil {
-		return nil, false, fmt.Errorf(
+		return nil, false, nil, fmt.Errorf(
 			"%w: commit pinned AdminDSN inventory snapshot: %v",
 			store.ErrEnumerationNotAuthoritative, err,
 		)
 	}
+	return orgs, true, nil, nil
+}
+
+// listOrgsThroughInventory enumerates every org on PostgreSQL without the admin
+// pool: the attested closed directory inventory routine
+// (olivares_directory_inventory_v1, owned by a NOLOGIN BYPASSRLS role that reads
+// org ids only) names every org, and each org row is then read on this same
+// transaction with that tenant's pin, which RLS allows the application role. This
+// is the source directory-epoch reconcile and retirement already use.
+//
+// present is false, with no error, when the routine is not installed. A routine
+// that is installed but fails attestation, or an org the routine names that its
+// pinned read does not return, is an error: the result is never authoritative
+// then. The tenant pin is cleared again before returning.
+func (sys *systemScope) listOrgsThroughInventory(ctx context.Context) (orgs []model.Org, present bool, err error) {
+	present, err = verifyPostgresDirectoryInventory(ctx, sys.tx, sys.s.directoryGuardRoles)
+	if err != nil || !present {
+		return nil, present, err
+	}
+	inventory, err := readDirectoryInventory(ctx, sys.tx, sys.s.dia, true, true)
+	if err != nil {
+		return nil, true, err
+	}
+	tenants := slices.Clone(inventory.BusinessTenants)
+	if inventory.System.TenantID == model.SystemTenantID {
+		tenants = append(tenants, model.SystemTenantID)
+	}
+	defer func() {
+		if clearErr := sys.s.dia.ClearTenant(ctx, sys.tx); clearErr != nil && err == nil {
+			orgs, err = nil, fmt.Errorf("clear the tenant pin after the inventory read: %w", clearErr)
+		}
+	}()
+	cols := orgDescriptor.AllColumns()
+	q := sys.s.dia.Rebind(fmt.Sprintf("SELECT %s FROM %s WHERE id = ? AND tenant_id = ?",
+		strings.Join(cols, ", "), directoryWriterRelation(sys.s.dia, orgDescriptor.Table)))
+	for _, tenant := range tenants {
+		if err := sys.s.dia.BindTenant(ctx, sys.tx, tenant); err != nil {
+			return nil, true, fmt.Errorf("bind tenant %s for its org row: %w", tenant, err)
+		}
+		st, err := newScanState(orgDescriptor, cols)
+		if err != nil {
+			return nil, true, err
+		}
+		if err := sys.tx.QueryRowContext(ctx, q, tenant.String(), tenant.String()).Scan(st.dests...); err != nil {
+			return nil, true, fmt.Errorf("read the org row of tenant %s the inventory names: %w", tenant, err)
+		}
+		org, err := decodeOrg(st.record())
+		if err != nil {
+			return nil, true, err
+		}
+		orgs = append(orgs, org)
+	}
+	sort.Slice(orgs, func(i, j int) bool { return orgs[i].ID < orgs[j].ID })
 	return orgs, true, nil
 }
 

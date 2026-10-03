@@ -19,8 +19,13 @@ import { mergeSessions } from './provenance'
 import type { LiveDTO } from './types'
 import { WorkClause } from './work-clause'
 import { WorkRail } from './work-rail'
+
 import './i18n'
 import '@/features/home/i18n'
+
+/** RecentWork takes the merged sessions (runs and live rows); these fixtures are live rows only. */
+const asSessions = (rows: Parameters<typeof mergeSessions>[0]) =>
+  mergeSessions(rows, [])
 
 // The recent row is a router link; this double builds the href the router would.
 vi.mock('@tanstack/react-router', () => ({
@@ -121,7 +126,11 @@ describe('the action a session reports renders as an identifier', () => {
 
   it('the front door row names it the same way', () => {
     renderIntel(
-      <RecentWork sessions={[live()]} state="ready" canStartSession />,
+      <RecentWork
+        sessions={asSessions([live()])}
+        state="ready"
+        canStartSession
+      />,
     )
     const rowEl = screen.getByTestId('home-recent-row')
     expect(rowEl.querySelector('code')).toHaveTextContent('web.search')

@@ -8,18 +8,19 @@ description: >-
 ---
 
 Ce guide s'adresse aux ingénieurs et SRE qui mettent le control plane Olivares AI en
-production avec Docker. Tout le produit est une unique image distroless — le moteur
+production avec Docker. Tout le produit est une unique image — le moteur
 avec l'interface web embarquée — de sorte qu'un seul hôte peut exécuter la topologie
 SQLite sans dépendance externe, et un override Postgres vous donne la topologie
-multi-locataire quand vous en avez besoin. Chaque chemin conserve les mêmes valeurs
+multi-locataire quand vous en avez besoin. Les images de conteneur reposent sur Debian 13 slim
+(avec Node.js 24 pour les outils d'agent) et s'exécutent en tant qu'utilisateur non root. Chaque chemin conserve les mêmes valeurs
 par défaut sécurisées : aucune crédential par défaut, un token de configuration à
 usage unique et TLS activé par défaut. Le port de l'hôte est publié sur toutes les
 interfaces, car c'est un serveur — restreignez-le délibérément, comme ci-dessous.
 
-:::note[Beta — images publiées pour 26.10.0]
-Olivares AI est en **beta**. Les coordonnées d'image ci-dessous se résolvent : la release `26.10.0`
+:::note[Beta — images publiées pour 26.10.1]
+Olivares AI est en **beta**. Les coordonnées d'image ci-dessous se résolvent : la release `26.10.1`
 les a publiées sur Docker Hub et `ghcr.io` (témoin des surfaces d'installation
-`docs/releases/26.10.0-install-surfaces.json`). Considérez ceci comme la forme de déploiement que
+`docs/releases/26.10.1-install-surfaces.json`). Considérez ceci comme la forme de déploiement que
 vous utiliserez, non comme une garantie prête pour la production.
 :::
 
@@ -33,7 +34,7 @@ pour le scale-out, voir le chemin Kubernetes/Helm ci-dessous.
 Le pull de conteneur primaire est **Docker Hub** :
 
 ```bash
-docker pull docker.io/olivaresai/olivares:26.10.0
+docker pull docker.io/olivaresai/olivares:26.10.1
 ```
 
 Le même contenu est également publié sur `ghcr.io/olivaresai/olivares` — identique par
@@ -41,8 +42,8 @@ digest, utilisé comme sauvegarde et comme registre de build. Docker Hub appliqu
 de débit aux pulls **anonymes** ; ghcr.io n'impose aucune limite sur les pulls anonymes
 d'images publiques — `docker login` ou la coordonnée ghcr.io est donc la porte de sortie si un
 nœud de CI ou une flotte importante atteint le plafond. Les tags ne portent
-**aucun `v` initial** : `:26.10.0` épingle une release, `:latest` flotte, et
-`:26.10.0-fips` / `:26.10.0-stig` sont les variantes durcies. Les tags de base et
+**aucun `v` initial** : `:26.10.1` épingle une release, `:latest` flotte, et
+`:26.10.1-fips` / `:26.10.1-stig` sont les variantes durcies. Les tags de base et
 `:latest` sont multi-arch (`linux/amd64`, `linux/arm64`) ; `fips`/`stig` sont
 `amd64`-only.
 
@@ -54,14 +55,14 @@ même :
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.10.0")"
+DIGEST="$(crane digest "$IMAGE:26.10.1")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type spdxjson \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -92,7 +93,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:26.10.0 \
+  docker.io/olivaresai/olivares:26.10.1 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -102,7 +103,7 @@ docker run -d --name olivares \
 
 | Flag | Pourquoi |
 |---|---|
-| `--user 65532:65532` | exécuter sous l'UID non-root `nonroot` intégré à l'image distroless |
+| `--user 65532:65532` | exécuter sous l'UID non-root `nonroot` intégré à l'image |
 | `--read-only` | le système de fichiers racine est immuable ; seuls le volume de données et `/tmp` sont accessibles en écriture |
 | `--tmpfs /tmp` | un tmpfs scratch accessible en écriture, requis car le rootfs est en lecture seule |
 | `--cap-drop ALL` | le moteur n'a besoin d'aucune capability Linux |
@@ -191,7 +192,7 @@ en one-shot :
 
 ```bash
 printf 'a strong DR passphrase' > deploy/compose/dr-pass
-# the host stamps the bundle name (the distroless image has no `date`):
+# the host stamps the bundle name:
 BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
@@ -199,7 +200,7 @@ docker compose -f deploy/compose/docker-compose.yml \
 ```
 
 Le job partage le volume de données du moteur, écrit le bundle vers le volume
-`olivares-backups` et — puisque l'image est distroless — laisse la rétention à l'hôte :
+`olivares-backups` et laisse la rétention à l'hôte :
 purgez les anciens bundles avec un cron de l'hôte
 (`find <backups> -name '*.drbundle' -mtime +14 -delete`). Encapsulez l'exécution dans
 un cron de l'hôte pour un RPO planifié et **mirorisez le volume `olivares-backups`
@@ -215,8 +216,8 @@ dépôt ; la présentation de plus haut niveau est [Sauvegarder et restaurer](/h
 
 ## 5. Notes d'exploitation
 
-**Sondez la santé depuis l'hôte, pas depuis le conteneur.** L'image est **distroless** —
-elle n'a ni shell ni `curl`, donc il n'y a intentionnellement aucun `HEALTHCHECK`
+**Sondez la santé depuis l'hôte, pas depuis le conteneur.** L'image
+ne définit intentionnellement aucun `HEALTHCHECK`
 in-container. Le moteur expose `/livez` et `/readyz` sur le port HTTPS ; sondez-les
 depuis l'hôte (ou votre orchestrateur) :
 
@@ -314,7 +315,7 @@ et re-vérifiez la nouvelle image avant de recréer.
 
 ## 8. Épingler par digest pour la production
 
-Les tags mutables (`:26.10.0`, `:latest`) sont pour l'évaluation. En production, épinglez
+Les tags mutables (`:26.10.1`, `:latest`) sont pour l'évaluation. En production, épinglez
 le **digest** que vous avez vérifié — un digest est immuable et correspond exactement à
 ce que vous avez validé :
 

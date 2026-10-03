@@ -317,7 +317,9 @@ describe('RoutinePoliciesView posture header', () => {
       items: [anyCron],
       has_more: false,
     })
-    api.routinePosture.mockRejectedValue(new ApiError(503, 'unavailable', 'nope'))
+    api.routinePosture.mockRejectedValue(
+      new ApiError(503, 'unavailable', 'nope'),
+    )
 
     wrap(<RoutinePoliciesView />)
 
@@ -330,7 +332,10 @@ describe('RoutinePoliciesView posture header', () => {
 
   it('echoes the scope the answer was resolved for, and flags a drifted draft', async () => {
     api.routinePosture.mockResolvedValue(
-      posture([anyCron], { scope_user_ref: 'user:alice', scope_user_known: true }),
+      posture([anyCron], {
+        scope_user_ref: 'user:alice',
+        scope_user_known: true,
+      }),
     )
     api.listRoutinePolicies.mockResolvedValue({
       items: [anyCron],
@@ -417,7 +422,9 @@ describe('RoutinePoliciesView posture header', () => {
     ).toBeInTheDocument()
     const section = screen.getByTestId('routine-posture')
     expect(section.textContent).not.toMatch(/the resolution was REFUSED/i)
-    expect(screen.queryByTestId('posture-indeterminate')).not.toBeInTheDocument()
+    expect(
+      screen.queryByTestId('posture-indeterminate'),
+    ).not.toBeInTheDocument()
   })
 
   it('re-resolves the posture for the scope the operator names', async () => {
@@ -494,7 +501,9 @@ describe('RoutinePolicyEditorDialog write intents', () => {
     wrap(<RoutinePoliciesView />)
     const user = userEvent.setup()
 
-    await user.click(await screen.findByTestId('routine-policy-row-pol-unreadable'))
+    await user.click(
+      await screen.findByTestId('routine-policy-row-pol-unreadable'),
+    )
     // Change something unrelated — the cadence toggle — and save.
     await user.click(await screen.findByTestId('routine-editor-approval'))
     await user.click(screen.getByTestId('routine-editor-save'))
@@ -526,7 +535,10 @@ describe('RoutinePolicyEditorDialog write intents', () => {
     await user.click(await screen.findByRole('option', { name: /only these/i }))
 
     expect(screen.getByTestId('routine-editor-save')).toBeDisabled()
-    await user.type(screen.getByTestId('routine-editor-cron-entries'), '0 * * * *')
+    await user.type(
+      screen.getByTestId('routine-editor-cron-entries'),
+      '0 * * * *',
+    )
     expect(screen.getByTestId('routine-editor-save')).toBeEnabled()
   })
 

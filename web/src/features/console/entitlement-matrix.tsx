@@ -56,6 +56,12 @@ import { CaveatNotice, SectionCard } from '@/features/_intel'
 import { ApiError, isOpenCoreSeam } from '@/lib/api/errors'
 import { cn } from '@/lib/utils'
 import { StaticTable } from '@/components/data/static-table'
+import {
+  activationDetail,
+  activationLabel,
+  activationText,
+  activationTone,
+} from './activation-label'
 
 const DISCLOSURE_SUMMARY_CLASS = cn(
   'cursor-pointer rounded-sm text-body text-foreground',
@@ -89,6 +95,11 @@ export interface AddonRow {
   state: string
   preset?: string
   reason?: string
+  needs_secret?: boolean
+  /** The edition's catalog says the module is in this build. Absent = not known. */
+  in_build?: boolean
+  /** The verified licence covers the module. Absent = not known. */
+  license_covered?: boolean
 }
 
 /**
@@ -102,14 +113,20 @@ export interface AddonRow {
 export function ejeDerecho(
   addonKey: string,
   features: string[] | undefined,
+  licenseCovered?: boolean,
 ): Eje {
+  // The engine's own coverage fact (S, `license_covered`) wins when it is known:
+  // false is an observed "no", not a guess from a free-form list.
+  if (licenseCovered !== undefined) return licenseCovered ? 'yes' : 'no'
   if (features === undefined) return 'unknown'
   return features.includes(addonKey) ? 'yes' : 'unknown'
 }
 
-/** El eje del binario es «no se sabe» por add-on, y el porqué está en la cabecera de este fichero. */
-export function ejeBinario(): Eje {
-  return 'unknown'
+/** El eje del binario: el hecho `in_build` del catálogo de la edición cuando el motor lo
+ * publica (S, 2026-10-01); sin él sigue siendo «no se sabe», por lo que dice la cabecera. */
+export function ejeBinario(inBuild?: boolean): Eje {
+  if (inBuild === undefined) return 'unknown'
+  return inBuild ? 'yes' : 'no'
 }
 
 /** Activado sí se sabe: el motor publica el estado por add-on. */
@@ -158,10 +175,13 @@ export function EntitlementMatrix({
   lastSuccessfulLicense,
   licenseRetry,
   licenseErrorDetail,
+  restartRequired = false,
 }: {
   addons: AddonRow[]
   features?: string[]
   edition?: string
+  /** The activation status says a restart is pending (`restart_required`). */
+  restartRequired?: boolean
   entitlementUnknownReason?: EntitlementUnknownReason
   lastSuccessfulLicense?: Pick<LicenseStatusDTO, 'edition' | 'status'>
   licenseRetry?: () => void
@@ -187,12 +207,22 @@ export function EntitlementMatrix({
           ? t('entitlement.licenseLoading')
           : t('entitlement.noVerifiedLicense')
 
+  // The notice is about coverage the console cannot state. When every row carries the
+  // engine's own license_covered fact, coverage is known even without a feature list
+  // (EU-06 on Business 07: a valid license read beside covered rows said "unknown").
+  // A failed license read is still said.
+  const coverageUnknown =
+    addons.some(
+      (a) => ejeDerecho(a.key, features, a.license_covered) === 'unknown',
+    ) ||
+    entitlementUnknownReason === 'refresh-failed' ||
+    entitlementUnknownReason === 'unavailable'
   return (
     <SectionCard
       title={t('entitlement.title')}
       description={t('entitlement.description')}
     >
-      {features === undefined ? (
+      {features === undefined && coverageUnknown ? (
         <div
           className="mb-3 flex flex-col gap-3"
           data-slot="license-read-state"
@@ -246,8 +276,10 @@ export function EntitlementMatrix({
           </thead>
           <tbody className="max-md:block">
             {addons.map((a) => {
-              const derecho = ejeDerecho(a.key, features)
-              const activado = ejeActivado(a.state)
+              const binario = ejeBinario(a.in_build)
+              const derecho = ejeDerecho(a.key, features, a.license_covered)
+              const label = activationLabel(a, restartRequired)
+              const detail = activationDetail(label)
               return (
                 <tr
                   key={a.key}
@@ -277,10 +309,15 @@ export function EntitlementMatrix({
                     </span>
                   </th>
                   <MatrixFact label={t('entitlement.colBinary')}>
-                    {/* Siempre «no se sabe»: la edición es por artefacto. */}
                     <Celda
-                      eje={ejeBinario()}
-                      texto={t('entitlement.unknown')}
+                      eje={binario}
+                      texto={
+                        binario === 'yes'
+                          ? t('entitlement.inBuild')
+                          : binario === 'no'
+                            ? t('entitlement.notInBuild')
+                            : t('entitlement.unknown')
+                      }
                     />
                   </MatrixFact>
                   <MatrixFact label={t('entitlement.colEntitled')}>
@@ -289,17 +326,23 @@ export function EntitlementMatrix({
                       texto={
                         derecho === 'yes'
                           ? t('entitlement.entitled')
-                          : t('entitlement.unknown')
+                          : derecho === 'no'
+                            ? t('entitlement.notCovered')
+                            : t('entitlement.unknown')
                       }
                     />
                   </MatrixFact>
                   <MatrixFact label={t('entitlement.colActivated')}>
-                    <Celda
-                      eje={activado}
-                      texto={t(`entitlement.state.${a.state}`, {
-                        defaultValue: a.state,
-                      })}
-                    />
+                    <span className="flex min-w-0 flex-col items-end gap-1 md:items-start">
+                      <Badge variant={activationTone(label)}>
+                        {activationText(label, t)}
+                      </Badge>
+                      {detail && (
+                        <span className="max-w-[42ch] text-caption text-muted-foreground [overflow-wrap:anywhere]">
+                          {detail}
+                        </span>
+                      )}
+                    </span>
                   </MatrixFact>
                 </tr>
               )
@@ -791,6 +834,7 @@ export function EntitlementMatrixCard() {
       //    A failed license read must not pass cached features as current.
       features={currentFeatures}
       edition={activacion.data?.edition}
+      restartRequired={activacion.data?.restart_required === true}
       entitlementUnknownReason={entitlementUnknownReason}
       lastSuccessfulLicense={lastSuccessfulLicense}
       licenseRetry={licenseRead.kind === 'failed' ? retryLicense : undefined}

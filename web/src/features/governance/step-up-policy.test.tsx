@@ -95,7 +95,9 @@ const rol = () => new ApiError(403, 'forbidden', 'your role cannot do this')
 const wrap = (ui: ReactNode) =>
   render(
     <QueryClientProvider
-      client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}
+      client={
+        new QueryClient({ defaultOptions: { queries: { retry: false } } })
+      }
     >
       {ui}
     </QueryClientProvider>,
@@ -210,7 +212,8 @@ const sinComentarios = (src: string): string[] => {
 
 const primerUso = (src: string, aguja: string) => {
   const lineas = sinComentarios(src)
-  for (let i = 0; i < lineas.length; i++) if (lineas[i].includes(aguja)) return i
+  for (let i = 0; i < lineas.length; i++)
+    if (lineas[i].includes(aguja)) return i
   return Number.POSITIVE_INFINITY
 }
 

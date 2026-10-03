@@ -18,6 +18,8 @@ import { queryKeys } from '@/lib/api/query'
 import { authApi } from '@/lib/api/endpoints'
 import type { Whoami } from '@/lib/api/types'
 import { useSessionStore } from '@/stores/session'
+import { toast } from '@/components/ui/toaster'
+import i18n from '@/lib/i18n'
 import { useTenantStore } from '@/stores/tenant'
 import { useViewAccess } from './authorization'
 import { createSessionRecents, recentDestination } from './session-recents'
@@ -25,6 +27,7 @@ import {
   createPersonalNavigationSession,
   favoriteStorageKey,
   resolvePersonalLink,
+  type FavoritesRemote,
   type PersonalLink,
 } from './personal-navigation-store'
 
@@ -40,7 +43,9 @@ function identity(principal: Whoami | null): string | Whoami | null {
     : principal
 }
 
-function usePersonalSession() {
+function usePersonalSession(
+  engineFavorites?: (tenant: string | null) => FavoritesRemote,
+) {
   const client = useQueryClient()
   const { principal, activeTenant, status } = useAuth()
   const generation = useSessionStore((s) => s.credentialGeneration)
@@ -141,6 +146,9 @@ function usePersonalSession() {
           owner ===
             identity(client.getQueryData<Whoami>(queryKeys.whoami) ?? null) &&
           principal === client.getQueryData<Whoami>(queryKeys.whoami),
+        // Favorites follow the user: the engine keeps them per user and organization.
+        remote: engineFavorites?.(activeTenant),
+        onSaveError: () => toast.error(i18n.t('nav:personal.saveFailed')),
       }),
     // A source can leave and return between renders; movement creates a fresh lifetime.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -153,6 +161,7 @@ function usePersonalSession() {
       generation,
       verified,
       movement,
+      engineFavorites,
     ],
   )
   useEffect(() => {
@@ -294,10 +303,13 @@ function usePersonalSession() {
 
 export function PersonalNavigationProvider({
   children,
+  engineFavorites,
 }: {
   children: ReactNode
+  /** Where favorites are kept beyond this browser (the app layout passes the engine's). */
+  engineFavorites?: (tenant: string | null) => FavoritesRemote
 }) {
-  const value = usePersonalSession()
+  const value = usePersonalSession(engineFavorites)
   return (
     <PersonalContext.Provider value={value}>
       {children}

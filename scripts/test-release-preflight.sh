@@ -56,8 +56,8 @@ PFTBL="$WORK/pf-anchors.md"
 {
 	printf '| Release | Domain | Public key (base64-std) | SHA-256 fingerprint | `version` prefix |\n'
 	printf '|---|---|---|---|---|\n'
-	printf '| 26.8.0 | license | `%s` | x | x |\n' "$LIC"
-	printf '| 26.8.0 | OTA | `%s` | x | x |\n' "$OTA"
+	printf '| 26.11 | license | `%s` | x | x |\n' "$LIC"
+	printf '| 26.11 | OTA | `%s` | x | x |\n' "$OTA"
 } >"$PFTBL"
 # ⛔ Y VAN DENTRO DE LA TUPLA `PROD`, no exportadas: run_pf lanza el preflight con `env -i`, que
 # borra el entorno entero. Exportarlas parece funcionar y no llega nada — medido aquí mismo: cinco
@@ -71,7 +71,7 @@ PROD=(
 	SOURCE_REPOSITORY_URL=https://github.com/olivaresai/olivares
 	MIRROR_IMAGE_REPO=docker.io/olivaresai/olivares
 	HOMEBREW_TAP_REPO=olivaresai/homebrew-tap
-	RELEASE_TAG=26.8.0
+	RELEASE_TAG=26.11
 	COSIGN_MODE=keyless
 	COSIGN_TLOG_UPLOAD=true
 	PUBLISH_LATEST=true
@@ -80,8 +80,8 @@ PROD=(
 	PUBLISH_OTA_STABLE=true
 	RUN_SLSA=true
 	GITHUB_REPOSITORY=olivaresai/olivares
-	GITHUB_REF=refs/tags/26.8.0
-	GITHUB_REF_NAME=26.8.0
+	GITHUB_REF=refs/tags/26.11
+	GITHUB_REF_NAME=26.11
 	GITHUB_REF_TYPE=tag
 	GITHUB_SHA="$SHA"
 	OLIVARES_LICENSE_PUBKEY="$LIC"
@@ -137,8 +137,8 @@ PRE=(
 	OLIVARES_PREPROD_EXPECTED_REPO="$PRE_ID"
 	OLIVARES_PREPROD_EXPECTED_OCI="ghcr.io/$PRE_ID"
 	OLIVARES_PREPROD_EXPECTED_SOURCE="https://github.com/$PRE_ID"
-	# The REAL tag grammar: a preprod act rehearses v26.8.0 itself (order 36).
-	RELEASE_TAG=26.8.0
+	# The REAL tag grammar: a preprod act rehearses v26.11 itself (order 36).
+	RELEASE_TAG=26.11
 	COSIGN_MODE=keyless
 	COSIGN_TLOG_UPLOAD=true
 	PUBLISH_LATEST=true
@@ -151,8 +151,8 @@ PRE=(
 	OLIVARES_OTA_PUBKEY="$OTA"
 	HOMEBREW_PREPROD_TAP_GITHUB_TOKEN=preprod-scoped-fixture-token
 	GITHUB_REPOSITORY="$PRE_ID"
-	GITHUB_REF=refs/tags/26.8.0
-	GITHUB_REF_NAME=26.8.0
+	GITHUB_REF=refs/tags/26.11
+	GITHUB_REF_NAME=26.11
 	GITHUB_REF_TYPE=tag
 	GITHUB_SHA="$SHA"
 )
@@ -192,8 +192,8 @@ grep -qx 'release_github_repo=olivaresai/olivares' "$out" &&
 	grep -qx 'release_github_owner=olivaresai' "$out" &&
 	grep -qx 'release_github_name=olivares' "$out"
 check "production outputs are exactly the reviewed tuple" "owner/name/oci/source" $?
-grep -qx 'release_version=26.8.0' "$out" && grep -qx 'release_tag=26.8.0' "$out"
-check "the tag is bare CalVer and the version output equals it" "26.8.0" $?
+grep -qx 'release_version=26.11' "$out" && grep -qx 'release_tag=26.11' "$out"
+check "the tag is bare CalVer and the version output equals it" "26.11" $?
 grep -qx 'publish_latest=true' "$out" && grep -qx 'publish_dockerhub=auto' "$out" &&
 	grep -qx 'cosign_mode=keyless' "$out" && grep -qx 'run_slsa=true' "$out"
 check "production switches pass through validated" "latest/dockerhub/cosign/slsa" $?
@@ -242,7 +242,7 @@ run_pf prod GITHUB_REF=refs/tags/26.8.1
 [ "$rc" -ne 0 ]
 check "ref and declared tag must be the same tag ref" "mismatch" $?
 
-run_pf reh RELEASE_TAG=26.8.0 GITHUB_REF=refs/tags/26.8.0 GITHUB_REF_NAME=26.8.0
+run_pf reh RELEASE_TAG=26.11 GITHUB_REF=refs/tags/26.11 GITHUB_REF_NAME=26.11
 [ "$rc" -ne 0 ]
 check "a production-looking tag is rejected in rehearsal" "tag grammar" $?
 
@@ -252,7 +252,7 @@ check "a rehearsal tag is rejected in production" "tag grammar" $?
 
 # The PINNED prerelease policy (P2-03): deny-closed until widens the signing
 # identity. If this case ever needs to change, the identity regexps change WITH it.
-run_pf prod RELEASE_TAG=26.8.0-rc.1 GITHUB_REF=refs/tags/26.8.0-rc.1 GITHUB_REF_NAME=26.8.0-rc.1
+run_pf prod RELEASE_TAG=26.11-rc.1 GITHUB_REF=refs/tags/26.11-rc.1 GITHUB_REF_NAME=26.11-rc.1
 [ "$rc" -ne 0 ] && grep -q 'production tag contract' "$err"
 check "a prerelease tag is rejected in production (policy pinned)" "deny-closed" $?
 
@@ -260,7 +260,7 @@ check "a prerelease tag is rejected in production (policy pinned)" "deny-closed"
 # A v prefix is refused with its OWN message, because pasting the old shape is the
 # reflexive mistake and a generic grammar error would send the operator counting digits
 # instead of deleting one letter.
-run_pf prod RELEASE_TAG=v26.8.0 GITHUB_REF=refs/tags/v26.8.0 GITHUB_REF_NAME=v26.8.0
+run_pf prod RELEASE_TAG=v26.11 GITHUB_REF=refs/tags/v26.11 GITHUB_REF_NAME=v26.11
 [ "$rc" -ne 0 ] && grep -q 'carries a v prefix' "$err"
 check "a v-prefixed tag is rejected in production with the correction message" "v prefix" $?
 
@@ -268,9 +268,16 @@ run_pf pre RELEASE_TAG=v26.10.0 GITHUB_REF=refs/tags/v26.10.0 GITHUB_REF_NAME=v2
 [ "$rc" -ne 0 ] && grep -q 'carries a v prefix' "$err"
 check "a v-prefixed tag is rejected in preprod with the correction message" "v prefix" $?
 
-run_pf prod RELEASE_TAG=26.10 GITHUB_REF=refs/tags/26.10 GITHUB_REF_NAME=26.10
-[ "$rc" -ne 0 ]
-check "a two-part tag is rejected" "26.10" $?
+run_pf prod RELEASE_TAG=26.11 GITHUB_REF=refs/tags/26.11 GITHUB_REF_NAME=26.11
+[ "$rc" -eq 0 ]
+check "a monthly tag is accepted without a zero patch" "26.11" $?
+
+run_pf prod RELEASE_TAG=26.11.0 GITHUB_REF=refs/tags/26.11.0 GITHUB_REF_NAME=26.11.0
+if [ "$rc" -ne 0 ]; then
+ check "a new zero-patch tag is refused" "26.11.0" 0
+else
+ check "a new zero-patch tag is refused" "26.11.0" 1
+fi
 
 run_pf prod RELEASE_TAG=26.100.1 GITHUB_REF=refs/tags/26.100.1 GITHUB_REF_NAME=26.100.1
 [ "$rc" -ne 0 ]
@@ -295,13 +302,13 @@ run_pf prod RELEASE_TAG=026.10.0 GITHUB_REF=refs/tags/026.10.0 GITHUB_REF_NAME=0
 [ "$rc" -ne 0 ]
 check "a leading zero in the year is rejected" "026.10.0" $?
 
-run_pf prod RELEASE_TAG=26.1.0 GITHUB_REF=refs/tags/26.1.0 GITHUB_REF_NAME=26.1.0
+run_pf prod RELEASE_TAG=27.1 GITHUB_REF=refs/tags/27.1 GITHUB_REF_NAME=27.1
 [ "$rc" -eq 0 ]
-check "a one-digit month is accepted" "26.1.0" $?
+check "a one-digit month is accepted" "27.1" $?
 
-run_pf prod RELEASE_TAG=26.12.0 GITHUB_REF=refs/tags/26.12.0 GITHUB_REF_NAME=26.12.0
+run_pf prod RELEASE_TAG=26.12 GITHUB_REF=refs/tags/26.12 GITHUB_REF_NAME=26.12
 [ "$rc" -eq 0 ]
-check "a two-digit month is accepted" "26.12.0" $?
+check "a two-digit month is accepted" "26.12" $?
 
 run_pf reh OCI_IMAGE_REPO=ghcr.io/evil/olivares
 [ "$rc" -ne 0 ]
@@ -407,7 +414,7 @@ grep -q "release_github_repo=$PRE_ID" "$out" &&
 	grep -q "mirror_image_repo=ghcr.io/$PRE_ID/mirror" "$out" &&
 	grep -q "homebrew_tap_owner=${PRE_ID%%/*}" "$out" &&
 	grep -q 'homebrew_tap_name=homebrew-preprod' "$out" &&
-	grep -q 'release_version=26.8.0' "$out"
+	grep -q 'release_version=26.11' "$out"
 check "preprod outputs carry every rehearsal destination and the real version" "release/oci/mirror/tap" $?
 
 # DENY-CLOSED: without the injection there is no name to fall back to.

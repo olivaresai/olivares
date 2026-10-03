@@ -21,7 +21,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"log/slog"
 	"net/http"
 	"regexp"
@@ -156,6 +155,9 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	reg.Handle("POST", "/views", permViewWrite, m.handleCreate)
 	reg.Handle("PUT", "/views/{id}", permViewWrite, m.handleUpdate)
 	reg.Handle("DELETE", "/views/{id}", permViewWrite, m.handleDelete)
+	// The caller's own favorites (favorites.go): read permission, own row only.
+	reg.Handle("GET", "/favorites", permViewRead, m.handleFavoritesGet)
+	reg.Handle("PUT", "/favorites", permViewRead, m.handleFavoritesPut)
 }
 
 // savedViewDTO is a saved view as the console consumes it. Params round-trips
@@ -206,6 +208,8 @@ func (in *savedViewInput) validate() string {
 	switch {
 	case !featureIDPattern.MatchString(in.FeatureID):
 		return "feature_id must be a lowercase slug (max 64 chars)"
+	case in.FeatureID == favoritesFeature:
+		return "feature_id \"favorites\" is reserved for the favorites list"
 	case in.Name == "" || len(in.Name) > maxNameLen:
 		return "name is required (max 120 chars)"
 	case len(in.Description) > maxDescLen:
@@ -252,8 +256,8 @@ func (m *Module) handleList(w http.ResponseWriter, r *http.Request, mc api.Modul
 		seen := make(map[string]bool, len(own)+len(shared))
 		for _, rec := range append(own, shared...) {
 			id := rec.String(model.ColID)
-			if seen[id] {
-				continue // an own shared view matches both queries
+			if seen[id] || rec.String(colFeature) == favoritesFeature {
+				continue // an own shared view matches both queries; favorites are not a view
 			}
 			seen[id] = true
 			out.Items = append(out.Items, toDTO(rec, caller))
@@ -326,8 +330,12 @@ func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request, mc api.Mod
 		if err != nil {
 			return err
 		}
-		mine := 0
+		mine, views := 0, 0
 		for _, rec := range all {
+			if rec.String(colFeature) == favoritesFeature {
+				continue // favorites rows are not views and do not count toward the caps
+			}
+			views++
 			if rec.String(colOwner) == caller {
 				mine++
 				if rec.String(colFeature) == in.FeatureID && rec.String(colName) == in.Name {
@@ -336,7 +344,7 @@ func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request, mc api.Mod
 				}
 			}
 		}
-		if len(all) >= maxPerTenant {
+		if views >= maxPerTenant {
 			refuse = refusal{http.StatusUnprocessableEntity, "tenant saved-view cap reached (2000)"}
 			return errRefused
 		}
@@ -534,20 +542,7 @@ func eqBool(col string, val bool) model.Filter {
 // decodeJSON reads a JSON body into v, bounding the read so a malformed or huge
 // body cannot exhaust memory. It returns false (and writes a 400) on failure.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
-	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid request body"))
-		return false
-	}
-	// A BODY IS ONE JSON DOCUMENT (2026-08-06). Decode reads the FIRST value and stops,
-	// so `{...}{...}` used to decode the first, silently discard the rest and perform a
-	// durable mutation returning 201. Measured against a live engine on the models route,
-	// with the created row read back by a separate GET; core/api/render.go has rejected
-	// this since it was written, and 21 of the 22 copies of this helper had drifted from
-	// it. A concatenation error becomes an apparently correct action, and two layers can
-	// disagree about which document the request meant.
-	if dec.More() {
+	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 1 << 20}); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid request body"))
 		return false
 	}
@@ -586,6 +581,6 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusOK, nil)
 		return
 	}
-	status, msg, _ := api.StoreErrorStatus(err)
-	writeJSON(w, status, errorBody(msg))
+	status, body, _ := api.StoreErrorBody(err)
+	writeJSON(w, status, body)
 }

@@ -10,9 +10,11 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
 )
 
@@ -449,7 +451,86 @@ func governanceApprovalsCmd(flags *authClientFlags) *cobra.Command {
 			"and why, which is the record an audit actually asks for.",
 	}
 	cmd.AddCommand(governanceApprovalsListCmd(flags), governanceApprovalsGetCmd(flags),
-		governanceApprovalsDecisionsCmd(flags))
+		governanceApprovalsDecisionsCmd(flags),
+		governanceApprovalsDecideCmd(flags, "approve"), governanceApprovalsDecideCmd(flags, "reject"))
+	return cmd
+}
+
+// governanceApprovalsDecideCmd is `approve` and `reject`: an administrator on a server
+// without a browser decides a request. The request and its whole reason are shown
+// first, then one confirmation (--yes skips it), then the vote goes to the engine's
+// decisions route. Deciding needs a signed-in person: a system token cannot vote, and
+// the engine may ask for a recent stronger sign-in (step-up).
+func governanceApprovalsDecideCmd(flags *authClientFlags, decision string) *cobra.Command {
+	var (
+		note string
+		yes  bool
+	)
+	verb, done := "Approve", "Approved"
+	if decision == "reject" {
+		verb, done = "Reject", "Rejected"
+	}
+	cmd := &cobra.Command{
+		Use:   decision + " <approval-id>",
+		Short: verb + " a request that waits for a person",
+		Long: decision + " shows the request and its whole reason, asks once (--yes skips it) and records\n" +
+			"your vote. It prints where the request stands: decided, or how many more votes it\n" +
+			"needs. Use it where there is no browser; the console's approvals page does the same.",
+		Example: "  olivares governance approvals " + decision + " 01890000-0000-7000-8000-000000000001 --note \"checked the folder\"",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			path := "/approvals/" + url.PathEscape(args[0])
+			res, err := observeCall{flags: flags, ns: governanceNS, method: http.MethodGet, path: path}.do(cmd)
+			if err != nil {
+				return err
+			}
+			var a cliApproval
+			if err := res.decode(&a); err != nil {
+				return err
+			}
+			if a.Status != "" && a.Status != "pending" {
+				// Nothing to decide: say so before showing the request or asking (refresh 06).
+				return sentence(exitcode.Conflict, "Approval %s is already %s; there is nothing to decide.",
+					termSafe(args[0]), termSafe(a.Status))
+			}
+			if !outputIsJSON(cmd) {
+				out := cmd.OutOrStdout()
+				if err := writeApprovalTable(out, []cliApproval{a}); err != nil {
+					return err
+				}
+				writeApprovalReason(renderTo(out), a.Reason)
+			}
+			what := strings.ToLower(verb) + " " + termSafe(a.ID)
+			if a.Action != "" {
+				what += " (" + termSafe(a.Action) + ")"
+			}
+			if err := confirmDestructive(cmd, yes, what); err != nil {
+				return err
+			}
+			res, err = observeCall{flags: flags, ns: governanceNS, method: http.MethodPost, path: path + "/decisions",
+				body: map[string]any{"decision": decision, "note": note}}.do(cmd)
+			if err != nil {
+				return err
+			}
+			var after cliApproval
+			if err := res.decode(&after); err != nil {
+				return err
+			}
+			return renderOut(cmd, func(out io.Writer) error {
+				r := renderTo(out)
+				r.Blank()
+				standing := "The request is " + termSafe(after.Status) + "."
+				if after.Status == "pending" {
+					more := after.RequiredApprovals - after.ApproveCount
+					standing = fmt.Sprintf("It needs %d more approval(s).", more)
+				}
+				r.Line(fmt.Sprintf("%s %s. %s", done, termSafe(after.ID), standing))
+				return nil
+			}, observeJSON(res.raw))
+		},
+	}
+	cmd.Flags().StringVar(&note, "note", "", "why you decided (kept with your vote)")
+	addYesFlag(cmd, &yes)
 	return cmd
 }
 
@@ -563,7 +644,11 @@ func governanceApprovalsGetCmd(flags *authClientFlags) *cobra.Command {
 				return err
 			}
 			return renderOut(cmd, func(out io.Writer) error {
-				return writeApprovalTable(out, []cliApproval{a})
+				if err := writeApprovalTable(out, []cliApproval{a}); err != nil {
+					return err
+				}
+				writeApprovalReason(renderTo(out), a.Reason)
+				return nil
 			}, observeJSON(res.raw))
 		},
 	}
@@ -610,6 +695,63 @@ func governanceApprovalsDecisionsCmd(flags *authClientFlags) *cobra.Command {
 			}, observeJSON(res.raw))
 		},
 	}
+}
+
+// writeApprovalReason prints the request's reason whole, because a reviewer approves
+// the exact command it names. The reason's own lines are kept; a long line is folded
+// only at a space, which becomes the break; internal spacing is unchanged; terminal
+// controls are removed. The text form used to drop it (JSON kept it).
+func writeApprovalReason(r *termrender.Renderer, reason string) {
+	r.Blank()
+	r.Line(r.Paint("REASON", termrender.RoleMuted))
+	reason = strings.TrimRight(termSafe(reason), "\n")
+	if strings.TrimSpace(reason) == "" {
+		r.Line("  (none given)")
+		return
+	}
+	width := r.Width()
+	if width <= 0 {
+		width = 80
+	}
+	if width < 60 {
+		width = 60
+	}
+	for _, line := range strings.Split(reason, "\n") {
+		for _, fold := range foldAtSpaces(line, width-2) {
+			r.Line("  " + fold)
+		}
+	}
+}
+
+// foldAtSpaces cuts s into pieces no wider than width, each break at the last space
+// that fits; the space at a break is dropped and every other byte is kept. A word
+// wider than width stays whole.
+func foldAtSpaces(s string, width int) []string {
+	rs := []rune(s)
+	var out []string
+	for len(rs) > width {
+		cut := -1
+		for i := width; i > 0; i-- {
+			if rs[i] == ' ' {
+				cut = i
+				break
+			}
+		}
+		if cut < 0 {
+			for i := width; i < len(rs); i++ {
+				if rs[i] == ' ' {
+					cut = i
+					break
+				}
+			}
+			if cut < 0 {
+				break
+			}
+		}
+		out = append(out, string(rs[:cut]))
+		rs = rs[cut+1:]
+	}
+	return append(out, string(rs))
 }
 
 func writeApprovalTable(out io.Writer, rows []cliApproval) error {

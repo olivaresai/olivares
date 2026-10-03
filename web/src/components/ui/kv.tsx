@@ -45,7 +45,9 @@ export function KvRow({
       <dt className="shrink-0 text-body text-muted-foreground">{label}</dt>
       <dd
         className={cn(
-          'min-w-0 text-body text-foreground',
+          // A value with no spaces (a path, a token, a whole command) breaks
+          // anywhere rather than pushing the sheet wider than the viewport.
+          'min-w-0 text-body text-foreground [overflow-wrap:anywhere]',
           align === 'right' ? 'text-right' : 'flex-1 text-left',
           mono && 'font-mono text-caption tabular-nums',
         )}

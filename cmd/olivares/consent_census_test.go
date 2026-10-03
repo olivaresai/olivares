@@ -190,18 +190,25 @@ func TestEveryCountedColumnHasAReader(t *testing.T) {
 			}
 		}
 		counted := map[string]bool{}
-		for _, d := range e.eng.census.CensusDescriptors() {
+		retirement := map[string]bool{}
+		for _, d := range readerCensusDescriptors(t, e.eng.census) {
 			for _, col := range d.CountedColumns() {
+				counted[string(d.Kind)+"."+col] = true
+			}
+			for _, col := range append(d.CountedColumns(), d.ContentColumns()...) {
 				key := string(d.Kind) + "." + col
-				counted[key] = true
+				if retirement[key] {
+					continue
+				}
+				retirement[key] = true
 				if len(coverage[key]) != 1 {
-					t.Errorf("counted column %s is covered by %v, want exactly one declared module", key, coverage[key])
+					t.Errorf("retirement column %s is covered by %v, want exactly one declared module", key, coverage[key])
 				}
 			}
 		}
 		for key, modules := range coverage {
-			if !counted[key] {
-				t.Errorf("declared module %v covers %s, which is not a counted column", modules, key)
+			if !retirement[key] {
+				t.Errorf("declared module %v covers %s, which is neither counted nor declared content", modules, key)
 			}
 		}
 		for _, key := range censusAnchors {
@@ -222,7 +229,7 @@ func TestEveryCompositionIsReadyForAnAbsenceProof(t *testing.T) {
 		}
 		r := e.eng.census.CompositionReadiness()
 		if !r.Ready() {
-			t.Errorf("the Community composition opened unready: %s", r.Cause())
+			assertEditionAbsenceProofReadiness(t, e, r)
 		}
 		if again := e.eng.census.CompositionReadiness(); again.Ready() != r.Ready() || again.Cause() != r.Cause() {
 			t.Errorf("the readiness verdict changed after open")
@@ -281,7 +288,22 @@ func openCensus(t *testing.T, register func(store.ExtensionRegistry) error) stor
 	return st
 }
 
-// unreadCounted returns the counted columns of st's registry that no declared
+// readerCensusDescriptors includes the stores declared outside the registry in
+// the same composition whose module readers are checked.
+func readerCensusDescriptors(t *testing.T, census store.CompositionCensus) []model.EntityDescriptor {
+	t.Helper()
+	contributions, ok := census.(store.CompositionContributions)
+	if !ok {
+		t.Fatal("the composed store exposes no edition contributions")
+	}
+	descriptors := append([]model.EntityDescriptor(nil), census.CensusDescriptors()...)
+	for _, contribution := range contributions.CompositionContributions() {
+		descriptors = append(descriptors, contribution.OutsideStores...)
+	}
+	return descriptors
+}
+
+// unreadCounted returns the counted columns of st's composition that no declared
 // module reads.
 func unreadCounted(t *testing.T, st store.Store) []string {
 	t.Helper()
@@ -297,7 +319,7 @@ func unreadCounted(t *testing.T, st store.Store) []string {
 		}
 	}
 	var out []string
-	for _, d := range census.CensusDescriptors() {
+	for _, d := range readerCensusDescriptors(t, census) {
 		for _, col := range d.CountedColumns() {
 			if key := string(d.Kind) + "." + col; !read[key] {
 				out = append(out, key)
@@ -316,6 +338,46 @@ func censusOutsideStore(owner *model.ColumnDecl) model.EntityDescriptor {
 			{Name: "owner_ref", Kind: model.KindText, Principal: owner},
 			{Name: "note", Kind: model.KindText, Principal: model.None("rendered prose: consent_census_test.go:1")},
 		},
+	}
+}
+
+// The store's real contribution API carries outside authority columns even
+// though CensusDescriptors inventories only the registered core tables.
+func TestCountedReaderCensusIncludesEditionOutsideColumns(t *testing.T) {
+	for _, read := range []bool{false, true} {
+		name := "unread outside authority"
+		if read {
+			name = "covered outside authority"
+		}
+		t.Run(name, func(t *testing.T) {
+			outside := censusOutsideStore(model.Ref(model.EncodeUserID, model.ClassAuthority))
+			outside.Fields = append(outside.Fields, model.FieldSpec{Name: "opaque_payload", Kind: model.KindBytes})
+			st := openCensus(t, func(reg store.ExtensionRegistry) error {
+				if err := reg.(store.CompositionContributionRegistry).DeclareCompositionContribution(store.CompositionContribution{
+					Edition: "synthetic", Modules: []string{"synthetic"}, OutsideStores: []model.EntityDescriptor{outside},
+				}); err != nil {
+					return err
+				}
+				if read {
+					return reg.(store.CompositionReaderRegistry).DeclareCompositionReader("synthetic", []string{"synthetic.outside.owner_ref"})
+				}
+				return nil
+			})
+			unread := false
+			for _, column := range unreadCounted(t, st) {
+				unread = unread || column == "synthetic.outside.owner_ref"
+			}
+			if unread == read {
+				t.Fatalf("outside authority unread=%v, reader registered=%v", unread, read)
+			}
+			readiness := st.(store.CompositionCensus).CompositionReadiness()
+			for _, cause := range readiness.Causes {
+				if strings.Contains(cause, "synthetic.outside.opaque_payload: undeclared") {
+					return
+				}
+			}
+			t.Fatalf("counting a known outside authority concealed unknown payloads: %v", readiness.Causes)
+		})
 	}
 }
 

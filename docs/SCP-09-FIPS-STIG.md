@@ -18,7 +18,7 @@ profile, shipped as **separate, opt-in artifacts**.
 | Artifact | What it is | How you verify it |
 |---|---|---|
 | `olivares-fips` binary / archive (`.goreleaser.yaml`) | The control plane built in Go **native FIPS 140-3 mode** (`GOFIPS140=v1.0.0`, still `CGO_ENABLED=0` pure-Go static). | `scripts/fips-verify.sh` — builds it, proves the validated module is linked, demonstrates the runtime toggle. |
-| `Dockerfile.fips` → `…:VERSION-fips-amd64` | That FIPS binary on the same distroless static base, launched with `GODEBUG=fips140=on`. | `docker run --rm IMG version` (FIPS on); distroless has **no OS** to OSCAP-scan. |
+| `Dockerfile.fips` → `…:VERSION-fips-amd64` | That FIPS binary on the same Debian 13 slim base as the default image, launched with `GODEBUG=fips140=on`. | `docker run --rm IMG version` (FIPS on); not STIG-scanned (see below). |
 | `Dockerfile.stig` → `…:VERSION-stig-amd64` | The FIPS binary on a **scannable**, STIG-profiled OS (UBI micro), non-root. | `oscap/scan.sh --image …` against the **upstream** DISA STIG SCAP content. |
 | `oscap/` | OpenSCAP harness: `scan.sh`, `tailoring.xml` (extends the upstream profile), `README.md`. | You run it; it produces **your** report. We ship no baked result. |
 
@@ -128,10 +128,9 @@ other connection. The FIPS build story above is unchanged.
 ## STIG / OSCAP: why two images, and how to scan
 
 A DISA STIG is **verified with OpenSCAP** against a SCAP datastream, which needs a
-**scannable OS** (package DB, `/etc`, PAM/auditd config…). The default **distroless**
-image — and `Dockerfile.fips`, which keeps distroless for a lean FIPS *binary* image
-— has **no OS**, so there is **nothing for `oscap` to evaluate** there. That is by
-design: distroless removes the very surface STIG checks inspect.
+**scannable OS** (package DB, `/etc`, PAM/auditd config…) with a STIG profile. The default
+image and `Dockerfile.fips` run on Debian 13 slim, which the RHEL 9 STIG content below does not
+cover, so there is **nothing for `oscap` to evaluate** there.
 
 Therefore the **STIG image** (`Dockerfile.stig`) is a separate **deployment** variant:
 
@@ -178,7 +177,7 @@ the contract: what each artifact claims, and its verification status.
 | **`GODEBUG=fips140=on`** (runtime) | The validated module runs its self-tests and the stdlib permits only approved algorithms for this process. | **Verifiable** via `crypto/fips140.Enabled()`. Build-time `GOFIPS140` selects the module; this toggle enforces it at runtime. |
 | **STIG image** (`Dockerfile.stig`) | Hardened toward the DISA STIG and **self-verifiable** with the published OpenSCAP profile. | **Self-verifiable, NOT a certification.** Run `oscap/scan.sh` against the **upstream** ComplianceAsCode DISA STIG content to produce **your** report. We ship the harness, not a passing result. **No DoD ATO** is claimed. |
 | **`oscap/tailoring.xml`** | A tailoring that **extends** the upstream DISA STIG profile and deselects only container-inapplicable rules. | **Honest tailoring.** Inherits all upstream rules; redefines none; weakens none; each deselection justified inline and reversible. FIPS/crypto rules stay selected. |
-| **Default pure-Go binary / distroless image** (base `olivares` build, `Dockerfile`/`Dockerfile.release`) | The standard reproducible release artifact. | **Unaffected by SCP-09.** Byte-for-byte unchanged; the FIPS/STIG variants are additive and opt-in. |
+| **Default pure-Go binary / Debian 13 slim image** (base `olivares` build, `Dockerfile`/`Dockerfile.release`) | The standard reproducible release artifact. | **Unaffected by SCP-09.** Byte-for-byte unchanged; the FIPS/STIG variants are additive and opt-in. |
 | **FedRAMP / DoD ATO** | — | **Not claimed. None held.** This deliverable provides validated-crypto and self-verifiable-STIG *building blocks*; authorization is a separate, system-level process. |
 
 ### Explicit non-claims

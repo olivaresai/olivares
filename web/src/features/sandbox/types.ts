@@ -71,7 +71,7 @@ export interface Scenario {
 
 /** GET /runs item / GET /runs/{id}. */
 export interface Run {
- live_ref?: string
+  live_ref?: string
   id: string
   /** Nullable: a replay/compare may not be tied to a stored scenario. */
   scenario_ref?: string | null
@@ -152,14 +152,11 @@ export interface RunStreamSummary {
 /** Pre/post-deploy verdict. `improved`=success, `regressed`=danger,
  *  `unchanged`=neutral, `inconclusive`=warning. */
 export type ComparisonVerdict =
-  | 'improved'
-  | 'regressed'
-  | 'unchanged'
-  | 'inconclusive'
+  'improved' | 'regressed' | 'unchanged' | 'inconclusive'
 
 /** GET /comparisons item / GET /comparisons/{id} — append-only deploy evidence. */
 export interface Comparison {
- live_ref?: string
+  live_ref?: string
   id: string
   scenario_ref?: string | null
   baseline_run_ref: string
@@ -203,7 +200,7 @@ export interface RunScenarioInput {
 
 /** POST /replay body (sandbox:run:write) — deterministic replay of a session. */
 export interface ReplayInput {
- live_ref?: string
+  live_ref?: string
   session_ref?: string
   variant?: string
   suite_ref?: string
@@ -211,7 +208,7 @@ export interface ReplayInput {
 
 /** POST /compare body (sandbox:run:admin) — pre/post-deploy decision. */
 export interface CompareInput {
- live_ref?: string
+  live_ref?: string
   scenario_ref?: string
   session_ref?: string
   baseline_variant: string

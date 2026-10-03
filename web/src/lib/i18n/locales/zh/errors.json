@@ -6,7 +6,11 @@
   },
   "forbidden": {
     "title": "未获授权",
-    "description": "您无权查看此内容。请向管理员申请访问权限。"
+    "description": "您无权查看此内容。请向管理员申请访问权限。",
+    "accessTo": "你无权访问{{subject}}。",
+    "accessToThis": "你无权访问此内容。",
+    "nextStep": "你的角色或组策略不允许此操作。此组织的所有者或管理员可以授予权限。",
+    "deniedByPolicy": "策略“{{policy}}”拒绝了此操作。此组织的所有者或管理员可以更改它。"
   },
   "serverError": {
     "title": "出现问题",
@@ -38,11 +42,21 @@
     "locked_out": "尝试次数过多。请稍后重试。",
     "setup_required": "控制平面需要进行首次启动设置。",
     "setup_complete": "设置已完成。",
-    "cross_tenant_admin_pool_not_configured": "此部署没有跨租户的管理数据库连接池。请使用 `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` 预配 NOSUPERUSER BYPASSRLS 角色（参见 deploy/postgres/README.md），并使用指向该角色的 --admin-dsn 重启服务器。",
+    "cross_tenant_admin_pool_not_configured": "此数据库无法列出所有组织。请运行 `olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` 并重启引擎。或者使用 `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` 预配 NOSUPERUSER BYPASSRLS 角色（参见 deploy/postgres/README.md），并使用指向该角色的 --admin-dsn 重启服务器。",
     "internal": "发生内部错误。"
   },
   "tenantAdmission": {
     "title": "需要组织准入",
     "description": "请使用已获组织准入的目录身份登录。全局 bootstrap 权限不能操作工作区通信。"
+  },
+  "moduleNotEnabled": {
+    "title": "此安装未启用",
+    "description": "Olivares 的这一部分在这里已关闭，因此没有可显示的内容。",
+    "named": "此安装未启用 {{module}}。",
+    "unnamed": "此安装未启用该模块。"
+  },
+  "notInEdition": {
+    "subject": "此版本不包含{{subject}}。",
+    "generic": "此版本不包含此功能。"
   }
 }

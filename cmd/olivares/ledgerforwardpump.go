@@ -117,5 +117,5 @@ func (p *ledgerForwardPump) runOnce(ctx context.Context) error {
 // are out of scope for tenant SIEM forwarding (the same boundary the eventing pump
 // and capture path apply).
 func (p *ledgerForwardPump) businessTenants(ctx context.Context) ([]model.TenantID, error) {
-	return servedBusinessTenants(ctx, p.st)
+	return servedWorkTenants(ctx, p.st)
 }

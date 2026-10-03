@@ -1,0 +1,101 @@
+{
+  "tools": {
+    "claude": "Claude Code",
+    "codex": "Codex",
+    "grok": "Grok Build"
+  },
+  "status": {
+    "installed": "已安装",
+    "notInstalled": "未安装",
+    "signedIn": "已登录",
+    "signedInAs": "已以 {{account}} 登录",
+    "notSignedIn": "未登录",
+    "usesKey": "使用你的 API 密钥：{{name}}",
+    "usesLocal": "使用本地模型服务器：{{name}}",
+    "keyRefused": "API 密钥 {{name}} 被拒绝。请在“提供方”中替换它。",
+    "keyUnchecked": "无法检查 {{name}} 密钥。请在“提供方”中测试它。"
+  },
+  "actions": {
+    "install": "安装",
+    "installing": "正在安装…",
+    "retry": "重试",
+    "cancel": "取消",
+    "signInClaude": "使用 Claude 登录",
+    "signInChatGPT": "使用 ChatGPT 登录",
+    "useApiKey": "改用 API 密钥",
+    "signInGrok": "使用你的 xAI 账户登录"
+  },
+  "signIn": {
+    "openLink": "打开登录页面",
+    "codeLabel": "登录页面上的代码",
+    "codeHint": "批准访问后，页面会显示一个代码。请粘贴到这里。",
+    "continue": "继续",
+    "enterCode": "在登录页面上输入此代码：",
+    "waiting": "正在等待你在登录页面上完成操作…",
+    "expires": "代码在 15 分钟内有效。取消会停止此服务器上的登录。"
+  },
+  "errors": {
+    "status": "无法读取该工具的状态。",
+    "install": "安装未完成：{{error}}",
+    "signIn": "登录未完成。请重新开始。",
+    "start": "会话未能启动：{{error}}",
+    "needsApproval": "在此部署中，不经询问就运行命令需要另一人批准。请改为仅编辑开始："
+  },
+  "steps": {
+    "install": {
+      "title": "安装一个智能体工具",
+      "body": "Olivares 在此服务器上运行官方的 Claude Code 或 Codex。一个就够了。"
+    },
+    "signIn": {
+      "title": "登录工具",
+      "body": "使用你的 Claude 或 ChatGPT 订阅。登录信息保留在此服务器上工具存放它的位置。",
+      "waiting": "请先安装一个工具。"
+    },
+    "start": {
+      "title": "启动会话",
+      "body": "选择一个文件夹，如果愿意，可以说明先做什么。"
+    },
+    "progress": "已完成 {{done}}/3"
+  },
+  "start": {
+    "tool": "工具",
+    "notReady": "{{tool}} 尚无法启动。",
+    "folder": "文件夹",
+    "folderHint": "此服务器上的一个文件夹。留空则在新文件夹中开始。",
+    "prompt": "第一条消息（可选）",
+    "promptPlaceholder": "它应该先做什么？",
+    "more": "更多选项",
+    "permission": "智能体可以做什么",
+    "start": "启动",
+    "starting": "正在启动…",
+    "needTool": "请先安装并登录一个工具。",
+    "dialogTitle": "新建会话",
+    "dialogDescription": "选择一个文件夹并说明要做什么。",
+    "advanced": "高级启动选项",
+    "secrets": "作为环境变量的密钥",
+    "secretsHint": "会话从你指定的变量中读取所选的保管库密钥。该值不会被显示、记录或写入文件夹。",
+    "secretsNone": "还没有会话密钥。请添加一个以 env/ 开头命名的密钥。",
+    "secretUse": "将 {{name}} 提供给此会话",
+    "secretVariable": "{{name}} 的变量",
+    "secretsManage": "管理会话密钥",
+    "openTools": "打开 AI 工具"
+  },
+  "permission": {
+    "editsOnly": "仅编辑文件",
+    "editsAndCommands": "编辑文件并运行命令",
+    "readOnly": "只读",
+    "ask": "每次操作前询问"
+  },
+  "next": {
+    "title": "后续步骤（需要时再做）",
+    "invite": "邀请成员",
+    "identity": "连接身份提供方",
+    "policies": "设置策略",
+    "mcp": "添加 MCP 服务器",
+    "budgets": "设置预算",
+    "cli": "使用 olivares 命令行",
+    "cliHint": "此服务器上已安装 olivares 命令。在其他计算机上，可用以下命令安装：",
+    "copy": "复制",
+    "copied": "已复制"
+  }
+}

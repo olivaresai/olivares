@@ -3,7 +3,10 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 package main
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestAgentToolsOfflineOpenAPICarriesAllSystemRoutes(t *testing.T) {
 	doc, err := moduleOpenAPIDocument()
@@ -30,8 +33,17 @@ func TestAgentToolsOfflineOpenAPICarriesAllSystemRoutes(t *testing.T) {
 		}
 		if path == "installs" {
 			responses := op["responses"].(map[string]any)
-			if responses["202"] == nil || responses["200"] != nil || op["x-required-assurance"] != 3 {
+			if responses["202"] == nil || responses["200"] != nil || responses["403"] == nil {
 				t.Fatalf("install contract: %#v", op)
+			}
+			// The install asks the deployment's administrative step-up policy
+			// (agenttoolsapi handleInstall -> guard(true) -> auth.StepUpSatisfied): nothing
+			// beyond the sign-in by default, an authenticator code under totp, a passkey
+			// (AAL3) under passkey. No fixed assurance holds on every deployment, so none
+			// is published; the text names the step-up (TestInstallFollowsTheStepUpPolicy).
+			description, _ := op["description"].(string)
+			if _, fixed := op["x-required-assurance"]; fixed || !strings.Contains(description, "administrative step-up") {
+				t.Fatalf("install step-up: %#v", op)
 			}
 		}
 	}

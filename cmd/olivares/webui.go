@@ -93,6 +93,7 @@ type spaServer struct {
 	once      sync.Once
 	indexHTML []byte
 	indexErr  error
+	assets    sync.Map // Existing immutable asset names only; bounded by the bundle.
 }
 
 func (s *spaServer) serve(w http.ResponseWriter, r *http.Request) {
@@ -106,8 +107,12 @@ func (s *spaServer) serve(w http.ResponseWriter, r *http.Request) {
 	}
 
 	name := strings.TrimPrefix(path.Clean("/"+r.URL.Path), "/")
-	if name == "" {
+	if name == "" || name == "index.html" {
 		s.serveIndex(w, r)
+		return
+	}
+	if cached, ok := s.assets.Load(name); ok {
+		cached.(*spaAsset).serve(w, r, name)
 		return
 	}
 
@@ -124,7 +129,9 @@ func (s *spaServer) serve(w http.ResponseWriter, r *http.Request) {
 	// Vite emits content-hashed asset filenames under assets/, safe to cache hard;
 	// everything else (favicon, etc.) revalidates so a redeploy is picked up.
 	if strings.HasPrefix(name, "assets/") {
-		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		asset, _ := s.assets.LoadOrStore(name, newSPAAsset(name, data))
+		asset.(*spaAsset).serve(w, r, name)
+		return
 	} else {
 		w.Header().Set("Cache-Control", "no-cache")
 	}

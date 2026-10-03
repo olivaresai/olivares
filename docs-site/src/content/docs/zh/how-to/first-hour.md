@@ -109,11 +109,41 @@ curl -sf "$BASE/v1/agents" \
 ./bin/olivares agent managed-settings --out ./managed-settings.json
 ```
 
-`POST /v1/agents` **不**要求 AAL3。创建源、连接器、工作区和密钥 **要求**。
+`POST /v1/agents` 不要求额外的管理认证。源、连接器、工作区和密钥的额外
+认证由 `admin_step_up` 决定，默认值为 `none`。如何要求 AAL3，请参阅下方
+的策略设置。
 
 ### 4. 受治理会话：允许 Read，拒绝 Bash
 
-用 `OLIVARES_HOOK_PEP_CONFIG` 和 deny-closed 策略重启。然后：
+停止步骤 1 的引擎。在同一工作目录中保留步骤 1 和 2 的 `DATA` 与 `TENANT`，
+然后执行以下命令。这会写入默认拒绝的策略，并挂载 PEP 后重启引擎：
+
+```bash
+# TENANT is the tenant_id returned in step 2.
+: "${TENANT:?Set TENANT to the tenant_id from step 2}"
+cat > ./hook-pep.json <<JSON
+{
+  "listen": "127.0.0.1:8447",
+  "tenants": [
+    {
+      "tenant": "$TENANT",
+      "require_firm_identity": false,
+      "policy": {
+        "version": "first-hour/v1",
+        "default": "deny",
+        "rules": [
+          { "tool": "Read", "decision": "allow", "reason": "reads are permitted in the first hour" },
+          { "tool": "Bash", "decision": "deny", "reason": "shell execution is blocked in the first hour" }
+        ]
+      }
+    }
+  ]
+}
+JSON
+OLIVARES_HOOK_PEP_CONFIG=./hook-pep.json \
+  ./bin/olivares serve --insecure --data-dir "$DATA" \
+  --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444
+```
 
 ```bash
 export OLIVARES_HOOK_PEP_URL=http://127.0.0.1:8447/
@@ -156,11 +186,19 @@ docker compose -f deploy/compose/docker-compose.yml \
 控制平面保持本地 SQLite。在已有 `claude` 的工作站上运行智能体。官方 CLI
 的实时会话（PTY）属于 Community 运行时，不是本页。
 
-## AAL3 屏障（仍然成立）
+## 管理操作的额外认证策略
 
-创建源、连接器、工作区和密钥在达到 AAL3 之前会被 **拒绝**。标准安装上
-PIV/CAC 返回 **501**。打开 `https://localhost:PORT`，然后到
-**Identity → Privileged login**。
+`admin_step_up` 默认为 `none`：已登录的管理员使用当前会话的认证强度
+执行操作。因此，创建源、连接器、工作区和密钥默认不要求 AAL3。认证、权限、
+租户隔离和审计仍然适用；API 令牌不能满足此认证要求。
+
+要为这些操作要求新鲜的 AAL3，请在 `https://localhost:PORT` 注册 passkey，
+并在该控制台地址完成新的 passkey/PIV 额外认证。在 **Settings → Sign-in →
+Extra check for administrative actions** 中选择 **Passkey**。对应的 API 是
+`PUT /v1/auth/step-up-policy`，请求体为 `{"admin_step_up":"passkey"}`。
+管理员证明所选认证方式可用之前，引擎会拒绝提高策略要求。`POST /v1/agents`
+不受此额外认证检查约束。
+
 
 ## 3. 从控制台启动 Claude Code 会话
 

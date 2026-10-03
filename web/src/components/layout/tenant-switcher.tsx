@@ -1,7 +1,6 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { useQuery } from '@tanstack/react-query'
 import { Building2, Check, ChevronsUpDown } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
@@ -10,13 +9,13 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuLabel,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
-import { systemApi } from '@/lib/api/endpoints'
-import { queryKeys } from '@/lib/api/query'
+import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { cn } from '@/lib/utils'
-import { shortId } from './tenant-label'
+import { grantName, shortId, useOrgs } from './tenant-label'
 
 interface TenantOption {
   tenant: string
@@ -31,15 +30,18 @@ interface TenantOption {
  * org NAMES to non-superadmins — minimum data — so members see a short id + role.)
  */
 export function TenantSwitcher({ className }: { className?: string } = {}) {
-  const { t } = useTranslation(['auth', 'common'])
+  const { t } = useTranslation(['auth', 'common', 'errors'])
   const { grants, activeTenant, setActiveTenant, isSuperadmin } = useAuth()
 
-  const orgs = useQuery({
-    queryKey: queryKeys.orgs,
-    queryFn: () => systemApi.listOrgs(),
-    enabled: isSuperadmin,
-    staleTime: 60_000,
-  })
+  const orgs = useOrgs()
+  // A PostgreSQL install without the tenant inventory (an upgrade, typically) answers the
+  // organization list 501 cross_tenant_admin_pool_not_configured. The read is asked once
+  // per session (useOrgs); the switcher says once, where the list would be, how to enable
+  // it, instead of the bare failure on every screen.
+  const listUnavailable =
+    isSuperadmin &&
+    orgs.error instanceof ApiError &&
+    orgs.error.code === 'cross_tenant_admin_pool_not_configured'
 
   const options: TenantOption[] =
     isSuperadmin && orgs.data
@@ -50,7 +52,7 @@ export function TenantSwitcher({ className }: { className?: string } = {}) {
         }))
       : grants.map((g) => ({
           tenant: g.tenant,
-          label: shortId(g.tenant),
+          label: grantName(grants, g.tenant) ?? shortId(g.tenant),
           sub: t(`auth:roles.${g.role}`, { defaultValue: String(g.role) }),
         }))
 
@@ -127,6 +129,17 @@ export function TenantSwitcher({ className }: { className?: string } = {}) {
             )}
           </DropdownMenuItem>
         ))}
+        {listUnavailable ? (
+          <>
+            <DropdownMenuSeparator />
+            <p
+              className="max-w-80 px-2 py-1.5 text-caption text-muted-foreground"
+              data-slot="org-list-unavailable"
+            >
+              {t('errors:codes.cross_tenant_admin_pool_not_configured')}
+            </p>
+          </>
+        ) : null}
       </DropdownMenuContent>
     </DropdownMenu>
   )

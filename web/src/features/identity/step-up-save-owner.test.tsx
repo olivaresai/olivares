@@ -53,9 +53,10 @@ beforeEach(() => {
   useTenantStore.setState({ activeTenant: 't1' })
   useSessionStore
     .getState()
-    .setSession({ token: 'fixture', sessionId: 'fixture', expiresAt: '' })
+    .setSession({ csrfToken: 'fixture', sessionId: 'fixture', expiresAt: '' })
   configureApiClient({
-    getToken: () => useSessionStore.getState().token,
+    getToken: () => null,
+    getCSRFToken: () => useSessionStore.getState().csrfToken,
     getTenant: () => useTenantStore.getState().activeTenant,
     onUnauthorized: vi.fn(),
     getExpiresAt: () => null,

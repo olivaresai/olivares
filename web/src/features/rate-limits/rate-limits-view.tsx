@@ -14,6 +14,8 @@
 //    (`GET /v1/m/models/rate-limits`, flipped from a declared seam in). The route
 //    always answers 200; when `available=false` the view shows an honest "unavailable"
 //    notice with the backend reason, never a fabricated empty inventory.
+import { ModuleOffNotice } from '@/components/layout/query-error-state'
+import { useModuleOn } from '@/stores/modules'
 import { Gauge } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -40,9 +42,12 @@ export function RateLimitsView() {
   const { activeTenant } = useAuth()
 
   // REAL: the governance Info finding carrying the count (subject anthropic.rate_limit).
+  // It is the security module's: while that is off the summary says so (EU18).
+  const securityOn = useModuleOn('security')
   const findingsQ = useQuery({
     queryKey: rateLimitsKeys.findings(activeTenant),
     queryFn: () => rateLimitsApi.findings(),
+    enabled: securityOn,
   })
 
   // LIVE: the per-group inventory (GET /v1/m/models/rate-limits — always 200).
@@ -92,6 +97,7 @@ export function RateLimitsView() {
           hint={t('rateLimits:truncation.hint')}
           className="px-0 pt-0 pb-3"
         />
+        {securityOn ? null : <ModuleOffNotice module="security" />}
         <AsyncSection query={findingsQ} skeletonHeight={108}>
           {(list) => {
             // The connector emits exactly one summary for this subject; an empty list

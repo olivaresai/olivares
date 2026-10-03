@@ -49,7 +49,7 @@ func newDeployCmd() *cobra.Command {
 			"  0  the operation completed\n" +
 			"  7  an approval was opened and NOTHING was actuated — re-run with --approval-ref\n" +
 			"  5  a kill switch or a state conflict blocked it; nothing was actuated\n" +
-			"  3  governance denied it, or your session needs a hardware step-up",
+			"  3  governance denied it, or your session needs the step-up this deployment requires",
 		Example: "  olivares deploy definitions ls\n" +
 			"  olivares deploy plan dep-1\n" +
 			"  olivares deploy apply dep-1 --approval-ref ap-9\n" +
@@ -392,8 +392,9 @@ func newDeployApplyCmd(flags *authClientFlags) *cobra.Command {
 			"  with --approval-ref     the engine deploys only if the approval is explicit\n" +
 			"                          AND bound to the current plan hash.\n\n" +
 			"A retired definition is a conflict (exit 5) — roll it back or update it first.\n" +
-			"A human session without a fresh hardware step-up is refused with exit 3, and\n" +
-			"this command says that is what happened rather than blaming your role.",
+			"When an administrator has turned on the administrative step-up (it is off by\n" +
+			"default), a human session without it is refused with exit 3, and this command\n" +
+			"says that is what happened rather than blaming your role.",
 		Example: "  olivares deploy apply dep-1\n  olivares deploy apply dep-1 --approval-ref ap-9",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

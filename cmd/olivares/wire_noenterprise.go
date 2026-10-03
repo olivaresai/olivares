@@ -276,6 +276,13 @@ func editionModuleRegistrars(_ EditionConfig) []api.Module {
 	return []api.Module{sessioncockpit.NewPlaceholder()}
 }
 
+// editionActivationModules names the engine modules (moduleCatalog names) an
+// activation add-on needs. The default (AGPL) build links no add-on, so no add-on
+// runs a module here. The commercial build maps each add-on of its activation
+// catalog: while the add-on is active its modules run without being selected
+// (moduleprofile.go), so enabling a family is one action.
+func editionActivationModules(_ string) []string { return nil }
+
 // editionAgentServers wires NO auxiliary listener in the default (AGPL) build: the
 // session cockpit's mTLS agent link is commercial and links only under
 // `enterprise && addon_ids` (docs/contracts/COCKPIT-03-agent-protocol.md §3). An empty

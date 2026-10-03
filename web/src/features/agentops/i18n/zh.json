@@ -79,13 +79,15 @@
     "create": "新建会话",
     "stop": "停止",
     "resume": "恢复",
+    "startAgain": "重新开始",
     "cleanup": "清理",
     "delete": "删除",
     "attach": "接入",
     "detach": "断开"
   },
   "create": {
-    "title": "新建 Claude Code 会话",
+    "title": "新建会话",
+    "titleTool": "新建 {{tool}} 会话",
     "description": "Olivares 启动并治理该进程——等同于 CLI 启动的可视化形式，策略在线生效。",
     "name": "名称",
     "namePlaceholder": "显示标签（可选）",
@@ -163,7 +165,7 @@
     "none": "无",
     "providerProfile": "提供商配置档案",
     "providerDriver": "驱动",
-    "providerEnvironment": "执行环境",
+    "providerEnvironment": "服务器",
     "liveRef": "实时行"
   },
   "live": {
@@ -345,7 +347,7 @@
   },
   "profiles": {
     "title": "提供商配置文件",
-    "subtitle": "一个执行环境上一个已配置提供商实例的持久身份：由哪个驱动提供服务，以及启动的会话在哪个配置主目录下运行。配置文件只登记已存在的主目录，不安装任何内容，也不登录任何账户。",
+    "subtitle": "会话中工具的运行方式：使用哪个工具，以及它从哪个设置文件夹登录。配置文件指向此服务器上已有的工具安装；它不会安装任何内容，也不会登录。",
     "register": "登记配置文件",
     "nextAction": "登记一个配置文件",
     "rowMenu": "{{name}} 的行操作",
@@ -354,7 +356,7 @@
     "cols": {
       "name": "配置文件",
       "driver": "驱动",
-      "environment": "执行环境",
+      "environment": "服务器",
       "state": "状态",
       "launch": "在此启用",
       "created": "创建时间"
@@ -367,8 +369,9 @@
     "environment": {
       "local": "本节点",
       "foreign": "其他环境",
-      "foreignHint": "此配置文件属于另一个执行环境。它会如实显示，且永远不会从本节点启动。"
+      "foreignHint": "此配置文件属于另一台服务器。它会显示在这里，但绝不会从此服务器启动。"
     },
+    "serverUserLogin": "使用的是本服务器用户的登录；请重新登录以使用产品登录",
     "operable": {
       "yes": "在此环境已启用",
       "no": "在此环境未启用",
@@ -376,8 +379,8 @@
     },
     "empty": {
       "title": "没有提供商配置文件",
-      "registerHint": "使用上方的“{{control}}”登记本节点上现有提供商安装的配置主目录；之后会话即可在稳定身份下启动并归属。",
-      "noWrite": "登记现有提供商安装的配置主目录需要 sessions:profile:write，您的角色不包含该权限。"
+      "registerHint": "登记一个配置文件，以添加此服务器上已有的工具安装。之后，会话将使用其设置和登录信息运行。",
+      "noWrite": "添加配置文件需要 sessions:profile:write 权限，而你的角色不包含该权限。"
     },
     "filteredEmpty": {
       "title": "没有匹配此状态的配置文件",
@@ -402,23 +405,26 @@
     },
     "create": {
       "title": "登记提供商配置文件",
-      "description": "登记此执行环境上现有提供商安装的主目录。服务器在本节点上验证每条路径——绝对路径、已解析符号链接、存在且为目录。不会创建、安装或登录任何内容，也不会发送任何凭据。",
+      "description": "添加此服务器上已有的工具安装。服务器会检查每个文件夹是否在此存在；不会创建、安装或登录任何内容，也不会发送任何凭据。",
       "driver": "驱动",
-      "driverPlaceholder": "claude",
-      "driverHint": "小写驱动键（字母、数字、- _ .）。本节点能否启动该配置文件由服务器在登记后报告，而不由名称决定。",
-      "configHome": "配置主目录",
+      "configHome": "设置文件夹",
       "configHomePlaceholder": "/home/agent/.claude-work",
       "configHomeHint": "提供商配置目录的绝对路径（对 Claude Code 而言即其 CLAUDE_CONFIG_DIR）。在本节点上验证；不存在的目录将被拒绝，绝不会被创建。",
       "userHome": "用户主目录",
       "userHomePlaceholder": "/home/agent",
       "userHomeHint": "启动的会话作为 HOME 运行所在的绝对路径。在本节点上验证。",
+      "homesOptional": "使用工具自己的登录时，两项都留空即使用此服务器上该工具自己的文件夹。",
       "displayName": "显示名称",
       "displayNamePlaceholder": "一个标签（可选）",
-      "environmentKnown": "登记到本节点的执行环境 {{env}}，由其验证路径。面向其他环境的配置文件需从该环境登记。",
-      "environmentUnknown": "登记到本节点的执行环境，由其验证路径。面向其他环境的配置文件需从该环境登记。",
+      "environmentKnown": "添加到此服务器（{{env}}），由它检查文件夹。其他服务器的配置文件需在那台服务器上添加。",
+      "environmentUnknown": "添加到此服务器，由它检查文件夹。其他服务器的配置文件需在那台服务器上添加。",
       "submit": "登记",
       "submitting": "登记中…",
-      "success": "提供商配置文件已登记"
+      "success": "提供商配置文件已登记",
+      "homesOptionalManaged": "使用“提供商”中的 API 密钥时，两个文件夹都留空：此服务器会为该配置文件创建专用文件夹。",
+      "missingProvider": "请选择此配置文件使用的 API 密钥。",
+      "missingHomesOrNone": "请填写两个文件夹，或两个都留空。",
+      "missingHomes": "请填写两个文件夹。它们必须已存在于此服务器上。"
     },
     "rename": {
       "title": "重命名配置文件",
@@ -444,7 +450,7 @@
     "details": {
       "ref": "引用",
       "driver": "驱动",
-      "environment": "执行环境",
+      "environment": "服务器",
       "state": "状态",
       "launch": "在此启用",
       "created": "创建时间",
@@ -455,20 +461,20 @@
     "configuration": {
       "title": "配置",
       "hint": "存储的主目录仅管理员可读，仅在您请求时获取，且从不在列表中显示。绝不会返回任何凭据值。",
-      "configHome": "配置主目录",
+      "configHome": "设置文件夹",
       "userHome": "用户主目录",
-      "validatedOn": "由执行环境 {{env}} 验证并存储的路径。",
+      "validatedOn": "由服务器 {{env}} 检查并保存的文件夹。",
       "loading": "正在读取配置…",
       "failed": "无法读取配置。"
     },
     "bindings": {
       "title": "来源绑定",
-      "subtitle": "将一个已配置的来源，以本节点应用的确切修订版，专用于一个配置文件，使该来源观测到的会话归属于它。身份是来源的持久 ID 和修订版，而非其名称。",
+      "subtitle": "将此服务器读取的某个来源绑定到一个配置文件，使该来源发现的会话计入该配置文件。",
       "cols": {
         "source": "来源",
         "revision": "已应用修订版",
         "profile": "配置文件",
-        "environment": "执行环境",
+        "environment": "服务器",
         "state": "状态",
         "bound": "绑定时间"
       },
@@ -481,7 +487,7 @@
         "description": "将已配置的来源绑定到配置文件，以归属其观测到的会话。"
       },
       "noRead": "未显示来源绑定：您的角色不包含 sessions:profile-binding:read。",
-      "notBindable": "只有本执行环境的活跃配置文件才能接受绑定。",
+      "notBindable": "只能绑定此服务器上的活动配置文件。",
       "revoke": {
         "title": "撤销绑定",
         "description": "已在此绑定下归属的会话保留其来源；此后经该来源的观测不再归属于该配置文件。此操作无法撤销——新的绑定是新的一行。",
@@ -490,16 +496,16 @@
       },
       "create": {
         "title": "将来源绑定到配置文件",
-        "description": "引擎以本节点应用的修订版绑定来源的持久 ID。两者均从来源名册读取——绝不手动输入，也绝不从名称推导。",
+        "description": "引擎按此服务器最近一次应用的状态绑定来源，信息读取自来源列表。它从不按名称匹配来源。",
         "profile": "配置文件",
         "profileNone": "选择配置文件",
         "profileNotBindable": "此处不可绑定",
-        "profileHint": "只有本执行环境的活跃配置文件才能接受绑定。",
+        "profileHint": "只能绑定此服务器上的活动配置文件。",
         "profilesNotRead": "无法读取配置文件，因此无法选择。",
         "source": "来源",
         "sourceNone": "选择来源",
         "sourceNotApplied": "未在本节点应用",
-        "sourceHint": "部署名册中的来源及本节点应用的修订版。本节点未应用的来源无法在此绑定。",
+        "sourceHint": "此服务器已应用的来源。尚未应用的来源无法在此绑定。",
         "needsSourceAdmin": "绑定来源还需要部署级来源管理权限（系统管理员）。您的账户无法读取来源名册，因此此处无法选择来源。",
         "rosterFailed": "无法读取来源名册。",
         "rosterEmpty": "此部署未配置任何来源。",
@@ -524,7 +530,7 @@
         "revision": "已应用修订版",
         "profile": "配置文件",
         "driver": "驱动",
-        "environment": "执行环境",
+        "environment": "服务器",
         "selector": "选择器",
         "state": "状态",
         "bound": "绑定时间",
@@ -604,20 +610,20 @@
     }
   },
   "accounts": {
-    "subtitle": "此租户中已命名的提供商账户。采纳会为现有提供商配置文件命名一次；其主目录保持原位。",
-    "adopt": "采纳配置文件",
+    "subtitle": "此组织中的工具账户，例如第二个 Claude 订阅。会话使用其配置文件指定的账户。将现有配置文件命名为账户时，其设置文件夹保持不变。",
+    "adopt": "将配置文件命名为账户",
     "cols": {
       "name": "账户",
       "driver": "驱动",
-      "environment": "执行环境",
+      "environment": "服务器",
       "state": "状态",
       "isolation": "隔离",
       "created": "创建时间"
     },
     "empty": {
       "title": "没有提供商账户",
-      "adoptHint": "创建受管理的账户，或使用“{{control}}”将现有提供商配置命名为账户。",
-      "noWrite": "将提供商配置文件采纳为账户需要 sessions:account:write，您的角色不包含该权限。"
+      "adoptHint": "创建账户，或将已有的配置文件命名为账户。",
+      "noWrite": "将配置文件命名为账户需要 sessions:account:write 权限，而你的角色不包含该权限。"
     },
     "more": "目前已显示：{{shown}}。还有更多账户；加载更多即可查看。",
     "moreFailed": "无法读取下一页账户。所显示的账户不是完整列表。",
@@ -628,7 +634,7 @@
       "dedicatedMeaning": "专用：服务器将此主目录记录为该账户专用。"
     },
     "home": {
-      "adopted": "已采纳（现有主目录）",
+      "adopted": "来自现有配置文件",
       "managed": "由服务器管理"
     },
     "authSource": {
@@ -640,7 +646,7 @@
       "name": "名称",
       "ref": "引用",
       "driver": "驱动",
-      "environment": "执行环境",
+      "environment": "服务器",
       "state": "状态",
       "home": "主目录",
       "isolation": "隔离",
@@ -661,8 +667,8 @@
       "empty": "未报告任何内容（来源：{{source}}）"
     },
     "adoptDialog": {
-      "title": "采纳提供商配置文件",
-      "description": "将现有提供商配置文件命名为账户。其主目录保持原位，并记录为共享而非专用。不会安装任何内容，也不会登录任何人。",
+      "title": "将配置文件命名为账户",
+      "description": "为现有配置文件指定账户名称。其设置文件夹保持不变，并作为共享文件夹，而不是此账户专用。不会安装任何内容，也不会有人登录。",
       "profile": "配置文件",
       "profilePlaceholder": "选择配置文件",
       "profileOption": "{{name}}（{{ref}}）",
@@ -677,19 +683,19 @@
       "referenceHintNoList": "您的角色无法列出提供商配置文件。请输入现有配置文件的引用；以 ppf_ 开头。",
       "name": "账户名称（可选）",
       "nameHint": "小写字母、数字和连字符，以字母开头，最多 32 个字符。留空则由服务器生成，例如 claude 或 claude-b。",
-      "submit": "采纳",
-      "submitting": "正在采纳…",
-      "pendingStatus": "正在采纳 {{ref}}。正在等待服务器响应。",
-      "success": "已采纳为 {{name}}",
-      "failedTitle": "配置文件未被采纳",
-      "forbidden": "您的角色无法在此租户中采纳账户。未做任何更改。"
+      "submit": "命名为账户",
+      "submitting": "正在命名…",
+      "pendingStatus": "正在将 {{ref}} 命名为账户。正在等待服务器响应。",
+      "success": "已命名为 {{name}}",
+      "failedTitle": "配置文件未被命名为账户",
+      "forbidden": "你的角色无法在此组织中添加账户。未作任何更改。"
     },
     "adoption": {
-      "pending": "正在采纳 {{ref}}。服务器尚未响应。",
-      "adopted": "{{ref}} 已采纳为 {{name}}。",
-      "refused": "{{ref}} 未被采纳：",
-      "forbidden": "{{ref}} 未被采纳：您的角色无法在此租户中采纳账户。未做任何更改。",
-      "unknown": "此处无法得知采纳 {{ref}} 的结果。",
+      "pending": "正在将 {{ref}} 命名为账户。服务器尚未响应。",
+      "adopted": "{{ref}} 现在是账户 {{name}}。",
+      "refused": "{{ref}} 未被命名为账户：",
+      "forbidden": "{{ref}} 未被命名为账户：你的角色无法在此组织中添加账户。未作任何更改。",
+      "unknown": "此处无法确定 {{ref}} 是否已成为账户。",
       "checking": "正在检查 {{ref}} 现在是否为账户…",
       "isAccount": "本次读取时，{{ref}} 是账户 {{name}}。",
       "notAccount": "本次读取时，{{ref}} 不是账户。",
@@ -759,6 +765,8 @@
     "transport": "传输",
     "isolation": "隔离",
     "failedInline": "启动请求被拒绝。你的选择保持不变。",
+    "stoppedAtStart": "The tool started and stopped at once. What it said:",
+    "stoppedSilently": "It printed nothing. Check on AI tools that it is installed and signed in, then start again.",
     "state": {
       "ready": "已检查本地要求",
       "not_configured": "缺少配置",
@@ -788,8 +796,8 @@
       "profile_disabled": "该配置文件已禁用。启用需要 sessions:profile:write；已退役的配置文件不能重新激活。",
       "profile_retired": "该配置文件已退役，不能用于新的启动。",
       "environment_local": "该配置文件属于本节点。",
-      "other_environment": "该配置文件属于另一个执行环境。请选择本地配置文件，或使用管理它的环境。没有自动远程执行。",
-      "environment_unavailable": "管理该配置文件的执行环境在此不可用。",
+      "other_environment": "此配置文件属于另一台服务器。请选择此服务器上的配置文件，或使用管理它的服务器。会话绝不会自动在另一台服务器上启动。",
+      "environment_unavailable": "管理此配置文件的服务器在此不可用。",
       "driver_operable": "此运行时已注册驱动路径。",
       "driver_not_registered": "此驱动未在此运行时注册。Codex 请设置 OLIVARES_SESSION_RUNTIME_CODEX_BIN；Grok 请设置 OLIVARES_SESSION_RUNTIME_GROK_BIN。",
       "transport_unsupported": "此传输不是所选驱动的契约。",
@@ -813,6 +821,7 @@
       "provider_credential_adapter_configured": "此驱动的凭据适配器已接线。",
       "provider_credential_adapter_not_configured": "此驱动的受治理凭据适配器未接线。不要复用其他提供商的 bearer，也不要回退到 account-home。",
       "credential_source_not_injected": "此组合不会注入推理凭据。",
+      "provider_record_bound": "This profile runs on an API key saved in Providers; that key is its credential.",
       "runtime_credentials_wired": "work/K3 运行时凭据已接线。",
       "runtime_credentials_not_requested": "此组合不请求 work/K3 运行时凭据。",
       "runtime_credential_wiring_incomplete": "work/K3 运行时凭据接线不完整。由操作员审查该组合；本次读取不请求商业凭据。",

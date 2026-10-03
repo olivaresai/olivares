@@ -195,7 +195,47 @@
   "notifications": {
     "title": "Activité récente",
     "empty": "Aucune activité récente.",
-    "viewAll": "Tout voir dans le registre d’audit"
+    "viewAll": "Tout voir dans le registre d’audit",
+    "events": {
+      "auditCheckpoint": "Point de contrôle d’audit créé",
+      "orgCreated": "Organisation créée",
+      "loginBlocked": "Une connexion de {{actor}} a été bloquée",
+      "loginBlocked_you": "Une de vos connexions a été bloquée",
+      "ssoLogin": "{{actor}} s’est connecté avec le SSO",
+      "ssoLogin_you": "Vous vous êtes connecté avec le SSO",
+      "userInvited": "{{actor}} a invité quelqu’un",
+      "userInvited_you": "Vous avez invité quelqu’un",
+      "userJoined": "{{actor}} a rejoint",
+      "userJoined_you": "Vous avez rejoint",
+      "sessionStarted": "{{actor}} a démarré une session",
+      "sessionStarted_you": "Vous avez démarré une session",
+      "sessionStopped": "{{actor}} a arrêté une session",
+      "sessionStopped_you": "Vous avez arrêté une session",
+      "sessionResumed": "{{actor}} a repris une session",
+      "sessionResumed_you": "Vous avez repris une session",
+      "sessionFailed": "Une session n’a pas pu démarrer",
+      "approvalRequested": "La session de {{actor}} demande une approbation",
+      "approvalRequested_you": "Votre session demande une approbation",
+      "killswitchEngaged": "Arrêt d’urgence activé par {{actor}}",
+      "killswitchEngaged_you": "Vous avez activé l’arrêt d’urgence",
+      "killswitchReleased": "Arrêt d’urgence levé par {{actor}}",
+      "killswitchReleased_you": "Vous avez levé l’arrêt d’urgence",
+      "killswitchDenied": "L’arrêt d’urgence a arrêté une session",
+      "toolInstalled": "Un outil d’agent a été installé",
+      "secretStored": "Un secret a été enregistré",
+      "viewSaved": "{{actor}} a enregistré une vue",
+      "viewSaved_you": "Vous avez enregistré une vue",
+      "workspaceCreated": "{{actor}} a créé un espace de travail",
+      "workspaceCreated_you": "Vous avez créé un espace de travail",
+      "workspaceUpdated": "{{actor}} a modifié un espace de travail",
+      "workspaceUpdated_you": "Vous avez modifié un espace de travail"
+    },
+    "actors": {
+      "you": "Vous",
+      "member": "Un membre",
+      "token": "Un jeton d’API",
+      "system": "Olivares"
+    }
   },
   "passphrase": {
     "tooShort": "La phrase secrète doit comporter au moins {{min}} caractères",
@@ -257,6 +297,15 @@
         "first": "Premier module",
         "last": "Dernier module",
         "pin": "Épingler ou détacher ce module"
+      },
+      "session": {
+        "new": "Nouvelle session"
+      },
+      "sourceDiff": {
+        "nextFile": "Fichier suivant",
+        "previousFile": "Fichier précédent",
+        "nextHunk": "Modification suivante",
+        "previousHunk": "Modification précédente"
       }
     },
     "when": {

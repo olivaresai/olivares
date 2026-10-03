@@ -106,7 +106,7 @@
   },
   "decisions": {
     "title": "Entscheidungen",
-    "subtitle": "Das append-only geführte Entscheidungsregister und seine Projektion des aktuellen Stands.",
+    "subtitle": "Jede Entscheidung, wie sie festgehalten wurde, und die jetzt gültigen.",
     "view": {
       "effective": "In Kraft",
       "revoked": "Widerrufen",
@@ -125,11 +125,11 @@
     "empty": {
       "effective": {
         "title": "Keine Entscheidung in Kraft",
-        "body": "Die Engine hat die Projektion des aktuellen Stands gelesen und keine in Kraft befindliche gefunden."
+        "body": "Keine Entscheidung ist gültig."
       },
       "revoked": {
         "title": "Keine widerrufenen Entscheidungen",
-        "body": "Die Engine hat die Projektion des aktuellen Stands gelesen und keine widerrufene gefunden."
+        "body": "Keine Entscheidung wurde widerrufen."
       },
       "history": {
         "title": "Keine Entscheidungen verzeichnet",
@@ -175,12 +175,12 @@
   },
   "items": {
     "title": "Arbeitseinheiten",
-    "subtitle": "Filter schränken den gesamten Speicher ein, nicht nur die angezeigte Seite.",
+    "subtitle": "Filter durchsuchen alle Arbeitseinheiten, nicht nur diese Seite.",
     "empty": {
       "title": "Keine Arbeitseinheit passt",
-      "body": "Nichts im Speicher entspricht diesen Filtern. Das ist eine echte, vollständige Antwort: Die Engine hat den Speicher gelesen und keine gefunden.",
+      "body": "Keine Arbeitseinheit entspricht diesen Filtern.",
       "allTitle": "Noch keine Arbeitseinheiten",
-      "allBody": "Arbeitseinheiten erscheinen hier, sobald Sitzungen, Agenten und Bedienende sie erfassen. Das ist eine echte, vollständige Antwort: Die Engine hat den Speicher gelesen und keine gefunden.",
+      "allBody": "Arbeitseinheiten erscheinen hier, sobald Sitzungen, Agenten und Personen sie erfassen.",
       "start": "Sitzung starten"
     }
   },
@@ -228,7 +228,7 @@
     "error": "Stream unterbrochen",
     "unavailableBody": "Die angezeigte Liste kann veraltet sein, und nichts anderes wird Sie darauf hinweisen. Aktualisieren Sie, um den Speicher direkt zu lesen."
   },
-  "subtitle": "Das dauerhafte sitzungsübergreifende Backlog: Arbeitseinheiten, Zuständigkeit, Abhängigkeiten, Abnahmekriterien und Entscheidungen. Jede Änderung wird geplant, bevor sie angewendet wird.",
+  "subtitle": "Arbeit, die Sitzungen und Personen teilen: Einheiten, Verantwortliche, Abhängigkeiten, Abnahmekriterien und Entscheidungen. Jede Änderung wird angezeigt, bevor sie angewendet wird.",
   "tabs": {
     "items": "Arbeitseinheiten",
     "decisions": "Entscheidungen"
@@ -276,6 +276,7 @@
     "noPermission": "Ihre Rolle kann keine Übergabe anbieten. Dieser Vorgang braucht sessions:message-send:write."
   },
   "url": {
-    "invalidItem": "Die Adresse nennt eine Elementkennung, die diese Ansicht nicht verwenden kann, und wurde ignoriert."
+    "invalidItem": "Die Adresse nennt eine Elementkennung, die diese Ansicht nicht verwenden kann, und wurde ignoriert.",
+    "invalidFilter": "Die Adresse nennt einen Filter, den diese Seite nicht anbietet; daher werden alle Einträge angezeigt."
   }
 }

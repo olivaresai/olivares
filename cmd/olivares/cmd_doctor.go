@@ -31,8 +31,10 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/localinstall"
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/license"
 	"github.com/olivaresai/olivares/core/release"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 const doctorSchema = "olivares.ai/doctor/v1"
@@ -102,6 +104,9 @@ type doctorDeps struct {
 	lookupUID func(string) (int, error)
 	homeDir   func() (string, error)
 	goos      string
+	// toolSignIn asks the engine of the saved sign-in whether a tool is signed in,
+	// the answer `olivares tool ls` shows. nil means doctor does not ask.
+	toolSignIn func(driver string) doctorToolState
 }
 
 // doctorCommands is the CLOSED SET of external programs `doctor` may run by NAME, and it exists
@@ -135,6 +140,8 @@ func doctorExecutable(name string) error {
 
 func defaultDoctorDeps() doctorDeps {
 	return doctorDeps{
+		toolSignIn: doctorToolSignIn,
+
 		stat: os.Stat, readFile: os.ReadFile, lookPath: exec.LookPath,
 		run: func(ctx context.Context, name string, args ...string) (int, error) {
 			if err := doctorExecutable(name); err != nil {
@@ -278,7 +285,7 @@ func newDoctorCmd() *cobra.Command {
 	o := &doctorOptions{mode: "auto", init: "auto", server: "https://127.0.0.1:8443", timeout: 10 * time.Second}
 	cmd := &cobra.Command{
 		Use:   "doctor",
-		Short: "Diagnose this host installation without printing secrets",
+		Short: "Check this host's installation and say what to fix",
 		Long: "doctor checks the installed binary and verification anchors, local paths and modes,\n" +
 			"service account and init state, TLS live/ready probes, store status, license, and\n" +
 			"optional audit/update checks. It also reports first-hour readiness: whether an\n" +
@@ -398,6 +405,7 @@ func runDoctor(ctx context.Context, raw *doctorOptions, deps doctorDeps) (doctor
 	} else {
 		add(doctorUnitCheck(deps, o, unitModes))
 	}
+	add(doctorServiceOverridesCheck(deps, o))
 	add(doctorManifestCheck(deps, report.Paths.Manifest, o))
 	accountCheck, accountUID := doctorAccountCheck(deps, o)
 	add(accountCheck)
@@ -417,13 +425,16 @@ func runDoctor(ctx context.Context, raw *doctorOptions, deps doctorDeps) (doctor
 	add(ready)
 	add(doctorStoreCheck(ctx, deps, o, ca, initActive))
 	add(doctorLicenseCheck(o.dataDir))
+	add(doctorActivationSourceCheck(o.dataDir))
+	add(doctorBackgroundJobsCheck(ctx, deps, o, ca))
 	add(doctorAuditCheck(ctx, deps, o))
 	add(doctorChannelCheck(ctx, deps, o))
-	agentHour := doctorFirstHourCodingAgent(deps)
-	pepHour := doctorFirstHourHookPEP(deps)
+	agentHour := doctorFirstHourCodingAgent(deps, o.dataDir)
+	pepHour := doctorFirstHourHookPEP(deps, ready)
 	add(agentHour)
 	add(pepHour)
-	add(doctorFirstHourNextStep(agentHour, pepHour))
+	add(doctorInferenceRouting(deps))
+	add(doctorFirstHourNextStep(deps, agentHour, pepHour))
 
 	// The required set depends on HOW this installation was made, and the relaxation
 	// runs BEFORE the verdict so a correct local install can reach healthy.
@@ -888,6 +899,33 @@ func doctorAgentOpsCheck(deps doctorDeps, o doctorOptions, manifest string, envM
 	return c
 }
 
+// A retained AgentOps drop-in can override the new base unit. Report its presence
+// without reading configuration values or treating an operator override as damage.
+func doctorServiceOverridesCheck(deps doctorDeps, o doctorOptions) doctorCheck {
+	c := doctorCheck{Name: "service-overrides", Status: "not_applicable"}
+	if o.init != "systemd" {
+		c.Detail = "not a systemd install"
+		return c
+	}
+	path := o.unit + ".d/agentops.conf"
+	if o.mode == "system" && (o.unit == "/usr/lib/systemd/system/olivares.service" || o.unit == "/lib/systemd/system/olivares.service") {
+		path = "/etc/systemd/system/olivares.service.d/agentops.conf"
+	}
+	_, err := deps.stat(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		c.Detail = "no AgentOps drop-in"
+		return c
+	}
+	if err != nil {
+		c.Status, c.Detail = "unknown", "cannot inspect "+path
+		c.Remediation = "make the drop-in stat-readable and rerun doctor"
+		return c
+	}
+	c.Status, c.Detail = "warn", path+" overrides the base service unit"
+	c.Remediation = "review this drop-in if chosen folders are hidden or agent runtimes fail; hand-edited files are preserved during upgrades"
+	return c
+}
+
 func doctorUnitCheck(deps doctorDeps, o doctorOptions, modes []fs.FileMode) doctorCheck {
 	c := doctorFileCheck(deps, "service-unit", o.unit, true, modes)
 	if c.Status != "pass" {
@@ -1167,6 +1205,54 @@ func doctorStoreCheck(ctx context.Context, deps doctorDeps, o doctorOptions, caC
 	return c
 }
 
+// doctorBackgroundJobsCheck names the background jobs the running engine composes
+// but cannot run (server-info jobs_not_running) and how to enable them. It is
+// optional: a database without the tenant inventory or the admin role warns, it
+// does not fail an otherwise healthy install.
+func doctorBackgroundJobsCheck(ctx context.Context, deps doctorDeps, o doctorOptions, caCert string) doctorCheck {
+	c := doctorCheck{Name: "background-jobs", Required: false, Detail: o.server + "/v1/server-info"}
+	ctx, cancel := context.WithTimeout(ctx, o.timeout)
+	defer cancel()
+	rc, body, err := deps.httpGet(ctx, strings.TrimRight(o.server, "/")+"/v1/server-info", caCert, o.timeout)
+	if err != nil || rc != http.StatusOK {
+		c.Status, c.Remediation = "unknown", "start the service, then rerun doctor"
+		return c
+	}
+	var info struct {
+		JobsNotRunning []api.JobNotRunning `json:"jobs_not_running"`
+	}
+	if err := json.Unmarshal(body, &info); err != nil {
+		c.Status, c.Remediation = "unknown", "the server information is not valid JSON"
+		return c
+	}
+	if len(info.JobsNotRunning) == 0 {
+		c.Status, c.Detail = "pass", "every composed background job runs"
+		return c
+	}
+	var names []string
+	remedies := map[string]bool{}
+	for _, j := range info.JobsNotRunning {
+		names = append(names, j.Job+" ("+j.Reason+")")
+		remedies[j.Reason] = true
+	}
+	c.Status, c.Detail = "warn", "not running: "+strings.Join(names, ", ")
+	var guidance []string
+	if remedies[api.JobReasonNoTenantInventory] {
+		guidance = append(guidance, "install the tenant inventory once: olivares db init --superuser-dsn … --data-dir <this data directory>, then restart (deploy/postgres/README.md, \"Jobs that need the tenant inventory\")")
+	}
+	if remedies[api.JobReasonAddonRequiresLicense] {
+		guidance = append(guidance, "install or renew an Identity & Scale license: olivares license install <license file> --data-dir <this data directory>; enable it with olivares enterprise enable identity-scale")
+	}
+	if remedies[api.JobReasonDirectoryUnavailable] {
+		guidance = append(guidance, "inspect the configured directory source with olivares ldap detail <directory ID>; check its staged generation with olivares ldap check <directory ID> --generation <observed staged generation> --reason <audit reason>, repair its configuration or connection, then run olivares ldap sync <directory ID> --reason <audit reason>")
+	}
+	if len(guidance) == 0 {
+		guidance = append(guidance, "inspect each named job's configuration, then rerun doctor")
+	}
+	c.Remediation = strings.Join(guidance, "; ")
+	return c
+}
+
 func doctorLicenseCheck(dataDir string) doctorCheck {
 	c := doctorCheck{Name: "license", Required: false}
 	src, err := resolveLicense("", dataDir, osGetenv)
@@ -1281,56 +1367,168 @@ func doctorChannelCheck(ctx context.Context, deps doctorDeps, o doctorOptions) d
 // accepts as "one coding agent". Order is detection order, not preference.
 var firstHourCodingAgents = []string{"claude", "codex", "grok"}
 
-// doctorFirstHourCodingAgent reports whether an official coding agent is on
-// PATH. Required is false: a fresh install is healthy before the operator
-// connects an agent. Absence is unknown, never fail — fail would mark the
-// whole doctor report unhealthy and hide the next-step hint.
-func doctorFirstHourCodingAgent(deps doctorDeps) doctorCheck {
+// doctorFirstHourCodingAgent reports whether sessions would find an official
+// coding agent, with the SAME rule a launch uses (installedSessionProgram: a
+// verified install Olivares made under the data directory, else PATH), so the
+// report and a launch never disagree. Required is false: a fresh install is
+// healthy before the operator connects an agent. Absence is unknown, never fail
+// — fail would mark the whole doctor report unhealthy and hide the next-step hint.
+func doctorFirstHourCodingAgent(deps doctorDeps, dataDir string) doctorCheck {
 	c := doctorCheck{Name: "first-hour-coding-agent", Required: false}
+	obs := newHostToolObserverForDataDir(dataDir, deps.getenv)
+	// The launch's order (sessionruntime.go, boot.go): the pin variable first, then
+	// installedSessionProgram (a verified release Olivares installed, then PATH).
+	pins := map[string]string{"claude": envSessionClaudeBin, "codex": envSessionCodexBin, "grok": envSessionGrokBin}
 	for _, name := range firstHourCodingAgents {
-		path, err := deps.lookPath(name)
-		if err == nil && strings.TrimSpace(path) != "" {
+		if bin := strings.TrimSpace(deps.getenv(pins[name])); bin != "" {
+			c.Status, c.Detail = "pass", name+" pinned by "+pins[name]+": "+bin
+			return c
+		}
+		onPath, _ := deps.lookPath(name)
+		if program := installedSessionProgram(obs, name, deps.lookPath); strings.TrimSpace(program) != "" {
 			c.Status, c.Detail = "pass", "official CLI on PATH: "+name
+			if program != onPath {
+				// <tools>/<driver>/<release>/bin/<driver>: name the release.
+				c.Detail = "installed by Olivares: " + name + " " + filepath.Base(filepath.Dir(filepath.Dir(program)))
+			}
 			return c
 		}
 	}
 	c.Status = "unknown"
-	c.Detail = "no official coding agent (claude, codex, grok) on PATH"
-	c.Remediation = "install one official CLI on this host, then run olivares agent tool detect"
+	c.Detail = "no official coding agent (claude, codex, grok) installed by Olivares or on PATH"
+	c.Remediation = "olivares tool install claude"
 	return c
 }
 
-// doctorFirstHourHookPEP reports whether the operator's environment names a
-// hook PEP. It never prints the URL or the config path: those can carry a
-// token in a query or a policy path under a home directory.
-func doctorFirstHourHookPEP(deps doctorDeps) doctorCheck {
+// doctorFirstHourHookPEP is the one row about Olivares' hooks in Claude Code
+// sessions. The engine always runs its hook PEP, on a loopback port it picks, and it
+// holds that listener before it serves anything: an engine that answers /readyz has
+// its hook PEP running. What can still switch the hooks off is this host's Claude
+// Code managed settings, which the shared hook-policy check reads
+// (sessions.CheckClaudeHookHostPolicy, the one a launch refuses on). The row never
+// names the PEP's address or any configuration variable.
+func doctorFirstHourHookPEP(deps doctorDeps, ready doctorCheck) doctorCheck {
 	c := doctorCheck{Name: "first-hour-hook-pep", Required: false}
-	switch {
-	case strings.TrimSpace(deps.getenv("OLIVARES_HOOK_PEP_CONFIG")) != "":
-		c.Status, c.Detail = "pass", "OLIVARES_HOOK_PEP_CONFIG is set"
-	case strings.TrimSpace(deps.getenv("OLIVARES_HOOK_PEP_URL")) != "":
-		c.Status, c.Detail = "pass", "OLIVARES_HOOK_PEP_URL is set"
-	default:
-		c.Status = "unknown"
-		c.Detail = "hook PEP is not wired"
-		c.Remediation = "write a deny-closed hook policy and set OLIVARES_HOOK_PEP_CONFIG"
+	if err := checkClaudeHookHostPolicy(); err != nil {
+		dir := sessions.ClaudeManagedSettingsDir()
+		c.Status, c.Detail = "fail", err.Error()
+		c.Remediation = "in " + dir + "/managed-settings.json and " + dir + "/managed-settings.d/*.json, " +
+			"enable hooks (disableAllHooks=false); when allowManagedHooksOnly=true, install the Olivares managed PEP hook"
+		return c
 	}
+	if ready.Status != "pass" {
+		c.Status = "unknown"
+		c.Detail = "the engine is not answering; it runs the hook PEP for sessions while it is up"
+		return c
+	}
+	c.Status = "pass"
+	c.Detail = "the engine runs the hook PEP for sessions; this host's Claude Code settings let its hooks run"
 	return c
 }
+
+// doctorInferenceRouting states where sessions' model calls go: straight to the
+// provider, or through the inference proxy named by the session runtime base URL. It
+// is a fact of the deployment, never a failure (an un-routed deployment is supported),
+// and it reads the same posture the launch gate logs at boot (inferenceRoutingPosture).
+// The address is printed without user information or query, which can carry a secret.
+func doctorInferenceRouting(deps doctorDeps) doctorCheck {
+	c := doctorCheck{Name: "session-inference-routing", Required: false, Status: "pass"}
+	if inferenceRoutingPosture(deps.getenv) != inferenceRouted {
+		c.Detail = "Model calls go straight to the provider"
+		return c
+	}
+	c.Detail = "Model calls go through " + doctorSafeAddress(deps.getenv(envSessionBaseURL))
+	return c
+}
+
+// doctorSafeAddress is scheme://host[:port]/path of an address, never its user
+// information or query.
+func doctorSafeAddress(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Host == "" {
+		return "the address in " + envSessionBaseURL
+	}
+	return termSafe(u.Scheme + "://" + u.Host + u.EscapedPath())
+}
+
+// checkClaudeHookHostPolicy is a variable so a test can stand in for the host files.
+var checkClaudeHookHostPolicy = sessions.CheckClaudeHookHostPolicy
+
+// doctorToolState is what the engine says about the coding tool's own sign-in.
+type doctorToolState int
+
+const (
+	toolStateUnknown   doctorToolState = iota // the engine could not be asked
+	toolStateNoLogin                          // this machine has no saved sign-in
+	toolStateSignedOut                        // installed, not signed in
+	toolStateSignedIn                         // installed and signed in
+)
 
 // doctorFirstHourNextStep always passes. It is the sentence the operator
 // reads when doctor does not fail the install but the first hour is not done.
-func doctorFirstHourNextStep(agent, pep doctorCheck) doctorCheck {
+// Every sentence ends with ": <command>", which is what the last line prints.
+func doctorFirstHourNextStep(deps doctorDeps, agent, pep doctorCheck) doctorCheck {
 	c := doctorCheck{Name: "first-hour-next-step", Required: false, Status: "pass"}
-	switch {
-	case agent.Status != "pass":
-		c.Detail = "install one official coding agent (claude, codex or grok) on this host, then run olivares agent tool detect"
-	case pep.Status != "pass":
-		c.Detail = "wire OLIVARES_HOOK_PEP_CONFIG with a deny-closed policy, then replay a Read allow and a Bash deny"
+	// The first hour is install a tool, sign it in, start a session (FH, 2026-10-01).
+	// The hook PEP stays a check of its own; it is not the next step of a new user.
+	_ = pep
+	if agent.Status != "pass" {
+		c.Detail = "install Claude Code: olivares tool install claude"
+		return c
+	}
+	driver := doctorAgentDriver(agent)
+	state := toolStateUnknown
+	if deps.toolSignIn != nil {
+		state = deps.toolSignIn(driver)
+	}
+	// HU 016: the old sentence said "sign the tool in" after it was signed in.
+	switch state {
+	case toolStateSignedIn:
+		start := "olivares session start <folder>"
+		if driver != "claude" {
+			start += " --tool " + driver
+		}
+		c.Detail = "start a session in a folder: " + start
+	case toolStateSignedOut:
+		c.Detail = "sign " + toolName(driver) + " in, then start a session: olivares tool login " + driver
+	case toolStateNoLogin:
+		c.Detail = "sign in to the engine, then sign the tool in: olivares login"
 	default:
-		c.Detail = "run a governed session (allow one tool, deny another) and read GET /v1/audit?action=hook.tool"
+		c.Detail = "see whether " + toolName(driver) + " is signed in: olivares tool ls"
 	}
 	return c
+}
+
+// doctorAgentDriver is the tool the coding-agent row found.
+func doctorAgentDriver(agent doctorCheck) string {
+	for _, name := range firstHourCodingAgents {
+		if strings.Contains(agent.Detail, name) {
+			return name
+		}
+	}
+	return "claude"
+}
+
+// doctorToolSignIn asks the engine of the saved client context, the way
+// `olivares tool ls` does. It never prints or keeps the credential.
+func doctorToolSignIn(driver string) doctorToolState {
+	resolved, err := resolveCLIConfig(cliResolutionOptions{})
+	switch {
+	case err != nil || !toolSignsIn(driver):
+		return toolStateUnknown
+	case resolved.Server == "" || resolved.Token == "":
+		return toolStateNoLogin
+	}
+	cfg := agentClientConfig{resolved: resolved, server: resolved.Server, token: resolved.Token,
+		tenant: resolved.Tenant, timeout: 5 * time.Second}
+	st, ok := cfg.toolSignInStatus(context.Background(), driver)
+	switch {
+	case !ok || !st.Installed:
+		return toolStateUnknown
+	case st.SignedIn:
+		return toolStateSignedIn
+	}
+	return toolStateSignedOut
 }
 
 func renderDoctor(cmd *cobra.Command, report doctorReport) error {
@@ -1481,13 +1679,20 @@ func doctorSummaryClause(report doctorReport) string {
 // The order is the order of the operator's problem. A required check that is not a
 // pass is the reason the exit code is non-zero, and the FIX entries above say what
 // to change; the command that re-measures them is doctor itself. With the install
-// healthy, the next step is the first hour's, and doctor's own annotation already
-// names it — read from the same table the help section uses, so the terminal and
-// the help cannot disagree.
+// healthy, the next step is the first hour's: the command the first-hour-next-step
+// row measured, else doctor's own annotation from the table the help section uses.
 func doctorNextCommand(report doctorReport) string {
 	for _, check := range report.Checks {
 		if check.Required && check.Status != "pass" {
 			return "olivares doctor"
+		}
+	}
+	for _, check := range report.Checks {
+		if check.Name != "first-hour-next-step" {
+			continue
+		}
+		if i := strings.LastIndex(check.Detail, ": "); i >= 0 && strings.HasPrefix(check.Detail[i+2:], "olivares ") {
+			return check.Detail[i+2:]
 		}
 	}
 	return firstHourNextCommands["doctor"]

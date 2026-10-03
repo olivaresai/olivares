@@ -158,6 +158,19 @@ describe('decodeSessionAddress — a bad value falls back AND says which', () =>
     expect(issues).toEqual(['session', 'pane', 'evidence'])
   })
 
+  // F1 09b sweep: a desktop link narrowed or reloaded on a phone showed only the list.
+  it('a named session with no pane opens on its conversation', () => {
+    expect(decodeSessionAddress({ session: 'run:abc' }).value.pane).toBe(
+      'narrative',
+    )
+  })
+
+  it('an explicit pane still wins, so Back to sessions shows the list', () => {
+    expect(
+      decodeSessionAddress({ session: 'run:abc', pane: 'rail' }).value.pane,
+    ).toBe('rail')
+  })
+
   it('keeps a valid pane when the session is gone, rather than teaching a half-wrong URL', () => {
     const { value, issues } = decodeSessionAddress({ pane: 'narrative' })
     expect(value.pane).toBe('narrative')

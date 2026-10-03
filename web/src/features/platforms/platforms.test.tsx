@@ -3,7 +3,13 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { DEFAULT_AUTH, renderIntel, screen, waitFor, within } from '@/test/intel'
+import {
+  DEFAULT_AUTH,
+  renderIntel,
+  screen,
+  waitFor,
+  within,
+} from '@/test/intel'
 import '@/features/_intel' // register the shared `intel` namespace for badges/notices
 import {
   ApiSupportMatrix,
@@ -151,9 +157,7 @@ describe('LifecycleMatrix — per-platform divergence', () => {
   it('shows the authority-published successor, and the honest empty where none was named', () => {
     renderIntel(<LifecycleMatrix lifecycles={lifecyclesFixture} />)
     // replacement_ref is now POPULATED from the deprecations page.
-    expect(
-      screen.getAllByText('claude-sonnet-4-6').length,
-    ).toBeGreaterThan(0)
+    expect(screen.getAllByText('claude-sonnet-4-6').length).toBeGreaterThan(0)
     expect(
       screen.getAllByText('claude-haiku-4-5-20251001').length,
     ).toBeGreaterThan(0)
@@ -220,9 +224,7 @@ describe('PlatformsView — live reference', () => {
     const { PlatformsView } = await import('./platforms-view')
     const { userEvent } = await import('@/test/intel')
     renderIntel(<PlatformsView />)
-    await userEvent.click(
-      screen.getByRole('tab', { name: /Model lifecycle/i }),
-    )
+    await userEvent.click(screen.getByRole('tab', { name: /Model lifecycle/i }))
     expect(
       await screen.findByText(
         /Reference served by the engine — AsOf 2026-06-09/i,
@@ -250,15 +252,13 @@ describe('PlatformsView — live reference', () => {
     expect(
       await screen.findByText(/platforms reference is unavailable/i),
     ).toBeInTheDocument()
-    expect(
-      screen.getByText(/provider is not wired/i),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/provider is not wired/i)).toBeInTheDocument()
     // No fabricated empty grid.
     expect(screen.queryByRole('grid')).not.toBeInTheDocument()
   })
 })
 
-describe('PlatformsView — where this estate\'s own answer lives', () => {
+describe("PlatformsView — where this estate's own answer lives", () => {
   // The tuples themselves: this page describes what a PROVIDER supports, and the two
   // destinations that answer "and here?" are the catalog and model operations. Pinning the
   // pair (path, route permission) is the point — a link whose permission does not match its
@@ -273,10 +273,9 @@ describe('PlatformsView — where this estate\'s own answer lives', () => {
     expect(
       await screen.findByRole('link', { name: /model catalog/i }),
     ).toHaveAttribute('href', '/models')
-    expect(screen.getByRole('link', { name: /model operations/i })).toHaveAttribute(
-      'href',
-      '/model-operations',
-    )
+    expect(
+      screen.getByRole('link', { name: /model operations/i }),
+    ).toHaveAttribute('href', '/model-operations')
   })
 
   it('hides model operations for a principal holding only the catalog permission', async () => {
@@ -287,7 +286,9 @@ describe('PlatformsView — where this estate\'s own answer lives', () => {
     const { PlatformsView } = await import('./platforms-view')
     renderIntel(<PlatformsView />)
 
-    expect(await screen.findByRole('link', { name: /model catalog/i })).toBeVisible()
+    expect(
+      await screen.findByRole('link', { name: /model catalog/i }),
+    ).toBeVisible()
     expect(screen.queryByRole('link', { name: /model operations/i })).toBeNull()
   })
 })

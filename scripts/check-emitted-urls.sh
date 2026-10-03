@@ -227,6 +227,17 @@ MAX_RECORD_AGE_DAYS=45
 #       only after the 26.10.0 release is published; before that they answer 404. The rows move to
 #       200, and lose this owner, when the published release answers.
 #
+#   public-release-26.10.1-pending
+#       README.md names the 26.10.1 release page and its three Linux package downloads. They exist
+#       only after the 26.10.1 release is published; before that they answer 404. The rows move to
+#       200, and lose this owner, when the published release answers.
+#
+#   release-asset-base-not-a-location
+#       .github/workflows/pr-ci.yml downloads the previous release's .deb and its signed checksums
+#       by appending each asset name to this release download directory. The directory itself is
+#       not a page and answers 404; its assets answer (checksums.txt: 206 to a one-byte range read,
+#       five of five, 2026-10-02).
+#
 #   appliance-origin-unpublished
 #       .github/workflows/appliance-image.yml names https://appliance.olivares.ai as the origin of
 #       appliance files larger than 2 GiB. No appliance image is published with 26.10.0 and the name
@@ -280,6 +291,13 @@ MAX_RECORD_AGE_DAYS=45
 # 2026-10-01 · 26.10.0 published. Its tag page and the three README package downloads answered 200
 # in five of five probes (GET, following redirects), so their rows carry no owner. The v26.9.0 tag
 # page row left the record: README.md names 26.10.0 and nothing else emits it.
+# 2026-10-02 · 26.10.1 prepared. README.md names the 26.10.1 tag page and three package downloads;
+# they answered 404 in five of five probes (GET, following redirects) until the release is published
+# (public-release-26.10.1-pending). The 26.10.0 tag page and package rows left the record: README.md
+# names 26.10.1 and nothing else emits them.
+# 2026-10-02 · the package-service journey in pr-ci.yml emits the 26.10.0 download directory and the
+# 26.10.0 release workflow identity. Both answered 404 in five of five probes; neither is a page,
+# so each carries its owner.
 EMITTED_RECORD="https://alma.olivares.ai 200 2026-09-24
 https://appliance.olivares.ai 000 2026-10-01 appliance-origin-unpublished
 https://docs.olivares.ai 200 2026-09-24
@@ -288,6 +306,7 @@ https://docs.olivares.ai/reference/api-stability/ 200 2026-09-24
 https://docs.olivares.ai/reference/configuration/ 200 2026-09-24
 https://github.com/olivaresai/olivares 200 2026-09-24
 https://github.com/olivaresai/olivares.git 200 2026-09-24
+https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/26.10.0 404 2026-10-02 sigstore-certificate-identity-not-a-location
 https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/\${tag} 404 2026-09-24 sigstore-certificate-identity-not-a-location
 https://github.com/olivaresai/olivares/blob/main/CONTRIBUTING.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/GOVERNANCE.md 200 2026-09-24
@@ -297,10 +316,11 @@ https://github.com/olivaresai/olivares/blob/main/SUPPORT.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/docs/RELEASE-VERIFICATION.md 200 2026-09-24
 https://github.com/olivaresai/olivares/blob/main/scripts/smoke-agentops.sh 200 2026-09-24
 https://github.com/olivaresai/olivares/releases 200 2026-09-24
-https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.apk 200 2026-10-01
-https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.deb 200 2026-10-01
-https://github.com/olivaresai/olivares/releases/download/26.10.0/olivares_26.10.0_linux_amd64.rpm 200 2026-10-01
-https://github.com/olivaresai/olivares/releases/tag/26.10.0 200 2026-10-01
+https://github.com/olivaresai/olivares/releases/download/26.10.0 404 2026-10-02 release-asset-base-not-a-location
+https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.apk 404 2026-10-02 public-release-26.10.1-pending
+https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.deb 404 2026-10-02 public-release-26.10.1-pending
+https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.rpm 404 2026-10-02 public-release-26.10.1-pending
+https://github.com/olivaresai/olivares/releases/tag/26.10.1 404 2026-10-02 public-release-26.10.1-pending
 https://github.com/olivaresai/olivares/security/advisories/OLIVARES-DRILL-0001 404 2026-09-24 drill-fixture-not-a-location
 https://github.com/olivaresai/olivares/tree/main/examples/govern-claude-code 200 2026-09-24
 https://licenses.olivares.ai 200 2026-09-24

@@ -11,6 +11,7 @@ import {
   decodePins,
   encodePins,
   pinStorageKey,
+  pinnedAddress,
   togglePin,
 } from './session-pins'
 
@@ -100,5 +101,25 @@ describe('togglePin', () => {
     expect(next).toContain('live:new')
     expect(next).not.toContain('live:0')
     expect(next[0]).toBe('live:1')
+  })
+})
+
+// F1 09b sweep: a launched session is run:<ref> until its managed row is proven and
+// live:<ref> after, so a pin saved under one name was lost under the other.
+describe('pinnedAddress — one session, either name', () => {
+  const session = {
+    key: 'live:lr-a',
+    liveRef: 'lr-a',
+    runs: [{ run_ref: 'run-a' }],
+  } as unknown as Parameters<typeof pinnedAddress>[1]
+  it('finds a pin stored under the run name once the session is live', () => {
+    expect(pinnedAddress(new Set(['run:run-a']), session)).toBe('run:run-a')
+  })
+  it('while the session is still a run, finds a pin stored under the run name', () => {
+    const early = { ...session, key: 'run:run-a', liveRef: undefined }
+    expect(pinnedAddress(new Set(['run:run-a']), early)).toBe('run:run-a')
+  })
+  it('is undefined for a session pinned under no name of its own', () => {
+    expect(pinnedAddress(new Set(['run:other']), session)).toBeUndefined()
   })
 })

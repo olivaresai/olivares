@@ -174,7 +174,11 @@ func (m *Module) CreateProviderAccount(ctx context.Context, actor auth.Principal
 		if err != nil {
 			return err
 		}
-		rec := model.Record{colPPRef: op.String(colHORef), colPPDriver: driver, colPPEnvRef: env, colPPConfigHome: homes[0], colPPUserHome: homes[1], colPPDisplayName: "", colPPState: ProfileActive, colPPHomeSlot: activeHomeSlot(env, driver, homes[0]), colPPAccountName: op.String(colHOName), colPPHomeMode: AccountHomeManaged, colPPHomeGeneration: int64(0), colPPIsolationLevel: AccountIsolationShared}
+		rec := model.Record{colPPRef: op.String(colHORef), colPPDriver: driver, colPPEnvRef: env, colPPConfigHome: homes[0], colPPUserHome: homes[1], colPPDisplayName: "", colPPState: ProfileActive, colPPHomeSlot: activeHomeSlot(env, driver, homes[0]), colPPAccountName: op.String(colHOName), colPPHomeMode: AccountHomeManaged, colPPHomeGeneration: int64(0), colPPIsolationLevel: AccountIsolationShared,
+			// The account's homes are where the tool's own login lives, so the account's
+			// profile signs in with it, as a New session profile does. Without an auth
+			// source the launch was refused (ARCH smoke, HU-01): one way to a ready profile.
+			colPPAuthSource: AuthSourceAccountHome}
 		created, err := profiles.Create(ctx, rec)
 		if err != nil {
 			return err

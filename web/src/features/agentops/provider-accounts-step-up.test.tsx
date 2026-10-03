@@ -81,16 +81,18 @@ function wrap() {
  *  engine's assurance demand. */
 async function submitIntoStepUp(user: ReturnType<typeof userEvent.setup>) {
   await user.click(
-    await screen.findByRole('button', { name: 'Adopt a profile' }),
+    await screen.findByRole('button', { name: 'Name a profile as an account' }),
   )
   const dialog = await screen.findByRole('dialog', {
-    name: 'Adopt a provider profile',
+    name: 'Name a profile as an account',
   })
   await user.type(
     within(dialog).getByRole('textbox', { name: 'Profile reference' }),
     'ppf_b',
   )
-  await user.click(within(dialog).getByRole('button', { name: 'Adopt' }))
+  await user.click(
+    within(dialog).getByRole('button', { name: 'Name as account' }),
+  )
   await waitFor(() => expect(api.adoptAccount).toHaveBeenCalledOnce())
   await waitFor(() => expect(useStepUpStore.getState().request).not.toBeNull())
   return dialog
@@ -110,7 +112,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   useStepUpStore.getState().clear()
   useSessionStore.setState({
-    token: 'olvs_step_up',
+    csrfToken: 'olvs_step_up',
     sessionId: 'sid-step-up',
     expiresAt: '2030-01-01T00:00:00Z',
   })
@@ -140,7 +142,7 @@ describe('an assurance demand before any effect', () => {
     await waitFor(() => expect(api.adoptAccount).toHaveBeenCalledTimes(2))
     await waitFor(() =>
       expect(toast.success).toHaveBeenCalledWith(
-        'Adopted as claude-b',
+        'Named as claude-b',
         undefined,
       ),
     )
@@ -162,7 +164,7 @@ describe('an assurance demand before any effect', () => {
     await completeTheCeremony()
     await waitFor(() => expect(api.adoptAccount).toHaveBeenCalledTimes(2))
     const alert = await within(dialog).findByRole('alert')
-    expect(alert).toHaveTextContent('The profile was not adopted')
+    expect(alert).toHaveTextContent('The profile was not named as an account')
     expect(alert).toHaveTextContent(reason)
     expect(screen.queryByText(/is not known here/)).toBeNull()
     expect(toast.success).not.toHaveBeenCalled()
@@ -179,11 +181,11 @@ describe('an assurance demand before any effect', () => {
     await completeTheCeremony()
     expect(
       await screen.findByText(
-        'The outcome of adopting ppf_b is not known here.',
+        'Whether ppf_b became an account is not known here.',
       ),
     ).toBeInTheDocument()
     expect(
-      screen.queryByRole('dialog', { name: 'Adopt a provider profile' }),
+      screen.queryByRole('dialog', { name: 'Name a profile as an account' }),
     ).not.toBeInTheDocument()
     await waitFor(() =>
       expect(api.listAccounts.mock.calls.length).toBeGreaterThan(reads),

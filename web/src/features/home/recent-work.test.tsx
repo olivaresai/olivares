@@ -8,10 +8,17 @@ import { describe, expect, it, vi } from 'vitest'
 import { renderIntel, screen } from '@/test/intel'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
 import type { LiveDTO } from '@/features/sessions/types'
+import { useNewSessionDialog } from '@/features/first-hour/new-session-store'
 import { RecentWork } from './recent-work'
 import { RECENT_WORK_ROWS, sessionNameLadder, workLine } from './work-line'
+import { mergeSessions } from '@/features/sessions/provenance'
+
 import './i18n'
 import '@/features/sessions/i18n'
+
+/** RecentWork takes the merged sessions (runs and live rows); these fixtures are live rows only. */
+const asSessions = (rows: Parameters<typeof mergeSessions>[0]) =>
+  mergeSessions(rows, [])
 
 // The anchor mock FORWARDS every prop, unlike the older copies of it in this
 // directory. Those drop `data-testid`, so a test that asks for a link by test id
@@ -147,7 +154,11 @@ describe('sessionNameLadder — one ladder for every surface', () => {
 describe('RecentWork', () => {
   it('tells duration, tool calls, events and cost from the fields the engine sent', () => {
     const { container } = renderIntel(
-      <RecentWork sessions={[row()]} state="ready" canStartSession />,
+      <RecentWork
+        sessions={asSessions([row()])}
+        state="ready"
+        canStartSession
+      />,
     )
     expect(screen.getByText(/worked for 15\.0s/)).toBeInTheDocument()
     expect(screen.getByText(/2 tool calls/)).toBeInTheDocument()
@@ -158,9 +169,9 @@ describe('RecentWork', () => {
   it('leaves a figure out rather than printing a zero', () => {
     renderIntel(
       <RecentWork
-        sessions={[
+        sessions={asSessions([
           row({ tool_call_count: 0, event_count: 0, cost_micro_usd: 0 }),
-        ]}
+        ])}
         state="ready"
         canStartSession
       />,
@@ -174,7 +185,7 @@ describe('RecentWork', () => {
     // "1 open incidents" shipped once already (features/shared/i18n-plurals.test.ts).
     renderIntel(
       <RecentWork
-        sessions={[row({ tool_call_count: 1, event_count: 1 })]}
+        sessions={asSessions([row({ tool_call_count: 1, event_count: 1 })])}
         state="ready"
         canStartSession
       />,
@@ -187,7 +198,9 @@ describe('RecentWork', () => {
     const many = Array.from({ length: 9 }, (_, i) =>
       row({ session_ref: `s-${i}`, live_ref: `ref-${i}` }),
     )
-    renderIntel(<RecentWork sessions={many} state="ready" canStartSession />)
+    renderIntel(
+      <RecentWork sessions={asSessions(many)} state="ready" canStartSession />,
+    )
     expect(
       screen.getByTestId('home-recent-rows').querySelectorAll('li'),
     ).toHaveLength(RECENT_WORK_ROWS)
@@ -198,17 +211,24 @@ describe('RecentWork', () => {
   })
 
   it('an empty estate offers the verb that fills it', () => {
-    renderIntel(<RecentWork sessions={[]} state="ready" canStartSession />)
-    expect(screen.getByText('No sessions yet')).toBeInTheDocument()
-    expect(screen.getByTestId('home-recent-start')).toHaveAttribute(
-      'href',
-      '/agentops',
+    renderIntel(
+      <RecentWork sessions={asSessions([])} state="ready" canStartSession />,
     )
+    expect(screen.getByText('No sessions yet')).toBeInTheDocument()
+    // The verb opens the one New session dialog (tool, folder, first message), the same
+    // one the sidebar, the phone bar and the N key open; it used to link to /agentops.
+    useNewSessionDialog.setState({ open: false })
+    screen.getByTestId('home-recent-start').click()
+    expect(useNewSessionDialog.getState().open).toBe(true)
   })
 
   it('offers nothing to a principal who cannot start a run', () => {
     renderIntel(
-      <RecentWork sessions={[]} state="ready" canStartSession={false} />,
+      <RecentWork
+        sessions={asSessions([])}
+        state="ready"
+        canStartSession={false}
+      />,
     )
     expect(screen.getByText('No sessions yet')).toBeInTheDocument()
     // Still says what the surface will show — the description is not conditional.
@@ -246,10 +266,10 @@ describe('the row opens the SESSION, not the room', () => {
     // `liveRowKey`, the same function that keys the row inside the surface.
     renderIntel(
       <RecentWork
-        sessions={[
+        sessions={asSessions([
           row({ attribution: 'observed', live_ref: 'lr-9' }),
           row({ session_ref: 'sess-legacy', attribution: 'legacy' }),
-        ]}
+        ])}
         state="ready"
         canStartSession
       />,
@@ -265,7 +285,7 @@ describe('the row opens the SESSION, not the room', () => {
   it('gives the row ONE accessible name, and it is the sentence', () => {
     renderIntel(
       <RecentWork
-        sessions={[row({ summary: 'Filed PR #7723' })]}
+        sessions={asSessions([row({ summary: 'Filed PR #7723' })])}
         state="ready"
         canStartSession
       />,
@@ -285,7 +305,7 @@ describe('RecentWork — names, not ids', () => {
     // keeps the whole sentence, reference and facts on its own title.
     renderIntel(
       <RecentWork
-        sessions={[row({ summary: 'Filed PR #7723' })]}
+        sessions={asSessions([row({ summary: 'Filed PR #7723' })])}
         state="ready"
         canStartSession
       />,
@@ -297,7 +317,13 @@ describe('RecentWork — names, not ids', () => {
   })
 
   it('paints Untitled session, never sess-* as the row name', () => {
-    renderIntel(<RecentWork sessions={[row()]} state="ready" canStartSession />)
+    renderIntel(
+      <RecentWork
+        sessions={asSessions([row()])}
+        state="ready"
+        canStartSession
+      />,
+    )
     const rowEl = screen.getByTestId('home-recent-row')
     expect(rowEl).toHaveTextContent('Untitled session')
     expect(rowEl.textContent ?? '').not.toMatch(/\bsess-/)
@@ -306,6 +332,24 @@ describe('RecentWork — names, not ids', () => {
 })
 
 describe('RecentWork — the list starts the work', () => {
+  it('on Now, where it follows "Needs you", it shows its title', () => {
+    renderIntel(
+      <RecentWork
+        titled
+        sessions={asSessions([row()])}
+        state="ready"
+        canStartSession
+      />,
+    )
+    const heading = screen.getByRole('heading', { name: 'Recent work' })
+    expect(heading).not.toHaveClass('sr-only')
+    // Still a section title, not a card: the first row stays the list's first child.
+    const list = screen.getByTestId('home-recent-rows')
+    expect(list.firstElementChild).toBe(
+      screen.getByTestId('home-recent-row').closest('li'),
+    )
+  })
+
   it('does not put a Recent work card above the first row', () => {
     // Header 48 + title 24 + composer 64 = 136. A titled card (title, description,
     // "All sessions") above the first row was the rest of the 268 px measured there.
@@ -313,7 +357,7 @@ describe('RecentWork — the list starts the work', () => {
     // list's first child, with no card heading between them.
     renderIntel(
       <RecentWork
-        sessions={[row({ summary: 'Filed PR #7723' })]}
+        sessions={asSessions([row({ summary: 'Filed PR #7723' })])}
         state="ready"
         canStartSession
       />,

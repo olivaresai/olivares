@@ -8,6 +8,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/olivaresai/olivares/modules/orchestration"
 )
 
 // orchcadencepump_test.go pins the pump's environment contract (default
@@ -44,15 +46,15 @@ func TestNewOrchCadencePumpDisableSemantics(t *testing.T) {
 	env := map[string]string{}
 	getenv := func(k string) string { return env[k] }
 
-	if p := newOrchCadencePump(getenv, nil, nil, discardLog()); p == nil || p.interval != defaultOrchCadencePumpInterval {
+	if p := newOrchCadencePump(getenv, nil, &orchestration.Module{}, discardLog()); p == nil || p.interval != defaultOrchCadencePumpInterval {
 		t.Fatalf("unset env must yield the default-cadence pump, got %+v", p)
 	}
 	env[orchCadencePumpIntervalEnv] = "0"
-	if p := newOrchCadencePump(getenv, nil, nil, discardLog()); p != nil {
+	if p := newOrchCadencePump(getenv, nil, &orchestration.Module{}, discardLog()); p != nil {
 		t.Fatal("\"0\" must disable the pump (nil)")
 	}
 	env[orchCadencePumpIntervalEnv] = "45s"
-	if p := newOrchCadencePump(getenv, nil, nil, discardLog()); p == nil || p.interval != 45*time.Second {
+	if p := newOrchCadencePump(getenv, nil, &orchestration.Module{}, discardLog()); p == nil || p.interval != 45*time.Second {
 		t.Fatalf("explicit interval not honored: %+v", p)
 	}
 }

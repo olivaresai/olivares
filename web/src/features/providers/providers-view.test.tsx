@@ -166,6 +166,20 @@ describe('ProvidersView', () => {
     expect(screen.queryByText(/next: deploy an agent/i)).not.toBeInTheDocument()
   })
 
+  // HU2-17: a session used a key with no binding, while this page said a provider
+  // "launches nothing on its own" until it is bound to a provider profile.
+  it('does not send a working key to provider profiles to be bound', async () => {
+    providersApi.list.mockResolvedValue({
+      items: [{ ...registered, probe_state: 'ok' }],
+    })
+    wrap(<ProvidersView />)
+    expect(await screen.findByText('Anthropic (prod)')).toBeInTheDocument()
+    expect(screen.queryByText(/next: deploy an agent/i)).not.toBeInTheDocument()
+    expect(
+      screen.queryByText(/launches nothing on its own/i),
+    ).not.toBeInTheDocument()
+  })
+
   it('reports a provider-side refusal as a refusal, not as a broken request', async () => {
     providersApi.list.mockResolvedValue({ items: [registered] })
     providersApi.test.mockResolvedValue({
@@ -179,16 +193,6 @@ describe('ProvidersView', () => {
       await screen.findByRole('button', { name: /test connection/i }),
     )
     expect(providersApi.test).toHaveBeenCalledWith('prv_1')
-  })
-
-  it('offers the next step once a provider answered a test', async () => {
-    providersApi.list.mockResolvedValue({
-      items: [{ ...registered, probe_state: 'ok', models: ['claude-opus-5'] }],
-    })
-    wrap(<ProvidersView />)
-    expect(
-      await screen.findByText(/next: deploy an agent/i),
-    ).toBeInTheDocument()
   })
 
   it('never renders a credential: only the four-character hint', async () => {
@@ -218,10 +222,7 @@ describe('ProvidersView', () => {
     expect(
       screen.queryByPlaceholderText('Paste the key'),
     ).not.toBeInTheDocument()
-    await user.type(
-      screen.getByPlaceholderText('Anthropic (production)'),
-      'Local',
-    )
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'Local')
     expect(
       screen.getByDisplayValue('http://127.0.0.1:11434'),
     ).toBeInTheDocument()
@@ -287,5 +288,27 @@ describe('ProvidersView', () => {
     expect(
       screen.getByText(/you cannot read the providers of this tenant/i),
     ).toBeInTheDocument()
+  })
+
+  // Root 19:15Z / HU2-18: the form opened with no provider chosen.
+  it('opens the form with a provider chosen', async () => {
+    const user = userEvent.setup()
+    wrap(<ProvidersView />)
+    await user.click(
+      await screen.findByRole('button', { name: /add your first provider/i }),
+    )
+    expect(screen.getByRole('combobox')).toHaveTextContent('Anthropic')
+  })
+
+  it("opens the form on the provider ?add= names, and on nothing it doesn't know", async () => {
+    window.history.pushState({}, '', '/providers?add=openai')
+    const first = wrap(<ProvidersView />)
+    expect(await screen.findByRole('combobox')).toHaveTextContent('OpenAI')
+    first.unmount()
+    window.history.pushState({}, '', '/providers?add=nope')
+    wrap(<ProvidersView />)
+    await screen.findByRole('button', { name: /add your first provider/i })
+    expect(screen.queryByRole('combobox')).toBeNull()
+    window.history.pushState({}, '', '/')
   })
 })

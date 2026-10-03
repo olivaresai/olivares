@@ -36,7 +36,7 @@
     "openai": "Codex. Injects OPENAI_API_KEY.",
     "xai": "Grok. Injects XAI_API_KEY.",
     "openai_compatible": "Any OpenAI-shaped endpoint. Injects OPENAI_API_KEY and OPENAI_BASE_URL; the endpoint is required.",
-    "ollama": "Local models for Codex. No API key. Use the native Ollama endpoint; the test reads model metadata."
+    "ollama": "Local models for OpenCode. No API key. Use the native Ollama endpoint; the test reads model metadata."
   },
   "states": {
     "active": "Active",
@@ -74,7 +74,7 @@
     "kind": "Provider",
     "kindPlaceholder": "Choose a provider",
     "name": "Name",
-    "nameHint": "Your own name for this credential. It is what a picker shows.",
+    "nameHint": "Optional. Leave it empty to use the provider's name.",
     "namePlaceholder": "Anthropic (production)",
     "baseURL": "Endpoint",
     "baseURLHint": "Leave empty for the provider's official endpoint. Must be https.",
@@ -88,7 +88,8 @@
     "success": "Provider registered. Test the connection to confirm it works.",
     "testNext": "Test connection now",
     "registering": "Registering…",
-    "localNameHint": "Your label for this endpoint. It is what a picker shows."
+    "localNameHint": "Optional. Leave it empty to use the provider's name.",
+    "advanced": "Advanced: custom endpoint"
   },
   "rotate": {
     "title": "Rotate this provider's key",
@@ -121,11 +122,6 @@
   "vaultUnavailable": {
     "title": "This deployment cannot store a provider credential",
     "description": "No sealed credential vault is wired, so the engine refuses to store a key rather than storing one it cannot protect. An administrator must configure the secret sealer."
-  },
-  "next": {
-    "title": "Next: deploy an agent",
-    "description": "A registered provider launches nothing on its own. Bind it to a provider profile so new sessions use it.",
-    "action": "Go to provider profiles"
   },
   "truncation": {
     "label": "Showing {{n}} providers; there are more",

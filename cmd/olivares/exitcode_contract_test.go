@@ -13,7 +13,7 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 )
 
-// TestExitCodeContract exercises the table `olivares --help` publishes, end to
+// TestExitCodeContract exercises the table `olivares help exit-codes` publishes, end to
 // end, through real command invocations rather than through the exitcode
 // package's own vocabulary.
 //

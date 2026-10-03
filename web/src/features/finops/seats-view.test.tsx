@@ -49,7 +49,7 @@ const { FinOpsView } = await import('./finops-view')
 async function abrirAsientos(user: ReturnType<typeof userEvent.setup>) {
   renderIntel(<FinOpsView />)
   await user.click(
-    await screen.findByRole('tab', { name: /Seat utilisation/i }),
+    await screen.findByRole('tab', { name: /Seat utilization/i }),
   )
 }
 

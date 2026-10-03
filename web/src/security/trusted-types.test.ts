@@ -6,7 +6,11 @@
 // the createPolicy registry and assert the two policies are installed with the
 // right names and that their callbacks sanitise HTML / refuse script sinks.
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { checkSafetyNet, installTrustedTypes, trustedHTML } from './trusted-types'
+import {
+  checkSafetyNet,
+  installTrustedTypes,
+  trustedHTML,
+} from './trusted-types'
 
 interface PolicyOptions {
   createHTML: (s: string) => string

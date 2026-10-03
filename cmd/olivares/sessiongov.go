@@ -24,8 +24,6 @@ import (
 	"github.com/olivaresai/olivares/modules/finops"
 	"github.com/olivaresai/olivares/modules/knowledge"
 	"github.com/olivaresai/olivares/modules/sessions"
-	"github.com/olivaresai/olivares/sdk/event"
-	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
 // sessiongov.go is the composition-root wiring that turns an OPERATED Claude
@@ -82,13 +80,41 @@ const (
 	sessionIOAnchorEvery = 64
 	// sessionIOAction is the audit verb each I/O evidence anchor carries.
 	sessionIOAction = "sessions.io.recorded"
-
-	// sessionSignalSource labels the bus findings the session launch gate emits.
-	sessionSignalSource = "sessions_governance"
-	// unroutedLaunchFindingKind is the posture finding raised when an operated session
-	// launches without inference routed through the governing proxy.
-	unroutedLaunchFindingKind = "session_launch_ungoverned_model"
 )
+
+// The deployment fact "does session inference go through the Olivares inference
+// proxy" (ARCH B4b). Routed, the proxy enforces model access, budget and DLP
+// in-band; not routed, the tool talks to its provider directly and those apply at
+// launch and through tool-call hooks only. It is stated once at boot and by doctor
+// under this name, never per launch, and it never blocks one.
+const (
+	inferenceRoutingFact = "session_inference_routing"
+	inferenceRouted      = "routed"
+	inferenceNotRouted   = "not_routed"
+)
+
+// inferenceRoutingPosture reads the fact from the setting the session runtime
+// itself uses to route inference (OLIVARES_SESSION_RUNTIME_BASE_URL).
+func inferenceRoutingPosture(getenv func(string) string) string {
+	if strings.TrimSpace(getenv(envSessionBaseURL)) != "" {
+		return inferenceRouted
+	}
+	return inferenceNotRouted
+}
+
+// logInferenceRoutingPosture states the fact once, at boot. INFO, not WARN: an
+// un-routed deployment is a supported configuration, not a fault.
+func logInferenceRoutingPosture(log *slog.Logger, posture string) {
+	if log == nil {
+		return
+	}
+	if posture == inferenceRouted {
+		log.Info("session inference goes through the Olivares inference proxy", inferenceRoutingFact, posture)
+		return
+	}
+	log.Info("session inference does not go through the Olivares inference proxy: model access, budget and DLP apply at launch and through tool-call hooks, not in-band",
+		inferenceRoutingFact, posture)
+}
 
 // sessionIOTargetKind is the audit target kind for an I/O evidence anchor.
 const sessionIOTargetKind model.Kind = "sessions.run"
@@ -211,23 +237,19 @@ func (g sessionStopGate) Check(ctx context.Context, tenant model.TenantID, dims 
 // cap/forbid decisions always deny. The kill-switch is the SEPARATE StopGate, checked
 // by the module BEFORE this gate (stop > break-glass), so a stopped estate denies
 // before any approval is opened.
+type sessionContextPolicyResolver interface {
+	contextPolicyResolver
+	HasContextPolicies(context.Context, model.TenantID) (bool, error)
+}
+
 type sessionLaunchGate struct {
-	fin             budgetChecker          // Budget admission (nil ⇒ no budget gate)
-	bridge          hookApprovalOpener     // HITL (nil ⇒ a CRITICAL launch is denied)
-	pep             *sessionPEPProvisioner // PEP env (nil ⇒ no env ⇒ deny-closed per-tool)
-	contextPolicy   contextPolicyResolver  // Context/compaction launch policy (nil ⇒ no context policy)
-	budgetPosture   availabilityPosture    // read-error posture for the budget control
-	contextPosture  availabilityPosture    // read-error posture for the context-policy control
-	recordAvailable bool                   // a recorder is wired (a CRITICAL launch needs it)
-	// model-layer governance posture. inferenceRouted reports whether operated
-	// sessions' inference is routed through Olivares' own governing proxy (the same
-	// OLIVARES_SESSION_RUNTIME_BASE_URL the runtime reads). When it is NOT, the launched
-	// `claude` talks to the model provider directly — model-access/budget/DLP are never
-	// enforced in-band — so each launch emits a loud, evidenced posture finding on `sink`
-	// rather than the gap staying silent. The in-band enforcement itself lives in the proxy
-	// (inferenceproxy.go) and is on the path only for a routed session.
-	inferenceRouted bool
-	sink            observationSink // bus for the un-routed posture finding (nil ⇒ no emit)
+	fin             budgetChecker                // Budget admission (nil ⇒ no budget gate)
+	bridge          hookApprovalOpener           // HITL (nil ⇒ a CRITICAL launch is denied)
+	pep             *sessionPEPProvisioner       // default engine session credential environment
+	contextPolicy   sessionContextPolicyResolver // Context/compaction launch policy (nil ⇒ no context policy)
+	budgetPosture   availabilityPosture          // read-error posture for the budget control
+	contextPosture  availabilityPosture          // read-error posture for the context-policy control
+	recordAvailable bool                         // a recorder is wired (a CRITICAL launch needs it)
 	clock           func() time.Time
 	log             *slog.Logger
 }
@@ -273,6 +295,29 @@ func admissionUnreachable(res finops.Reservation, err error) bool {
 // budgetUnavailable answers a launch whose ledger admission could not reach, by the
 // configured posture: fail-closed refuses it, fail-open launches it. Either way the launch
 // is recorded. ok is false when the launch is refused.
+// admissionTargetProber is an OPTIONAL budgetChecker capability (the same shape
+// as RecordedHeadReader on AuditLog): whether the tenant has any admission
+// target at all. finops.Module implements it; a checker without it — every test
+// fake today — keeps the pre-B2 behavior of reserving on every launch.
+type admissionTargetProber interface {
+	HasAdmissionTargets(context.Context, model.TenantID) (bool, error)
+}
+
+// budgetAdmissionEngaged reports whether the launch must run the budget reserve:
+// always when the checker cannot answer the question or answers it with an error
+// (Reserve owns the unreachable postures), and exactly its answer when it can.
+func (g *sessionLaunchGate) budgetAdmissionEngaged(ctx context.Context, tenant model.TenantID) bool {
+	prober, ok := g.fin.(admissionTargetProber)
+	if !ok {
+		return true
+	}
+	has, err := prober.HasAdmissionTargets(ctx, tenant)
+	if err != nil {
+		return true
+	}
+	return has
+}
+
 func (g *sessionLaunchGate) budgetUnavailable(cause error) (sessions.LaunchDecision, bool) {
 	if g.budgetPosture == availabilityFailClosed {
 		g.recordBudgetFailure("refused", finops.ReasonStoreUnreachable, cause)
@@ -338,7 +383,18 @@ func (g *sessionLaunchGate) Authorize(ctx context.Context, tenant model.TenantID
 	//    (throttle) so a session/identity at its limit does not start. A ledger that
 	//    cannot be read answers deny, and the configured availability posture decides
 	//    what the launch does with that; any other failure of admission refuses it.
-	if g.fin != nil {
+	//
+	// CUTS B2 (2026-10-01): the reserve runs only when the tenant has at least one
+	//    admission target (an enabled budget, a spend-limit policy, or the lifecycle
+	//    activation frontier). With none there is nothing to reserve against, and
+	//    skipping saves the target enumeration, the per-target spend aggregation and
+	//    the zero-target writer-lock transaction on every launch. The probe is an
+	//    OPTIONAL capability of the checker (finops.Module implements it); a checker
+	//    without it keeps today's behavior, and a probe ERROR falls through to
+	//    Reserve, which owns the unreachable postures. A budget created while a
+	//    session runs does not see that session's reservation; it sees its settled
+	//    spend, exactly as before.
+	if g.fin != nil && g.budgetAdmissionEngaged(ctx, tenant) {
 		chk, err := g.fin.Reserve(ctx, tenant, launchAdmission(intent))
 		switch {
 		case admissionUnreachable(chk, err):
@@ -386,9 +442,9 @@ func (g *sessionLaunchGate) Authorize(ctx context.Context, tenant model.TenantID
 		return denyLaunch("a privileged session must be recorded but no recorder is wired (deny-closed)"), nil
 	}
 
-	// 4. CRITICAL ⇒ governed human approval: time-boxed, two-person floor + AAL3.
-	//    The bridge is async — a pending approval DENIES the launch with its ref; the
-	//    operator approves out-of-band and retries (gateOnce then finds it approved).
+	// 4. A classified/privileged launch requires a time-boxed human approval.
+	// The run waits durably while pending. Governance applies the configured quorum
+	// and the deployment's shared administrative step-up policy.
 	var approvalRef string
 	if critical {
 		ref, dec, ok := g.gateCriticalLaunch(ctx, tenant, intent, why)
@@ -398,29 +454,28 @@ func (g *sessionLaunchGate) Authorize(ctx context.Context, tenant model.TenantID
 		approvalRef = ref
 	}
 
-	// 5. PEP env provisioning: the managed PreToolUse hook the launched session
-	//    runs reaches the governed PEP with this env. No provisioner ⇒ no env ⇒ the
-	//    managed hook is deny-closed and EVERY tool-call is denied (Q4: the session
-	//    launches and is observable, but cannot act until PEP-provisioned).
+	// 5. The shared session bearer is provisioned by the default engine wiring.
+	// A failure must refuse before spawning a child without governed hooks.
 	var injectEnv []sessions.EnvVar
 	if g.pep != nil {
-		env, err := g.pep.provision(ctx, tenant, intent.AgentRef)
+		env, err := g.pep.provisionLaunch(ctx, tenant, intent)
 		if err != nil {
-			if g.log != nil {
-				g.log.Warn("session launch-gate: PEP provisioning failed; the session's tool-calls stay deny-closed per-tool", "err", err)
-			}
-		} else {
-			injectEnv = env
+			return sessions.LaunchDecision{}, err
 		}
+		injectEnv = env
 	}
 
 	var ctxSummary string
 	if g.contextPolicy != nil {
-		ctxPol, cperr := g.contextPolicy.Apply(ctx, tenant, knowledge.ContextPolicyQuery{
-			AgentRef:     intent.AgentRef,
-			WorkspaceRef: intent.WorkspaceRef,
-			Model:        intent.Model,
-		})
+		configured, cperr := g.contextPolicy.HasContextPolicies(ctx, tenant)
+		var ctxPol knowledge.EffectivePolicy
+		if cperr == nil && configured {
+			ctxPol, cperr = g.contextPolicy.Apply(ctx, tenant, knowledge.ContextPolicyQuery{
+				AgentRef:     intent.AgentRef,
+				WorkspaceRef: intent.WorkspaceRef,
+				Model:        intent.Model,
+			})
+		}
 		if cperr != nil {
 			if g.log != nil {
 				g.log.Error("session launch-gate: context policy check failed", "posture", g.contextPosture.String(), "err", cperr)
@@ -438,7 +493,7 @@ func (g *sessionLaunchGate) Authorize(ctx context.Context, tenant model.TenantID
 				Reason:       "context policy forbids this agent",
 				DeniedStatus: http.StatusForbidden,
 			}, nil
-		} else {
+		} else if configured {
 			maxTokens := strconv.FormatInt(ctxPol.MaxContextTokens, 10)
 			injectEnv = append(injectEnv,
 				sessions.EnvVar{Name: envContextMaxTokens, Value: maxTokens},
@@ -446,14 +501,6 @@ func (g *sessionLaunchGate) Authorize(ctx context.Context, tenant model.TenantID
 			)
 			ctxSummary = "ctx max=" + maxTokens + " strategy=" + ctxPol.Strategy + " scope=" + ctxPol.WinningScope
 		}
-	}
-
-	// the launch is authorized. If its inference is NOT routed through the
-	// governing proxy, the model layer runs un-governed (model-access/budget/DLP are not
-	// enforced in-band) — raise a loud, evidenced posture finding so the gap is never silent
-	// (deduped per tenant downstream by DetailHash).
-	if !g.inferenceRouted {
-		g.emitUnroutedFinding(ctx, tenant)
 	}
 
 	return sessions.LaunchDecision{
@@ -464,33 +511,6 @@ func (g *sessionLaunchGate) Authorize(ctx context.Context, tenant model.TenantID
 		Critical:             critical,
 		ApprovalRef:          approvalRef,
 	}, nil
-}
-
-// emitUnroutedFinding publishes the "operated session launched un-routed" posture finding.
-// Best-effort (a bus failure never blocks a launch) and deduped per tenant by DetailHash, so
-// a tenant running operated sessions without inference routing surfaces exactly one active
-// finding. No caller identity is needed — the gap is a process/tenant posture, not a
-// per-principal event.
-func (g *sessionLaunchGate) emitUnroutedFinding(ctx context.Context, tenant model.TenantID) {
-	if g.sink == nil {
-		return
-	}
-	now := time.Now()
-	if g.clock != nil {
-		now = g.clock()
-	}
-	obs := sdkmodel.FindingReport{
-		Kind:        unroutedLaunchFindingKind,
-		Severity:    sdkmodel.SeverityMedium,
-		SubjectKind: string(sessionIOTargetKind),
-		SubjectRef:  "inference-routing",
-		Title:       "Operated Claude Code session launched without inference routed through the governing proxy — model-access/budget/DLP are not enforced in-band (model-layer governance gap)",
-		DetailHash:  hexSHA("session_launched_unrouted|" + tenant.String()),
-		OccurredAt:  now.UTC(),
-	}
-	if err := g.sink.Publish(ctx, event.FromObservation(tenant.String(), sessionSignalSource, obs)); err != nil && g.log != nil {
-		g.log.Warn("session launch-gate: un-routed posture finding publish failed (best-effort)", "err", err)
-	}
 }
 
 // gateCriticalLaunch opens (or idempotently finds/reuses) the governed approval for a
@@ -506,7 +526,16 @@ func (g *sessionLaunchGate) gateCriticalLaunch(ctx context.Context, tenant model
 	}
 	planHash := sessionLaunchPlanHash(intent)
 	reason := "Privileged Claude Code session launch (" + why + "): " + describeLaunch(intent)
-	ref, status, _, err := g.bridge.gateOnce(ctx, tenant, sessionLaunchAction, sessionLaunchSubjectKind, launchSubjectRef(intent), planHash, reason, intent.Actor)
+	var ref, status string
+	var err error
+	if intent.ApprovalRef != "" {
+		ref = intent.ApprovalRef
+		status, _, err = g.scopedApprovalStatus(ctx, tenant, intent, ref)
+	} else if bridge, ok := g.bridge.(*approvalBridge); ok {
+		ref, status, _, err = bridge.gateOnceForSession(ctx, tenant, sessionLaunchAction, sessionLaunchSubjectKind, launchSubjectRef(intent), planHash, reason, intent.Actor, intent.ClaimSID)
+	} else {
+		ref, status, _, err = g.bridge.gateOnce(ctx, tenant, sessionLaunchAction, sessionLaunchSubjectKind, launchSubjectRef(intent), planHash, reason, intent.Actor)
+	}
 	if err != nil {
 		// The bridge broke; it did not decide. Still denied — but as an outage the
 		// caller may retry, not as a verdict about this launch (P1-R6-01).
@@ -539,7 +568,7 @@ func (g *sessionLaunchGate) gateCriticalLaunch(ctx context.Context, tenant model
 	case nbBreakGlass:
 		return ref, sessions.LaunchDecision{}, true
 	case nbPending:
-		return ref, denyLaunch("privileged session launch requires human approval (pending: " + ref + ")"), false
+		return ref, sessions.LaunchDecision{DeniedStatus: http.StatusAccepted, Reason: "waiting for human approval", ApprovalRef: ref, Critical: true, RecordIO: true}, false
 	default:
 		return ref, denyLaunch("human review did not approve the privileged launch (status=" + status + ")"), false
 	}
@@ -570,12 +599,23 @@ func denyUnavailable(reason string) sessions.LaunchDecision {
 	}
 }
 
-// isCriticalLaunch classifies a launch as privileged (HITL + recording floor):
-// bypassPermissions/dontAsk, or a read-write mount of a classified workspace.
+// isCriticalLaunch applies approval and recording requirements to unconfined
+// dontAsk launches and read-write mounts of classified workspaces.
+//
+// dontAsk with an allowlist resolved server-side from one
+// of the engine's built-in templates ("Edit files and run commands") runs only
+// the tools that list names and refuses every other one. It keeps hook
+// enforcement, policies, the kill switch, audit and recording, and is not a
+// privileged launch. dontAsk under a custom template or with no allowlist stays
+// critical. bypassPermissions ("full") is not critical either: it is an
+// administrator's own decision, checked where the session is started and
+// resumed (sessions.refuseUnrestrictedFor), so no separate approval is opened for it.
 func isCriticalLaunch(intent sessions.LaunchIntent) (bool, string) {
 	switch strings.TrimSpace(intent.PermissionMode) {
-	case "bypassPermissions", "dontAsk":
-		return true, "permission-mode " + strings.TrimSpace(intent.PermissionMode)
+	case "dontAsk":
+		if !(intent.TemplateBuiltin && len(intent.AllowedTools) > 0) {
+			return true, "permission-mode dontAsk"
+		}
 	}
 	if intent.WorkspaceClassified && intent.WorkspaceReadWrite {
 		return true, "read-write mount of a classified workspace"
@@ -589,7 +629,7 @@ func isCriticalLaunch(intent sessions.LaunchIntent) (bool, string) {
 func sessionLaunchPlanHash(intent sessions.LaunchIntent) string {
 	h := sha256.New()
 	fields := []string{
-		string(intent.Action), string(intent.Transport), intent.PermissionMode,
+		string(intent.Action), intent.RunRef, string(intent.Transport), intent.PermissionMode,
 		intent.Model, intent.WorkspaceRef, intent.Actor,
 	}
 	// the workspace template's identity, REVISION and merged tool allowlist join the
@@ -601,6 +641,15 @@ func sessionLaunchPlanHash(intent sessions.LaunchIntent) string {
 	// too so the binding survives any future path that reaches this gate without one.
 	fields = append(fields, intent.TemplateRef, strconv.FormatInt(intent.TemplateVersion, 10))
 	fields = append(fields, intent.AllowedTools...)
+	fields = append(fields, "profile-tools", strconv.FormatBool(intent.ToolSurfaceDeclared))
+	fields = append(fields, intent.ToolSurface...)
+	// Vault secrets given to the session (modules/sessions session_secret_env.go): an
+	// approval opened for these NAMES cannot be spent on a launch given more. Appended
+	// only when present, so a launch without secrets keeps the hash it always had.
+	if len(intent.SecretEnv) > 0 {
+		fields = append(fields, "secret-env")
+		fields = append(fields, secretEnvNames(intent.SecretEnv)...)
+	}
 	for _, s := range fields {
 		_, _ = h.Write([]byte(s))
 		_, _ = h.Write([]byte{0})
@@ -634,7 +683,19 @@ func describeLaunch(intent sessions.LaunchIntent) string {
 	if len(intent.AllowedTools) > 0 {
 		parts = append(parts, "tools="+strings.Join(intent.AllowedTools, ","))
 	}
+	if len(intent.SecretEnv) > 0 {
+		parts = append(parts, "secrets="+strings.Join(secretEnvNames(intent.SecretEnv), ","))
+	}
 	return strings.Join(parts, " ")
+}
+
+// secretEnvNames renders a launch's vault secrets as "VARIABLE<-secret" names.
+func secretEnvNames(refs []sessions.SecretEnvRef) []string {
+	out := make([]string, 0, len(refs))
+	for _, ref := range refs {
+		out = append(out, ref.Env+"<-"+ref.Secret)
+	}
+	return out
 }
 
 // budgetActionLabel maps a FinOps action to a money-free reason fragment.
@@ -663,13 +724,37 @@ func budgetStatus(action string) int {
 
 // sessionPEPProvisioner builds the managed PEP-hook environment the launched session
 // carries so its PreToolUse hook reaches the governed PEP. The bearer is minted per
-// launch and discarded after the launch (never persisted). Built (and wired) only when
-// the operator configured a PEP URL + a bearer source; otherwise the gate injects no
-// env and the managed hook is deny-closed per-tool.
+// launch and held only in memory. The engine supplies its shared session issuer
+// by default; the legacy operator provisioner is retained for standalone wiring.
 type sessionPEPProvisioner struct {
-	url  string
-	mint func(ctx context.Context, tenant model.TenantID, agentRef string) (string, error)
-	log  *slog.Logger
+	mintLaunch func(context.Context, model.TenantID, sessions.LaunchIntent) (string, error)
+	endpoint   func() string // the engine's acquired listener, read at launch
+	url        string
+	mint       func(ctx context.Context, tenant model.TenantID, agentRef string) (string, error)
+	log        *slog.Logger
+}
+
+func (p *sessionPEPProvisioner) provisionLaunch(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) ([]sessions.EnvVar, error) {
+	if p.mintLaunch == nil {
+		return p.provision(ctx, tenant, intent.AgentRef)
+	}
+	endpoint := p.url
+	if p.endpoint != nil {
+		endpoint = p.endpoint()
+	}
+	if endpoint == "" {
+		return nil, errors.New("session hook listener is not ready")
+	}
+	token, err := p.mintLaunch(ctx, tenant, intent)
+	if err != nil {
+		return nil, err
+	}
+	return []sessions.EnvVar{
+		{Name: envHookPEPURL, Value: endpoint},
+		{Name: envHookPEPTenant, Value: tenant.String()},
+		{Name: envHookPEPAgent, Value: intent.AgentRef},
+		{Name: envHookPEPToken, Value: token},
+	}, nil
 }
 
 func (p *sessionPEPProvisioner) provision(ctx context.Context, tenant model.TenantID, agentRef string) ([]sessions.EnvVar, error) {
@@ -860,10 +945,10 @@ func writeInt64(h hash.Hash, v int64) {
 // kill-switch StopGate + active-termination sweep, the budget/HITL/PEP
 // LaunchGate, and the I/O Recorder. The StopGate and Recorder
 // are ALWAYS wired (governance + the audit ledger are in-process); the HITL bridge and
-// the PEP provisioner are wired only when configured (else CRITICAL launches and tool
-// governance stay deny-closed). stopDeny is the shared throttled deny recorder (reused
+// the default PEP provisioner is supplied by engine composition. stopDeny is the
+// shared throttled deny recorder (reused
 // from the engine so launch denials and hooks-PEP/MCP denials share one throttle).
-func wireSessionGovernance(set moduleSet, st store.Store, stopDeny *stopDenyRecorder, bus observationSink, getenv func(string) string, log *slog.Logger) {
+func wireSessionGovernance(set moduleSet, st store.Store, stopDeny *stopDenyRecorder, bus observationSink, getenv func(string) string, log *slog.Logger, defaultPEP ...*sessionPEPProvisioner) {
 	if set.sessions == nil {
 		return
 	}
@@ -881,34 +966,39 @@ func wireSessionGovernance(set moduleSet, st store.Store, stopDeny *stopDenyReco
 	if set.approvalBridge != nil {
 		bridge = set.approvalBridge
 	}
-	var contextPolicy contextPolicyResolver
-	if set.knowledge != nil {
-		contextPolicy = set.knowledge
-	}
+	// The budget and context-policy gates exist only where their module runs. set is
+	// the running view, so a module outside the node's profile is nil here; it must
+	// stay an untyped nil in the gate, or the gate calls a nil module on every launch
+	// (refresh 08: every session launch panicked with finops off).
+	fin := budgetGateOf(set.finops)
+	contextPolicy := contextPolicyOf(set.knowledge)
 	budgetPosture := resolveAvailabilityPosture(getenv(envSessionBudgetAvailability), buildEdition, log)
 	contextPosture := resolveAvailabilityPosture(getenv(envSessionContextAvailability), buildEdition, log)
-	// mirror the runtime's routing decision (sessionruntime.go reads the SAME env to
-	// set ANTHROPIC_BASE_URL). Un-routed ⇒ the launch gate emits a posture finding per launch.
-	inferenceRouted := strings.TrimSpace(getenv(envSessionBaseURL)) != ""
+	// Whether session inference goes through the Olivares inference proxy is a fact of
+	// this deployment, stated once below and in doctor, never per launch (ARCH B4b).
+	routing := inferenceRoutingPosture(getenv)
+	pep := loadSessionPEPProvisioner(getenv, log)
+	if len(defaultPEP) > 0 {
+		pep = defaultPEP[0]
+	}
 	set.sessions.UseLaunchGate(buildSessionLaunchGate(set, &sessionLaunchGate{
-		fin:             set.finops,
+		fin:             fin,
 		bridge:          bridge,
-		pep:             loadSessionPEPProvisioner(getenv, log),
+		pep:             pep,
 		contextPolicy:   contextPolicy,
 		budgetPosture:   budgetPosture,
 		contextPosture:  contextPosture,
 		recordAvailable: true,
-		inferenceRouted: inferenceRouted,
-		sink:            bus,
 		clock:           time.Now,
 		log:             log,
 	}))
 	if log != nil {
 		log.Info("session governance wired",
-			"stop_gate", true, "budget_gate", set.finops != nil,
-			"budget_posture", budgetPosture.String(), "context_posture", contextPosture.String(),
+			"stop_gate", true, "budget_gate", fin != nil,
+			"budget_posture", gatePosture(fin != nil, budgetPosture), "context_posture", gatePosture(contextPolicy != nil, contextPosture),
 			"hitl_bridge", bridge != nil, "context_policy", contextPolicy != nil, "io_recording", true,
-			"inference_routed", inferenceRouted, "claim_admission", true)
+			"inference_routed", routing == inferenceRouted, "claim_admission", true)
+		logInferenceRoutingPosture(log, routing)
 		// A FAIL-OPEN POSTURE IS NOT PART OF "WIRED" (2026-08-06). The line above is true and
 		// stays INFO: the gate IS composed. But two of its nine key/value pairs carry the
 		// opposite of good news — a posture of fail-open means that when this process cannot
@@ -923,14 +1013,17 @@ func wireSessionGovernance(set moduleSet, st store.Store, stopDeny *stopDenyReco
 		// naming the control, the consequence and the switch that changes it.
 		for _, p := range []struct {
 			control string
+			wired   bool
 			posture availabilityPosture
 			env     string
 			effect  string
 		}{
-			{"budget", budgetPosture, envSessionBudgetAvailability, "a session launches even when its spend cannot be read"},
-			{"context policy", contextPosture, envSessionContextAvailability, "a session launches even when its context policy cannot be read"},
+			{"budget", fin != nil, budgetPosture, envSessionBudgetAvailability, "a session launches even when its spend cannot be read"},
+			{"context policy", contextPolicy != nil, contextPosture, envSessionContextAvailability, "a session launches even when its context policy cannot be read"},
 		} {
-			if p.posture == availabilityFailOpen {
+			// A control whose module does not run has nothing to read: it is off, not
+			// fail-open, and the line above says so.
+			if p.wired && p.posture == availabilityFailOpen {
 				log.Warn("session launch gate is FAIL-OPEN for an unreadable control",
 					"control", p.control, "on_read_error", "allow", "effect", p.effect,
 					"set_to_fail_closed_with", p.env+"=fail-closed")
@@ -1008,4 +1101,52 @@ func loadKillSwitchSweepInterval(getenv func(string) string, log *slog.Logger) t
 		return defaultStopSweepInterval
 	}
 	return d
+}
+
+func (g *sessionLaunchGate) ApprovalStatus(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent, ref string) (string, error) {
+	reader, ok := g.bridge.(interface {
+		observeScoped(context.Context, model.TenantID, string, string, string, string, string) (string, string, error)
+	})
+	if !ok {
+		return "", errors.New("approval observer unavailable")
+	}
+	status, _, err := reader.observeScoped(ctx, tenant, ref, sessionLaunchPlanHash(intent), sessionLaunchAction, sessionLaunchSubjectKind, launchSubjectRef(intent))
+	return status, err
+}
+
+func (g *sessionLaunchGate) scopedApprovalStatus(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent, ref string) (string, string, error) {
+	reader, ok := g.bridge.(interface {
+		statusScoped(context.Context, model.TenantID, string, string, string, string, string) (string, string, error)
+	})
+	if !ok {
+		return "", "", errors.New("scoped approval reader unavailable")
+	}
+	return reader.statusScoped(ctx, tenant, ref, sessionLaunchPlanHash(intent), sessionLaunchAction, sessionLaunchSubjectKind, launchSubjectRef(intent))
+}
+
+// budgetGateOf is the launch gate's budget check: the finops module when it runs on
+// this node, else an untyped nil (no budget gate). Never a typed nil.
+func budgetGateOf(fin *finops.Module) budgetChecker {
+	if fin == nil {
+		return nil
+	}
+	return fin
+}
+
+// contextPolicyOf is the launch gate's context policy: the knowledge module when
+// it runs on this node, else an untyped nil (no context policy). Never a typed nil.
+func contextPolicyOf(k *knowledge.Module) sessionContextPolicyResolver {
+	if k == nil {
+		return nil
+	}
+	return k
+}
+
+// gatePosture is how the boot line names a launch control: its read-error posture
+// when its module runs, "off (module not enabled)" when it does not.
+func gatePosture(wired bool, p availabilityPosture) string {
+	if !wired {
+		return "off (module not enabled)"
+	}
+	return p.String()
 }

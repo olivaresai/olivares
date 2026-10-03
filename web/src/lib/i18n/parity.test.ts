@@ -11,7 +11,7 @@
 // assertions make that a failing test instead of a shipped untranslated string.
 import { describe, expect, it } from 'vitest'
 
-import i18n, { LANGUAGE_CODES } from './index'
+import i18n, { i18nReady, LANGUAGE_CODES } from './index'
 
 // Importing each feature's i18n entry registers its namespace as a side effect.
 // `_intel` now carries the same `i18n/index.ts` every other feature has, so this
@@ -65,6 +65,10 @@ function flatten(obj: unknown, prefix = '', acc?: Flat): Flat {
   }
   return out
 }
+
+// Exercise the real backend before inspecting every supported language.
+await i18nReady
+await i18n.loadLanguages([...LANGUAGE_CODES])
 
 const data = i18n.store.data as Record<string, Record<string, unknown>>
 const namespaces = Object.keys(data.en).sort()

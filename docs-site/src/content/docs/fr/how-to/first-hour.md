@@ -124,13 +124,43 @@ curl -sf "$BASE/v1/agents" \
 ./bin/olivares agent managed-settings --out ./managed-settings.json
 ```
 
-`POST /v1/agents` **n’exige pas** AAL3. Créer des sources, connecteurs,
-espaces de travail et secrets **si**.
+`POST /v1/agents` n’exige pas de vérification administrative supplémentaire.
+Pour les sources, connecteurs, espaces de travail et secrets, cette
+vérification dépend de `admin_step_up`, dont la valeur par défaut est `none`.
+La section consacrée à la politique ci-dessous explique comment exiger AAL3.
 
 ### 4. Session gouvernée : autoriser Read, refuser Bash
 
-Redémarrez avec `OLIVARES_HOOK_PEP_CONFIG` et une politique deny-closed.
-Puis :
+Arrêtez le moteur de l’étape 1. Exécutez ensuite ceci dans le même répertoire
+de travail, en conservant `DATA` et `TENANT` des étapes 1 et 2. Cette politique
+refuse par défaut et le redémarrage active le PEP :
+
+```bash
+# TENANT is the tenant_id returned in step 2.
+: "${TENANT:?Set TENANT to the tenant_id from step 2}"
+cat > ./hook-pep.json <<JSON
+{
+  "listen": "127.0.0.1:8447",
+  "tenants": [
+    {
+      "tenant": "$TENANT",
+      "require_firm_identity": false,
+      "policy": {
+        "version": "first-hour/v1",
+        "default": "deny",
+        "rules": [
+          { "tool": "Read", "decision": "allow", "reason": "reads are permitted in the first hour" },
+          { "tool": "Bash", "decision": "deny", "reason": "shell execution is blocked in the first hour" }
+        ]
+      }
+    }
+  ]
+}
+JSON
+OLIVARES_HOOK_PEP_CONFIG=./hook-pep.json \
+  ./bin/olivares serve --insecure --data-dir "$DATA" \
+  --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444
+```
 
 ```bash
 export OLIVARES_HOOK_PEP_URL=http://127.0.0.1:8447/
@@ -175,11 +205,23 @@ Gardez le plan de contrôle en SQLite local. Exécutez l’agent sur un poste
 qui a déjà `claude`. Une session CLI officielle en direct (PTY) relève du runtime Community, pas de
 cette page.
 
-## La barrière AAL3 (toujours vraie)
+## Politique de vérification administrative supplémentaire
 
-Créer des sources, connecteurs, espaces de travail et secrets est **refusé**
-jusqu’à AAL3. PIV/CAC répond **501** sur une installation standard. Ouvrez
-`https://localhost:PORT`, puis **Identity → Privileged login**.
+La valeur par défaut de `admin_step_up` est `none` : un administrateur
+connecté agit avec le niveau de sa session actuelle. Créer des sources,
+connecteurs, espaces de travail et secrets n’exige donc pas AAL3 par défaut.
+L’authentification, les permissions, l’isolation des tenants et l’audit restent
+actifs ; les jetons d’API ne satisfont pas cette vérification.
+
+Pour exiger un AAL3 récent pour ces actions, enregistrez une passkey sur
+`https://localhost:PORT` et effectuez une vérification récente par passkey/PIV
+à cette adresse de console. Dans **Settings → Sign-in → Extra check for
+administrative actions**, choisissez **Passkey**. L’équivalent API est
+`PUT /v1/auth/step-up-policy` avec `{"admin_step_up":"passkey"}`. Le moteur
+refuse de renforcer la politique tant que l’administrateur n’a pas prouvé que
+le facteur choisi fonctionne. `POST /v1/agents` reste hors de cette
+vérification supplémentaire.
+
 
 ## 3. Lancer une session Claude Code depuis la console
 

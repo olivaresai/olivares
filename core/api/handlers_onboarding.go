@@ -62,7 +62,7 @@ func (s *Server) handleOnboardMember(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	var in onboardInput
@@ -72,6 +72,10 @@ func (s *Server) handleOnboardMember(w http.ResponseWriter, r *http.Request) {
 	}
 	if in.Mode != "" && in.Mode != "password" && in.Mode != "invite" {
 		s.badRequest(w, r, "mode must be \"password\" or \"invite\"")
+		return
+	}
+	if err := auth.ValidateEmail(in.Email); err != nil {
+		s.writeError(w, r, err)
 		return
 	}
 	if in.Mode == "invite" && s.inviteSender == nil {
@@ -135,7 +139,7 @@ func (s *Server) handleResendInvite(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	if !s.requireAAL3(w, r, p) {
+	if !s.requireStepUp(w, r, p) {
 		return
 	}
 	if s.inviteSender == nil {
@@ -167,9 +171,7 @@ func (s *Server) handleAcceptInvite(w http.ResponseWriter, r *http.Request) {
 		s.writeError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{
-		"token": token, "session_id": sess.ID.String(), "expires_at": sess.ExpiresAt.String(),
-	})
+	writeJSON(w, http.StatusOK, SessionEnvelope(w, r, token, sess))
 }
 
 // handleListInvites lists a tenant's pending (unaccepted, unexpired) invitations,

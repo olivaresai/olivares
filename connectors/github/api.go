@@ -7,12 +7,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 // apiRepo is a repository returned by the GitHub REST API.
@@ -162,8 +163,8 @@ func (s *Source) apiGet(ctx context.Context, url string, dst interface{}) (strin
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-		return "", fmt.Errorf("GitHub API %s: %d %s", url, resp.StatusCode, string(body))
+		body := redact.ReadHTTPError(resp.Body, 1024, req, s.token)
+		return "", fmt.Errorf("GitHub API %s: %d %s", url, resp.StatusCode, body)
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(dst); err != nil {

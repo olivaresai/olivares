@@ -28,3 +28,16 @@ export interface SavedViewInput {
 export interface SavedViewsResponse {
   items: SavedView[]
 }
+
+/** A starred console page: a registry view id, or the Settings utility. */
+export interface FavoriteLink {
+  kind: 'feature' | 'utility'
+  id: string
+}
+
+export interface FavoritesResponse {
+  favorites: FavoriteLink[]
+  /** False until the user saves favorites for the first time. */
+  stored: boolean
+  updated_at?: string
+}

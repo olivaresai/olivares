@@ -32,7 +32,8 @@ type RouteMetadata struct {
 	CedarAction string
 
 	// RequireScopedGrant fixes the RBAC term of the algebra to FALSE for this route,
-	// leaving Grant ∧ ¬Forbid ∧ ¬deny-overlay.
+	// leaving Grant ∧ ¬Forbid ∧ ¬deny-overlay. Tenant owners hold an implicit
+	// scoped grant; other roles need an explicit positive grant.
 	//
 	// It is how a route says "breadth of role is not enough here": no role, tenant
 	// admin included, reaches a governed terminal merely by being broad. It removes a

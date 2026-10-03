@@ -132,6 +132,8 @@ const (
 	codeProviderCredentialAdapterConfigured = "provider_credential_adapter_configured"
 	codeProviderAdapterNotConfigured        = "provider_credential_adapter_not_configured"
 	codeCredentialSourceNotInjected         = "credential_source_not_injected"
+	// The profile is bound to an API key saved in Providers: the key is the credential.
+	codeProviderRecordBound = "provider_record_bound"
 
 	// runtime_credentials
 	codeRuntimeCredentialsWired        = "runtime_credentials_wired"
@@ -230,7 +232,7 @@ func readinessCodeVocabulary() []string {
 		codeAuthSourceRequired, codeManagedInjectionNotAppliedForTransport,
 		codeClaudeCredentialSourceConfigured, codeClaudeCredentialSourceNotConfigured,
 		codeProviderCredentialAdapterConfigured, codeProviderAdapterNotConfigured,
-		codeCredentialSourceNotInjected,
+		codeCredentialSourceNotInjected, codeProviderRecordBound,
 		codeRuntimeCredentialsWired, codeRuntimeCredentialsNotRequested,
 		codeRuntimeCredentialWiringPartial, codeRuntimeReadinessUnavailable,
 		codeInspectionUnavailable, codeNotCheckedInThisEnvironment,
@@ -652,7 +654,7 @@ func (m *Module) readinessProgram(driver string) string {
 	if d, ok := m.driverFor(driver); ok {
 		return m.driverProgram(d)
 	}
-	return m.rt.program
+	return m.claudeProgram()
 }
 
 // homesCheck re-runs the launch's OWN home revalidation (revalidateHome), then
@@ -780,6 +782,12 @@ func (m *Module) credentialSourceCheck(
 		// Nothing is injected: the authorized account home IS the credential, and
 		// demanding a global WIF on top of it is the conflation §5.1 forbids.
 		return verdict(CheckCredentialSource, ReadinessNotApplicable, codeCredentialSourceNotInjected, "")
+	}
+	if strings.TrimSpace(prof.ProviderRecordRef) != "" {
+		// Bound to a key saved in Providers: the launch opens it from the vault for
+		// every driver (mintLaunchAuthority's record path) and needs no WIF, no
+		// token file and no adapter. Its state is re-checked at launch.
+		return verdict(CheckCredentialSource, ReadinessReady, codeProviderRecordBound, "")
 	}
 	if prof.Driver == providerDriverClaude {
 		if Transport(sel.Transport) != TransportStreamJSON {

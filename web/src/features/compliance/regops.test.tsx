@@ -88,6 +88,11 @@ const toastSpy = {
   warning: vi.fn(),
   info: vi.fn(),
 }
+const edition = vi.hoisted(() => ({ community: false }))
+vi.mock('@/lib/hooks/use-edition', () => ({
+  useCommunityBuild: () => edition.community,
+  useEdition: () => (edition.community ? 'community' : undefined),
+}))
 vi.mock('@/components/ui/toaster', () => ({ toast: toastSpy }))
 
 const { ComplianceView } = await import('./compliance-view')
@@ -343,6 +348,25 @@ beforeEach(() => {
   vi.unstubAllGlobals()
   Object.values(toastSpy).forEach((fn) => fn.mockReset())
   allowed = new Set(ALL_PERMS)
+})
+
+describe('a Community build', () => {
+  it('offers neither Regulatory ops nor NIS 2 incidents, and keeps the other tabs', async () => {
+    edition.community = true
+    try {
+      stubConsole()
+      renderIntel(<ComplianceView />)
+      expect(
+        await screen.findByRole('tab', { name: /^Retention$/i }),
+      ).toBeInTheDocument()
+      expect(
+        screen.queryByRole('tab', { name: /^Regulatory ops$/i }),
+      ).toBeNull()
+      expect(screen.queryByRole('tab', { name: /nis ?2/i })).toBeNull()
+    } finally {
+      edition.community = false
+    }
+  })
 })
 
 // =============================================================================

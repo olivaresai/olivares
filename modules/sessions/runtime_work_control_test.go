@@ -845,11 +845,9 @@ func (fx *runtimeWorkControlFixture) releaseWorkLease(t *testing.T) {
 	fx.itemVer = released.Version
 }
 
-// TestRunOutlivesItsWorkLeaseGenerationWithoutReopeningLegacyControl pins the
-// permanent control-plane selection made by the immutable run stamp. A released
-// generation may be re-acquired and controlled with its new fence, but legacy
-// input/stop/resume never reopen: doing so would race a concurrent acquire.
-func TestRunOutlivesItsWorkLeaseGenerationWithoutReopeningLegacyControl(t *testing.T) {
+// A live generation requires its fence; ending it restores ordinary live
+// controls without erasing the stamp. Re-acquisition closes those controls again.
+func TestRunOutlivesItsWorkLeaseGenerationAndRequiresTheActiveFence(t *testing.T) {
 	t.Parallel()
 
 	t.Run("no-fire: a LIVE generation still refuses the legacy paths", func(t *testing.T) {
@@ -872,7 +870,7 @@ func TestRunOutlivesItsWorkLeaseGenerationWithoutReopeningLegacyControl(t *testi
 		}
 	})
 
-	t.Run("release still refuses legacy stop", func(t *testing.T) {
+	t.Run("release restores ordinary stop", func(t *testing.T) {
 		fx := newRuntimeWorkControlFixture(t)
 		ctx := context.Background()
 		fx.releaseWorkLease(t)
@@ -880,12 +878,11 @@ func TestRunOutlivesItsWorkLeaseGenerationWithoutReopeningLegacyControl(t *testi
 		if _, ok := fx.m.rt.getLive(fx.tenant, fx.runRef); !ok {
 			t.Fatal("release must not kill the supervised process")
 		}
-		var re *runErr
-		if _, err := fx.m.stopRun(ctx, fx.tenant, fx.runRef, "user:operator", model.ActorUser); !errors.As(err, &re) || re.status != http.StatusConflict {
-			t.Fatalf("legacy stop after release = %v, want 409", err)
+		if dto, err := fx.m.stopRun(ctx, fx.tenant, fx.runRef, "user:operator", model.ActorUser); err != nil || dto.State != stateStopped {
+			t.Fatalf("ordinary stop after release = %+v, %v, want stopped", dto, err)
 		}
-		if got := fx.proc.stopCount(); got != 0 {
-			t.Fatalf("refused legacy stop after release stopped the process %d time(s)", got)
+		if got := fx.proc.stopCount(); got != 1 {
+			t.Fatalf("ordinary stop after release stopped the process %d time(s), want 1", got)
 		}
 	})
 

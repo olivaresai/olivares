@@ -63,9 +63,11 @@ func (p *providerProbeServer) lastBody() string   { s, _ := p.body.Load().(strin
 func (p *providerProbeServer) lastPath() string   { s, _ := p.path.Load().(string); return s }
 func (p *providerProbeServer) lastMethod() string { s, _ := p.method.Load().(string); return s }
 
+// providerArgs is an add with every choice explicit and no test after it, so a test
+// reads the add's own request (the test that follows is TestProviderAddTestsTheKeyItAdded).
 func providerArgs(server string, extra ...string) []string {
 	return append([]string{
-		"provider", "add",
+		"provider", "add", "--no-test",
 		"--kind", "anthropic", "--name", "Anthropic (prod)",
 		"--server", server, "--token", "test-token", "--tenant", "tenant-a",
 	}, extra...)
@@ -277,9 +279,14 @@ func TestAgentDeployRegistersTheProfileAndBindsTheProvider(t *testing.T) {
 	if body["auth_source"] != "managed_injection" || body["provider_record_ref"] != "prv_fixture" {
 		t.Fatalf("body=%v", body)
 	}
-	// The homes are DEFAULTED from this account's home, and they are the driver's own.
-	if body["config_home"] != filepath.Join(home, ".claude") || body["user_home"] != home {
-		t.Fatalf("homes=%v/%v", body["config_home"], body["user_home"])
+	// HU-07: no home is typed or defaulted from this account's home; the engine makes
+	// the profile's own. $HOME/.claude was refused when missing (422) and, when it was
+	// the engine user's own login, never launched.
+	if _, ok := body["config_home"]; ok {
+		t.Fatalf("deploy sent a home nobody named: %v", body)
+	}
+	if _, ok := body["user_home"]; ok {
+		t.Fatalf("deploy sent a home nobody named: %v", body)
 	}
 	if !strings.Contains(out, "not installed") && !strings.Contains(out, "installed") {
 		t.Fatalf("deploy must report the tool state: %q", out)
@@ -309,8 +316,10 @@ func TestAgentDeployRegistersTheProfileAndBindsTheProvider(t *testing.T) {
 func TestAgentDeployWithoutProviderDoesNotAuthoriseInjection(t *testing.T) {
 	p := newProviderProbeServer(t, http.StatusCreated,
 		`{"profile_ref":"ppf_fixture","driver":"claude","state":"active"}`)
-	t.Setenv("HOME", t.TempDir())
+	home := t.TempDir()
+	t.Setenv("HOME", home)
 	if _, errb, err := execRootStdin(t, "", "agent", "deploy", "claude",
+		"--config-home", filepath.Join(home, ".claude"), "--user-home", home,
 		"--server", p.URL, "--token", "t", "--tenant", "tenant-a"); err != nil {
 		t.Fatalf("deploy: %v %s", err, errb)
 	}
@@ -329,6 +338,34 @@ func TestAgentDeployWithoutProviderDoesNotAuthoriseInjection(t *testing.T) {
 	}
 	if _, ok := body["provider_record_ref"]; ok {
 		t.Fatalf("deploy must not bind a provider nobody named: %v", body)
+	}
+}
+
+// HU-07: with no home named and no provider, deploy asks the engine for the profile a
+// new session of the driver uses (the resolve rule `session start` and the console
+// use), so a fresh account needs no path and a second deploy reuses the profile. The
+// CLI names nothing but the driver: no home, no auth source, no provider.
+func TestAgentDeployWithoutHomesUsesTheEnginesProfile(t *testing.T) {
+	p := newProviderProbeServer(t, http.StatusOK,
+		`{"profile":{"profile_ref":"ppf_resolved","driver":"claude","state":"active"},"reason":"own_login","created":true}`)
+	t.Setenv("HOME", t.TempDir())
+	out, errb, err := execRootStdin(t, "", "agent", "deploy", "claude",
+		"--server", p.URL, "--token", "t", "--tenant", "tenant-a")
+	if err != nil {
+		t.Fatalf("deploy: %v %s", err, errb)
+	}
+	if p.lastMethod() != http.MethodPost || p.lastPath() != "/v1/m/sessions/provider-profiles/resolve" {
+		t.Fatalf("method=%q path=%q, want the engine's resolve", p.lastMethod(), p.lastPath())
+	}
+	var body map[string]any
+	if uerr := json.Unmarshal([]byte(p.lastBody()), &body); uerr != nil {
+		t.Fatal(uerr)
+	}
+	if len(body) != 1 || body["driver"] != "claude" {
+		t.Fatalf("resolve body = %v, want only the driver", body)
+	}
+	if !strings.Contains(out, "ppf_resolved") || !strings.Contains(out, "kept by the engine") {
+		t.Fatalf("deploy did not report the engine's profile:\n%s", out)
 	}
 }
 

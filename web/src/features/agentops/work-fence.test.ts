@@ -6,9 +6,15 @@
 // components that make the request (live-console-input.test.tsx,
 // work-composer.test.tsx); these pin the predicate itself, which the engine states in
 // `runHasWorkBinding`: ANY of the four stamps, not all four.
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { agentOpsApi } from './api'
 import type { RunDTO } from './types'
-import { isWorkBound, workLeaseFenceFor } from './work-fence'
+import {
+  controlFence,
+  currentControlFence,
+  isWorkBound,
+  workLeaseFenceFor,
+} from './work-fence'
 
 const run = (over: Partial<RunDTO> = {}): RunDTO => ({
   run_ref: 'run_1',
@@ -67,4 +73,60 @@ describe('workLeaseFenceFor', () => {
       ).toBeUndefined()
     },
   )
+})
+
+// MC (Root 2026-10-02, F1's 09 defect): after a peer work item is submitted, its lease has
+// ended. The engine then applies ordinary control and refuses an explicitly STALE fence.
+// The run says so itself (`work_lease_state`, SR2: no lease permission needed).
+describe('controlFence: the stamp is presented until the run says its lease ended', () => {
+  const bound = { work_item_id: 'item-a', work_lease_fence: 7 }
+  it('during an active lease, the exact fence is presented', () => {
+    expect(controlFence({ ...bound, work_lease_state: 'active' })).toBe(7)
+  })
+  it('after submit (lease ended), no fence is presented', () => {
+    expect(
+      controlFence({ ...bound, work_lease_state: 'ended' }),
+    ).toBeUndefined()
+  })
+  it('an unknown lease keeps the stamp (the engine decides)', () => {
+    expect(controlFence({ ...bound, work_lease_state: 'unknown' })).toBe(7)
+  })
+  it('an engine that does not say yet keeps the stamp', () => {
+    expect(controlFence(bound)).toBe(7)
+  })
+  it('a run with no stamp presents nothing, whatever it says', () => {
+    expect(controlFence({ work_lease_state: 'active' })).toBeUndefined()
+  })
+})
+
+// SR3 on 2339eb7d: the screen's copy of a run can be older than the lease. Only what the
+// engine answers now may drop the stamp.
+describe('currentControlFence: only a current ended read drops the stamp', () => {
+  afterEach(() => vi.restoreAllMocks())
+  const bound = run({ work_item_id: 'item-a', work_lease_fence: 7 })
+  it.each(['active', 'unknown', undefined] as const)(
+    'keeps the stamp when the current read says %s, whatever the screen held',
+    async (state) => {
+      vi.spyOn(agentOpsApi, 'getRun').mockResolvedValue({
+        ...bound,
+        work_lease_state: state,
+      })
+      expect(
+        await currentControlFence({ ...bound, work_lease_state: 'ended' }),
+      ).toBe(7)
+    },
+  )
+  it('drops the stamp when the current read says ended', async () => {
+    vi.spyOn(agentOpsApi, 'getRun').mockResolvedValue({
+      ...bound,
+      work_lease_state: 'ended',
+    })
+    expect(await currentControlFence(bound)).toBeUndefined()
+  })
+  it('keeps the stamp when the read fails, even if the screen held ended', async () => {
+    vi.spyOn(agentOpsApi, 'getRun').mockRejectedValue(new Error('unavailable'))
+    expect(
+      await currentControlFence({ ...bound, work_lease_state: 'ended' }),
+    ).toBe(7)
+  })
 })

@@ -437,6 +437,7 @@ func (e *consentEstate) wantNames(t *testing.T, kind model.Kind, column string, 
 type accountAliases struct {
 	id                model.ID
 	email, externalID string
+	credentials       []model.ID
 }
 
 // aliasesOf reads the aliases of user from its account record.
@@ -450,6 +451,34 @@ func (e *consentEstate) aliasesOf(t *testing.T, user model.ID) accountAliases {
 			return err
 		}
 		a.email, a.externalID = u.Email, u.ExternalID
+		q := model.Query{Filters: []model.Filter{{Column: "user_id", Op: model.OpEq, Value: user.String()}}, Limit: 500}
+		for {
+			sessions, page, err := as.Sessions().List(ctx, q)
+			if err != nil {
+				return err
+			}
+			for _, session := range sessions {
+				a.credentials = append(a.credentials, session.ID)
+			}
+			if !page.HasMore || page.Cursor == "" {
+				break
+			}
+			q.Cursor = page.Cursor
+		}
+		q.Cursor = ""
+		for {
+			tokens, page, err := as.Tokens().List(ctx, q)
+			if err != nil {
+				return err
+			}
+			for _, token := range tokens {
+				a.credentials = append(a.credentials, token.ID)
+			}
+			if !page.HasMore || page.Cursor == "" {
+				break
+			}
+			q.Cursor = page.Cursor
+		}
 		return nil
 	}); err != nil {
 		t.Fatalf("read the aliases of %s: %v", user, err)
@@ -479,7 +508,15 @@ func namesThrough(decl *model.ColumnDecl, rec model.Record, column string, a acc
 		return ref != "" && ref == a.externalID, nil
 	}
 	ids, err := decl.CountedUserIDs(rec, column)
-	return slices.Contains(ids, a.id), err
+	if err != nil || slices.Contains(ids, a.id) {
+		return slices.Contains(ids, a.id), err
+	}
+	for _, credential := range decl.CountedCredentialIDs(rec, column) {
+		if slices.Contains(a.credentials, credential) {
+			return true, nil
+		}
+	}
+	return false, nil
 }
 
 // textNamesAccount reports whether untyped text names the account, as the

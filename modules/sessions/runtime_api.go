@@ -6,6 +6,7 @@ package sessions
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -49,6 +50,9 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	reg.HandleEntity("GET", "/runs/{ref}", permRunRead, runEntity, m.handleGetRun)
 	reg.HandleEntity("GET", "/runs/{ref}/events", permRunRead, runEntity, m.handleRunEvents)
 	reg.HandleEntity("GET", "/runs/{ref}/attach", permRunRead, runEntity, m.handleAttachRun)
+	// What the session changed in its folder (run_changes.go): read-only, nothing executed.
+	reg.HandleEntity("GET", "/runs/{ref}/changes", permRunRead, runEntity, m.handleRunChanges)
+	reg.HandleEntity("GET", "/runs/{ref}/changes/file", permRunRead, runEntity, m.handleRunChangedFile)
 	// A caller who can read this run may learn that an action is forbidden.
 	// Other workspaces and absent runs retain the same concealed 404.
 	runEntity.DeniedReadPermission = permRunRead
@@ -56,6 +60,7 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	reg.HandleEntity("POST", "/runs/{ref}/interrupt", permRunWrite, runEntity, m.handleInterruptRun)
 	reg.HandleEntity("POST", "/runs/{ref}/stop", permRunWrite, runEntity, m.handleStopRun)
 	reg.HandleEntity("POST", "/runs/{ref}/resume", permRunWrite, runEntity, m.handleResumeRun)
+	reg.HandleEntity("PUT", "/runs/{ref}/peers", permRunWrite, runEntity, m.handleSetRunPeers)
 	reg.HandleEntity("POST", "/runs/{ref}/cleanup", permRunAdmin, runEntity, m.handleCleanupRun)
 	reg.HandleEntity("DELETE", "/runs/{ref}", permRunAdmin, runEntity, m.handleDeleteRun)
 }
@@ -78,16 +83,32 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 		writeJSON(w, http.StatusUnprocessableEntity, errorBody("provider_profile_ref is not accepted on this deployment: profiled launches are not enabled until every session reader understands profile-scoped rows"))
 		return
 	}
+	// "The default works" (NEXT-COMMON): a launch that names no profile runs under the
+	// one the engine resolves for Claude Code, the default tool, exactly as `session
+	// start` and the console's first session do (provider_profile_resolve.go). Resolving
+	// may create that profile, so it needs the caller's profile write; without it the
+	// refusal below stands.
+	if body.ProviderProfileRef == "" && m.rt.profiledLaunchesEnabled && m.mayWriteProfiles(r.Context(), mc) {
+		got, err := m.ResolveProfile(r.Context(), mc.Tenant, providerDriverClaude)
+		if err != nil {
+			writeRunErr(w, err)
+			return
+		}
+		body.ProviderProfileRef = got.Profile.Ref
+	}
+	credential, _ := auth.QueuedCredentialFrom(mc.Principal)
 	dto, err := m.createRun(r.Context(), mc.Tenant, CreateRunParams{
-		Name:           body.Name,
-		Transport:      Transport(body.Transport),
-		PermissionMode: body.PermissionMode,
-		Effort:         body.Effort,
-		Model:          body.Model,
-		WorkspaceRef:   body.WorkspaceRef,
-		TemplateID:     body.TemplateID,
-		Isolation:      Isolation(body.Isolation),
-		EnvAllow:       body.EnvAllow,
+		queuedCredential: credential,
+		Name:             body.Name,
+		Transport:        Transport(body.Transport),
+		PermissionMode:   body.PermissionMode,
+		Effort:           body.Effort,
+		Model:            body.Model,
+		WorkspaceRef:     body.WorkspaceRef,
+		TemplateID:       body.TemplateID,
+		Isolation:        Isolation(body.Isolation),
+		EnvAllow:         body.EnvAllow,
+		SecretEnv:        body.SecretEnv,
 		// The profile is a REFERENCE; its homes are resolved and validated on the
 		// server. The DTO has no field for a home, an environment or a snapshot.
 		ProviderProfileRef: body.ProviderProfileRef,
@@ -95,13 +116,85 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 		ActorKind:          mc.Principal.ActorKind(),
 		// Server-set from the AUTHENTICATED identity, never from the body: the DTO
 		// has no agent_ref field and must not grow one (confused-deputy).
-		AgentRef: mc.Principal.AgentIdentity,
+		AgentRef:           mc.Principal.AgentIdentity,
+		MayRunUnrestricted: m.mayRunUnrestricted(r.Context(), mc),
+		MayUseSecretEnv:    m.mayUseSecretEnv(r.Context(), mc),
 	})
 	if err != nil {
 		writeRunErr(w, err)
 		return
 	}
+	if dto.State == stateWaitingApproval {
+		w.Header().Set("Location", "/v1/m/governance/approvals/"+dto.ApprovalRef)
+		writeJSON(w, http.StatusAccepted, dto)
+		return
+	}
 	writeJSON(w, http.StatusCreated, dto)
+}
+
+// mayWriteProfiles reports whether the authenticated caller may create provider
+// profiles in this tenant. No authorizer wired is a no.
+func (m *Module) mayWriteProfiles(ctx context.Context, mc api.ModuleContext) bool {
+	if m.workAuthz == nil {
+		return false
+	}
+	return m.workAuthz.Authorize(ctx, auth.Request{
+		Principal: mc.Principal, Tenant: mc.Tenant,
+		Permission: permProfileWrite, Resource: auth.ResourceFor(permProfileWrite),
+	}).Allow
+}
+
+// mayRunUnrestricted reports whether the authenticated caller administers runs
+// in this tenant: the one who may choose the "full" preset. No authorizer wired
+// is a no.
+func (m *Module) mayRunUnrestricted(ctx context.Context, mc api.ModuleContext) bool {
+	if m.workAuthz == nil {
+		return false
+	}
+	return m.workAuthz.Authorize(ctx, auth.Request{
+		Principal: mc.Principal, Tenant: mc.Tenant,
+		Permission: permRunAdmin, Resource: auth.ResourceFor(permRunAdmin),
+	}).Allow
+}
+
+// principalMayRunUnrestricted asks a restored queued launcher, as it is now, for
+// run administration, and not confined to one workspace (Root on FH 048).
+func (m *Module) principalMayRunUnrestricted(ctx context.Context, tenant model.TenantID, p auth.Principal) bool {
+	if m.workAuthz == nil {
+		return false
+	}
+	if _, confined := p.ConfinedWorkspaceIn(tenant); confined {
+		return false
+	}
+	return m.workAuthz.Authorize(ctx, auth.Request{
+		Principal: p, Tenant: tenant,
+		Permission: permRunAdmin, Resource: auth.ResourceFor(permRunAdmin),
+	}).Allow
+}
+
+// mayUseSecretEnv reports whether the authenticated caller may give vault secrets
+// to a session: tenant administration, the permission the vault's tenant scope
+// already requires (core/api handlers_secrets.go), and not confined to one
+// workspace. No authorizer wired is a no.
+func (m *Module) mayUseSecretEnv(ctx context.Context, mc api.ModuleContext) bool {
+	return m.principalMayUseSecretEnv(ctx, mc.Tenant, mc.Principal)
+}
+
+// principalMayUseSecretEnv is that one question for any principal: the caller of a
+// launch or resume, or the launcher of a queued launch as it is restored, CURRENT,
+// when its approval arrives (SR2 on 834b0c8c).
+func (m *Module) principalMayUseSecretEnv(ctx context.Context, tenant model.TenantID, p auth.Principal) bool {
+	if m.workAuthz == nil {
+		return false
+	}
+	if _, confined := p.ConfinedWorkspaceIn(tenant); confined {
+		return false
+	}
+	const tenantAdmin = auth.Permission("tenant:admin")
+	return m.workAuthz.Authorize(ctx, auth.Request{
+		Principal: p, Tenant: tenant,
+		Permission: tenantAdmin, Resource: auth.ResourceFor(tenantAdmin),
+	}).Allow
 }
 
 func (m *Module) handleListRuns(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -185,6 +278,7 @@ func (m *Module) handleListRuns(w http.ResponseWriter, r *http.Request, mc api.M
 			if stateFilter != "" && dto.State != stateFilter {
 				continue
 			}
+			dto.WorkLeaseState = runWorkLeaseState(r.Context(), sc, rec)
 			out.Items = append(out.Items, dto)
 		}
 		out.HasMore = page.HasMore
@@ -203,7 +297,22 @@ func (m *Module) handleGetRun(w http.ResponseWriter, r *http.Request, mc api.Mod
 		writeJSON(w, http.StatusBadRequest, errorBody("run ref required"))
 		return
 	}
-	dto, err := m.getRun(r.Context(), mc.Tenant, ref)
+	// Only this authorized read route may project actual lease state. Shared
+	// runtime reads also serve write-only controls and keep the unknown posture.
+	var dto runDTO
+	err := m.runtimeData(r.Context()).View(r.Context(), mc.Tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(runKind)
+		if err != nil {
+			return err
+		}
+		rec, err := findRunRec(r.Context(), repo, ref)
+		if err != nil {
+			return err
+		}
+		dto = m.toRunDTO(rec)
+		dto.WorkLeaseState = runWorkLeaseState(r.Context(), sc, rec)
+		return nil
+	})
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -378,7 +487,16 @@ func (m *Module) handleStopRun(w http.ResponseWriter, r *http.Request, mc api.Mo
 }
 
 func (m *Module) handleResumeRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	dto, err := m.resumeRun(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), mc.Principal.Actor(), mc.Principal.ActorKind(), mc.Principal.AgentIdentity)
+	ref := chi.URLParam(r, "ref")
+	// A "full" session is resumed only by a run administrator, as it is started.
+	if rec, err := m.loadRun(r.Context(), mc.Tenant, ref); err == nil {
+		if err := refuseUnrestrictedFor(rec.String(colPermissionMode), m.mayRunUnrestricted(r.Context(), mc)); err != nil {
+			writeRunErr(w, err)
+			return
+		}
+	}
+	dto, err := m.resumeRunAsCaller(r.Context(), mc.Tenant, ref, mc.Principal.Actor(), mc.Principal.ActorKind(), mc.Principal.AgentIdentity,
+		m.mayRunUnrestricted(r.Context(), mc), m.mayUseSecretEnv(r.Context(), mc))
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -572,6 +690,11 @@ func writeRunErr(w http.ResponseWriter, err error) {
 	var raced *racedRunErr
 	if errors.As(err, &raced) {
 		writeJSON(w, http.StatusConflict, raced.dto)
+		return
+	}
+	var coded *codedRunErr
+	if errors.As(err, &coded) {
+		writeJSON(w, coded.status, map[string]any{"error": map[string]string{"code": coded.code, "message": coded.msg}})
 		return
 	}
 	var re *runErr

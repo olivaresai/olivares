@@ -23,11 +23,12 @@ export interface CostSparklineProps {
  * into the `{ v: number }[]` record format that the shared `Sparkline`
  * component expects, then delegates all rendering to it.
  */
-export function CostSparkline({ data, color, height = 40 }: CostSparklineProps) {
-  const points = useMemo(
-    () => data.map((v) => ({ v })),
-    [data],
-  )
+export function CostSparkline({
+  data,
+  color,
+  height = 40,
+}: CostSparklineProps) {
+  const points = useMemo(() => data.map((v) => ({ v })), [data])
 
   // An all-zero trend is still meaningful (nothing spent) — render the flat line.
   return (

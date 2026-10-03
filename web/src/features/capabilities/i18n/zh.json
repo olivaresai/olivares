@@ -223,7 +223,8 @@
     },
     "server": {
       "title": "尚未发现 MCP 服务器",
-      "description": "连接器观测到 MCP 服务器并将其纳入租户清单后，服务器才会显示。"
+      "description": "连接器观测到 MCP 服务器并将其纳入租户清单后，服务器才会显示。",
+      "action": "在 MCP 服务器中添加或测试服务器"
     },
     "skill": {
       "title": "尚未发现技能",

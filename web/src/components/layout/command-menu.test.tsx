@@ -58,11 +58,14 @@ const READS = [
   'notify:route:read',
   'orchestration:graph:read',
 ]
-/** The three permissions the ENGINE requires for the writes those verbs open. */
+/** The permissions the ENGINE requires for the writes the palette's verbs open (the three
+ * creation verbs, Engage kill switch and Invite people). */
 const WRITES = [
   'eventing:subscription:write',
   'notify:route:write',
   'orchestration:schedule:write',
+  'governance:killswitch:admin',
+  'membership:write',
 ]
 
 /** A principal holding exactly `permissions`, and the navigation authority for the rest of

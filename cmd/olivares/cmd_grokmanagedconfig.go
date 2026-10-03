@@ -22,7 +22,7 @@ func newGrokCmd() *cobra.Command {
 		Short: "Author Grok Build governance artifacts (managed requirements)",
 		Long: "grok renders the system-tier requirements.toml that Grok Build clamps as its\n" +
 			"highest configuration layer (sandbox profile and MCP allowlist). It writes a file;\n" +
-			"it does not talk to a control plane.\n\n" +
+			"it does not talk to an engine.\n\n" +
 			"Can-enforce: sandbox profile and MCP server names in /etc/grok/requirements.toml.\n" +
 			"Can-only-observe: ~/.grok/disabled-hooks (a user can disable a managed hook by name).\n" +
 			"This command does not write disabled-hooks and does not claim authentication.",

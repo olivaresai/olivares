@@ -9,10 +9,10 @@
     "active": "Actif",
     "idle": "Inactif",
     "silentEvasion": "Évasion possible",
-    "total": "Sessions",
-    "launched": "Lancées",
-    "discovered": "Découvertes",
-    "attention": "À examiner"
+    "sessions_one": "{{n}} session",
+    "sessions_many": "{{n}} sessions",
+    "sessions_other": "{{n}} sessions",
+    "running": "{{n}} en cours"
   },
   "cols": {
     "session": "Session",
@@ -91,7 +91,6 @@
   },
   "operateTitle": "Claude Code",
   "operateSubtitle": "Créez, rejoignez et gouvernez des sessions Claude Code, sans SSH. Les sessions qu’Olivares se contente d’observer figurent dans cette même liste et ouvrent la même fiche.",
-  "unifiedSubtitle": "Toutes les sessions d’agents de ce plan — celles qu’Olivares a découvertes et celles qu’il a lancées — dans une seule liste, avec ce que chacune fait et ce que l’on peut en faire.",
   "launch": "Nouvelle session",
   "allSources": "Toutes les origines",
   "tabs": {
@@ -140,6 +139,7 @@
       "watch": "Voir sa télémétrie en direct et sa chronologie",
       "attach": "Voir ses E/S au fil de l’eau",
       "drive": "Lui envoyer une entrée",
+      "interrupt": "Interrompre son tour en cours",
       "stop": "L’arrêter",
       "resume": "La reprendre",
       "cleanup": "Nettoyer son espace de travail",
@@ -156,6 +156,7 @@
     "actions": {
       "stop": "Arrêter",
       "resume": "Reprendre",
+      "startAgain": "Recommencer",
       "cleanup": "Nettoyer",
       "delete": "Supprimer",
       "cleanupHint": "Clôt l’exécution et libère sa poignée de reprise : elle ne pourra plus être reprise. Le journal de cycle de vie est conservé.",
@@ -252,6 +253,8 @@
   },
   "surface": {
     "paneSwitcher": "Choisir un volet",
+    "closeContext": "Fermer le contexte",
+    "backTo": "Retour à {{pane}}",
     "pane": {
       "rail": "Sessions",
       "narrative": "Travail",
@@ -262,22 +265,19 @@
     "noneTitle": "Sélectionnez une session",
     "noneDescription": "Choisissez une session dans le rail pour lire ce qu’elle a fait, avec ses preuves à côté.",
     "openDetail": "Contrôles complets",
-    "noObjective": "Le moteur n’a signalé aucun objectif pour cette session.",
     "notReadTitle": "Cette session n’a pas pu être lue",
-    "menu": "Actions pour {{name}}"
+    "menu": "Actions pour {{name}}",
+    "terminal": "Dans un terminal"
   },
   "evidence": {
     "checks": {
-      "title": "Vérifications",
-      "empty": "Cette session n’a signalé aucun constat."
+      "title": "Vérifications"
     },
     "activity": {
-      "title": "Derniers tours",
-      "empty": "Cette session n’a fait aucun appel d’outil ni MCP."
+      "title": "Derniers tours"
     },
     "resources": {
-      "title": "Ressources touchées",
-      "empty": "Aucune entrée ne nomme de ressource."
+      "title": "Ressources touchées"
     },
     "forbiddenTitle": "Preuves non autorisées",
     "forbiddenDescription": "Votre rôle n’inclut pas la permission de lire la télémétrie des sessions.",
@@ -339,7 +339,9 @@
     "workRoles": {
       "worker": "Exécutant",
       "orchestrator": "Orchestrateur"
-    }
+    },
+    "details": "Détails",
+    "echoes": "Également signalée comme"
   },
   "conversation": {
     "log": "Conversation",
@@ -356,7 +358,46 @@
     "inspect": "Afficher dans l’inspecteur",
     "args": "Arguments",
     "toolResult": "Résultat",
+    "toolFailed": "Échec",
     "tokens": "{{input}} entrées · {{output}} sorties",
-    "cwdWarning": "Cette session n’a pas d’espace de travail. Le pilote a déclaré son répertoire de travail comme {{cwd}}."
+    "cwdWarning": "Cette session n’a pas d’espace de travail. Le pilote a déclaré son répertoire de travail comme {{cwd}}.",
+    "protocol": "Trames de protocole : {{count}}",
+    "stop": {
+      "cancelled": "Annulé",
+      "refusal": "Refusé par le modèle",
+      "maxTokens": "Arrêté à la limite de jetons",
+      "maxTurnRequests": "Arrêté à la limite de tours"
+    },
+    "turnFailed": "Le tour a échoué : {{message}}",
+    "retrying": "Nouvelle tentative ({{count}}) : {{message}}",
+    "keyRefused": "Le fournisseur a refusé la clé d’API. Remplacez-la dans Fournisseurs.",
+    "output": "Sortie de l’outil ({{count}}) : {{first}}",
+    "notSent": "Non envoyé : {{reason}}"
+  },
+  "changes": {
+    "title": "Modifications dans {{folder}}",
+    "titleNoFolder": "Modifications",
+    "hint": "Fichiers que l’agent a modifiés dans son dossier depuis le début de cette session.",
+    "empty": "Aucun fichier modifié pour l’instant.",
+    "none": "Cette session n’a pas de dossier sur ce serveur.",
+    "loading": "Lecture du dossier…",
+    "error": "Les modifications n’ont pas pu être lues. Réessayez dans un instant.",
+    "back": "Toutes les modifications",
+    "binary": "Fichier binaire, {{size}}.",
+    "fileTruncated": "Affichage des 256 premiers Ko.",
+    "truncated": "Affichage des {{count}} fichiers les plus récents."
+  },
+  "peers": {
+    "button_one": "Peut écrire à {{count}} autre session",
+    "button_many": "Peut écrire à {{count}} autres sessions",
+    "button_other": "Peut écrire à {{count}} autres sessions",
+    "buttonNone": "Ne peut écrire à aucune autre session",
+    "template": "Peut écrire aux sessions de ce modèle",
+    "title": "Sessions auxquelles elle peut écrire",
+    "hint": "Les sessions auxquelles celle-ci peut écrire ou confier du travail. Le moteur refuse toute autre.",
+    "sameTemplate": "Sessions de ce modèle",
+    "none": "Aucune autre session active dans cet espace de travail.",
+    "save": "Enregistrer",
+    "saved": "Autorisations de messages enregistrées."
   }
 }

@@ -275,13 +275,16 @@ var (
 		model.Leaf("hooks.post_tool[].command", pdeclNoneTemplateHook),
 		model.Leaf("hooks.pre_session[].command", pdeclNoneTemplateHook),
 		model.Leaf("hooks.post_session[].command", pdeclNoneTemplateHook),
-		model.Leaf("settings.permission_mode", model.None("a permission mode, checked against a closed set: templateapply.go:144, templateapply.go:179")),
-		model.Leaf("settings.effort", model.None("an effort level, checked against a closed set: templateapply.go:145, templateapply.go:182")),
-		model.Leaf("settings.model", model.None("a model id a launch passes to the child: templateapply.go:146")),
-		model.Leaf("settings.custom_instructions", model.None("instruction prose a launch passes to the child: templateapply.go:147")),
-		model.Leaf("connectors[]", model.None("a connector name no launch consumes: templateapply.go:175-178")),
-		model.Leaf("policies.dlp_mode", model.None("a DLP posture label: templateapply.go:157")),
-		model.Leaf("policies.allowed_tools[]", model.None("a tool name: templateapply.go:150")),
+		model.Leaf("settings.permission_mode", model.None("a permission mode, checked against a closed set: templateapply.go:145, templateapply.go:180")),
+		model.Leaf("settings.effort", model.None("an effort level, checked against a closed set: templateapply.go:146, templateapply.go:183")),
+		model.Leaf("settings.model", model.None("a model id a launch passes to the child: templateapply.go:147")),
+		model.Leaf("settings.custom_instructions", model.None("instruction prose a launch passes to the child: templateapply.go:148")),
+		model.Leaf("connectors[]", model.None("a connector name no launch consumes: templateapply.go:176-179")),
+		model.Leaf("policies.dlp_mode", model.None("a DLP posture label: templateapply.go:158")),
+		model.Leaf("policies.allowed_tools[]", model.None("a tool name: templateapply.go:151")),
+		model.Leaf("peers_rule", model.None("a peer selection rule, checked as same-template or omission: templates.go:58, templateapply.go:284-286")),
+		model.Leaf("settings.secret_env[].env", model.None("an environment variable NAME a launch sets on the child, checked against reserved and malformed names, never a value: templateapply.go:150, templateapply.go:391-407, session_secret_env.go:72")),
+		model.Leaf("settings.secret_env[].secret", model.None("a vault secret NAME under env/, opened only at launch and never stored or returned as a value: templateapply.go:150, session_secret_env.go:72, session_secret_env.go:113")),
 	)
-	pdeclNoneTemplateHook = model.None("a hook command a launch never runs: templateapply.go:162-174")
+	pdeclNoneTemplateHook = model.None("a hook command a launch never runs: templateapply.go:163-175")
 )

@@ -12,6 +12,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
 )
 
@@ -28,6 +29,10 @@ type runtimeWorkAPIFixture struct {
 }
 
 func newRuntimeWorkAPIFixture(t *testing.T) runtimeWorkAPIFixture {
+	return newRuntimeWorkAPIFixtureWithData(t, nil)
+}
+
+func newRuntimeWorkAPIFixtureWithData(t *testing.T, decorate func(api.ModuleData) api.ModuleData) runtimeWorkAPIFixture {
 	t.Helper()
 	runner := &fakeRunner{}
 	m := New(WithSessionWorkspaceRoot(t.TempDir()),
@@ -37,6 +42,9 @@ func newRuntimeWorkAPIFixture(t *testing.T) runtimeWorkAPIFixture {
 		WithWorkContentGuard(allowWorkContent{}),
 	)
 	h := newHarness(t, m)
+	if decorate != nil {
+		m.UseData(decorate(api.NewModuleData(h.st)))
+	}
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "runtime-work-api")
 	createdRun := h.doJSON(http.MethodPost, "/v1/m/sessions/runs", admin, map[string]any{

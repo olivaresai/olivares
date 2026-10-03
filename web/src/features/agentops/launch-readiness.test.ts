@@ -7,6 +7,8 @@ import {
   currentLaunchReadinessObservation,
   effectiveLaunchTransport,
   isProfileChangedError,
+  launchFailureMessage,
+  stoppedAtStartReason,
   launchRequestPermission,
   observationMatchesSelection,
   PROFILE_CHANGED_CODE,
@@ -215,5 +217,39 @@ describe('launch-readiness helpers', () => {
         ),
       ),
     ).toBe('none')
+  })
+})
+
+describe('a launch that stopped as it started (HU-06)', () => {
+  const stopped = (body: unknown) =>
+    new ApiError(409, 'conflict', 'Conflict', undefined, {}, body)
+
+  it('reads the reason the engine recorded from the run in the 409 body', () => {
+    const err = stopped({
+      run_ref: 'run-1',
+      state: 'failed',
+      reason: 'exit 1: Invalid API key',
+    })
+    expect(stoppedAtStartReason(err)).toBe('exit 1: Invalid API key')
+    expect(launchFailureMessage(err, 'fallback', (r) => `said: ${r}`)).toBe(
+      'said: exit 1: Invalid API key',
+    )
+  })
+
+  it('is an empty reason when the tool said nothing, and not this case otherwise', () => {
+    expect(
+      stoppedAtStartReason(stopped({ run_ref: 'run-1', state: 'failed' })),
+    ).toBe('')
+    expect(
+      stoppedAtStartReason(stopped({ error: { message: 'claimed' } })),
+    ).toBeNull()
+    expect(
+      stoppedAtStartReason(
+        new ApiError(403, 'forbidden', 'no', undefined, {}, { run_ref: 'r' }),
+      ),
+    ).toBeNull()
+    expect(launchFailureMessage(stopped({ error: {} }), 'fallback')).toBe(
+      'Conflict',
+    )
   })
 })

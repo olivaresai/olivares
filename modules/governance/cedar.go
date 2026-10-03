@@ -75,7 +75,7 @@ func NewCedarEvaluator(policySrc string, logger *slog.Logger) (*CedarEvaluator, 
 // and the request context (tenant, principal kind, permission, time) into the Cedar
 // context — and returns Allow unless a forbid rule matches. It never widens: a Cedar
 // Allow means "no restriction", a Cedar Deny means "a forbid matched".
-func (c *CedarEvaluator) Evaluate(_ context.Context, req auth.Request) (auth.Decision, error) {
+func (c *CedarEvaluator) Evaluate(ctx context.Context, req auth.Request) (auth.Decision, error) {
 	resID := req.Resource.ID
 	if resID == "" {
 		resID = "*" // a collection-level action: no specific resource id
@@ -110,6 +110,7 @@ func (c *CedarEvaluator) Evaluate(_ context.Context, req auth.Request) (auth.Dec
 		}),
 	}
 
+	auth.CaptureAuthorizationInputs(ctx, false, "cedar-overlay-v1", retainedCedar{Policies: c.policies, Entities: entities, Request: creq})
 	decision, diag := cedar.Authorize(c.policies, entities, creq)
 	// A policy that ERRORS during evaluation is skipped by Cedar (not a Deny). For a
 	// security control that is dangerous to do silently — a forbid that errors would

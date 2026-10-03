@@ -639,11 +639,14 @@ group_fixture
 # The remainder is EXACT NAMES, so it is the one expression that can outgrow what the kernel
 # will carry in a single argument. A gate that lets it through buys an exec failure on the
 # runner whose message is about the argument list and never about the tests.
+# The input names also exceed ARG_MAX: enumeration must reach the declared refusal,
+# rather than failing to exec the reader with its test list in an environment variable.
 python3 - "$T/tests.txt" <<'PYGEN'
-import sys
+import os, sys
+count = max(100000, os.sysconf("SC_ARG_MAX")) // len("TestBeyondWhatOneArgumentOfTheKernelWillCarry00000000\n") + 1
 with open(sys.argv[1], "a", encoding="utf-8") as fh:
-    for i in range(2500):
-        fh.write("example.test/tree/cmd/tool TestBeyondWhatOneArgumentOfTheKernelWillCarry%04d\n" % i)
+    for i in range(count):
+        fh.write("example.test/tree/cmd/tool TestBeyondWhatOneArgumentOfTheKernelWillCarry%08d\n" % i)
 PYGEN
 check "case 30 — a -run expression over the argument limit" 1 "MAX_ARG_STRLEN"
 

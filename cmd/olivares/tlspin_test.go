@@ -251,7 +251,7 @@ func colonize(h string) string {
 	return b.String()
 }
 
-// TestBadPinIsAUsageError. The root command's help documents exit 2 for "the
+// TestBadPinIsAUsageError. `olivares help exit-codes` documents exit 2 for "the
 // invocation itself is wrong (unknown flag, bad arguments)". A malformed
 // --pin-sha256 is precisely that, and it exited 1 — indistinguishable, to a script,
 // from the engine being broken.

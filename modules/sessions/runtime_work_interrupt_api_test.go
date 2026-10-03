@@ -51,23 +51,24 @@ func TestRuntimeWorkAPIInterruptBodyIsValidatedAndNeverFallsBackToStop(t *testin
 		t.Fatalf("stale fenced interrupt = %d %s", stale.code, stale.raw)
 	}
 
-	// The exact fence on a run with NO protocol driver: a refusal that names the
-	// missing capability, never a stop standing in for it.
+	// The exact fence on a Claude run (no protocol driver session): the interrupt goes
+	// to Claude Code as its own control request and is confirmed; never a stop.
+	claudeProtocolStub(t, proc, "success")
 	exact := f.h.doJSON(http.MethodPost, path, f.admin, map[string]any{
 		"work_lease_fence": f.fence,
 	}, tenantHdr(f.tenant))
-	if exact.code != http.StatusConflict {
-		t.Fatalf("fenced interrupt of a driverless run = %d %s", exact.code, exact.raw)
+	if exact.code != http.StatusOK {
+		t.Fatalf("fenced interrupt of a Claude run = %d %s", exact.code, exact.raw)
 	}
 	proc.mu.Lock()
 	stopped := proc.done
 	proc.mu.Unlock()
 	if stopped {
-		t.Fatal("a refused interrupt ended the process; /interrupt never falls back to /stop")
+		t.Fatal("an interrupt ended the process; /interrupt never falls back to /stop")
 	}
 	state := f.h.do(http.MethodGet, "/v1/m/sessions/runs/"+f.runRef, f.admin, tenantHdr(f.tenant))
 	if state.code != http.StatusOK || state.body["state"] != stateRunning {
-		t.Fatalf("the run must still be running after a refused interrupt: %d %s", state.code, state.raw)
+		t.Fatalf("the run must still be running after an interrupt: %d %s", state.code, state.raw)
 	}
 	finishWorkRuntimeRun(t, f.m, f.tenant, f.runRef, proc)
 }

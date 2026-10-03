@@ -26,7 +26,8 @@
     "docs": "docs",
     "enabled": "Activé",
     "unset": "Non défini",
-    "listPlaceholder": "valeurs séparées par des virgules"
+    "listPlaceholder": "valeurs séparées par des virgules",
+    "objectListInvalid": "Saisissez une liste JSON d’objets, par exemple [{\"source\": \"github\", \"repo\": \"your-org/*\"}]."
   },
   "panel": {
     "guided": "Guidé",

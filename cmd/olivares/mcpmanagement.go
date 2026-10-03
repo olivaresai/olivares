@@ -7,14 +7,18 @@ package main
 import (
 	"context"
 	"crypto/sha256"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net"
 	"net/http"
 	"net/url"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -30,14 +34,16 @@ import (
 // are live; API writes and local protocol requests share the same gate, so a
 // completed disable cannot be followed by a new local dispatch on an old cache.
 type mcpManagement struct {
-	mu      sync.RWMutex
-	cacheMu sync.Mutex
-	store   *auth.MCPGatewayStore
-	secrets *auth.SecretStore
-	cfg     agentGatewayConfig
-	source  string
-	eng     *engine
-	cache   map[string]managedMCPServer
+	mu                   sync.RWMutex
+	cacheMu              sync.Mutex
+	store                *auth.MCPGatewayStore
+	secrets              *auth.SecretStore
+	cfg                  agentGatewayConfig
+	source               string
+	eng                  *engine
+	cache                map[string]managedMCPServer
+	sessionCache         map[string]*managedSessionServer
+	sessionAuthenticator sessionMCPAuthenticator
 }
 
 type managedMCPServer struct {
@@ -65,7 +71,7 @@ func (m *mcpManagement) Get(ctx context.Context, tenant model.TenantID) (auth.MC
 		if cfg := m.cfg.MCP; cfg != nil {
 			configured, present, err := parseBusinessTenant("MCP tenant", cfg.Tenant)
 			if err == nil && present && configured == tenant {
-				row := auth.MCPGatewayServer{ID: "file", MCPGatewayServerInput: auth.MCPGatewayServerInput{Name: "Operator file", Transport: "streamable_http", URL: safeMCPConfigURL(cfg.UpstreamURL), Enabled: cfg.Resource != "", Trust: auth.MCPGatewayTrust{Resource: safeMCPConfigURL(cfg.Resource), Issuer: safeMCPConfigURL(cfg.Issuer), JWKSURL: safeMCPConfigURL(cfg.JWKSURL)}}, Probe: auth.MCPGatewayProbe{State: "file_owned", Tools: []auth.MCPGatewayTool{}}}
+				row := auth.MCPGatewayServer{ID: "file", MCPGatewayServerInput: auth.MCPGatewayServerInput{Name: "Operator file", Transport: "streamable_http", URL: safeMCPConfigURL(cfg.UpstreamURL), Enabled: cfg.Resource != "", Trust: auth.MCPGatewayTrust{Resource: safeMCPConfigURL(cfg.Resource), Issuer: safeMCPConfigURL(cfg.Issuer), JWKSURL: safeMCPConfigURL(cfg.JWKSURL)}}, Probe: auth.MCPGatewayProbe{State: "file_owned", Tools: []auth.MCPGatewayTool{}}, ProposedAllow: &[]string{}}
 				for _, policy := range cfg.Tools {
 					row.AllowedTools = append(row.AllowedTools, auth.MCPGatewayToolPolicy{Name: policy.Name, RequiredScope: policy.RequiredScope, Destructive: policy.Destructive})
 				}
@@ -84,7 +90,7 @@ func (m *mcpManagement) Get(ctx context.Context, tenant model.TenantID) (auth.MC
 }
 
 func managedMCPGovernance() map[string]string {
-	return map[string]string{"configuration": "tenant_store", "credential": "tenant_sealed_reference", "session_listener": "control_plane_http_listener", "content_gate": "declared_inventory_and_consent", "deep_content_inspection": "not_configured", "egress": "exact_https_destination_and_pinned_addresses", "redirects": "refused", "tool_policy": "explicit_scope_and_destructive_approval", "tasks": "not_provisioned", "subscriptions": "not_provisioned"}
+	return map[string]string{"configuration": "tenant_store", "credential": "tenant_sealed_reference", "session_listener": "control_plane_http_listener", "content_gate": "declared_inventory_and_consent", "deep_content_inspection": "not_configured", "egress": "exact_https_destination_and_pinned_addresses", "redirects": "refused", "tool_policy": "explicit_scope_and_destructive_approval", "tasks": "not_provisioned", "subscriptions": "not_provisioned", "local_execution": "session_runner_engine_user_session_folder", "process_confinement": "reported_by_session_runner", "network_confinement": "not_supplied_for_local_commands"}
 }
 
 func safeMCPConfigURL(raw string) string {
@@ -107,6 +113,21 @@ func (m *mcpManagement) PutServer(ctx context.Context, p auth.Principal, tenant 
 	if m.source != "store" {
 		return auth.MCPGatewaySnapshot{}, auth.ErrMCPGatewayFileOwned
 	}
+	in = in.WithDefaults()
+	for _, reference := range in.EnvSecretRefs {
+		ref, ok := secret.ParseReference(reference)
+		if !ok || ref.Scheme != secret.SchemeStore || reference != "store:"+ref.Locator || !strings.HasPrefix(ref.Locator, "mcp/") {
+			return auth.MCPGatewaySnapshot{}, auth.ErrMCPGatewayInvalid
+		}
+		if m.secrets == nil {
+			return auth.MCPGatewaySnapshot{}, auth.ErrMCPGatewayUnavailable
+		}
+		if _, found, err := m.secrets.Get(ctx, tenant, ref.Locator); err != nil {
+			return auth.MCPGatewaySnapshot{}, err
+		} else if !found {
+			return auth.MCPGatewaySnapshot{}, auth.ErrSecretNotFound
+		}
+	}
 	if in.CredentialRef != "" {
 		ref, ok := secret.ParseReference(in.CredentialRef)
 		if !ok || ref.Scheme != secret.SchemeStore || in.CredentialRef != "store:"+ref.Locator || !strings.HasPrefix(ref.Locator, "mcp/") {
@@ -123,10 +144,10 @@ func (m *mcpManagement) PutServer(ctx context.Context, p auth.Principal, tenant 
 			return auth.MCPGatewaySnapshot{}, auth.ErrSecretNotFound
 		}
 	}
-	if in.Enabled && !managedMCPResourcePath(in.Trust.Resource, tenant, id) {
+	if in.Enabled && in.Trust.Resource != "" && !managedMCPResourcePath(in.Trust.Resource, tenant, id) {
 		return auth.MCPGatewaySnapshot{}, auth.ErrMCPGatewayInvalid
 	}
-	if in.Enabled && m.eng != nil {
+	if in.Enabled && in.Trust.Resource != "" && m.eng != nil {
 		if _, err := m.buildServer(tenant, auth.MCPGatewayServer{ID: id, MCPGatewayServerInput: in}); err != nil {
 			return auth.MCPGatewaySnapshot{}, auth.ErrMCPGatewayInvalid
 		}
@@ -161,12 +182,14 @@ func (m *mcpManagement) SetSessionTools(ctx context.Context, p auth.Principal, t
 	if _, err := m.store.SetSessionTools(ctx, p, tenant, version, enabled); err != nil {
 		return auth.MCPGatewaySnapshot{}, err
 	}
+	m.invalidate(tenant)
 	return m.Get(ctx, tenant)
 }
 
 func (m *mcpManagement) invalidate(tenant model.TenantID) {
 	m.cacheMu.Lock()
 	defer m.cacheMu.Unlock()
+	m.invalidateSessions(tenant)
 	for key := range m.cache {
 		if strings.HasPrefix(key, tenant.String()+"/") {
 			delete(m.cache, key)
@@ -183,6 +206,10 @@ var errManagedMCPEgress = errors.New("managed MCP destination not admitted")
 var errManagedMCPRefused = errors.New("managed MCP authentication refused")
 var errManagedMCPInvalidResponse = errors.New("managed MCP invalid response")
 var errManagedMCPRedirect = errors.New("managed MCP redirect refused")
+
+// errManagedMCPResolve is a name that did not resolve. It is not an egress refusal: the
+// policy never saw an address.
+var errManagedMCPResolve = errors.New("managed MCP host did not resolve")
 
 type managedMCPTransport struct {
 	inner    http.RoundTripper
@@ -238,7 +265,7 @@ func newManagedMCPClient(in auth.MCPGatewayServerInput, timeout time.Duration) (
 		}
 		ips, err := egress.Resolve(ctx, egress.NetResolver{}, destination)
 		if err != nil {
-			return nil, errManagedMCPEgress
+			return nil, fmt.Errorf("%w: %w", errManagedMCPResolve, err)
 		}
 		// The shared evaluator permits loopback for existing local connectors.
 		// Managed gateway admission is explicit even for that address class.
@@ -334,67 +361,81 @@ func (m *mcpManagement) TestServer(ctx context.Context, p auth.Principal, tenant
 		return auth.MCPGatewaySnapshot{}, store.ErrNotFound
 	}
 	probe := auth.MCPGatewayProbe{State: "unreachable", TestedAt: time.Now().UTC().Format(time.RFC3339), Tools: []auth.MCPGatewayTool{}}
-	client, err := newManagedMCPClient(row.MCPGatewayServerInput, 10*time.Second)
-	if err != nil {
-		probe.State = "egress_denied"
-	} else {
-		credential := tenantMCPCredentialProvider{store: m.secrets, tenant: tenant, ref: row.CredentialRef, target: row.URL}
-		header, cerr := credential.Credential(ctx, row.URL)
-		if cerr == nil {
-			_, cerr = mcpCredentialPatterns(header)
-			if cerr != nil && m.eng != nil && m.eng.log != nil {
-				m.eng.log.Warn("mcp-gateway: upstream credential configuration refused", "reason", cerr)
-			}
-		}
-		if cerr != nil {
+	if row.Transport == "stdio" {
+		tools, probeErr := m.probeLocalServer(ctx, tenant, *row)
+		if probeErr == nil {
+			probe.State = "ok"
+			probe.Tools = managedMCPProbeTools(tools)
+		} else if errors.Is(probeErr, mcpc.ErrUpstreamCredentialDisclosure) {
+			probe.State = "invalid_response"
+		} else if errors.Is(probeErr, auth.ErrSecretNotFound) {
 			probe.State = "credential_unavailable"
 		} else {
-			ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-			defer cancel()
-			client.Transport = mcpCredentialTransport{inner: client.Transport}
-			reader, createErr := mcpc.NewHTTPInspectionClient(row.URL, map[string]string{"Authorization": header}, client)
-			if createErr != nil {
-				return auth.MCPGatewaySnapshot{}, auth.ErrMCPGatewayUnavailable
-			}
-			defer reader.Close()
-			init, initErr := reader.Initialize(ctx)
-			err = initErr
-			if err == nil && init.ProtocolVersion != "2025-11-25" {
-				err = errManagedMCPInvalidResponse
-			}
-			var tools []mcpc.Tool
-			if err == nil {
-				tools, err = reader.ListTools(ctx)
-			}
-			switch {
-			case err == nil:
-				probe.State = "ok"
-				for _, tool := range tools {
-					encoded, _ := json.Marshal(tool)
-					hash := sha256.Sum256(encoded)
-					probe.Tools = append(probe.Tools, auth.MCPGatewayTool{Name: tool.Name, Fingerprint: hex.EncodeToString(hash[:])})
+			probe.Reason, probe.Detail = stdioProbeFailure(probeErr)
+			m.warnStdioFailure(id, probeErr)
+		}
+	} else {
+		client, err := newManagedMCPClient(row.MCPGatewayServerInput, 10*time.Second)
+		if err != nil {
+			probe.State = "egress_denied"
+		} else {
+			credential := tenantMCPCredentialProvider{store: m.secrets, tenant: tenant, ref: row.CredentialRef, target: row.URL}
+			header, cerr := credential.Credential(ctx, row.URL)
+			if cerr == nil {
+				_, cerr = mcpCredentialPatterns(header)
+				if cerr != nil && m.eng != nil && m.eng.log != nil {
+					m.eng.log.Warn("mcp-gateway: upstream credential configuration refused", "reason", cerr)
 				}
-			case errors.Is(err, mcpc.ErrUpstreamCredentialDisclosure):
-				probe.State = "invalid_response"
-				if m.eng != nil && m.eng.log != nil {
-					m.eng.log.Warn("mcp-gateway: upstream credential response refused", "reason", mcpc.ErrUpstreamCredentialDisclosure)
+			}
+			if cerr != nil {
+				probe.State = "credential_unavailable"
+			} else {
+				ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+				defer cancel()
+				status := &mcpProbeStatus{inner: mcpCredentialTransport{inner: client.Transport}}
+				client.Transport = status
+				reader, createErr := mcpc.NewHTTPInspectionClient(row.URL, map[string]string{"Authorization": header}, client)
+				if createErr != nil {
+					return auth.MCPGatewaySnapshot{}, auth.ErrMCPGatewayUnavailable
 				}
-			case errors.Is(err, errManagedMCPRefused):
-				probe.State = "refused"
-			case errors.Is(err, errManagedMCPInvalidResponse), errors.Is(err, mcpc.ErrInspectionCatalogInvalid):
-				probe.State = "invalid_response"
-			case errors.Is(err, errManagedMCPRedirect):
-				probe.State = "redirect_refused"
-			case errors.Is(err, errManagedMCPEgress):
-				probe.State = "egress_denied"
-			default:
-				probe.State = "unreachable"
+				defer reader.Close()
+				init, initErr := reader.Initialize(ctx)
+				err = initErr
+				if err == nil && init.ProtocolVersion != "2025-11-25" {
+					err = errManagedMCPInvalidResponse
+				}
+				var tools []mcpc.Tool
+				if err == nil {
+					tools, err = reader.ListTools(ctx)
+				}
+				switch {
+				case err == nil:
+					probe.State = "ok"
+					probe.Tools = managedMCPProbeTools(tools)
+				case errors.Is(err, mcpc.ErrUpstreamCredentialDisclosure):
+					probe.State = "invalid_response"
+					if m.eng != nil && m.eng.log != nil {
+						m.eng.log.Warn("mcp-gateway: upstream credential response refused", "reason", mcpc.ErrUpstreamCredentialDisclosure)
+					}
+				case errors.Is(err, errManagedMCPRefused):
+					probe.State = "refused"
+				case errors.Is(err, errManagedMCPInvalidResponse), errors.Is(err, mcpc.ErrInspectionCatalogInvalid):
+					probe.State = "invalid_response"
+				case errors.Is(err, errManagedMCPRedirect):
+					probe.State = "redirect_refused"
+				case errors.Is(err, errManagedMCPEgress):
+					probe.State = "egress_denied"
+				default:
+					probe.State = "unreachable"
+					probe.Reason, probe.HTTPStatus = mcpProbeReason(err, status.code)
+				}
 			}
 		}
 	}
 	_, err = m.store.SaveProbe(ctx, p, tenant, version, id, probe)
 	if errors.Is(err, auth.ErrMCPGatewayInvalid) {
 		probe.State = "invalid_response"
+		probe.Reason, probe.Detail, probe.HTTPStatus = "", "", 0
 		probe.Tools = []auth.MCPGatewayTool{}
 		_, err = m.store.SaveProbe(ctx, p, tenant, version, id, probe)
 	}
@@ -403,6 +444,48 @@ func (m *mcpManagement) TestServer(ctx context.Context, p auth.Principal, tenant
 	}
 	m.invalidate(tenant)
 	return m.Get(ctx, tenant)
+}
+
+// mcpProbeStatus remembers the HTTP status of a connection test's last response, so a
+// failed test can say "the server answered 404" instead of "unreachable".
+type mcpProbeStatus struct {
+	inner http.RoundTripper
+	code  int
+}
+
+func (t *mcpProbeStatus) RoundTrip(req *http.Request) (*http.Response, error) {
+	resp, err := t.inner.RoundTrip(req)
+	if resp != nil {
+		t.code = resp.StatusCode
+	}
+	return resp, err
+}
+
+// mcpProbeReason names why an otherwise "unreachable" test failed: the name did not
+// resolve, TLS failed, the server answered an HTTP error, nothing accepted the
+// connection, or nothing answered in time. "" when the error has no finer class.
+func mcpProbeReason(err error, status int) (string, int) {
+	var dnsErr *net.DNSError
+	var certErr *tls.CertificateVerificationError
+	var hostErr x509.HostnameError
+	var authorityErr x509.UnknownAuthorityError
+	var invalidErr x509.CertificateInvalidError
+	var recordErr tls.RecordHeaderError
+	var netErr net.Error
+	switch {
+	case status >= 400 && status <= 599:
+		return "http_status", status
+	case errors.Is(err, errManagedMCPResolve), errors.As(err, &dnsErr):
+		return "dns", 0
+	case errors.As(err, &certErr), errors.As(err, &hostErr), errors.As(err, &authorityErr),
+		errors.As(err, &invalidErr), errors.As(err, &recordErr):
+		return "tls", 0
+	case errors.Is(err, context.DeadlineExceeded), errors.As(err, &netErr) && netErr.Timeout():
+		return "timeout", 0
+	case errors.Is(err, syscall.ECONNREFUSED):
+		return "connection_refused", 0
+	}
+	return "", 0
 }
 
 func (m *mcpManagement) buildServer(tenant model.TenantID, row auth.MCPGatewayServer) (*mcpc.ResourceServer, error) {
@@ -452,7 +535,7 @@ func (m *mcpManagement) ServeGatewayHTTP(w http.ResponseWriter, r *http.Request)
 			break
 		}
 	}
-	if row == nil {
+	if row == nil || row.Transport == "stdio" || row.Trust.Resource == "" {
 		w.WriteHeader(http.StatusNotFound)
 		return
 	}
@@ -491,12 +574,34 @@ func (m *mcpManagement) ServeSessionHTTP(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	scope := sessionOrchestrationWorkScope{st: m.eng.store, module: m.eng.sessionsMod}
-	h := &sessionMCPHandler{authr: m.eng.authr, api: m.eng.api.Handler(), enabled: func(ctx context.Context, tenant model.TenantID) (bool, error) {
+	authenticator := sessionMCPAuthenticator(m.eng.authr)
+	if m.sessionAuthenticator != nil {
+		authenticator = m.sessionAuthenticator
+	}
+	h := &sessionMCPHandler{authr: authenticator, issuedSessionOnly: m.sessionAuthenticator != nil, work: m.eng.sessionsMod.CallSessionWork, managed: m.serveManagedSession, managedTools: m.aggregateSessionTools, managedCall: m.aggregateSessionCall, enabled: func(ctx context.Context, tenant model.TenantID) (bool, error) {
 		snapshot, err := m.store.Get(ctx, tenant)
-		return snapshot.SessionTools, err
+		return sessionMCPAvailable(snapshot), err
 	},
 		checkOrchestration: func(ctx context.Context, p auth.Principal, tenant model.TenantID) error {
 			return scope.WithScope(ctx, p, tenant, false, func(store.Scope) error { return nil })
 		}}
 	h.ServeHTTP(w, r)
+}
+
+func managedMCPProbeTools(tools []mcpc.Tool) []auth.MCPGatewayTool {
+	out := make([]auth.MCPGatewayTool, 0, len(tools))
+	for _, tool := range tools {
+		encoded, _ := json.Marshal(tool)
+		hash := sha256.Sum256(encoded)
+		// MCP destructiveHint applies only when readOnlyHint is false.
+		readOnly := tool.Annotations != nil && tool.Annotations.ReadOnlyHint != nil && *tool.Annotations.ReadOnlyHint
+		out = append(out, auth.MCPGatewayTool{Name: tool.Name, Fingerprint: hex.EncodeToString(hash[:]), ReadOnly: readOnly})
+	}
+	return out
+}
+
+// UseSessionCredentials binds PEP's single in-process session credential service.
+// When bound, legacy work/communication and operator bearers have no fallback.
+func (m *mcpManagement) UseSessionCredentials(service sessionMCPAuthenticator) {
+	m.sessionAuthenticator = service
 }

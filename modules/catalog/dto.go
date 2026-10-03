@@ -7,7 +7,6 @@ package catalog
 import (
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -53,8 +52,8 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		// out loud rather than the shared "conflict" — it must not name one cause.
 		writeJSON(w, http.StatusConflict, errorBody("conflict: a resource with these unique fields already exists, or it was modified concurrently"))
 	default:
-		status, msg, _ := api.StoreErrorStatus(err)
-		writeJSON(w, status, errorBody(msg))
+		status, body, _ := api.StoreErrorBody(err)
+		writeJSON(w, status, body)
 	}
 }
 
@@ -85,20 +84,7 @@ func eq(col, val string) model.Filter {
 // smuggle, e.g., a credential value into a reference-only field). It writes a 400
 // and returns false on failure.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
-	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
-		return false
-	}
-	// A BODY IS ONE JSON DOCUMENT (2026-08-06). Decode reads the FIRST value and stops,
-	// so `{...}{...}` used to decode the first, silently discard the rest and perform a
-	// durable mutation returning 201. Measured against a live engine on the models route,
-	// with the created row read back by a separate GET; core/api/render.go has rejected
-	// this since it was written, and 21 of the 22 copies of this helper had drifted from
-	// it. A concatenation error becomes an apparently correct action, and two layers can
-	// disagree about which document the request meant.
-	if dec.More() {
+	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 1 << 20}); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
 		return false
 	}

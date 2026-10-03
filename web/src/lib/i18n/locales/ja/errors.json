@@ -6,7 +6,11 @@
   },
   "forbidden": {
     "title": "権限がありません",
-    "description": "これを表示する権限がありません。管理者にアクセスを依頼してください。"
+    "description": "これを表示する権限がありません。管理者にアクセスを依頼してください。",
+    "accessTo": "{{subject}} へのアクセス権がありません。",
+    "accessToThis": "これへのアクセス権がありません。",
+    "nextStep": "あなたのロールまたはグループポリシーで許可されていません。この組織のオーナーまたは管理者が付与できます。",
+    "deniedByPolicy": "ポリシー「{{policy}}」により拒否されています。この組織のオーナーまたは管理者が変更できます。"
   },
   "serverError": {
     "title": "問題が発生しました",
@@ -38,11 +42,21 @@
     "locked_out": "試行回数が多すぎます。しばらくしてからもう一度お試しください。",
     "setup_required": "コントロールプレーンには初回起動時のセットアップが必要です。",
     "setup_complete": "セットアップはすでに完了しています。",
-    "cross_tenant_admin_pool_not_configured": "このデプロイメントにはテナント横断の管理用データベースプールがありません。`olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` で NOSUPERUSER BYPASSRLS ロールをプロビジョニングし (deploy/postgres/README.md を参照)、そのロールを指す --admin-dsn を指定してサーバーを再起動してください。",
+    "cross_tenant_admin_pool_not_configured": "このデータベースではすべての組織を一覧表示できません。`olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` を実行し、エンジンを再起動してください。または、`olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` で NOSUPERUSER BYPASSRLS ロールをプロビジョニングし (deploy/postgres/README.md を参照)、そのロールを指す --admin-dsn を指定してサーバーを再起動してください。",
     "internal": "内部エラーが発生しました。"
   },
   "tenantAdmission": {
     "title": "組織への承認が必要です",
     "description": "組織に承認されたディレクトリ ID でサインインしてください。グローバルな bootstrap 権限ではワークスペースの通信を操作できません。"
+  },
+  "moduleNotEnabled": {
+    "title": "このインストールでは有効になっていません",
+    "description": "Olivares のこの部分はここでは無効なため、表示するものはありません。",
+    "named": "{{module}} はこのインストールで有効になっていません。",
+    "unnamed": "このモジュールはこのインストールで有効になっていません。"
+  },
+  "notInEdition": {
+    "subject": "このエディションには{{subject}}は含まれていません。",
+    "generic": "このエディションには含まれていません。"
   }
 }

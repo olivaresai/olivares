@@ -173,10 +173,11 @@ func WithAgentAutonomySource(s AgentAutonomySource) Option {
 // Module is module VI — identity, permissions and governance. See doc.go for the
 // five subsystems and the honest composition-root caveat.
 type Module struct {
-	log   *slog.Logger
-	data  api.ModuleData
-	host  sdk.Host
-	clock model.Clock
+	approvalCapacity func(context.Context, model.TenantID) (int64, error)
+	log              *slog.Logger
+	data             api.ModuleData
+	host             sdk.Host
+	clock            model.Clock
 	// offlineStaleness is the deployment-wide offline-trust bound (ADR-0024 Q1), wired
 	// into the scoped-grant engine at construction. Zero ⇒ no bound (connected default).
 	offlineStaleness time.Duration
@@ -219,7 +220,9 @@ type Module struct {
 
 	// standing is the standing port of the fenced writers that run outside a
 	// request (fence.go). Nil refuses every such write that names an account.
-	standing auth.StandingReader
+	standing              auth.StandingReader
+	approvalAuthenticator *auth.Authenticator
+	approvalAuthorizer    *auth.Authorizer
 }
 
 // Compile-time proof the module satisfies the SDK lifecycle, the engine-side
@@ -333,14 +336,14 @@ func (m *Module) auditDecision(req auth.Request, dec auth.Decision) {
 		return
 	}
 	m.log.Info("abac policy restriction",
-		"tenant", string(req.Tenant),
-		"principal_kind", string(req.Principal.Kind),
-		"cred_id", string(req.Principal.CredID),
-		"permission", string(req.Permission),
-		"resource_kind", req.Resource.Kind,
-		"resource_id", req.Resource.ID,
-		"sensitivity", req.Resource.Sensitivity,
-		"reason", dec.Reason,
+		"tenant", redactPDPText(req.EvidenceRedactor, string(req.Tenant)),
+		"principal_kind", redactPDPText(req.EvidenceRedactor, string(req.Principal.Kind)),
+		"cred_id", redactPDPText(req.EvidenceRedactor, string(req.Principal.CredID)),
+		"permission", redactPDPText(req.EvidenceRedactor, string(req.Permission)),
+		"resource_kind", redactPDPText(req.EvidenceRedactor, req.Resource.Kind),
+		"resource_id", redactPDPText(req.EvidenceRedactor, req.Resource.ID),
+		"sensitivity", redactPDPText(req.EvidenceRedactor, req.Resource.Sensitivity),
+		"reason", redactPDPText(req.EvidenceRedactor, dec.Reason),
 	)
 }
 

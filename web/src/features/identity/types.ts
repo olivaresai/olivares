@@ -393,36 +393,6 @@ export interface WorkspaceResidency {
 }
 
 // ---------------------------------------------------------------------------
-// DECLARED — panel cert-manager TLS posture + crypto-agility/PQC inventory
-//. Has NOT built a posture contract for these (verified
-// ABSENT); the views sit behind this documented pending interface and say so.
-// ---------------------------------------------------------------------------
-
-export interface TlsPosture {
-  /** cert-manager issuer / ClusterIssuer ref. */
-  issuer?: string
-  serial?: string
-  not_before?: string
-  not_after?: string
-  /** Last automated rotation. */
-  rotated_at?: string
-  /** Chain subjects, leaf → root (subjects only, no key material). */
-  chain?: string[]
-  auto_renew?: boolean
-}
-
-export interface CryptoInventoryItem {
-  id: string
-  /** Where the key/algorithm is used (e.g. "panel-tls", "audit-ledger-signer"). */
-  usage: string
-  algorithm: string
-  /** classic | pqc | hybrid */
-  family: 'classic' | 'pqc' | 'hybrid' | string
-  /** Whether this slot can be rotated to a PQC algorithm today (crypto-agility). */
-  pqc_ready?: boolean
-}
-
-// ---------------------------------------------------------------------------
 // DECLARED — auth-MCP (PRM RFC 9728). The panel documents the audience-bound
 // model and surfaces the REAL mcp_auth Findings; it NEVER exposes token
 // passthrough (prohibited by design).

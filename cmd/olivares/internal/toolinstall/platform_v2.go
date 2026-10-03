@@ -15,12 +15,21 @@ func PlatformV2For(driver string, host Platform) (PlatformV2, string, error) {
 	}
 	switch driver {
 	case DriverOpenCode:
-		p := PlatformV2{OS: "linux", Arch: host.Arch, Libc: "musl"}
+		// HU-R13: OpenCode's musl build is NOT static (unlike Codex's) — it needs
+		// the musl loader, and on a glibc host the probe fails "no such file or
+		// directory". Choose the build the host's own loaders can exec.
+		p := PlatformV2{OS: "linux", Arch: host.Arch, Libc: hostLibc()}
 		switch host.Arch {
 		case "amd64":
-			return p, "linux-x64-baseline-musl", nil
+			if p.Libc == "musl" {
+				return p, "linux-x64-baseline-musl", nil
+			}
+			return p, "linux-x64-baseline", nil
 		case "arm64":
-			return p, "linux-arm64-musl", nil
+			if p.Libc == "musl" {
+				return p, "linux-arm64-musl", nil
+			}
+			return p, "linux-arm64", nil
 		}
 		return PlatformV2{}, "", refuse(KindUnsupportedPlatform, "OpenCode release is unavailable for this architecture")
 	case DriverOllama:

@@ -23,6 +23,7 @@ import (
 	dsig "github.com/russellhaering/goxmldsig"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
 )
 
 // commonEmailAttrs are the SAML Attribute Names IdPs use for email, tried in
@@ -62,6 +63,7 @@ var samlEncryptionMethods = []saml.EncryptionMethod{
 // the assertion on the callback leg). The published SP metadata advertises whichever
 // keypairs are configured, each with its real certificate and use.
 type samlProvider struct {
+	assurance *model.FederationAssuranceMapping
 	// beginSP makes+signs the AuthnRequest on the start leg. It carries the SIGNING
 	// keypair (+SignatureMethod) when one is configured, else no key (unsigned
 	// request — the pre behavior).
@@ -103,6 +105,7 @@ func samlFromEnv(getenv func(string) string) (*Provider, error) {
 // samlParts is the plaintext SAML config shared by the env and managed-config
 // builders. The two keypairs are independent: either, both, or neither may be set.
 type samlParts struct {
+	assurance                      *model.FederationAssuranceMapping
 	metaURL, entityID, acs, idpSSO string
 	encCertPEM, encKeyPEM          string // encryption keypair (RSA only)
 	signCertPEM, signKeyPEM        string // signing keypair (RSA or EC)
@@ -146,6 +149,7 @@ func samlFromParts(p samlParts) (*Provider, error) {
 	}
 
 	sp := &samlProvider{
+		assurance:  p.assurance,
 		beginSP:    base,
 		validateSP: base,
 		metaSP:     base,
@@ -359,6 +363,7 @@ func (s *samlProvider) validate(_ context.Context, a auth.Assertion) (auth.Feder
 	// here it is the verified issuing IdP identity, safe to qualify the subject with
 	// (U3). It is a value (not a pointer), so no nil-guard is needed.
 	id := auth.FederatedIdentity{Protocol: auth.ProtocolSAML, Subject: nameID, Issuer: assertion.Issuer.Value, Email: email, DisplayName: name}
+	id.AAL, id.AuthenticatedAt = s.assertionAssurance(assertion)
 	if s.groupsAttr != "" {
 		id.Groups = s.extractGroups(assertion)
 	}

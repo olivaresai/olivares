@@ -36,6 +36,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 // Doer is the minimal HTTP capability the transport needs. *http.Client
@@ -149,12 +151,13 @@ type Result struct {
 	// StatusCode is the HTTP status of the final attempt (0 if no response was
 	// ever received, e.g. a persistent network error).
 	StatusCode int
-	// Body is a bounded excerpt of the final response body for diagnostics.
+	// Body is a bounded, redacted final response diagnostic.
 	Body string
 	// RawBody is the same bounded excerpt as Body but untrimmed bytes, so a caller
 	// whose destination answers in a binary encoding (e.g. an OTLP/protobuf
 	// ExportLogsServiceResponse) can decode the response. It is the verbatim bytes
-	// of the excerpt (capped at maxBodyExcerpt); nil when no response body was read.
+	// of a successful response (capped at maxBodyExcerpt). Non-2xx rejections
+	// are redacted like Body; nil when no response body was read.
 	RawBody []byte
 	// BodyComplete reports whether RawBody is the WHOLE response body. It is false
 	// when the body was longer than maxBodyExcerpt or when reading it failed part
@@ -186,6 +189,9 @@ type Request struct {
 	// Header is the set of request headers (auth, content-type). It is sent as-is
 	// and never logged.
 	Header map[string]string
+	// Credentials are resolved secrets sent outside headers (for example a
+	// PagerDuty routing key). They are used only to scrub reflected diagnostics.
+	Credentials []string
 	// Body is the request body, resent verbatim on each attempt.
 	Body []byte
 }
@@ -274,6 +280,10 @@ func (c *Client) attempt(ctx context.Context, method string, req Request) (attem
 	// the ambiguity resolves toward "complete" — which is the unsafe direction.
 	excerpt, readErr := io.ReadAll(io.LimitReader(resp.Body, maxBodyExcerpt+1))
 	complete := readErr == nil && len(excerpt) <= maxBodyExcerpt
+	diagnostic := redact.HTTPError(excerpt, maxBodyExcerpt, httpReq, req.Credentials...)
+	if readErr != nil {
+		diagnostic = redact.OmittedHTTPError
+	}
 	if len(excerpt) > maxBodyExcerpt {
 		excerpt = excerpt[:maxBodyExcerpt]
 	}
@@ -282,7 +292,7 @@ func (c *Client) attempt(ctx context.Context, method string, req Request) (attem
 
 	r := attemptResult{Result: Result{
 		StatusCode:   resp.StatusCode,
-		Body:         strings.TrimSpace(string(excerpt)),
+		Body:         diagnostic,
 		RawBody:      excerpt,
 		BodyComplete: complete,
 		BodyErr:      readErr,
@@ -291,6 +301,9 @@ func (c *Client) attempt(ctx context.Context, method string, req Request) (attem
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
 		return r, 0, nil
 	}
+	// A rejection's typed raw field is also an observable diagnostic; only
+	// successful protocol bytes need to remain verbatim for decoding.
+	r.RawBody = []byte(diagnostic)
 
 	retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
 	r.retryable = c.opts.retryable(resp.StatusCode)

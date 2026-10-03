@@ -6,9 +6,10 @@ import {
   createRoute,
   Outlet,
   redirect,
+  lazyRouteComponent,
+  type ErrorComponentProps,
 } from '@tanstack/react-router'
 import { lazy, Suspense } from 'react'
-import { AppLayout } from '@/components/layout/app-layout'
 import { RequirePermission } from '@/components/layout/require-permission'
 import { Spinner } from '@/components/ui/spinner'
 import { FEATURE_VIEWS, ROUTE_ALIASES, type AreaId } from '@/features/registry'
@@ -19,6 +20,11 @@ import { NotFoundPage } from './pages/not-found'
 import { RouteErrorPage } from './pages/route-error'
 import { SettingsPage } from './pages/settings'
 import { SetupPage } from './pages/setup'
+
+const AppLayout = lazyRouteComponent(
+  () => import('@/components/layout/app-layout'),
+  'AppLayout',
+)
 
 // N1 — the nine area directories (features/navigation/area-directory.tsx). One code-split
 // chunk for all nine: they are one component with a different `areaId`.
@@ -50,6 +56,19 @@ function ViewLoading() {
   )
 }
 
+function ShellError({ error, reset }: ErrorComponentProps) {
+  return (
+    <RouteErrorPage
+      error={error}
+      reset={async () => {
+        // Retry the failed import before clearing the route's error boundary.
+        await AppLayout.preload?.()
+        reset()
+      }}
+    />
+  )
+}
+
 export const rootRoute = createRootRoute({
   component: () => <Outlet />,
   notFoundComponent: NotFoundPage,
@@ -59,6 +78,8 @@ export const rootRoute = createRootRoute({
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
+  validateSearch: (search: Record<string, unknown>): { returnTo?: string } =>
+    typeof search.returnTo === 'string' ? { returnTo: search.returnTo } : {},
   component: LoginPage,
 })
 const setupRoute = createRoute({
@@ -96,6 +117,8 @@ const appRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'app',
   component: AppLayout,
+  pendingComponent: ViewLoading,
+  errorComponent: ShellError,
 })
 
 const settingsRoute = createRoute({

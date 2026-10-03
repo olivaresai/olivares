@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -305,6 +306,13 @@ func validProviderBaseURL(kind, s string) (string, error) {
 		return "", badRequest("base_url is too long")
 	}
 	lower := strings.ToLower(s)
+	if kind == ProviderKindOpenAICompatible && strings.HasPrefix(lower, "http://") {
+		// HU-R14: a local model server is plain http. It is accepted only for
+		// loopback and private-network addresses — never for a public host, and
+		// refused rather than warned about for the same reason as before: a
+		// warning an operator can click past is not a control.
+		return validLocalHTTPBaseURL(s)
+	}
 	if !strings.HasPrefix(lower, "https://") {
 		// http:// is refused rather than warned about: the value that travels over it
 		// is a credential, and a warning an operator can click past is not a control.
@@ -327,6 +335,32 @@ func validProviderBaseURL(kind, s string) (string, error) {
 	return strings.TrimRight(s, "/"), nil
 }
 
+// providerLocalHTTPHostAllowed is the one host rule for a plain-http endpoint:
+// localhost, a loopback address, or a private-network address (RFC 1918 /
+// fc00::/7). A public host over plain http fails here, never by accident of a
+// parse that accepted something else.
+func providerLocalHTTPHostAllowed(host string) bool {
+	if host == "localhost" {
+		return true
+	}
+	ip, err := netip.ParseAddr(host)
+	return err == nil && (ip.IsLoopback() || ip.IsPrivate())
+}
+
+// validLocalHTTPBaseURL is the openai_compatible plain-http branch of
+// validProviderBaseURL: the same shape rule validOllamaBaseURL applies, with
+// this kind's own messages.
+func validLocalHTTPBaseURL(s string) (string, error) {
+	u, err := url.Parse(s)
+	if err != nil || u.Hostname() == "" || u.User != nil || u.RawQuery != "" || u.Fragment != "" || u.Opaque != "" || u.ForceQuery {
+		return "", badRequest("a plain-http base_url must be an endpoint without credentials, query or fragment")
+	}
+	if !providerLocalHTTPHostAllowed(u.Hostname()) {
+		return "", badRequest("plain HTTP base_url must be loopback or a private IP address")
+	}
+	return strings.TrimRight(u.String(), "/"), nil
+}
+
 // validOllamaBaseURL accepts native endpoints without embedding credentials.
 // Plain HTTP is limited to loopback and literal private addresses; HTTPS can
 // address a protected remote Ollama endpoint. No key is sent by this kind.
@@ -341,11 +375,8 @@ func validOllamaBaseURL(s string) (string, error) {
 	if u.Scheme != "http" && u.Scheme != "https" {
 		return "", badRequest("Ollama base_url must use http or https")
 	}
-	if u.Scheme == "http" {
-		ip, err := netip.ParseAddr(u.Hostname())
-		if u.Hostname() != "localhost" && (err != nil || (!ip.IsLoopback() && !ip.IsPrivate())) {
-			return "", badRequest("plain HTTP Ollama endpoints must be loopback or a private IP address")
-		}
+	if u.Scheme == "http" && !providerLocalHTTPHostAllowed(u.Hostname()) {
+		return "", badRequest("plain HTTP Ollama endpoints must be loopback or a private IP address")
 	}
 	return strings.TrimRight(u.String(), "/"), nil
 }
@@ -406,32 +437,74 @@ func validProviderRecordRef(ref string) bool {
 	return err == nil && !id.IsZero()
 }
 
-// recordServesDriver reports whether a credential of this kind can be read by this
-// driver's official CLI.
+// recordServesDriver reports whether this driver's official CLI can run on a record of
+// this kind AND be held to that record's endpoint: a session bound to a provider record
+// reaches only that record's endpoint, or it does not start (Root 2026-10-02 21:16Z,
+// HU2 019). It is the one rule the binding, the resolve rule and the launch read.
 //
 // It is an explicit table and not a derivation, and that is the decision. A
 // derivation ("the kind whose name looks like the driver") would silently accept
 // every driver added later, including one whose CLI reads a variable nobody here
-// has heard of. An unknown driver therefore accepts ONLY openai_compatible, which
-// is the one kind that says what it injects in its own name.
-func recordServesDriver(kind, driver string) bool {
-	if kind == ProviderKindOllama {
-		return driver == providerDriverCodex
-	}
-	if kind == ProviderKindOpenAICompatible {
-		return true
-	}
+// has heard of. Until 26.10.1 an openai_compatible record served every driver because
+// it names what it injects; naming OPENAI_* holds no CLI to its address, so it now
+// serves only Codex, whose own provider configuration takes the endpoint. An unknown
+// driver serves nothing.
+func recordServesDriver(kind, baseURL, driver string) bool {
 	switch driver {
 	case providerDriverClaude:
 		return kind == ProviderKindAnthropic
 	case providerDriverCodex:
-		return kind == ProviderKindOpenAI
+		// HU-R14: the local OpenAI-compatible endpoint (<base_url>/v1, no key) too.
+		return kind == ProviderKindOpenAI || kind == ProviderKindOpenAICompatible || kind == ProviderKindOllama
 	case providerDriverGrok:
 		return kind == ProviderKindXAI
 	case providerDriverOpenCode:
-		return kind == ProviderKindAnthropic || kind == ProviderKindOpenAI || kind == ProviderKindXAI
+		return kind == ProviderKindOllama || openCodeCanConfine(kind, baseURL)
 	}
+	// An unknown driver has no established way to be held to a record's endpoint.
 	return false
+}
+
+// recordDriverSupport is, per driver, the records it can be held to, in the person's
+// words: the sentence a refusal names (recordServesDriver is the rule).
+var recordDriverSupport = map[string]string{
+	providerDriverClaude:   "Claude Code runs only on an Anthropic key",
+	providerDriverCodex:    "Codex runs only on an OpenAI key, an OpenAI-compatible endpoint or a local model (Ollama)",
+	providerDriverGrok:     "Grok Build runs only on an xAI key",
+	providerDriverOpenCode: "OpenCode runs only on an Anthropic, OpenAI or xAI key at the provider's own address, or on a local model (Ollama)",
+}
+
+// recordDriverRefusal is the one sentence for a record a driver cannot be held to.
+func recordDriverRefusal(driver, recordName, kind string) string {
+	support, ok := recordDriverSupport[driver]
+	if !ok {
+		return "driver " + driver + " cannot be held to a provider from Providers; use its own sign-in"
+	}
+	return support + "; " + strconv.Quote(recordName) + " (kind " + kind + ") is not one of these, so the session does not start"
+}
+
+// providerVendorEndpoints is each vendor kind's own API: the endpoint a key record with
+// no base_url reaches, written the way that kind's base-URL variable takes it
+// (providerRecordEnv). openai_compatible has none and requires a base_url.
+var providerVendorEndpoints = map[string]string{
+	ProviderKindAnthropic: "https://api.anthropic.com",
+	ProviderKindOpenAI:    "https://api.openai.com/v1",
+	ProviderKindXAI:       "https://api.x.ai/v1",
+}
+
+// recordEndpoint is the one endpoint a session bound to rec may reach: its base_url,
+// else its vendor's own API. A local model is reached at <base_url>/v1, the address its
+// launch configuration names. ok is false when neither exists.
+func recordEndpoint(rec ProviderRecord) (string, bool) {
+	base := strings.TrimRight(strings.TrimSpace(rec.BaseURL), "/")
+	if rec.Kind == ProviderKindOllama {
+		return base + "/v1", base != ""
+	}
+	if base != "" {
+		return base, true
+	}
+	endpoint, ok := providerVendorEndpoints[rec.Kind]
+	return endpoint, ok
 }
 
 // providerRecordEnv is the environment a record of this kind produces for a child.

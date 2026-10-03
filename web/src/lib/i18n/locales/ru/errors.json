@@ -6,7 +6,11 @@
   },
   "forbidden": {
     "title": "Нет доступа",
-    "description": "У вас нет разрешения на просмотр этого. Запросите доступ у администратора."
+    "description": "У вас нет разрешения на просмотр этого. Запросите доступ у администратора.",
+    "accessTo": "У вас нет доступа к разделу «{{subject}}».",
+    "accessToThis": "У вас нет доступа к этому.",
+    "nextStep": "Ваши роли или групповая политика этого не разрешают. Владелец или администратор этой организации может предоставить доступ.",
+    "deniedByPolicy": "Политика «{{policy}}» запрещает это. Владелец или администратор этой организации может её изменить."
   },
   "serverError": {
     "title": "Что-то пошло не так",
@@ -38,11 +42,21 @@
     "locked_out": "Слишком много попыток. Повторите попытку через некоторое время.",
     "setup_required": "Для control plane требуется первоначальная настройка.",
     "setup_complete": "Настройка уже завершена.",
-    "cross_tenant_admin_pool_not_configured": "В этой инсталляции нет межтенантного административного пула базы данных. Создайте роль NOSUPERUSER BYPASSRLS командой `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (см. deploy/postgres/README.md) и перезапустите сервер с --admin-dsn, указывающим на эту роль.",
+    "cross_tenant_admin_pool_not_configured": "Эта база данных не может перечислить все организации. Выполните `olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` и перезапустите движок. Или создайте роль NOSUPERUSER BYPASSRLS командой `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (см. deploy/postgres/README.md) и перезапустите сервер с --admin-dsn, указывающим на эту роль.",
     "internal": "Произошла внутренняя ошибка."
   },
   "tenantAdmission": {
     "title": "Требуется допуск в организацию",
     "description": "Войдите с учётной записью каталога, допущенной в организацию. Глобальные права bootstrap не разрешают операции связи в рабочем пространстве."
+  },
+  "moduleNotEnabled": {
+    "title": "Не включено в этой установке",
+    "description": "Эта часть Olivares здесь выключена, поэтому показывать нечего.",
+    "named": "Модуль «{{module}}» не включён в этой установке.",
+    "unnamed": "Этот модуль не включён в этой установке."
+  },
+  "notInEdition": {
+    "subject": "Раздел «{{subject}}» не входит в эту редакцию.",
+    "generic": "В эту редакцию это не входит."
   }
 }

@@ -16,6 +16,9 @@ const { api, auth, toast } = vi.hoisted(() => ({
   },
   auth: {
     isSuperadmin: true,
+    // The tool card asks can('sessions:provider:read') (the refused-key read). These
+    // cases are about the install and sign-in rows, so the role reads no providers.
+    can: () => false,
     activeTenant: null,
     principal: { user_id: 'root' },
   },
@@ -24,6 +27,18 @@ const { api, auth, toast } = vi.hoisted(() => ({
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => auth }))
 vi.mock('./api', () => ({ agentToolsApi: api }))
 vi.mock('@/components/ui/toaster', () => ({ toast }))
+// The first-hour cards at the top read the tools' own sign-in status; these cases
+// are about the version manager below them, so the tools answer "installed, signed in".
+const signIn = vi.hoisted(() => ({
+  status: vi.fn((driver: string) =>
+    Promise.resolve({ driver, installed: true, signed_in: true }),
+  ),
+}))
+vi.mock('@/features/first-hour/api', async (orig) => ({
+  ...((await orig()) as object),
+  signInApi: signIn,
+}))
+import { ApiError } from '@/lib/api/errors'
 import { AgentToolsView } from './agent-tools-view'
 function mount() {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -270,4 +285,56 @@ it.each([
     failure.probe_error ?? failure.probe_skipped!,
   )
   expect(toast.success).not.toHaveBeenCalled()
+})
+
+// EU18/EU20 (WEB 01f5fe2b): the page maps a failed read like every other panel. A
+// refused inventory says the person has no access, not that the engine failed.
+it('says the person has no access when the inventory read is refused', async () => {
+  api.inventory.mockRejectedValue(
+    new ApiError(
+      403,
+      'forbidden',
+      'A system administrator session is required.',
+    ),
+  )
+  mount()
+  expect(
+    await screen.findByText('You do not have access to Agent tools.'),
+  ).toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: /try again|retry/i })).toBeNull()
+})
+
+// EU on RC10: Claude Code showed "Installed" in its card and "No managed installation"
+// below it. A tool on the server that Olivares did not install now says so.
+it('says a tool found on the server was not installed by Olivares', async () => {
+  mount()
+  // Claude Code and Codex; findAll resolves at its first match, so wait for both.
+  await waitFor(() =>
+    expect(
+      screen.getAllByText('Installed on this server, not by Olivares'),
+    ).toHaveLength(2),
+  )
+  // Grok Build has no such status: its line is unchanged.
+  expect(screen.getByText('No managed installation')).toBeInTheDocument()
+})
+
+// HU2-30 (RC10): after Review -> Install, the sign-in row kept "Not installed" next to
+// "Installed" until a reload. A finished install reads the tools' own status again.
+it('reads the tool status again when an install finishes', async () => {
+  mount()
+  const user = userEvent.setup()
+  await user.click(
+    await screen.findByRole('button', { name: /review claude code/i }),
+  )
+  await screen.findByText('2.1.261')
+  const before = signIn.status.mock.calls.filter(([d]) => d === 'claude').length
+  await user.click(
+    screen.getByRole('button', { name: /install approved version/i }),
+  )
+  expect(await screen.findByText(/installation complete/i)).toBeInTheDocument()
+  await waitFor(() =>
+    expect(
+      signIn.status.mock.calls.filter(([d]) => d === 'claude').length,
+    ).toBeGreaterThan(before),
+  )
 })

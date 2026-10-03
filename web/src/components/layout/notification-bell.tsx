@@ -14,30 +14,25 @@ import {
 } from '@/components/ui/popover'
 import { Spinner } from '@/components/ui/spinner'
 import { RelTimeLabel } from '@/features/shared'
+import { consoleApi, consoleKeys } from '@/features/console/api'
 import { auditApi } from '@/lib/api/endpoints'
 import { useAuth } from '@/lib/auth/context'
+import {
+  actorOf,
+  eventLink,
+  hiddenInBell,
+  readableAction,
+  sentenceKey,
+} from './bell-events'
 
-// TWO constants, and their separation is the point. RECENT_LIMIT is what the popover
-// SHOWS; SCAN_WINDOW is how many tail POSITIONS the engine is asked to examine to find
-// them. They were one constant until F-04, and that is precisely what broke: the window
-// is counted in sequence positions, the bell's own reads keep occupying them, so ten
-// positions could hold ten reads and nothing else — a page that came back empty while
-// real activity sat just below `from`.
-//
-// Widening the examination does not GUARANTEE ten events (a hundred positions can be a
-// hundred reads); it buys a horizon roughly ten times deeper, and it is a quantified
-// mitigation, not a closure. The guarantee needs a filtered reverse-tail operation in
-// the engine, which is deliberately post-release.
+// The bell reads GET /v1/audit/recent: the newest events, newest first, without the
+// ledger's own audit.read events. That read is not itself recorded, so polling it once a
+// minute does not fill the ledger. Until 26.10.1 the bell polled GET /v1/audit, and each
+// poll appended an audit.read to the ledger it was showing.
 const RECENT_LIMIT = 10
-const SCAN_WINDOW = 100
+// Routine events (reads, sign-ins) are not shown, so ask for more than are shown.
+const RECENT_READ = 30
 const REFETCH_INTERVAL = 60_000
-// F-01: reading the ledger is itself a ledger event. Every GET /v1/audit appends its
-// own `audit.read`, so a bell that polls the TAIL fills that tail with its own
-// looking — and re-lights the unread dot every interval for activity nobody
-// performed. Excluding the family from the VIEW is the fix; the engine keeps sealing
-// every read, because the other way to quiet the bell was to stop recording them,
-// and that buys a quiet notification by destroying evidence.
-const EXCLUDED_ACTIONS = ['audit.read']
 //E4e: the newest event timestamp the user has SEEN (opened the popover on),
 // persisted per browser so the unread dot survives a reload instead of lighting
 // up for history the user already reviewed. ISO-8601 strings compare lexically.
@@ -49,10 +44,6 @@ function readLastSeen(): string {
   } catch {
     return ''
   }
-}
-
-function actionLabel(action: string): string {
-  return action.replace(/[._]/g, ' ')
 }
 
 function actionTone(action: string): string {
@@ -70,85 +61,52 @@ function actionTone(action: string): string {
 
 export function NotificationBell() {
   const { t } = useTranslation('common')
-  const { activeTenant } = useAuth()
+  const { activeTenant, principal, can } = useAuth()
   const [open, setOpen] = useState(false)
   const [lastSeen, setLastSeen] = useState<string>(readLastSeen)
 
-  //TWO calls, and the first one is not a round trip we can save.
-  //
-  // The ledger is keyset-paginated FORWARDS: `from` is a 1-based sequence and the
-  // engine walks ORDER BY seq ASC (core/internal/store/sqlstore/audit.go Walk), so
-  // a bare `list({ limit: N })` returns the N OLDEST events of the tenant — the
-  // start of the chain, not its end. Asking for them and calling items[0] "newest"
-  // is what this component did until: correct with one event, reversed from
-  // the second, and — because lastSeen then froze on the genesis event's timestamp,
-  // which never changes — the unread dot could never light again.
-  //
-  // There is no `order=desc` and no tail parameter to ask for instead. The tail is
-  // addressable only through head_seq, and head_seq only comes back IN a response;
-  // hence the probe. It costs one row.
-  const { data: headData, isLoading: isLoadingHead } = useQuery({
-    queryKey: ['notifications-head', activeTenant],
-    queryFn: () => auditApi.list({ limit: 1 }),
+  const { data, isLoading } = useQuery({
+    queryKey: ['notifications', activeTenant],
+    queryFn: () => auditApi.recent({ limit: RECENT_READ }),
     refetchInterval: REFETCH_INTERVAL,
-    // The bell lives in the topbar, OUTSIDE the routed content TenantGate
-    // guards, so it needs the precondition itself: /v1/audit is tenant-scoped
-    // and with no tenant selected the engine answers 400 "tenant required" —
-    // once a minute, forever (core/api/middleware.go resolveTenantValue).
+    // The bell lives in the topbar, outside the routed TenantGate: the read is
+    // tenant-scoped, and with no tenant selected the engine answers 400.
     enabled: !!activeTenant,
   })
-  const headSeq = headData?.head_seq ?? 0
 
-  // headSeq is IN the key, so a new event moves the window and refetches the tail
-  // by itself; polling this one too would only re-ask for a page that cannot have
-  // changed. 0 is the empty ledger — nothing to fetch, and `from: 0` would be a
-  // request for a sequence that does not exist.
-  const { data, isLoading: isLoadingPage } = useQuery({
-    queryKey: ['notifications', activeTenant, headSeq],
-    queryFn: () =>
-      auditApi.list({
-        // `limit` is SCAN_WINDOW, not RECENT_LIMIT, and that is not a slip: the engine's
-        // filtered scan walks FORWARDS and stops at `limit` MATCHES, so asking for ten
-        // over a hundred positions would return the ten OLDEST matches in the window —
-        // the original defect, one level down. Ask for the window, keep the newest.
-        // Math.max keeps `from` at 1 on a ledger shorter than the window: sequence
-        // numbers start at 1 and there is nothing below it.
-        from: Math.max(1, headSeq - SCAN_WINDOW + 1),
-        limit: SCAN_WINDOW,
-        exclude_action: EXCLUDED_ACTIONS,
-      }),
-    enabled: !!activeTenant && headSeq > 0,
+  const events = (data?.items ?? [])
+    .filter((e) => !hiddenInBell(e.action))
+    .slice(0, RECENT_LIMIT)
+  // People are named for a principal who may already read the members; otherwise "You" or
+  // "A member". The bell shows no one's address to someone who could not see it elsewhere.
+  const canReadMembers = can('user:read')
+  const members = useQuery({
+    queryKey: consoleKeys.members(activeTenant),
+    queryFn: () => consoleApi.listMembers(),
+    enabled: open && canReadMembers && !!activeTenant,
   })
-
-  // Ascending, so the LAST element is the newest — the single line that made the
-  // old `newest` a lie. The list is rendered reversed (newest first) below.
-  const events = data?.items ?? []
-  const newest = events[events.length - 1]?.occurred_at ?? ''
-  const arrived = newest !== '' && newest > lastSeen
-
-  // LATCHED, and the reason is a measured loss, not tidiness. The window is a bounded
-  // number of SEQUENCE positions, and the bell's own reads keep occupying them, so an
-  // event that lit the dot can still slide below `from` before the user ever opens —
-  // SCAN_WINDOW pushes that horizon out, it does not remove it.
-  // Computed fresh each render, `hasUnseen` would then go back to false — the dot
-  // switching itself off for something nobody looked at, which is the one thing an
-  // unread marker must never do. Once something has arrived unseen it stays lit until
-  // the user OPENS, because opening is what "seen" means here.
-  const [unseen, setUnseen] = useState(false)
-  if (arrived && !unseen) setUnseen(true)
-  const hasUnseen = unseen
-  // Both queries, and the second only while it can actually run. A disabled query
-  // is not "loading" (TanStack reports pending+idle), which is what keeps the two
-  // resting states honest: with no tenant selected, and with an empty ledger, the
-  // popover says "nothing yet" instead of spinning on an answer nobody asked for.
-  const isLoading = isLoadingHead || (headSeq > 0 && isLoadingPage)
+  const actorName = (event: (typeof events)[number]) => {
+    const who = actorOf(event, principal?.user_id)
+    if (who.kind !== 'member') return t(`notifications.actors.${who.kind}`)
+    const m = members.data?.items.find((x) => x.user_id === who.userId)
+    return m?.display_name || m?.email || t('notifications.actors.member')
+  }
+  const sentence = (event: (typeof events)[number]) => {
+    const key = sentenceKey(event.action)
+    if (!key) return readableAction(event.action)
+    const you = actorOf(event, principal?.user_id).kind === 'you'
+    return t(`notifications.events.${key}`, {
+      actor: actorName(event),
+      context: you ? 'you' : undefined,
+    })
+  }
+  const newest = events[0]?.occurred_at ?? ''
+  const hasUnseen = newest !== '' && newest > lastSeen
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next)
-    // Opening = seeing: the latch clears even when the page came back EMPTY, because
-    // the user did look. Only a non-empty page has a timestamp worth persisting.
-    if (next) setUnseen(false)
-    if (next && newest !== '' && newest > lastSeen) {
+    // Opening = seeing: the newest timestamp on screen becomes the last one seen.
+    if (next && hasUnseen) {
       setLastSeen(newest)
       try {
         localStorage.setItem(LAST_SEEN_KEY, newest)
@@ -189,36 +147,37 @@ export function NotificationBell() {
           </div>
         ) : (
           <div className="max-h-80 overflow-y-auto">
-            {/* The page arrives ascending by sequence; a notification list reads
-                newest first. Copy before reversing — `events` is the query's own
-                array and reverse() mutates in place. */}
-            {[...events]
-              .slice(-RECENT_LIMIT)
-              .reverse()
-              .map((event) => (
+            {events.map((event) => {
+              const link = eventLink(event)
+              const body = (
+                <div className="flex items-start justify-between gap-2">
+                  <span
+                    className={`min-w-0 text-caption font-medium ${actionTone(event.action)}`}
+                  >
+                    {sentence(event)}
+                  </span>
+                  <RelTimeLabel ts={event.occurred_at} />
+                </div>
+              )
+              return link ? (
+                <Link
+                  key={event.id}
+                  to={link.to as never}
+                  search={link.search as never}
+                  onClick={() => setOpen(false)}
+                  className="block border-b border-border px-3 py-2 outline-none last:border-0 hover:bg-muted focus-visible:bg-muted"
+                >
+                  {body}
+                </Link>
+              ) : (
                 <div
                   key={event.id}
                   className="border-b border-border px-3 py-2 last:border-0"
                 >
-                  <div className="flex items-start justify-between gap-2">
-                    <span
-                      className={`text-caption font-medium ${actionTone(event.action)}`}
-                    >
-                      {actionLabel(event.action)}
-                    </span>
-                    <RelTimeLabel ts={event.occurred_at} />
-                  </div>
-                  {event.target_kind && (
-                    <div className="mt-0.5 truncate font-mono text-caption text-muted-foreground">
-                      {event.target_kind}
-                      {event.target_id ? ` ${event.target_id}` : ''}
-                    </div>
-                  )}
-                  <div className="mt-0.5 text-caption text-muted-foreground">
-                    {event.actor_kind}: {event.actor}
-                  </div>
+                  {body}
                 </div>
-              ))}
+              )
+            })}
           </div>
         )}
         {/*E4e: the bell is a preview — the audit ledger is the full record. */}

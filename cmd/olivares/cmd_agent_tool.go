@@ -24,25 +24,32 @@ import (
 	"github.com/olivaresai/olivares/cmd/olivares/internal/toolinstall"
 )
 
+// verifiedToolReleases is this process's memory of the tool releases a full check
+// found installed (toolinstall.VerifiedCache): every engine the composition builds
+// shares it, so the AI tools status, the resolve rule and a launch stop re-hashing
+// an unchanged install at every read (EU-CB07). Memory only; a restart starts empty.
+var verifiedToolReleases = toolinstall.NewVerifiedCache()
+
 // toolInstallEngine builds the engine behind `olivares agent tool`. It is a
 // variable so tests can substitute an engine that trusts a fixture signing key
 // and a fixture release server. Production wiring trusts the embedded Claude
 // release key only; no flag or environment variable reaches this seam.
 var toolInstallEngine = func(ctx context.Context) *toolinstall.Engine {
-	var verifier toolinstall.SignatureVerifier
-	if v, err := toolinstall.NewGPGVerifier(ctx, exec.LookPath); err != nil {
-		verifier = toolinstall.UnavailableVerifier{Err: err}
-	} else {
+	// gpg when the node has it; otherwise the in-process OpenPGP check, so a
+	// distroless container verifies the same signed manifest.
+	var verifier toolinstall.SignatureVerifier = toolinstall.NativeOpenPGPVerifier{}
+	if v, err := toolinstall.NewGPGVerifier(ctx, exec.LookPath); err == nil {
 		verifier = v
 	}
 	claude := toolinstall.NewClaude(toolinstall.ClaudeOptions{Verifier: verifier})
-	codex := toolinstall.NewCodex(toolinstall.CodexOptions{})
+	codex := toolinstall.NewCodexRelease(toolinstall.ReleaseArchiveOptions{})
 	grok := toolinstall.NewGrok(toolinstall.GrokOptions{})
 	cat, err := toolinstall.NewCapabilityCatalog(toolinstall.NewCatalog(claude), codex, grok, toolinstall.NewOpenCode(toolinstall.ReleaseArchiveOptions{}), toolinstall.NewOllama(toolinstall.ReleaseArchiveOptions{}))
+	opts := toolinstall.EngineOptions{InstallerVersion: version, Verified: verifiedToolReleases}
 	if err != nil {
-		return toolinstall.NewEngine(toolinstall.NewCatalog(claude), toolinstall.EngineOptions{InstallerVersion: version})
+		return toolinstall.NewEngine(toolinstall.NewCatalog(claude), opts)
 	}
-	return toolinstall.NewEngineWithCapabilities(cat, toolinstall.EngineOptions{InstallerVersion: version})
+	return toolinstall.NewEngineWithCapabilities(cat, opts)
 }
 
 func newAgentToolCmd() *cobra.Command {
@@ -52,24 +59,24 @@ func newAgentToolCmd() *cobra.Command {
 		Long: "tool installs an official provider command-line tool into a versioned directory that\n" +
 			"Olivares owns and records a typed receipt. It runs entirely on this host: no control\n" +
 			"plane, no server, no account. This release installs Claude Code (plan/v1, publisher-signed\n" +
-			"manifest) and Codex and Grok Build (plan/v2) for Linux amd64/arm64. macOS and Windows are\n" +
-			"release work still ahead.\n\n" +
+			"manifest) and Codex, Grok Build, OpenCode and Ollama (plan/v2) for Linux amd64/arm64. macOS\n" +
+			"and Windows are release work still ahead.\n\n" +
 			"Verification class is per driver and is recorded on the receipt: Claude is publisher-signed\n" +
-			"OpenPGP; Codex is mixed-assurance (exact package digest plus publisher-signed subjects) and\n" +
-			"origin-install refuses when a subject verifier is unavailable; Grok is origin-only HTTPS\n" +
-			"plus a bounded probe, which is not a publisher signature. OpenCode and Ollama compare\n" +
-			"SHA-256 from their pinned official GitHub release metadata before archive placement.\n\n" +
+			"OpenPGP; Grok is origin-only HTTPS plus a bounded probe, which is not a publisher signature;\n" +
+			"Codex, OpenCode and Ollama compare SHA-256 from their pinned official GitHub release\n" +
+			"metadata before archive placement.\n\n" +
 			"Channel names belong to the vendor, not to Olivares: the Grok origin publishes stable and\n" +
 			"answers 404 for latest, so --version stable is the pointer to ask for. A pointer the origin\n" +
 			"does not publish is reported as version_unknown with the URL and the status.\n\n" +
 			"What it never does: vendor the CLI into this repository; edit PATH, shell startup files or\n" +
 			"your home; read credential values; overwrite or delete an existing version; run a vendor\n" +
 			"install script. Probe --version is not authentication. An installed tool is not a launched\n" +
-			"session; `olivares agent session create` launches through a provider profile. A managed\n" +
-			"install can pin the session runtime when OLIVARES_SESSION_RUNTIME_*_BIN is unset.",
+			"session; `olivares agent session create` launches through a provider profile. A session\n" +
+			"runs the newest verified managed install, found at launch with no restart;\n" +
+			"OLIVARES_SESSION_RUNTIME_*_BIN, when set, overrides it.",
 		Example: "  olivares agent tool plan --driver claude --version latest\n" +
 			"  olivares agent tool install --driver grok --version stable --yes\n" +
-			"  olivares agent tool install --driver codex --version 0.153.4 --yes\n" +
+			"  olivares agent tool install --driver claude --version latest --yes\n" +
 			"  olivares agent tool list -o json\n" +
 			"  olivares agent tool detect --driver grok --probe",
 	}

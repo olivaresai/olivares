@@ -57,6 +57,9 @@ type AuthScope interface {
 	// : at most one row; an absent row is the default posture. The reader,
 	// not the store, treats "no row" and "row, false" alike.
 	AuthPolicy() Repository[model.AuthPolicy]
+	// DeploymentSettings is the deployment's product settings singleton (one
+	// row in the system tenant, created on first write).
+	DeploymentSettings() Repository[model.DeploymentSettings]
 	// Invites is the pending-onboarding-invitation repository (FASE X):
 	// single-use tokens (selector + secret hash) to activate a non-federated
 	// account, looked up by selector (the accept leg) or filtered by

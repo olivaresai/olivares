@@ -224,7 +224,8 @@
     },
     "server": {
       "title": "Noch keine MCP-Server erkannt",
-      "description": "MCP-Server erscheinen, sobald Konnektorbeobachtungen sie im Inventar des Mandanten identifizieren."
+      "description": "MCP-Server erscheinen, sobald Konnektorbeobachtungen sie im Inventar des Mandanten identifizieren.",
+      "action": "Server unter MCP-Server hinzufügen oder testen"
     },
     "skill": {
       "title": "Keine Skills entdeckt",

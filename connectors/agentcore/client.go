@@ -12,11 +12,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/olivaresai/olivares/connectors/internal/awssig"
 	"github.com/olivaresai/olivares/connectors/internal/httpx"
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 // signingService is the SigV4 signing name. TRAP (VERIFIED 2026-06-11 from the
@@ -147,10 +147,9 @@ func (c *client) do(ctx context.Context, method, path string, query url.Values, 
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrExcerpt))
-		// The excerpt is the service's error body; the request (whose signing
-		// headers hold the credential) is never included.
-		return &apiError{op: method + " " + path, status: resp.StatusCode, excerpt: strings.TrimSpace(string(excerpt))}
+		excerpt := redact.ReadHTTPError(resp.Body, maxErrExcerpt, req, c.creds.AKID, c.creds.Secret, c.creds.Token)
+		// The provider can reflect signing headers; scrub known credentials too.
+		return &apiError{op: method + " " + path, status: resp.StatusCode, excerpt: excerpt}
 	}
 	if out == nil {
 		_, _ = io.Copy(io.Discard, resp.Body)

@@ -1,6 +1,13 @@
 {
-  "title": "Identity & NHI",
-  "subtitle": "SSO, SCIM, identity inventory, the NHI lifecycle, the WIF graph and privileged login — observed, governed and audited.",
+  "title": "Identity & access",
+  "subtitle": "Who can sign in, what they can do, and how they prove it.",
+  "sections": "Identity sections",
+  "groups": {
+    "people": "People",
+    "signIn": "Sign-in",
+    "machines": "Machine identities",
+    "posture": "Posture"
+  },
   "tabs": {
     "federation": "SSO & SCIM",
     "inventory": "Identity inventory",
@@ -42,7 +49,10 @@
       "nhiLifecycleFinalize": "Finalizing non-human identity offboarding",
       "providers": "Registering or withdrawing a provider credential",
       "generic": "This action",
-      "console": "Managing connectors"
+      "console": "Managing connectors",
+      "stepUpPolicy": "Changing the extra check for administrative actions",
+      "modules": "Turning modules on or off",
+      "signing": "Turning report signing on or off"
     },
     "aal": {
       "aal1": "AAL1 (password)",
@@ -63,7 +73,12 @@
     "verificationFailed": "The session could not be verified for this action. Authentication may have completed; the action has not continued.",
     "cancelled": "The passkey operation was dismissed or timed out. You can start a new attempt. The action has not continued.",
     "cancelHint": "Closing cancels this action. A registration or authentication already sent may still complete.",
-    "registrationUnknownElsewhere": "Registration could not be confirmed. The passkey may have been saved. Close this dialog and check your passkeys before starting another registration."
+    "registrationUnknownElsewhere": "Registration could not be confirmed. The passkey may have been saved. Close this dialog and check your passkeys before starting another registration.",
+    "code": {
+      "title": "Sign in with your authenticator code",
+      "body": "{{action}} needs a sign-in with your authenticator code on this deployment. Sign in again and enter your code.",
+      "signInAgain": "Sign in again"
+    }
   },
   "references": {
     "note": "Standards this panel reflects. The panel observes and verifies; it does not claim certification.",
@@ -101,7 +116,7 @@
   },
   "sso": {
     "title": "Single sign-on (OIDC / SAML)",
-    "description": "Federated login is implemented in the business build and configured by environment at boot. This panel documents the configuration, checks the exact redirect URI and surfaces the connection state — it does not write the configuration.",
+    "description": "Federated login is configured in SSO / IdP, or by environment at boot. This panel documents the configuration, checks the exact redirect URI and surfaces the connection state — it does not write the configuration.",
     "notConfigured": "Not configured",
     "notConfiguredHint": "No identity provider is configured, so federation requests return 501. Set the environment keys below and restart the engine to enable SSO.",
     "seamWhat": "The SSO connection-state summary",
@@ -281,9 +296,9 @@
       "title": "Lifecycle actions",
       "reason": "Reason",
       "critical": {
-        "twoAccountsAal3": "This CRITICAL action requires approval from two distinct user accounts, each over an AAL3 session, before it can run. The engine enforces distinct ACCOUNTS: it cannot prove that two accounts are two different people. Both conditions follow the live risk tier, which an approval policy can lower.",
-        "breakGlassPossible": "Nothing runs until two distinct user accounts approve it, each over a hardware-verified session. An active emergency break-glass grant can authorize it instead — that use is recorded and reviewed afterwards. Both conditions follow the live risk tier, which an approval policy can lower.",
-        "noBreakGlass": "Nothing runs until two distinct user accounts approve it, each over a hardware-verified session. Break-glass cannot authorize this one: there is no emergency path around the second approver. Both conditions follow the live risk tier, which an approval policy can lower."
+        "twoAccountsAal3": "This CRITICAL action requires approval from two different user accounts before it can run. The engine enforces different ACCOUNTS: it cannot prove that two accounts are two different people. This follows the live risk tier, which an approval policy can lower.",
+        "breakGlassPossible": "Nothing runs until two different user accounts approve it. An active emergency break-glass grant can authorize it instead — that use is recorded and reviewed afterwards. This follows the live risk tier, which an approval policy can lower.",
+        "noBreakGlass": "Nothing runs until two different user accounts approve it. Break-glass cannot authorize this one: there is no emergency path around the second approver. This follows the live risk tier, which an approval policy can lower."
       },
       "ownership": {
         "button": "Assign ownership",
@@ -503,33 +518,6 @@
       "inferenceGeos": "Allowed inference regions",
       "unrestricted": "Unrestricted / unreported"
     },
-    "tls": {
-      "title": "Panel TLS (cert-manager)",
-      "description": "The panel's own TLS posture: issuer, expiry, rotation and chain.",
-      "seamWhat": "The panel cert-manager TLS posture",
-      "issuer": "Issuer",
-      "notAfter": "Expires",
-      "autoRenew": "Auto-renew",
-      "chain": "Chain"
-    },
-    "crypto": {
-      "title": "Crypto agility / PQC inventory",
-      "description": "Classic versus post-quantum algorithms across the identity estate, and which slots can be rotated to PQC (NIST SP 800-57 r6).",
-      "seamWhat": "The crypto-agility / PQC inventory",
-      "ready": "PQC-ready",
-      "notReady": "Classic only",
-      "family": {
-        "classic": "Classic",
-        "pqc": "Post-quantum",
-        "hybrid": "Hybrid"
-      },
-      "col": {
-        "usage": "Usage",
-        "algorithm": "Algorithm",
-        "family": "Family",
-        "pqcReady": "PQC agility"
-      }
-    },
     "unavailable": {
       "badge": "Not readable",
       "fallback": "This posture could not be read on this deployment."
@@ -537,11 +525,15 @@
   },
   "login": {
     "statusTitle": "Session assurance",
-    "statusDescription": "The authenticator assurance level of your current session. Sensitive views require a hardware step-up.",
+    "statusDescription": "How you signed in to this session.",
     "currentAal": "Current level",
     "methods": "Methods",
     "methodsUnknown": "Not reported",
-    "targetStandardsNote": "AAL3 (NIST SP 800-63B-4) and PIV/CAC (FIPS 201-3) are the target standards for privileged login. The panel reflects what the backend enforces; it claims no certification.",
+    "policy": {
+      "none": "This deployment asks for no extra check before administrative actions. A system administrator can turn one on under Settings › Sign-in and security.",
+      "totp": "Administrative actions on this deployment ask for a sign-in with an authenticator code.",
+      "passkey": "Administrative actions on this deployment ask for a passkey."
+    },
     "passkeyTitle": "Register a passkey",
     "passkeyDescription": "Enroll a hardware security key or platform authenticator (WebAuthn / FIDO2) for phishing-resistant privileged login.",
     "registerPasskey": "Register a passkey",
@@ -571,9 +563,11 @@
       "description": "Manage your FIDO2/WebAuthn authenticators. Each passkey provides phishing-resistant hardware-bound login.",
       "register": "Register passkey",
       "registerTitle": "Register new passkey",
-      "registerHint": "Give your passkey a name so you can identify it later.",
+      "registerHint": "Optional. Leave it empty to name it after this device.",
       "nameLabel": "Passkey name",
       "namePlaceholder": "e.g. YubiKey 5C, MacBook Touch ID",
+      "defaultName": "Passkey on {{device}}",
+      "defaultNameNoDevice": "Passkey",
       "registering": "Completing ceremony…",
       "registered": "Passkey registered.",
       "registerFailed": "Registration failed. Your browser may not support WebAuthn or the ceremony was cancelled.",
@@ -597,10 +591,6 @@
     }
   },
   "empty": {
-    "cryptoInventory": {
-      "title": "No cryptographic assets inventoried",
-      "description": "This build declares the TLS and post-quantum posture contract without serving it; a pending-contract notice replaces this panel until it answers."
-    },
     "externalKeys": {
       "title": "No external key references reported yet",
       "description": "No customer-managed encryption keys were reported for this organization. The inventory was read successfully — this is a real zero, not a missing backend."
@@ -643,6 +633,22 @@
     "policyEnable": "Require for administrators",
     "policyConfirmOn": "Confirm: require",
     "policyDisable": "Turn off",
-    "policyAal3Note": "Changing this policy needs an AAL3 session. Accounts without a factor are sent to enrollment at their next login — never locked out."
+    "policyAal3Note": "Accounts without a code are asked to set one up at their next sign-in; they are never locked out."
+  },
+  "stepUpPolicy": {
+    "title": "Extra check for administrative actions",
+    "description": "Off by default. Turn it on to ask for an authenticator code or a passkey before administrative changes such as users, identity providers, secrets or tool installs.",
+    "options": {
+      "none": "Off",
+      "totp": "Authenticator code",
+      "passkey": "Passkey"
+    },
+    "saved": "Saved.",
+    "loadFailed": "This setting could not be read. Refresh the page to try again.",
+    "note": "To require a passkey, sign in with your passkey here first. To require an authenticator code, sign in with your code first. You can always turn it off. A change takes effect within a few seconds on every server.",
+    "refused": {
+      "passkey_not_enrolled": "Add a passkey to your account first (Identity > Passkeys), then turn this on.",
+      "totp_sign_in_required": "Set up an authenticator app and sign in with its code first, then turn this on."
+    }
   }
 }

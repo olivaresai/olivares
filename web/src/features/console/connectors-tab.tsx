@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Cable,
@@ -25,7 +26,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -468,7 +469,10 @@ function ConnectorsTabBody({ scope }: { scope: string }) {
           {t('console:connectors.sourcesUnavailable')}
         </p>
       ) : rosterAdmission === 'failed' ? (
-        <ErrorState retry={() => void sources.refetch()} />
+        <QueryErrorState
+          error={sources.error}
+          retry={() => void sources.refetch()}
+        />
       ) : rows.length === 0 ? (
         <EmptyState
           title={t('console:connectors.none')}
@@ -631,7 +635,8 @@ function ConnectorsTabBody({ scope }: { scope: string }) {
         // A 5xx on the catalog is a genuine failure of THIS half and says so, with a
         // retry for this half alone. It does not revoke the roster, and the roster's
         // own failure does not borrow this title.
-        <ErrorState
+        <QueryErrorState
+          error={catalog.error}
           title={t('console:connectors.catalogError')}
           retry={() => void catalog.refetch()}
         />

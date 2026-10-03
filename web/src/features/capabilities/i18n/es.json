@@ -225,7 +225,8 @@
     },
     "server": {
       "title": "Aún no se han descubierto servidores MCP",
-      "description": "Los servidores MCP aparecen cuando las observaciones de los conectores los identifican en el inventario del tenant."
+      "description": "Los servidores MCP aparecen cuando las observaciones de los conectores los identifican en el inventario del tenant.",
+      "action": "Añade o prueba un servidor en Servidores MCP"
     },
     "skill": {
       "title": "Sin skills descubiertas",

@@ -106,7 +106,7 @@
   },
   "decisions": {
     "title": "Decisiones",
-    "subtitle": "El registro de decisiones append-only y su proyección de estado actual.",
+    "subtitle": "Cada decisión tal como se registró, y las que están en vigor ahora.",
     "view": {
       "effective": "Vigentes",
       "revoked": "Revocadas",
@@ -125,11 +125,11 @@
     "empty": {
       "effective": {
         "title": "Ninguna decisión vigente",
-        "body": "El motor leyó la proyección de estado actual y no encontró ninguna vigente."
+        "body": "No hay ninguna decisión en vigor."
       },
       "revoked": {
         "title": "Ninguna decisión revocada",
-        "body": "El motor leyó la proyección de estado actual y no encontró ninguna revocada."
+        "body": "No se ha revocado ninguna decisión."
       },
       "history": {
         "title": "Sin decisiones registradas",
@@ -175,12 +175,12 @@
   },
   "items": {
     "title": "Unidades de trabajo",
-    "subtitle": "Los filtros estrechan el almacén entero, no solo la página que estás viendo.",
+    "subtitle": "Los filtros buscan en todas las unidades de trabajo, no solo en esta página.",
     "empty": {
       "title": "Ninguna unidad coincide",
-      "body": "Nada en el almacén coincide con estos filtros. Es una respuesta real y completa: el motor leyó el almacén y no encontró ninguna.",
+      "body": "Ninguna unidad de trabajo coincide con estos filtros.",
       "allTitle": "Aún no hay unidades de trabajo",
-      "allBody": "Las unidades de trabajo aparecen aquí conforme las registran las sesiones, los agentes y los operadores. Es una respuesta real y completa: el motor leyó el almacén y no encontró ninguna.",
+      "allBody": "Las unidades de trabajo aparecen aquí a medida que las sesiones, los agentes y las personas las registran.",
       "start": "Iniciar una sesión"
     }
   },
@@ -228,7 +228,7 @@
     "error": "Flujo interrumpido",
     "unavailableBody": "La lista en pantalla puede estar desactualizada y nada más te lo va a advertir. Actualiza para leer el almacén directamente."
   },
-  "subtitle": "El backlog durable entre sesiones: unidades de trabajo, propiedad, dependencias, criterios de aceptación y decisiones. Todo cambio se planifica antes de aplicarse.",
+  "subtitle": "Trabajo que comparten las sesiones y las personas: unidades, responsables, dependencias, criterios de aceptación y decisiones. Cada cambio se muestra antes de aplicarse.",
   "tabs": {
     "items": "Unidades de trabajo",
     "decisions": "Decisiones"
@@ -276,6 +276,7 @@
     "noPermission": "Tu rol no puede ofrecer un traspaso. Ese acto exige sessions:message-send:write."
   },
   "url": {
-    "invalidItem": "La dirección nombra un identificador de ítem que esta pantalla no puede usar, así que se ignoró."
+    "invalidItem": "La dirección nombra un identificador de ítem que esta pantalla no puede usar, así que se ignoró.",
+    "invalidFilter": "La dirección indica un filtro que esta pantalla no ofrece, así que se muestran todos los elementos."
   }
 }

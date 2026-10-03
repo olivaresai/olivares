@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 	"unicode"
@@ -49,6 +50,9 @@ type authClientFlags struct {
 	pins           []string
 	insecure       bool
 	timeout        time.Duration
+	// localOrigin is set when no server was given anywhere and resolve() used the
+	// engine this host's data directory recorded (localEngine).
+	localOrigin string
 }
 
 type authWhoamiResponse struct {
@@ -126,13 +130,14 @@ type authUseContextResult struct {
 func newAuthCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "auth",
-		Short: "Manage CLI authentication and named client contexts",
-		Long: "Manage credentials and kubeconfig-style client contexts for remote control planes.\n\n" +
+		Short: "Sign-in details: status, saved contexts, first-boot setup",
+		Long: "Manage credentials and saved sign-ins (contexts) for engines.\n\n" +
 			"Client values resolve in this order: explicit flag > OLIVARES_SERVER_URL,\n" +
 			"OLIVARES_TOKEN, or OLIVARES_TENANT environment variable > current context in\n" +
 			"~/.config/olivares/config.yaml. The use-context command lives under auth because\n" +
 			"the existing top-level config command manages engine configuration, not CLI state.",
-		Example: `  olivares auth login --server https://plane.example.com --token "$OLIVARES_TOKEN"
+		Example: `  olivares login
+  olivares auth login --server https://olivares.example.com --token-file ./token
   olivares auth status
   olivares auth use-context production`,
 	}
@@ -286,17 +291,22 @@ func newAuthLoginCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "login",
-		Short: "Validate a credential and save it in a client context",
-		Long: "Validate the effective credential with GET /v1/auth/whoami, then create or\n" +
-			"update a named client context and select it. No credential is saved unless the\n" +
-			"server accepts it. The default context name is the server hostname.\n\n" +
-			"Two credentials are accepted, and they are different things. --token is an existing\n" +
-			"bearer (an API token, or a session you already hold). --email with --password-file\n" +
-			"exchanges a password for a fresh SESSION — the browser-free equivalent of signing in,\n" +
-			"and the only way to use the account `olivares auth bootstrap` just created.",
-		Example: `  olivares auth login --server https://plane.example.com --token "$OLIVARES_TOKEN" --tenant tenant-a
-  olivares auth login --server https://plane.example.com --email admin@example.com --password-file ./admin.pw
-  olivares auth login --server https://lab.example.com --token "$LAB_TOKEN" --context lab --ca-cert ./lab-ca.pem`,
+		Short: "Sign in to an engine and keep the sign-in for the next commands",
+		Long: "Sign in and save the sign-in as a client context that the next commands use.\n" +
+			"On the engine's own host, run it with no flags: it finds the engine and its\n" +
+			"certificate, and asks for your email and password.\n\n" +
+			"For another engine, pass --server: it asks the same, or only for the password when you\n" +
+			"pass --email. A self-signed engine also needs --ca-cert <its tls.crt> or --pin-sha256 <pin>\n" +
+			"(the engine logs the pin when it starts; server-info carries it as tls_pin_sha256).\n" +
+			"Scripts sign in with --email and --password-file, or with an API token (--token-file).\n" +
+			"Nothing is saved unless the engine accepts the credential; the context is named\n" +
+			"after the server's host unless you pass --context.\n\n" +
+			"Every command also takes --server, --tenant, --token-file, --ca-cert, --pin-sha256,\n" +
+			"--insecure and --timeout, as listed below, to reach an engine without a saved sign-in\n" +
+			"(scripts). They are not repeated in each command's help.",
+		Example: `  olivares login
+  olivares login --server https://olivares.example.com --email ana@example.com
+  olivares login --server https://olivares.example.com --token-file ./token --context prod`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			resolved, err := flags.resolve(cmd)
@@ -304,7 +314,11 @@ func newAuthLoginCmd() *cobra.Command {
 				return redactCoded(err, flags.effectiveToken())
 			}
 			if resolved.Server == "" {
-				return errors.New("no server: set --server, OLIVARES_SERVER_URL, or an active client context")
+				return sentence(exitcode.Usage,
+					"No engine found on this machine. Give its address: olivares login --server https://<host>:8443")
+			}
+			if flags.localOrigin != "" {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Using the engine on this machine: %s\n", flags.localOrigin)
 			}
 			// The password leg. It runs only when the operator asked for it, so the
 			// bearer-token path above and below is byte-for-byte the one it always
@@ -312,6 +326,29 @@ func newAuthLoginCmd() *cobra.Command {
 			password, pwErr := resolveLoginPassword(cmd, password, passwordFile)
 			if pwErr != nil {
 				return pwErr
+			}
+			// A person at a terminal who gave --email is asked for its password; a script
+			// without a terminal keeps the refusal that names --password-file.
+			if strings.TrimSpace(email) != "" && password == "" {
+				pw, asked, perr := promptPassword(cmd)
+				if perr != nil {
+					return perr
+				}
+				if asked {
+					password = pw
+				}
+			}
+			// A person at a terminal who passed no credential is asked for one.
+			// Scripts, and anyone who set OLIVARES_TOKEN, keep the flag paths below.
+			if email == "" && password == "" && !cmd.Flags().Changed("token") &&
+				flags.tokenFile == "" && os.Getenv("OLIVARES_TOKEN") == "" {
+				e, p, asked, perr := promptCredentials(cmd)
+				if perr != nil {
+					return perr
+				}
+				if asked {
+					email, password = e, p
+				}
 			}
 			identityExchanged := false
 			if strings.TrimSpace(email) != "" || password != "" {
@@ -377,7 +414,7 @@ func newAuthLoginCmd() *cobra.Command {
 			}
 			insecureNotPersisted := flags.insecure && resolved.CACert == "" && len(resolved.PinSHA256) == 0
 			if err = renderOut(cmd, func(out io.Writer) error {
-				_, werr := fmt.Fprintf(out, "login validated; current context set to %q\n", safeCLIValue(name, resolved.Token))
+				_, werr := fmt.Fprintf(out, "Saved as context %q. The next commands use it.\n", safeCLIValue(name, resolved.Token))
 				return werr
 			}, authLoginResult{
 				Validated:            true,
@@ -426,6 +463,7 @@ func newAuthLoginCmd() *cobra.Command {
 		},
 	}
 	flags.add(cmd)
+	showConnectionFlags(cmd.Flags())
 	cmd.Flags().StringVar(&contextName, "context", "", "context name to create or update (default: server hostname)")
 	cmd.Flags().StringVar(&email, "email", "", "sign in with this account's password instead of a bearer token")
 	cmd.Flags().StringVar(&password, "password", "", "password for --email (prefer --password-file: this form is visible in the process table)")
@@ -487,10 +525,14 @@ func passwordLogin(cmd *cobra.Command, flags *authClientFlags, email, password s
 		return "", err
 	}
 	if session.Token == "" {
-		return "", exitcode.New(exitcode.Server, errors.New("the control plane accepted the password but returned no session"))
+		return "", exitcode.New(exitcode.Server, errors.New("the engine accepted the password but returned no session"))
 	}
-	fmt.Fprintf(cmd.ErrOrStderr(), "signed in as %s; the session expires at %s\n",
-		safeCLIValue(email, password), safeCLIValue(session.ExpiresAt, password))
+	until := session.ExpiresAt
+	if t, perr := time.Parse(time.RFC3339Nano, until); perr == nil {
+		until = t.UTC().Format("2006-01-02 15:04 UTC")
+	}
+	fmt.Fprintf(cmd.ErrOrStderr(), "Signed in as %s until %s.\n",
+		safeCLIValue(email, password), safeCLIValue(until, password))
 	return session.Token, nil
 }
 
@@ -581,7 +623,7 @@ func saveSessionContext(cmd *cobra.Command, flags *authClientFlags, contextName,
 	if err := writeCLIConfig(path, cfg); err != nil {
 		return redactCoded(err, resolved.Token)
 	}
-	_, err = fmt.Fprintf(cmd.ErrOrStderr(), "current context set to %q (tenant %s)\n",
+	_, err = fmt.Fprintf(cmd.ErrOrStderr(), "Saved as context %q (tenant %s). The next commands use it.\n",
 		safeCLIValue(name, resolved.Token), safeCLIValue(resolved.Tenant, resolved.Token))
 	return err
 }
@@ -593,7 +635,7 @@ func newAuthLogoutCmd() *cobra.Command {
 	)
 	cmd := &cobra.Command{
 		Use:   "logout",
-		Short: "Remove a saved token from a client context",
+		Short: "Sign out: remove the saved sign-in from this computer",
 		Long: "Remove the token from the selected or named client context while preserving its\n" +
 			"server, tenant and TLS trust settings. Pass --purge to delete the whole context;\n" +
 			"purging the current context leaves no context selected.",
@@ -611,7 +653,8 @@ func newAuthLogoutCmd() *cobra.Command {
 				name = cfg.CurrentContext
 			}
 			if name == "" {
-				return errors.New("no client context selected; pass --context")
+				// The same lead and exit code as every "not signed in" refusal.
+				return sentence(exitcode.Usage, "Not signed in: there is no saved sign-in to remove.")
 			}
 			if purge {
 				if !cfg.removeContext(name) {
@@ -657,7 +700,7 @@ func newAuthStatusCmd() *cobra.Command {
 			"print the actor, effective tenant, role, server and active context. The bearer\n" +
 			"token is always redacted and is never written in full to command output.",
 		Example: `  olivares auth status
-  olivares auth status --server https://plane.example.com --token "$OLIVARES_TOKEN" --tenant tenant-a`,
+  olivares auth status --server https://olivares.example.com --token-file ./token --tenant tenant-a`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			resolved, err := flags.resolve(cmd)
@@ -665,10 +708,10 @@ func newAuthStatusCmd() *cobra.Command {
 				return redactCoded(err, flags.effectiveToken())
 			}
 			if resolved.Server == "" {
-				return errors.New("no server: set --server, OLIVARES_SERVER_URL, or an active client context")
+				return notSignedIn("--server", "OLIVARES_SERVER_URL")
 			}
 			if resolved.Token == "" {
-				return errors.New("no token: set --token, OLIVARES_TOKEN, or a token in the active client context")
+				return notSignedIn("--token-file", "OLIVARES_TOKEN")
 			}
 			whoami, err := fetchAuthWhoami(cmd.Context(), resolved, &flags, cmd.ErrOrStderr())
 			if err != nil {
@@ -733,7 +776,7 @@ func newAuthUseContextCmd() *cobra.Command {
 		Short: "Select the current CLI client context",
 		Long: "Select a named client context for subsequent commands. This command is intentionally\n" +
 			"under auth: the top-level `olivares config` tree owns engine configuration and\n" +
-			"cannot also represent kubeconfig-style client state without a command collision.",
+			"cannot also represent saved sign-in state without a command collision.",
 		Example: "  olivares auth use-context production",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -758,7 +801,7 @@ func newAuthUseContextCmd() *cobra.Command {
 }
 
 func (f *authClientFlags) add(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&f.server, "server", "", "control-plane base URL (default $OLIVARES_SERVER_URL, then current context)")
+	cmd.Flags().StringVar(&f.server, "server", "", "the engine's address, https://<host>:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in)")
 	cmd.Flags().StringVar(&f.token, "token", "", "API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context)")
 	cmd.Flags().StringVar(&f.tokenFile, "token-file", "", "read the API bearer token from a file, or - for stdin")
 	cmd.Flags().BoolVar(&f.allowCleartext, "allow-cleartext", false, "allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable)")
@@ -767,6 +810,7 @@ func (f *authClientFlags) add(cmd *cobra.Command) {
 	cmd.Flags().StringArrayVar(&f.pins, "pin-sha256", nil, "trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context)")
 	cmd.Flags().BoolVar(&f.insecure, "insecure", false, "skip TLS certificate verification (DANGEROUS; development only)")
 	cmd.Flags().DurationVar(&f.timeout, "timeout", defaultCLIRequestTimeout, "request timeout")
+	hideConnectionFlags(cmd.Flags())
 }
 
 // resolutionOptions builds the resolution inputs for one command invocation. It
@@ -775,19 +819,9 @@ func (f *authClientFlags) add(cmd *cobra.Command) {
 // falling back to the environment: that would answer "the file you named is
 // unreadable" by silently using a different credential.
 func (f *authClientFlags) resolutionOptions(cmd *cobra.Command) (cliResolutionOptions, error) {
-	token, tokenExplicit := f.token, cmd.Flags().Changed("token")
-	if f.tokenFile != "" {
-		if tokenExplicit && f.token != "" {
-			return cliResolutionOptions{}, exitcode.New(exitcode.Usage, errors.New(
-				"--token and --token-file are two spellings of one credential; pass one of them"))
-		}
-		value, err := f.readTokenFile(cmd)
-		if err != nil {
-			return cliResolutionOptions{}, err
-		}
-		token, tokenExplicit = value, true
-	} else if tokenExplicit && f.token != "" {
-		f.warnTokenInArgv(cmd)
+	token, tokenExplicit, err := f.resolveToken(cmd)
+	if err != nil {
+		return cliResolutionOptions{}, err
 	}
 	return cliResolutionOptions{
 		Server:         f.server,
@@ -803,6 +837,25 @@ func (f *authClientFlags) resolutionOptions(cmd *cobra.Command) (cliResolutionOp
 	}, nil
 }
 
+// resolveToken shares file/stdin caching and explicit-token precedence across CLI clients.
+func (f *authClientFlags) resolveToken(cmd *cobra.Command) (string, bool, error) {
+	token, tokenExplicit := f.token, cmd.Flags().Changed("token")
+	if f.tokenFile != "" {
+		if tokenExplicit && f.token != "" {
+			return "", false, exitcode.New(exitcode.Usage, errors.New(
+				"--token and --token-file are two spellings of one credential; pass one of them"))
+		}
+		value, err := f.readTokenFile(cmd)
+		if err != nil {
+			return "", false, err
+		}
+		token, tokenExplicit = value, true
+	} else if tokenExplicit && f.token != "" {
+		f.warnTokenInArgv(cmd)
+	}
+	return token, tokenExplicit, nil
+}
+
 // resolve is resolutionOptions + resolveCLIConfig, the pair every caller needs.
 // It exists so that a new fallible step in the resolution (the token file, today)
 // is added in ONE place instead of at nine call sites that could each forget it.
@@ -811,7 +864,26 @@ func (f *authClientFlags) resolve(cmd *cobra.Command) (cliResolvedConfig, error)
 	if err != nil {
 		return cliResolvedConfig{}, err
 	}
-	return resolveCLIConfig(opts)
+	resolved, err := resolveCLIConfig(opts)
+	if err != nil {
+		return resolved, err
+	}
+	return f.withLocalEngine(resolved, opts), nil
+}
+
+// withLocalEngine fills an unresolved server with the engine on this host, trusted
+// through the certificate it generated unless a CA or a pin was given.
+func (f *authClientFlags) withLocalEngine(resolved cliResolvedConfig, opts cliResolutionOptions) cliResolvedConfig {
+	if resolved.Server != "" || opts.ServerExplicit {
+		return resolved
+	}
+	if origin, crt := localEngine(); origin != "" {
+		resolved.Server, f.localOrigin = origin, origin
+		if resolved.CACert == "" && len(resolved.PinSHA256) == 0 {
+			resolved.CACert = crt
+		}
+	}
+	return resolved
 }
 
 func (f *authClientFlags) readTokenFile(cmd *cobra.Command) (string, error) {
@@ -846,6 +918,9 @@ func (f *authClientFlags) readTokenFile(cmd *cobra.Command) (string, error) {
 // It is a warning and not a refusal because a bearer in argv is a real, sometimes
 // unavoidable workflow, and because stderr is where this belongs: stdout stays
 // machine-readable and the exit code is untouched.
+//
+// --token is deprecated (CLI audit of 09b): no help lists it, login's included, and
+// this line says so. It keeps working; --token-file is the form the CLI documents.
 func (f *authClientFlags) warnTokenInArgv(cmd *cobra.Command) {
 	if f.warnedTokenArgv {
 		return
@@ -860,8 +935,8 @@ func (f *authClientFlags) warnTokenInArgv(cmd *cobra.Command) {
 // may now legitimately appear there. Naming it keeps that test an exact-match
 // assertion — strictly stronger than the "want empty" it replaced for that input —
 // instead of a substring check that any rewording would quietly loosen.
-const cliTokenArgvWarning = "WARNING: --token puts the bearer in this host's process table " +
-	"and in your shell history; prefer --token-file <file> (or - for stdin)"
+const cliTokenArgvWarning = "WARNING: --token is deprecated: it puts the bearer in this host's process table " +
+	"and in your shell history; use --token-file <file> (or - for stdin)"
 
 // effectiveToken is the bearer this invocation will actually send, as far as the
 // FLAGS know it. Redaction helpers take it so that a token read from a file is

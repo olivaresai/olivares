@@ -8,16 +8,17 @@ description: >-
 ---
 
 This guide is for engineers and SREs putting the Olivares AI control plane into
-production with Docker. The whole product is a single distroless image — the engine
+production with Docker. The whole product is a single image — the engine
 with the web UI embedded — so a single host can run the SQLite topology with no
 external dependencies, and a Postgres override gives you the multi-tenant topology
-when you need it. Every path keeps the same secure defaults: no default credentials,
+when you need it. Container images are based on Debian 13 slim (with Node.js 24 for the agent
+tools) and run as a non-root user. Every path keeps the same secure defaults: no default credentials,
 a one-time setup token and TLS on by default. The host port is published on every
 interface, because this is a server — restrict it deliberately, as shown below.
 
-:::note[Beta — images published for 26.10.0]
-Olivares AI is **beta**. The image coordinates below resolve: release `26.10.0` published them to
-Docker Hub and `ghcr.io` (install-surface witness `docs/releases/26.10.0-install-surfaces.json`).
+:::note[Beta — images published for 26.10.1]
+Olivares AI is **beta**. The image coordinates below resolve: release `26.10.1` published them to
+Docker Hub and `ghcr.io` (install-surface witness `docs/releases/26.10.1-install-surfaces.json`).
 Treat this as the deployment shape you will use, not a production-ready guarantee.
 :::
 
@@ -31,7 +32,7 @@ the Kubernetes/Helm path below.
 The official container pull is **Docker Hub**:
 
 ```bash
-docker pull docker.io/olivaresai/olivares:26.10.0
+docker pull docker.io/olivaresai/olivares:26.10.1
 ```
 
 The same content is also published to `ghcr.io/olivaresai/olivares` — identical by digest,
@@ -39,7 +40,7 @@ and used as the build registry and the fallback. Docker Hub rate-limits **anonym
 pulls; ghcr.io does not rate-limit anonymous pulls of public images, so `docker login`
 or the ghcr.io coordinate is the way out if a CI node or a large fleet hits the ceiling.
 Tags carry **no leading `v`**:
-`:26.10.0` pins a release, `:latest` floats, and `:26.10.0-fips` / `:26.10.0-stig` are
+`:26.10.1` pins a release, `:latest` floats, and `:26.10.1-fips` / `:26.10.1-stig` are
 the hardened variants. The base and `:latest` tags are multi-arch
 (`linux/amd64`, `linux/arm64`); `fips`/`stig` are `amd64`-only.
 
@@ -50,14 +51,14 @@ Docker Hub by `cosign copy`, so the digest is the same:
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.10.0")"
+DIGEST="$(crane digest "$IMAGE:26.10.1")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type spdxjson \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -86,7 +87,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:26.10.0 \
+  docker.io/olivaresai/olivares:26.10.1 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -96,7 +97,7 @@ docker run -d --name olivares \
 
 | Flag | Why |
 |---|---|
-| `--user 65532:65532` | run as the non-root `nonroot` UID baked into the distroless image |
+| `--user 65532:65532` | run as the non-root `nonroot` UID baked into the image |
 | `--read-only` | the root filesystem is immutable; only the data volume and `/tmp` are writable |
 | `--tmpfs /tmp` | a writable scratch tmpfs, required because the rootfs is read-only |
 | `--cap-drop ALL` | the engine needs no Linux capabilities |
@@ -124,7 +125,7 @@ or your own TLS material. The token is shown **once** and is single-use.
 
 The repository ships a Compose stack that wires the volume, the published ports and the
 same hardening flags as above. The engine's container is named `olivares`, so the
-commands below are one argv each — the image is distroless and has no shell:
+commands below are one argv each and need no shell in the image:
 
 ```bash
 docker compose -f deploy/compose/docker-compose.yml up -d
@@ -181,7 +182,7 @@ image**, then run the one-shot `backup` profile:
 
 ```bash
 printf 'a strong DR passphrase' > deploy/compose/dr-pass
-# the host stamps the bundle name (the distroless image has no `date`):
+# the host stamps the bundle name:
 BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
@@ -189,7 +190,7 @@ docker compose -f deploy/compose/docker-compose.yml \
 ```
 
 The job shares the engine's data volume, writes the bundle to the `olivares-backups`
-volume, and — because the image is distroless — leaves retention to the host: prune old
+volume, and leaves retention to the host: prune old
 bundles with a host cron (`find <backups> -name '*.drbundle' -mtime +14 -delete`). Wrap
 the run in host cron for a scheduled RPO and **mirror the `olivares-backups` volume
 offsite** — a same-host backup is not disaster recovery. Restore and verify with:
@@ -203,8 +204,8 @@ runbook; the higher-level walkthrough is [Back up and restore](/how-to/backup-an
 
 ## 5. Operating notes
 
-**Probe health from the host, not the container.** The image is **distroless** — it
-has no shell and no `curl`, so there is intentionally no in-container `HEALTHCHECK`.
+**Probe health from the host, not the container.** The image
+intentionally defines no in-container `HEALTHCHECK`.
 The engine exposes `/livez` and `/readyz` on the HTTPS port; probe them from the host
 (or your orchestrator):
 
@@ -299,7 +300,7 @@ image before recreating.
 
 ## 8. Pin by digest for production
 
-Mutable tags (`:26.10.0`, `:latest`) are for evaluation. In production, pin the
+Mutable tags (`:26.10.1`, `:latest`) are for evaluation. In production, pin the
 **digest** you verified — a digest is immutable and is exactly what you signed off on:
 
 ```bash

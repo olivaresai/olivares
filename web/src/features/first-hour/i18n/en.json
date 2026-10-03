@@ -1,0 +1,101 @@
+{
+  "tools": {
+    "claude": "Claude Code",
+    "codex": "Codex",
+    "grok": "Grok Build"
+  },
+  "status": {
+    "installed": "Installed",
+    "notInstalled": "Not installed",
+    "signedIn": "Signed in",
+    "signedInAs": "Signed in as {{account}}",
+    "notSignedIn": "Not signed in",
+    "usesKey": "Uses your API key: {{name}}",
+    "usesLocal": "Uses the local model server: {{name}}",
+    "keyRefused": "The API key {{name}} was refused. Replace it under API keys.",
+    "keyUnchecked": "The API key {{name}} could not be checked. Test it under API keys."
+  },
+  "actions": {
+    "install": "Install",
+    "installing": "Installing…",
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "signInClaude": "Sign in with Claude",
+    "signInChatGPT": "Sign in with ChatGPT",
+    "useApiKey": "Use an API key instead",
+    "signInGrok": "Sign in with your xAI account"
+  },
+  "signIn": {
+    "openLink": "Open the sign-in page",
+    "codeLabel": "Code from the sign-in page",
+    "codeHint": "After you approve access, the page shows a code. Paste it here.",
+    "continue": "Continue",
+    "enterCode": "On the sign-in page, enter this code:",
+    "waiting": "Waiting for you to finish on the sign-in page…",
+    "expires": "The code works for 15 minutes. Cancel stops the sign-in on this server."
+  },
+  "errors": {
+    "status": "The tool's status could not be read.",
+    "install": "The install did not finish: {{error}}",
+    "signIn": "The sign-in did not complete. Start it again.",
+    "start": "The session did not start: {{error}}",
+    "needsApproval": "Running commands without asking needs a second person's approval on this deployment. Start with edits only instead:"
+  },
+  "steps": {
+    "install": {
+      "title": "Install an agent tool",
+      "body": "Olivares runs the official Claude Code or Codex on this server. One is enough."
+    },
+    "signIn": {
+      "title": "Sign it in",
+      "body": "Use your Claude or ChatGPT subscription. The login stays on this server, where the tool keeps it.",
+      "waiting": "Install a tool first."
+    },
+    "start": {
+      "title": "Start a session",
+      "body": "Pick a folder and, if you like, say what to do first."
+    },
+    "progress": "{{done}} of 3 done"
+  },
+  "start": {
+    "tool": "Tool",
+    "notReady": "{{tool}} cannot start yet.",
+    "folder": "Folder",
+    "folderHint": "A folder on this server. Leave it empty to start in a new folder.",
+    "prompt": "First message (optional)",
+    "promptPlaceholder": "What should it do first?",
+    "more": "More options",
+    "permission": "What the agent may do",
+    "start": "Start",
+    "starting": "Starting…",
+    "needTool": "Install and sign in a tool first.",
+    "dialogTitle": "New session",
+    "dialogDescription": "Choose a folder and say what to do.",
+    "advanced": "Advanced launch options",
+    "secrets": "Secrets as environment variables",
+    "secretsHint": "The session reads each chosen vault secret from the variable you name. The value is never shown, logged or written to the folder.",
+    "secretsNone": "No session secrets yet. Add one with a name that begins with env/.",
+    "secretUse": "Give this session {{name}}",
+    "secretVariable": "Variable for {{name}}",
+    "secretsManage": "Manage session secrets",
+    "openTools": "Open AI tools"
+  },
+  "permission": {
+    "editsOnly": "Edit files only",
+    "editsAndCommands": "Edit files and run commands",
+    "readOnly": "Read only",
+    "ask": "Ask before each action"
+  },
+  "next": {
+    "title": "Next, when you need them",
+    "invite": "Invite people",
+    "identity": "Connect an identity provider",
+    "policies": "Set policies",
+    "mcp": "Add MCP servers",
+    "budgets": "Set budgets",
+    "cli": "Use the olivares command line",
+    "cliHint": "On this server, the olivares command is already installed. From another computer, install it with:",
+    "copy": "Copy",
+    "copied": "Copied"
+  }
+}

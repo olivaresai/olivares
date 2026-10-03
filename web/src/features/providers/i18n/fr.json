@@ -36,7 +36,7 @@
     "openai": "Codex. Injecte OPENAI_API_KEY.",
     "xai": "Grok. Injecte XAI_API_KEY.",
     "openai_compatible": "Tout point de terminaison de forme OpenAI. Injecte OPENAI_API_KEY et OPENAI_BASE_URL ; le point de terminaison est obligatoire.",
-    "ollama": "Modèles locaux pour Codex. Sans clé API. Utilisez le point de terminaison natif Ollama ; le test lit les métadonnées des modèles."
+    "ollama": "Modèles locaux pour OpenCode. Sans clé API. Utilisez le point de terminaison natif Ollama ; le test lit les métadonnées des modèles."
   },
   "states": {
     "active": "Actif",
@@ -88,7 +88,8 @@
     "success": "Fournisseur enregistré. Testez la connexion pour confirmer qu'il fonctionne.",
     "testNext": "Tester la connexion maintenant",
     "registering": "Enregistrement…",
-    "localNameHint": "Votre nom pour ce point de terminaison. Il apparaît dans le sélecteur."
+    "localNameHint": "Votre nom pour ce point de terminaison. Il apparaît dans le sélecteur.",
+    "advanced": "Advanced: custom endpoint"
   },
   "rotate": {
     "title": "Changer la clé de ce fournisseur",
@@ -121,11 +122,6 @@
   "vaultUnavailable": {
     "title": "Ce déploiement ne peut pas stocker un identifiant de fournisseur",
     "description": "Aucun coffre scellé n'est câblé, donc le moteur refuse de stocker une clé plutôt que d'en stocker une qu'il ne peut pas protéger. Une personne administratrice doit configurer le scelleur de secrets."
-  },
-  "next": {
-    "title": "Ensuite : déployez un agent",
-    "description": "Un fournisseur enregistré ne lance aucune session à lui seul. Liez-le à un profil de fournisseur pour que les nouvelles sessions l’utilisent.",
-    "action": "Aller aux profils de fournisseur"
   },
   "truncation": {
     "label": "{{n}} fournisseurs affichés ; il y en a d’autres",

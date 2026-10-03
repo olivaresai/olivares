@@ -114,5 +114,5 @@ func (p *notifyPump) runOnce(ctx context.Context) error {
 // businessTenants enumerates the orgs to pump. The reserved SYSTEM tenant is skipped
 // deliberately (notify routes on tenant-scoped findings/approvals, like eventing).
 func (p *notifyPump) businessTenants(ctx context.Context) ([]model.TenantID, error) {
-	return servedBusinessTenants(ctx, p.st)
+	return servedWorkTenants(ctx, p.st)
 }

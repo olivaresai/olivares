@@ -347,6 +347,20 @@ type AuthPolicy struct {
 	// of any tenant) to hold a confirmed TOTP factor: a password login without
 	// one must enrol before it completes.
 	RequireTOTPAdmins bool
+	// AdminStepUp is what administrative actions demand beyond the sign-in:
+	// "none" (also the empty value of an older row), "totp" or "passkey".
+	// core/auth/stepup_policy.go owns the meaning.
+	AdminStepUp string
+}
+
+// DeploymentSettings is the deployment's product settings singleton: one row in
+// the system tenant holding a JSON document (the edition activation today). It is
+// the source of truth; each node keeps a file copy for the part of boot that runs
+// before the store opens (cmd/olivares/productsettings.go).
+type DeploymentSettings struct {
+	BaseFields
+	// Doc is the settings document, JSON.
+	Doc string
 }
 
 // APIToken is a programmatic credential (CLI, Terraform provider, MCP). Like a

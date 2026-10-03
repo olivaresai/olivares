@@ -190,81 +190,13 @@ case "$init" in
   openrc) case "$binary$data_dir$config" in *' '*) err "openrc paths may not contain spaces" ;; esac ;;
   systemd) case "$binary$config" in *' '*) err "systemd binary and config paths may not contain spaces" ;; esac ;;
 esac
-# SYSTEMD_BIND_MIN — the first systemd release in which a BindPaths= destination is
-# created by systemd itself, which is what makes a bind mount under /tmp or /var/tmp
-# work together with PrivateTmp=. Upstream commit a227a4be489333b1b149df124ab284d82397ff2d
-# ("namespace: if we can create the destination of bind and PrivateTmp= mounts",
-# 2017-09-28) says so in its own message: "we can use namespace bind mounts on dirs in
-# /tmp or /var/tmp even in conjunction with PrivateTmp=". Measured against the official
-# repository on 2026-09-05: that commit is an ancestor of v235 and is NOT contained in
-# v234, and the maintainer closed systemd#7272 by pointing at it.
-SYSTEMD_BIND_MIN=235
-# systemd_major — the running manager's major version, or nothing when it cannot be
-# read. `systemctl --version` prints "systemd 257 (257.13-1~deb13u1)" on its first line.
-# Absence is not treated as a failure: a staging root (--root) has no manager at all,
-# and this adapter must stay usable for image builds.
-systemd_major() {
-  have systemctl || return 0
-  systemctl --version 2>/dev/null | awk 'NR == 1 && $2 ~ /^[0-9]+$/ { print $2; exit }'
-}
-# bind_safe <path> <what> — a path that has to be re-exposed with BindPaths= may not
-# contain ":": systemd reads that value as source:destination[:options], so a colon in
-# the path would silently bind somewhere else. Only the two locations that need a bind
-# are checked, so a colon stays admissible everywhere it is inert.
-bind_safe() {
-  case "$1" in
-    *:*) err "$2 $1 contains ':' and this location can only be reached with BindPaths=, whose value uses ':' to separate source from destination; choose a path without it" ;;
-  esac
-}
-# sandbox_access <path> — how the hardened systemd unit can reach a directory.
-#   plain          ReadWritePaths= re-exposes it under ProtectSystem=strict.
-#   protected-home ProtectHome=true masks /home, /root and /run/user entirely, so the
-#                  unit switches to ProtectHome=tmpfs and binds exactly this path
-#                  (the systemd-documented pairing); other homes stay hidden.
-#   private-tmp    PrivateTmp=true replaces /tmp and /var/tmp with private ones, so a
-#                  directory there is NOT visible by default. BindPaths=<dir> mounts the
-#                  host's directory into that private tree, and only it — the rest of
-#                  the host's /tmp stays hidden. See SYSTEMD_BIND_MIN above for the
-#                  version this needs and docs/RELEASE-INSTALLER.md for what has and has
-#                  not been verified on a live manager.
-#   api-fs         /dev, /proc and /sys hold kernel and device interfaces, not durable
-#                  state, and the hardening (PrivateDevices=, ProtectKernelTunables=,
-#                  ProtectControlGroups=) replaces or read-only-mounts what the service
-#                  would see there. Refused: a data directory whose tree a purge removes
-#                  does not belong on one.
-#
-# ⛔ THIS TABLE SAID, UNTIL 2026-09-05, THAT NO DIRECTIVE COULD RE-EXPOSE THE HOST'S
-# /tmp AND REFUSED THE LOCATION ON THAT GROUND. The claim was false, and an
-# untested assumption stated as an impossibility is worse than an unsupported
-# option: it turned an adapter's debt into a product veto.
-sandbox_access() {
-  case "$1" in
-    /home|/home/*|/root|/root/*|/run/user|/run/user/*) printf protected-home ;;
-    /tmp|/tmp/*|/var/tmp|/var/tmp/*) printf private-tmp ;;
-    /dev|/dev/*|/proc|/proc/*|/sys|/sys/*) printf api-fs ;;
-    *) printf plain ;;
-  esac
-}
-data_access=plain
-if [ "$init" = systemd ]; then
-  data_access="$(sandbox_access "$data_dir")"
-  # A user service gets the SAME private /tmp from the shared template, so the bind is
-  # rendered for it too. The other classes stay system-only on purpose: ProtectHome= is
-  # not applied in user mode (the default user data directory lives under the operator's
-  # own home, and binding it would be a change of behaviour with no defect behind it),
-  # and widening the API-file-system refusal to user mode would refuse something this
-  # adapter accepts today, outside what the review asked for.
-  if [ "$mode" != system ] && [ "$data_access" != private-tmp ]; then data_access=plain; fi
-  case "$data_access" in
-    protected-home) bind_safe "$data_dir" "data directory" ;;
-    private-tmp)
-      bind_safe "$data_dir" "data directory"
-      running="$(systemd_major)"
-      if [ -n "$running" ] && [ "$running" -lt "$SYSTEMD_BIND_MIN" ]; then
-        err "data directory $data_dir is under /tmp or /var/tmp and this host runs systemd $running: creating a BindPaths= destination inside the private /tmp needs systemd $SYSTEMD_BIND_MIN or later (upstream a227a4be), so the service would see its own empty /tmp instead of $data_dir; choose a location outside /tmp and /var/tmp on this host"
-      fi
-      ;;
-    api-fs) err "data directory $data_dir is under an API file system (/dev, /proc, /sys): those hold kernel and device interfaces rather than durable state, and the hardened unit replaces or read-only-mounts what the service would see there; choose a real directory" ;;
+# Durable product state does not belong on kernel/device API filesystems.
+# Homes and temporary project folders remain visible; the product confines
+# session and MCP children to the folder selected for that session.
+if [ "$init" = systemd ] && [ "$mode" = system ]; then
+  case "$data_dir" in
+    /dev|/dev/*|/proc|/proc/*|/sys|/sys/*)
+      err "data directory $data_dir is under an API file system (/dev, /proc, /sys): choose a real directory" ;;
   esac
 fi
 # quote_unit renders a path for a systemd or OpenRC value: bare when it has
@@ -290,14 +222,10 @@ say "  mode: $mode"
 say "  init: $init"
 say "  binary: $binary"
 say "  config: $config (create only; existing files are preserved)"
-case "$data_access" in
-  protected-home) access_note=", protected-home: ProtectHome=tmpfs + BindPaths" ;;
-  private-tmp) access_note=", private-tmp: PrivateTmp=true + BindPaths" ;;
-  *) access_note="" ;;
+say "  data: $data_dir ($layout layout)"
+case "$data_dir" in
+  /tmp/*|/var/tmp/*) say "  note: /tmp and /var/tmp may be cleared on boot or on a timer; use a persistent data directory for a lasting installation." ;;
 esac
-say "  data: $data_dir ($layout layout$access_note)"
-[ "$data_access" != private-tmp ] ||
-  say "  note: $data_dir is under a shared temporary directory. The unit keeps PrivateTmp=true and binds exactly this directory into it, so the rest of the host's /tmp stays hidden from the service; but /tmp and /var/tmp are world-writable and many distributions clear them on boot or on a timer (systemd-tmpfiles), which would delete this estate under a running service."
 say "  unit: $unit"
 say "  start: $([ "$start" -eq 1 ] && printf explicit || printf no)"
 [ -z "$root_prefix" ] || say "  staging root: $root_prefix (no account or daemon mutation)"
@@ -440,13 +368,15 @@ else
 fi
 
 validate_config_names() {
+  config_line=0
   while IFS= read -r line || [ -n "$line" ]; do
-    case "$line" in ''|'#'*) continue ;; *=*) key=${line%%=*} ;; *) err "invalid config line (expected KEY=value; value redacted): ${line%%=*}" ;; esac
+    config_line=$((config_line + 1))
+    case "$line" in ''|'#'*) continue ;; *=*) key=${line%%=*} ;; *) err "invalid config line $config_line (expected KEY=value; value redacted)" ;; esac
     case "$key" in OLIVARES_EXTRA_ARGS) continue ;; esac
-    case "$key" in OLIVARES_*) ;; *) err "invalid config key: $key" ;; esac
-    case "$key" in *[!A-Z0-9_]*) err "invalid config key: $key" ;; esac
+    case "$key" in OLIVARES_*) ;; *) err "invalid config key at line $config_line (expected OLIVARES_ name; value redacted)" ;; esac
+    case "$key" in *[!A-Z0-9_]*) err "invalid config key at line $config_line (expected uppercase name; value redacted)" ;; esac
     env -i PATH="$PATH" HOME="${HOME:-/}" "$key=" "$binary_target" config validate >/dev/null 2>&1 ||
-      err "configuration contains an unrecognized key: $key"
+      err "configuration contains an unrecognized key: $key (line $config_line; value redacted)"
   done <"$config_target"
 }
 validate_config_names
@@ -469,15 +399,30 @@ elif [ "$mode" = user ] && [ -z "$root_prefix" ] && [ "$(stat_uid "$data_target"
   err "existing user data directory is not owned by the invoking uid"
 fi
 
+render_content() {
+  sed \
+    -e "s|@USER_LINE@|$user_line|g" \
+    -e "s|@GROUP_LINE@|$group_line|g" \
+    -e "s|@WANTED_BY@|$wanted_by|g" \
+    -e "s|@USER_KEY@|$user_key|g" \
+    -e "s|@BINARY@|$binary|g" \
+    -e "s|@DATA_DIR@|$data_value|g" \
+    -e "s|@CONFIG@|$config|g" \
+    -e "s|@PROGRAM@|$program|g" \
+    -e "s|@LOG_PATH@|$log_path|g" \
+    -e "s|@PROTECT_HOME@|$legacy_protect_home|g" \
+    -e "$legacy_bind_expr" \
+    "$1" > "$2"
+}
+
 render() {
   input="$1" output="$2" mode_bits="$3"
   user_line='# user service runs as the invoking account'
   group_line='# group is inherited from the invoking account'
-  protect_home=false
   wanted_by=default.target
   user_key='<!-- user agent runs as the logged-in account -->'
   if [ "$mode" = system ]; then
-    user_line="User=$account_name"; group_line="Group=$account_group"; protect_home=true
+    user_line="User=$account_name"; group_line="Group=$account_group"
     wanted_by=multi-user.target
     user_key="<key>UserName</key><string>$account_name</string>"
   fi
@@ -491,33 +436,33 @@ render() {
   tmp="$(mktemp "${TMPDIR:-/tmp}/olivares-service-render.XXXXXX")"
   data_value="$data_dir"
   [ "$init" = launchd ] || data_value="$(quote_unit "$data_dir")"
-  # The bind is what exposes the selected directory; ProtectHome=tmpfs is only for the
-  # home case. They are rendered independently: a data directory under /tmp needs the
-  # bind and must NOT relax ProtectHome, and the rest of the hardening is untouched in
-  # both cases.
-  bind_expr='/@BIND_PATHS@/d'
-  case "$data_access" in
-    protected-home) protect_home=tmpfs; bind_expr="s|@BIND_PATHS@|BindPaths=$data_value|" ;;
-    private-tmp) bind_expr="s|@BIND_PATHS@|BindPaths=$data_value|" ;;
-  esac
-  sed \
-    -e "s|@USER_LINE@|$user_line|g" \
-    -e "s|@GROUP_LINE@|$group_line|g" \
-    -e "s|@PROTECT_HOME@|$protect_home|g" \
-    -e "s|@WANTED_BY@|$wanted_by|g" \
-    -e "s|@USER_KEY@|$user_key|g" \
-    -e "s|@BINARY@|$binary|g" \
-    -e "s|@DATA_DIR@|$data_value|g" \
-    -e "s|@CONFIG@|$config|g" \
-    -e "s|@PROGRAM@|$program|g" \
-    -e "s|@LOG_PATH@|$log_path|g" \
-    -e "$bind_expr" \
-    "$input" >"$tmp"
+  # These two substitutions apply only to the retained 26.10 template used to
+  # recognize an unedited install. They do not change the new unit's policy.
+  legacy_protect_home=false
+  legacy_bind_expr='/@BIND_PATHS@/d'
+  if [ "$mode" = system ]; then
+    legacy_protect_home=true
+    case "$data_dir" in
+      /home/*|/root/*|/run/user/*) legacy_protect_home=tmpfs; legacy_bind_expr="s|@BIND_PATHS@|BindPaths=$data_value|" ;;
+    esac
+  fi
+  case "$data_dir" in /tmp/*|/var/tmp/*) legacy_bind_expr="s|@BIND_PATHS@|BindPaths=$data_value|" ;; esac
+  render_content "$input" "$tmp"
   if grep -Eq '@[A-Z_]+@' "$tmp"; then rm -f "$tmp"; err "unresolved service template marker"; fi
   if [ -e "$output" ]; then
     if same_bytes "$tmp" "$output"; then rm -f "$tmp"; chmod "$mode_bits" "$output"; return 0; fi
-    rm -f "$tmp"
-    err "refusing to replace existing service file: $output"
+    legacy_match=0
+    if [ "$init" = systemd ] && [ ! -L "$output" ] && [ -r "$templates/systemd-26.10.service" ]; then
+      old_tmp="$(mktemp "${TMPDIR:-/tmp}/olivares-service-legacy.XXXXXX")"
+      render_content "$templates/systemd-26.10.service" "$old_tmp"
+      if same_bytes "$old_tmp" "$output"; then legacy_match=1; fi
+      rm -f "$old_tmp"
+    fi
+    if [ "$legacy_match" -ne 1 ]; then
+      rm -f "$tmp"
+      err "refusing to replace existing service file: $output"
+    fi
+    say "  upgrading the unedited 26.10 service unit: $output"
   fi
   chmod "$mode_bits" "$tmp"
   mv "$tmp" "$output"
@@ -560,6 +505,10 @@ case "$init" in
     render "$templates/launchd.xml" "$unit_target" 0644
     ;;
 esac
+
+if [ "$init" = systemd ]; then
+  /bin/sh "$templates/migrate-agentops-dropin.sh" "$unit_target.d/agentops.conf"
+fi
 
 manifest_target="$data_target/install-manifest.json"
 manifest_logical="$data_dir/install-manifest.json"

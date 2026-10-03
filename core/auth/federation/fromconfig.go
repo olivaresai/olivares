@@ -26,10 +26,17 @@ import (
 func FromConfig(ctx context.Context, p auth.FederationParams) (auth.Federation, error) {
 	switch p.Protocol {
 	case auth.ProtocolOIDC:
-		return oidcFromParts(ctx, p.OIDCIssuer, p.OIDCClientID, p.OIDCClientSecret, p.OIDCGroupsClaim)
+		provider, err := oidcFromParts(ctx, p.OIDCIssuer, p.OIDCClientID, p.OIDCClientSecret, p.OIDCGroupsClaim)
+		if err != nil {
+			return nil, err
+		}
+		provider.oidc.assurance = assuranceMapping(p.AssuranceMapping)
+		provider.oidc.allowAMRCombination = p.AssuranceMapping == nil || p.AssuranceMapping.AMR == nil
+		return provider, nil
 	case auth.ProtocolSAML:
 		return samlFromParts(samlParts{
-			metaURL: p.SAMLMetadataURL, entityID: p.SAMLEntityID, acs: p.SAMLACSURL, idpSSO: p.SAMLIDPSSOURL,
+			assurance: p.AssuranceMapping,
+			metaURL:   p.SAMLMetadataURL, entityID: p.SAMLEntityID, acs: p.SAMLACSURL, idpSSO: p.SAMLIDPSSOURL,
 			encCertPEM: p.SAMLSPCertPEM, encKeyPEM: p.SAMLSPKeyPEM,
 			signCertPEM: p.SAMLSPSignCertPEM, signKeyPEM: p.SAMLSPSignKeyPEM,
 			emailAttr: p.SAMLEmailAttr, groupsAttr: p.SAMLGroupsAttr,

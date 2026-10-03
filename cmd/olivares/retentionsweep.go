@@ -49,6 +49,7 @@ type retentionSweepLoop struct {
 	comp     *compliance.Module
 	interval time.Duration
 	log      *slog.Logger
+	skips    enumerationSkips
 }
 
 // newRetentionSweepLoop builds the loop from the environment. nil when the
@@ -57,6 +58,9 @@ type retentionSweepLoop struct {
 // otherwise ALWAYS on: with no enabled purge schedules a pass is a cheap
 // no-op (the motor is inert until a tenant creates policies, §2).
 func newRetentionSweepLoop(getenv func(string) string, st store.Store, comp *compliance.Module, log *slog.Logger) *retentionSweepLoop {
+	if comp == nil {
+		return nil // the compliance module does not run on this node
+	}
 	interval, ok := retentionSweepInterval(getenv(retentionSweepIntervalEnv), log)
 	if !ok {
 		return nil
@@ -102,9 +106,10 @@ func (l *retentionSweepLoop) runOnce(ctx context.Context) error {
 	}
 	tenants, err := l.businessTenants(ctx)
 	if err != nil {
-		l.log.Warn("retention-sweep: cannot enumerate orgs; skipping this tick", "err", err)
+		l.skips.skip(l.log, "retention-sweep", err)
 		return nil
 	}
+	l.skips.listed(l.log, "retention-sweep")
 	for _, t := range tenants {
 		if err := ctx.Err(); err != nil {
 			return err

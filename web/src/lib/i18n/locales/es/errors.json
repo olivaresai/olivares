@@ -6,7 +6,11 @@
   },
   "forbidden": {
     "title": "Sin autorización",
-    "description": "No tienes permiso para ver esto. Solicita acceso a un administrador."
+    "description": "No tienes permiso para ver esto. Solicita acceso a un administrador.",
+    "accessTo": "No tienes acceso a {{subject}}.",
+    "accessToThis": "No tienes acceso a esto.",
+    "nextStep": "Tus roles o una política de grupo no lo permiten. Un propietario o administrador de esta organización puede concederlo.",
+    "deniedByPolicy": "La política «{{policy}}» lo deniega. Un propietario o administrador de esta organización puede cambiarla."
   },
   "serverError": {
     "title": "Algo ha salido mal",
@@ -38,11 +42,21 @@
     "locked_out": "Demasiados intentos. Inténtalo de nuevo en un momento.",
     "setup_required": "El control plane necesita la configuración inicial.",
     "setup_complete": "La configuración ya está completada.",
-    "cross_tenant_admin_pool_not_configured": "Este despliegue no tiene un pool de administración de base de datos entre tenants. Provisiona un rol NOSUPERUSER BYPASSRLS con `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (ver deploy/postgres/README.md) y reinicia el servidor con --admin-dsn apuntando a ese rol.",
+    "cross_tenant_admin_pool_not_configured": "Esta base de datos no puede listar todas las organizaciones. Ejecuta `olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` y reinicia el motor. O provisiona un rol NOSUPERUSER BYPASSRLS con `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (ver deploy/postgres/README.md) y reinicia el servidor con --admin-dsn apuntando a ese rol.",
     "internal": "Se ha producido un error interno."
   },
   "tenantAdmission": {
     "title": "Se requiere admisión en la organización",
     "description": "Inicia sesión con una identidad del directorio admitida en la organización. La autoridad global de bootstrap no permite operar comunicaciones del workspace."
+  },
+  "moduleNotEnabled": {
+    "title": "No activado en esta instalación",
+    "description": "Esta parte de Olivares está apagada aquí, así que no hay nada que mostrar.",
+    "named": "{{module}} no está activado en esta instalación.",
+    "unnamed": "Este módulo no está activado en esta instalación."
+  },
+  "notInEdition": {
+    "subject": "Esta edición no incluye {{subject}}.",
+    "generic": "Esta edición no incluye esto."
   }
 }

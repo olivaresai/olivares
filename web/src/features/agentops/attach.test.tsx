@@ -29,7 +29,7 @@ const sse = (event: string, data: unknown) =>
 
 beforeEach(() => {
   useSessionStore.setState({
-    token: 'olvs_test',
+    csrfToken: 'olvs_test',
     sessionId: 's1',
     expiresAt: '2099-01-01T00:00:00Z',
   })
@@ -39,7 +39,11 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   vi.unstubAllGlobals()
-  useSessionStore.setState({ token: null, sessionId: null, expiresAt: null })
+  useSessionStore.setState({
+    csrfToken: null,
+    sessionId: null,
+    expiresAt: null,
+  })
 })
 
 describe('useRunAttach', () => {
@@ -80,7 +84,11 @@ describe('useRunAttach', () => {
   })
 
   it('stays closed without a token (deny-closed: no anonymous attach)', async () => {
-    useSessionStore.setState({ token: null, sessionId: null, expiresAt: null })
+    useSessionStore.setState({
+      csrfToken: null,
+      sessionId: null,
+      expiresAt: null,
+    })
     const fetchMock = vi.fn()
     vi.stubGlobal('fetch', fetchMock)
     const { result } = renderHook(() =>
@@ -428,7 +436,7 @@ describe('useRunAttach', () => {
           useTenantStore.setState({ activeTenant: 't2' })
         } else {
           useSessionStore.getState().setSession({
-            token: 'olvs_other',
+            csrfToken: 'olvs_other',
             sessionId: 's1',
             expiresAt: '2099-01-01T00:00:00Z',
           })

@@ -112,16 +112,20 @@ func validPrincipalAuthoritySeal(p Principal) bool {
 // validPrincipalAuthorityShape accepts exactly the credential shapes the
 // resolver can reconstruct: a human session, an ordinary bound token, a
 // canonical agent-OBO token, or one of the two server-authored runtime tokens.
-// Synthetic, ambiguous delegation/act-as, superadmin and local principals
-// cannot acquire a valid v4 seal.
+// A human superadmin may carry owner admission to one explicit tenant, with
+// that tenant bound into the seal and SessionScope. Global tokens, synthetic,
+// ambiguous delegation/act-as and local principals remain ineligible.
 func validPrincipalAuthorityShape(p Principal) bool {
 	if p.localVia != "" || p.localSubject != "" || len(p.localMeta) != 0 || p.localSystem ||
-		p.Superadmin || !validPrincipalAuthorityProvenanceShape(p) || !validPrincipalReadAuthorityShape(p) ||
+		(p.Superadmin && p.Kind != KindUser) || !validPrincipalAuthorityProvenanceShape(p) || !validPrincipalReadAuthorityShape(p) ||
 		len(p.grants) != 1 {
 		return false
 	}
 	role, admitted := p.grants[p.evidence.tenant]
 	if !admitted {
+		return false
+	}
+	if p.Superadmin && (role != RoleOwner || p.sessionScope != p.evidence.tenant) {
 		return false
 	}
 
@@ -146,7 +150,7 @@ func validPrincipalReadAuthorityShape(p Principal) bool {
 	case principalHumanAuthority:
 		return p.Kind == KindUser && validPrincipalEvidenceID(p.UserID) &&
 			p.evidence.userAuthority.UserID == p.UserID && p.evidence.userAuthority.Version > 0 &&
-			validAuthenticationInstant(p.evidence.authenticatedAt) && !p.evidence.authenticatedAt.After(p.evidence.observedAt)
+			validAuthenticationInstant(p.evidence.authenticatedAt) && !afterTransactionClock(p.evidence.authenticatedAt, model.NewTimestamp(p.evidence.observedAt))
 	case principalTokenDirectoryOnly:
 		return p.Kind == KindToken && p.evidence.userAuthority == (store.UserAuthorityFactRef{}) && p.evidence.authenticatedAt.IsZero()
 	default:
@@ -170,8 +174,7 @@ func validPrincipalAuthorityProvenanceShape(p Principal) bool {
 
 func validSealedSessionPrincipal(p Principal, role string) bool {
 	if !validPrincipalEvidenceID(p.UserID) || !IsRole(role) ||
-		(p.AAL != AAL1 && p.AAL != AAL3) || !defensiveAMRValid(p.AMR) ||
-		(p.AAL == AAL3 && !containsElevatedAMR(p.AMR)) ||
+		!validEvidenceAALAMR(p.AAL, p.AMR) || !defensiveAMRValid(p.AMR) ||
 		p.AgentIdentity != "" || p.SessionIdentity != "" ||
 		!p.SessionWorkspaceID.IsZero() || p.SessionRunRef != "" || p.SessionFence != 0 ||
 		len(p.audiences) != 0 || !p.actAs.IsZero() || p.restricted != nil {

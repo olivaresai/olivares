@@ -34,13 +34,13 @@ const nextCommandAnnotation = "olivares.next-command"
 var firstHourNextCommands = map[string]string{
 	"quickstart":           "olivares first-boot",
 	"first-boot":           "olivares doctor",
-	"doctor":               "olivares agent tool detect",
+	"doctor":               "olivares tool ls",
 	"agent tool detect":    "olivares agent tool install --driver <name> --yes",
 	"agent tool install":   "olivares agent deploy <driver>",
-	"agent deploy":         "olivares agent session create --provider-profile <ref>",
+	"agent deploy":         "olivares session start <folder>",
 	"provider add":         "olivares provider test <provider-ref>",
 	"provider test":        "olivares agent deploy <driver> --provider <provider-ref>",
-	"agent session create": "olivares agent session attach <run-ref>",
+	"agent session create": "olivares session follow <session>",
 }
 
 // topLevelNextCommands extends the same rule to EVERY remaining top-level verb.
@@ -78,8 +78,12 @@ var firstHourNextCommands = map[string]string{
 var topLevelNextCommands = map[string]string{
 	"accessmap":     "olivares accessmap graph",
 	"adoption":      "olivares adoption summary",
-	"agent":         "olivares agent session ls",
-	"audit":         "olivares audit verify",
+	"agent":         "olivares session ls",
+	"session":       "olivares session ls",
+	"tool":          "olivares tool ls",
+	"login":         "olivares session ls",
+	"logout":        "olivares auth status",
+	"audit":         "olivares audit ls",
 	"auth":          "olivares auth status",
 	"capabilities":  "olivares capabilities servers ls",
 	"catalog":       "olivares catalog entries ls",

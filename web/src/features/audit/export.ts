@@ -54,8 +54,8 @@ export async function fetchAuditExport(
   const headers = new Headers({
     Accept: isNdjson(format) ? 'application/x-ndjson' : 'text/plain',
   })
-  const token = useSessionStore.getState().token
-  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const token = useSessionStore.getState().csrfToken
+  if (token) headers.set('X-CSRF-Token', token)
   if (tenant) headers.set('X-Olivares-Tenant', tenant)
 
   let res: Response

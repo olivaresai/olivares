@@ -301,7 +301,7 @@ func newConsoleViewsCreateCmd(flags *authClientFlags) *cobra.Command {
 			// confirmedCreate exists for one file over (cmd_compliance.go:376).
 			if strings.TrimSpace(v.ID) == "" {
 				return exitcode.New(exitcode.Server, fmt.Errorf(
-					"the control plane answered HTTP %d but returned no view id, so nothing can be confirmed as created",
+					"the engine answered HTTP %d but returned no view id, so nothing can be confirmed as created",
 					res.status))
 			}
 			return renderConsoleView(cmd, res.raw, v, "created saved view "+observeCell(v.ID))

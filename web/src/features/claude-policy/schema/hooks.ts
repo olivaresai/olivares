@@ -17,10 +17,7 @@ import { type SchemaIssue, validateWith, z } from './types'
 const HOOKS_DOC = 'https://code.claude.com/docs/en/hooks'
 
 export type HookDecisionKind =
-  | 'pre-tool-use'
-  | 'permission-request'
-  | 'block'
-  | 'none'
+  'pre-tool-use' | 'permission-request' | 'block' | 'none'
 
 export interface HookEventDescriptor {
   name: string

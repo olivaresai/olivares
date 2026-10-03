@@ -23,6 +23,7 @@ type nfpmContent struct {
 	Src      string `json:"src"`
 	Dst      string `json:"dst"`
 	Type     string `json:"type"`
+	Packager string `json:"packager"`
 	FileInfo struct {
 		Mode uint32 `json:"mode"`
 	} `json:"file_info"`
@@ -60,16 +61,29 @@ func readManifest(t *testing.T) (manifest struct {
 }
 
 // productOwned lists the paths the product's package installs (every nfpm dst in
-// .goreleaser.yaml) and those its postinstall creates.
+// packaging/nfpm/packages.json) and those its postinstall creates.
 func productOwned(t *testing.T) []string {
 	t.Helper()
-	data, err := os.ReadFile(filepath.Join(repoRoot, ".goreleaser.yaml"))
+	data, err := os.ReadFile(filepath.Join(repoRoot, "packaging/nfpm/packages.json"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	owned := []string{"/usr/bin/olivares", "/etc/olivares", "/var/lib/olivares", "/usr/lib/olivares"}
-	for _, m := range regexp.MustCompile(`(?m)^\s+(?:- )?dst: (/\S+)$`).FindAllStringSubmatch(string(data), -1) {
-		owned = append(owned, m[1])
+	var recipes struct {
+		Nfpms []struct {
+			Contents []nfpmContent `json:"contents"`
+		} `json:"nfpms"`
+	}
+	if err := json.Unmarshal(data, &recipes); err != nil {
+		t.Fatal(err)
+	}
+	if len(recipes.Nfpms) != 2 {
+		t.Fatalf("native recipe inventory: got %d, want 2", len(recipes.Nfpms))
+	}
+	for _, recipe := range recipes.Nfpms {
+		for _, content := range recipe.Contents {
+			owned = append(owned, content.Dst)
+		}
 	}
 	return owned
 }
@@ -136,6 +150,124 @@ func TestPackage_ManifestInstallsTheUnitAndBinariesAndOwnsNoProductFile(t *testi
 				t.Fatalf("%s overlaps the product package's %s", dst, p)
 			}
 		}
+	}
+}
+
+func TestPackage_PostinstallHelpersAreShippedInPackagesAndFixtureImages(t *testing.T) {
+	const postinstall = "packaging/nfpm/postinstall.sh"
+	// Absolute shell-script paths in the maintainer script are package payload,
+	// including when a fixture installs the product's files without its package.
+	var helpers []string
+	paths := regexp.MustCompile(`(?:^|[[:space:]"'])(/[a-zA-Z0-9_./-]+\.sh)(?:[[:space:]"']|$)`)
+	for line := range strings.SplitSeq(readRepo(t, postinstall), "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+			for _, match := range paths.FindAllStringSubmatch(line, -1) {
+				path := match[1]
+				if !slices.Contains(helpers, path) {
+					helpers = append(helpers, path)
+				}
+			}
+		}
+	}
+	if len(helpers) == 0 {
+		t.Fatal("no postinstall helper paths found")
+	}
+	type recipe struct {
+		Name     string            `json:"name"`
+		ID       string            `json:"id"`
+		Formats  []string          `json:"formats"`
+		Contents []nfpmContent     `json:"contents"`
+		Scripts  map[string]string `json:"scripts"`
+	}
+	var configs []string
+	for _, pattern := range []string{"*.json", "*.yaml"} {
+		files, err := filepath.Glob(filepath.Join(repoRoot, "packaging/nfpm", pattern))
+		if err != nil {
+			t.Fatal(err)
+		}
+		configs = append(configs, files...)
+	}
+	configs = append(configs, filepath.Join(repoRoot, "appliance/images/kiwi/product-dev.nfpm.yaml"))
+	sources := map[string]string{}
+	checked := 0
+	for _, config := range configs {
+		data, err := os.ReadFile(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var body strings.Builder
+		for line := range strings.SplitSeq(string(data), "\n") {
+			if !strings.HasPrefix(strings.TrimSpace(line), "#") {
+				body.WriteString(line + "\n")
+			}
+		}
+		var document struct {
+			recipe
+			Nfpms []recipe `json:"nfpms"`
+		}
+		if err := json.Unmarshal([]byte(body.String()), &document); err != nil {
+			t.Fatalf("%s: %v", config, err)
+		}
+		recipes := document.Nfpms
+		if len(recipes) == 0 {
+			recipes = []recipe{document.recipe}
+		}
+		for _, r := range recipes {
+			if r.Scripts["postinstall"] != postinstall {
+				continue
+			}
+			checked++
+			if len(r.Formats) == 0 {
+				r.Formats = []string{"deb", "rpm"}
+			}
+			for _, helper := range helpers {
+				for _, format := range r.Formats {
+					found := false
+					for _, content := range r.Contents {
+						if content.Dst == helper && (content.Packager == "" || content.Packager == format) {
+							found = content.Type == "" && content.FileInfo.Mode == 0o755 && content.Src != ""
+							if found {
+								readRepo(t, content.Src)
+								sources[helper] = content.Src
+							}
+							break
+						}
+					}
+					if !found {
+						t.Errorf("%s %s %s: postinstall helper %s is not shipped 0755", config, r.ID, format, helper)
+					}
+				}
+			}
+		}
+	}
+	if checked == 0 {
+		t.Fatal("no package uses the product postinstall script")
+	}
+	workflow := readRepo(t, ".github/workflows/appliance-a1.yml")
+	for _, fixture := range []struct{ file, job string }{
+		{"Containerfile", "fixture"}, {"fedora/Containerfile", "fixture-fedora"},
+	} {
+		t.Run(fixture.job, func(t *testing.T) {
+			container := readRepo(t, "appliance/layer/base/fixture/"+fixture.file)
+			before, _, ok := strings.Cut(container, "RUN sh /tmp/olivares-postinstall.sh")
+			if !ok {
+				t.Fatal("fixture does not run the product postinstall script")
+			}
+			_, job, ok := strings.Cut(workflow, "\n  "+fixture.job+":\n")
+			if !ok {
+				t.Fatal("fixture workflow job is absent")
+			}
+			job, _, _ = strings.Cut(job, "\n  fixture-fedora:\n")
+			for _, helper := range helpers {
+				source := sources[helper]
+				if source == "" || !strings.Contains(job, source+" ") {
+					t.Errorf("workflow does not stage the postinstall helper %s", helper)
+				}
+				if !strings.Contains(before, "\nCOPY --chmod=0755 "+filepath.Base(source)+" "+helper+"\n") {
+					t.Errorf("fixture does not install the postinstall helper %s before running postinstall", helper)
+				}
+			}
+		})
 	}
 }
 

@@ -41,8 +41,10 @@ func gitpublishBootFunc(t *testing.T, file, name string) *ast.FuncDecl {
 }
 
 // gitpublishGuarded reports whether call sits in the body of an
-// `if set.gitpublish != nil` statement of body.
-func gitpublishGuarded(body *ast.BlockStmt, call *ast.CallExpr) bool {
+// `if <module> != nil` statement of body: set.gitpublish for the ports, bound on every
+// node, and running.gitpublish for the sweep, scheduled only where the module runs
+// (module profiles, c853069f).
+func gitpublishGuarded(body *ast.BlockStmt, call *ast.CallExpr, module string) bool {
 	guarded := false
 	ast.Inspect(body, func(node ast.Node) bool {
 		conditional, ok := node.(*ast.IfStmt)
@@ -50,7 +52,7 @@ func gitpublishGuarded(body *ast.BlockStmt, call *ast.CallExpr) bool {
 			return !guarded
 		}
 		binary, ok := conditional.Cond.(*ast.BinaryExpr)
-		if ok && binary.Op == token.NEQ && communicationBootSelectorPath(binary.X) == "set.gitpublish" &&
+		if ok && binary.Op == token.NEQ && communicationBootSelectorPath(binary.X) == module &&
 			communicationBootIdentifier(binary.Y, "nil") &&
 			conditional.Body.Pos() <= call.Pos() && call.End() <= conditional.Body.End() {
 			guarded = true
@@ -64,7 +66,7 @@ func gitpublishGuarded(body *ast.BlockStmt, call *ast.CallExpr) bool {
 // authority with the serving Authenticator and the composed Authorizer after
 // both exist, custody and git after the source roster and the secret store,
 // and the sweep on the runtime scheduler, all before the runtime starts and
-// under the module's nil guard.
+// under the module's nil guard (the sweep under the running view's).
 func TestBootBindsGitPublicationOnce(t *testing.T) {
 	boot := gitpublishBootFunc(t, "boot.go", "boot")
 	assigned := map[string]token.Pos{}
@@ -98,7 +100,7 @@ func TestBootBindsGitPublicationOnce(t *testing.T) {
 			t.Fatalf("boot assigns no %s", name)
 		}
 	}
-	before := func(label string, call *ast.CallExpr, after ...string) {
+	before := func(label, guard string, call *ast.CallExpr, after ...string) {
 		t.Helper()
 		for _, name := range after {
 			if call.Pos() <= assigned[name] {
@@ -108,8 +110,8 @@ func TestBootBindsGitPublicationOnce(t *testing.T) {
 		if call.End() >= starts[0].Pos() {
 			t.Errorf("%s follows the runtime start", label)
 		}
-		if !gitpublishGuarded(boot.Body, call) {
-			t.Errorf("%s is not under the set.gitpublish nil guard", label)
+		if !gitpublishGuarded(boot.Body, call, guard) {
+			t.Errorf("%s is not under the %s nil guard", label, guard)
 		}
 	}
 
@@ -119,7 +121,7 @@ func TestBootBindsGitPublicationOnce(t *testing.T) {
 		!communicationBootIdentifier(authority[0].Args[1], "authz") {
 		t.Fatalf("gitpublish authority binds = %d, want one UseAuthority(authr, authz)", len(authority))
 	}
-	before("UseAuthority", authority[0], "authr", "authz")
+	before("UseAuthority", "set.gitpublish", authority[0], "authr", "authz")
 
 	custody, git, built := calls["set.gitpublish.UseCustody"], calls["set.gitpublish.UseGit"], calls["newGitPublication"]
 	if len(custody) != 1 || len(git) != 1 || len(built) != 1 {
@@ -129,20 +131,22 @@ func TestBootBindsGitPublicationOnce(t *testing.T) {
 		!communicationBootIdentifier(args[2], "secretStore") || !communicationBootIdentifier(args[3], "secretStoreSealerPresent") {
 		t.Fatalf("newGitPublication arguments = %#v, want the roster, the sealed secret store and its sealer posture", args)
 	}
-	before("UseCustody", custody[0], "secretResolver", "secretStore", "sourceStore")
-	before("UseGit", git[0], "secretResolver", "secretStore", "sourceStore")
+	before("UseCustody", "set.gitpublish", custody[0], "secretResolver", "secretStore", "sourceStore")
+	before("UseGit", "set.gitpublish", git[0], "secretResolver", "secretStore", "sourceStore")
 
 	if len(sweeps) != 1 {
 		t.Fatalf("gitpublish sweep registrations = %d, want one", len(sweeps))
 	}
-	pump, ok := communicationBootCall(sweeps[0].Args[3], "set.gitpublish.SweepPump", 2)
+	// The sweep is a periodic job of the module, so it comes from the running view: a node
+	// whose profile leaves gitpublish dormant schedules none (module profiles, c853069f).
+	pump, ok := communicationBootCall(sweeps[0].Args[3], "running.gitpublish.SweepPump", 2)
 	if !ok || communicationBootSelectorPath(pump.Args[0]) != "st.Leader()" {
-		t.Fatalf("sweep job = %#v, want set.gitpublish.SweepPump(st.Leader(), …)", sweeps[0].Args[3])
+		t.Fatalf("sweep job = %#v, want running.gitpublish.SweepPump(st.Leader(), …)", sweeps[0].Args[3])
 	}
 	if _, ok := communicationBootCall(pump.Args[1], "gitpublishSweepTenants", 2); !ok {
 		t.Fatalf("sweep tenants = %#v, want gitpublishSweepTenants(st, log)", pump.Args[1])
 	}
-	before("the sweep registration", sweeps[0])
+	before("the sweep registration", "running.gitpublish", sweeps[0], "running")
 
 	// No other composition file binds a publication port.
 	files, err := filepath.Glob("*.go")

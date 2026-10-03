@@ -31,12 +31,12 @@ We will keep you updated through triage and fix, and we are glad to credit repor
 
 ## Supported versions
 
-The project is **beta**; the latest tagged release is `26.10.0`. Security fixes are applied to the `main` branch and ship as the next signed release — there is no separate maintenance branch yet. Each release's cut date is in its own [`CHANGELOG.md`](CHANGELOG.md) section.
+The project is **beta**; the latest tagged release is `26.10.1`. Security fixes are applied to the `main` branch and ship as the next signed release — there is no separate maintenance branch yet. Each release's cut date is in its own [`CHANGELOG.md`](CHANGELOG.md) section.
 
 | Version | Supported |
 |---|---|
 | `main` (development) | Yes |
-| `26.10.0` (latest release) | Yes — fixes ship as the next release |
+| `26.10.1` (latest release) | Yes — fixes ship as the next release |
 | Older tagged releases | No — upgrade to the latest release |
 
 This table grows into a real support matrix as releases accumulate.
@@ -52,8 +52,8 @@ Out of scope: third-party dependencies (report upstream; tell us so we can pin/p
 For a security product, build integrity is part of the trust model, not an afterthought:
 
 - **Signed releases** with cosign / Sigstore, published **SBOMs** (syft), and checksums —
-  26.10.0 is available now, and `scripts/verify-release.sh` verifies its chain before use.
-- **Distroless** container images and a single static, memory-safe Go binary, which removes whole classes of C memory-corruption CVEs.
+  26.10.1 is available now, and `scripts/verify-release.sh` verifies its chain before use.
+- **Minimal, non-root** container images on a digest-pinned Debian 13 slim base (the STIG image on UBI 9 minimal), and a single static, memory-safe Go binary, which removes whole classes of C memory-corruption CVEs.
 - **Minimal, pinned dependencies**; no `curl | bash` without checksums.
 - **CI gates:** dependency scanning with `govulncheck` and secret scanning on every change.
 
@@ -96,7 +96,7 @@ Actively-exploited vulnerabilities (CISA KEV, or credible in-the-wild reports) a
 **How we keep the clock honest:**
 
 - **Reachability first.** We gate every change on `govulncheck`, whose Go call-graph analysis tells us whether a dependency CVE is actually reachable. Unreachable CVEs are documented in a signed **OpenVEX** statement (`not_affected`, justification `vulnerable_code_not_in_execute_path`) so your scanner isn't lit up by noise — they do not start a remediation clock; reachable ones do.
-- **Scheduled rebuilds.** A weekly job rebuilds the image from the latest patched base, re-scans the result (grype + trivy), refreshes the SBOM and VEX, and opens a tracking issue when remediation is due. The distroless base image is pinned by digest and bumped by automation.
+- **Scheduled rebuilds.** A weekly job rebuilds the image from the latest patched base, re-scans the result (grype + trivy), refreshes the SBOM and VEX, and opens a tracking issue when remediation is due. The base image is pinned by digest and bumped by automation.
 - **Verifiable output.** Every release — including a patch release — ships signed (cosign), with an SBOM attestation, an OpenVEX document and SLSA Build L3 provenance (via the `slsa-github-generator` reusable workflows). Verify with `scripts/verify-release.sh`.
 
 The reference bar for this cadence is a continuously-rebuilt image programme (e.g. Chainguard's nightly rebuilds with a 7/14-day SLA); we target the same shape, scaled to a single-maintainer project, and will tighten it as the project matures.

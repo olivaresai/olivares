@@ -9,6 +9,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"time"
@@ -16,6 +18,7 @@ import (
 	executor "github.com/olivaresai/olivares/core/runtime/executor"
 	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/modules/sessions/cliruntime"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 // sessionruntime.go is the OPERATE seam adapter: it wires the concrete
@@ -116,28 +119,26 @@ func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentia
 	if bin := strings.TrimSpace(getenv(envSessionClaudeBin)); bin != "" {
 		opts = append(opts, sessions.WithProgram(bin))
 	}
+	// A driver with no pinned binary runs the tool installed on this node, found
+	// AT LAUNCH: the newest verified managed install, then the engine's PATH. A
+	// tool installed from the console is used at once, with no restart and no
+	// environment variable; the variables above stay as explicit overrides.
+	opts = append(opts, sessions.WithProgramResolver(func(driver string) string {
+		return installedSessionProgram(obs, driver, exec.LookPath)
+	}))
+	// Claude sessions get Olivares' tool-call hooks when the PEP is mounted.
+	if self, err := os.Executable(); err == nil && filepath.IsAbs(dataDir) {
+		opts = append(opts, sessions.WithClaudeHookPEP(dataDir, self))
+	}
 	// The version Olivares presents to an official CLI's handshake is the BUILD's,
 	// never a constant the module invented.
 	opts = append(opts, sessions.WithProductVersion(version))
-	pinOfficialSessionDriver(&opts, getenv, log, obs, envSessionCodexBin, "codex", sessions.NewCodexDriver,
+	pinOfficialSessionDriver(&opts, getenv, log, obs, envSessionCodexBin, "codex", firstHourCodexDriver,
 		"authentication", "per profile: "+sessions.AuthSourceAccountHome+" or "+sessions.AuthSourceManagedInjection+" (managed needs its own governed adapter)")
 	pinOfficialSessionDriver(&opts, getenv, log, obs, envSessionGrokBin, "grok", sessions.NewGrokDriver,
 		"transport", "agent --no-leader stdio (owned child, ACP over stdio; never a leader, server or relay)")
-	if bin := strings.TrimSpace(getenv(envSessionOpenCodeBin)); bin != "" {
-		opts = append(opts,
-			sessions.WithProviderDriver(sessions.NewOpenCodeDriver()),
-			sessions.WithDriverProgram("opencode", bin),
-		)
-		if log != nil {
-			log.Info("session runtime: the official OpenCode driver is operable on this node",
-				"program", bin,
-				"transport", "acp --hostname 127.0.0.1 (owned child, ACP over stdio; never serve, web, attach or an external listener)",
-				"authentication", "per profile: "+sessions.AuthSourceAccountHome+" or "+sessions.AuthSourceManagedInjection+" (managed needs its own governed adapter)")
-		}
-	} else if log != nil {
-		log.Info("session runtime: no OpenCode driver registered; opencode profiles are observable and not launchable",
-			"set", envSessionOpenCodeBin+" to the pinned official opencode binary")
-	}
+	pinOfficialSessionDriver(&opts, getenv, log, obs, envSessionOpenCodeBin, "opencode", sessions.NewOpenCodeDriver,
+		"transport", "acp --hostname 127.0.0.1 (owned child, ACP over stdio; never serve, web, attach or an external listener)")
 	if base := strings.TrimSpace(getenv(envSessionBaseURL)); base != "" {
 		opts = append(opts, sessions.WithInferenceBaseURL(base))
 	}
@@ -155,7 +156,38 @@ func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentia
 	// sensitivity labels, and a `deny`-mode workspace can refuse a sensitive read
 	// (without it, deny-mode fails closed — see the module seam).
 	opts = append(opts, sessions.WithClassifier(securityWorkspaceClassifier{}))
+	opts = append(opts, sessionConfinementOption(dataDir, log))
 	return opts
+}
+
+// sessionConfinementOption confines every session child: it may write its
+// folder, its account homes and its own temporary directory, and can never
+// reach the engine data directory (the database, secret-store.key), the engine
+// configuration or the CLI credentials of the user the engine runs as.
+func sessionConfinementOption(dataDir string, log *slog.Logger) sessions.Option {
+	protect := sessionProtectPaths(dataDir)
+	if log != nil {
+		state := confine.Probe()
+		if state.Mode == confine.ModeLandlock {
+			log.Info("session runtime: session processes are confined to their folder", "confinement", state.String(), "protected", protect, "limits", confine.SessionLimits())
+		} else {
+			log.Warn("session runtime: session processes run UNCONFINED on this node", "reason", state.Reason)
+		}
+	}
+	return sessions.WithConfinement(protect, false)
+}
+
+// sessionProtectPaths are what a confined child never reaches: the engine data
+// directory, the engine configuration and the engine user's olivares configuration.
+func sessionProtectPaths(dataDir string) []string {
+	protect := []string{"/etc/olivares"}
+	if dataDir = strings.TrimSpace(dataDir); filepath.IsAbs(dataDir) {
+		protect = append(protect, filepath.Clean(dataDir))
+	}
+	if dir, err := os.UserConfigDir(); err == nil {
+		protect = append(protect, filepath.Join(dir, "olivares"))
+	}
+	return protect
 }
 
 // sessionWorkspaceDirName is the subdirectory of the data directory that holds
@@ -233,39 +265,89 @@ func pinOfficialSessionDriver(
 	newDriver func() sessions.ProviderDriver,
 	extraKey, extraVal string,
 ) {
+	// The driver is registered whether or not its CLI is installed yet: the
+	// program is resolved at launch (WithProgramResolver), so installing it from
+	// the console makes it launchable without a restart. A missing CLI is
+	// reported by the launch-readiness program check, with the action.
+	*opts = append(*opts, sessions.WithProviderDriver(newDriver()))
 	bin := strings.TrimSpace(getenv(envName))
-	source := "environment"
-	if bin == "" && obs != nil {
-		if managed := obs.latestProgram(driver); managed != "" {
-			bin, source = managed, "managed-install"
-		}
+	if bin != "" {
+		*opts = append(*opts, sessions.WithDriverProgram(driver, bin))
 	}
-	if bin == "" {
-		if log != nil {
-			// The hint names what ACHIEVES the registration, and both halves are
-			// measured. Until 2026-09-18 it offered `agent tool install` while only the
-			// variable worked: the observer re-derived the tools root from
-			// the environment, so an install into the engine's own `<data-dir>/tools`
-			// was never seen. It is seen now — at the NEXT BOOT, because registration
-			// happens at construction, and a hint that omitted the restart would be
-			// half true in the same way the old one was.
-			log.Info("session runtime: no "+driver+" driver registered; profiles are observable and not launchable",
-				"set", envName+" to a pinned official binary",
-				"or", "olivares agent tool install --driver "+driver+", then restart the engine")
-		}
+	if log == nil {
 		return
 	}
-	*opts = append(*opts,
-		sessions.WithProviderDriver(newDriver()),
-		sessions.WithDriverProgram(driver, bin),
-	)
-	if log != nil {
-		args := []any{"program", bin, "pin", source}
-		if extraKey != "" {
-			args = append(args, extraKey, extraVal)
-		}
-		log.Info("session runtime: the official "+driver+" driver is operable on this node", args...)
+	pin, source := bin, "environment"
+	if pin == "" {
+		pin, source = installedSessionProgram(obs, driver, exec.LookPath), "installed"
 	}
+	if pin == "" {
+		log.Info("session runtime: the "+driver+" driver is registered; its CLI is not installed on this node yet",
+			"install", "AI tools in the console, or olivares agent tool install --driver "+driver,
+			"or", envName+" to a pinned official binary")
+		return
+	}
+	args := []any{"program", pin, "pin", source}
+	if extraKey != "" {
+		args = append(args, extraKey, extraVal)
+	}
+	log.Info("session runtime: the official "+driver+" driver is operable on this node", args...)
+}
+
+// firstHourCodexDriver is the Codex driver every product session uses: it writes
+// inside its workspace, retaining its own sandbox when the actual startup probe
+// succeeds (modules/sessions/driver_codex_sandbox_probe.go), and asks before every
+// command and edit it does not consider
+// trusted (approval "untrusted"). Each request is answered at once by the
+// session's Olivares policy (authorizeProviderApproval): allow approves, deny
+// declines, ask waits in the in-process approval queue. It used to send none
+// (approval "never"), so no policy could ask about or deny a Codex command.
+// "Full" gets the same: a deny or ask rule can apply at any time during a
+// session, so the policy is always asked.
+func firstHourCodexDriver() sessions.ProviderDriver {
+	d, err := sessions.NewCodexDriverWithPolicy(sessions.CodexPolicy{
+		Approval: sessions.CodexApprovalPolicy{Mode: sessions.CodexApprovalUntrusted},
+		Sandbox:  sessions.CodexSandboxWorkspaceWrite,
+	})
+	if err != nil {
+		return sessions.NewCodexDriver()
+	}
+	return d
+}
+
+// installedSessionProgram is the executable a driver with no pinned binary runs:
+// the newest verified managed install under the engine's data directory, then
+// the official program name on the engine's PATH, else "".
+func installedSessionProgram(obs *hostToolObserver, driver string, lookPath func(string) (string, error)) string {
+	if managed := obs.latestProgram(driver); managed != "" {
+		return managed
+	}
+	if managed := verifiedManagedProgram(obs, driver); managed != "" {
+		return managed
+	}
+	name := map[string]string{"claude": "claude", "codex": "codex", "grok": "grok", "opencode": "opencode"}[driver]
+	if name == "" {
+		return ""
+	}
+	if p, err := lookPath(name); err == nil {
+		return p
+	}
+	return ""
+}
+
+// verifiedManagedProgram re-checks a managed Claude install's retained signature
+// with the pinned release key (local gpg, no network), the check the host-tool
+// observer deliberately never runs because it executes nothing. It runs only
+// here, when a launch asks for its program. A variable so tests stay hermetic.
+var verifiedManagedProgram = func(obs *hostToolObserver, driver string) string {
+	if driver != "claude" || obs == nil || obs.rootErr != nil || obs.root == "" {
+		return ""
+	}
+	in, ok, err := toolInstallEngine(context.Background()).LatestInstalled(context.Background(), obs.root, driver)
+	if err != nil || !ok || strings.TrimSpace(in.Executable) == "" {
+		return ""
+	}
+	return in.Executable
 }
 
 // sessionRunnerOption wires the session RUNNER the launch forms DECLARE they

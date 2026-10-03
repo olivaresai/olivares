@@ -23,6 +23,7 @@
 package pagerduty
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -224,9 +225,10 @@ func (o *Output) enqueue(ctx context.Context, url string, ev event) error {
 		return fmt.Errorf("pagerduty: marshal event: %w", err)
 	}
 	res, err := o.client.Send(ctx, delivery.Request{
-		URL:    url,
-		Header: map[string]string{"Content-Type": "application/json"},
-		Body:   body,
+		URL:         url,
+		Header:      map[string]string{"Content-Type": "application/json"},
+		Body:        body,
+		Credentials: []string{o.routingKey},
 	})
 	if err != nil {
 		// delivery already redacts: its error carries only status + a bounded body
@@ -234,7 +236,7 @@ func (o *Output) enqueue(ctx context.Context, url string, ev event) error {
 		return fmt.Errorf("pagerduty: deliver event: %w", err)
 	}
 	if logicalErr := pagerDutyResultError(res); logicalErr != nil {
-		return fmt.Errorf("pagerduty: event rejected: %w", logicalErr)
+		return fmt.Errorf("pagerduty: event response: %w", logicalErr)
 	}
 	return nil
 }
@@ -272,15 +274,16 @@ func (o *Output) notifyChange(ctx context.Context, n sdk.Notification) error {
 		return fmt.Errorf("pagerduty: marshal change event: %w", err)
 	}
 	res, err := o.client.Send(ctx, delivery.Request{
-		URL:    o.changeURL,
-		Header: map[string]string{"Content-Type": "application/json"},
-		Body:   body,
+		URL:         o.changeURL,
+		Header:      map[string]string{"Content-Type": "application/json"},
+		Body:        body,
+		Credentials: []string{o.routingKey},
 	})
 	if err != nil {
 		return fmt.Errorf("pagerduty: deliver change event: %w", err)
 	}
 	if logicalErr := pagerDutyResultError(res); logicalErr != nil {
-		return fmt.Errorf("pagerduty: change event rejected: %w", logicalErr)
+		return fmt.Errorf("pagerduty: change event response: %w", logicalErr)
 	}
 	return nil
 }
@@ -418,7 +421,20 @@ type pdResult struct {
 // error. The returned error never contains the routing key (the response body
 // does not echo it).
 func pagerDutyResultError(res delivery.Result) error {
+	if !res.BodyComplete || res.Body == redact.OmittedHTTPError {
+		return sdk.NewDeliveryError(
+			sdk.DeliveryReport{Outcome: sdk.OutcomeIndeterminate, Sent: 1, Rejected: -1},
+			fmt.Errorf("provider response unavailable; delivery cannot be confirmed"))
+	}
 	if res.Body == "" {
+		return nil
+	}
+	// Use only the public wire status for acceptance. Diagnostic masking may
+	// replace that string when a credential happens to contain the same word.
+	var verdict struct {
+		Status string `json:"status"`
+	}
+	if json.Unmarshal(bytes.TrimPrefix(bytes.TrimSpace(res.RawBody), []byte("\xef\xbb\xbf")), &verdict) == nil && verdict.Status == "success" {
 		return nil
 	}
 	var r pdResult

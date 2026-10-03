@@ -30,7 +30,7 @@
     "empty": "Keine Ansicht passt zu „{{query}}“"
   },
   "items": {
-    "home": "Übersicht",
+    "home": "Start",
     "onboarding": "Einrichtungsassistent",
     "inventory": "Inventar",
     "sessions": "Sitzungen beobachten",
@@ -96,7 +96,8 @@
     "providerProfiles": "Anbieterprofile",
     "providerBindings": "Quellenbindungen",
     "providerAccounts": "Anbieterkonten",
-    "agent-tools": "Agentenwerkzeuge"
+    "agent-tools": "Agentenwerkzeuge",
+    "mcpServers": "MCP-Server"
   },
   "workspace": {
     "open": "{{workspace}} öffnen",
@@ -104,7 +105,7 @@
     "all": "Alle Arbeitsbereiche",
     "allHint": "Kein Arbeitsbereich-Filter",
     "default": "Standard",
-    "tenantWide": "Mandantenweit — nicht nach Arbeitsbereich gefiltert",
+    "tenantWide": "Alle Arbeitsbereiche",
     "unresolved": "Workspace nicht in der Liste",
     "truncated": "Die Liste ist unvollständig — es gibt mehr Workspaces als geladen"
   },
@@ -131,7 +132,7 @@
     "knowledge": "Wissensdatenbanken, RAG und Datenherkunft",
     "catalog": "Kuratierte, genehmigte Agenten und Fähigkeiten",
     "killswitch": "Notabschaltung, Wiederherstellung im Vier-Augen-Prinzip und Guardian-Eindämmung",
-    "work": "Das dauerhafte sitzungsübergreifende Backlog: Einheiten, Abhängigkeiten, Abnahme und Entscheidungen",
+    "work": "Gemeinsame Arbeit: Einheiten, Abhängigkeiten, Abnahme und Entscheidungen",
     "agentops": "Claude-Code-Sitzungen erstellen, anhängen und steuern — ohne SSH; teilt sich den Bildschirm mit „Sitzungen beobachten“",
     "agentArtifacts": "Skills, MCP-Erweiterungen und Instruktionsdateien — Registry, Sicherheitslage und Supply-Chain-BOM",
     "models": "Modelle, Routing und Anbieterschlüssel",
@@ -174,7 +175,8 @@
     "backups": "Verschlüsselte Disaster-Recovery-Schnappschüsse der Steuerungsebene: erstellen, planen, herunterladen und wiederherstellen",
     "logs": "Der Live-Protokollstrom der Engine mit Filtern nach Stufe und Modul, Suche und Pause",
     "sourceDiff": "Vergleichen Sie eine Basis- und eine Head-Revision eines verbundenen Git-Repositorys, Datei für Datei",
-    "agent-tools": "Erkennen, installieren und aktualisieren Sie die Agentenwerkzeuge auf diesem Host und verfolgen Sie jede Installation; nur für Deployment-Administratoren"
+    "agent-tools": "Erkennen, installieren und aktualisieren Sie die Agentenwerkzeuge auf diesem Host und verfolgen Sie jede Installation; nur für Deployment-Administratoren",
+    "mcpServers": "Entfernte MCP-Server mit dieser Organisation verbinden, testen und festlegen, welche Tools Sitzungen nutzen dürfen"
   },
   "commandActions": {
     "eventing": {
@@ -185,6 +187,12 @@
     },
     "orchestration": {
       "createSchedule": "Neuer Zeitplan"
+    },
+    "killswitch": {
+      "engage": "Not-Aus auslösen"
+    },
+    "identity": {
+      "invite": "Personen einladen"
     }
   },
   "aliases": {
@@ -283,7 +291,7 @@
     "modulesOf": "Module von {{area}}",
     "empty": "In diesem Bereich sind für Sie keine Einträge verfügbar",
     "emptyHint": "Einträge erscheinen hier, sobald Ihre Rolle in der aktuellen Organisation Zugriff auf ein Modul dieses Bereichs gewährt.",
-    "backHome": "Zur Übersicht",
+    "backHome": "Zu Start",
     "area": "Bereich"
   },
   "personal": {
@@ -293,7 +301,8 @@
     "viewAll": "Alle anzeigen ({{count}})",
     "manage": "Favoriten verwalten",
     "empty": "Markiere ein Modul mit dem Stern, um es hier zu speichern.",
-    "scope": "In diesem Browser für dein Konto und deine Organisation gespeichert.",
+    "scope": "In deinem Konto gespeichert, in jedem Browser.",
+    "saveFailed": "Die Favoriten konnten nicht in deinem Konto gespeichert werden. Sie bleiben in diesem Browser und werden bei der nächsten Änderung oder Anmeldung erneut gespeichert.",
     "temporary": "Favoriten bleiben vorerst im Arbeitsspeicher.",
     "clear": "Favoriten löschen",
     "recents": "Zuletzt geöffnet",
@@ -351,7 +360,25 @@
       "sessions": "Sitzungen",
       "workspaceDashboard": "Arbeitsbereiche",
       "providers": "KI-Werkzeuge",
-      "deploy": "Bereitstellen"
+      "deploy": "Bereitstellen",
+      "work": "Arbeit",
+      "approvals": "Genehmigungen",
+      "inventory": "Inventar",
+      "finops": "Kosten & FinOps",
+      "accessMap": "Zugriffskarte",
+      "mcpServers": "MCP-Server",
+      "knowledge": "Wissen",
+      "identity": "Identität & NHI",
+      "claudePolicy": "Claude Code-Governance",
+      "audit": "Audit-Hauptbuch",
+      "killswitch": "Not-Aus",
+      "agent-tools": "KI-Werkzeuge"
+    },
+    "groups": {
+      "work": "Arbeit",
+      "manage": "Verwalten",
+      "integrate": "Integrieren",
+      "secure": "Absichern"
     },
     "phoneBarLabel": "Haupt",
     "newSession": "Neue Sitzung",
@@ -388,7 +415,8 @@
       "hours": "{{count}} Std.",
       "days": "{{count}} T.",
       "loading": "Sitzungen werden gelesen…",
-      "error": "Die Sitzungen konnten nicht gelesen werden."
+      "error": "Die Sitzungen konnten nicht gelesen werden.",
+      "approvalsError": "Die Genehmigungen konnten nicht geladen werden."
     },
     "engine": {
       "checking": "Engine wird geprüft",
@@ -410,6 +438,14 @@
       "when": {
         "outsideField": "außerhalb eines Feldes"
       }
+    },
+    "killswitch": {
+      "estateStopped": "ALLE AGENTEN GESTOPPT",
+      "estateBody": "Agenten können nicht handeln, bis zwei Benutzerkonten den Neustart genehmigen.",
+      "agentStops": "{{count}} Agent-Stopp aktiv",
+      "agentStops_one": "{{count}} Agent-Stopp aktiv",
+      "agentStops_other": "{{count}} Agent-Stopps aktiv",
+      "none": "Nichts ist gestoppt. Sitzungen und Agenten laufen normal."
     }
   }
 }

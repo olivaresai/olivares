@@ -29,6 +29,9 @@ func archiveFixture(t *testing.T, driver string, extra *tar.Header) []byte {
 	if driver == DriverOllama {
 		name = "bin/ollama"
 	}
+	if driver == DriverCodex {
+		name = "codex-x86_64-unknown-linux-musl" // the official archive's single member
+	}
 	body := []byte("#!/bin/sh\nprintf '" + driver + " version 1.2.3\\n'\n")
 	if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0755, Size: int64(len(body)), Typeflag: tar.TypeReg}); err != nil {
 		t.Fatal(err)
@@ -71,12 +74,13 @@ func archiveEngine(t *testing.T, driver string, payload []byte, badDigest bool) 
 	}
 	repo := releaseRepository(driver)
 	asset := releaseAssetName(driver, vendor)
-	pkg := "https://github.com/" + repo + "/releases/download/v1.2.3/" + asset
+	tag := releaseTagPrefix(driver) + "1.2.3"
+	pkg := "https://github.com/" + repo + "/releases/download/" + tag + "/" + asset
 	digest := sha256Hex(payload)
 	if badDigest {
 		digest = strings.Repeat("a", 64)
 	}
-	meta, _ := json.Marshal(map[string]any{"tag_name": "v1.2.3", "assets": []any{map[string]any{"name": asset, "size": len(payload), "digest": "sha256:" + digest, "browser_download_url": pkg}}})
+	meta, _ := json.Marshal(map[string]any{"tag_name": tag, "assets": []any{map[string]any{"name": asset, "size": len(payload), "digest": "sha256:" + digest, "browser_download_url": pkg}}})
 	client := &http.Client{Transport: archiveRoundTrip(func(r *http.Request) (*http.Response, error) {
 		if r.URL.Scheme != "https" {
 			t.Error("non-HTTPS source")
@@ -84,7 +88,7 @@ func archiveEngine(t *testing.T, driver string, payload []byte, badDigest bool) 
 		body := meta
 		if r.URL.String() == pkg {
 			body = payload
-		} else if r.URL.String() != "https://api.github.com/repos/"+repo+"/releases/latest" && r.URL.String() != "https://api.github.com/repos/"+repo+"/releases/tags/v1.2.3" {
+		} else if r.URL.String() != "https://api.github.com/repos/"+repo+"/releases/latest" && r.URL.String() != "https://api.github.com/repos/"+repo+"/releases/tags/"+tag {
 			t.Errorf("unexpected repository URL %s", r.URL)
 		}
 		return &http.Response{StatusCode: 200, Header: http.Header{}, ContentLength: int64(len(body)), Body: io.NopCloser(bytes.NewReader(body)), Request: r}, nil
@@ -93,6 +97,9 @@ func archiveEngine(t *testing.T, driver string, payload []byte, badDigest bool) 
 	if driver == DriverOllama {
 		provider = NewOllama(ReleaseArchiveOptions{Client: client})
 	}
+	if driver == DriverCodex {
+		provider = NewCodexRelease(ReleaseArchiveOptions{Client: client})
+	}
 	catalog, err := NewCapabilityCatalog(NewCatalog(), provider)
 	if err != nil {
 		t.Fatal(err)
@@ -100,7 +107,7 @@ func archiveEngine(t *testing.T, driver string, payload []byte, badDigest bool) 
 	return NewEngineWithCapabilities(catalog, EngineOptions{}), RequestV2{Driver: driver, Version: "latest", Platform: PlatformV2{OS: "linux", Arch: "amd64"}, DestRoot: filepath.Join(t.TempDir(), "tools")}, client
 }
 func TestReleaseArchiveInstallAndRevalidation(t *testing.T) {
-	for _, driver := range []string{DriverOpenCode, DriverOllama} {
+	for _, driver := range []string{DriverOpenCode, DriverOllama, DriverCodex} {
 		t.Run(driver, func(t *testing.T) {
 			payload := archiveFixture(t, driver, nil)
 			engine, req, _ := archiveEngine(t, driver, payload, false)
@@ -141,6 +148,37 @@ func TestReleaseArchiveInstallAndRevalidation(t *testing.T) {
 			}
 			if _, _, err := engine.InstallV2(context.Background(), req, plan, io.Discard); err == nil {
 				t.Fatal("damaged runtime revalidated")
+			}
+		})
+	}
+}
+
+// A person who types an exact version in AI tools (CONTRACT on the builder, 09570b6b: Codex
+// 0.160.0 and OpenCode 1.18.34 refused "source URLs contain duplicate" before any download).
+// For an exact version the release's tag metadata is both the pointer and the checksums.
+func TestReleaseArchiveExactVersionPlansAndInstalls(t *testing.T) {
+	for _, driver := range []string{DriverCodex, DriverOpenCode, DriverOllama} {
+		t.Run(driver, func(t *testing.T) {
+			engine, req, _ := archiveEngine(t, driver, archiveFixture(t, driver, nil), false)
+			req.Version = "1.2.3"
+			plan, err := engine.PlanV2(context.Background(), req)
+			if err != nil {
+				t.Fatalf("exact plan: %v", err)
+			}
+			tags := "https://api.github.com/repos/" + releaseRepository(driver) + "/releases/tags/" + releaseTagPrefix(driver) + "1.2.3"
+			src := plan.Selection.Source
+			if plan.Selection.Channel != ChannelExact || plan.Selection.Version != "1.2.3" || src.Pointer.URL != tags || src.Checksums.URL != tags {
+				t.Fatalf("exact selection: %+v", plan.Selection)
+			}
+			receipt, _, err := engine.InstallV2(context.Background(), req, plan, io.Discard)
+			if err != nil || receipt.Version != "1.2.3" {
+				t.Fatalf("exact install: %+v %v", receipt, err)
+			}
+			// Only the pointer and the checksums share a URL: any other repeat is still refused.
+			repeated := plan.Selection
+			repeated.Source.Package = src.Checksums
+			if err := repeated.Source.originsCover(repeated.presentFetchURLs()); err == nil || !strings.Contains(err.Error(), "duplicate") {
+				t.Fatalf("a package URL equal to the metadata was accepted: %v", err)
 			}
 		})
 	}
@@ -302,5 +340,41 @@ func TestReleaseArchiveDecodedMetadataCountsAgainstByteLimit(t *testing.T) {
 	layout.Limits.MaxExpandedBytes = 64 // file fits; its tar header does not
 	if _, err = extractReleaseArchive(context.Background(), DriverOpenCode, root, "stage", "payload", layout); KindOf(err) != KindResponseTooLarge {
 		t.Fatalf("decoded metadata was not bounded: %v", err)
+	}
+}
+
+// The Codex plan is resolved from the official release metadata exactly as
+// GitHub answered it for rust-v0.159.3 (recorded 2026-10-01, trimmed to the
+// Codex archives): the rust-v tag, the platform archive and its SHA-256.
+func TestReleaseArchiveCodexPlansFromRecordedOfficialMetadata(t *testing.T) {
+	meta, err := os.ReadFile(filepath.Join("testdata", "codex-release-rust-v0.159.3.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	client := &http.Client{Transport: archiveRoundTrip(func(r *http.Request) (*http.Response, error) {
+		switch r.URL.String() {
+		case "https://api.github.com/repos/openai/codex/releases/latest", "https://api.github.com/repos/openai/codex/releases/tags/rust-v0.159.3":
+		default:
+			t.Errorf("unexpected URL %s", r.URL)
+		}
+		return &http.Response{StatusCode: 200, Header: http.Header{}, ContentLength: int64(len(meta)), Body: io.NopCloser(bytes.NewReader(meta)), Request: r}, nil
+	})}
+	catalog, err := NewCapabilityCatalog(NewCatalog(), NewCodexRelease(ReleaseArchiveOptions{Client: client}))
+	if err != nil {
+		t.Fatal(err)
+	}
+	engine := NewEngineWithCapabilities(catalog, EngineOptions{})
+	for _, tc := range []struct{ arch, url, digest string }{
+		{"amd64", "https://github.com/openai/codex/releases/download/rust-v0.159.3/codex-x86_64-unknown-linux-musl.tar.gz", "b48ca1b2d6b1bf42b944e02c3d937c898e24651916684cdc35fdedf31b291bcb"},
+		{"arm64", "https://github.com/openai/codex/releases/download/rust-v0.159.3/codex-aarch64-unknown-linux-musl.tar.gz", "cd5f307b3fcd6080773e684b86c3114a67d4f1c61dc447be09876b552eb4bea7"},
+	} {
+		plan, err := engine.PlanV2(context.Background(), RequestV2{Driver: DriverCodex, Version: "latest", Platform: PlatformV2{OS: "linux", Arch: tc.arch}, DestRoot: filepath.Join(t.TempDir(), "tools")})
+		if err != nil {
+			t.Fatalf("%s: %v", tc.arch, err)
+		}
+		s := plan.Selection
+		if s.Version != "0.159.3" || s.Source.Package.URL != tc.url || s.FetchedObject.SHA256 != tc.digest || s.Layout.EntryPoint != "bin/codex" || s.Verification.Kind != VerificationGitHubReleaseSHA256 {
+			t.Fatalf("%s plan = %+v", tc.arch, s)
+		}
 	}
 }

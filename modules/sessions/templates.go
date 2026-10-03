@@ -51,6 +51,11 @@ type tplBody struct {
 	Settings   *tplSettings `json:"settings,omitempty"`
 	Connectors []string     `json:"connectors,omitempty"`
 	Policies   *tplPolicies `json:"policies,omitempty"`
+	PeersRule  string       `json:"peers_rule,omitempty"`
+}
+
+func validTemplatePeerRule(rule string) bool {
+	return rule == "" || rule == sameTemplatePeerRule
 }
 
 type tplHooks struct {
@@ -70,6 +75,10 @@ type tplSettings struct {
 	Effort             string `json:"effort,omitempty"`
 	Model              string `json:"model,omitempty"`
 	CustomInstructions string `json:"custom_instructions,omitempty"`
+	// SecretEnv names vault secrets (env/…) a session launched from this template
+	// receives as environment variables. Names only; the launcher still needs tenant
+	// administration to use them (session_secret_env.go).
+	SecretEnv []SecretEnvRef `json:"secret_env,omitempty"`
 }
 
 type tplPolicies struct {
@@ -189,6 +198,10 @@ func (m *Module) handleCreateTemplate(w http.ResponseWriter, r *http.Request, mc
 		writeJSON(w, http.StatusBadRequest, errorBody("name is required"))
 		return
 	}
+	if !validTemplatePeerRule(req.Body.PeersRule) {
+		writeJSON(w, http.StatusBadRequest, errorBody("peers_rule must be same-template or omitted"))
+		return
+	}
 	bodyJSON, _ := json.Marshal(req.Body)
 
 	var dto templateDTO
@@ -231,6 +244,10 @@ func (m *Module) handleUpdateTemplate(w http.ResponseWriter, r *http.Request, mc
 	}
 	var req updateTemplateRequest // strict, for the reason in handleCreateTemplate
 	if !decodeJSONBody(w, r, &req) {
+		return
+	}
+	if req.Body != nil && !validTemplatePeerRule(req.Body.PeersRule) {
+		writeJSON(w, http.StatusBadRequest, errorBody("peers_rule must be same-template or omitted"))
 		return
 	}
 
@@ -388,6 +405,12 @@ type applyTarget struct {
 	WorkspaceRef       string   `json:"workspace_ref,omitempty"`
 }
 
+// Peer selection is a server-resolved launch default, not an input to /apply.
+type applyMergedTarget struct {
+	applyTarget
+	PeersRule string `json:"peers_rule,omitempty"`
+}
+
 // applyTemplateRequest is the OPTIONAL POST /templates/{id}/apply body. An absent body
 // previews the template against an empty configuration, which is what a caller asking
 // "what does this template impose?" wants and what every pre client sends.
@@ -409,7 +432,7 @@ type applyResponse struct {
 	Conflicts []mergeConflict `json:"conflicts"`
 	Template  templateDTO     `json:"template"`
 	// Merged is the configuration a launch would run under. Absent when applied is false.
-	Merged *applyTarget `json:"merged,omitempty"`
+	Merged *applyMergedTarget `json:"merged,omitempty"`
 	// Unenforceable names every declared term this runtime cannot keep. Non-empty ⇒
 	// applied is false ⇒ a launch naming this template is refused with the same list.
 	Unenforceable []string `json:"unenforceable,omitempty"`
@@ -474,7 +497,7 @@ func (m *Module) handleApplyTemplate(w http.ResponseWriter, r *http.Request, mc 
 	if conflicts == nil {
 		conflicts = []mergeConflict{}
 	}
-	merged := targetOf(p)
+	merged := applyMergedTarget{applyTarget: targetOf(p), PeersRule: p.templatePeersRule}
 	writeJSON(w, http.StatusOK, applyResponse{
 		Applied:   true,
 		Conflicts: conflicts,
@@ -626,6 +649,20 @@ var builtinTemplates = []struct {
 			// Was "default", which CONTRADICTED the allowlist beside it and would now refuse
 			// its own launch. dontAsk is what the description already promised — "no
 			// interactive tools" is precisely the mode that never prompts.
+			Settings: &tplSettings{PermissionMode: permModeDontAsk},
+		},
+	},
+	// The New session dialog's "Edit files and run commands" for Claude Code: an
+	// allowlist under dontAsk, the only mode under which an allowlist confines. The
+	// named tools run without a prompt (a --print child has nobody to ask) and every
+	// other tool is refused. Because the allowlist is the engine's own, the launch gate
+	// does not class it as privileged (cmd/olivares/sessiongov.go isCriticalLaunch).
+	// It is the dialog's default. Hook enforcement, kill switch and audit apply.
+	{
+		name: "Edits and commands",
+		desc: "Reads, edits files and runs commands in the session folder without asking; other tools are refused.",
+		body: tplBody{
+			Policies: &tplPolicies{AllowedTools: []string{"Bash", "Edit", "Glob", "Grep", "LS", "MultiEdit", "NotebookEdit", "Read", "TodoWrite", "Write"}},
 			Settings: &tplSettings{PermissionMode: permModeDontAsk},
 		},
 	},

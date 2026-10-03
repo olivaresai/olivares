@@ -494,9 +494,9 @@ const VIEWS: {
   {
     id: 'list-truncated',
     path: '/console',
-    // El h1 real es «Control console», no «Console». Lo cazó el oráculo del propio arnés,
+    // El h1 real es «Administration» (antes «Control console»), no «Console». Lo cazó el oráculo del arnés,
     // que existe para negarse a fotografiar una pantalla que no es la pedida.
-    heading: /^Control console$/,
+    heading: /^Administration$/,
     settle: 800,
     // El aviso de recorte, que hoy no aparece en NINGUNA captura publicada. Se fuerza `has_more`
     // en una lista de consola: es la afirmación que el aviso hace, así que interceptarla la hace
@@ -1010,7 +1010,7 @@ const VIEWS: {
     id: 'console',
     path: '/console',
     settle: 1000,
-    heading: /^Control console$/,
+    heading: /^Administration$/,
   },
   {
     id: 'sourceDiff',
@@ -1060,6 +1060,7 @@ const VIEWS: {
   // this capture is the EMPTY state, which is the point — it is the first screen a
   // new operator sees here, so it is the one that has to name the next action.
   { id: 'agent-tools', path: '/agent-tools', heading: /^Agent tools$/ },
+  { id: 'mcpServers', path: '/mcp-servers', heading: /^MCP servers$/ },
   {
     id: 'providers',
     path: '/providers',
@@ -1409,7 +1410,7 @@ const VIEWS: {
   {
     id: 'guias-connectors',
     path: '/console?tab=connectors',
-    heading: /^Control console$/,
+    heading: /^Administration$/,
     settle: 800,
   },
   // ⛔ LAS TRES FICHAS DE CONFIGURACION NO SE PUEDEN FOTOGRAFIAR, Y NO ES UN FALLO DE SELECTOR.
@@ -1985,7 +1986,7 @@ test.describe('Docs captures over real seeded data', () => {
           id: tab.id,
           theme,
           ruta: `/console (pestaña ${tab.id})`,
-          objetivo: encabezadoDePagina(page, 'Control console'),
+          objetivo: encabezadoDePagina(page, 'Administration'),
           marcadores: [
             page.getByRole('tab', { name: tab.trigger, selected: true }),
           ],

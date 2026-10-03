@@ -139,12 +139,13 @@ beforeEach(() => {
   useStepUpStore.getState().clear()
   useTenantStore.setState({ activeTenant: 't1' })
   useSessionStore.getState().setSession({
-    token: 'fixture',
+    csrfToken: 'fixture',
     sessionId: 'fixture-session',
     expiresAt: '',
   })
   configureApiClient({
-    getToken: () => useSessionStore.getState().token,
+    getToken: () => null,
+    getCSRFToken: () => useSessionStore.getState().csrfToken,
     getTenant: () => useTenantStore.getState().activeTenant,
     onUnauthorized: unauthorized,
     getExpiresAt: () => null,
@@ -394,7 +395,7 @@ describe('each await belongs to a still-live Add intent', () => {
           await act(async () => {
             if (movement === 'credential generation')
               useSessionStore.getState().setSession({
-                token: 'fixture-rotated',
+                csrfToken: 'fixture-rotated',
                 sessionId: 'fixture-session',
                 expiresAt: '',
               })

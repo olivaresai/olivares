@@ -135,7 +135,7 @@ func newMessageActionCmd(action string) *cobra.Command {
 				input = sessionHandoffRespondArgs{ID: model.ID(args[0]), Transition: sessions.HandoffTransition(transition), Reason: reason, Version: version, IdempotencyKey: key}
 			}
 			raw, _ := json.Marshal(input)
-			request, err := sessionToolRequest(cmd.Context(), auth.Principal{SessionWorkspaceID: model.ID(workspace)}, name, raw)
+			request, err := messageToolRequest(cmd.Context(), auth.Principal{SessionWorkspaceID: model.ID(workspace)}, name, raw)
 			if err != nil {
 				return err
 			}
@@ -161,9 +161,9 @@ func newMessageActionCmd(action string) *cobra.Command {
 				return redactCodedServer(err, cfg.token)
 			}
 			defer func() { _ = response.Body.Close() }()
-			result, err := io.ReadAll(io.LimitReader(response.Body, (1<<20)+1))
+			result, err := readCLIHTTPResponse(response, outbound, (1<<20)+1, response.StatusCode < 400, workHTTPError)
 			if err != nil {
-				return redactCodedServer(err, cfg.token)
+				return wrapCLIResponseReadError(err, "read message response")
 			}
 			if len(result) > 1<<20 {
 				return errors.New("message response exceeds 1 MiB")

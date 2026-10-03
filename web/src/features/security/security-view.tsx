@@ -45,7 +45,6 @@ import {
   IntelNotice,
   IntelPage,
   SectionCard,
-  SelfAuditNotice,
 } from '@/features/_intel'
 import { useSessionNames } from '@/features/shared'
 import { formatDateTime } from '@/lib/format'
@@ -679,7 +678,6 @@ function AnomaliesTab() {
       description={t('anomalies.description')}
     >
       {/* Querying the queue is a privileged read — say it is recorded. */}
-      <SelfAuditNotice className="mb-3" />
       <AsyncSection query={anomaliesQ} skeletonHeight={220}>
         {(data) =>
           data.items.length === 0 ? (
@@ -744,7 +742,6 @@ function ForensicsTab() {
         description={t('forensics.description')}
         actions={<NewCaseButton canWrite={canWriteCases} />}
       >
-        <SelfAuditNotice className="mb-3" />
         {/* Un expediente forense que no cabe en la página no es un expediente que no
             exista, y esta lista es la que un investigador usa para decir «no hay más». */}
         <ListTruncationBadge
@@ -788,7 +785,6 @@ function IntegritySection() {
   return (
     <>
       {/* Verifying is itself recorded in the chain it checks. */}
-      <SelfAuditNotice className="mb-3" />
       <AsyncSection query={integrityQ} skeletonHeight={160}>
         {(data) => <IntegrityPanel integrity={data} />}
       </AsyncSection>
@@ -890,7 +886,6 @@ function CaseDetail({
         </Button>
       </div>
       {/* The case timeline is a privileged, self-audited read. */}
-      <SelfAuditNotice />
       <AsyncSection query={timelineQ} skeletonHeight={320}>
         {(data) => (
           <>

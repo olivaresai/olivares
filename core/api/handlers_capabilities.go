@@ -265,7 +265,7 @@ func (s *Server) evaluateCapabilityQuestion(
 	}()
 	if !known {
 		evaluation.projection = inputRejectedProjection(capabilityCodeNotSupported)
-	} else if descriptor.meta.RequiresStepUp(p.AAL) {
+	} else if descriptor.meta.RequiresStepUp(r.Context(), p) {
 		evaluation.projection = inputRejectedProjection(capabilityCodeStepUpRequired)
 	} else {
 		switch question.Kind {

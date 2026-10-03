@@ -30,9 +30,11 @@ Erfüllen Sie diese Punkte vor einem Start. Ein fehlender Punkt ist eine
 Ablehnung, kein Fallback.
 
 1. Olivares AI ist installiert und der erste Administrator existiert.
-   Siehe [Ihre erste Stunde](/de/how-to/first-hour/) für das Setup-Token und die
-   AAL3-Passkey-Schranke. Das Anlegen von Quellen und privilegierte
-   Session-Operationen erfordern AAL3 (`core/api/middleware.go` `requireAAL3`).
+   Siehe [Ihre erste Stunde](/de/how-to/first-hour/) für das Setup-Token.
+   Die zusätzliche Authentifizierung für administrative Aktionen (`admin_step_up`)
+   ist standardmäßig auf `none` gesetzt. Aktiviert ein Administrator `totp` oder
+   `passkey`, erfüllen Sie diese Richtlinie vor privilegierten Operationen
+   (`core/api/middleware.go` `requireStepUp`).
 2. Die offizielle Provider-CLI ist bereits auf **diesem Knoten** installiert.
    Das Profil registriert Homes, die bereits existieren. Der Server löst die
    Pfade auf (absolut, Symlinks aufgelöst, vorhandenes Verzeichnis) und legt
@@ -192,7 +194,7 @@ bestätigten Provider-Empfang.
 
 ## Verwandte Themen
 
-- [Ihre erste Stunde](/de/how-to/first-hour/) — Setup-Token, AAL3, Claude-Credential-Quelle.
+- [Ihre erste Stunde](/de/how-to/first-hour/) — Setup-Token, zusätzliche administrative Authentifizierung, Claude-Credential-Quelle.
 - [Claude Code mit Olivares betreiben](/how-to/run-claude-code-with-olivares/) — Co-Deployment-Topologien.
 - [Codex integrieren](/how-to/integrations/codex/) / [Grok Build integrieren](/how-to/integrations/grok/) — Connector und PEP-Hook.
 - [Session-Runtime-API](/reference/session-runtime-api/) — Listen, Attach, Input, Stop; Community-PTY und Editionsgrenze.

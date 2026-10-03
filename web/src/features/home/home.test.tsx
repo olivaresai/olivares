@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { ReactNode } from 'react'
+import { onlineManager } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { renderIntel, screen, waitFor } from '@/test/intel'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
@@ -12,12 +13,21 @@ import { expectNoRawI18nKeys } from '@/test/i18n-keys'
 // own namespaces; if that regresses, this test goes red with the raw key.
 import { ApiError } from '@/lib/api/errors'
 import { finopsApi } from '@/features/finops/api'
+import { governanceApi } from '@/features/governance/api'
+import { killswitchApi } from '@/features/killswitch/api'
 import { securityApi } from '@/features/security/api'
 import { healthApi } from '@/features/health/api'
+import { complianceApi } from '@/features/compliance/api'
+import { providersApi } from '@/features/providers/api'
+import { signInApi } from '@/features/first-hour/api'
+import { sessionsApi } from '@/features/sessions/api'
+import { agentOpsApi } from '@/features/agentops/api'
+import { useModulesStore } from '@/stores/modules'
 import {
   finopsForecastFixture,
   finopsSummaryFixture,
   finopsTrendFixture,
+  complianceSummary,
   healthIncidentsFixture,
   healthStatusFixture,
   securityFindingsFixture,
@@ -38,16 +48,25 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }))
 
+// Whether the person opened Compliance (compliance-opened.test.ts covers the record).
+const compliance = vi.hoisted(() => ({ opened: false }))
+vi.mock('@/features/compliance/compliance-opened', () => ({
+  useComplianceOpened: () => compliance.opened,
+}))
+
 // A mutable auth value the container reads — flip `can` per test to assert RBAC gating.
 const authState = vi.hoisted(() => ({
   can: (_p: string): boolean => true,
   activeTenant: 'demo' as string | null,
+  // The tools' own status is a system administrator's read (useToolStatus).
+  isSuperadmin: true,
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 
 afterEach(() => {
   vi.restoreAllMocks()
   authState.can = () => true
+  authState.isSuperadmin = true
 })
 
 describe('EstateTile (the three honest states)', () => {
@@ -220,6 +239,56 @@ describe('HomeView (RBAC gating + honest states)', () => {
     expect(screen.queryByText('Health & SLA')).toBeNull()
     expect(screen.queryByText('Inventory')).toBeNull()
     expect(screen.queryByText('Compliance')).toBeNull()
+    expect(screen.queryByText('Kill switch')).toBeNull()
+  })
+
+  it('gives a role that reads only the approval queue its pending approvals on Now', async () => {
+    authState.can = (p) => p === 'governance:approval:read'
+    vi.spyOn(governanceApi, 'listApprovals').mockResolvedValue({
+      items: [
+        {
+          id: 'ap-9',
+          action: 'deploy.promote',
+          requested_by: 'user:grace',
+          status: 'pending',
+          required_approvals: 2,
+          approve_count: 1,
+          reject_count: 0,
+          escalated: false,
+        },
+      ],
+      has_more: false,
+    } as never)
+    renderIntel(<HomeView />)
+    // This file's Link double renders href and children only, so the row is read by text.
+    const action = await screen.findByText('deploy.promote')
+    expect(action.closest('a')).toHaveAttribute('href', '/permissions')
+    expect(screen.queryByText(/Nothing to show yet/i)).toBeNull()
+  })
+
+  it('states the kill switch posture from its own read, and opens the kill switch', async () => {
+    authState.can = (p) => p === 'governance:killswitch:read'
+    vi.spyOn(killswitchApi, 'state').mockResolvedValue({
+      estate_stopped: true,
+      active: [
+        {
+          id: 'ks-1',
+          scope_kind: 'estate',
+          status: 'active',
+          source: 'operator',
+          engaged_aal: 3,
+          engage_audit_seq: 1,
+          revoked_approvals: 0,
+          reviewed: false,
+        },
+      ],
+    })
+    renderIntel(<HomeView />)
+    expect(await screen.findByText('ALL AGENTS STOPPED')).toBeInTheDocument()
+    const tile = screen.getByText('Kill switch').closest('a')
+    expect(tile).toHaveAttribute('href', '/killswitch')
+    // A role that can read only the kill switch still gets a Now page, not "nothing".
+    expect(screen.queryByText(/Nothing to show yet/i)).toBeNull()
   })
 
   it('shows the honest empty state when the role can read nothing', () => {
@@ -236,6 +305,94 @@ describe('HomeView (RBAC gating + honest states)', () => {
     const page = container.querySelector('.gap-0')
     expect(page).not.toBeNull()
     expect(page!.className).not.toMatch(/\bgap-4\b/)
+  })
+
+  // HU2-25: an upgraded install drew a tile per module, "No health checks yet" and a
+  // compliance score nobody asked for among them. A tile now hides when its answer is in
+  // and empty; the compliance score waits until the person opened Compliance.
+  it('draws no tile for a module whose answer is empty', async () => {
+    authState.can = (p) =>
+      p === 'health:status:read' || p === 'governance:killswitch:read'
+    const status = vi
+      .spyOn(healthApi, 'status')
+      .mockResolvedValue({ items: [], has_more: false } as never)
+    // No subject and no open incident: an open incident is something to say.
+    vi.spyOn(healthApi, 'incidents').mockResolvedValue({
+      items: [],
+      has_more: false,
+    } as never)
+    vi.spyOn(killswitchApi, 'state').mockResolvedValue({
+      estate_stopped: false,
+      active: [],
+    })
+    renderIntel(<HomeView />)
+    await waitFor(() => expect(status).toHaveBeenCalled())
+    await waitFor(() => expect(screen.queryByText('Health & SLA')).toBeNull())
+    expect(screen.queryByText('No health checks yet')).toBeNull()
+    expect(screen.queryByText('Kill switch')).toBeNull()
+  })
+
+  // SR4C on ea62fad5: only a successful, complete, empty answer hides a tile.
+  it('keeps a tile whose first read is paused, and says so instead of "no checks"', async () => {
+    authState.can = (p) => p === 'health:status:read'
+    vi.spyOn(healthApi, 'status').mockResolvedValue({
+      items: [],
+      has_more: false,
+    } as never)
+    vi.spyOn(healthApi, 'incidents').mockResolvedValue(healthIncidentsFixture)
+    onlineManager.setOnline(false)
+    try {
+      renderIntel(<HomeView />)
+      expect(await screen.findByText('Health & SLA')).toBeInTheDocument()
+      expect(
+        screen.getByText('Query paused — waiting to resume'),
+      ).toBeInTheDocument()
+      expect(screen.queryByText('No health checks yet')).toBeNull()
+    } finally {
+      onlineManager.setOnline(true)
+    }
+  })
+
+  it('keeps a tile whose answer is a first page with more behind it', async () => {
+    authState.can = (p) => p === 'security:finding:read'
+    const findings = vi.spyOn(securityApi, 'findings').mockResolvedValue({
+      items: [],
+      has_more: true,
+    } as never)
+    renderIntel(<HomeView />)
+    await waitFor(() => expect(findings).toHaveBeenCalled())
+    // The answered tile is a link (a loading tile is not): it stays after the answer.
+    await waitFor(() =>
+      expect(screen.getByText('Security').closest('a')).toHaveAttribute(
+        'href',
+        '/security',
+      ),
+    )
+  })
+
+  it('keeps a tile whose source could not be read', async () => {
+    authState.can = (p) => p === 'health:status:read'
+    vi.spyOn(healthApi, 'status').mockRejectedValue(
+      new ApiError(500, 'server_error', 'boom'),
+    )
+    vi.spyOn(healthApi, 'incidents').mockResolvedValue(healthIncidentsFixture)
+    renderIntel(<HomeView />)
+    expect(await screen.findByText('Health & SLA')).toBeInTheDocument()
+  })
+
+  it('shows the compliance score only after Compliance was opened', async () => {
+    authState.can = (p) => p === 'compliance:framework:read'
+    const summary = vi
+      .spyOn(complianceApi, 'summary')
+      .mockResolvedValue(complianceSummary)
+    const first = renderIntel(<HomeView />)
+    await waitFor(() => expect(summary).toHaveBeenCalled())
+    await waitFor(() => expect(screen.queryByText('Compliance')).toBeNull())
+    first.unmount()
+    compliance.opened = true
+    renderIntel(<HomeView />)
+    expect(await screen.findByText('Compliance')).toBeInTheDocument()
+    compliance.opened = false
   })
 
   it('renders a source error as unavailable, never a fabricated 0', async () => {
@@ -338,5 +495,183 @@ describe('HomeView (RBAC gating + honest states)', () => {
     expect(screen.getByTestId('estate-kpi-value')).not.toHaveTextContent(
       '2/2 healthy',
     )
+  })
+})
+
+describe('Now — the next step once a coding tool is ready (HU 022)', () => {
+  // What each tool runs on is the engine's answer (GET provider-profiles/resolve):
+  // a tool missing from the map is refused with the engine's 409 sentence.
+  const runsOn = (
+    answers: Partial<
+      Record<string, Awaited<ReturnType<typeof agentOpsApi.previewProfile>>>
+    >,
+  ) =>
+    vi
+      .spyOn(agentOpsApi, 'previewProfile')
+      .mockImplementation(async (driver) => {
+        const answer = answers[driver]
+        if (answer) return answer
+        throw new ApiError(
+          409,
+          'conflict',
+          `${driver} has nothing to run on yet.`,
+        )
+      })
+
+  it('drops the generic next steps when a tool is signed in; New session is the action', async () => {
+    runsOn({ claude: { reason: 'own_login' } })
+    vi.spyOn(signInApi, 'status').mockImplementation(
+      async (driver) =>
+        ({
+          driver,
+          installed: driver === 'claude',
+          signed_in: driver === 'claude',
+        }) as Awaited<ReturnType<typeof signInApi.status>>,
+    )
+    renderIntel(<HomeView />)
+    expect(await screen.findByTestId('now-start')).toBeInTheDocument()
+    expect(screen.queryByTestId('home-next-step')).toBeNull()
+  })
+
+  it('a tool that runs on an API key from Providers is ready too (HU 029)', async () => {
+    vi.spyOn(signInApi, 'status').mockImplementation(async (driver) => ({
+      driver,
+      installed: driver === 'claude',
+      signed_in: false,
+    }))
+    runsOn({
+      claude: {
+        reason: 'api_key',
+        provider: { provider_ref: 'prv_1', kind: 'anthropic' },
+      },
+    })
+    // Changed, stated (SR4C on b569f2e8): a key is ready once its last test is read and
+    // was not refused, so the key's record is read here too.
+    vi.spyOn(providersApi, 'list').mockResolvedValue({
+      items: [
+        {
+          provider_ref: 'prv_1',
+          kind: 'anthropic',
+          state: 'active',
+          probe_state: 'ok',
+        },
+      ],
+      has_more: false,
+    } as never)
+    renderIntel(<HomeView />)
+    expect(await screen.findByTestId('now-start')).toHaveTextContent(
+      'Claude Code is ready.',
+    )
+    expect(screen.queryByTestId('home-next-step')).toBeNull()
+  })
+
+  // WEB on 09b: an editor's Home asked GET agenttools/sign-in for both tools and got
+  // 403 twice per load. Only a system administrator may read it, so nobody else asks.
+  it('never asks for the tools\u2019 own status for someone who is not a system administrator', async () => {
+    authState.isSuperadmin = false
+    runsOn({ claude: { reason: 'own_login' } })
+    const status = vi.spyOn(signInApi, 'status')
+    renderIntel(<HomeView />)
+    expect(await screen.findByTestId('now-start')).toHaveTextContent(
+      'Claude Code is ready.',
+    )
+    expect(status).not.toHaveBeenCalled()
+  })
+
+  it('a fresh install shows the real next step, signing the tool in, and no generic cards (N2 J8)', async () => {
+    runsOn({})
+    vi.spyOn(signInApi, 'status').mockImplementation(
+      async (driver) =>
+        ({
+          driver,
+          installed: driver === 'claude',
+          signed_in: false,
+        }) as Awaited<ReturnType<typeof signInApi.status>>,
+    )
+    renderIntel(<HomeView />)
+    expect(await screen.findByTestId('now-start')).toHaveTextContent(
+      'Sign Claude Code in to start a session.',
+    )
+    expect(screen.queryByTestId('home-next-step')).toBeNull()
+  })
+})
+
+describe('Home with modules not enabled (ARCH C1)', () => {
+  afterEach(() => useModulesStore.getState().setOff([]))
+
+  it('shows no tile and asks nothing of a module that is not enabled', async () => {
+    useModulesStore.getState().setOff(['finops', 'security'])
+    const summary = vi.spyOn(finopsApi, 'summary')
+    const findings = vi.spyOn(securityApi, 'findings')
+    renderIntel(<HomeView />)
+    await screen.findByTestId('now-aside')
+    expect(summary).not.toHaveBeenCalled()
+    expect(findings).not.toHaveBeenCalled()
+  })
+})
+
+describe('Now counts sessions, not the rows each one wrote (HU 029)', () => {
+  it('one launch with its hook and usage rows is one live session', async () => {
+    const RUN = '01a0f8bd-e094-7cfd-ace2-5e36665dca8b'
+    const OSN = 'osn_01a0f8bd-e095-7203-b4fa-2b332c008029'
+    const base = {
+      cc_state: 'active',
+      input_tokens: 0,
+      output_tokens: 0,
+      cost_micro_usd: 0,
+      event_count: 0,
+      tool_call_count: 0,
+      first_event_at: '2026-10-01T18:33:08Z',
+      last_event_at: '2026-10-01T18:33:08Z',
+      duration_seconds: 0,
+    }
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue({
+      items: [
+        {
+          ...base,
+          session_ref: 'claude-sid',
+          live_ref: 'lr-m',
+          attribution: 'managed',
+          canonical_sid: OSN,
+          run_ref: RUN,
+          provider_profile_ref: 'ppf_1',
+        },
+        {
+          ...base,
+          session_ref: RUN,
+          live_ref: 'lr-hook',
+          attribution: 'legacy',
+        },
+        {
+          ...base,
+          session_ref: OSN,
+          live_ref: 'lr-usage',
+          attribution: 'legacy',
+        },
+      ],
+      has_more: false,
+    } as never)
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue({
+      items: [
+        {
+          run_ref: RUN,
+          state: 'running',
+          transport: 'stream-json',
+          provider_profile_ref: 'ppf_1',
+          live_ref: 'lr-m',
+          claude_session_id: 'claude-sid',
+        },
+      ],
+      has_more: false,
+    } as never)
+    const { container } = renderIntel(<HomeView />)
+    await waitFor(() => {
+      const tile = [...container.querySelectorAll('a[href="/sessions"]')].find(
+        (a) => a.textContent?.includes('Live sessions'),
+      )
+      expect(
+        tile?.querySelector('[data-testid="estate-kpi-value"]')?.textContent,
+      ).toBe('1')
+    })
   })
 })

@@ -17,7 +17,8 @@ import (
 // so it is deliberately self-contained (no x/mod/semver): fewer moving parts on a
 // security-relevant decision, and it accepts the exact shape our releases produce.
 //
-// Accepted forms: "MAJOR.MINOR.PATCH" with an optional leading "v" and an optional
+// Accepted forms: "MAJOR.MINOR" (monthly) or "MAJOR.MINOR.PATCH" (patch or
+// historical), with an optional leading "v" and an optional
 // "-prerelease" suffix (e.g. "26.7.0", "v26.7.1", "26.8.0-rc.1"). Build metadata
 // ("+meta") is ignored for ordering, per SemVer. A version WITH a prerelease sorts
 // BEFORE the same version without one (26.8.0-rc.1 < 26.8.0).
@@ -86,8 +87,8 @@ func ParseVersion(s string) (Version, error) {
 		v.Pre = strings.Split(pre, ".")
 	}
 	parts := strings.Split(core, ".")
-	if len(parts) != 3 {
-		return Version{}, fmt.Errorf("release: version %q is not MAJOR.MINOR.PATCH", raw)
+	if len(parts) != 2 && len(parts) != 3 {
+		return Version{}, fmt.Errorf("release: version %q is not MAJOR.MINOR or MAJOR.MINOR.PATCH", raw)
 	}
 	nums := [3]int{}
 	for i, p := range parts {

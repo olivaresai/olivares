@@ -291,8 +291,8 @@ run_inside() {
 	esac
 	local install_spec="$package_name"
 	if [[ -n "$version" ]]; then
-		[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
-			printf 'dnf-repository-client: could not check — version must be MAJOR.MINOR.PATCH\n' >&2
+		[[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || {
+			printf 'dnf-repository-client: could not check — version must be YY.M or YY.M.N\n' >&2
 			exit 2
 		}
 		install_spec="${package_name}-${version}"

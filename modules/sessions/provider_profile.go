@@ -253,9 +253,9 @@ func (m *Module) registerProviderProfileSchema(reg store.ExtensionRegistry) erro
 			// identity, so it does not create another profile id.
 			{Name: colPPProviderRecordRef, Kind: model.KindText, Nullable: true, Principal: pdeclNoneProviderRecordRef},
 			// The declared SESSION POLICY (provider_profile_policy.go). Nullable is the
-			// contract, not hygiene: NULL means the operator declared nothing, which is
-			// deny-closed — the child is launched with no built-in tools. A profile that
-			// predates the columns therefore reads as undeclared, which is what it is.
+			// contract, not hygiene: NULL means the operator declared nothing, and the
+			// child gets the tool's default surface (provider_profile_policy.go). A profile
+			// that predates the columns therefore reads as undeclared, which is what it is.
 			{Name: colPPSessionTools, Kind: model.KindText, Nullable: true, Principal: pdeclProfileSessionTools},
 			{Name: colPPSessionPermissionMode, Kind: model.KindText, Nullable: true, Principal: pdeclNonePermissionMode},
 			{Name: colPPSessionWorkGrant, Kind: model.KindText, Nullable: true, Principal: model.None("operator-delegated non-human session capability and workspace; re-read for mint and renewal: modules/sessions/orchestration_work.go:87, modules/sessions/orchestration_work.go:145")},
@@ -369,6 +369,188 @@ func canonicalHome(field, p string) (string, error) {
 		return "", &runErr{http.StatusUnprocessableEntity, field + " is not a directory"}
 	}
 	return real, nil
+}
+
+// UseProfileHomesRoot late-binds the directory this node creates the HOME of a
+// tool's-own-login profile under (the composition root passes
+// <data-dir>/profile-homes). Empty keeps such a profile refused.
+func (m *Module) UseProfileHomesRoot(root string) {
+	root = strings.TrimSpace(root)
+	if root != "" && !filepath.IsAbs(root) {
+		root = ""
+	}
+	m.profileHomesRoot = root
+}
+
+// standardConfigDirs is each tool's configuration directory, relative to a home.
+var standardConfigDirs = map[string]string{
+	providerDriverClaude: ".claude",
+	"codex":              ".codex",
+	"grok":               ".grok",
+	"opencode":           filepath.Join(".config", "opencode"),
+}
+
+// ToolLoginHome is where a tenant's own login of a tool lives on this node: a HOME
+// the product creates under its data directory (<root>/<tenant>/<driver>), and the
+// tool's standard configuration directory inside it. The console's sign-in writes
+// the login there and reads its status there; an own-login profile runs on it.
+//
+// Root on FH 036 (EU, refresh 08): this was the ENGINE USER's own home (~/.claude,
+// ~/.codex, ~/.grok), so a fresh install reported, and would have launched on, a
+// vendor login nobody gave the product. Nothing here reads the engine's HOME or
+// inherits CLAUDE_CONFIG_DIR, CODEX_HOME or the like from its environment. It is
+// per tenant: a subscription one organization signs in never serves another.
+func ToolLoginHome(root string, tenant model.TenantID, driver string) (home, configDir string, ok bool) {
+	rel, known := standardConfigDirs[driver]
+	root = strings.TrimSpace(root)
+	if !known || root == "" || !filepath.IsAbs(root) || tenant.IsZero() || tenant.IsSystem() {
+		return "", "", false
+	}
+	t := tenant.String()
+	if t == "" || t == "." || t == ".." || strings.ContainsAny(t, `/\`) {
+		return "", "", false
+	}
+	home = filepath.Join(filepath.Clean(root), t, driver)
+	return home, filepath.Join(home, rel), true
+}
+
+// refuseForeignToolLogin keeps a tool login with the organization and the tool that
+// signed it in (SR2 on 65d841a1): a home under <tool-logins>/ that is not under this
+// tenant's own <tool-logins>/<tenant>/<driver>/ is refused, at registration and at
+// every launch and resume. A home outside <tool-logins>/ keeps its own contract.
+func (m *Module) refuseForeignToolLogin(tenant model.TenantID, driver string, homes ...string) error {
+	root := strings.TrimSpace(m.toolLoginsRoot)
+	if root == "" {
+		return nil
+	}
+	roots := []string{filepath.Clean(root)}
+	if real, err := filepath.EvalSymlinks(root); err == nil && real != roots[0] {
+		roots = append(roots, real)
+	}
+	within := func(dir, path string) bool {
+		rel, err := filepath.Rel(dir, path)
+		return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	}
+	for _, home := range homes {
+		home = filepath.Clean(strings.TrimSpace(home))
+		if home == "." || home == "" {
+			continue
+		}
+		for _, r := range roots {
+			if !within(r, home) {
+				continue
+			}
+			if tenant.IsZero() || !within(filepath.Join(r, tenant.String()), home) {
+				return forbiddenErr("that tool login belongs to another organization; sign the tool in for this organization under AI tools")
+			}
+			if driver == "" || !within(filepath.Join(r, tenant.String(), driver), home) {
+				return forbiddenErr("that login belongs to another tool; each tool signs in with its own login")
+			}
+		}
+	}
+	return nil
+}
+
+// serverUserLoginSentence refuses a profile that runs on this server's user login.
+const serverUserLoginSentence = "This profile uses this server's user login; sign in again to use a product login."
+
+// usesServerUserLogin reports an own-login profile whose configuration home is the
+// engine user's own tool directory (~/.claude, ~/.codex, ~/.grok,
+// ~/.config/opencode): the shape profiles were given before FH 036. Such a profile
+// is shown as such and not launched, until an administrator chooses what to do with
+// it. Only the PATH is compared; no file under it is opened.
+func usesServerUserLogin(driver, authSource, configHome string) bool {
+	rel, ok := standardConfigDirs[driver]
+	if !ok || authSource != AuthSourceAccountHome || strings.TrimSpace(configHome) == "" {
+		return false
+	}
+	home, err := os.UserHomeDir()
+	if err != nil || !filepath.IsAbs(home) {
+		return false
+	}
+	want := filepath.Join(filepath.Clean(home), rel)
+	if real, err := filepath.EvalSymlinks(want); err == nil {
+		want = real
+	}
+	return filepath.Clean(configHome) == filepath.Clean(want) || filepath.Clean(configHome) == filepath.Join(filepath.Clean(home), rel)
+}
+
+// UseToolLoginsRoot late-binds the directory the tools' own logins live under
+// (the composition root passes <data-dir>/tool-logins). Empty refuses an
+// own-login profile that names no homes: there is no fallback to the engine
+// user's home.
+func (m *Module) UseToolLoginsRoot(root string) {
+	root = strings.TrimSpace(root)
+	if root != "" && !filepath.IsAbs(root) {
+		root = ""
+	}
+	m.toolLoginsRoot = root
+}
+
+// ownLoginConfigHome is the tool's own-login configuration directory on this
+// node, created (0700) when missing.
+func (m *Module) ownLoginConfigHome(tenant model.TenantID, driver string) (string, error) {
+	if _, ok := standardConfigDirs[driver]; !ok {
+		return "", badRequest("config_home and user_home are required for this driver")
+	}
+	home, configHome, ok := ToolLoginHome(m.toolLoginsRoot, tenant, driver)
+	if !ok {
+		return "", &runErr{http.StatusUnprocessableEntity, "this node has no directory for the tools' own logins; name config_home and user_home"}
+	}
+	if err := os.MkdirAll(home, 0o700); err != nil {
+		return "", &runErr{http.StatusUnprocessableEntity, "the tool's login directory could not be created on this execution environment"}
+	}
+	_ = os.Chmod(filepath.Dir(home), 0o700) // the tenant's directory holds its logins only
+	if err := os.MkdirAll(configHome, 0o700); err != nil {
+		return "", &runErr{http.StatusUnprocessableEntity, "the tool's login directory could not be created on this execution environment"}
+	}
+	return configHome, nil
+}
+
+// standardAccountHomes picks the homes of a profile that asks for the tool's own
+// login and names none. The configuration home is the tool's own login on this
+// node (ToolLoginHome: under the data directory, where the console's sign-in runs
+// the tool's login), never the engine user's. HOME is a directory the product
+// creates for this profile (<profile homes root>/<profile ref>, 0700), so a
+// session never runs with the operator's ~/.ssh, other projects or dotfiles as
+// its home. Only the tool's own variable (CLAUDE_CONFIG_DIR, CODEX_HOME, …)
+// points at the login.
+func (m *Module) standardAccountHomes(tenant model.TenantID, driver, ref string) (configHome, userHome string, err error) {
+	if _, ok := standardConfigDirs[driver]; !ok {
+		return "", "", badRequest("config_home and user_home are required for this driver")
+	}
+	if m.profileHomesRoot == "" {
+		return "", "", &runErr{http.StatusUnprocessableEntity, "this node has no directory for a profile's own home; name config_home and user_home"}
+	}
+	if configHome, err = m.ownLoginConfigHome(tenant, driver); err != nil {
+		return "", "", err
+	}
+	userHome = filepath.Join(m.profileHomesRoot, ref)
+	if err := os.MkdirAll(userHome, 0o700); err != nil {
+		return "", "", &runErr{http.StatusUnprocessableEntity, "the profile's home directory could not be created on this execution environment"}
+	}
+	return configHome, userHome, nil
+}
+
+// managedProfileHomes picks the homes of a profile whose credential the engine
+// injects (an API key from Providers) and that names none. Both are the
+// product's own: HOME is <profile homes root>/<profile ref> and the tool's
+// configuration directory sits inside it, so a key-backed session never shares
+// the tool's own login folder with the operator's subscription sign-in.
+func (m *Module) managedProfileHomes(driver, ref string) (configHome, userHome string, err error) {
+	rel, ok := standardConfigDirs[driver]
+	if !ok {
+		return "", "", badRequest("config_home and user_home are required for this driver")
+	}
+	if m.profileHomesRoot == "" {
+		return "", "", &runErr{http.StatusUnprocessableEntity, "this node has no directory for a profile's own home; name config_home and user_home"}
+	}
+	userHome = filepath.Join(m.profileHomesRoot, ref)
+	configHome = filepath.Join(userHome, rel)
+	if err := os.MkdirAll(configHome, 0o700); err != nil {
+		return "", "", &runErr{http.StatusUnprocessableEntity, "the profile's home directory could not be created on this execution environment"}
+	}
+	return configHome, userHome, nil
 }
 
 // revalidateHome re-checks an already-canonical stored home before a launch or a
@@ -515,13 +697,20 @@ func validateRecordBinding(ctx context.Context, sc store.Scope, driver, ref stri
 	if rec.String(colPRState) != ProviderRecordActive {
 		return ErrProviderRecordRevoked
 	}
-	kind := rec.String(colPRKind)
-	if !recordServesDriver(kind, driver) {
-		return &runErr{
-			http.StatusUnprocessableEntity,
-			"a " + kind + " credential is not readable by driver " + driver +
-				"; bind a provider of a kind this driver reads, or register an openai_compatible provider with its endpoint",
-		}
+	if !recordServesDriver(rec.String(colPRKind), rec.String(colPRBaseURL), driver) {
+		return &runErr{http.StatusUnprocessableEntity, recordDriverRefusal(driver, rec.String(colPRDisplayName), rec.String(colPRKind))}
+	}
+	return nil
+}
+
+// refuseKeyUnderOwnLogin is the coherence rule for a profile's credential: a key
+// from Providers is used by a managed credential only, so a profile that would
+// carry one under the tool's own login is refused rather than stored unused
+// (HU 030). Nothing at launch reads a record under an own-login profile.
+func refuseKeyUnderOwnLogin(source, recordRef string) error {
+	if source == AuthSourceAccountHome && strings.TrimSpace(recordRef) != "" {
+		return &runErr{http.StatusUnprocessableEntity,
+			"This profile uses the tool's own login; to use a key from Providers, choose 'Managed provider credential'."}
 	}
 	return nil
 }
@@ -546,6 +735,22 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 	if err != nil {
 		return ProviderProfile{}, err
 	}
+	authSource, err := normalizeAuthSource(in.AuthSource)
+	if err != nil {
+		return ProviderProfile{}, err
+	}
+	ref := newProfileRef()
+	if strings.TrimSpace(in.ConfigHome) == "" && strings.TrimSpace(in.UserHome) == "" {
+		switch authSource {
+		case AuthSourceAccountHome:
+			in.ConfigHome, in.UserHome, err = m.standardAccountHomes(tenant, driver, ref)
+		case AuthSourceManagedInjection:
+			in.ConfigHome, in.UserHome, err = m.managedProfileHomes(driver, ref)
+		}
+		if err != nil {
+			return ProviderProfile{}, err
+		}
+	}
 	configHome, err := canonicalHome("config_home", in.ConfigHome)
 	if err != nil {
 		return ProviderProfile{}, err
@@ -558,11 +763,10 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 	if err != nil {
 		return ProviderProfile{}, err
 	}
-	authSource, err := normalizeAuthSource(in.AuthSource)
-	if err != nil {
+	recordRef := strings.TrimSpace(in.ProviderRecordRef)
+	if err := refuseKeyUnderOwnLogin(authSource, recordRef); err != nil {
 		return ProviderProfile{}, err
 	}
-	recordRef := strings.TrimSpace(in.ProviderRecordRef)
 	policyTools, policyMode, err := validateSessionPolicyInput(
 		driver, in.SessionTools, in.SessionToolsDeclared, in.SessionPermissionMode)
 	if err != nil {
@@ -575,7 +779,6 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 	if err != nil {
 		return ProviderProfile{}, err
 	}
-	ref := newProfileRef()
 	var out ProviderProfile
 	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, _, err := accountHomeAdmission(ctx, sc, tenant)
@@ -583,6 +786,9 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 			return err
 		}
 		if err := m.rejectManagedRegistration(configHome, userHome); err != nil {
+			return err
+		}
+		if err := m.refuseForeignToolLogin(tenant, driver, configHome, userHome); err != nil {
 			return err
 		}
 		if err := validateRecordBinding(ctx, sc, driver, recordRef); err != nil {
@@ -799,6 +1005,12 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 			}
 			rec[colPPProviderRecordRef] = recordRef
 		}
+		// The RESULT of the patch is what must be coherent: binding a key to an
+		// own-login profile, or switching a key-bound profile to its own login,
+		// would leave a key nothing reads.
+		if err := refuseKeyUnderOwnLogin(rec.String(colPPAuthSource), rec.String(colPPProviderRecordRef)); err != nil {
+			return err
+		}
 		if p.SessionTools != nil {
 			// The DRIVER is read from the row, never from the request: it is immutable,
 			// so the row is the authority, and a caller cannot declare a policy for a
@@ -854,8 +1066,25 @@ func (m *Module) resolveLaunchProfile(ctx context.Context, tenant model.TenantID
 	if err != nil {
 		return ProviderHomeSnapshot{}, sessionPolicy{}, err
 	}
-	snap, err := m.snapshotForLaunch(prof, env)
+	snap, err := m.snapshotForLaunch(tenant, prof, env)
 	return snap, profileSessionPolicy(prof), err
+}
+
+// ProviderLoginHome resolves an existing account/profile through the same home
+// and lifecycle guards a session launch uses. Sign-in never accepts a path or
+// changes a profile's authorized authentication source.
+func (m *Module) ProviderLoginHome(ctx context.Context, tenant model.TenantID, driver, ref string) (home, configDir string, err error) {
+	snap, _, err := m.resolveLaunchProfile(ctx, tenant, ref)
+	if err != nil {
+		return "", "", err
+	}
+	if snap.Driver != driver {
+		return "", "", conflictErr("this provider account belongs to another tool")
+	}
+	if snap.AuthSource != AuthSourceAccountHome || snap.ProviderRecordRef != "" {
+		return "", "", conflictErr("this provider account uses a managed credential; sign-in requires the tool's own login")
+	}
+	return snap.UserHome, snap.ConfigHome, nil
 }
 
 // profileSessionPolicy is the profile's DECLARED session policy
@@ -873,7 +1102,7 @@ func profileSessionPolicy(prof ProviderProfile) sessionPolicy {
 }
 
 // snapshotForLaunch is the profile→snapshot check shared by create and resume.
-func (m *Module) snapshotForLaunch(prof ProviderProfile, env string) (ProviderHomeSnapshot, error) {
+func (m *Module) snapshotForLaunch(tenant model.TenantID, prof ProviderProfile, env string) (ProviderHomeSnapshot, error) {
 	switch prof.State {
 	case ProfileActive:
 	case ProfileDisabled:
@@ -891,6 +1120,15 @@ func (m *Module) snapshotForLaunch(prof ProviderProfile, env string) (ProviderHo
 		return ProviderHomeSnapshot{}, err
 	}
 	if err := revalidateHome("user_home", prof.UserHome); err != nil {
+		return ProviderHomeSnapshot{}, err
+	}
+	// FH 036, here because launch, resume and a queued launch all come through this
+	// snapshot (SR2 on 65d841a1): a profile on this server's user login is not used,
+	// and a tool login belongs to the organization that signed it in.
+	if usesServerUserLogin(prof.Driver, prof.AuthSource, prof.ConfigHome) {
+		return ProviderHomeSnapshot{}, &runErr{http.StatusConflict, serverUserLoginSentence}
+	}
+	if err := m.refuseForeignToolLogin(tenant, prof.Driver, prof.ConfigHome, prof.UserHome); err != nil {
 		return ProviderHomeSnapshot{}, err
 	}
 	if err := requireAuthSourceForDriver(prof.Driver, prof.AuthSource); err != nil {
@@ -999,7 +1237,7 @@ func (m *Module) revalidateStoredProfile(ctx context.Context, tenant model.Tenan
 		// write; either way it is not proof of the previous home.
 		return ProviderHomeSnapshot{}, sessionPolicy{}, &runErr{http.StatusConflict, "the run's persisted home does not match its profile; refusing to continue on an unproven home"}
 	}
-	snap, err := m.snapshotForLaunch(prof, env)
+	snap, err := m.snapshotForLaunch(tenant, prof, env)
 	// The policy is RE-RESOLVED from the CURRENT profile, exactly as the template's
 	// terms are on resume: the posture a session continues under is today's, not the
 	// one it was born with.

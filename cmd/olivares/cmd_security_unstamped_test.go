@@ -249,8 +249,8 @@ func TestNonSemverStampAbstainsButATypedOneIsAUsageError(t *testing.T) {
 // it had never been read. Same lie as the unstamped build, one level down — the command
 // reporting a measurement it did not make.
 func TestUnreadableAdvisoryBlocksACleanVerdict(t *testing.T) {
-	// "26.5" is not MAJOR.MINOR.PATCH, so the range cannot be ordered.
-	feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-unreadable", "26.5", "26.7.2")
+	// "26.5.0.1" has four numeric components, so the range cannot be ordered.
+	feedPath, pub := writeSignedFeedRange(t, t.TempDir(), "GHSA-fixture-unreadable", "26.5.0.1", "26.7.2")
 	out, code := runCheckProcess(t, "--feed", feedPath, "--pubkey", pub, "--product-version", "26.7.0")
 
 	if strings.Contains(out, "no known advisory affects this version") {
@@ -305,7 +305,7 @@ func writeMixedFeed(t *testing.T, dir string) mixedFeed {
 		}
 	}
 	feed := secadvisory.NewFeed("security@olivares.ai", time.Date(2026, 8, 7, 12, 0, 0, 0, time.UTC),
-		[]secadvisory.Advisory{mk("GHSA-fixture-hit-real", "0", "26.7.2"), mk("GHSA-fixture-unread", "26.5", "26.9.0")})
+		[]secadvisory.Advisory{mk("GHSA-fixture-hit-real", "0", "26.7.2"), mk("GHSA-fixture-unread", "26.5.0.1", "26.9.0")})
 	fb, sig, err := feed.Sign(priv)
 	if err != nil {
 		t.Fatalf("Sign: %v", err)

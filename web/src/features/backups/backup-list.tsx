@@ -196,10 +196,10 @@ function RowActions({
     // Build an authenticated download by creating a temporary anchor. The route
     // requires auth headers so we fetch the blob with credentials and save it.
     const url = drApi.downloadUrl(backup.id)
-    const token = useSessionStore.getState().token
+    const token = useSessionStore.getState().csrfToken
     const tenant = useTenantStore.getState().activeTenant
     const headers = new Headers()
-    if (token) headers.set('Authorization', `Bearer ${token}`)
+    if (token) headers.set('X-CSRF-Token', token)
     if (tenant) headers.set('X-Olivares-Tenant', tenant)
 
     void fetch(url, { method: 'GET', headers, credentials: 'same-origin' })

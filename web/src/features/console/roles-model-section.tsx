@@ -1,6 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import {
+  ModuleGate,
+  QueryErrorState,
+} from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { Layers, Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react'
 import { useState } from 'react'
@@ -17,7 +21,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
@@ -50,6 +53,16 @@ import { StaticTable } from '@/components/data/static-table'
  * remains the authority; this panel is an authoring interface only.
  */
 export function ModelGovernanceSection() {
+  // Model groups and access rules are the models module's (EU18): while it is off the
+  // section is one line with the administrator's enable action, no reads and no New.
+  return (
+    <ModuleGate module="models">
+      <ModelGovernanceReads />
+    </ModuleGate>
+  )
+}
+
+function ModelGovernanceReads() {
   const { t } = useTranslation(['console', 'common'])
   const { activeTenant, can } = useAuth()
   const tenantRequest: TenantRequestOptions = { tenant: activeTenant }
@@ -103,6 +116,7 @@ export function ModelGovernanceSection() {
         items={modelGroupsQuery.data?.items ?? []}
         loading={modelGroupsQuery.isLoading}
         isError={modelGroupsQuery.isError}
+        error={modelGroupsQuery.error}
         refetch={() => void modelGroupsQuery.refetch()}
         canRead={canReadGroups}
         canWrite={canWriteGroups}
@@ -111,6 +125,7 @@ export function ModelGovernanceSection() {
         items={modelAccessQuery.data?.items ?? []}
         loading={modelAccessQuery.isLoading}
         isError={modelAccessQuery.isError}
+        error={modelAccessQuery.error}
         refetch={() => void modelAccessQuery.refetch()}
         canRead={canReadAccess}
         canAdmin={canAdminAccess}
@@ -125,6 +140,7 @@ function ModelGroupsSection({
   items,
   loading,
   isError,
+  error,
   refetch,
   canRead,
   canWrite,
@@ -132,6 +148,8 @@ function ModelGroupsSection({
   items: ModelGroupDTO[]
   loading: boolean
   isError: boolean
+  /** The read's error, for the one error mapping (QueryErrorState). */
+  error?: unknown
   refetch: () => void
   canRead: boolean
   canWrite: boolean
@@ -192,7 +210,7 @@ function ModelGroupsSection({
           <Spinner />
         </div>
       ) : isError ? (
-        <ErrorState retry={refetch} />
+        <QueryErrorState error={error} retry={refetch} />
       ) : items.length === 0 ? (
         <EmptyState
           action={
@@ -480,6 +498,7 @@ function ModelAccessSection({
   items,
   loading,
   isError,
+  error,
   refetch,
   canRead,
   canAdmin,
@@ -487,6 +506,8 @@ function ModelAccessSection({
   items: ModelAccessDTO[]
   loading: boolean
   isError: boolean
+  /** The read's error, for the one error mapping (QueryErrorState). */
+  error?: unknown
   refetch: () => void
   canRead: boolean
   canAdmin: boolean
@@ -548,7 +569,7 @@ function ModelAccessSection({
           <Spinner />
         </div>
       ) : isError ? (
-        <ErrorState retry={refetch} />
+        <QueryErrorState error={error} retry={refetch} />
       ) : items.length === 0 ? (
         <EmptyState
           action={

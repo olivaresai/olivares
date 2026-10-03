@@ -25,6 +25,14 @@ vi.mock('@tanstack/react-router', () => ({
   ),
 }))
 
+// Setup signs the new administrator straight in. By default the sign-in is
+// refused here, so the original "go to /login" path stays pinned; the auto
+// sign-in test makes it succeed.
+const mockLogin = vi.fn()
+vi.mock('@/lib/auth/context', () => ({
+  useAuth: () => ({ login: (...args: unknown[]) => mockLogin(...args) }),
+}))
+
 const mockSetup = vi.fn()
 vi.mock('@/lib/api/endpoints', () => ({
   authApi: {
@@ -54,6 +62,7 @@ function Wrapper({ children }: { children: ReactNode }) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  mockLogin.mockRejectedValue(new Error('sign-in refused'))
   localStorage.clear()
   useTenantStore.setState({ activeTenant: null })
 })
@@ -95,6 +104,101 @@ describe('SetupPage', () => {
       expect(useTenantStore.getState().activeTenant).toBe(TENANT_ID),
     )
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' })
+  })
+
+  it('signs the new administrator in with what they typed and opens the setup wizard', async () => {
+    const user = userEvent.setup()
+    mockSetup.mockResolvedValue({
+      id: 'u-1',
+      email: 'admin@example.com',
+      status: 'active',
+      is_superadmin: true,
+      created_at: '2026-08-05T10:00:00Z',
+    })
+    mockLogin.mockResolvedValue({
+      token: 'session',
+      session_id: 's',
+      expires_at: '',
+    })
+
+    render(<SetupPage />, { wrapper: Wrapper })
+    await user.type(await screen.findByLabelText(/setup token/i), 'olv_tok')
+    await user.type(
+      screen.getByLabelText(/administrator email/i),
+      'admin@example.com',
+    )
+    await user.type(screen.getByLabelText(/password/i), 'correct-horse-battery')
+    await user.click(
+      screen.getByRole('button', { name: /create administrator/i }),
+    )
+
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/onboarding' }),
+    )
+    expect(mockLogin).toHaveBeenCalledWith({
+      email: 'admin@example.com',
+      password: 'correct-horse-battery',
+    })
+    expect(mockNavigate).not.toHaveBeenCalledWith({ to: '/login' })
+  })
+
+  it('opens the setup wizard when the session travels in the browser cookie', async () => {
+    const user = userEvent.setup()
+    mockSetup.mockResolvedValue({
+      id: 'u-1',
+      email: 'admin@example.com',
+      status: 'active',
+      is_superadmin: true,
+      created_at: '2026-08-05T10:00:00Z',
+    })
+    mockLogin.mockResolvedValue({
+      csrf_token: 'c',
+      session_id: 's',
+      expires_at: '',
+    })
+
+    render(<SetupPage />, { wrapper: Wrapper })
+    await user.type(await screen.findByLabelText(/setup token/i), 'olv_tok')
+    await user.type(
+      screen.getByLabelText(/administrator email/i),
+      'admin@example.com',
+    )
+    await user.type(screen.getByLabelText(/password/i), 'correct-horse-battery')
+    await user.click(
+      screen.getByRole('button', { name: /create administrator/i }),
+    )
+
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/onboarding' }),
+    )
+    expect(mockNavigate).not.toHaveBeenCalledWith({ to: '/login' })
+  })
+
+  it('falls back to the sign-in page when the new session needs a second factor', async () => {
+    const user = userEvent.setup()
+    mockSetup.mockResolvedValue({
+      id: 'u-1',
+      email: 'admin@example.com',
+      status: 'active',
+      is_superadmin: true,
+      created_at: '2026-08-05T10:00:00Z',
+    })
+    mockLogin.mockResolvedValue({ mfa_required: true, mfa_token: 'm' })
+
+    render(<SetupPage />, { wrapper: Wrapper })
+    await user.type(await screen.findByLabelText(/setup token/i), 'olv_tok')
+    await user.type(
+      screen.getByLabelText(/administrator email/i),
+      'admin@example.com',
+    )
+    await user.type(screen.getByLabelText(/password/i), 'correct-horse-battery')
+    await user.click(
+      screen.getByRole('button', { name: /create administrator/i }),
+    )
+
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/login' }),
+    )
   })
 
   it('leaves the selection empty when setup reports no organization', async () => {
@@ -163,6 +267,9 @@ describe('SetupPage', () => {
     // end to end, so following the screen got you nothing (F8).
     const shown = await screen.findByText(/--admin-dsn/)
     expect(shown.textContent).toMatch(/olivares db init/)
+    // The engine's own first remedy (core/api/errors.go): install the tenant inventory on
+    // the database it already uses; the admin role stays the alternative.
+    expect(shown.textContent).toMatch(/--install-directory-inventory/)
     expect(shown.textContent).toMatch(/--admin-role/)
     expect(shown.textContent).toMatch(/NOSUPERUSER BYPASSRLS/)
     expect(screen.queryByText(/Something went wrong/i)).toBeNull()

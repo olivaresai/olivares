@@ -26,3 +26,23 @@ olivares-data/
 *.crt
 *.key
 *.pem
+# Local environment and vendor account stores are never build inputs.
+**/.env
+**/.env.*
+**/.secrets
+**/.claude
+**/.codex
+**/.gemini
+**/.config
+**/.local/share
+**/.aws
+**/.azure
+**/.kube
+**/.ssh
+**/.gnupg
+**/.netrc
+**/.npmrc
+**/credentials.json
+**/auth.json
+# Console auth translations are product inputs, not vendor credentials.
+!web/src/lib/i18n/locales/*/auth.json

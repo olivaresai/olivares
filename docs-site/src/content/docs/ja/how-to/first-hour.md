@@ -119,12 +119,42 @@ curl -sf "$BASE/v1/agents" \
 ./bin/olivares agent managed-settings --out ./managed-settings.json
 ```
 
-`POST /v1/agents` は AAL3 を **要求しません**。ソース、コネクタ、ワークスペース、
-シークレットの作成は **要求します**。
+`POST /v1/agents` は管理操作の追加認証を要求しません。ソース、コネクタ、
+ワークスペース、シークレットの追加認証は `admin_step_up` に従い、既定値は
+`none` です。AAL3 を必須にする方法は、後述のポリシー設定を参照してください。
 
 ### 4. ガバナンス済みセッション: Read を許可し、Bash を拒否する
 
-`OLIVARES_HOOK_PEP_CONFIG` と deny-closed ポリシーで再起動します。その後:
+手順 1 のエンジンを停止します。同じ作業ディレクトリで、手順 1 と 2 の
+`DATA` と `TENANT` を保持したまま以下を実行してください。既定で拒否する
+ポリシーを書き込み、PEP を有効にしてエンジンを再起動します。
+
+```bash
+# TENANT is the tenant_id returned in step 2.
+: "${TENANT:?Set TENANT to the tenant_id from step 2}"
+cat > ./hook-pep.json <<JSON
+{
+  "listen": "127.0.0.1:8447",
+  "tenants": [
+    {
+      "tenant": "$TENANT",
+      "require_firm_identity": false,
+      "policy": {
+        "version": "first-hour/v1",
+        "default": "deny",
+        "rules": [
+          { "tool": "Read", "decision": "allow", "reason": "reads are permitted in the first hour" },
+          { "tool": "Bash", "decision": "deny", "reason": "shell execution is blocked in the first hour" }
+        ]
+      }
+    }
+  ]
+}
+JSON
+OLIVARES_HOOK_PEP_CONFIG=./hook-pep.json \
+  ./bin/olivares serve --insecure --data-dir "$DATA" \
+  --listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444
+```
 
 ```bash
 export OLIVARES_HOOK_PEP_URL=http://127.0.0.1:8447/
@@ -168,11 +198,21 @@ docker compose -f deploy/compose/docker-compose.yml \
 ワークステーションで実行します。公式 CLI のライブセッション (PTY) は Community ランタイムの領分であり、
 このページではありません。
 
-## AAL3 の壁 (今も正しい)
+## 管理操作の追加認証ポリシー
 
-ソース、コネクタ、ワークスペース、シークレットの作成は AAL3 まで **拒否**
-されます。標準インストールで PIV/CAC は **501** です。
-`https://localhost:PORT` を開き、**Identity → Privileged login** に進みます。
+`admin_step_up` の既定値は `none` です。サインイン済みの管理者は、現在の
+セッションの認証強度で操作します。そのため、ソース、コネクタ、ワークスペース、
+シークレットの作成に既定で AAL3 は要求されません。認証、権限、テナント分離、
+監査は引き続き適用されます。API トークンはこの認証要件を満たしません。
+
+これらの操作に最新の AAL3 を要求するには、`https://localhost:PORT` で
+パスキーを登録し、そのコンソールのアドレスで新たにパスキー/PIV による追加認証を
+完了してください。**Settings → Sign-in → Extra check for administrative
+actions** で **Passkey** を選択します。API では
+`PUT /v1/auth/step-up-policy` に `{"admin_step_up":"passkey"}` を送信します。
+選択した認証要素が機能することを管理者が確認するまで、エンジンはポリシーの
+強化を拒否します。`POST /v1/agents` はこの追加認証の対象外です。
+
 
 ## 3. コンソールから Claude Code セッションを起動する
 

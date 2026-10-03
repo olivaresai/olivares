@@ -313,7 +313,7 @@ func askPostgres(cmd *cobra.Command, p *prompter, plan *installPlan, secretsDir 
 	if wantAdmin {
 		p.printf("  postgres-prod requires a dedicated NOSUPERUSER BYPASSRLS admin role for complete cross-tenant operations.\n")
 	} else {
-		wantAdmin = p.askBool("Provision a cross-tenant admin role (full org-list / checkpoint coverage)?", false)
+		wantAdmin = p.askBool("Provision a cross-tenant admin role (DR backups, retirement, eventing egress)?", false)
 	}
 	var adminRole, adminPw string
 	if wantAdmin {
@@ -373,6 +373,20 @@ func askPostgres(cmd *cobra.Command, p *prompter, plan *installPlan, secretsDir 
 			return fmt.Errorf("db init during setup: %w", err)
 		}
 		p.printf("  provisioned database %q (%d step(s)); roles verified.\n", dbName, len(res.Steps))
+		// As db init does: the engine's schema, applied as the owner, then the tenant
+		// inventory, so the first start runs every job that must cover every tenant
+		// even without the admin connection. A refusal leaves those jobs off, which the
+		// engine says; provisioning itself succeeded.
+		if split {
+			if err := applySchemaAndInstallTenantInventoryWith(cmd.Context(), mkDSN(appRole, appPw), mkDSN(ownerRole, ownerPw), superDSN, spec); err != nil {
+				p.printf("  %s\n", tenantInventoryNotInstalled(err))
+			} else {
+				p.printf("  %s.\n", dbInitInventoryInstalledLine)
+			}
+		} else {
+			p.printf("  after the first start, install the tenant inventory once (retention, legal hold and audit checkpoints need it):\n"+
+				"    olivares db init --superuser-dsn … --database %s --app-role %s --install-directory-inventory\n", dbName, appRole)
+		}
 		warnPosture(p, "app", res.AppPosture, false)
 		warnPosture(p, "owner", res.OwnerPosture, false)
 		warnPosture(p, "admin", res.AdminPosture, true)

@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
 )
 
 const testClientID = "client-1"
@@ -140,6 +141,71 @@ func TestOIDC_ValidToken(t *testing.T) {
 	}
 	if id.Email != "alice@corp.example" || id.Subject != "user-123" {
 		t.Errorf("identity = %+v, want alice@corp.example / user-123", id)
+	}
+}
+
+func TestOIDC_SignedMFAAssurance(t *testing.T) {
+	idp := newOIDCTestIDP(t)
+	p := idp.provider(t)
+	claims := idp.baseClaims("mfa-nonce")
+	authTime := time.Now().Add(-time.Minute).Unix()
+	claims["amr"] = []string{"pwd", "otp"}
+	claims["auth_time"] = authTime
+	idp.idToken = idp.signRS256(claims)
+	id, err := validateWith(t, p, "mfa-nonce")
+	if err != nil || id.AAL != auth.AAL2 || !id.AuthenticatedAt.Equal(time.Unix(authTime, 0)) {
+		t.Fatalf("signed MFA assurance = %d at %v, err %v; want 2 at upstream authentication", id.AAL, id.AuthenticatedAt, err)
+	}
+}
+
+func TestOIDC_AssuranceMappingAndClaimProvenance(t *testing.T) {
+	idp := newOIDCTestIDP(t)
+	for _, tc := range []struct {
+		name     string
+		amr      any
+		acr      string
+		time     bool
+		userinfo bool
+		mapping  *model.FederationAssuranceMapping
+		want     int
+	}{
+		{name: "signed MFA", amr: []string{"pwd", "mfa"}, time: true, want: auth.AAL2},
+		{name: "SMS alone", amr: []string{"pwd", "sms"}, time: true, want: auth.AAL1},
+		{name: "numeric ACR without mapping", acr: "2", time: true, want: auth.AAL1},
+		{name: "administrator ACR", acr: "urn:corp:aal3", time: true, mapping: &model.FederationAssuranceMapping{ACR: []string{"urn:corp:aal3"}}, want: auth.AAL2},
+		{name: "disabled AMR mapping", amr: []string{"otp"}, time: true, mapping: &model.FederationAssuranceMapping{AMR: []string{}}, want: auth.AAL1},
+		{name: "missing authentication time", amr: []string{"otp"}, want: auth.AAL1},
+		{name: "malformed AMR", amr: "otp", time: true, want: auth.AAL1},
+		{name: "UserInfo cannot elevate", userinfo: true, want: auth.AAL1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p, err := FromConfig(context.Background(), auth.FederationParams{
+				Protocol: auth.ProtocolOIDC, OIDCIssuer: idp.srv.URL, OIDCClientID: testClientID,
+				OIDCClientSecret: "test-secret", AssuranceMapping: tc.mapping,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			claims := idp.baseClaims("mapping-nonce")
+			claims["amr"], claims["acr"] = tc.amr, tc.acr
+			at := time.Now().Add(-time.Minute).Unix()
+			if tc.time {
+				claims["auth_time"] = at
+			}
+			idp.userinfo = nil
+			if tc.userinfo {
+				delete(claims, "email")
+				idp.userinfo = map[string]any{"sub": "user-123", "email": "alice@corp.example", "email_verified": true, "amr": []string{"mfa"}, "auth_time": at}
+			}
+			idp.idToken = idp.signRS256(claims)
+			id, err := p.ValidateAssertion(context.Background(), auth.Assertion{Protocol: auth.ProtocolOIDC, Raw: "code", Nonce: "mapping-nonce", PKCEVerifier: "verifier", RedirectURI: "https://app.example/callback"})
+			if err != nil || id.AAL != tc.want {
+				t.Fatalf("assurance = %d, err %v; want %d", id.AAL, err, tc.want)
+			}
+			if tc.want == auth.AAL2 && !id.AuthenticatedAt.Equal(time.Unix(at, 0)) {
+				t.Fatal("mapped proof replaced the authentication instant")
+			}
+		})
 	}
 }
 

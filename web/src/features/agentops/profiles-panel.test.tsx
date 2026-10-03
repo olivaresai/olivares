@@ -277,7 +277,7 @@ beforeEach(() => {
   auth.isSuperadmin = false
   auth.principal = 'u1'
   useSessionStore.setState({
-    token: 'olvs_first',
+    csrfToken: 'olvs_first',
     sessionId: 'sid-1',
     expiresAt: '2030-01-01T00:00:00Z',
   })
@@ -335,6 +335,23 @@ describe('ProfilesPanel — the list', () => {
     // The ordinary list never asked for a home or an inventory-wide readiness GET.
     expect(api.profileConfiguration).not.toHaveBeenCalled()
     expect(api.profileLaunchReadiness).not.toHaveBeenCalled()
+  })
+
+  // FH 036: a profile made before the product had its own login home points at this
+  // server's user login. It is shown as such, never as enabled, and not launched.
+  it('marks a profile on the server user login instead of calling it enabled', async () => {
+    api.listProfiles.mockResolvedValue(
+      page([{ ...homeA, server_user_login: true }]),
+    )
+    wrap()
+    await screen.findByText('Home A')
+    const row = rowOf('Home A')
+    expect(
+      within(row).getByText(
+        "Uses this server's user login; sign in again to use a product login",
+      ),
+    ).toBeInTheDocument()
+    expect(within(row).queryByText('Enabled in this environment')).toBeNull()
   })
 
   it('narrows by state on the SERVER, not on the loaded page', async () => {
@@ -509,7 +526,7 @@ describe('ProfilesPanel — a filtered empty page is not an empty estate', () =>
     expect(await screen.findByText('No provider profiles')).toBeInTheDocument()
     let empty = emptyStateOf('No provider profiles')
     expect(
-      within(empty).getByText(/Use “Register profile” above to register/),
+      within(empty).getByText(/Register a profile to add a tool installation/),
     ).toBeInTheDocument()
     // The ONE control that registers is the header button, gated by the write tier;
     // the empty state holds no second create workflow and no clear action.
@@ -529,11 +546,11 @@ describe('ProfilesPanel — a filtered empty page is not an empty estate', () =>
     // Accurate for a reader: the specific missing write, not "you cannot use this".
     expect(
       within(empty).getByText(
-        /needs sessions:profile:write, which your role does not include/,
+        /needs the sessions:profile:write permission, which your role does not include/,
       ),
     ).toBeInTheDocument()
     expect(
-      within(empty).queryByText(/Use “Register profile” above/),
+      within(empty).queryByText(/Register a profile to add/),
     ).not.toBeInTheDocument()
     expect(within(empty).queryByRole('button')).not.toBeInTheDocument()
     expect(
@@ -632,7 +649,7 @@ describe('ProfilesPanel — a filtered empty page is not an empty estate', () =>
     [
       '403 of role',
       () => new ApiError(403, 'forbidden', 'your role cannot list profiles'),
-      'Not authorized',
+      'You do not have access to this.',
     ],
     [
       '403 of assurance',
@@ -681,7 +698,9 @@ describe('ProfilesPanel — a filtered empty page is not an empty estate', () =>
     await act(async () => {
       await qc.invalidateQueries({ queryKey: ['agentops', 't1'] })
     })
-    expect(await screen.findByText('Not authorized')).toBeInTheDocument()
+    expect(
+      await screen.findByText('You do not have access to this.'),
+    ).toBeInTheDocument()
     expect(screen.queryByText('Home A')).not.toBeInTheDocument()
     expect(screen.queryByText('No provider profiles')).not.toBeInTheDocument()
     expect(
@@ -870,7 +889,7 @@ describe('ProfilesPanel — one-line rows', () => {
 })
 
 describe('ProfilesPanel — registering', () => {
-  it('posts exactly the driver, the two homes and the label — no environment, no credential', async () => {
+  it('posts exactly the driver, the two homes, the login source and the label — no environment, no credential', async () => {
     const user = userEvent.setup()
     wrap()
     await screen.findByText('Home A')
@@ -879,13 +898,14 @@ describe('ProfilesPanel — registering', () => {
     // The dialog names WHICH machine validates the paths: the environment a local
     // profile reported.
     expect(
-      within(dialog).getByText(/xenv_1, which validates the paths/),
+      within(dialog).getByText(
+        /on this server \(xenv_1\), which checks the folders/,
+      ),
     ).toBeInTheDocument()
     const submit = within(dialog).getByRole('button', { name: 'Register' })
-    expect(submit).toBeDisabled()
-    await user.type(within(dialog).getByLabelText('Driver'), 'Claude')
+    await user.selectOptions(within(dialog).getByLabelText('Driver'), 'claude')
     await user.type(
-      within(dialog).getByLabelText('Configuration home'),
+      within(dialog).getByLabelText('Settings folder'),
       '/srv/homes/b/.claude ',
     )
     await user.type(within(dialog).getByLabelText('User home'), '/srv/homes/b')
@@ -893,15 +913,17 @@ describe('ProfilesPanel — registering', () => {
     await user.click(submit)
     await waitFor(() => expect(api.createProfile).toHaveBeenCalledOnce())
     expect(api.createProfile).toHaveBeenCalledWith({
-      driver: 'Claude',
+      driver: 'claude',
       config_home: '/srv/homes/b/.claude',
       user_home: '/srv/homes/b',
       display_name: 'Home B',
+      auth_source: 'provider_account_home',
     })
     const body = api.createProfile.mock.calls[0][0] as Record<string, unknown>
     expect(body).not.toHaveProperty('environment_ref')
     expect(body).not.toHaveProperty('state')
     expect(Object.keys(body).sort()).toEqual([
+      'auth_source',
       'config_home',
       'display_name',
       'driver',
@@ -927,7 +949,7 @@ describe('ProfilesPanel — a registration draft does not outlive its tier', () 
     await screen.findByText('Home A')
     await user.click(screen.getByRole('button', { name: 'Register profile' }))
     const dialog = await screen.findByRole('dialog')
-    await user.type(within(dialog).getByLabelText('Driver'), 'claude')
+    await user.selectOptions(within(dialog).getByLabelText('Driver'), 'codex')
     grant(READ)
     rerender(
       <QueryClientProvider client={qc}>
@@ -952,7 +974,7 @@ describe('ProfilesPanel — a registration draft does not outlive its tier', () 
     // A new gesture opens a FRESH dialog: the earlier draft is gone with its tier.
     await user.click(screen.getByRole('button', { name: 'Register profile' }))
     const fresh = await screen.findByRole('dialog')
-    expect(within(fresh).getByLabelText('Driver')).toHaveValue('')
+    expect(within(fresh).getByLabelText('Driver')).toHaveValue('claude')
   })
 })
 
@@ -1074,9 +1096,7 @@ describe('ProfilesPanel — the sheet', () => {
     )
     expect(await screen.findByText('/srv/homes/a/.claude')).toBeInTheDocument()
     expect(screen.getByText('/srv/homes/a')).toBeInTheDocument()
-    expect(
-      screen.getByText(/stored by execution environment xenv_1/),
-    ).toBeInTheDocument()
+    expect(screen.getByText(/stored by server xenv_1/)).toBeInTheDocument()
     expect(api.profileConfiguration.mock.calls[0][0]).toBe('ppf_a')
     await user.click(
       within(sheet).getByRole('button', { name: 'Hide configuration' }),
@@ -1286,7 +1306,7 @@ describe('ProfilesPanel — an explicit reveal ends when the operator, or their 
       'new-session credential',
       () =>
         useSessionStore.getState().setSession({
-          token: 'olvs_next',
+          csrfToken: 'olvs_next',
           sessionId: `sid-${Date.now()}`,
           expiresAt: '2030-01-01T00:00:00Z',
         }),
@@ -1296,7 +1316,7 @@ describe('ProfilesPanel — an explicit reveal ends when the operator, or their 
       () => {
         // What POST /v1/auth/refresh really does: a new bearer, the SAME session id.
         useSessionStore.getState().setSession({
-          token: 'olvs_rotated',
+          csrfToken: 'olvs_rotated',
           sessionId: 'sid-1',
           expiresAt: '2030-01-01T00:00:00Z',
         })

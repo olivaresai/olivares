@@ -18,7 +18,11 @@
 import { describe, expect, it } from 'vitest'
 import { auditRouteCensus, type RouteAlias } from './route-census'
 
-const alias = (from: string, to: string): RouteAlias => ({ from, to, note: 'fixture' })
+const alias = (from: string, to: string): RouteAlias => ({
+  from,
+  to,
+  note: 'fixture',
+})
 
 describe('auditRouteCensus', () => {
   const CLEAN = {
@@ -32,7 +36,11 @@ describe('auditRouteCensus', () => {
 
   it('is silent when the router still mounts every censused path', () => {
     expect(
-      auditRouteCensus({ census: ['/a', '/b'], live: ['/a', '/b'], aliases: [] }),
+      auditRouteCensus({
+        census: ['/a', '/b'],
+        live: ['/a', '/b'],
+        aliases: [],
+      }),
     ).toEqual(CLEAN)
   })
 
@@ -90,7 +98,11 @@ describe('auditRouteCensus', () => {
   })
 
   it('REPORTS a censused path the registry no longer serves', () => {
-    const r = auditRouteCensus({ census: ['/a', '/b'], live: ['/a'], aliases: [] })
+    const r = auditRouteCensus({
+      census: ['/a', '/b'],
+      live: ['/a'],
+      aliases: [],
+    })
     expect(r.vanished).toEqual(['/b'])
   })
 
@@ -98,7 +110,11 @@ describe('auditRouteCensus', () => {
     // The defect the two existing cross-file guards cannot see: a coordinated delete.
     // `live` here is what the registry, routes.ts and nav.json all agree on after a
     // tidy-up commit — they are consistent with each other and wrong together.
-    const r = auditRouteCensus({ census: ['/a', '/b', '/c'], live: ['/a'], aliases: [] })
+    const r = auditRouteCensus({
+      census: ['/a', '/b', '/c'],
+      live: ['/a'],
+      aliases: [],
+    })
     expect(r.vanished).toEqual(['/b', '/c'])
   })
 
@@ -149,7 +165,11 @@ describe('auditRouteCensus', () => {
   })
 
   it('REPORTS a live path that nobody recorded in the census', () => {
-    const r = auditRouteCensus({ census: ['/a'], live: ['/a', '/new'], aliases: [] })
+    const r = auditRouteCensus({
+      census: ['/a'],
+      live: ['/a', '/new'],
+      aliases: [],
+    })
     expect(r.unrecorded).toEqual(['/new'])
     expect(r.vanished).toEqual([])
   })

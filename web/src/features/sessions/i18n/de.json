@@ -9,10 +9,9 @@
     "active": "Aktiv",
     "idle": "Inaktiv",
     "silentEvasion": "Mögliche Umgehung",
-    "total": "Sitzungen",
-    "launched": "Gestartet",
-    "discovered": "Entdeckt",
-    "attention": "Prüfen"
+    "sessions_one": "{{n}} Sitzung",
+    "sessions_other": "{{n}} Sitzungen",
+    "running": "{{n}} laufen"
   },
   "cols": {
     "session": "Sitzung",
@@ -91,7 +90,6 @@
   },
   "operateTitle": "Claude Code",
   "operateSubtitle": "Claude-Code-Sitzungen anlegen, sich aufschalten und regeln – ohne SSH. Sitzungen, die Olivares nur beobachtet, stehen in derselben Liste und öffnen dieselbe Karte.",
-  "unifiedSubtitle": "Alle Agentensitzungen dieser Ebene – die von Olivares entdeckten und die von ihm gestarteten – in einer Liste, mit dem, was jede gerade tut und was sich mit ihr tun lässt.",
   "launch": "Neue Sitzung",
   "allSources": "Alle Herkünfte",
   "tabs": {
@@ -140,6 +138,7 @@
       "watch": "Live-Telemetrie und Zeitleiste ansehen",
       "attach": "Ihre E/A live mitlesen",
       "drive": "Eingaben an sie senden",
+      "interrupt": "Den aktuellen Turn unterbrechen",
       "stop": "Stoppen",
       "resume": "Fortsetzen",
       "cleanup": "Ihren Arbeitsbereich aufräumen",
@@ -156,6 +155,7 @@
     "actions": {
       "stop": "Stoppen",
       "resume": "Fortsetzen",
+      "startAgain": "Neu starten",
       "cleanup": "Aufräumen",
       "delete": "Löschen",
       "cleanupHint": "Schließt den Lauf und gibt seinen Fortsetzungs-Handle frei; danach ist kein Fortsetzen mehr möglich. Das Lebenszyklus-Protokoll bleibt erhalten.",
@@ -250,6 +250,8 @@
   },
   "surface": {
     "paneSwitcher": "Bereich wählen",
+    "closeContext": "Kontext schließen",
+    "backTo": "Zurück zu {{pane}}",
     "pane": {
       "rail": "Sitzungen",
       "narrative": "Arbeit",
@@ -260,22 +262,19 @@
     "noneTitle": "Sitzung auswählen",
     "noneDescription": "Wählen Sie eine Sitzung in der Leiste, um zu lesen, was sie getan hat — mit ihren Belegen daneben.",
     "openDetail": "Alle Steuerungen",
-    "noObjective": "Die Engine hat für diese Sitzung kein Ziel gemeldet.",
     "notReadTitle": "Diese Sitzung konnte nicht gelesen werden",
-    "menu": "Aktionen für {{name}}"
+    "menu": "Aktionen für {{name}}",
+    "terminal": "Im Terminal"
   },
   "evidence": {
     "checks": {
-      "title": "Prüfungen",
-      "empty": "Diese Sitzung hat keine Funde gemeldet."
+      "title": "Prüfungen"
     },
     "activity": {
-      "title": "Letzte Schritte",
-      "empty": "Diese Sitzung hat keine Tool- oder MCP-Aufrufe gemacht."
+      "title": "Letzte Schritte"
     },
     "resources": {
-      "title": "Berührte Ressourcen",
-      "empty": "Kein Eintrag nennt eine Ressource."
+      "title": "Berührte Ressourcen"
     },
     "forbiddenTitle": "Belege nicht freigegeben",
     "forbiddenDescription": "Ihre Rolle enthält keine Berechtigung, Sitzungstelemetrie zu lesen.",
@@ -335,7 +334,9 @@
     "workRoles": {
       "worker": "Worker",
       "orchestrator": "Orchestrator"
-    }
+    },
+    "details": "Details",
+    "echoes": "Auch gemeldet als"
   },
   "conversation": {
     "log": "Unterhaltung",
@@ -352,7 +353,45 @@
     "inspect": "Im Inspektor zeigen",
     "args": "Argumente",
     "toolResult": "Ergebnis",
+    "toolFailed": "Fehlgeschlagen",
     "tokens": "{{input}} ein · {{output}} aus",
-    "cwdWarning": "Diese Sitzung hat keinen Arbeitsbereich. Der Treiber hat sein Arbeitsverzeichnis als {{cwd}} gemeldet."
+    "cwdWarning": "Diese Sitzung hat keinen Arbeitsbereich. Der Treiber hat sein Arbeitsverzeichnis als {{cwd}} gemeldet.",
+    "protocol": "Protokoll-Frames: {{count}}",
+    "stop": {
+      "cancelled": "Abgebrochen",
+      "refusal": "Vom Modell abgelehnt",
+      "maxTokens": "Am Token-Limit gestoppt",
+      "maxTurnRequests": "Am Durchgangslimit gestoppt"
+    },
+    "turnFailed": "Der Durchgang ist fehlgeschlagen: {{message}}",
+    "retrying": "Neuer Versuch ({{count}}): {{message}}",
+    "keyRefused": "Der Anbieter hat den API-Schlüssel abgelehnt. Ersetzen Sie ihn unter Anbieter.",
+    "output": "Ausgabe des Tools ({{count}}): {{first}}",
+    "notSent": "Nicht gesendet: {{reason}}"
+  },
+  "changes": {
+    "title": "Änderungen in {{folder}}",
+    "titleNoFolder": "Änderungen",
+    "hint": "Dateien, die der Agent seit Beginn dieser Sitzung in seinem Ordner geändert hat.",
+    "empty": "Noch keine Datei geändert.",
+    "none": "Diese Sitzung hat keinen Ordner auf diesem Server.",
+    "loading": "Ordner wird gelesen…",
+    "error": "Die Änderungen konnten nicht gelesen werden. Versuche es gleich noch einmal.",
+    "back": "Alle Änderungen",
+    "binary": "Binärdatei, {{size}}.",
+    "fileTruncated": "Die ersten 256 KB werden angezeigt.",
+    "truncated": "Die {{count}} neuesten Dateien werden angezeigt."
+  },
+  "peers": {
+    "button_one": "Darf an {{count}} andere Sitzung schreiben",
+    "button_other": "Darf an {{count}} andere Sitzungen schreiben",
+    "buttonNone": "Darf an keine andere Sitzung schreiben",
+    "template": "Darf an Sitzungen aus dieser Vorlage schreiben",
+    "title": "Sitzungen, an die sie schreiben darf",
+    "hint": "Die Sitzungen, denen diese schreiben oder Arbeit übergeben darf. Die Engine lehnt alle anderen ab.",
+    "sameTemplate": "Sitzungen aus dieser Vorlage",
+    "none": "Keine andere aktive Sitzung in diesem Arbeitsbereich.",
+    "save": "Speichern",
+    "saved": "Nachrichtenrechte gespeichert."
   }
 }

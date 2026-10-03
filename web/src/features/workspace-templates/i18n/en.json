@@ -46,14 +46,17 @@
       "permissionMode": "Permission mode",
       "effort": "Effort level",
       "model": "Model",
-      "customInstructions": "Custom instructions"
+      "customInstructions": "Custom instructions",
+      "secretEnv": "Secrets as environment variables",
+      "secretEnvHint": "VARIABLE=env/secret, comma-separated. Sessions from this template read each vault secret from its variable; only someone who manages the tenant secrets can launch them."
     },
     "policies": {
       "dlpMode": "DLP mode",
       "maxDuration": "Max session duration (minutes)",
       "allowedTools": "Allowed tools",
       "allowedToolsPlaceholder": "e.g. Bash,Read,Edit",
-      "recordIo": "Record I/O"
+      "recordIo": "Record I/O",
+      "peersSameTemplate": "Sessions from this template can message each other"
     }
   },
   "actions": {

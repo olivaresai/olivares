@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -35,14 +36,17 @@ const maxClientBody = 1 << 20
 // (the bearer the endpoint resolves to a firm principal); it is sent only over the
 // loopback Authorization header and never written to stdout/stderr.
 type HookClientConfig struct {
-	Endpoint string        // governed PEP URL (e.g. http://127.0.0.1:8447/)
-	Token    string        // bearer credential (the agent's PEP token)
-	Tenant   string        // X-Olivares-Hook-Tenant
-	Agent    string        // X-Olivares-Hook-Agent
-	Org      string        // X-Olivares-Hook-Org
-	Account  string        // X-Olivares-Hook-Account
-	Timeout  time.Duration // request timeout (default 5s)
-	Client   *http.Client  // optional override (tests inject)
+	Endpoint      string         // governed PEP URL (e.g. http://127.0.0.1:8447/)
+	Token         string         // bearer credential (the agent's PEP token)
+	Tenant        string         // X-Olivares-Hook-Tenant
+	Agent         string         // X-Olivares-Hook-Agent
+	Org           string         // X-Olivares-Hook-Org
+	Account       string         // X-Olivares-Hook-Account
+	Timeout       time.Duration  // whole helper deadline, including stdin and paths (default 5s)
+	StartedAt     time.Time      // optional invocation start; zero starts at RunHookClient entry
+	ExpectedEvent string         // invocation event pinned by protected settings; rendering only
+	Client        *http.Client   // optional override (tests inject)
+	pathCalls     *hookPathCalls // private filesystem seam; nil uses the agent host
 	// Diag receives the CAUSE of a deny-closed, for the operator. It never receives the
 	// decision itself: that goes to `out` as the hookSpecificOutput the agent enforces, and
 	// its reason string is a CONTRACT with Claude Code — widening it to carry transport
@@ -71,16 +75,102 @@ func diag(cfg HookClientConfig, format string, args ...any) {
 // and writes the returned decision to out. It is deny-closed on every failure path. It
 // returns an error only if writing the decision to out fails.
 func RunHookClient(ctx context.Context, in io.Reader, out io.Writer, cfg HookClientConfig) error {
-	body, _ := io.ReadAll(io.LimitReader(in, maxClientBody))
-	// canonicalize symlinked file paths on the AGENT host (the only place that sees the
-	// real filesystem) so the governed decision is made against the real target, closing a
-	// symlink-escape of a path/subtree deny. Best-effort: unresolved paths are forwarded as-is.
-	body = canonicalizeHookPayloadPaths(body)
+	to := cfg.Timeout
+	if to <= 0 {
+		to = 5 * time.Second
+	}
+	started := cfg.StartedAt
+	if started.IsZero() {
+		started = time.Now()
+	}
+	ctx, cancel := context.WithDeadline(ctx, started.Add(to))
+	defer cancel()
+	event := hookPreToolUse
+	if _, known := hookSpecs[cfg.ExpectedEvent]; known {
+		event = cfg.ExpectedEvent
+	}
+	timedOut := func() error {
+		_, err := out.Write(denyClosedDecision(event, "governed PEP decision timed out; tool-call denied"))
+		return err
+	}
+	if ctx.Err() != nil {
+		return timedOut()
+	}
+	// Stdin and host filesystem syscalls do not support cancellation. They stay
+	// off the sole output path: a stalled worker cannot hold or later overwrite
+	// the explicit deadline verdict. The standalone helper exits after this call.
+	events := make(chan string, 1)
+	type result struct {
+		body []byte
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		var buffered bytes.Buffer
+		err := runHookClientRequest(ctx, in, &buffered, cfg, events)
+		done <- result{body: bytes.Clone(buffered.Bytes()), err: err}
+	}()
+	readEvent := func() {
+		select {
+		case event = <-events:
+		default:
+		}
+	}
+	select {
+	case reply := <-done:
+		readEvent()
+		// Deadline wins even if completion and cancellation become ready together.
+		if ctx.Err() != nil {
+			return timedOut()
+		}
+		if reply.err != nil {
+			return reply.err
+		}
+		_, err := out.Write(reply.body)
+		return err
+	case <-ctx.Done():
+		readEvent()
+		return timedOut()
+	}
+}
+
+func runHookClientRequest(ctx context.Context, in io.Reader, out io.Writer, cfg HookClientConfig, events chan<- string) error {
+	body, readErr := io.ReadAll(io.LimitReader(in, maxClientBody+1))
+	incompleteInput := readErr != nil || len(body) > maxClientBody
 	event := eventOf(body)
+	refusalEvent := event
+	expected, known := hookSpecs[cfg.ExpectedEvent]
+	if known && expected.enforceable {
+		// A parsed neutral event cannot neutralize the registered gate's refusal.
+		refusalEvent = cfg.ExpectedEvent
+	} else if cfg.ExpectedEvent != "" && !known && !hookSpecFor(event).enforceable {
+		// A malformed rendering hint never grants a neutral timeout response.
+		refusalEvent = hookPreToolUse
+	}
+	events <- refusalEvent
 
 	denyClosed := func(reason string) error {
-		_, err := out.Write(denyClosedDecision(event, reason))
+		_, err := out.Write(denyClosedDecision(refusalEvent, reason))
 		return err
+	}
+	if cfg.ExpectedEvent != "" && (!known || cfg.ExpectedEvent != event) {
+		return denyClosed("hook input did not match its configured event (deny-closed)")
+	}
+	if incompleteInput {
+		return denyClosed("could not read complete hook input (deny-closed)")
+	}
+	if ctx.Err() != nil {
+		return denyClosed("governed PEP decision timed out; tool-call denied")
+	}
+	// Canonicalize on the agent host, keeping the original best-effort behavior.
+	calls := hostHookPathCalls
+	if cfg.pathCalls != nil {
+		calls = *cfg.pathCalls
+	}
+	body = canonicalizeHookPayloadPathsWith(ctx, body, calls)
+	// A recovered filesystem must not dispatch a request after the helper denied.
+	if ctx.Err() != nil {
+		return denyClosed("governed PEP decision timed out; tool-call denied")
 	}
 
 	endpoint := strings.TrimSpace(cfg.Endpoint)
@@ -114,16 +204,53 @@ func RunHookClient(ctx context.Context, in io.Reader, out io.Writer, cfg HookCli
 	resp, err := client.Do(req)
 	if err != nil {
 		diag(cfg, "governed PEP unreachable: %v", err)
+		if errors.Is(err, context.DeadlineExceeded) {
+			return denyClosed("governed PEP decision timed out; tool-call denied")
+		}
 		return denyClosed("governed PEP unreachable (deny-closed)")
 	}
 	defer func() { _ = resp.Body.Close() }()
-	respBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxClientBody))
+	respBody, readErr := io.ReadAll(io.LimitReader(resp.Body, maxClientBody+1))
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		diag(cfg, "governed PEP returned HTTP %d", resp.StatusCode)
 		return denyClosed("governed PEP returned an error (deny-closed)")
 	}
+	if readErr != nil || len(respBody) > maxClientBody || !completeHookDecision(event, respBody) {
+		return denyClosed("governed PEP returned an incomplete decision (deny-closed)")
+	}
+	if ctx.Err() != nil {
+		return denyClosed("governed PEP decision timed out; tool-call denied")
+	}
 	_, werr := out.Write(respBody)
 	return werr
+}
+
+// A successful transport is insufficient: an empty/truncated response to a
+// permission gate is ignored by Claude Code. Require the event's explicit
+// permission schema before relaying it. Other event mechanisms allow neutral {}.
+func completeHookDecision(event string, body []byte) bool {
+	var object map[string]json.RawMessage
+	if json.Unmarshal(body, &object) != nil || object == nil {
+		return false
+	}
+	mech := hookMechFor(event)
+	if mech != mechPermissionDecision && mech != mechPermissionBehavior {
+		return true
+	}
+	var output struct {
+		Event      string `json:"hookEventName"`
+		Permission string `json:"permissionDecision"`
+		Decision   struct {
+			Behavior string `json:"behavior"`
+		} `json:"decision"`
+	}
+	if json.Unmarshal(object["hookSpecificOutput"], &output) != nil || output.Event != event {
+		return false
+	}
+	if mech == mechPermissionBehavior {
+		return output.Decision.Behavior == permAllow || output.Decision.Behavior == permDeny
+	}
+	return permissionValueValid(event, output.Permission)
 }
 
 // denyClosedDecision renders the deny verdict the client emits when it cannot obtain a

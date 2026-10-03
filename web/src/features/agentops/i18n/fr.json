@@ -79,13 +79,15 @@
     "create": "Nouvelle session",
     "stop": "Arrêter",
     "resume": "Reprendre",
+    "startAgain": "Recommencer",
     "cleanup": "Nettoyer",
     "delete": "Supprimer",
     "attach": "Attacher",
     "detach": "Détacher"
   },
   "create": {
-    "title": "Nouvelle session Claude Code",
+    "title": "Nouvelle session",
+    "titleTool": "Nouvelle session {{tool}}",
     "description": "Olivares lance et gouverne le processus — l’équivalent visuel du lancement en CLI, avec la politique en ligne.",
     "name": "Nom",
     "namePlaceholder": "Un libellé d’affichage (facultatif)",
@@ -165,7 +167,7 @@
     "none": "Aucun",
     "providerProfile": "Profil de fournisseur",
     "providerDriver": "Pilote",
-    "providerEnvironment": "Environnement d’exécution",
+    "providerEnvironment": "Serveur",
     "liveRef": "Ligne en direct"
   },
   "live": {
@@ -347,7 +349,7 @@
   },
   "profiles": {
     "title": "Profils de fournisseur",
-    "subtitle": "L’identité durable d’une instance de fournisseur configurée sur un environnement d’exécution : quel pilote la sert et sous quel répertoire de configuration s’exécute une session lancée. Un profil enregistre des répertoires qui existent déjà — il n’installe rien et ne se connecte à rien.",
+    "subtitle": "Comment un outil s'exécute pour une session : quel outil, et le dossier de configuration depuis lequel il se connecte. Un profil désigne une installation de l'outil qui existe déjà sur ce serveur ; il n'installe rien et ne connecte rien.",
     "register": "Enregistrer un profil",
     "nextAction": "Enregistrer un profil",
     "rowMenu": "Actions de ligne pour {{name}}",
@@ -356,7 +358,7 @@
     "cols": {
       "name": "Profil",
       "driver": "Pilote",
-      "environment": "Environnement d’exécution",
+      "environment": "Serveur",
       "state": "État",
       "launch": "Activé ici",
       "created": "Créé"
@@ -369,8 +371,9 @@
     "environment": {
       "local": "ce nœud",
       "foreign": "autre environnement",
-      "foreignHint": "Ce profil appartient à un autre environnement d’exécution. Il est affiché comme tel et n’est jamais lancé depuis ce nœud."
+      "foreignHint": "Ce profil appartient à un autre serveur. Il est affiché ici, mais n'est jamais lancé depuis ce serveur."
     },
+    "serverUserLogin": "Utilise la connexion de l’utilisateur du serveur ; reconnectez-vous pour utiliser une connexion du produit",
     "operable": {
       "yes": "Activé dans cet environnement",
       "no": "Non activé dans cet environnement",
@@ -378,8 +381,8 @@
     },
     "empty": {
       "title": "Aucun profil de fournisseur",
-      "registerHint": "Utilisez « {{control}} » ci-dessus pour enregistrer le répertoire de configuration d’une installation de fournisseur existante sur ce nœud ; les sessions sont ensuite lancées et attribuées sous une identité stable.",
-      "noWrite": "Enregistrer le répertoire de configuration d’une installation de fournisseur existante nécessite sessions:profile:write, que votre rôle n’inclut pas."
+      "registerHint": "Enregistrez un profil pour ajouter une installation de l'outil qui existe déjà sur ce serveur. Les sessions s'exécutent ensuite avec sa configuration et sa connexion.",
+      "noWrite": "Ajouter un profil nécessite l'autorisation sessions:profile:write, que votre rôle n'inclut pas."
     },
     "filteredEmpty": {
       "title": "Aucun profil ne correspond à cet état",
@@ -404,23 +407,26 @@
     },
     "create": {
       "title": "Enregistrer un profil de fournisseur",
-      "description": "Enregistre les répertoires d’une installation de fournisseur existante sur cet environnement d’exécution. Le serveur valide chaque chemin sur ce nœud — absolu, liens symboliques résolus, existant et répertoire. Rien n’est créé, installé ni connecté, et aucun identifiant n’est envoyé.",
+      "description": "Ajoute une installation de l'outil qui existe déjà sur ce serveur. Le serveur vérifie que chaque dossier existe ici ; rien n'est créé, installé ni connecté, et aucun identifiant n'est envoyé.",
       "driver": "Pilote",
-      "driverPlaceholder": "claude",
-      "driverHint": "Clé du pilote en minuscules (lettres, chiffres, - _ .). Si ce nœud peut lancer le profil, le serveur le signale après l’enregistrement ; le nom ne le décide pas.",
-      "configHome": "Répertoire de configuration",
+      "configHome": "Dossier de configuration",
       "configHomePlaceholder": "/home/agent/.claude-work",
       "configHomeHint": "Chemin absolu du répertoire de configuration du fournisseur (pour Claude Code, son CLAUDE_CONFIG_DIR). Validé sur ce nœud ; un répertoire manquant est refusé, jamais créé.",
       "userHome": "Répertoire utilisateur",
       "userHomePlaceholder": "/home/agent",
       "userHomeHint": "Chemin absolu sous lequel la session lancée s’exécute comme HOME. Validé sur ce nœud.",
+      "homesOptional": "Avec la connexion propre à l'outil, laissez les deux dossiers vides pour utiliser ceux de l'outil sur ce serveur.",
       "displayName": "Nom affiché",
       "displayNamePlaceholder": "Une étiquette (facultatif)",
-      "environmentKnown": "Enregistré sur l’environnement d’exécution de ce nœud, {{env}}, qui valide les chemins. Un profil pour un autre environnement s’enregistre depuis cet environnement.",
-      "environmentUnknown": "Enregistré sur l’environnement d’exécution de ce nœud, qui valide les chemins. Un profil pour un autre environnement s’enregistre depuis cet environnement.",
+      "environmentKnown": "Ajouté sur ce serveur ({{env}}), qui vérifie les dossiers. Un profil pour un autre serveur s'ajoute sur ce serveur-là.",
+      "environmentUnknown": "Ajouté sur ce serveur, qui vérifie les dossiers. Un profil pour un autre serveur s'ajoute sur ce serveur-là.",
       "submit": "Enregistrer",
       "submitting": "Enregistrement…",
-      "success": "Profil de fournisseur enregistré"
+      "success": "Profil de fournisseur enregistré",
+      "homesOptionalManaged": "Avec une clé d’API des Fournisseurs, laissez les deux dossiers vides : ce serveur crée les dossiers propres au profil.",
+      "missingProvider": "Choisissez la clé d’API utilisée par ce profil.",
+      "missingHomesOrNone": "Indiquez les deux dossiers, ou laissez-les tous deux vides.",
+      "missingHomes": "Indiquez les deux dossiers. Ils doivent déjà exister sur ce serveur."
     },
     "rename": {
       "title": "Renommer le profil",
@@ -446,7 +452,7 @@
     "details": {
       "ref": "Référence",
       "driver": "Pilote",
-      "environment": "Environnement d’exécution",
+      "environment": "Serveur",
       "state": "État",
       "launch": "Activé ici",
       "created": "Créé",
@@ -457,20 +463,20 @@
     "configuration": {
       "title": "Configuration",
       "hint": "Les répertoires stockés sont une lecture réservée aux administrateurs, obtenue uniquement à votre demande et jamais affichée dans la liste. Aucune valeur d’identifiant n’est jamais renvoyée.",
-      "configHome": "Répertoire de configuration",
+      "configHome": "Dossier de configuration",
       "userHome": "Répertoire utilisateur",
-      "validatedOn": "Chemins tels que validés et stockés par l’environnement d’exécution {{env}}.",
+      "validatedOn": "Dossiers tels que vérifiés et enregistrés par le serveur {{env}}.",
       "loading": "Lecture de la configuration…",
       "failed": "La configuration n’a pas pu être lue."
     },
     "bindings": {
       "title": "Liaisons de sources",
-      "subtitle": "Dédie une source configurée, à la révision exacte appliquée par ce nœud, à un profil, de sorte que les sessions observées par cette source lui soient attribuées. L’identité est l’identifiant persistant et la révision de la source — jamais son nom.",
+      "subtitle": "Lie une source que lit ce serveur à un profil, afin que les sessions que cette source trouve soient comptées sous ce profil.",
       "cols": {
         "source": "Source",
         "revision": "Révision appliquée",
         "profile": "Profil",
-        "environment": "Environnement d’exécution",
+        "environment": "Serveur",
         "state": "État",
         "bound": "Lié"
       },
@@ -483,7 +489,7 @@
         "description": "Liez une source configurée à un profil pour lui attribuer les sessions qu’elle observe."
       },
       "noRead": "Les liaisons de sources ne sont pas affichées : votre rôle n’inclut pas sessions:profile-binding:read.",
-      "notBindable": "Seul un profil actif de cet environnement d’exécution peut recevoir une liaison.",
+      "notBindable": "Seul un profil actif de ce serveur peut être lié.",
       "revoke": {
         "title": "Révoquer la liaison",
         "description": "Les sessions déjà attribuées sous cette liaison conservent leur provenance ; les observations ultérieures via cette source ne sont plus attribuées au profil. Cette action est irréversible — une nouvelle liaison est une nouvelle ligne.",
@@ -492,16 +498,16 @@
       },
       "create": {
         "title": "Lier une source à un profil",
-        "description": "Le moteur lie l’identifiant persistant de la source à la révision appliquée par ce nœud. Les deux sont lus depuis le registre des sources — jamais saisis, jamais dérivés d’un nom.",
+        "description": "Le moteur lie la source telle que ce serveur l'a appliquée en dernier, lue dans la liste des sources. Il n'identifie jamais une source par son nom.",
         "profile": "Profil",
         "profileNone": "Sélectionner un profil",
         "profileNotBindable": "non liable ici",
-        "profileHint": "Seul un profil actif de cet environnement d’exécution peut recevoir une liaison.",
+        "profileHint": "Seul un profil actif de ce serveur peut être lié.",
         "profilesNotRead": "Les profils n’ont pas pu être lus ; aucun ne peut donc être sélectionné.",
         "source": "Source",
         "sourceNone": "Sélectionner une source",
         "sourceNotApplied": "non appliquée sur ce nœud",
-        "sourceHint": "Sources du registre du déploiement, avec la révision appliquée par ce nœud. Une source que ce nœud n’a pas appliquée ne peut pas être liée ici.",
+        "sourceHint": "Sources que ce serveur a appliquées. Une source qu'il n'a pas encore appliquée ne peut pas être liée ici.",
         "needsSourceAdmin": "Lier une source requiert aussi l’administration des sources à l’échelle du déploiement (administrateur système). Votre compte ne peut pas lire le registre des sources, aucune source ne peut donc être sélectionnée ici.",
         "rosterFailed": "Le registre des sources n’a pas pu être lu.",
         "rosterEmpty": "Aucune source n’est configurée sur ce déploiement.",
@@ -526,7 +532,7 @@
         "revision": "Révision appliquée",
         "profile": "Profil",
         "driver": "Pilote",
-        "environment": "Environnement d’exécution",
+        "environment": "Serveur",
         "selector": "Sélecteur",
         "state": "État",
         "bound": "Lié",
@@ -606,20 +612,20 @@
     }
   },
   "accounts": {
-    "subtitle": "Les comptes de fournisseur nommés de ce locataire. Adopter nomme une seule fois un profil de fournisseur existant ; son répertoire reste où il est.",
-    "adopt": "Adopter un profil",
+    "subtitle": "Comptes d'outils de cette organisation, comme un second abonnement Claude. Les sessions utilisent le compte que désigne leur profil. Nommer un profil existant comme compte laisse son dossier de configuration à sa place.",
+    "adopt": "Nommer un profil comme compte",
     "cols": {
       "name": "Compte",
       "driver": "Pilote",
-      "environment": "Environnement d’exécution",
+      "environment": "Serveur",
       "state": "État",
       "isolation": "Isolation",
       "created": "Créé"
     },
     "empty": {
       "title": "Aucun compte de fournisseur",
-      "adoptHint": "Créez un compte géré ou utilisez « {{control}} » pour nommer un profil fournisseur existant comme compte.",
-      "noWrite": "Adopter un profil de fournisseur comme compte nécessite sessions:account:write, que votre rôle n’inclut pas."
+      "adoptHint": "Créez un compte, ou nommez comme compte un profil que vous avez déjà.",
+      "noWrite": "Nommer un profil comme compte nécessite l'autorisation sessions:account:write, que votre rôle n'inclut pas."
     },
     "more": "Affichés jusqu’ici : {{shown}}. D’autres comptes existent ; chargez-en plus pour les voir.",
     "moreFailed": "La page suivante de comptes n’a pas pu être lue. Les comptes affichés ne sont pas la liste complète.",
@@ -630,7 +636,7 @@
       "dedicatedMeaning": "Dédié : le serveur enregistre ce répertoire comme réservé à ce compte."
     },
     "home": {
-      "adopted": "Adopté (un répertoire existant)",
+      "adopted": "D'un profil existant",
       "managed": "Géré par le serveur"
     },
     "authSource": {
@@ -642,7 +648,7 @@
       "name": "Nom",
       "ref": "Référence",
       "driver": "Pilote",
-      "environment": "Environnement d’exécution",
+      "environment": "Serveur",
       "state": "État",
       "home": "Répertoire",
       "isolation": "Isolation",
@@ -663,8 +669,8 @@
       "empty": "Rien de signalé (source : {{source}})"
     },
     "adoptDialog": {
-      "title": "Adopter un profil de fournisseur",
-      "description": "Nommez un profil de fournisseur existant comme compte. Son répertoire reste où il est et est enregistré comme partagé, non dédié. Rien n’est installé et personne n’est connecté.",
+      "title": "Nommer un profil comme compte",
+      "description": "Donne un nom de compte à un profil existant. Son dossier de configuration reste à sa place et est partagé, non réservé à ce compte. Rien n'est installé et personne n'est connecté.",
       "profile": "Profil",
       "profilePlaceholder": "Choisir un profil",
       "profileOption": "{{name}} ({{ref}})",
@@ -679,19 +685,19 @@
       "referenceHintNoList": "Votre rôle ne peut pas lister les profils de fournisseur. Saisissez la référence d’un profil existant ; elle commence par ppf_.",
       "name": "Nom du compte (facultatif)",
       "nameHint": "Minuscules, chiffres et tirets, commençant par une lettre, 32 caractères au plus. Laissez vide et le serveur en génère un, comme claude ou claude-b.",
-      "submit": "Adopter",
-      "submitting": "Adoption…",
-      "pendingStatus": "Adoption de {{ref}}. En attente de la réponse du serveur.",
-      "success": "Adopté sous le nom {{name}}",
-      "failedTitle": "Le profil n’a pas été adopté",
-      "forbidden": "Votre rôle ne peut pas adopter de comptes dans ce locataire. Rien n’a été modifié."
+      "submit": "Nommer comme compte",
+      "submitting": "Attribution du nom…",
+      "pendingStatus": "Attribution du nom de compte à {{ref}}. En attente de la réponse du serveur.",
+      "success": "Nommé {{name}}",
+      "failedTitle": "Le profil n'a pas été nommé comme compte",
+      "forbidden": "Votre rôle ne peut pas ajouter de comptes dans cette organisation. Rien n'a été modifié."
     },
     "adoption": {
-      "pending": "Adoption de {{ref}}. Le serveur n’a pas encore répondu.",
-      "adopted": "{{ref}} a été adopté sous le nom {{name}}.",
-      "refused": "{{ref}} n’a pas été adopté :",
-      "forbidden": "{{ref}} n’a pas été adopté : votre rôle ne peut pas adopter de comptes dans ce locataire. Rien n’a été modifié.",
-      "unknown": "Le résultat de l’adoption de {{ref}} n’est pas connu ici.",
+      "pending": "Attribution du nom de compte à {{ref}}. Le serveur n'a pas encore répondu.",
+      "adopted": "{{ref}} est maintenant le compte {{name}}.",
+      "refused": "{{ref}} n'a pas été nommé comme compte :",
+      "forbidden": "{{ref}} n'a pas été nommé comme compte : votre rôle ne peut pas ajouter de comptes dans cette organisation. Rien n'a été modifié.",
+      "unknown": "On ne sait pas ici si {{ref}} est devenu un compte.",
       "checking": "Vérification que {{ref}} est maintenant un compte…",
       "isAccount": "À cette lecture, {{ref}} est le compte {{name}}.",
       "notAccount": "À cette lecture, {{ref}} n’est pas un compte.",
@@ -761,6 +767,8 @@
     "transport": "Transport",
     "isolation": "Isolation",
     "failedInline": "La demande de lancement a été refusée. Vos choix sont conservés.",
+    "stoppedAtStart": "The tool started and stopped at once. What it said:",
+    "stoppedSilently": "It printed nothing. Check on AI tools that it is installed and signed in, then start again.",
     "state": {
       "ready": "Exigences locales vérifiées",
       "not_configured": "Configuration manquante",
@@ -790,8 +798,8 @@
       "profile_disabled": "Le profil est désactivé. L’activation exige sessions:profile:write ; un profil retiré ne peut pas être réactivé.",
       "profile_retired": "Le profil est retiré et ne peut pas servir à un nouveau lancement.",
       "environment_local": "Ce profil appartient à ce nœud.",
-      "other_environment": "Ce profil appartient à un autre environnement d’exécution. Choisissez un profil local ou utilisez l’environnement qui l’administre. Il n’y a pas d’exécution distante automatique.",
-      "environment_unavailable": "L’environnement d’exécution qui administre ce profil n’est pas disponible ici.",
+      "other_environment": "Ce profil appartient à un autre serveur. Choisissez un profil de ce serveur, ou utilisez le serveur qui le gère. Les sessions ne sont jamais lancées automatiquement sur un autre serveur.",
+      "environment_unavailable": "Le serveur qui gère ce profil n'est pas disponible ici.",
       "driver_operable": "Un chemin de pilote est enregistré sur ce runtime.",
       "driver_not_registered": "Ce pilote n’est pas enregistré sur ce runtime. Pour Codex, définissez OLIVARES_SESSION_RUNTIME_CODEX_BIN ; pour Grok, OLIVARES_SESSION_RUNTIME_GROK_BIN.",
       "transport_unsupported": "Ce transport n’est pas un contrat du pilote sélectionné.",
@@ -815,6 +823,7 @@
       "provider_credential_adapter_configured": "L’adaptateur de credencial de ce pilote est câblé.",
       "provider_credential_adapter_not_configured": "L’adaptateur de credencial gouverné de ce pilote n’est pas câblé. Ne réutilisez pas le bearer d’un autre fournisseur et ne retombez pas sur account-home.",
       "credential_source_not_injected": "Cette combinaison n’injecte pas de credencial d’inférence.",
+      "provider_record_bound": "This profile runs on an API key saved in Providers; that key is its credential.",
       "runtime_credentials_wired": "Les identifiants de runtime work/K3 sont câblés.",
       "runtime_credentials_not_requested": "Cette composition ne demande pas d’identifiants de runtime work/K3.",
       "runtime_credential_wiring_incomplete": "Le câblage des identifiants de runtime work/K3 est incomplet. Un opérateur examine cette composition ; cette lecture ne demande pas d’identifiants commerciaux.",

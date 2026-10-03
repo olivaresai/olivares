@@ -11,8 +11,8 @@
 //    mirroring the backend's single ErrInviteInvalid, no user-enumeration oracle);
 //  - the password rule mirrors the server's MinPasswordLen (core/auth,
 //    length >= 8) so the client never promises what the engine would reject;
-//  - on success the minted session token is DISCARDED and the user is routed to
-//    the internal /login (never a URL-supplied destination — no open redirect).
+//  - on success the protected cookie session is adopted and the user is routed
+//    to the internal / (never a URL-supplied destination — no open redirect).
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation } from '@tanstack/react-query'
 import { Link, useNavigate } from '@tanstack/react-router'
@@ -25,9 +25,9 @@ import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
-import { toast } from '@/components/ui/toaster'
 import { authApi } from '@/lib/api/endpoints'
 import { ApiError } from '@/lib/api/errors'
+import { useAuth } from '@/lib/auth/context'
 
 /** Server-side MinPasswordLen (core/auth/accounts.go) mirrored client-side. */
 const MIN_PASSWORD_LEN = 8
@@ -57,6 +57,7 @@ function readInviteToken(): string {
 export function AcceptInvitePage() {
   const { t } = useTranslation(['auth', 'errors'])
   const navigate = useNavigate()
+  const { adoptSession } = useAuth()
   // Read the token ONCE at mount; it lives in component memory only.
   const [token] = useState(readInviteToken)
   useEffect(() => {
@@ -72,11 +73,9 @@ export function AcceptInvitePage() {
   const mutation = useMutation({
     mutationFn: (values: AcceptValues) =>
       authApi.acceptInvite({ token, password: values.password }),
-    onSuccess: () => {
-      // Deliberately drop the minted session: the account is active, and the
-      // user signs in through the one normal path. Fixed internal target.
-      toast.success(t('invite.success'))
-      void navigate({ to: '/login' })
+    onSuccess: async (session) => {
+      await adoptSession(session)
+      void navigate({ to: '/', replace: true })
     },
   })
 

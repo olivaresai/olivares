@@ -6,7 +6,11 @@
   },
   "forbidden": {
     "title": "Not authorized",
-    "description": "You do not have permission to view this. Ask an administrator for access."
+    "description": "You do not have permission to view this. Ask an administrator for access.",
+    "accessTo": "You do not have access to {{subject}}.",
+    "accessToThis": "You do not have access to this.",
+    "nextStep": "Your roles or a group policy do not allow it. An owner or administrator of this organization can grant it.",
+    "deniedByPolicy": "The policy “{{policy}}” denies it. An owner or administrator of this organization can change it."
   },
   "serverError": {
     "title": "Something went wrong",
@@ -38,11 +42,21 @@
     "locked_out": "Too many attempts. Try again in a moment.",
     "setup_required": "The control plane needs first-boot setup.",
     "setup_complete": "Setup is already complete.",
-    "cross_tenant_admin_pool_not_configured": "This deployment has no cross-tenant admin database pool. Provision a NOSUPERUSER BYPASSRLS role with `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (see deploy/postgres/README.md) and restart the server with --admin-dsn pointing at that role.",
+    "cross_tenant_admin_pool_not_configured": "This database cannot list every organization. Run `olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` and restart the engine. Or provision a NOSUPERUSER BYPASSRLS role with `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` (see deploy/postgres/README.md) and restart the server with --admin-dsn pointing at that role.",
     "internal": "An internal error occurred."
   },
   "tenantAdmission": {
     "title": "Tenant admission required",
     "description": "Sign in with a tenant-admitted directory identity. Global bootstrap authority cannot operate workspace communications."
+  },
+  "moduleNotEnabled": {
+    "title": "Not enabled on this installation",
+    "description": "This part of Olivares is switched off here, so it has nothing to show.",
+    "named": "{{module}} is not enabled on this installation.",
+    "unnamed": "This module is not enabled on this installation."
+  },
+  "notInEdition": {
+    "subject": "This edition does not include {{subject}}.",
+    "generic": "This edition does not include this."
   }
 }

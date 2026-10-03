@@ -69,7 +69,7 @@ func TestMCPGatewayStoreConfinementCASAndExplicitEnable(t *testing.T) {
 	svc := auth.NewMCPGatewayStore(st)
 	a, b := model.TenantID(model.NewID()), model.TenantID(model.NewID())
 	initial, err := svc.Get(ctx, a)
-	if err != nil || initial.SessionTools || initial.Version != 0 {
+	if err != nil || !initial.SessionTools || initial.Version != 0 {
 		t.Fatalf("default: %+v %v", initial, err)
 	}
 	in := mcpGatewayInput()
@@ -147,5 +147,22 @@ func TestMCPGatewayStoreConfinementCASAndExplicitEnable(t *testing.T) {
 	}
 	if len(actions) != 6 {
 		t.Fatalf("atomic change audits: %v", actions)
+	}
+}
+
+func TestMCPGatewayLocalEnvironmentReservesPrivateRunnerDirectories(t *testing.T) {
+	for _, name := range []string{"HOME", "TMPDIR", "TMP", "TEMP"} {
+		for _, secretRef := range []bool{false, true} {
+			in := auth.MCPGatewayServerInput{Name: "Private cache", Command: "npx"}
+			if secretRef {
+				in.EnvSecretRefs = map[string]string{name: "store:mcp/cache-home"}
+			} else {
+				in.Env = map[string]string{name: "/user/project"}
+			}
+			_, err := auth.NewMCPGatewayStore(testStore(t)).PutServer(t.Context(), adminActor(), model.TenantID(model.NewID()), 0, "", in)
+			if !errors.Is(err, auth.ErrMCPGatewayInvalid) {
+				t.Fatalf("runner-owned %s accepted (secret ref %v): %v", name, secretRef, err)
+			}
+		}
 	}
 }

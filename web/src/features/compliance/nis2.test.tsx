@@ -264,7 +264,7 @@ describe('updateNis2Incident — a body the engine will not reject', () => {
 
 describe('exportNis2Incident — the server bytes, and the auth to get them', () => {
   it('GETs the export route with auth and tenant, and keeps the bytes intact', async () => {
-    useSessionStore.setState({ token: 'tok' } as never)
+    useSessionStore.setState({ csrfToken: 'tok' } as never)
     useTenantStore.setState({ activeTenant: 'acme' } as never)
     // PRETTY-PRINTED ON PURPOSE. The first version of this fixture was
     // `{"id":"ni-1","ledger_anchor":{"seq":12}}` — already exactly what
@@ -288,7 +288,7 @@ describe('exportNis2Incident — the server bytes, and the auth to get them', ()
     expect(req.path).toBe('/v1/m/compliance/nis2/incidents/ni-1/export')
     // This route self-audits in the caller's transaction (nis2incident.go:346), so
     // it has to arrive as the real principal or the ledger entry names nobody.
-    expect(req.headers.get('Authorization')).toBe('Bearer tok')
+    expect(req.headers.get('X-CSRF-Token')).toBe('tok')
     expect(req.headers.get('X-Olivares-Tenant')).toBe('acme')
     // Byte-exact: what an auditor is handed is what the server sealed, never a
     // parse-and-reserialize round trip.

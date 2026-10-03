@@ -195,7 +195,47 @@
   "notifications": {
     "title": "最近活动",
     "empty": "没有最近的活动。",
-    "viewAll": "在审计账本中查看全部"
+    "viewAll": "在审计账本中查看全部",
+    "events": {
+      "auditCheckpoint": "已创建审计检查点",
+      "orgCreated": "已创建组织",
+      "loginBlocked": "{{actor}} 的登录已被阻止",
+      "loginBlocked_you": "你的一次登录已被阻止",
+      "ssoLogin": "{{actor}} 通过 SSO 登录",
+      "ssoLogin_you": "你通过 SSO 登录",
+      "userInvited": "{{actor}} 邀请了成员",
+      "userInvited_you": "你邀请了成员",
+      "userJoined": "{{actor}} 已加入",
+      "userJoined_you": "你已加入",
+      "sessionStarted": "{{actor}} 启动了会话",
+      "sessionStarted_you": "你启动了会话",
+      "sessionStopped": "{{actor}} 停止了会话",
+      "sessionStopped_you": "你停止了会话",
+      "sessionResumed": "{{actor}} 恢复了会话",
+      "sessionResumed_you": "你恢复了会话",
+      "sessionFailed": "有一个会话未能启动",
+      "approvalRequested": "{{actor}} 的会话请求批准",
+      "approvalRequested_you": "你的会话请求批准",
+      "killswitchEngaged": "{{actor}} 启用了紧急停止",
+      "killswitchEngaged_you": "你启用了紧急停止",
+      "killswitchReleased": "{{actor}} 解除了紧急停止",
+      "killswitchReleased_you": "你解除了紧急停止",
+      "killswitchDenied": "紧急停止已停止一个会话",
+      "toolInstalled": "已安装代理工具",
+      "secretStored": "已保存一个密钥",
+      "viewSaved": "{{actor}} 保存了视图",
+      "viewSaved_you": "你保存了视图",
+      "workspaceCreated": "{{actor}} 创建了工作区",
+      "workspaceCreated_you": "你创建了工作区",
+      "workspaceUpdated": "{{actor}} 更新了工作区",
+      "workspaceUpdated_you": "你更新了工作区"
+    },
+    "actors": {
+      "you": "你",
+      "member": "一名成员",
+      "token": "一个 API 令牌",
+      "system": "Olivares"
+    }
   },
   "passphrase": {
     "tooShort": "密码短语长度至少为 {{min}} 个字符",
@@ -257,6 +297,15 @@
         "first": "第一个模块",
         "last": "最后一个模块",
         "pin": "固定或取消固定此模块"
+      },
+      "session": {
+        "new": "新建会话"
+      },
+      "sourceDiff": {
+        "nextFile": "下一个文件",
+        "previousFile": "上一个文件",
+        "nextHunk": "下一处更改",
+        "previousHunk": "上一处更改"
       }
     },
     "when": {

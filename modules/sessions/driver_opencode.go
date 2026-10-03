@@ -9,8 +9,10 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io/fs"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -88,22 +90,202 @@ func (openCodeDriver) TransportProfile() DriverTransportProfile {
 // LaunchTerms declares what an OpenCode launch hands its child. The model and
 // the effort travel on session/set_config_option, each only as an exact value the
 // agent offered, and a value it did not offer fails the handshake rather than
-// falling back to a default. The permission mode reaches no frame, so it is not
-// carried; here that comes with a refusal rather than a drop, because a launch
-// that asks for any mode but the default is refused before the spawn
-// (refuseOpenCodeUnsupportedControls). The models can be discovered by probing
+// falling back to a default. The permission preset reaches the native inline
+// configuration, with stronger live policy still deciding each edit or command.
+// The models can be discovered by probing
 // the credential a profile binds; the driver lists none.
 func (openCodeDriver) LaunchTerms() DriverLaunchTerms {
 	return DriverLaunchTerms{
 		Model:          TermCarried,
 		Effort:         TermCarried,
-		PermissionMode: TermNotCarried,
+		PermissionMode: TermCarried,
 		ModelDiscovery: ModelDiscoveryBoundCredentialProbe,
 	}
 }
 
-func (openCodeDriver) LaunchEnv(DriverLaunch) []EnvVar {
-	return []EnvVar{{Name: envOpenCodeDisableAutoUpdate, Value: "1"}}
+func (openCodeDriver) LaunchEnv(l DriverLaunch) []EnvVar {
+	env := []EnvVar{{Name: envOpenCodeDisableAutoUpdate, Value: "1"}}
+	cfg := map[string]any{}
+	bound := true
+	switch {
+	case l.LocalModelEndpoint != "":
+		_ = json.Unmarshal([]byte(openCodeLocalProviderConfig(l.LocalModelEndpoint, l.LocalModels)), &cfg)
+	case l.BoundProvider.Kind != "":
+		openCodeConfineToKey(cfg, l.BoundProvider)
+	default:
+		bound = false
+	}
+	if bound {
+		env = append(env,
+			EnvVar{Name: envOpenCodeDisableModelsFetch, Value: "1"},
+			EnvVar{Name: envOpenCodeDisableLSPDownload, Value: "1"},
+			EnvVar{Name: envNPMConfigOffline, Value: "true"},
+			EnvVar{Name: envOpenCodeDisableShare, Value: "1"})
+	}
+	permission := ""
+	switch l.Preset {
+	case PresetReadOnly:
+		permission = "deny"
+	case PresetAsk, PresetEditsOnly, PresetEditsAndCommands, PresetFull:
+		permission = "ask"
+	}
+	if permission != "" {
+		rules := map[string]any{"*": permission, "bash": permission, "edit": permission,
+			"read": map[string]string{"*": "allow", "*.env": "deny", "*.env.*": "deny", "*.env.example": "allow"},
+			"glob": "allow", "grep": "allow", "list": "allow"}
+		// Keep edits and commands asking so live policy can still deny or ask.
+		// ACP approval is answered at once when that policy permits it.
+		cfg["permission"] = rules
+		// Agent-specific configuration takes precedence over global permission
+		// rules. Pin the native built-in agent and its rules for this launch too.
+		cfg["default_agent"] = "build"
+		cfg["agent"] = map[string]any{"build": map[string]any{"permission": rules}}
+	}
+	if len(cfg) > 0 {
+		body, _ := json.Marshal(cfg)
+		env = append(env, EnvVar{Name: envOpenCodeConfigContent, Value: string(body)})
+	}
+	return env
+}
+
+// openCodeLocalProviderID names the local provider in OpenCode's configuration.
+const openCodeLocalProviderID = "olivares_ollama"
+
+// A SESSION BOUND TO A PROVIDER RECORD REACHES ONLY THAT PROVIDER (Root 21:16Z, HU2 019).
+//
+// OpenCode keeps its own hosted provider (OpenCode Zen, "opencode") beside any key it is
+// given, and with no model chosen it answers there: an Anthropic-key session answered on
+// opencode/big-pickle. So every record-bound launch allows exactly the bound provider,
+// disables the hosted one by name and turns sharing off. The title, small-model and
+// compaction requests resolve their model among the enabled providers, so they stay on it
+// too. Measured on OpenCode 1.18.34 over a whole session (FH 118 follow-up, egress probe
+// r4): Anthropic, OpenAI and xAI keys reached only their own API host, a local model only
+// loopback.
+//
+// Three more requests went to other hosts, each closed by OpenCode's own switch:
+//   - OPENCODE_DISABLE_MODELS_FETCH: the model catalogue from models.opencode.ai at start;
+//   - npm_config_offline: the background install of @opencode-ai/plugin from
+//     registry.npmjs.org into every configuration directory (it fails and is logged);
+//   - OPENCODE_DISABLE_LSP_DOWNLOAD: language servers downloaded when a file is edited.
+//
+// And two held against what a profile or a project may already hold (SR5C on a8ac380a):
+//   - the bound provider's address is pinned in the same configuration, so a baseURL saved
+//     for that provider elsewhere cannot carry the key and the prompt to another host;
+//   - OPENCODE_DISABLE_SHARE: share=disabled stops new shares, but a session shared before
+//     keeps syncing its messages to the share service on resume unless this is set.
+const (
+	envOpenCodeDisableModelsFetch = "OPENCODE_DISABLE_MODELS_FETCH"
+	envOpenCodeDisableLSPDownload = "OPENCODE_DISABLE_LSP_DOWNLOAD"
+	envNPMConfigOffline           = "npm_config_offline"
+	envOpenCodeDisableShare       = "OPENCODE_DISABLE_SHARE"
+)
+
+// openCodeHostedProviderID is OpenCode's own hosted provider.
+const openCodeHostedProviderID = "opencode"
+
+// openCodeKeyProvider is OpenCode's provider for a key record's kind and that provider's
+// own API in its SDK's spelling (the carrier's vendor endpoint, providerVendorEndpoints,
+// as the SDK takes it). Each reads its key from the variable the record injects.
+type openCodeKeyProvider struct{ id, baseURL string }
+
+var openCodeKeyProviders = map[string]openCodeKeyProvider{
+	ProviderKindAnthropic: {"anthropic", "https://api.anthropic.com/v1"},
+	ProviderKindOpenAI:    {"openai", "https://api.openai.com/v1"},
+	ProviderKindXAI:       {"xai", "https://api.x.ai/v1"},
+}
+
+// openCodeUnconfinedProviderID is allowed when a launch names a kind OpenCode has no
+// provider for. It names no provider, so nothing answers: the mint refuses such a record
+// first (recordServesDriver), and this keeps the driver closed if a caller did not.
+const openCodeUnconfinedProviderID = "olivares_no_provider"
+
+// openCodeConfineToKey allows only the bound key's provider, at the carrier's endpoint. A
+// carrier naming a kind OpenCode has no provider for, or any address but the vendor's own,
+// enables no provider at all.
+func openCodeConfineToKey(cfg map[string]any, b BoundProvider) {
+	p, ok := openCodeKeyProviders[b.Kind]
+	if !ok || b.Endpoint != providerVendorEndpoints[b.Kind] {
+		openCodeConfineTo(cfg, openCodeUnconfinedProviderID)
+		return
+	}
+	cfg["provider"] = map[string]any{p.id: map[string]any{"options": map[string]any{"baseURL": p.baseURL}}}
+	openCodeConfineTo(cfg, p.id)
+}
+
+// openCodeCanConfine reports whether OpenCode can be confined to a key record: a kind it
+// has a provider for, at that provider's own address (a custom address has no measured
+// OpenCode mapping).
+func openCodeCanConfine(kind, baseURL string) bool {
+	_, ok := openCodeKeyProviders[kind]
+	return ok && strings.TrimSpace(baseURL) == ""
+}
+
+// openCodeManagedConfigDir is where OpenCode 1.18.34 reads its host-managed configuration on
+// Linux (packages/opencode/src/config/managed.ts). A variable only so tests can move it.
+var openCodeManagedConfigDir = "/etc/opencode"
+
+// openCodeManagedConfigPresent names the host's managed OpenCode configuration file when one
+// exists with any content, or cannot be read. OpenCode merges it after the launch's own
+// configuration, and it can name the provider, its address and the models in more ways than a
+// reader here can follow (decoded escapes, {env:...} and {file:...} substitution, its own
+// comment rules), so a session on a provider from Providers does not start on top of it at all
+// (Root 2026-10-02 23:20Z). An empty file holds nothing.
+func openCodeManagedConfigPresent() (string, bool) {
+	for _, name := range []string{"opencode.json", "opencode.jsonc"} {
+		path := filepath.Join(openCodeManagedConfigDir, name)
+		raw, err := os.ReadFile(path)
+		if errors.Is(err, fs.ErrNotExist) {
+			continue
+		}
+		if err != nil || len(bytes.TrimSpace(raw)) > 0 {
+			return path, true
+		}
+	}
+	return "", false
+}
+
+// openCodeConfineTo allows exactly one provider, disables the hosted one and sharing.
+func openCodeConfineTo(cfg map[string]any, providerID string) {
+	cfg["enabled_providers"] = []string{providerID}
+	cfg["disabled_providers"] = []string{openCodeHostedProviderID}
+	cfg["share"] = "disabled"
+}
+
+// openCodeLocalProviderConfig hands the child its local provider the way Codex
+// gets it (driver_codex.go LaunchArgs): direct launch-time configuration that
+// modifies no home. OpenCode's documented inline-config source is
+// OPENCODE_CONFIG_CONTENT (opencode.ai/docs/config — merged over the global and
+// project files for the keys it sets); the block is the OpenAI-compatible
+// adapter pointed at <endpoint>/v1 with no key, the record's own contract.
+//
+// A session bound to the local endpoint never reaches a hosted model (FH 085,
+// measured on OpenCode 1.18.34): OpenCode offers only the models its config lists,
+// and its own default is a hosted OpenCode Zen model. So the endpoint's models are
+// listed, the first is the default, and enabled_providers allows no other
+// provider. A launch with no listed model is refused before this is built
+// (runtime_provider_auth.go).
+func openCodeLocalProviderConfig(endpoint string, models []string) string {
+	listed := map[string]any{}
+	for _, name := range models {
+		listed[name] = map[string]any{"name": name}
+	}
+	cfg := map[string]any{
+		"provider": map[string]any{
+			openCodeLocalProviderID: map[string]any{
+				"npm":     "@ai-sdk/openai-compatible",
+				"name":    "Olivares Ollama (local)",
+				"options": map[string]any{"baseURL": endpoint},
+				"models":  listed,
+			},
+		},
+	}
+	openCodeConfineTo(cfg, openCodeLocalProviderID)
+	if len(models) > 0 {
+		cfg["model"] = openCodeLocalProviderID + "/" + models[0]
+		cfg["small_model"] = cfg["model"]
+	}
+	body, _ := json.Marshal(cfg)
+	return string(body)
 }
 
 func (openCodeDriver) OpenSession(cfg DriverSessionConfig) DriverSession {

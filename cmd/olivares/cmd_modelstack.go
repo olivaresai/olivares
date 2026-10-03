@@ -89,7 +89,7 @@ type modelstackResult struct {
 
 // do performs one request against the module namespace. path is
 // module-relative ("/owned-models"); query is an already-encoded query string.
-func (c modelstackClient) do(cmd *cobra.Command, method, path, query string, body []byte) (modelstackResult, error) {
+func (c modelstackClient) do(cmd *cobra.Command, method, path, query string, body []byte, accepted ...int) (modelstackResult, error) {
 	opts, err := c.flags.resolutionOptions(cmd)
 	if err != nil {
 		return modelstackResult{}, err
@@ -139,10 +139,11 @@ func (c modelstackClient) do(cmd *cobra.Command, method, path, query string, bod
 		return modelstackResult{}, exitcode.Or(exitcode.Server, redactCoded(err, resolved.Token))
 	}
 	defer func() { _ = resp.Body.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxModelstackResponseSize+1))
+	raw, err := readCLIHTTPResponse(resp, req, maxModelstackResponseSize+1, cliStatusAccepted(resp.StatusCode, accepted...), func(status int, body []byte) error {
+		return modelstackHTTPError(modelstackResult{Status: status, Raw: body})
+	})
 	if err != nil {
-		return modelstackResult{}, exitcode.New(exitcode.Server,
-			fmt.Errorf("read %s response: %w", c.family, err))
+		return modelstackResult{Status: resp.StatusCode, Raw: raw, ContentType: resp.Header.Get("Content-Type")}, wrapCLIResponseReadError(err, fmt.Sprintf("read %s response", c.family))
 	}
 	if len(raw) > maxModelstackResponseSize {
 		return modelstackResult{}, exitcode.New(exitcode.Server, fmt.Errorf(
@@ -275,6 +276,14 @@ type modelstackFilterSpec struct {
 	Flag  string
 	Query string
 	Usage string
+	// Default is the value sent when the flag is not given; Required refuses the
+	// command locally when it ends up empty (the engine would answer 400).
+	Default  string
+	Required bool
+	// AtRun computes the value sent when the flag is empty, when the command RUNS.
+	// A date belongs here, not in Default: Default is printed by --help, and the
+	// generated CLI reference must be byte-stable.
+	AtRun func() string
 }
 
 // modelstackValues collects the declared filters into a deterministic query.
@@ -286,7 +295,11 @@ func modelstackValues(specs []modelstackFilterSpec, values []string) url.Values 
 		if i >= len(values) {
 			break
 		}
-		if v := strings.TrimSpace(values[i]); v != "" {
+		v := strings.TrimSpace(values[i])
+		if v == "" && spec.AtRun != nil {
+			v = spec.AtRun()
+		}
+		if v != "" {
 			out.Set(spec.Query, v)
 		}
 	}
@@ -295,7 +308,10 @@ func modelstackValues(specs []modelstackFilterSpec, values []string) url.Values 
 
 func addModelstackFilters(cmd *cobra.Command, specs []modelstackFilterSpec, values []string) {
 	for i := range specs {
-		cmd.Flags().StringVar(&values[i], specs[i].Flag, "", specs[i].Usage)
+		cmd.Flags().StringVar(&values[i], specs[i].Flag, specs[i].Default, specs[i].Usage)
+		if specs[i].Required {
+			_ = cmd.MarkFlagRequired(specs[i].Flag)
+		}
 	}
 }
 
@@ -359,7 +375,7 @@ func modelstackReadBody(cmd *cobra.Command, data string, mode modelstackBodyMode
 	}
 	if !json.Valid(body) {
 		return nil, exitcode.New(exitcode.Usage, fmt.Errorf(
-			"--data is not valid JSON (%d bytes read); the control plane takes one JSON document per request", len(body)))
+			"--data is not valid JSON (%d bytes read); the engine takes one JSON document per request", len(body)))
 	}
 	return body, nil
 }
@@ -371,7 +387,7 @@ func modelstackReadAll(r io.Reader, what string) ([]byte, error) {
 	}
 	if len(body) > maxModelstackRequestSize {
 		return nil, exitcode.New(exitcode.Usage, fmt.Errorf(
-			"--data from %s exceeds %d bytes, which is the control plane's own body limit", what, maxModelstackRequestSize))
+			"--data from %s exceeds %d bytes, which is the engine's own body limit", what, maxModelstackRequestSize))
 	}
 	return body, nil
 }
@@ -419,7 +435,7 @@ func modelstackRenderPayload(cmd *cobra.Command, res modelstackResult) error {
 		return modelstackRenderReport(cmd, res)
 	}
 	fmt.Fprintf(cmd.ErrOrStderr(),
-		"note: the control plane answered %s, not JSON; stdout carries it verbatim and -o does not apply\n",
+		"note: the engine answered %s, not JSON; stdout carries it verbatim and -o does not apply\n",
 		strings.TrimSpace(res.ContentType))
 	_, err := cmd.OutOrStdout().Write(res.Raw)
 	return err
@@ -519,7 +535,7 @@ func modelstackDecodePage(raw []byte, itemsKey string) (modelstackPage, error) {
 	rawItems, ok := envelope[itemsKey]
 	if !ok {
 		return modelstackPage{}, exitcode.New(exitcode.Server, fmt.Errorf(
-			"the response carries no %q array; the control plane answered a shape this command does not know", itemsKey))
+			"the response carries no %q array; the engine answered a shape this command does not know", itemsKey))
 	}
 	page := modelstackPage{}
 	if err := json.Unmarshal(rawItems, &page.Items); err != nil {
@@ -623,7 +639,7 @@ func newModelstackListCmd(c modelstackClient, spec modelstackListSpec) *cobra.Co
 	}
 	addModelstackFilters(cmd, spec.Filters, filters)
 	if spec.Paginated {
-		cmd.Flags().IntVar(&limit, "limit", 0, "page size to request (0 leaves the control plane's default)")
+		cmd.Flags().IntVar(&limit, "limit", 0, "page size to request (left out: the engine's default)")
 		cmd.Flags().StringVar(&cursor, "cursor", "", "opaque cursor from a previous page's cursor field")
 		cmd.Flags().BoolVar(&all, "all", false,
 			"follow the cursor to the end and emit one merged page (json output carries has_more:false and no cursor)")
@@ -666,7 +682,7 @@ func modelstackCollectAllPages(cmd *cobra.Command, c modelstackClient, spec mode
 		}
 		if seen[page.Cursor] {
 			return nil, exitcode.New(exitcode.Server, fmt.Errorf(
-				"the control plane returned the same cursor twice; refusing to page forever"))
+				"the engine returned the same cursor twice; refusing to page forever"))
 		}
 		seen[page.Cursor] = true
 		query.Set("cursor", page.Cursor)
@@ -726,7 +742,7 @@ func modelstackNotePartialPage(cmd *cobra.Command, spec modelstackListSpec, page
 	case spec.CapNote != "":
 		fmt.Fprintf(cmd.ErrOrStderr(), "note: %s\n", spec.CapNote)
 	default:
-		fmt.Fprintln(cmd.ErrOrStderr(), "note: the control plane reports more rows than this page carries")
+		fmt.Fprintln(cmd.ErrOrStderr(), "note: the engine reports more rows than this page carries")
 	}
 }
 
@@ -803,7 +819,7 @@ func newModelstackWriteCmd(c modelstackClient, spec modelstackWriteSpec) *cobra.
 			if err != nil {
 				return err
 			}
-			res, err := c.do(cmd, spec.Method, path, modelstackValues(spec.Filters, filters).Encode(), body)
+			res, err := c.do(cmd, spec.Method, path, modelstackValues(spec.Filters, filters).Encode(), body, http.StatusOK, http.StatusCreated, http.StatusAccepted, http.StatusNoContent)
 			if err != nil {
 				return err
 			}
@@ -880,7 +896,7 @@ func newModelstackDeleteCmd(c modelstackClient, spec modelstackDeleteSpec) *cobr
 			if err := confirmDestructive(cmd, yes, what); err != nil {
 				return err
 			}
-			res, err := c.do(cmd, http.MethodDelete, path, "", nil)
+			res, err := c.do(cmd, http.MethodDelete, path, "", nil, http.StatusNoContent, http.StatusOK)
 			if err != nil {
 				return err
 			}

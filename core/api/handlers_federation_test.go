@@ -30,6 +30,13 @@ import (
 // identity. Raw=="bad" simulates a rejected assertion.
 type fakeFed struct{ proto string }
 
+func (f *fakeFed) SAMLMetadata() ([]byte, error) {
+	if f.proto != auth.ProtocolSAML {
+		return nil, auth.ErrSSONotConfigured
+	}
+	return []byte(`<?xml version="1.0"?><EntityDescriptor entityID="https://sp.example.test"/>`), nil
+}
+
 func (f *fakeFed) Protocol() string { return f.proto }
 
 func (f *fakeFed) BeginAuth(_ context.Context, p auth.AuthParams) (string, error) {
@@ -100,6 +107,159 @@ func TestSSONotConfigured(t *testing.T) {
 	cb := h.raw("GET", "/v1/auth/federation/callback", nil)
 	if cb.Code != http.StatusNotImplemented {
 		t.Errorf("callback with NoFederation = %d, want 501", cb.Code)
+	}
+}
+
+func TestCommunitySAMLMetadata(t *testing.T) {
+	for _, protocol := range []string{"", auth.ProtocolOIDC, auth.ProtocolSAML} {
+		t.Run(protocol, func(t *testing.T) {
+			h := newFedHarness(t, &fakeFed{proto: protocol})
+			h.adminLogin()
+			r := h.raw("GET", "/v1/auth/federation/saml/metadata", nil)
+			if protocol != auth.ProtocolSAML {
+				if r.Code != http.StatusNotImplemented {
+					t.Fatalf("unconfigured/non-SAML metadata = %d, want 501", r.Code)
+				}
+				return
+			}
+			if r.Code != http.StatusOK || r.Header().Get("Content-Type") != "application/samlmetadata+xml; charset=utf-8" {
+				t.Fatalf("Community metadata = %d %s", r.Code, r.Header().Get("Content-Type"))
+			}
+			if r.Body.String() != `<?xml version="1.0"?><EntityDescriptor entityID="https://sp.example.test"/>` {
+				t.Fatalf("metadata differs: %s", r.Body.String())
+			}
+			if len(r.Result().Cookies()) != 0 {
+				t.Fatal("metadata must not issue a login credential")
+			}
+		})
+	}
+}
+
+func TestServerInfoSSOProviders(t *testing.T) {
+	for _, protocol := range []string{"", auth.ProtocolOIDC, auth.ProtocolSAML} {
+		t.Run(protocol, func(t *testing.T) {
+			h := newFedHarness(t, &fakeFed{proto: protocol})
+			r := h.raw("GET", "/v1/server-info", nil)
+			var info map[string]any
+			if err := json.Unmarshal(r.Body.Bytes(), &info); err != nil {
+				t.Fatal(err)
+			}
+			providers, present := info["sso_providers"]
+			if protocol == "" {
+				if present {
+					t.Fatal("unconfigured server must omit provider buttons")
+				}
+				return
+			}
+			items, ok := providers.([]any)
+			if !ok || len(items) != 1 {
+				t.Fatalf("configured provider buttons = %v, want one", providers)
+			}
+			item := items[0].(map[string]any)
+			if len(item) != 2 || item["label"] == "" {
+				t.Fatalf("provider must expose only label and start_url: %v", item)
+			}
+			if item["start_url"] != "/v1/auth/federation/start?browser_session=1&return_to=%2F" {
+				t.Fatalf("start URL = %v", item["start_url"])
+			}
+		})
+	}
+}
+
+func TestServerInfoManagedSSODisplayName(t *testing.T) {
+	h := newConsoleHarness(t)
+	admin := h.adminLogin()
+	h.elevate(admin)
+	input := map[string]any{
+		"protocol": "oidc", "enabled": true,
+		"oidc_issuer": "https://idp.example", "oidc_client_id": "cid", "oidc_client_secret": "test-client-secret",
+		"display_name": "Contoso",
+	}
+	put := h.do("PUT", "/v1/console/sso", admin, input, nil)
+	if put.code != http.StatusOK || put.body["display_name"] != "Contoso" {
+		t.Fatalf("save provider display name = %d %s", put.code, put.raw)
+	}
+	assertLabel := func(want string) {
+		t.Helper()
+		r := h.do("GET", "/v1/server-info", "", nil, nil)
+		items, ok := r.body["sso_providers"].([]any)
+		if !ok || len(items) != 1 || items[0].(map[string]any)["label"] != want {
+			t.Fatalf("provider button = %v, want label %q", r.body["sso_providers"], want)
+		}
+	}
+	assertLabel("Contoso")
+	delete(input, "display_name")
+	input["oidc_client_secret"] = ""
+	if r := h.do("PUT", "/v1/console/sso", admin, input, nil); r.code != http.StatusOK {
+		t.Fatalf("older client update = %d %s", r.code, r.raw)
+	}
+	assertLabel("Contoso")
+	input["display_name"] = ""
+	if r := h.do("PUT", "/v1/console/sso", admin, input, nil); r.code != http.StatusOK {
+		t.Fatalf("clear name = %d %s", r.code, r.raw)
+	}
+	assertLabel("Single sign-on")
+	input["enabled"] = false
+	if r := h.do("PUT", "/v1/console/sso", admin, input, nil); r.code != http.StatusOK {
+		t.Fatalf("disable provider = %d %s", r.code, r.raw)
+	}
+	if r := h.do("GET", "/v1/server-info", "", nil, nil); r.body["sso_providers"] != nil {
+		t.Fatalf("disabled provider advertised: %v", r.body["sso_providers"])
+	}
+}
+
+func TestSSOAssuranceMappingRoundTrip(t *testing.T) {
+	h := newConsoleHarness(t)
+	admin := h.adminLogin()
+	h.elevate(admin)
+	mapping := map[string]any{"amr": []string{"otp"}, "acr": []string{"urn:corp:mfa"}, "saml_contexts": []string{"https://refeds.org/profile/mfa"}}
+	input := map[string]any{
+		"protocol": "oidc", "enabled": true,
+		"oidc_issuer": "https://idp.example", "oidc_client_id": "cid", "oidc_client_secret": "test-client-secret",
+		"assurance_mapping": mapping,
+	}
+	if r := h.do("PUT", "/v1/console/sso", admin, input, nil); r.code != http.StatusOK {
+		t.Fatalf("save mapping = %d %s", r.code, r.raw)
+	}
+	delete(input, "assurance_mapping")
+	input["oidc_client_secret"] = ""
+	if r := h.do("PUT", "/v1/console/sso", admin, input, nil); r.code != http.StatusOK {
+		t.Fatalf("older client update = %d %s", r.code, r.raw)
+	}
+	r := h.do("GET", "/v1/console/sso", admin, nil, nil)
+	got, err := json.Marshal(r.body["assurance_mapping"])
+	want, _ := json.Marshal(mapping)
+	if err != nil || string(got) != string(want) {
+		t.Fatalf("stored mapping = %s, want %s; err %v", got, want, err)
+	}
+}
+
+func TestSAMLFlowCookieAcceptsCrossSitePOST(t *testing.T) {
+	for _, test := range []struct {
+		name, protocol, origin string
+		forwarded              bool
+		secure                 bool
+		sameSite               http.SameSite
+	}{
+		{"oidc", auth.ProtocolOIDC, "https://console.example", false, true, http.SameSiteLaxMode},
+		{"saml", auth.ProtocolSAML, "https://console.example", false, true, http.SameSiteNoneMode},
+		{"saml behind HTTPS proxy", auth.ProtocolSAML, "http://console.example", true, true, http.SameSiteNoneMode},
+		{"same-site HTTP development", auth.ProtocolSAML, "http://console.example", false, false, http.SameSiteLaxMode},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			h := newFedHarness(t, &fakeFed{proto: test.protocol})
+			h.adminLogin()
+			req := httptest.NewRequest("GET", test.origin+"/v1/auth/federation/start?browser_session=1", http.NoBody)
+			if test.forwarded {
+				req.Header.Set("X-Forwarded-Proto", "https")
+			}
+			rec := httptest.NewRecorder()
+			h.srv.Handler().ServeHTTP(rec, req)
+			cookie := findCookie(rec.Result().Cookies(), "olv_sso")
+			if cookie == nil || cookie.SameSite != test.sameSite || cookie.Secure != test.secure || !cookie.HttpOnly {
+				t.Fatalf("flow cookie = %+v, want Secure=%v HttpOnly SameSite=%d", cookie, test.secure, test.sameSite)
+			}
+		})
 	}
 }
 

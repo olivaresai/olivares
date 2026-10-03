@@ -119,17 +119,17 @@ func newHostToolObserverAt(root string, rootErr error, home, pathEnv string) *ho
 		Verifier: toolinstall.UnavailableVerifier{},
 		Client:   client,
 	})
-	codex := toolinstall.NewCodex(toolinstall.CodexOptions{
-		Verifier: toolinstall.UnavailableSubjectVerifier{},
-		Client:   client,
-	})
+	codex := toolinstall.NewCodexRelease(toolinstall.ReleaseArchiveOptions{Client: client})
 	grok := toolinstall.NewGrok(toolinstall.GrokOptions{Client: client})
 	cat, err := toolinstall.NewCapabilityCatalog(toolinstall.NewCatalog(claude), codex, grok)
 	var engine *toolinstall.Engine
+	// The process's verified releases (cmd_agent_tool.go): a release the full check
+	// verified is not re-hashed here while it is unchanged.
+	opts := toolinstall.EngineOptions{InstallerVersion: version, Verified: verifiedToolReleases}
 	if err != nil {
-		engine = toolinstall.NewEngine(toolinstall.NewCatalog(claude), toolinstall.EngineOptions{InstallerVersion: version})
+		engine = toolinstall.NewEngine(toolinstall.NewCatalog(claude), opts)
 	} else {
-		engine = toolinstall.NewEngineWithCapabilities(cat, toolinstall.EngineOptions{InstallerVersion: version})
+		engine = toolinstall.NewEngineWithCapabilities(cat, opts)
 	}
 	return &hostToolObserver{
 		engine:  engine,

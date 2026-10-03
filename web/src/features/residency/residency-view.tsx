@@ -8,6 +8,7 @@
 // confirm (form → review), gated by an AAL3 step-up and self-audited server-side.
 // The engine validates the region — an unknown region / non-region-scoped instance
 // returns 400 naming the known regions, surfaced honestly (never a fabricated list).
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import './i18n'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -25,7 +26,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/ui/page-header'
@@ -37,7 +38,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
-import { ListTruncationBadge, SelfAuditNotice } from '@/features/_intel'
+import { ListTruncationBadge } from '@/features/_intel'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
@@ -98,7 +99,10 @@ export function ResidencyView() {
         }
       />
       {registryQ.isError ? (
-        <ErrorState retry={() => void registryQ.refetch()} />
+        <QueryErrorState
+          error={registryQ.error}
+          retry={() => void registryQ.refetch()}
+        />
       ) : null}
       <Card>
         <CardHeader>
@@ -123,7 +127,10 @@ export function ResidencyView() {
               <Spinner />
             </div>
           ) : orgsQ.isError ? (
-            <ErrorState retry={() => void orgsQ.refetch()} />
+            <QueryErrorState
+              error={orgsQ.error}
+              retry={() => void orgsQ.refetch()}
+            />
           ) : orgs.length === 0 ? (
             <EmptyState
               description={t('orgs.emptyHint')}
@@ -325,7 +332,6 @@ function RegionDialog({
               <p className="text-body text-muted-foreground">
                 {t('dialog.implications')}
               </p>
-              <SelfAuditNotice />
               <DialogFooter>
                 <Button
                   variant="ghost"

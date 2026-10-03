@@ -14,6 +14,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -47,12 +48,29 @@ type Options struct {
 	Logger        *slog.Logger
 	Clock         model.Clock
 	Version       string
+	// Edition is the build edition of this binary ("community" for the default AGPL
+	// build), reported by server-info so the console shows only the controls this build
+	// can serve. It is a build fact, never a license or entitlement input (LICENSING.md).
+	// Empty omits the field.
+	Edition string
+	// AuthorizationRecorder persists final PDP writes and denials after request transactions close.
+	AuthorizationRecorder AuthorizationDecisionRecorder
 	// LicensePublicKey and LicenseBlob are informational only; the API never
 	// gates on them (LICENSING.md). They populate the license status in server-info.
 	LicensePublicKey ed25519.PublicKey
 	LicenseBlob      string
 	// Modules are the API modules whose routes are mounted under /v1/m/<ns>/.
 	Modules []Module
+	// NotEnabledModules are the namespaces of Modules this node does not run (its
+	// module profile). Their permissions stay declared, so roles and grants keep
+	// their meaning, but every route under /v1/m/<ns>/ answers 404
+	// module_not_enabled, and server-info lists them for the console.
+	NotEnabledModules []string
+	// CommunicationReady reports whether the session communication plane is
+	// effective on this node; server-info carries it so the console shows or hides
+	// the communication screens without asking a route that answers 503. nil
+	// omits the fact.
+	CommunicationReady func(context.Context) bool
 	// UnconditionalGrants reports the permissions a principal holds by an authored
 	// grant that no resource condition gates, so /v1/auth/whoami can report authority
 	// the ROLE does not carry. It is the reporting counterpart of the
@@ -202,6 +220,12 @@ type Options struct {
 	// per-add-on state and enables/disables a preset. nil (community build) = the
 	// /v1/console/activation endpoints answer 501, the honest not-wired seam.
 	Activation ActivationService
+	// ModuleSelection reads and changes which optional modules the engine runs
+	// (/v1/console/modules). nil = the endpoints answer 501.
+	ModuleSelection ModuleSelectionService
+	// JobsNotRunning lists the background jobs this node does not run and why;
+	// server-info carries them so the console can say so. nil omits the fact.
+	JobsNotRunning func() []JobNotRunning
 	// UpdateStatus is the OTA update-availability probe: a nil-safe accessor
 	// returning the latest cached update check for the console indicator. nil (or an
 	// air-gapped deployment with no update endpoint) leaves the health summary's
@@ -270,14 +294,19 @@ type Options struct {
 // Server is the engine's HTTP API. Build it with New, mount it with Handler or
 // run it with a hardened http.Server from NewHTTPServer.
 type Server struct {
-	st          store.Store
-	authr       *auth.Authenticator
-	authz       *auth.Authorizer
-	signer      *audit.Signer
-	setupTok    *secure.SetupToken
-	log         *slog.Logger
-	clock       model.Clock
-	version     string
+	st                    store.Store
+	authr                 *auth.Authenticator
+	authz                 *auth.Authorizer
+	authorizationRecorder AuthorizationDecisionRecorder
+	signer                *audit.Signer
+	setupTok              *secure.SetupToken
+	log                   *slog.Logger
+	clock                 model.Clock
+	version               string
+	edition               string
+	// tlsPin answers the --pin-sha256 value of the certificate this engine serves now, or
+	// "" (plain HTTP, or no certificate). Set by serve before the listener starts.
+	tlsPin      func() string
 	licensePub  ed25519.PublicKey
 	licenseBlob string
 
@@ -396,6 +425,10 @@ type Server struct {
 	// activation: the enterprise activation surface; nil = the console
 	// activation endpoints answer 501 (community build / not opted in).
 	activation ActivationService
+	// moduleSelection is the module selection surface (nil = 501).
+	moduleSelection ModuleSelectionService
+	// jobsNotRunning is Options.JobsNotRunning.
+	jobsNotRunning func() []JobNotRunning
 	// emaGrant: the EMA jwt-bearer grant handler; nil = EMA not configured
 	// (deny-closed: the token endpoint refuses jwt-bearer requests).
 	emaGrant *auth.EMAGrant
@@ -454,6 +487,10 @@ type Server struct {
 
 	setupComplete atomic.Bool
 	handler       http.Handler
+	// notEnabled are the module namespaces this node does not run, sorted.
+	notEnabled []string
+	// communicationReady is Options.CommunicationReady.
+	communicationReady func(context.Context) bool
 }
 
 // New builds a Server and its router.
@@ -475,7 +512,8 @@ func New(opts Options) (*Server, error) {
 	}
 	s := &Server{
 		st: opts.Store, authr: opts.Authenticator, authz: opts.Authorizer, signer: opts.Signer,
-		setupTok: opts.SetupToken, log: opts.Logger, clock: opts.Clock, version: opts.Version,
+		authorizationRecorder: opts.AuthorizationRecorder,
+		setupTok:              opts.SetupToken, log: opts.Logger, clock: opts.Clock, version: opts.Version, edition: opts.Edition, notEnabled: sortedCopy(opts.NotEnabledModules), communicationReady: opts.CommunicationReady,
 		licensePub: opts.LicensePublicKey, licenseBlob: opts.LicenseBlob, ingest: opts.Ingest,
 		fed: opts.Federation, sso: newSSOFlowStore(), trace: opts.Tracing, residency: opts.Residency,
 		keyCustody:      KeyCustodyInfo{Keys: append([]KeyInfo(nil), opts.KeyCustody.Keys...)},
@@ -497,6 +535,8 @@ func New(opts Options) (*Server, error) {
 		supportBundleContainsSensitive: opts.SupportBundleContainsSensitive,
 		license:                        opts.License, emaGrant: opts.EMAGrant,
 		activation:      opts.Activation,
+		moduleSelection: opts.ModuleSelection,
+		jobsNotRunning:  opts.JobsNotRunning,
 		logBroker:       opts.LogBroker,
 		leaderRouteGate: opts.LeaderRouteGate,
 	}
@@ -621,7 +661,7 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 	// declaration reach those refusals without giving any sibling a policy it never
 	// asked for. It is inert when nothing is declared.
 	mw = append(mw, s.deprecationHeaders, s.secureHeaders, s.accessLog,
-		s.routeResponseMetadata, s.authenticate)
+		s.routeResponseMetadata, s.authenticate, s.recordAuthorizationDecisions)
 	// Stage-2: the HA leader-routing backstop runs right after authentication —
 	// BEFORE the rate limiter and the setup gate. A standby is dialable in that
 	// layout, so a request that lands on one is going to be refused no matter what;
@@ -691,6 +731,8 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 
 	v1.Route("/auth", func(r chi.Router) {
 		r.Post("/login", s.handleLogin)
+		r.Get("/browser-session", s.handleBrowserSession)
+		r.Post("/browser-session", s.handleBrowserSession)
 		r.Post("/logout", s.handleLogout)
 		// Renew the calling session credential without a full re-login (rotates the
 		// token, extends expiry). Deny-closed for non-session principals.
@@ -714,6 +756,7 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		// redirects to the IdP; callback validates the assertion, find/provisions
 		// the local user, and mints an opaque session. With NoFederation -> 501.
 		r.Get("/federation/start", s.handleSSOStart)
+		r.Get("/federation/saml/metadata", s.handleSAMLMetadata)
 		r.Get("/federation/callback", s.handleSSOCallback)
 		r.Post("/federation/callback", s.handleSSOCallback)
 		// Privileged login: WebAuthn ceremonies elevate the
@@ -741,6 +784,8 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		r.Delete("/totp", s.handleTOTPRemove)
 		r.Get("/totp/policy", s.handleTOTPPolicyGet)
 		r.Put("/totp/policy", s.handleTOTPPolicyPut)
+		r.Get("/step-up-policy", s.handleStepUpPolicyGet)
+		r.Put("/step-up-policy", s.handleStepUpPolicyPut)
 	})
 
 	v1.Route("/agents", func(r chi.Router) {
@@ -867,6 +912,12 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		r.Post("/preview", s.handleActivationPreview)
 		r.Post("/apply", s.handleActivationApply)
 	})
+	// The module selection: which optional modules the engine runs. Superadmin;
+	// the change requires the deployment's administrative step-up, like activation.
+	v1.Route("/console/modules", func(r chi.Router) {
+		r.Get("/", s.handleModuleSelection)
+		r.Put("/", s.handleSelectModules)
+	})
 	// Operational console endpoints. Effective config is already redacted and the
 	// remaining reads expose no secrets, so they need no AAL3. The support bundle
 	// aggregates config and logs and therefore adds an explicit AAL3 gate.
@@ -918,6 +969,8 @@ func (s *Server) buildRouter(modules []Module) (http.Handler, error) {
 		// tenant-scoped list above cannot reach it (resolveTenant rejects system).
 		r.Get("/system", s.handleSystemAuditList)
 		r.Get("/verify", s.handleAuditVerify)
+		// The notification bell's read: newest first, not itself recorded.
+		r.Get("/recent", s.handleAuditRecent)
 		r.Get("/export", s.handleAuditExport)
 		r.Get("/pubkey", s.handleAuditPubkey)
 	})
@@ -1109,6 +1162,10 @@ func (s *Server) mountModules(r chi.Router, modules []Module) error {
 		// route it registers is filed with the adapter of the module that registered
 		// it. A module implementing none files nil, and its operations project as
 		// not_supported rather than as the outer boolean.
+		if slices.Contains(s.notEnabled, ns) {
+			r.Mount("/m/"+ns, moduleNotEnabledHandler(ns))
+			continue
+		}
 		projector, _ := m.(ModuleCapabilityProjector)
 		m.APIRoutes(chiRegistrar{s: s, r: sub, ns: ns, projector: projector})
 		r.Mount("/m/"+ns, sub)
@@ -2124,4 +2181,32 @@ func (s *Server) licenseStatus() LicenseDisplayInfo {
 		Plan:        v.Plan(),
 		SupportTier: v.SupportTier(),
 	}
+}
+
+// moduleNotEnabledBody is the error body of a route whose module this node does
+// not run: errorBody plus the module's namespace, so the console offers the action
+// that enables that module.
+type moduleNotEnabledBody struct {
+	Error struct {
+		Code    string `json:"code"`
+		Message string `json:"message"`
+		Module  string `json:"module"`
+	} `json:"error"`
+}
+
+// moduleNotEnabledHandler answers every route of a module this node does not run.
+func moduleNotEnabledHandler(ns string) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		var body moduleNotEnabledBody
+		body.Error.Code = "module_not_enabled"
+		body.Error.Message = "The " + ns + " module is not enabled on this node. An administrator can enable it in the module settings."
+		body.Error.Module = ns
+		writeJSON(w, http.StatusNotFound, body)
+	})
+}
+
+func sortedCopy(in []string) []string {
+	out := slices.Clone(in)
+	slices.Sort(out)
+	return out
 }

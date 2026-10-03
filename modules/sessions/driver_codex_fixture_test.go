@@ -15,8 +15,11 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
+
+	"github.com/olivaresai/olivares/modules/sessions/confine"
 )
 
 // The FIXTURE EXECUTABLE PEER.
@@ -57,6 +60,8 @@ const codexFixtureHomeEnv = envCodexHome
 
 // codexFixture configures one peer run.
 type codexFixture struct {
+	SandboxExit   int  `json:"sandbox_exit"`
+	SandboxSignal bool `json:"sandbox_signal"`
 	// ThreadID is the conversation the peer nominates on thread/start.
 	ThreadID string `json:"thread_id"`
 	// ResumeThreadID overrides what thread/resume answers ("" ⇒ echo the request).
@@ -124,14 +129,29 @@ var codexFixturePresence = []string{
 // changed its argv would stop reaching its own peer, and every row of its suite
 // would say so.
 func TestMain(m *testing.M) {
-	if len(os.Args) > 1 {
-		switch os.Args[1] {
+	args := os.Args[1:]
+	for len(args) >= 2 && args[0] == "-c" {
+		args = args[2:]
+	}
+	if len(args) > 0 {
+		switch args[0] {
+		case "sandbox":
+			var cfg codexFixture
+			raw, _ := os.ReadFile(filepath.Join(os.Getenv(envCodexHome), codexFixtureConfigFile))
+			_ = json.Unmarshal(raw, &cfg)
+			if cfg.SandboxSignal {
+				_ = syscall.Kill(os.Getpid(), syscall.SIGKILL)
+			}
+			os.Exit(cfg.SandboxExit)
 		case "app-server":
 			os.Exit(runCodexFixturePeer())
 		case "agent":
 			os.Exit(runGrokFixturePeer())
 		case "acp":
 			os.Exit(runOpenCodeFixturePeer())
+		case confine.HelperArg:
+			// The confinement helper: procRunner re-executes this test binary.
+			os.Exit(confine.RunHelper(args[1:]))
 		case "fixture-grandchild":
 			// A grandchild that holds the inherited stdout open. Only a PROCESS GROUP
 			// teardown ends it; a signal to the direct child alone leaves it running

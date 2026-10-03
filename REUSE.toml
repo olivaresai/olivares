@@ -62,6 +62,13 @@ precedence = "aggregate"
 SPDX-FileCopyrightText = "2026 Olivares.AI"
 SPDX-License-Identifier = "AGPL-3.0-only"
 
+# Upstream uv notice, distributed under uv's MIT license option.
+[[annotations]]
+path = ["packaging/container/uv-LICENSE-MIT.txt"]
+precedence = "override"
+SPDX-FileCopyrightText = "2025 Astral Software Inc."
+SPDX-License-Identifier = "MIT"
+
 # --- Product documentation site (docs-site/) ---------------------------------
 # The docs site and its content are part of the AGPL product (like /web). Its
 # non-code files use extensions the repo-wide default does not cover (.mdx,

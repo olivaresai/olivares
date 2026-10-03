@@ -7,6 +7,7 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -18,17 +19,21 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
+	"unicode/utf8"
 
 	"github.com/google/uuid"
 
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/sessions"
 )
 
-const sessionMCPRevision = "2025-11-25"
+const (
+	sessionMCPRevision     = "2025-11-25"
+	maxSessionPeerKeyChars = 256
+)
 
 var sessionWorkCommands = map[string]bool{
 	"item.create": true, "item.update": true, "item.assign": true, "item.ready": true,
@@ -40,13 +45,21 @@ var sessionWorkCommands = map[string]bool{
 }
 
 // This endpoint is the product's own session surface, separate from the external
-// OAuth resource server. It accepts only server-issued private session purposes.
-// Its only backend is this engine's existing REST handler, under the SAME bearer.
+// OAuth resource server. It uses the resolved session principal at in-process
+// module ports; the session bearer never reaches the general REST authenticator.
+type sessionMCPAuthenticator interface {
+	Authenticate(context.Context, string) (auth.Principal, error)
+}
+
 type sessionMCPHandler struct {
 	enabled            func(context.Context, model.TenantID) (bool, error)
-	authr              *auth.Authenticator
-	api                http.Handler
+	authr              sessionMCPAuthenticator
+	issuedSessionOnly  bool
+	work               func(http.ResponseWriter, *http.Request, auth.Principal, model.TenantID)
 	checkOrchestration func(context.Context, auth.Principal, model.TenantID) error
+	managed            func(http.ResponseWriter, *http.Request, auth.Principal, model.TenantID, sessionMCPRequest)
+	managedTools       func(context.Context, auth.Principal, model.TenantID) ([]mcpc.Tool, error)
+	managedCall        func(http.ResponseWriter, *http.Request, auth.Principal, model.TenantID, sessionMCPRequest) bool
 }
 
 type sessionMCPRequest struct {
@@ -67,7 +80,7 @@ func (h *sessionMCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusMethodNotAllowed)
 		return
 	}
-	if h.authr == nil || h.api == nil {
+	if h.authr == nil {
 		http.Error(w, "session tools unavailable", http.StatusServiceUnavailable)
 		return
 	}
@@ -82,7 +95,7 @@ func (h *sessionMCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusUnauthorized)
 		return
 	}
-	if !p.IsWorkSessionCredential() && !p.IsCommunicationSessionCredential() && !p.IsOrchestrationSessionCredential() {
+	if !h.issuedSessionOnly && !p.IsWorkSessionCredential() && !p.IsCommunicationSessionCredential() && !p.IsOrchestrationSessionCredential() {
 		w.WriteHeader(http.StatusForbidden)
 		return
 	}
@@ -119,7 +132,7 @@ func (h *sessionMCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var in sessionMCPRequest
-	if err := strictSessionJSON(http.MaxBytesReader(w, r.Body, 1<<20), &in); err != nil || in.JSONRPC != "2.0" || in.Method == "" || !validSessionRPCID(in.ID) {
+	if err := api.DecodeRequestBody(w, r, &in, api.RequestBodySpec{}); err != nil || in.JSONRPC != "2.0" || in.Method == "" || !validSessionRPCID(in.ID) {
 		sessionRPCError(w, nil, -32600, "Invalid JSON-RPC request")
 		return
 	}
@@ -131,14 +144,34 @@ func (h *sessionMCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusAccepted)
 		return
 	}
+	if r.URL.Query().Has("server") {
+		if h.managed == nil {
+			w.WriteHeader(http.StatusNotFound)
+			return
+		}
+		h.managed(w, r, p, tenant, in)
+		return
+	}
 	switch in.Method {
 	case "initialize":
-		sessionRPCResult(w, in.ID, map[string]any{"protocolVersion": sessionMCPRevision, "serverInfo": map[string]any{"name": "olivares-session-tools", "version": "26.10"}, "capabilities": map[string]any{"tools": map[string]any{}}, "instructions": "Use the work bearer for work tools and the communication bearer for exact-session messages. Commands retain REST versions, idempotency and Claim fencing. A denied session never falls back to operator authority."})
+		sessionRPCResult(w, in.ID, map[string]any{"protocolVersion": sessionMCPRevision, "serverInfo": map[string]any{"name": "olivares-session-tools", "version": "26.10"}, "capabilities": map[string]any{"tools": map[string]any{}}, "instructions": "Use this session's credential. Tools are filtered by each server's policy and retain approval and audit. Local servers run in this session's folder with its runner. Their actual process confinement is reported with the tools; MCP does not restrict network egress."})
 	case "ping":
 		sessionRPCResult(w, in.ID, map[string]any{})
 	case "tools/list":
-		sessionRPCResult(w, in.ID, map[string]any{"tools": sessionMCPTools(p)})
+		tools := sessionMCPTools(p, h.issuedSessionOnly)
+		if h.managedTools != nil {
+			extra, err := h.managedTools(r.Context(), p, tenant)
+			if err != nil {
+				sessionRPCError(w, in.ID, -32001, "Session tools unavailable")
+				return
+			}
+			tools = append(tools, extra...)
+		}
+		sessionRPCListTools(w, in.ID, tools)
 	case "tools/call":
+		if h.managedCall != nil && h.managedCall(w, r, p, tenant, in) {
+			return
+		}
 		var call struct {
 			Name      string          `json:"name"`
 			Arguments json.RawMessage `json:"arguments"`
@@ -149,7 +182,7 @@ func (h *sessionMCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		allowed := false
-		for _, tool := range sessionMCPTools(p) {
+		for _, tool := range sessionMCPTools(p, h.issuedSessionOnly) {
 			if tool.Name == call.Name {
 				allowed = true
 				break
@@ -164,12 +197,12 @@ func (h *sessionMCPHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			sessionRPCError(w, in.ID, -32602, err.Error())
 			return
 		}
-		request.Header.Set("Authorization", "Bearer "+parts[1])
-		request.Header.Set("X-Olivares-Tenant", tenant.String())
-		// Preserve the transport peer used by the API's throttle and request evidence.
-		request.RemoteAddr = r.RemoteAddr
+		if h.work == nil {
+			sessionRPCError(w, in.ID, -32001, "Session work tools unavailable")
+			return
+		}
 		response := &sessionAPIResponse{header: make(http.Header)}
-		h.api.ServeHTTP(response, request)
+		h.work(response, request, p, tenant)
 		if response.overflow {
 			sessionToolResult(w, in.ID, http.StatusBadGateway, []byte(`{"code":"response_too_large","message":"Use a smaller page limit"}`), nil)
 			return
@@ -210,6 +243,42 @@ func sessionRPCResult(w http.ResponseWriter, id json.RawMessage, result any) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": id, "result": result})
 }
+
+// Omit absent optional MCP fields at the HTTP edge. The connector's Tool
+// encoding also fingerprints persisted probes, so changing its tags would make
+// previously tested, unchanged servers disappear until tested again.
+func sessionRPCListTools(w http.ResponseWriter, id json.RawMessage, tools []mcpc.Tool) {
+	wire := make([]map[string]json.RawMessage, 0, len(tools))
+	for _, tool := range tools {
+		raw, err := json.Marshal(tool)
+		var fields map[string]json.RawMessage
+		if err != nil || json.Unmarshal(raw, &fields) != nil {
+			sessionRPCError(w, id, -32603, "Invalid tool catalogue")
+			return
+		}
+		for _, field := range []string{"annotations", "outputSchema", "_meta", "icons"} {
+			if bytes.Equal(bytes.TrimSpace(fields[field]), []byte("null")) {
+				delete(fields, field)
+			}
+		}
+		if annotations, present := fields["annotations"]; present {
+			var hints map[string]json.RawMessage
+			if json.Unmarshal(annotations, &hints) != nil {
+				sessionRPCError(w, id, -32603, "Invalid tool annotations")
+				return
+			}
+			for _, field := range []string{"readOnlyHint", "destructiveHint", "idempotentHint", "openWorldHint"} {
+				if bytes.Equal(bytes.TrimSpace(hints[field]), []byte("null")) {
+					delete(hints, field)
+				}
+			}
+			fields["annotations"], _ = json.Marshal(hints)
+		}
+		wire = append(wire, fields)
+	}
+	sessionRPCResult(w, id, map[string]any{"tools": wire})
+}
+
 func sessionRPCError(w http.ResponseWriter, id json.RawMessage, code int, message string) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(map[string]any{"jsonrpc": "2.0", "id": id, "error": map[string]any{"code": code, "message": message}})
@@ -274,47 +343,20 @@ type sessionWorkCommandArgs struct {
 	IdempotencyKey string               `json:"idempotency_key,omitempty"`
 	PlanHash       string               `json:"if_plan_hash,omitempty"`
 }
-type sessionInboxArgs struct {
-	Limit        int    `json:"limit,omitempty"`
-	Continuation string `json:"continuation,omitempty"`
+type sessionPeerSendArgs struct {
+	ToSID          string `json:"to_sid"`
+	Title          string `json:"title"`
+	BriefMD        string `json:"brief_md"`
+	Priority       string `json:"priority,omitempty"`
+	IdempotencyKey string `json:"idempotency_key"`
 }
-type sessionSendArgs struct {
-	ChannelID      model.ID `json:"channel_id"`
-	ToSID          string   `json:"to_sid"`
-	Subject        string   `json:"subject"`
-	Text           string   `json:"text"`
-	IdempotencyKey string   `json:"idempotency_key"`
-}
-type sessionAckArgs struct {
-	ID             model.ID `json:"id"`
-	Version        int64    `json:"version"`
-	IdempotencyKey string   `json:"idempotency_key"`
-}
-type sessionHandoffInboxArgs struct {
-	State        string `json:"state,omitempty"`
-	Limit        int    `json:"limit,omitempty"`
-	Continuation string `json:"continuation,omitempty"`
-}
-type sessionHandoffOfferArgs struct {
-	ChannelID          model.ID                `json:"channel_id"`
-	WorkItemID         model.ID                `json:"work_item_id"`
-	ToSID              string                  `json:"to_sid"`
-	Handoff            sessions.HandoffContent `json:"handoff"`
-	AckDeadline        string                  `json:"ack_deadline"`
-	ExpectedOwnerEpoch int64                   `json:"expected_owner_epoch"`
-	Version            int64                   `json:"version"`
-	IdempotencyKey     string                  `json:"idempotency_key"`
-}
-type sessionHandoffRespondArgs struct {
-	ID             model.ID                             `json:"id"`
-	Transition     sessions.HandoffTransition           `json:"transition"`
-	Reason         *sessions.CommunicationReasonContent `json:"reason,omitempty"`
-	Version        int64                                `json:"version"`
-	IdempotencyKey string                               `json:"idempotency_key"`
+type sessionPeerInboxArgs struct {
+	Limit  int    `json:"limit,omitempty"`
+	Cursor string `json:"cursor,omitempty"`
 }
 
-// Schemas derive only the public JSON fields of these typed REST envelopes. The
-// API remains the source of command-specific validation and domain invariants.
+// Schemas derive the public JSON fields of the work envelopes. The sessions
+// module remains the source of command validation and domain invariants.
 func sessionJSONSchema(t reflect.Type) map[string]any {
 	if t.Kind() == reflect.Pointer {
 		return sessionJSONSchema(t.Elem())
@@ -360,26 +402,17 @@ func sessionTool(name, description string, input any, required []string, read bo
 		sort.Strings(commands)
 		properties["command"].(map[string]any)["properties"].(map[string]any)["command"].(map[string]any)["enum"] = commands
 	}
+	if name == "olivares_peer_send" {
+		properties["priority"].(map[string]any)["enum"] = []string{"p0", "p1", "p2", "p3"}
+		properties["priority"].(map[string]any)["default"] = "p2"
+		key := properties["idempotency_key"].(map[string]any)
+		key["minLength"], key["maxLength"] = 1, maxSessionPeerKeyChars
+	}
 	if limit, ok := properties["limit"].(map[string]any); ok {
 		limit["minimum"], limit["maximum"] = 1, 200
 	}
 	if version, ok := properties["version"].(map[string]any); ok {
 		version["minimum"] = 1
-	}
-	if epoch, ok := properties["expected_owner_epoch"].(map[string]any); ok {
-		epoch["minimum"] = 1
-	}
-	if deadline, ok := properties["ack_deadline"].(map[string]any); ok {
-		deadline["format"] = "date-time"
-	}
-	if transition, ok := properties["transition"].(map[string]any); ok {
-		transition["enum"] = []string{"accept", "reject"}
-	}
-	if state, ok := properties["state"].(map[string]any); ok {
-		state["enum"] = []string{"offered", "accepted", "rejected", "withdrawn", "expired"}
-	}
-	if name == "olivares_session_ack" || name == "olivares_session_handoff_offer" || name == "olivares_session_handoff_respond" {
-		properties["idempotency_key"].(map[string]any)["pattern"] = "^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"
 	}
 	if len(required) > 0 {
 		schema["required"] = required
@@ -388,9 +421,10 @@ func sessionTool(name, description string, input any, required []string, read bo
 	destructive, idempotent, open := !read, read, false
 	return mcpc.Tool{Name: name, Title: name, Description: description, InputSchema: raw, Annotations: &mcpc.ToolAnnotations{ReadOnlyHint: &read, DestructiveHint: &destructive, IdempotentHint: &idempotent, OpenWorldHint: &open}}
 }
-func sessionMCPTools(p auth.Principal) []mcpc.Tool {
+func sessionMCPTools(p auth.Principal, issued bool) []mcpc.Tool {
 	tools := []mcpc.Tool{}
-	writable := p.IsWorkSessionCredential()
+	role, _ := p.RoleIn(p.SessionScope())
+	writable := p.IsWorkSessionCredential() || (issued && auth.RoleRank(role) >= auth.RoleRank(auth.RoleEditor))
 	if binding, ok := p.OrchestrationSessionGrant(); ok {
 		for _, cap := range binding.Capabilities {
 			if cap == "work.create" || cap == "work.assign" || cap == "work.review" || cap == "decision.write" {
@@ -398,29 +432,25 @@ func sessionMCPTools(p auth.Principal) []mcpc.Tool {
 			}
 		}
 	}
-	if p.IsWorkSessionCredential() || p.IsOrchestrationSessionCredential() {
+	if issued || p.IsWorkSessionCredential() || p.IsOrchestrationSessionCredential() {
 		if writable {
-			tools = append(tools, sessionTool("olivares_work_command", "Validate, plan or apply one governed work command. Use command.command (item.create/assign/ready/submit/complete, lease.acquire/renew/release, acceptance.evaluate, decision.set). Other fields follow the REST WorkCommand. Apply requires a stable idempotency_key and current version except item.create. Obtain assigned IDs/versions via messages if this worker cannot read backlog. On 412 refresh the version; on 403 ask the operator to review the grant; never retry with broader authority.", sessionWorkCommandArgs{}, []string{"mode", "command"}, false))
+			tools = append(tools, sessionTool("olivares_work_command", "Validate, plan or apply one governed work command. Use command.command (item.create/assign/ready/submit/complete, lease.acquire/renew/release, acceptance.evaluate, decision.set). Other fields follow the REST WorkCommand. Apply requires a stable idempotency_key and current version except item.create. On 412 refresh the version; on 403 ask the operator to review the grant; never retry with broader authority.", sessionWorkCommandArgs{}, []string{"mode", "command"}, false))
 		}
+		readable := issued
 		if binding, ok := p.OrchestrationSessionGrant(); ok {
 			for _, cap := range binding.Capabilities {
-				if cap == "work.read" || cap == "decision.read" {
-					tools = append(tools, sessionTool("olivares_work_list", "Read this workspace's work or decisions (kind work or decision); limit 1..200 and cursor paginate. Filters use the existing REST names. Read capability is checked separately for each kind.", sessionWorkListArgs{}, nil, true), sessionTool("olivares_work_get", "Read a work snapshot or decision by UUID (kind work or decision). Returns current version and acceptance/dependencies. Cross-workspace rows stay concealed.", sessionGetArgs{}, []string{"id"}, true))
-					break
-				}
+				readable = readable || cap == "work.read" || cap == "decision.read"
 			}
 		}
-	}
-	if p.IsCommunicationSessionCredential() {
-		tools = append(tools,
-			sessionTool("olivares_session_inbox", "Read only this authenticated session's inbox in its workspace. Limit and continuation paginate without acknowledging messages; retain delivery IDs and versions for ack.", sessionInboxArgs{}, nil, true),
-			sessionTool("olivares_session_delivery", "Read one delivery owned by this exact session, including its message content. ID is a delivery UUID, not a message UUID.", sessionGetArgs{}, []string{"id"}, true),
-			sessionTool("olivares_session_send", "Send subject and plain-text content to one exact canonical SID in the same workspace through an operator-authorized channel. Use to_sid (osn_UUID), channel_id UUID and a stable idempotency_key. Crossed workspace, stale Claim and missing channel grants deny.", sessionSendArgs{}, []string{"channel_id", "to_sid", "subject", "text", "idempotency_key"}, false),
-			sessionTool("olivares_session_ack", "Acknowledge this exact session's delivery using its current version and a canonical UUIDv7 idempotency_key retained for exact retries. On 412 read the delivery again.", sessionAckArgs{}, []string{"id", "version", "idempotency_key"}, false),
-			sessionTool("olivares_session_handoff_inbox", "List content-free handoff offers addressed to this exact session in its workspace. State is one of offered (default), accepted, rejected, withdrawn or expired. Read each carrier delivery through handoff_get before responding.", sessionHandoffInboxArgs{}, nil, true),
-			sessionTool("olivares_session_handoff_get", "Read the protected handoff context for one carrier delivery owned by this exact session. ID is the delivery UUID, not the handoff UUID. The result supplies handoff id/version/etag and current work ownership; read before responding.", sessionGetArgs{}, []string{"id"}, true),
-			sessionTool("olivares_session_handoff_offer", "Offer this session's current work ownership to one exact canonical SID through an authorized same-workspace channel. Supply current work version and expected_owner_epoch, handoff summary/next_action and a future RFC3339 ack_deadline. The UUIDv7 idempotency_key must be retained for exact retries. Offer leaves ownership unchanged until accepted; never substitute operator authority.", sessionHandoffOfferArgs{}, []string{"channel_id", "work_item_id", "to_sid", "handoff", "ack_deadline", "expected_owner_epoch", "version", "idempotency_key"}, false),
-			sessionTool("olivares_session_handoff_respond", "Accept or reject a handoff addressed to this exact session. ID is the handoff UUID from protected handoff_get, version is its current handoff version. Reject requires reason.code; accept must omit reason. Use a UUIDv7 idempotency_key retained for retries. Accept atomically transfers ownership and fences the old lease; conflicts require rereading.", sessionHandoffRespondArgs{}, []string{"id", "transition", "version", "idempotency_key"}, false))
+		if readable {
+			tools = append(tools, sessionTool("olivares_work_list", "Read this workspace's work or decisions (kind work or decision); limit 1..200 and cursor paginate. Read capability is checked separately for each kind.", sessionWorkListArgs{}, nil, true), sessionTool("olivares_work_get", "Read a work snapshot or decision by UUID (kind work or decision). Returns current version and acceptance/dependencies. Cross-workspace rows stay concealed.", sessionGetArgs{}, []string{"id"}, true))
+		}
+		if issued {
+			if writable {
+				tools = append(tools, sessionTool("olivares_peer_send", "Send a message or work request to an allowed live peer using its canonical osn_ session ID. Creates a draft work item owned by that peer; the sender and workspace are supplied by the server. Reuse a stable idempotency_key of 1 to 256 characters for retries. The peer can ready, lease and complete it with olivares_work_command and reply with this tool. Permission refusals are audited.", sessionPeerSendArgs{}, []string{"to_sid", "title", "brief_md", "idempotency_key"}, false))
+			}
+			tools = append(tools, sessionTool("olivares_peer_inbox", "Check between tasks for work and messages addressed to this session. The server supplies the recipient; limit 1..200 and cursor paginate. Draft items can be read, readied, leased and completed with the work tools when your grant permits it.", sessionPeerInboxArgs{}, nil, true))
+		}
 	}
 	return tools
 }
@@ -439,9 +469,18 @@ func sessionToolRequest(ctx context.Context, p auth.Principal, name string, raw 
 		return nil
 	}
 	switch name {
-	case "olivares_work_list":
+	case "olivares_work_list", "olivares_peer_inbox":
 		var args sessionWorkListArgs
-		if err := decode(&args); err != nil {
+		if name == "olivares_peer_inbox" {
+			var inbox sessionPeerInboxArgs
+			if err := decode(&inbox); err != nil {
+				return nil, err
+			}
+			if !validSessionPeerSID(p.SessionIdentity) {
+				return nil, errors.New("This session has no canonical recipient")
+			}
+			args = sessionWorkListArgs{Limit: inbox.Limit, Cursor: inbox.Cursor, Filters: map[string]string{"owner_kind": "session", "owner_ref": p.SessionIdentity}}
+		} else if err := decode(&args); err != nil {
 			return nil, err
 		}
 		path = "/work-items"
@@ -465,7 +504,33 @@ func sessionToolRequest(ctx context.Context, p auth.Principal, name string, raw 
 			}
 			query.Set(key, value)
 		}
-	case "olivares_work_get", "olivares_session_delivery", "olivares_session_handoff_get":
+	case "olivares_peer_send":
+		var args sessionPeerSendArgs
+		if err := decode(&args); err != nil {
+			return nil, err
+		}
+		workspace, confined := p.ConfinedWorkspaceIn(p.SessionScope())
+		if !confined || workspace.IsZero() || !validSessionPeerSID(p.SessionIdentity) || !validSessionPeerSID(args.ToSID) {
+			return nil, errors.New("to_sid must name a canonical session in this session's workspace")
+		}
+		if args.IdempotencyKey == "" || utf8.RuneCountInString(args.IdempotencyKey) > maxSessionPeerKeyChars {
+			return nil, errors.New("Use a stable idempotency_key with 1 to 256 characters")
+		}
+		if args.Priority == "" {
+			args.Priority = "p2"
+		}
+		method, path = http.MethodPost, "/work-items"
+		query.Set("mode", "apply")
+		// Keep work apply's UUID contract while isolating retries by the
+		// authenticated sender. The domain and SID cannot contain a separator.
+		key := []byte("olivares_peer_send\x00" + p.SessionIdentity + "\x00" + args.IdempotencyKey)
+		headers.Set("Idempotency-Key", uuid.NewHash(sha256.New(), uuid.NameSpaceURL, key, 8).String())
+		body = sessions.WorkCommand{
+			Command: "item.create", WorkspaceID: workspace, WorkKind: "message", Title: args.Title, BriefMD: args.BriefMD, Priority: args.Priority,
+			OwnerKind: "session", OwnerRef: args.ToSID, ProvenanceKind: "mcp", ProvenanceRef: p.SessionIdentity,
+			Acceptance: []sessions.AcceptanceInput{{Key: "read-or-reply", Ordinal: 1, Statement: "Read the message and record the response or completed work.", Required: true}},
+		}
+	case "olivares_work_get":
 		var args sessionGetArgs
 		if err := decode(&args); err != nil {
 			return nil, err
@@ -474,15 +539,7 @@ func sessionToolRequest(ctx context.Context, p auth.Principal, name string, raw 
 			return nil, errors.New("id must be a UUIDv7")
 		}
 		path = "/work-items/" + args.ID.String()
-		if name == "olivares_session_delivery" || name == "olivares_session_handoff_get" {
-			if args.Kind != "" {
-				return nil, errors.New("delivery does not accept kind")
-			}
-			path = "/deliveries/" + args.ID.String()
-			if name == "olivares_session_handoff_get" {
-				path += "/handoff"
-			}
-		} else if args.Kind == "decision" {
+		if args.Kind == "decision" {
 			path = "/decisions/" + args.ID.String()
 		} else if args.Kind != "" && args.Kind != "work" {
 			return nil, errors.New("kind must be work or decision")
@@ -533,97 +590,6 @@ func sessionToolRequest(ctx context.Context, p auth.Principal, name string, raw 
 			}
 			body = lease
 		}
-	case "olivares_session_inbox":
-		var args sessionInboxArgs
-		if err := decode(&args); err != nil {
-			return nil, err
-		}
-		path = "/inbox"
-		query.Set("workspace_id", p.SessionWorkspaceID.String())
-		if args.Limit < 0 || args.Limit > 200 {
-			return nil, errors.New("limit must be 1..200")
-		}
-		if args.Limit > 0 {
-			query.Set("limit", strconv.Itoa(args.Limit))
-		}
-		if args.Continuation != "" {
-			query.Set("continuation", args.Continuation)
-		}
-	case "olivares_session_send":
-		var args sessionSendArgs
-		if err := decode(&args); err != nil {
-			return nil, err
-		}
-		if !validSessionToolID(args.ChannelID) || !validSessionToolSID(args.ToSID) || args.Subject == "" || args.Text == "" || args.IdempotencyKey == "" {
-			return nil, errors.New("Provide channel_id UUIDv7, exact to_sid, subject, text and stable idempotency_key")
-		}
-		method, path = http.MethodPost, "/messages/send"
-		headers.Set("Idempotency-Key", args.IdempotencyKey)
-		body = sessions.DirectNoticePublishCommand{ChannelID: args.ChannelID, Recipient: sessions.RecipientRef{Kind: sessions.RecipientSession, Ref: args.ToSID}, Content: sessions.MessageContent{Subject: args.Subject, Blocks: []sessions.MessageContentBlock{{Type: sessions.ContentBlockText, Format: sessions.TextPlain, Text: args.Text}}}}
-	case "olivares_session_ack":
-		var args sessionAckArgs
-		if err := decode(&args); err != nil {
-			return nil, err
-		}
-		if !validSessionToolID(args.ID) || args.Version < 1 || !validSessionToolID(model.ID(args.IdempotencyKey)) {
-			return nil, errors.New("Provide delivery id, current version and canonical UUIDv7 idempotency_key")
-		}
-		method, path, body = http.MethodPost, "/deliveries/"+args.ID.String()+"/ack", map[string]any{}
-		headers.Set("If-Match", fmt.Sprintf(`"v%d"`, args.Version))
-		headers.Set("Idempotency-Key", args.IdempotencyKey)
-	case "olivares_session_handoff_inbox":
-		var args sessionHandoffInboxArgs
-		if err := decode(&args); err != nil {
-			return nil, err
-		}
-		if args.Limit < 0 || args.Limit > 200 {
-			return nil, errors.New("limit must be 1..200")
-		}
-		if args.State == "" {
-			args.State = "offered"
-		}
-		switch args.State {
-		case "offered", "accepted", "rejected", "withdrawn", "expired":
-		default:
-			return nil, errors.New("Provide one handoff state from tools/list")
-		}
-		path = "/inbox/handoffs"
-		query.Set("workspace_id", p.SessionWorkspaceID.String())
-		query.Set("state", args.State)
-		if args.Limit > 0 {
-			query.Set("limit", strconv.Itoa(args.Limit))
-		}
-		if args.Continuation != "" {
-			query.Set("continuation", args.Continuation)
-		}
-	case "olivares_session_handoff_offer":
-		var args sessionHandoffOfferArgs
-		if err := decode(&args); err != nil {
-			return nil, err
-		}
-		deadline, err := time.Parse(time.RFC3339Nano, args.AckDeadline)
-		if err != nil || !validSessionToolID(args.ChannelID) || !validSessionToolID(args.WorkItemID) || !validSessionToolSID(args.ToSID) || args.Version < 1 || args.ExpectedOwnerEpoch < 1 || !validSessionToolID(model.ID(args.IdempotencyKey)) {
-			return nil, errors.New("Provide exact channel/work/SID, current work version/owner epoch, RFC3339 deadline and UUIDv7 idempotency_key")
-		}
-		method, path = http.MethodPost, "/handoffs"
-		body = sessions.WorkItemHandoffOfferCommand{ChannelID: args.ChannelID, WorkItemID: args.WorkItemID, Recipient: sessions.RecipientRef{Kind: sessions.RecipientSession, Ref: args.ToSID}, Content: args.Handoff, AckDeadline: deadline, ExpectedOwnerEpoch: args.ExpectedOwnerEpoch}
-		headers.Set("If-Match", fmt.Sprintf(`"v%d"`, args.Version))
-		headers.Set("Idempotency-Key", args.IdempotencyKey)
-	case "olivares_session_handoff_respond":
-		var args sessionHandoffRespondArgs
-		if err := decode(&args); err != nil {
-			return nil, err
-		}
-		if !validSessionToolID(args.ID) || args.Version < 1 || !validSessionToolID(model.ID(args.IdempotencyKey)) || (args.Transition != sessions.HandoffAccept && args.Transition != sessions.HandoffReject) {
-			return nil, errors.New("Provide handoff id/current version, accept or reject, and UUIDv7 idempotency_key")
-		}
-		if args.Transition == sessions.HandoffAccept && args.Reason != nil || args.Transition == sessions.HandoffReject && args.Reason == nil {
-			return nil, errors.New("Reject requires a reason; accept must omit it")
-		}
-		method, path = http.MethodPost, "/handoffs/"+args.ID.String()+"/responses"
-		body = sessions.HandoffResponseCommand{Transition: args.Transition, Reason: args.Reason}
-		headers.Set("If-Match", fmt.Sprintf(`"v%d"`, args.Version))
-		headers.Set("Idempotency-Key", args.IdempotencyKey)
 	default:
 		return nil, errors.New("Unknown session tool")
 	}
@@ -650,6 +616,7 @@ func validSessionToolID(id model.ID) bool {
 	parsed, err := uuid.Parse(id.String())
 	return err == nil && parsed.Version() == 7 && parsed.String() == id.String()
 }
-func validSessionToolSID(sid string) bool {
+
+func validSessionPeerSID(sid string) bool {
 	return strings.HasPrefix(sid, "osn_") && validSessionToolID(model.ID(strings.TrimPrefix(sid, "osn_")))
 }

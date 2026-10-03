@@ -29,7 +29,7 @@ func (m *Module) UseStanding(r auth.StandingReader) { m.standing = r }
 // subjects: the named accounts' authority versions are pinned first, and none is
 // pinned when no subject names an account.
 func (m *Module) fencedMutate(ctx context.Context, tenant model.TenantID, subjects []model.ID, write func(store.Scope) error) error {
-	mutate := func(fn func(store.Scope) error) error { return m.data.Mutate(ctx, tenant, fn) }
+	mutate := func(fn func(store.Scope) error) error { return m.mutate(ctx, tenant, fn) }
 	return auth.FencedWrite(ctx, m.standing, tenant, subjects, auth.FenceDirectory, mutate,
 		func(sc store.Scope, _ bool) error { return write(sc) })
 }
@@ -56,4 +56,16 @@ func spendLimitSubjects(s storedSpendLimitSpec) []model.ID {
 		return nil
 	}
 	return []model.ID{id}
+}
+
+// mutate is the module's ONE write funnel (CUTS B2): every successful commit
+// invalidates the tenant's HasAdmissionTargets memo, so a budget, spend-limit or
+// lifecycle write takes effect on the very next launch probe. Handlers reach it
+// as m.mutate(r.Context(), mc.Tenant, fn) exactly where they used mc.Data.Mutate.
+func (m *Module) mutate(ctx context.Context, tenant model.TenantID, fn func(store.Scope) error) error {
+	err := m.data.Mutate(ctx, tenant, fn)
+	if err == nil {
+		m.targetsCache.Delete(tenant)
+	}
+	return err
 }

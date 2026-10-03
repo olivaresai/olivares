@@ -20,10 +20,7 @@ export * from './managed-mcp'
 export * from './sandbox'
 
 export type PolicySurface =
-  | 'managed-settings'
-  | 'hooks'
-  | 'managed-mcp'
-  | 'sandbox'
+  'managed-settings' | 'hooks' | 'managed-mcp' | 'sandbox'
 
 export const POLICY_SURFACES: readonly PolicySurface[] = [
   'managed-settings',

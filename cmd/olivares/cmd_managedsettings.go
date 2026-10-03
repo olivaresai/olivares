@@ -8,19 +8,23 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/connectors/managedsettings"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 // cmd_managedsettings.go renders the Claude Code managed-settings.json that makes an
 // OPERATED session's tool-calls PEP-governed. It is the STATIC half of the PEP
-// injection: a non-overridable managed PreToolUse hook (+ AllowManagedHooksOnly) that
+// injection: a non-overridable managed PreToolUse hook that
 // runs `olivares claude-hook` before every tool, so the launched `claude` consults the
 // governed PEP. The PER-SESSION half (the loopback URL + tenant/agent + bearer) is the
 // OLIVARES_HOOK_PEP_* env the runner injects at launch (sessiongov.go) — it is NOT in
 // this file, so the file is deployment-static and the operator distributes it once.
+// Managed-only hosts use this managed hook. Other hosts use the protected
+// per-session --settings hook with user/project/local setting sources excluded.
 //
 // Placement (the file must live at the OS-policy MANAGED tier, NOT under the session's
 // HOME — the managed tier is the highest, non-overridable precedence, the anti-tamper
@@ -37,22 +41,23 @@ import (
 // newAgentManagedSettingsCmd renders the managed-settings.json for governed sessions.
 func newAgentManagedSettingsCmd() *cobra.Command {
 	var (
-		pepCommand   string
-		out          string
-		matcher      string
-		timeoutSecs  int
-		redact       bool
-		noHook       bool
-		otelEndpoint string
-		gatewayURL   string
+		pepCommand    string
+		out           string
+		matcher       string
+		timeoutSecs   int
+		redact        bool
+		noHook        bool
+		pinHookEvents bool
+		otelEndpoint  string
+		gatewayURL    string
 	)
 	cmd := &cobra.Command{
 		Use:   "managed-settings",
 		Short: "Render the Claude Code managed-settings.json that governs operated sessions (PEP hook)",
 		Long: "managed-settings renders the non-overridable Claude Code managed-settings.json that makes an\n" +
 			"operated session's tool-calls pass the governed PEP: a managed PreToolUse hook running\n" +
-			"`olivares claude-hook`, with allowManagedHooksOnly so a session cannot add a hook that\n" +
-			"undercuts it. Place the output at the OS-policy managed path (Linux: /etc/claude-code/\n" +
+			"`olivares claude-hook`. User and project hooks are restricted to preserve the PEP's\n" +
+			"approved tool input. Place the output at the OS-policy managed path (Linux: /etc/claude-code/\n" +
 			"managed-settings.json). The per-session PEP endpoint/bearer is injected as the\n" +
 			"OLIVARES_HOOK_PEP_* environment at launch (governed by Olivares), not written here.",
 		Example: `  # Write the managed policy to the Linux system path
@@ -62,18 +67,44 @@ func newAgentManagedSettingsCmd() *cobra.Command {
   olivares agent managed-settings --gateway-base-url https://olivares.internal/v1`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			// allowManagedHooksOnly is the anti-tamper pairing: only managed/SDK hooks load,
-			// so a developer's user/project hook can never bypass or precede the PEP.
 			pol := managedsettings.Policy{AllowManagedHooksOnly: true}
 			if !noHook {
+				defaultClient := !cmd.Flags().Changed("pep-command")
+				hookTimeout := timeoutSecs
+				if defaultClient && cmd.Flags().Changed("timeout") {
+					// Published explicit timeouts remain valid. Leave time for a
+					// refusal to reach stdout before Claude discards a timed-out hook.
+					clientTimeout := 5 * time.Second
+					if hookTimeout > 0 && hookTimeout <= 5 {
+						clientTimeout = time.Duration(hookTimeout) * time.Second / 2
+					}
+					pepCommand = "olivares claude-hook --timeout " + clientTimeout.String()
+					if hookTimeout > 0 && hookTimeout <= int(sessions.ClaudeHookPEPClientTimeout/time.Second) {
+						_, _ = fmt.Fprintf(cmd.ErrOrStderr(), "WARNING: approvals needing longer than the explicit %ds hook timeout are denied (client deadline %s).\n", hookTimeout, clientTimeout)
+					}
+				}
 				hooks, err := managedsettings.PEPHook(managedsettings.PEPHookConfig{
 					Command:     pepCommand,
 					Matcher:     matcher, // "" = every tool (deny-closed coverage)
-					TimeoutSecs: timeoutSecs,
+					TimeoutSecs: hookTimeout,
 					Redact:      redact,
 				})
 				if err != nil {
 					return err
+				}
+				if pinHookEvents || (defaultClient && cmd.Flags().Changed("timeout")) {
+					for event, matchers := range hooks {
+						for i := range matchers {
+							// PEPHook shares its command slice between events.
+							// Each invocation needs its own immutable event pin.
+							commands := append([]managedsettings.HookCommand(nil), matchers[i].Hooks...)
+							for j := range commands {
+								commands[j].Command += " --hook-event " + event
+							}
+							matchers[i].Hooks = commands
+						}
+						hooks[event] = matchers
+					}
 				}
 				pol.Hooks = hooks
 			}
@@ -110,10 +141,11 @@ func newAgentManagedSettingsCmd() *cobra.Command {
 			return os.WriteFile(out, b, 0o644)
 		},
 	}
-	cmd.Flags().StringVar(&pepCommand, "pep-command", "olivares claude-hook", "the managed PreToolUse PEP-client command (deny-closed: required unless --no-hook)")
+	cmd.Flags().StringVar(&pepCommand, "pep-command", "olivares claude-hook", "the managed PEP-client command (explicit custom commands are preserved)")
 	cmd.Flags().StringVar(&out, "out", "-", "output path ('-' = stdout)")
 	cmd.Flags().StringVar(&matcher, "matcher", "", "tool-name matcher for the PEP hook (\"\" = all tools)")
-	cmd.Flags().IntVar(&timeoutSecs, "timeout", 5, "PEP hook timeout in seconds (a hung control plane must fail fast, deny-closed)")
+	cmd.Flags().IntVar(&timeoutSecs, "timeout", 5, "outer hook timeout in seconds (explicit: published 5s client shortened if needed)")
+	cmd.Flags().BoolVar(&pinHookEvents, "pin-hook-events", false, "pin each hook's event; for longer approvals use --pep-command 'olivares claude-hook --timeout 120s' --timeout 180")
 	cmd.Flags().BoolVar(&redact, "redact", true, "also install the paired PostToolUse output-redaction hook")
 	cmd.Flags().BoolVar(&noHook, "no-hook", false, "render env/telemetry only, no PEP hook")
 	cmd.Flags().StringVar(&otelEndpoint, "otel-endpoint", "", "managed OTEL collector endpoint (enables the sanctioned telemetry env)")

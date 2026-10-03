@@ -70,21 +70,9 @@ func writeSCIMError(w http.ResponseWriter, e scim.Error) {
 
 // decodeSCIMBody decodes a SCIM JSON body leniently (IdPs send many attributes
 // the provider does not model, so unknown fields are NOT rejected), under the
-// body-size cap.
+// body-size cap. The single-document property lives in DecodeRequestBody.
 func decodeSCIMBody(w http.ResponseWriter, r *http.Request, v any) error {
-	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
-	// ONE JSON DOCUMENT. Decode reads the first value and stops, so a body of two
-	// concatenated objects would decode the first and silently discard the rest — on a
-	// SCIM provisioning route, that is an identity mutation taken from a body nobody
-	// agreed on. See scripts/check-json-decoders.sh.
-	dec := json.NewDecoder(r.Body)
-	if err := dec.Decode(v); err != nil {
-		return err
-	}
-	if dec.More() {
-		return errors.New("request body carries more than one JSON document")
-	}
-	return nil
+	return DecodeRequestBody(w, r, v, RequestBodySpec{AllowUnknownFields: true})
 }
 
 // scimUserAttr returns a getter over a user's filterable attributes for in-memory

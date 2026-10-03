@@ -844,7 +844,7 @@ describe('DataTable — evidence_unavailable is unknown, not an unexpected 503',
 
   it('keeps a 403 as a calm denial, never as unknown or unexpected', () => {
     mount(new ApiError(403, 'forbidden', 'no'))
-    expect(screen.getByText(/not authorized/i)).toBeInTheDocument()
+    expect(screen.getByText(/you do not have access/i)).toBeInTheDocument()
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
     expect(screen.queryByText(/unexpected error/i)).not.toBeInTheDocument()
     expect(

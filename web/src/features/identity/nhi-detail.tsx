@@ -3,10 +3,11 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
 // Detail and append-only event trail for one governed non-human identity.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { KvList, KvRow } from '@/components/ui/kv'
 import {
@@ -17,7 +18,7 @@ import {
   SheetTitle,
 } from '@/components/ui/sheet'
 import { Spinner } from '@/components/ui/spinner'
-import { SectionCard, SelfAuditNotice } from '@/features/_intel'
+import { SectionCard } from '@/features/_intel'
 import { RelTimeLabel } from '@/features/shared'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
@@ -80,7 +81,6 @@ export function NhiDetailSheet({
           </SheetDescription>
         </SheetHeader>
         <div className="flex flex-col gap-4 px-4 pb-6">
-          <SelfAuditNotice />
           {stepUp ? (
             <StepUpRequiredState
               action="generic"
@@ -100,7 +100,10 @@ export function NhiDetailSheet({
               {t('lifecycle.loading')}
             </div>
           ) : detail.error ? (
-            <ErrorState retry={() => void detail.refetch()} />
+            <QueryErrorState
+              error={detail.error}
+              retry={() => void detail.refetch()}
+            />
           ) : detail.data ? (
             <>
               <SectionCard title={t('lifecycle.detail.posture')}>
@@ -203,7 +206,10 @@ export function NhiDetailSheet({
                   {t('lifecycle.loading')}
                 </div>
               ) : events.error ? (
-                <ErrorState retry={() => void events.refetch()} />
+                <QueryErrorState
+                  error={events.error}
+                  retry={() => void events.refetch()}
+                />
               ) : (events.data?.items.length ?? 0) === 0 ? (
                 <p className="p-6 text-body text-muted-foreground">
                   {t('lifecycle.events.empty')}

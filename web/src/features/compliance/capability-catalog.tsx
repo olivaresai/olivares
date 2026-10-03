@@ -35,11 +35,11 @@
 //
 // And the disclaimer rides the view, because the engine ships one with every report
 // body and this module reports control STATUS + EVIDENCE, never certification.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useAuth } from '@/lib/auth/context'
 import { complianceApi, complianceKeys } from './api'
@@ -102,7 +102,14 @@ export function CapabilityCatalog() {
 
   if (query.isPending)
     return <Skeleton data-testid="capabilities-loading" className="h-40" />
-  if (query.isError) return <ErrorState title={t('capabilities.error')} />
+  if (query.isError)
+    return (
+      <QueryErrorState
+        error={query.error}
+        title={t('capabilities.error')}
+        retry={() => void query.refetch()}
+      />
+    )
 
   const items = query.data?.capabilities ?? []
   if (items.length === 0)

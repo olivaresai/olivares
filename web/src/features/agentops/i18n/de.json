@@ -79,13 +79,15 @@
     "create": "Neue Sitzung",
     "stop": "Stoppen",
     "resume": "Fortsetzen",
+    "startAgain": "Neu starten",
     "cleanup": "Bereinigen",
     "delete": "Löschen",
     "attach": "Verbinden",
     "detach": "Trennen"
   },
   "create": {
-    "title": "Neue Claude-Code-Sitzung",
+    "title": "Neue Sitzung",
+    "titleTool": "Neue {{tool}}-Sitzung",
     "description": "Olivares startet und steuert den Prozess — das visuelle Äquivalent zum CLI-Start, mit Richtlinie in line.",
     "name": "Name",
     "namePlaceholder": "Eine Anzeigebezeichnung (optional)",
@@ -164,7 +166,7 @@
     "none": "Keiner",
     "providerProfile": "Provider-Profil",
     "providerDriver": "Treiber",
-    "providerEnvironment": "Ausführungsumgebung",
+    "providerEnvironment": "Server",
     "liveRef": "Live-Zeile"
   },
   "live": {
@@ -346,7 +348,7 @@
   },
   "profiles": {
     "title": "Anbieterprofile",
-    "subtitle": "Die dauerhafte Identität einer konfigurierten Anbieterinstanz auf einer Ausführungsumgebung: welcher Treiber sie bedient und unter welchem Konfigurationsverzeichnis eine gestartete Sitzung läuft. Ein Profil registriert bereits vorhandene Verzeichnisse — es installiert nichts und meldet sich nirgends an.",
+    "subtitle": "Wie ein Werkzeug für eine Sitzung läuft: welches Werkzeug und aus welchem Einstellungsordner es sich anmeldet. Ein Profil verweist auf eine Werkzeuginstallation, die auf diesem Server bereits existiert; es installiert nichts und meldet nichts an.",
     "register": "Profil registrieren",
     "nextAction": "Ein Profil registrieren",
     "rowMenu": "Zeilenaktionen für {{name}}",
@@ -355,7 +357,7 @@
     "cols": {
       "name": "Profil",
       "driver": "Treiber",
-      "environment": "Ausführungsumgebung",
+      "environment": "Server",
       "state": "Zustand",
       "launch": "Hier aktiviert",
       "created": "Erstellt"
@@ -368,8 +370,9 @@
     "environment": {
       "local": "dieser Knoten",
       "foreign": "andere Umgebung",
-      "foreignHint": "Dieses Profil gehört zu einer anderen Ausführungsumgebung. Es wird als solches angezeigt und nie von diesem Knoten gestartet."
+      "foreignHint": "Dieses Profil gehört zu einem anderen Server. Es wird hier angezeigt, aber nie von diesem Server aus gestartet."
     },
+    "serverUserLogin": "Nutzt die Anmeldung des Server-Benutzers; melden Sie sich erneut an, um eine Produktanmeldung zu verwenden",
     "operable": {
       "yes": "In dieser Umgebung aktiviert",
       "no": "In dieser Umgebung nicht aktiviert",
@@ -377,8 +380,8 @@
     },
     "empty": {
       "title": "Keine Anbieterprofile",
-      "registerHint": "Registrieren Sie über „{{control}}“ oben das Konfigurationsverzeichnis einer vorhandenen Anbieterinstallation auf diesem Knoten; Sitzungen werden dann unter einer stabilen Identität gestartet und zugeordnet.",
-      "noWrite": "Das Registrieren des Konfigurationsverzeichnisses einer vorhandenen Anbieterinstallation erfordert sessions:profile:write; Ihre Rolle enthält diese Berechtigung nicht."
+      "registerHint": "Registrieren Sie ein Profil, um eine Werkzeuginstallation hinzuzufügen, die auf diesem Server bereits existiert. Sitzungen laufen dann mit ihren Einstellungen und ihrer Anmeldung.",
+      "noWrite": "Zum Hinzufügen eines Profils ist die Berechtigung sessions:profile:write nötig, die Ihre Rolle nicht enthält."
     },
     "filteredEmpty": {
       "title": "Keine Profile entsprechen diesem Zustand",
@@ -403,23 +406,26 @@
     },
     "create": {
       "title": "Anbieterprofil registrieren",
-      "description": "Registriert die Verzeichnisse einer vorhandenen Anbieterinstallation auf dieser Ausführungsumgebung. Der Server prüft jeden Pfad auf diesem Knoten — absolut, symbolische Links aufgelöst, vorhanden und ein Verzeichnis. Nichts wird erstellt, installiert oder angemeldet, und es wird kein Zugangsdatum gesendet.",
+      "description": "Fügt eine Werkzeuginstallation hinzu, die auf diesem Server bereits existiert. Der Server prüft, dass jeder Ordner hier existiert; nichts wird erstellt, installiert oder angemeldet, und keine Anmeldedaten werden gesendet.",
       "driver": "Treiber",
-      "driverPlaceholder": "claude",
-      "driverHint": "Treiberschlüssel in Kleinbuchstaben (Buchstaben, Ziffern, - _ .). Ob dieser Knoten das Profil starten kann, meldet der Server nach der Registrierung; der Name entscheidet das nicht.",
-      "configHome": "Konfigurationsverzeichnis",
+      "configHome": "Einstellungsordner",
       "configHomePlaceholder": "/home/agent/.claude-work",
       "configHomeHint": "Absoluter Pfad des Konfigurationsverzeichnisses des Anbieters (bei Claude Code dessen CLAUDE_CONFIG_DIR). Wird auf diesem Knoten geprüft; ein fehlendes Verzeichnis wird abgelehnt, nie angelegt.",
       "userHome": "Benutzerverzeichnis",
       "userHomePlaceholder": "/home/agent",
       "userHomeHint": "Absoluter Pfad, unter dem die gestartete Sitzung als HOME läuft. Wird auf diesem Knoten geprüft.",
+      "homesOptional": "Mit der eigenen Anmeldung des Tools lassen Sie beide Verzeichnisse leer, um die Ordner des Tools auf diesem Server zu verwenden.",
       "displayName": "Anzeigename",
       "displayNamePlaceholder": "Eine Bezeichnung (optional)",
-      "environmentKnown": "Wird auf der Ausführungsumgebung dieses Knotens, {{env}}, registriert, die die Pfade prüft. Ein Profil für eine andere Umgebung wird von dieser Umgebung aus registriert.",
-      "environmentUnknown": "Wird auf der Ausführungsumgebung dieses Knotens registriert, die die Pfade prüft. Ein Profil für eine andere Umgebung wird von dieser Umgebung aus registriert.",
+      "environmentKnown": "Wird auf diesem Server ({{env}}) hinzugefügt, der die Ordner prüft. Ein Profil für einen anderen Server wird auf jenem Server hinzugefügt.",
+      "environmentUnknown": "Wird auf diesem Server hinzugefügt, der die Ordner prüft. Ein Profil für einen anderen Server wird auf jenem Server hinzugefügt.",
       "submit": "Registrieren",
       "submitting": "Wird registriert…",
-      "success": "Anbieterprofil registriert"
+      "success": "Anbieterprofil registriert",
+      "homesOptionalManaged": "Mit einem API-Schlüssel aus Anbieter beide Ordner leer lassen: Dieser Server legt die eigenen Ordner des Profils an.",
+      "missingProvider": "Wählen Sie den API-Schlüssel, den dieses Profil verwendet.",
+      "missingHomesOrNone": "Geben Sie beide Ordner an oder lassen Sie beide leer.",
+      "missingHomes": "Geben Sie beide Ordner an. Sie müssen auf diesem Server bereits existieren."
     },
     "rename": {
       "title": "Profil umbenennen",
@@ -445,7 +451,7 @@
     "details": {
       "ref": "Referenz",
       "driver": "Treiber",
-      "environment": "Ausführungsumgebung",
+      "environment": "Server",
       "state": "Zustand",
       "launch": "Hier aktiviert",
       "created": "Erstellt",
@@ -456,20 +462,20 @@
     "configuration": {
       "title": "Konfiguration",
       "hint": "Die gespeicherten Verzeichnisse sind eine Lesung nur für Administratoren, werden nur auf Anfrage abgerufen und nie in der Liste angezeigt. Ein Zugangsdatenwert wird nie zurückgegeben.",
-      "configHome": "Konfigurationsverzeichnis",
+      "configHome": "Einstellungsordner",
       "userHome": "Benutzerverzeichnis",
-      "validatedOn": "Pfade, wie sie von der Ausführungsumgebung {{env}} geprüft und gespeichert wurden.",
+      "validatedOn": "Ordner, wie sie Server {{env}} geprüft und gespeichert hat.",
       "loading": "Konfiguration wird gelesen…",
       "failed": "Die Konfiguration konnte nicht gelesen werden."
     },
     "bindings": {
       "title": "Quellenbindungen",
-      "subtitle": "Widmet eine konfigurierte Quelle in genau der Revision, die dieser Knoten angewendet hat, einem Profil, sodass die von dieser Quelle beobachteten Sitzungen ihm zugeordnet werden. Die Identität ist die persistente ID und die Revision der Quelle — nie ihr Name.",
+      "subtitle": "Bindet eine Quelle, die dieser Server liest, an ein Profil, damit die Sitzungen, die diese Quelle findet, diesem Profil zugeordnet werden.",
       "cols": {
         "source": "Quelle",
         "revision": "Angewendete Revision",
         "profile": "Profil",
-        "environment": "Ausführungsumgebung",
+        "environment": "Server",
         "state": "Zustand",
         "bound": "Gebunden"
       },
@@ -482,7 +488,7 @@
         "description": "Binden Sie eine konfigurierte Quelle an ein Profil, um ihm die beobachteten Sitzungen zuzuordnen."
       },
       "noRead": "Quellenbindungen werden nicht angezeigt: Ihre Rolle enthält sessions:profile-binding:read nicht.",
-      "notBindable": "Nur ein aktives Profil dieser Ausführungsumgebung kann eine Bindung erhalten.",
+      "notBindable": "Nur ein aktives Profil auf diesem Server kann gebunden werden.",
       "revoke": {
         "title": "Bindung widerrufen",
         "description": "Bereits unter dieser Bindung zugeordnete Sitzungen behalten ihre Herkunft; spätere Beobachtungen über diese Quelle werden dem Profil nicht mehr zugeordnet. Dies kann nicht rückgängig gemacht werden — eine neue Bindung ist eine neue Zeile.",
@@ -491,16 +497,16 @@
       },
       "create": {
         "title": "Quelle an ein Profil binden",
-        "description": "Die Engine bindet die persistente ID der Quelle in der Revision, die dieser Knoten angewendet hat. Beide werden aus dem Quellenverzeichnis gelesen — nie eingetippt, nie aus einem Namen abgeleitet.",
+        "description": "Die Engine bindet die Quelle so, wie dieser Server sie zuletzt angewendet hat, gelesen aus der Quellenliste. Sie ordnet eine Quelle nie anhand ihres Namens zu.",
         "profile": "Profil",
         "profileNone": "Profil auswählen",
         "profileNotBindable": "hier nicht bindbar",
-        "profileHint": "Nur ein aktives Profil dieser Ausführungsumgebung kann eine Bindung erhalten.",
+        "profileHint": "Nur ein aktives Profil auf diesem Server kann gebunden werden.",
         "profilesNotRead": "Profile konnten nicht gelesen werden, daher kann keines ausgewählt werden.",
         "source": "Quelle",
         "sourceNone": "Quelle auswählen",
         "sourceNotApplied": "auf diesem Knoten nicht angewendet",
-        "sourceHint": "Quellen des Bereitstellungsverzeichnisses mit der Revision, die dieser Knoten angewendet hat. Eine Quelle, die dieser Knoten nicht angewendet hat, kann hier nicht gebunden werden.",
+        "sourceHint": "Quellen, die dieser Server angewendet hat. Eine Quelle, die er noch nicht angewendet hat, kann hier nicht gebunden werden.",
         "needsSourceAdmin": "Das Binden einer Quelle erfordert zusätzlich die bereitstellungsweite Quellenverwaltung (Systemadministrator). Ihr Konto kann das Quellenverzeichnis nicht lesen, daher kann hier keine Quelle ausgewählt werden.",
         "rosterFailed": "Das Quellenverzeichnis konnte nicht gelesen werden.",
         "rosterEmpty": "In dieser Bereitstellung sind keine Quellen konfiguriert.",
@@ -525,7 +531,7 @@
         "revision": "Angewendete Revision",
         "profile": "Profil",
         "driver": "Treiber",
-        "environment": "Ausführungsumgebung",
+        "environment": "Server",
         "selector": "Selektor",
         "state": "Zustand",
         "bound": "Gebunden",
@@ -605,20 +611,20 @@
     }
   },
   "accounts": {
-    "subtitle": "Die benannten Anbieterkonten dieses Mandanten. Übernehmen benennt ein vorhandenes Anbieterprofil genau einmal; sein Verzeichnis bleibt, wo es ist.",
-    "adopt": "Profil übernehmen",
+    "subtitle": "Werkzeugkonten in dieser Organisation, etwa ein zweites Claude-Abonnement. Sitzungen nutzen das Konto, das ihr Profil nennt. Wenn ein vorhandenes Profil als Konto benannt wird, bleibt sein Einstellungsordner, wo er ist.",
+    "adopt": "Profil als Konto benennen",
     "cols": {
       "name": "Konto",
       "driver": "Treiber",
-      "environment": "Ausführungsumgebung",
+      "environment": "Server",
       "state": "Status",
       "isolation": "Isolation",
       "created": "Erstellt"
     },
     "empty": {
       "title": "Keine Anbieterkonten",
-      "adoptHint": "Erstellen Sie ein verwaltetes Konto oder verwenden Sie „{{control}}“, um ein bestehendes Anbieterprofil als Konto zu benennen.",
-      "noWrite": "Ein Anbieterprofil als Konto zu übernehmen erfordert sessions:account:write, das Ihre Rolle nicht enthält."
+      "adoptHint": "Erstellen Sie ein Konto, oder benennen Sie ein vorhandenes Profil als Konto.",
+      "noWrite": "Zum Benennen eines Profils als Konto ist die Berechtigung sessions:account:write nötig, die Ihre Rolle nicht enthält."
     },
     "more": "Bisher angezeigt: {{shown}}. Es gibt weitere Konten; laden Sie mehr, um sie zu sehen.",
     "moreFailed": "Die nächste Seite der Konten konnte nicht gelesen werden. Die angezeigten Konten sind nicht die vollständige Liste.",
@@ -629,7 +635,7 @@
       "dedicatedMeaning": "Dediziert: Der Server führt dieses Verzeichnis als diesem Konto vorbehalten."
     },
     "home": {
-      "adopted": "Übernommen (ein vorhandenes Verzeichnis)",
+      "adopted": "Aus einem vorhandenen Profil",
       "managed": "Vom Server verwaltet"
     },
     "authSource": {
@@ -641,7 +647,7 @@
       "name": "Name",
       "ref": "Referenz",
       "driver": "Treiber",
-      "environment": "Ausführungsumgebung",
+      "environment": "Server",
       "state": "Status",
       "home": "Verzeichnis",
       "isolation": "Isolation",
@@ -662,8 +668,8 @@
       "empty": "Nichts gemeldet (Quelle: {{source}})"
     },
     "adoptDialog": {
-      "title": "Anbieterprofil übernehmen",
-      "description": "Benennen Sie ein vorhandenes Anbieterprofil als Konto. Sein Verzeichnis bleibt, wo es ist, und wird als geteilt, nicht dediziert, erfasst. Es wird nichts installiert und niemand angemeldet.",
+      "title": "Profil als Konto benennen",
+      "description": "Gibt einem vorhandenen Profil einen Kontonamen. Sein Einstellungsordner bleibt, wo er ist, und wird gemeinsam genutzt, nicht diesem Konto vorbehalten. Nichts wird installiert, und niemand wird angemeldet.",
       "profile": "Profil",
       "profilePlaceholder": "Profil wählen",
       "profileOption": "{{name}} ({{ref}})",
@@ -678,19 +684,19 @@
       "referenceHintNoList": "Ihre Rolle kann keine Anbieterprofile auflisten. Geben Sie die Referenz eines vorhandenen ein; sie beginnt mit ppf_.",
       "name": "Kontoname (optional)",
       "nameHint": "Kleinbuchstaben, Ziffern und Bindestriche, beginnend mit einem Buchstaben, höchstens 32 Zeichen. Leer lassen, und der Server erzeugt einen, etwa claude oder claude-b.",
-      "submit": "Übernehmen",
-      "submitting": "Wird übernommen…",
-      "pendingStatus": "{{ref}} wird übernommen. Warten auf die Antwort des Servers.",
-      "success": "Übernommen als {{name}}",
-      "failedTitle": "Das Profil wurde nicht übernommen",
-      "forbidden": "Ihre Rolle kann in diesem Mandanten keine Konten übernehmen. Es wurde nichts geändert."
+      "submit": "Als Konto benennen",
+      "submitting": "Wird benannt…",
+      "pendingStatus": "{{ref}} wird als Konto benannt. Warten auf die Antwort des Servers.",
+      "success": "Als {{name}} benannt",
+      "failedTitle": "Das Profil wurde nicht als Konto benannt",
+      "forbidden": "Ihre Rolle kann in dieser Organisation keine Konten hinzufügen. Nichts wurde geändert."
     },
     "adoption": {
-      "pending": "{{ref}} wird übernommen. Der Server hat noch nicht geantwortet.",
-      "adopted": "{{ref}} wurde als {{name}} übernommen.",
-      "refused": "{{ref}} wurde nicht übernommen:",
-      "forbidden": "{{ref}} wurde nicht übernommen: Ihre Rolle kann in diesem Mandanten keine Konten übernehmen. Es wurde nichts geändert.",
-      "unknown": "Das Ergebnis der Übernahme von {{ref}} ist hier nicht bekannt.",
+      "pending": "{{ref}} wird als Konto benannt. Der Server hat noch nicht geantwortet.",
+      "adopted": "{{ref}} ist jetzt das Konto {{name}}.",
+      "refused": "{{ref}} wurde nicht als Konto benannt:",
+      "forbidden": "{{ref}} wurde nicht als Konto benannt: Ihre Rolle kann in dieser Organisation keine Konten hinzufügen. Nichts wurde geändert.",
+      "unknown": "Ob {{ref}} ein Konto wurde, ist hier nicht bekannt.",
       "checking": "Es wird geprüft, ob {{ref}} jetzt ein Konto ist…",
       "isAccount": "Bei diesem Lesen ist {{ref}} das Konto {{name}}.",
       "notAccount": "Bei diesem Lesen ist {{ref}} kein Konto.",
@@ -760,6 +766,8 @@
     "transport": "Transport",
     "isolation": "Isolierung",
     "failedInline": "Die Startanforderung wurde abgelehnt. Ihre Auswahl bleibt erhalten.",
+    "stoppedAtStart": "The tool started and stopped at once. What it said:",
+    "stoppedSilently": "It printed nothing. Check on AI tools that it is installed and signed in, then start again.",
     "state": {
       "ready": "Lokale Anforderungen geprüft",
       "not_configured": "Konfiguration fehlt",
@@ -789,8 +797,8 @@
       "profile_disabled": "Das Profil ist deaktiviert. Aktivieren erfordert sessions:profile:write; ein stillgelegtes Profil kann nicht reaktiviert werden.",
       "profile_retired": "Das Profil ist stillgelegt und kann nicht für einen neuen Start verwendet werden.",
       "environment_local": "Dieses Profil gehört zu diesem Knoten.",
-      "other_environment": "Dieses Profil gehört zu einer anderen Ausführungsumgebung. Wählen Sie ein lokales Profil oder verwenden Sie die Umgebung, die es verwaltet. Es gibt keine automatische Remote-Ausführung.",
-      "environment_unavailable": "Die Ausführungsumgebung, die dieses Profil verwaltet, ist hier nicht verfügbar.",
+      "other_environment": "Dieses Profil gehört zu einem anderen Server. Wählen Sie ein Profil auf diesem Server, oder nutzen Sie den Server, der es verwaltet. Sitzungen werden nie automatisch auf einem anderen Server gestartet.",
+      "environment_unavailable": "Der Server, der dieses Profil verwaltet, ist hier nicht verfügbar.",
       "driver_operable": "Ein Treiberpfad ist in dieser Runtime registriert.",
       "driver_not_registered": "Dieser Treiber ist in dieser Runtime nicht registriert. Für Codex setzen Sie OLIVARES_SESSION_RUNTIME_CODEX_BIN; für Grok OLIVARES_SESSION_RUNTIME_GROK_BIN.",
       "transport_unsupported": "Dieser Transport ist kein Vertrag des gewählten Treibers.",
@@ -814,6 +822,7 @@
       "provider_credential_adapter_configured": "Der Credencial-Adapter dieses Treibers ist verdrahtet.",
       "provider_credential_adapter_not_configured": "Der gesteuerte Credencial-Adapter dieses Treibers ist nicht verdrahtet. Verwenden Sie nicht den Bearer eines anderen Anbieters und fallen Sie nicht auf account-home zurück.",
       "credential_source_not_injected": "Diese Kombination injiziert keine Inferenz-Credencial.",
+      "provider_record_bound": "This profile runs on an API key saved in Providers; that key is its credential.",
       "runtime_credentials_wired": "Die work/K3-Runtime-Anmeldedaten sind verdrahtet.",
       "runtime_credentials_not_requested": "Diese Zusammensetzung fordert keine work/K3-Runtime-Anmeldedaten an.",
       "runtime_credential_wiring_incomplete": "Die Verdrahtung der work/K3-Runtime-Anmeldedaten ist unvollständig. Ein Operator prüft diese Zusammensetzung; dieser Lesevorgang fordert keine kommerziellen Anmeldedaten an.",

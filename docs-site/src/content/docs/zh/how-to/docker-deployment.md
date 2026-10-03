@@ -7,14 +7,15 @@ description: >-
 ---
 
 本指南面向用 Docker 将 Olivares AI control plane 投入生产的工程师与 SRE。
-整个产品是一个 distroless 单镜像——引擎内嵌 web UI——因此单台主机即可运行
+整个产品是一个单镜像——引擎内嵌 web UI——因此单台主机即可运行
 SQLite 拓扑而无需任何外部依赖，在需要时通过 Postgres override 即可获得多租户拓扑。
+容器镜像基于 Debian 13 slim（含供代理工具使用的 Node.js 24），并以非 root 用户运行。
 每条路径都保持相同的安全默认值：无默认凭据、一次性 setup token、默认开启 TLS，
 以及默认启用的 TLS。主机端口默认发布在所有网络接口上，因为这是一台服务器——请按下文有意识地加以限制。
 
-:::note[Beta——26.10.0 镜像已发布]
-Olivares AI 处于 **beta** 阶段。下文的镜像坐标可以解析：版本 `26.10.0` 已将其发布到
-Docker Hub 与 `ghcr.io`（安装面证人 `docs/releases/26.10.0-install-surfaces.json`）。
+:::note[Beta——26.10.1 镜像已发布]
+Olivares AI 处于 **beta** 阶段。下文的镜像坐标可以解析：版本 `26.10.1` 已将其发布到
+Docker Hub 与 `ghcr.io`（安装面证人 `docs/releases/26.10.1-install-surfaces.json`）。
 请将其视为你将要使用的部署形态，而非可投入生产的保证。
 :::
 
@@ -28,14 +29,14 @@ Docker Hub 与 `ghcr.io`（安装面证人 `docs/releases/26.10.0-install-surfac
 主要的容器拉取来源是 **Docker Hub**：
 
 ```bash
-docker pull docker.io/olivaresai/olivares:26.10.0
+docker pull docker.io/olivaresai/olivares:26.10.1
 ```
 
 相同的内容也发布到 `ghcr.io/olivaresai/olivares`——按 digest 完全一致，
 用作备份和构建 registry。Docker Hub 对**匿名**拉取施加速率限制；ghcr.io 不对公共镜像的匿名拉取
 限速——因此当 CI 节点或大规模集群触及上限时，可以先 `docker login`，或改用 ghcr.io 坐标。
 Tag **不带前导 `v`**：
-`:26.10.0` 固定一个版本，`:latest` 浮动，而 `:26.10.0-fips` / `:26.10.0-stig`
+`:26.10.1` 固定一个版本，`:latest` 浮动，而 `:26.10.1-fips` / `:26.10.1-stig`
 是加固变体。基础 tag 和 `:latest` 是多架构的
 （`linux/amd64`、`linux/arm64`）；`fips`/`stig` 仅有 `amd64`。
 
@@ -46,14 +47,14 @@ control plane 是一款安全产品，所以运行前先验证。签名是
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.10.0")"
+DIGEST="$(crane digest "$IMAGE:26.10.1")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type spdxjson \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -82,7 +83,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:26.10.0 \
+  docker.io/olivaresai/olivares:26.10.1 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -92,7 +93,7 @@ docker run -d --name olivares \
 
 | 标志 | 原因 |
 |---|---|
-| `--user 65532:65532` | 以烘焙进 distroless 镜像的非 root `nonroot` UID 运行 |
+| `--user 65532:65532` | 以烘焙进镜像的非 root `nonroot` UID 运行 |
 | `--read-only` | 根文件系统不可变；只有数据卷和 `/tmp` 可写 |
 | `--tmpfs /tmp` | 一个可写的临时 tmpfs，因 rootfs 只读而必需 |
 | `--cap-drop ALL` | 引擎不需要任何 Linux capabilities |
@@ -175,15 +176,15 @@ backup profile 生成定时的、账本连续性安全的 DR 包：存储快照�
 
 ```bash
 printf 'a strong DR passphrase' > deploy/compose/dr-pass
-# the host stamps the bundle name (the distroless image has no `date`):
+# the host stamps the bundle name:
 BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
                --profile backup run --rm backup
 ```
 
-该作业共享引擎的数据卷，将包写入 `olivares-backups` 卷，并且——由于镜像是
-distroless 的——把保留策略交给主机：用主机 cron 清理旧包
+该作业共享引擎的数据卷，将包写入 `olivares-backups` 卷，并且
+把保留策略交给主机：用主机 cron 清理旧包
 （`find <backups> -name '*.drbundle' -mtime +14 -delete`）。把该运行包进主机
 cron 以实现定时 RPO，并**将 `olivares-backups` 卷异地镜像**——同主机的备份
 不构成灾难恢复。用以下命令恢复并验证：
@@ -197,8 +198,8 @@ olivares dr restore --in <bundle> --data-dir <dir> --passphrase-file dr-pass
 
 ## 5. 运维须知
 
-**从主机而非容器探测健康状态。** 该镜像是 **distroless** 的——没有 shell
-也没有 `curl`，因此有意不在容器内设 `HEALTHCHECK`。引擎在 HTTPS 端口上暴露
+**从主机而非容器探测健康状态。** 该镜像
+有意不在容器内设 `HEALTHCHECK`。引擎在 HTTPS 端口上暴露
 `/livez` 和 `/readyz`；请从主机（或你的编排器）探测它们：
 
 ```bash
@@ -289,7 +290,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. 生产环境按 digest 固定
 
-可变 tag（`:26.10.0`、`:latest`）用于评估。在生产环境中，请固定你所验证的
+可变 tag（`:26.10.1`、`:latest`）用于评估。在生产环境中，请固定你所验证的
 **digest**——digest 不可变，且正是你签字确认过的东西：
 
 ```bash

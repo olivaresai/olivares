@@ -9,7 +9,7 @@ draft: false
 ---
 
 :::note[Published package names]
-The 26.10.0 GitHub release publishes `.deb`, `.rpm` and `.apk` assets for both `amd64`
+The 26.10.1 GitHub release publishes `.deb`, `.rpm` and `.apk` assets for both `amd64`
 and `arm64`, with `checksums.txt`, `checksums.txt.sig` and `checksums.txt.pem`. The
 commands below use the literal `amd64` names from that release; replace `amd64` with
 `arm64` on a 64-bit ARM host. Install from those verified release assets. Repository
@@ -74,13 +74,13 @@ survive an upgrade), the data directory `/var/lib/olivares`, and the licence tex
 
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_26.10.0_linux_amd64.deb
+sudo dpkg -i olivares_26.10.1_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_26.10.0_linux_amd64.rpm
+sudo rpm -Uvh olivares_26.10.1_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_26.10.0_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk
 ```
 
 Installing **creates the system user and group `olivares`** (with `/usr/sbin/nologin` as

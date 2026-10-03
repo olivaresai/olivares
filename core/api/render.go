@@ -6,7 +6,6 @@ package api
 
 import (
 	"encoding/json"
-	"io"
 	"net/http"
 )
 
@@ -26,17 +25,8 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 }
 
 // decodeJSON reads and strictly decodes a JSON request body into v, enforcing the
-// body-size cap and rejecting unknown fields and trailing data.
+// body-size cap and rejecting unknown fields and trailing data. It is the strict
+// default of DecodeRequestBody; the property lives there, once.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) error {
-	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
-	dec := json.NewDecoder(r.Body)
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		return err
-	}
-	// Reject a second JSON value in the body.
-	if dec.More() {
-		return io.ErrUnexpectedEOF
-	}
-	return nil
+	return DecodeRequestBody(w, r, v, RequestBodySpec{})
 }

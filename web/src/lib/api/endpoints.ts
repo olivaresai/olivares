@@ -67,17 +67,24 @@ export const authApi = {
    * with the one-time setup token. The response carries the organization, whose
    * tenant id the console selects so the operator lands on a usable panel. */
   setup: (req: SetupRequest) =>
-    http.post<SetupResponse>('/v1/setup', req, { anonymous: true }),
-  /** Exchange email/password for an opaque session token — or, when the
+    http.post<SetupResponse>('/v1/setup', req, {
+      anonymous: true,
+      headers: { 'X-Olivares-Session': 'cookie' },
+    }),
+  /** Exchange email/password for a cookie session — or, when the
    * account's second factor gates the login, for the pending challenge the
    * caller completes through features/identity's totpApi . */
   login: (req: LoginRequest) =>
-    http.post<LoginResult>('/v1/auth/login', req, { anonymous: true }),
+    http.post<LoginResult>('/v1/auth/login', req, {
+      anonymous: true,
+      headers: { 'X-Olivares-Session': 'cookie' },
+    }),
   /** Redeem a single-use onboarding invite: sets the password and activates the
    * account. Anonymous — the invitee has no session; the token is the gate.*/
   acceptInvite: (req: AcceptInviteRequest) =>
     http.post<AcceptInviteResponse>('/v1/invites/accept', req, {
       anonymous: true,
+      headers: { 'X-Olivares-Session': 'cookie' },
     }),
   /** Revoke the calling session (204). */
   /**
@@ -270,6 +277,12 @@ export interface AuditListParams {
 /** Filtered list requests expose scan progress because a sparse match page may
  * stop before the ledger head. Unfiltered responses keep the legacy shape and
  * leave these fields absent. */
+/** GET /v1/audit/recent: newest first; head_seq is the ledger head it was read at. */
+export interface AuditRecentResponse {
+  items: AuditEventDTO[]
+  head_seq: number
+}
+
 export interface AuditListResponse extends ListResponse<AuditEventDTO> {
   next_from?: number
   scan_complete?: boolean
@@ -345,6 +358,12 @@ export const auditApi = {
   systemList: (params?: AuditListParams) =>
     http.get<AuditListResponse>('/v1/audit/system', {
       query: { ...params, limit: params?.limit ?? AUDIT_PAGE_MAX },
+    }),
+  /** The newest events, newest first, without the ledger's own reads. The engine does not
+   * record this read, so the notification bell can poll it. */
+  recent: (params?: { limit?: number }) =>
+    http.get<AuditRecentResponse>('/v1/audit/recent', {
+      query: { ...params },
     }),
   /** The engine's verdict on the chain + its signed checkpoints (from `from`). */
   verify: (params?: { from?: number }) =>

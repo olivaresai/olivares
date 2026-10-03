@@ -11,7 +11,23 @@ import (
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
+
+// requirePasskeyStepUp turns on the strictest administrative step-up policy
+// (passkey), the behavior before the policy existed. The default (none) is
+// covered in core/api.
+func (h *harness) requirePasskeyStepUp() {
+	h.t.Helper()
+	ctx := context.Background()
+	if err := h.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		_, err := as.AuthPolicy().Create(ctx, model.AuthPolicy{AdminStepUp: auth.StepUpPasskey})
+		return err
+	}); err != nil {
+		h.t.Fatalf("require passkey step-up: %v", err)
+	}
+	h.authr.ReloadStepUp()
+}
 
 // the AAL3 step-up floor on CRITICAL human checkpoints. The harness
 // operators are step-up-verified (harness stepUp); these tests mint sessions
@@ -48,6 +64,7 @@ func stepUpDenied(t *testing.T, r resp) {
 // the SAME user's decision is accepted (it was never half-recorded).
 func TestStepUpRequiredForCriticalDecision(t *testing.T) {
 	h := newHarness(t)
+	h.requirePasskeyStepUp()
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 	_, editor := h.roleUser(admin, tenant, "ed@x.io", "editor")
@@ -107,6 +124,7 @@ func TestStepUpNotRequiredBelowCritical(t *testing.T) {
 // same admin activates after stepping up.
 func TestStepUpRequiredForBreakGlass(t *testing.T) {
 	h := newHarness(t)
+	h.requirePasskeyStepUp()
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 

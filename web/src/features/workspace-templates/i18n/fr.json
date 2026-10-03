@@ -46,14 +46,17 @@
       "permissionMode": "Mode de permission",
       "effort": "Niveau d'effort",
       "model": "Modèle",
-      "customInstructions": "Instructions personnalisées"
+      "customInstructions": "Instructions personnalisées",
+      "secretEnv": "Secrets en variables d’environnement",
+      "secretEnvHint": "VARIABLE=env/secret, séparés par des virgules. Les sessions de ce modèle lisent chaque secret du coffre depuis sa variable ; seule une personne qui gère les secrets de l’organisation peut les lancer."
     },
     "policies": {
       "dlpMode": "Mode DLP",
       "maxDuration": "Durée maximale de session (minutes)",
       "allowedTools": "Outils autorisés",
       "allowedToolsPlaceholder": "ex. Bash,Read,Edit",
-      "recordIo": "Enregistrer les E/S"
+      "recordIo": "Enregistrer les E/S",
+      "peersSameTemplate": "Les sessions de ce modèle peuvent s'écrire entre elles"
     }
   },
   "actions": {

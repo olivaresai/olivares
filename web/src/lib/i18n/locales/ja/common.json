@@ -195,7 +195,47 @@
   "notifications": {
     "title": "最近のアクティビティ",
     "empty": "最近のアクティビティはありません。",
-    "viewAll": "監査台帳ですべて表示"
+    "viewAll": "監査台帳ですべて表示",
+    "events": {
+      "auditCheckpoint": "監査チェックポイントを作成しました",
+      "orgCreated": "組織を作成しました",
+      "loginBlocked": "{{actor}} のサインインがブロックされました",
+      "loginBlocked_you": "あなたのサインインがブロックされました",
+      "ssoLogin": "{{actor}} が SSO でサインインしました",
+      "ssoLogin_you": "SSO でサインインしました",
+      "userInvited": "{{actor}} がユーザーを招待しました",
+      "userInvited_you": "ユーザーを招待しました",
+      "userJoined": "{{actor}} が参加しました",
+      "userJoined_you": "参加しました",
+      "sessionStarted": "{{actor}} がセッションを開始しました",
+      "sessionStarted_you": "セッションを開始しました",
+      "sessionStopped": "{{actor}} がセッションを停止しました",
+      "sessionStopped_you": "セッションを停止しました",
+      "sessionResumed": "{{actor}} がセッションを再開しました",
+      "sessionResumed_you": "セッションを再開しました",
+      "sessionFailed": "セッションを開始できませんでした",
+      "approvalRequested": "{{actor}} のセッションが承認を求めています",
+      "approvalRequested_you": "あなたのセッションが承認を求めています",
+      "killswitchEngaged": "{{actor}} がキルスイッチを作動させました",
+      "killswitchEngaged_you": "キルスイッチを作動させました",
+      "killswitchReleased": "{{actor}} がキルスイッチを解除しました",
+      "killswitchReleased_you": "キルスイッチを解除しました",
+      "killswitchDenied": "キルスイッチがセッションを停止しました",
+      "toolInstalled": "エージェントツールをインストールしました",
+      "secretStored": "シークレットを保存しました",
+      "viewSaved": "{{actor}} がビューを保存しました",
+      "viewSaved_you": "ビューを保存しました",
+      "workspaceCreated": "{{actor}} がワークスペースを作成しました",
+      "workspaceCreated_you": "ワークスペースを作成しました",
+      "workspaceUpdated": "{{actor}} がワークスペースを更新しました",
+      "workspaceUpdated_you": "ワークスペースを更新しました"
+    },
+    "actors": {
+      "you": "あなた",
+      "member": "メンバー",
+      "token": "API トークン",
+      "system": "Olivares"
+    }
   },
   "passphrase": {
     "tooShort": "パスフレーズは{{min}}文字以上で入力してください",
@@ -257,6 +297,15 @@
         "first": "最初のモジュール",
         "last": "最後のモジュール",
         "pin": "このモジュールを固定／固定解除"
+      },
+      "session": {
+        "new": "新しいセッション"
+      },
+      "sourceDiff": {
+        "nextFile": "次のファイル",
+        "previousFile": "前のファイル",
+        "nextHunk": "次の変更",
+        "previousHunk": "前の変更"
       }
     },
     "when": {

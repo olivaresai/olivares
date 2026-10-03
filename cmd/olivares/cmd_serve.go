@@ -23,6 +23,7 @@ import (
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 
+	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/secure"
 	"github.com/olivaresai/olivares/core/webaddr"
@@ -37,6 +38,8 @@ type serveOptions struct {
 	listen, grpcListen   string
 	dataDir, engine, dsn string
 	adminDSN, ownerDSN   string
+	postgres             string
+	engineSet            bool
 	region               string
 	knownRegions         []string
 	tlsCert, tlsKey, lic string
@@ -69,6 +72,10 @@ type serveOptions struct {
 	// (enginelog.go), because a flag that also changed the shape of every line is
 	// what made one first hour produce two formats from one binary.
 	quiet bool
+	// quickstart retains logs in the data directory; terminal logs are opt-in.
+	quickstart bool
+	verbose    bool
+	consoleLog io.Writer
 }
 
 // newServeCmd runs the engine: the REST/web HTTP server and the gRPC server,
@@ -79,11 +86,11 @@ func newServeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Run the engine (REST + gRPC + embedded console), TLS-on-by-default",
-		Long: "serve starts the Olivares control plane: REST API, embedded web console, gRPC ingest,\n" +
+		Long: "serve starts the Olivares engine: REST API, embedded web console, gRPC ingest,\n" +
 			"configured modules and source connectors. It uses TLS by default, opens the selected SQLite\n" +
 			"or Postgres store, and prints one-time setup guidance on a first boot. It binds every\n" +
 			"interface (:8443 and :8444) — this is a server; bind 127.0.0.1 to restrict it to this host.",
-		Example: `  # Start the control plane on the default address: every interface, TLS on
+		Example: `  # Start the engine on the default address: every interface, TLS on
   olivares serve --data-dir /var/lib/olivares
 
   # Restrict the console and the ingest API to this machine
@@ -101,6 +108,7 @@ func newServeCmd() *cobra.Command {
   olivares serve --public-url https://olivares.example.com`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			opts.engineSet = cmd.Flags().Changed("engine")
 			opts.publicURLSet = cmd.Flags().Changed("public-url")
 			opts.loginProxies.set = cmd.Flags().Changed("login-trusted-proxies")
 			announce := func(ctx context.Context, out io.Writer, eng *engine, addr consoleAddress) error {
@@ -128,7 +136,7 @@ func newServeCmd() *cobra.Command {
 		return []string{"sqlite", "postgres"}, cobra.ShellCompDirectiveNoFileComp
 	})
 	cmd.Flags().StringVar(&opts.dsn, "dsn", "", "store DSN (default a SQLite file in the data dir). May be a file:<path> or env:<VAR> reference resolved at boot, so the password stays out of the env file")
-	cmd.Flags().StringVar(&opts.adminDSN, "admin-dsn", "", "Postgres: DSN of a dedicated NOSUPERUSER BYPASSRLS read role for first setup and cross-tenant operations (org listing, checkpoints, DR backup). Provision with olivares db init --admin-role; see deploy/postgres/README.md. Keep the app role NOSUPERUSER NOBYPASSRLS; never use a superuser here")
+	cmd.Flags().StringVar(&opts.adminDSN, "admin-dsn", "", "Postgres: optional DSN of a dedicated NOSUPERUSER BYPASSRLS read role for cross-tenant operations (org listing, checkpoints, DR backup). Provision with olivares db init --admin-role; see deploy/postgres/README.md. Keep the app role NOSUPERUSER NOBYPASSRLS; never use a superuser here")
 	cmd.Flags().StringVar(&opts.ownerDSN, "owner-dsn", "", "Postgres only: DSN of the owner role that owns the schema and runs DDL/migrations. Set it to a SEPARATE NOSUPERUSER NOBYPASSRLS role to make --dsn a least-privilege non-owner app role with only DML grants (provision both with 'olivares db init'). Empty = the --dsn role owns the schema (single-role). Accepts a file:/env: reference like --dsn")
 	cmd.Flags().StringVar(&opts.region, "region", "", "data-residency HOME region of THIS instance (e.g. eu, us). When set, the instance is region-scoped: it serves only tenants pinned to this region and denies cross-region access fail-closed. Empty = single-region mode, no residency enforcement")
 	cmd.Flags().StringSliceVar(&opts.knownRegions, "known-regions", nil, "comma-separated region codes valid across the whole deployment (e.g. eu,us); a tenant pin must be one of these. The home --region is always included. Only meaningful with --region set")
@@ -157,7 +165,30 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	// timestamp in UTC, at the level the operator asked for. Every engine start goes
 	// through here, so `serve` and `quickstart` cannot disagree about the shape of a
 	// log line — they did until 2026-09-18, and --quiet was what changed it.
-	log := installEngineLogger(os.Stderr, osGetenv, opts.quiet)
+	var logFile *os.File
+	defer func() {
+		if logFile != nil {
+			_ = logFile.Close()
+		}
+	}()
+	previousLog := slog.Default()
+	defer slog.SetDefault(previousLog)
+	logOutput := io.Writer(os.Stderr)
+	quiet := opts.quiet
+	var bufferedLog *engineLogBuffer
+	if opts.quickstart {
+		bufferedLog = &engineLogBuffer{}
+		logOutput = bufferedLog
+		quiet = false // The file retains checks even when the terminal is quiet.
+		if opts.verbose {
+			consoleLog := opts.consoleLog
+			if consoleLog == nil {
+				consoleLog = os.Stderr
+			}
+			bufferedLog.console = consoleLog
+		}
+	}
+	log := installEngineLogger(logOutput, osGetenv, quiet)
 	loginProxies, err := opts.loginProxies.resolve(osGetenv)
 	if err != nil {
 		return err
@@ -220,26 +251,66 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 		}
 	}
 
+	var dataDirReady func(string) error
+	if bufferedLog != nil {
+		dataDirReady = func(dir string) error {
+			logFile, err = os.OpenFile(filepath.Join(dir, "olivares.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+			if err != nil {
+				return fmt.Errorf("open quickstart log: %w", err)
+			}
+			if err := bufferedLog.flushTo(logFile); err != nil {
+				return fmt.Errorf("write quickstart log: %w", err)
+			}
+			return nil
+		}
+	}
+	var postgres *string
+	if opts.quickstart {
+		postgres = &opts.postgres
+	}
+	// The engine may ask to restart itself (a license activation): that cancels
+	// this context, the servers drain exactly as on a signal, and runEngine
+	// returns errSelfRestart once the engine is closed (main re-executes).
+	ctx, cancelServe := context.WithCancel(ctx)
+	defer cancelServe()
+	restart := &selfRestart{cancel: cancelServe, log: log}
 	eng, err := boot(ctx, bootConfig{
+		Restart: restart,
 		DataDir: opts.dataDir, Engine: opts.engine, DSN: opts.dsn, AdminDSN: opts.adminDSN, OwnerDSN: opts.ownerDSN, LicenseFile: opts.lic,
 		Version: version, Logger: log, DemoSeed: opts.seedDemo,
 		AllowPrivilegedDBRole: opts.allowPrivilegedDBRole,
 		Region:                opts.region, KnownRegions: opts.knownRegions,
 		ServeMode:           true, // long-lived server: OK to run the background update-check
+		ApplyModuleProfile:  true,
 		TLSCertNotAfter:     tlsCertNotAfter,
 		PublicAddr:          publicAddr,
 		PublicAddrSource:    publicSource,
 		LoginTrustedProxies: loginProxies,
+		dataDirReady:        dataDirReady,
+		quickstartPostgres:  postgres,
+		storeEngineExplicit: opts.engineSet,
 	})
 	if err != nil {
 		return err
 	}
 	defer func() { _ = eng.Close() }()
+	// Before any listener starts: this node's activation and module profile must
+	// match the deployment settings record, or the engine restarts once to build
+	// its modules from the record (productsettings.go, moduleprofile_settings.go).
+	mods := &moduleReconcile{booted: eng.moduleProfile, used: func(ctx context.Context) ([]string, error) { return usedModules(ctx, eng.store, eng.census) }}
+	settings := newProductSettings(eng.store, eng.dataDir)
+	settings.used = mods.used
+	if err := reconcileSettings(ctx, settings, mods, log); err != nil {
+		return err
+	}
 
 	// Schedule signed audit checkpoints (docs/SECURITY-HARDENING.md). Registered AFTER the
 	// eng.Close defer so its final shutdown checkpoint runs BEFORE the store
 	// closes (defers are LIFO).
 	cp := startCheckpointer(eng.signer, eng.store, opts.checkpointInterval, log, eng.metrics)
+	if opts.checkpointInterval > 0 {
+		eng.jobsNotRunning.coverageJob(eng.estateEnumerable, api.JobAuditCheckpoints, log)
+	}
 	defer cp.stop(context.Background())
 
 	tlsCert, tlsKey := opts.tlsCert, opts.tlsKey
@@ -253,12 +324,12 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	// Ensure TLS material ONCE, up front, before any listener accepts — so
 	// both HTTP and gRPC use the same cert and neither falls back to plaintext.
 	if !opts.insecure {
-		created, fp, terr := secure.EnsureTLSCert(tlsCert, tlsKey)
+		created, fp, terr := secure.EnsureTLSCert(tlsCert, tlsKey, opts.tlsCert != "" || opts.tlsKey != "")
 		if terr != nil {
 			return terr
 		}
 		if created {
-			log.Warn("generated a self-signed TLS certificate; "+pinAdvice, tlsTrustAttrs(tlsCert, fp)...)
+			log.Warn("generated a local TLS certificate; "+pinAdvice, tlsTrustAttrs(tlsCert, fp)...)
 		} else {
 			log.Info("serving HTTPS; "+pinAdvice, tlsTrustAttrs(tlsCert, fp)...)
 		}
@@ -268,6 +339,12 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 		}
 		registerTLSCertificateExpiry(eng.metrics, tlsLoader, true)
 		warnTLSCertificateExpiry(log, tlsLoader, time.Now())
+		// server-info names the pin the start line logs, from the certificate served now.
+		loader := tlsLoader
+		eng.api.SetTLSPin(func() string {
+			pin, _ := loader.Pin()
+			return pin
+		})
 	}
 
 	httpSrv := eng.api.NewHTTPServer(opts.listen)
@@ -328,11 +405,11 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	}
 
 	// the GOVERNED Claude Code hooks PEP (PreToolUse/PostToolUse) on its own
-	// socket, if provisioned (OLIVARES_HOOK_PEP_CONFIG). It turns "observe" into
+	// socket by default. Optional operator config changes its defaults. It turns "observe" into
 	// "govern": a managed hook posts each tool-call here and the engine returns
 	// allow/deny/ask deny-closed (PDP + firm identity + HITL + audit).
 	// Loopback-default; its security is fail-closed token verification + the
-	// governed decision, not network isolation. nil when unset.
+	// governed decision. Its authenticated loopback transport is local HTTP.
 	hookPEPSrv, err := buildClaudeHookPEPServer(eng, log)
 	if err != nil {
 		return err
@@ -442,7 +519,7 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 		serveListenerSpec{addr: opts.grpcListen},
 	)
 	for _, srv := range auxHTTP {
-		specs = append(specs, serveListenerSpec{addr: httpBindAddr(srv.Addr, opts.insecure, opts.reusePort), http: true})
+		specs = append(specs, serveListenerSpec{addr: httpBindAddr(srv.Addr, opts.insecure || (srv == hookPEPSrv && hostIsLoopback(srv.Addr)), opts.reusePort), http: true})
 	}
 	bind := opts.bindListener
 	if bind == nil {
@@ -454,6 +531,16 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	}
 	if err := ctx.Err(); err != nil {
 		return withCloseErrors(fmt.Errorf("serve startup canceled after binding, before the announcement: %w", err), owned.closeAll())
+	}
+
+	// Publish the hook endpoint only after all listeners are held. The launch gate
+	// reads this engine's bound address and pins it into each run's protected settings.
+	for i, srv := range auxHTTP {
+		if srv == hookPEPSrv {
+			if err := eng.hookCredentials().bindEndpoint(owned.listeners[2+i].Addr().String()); err != nil {
+				return withCloseErrors(err, owned.closeAll())
+			}
+		}
 	}
 
 	// The advice is built HERE and not at parse time, because it describes what a
@@ -483,7 +570,7 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	go serveHTTP(httpSrv, owned.listeners[0], opts.insecure, log, errCh)
 	go serveGRPC(grpcSrv, owned.listeners[1], errCh)
 	for i, srv := range auxHTTP {
-		go serveHTTP(srv, owned.listeners[2+i], opts.insecure, log, errCh)
+		go serveHTTP(srv, owned.listeners[2+i], opts.insecure || (srv == hookPEPSrv && hostIsLoopback(srv.Addr)), log, errCh)
 	}
 
 	// SIGHUP reconciles the durable source roster into the running engine —
@@ -509,7 +596,13 @@ func runEngine(ctx context.Context, out io.Writer, opts serveOptions, announce f
 	// entered still holds its listener. It runs before the checkpointer and store
 	// close. Closed sockets are not a goroutine join.
 	shutdownErr := waitAndShutdown(ctx, httpSrv, grpcSrv, hitlSrv, voiceWebhookSrv, gatewaySrv, hookPEPSrv, codexPEPSrv, grokPEPSrv, proxySrv, errCh, log)
-	return withCloseErrors(shutdownErr, owned.closeAll())
+	if err := withCloseErrors(shutdownErr, owned.closeAll()); err != nil {
+		return err
+	}
+	if reason := restart.requested(); reason != "" {
+		return &selfRestartError{reason: reason}
+	}
+	return nil
 }
 
 // watchReloadSignal reconciles the source roster on each SIGHUP until ctx is done.

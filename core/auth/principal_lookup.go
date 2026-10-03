@@ -86,7 +86,7 @@ func principalForUserInScope(ctx context.Context, as store.AuthScope, ref string
 	if u.Status != model.StatusActive {
 		return Principal{}, false, nil // inactive ⇒ not found: it authorizes nothing
 	}
-	grants, groups, confined, err := loadGrants(ctx, as, u.ID)
+	grants, groups, confined, err := loadGrants(ctx, as, u.ID, u.IsSuperadmin)
 	if err != nil {
 		return Principal{}, false, err
 	}
@@ -170,7 +170,7 @@ func (a *Authenticator) TenantPrincipals(ctx context.Context, tenant model.Tenan
 			if u.Status != model.StatusActive {
 				return nil
 			}
-			grants, groups, confined, e := loadGrants(ctx, as, u.ID)
+			grants, groups, confined, e := loadGrants(ctx, as, u.ID, u.IsSuperadmin)
 			if e != nil {
 				return e
 			}

@@ -55,6 +55,9 @@ type eventingPump struct {
 // entirely on fresh-event nudges, which is almost never what an operator
 // wants, so the disable warns loudly.
 func newEventingPump(getenv func(string) string, st store.Store, evt *eventing.Module, log *slog.Logger) *eventingPump {
+	if evt == nil {
+		return nil // the eventing module does not run on this node
+	}
 	interval, ok := eventingPumpInterval(getenv(eventingPumpIntervalEnv), log)
 	if !ok {
 		return nil
@@ -121,5 +124,5 @@ func (p *eventingPump) runOnce(ctx context.Context) error {
 // skipped deliberately: platform events are tenant-scoped facts (the capture
 // path drops system-tenant events for the same reason).
 func (p *eventingPump) businessTenants(ctx context.Context) ([]model.TenantID, error) {
-	return servedBusinessTenants(ctx, p.st)
+	return servedWorkTenants(ctx, p.st)
 }

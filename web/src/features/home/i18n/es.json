@@ -1,7 +1,8 @@
 {
   "title": "Resumen",
-  "description": "Tu patrimonio de IA de un vistazo: agregados de 30 días sobre los módulos que tu rol puede abrir.",
+  "description": "Lo que hicieron tus agentes de IA en los últimos 30 días, en las áreas que puedes abrir.",
   "openReport": "Informe ejecutivo",
+  "aside": "Resumen del entorno",
   "range": "últimos 30 días",
   "next": {
     "title": "Siguiente paso",
@@ -60,6 +61,19 @@
       "value": "{{healthy}}/{{total}} sanos",
       "caption": "{{breaches}} incumplimientos de SLA · {{incidents}} incidentes abiertos",
       "noChecks": "Aún no hay comprobaciones de salud"
+    },
+    "budgets": {
+      "label": "Presupuestos",
+      "none": "Aún no hay presupuestos",
+      "nonePartial": "Ninguno activado en esta página; hay más",
+      "over_one": "{{count}} por encima del límite",
+      "over_many": "{{count}} por encima del límite",
+      "over_other": "{{count}} por encima del límite",
+      "unknown_one": "{{count}} con importe desconocido",
+      "unknown_many": "{{count}} con importe desconocido",
+      "unknown_other": "{{count}} con importe desconocido",
+      "within": "Ninguno por encima del límite",
+      "partial": "Cargados {{n}} presupuestos; hay más"
     }
   },
   "state": {
@@ -78,5 +92,13 @@
   "empty": {
     "title": "Aún no hay nada que mostrar",
     "description": "Tu rol no concede acceso de lectura a ningún módulo del patrimonio. Pide a un administrador un permiso de lectura para ver el resumen."
+  },
+  "start": {
+    "ready": "{{tool}} está listo.",
+    "signIn": "Inicia sesión en {{tool}} para empezar una sesión.",
+    "signInAction": "Iniciar sesión",
+    "install": "Instala Claude Code o Codex para empezar una sesión.",
+    "installAction": "Preparar una herramienta",
+    "newSession": "Nueva sesión"
   }
 }

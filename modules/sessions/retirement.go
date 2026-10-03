@@ -46,6 +46,9 @@ const communicationChannelRetireAudit = "sessions.communication.channel.retire"
 
 // retirementCovers are the counted columns this module's step reads.
 var retirementCovers = []string{
+	string(runKind) + "." + colRunQueuedActor,
+	string(runKind) + "." + colRunQueuedUserID,
+	string(runKind) + "." + colRunQueuedCredentialID,
 	string(channelGrantKind) + "." + colCommSubjectRef,
 	string(channelSubscriptionKind) + "." + colCommSubscriberRef,
 	string(communicationEndpointKind) + "." + colCommOwnerRef,
@@ -88,7 +91,7 @@ func (s retirementStep) RetireUser(ctx context.Context, req auth.RetirementReque
 		if err := retireChannelGrants(ctx, sc, req.User); err != nil {
 			return err
 		}
-		blocking, unknown, err := retirementBlockers(ctx, sc, req.User)
+		blocking, unknown, err := retirementBlockers(ctx, sc, req)
 		if err != nil {
 			return err
 		}
@@ -281,8 +284,12 @@ type retirementScan struct {
 // retirementBlockers returns, as "<kind>:<id>", every live row that names user
 // through a counted column this step blocks on, and the tables holding a row
 // whose discriminator no registry knows.
-func retirementBlockers(ctx context.Context, sc store.Scope, user model.ID) ([]string, []string, error) {
+func retirementBlockers(ctx context.Context, sc store.Scope, req auth.RetirementRequest) ([]string, []string, error) {
+	user := req.User
 	scans := []retirementScan{
+		{runKind, colRunQueuedUserID, nil, func(r model.Record) bool { return r.String(colRunQueuedUserID) != "" }},
+		{runKind, colRunQueuedActor, nil, func(r model.Record) bool { return r.String(colRunQueuedActor) != "" }},
+		{runKind, colRunQueuedCredentialID, nil, func(r model.Record) bool { return r.String(colRunQueuedCredentialID) != "" }},
 		{channelSubscriptionKind, colCommSubscriberRef,
 			userRefFilters(colCommSubscriberKind, colCommSubscriberRef, user),
 			stateOutside(colCommState, string(SubscriptionRevoked))},
@@ -328,7 +335,13 @@ func retirementBlockers(ctx context.Context, sc store.Scope, user model.ID) ([]s
 		if err != nil {
 			return nil, nil, err
 		}
-		named, unknownKind, err := auth.RowsNaming(ctx, repo, decl, scan.column, user, scan.filters...)
+		var named []model.Record
+		var unknownKind bool
+		if scan.kind == runKind {
+			named, unknownKind, err = auth.RowsNamingAccount(ctx, repo, decl, scan.column, req, scan.filters...)
+		} else {
+			named, unknownKind, err = auth.RowsNaming(ctx, repo, decl, scan.column, user, scan.filters...)
+		}
 		if err != nil {
 			return nil, nil, err
 		}

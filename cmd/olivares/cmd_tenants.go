@@ -46,12 +46,12 @@ func newTenantsCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:     "tenants",
 		Aliases: []string{"orgs"},
-		Short:   "Create, list, suspend and delete tenants (superadmin)",
+		Short:   "Organizations: create, list, suspend, delete",
 		Long: "Manage the organizations this installation serves. Creating a tenant allocates its id,\n" +
 			"seeds its default workspace and starts its audit chain in one transaction — the same path\n" +
 			"first-boot setup takes. Suspending withdraws SERVICE without deleting anything; deleting\n" +
-			"is an unrecoverable purge. Pinning a tenant's data region is gated on an AAL3 step-up:\n" +
-			"no API token can carry one, an elevated user session can (see `set-region`).",
+			"is an unrecoverable purge. Pinning a tenant's data region needs a signed-in session, not\n" +
+			"an API token (see `set-region`).",
 		Example: `  olivares tenants ls
   olivares tenants create --name "Acme GmbH"
   olivares tenants set-status t_01hq --status suspended
@@ -133,7 +133,7 @@ func tenantsCreateCmd(client bootstrapClient) *cobra.Command {
 		Use:   "create",
 		Short: "Create a tenant",
 		Long: "Create a tenant. --slug is its short, URL-safe handle and must be unique; leave it out\n" +
-			"and the engine derives one from the name. --region pins the tenant's control-plane data\n" +
+			"and the engine derives one from the name. --region pins the tenant's engine data\n" +
 			"to a residency region and is validated against this instance's registry — an unknown\n" +
 			"region is refused and the tenant is never created half-pinned.",
 		Example: `  olivares tenants create --name "Acme GmbH"
@@ -240,14 +240,13 @@ func tenantsSetRegionCmd(client bootstrapClient) *cobra.Command {
 	var clearPin, yes bool
 	cmd := &cobra.Command{
 		Use:   "set-region <tenant-id>",
-		Short: "Pin or clear a tenant's data-residency region (requires an AAL3 session)",
-		Long: "Pin the tenant's control-plane data to a residency region, or clear the pin with\n" +
+		Short: "Pin or clear a tenant's data-residency region",
+		Long: "Pin the tenant's engine data to a residency region, or clear the pin with\n" +
 			"--clear. The region is validated against this instance's residency registry: an unknown\n" +
 			"one is refused. Moving an already-pinned tenant to another region is a DATA MIGRATION\n" +
 			"and is out of this endpoint's scope — the engine decides what it will accept.\n\n" +
-			"The route is gated on a verified hardware step-up (AAL3). An API token can never carry\n" +
-			"one; a user session elevated by the WebAuthn/PIV ceremony can, for 15 minutes — run the\n" +
-			"ceremony in the console, then bring that session with `auth login --token-file`.",
+			"It needs a signed-in session (`olivares login`); an API token is never enough. It may\n" +
+			"also ask for an extra check if your administrator turned one on (Settings > Security).",
 		Example: `  olivares tenants set-region t_01hq --region eu --yes
   olivares tenants set-region t_01hq --clear --yes`,
 		Args: cobra.ExactArgs(1),

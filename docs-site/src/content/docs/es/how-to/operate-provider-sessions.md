@@ -31,9 +31,10 @@ Complétalas antes de un lanzamiento. Un elemento que falta es una denegación,
 no un respaldo.
 
 1. Olivares AI está instalado y existe el primer administrador.
-   Consulta [Tu primera hora](/es/how-to/first-hour/) para el token de
-   configuración y el muro AAL3 de passkey. Crear orígenes y las operaciones
-   privilegiadas de sesión exigen AAL3 (`core/api/middleware.go` `requireAAL3`).
+   Consulta [Tu primera hora](/es/how-to/first-hour/) para el token de configuración.
+   La verificación adicional administrativa (`admin_step_up`) está en `none`
+   por defecto. Si un administrador activa `totp` o `passkey`, cumple esa política
+   antes de las operaciones privilegiadas (`core/api/middleware.go` `requireStepUp`).
 2. La CLI oficial del proveedor ya está instalada en **este nodo**. El perfil
    registra homes que ya existen. El servidor resuelve las rutas (absolutas,
    enlaces simbólicos resueltos, directorio existente) y no crea, instala ni
@@ -186,7 +187,7 @@ recibo confirmado del proveedor.
 
 ## Relacionado
 
-- [Tu primera hora](/es/how-to/first-hour/) — token de configuración, AAL3, fuente de credencial Claude.
+- [Tu primera hora](/es/how-to/first-hour/) — token de configuración, verificación adicional administrativa, fuente de credencial Claude.
 - [Ejecutar Claude Code con Olivares](/how-to/run-claude-code-with-olivares/) — topologías de co-despliegue.
 - [Integrar Codex](/how-to/integrations/codex/) / [Integrar Grok Build](/how-to/integrations/grok/) — conector y hook PEP.
 - [API de runtime de sesión](/reference/session-runtime-api/) — listar, adjuntar, input, stop; PTY Community y corte de edición.

@@ -1,14 +1,17 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { beforeEach, describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Whoami } from '@/lib/api/types'
 import { FEATURE_VIEWS } from '@/features/registry'
 import {
   createPersonalNavigationSession,
   decodeFavorites,
   favoriteStorageKey,
+  MAX_FAVORITES,
   personalLink,
+  type FavoritesCall,
+  type FavoritesRemote,
 } from './personal-navigation-store'
 
 const principal = { kind: 'user', user_id: 'operator-a' } as Whoami
@@ -185,5 +188,118 @@ describe('personal navigation storage boundary', () => {
       new StorageEvent('storage', { key: null, storageArea: localStorage }),
     )
     expect(a.getSnapshot().favorites).toEqual([])
+  })
+})
+
+describe('favorites on the engine', () => {
+  const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
+  const engine = (stored: { favorites: unknown[]; stored: boolean }) => {
+    let release: () => void = () => {}
+    const loaded = new Promise<void>((resolve) => (release = resolve))
+    const remote = {
+      load: vi.fn(async (_call: FavoritesCall) => {
+        await loaded
+        return stored
+      }),
+      save: vi.fn(async () => ({})),
+    } satisfies FavoritesRemote
+    return { remote, release }
+  }
+
+  it('shows the account copy over this browser copy, and caches it', async () => {
+    localStorage.setItem(key, JSON.stringify({ version: 1, favorites: [home] }))
+    const { remote, release } = engine({ favorites: [settings], stored: true })
+    const a = createPersonalNavigationSession({
+      key,
+      current: () => true,
+      remote,
+    })
+    expect(a.getSnapshot().favorites).toEqual([home])
+    release()
+    await settle()
+    expect(a.getSnapshot().favorites).toEqual([settings])
+    expect(session().getSnapshot().favorites).toEqual([settings])
+    expect(remote.save).not.toHaveBeenCalled()
+  })
+
+  it('moves this browser copy to the account once, then saves every change', async () => {
+    localStorage.setItem(key, JSON.stringify({ version: 1, favorites: [home] }))
+    const { remote, release } = engine({ favorites: [], stored: false })
+    const a = createPersonalNavigationSession({
+      key,
+      current: () => true,
+      remote,
+    })
+    release()
+    await settle()
+    expect(remote.save).toHaveBeenLastCalledWith([home], expect.anything())
+    a.setFavorite(settings, true)
+    await settle()
+    expect(remote.save).toHaveBeenLastCalledWith(
+      [home, settings],
+      expect.anything(),
+    )
+  })
+
+  it('keeps a change made while the read was out, and stops when revoked', async () => {
+    const { remote, release } = engine({ favorites: [settings], stored: true })
+    const a = createPersonalNavigationSession({
+      key,
+      current: () => true,
+      remote,
+    })
+    a.setFavorite(home, true)
+    release()
+    await settle()
+    expect(a.getSnapshot().favorites).toEqual([home])
+    expect(remote.save).toHaveBeenCalledWith([home], expect.anything())
+    const call = remote.load.mock.calls[0]![0]
+    a.revoke()
+    expect(call.signal.aborted).toBe(true)
+    expect(() => call.guard()).toThrow()
+  })
+
+  it('keeps a change the account did not take, says so, and sends it again at the next sign-in', async () => {
+    const failing = {
+      load: vi.fn(async () => ({ favorites: [], stored: true })),
+      save: vi.fn(async () => {
+        throw new Error('HTTP 503')
+      }),
+    } satisfies FavoritesRemote
+    const onSaveError = vi.fn()
+    const a = createPersonalNavigationSession({
+      key,
+      current: () => true,
+      remote: failing,
+      onSaveError,
+    })
+    await settle()
+    a.setFavorite(home, true)
+    await settle()
+    expect(onSaveError).toHaveBeenCalledOnce()
+    // The next sign-in: the account still has the older (empty) list.
+    const later = {
+      load: vi.fn(async () => ({ favorites: [], stored: true })),
+      save: vi.fn(async () => ({})),
+    } satisfies FavoritesRemote
+    const b = createPersonalNavigationSession({
+      key,
+      current: () => true,
+      remote: later,
+    })
+    await settle()
+    expect(b.getSnapshot().favorites).toEqual([home])
+    expect(later.save).toHaveBeenCalledWith([home], expect.anything())
+    await settle()
+    // Saved now: not pending any more, so the account copy wins again.
+    expect(JSON.parse(localStorage.getItem(key)!).pending).toBeUndefined()
+  })
+
+  it('lets a person star every page the console offers', () => {
+    const pages = FEATURE_VIEWS.flatMap((v) => personalLink(v.id) ?? [])
+    expect(pages.length).toBeLessThanOrEqual(MAX_FAVORITES)
+    const a = session()
+    pages.forEach((p) => a.setFavorite(p, true))
+    expect(a.getSnapshot().favorites).toHaveLength(pages.length)
   })
 })

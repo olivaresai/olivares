@@ -706,7 +706,7 @@ func (s *Server) handleListBackups(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var items []backupListItem
+	var items JSONArray[backupListItem]
 	for _, e := range entries {
 		if e.IsDir() || !strings.HasSuffix(e.Name(), ".drbundle") {
 			continue

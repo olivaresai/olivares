@@ -10,9 +10,19 @@ import { sessionNameLadder } from '@/features/home/work-line'
 // the sessions that ask. The inbox is served without content, so a handoff row names its
 // work item and its sender, and its link opens the handoff where Accept and Reject are.
 import type { HandoffInboxItem } from '@/features/communications/types'
-import { liveRowKey } from '@/features/sessions/provenance'
+import {
+  mergeSessions,
+  operatorName,
+  primaryRun,
+  sessionReference,
+  sessionShortId,
+  sharedNames,
+  type UnifiedSession,
+} from '@/features/sessions/provenance'
 import { addressOf, SESSION_PARAM } from '@/features/sessions/session-address'
 import type { LiveDTO } from '@/features/sessions/types'
+import type { RunDTO } from '@/features/agentops/types'
+import { runFolder } from '@/features/sessions/folder'
 
 export const RAIL_GROUP_IDS = ['needsYou', 'working', 'earlier'] as const
 export type RailGroupId = (typeof RAIL_GROUP_IDS)[number]
@@ -37,8 +47,9 @@ export interface RailRow {
   from?: string
   /** Whole minutes since the row last changed (a running session: since it started). */
   minutes: number
-  /** Where the row opens: a registry path and the search it carries. */
-  to: '/sessions' | '/communications/handoffs'
+  /** Where the row opens: a registry path and the search it carries. A session waiting
+   * on an approval opens the request itself. */
+  to: '/sessions' | '/communications/handoffs' | '/permissions'
   search: Record<string, string>
   /** The same address as one string, for a reader and a test. */
   href: string
@@ -52,6 +63,8 @@ export interface RailGroup {
 export interface RailSources {
   live: readonly LiveDTO[]
   handoffs: readonly HandoffInboxItem[]
+  /** The sessions this console's engine operates (launched runs). */
+  runs?: readonly RunDTO[]
 }
 
 function minutesSince(iso: string | undefined, now: number): number {
@@ -68,27 +81,80 @@ function sessionState(live: LiveDTO): RailState {
   return 'idle'
 }
 
-function sessionRow(live: LiveDTO, now: number): RailRow {
-  const state = sessionState(live)
-  const key = liveRowKey(live)
-  const search = { [SESSION_PARAM]: addressOf({ key }) }
-  const meta = [live.engine, live.agent_ref ?? live.model_ref]
+function isLiveState(run: RunDTO): boolean {
+  return (
+    run.state === 'running' || run.state === 'idle' || run.state === 'pending'
+  )
+}
+
+/** A launched run: running or idle is working; pending or waiting for an
+ * approval needs the operator; stopped, failed or cleaned is earlier. */
+function runState(run: RunDTO): RailState {
+  // A tool call waiting for a person needs the operator even though the run is running.
+  if (run.pending_approval_ref && isLiveState(run)) return 'need'
+  if (run.state === 'running' || run.state === 'idle') return 'live'
+  if (run.state === 'pending' || run.state === 'waiting_approval') return 'need'
+  return 'ended'
+}
+
+/** A title another row also carries gets the session's short tail (HU 029). */
+function distinctTitle(
+  title: string | null,
+  s: UnifiedSession,
+  shared: ReadonlySet<string>,
+): string | null {
+  return title && shared.has(title) ? `${title} · ${sessionShortId(s)}` : title
+}
+
+/** One row per session: a launched run and what was observed of it are one session
+ * (`mergeSessions`, the join the Sessions page and Now use), so one launch is one row. */
+function sessionRow(
+  s: UnifiedSession,
+  now: number,
+  shared: ReadonlySet<string> = new Set(),
+): RailRow {
+  const run = primaryRun(s.runs)
+  const live = s.live
+  const state: RailState = run
+    ? runState(run)
+    : live
+      ? sessionState(live)
+      : 'idle'
+  const waitingOn =
+    state === 'need' && run?.pending_approval_ref
+      ? run.pending_approval_ref
+      : undefined
+  const search: Record<string, string> = waitingOn
+    ? { tab: 'approvals', approval: waitingOn }
+    : { [SESSION_PARAM]: addressOf(s) }
+  const to = waitingOn ? ('/permissions' as const) : ('/sessions' as const)
+  // Tool and folder (Warp concept) for a launched session; engine and agent otherwise.
+  const meta = (
+    run
+      ? [run.provider_driver || 'claude', runFolder(run)]
+      : [live?.engine, live?.agent_ref ?? live?.model_ref]
+  )
     .filter((part): part is string => !!part)
     .join(' · ')
+  const started = run?.started_at ?? run?.created_at ?? live?.first_event_at
+  const last = run?.last_activity_at ?? live?.last_event_at ?? run?.created_at
   return {
-    key,
+    key: s.key,
     kind: 'session',
     state,
-    title: sessionNameLadder(null, live, '').text || null,
-    reference: live.session_ref,
-    meta: meta || null,
-    minutes: minutesSince(
-      state === 'live' ? live.first_event_at : live.last_event_at,
-      now,
+    title: distinctTitle(
+      operatorName(s) ||
+        (live ? sessionNameLadder(null, live, '').text : '') ||
+        null,
+      s,
+      shared,
     ),
-    to: '/sessions',
+    reference: sessionReference(s),
+    meta: meta || null,
+    minutes: minutesSince(state === 'live' ? started : last, now),
+    to,
     search,
-    href: `/sessions?${new URLSearchParams(search).toString()}`,
+    href: `${to}?${new URLSearchParams(search).toString()}`,
   }
 }
 
@@ -119,8 +185,10 @@ export function railGroups(sources: RailSources, now: number): RailGroup[] {
     .map((h) => handoffRow(h, now))
   const working: RailRow[] = []
   const earlier: RailRow[] = []
-  for (const live of sources.live) {
-    const row = sessionRow(live, now)
+  const sessions = mergeSessions([...sources.live], [...(sources.runs ?? [])])
+  const shared = sharedNames(sessions, '')
+  const rows = sessions.map((s) => sessionRow(s, now, shared))
+  for (const row of rows) {
     if (row.state === 'need') needs.push(row)
     else if (row.state === 'live') working.push(row)
     else earlier.push(row)

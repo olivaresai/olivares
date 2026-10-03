@@ -109,15 +109,16 @@ func supportBundleCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&o.out, "out", "", "output tar.gz path (default olivares-support-<UTC timestamp>.tar.gz)")
 	addStoreFlags(cmd, &o.dataDir, &o.engine, &o.dsn)
-	cmd.Flags().StringVar(&o.server, "server", "", "control-plane base URL (default $OLIVARES_SERVER_URL)")
+	cmd.Flags().StringVar(&o.server, "server", "", "the engine's address, https://<host>:8443 (default $OLIVARES_SERVER_URL)")
 	// `statusClientConfig` YA lleva caCert y pins —`status` los expone y los usa—, así que aquí
 	// faltaban sólo las banderas. Sin ellas, el texto de ayuda de más abajo ofrecía `--insecure`
 	// como remedio a un certificado autofirmado «que ya confías», que es justo el caso en el que
 	// un pin es la respuesta correcta y estaba a un `StringArrayVar` de distancia.
-	cmd.Flags().StringVar(&o.caCert, "ca-cert", "", "PEM CA bundle used to verify the control plane")
+	cmd.Flags().StringVar(&o.caCert, "ca-cert", "", "PEM CA bundle used to verify the engine")
 	cmd.Flags().StringArrayVar(&o.pins, "pin-sha256", nil, "pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate")
 	cmd.Flags().BoolVar(&o.insecure, "insecure", false, "skip TLS certificate verification for the status request")
 	cmd.Flags().DurationVar(&o.timeout, "timeout", 10*time.Second, "status request timeout")
+	hideConnectionFlags(cmd.Flags())
 	cmd.Flags().BoolVar(&o.offline, "offline", false, "skip the live GET /status request")
 	cmd.Flags().StringVar(&o.configPath, "config", defaultEnvFilePath, "effective systemd env file to redact")
 	cmd.Flags().StringVar(&o.logsPath, "logs", "", "engine log file to redact line by line")

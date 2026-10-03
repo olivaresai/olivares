@@ -46,14 +46,17 @@
       "permissionMode": "Modo de permiso",
       "effort": "Nivel de esfuerzo",
       "model": "Modelo",
-      "customInstructions": "Instrucciones personalizadas"
+      "customInstructions": "Instrucciones personalizadas",
+      "secretEnv": "Secretos como variables de entorno",
+      "secretEnvHint": "VARIABLE=env/secreto, separados por comas. Las sesiones de esta plantilla leen cada secreto del almacén desde su variable; solo quien gestiona los secretos de la organización puede lanzarlas."
     },
     "policies": {
       "dlpMode": "Modo DLP",
       "maxDuration": "Duración máxima de sesión (minutos)",
       "allowedTools": "Herramientas permitidas",
       "allowedToolsPlaceholder": "p. ej. Bash,Read,Edit",
-      "recordIo": "Grabar E/S"
+      "recordIo": "Grabar E/S",
+      "peersSameTemplate": "Las sesiones de esta plantilla pueden escribirse entre sí"
     }
   },
   "actions": {

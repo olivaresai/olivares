@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 // wire.go holds the JSON shapes the Cursor Admin API returns and the read-only HTTP
@@ -100,8 +102,8 @@ func (c *client) do(req *http.Request, path string, out any) error {
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, maxErrBody))
-		return fmt.Errorf("cursor: %s %s: status %d: %s", req.Method, path, resp.StatusCode, strings.TrimSpace(string(excerpt)))
+		excerpt := redact.ReadHTTPError(resp.Body, maxErrBody, req, c.key)
+		return fmt.Errorf("cursor: %s %s: status %d: %s", req.Method, path, resp.StatusCode, excerpt)
 	}
 	if out == nil {
 		_, _ = io.Copy(io.Discard, resp.Body)

@@ -7,16 +7,17 @@ description: >-
 ---
 
 このガイドは、Olivares AI の control plane を Docker で本番運用に投入するエンジニアと SRE 向けです。
-製品全体は単一の distroless イメージ ── Web UI を組み込んだエンジン ── なので、
+製品全体は単一のイメージ ── Web UI を組み込んだエンジン ── なので、
 単一ホストで外部依存なしに SQLite トポロジを実行でき、必要なときには Postgres オーバーライドで
-マルチテナントトポロジを構成できます。どの経路でも同じセキュアなデフォルトを維持します:
+マルチテナントトポロジを構成できます。コンテナイメージは Debian 13 slim（エージェントツール用の Node.js 24 を含む）を
+ベースとし、非 root ユーザーとして実行されます。どの経路でも同じセキュアなデフォルトを維持します:
 デフォルト認証情報なし、ワンタイムのセットアップトークン、TLS デフォルト有効、
 そして TLS はデフォルトで有効です。ホストポートはすべてのインターフェースに公開されます —
 これはサーバーだからです。下記のように意図して制限してください。
 
-:::note[ベータ ── 26.10.0 のイメージは公開済み]
-Olivares AI は **ベータ** です。以下のイメージ座標は解決します。リリース `26.10.0` がそれらを
-Docker Hub と `ghcr.io` に公開しました（インストール面の証人 `docs/releases/26.10.0-install-surfaces.json`）。
+:::note[ベータ ── 26.10.1 のイメージは公開済み]
+Olivares AI は **ベータ** です。以下のイメージ座標は解決します。リリース `26.10.1` がそれらを
+Docker Hub と `ghcr.io` に公開しました（インストール面の証人 `docs/releases/26.10.1-install-surfaces.json`）。
 これは本番運用可能であることの保証ではなく、あなたが使うことになるデプロイの形だと捉えてください。
 :::
 
@@ -31,14 +32,14 @@ Docker Hub と `ghcr.io` に公開しました（インストール面の証人 
 主要なコンテナのプル元は **Docker Hub** です:
 
 ```bash
-docker pull docker.io/olivaresai/olivares:26.10.0
+docker pull docker.io/olivaresai/olivares:26.10.1
 ```
 
 同じ内容は `ghcr.io/olivaresai/olivares` にも公開されています ── ダイジェストで同一であり、
 バックアップ兼ビルドレジストリとして使われます。Docker Hub は**匿名**プルにレート制限を課しますが、
 ghcr.io は公開イメージの匿名プルにレート制限を課しません。CI ノードや大規模なフリートが上限に達した
 場合は `docker login` するか、ghcr.io の座標に切り替えてください。タグには **先頭に `v` が付きません**:
-`:26.10.0` はリリースを固定し、`:latest` は浮動、`:26.10.0-fips` / `:26.10.0-stig` は
+`:26.10.1` はリリースを固定し、`:latest` は浮動、`:26.10.1-fips` / `:26.10.1-stig` は
 堅牢化されたバリアントです。ベースと `:latest` タグはマルチアーキ
 （`linux/amd64`、`linux/arm64`）で、`fips`/`stig` は `amd64` 専用です。
 
@@ -49,14 +50,14 @@ Docker Hub にコピーされるため、ダイジェストは同じです:
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.10.0")"
+DIGEST="$(crane digest "$IMAGE:26.10.1")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type spdxjson \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -86,7 +87,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:26.10.0 \
+  docker.io/olivaresai/olivares:26.10.1 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -96,7 +97,7 @@ docker run -d --name olivares \
 
 | フラグ | 理由 |
 |---|---|
-| `--user 65532:65532` | distroless イメージに焼き込まれた非 root の `nonroot` UID として実行する |
+| `--user 65532:65532` | イメージに焼き込まれた非 root の `nonroot` UID として実行する |
 | `--read-only` | ルートファイルシステムを不変にする。書き込み可能なのはデータボリュームと `/tmp` のみ |
 | `--tmpfs /tmp` | 書き込み可能なスクラッチ tmpfs。rootfs が読み取り専用のため必須 |
 | `--cap-drop ALL` | エンジンは Linux capability を一切必要としない |
@@ -181,7 +182,7 @@ DSN Secret とマネージド（またはあなた自身の）Postgres を備え
 
 ```bash
 printf 'a strong DR passphrase' > deploy/compose/dr-pass
-# the host stamps the bundle name (the distroless image has no `date`):
+# the host stamps the bundle name:
 BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
@@ -189,7 +190,7 @@ docker compose -f deploy/compose/docker-compose.yml \
 ```
 
 このジョブはエンジンのデータボリュームを共有し、バンドルを `olivares-backups` ボリュームへ
-書き込みます。そして ── イメージが distroless のため ── 保持期間管理はホストに委ねます:
+書き込みます。保持期間管理はホストに委ねます:
 古いバンドルはホストの cron で間引いてください
 （`find <backups> -name '*.drbundle' -mtime +14 -delete`）。スケジュールされた RPO のために
 実行をホストの cron でラップし、**`olivares-backups` ボリュームをオフサイトにミラーリング** してください ──
@@ -204,8 +205,8 @@ olivares dr restore --in <bundle> --data-dir <dir> --passphrase-file dr-pass
 
 ## 5. 運用上の注記
 
-**ヘルスはコンテナではなくホストからプローブする。** イメージは **distroless** で ──
-シェルも `curl` もないため、コンテナ内の `HEALTHCHECK` は意図的に存在しません。
+**ヘルスはコンテナではなくホストからプローブする。** イメージは
+コンテナ内の `HEALTHCHECK` を意図的に定義していません。
 エンジンは HTTPS ポートで `/livez` と `/readyz` を公開します。これらをホスト
 （またはオーケストレータ）からプローブしてください:
 
@@ -299,7 +300,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. 本番ではダイジェストで固定する
 
-可変タグ（`:26.10.0`、`:latest`）は評価用です。本番では検証した **ダイジェスト** を固定してください ──
+可変タグ（`:26.10.1`、`:latest`）は評価用です。本番では検証した **ダイジェスト** を固定してください ──
 ダイジェストは不変であり、まさにあなたが承認したものです:
 
 ```bash

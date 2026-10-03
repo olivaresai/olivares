@@ -36,6 +36,7 @@ type hookPEPClientConfig struct {
 	// the config was built without addFlags, as some constructor tests do.
 	resolveServer func() string
 	token         string
+	tenant        string
 	caCert        string
 	pins          []string
 	insecure      bool
@@ -44,7 +45,7 @@ type hookPEPClientConfig struct {
 
 func (c *hookPEPClientConfig) addFlags(cmd *cobra.Command) {
 	flags := cmd.PersistentFlags()
-	flags.StringVar(&c.baseURL, "url", "", "control-plane base URL (default $OLIVARES_HOOK_PEP_URL); --server is the canonical spelling")
+	flags.StringVar(&c.baseURL, "url", "", "engine address (default $OLIVARES_HOOK_PEP_URL); --server is the canonical spelling")
 	// E7: --server reaches this group too, without removing --url.
 	c.resolveServer = addServerAliasFlag(cmd, &c.baseURL, "url", "OLIVARES_HOOK_PEP_URL", true)
 	flags.StringVar(&c.token, "token", "", "API bearer token (default $OLIVARES_HOOK_PEP_TOKEN)")
@@ -55,9 +56,9 @@ func (c *hookPEPClientConfig) addFlags(cmd *cobra.Command) {
 	// ofrecía era `--insecure`, es decir apagar la verificación entera. El transporte compartido
 	// SIEMPRE supo pinear; lo que no había era dónde escribir el pin. Una promesa en un
 	// comentario no es un control.
-	flags.StringVar(&c.caCert, "ca-cert", "", "PEM CA bundle used to verify the control plane")
+	flags.StringVar(&c.caCert, "ca-cert", "", "PEM CA bundle used to verify the engine")
 	flags.StringArrayVar(&c.pins, "pin-sha256", nil, "pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate")
-	flags.BoolVar(&c.insecure, "insecure", false, "skip TLS certificate verification (self-signed development planes only)")
+	flags.BoolVar(&c.insecure, "insecure", false, "skip TLS certificate verification (self-signed development engines only)")
 	flags.DurationVar(&c.timeout, "timeout", 30*time.Second, "request timeout")
 }
 
@@ -68,11 +69,28 @@ func (c *hookPEPClientConfig) resolve() error {
 		c.baseURL = strings.TrimRight(firstNonEmptyEnv(c.baseURL, "OLIVARES_HOOK_PEP_URL"), "/")
 	}
 	c.token = strings.TrimSpace(firstNonEmptyEnv(c.token, "OLIVARES_HOOK_PEP_TOKEN"))
+	// What the flags and the legacy variables leave unset comes from the shared
+	// resolution, like every other command: OLIVARES_SERVER_URL / OLIVARES_TOKEN /
+	// OLIVARES_TENANT, then the saved client context (N1 RU-01, measured 2026-10-01:
+	// `hookpep versions` said "no server" right after `auth login`).
+	shared, err := resolveCLIConfig(cliResolutionOptions{
+		Server: c.baseURL, ServerExplicit: c.baseURL != "",
+		Token: c.token, TokenExplicit: c.token != "",
+		CACert: c.caCert, CACertExplicit: c.caCert != "",
+		PinSHA256: c.pins, PinsExplicit: len(c.pins) > 0,
+	})
+	if err != nil {
+		return err
+	}
+	c.baseURL, c.token, c.tenant = shared.Server, shared.Token, shared.Tenant
+	c.caCert, c.pins = shared.CACert, shared.PinSHA256
 	switch {
+	case c.baseURL == "" && shared.ContextName == "":
+		return missingCLIValueError("server", "--server", "OLIVARES_SERVER_URL", shared)
 	case c.baseURL == "":
 		return missingServerError("url", "OLIVARES_HOOK_PEP_URL")
 	case c.token == "":
-		return fmt.Errorf("no token: set --token or OLIVARES_HOOK_PEP_TOKEN")
+		return missingCLIValueError("token", "--token", "OLIVARES_TOKEN", shared)
 	}
 	return nil
 }
@@ -107,6 +125,9 @@ func (c *hookPEPClientConfig) newRequest(ctx context.Context, method, action str
 		return nil, err
 	}
 	req.Header.Set("Authorization", "Bearer "+c.token)
+	if c.tenant != "" {
+		req.Header.Set("X-Olivares-Tenant", c.tenant)
+	}
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
@@ -117,7 +138,7 @@ func (c *hookPEPClientConfig) do(req *http.Request) (int, []byte, error) {
 	// E4: the shared transport, so --ca-cert, --pin-sha256 and the
 	// --insecure warning exist here too, and a dead plane exits 6 not 1.
 	client, _, err := cliTransport(cliTransportOptions{
-		Resolved: cliResolvedConfig{Server: c.baseURL, Token: c.token, CACert: c.caCert, PinSHA256: c.pins},
+		Resolved: cliResolvedConfig{Server: c.baseURL, Token: c.token, Tenant: c.tenant, CACert: c.caCert, PinSHA256: c.pins},
 		Insecure: c.insecure, Timeout: c.timeout,
 	})
 	if err != nil {
@@ -128,7 +149,7 @@ func (c *hookPEPClientConfig) do(req *http.Request) (int, []byte, error) {
 		return 0, nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	response, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	response, err := readCLIHTTPResponse(resp, req, 8<<20, resp.StatusCode >= 200 && resp.StatusCode < 300, httpErr)
 	return resp.StatusCode, response, err
 }
 
@@ -136,7 +157,7 @@ func newHookPEPCmd() *cobra.Command {
 	var cfg hookPEPClientConfig
 	cmd := &cobra.Command{
 		Use:   "hookpep",
-		Short: "Author and inspect PDP policy through the control plane",
+		Short: "Author and inspect PDP policy through the engine",
 		Long: "hookpep is the authoring loop for the policy the PDP enforces: validate a\n" +
 			"candidate, dry-run a concrete request against it, ask why that request would be\n" +
 			"decided the way it is, then publish it as a new immutable revision — and roll\n" +
@@ -171,7 +192,7 @@ func newHookPEPSourceCmd(action string, cfg *hookPEPClientConfig) *cobra.Command
 	cmd := &cobra.Command{
 		Use:     action,
 		Short:   short,
-		Long:    short + ". The command is a thin authenticated HTTP client; all policy semantics and decisions are produced by the control plane.",
+		Long:    short + ". The command is a thin authenticated HTTP client; all policy semantics and decisions are produced by the engine.",
 		Example: hookPEPSourceExample(action),
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -240,7 +261,7 @@ func newHookPEPPublishCmd(cfg *hookPEPClientConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "publish",
 		Short:   "Compile, publish, and activate an authored policy revision",
-		Long:    "Publish an authored policy through the control plane. The server owns the deny-closed compile-and-activation workflow (Cedar activates on the live engine; OPA remains sidecar-owned); the client holds no policy logic.",
+		Long:    "Publish an authored policy through the engine. The server owns the deny-closed compile-and-activation workflow (Cedar activates on the live engine; OPA remains sidecar-owned); the client holds no policy logic.",
 		Example: "  olivares hookpep publish --engine cedar --file policy.cedar --note \"approved change\" -o json",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -278,7 +299,7 @@ func newHookPEPVersionsCmd(cfg *hookPEPClientConfig) *cobra.Command {
 	return &cobra.Command{
 		Use:     "versions",
 		Short:   "List immutable authored policy revisions",
-		Long:    "List immutable Cedar and OPA policy revisions stored by the control plane. The client only renders server-owned revision metadata and contains no policy logic.",
+		Long:    "List immutable Cedar and OPA policy revisions stored by the engine. The client only renders server-owned revision metadata and contains no policy logic.",
 		Example: "  olivares hookpep versions -o json",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -303,7 +324,7 @@ func newHookPEPTestsCmd(cfg *hookPEPClientConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "tests",
 		Short:   "Show the stored compile-validation artifact for a policy revision",
-		Long:    "Show the compile-validation artifact stored by the control plane for an immutable policy revision. The server selects the newest revision when --revision is omitted; the client performs no policy tests.",
+		Long:    "Show the compile-validation artifact stored by the engine for an immutable policy revision. The server selects the newest revision when --revision is omitted; the client performs no policy tests.",
 		Example: "  olivares hookpep tests --engine cedar --revision 7 -o json",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -344,7 +365,7 @@ func newHookPEPRollbackCmd(cfg *hookPEPClientConfig) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "rollback",
 		Short:   "Re-activate a prior immutable policy revision",
-		Long:    "Re-activate a prior immutable policy revision through the control plane. The server re-runs the compile/validation gate and atomically audits the activation; the client contains no policy logic.",
+		Long:    "Re-activate a prior immutable policy revision through the engine. The server re-runs the compile/validation gate and atomically audits the activation; the client contains no policy logic.",
 		Example: "  olivares hookpep rollback --engine cedar --revision 7 -o json",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {

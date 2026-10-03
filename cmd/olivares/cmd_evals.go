@@ -46,17 +46,18 @@ type evalsClientConfig struct {
 }
 
 func (c *evalsClientConfig) addFlags(cmd *cobra.Command) {
-	cmd.Flags().StringVar(&c.server, "server", "", "control-plane base URL (default $OLIVARES_SERVER_URL)")
+	cmd.Flags().StringVar(&c.server, "server", "", "the engine's address, https://<host>:8443 (default $OLIVARES_SERVER_URL)")
 	cmd.Flags().StringVar(&c.token, "token", "", "API bearer token (default $OLIVARES_TOKEN)")
 	cmd.Flags().StringVar(&c.tenant, "tenant", "", "tenant id (default $OLIVARES_TENANT)")
 	// ⛔ EL MISMO DEFECTO QUE cmd_hookpep.go, con el MISMO comentario copiado abajo: la llamada al
 	// transporte compartido se duplicó y las banderas no se ataron en ninguno de los dos. Medido el
 	// 2026-08-19 recorriendo el CLI contra un plano vivo: contra un certificado autofirmado —el que
 	// genera nuestro propio quickstart, que imprime su pin— la única salida era `--insecure`.
-	cmd.Flags().StringVar(&c.caCert, "ca-cert", "", "PEM CA bundle used to verify the control plane")
+	cmd.Flags().StringVar(&c.caCert, "ca-cert", "", "PEM CA bundle used to verify the engine")
 	cmd.Flags().StringArrayVar(&c.pins, "pin-sha256", nil, "pinned leaf SPKI SHA-256, base64 or hex (repeatable) — the engine prints it as pin_sha256 on the line reporting its certificate")
-	cmd.Flags().BoolVar(&c.insecure, "insecure", false, "skip TLS certificate verification (self-signed dev planes only)")
+	cmd.Flags().BoolVar(&c.insecure, "insecure", false, "skip TLS certificate verification (self-signed development engines only)")
 	cmd.Flags().DurationVar(&c.timeout, "timeout", 10*time.Minute, "request timeout (a judged gate can take a while)")
+	hideConnectionFlags(cmd.Flags())
 }
 
 func (c *evalsClientConfig) resolve() error {
@@ -76,7 +77,7 @@ func (c *evalsClientConfig) resolve() error {
 }
 
 // do performs one JSON request against the plane.
-func (c *evalsClientConfig) do(ctx context.Context, method, path string, body any) (int, []byte, error) {
+func (c *evalsClientConfig) do(ctx context.Context, method, path string, body any, accepted ...int) (int, []byte, error) {
 	var rdr io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -108,7 +109,7 @@ func (c *evalsClientConfig) do(ctx context.Context, method, path string, body an
 		return 0, nil, err
 	}
 	defer func() { _ = resp.Body.Close() }()
-	b, err := io.ReadAll(io.LimitReader(resp.Body, 8<<20))
+	b, err := readCLIHTTPResponse(resp, req, 8<<20, cliStatusAccepted(resp.StatusCode, accepted...), httpErr)
 	return resp.StatusCode, b, err
 }
 
@@ -150,7 +151,7 @@ func newEvalsGateCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "gate",
 		Short: "Run the CI regression gate (exit 0 pass/warn, 1 fail) or re-check one after a governed override",
-		Long: "evals gate scores candidate outputs against a golden suite on the control plane and\n" +
+		Long: "evals gate scores candidate outputs against a golden suite on the engine and\n" +
 			"maps the gate's EFFECTIVE verdict onto the exit code a CI pipeline blocks on:\n" +
 			"  pass → 0    warn → 0 (printed loudly: declared degradation, e.g. no judge credential)\n" +
 			"  fail → 1    (regression vs baseline, pass-rate below threshold, uncalibrated judge, budget block)\n\n" +
@@ -172,7 +173,7 @@ func newEvalsGateCmd() *cobra.Command {
 			var body []byte
 			var err error
 			if checkID != "" {
-				status, body, err = cfg.do(ctx, "GET", "/v1/m/evals/gate/"+checkID, nil)
+				status, body, err = cfg.do(ctx, "GET", "/v1/m/evals/gate/"+checkID, nil, http.StatusOK, http.StatusCreated)
 			} else {
 				if suite == "" {
 					return fmt.Errorf("--suite is required (or --check-id to re-check an existing gate)")
@@ -186,7 +187,7 @@ func newEvalsGateCmd() *cobra.Command {
 					"baseline_ref": baseline, "outputs": outputs, "seed": seed, "sample_size": sampleSize,
 					"model_ref": modelRef, "prompt_variant": variant, "comparison": map[string]any{"version": 1, "mode": comparisonMode},
 				}
-				status, body, err = cfg.do(ctx, "POST", "/v1/m/evals/gate", reqBody)
+				status, body, err = cfg.do(ctx, "POST", "/v1/m/evals/gate", reqBody, http.StatusOK, http.StatusCreated)
 			}
 			if err != nil {
 				return err
@@ -399,7 +400,7 @@ func runLabelSession(ctx context.Context, cfg *evalsClientConfig, stdin io.Reade
 			"human_passed": verdict == "p",
 		}
 		status, body, err := cfg.do(ctx, "POST", "/v1/m/evals/calibration/items",
-			map[string]any{"set_name": set, "items": []any{item}})
+			map[string]any{"set_name": set, "items": []any{item}}, http.StatusCreated)
 		if err != nil {
 			return fmt.Errorf("posting label for %s: %w", cand.CaseKey, err)
 		}
@@ -450,7 +451,7 @@ func labeledCaseKeys(ctx context.Context, cfg *evalsClientConfig, set string) (m
 		if cursor != "" {
 			path += "&cursor=" + cursor
 		}
-		status, body, err := cfg.do(ctx, "GET", path, nil)
+		status, body, err := cfg.do(ctx, "GET", path, nil, http.StatusOK)
 		if err != nil {
 			return nil, err
 		}

@@ -146,7 +146,28 @@ func WithProgram(program string) Option {
 	return func(m *Module) {
 		if program != "" {
 			m.rt.program = program
+			m.rt.programPinned = true
 		}
+	}
+}
+
+// WithClaudeHookPEP gives the runtime what ConfigureClaudeHookPEP needs to write a
+// Claude session's hook settings: the engine's data directory and the absolute
+// path of the olivares binary its hooks call.
+func WithClaudeHookPEP(dataDir, olivaresBinary string) Option {
+	return func(m *Module) {
+		m.rt.hookDataDir, m.rt.hookBinary = dataDir, olivaresBinary
+	}
+}
+
+// WithProgramResolver finds a driver's installed executable at launch time when
+// no explicit program is pinned for it (WithProgram, WithDriverProgram): the
+// engine's newest verified managed install, then its PATH. An empty answer keeps
+// the official program name, which the runner's own inspection reports as
+// missing with the action that installs it.
+func WithProgramResolver(resolve func(driver string) string) Option {
+	return func(m *Module) {
+		m.rt.programResolver = resolve
 	}
 }
 

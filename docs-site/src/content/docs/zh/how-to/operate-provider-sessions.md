@@ -26,9 +26,10 @@ description: >-
 启动前完成这些项。缺一项就是拒绝，而不是回退。
 
 1. 已安装 Olivares AI，并且已有首位管理员。
-   安装令牌与 AAL3 通行密钥屏障见
-   [第一个小时](/how-to/first-hour/)。创建源以及特权会话操作需要 AAL3
-   （`core/api/middleware.go` `requireAAL3`）。
+   安装令牌见 [第一个小时](/how-to/first-hour/)。
+   管理操作的追加认证（`admin_step_up`）默认为 `none`。
+   如果管理员启用 `totp` 或 `passkey`，请在特权操作前满足该策略的要求
+   （`core/api/middleware.go` `requireStepUp`）。
 2. 官方提供商 CLI 已安装在 **本节点**。配置文件登记的是已经存在的主目录。
    服务器解析路径（绝对路径、解析符号链接、已存在的目录），不创建、不安装、
    不登录（`web/src/features/agentops/types.ts` `CreateProfileRequest`）。
@@ -158,7 +159,7 @@ Grok 中断使用 ACP `session/cancel`，这是没有确认的通知。中断会
 
 ## 相关
 
-- [第一个小时](/how-to/first-hour/) — 安装令牌、AAL3、Claude 凭证来源。
+- [第一个小时](/how-to/first-hour/) — 安装令牌、管理操作的追加认证、Claude 凭证来源。
 - [在 Olivares 中运行 Claude Code](/how-to/run-claude-code-with-olivares/) — 共存拓扑。
 - [集成 Codex](/how-to/integrations/codex/) / [集成 Grok Build](/how-to/integrations/grok/) — 连接器与 PEP hook。
 - [会话运行时 API](/reference/session-runtime-api/) — 列表、attach、input、stop；Community PTY 与版本边界。

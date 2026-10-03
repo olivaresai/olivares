@@ -9,6 +9,12 @@ import { resolveDark, useThemeStore, type Theme } from '@/stores/theme'
 import { usePreferencesStore } from '@/stores/preferences'
 import { useClientSettings } from '@/features/settings/preferences'
 
+// The module list has its own tests (features/settings/modules-settings.test.tsx); here it
+// only has to be where a system administrator finds it.
+vi.mock('@/features/settings/modules-settings', () => ({
+  ModulesSettings: () => <section aria-label="Modules list" />,
+}))
+
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({
     principal: {
@@ -21,12 +27,16 @@ vi.mock('@/lib/auth/context', () => ({
   }),
 }))
 
+const server = vi.hoisted(() => ({
+  edition: 'community' as string | undefined,
+}))
 vi.mock('@/lib/hooks/use-server-info', () => ({
   useServerInfo: () => ({
     data: {
       version: 'v-test-settings',
       engine: 'sqlite',
       setup_required: false,
+      edition: server.edition,
       license: { status: 'community', licensee: 'Olivares Test' },
     },
   }),
@@ -49,6 +59,24 @@ beforeEach(async () => {
 })
 
 describe('Settings', () => {
+  it('offers no section that does nothing, opens the wizard from Setup, and names every key (HU-14)', async () => {
+    const user = userEvent.setup()
+    render(<SettingsPage />)
+    expect(
+      screen.queryByRole('button', { name: 'Notifications' }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Session defaults' }),
+    ).not.toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Setup' })).toHaveAttribute(
+      'href',
+      '/onboarding',
+    )
+    await user.click(screen.getByRole('button', { name: 'Keyboard' }))
+    expect(screen.getByText('New session')).toBeInTheDocument()
+    expect(screen.queryByText(/keys\.command\./)).not.toBeInTheDocument()
+  })
+
   it('shows Changed · reset only on a value that differs, and reset restores it', async () => {
     const user = userEvent.setup()
     render(<SettingsPage />)
@@ -142,6 +170,36 @@ describe('Settings', () => {
     expect(
       screen.queryByRole('button', { name: /Changed · reset/ }),
     ).not.toBeInTheDocument()
+  })
+
+  it('names the edition once, and on Community lists what a Business build adds', async () => {
+    const user = userEvent.setup()
+    server.edition = 'community'
+    const { unmount } = render(<SettingsPage />)
+    await user.click(screen.getByRole('button', { name: 'Edition & modules' }))
+    expect(
+      screen.getByRole('heading', { name: 'Edition & modules' }),
+    ).toBeInTheDocument()
+    expect(screen.getByText('Community')).toBeInTheDocument()
+    const adds = screen.getByRole('heading', { name: 'A Business build adds' })
+    expect(adds.parentElement?.querySelectorAll('li')).toHaveLength(6)
+    expect(screen.getByText('Tool pins')).toBeInTheDocument()
+    // Every optional module is turned on and off here, by a system administrator.
+    expect(
+      screen.getByRole('region', { name: 'Modules list' }),
+    ).toBeInTheDocument()
+    unmount()
+
+    // A Business build (the engine's "enterprise" build string) is named Business and
+    // lists nothing it lacks.
+    server.edition = 'enterprise'
+    render(<SettingsPage />)
+    await user.click(screen.getByRole('button', { name: 'Edition & modules' }))
+    expect(screen.getByText('Business')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('heading', { name: 'A Business build adds' }),
+    ).toBeNull()
+    server.edition = 'community'
   })
 
   it('shows this installation on About', async () => {

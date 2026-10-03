@@ -47,6 +47,9 @@ type openCodeFixture struct {
 	SpawnChild             bool   `json:"spawn_child"`
 	GroupedModel           bool   `json:"grouped_model"`
 	OfferEffort            bool   `json:"offer_effort"`
+	// EchoPrompt makes the peer send the prompt back as a user_message_chunk first,
+	// as an agent that echoes the person's message would.
+	EchoPrompt bool `json:"echo_prompt"`
 }
 
 type openCodeFixtureRecord struct {
@@ -68,13 +71,14 @@ type openCodeFixtureRecord struct {
 }
 
 var openCodeFixtureEnvValues = []string{
-	"HOME", envOpenCodeConfigDir, envOpenCodeConfig, envXDGConfigHome, envXDGDataHome,
+	"HOME", envOpenCodeConfigDir, envOpenCodeConfig, envOpenCodeConfigContent, envXDGConfigHome, envXDGDataHome,
 	envXDGStateHome, envXDGCacheHome, envXDGRuntimeDir, envGrokHome, envCodexHome,
 	envClaudeConfigDir, envOpenCodeDisableAutoUpdate, "FIXTURE_MARKER",
+	envOpenCodeDisableModelsFetch, envOpenCodeDisableLSPDownload, envNPMConfigOffline, envOpenCodeDisableShare,
 }
 
 var openCodeFixturePresence = []string{
-	"OPENCODE_SERVER_PASSWORD", "ANTHROPIC_AUTH_TOKEN", "OPENAI_API_KEY", "XAI_API_KEY",
+	"OPENCODE_SERVER_PASSWORD", "ANTHROPIC_AUTH_TOKEN", "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "XAI_API_KEY",
 	"OLIVARES_WORK_TOKEN", "OLIVARES_COMMUNICATION_TOKEN", "DISABLE_AUTOUPDATER",
 	envOpenCodeConfig, envOpenCodeConfigContent,
 }
@@ -278,6 +282,9 @@ func (p *openCodeFixturePeer) handle(frame map[string]json.RawMessage) {
 		}
 		p.rec.PromptTexts = append(p.rec.PromptTexts, text)
 		p.flush()
+		if p.cfg.EchoPrompt {
+			p.sendUpdate(p.session, "user_message_chunk", text)
+		}
 		p.onPrompt(id)
 	case openCodeMethodSessionClose:
 		p.reply(id, map[string]any{})

@@ -10,7 +10,7 @@
 //
 // HONESTY (ARCHITECTURE.md, docs/SECURITY-HARDENING.md): the web RENDERS the engine's events and verdicts.
 // It never recomputes, repairs, or fabricates the chain; reading the ledger is itself
-// audited (the engine appends audit.read / audit.export), surfaced via SelfAuditNotice.
+// audited (the engine appends audit.read / audit.export) and shows up in the list.
 import { useInfiniteQuery, useMutation, useQuery } from '@tanstack/react-query'
 import {
   FileCheck2,
@@ -83,9 +83,8 @@ const FILTER_KEYS = [
 const URL_KEYS = [...FILTER_KEYS, 'scope'] as const
 type FilterKey = (typeof FILTER_KEYS)[number]
 
-/** Keyset next-page cursor: the chain is gap-free, so the next page starts one past
- * the last event's seq (core/api/handlers_audit.go). Undefined ends the scroll. */
-function nextFrom(last: { items: AuditEventDTO[]; has_more: boolean }) {
+/** Keyset next-page cursor of the forward order: one past the last event's seq. */
+function forwardNextFrom(last: { items: AuditEventDTO[]; has_more: boolean }) {
   if (!last.has_more || last.items.length === 0) return undefined
   return last.items[last.items.length - 1].seq + 1
 }
@@ -94,6 +93,11 @@ function nextFrom(last: { items: AuditEventDTO[]; has_more: boolean }) {
  * the server. Falling back to the last matching item would skip or rescan data. */
 function filteredNextFrom(last: { has_more: boolean; next_from?: number }) {
   return last.has_more ? last.next_from : undefined
+}
+
+/** A ledger page; `window_from` marks a newest-first window (the first sequence it read). */
+type AuditPage = Awaited<ReturnType<typeof auditApi.list>> & {
+  window_from?: number
 }
 
 /** Validate URL/saved-view values before they can select an endpoint or enter a
@@ -173,24 +177,56 @@ export function AuditView() {
   const isSystem = scope === 'system'
   const listParams = useMemo(() => ({ limit: PAGE, ...filters }), [filters])
 
+  // NEWEST FIRST (HU-15). The ledger pages forward from ?from and has no sort
+  // parameter; its documented way to the tail is head_seq. So the unfiltered view reads
+  // the head (GET /v1/audit/recent, which is not itself recorded; the system ledger's own
+  // list for the system scope), then the last window of PAGE positions, shown reversed,
+  // and "load more" steps back one window. A filtered scan only walks forward: until the
+  // engine can scan backwards (ARCH PLAN item 9, N1), a filtered view shows the matches it
+  // has loaded newest first, which is a stop-gap.
+  const headQuery = useQuery({
+    queryKey: ['audit', activeTenant, scope, 'head'],
+    queryFn: async () =>
+      (isSystem
+        ? (await auditApi.systemList({ limit: 1 })).head_seq
+        : (await auditApi.recent({ limit: 1 })).head_seq) ?? null,
+    enabled: !filtersActive,
+  })
+  // An engine that answers without head_seq (older than the field) pages forward as before.
+  const head = headQuery.data
+  const newest = !filtersActive && typeof head === 'number'
+  const forward = filtersActive || (headQuery.isSuccess && head === null)
   const listQuery = useInfiniteQuery({
-    queryKey: isSystem
-      ? queryKeys.audit.systemList(activeTenant, listParams)
-      : queryKeys.audit.list(activeTenant, listParams),
-    queryFn: ({ pageParam }) =>
-      (isSystem ? auditApi.systemList : auditApi.list)({
-        from: pageParam,
-        ...listParams,
-      }),
-    initialPageParam: 1,
+    queryKey: [
+      ...(isSystem
+        ? queryKeys.audit.systemList(activeTenant, listParams)
+        : queryKeys.audit.list(activeTenant, listParams)),
+      newest ? 'newest' : 'forward',
+      head ?? null,
+    ],
+    queryFn: async ({ pageParam }): Promise<AuditPage> => {
+      const list = isSystem ? auditApi.systemList : auditApi.list
+      if (!newest) return list({ from: pageParam, ...listParams })
+      const from = Math.max(1, pageParam - PAGE + 1)
+      const page = await list({ from, limit: PAGE })
+      return { ...page, items: [...page.items].reverse(), window_from: from }
+    },
+    initialPageParam: newest ? (head as number) : 1,
     getNextPageParam: (last) =>
-      filtersActive ? filteredNextFrom(last) : nextFrom(last),
+      !newest
+        ? filtersActive
+          ? filteredNextFrom(last)
+          : forwardNextFrom(last)
+        : last.window_from !== undefined && last.window_from > 1
+          ? last.window_from - 1
+          : undefined,
+    enabled: forward || (newest && (head as number) > 0),
   })
 
-  const rows = useMemo(
-    () => listQuery.data?.pages.flatMap((p) => p.items) ?? [],
-    [listQuery.data],
-  )
+  const rows = useMemo(() => {
+    const items = listQuery.data?.pages.flatMap((p) => p.items) ?? []
+    return filtersActive ? [...items].sort((a, b) => b.seq - a.seq) : items
+  }, [listQuery.data, filtersActive])
   const lastPage = listQuery.data?.pages[listQuery.data.pages.length - 1]
   const scannedThrough =
     filtersActive &&
@@ -414,7 +450,6 @@ export function AuditView() {
           }
         />
       </div>
-      <p className="sr-only">{t('intel:notices.selfAudited')}</p>
 
       {scannedThrough !== undefined && (
         <div role="status" className="px-0 py-1 text-caption text-info">
@@ -427,8 +462,8 @@ export function AuditView() {
       <DataTable
         columns={columns}
         data={rows}
-        isLoading={listQuery.isLoading}
-        error={listQuery.error}
+        isLoading={headQuery.isLoading || listQuery.isLoading}
+        error={headQuery.error ?? listQuery.error}
         onRetry={() => void listQuery.refetch()}
         getRowId={(r) => r.id}
         onRowClick={(r) => setSelected(r)}

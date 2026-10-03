@@ -243,14 +243,14 @@ func fetchMirror(ctx context.Context, client *http.Client, o *exportMirrorOption
 	req.Header.Set("User-Agent", "olivares-export-mirror")
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, err
+		return nil, redactCoded(err, cliRequestSecrets(req)...)
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		// The gate names the reason AND the remedy in its 403s (C03-20); forwarding
 		// its body is the difference between "403" and "renew to restore downloads".
-		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return nil, fmt.Errorf("gate returned %d: %s", resp.StatusCode, strings.TrimSpace(string(msg)))
+		msg, readErr := readCLIResponse(resp, req, 512, false)
+		return nil, guardCLIRefusalError(fmt.Errorf("gate returned %d: %s", resp.StatusCode, strings.TrimSpace(string(msg))), resp.StatusCode, cliRequestSecrets(req), readErr)
 	}
 	return io.ReadAll(io.LimitReader(resp.Body, maxArtifactBytes))
 }

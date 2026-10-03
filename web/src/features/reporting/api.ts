@@ -38,6 +38,47 @@ export interface ReportMeta {
   formats: ReportFormat[]
 }
 
+/** Whether the evidence bundle will be signed, and why not (S, Business 06). */
+export interface BundleSigning {
+  ready: boolean
+  reason?: string
+}
+
+/** GET/PUT /v1/m/reporting/signing (S, Business 09; system:admin): whether downloaded
+ * evidence bundles are signed, the key that signs them, and why not. It never carries a
+ * private key or a secret reference. Turning it on applies at once; turning it off keeps the
+ * key, so bundles signed before can still be verified. */
+export interface ReportSigning {
+  enabled: boolean
+  ready: boolean
+  reason?: string
+  key_id?: string
+  /** Base64 Ed25519 public key. */
+  public_key?: string
+  /** Where the key comes from: made by this installation, the legacy configuration, none. */
+  source: 'product' | 'legacy' | 'unset' | (string & {})
+}
+
+/** GET /reports: the types this engine can render, in the formats it can render (a format
+ * it cannot produce is not listed), and the bundle signing readiness. */
+export interface ReportCatalog {
+  items: ReportMeta[]
+  bundle_signing?: BundleSigning
+}
+
+/** The signature facts a bundle download carries: signed only when `signed` is true. */
+export function bundleSignature(
+  out: unknown,
+): { signed: boolean; reason?: string } | undefined {
+  const sig = (out as { signature?: { signed?: unknown; reason?: unknown } })
+    ?.signature
+  if (!sig || typeof sig !== 'object') return undefined
+  return {
+    signed: sig.signed === true,
+    reason: typeof sig.reason === 'string' ? sig.reason : undefined,
+  }
+}
+
 /** The parameters a generation request accepts (reporting.parseReportParams). Empty
  * fields are omitted; the engine defaults the window to the last month. */
 export interface GenerateParams {
@@ -107,8 +148,8 @@ export async function fetchReport(
   const headers = new Headers({
     Accept: params.format === 'pdf' ? 'application/pdf' : 'text/html',
   })
-  const token = useSessionStore.getState().token
-  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const token = useSessionStore.getState().csrfToken
+  if (token) headers.set('X-CSRF-Token', token)
   if (tenant) headers.set('X-Olivares-Tenant', tenant)
 
   let res: Response
@@ -161,7 +202,11 @@ export function downloadBlob(blob: Blob, filename: string): void {
 
 export const reportingApi = {
   /** The report-type catalog (always available; the five built-in reports). */
-  listReports: () => http.get<{ items: ReportMeta[] }>(`${BASE}/reports`),
+  listReports: () => http.get<ReportCatalog>(`${BASE}/reports`),
+  /** Report signing on this installation (system:admin). */
+  signing: () => http.get<ReportSigning>(`${BASE}/signing`),
+  setSigning: (enabled: boolean) =>
+    http.put<ReportSigning>(`${BASE}/signing`, { enabled }),
   /** Scheduled reports. 501 in the community build → isEnterprisePending.*/
   listSchedules: (options: TenantRequestOptions) =>
     http.get<{ items: ScheduleConfig[] }>(`${BASE}/schedules`, options),
@@ -240,6 +285,7 @@ export const reportingApi = {
 
 export const reportingKeys = {
   reports: () => ['reporting', 'reports'] as const,
+  signing: (t: string | null) => ['reporting', t, 'signing'] as const,
   schedules: (t: string | null) => ['reporting', t, 'schedules'] as const,
   scheduleRuns: (t: string | null, id: string) =>
     ['reporting', t, 'schedules', id, 'runs'] as const,
@@ -272,8 +318,8 @@ export async function fetchReportTemplate(
   const tenant = useTenantStore.getState().activeTenant
   await ensureFreshSession()
   const headers = new Headers({ Accept: 'text/html' })
-  const token = useSessionStore.getState().token
-  if (token) headers.set('Authorization', `Bearer ${token}`)
+  const token = useSessionStore.getState().csrfToken
+  if (token) headers.set('X-CSRF-Token', token)
   if (tenant) headers.set('X-Olivares-Tenant', tenant)
 
   let res: Response

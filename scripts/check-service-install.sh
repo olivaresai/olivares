@@ -136,7 +136,7 @@ assert '--start requires --user or --system' in installer
 assert '--start requires --user or --system' in bootstrap
 
 assert 'newDoctorCmd()' in main
-assert '"doctor": "observe"' in main
+# CLI grouping is covered by the command catalog; the service needs doctor registered.
 assert 'const doctorSchema = "olivares.ai/doctor/v1"' in doctor
 assert 'code = exitcode.Usage // DIST-24-04' in doctor
 assert 'Values from the env file and hook PEP URLs are never read into output' in doctor
@@ -152,8 +152,12 @@ for pair in \
   marker="${pair#*:}"
   grep -Fq "$marker" "$root/$path" || fail "$path lost marker $marker"
 done
-grep -Fq 'ProtectSystem=strict' "$root/packaging/service/systemd.service" ||
+grep -Fq 'ProtectSystem=full' "$root/packaging/service/systemd.service" ||
   fail "systemd adapter lost filesystem hardening"
+for unit in packaging/service/systemd.service packaging/systemd/olivares.service; do
+  grep -Fqx 'SystemCallFilter=@system-service landlock_create_ruleset landlock_add_rule landlock_restrict_self' "$root/$unit" ||
+    fail "$unit blocks the product's Landlock launcher"
+done
 grep -Fq 'command_user="olivares:olivares"' "$root/packaging/service/openrc.sh" ||
   fail "OpenRC adapter lost its no-login service account"
 grep -Fq '<key>UserName</key>' "$root/scripts/install-service.sh" ||

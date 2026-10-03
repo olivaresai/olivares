@@ -22,6 +22,9 @@ const (
 	// AAL1 is the base assurance of every fresh session (password or a
 	// federated login this engine cannot vouch beyond).
 	AAL1 = 1
+	// AAL2 is verified upstream MFA from the selected OIDC/SAML provider. It
+	// never establishes first-party phishing-resistant assurance.
+	AAL2 = 2
 	// AAL3 is the assurance granted ONLY by a ceremony this engine verified:
 	// a WebAuthn assertion with user verification, or a validated PIV/CAC
 	// client certificate.
@@ -44,12 +47,15 @@ var ErrStepUpRequired = errors.New("auth: step-up required: this action requires
 // row (zero AAL), missing/invalid event, or elevated row at/past its deadline
 // reads as AAL1 — assurance is degraded, never inflated (fail-closed).
 func effectiveAAL(s model.AuthSession, now model.Timestamp) int {
-	if s.AAL != AAL3 || s.AALAuthenticatedAt == nil ||
+	if (s.AAL != AAL2 && s.AAL != AAL3) || s.AALAuthenticatedAt == nil ||
 		!validAuthenticationInstant(s.AALAuthenticatedAt.Time()) || s.AALAuthenticatedAt.Time().After(now.Time()) ||
 		s.AALExpiresAt == nil || !now.Before(*s.AALExpiresAt) {
 		return AAL1
 	}
-	return AAL3
+	if s.AAL == AAL2 && (!slices.Contains(s.AMR, "sso") || !slices.Contains(s.AMR, "mfa")) {
+		return AAL1
+	}
+	return s.AAL
 }
 
 // ElevateSession raises the calling session's assurance to aal after the caller

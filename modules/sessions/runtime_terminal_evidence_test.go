@@ -478,3 +478,37 @@ func TestTerminalEvidenceNonTerminalEventsOmitBothFields(t *testing.T) {
 		}
 	}
 }
+
+// Output loss does not erase the independent fact that Wait collected the child.
+func TestTerminalEvidenceOutputLossRetainsObservedReaping(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		err  error
+		want string
+	}{
+		{"output lost", ErrOutputAbandoned, obsProcessExitObserved},
+		{"framing refused", errors.Join(ErrOutputLineTooLong, ErrOutputAbandoned), obsProcessExitObserved},
+		{"collection unconfirmed", errors.Join(ErrOutputAbandoned, ErrChildNotReaped), obsProcessWaitUnverified},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			wr := &waitErrRunner{err: tc.err}
+			m, st, tenant, _ := newRuntimeHarness(t, WithRunner(wr), WithCredentialSource(staticCred()))
+			ref, launchID := launchedRun(t, m, tenant)
+			wr.last().finish()
+			waitFor(t, "terminal output-loss evidence", func() bool {
+				d, _ := m.getRun(context.Background(), tenant, ref)
+				return d.State == stateFailed || d.State == stateStopped
+			})
+			ev, _ := terminalEventOf(t, m, st, tenant, ref)
+			if ev.TerminalObservation != tc.want || ev.RetiredRuntimeLaunchID != launchID {
+				t.Fatalf("observation=%s, retired=%s", ev.TerminalObservation, ev.RetiredRuntimeLaunchID)
+			}
+			if !strings.Contains(ev.Detail, "output incomplete") {
+				t.Fatalf("missing output-loss evidence: %q", ev.Detail)
+			}
+			if tc.want == obsProcessExitObserved && managedStopProcessOutcome(ev.TerminalObservation, tc.err) != managedStopExitObserved {
+				t.Fatal("output loss made managed Stop unverified")
+			}
+		})
+	}
+}

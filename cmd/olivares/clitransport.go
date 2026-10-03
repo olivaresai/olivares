@@ -173,8 +173,7 @@ func cliTransport(opts cliTransportOptions) (*http.Client, http.Header, error) {
 	// as the generic 1 and a script could not tell a mistyped pin from a broken
 	// control plane. Same defect as the pin decoder below, same function.
 	if resolved.Server == "" {
-		return nil, nil, exitcode.New(exitcode.Usage,
-			errors.New("no server: set --server, OLIVARES_SERVER_URL, or an active client context"))
+		return nil, nil, notSignedIn("--server", "OLIVARES_SERVER_URL")
 	}
 	u, err := url.Parse(resolved.Server)
 	if err != nil || u.Host == "" {
@@ -273,14 +272,18 @@ func cliTransport(opts cliTransportOptions) (*http.Client, http.Header, error) {
 // certificate the caller refuses never produces one: client.Do returns a Go
 // error, which exitcode.From could only read as generic. Measured before this:
 // `dial tcp: connection refused` exited 1, so a script could not tell a dead
-// engine from a bad request — the contract in `olivares --help` says 6.
+// engine from a bad request — the contract in `olivares help exit-codes` says 6.
 //
 // Every CLI network path goes through here, so the classification is stated once
 // rather than at each of the dozens of call sites that could forget it.
+//
+// The two failures a new user meets first (a certificate this computer does not
+// trust, an engine that is not running) read as a sentence with the next step
+// (transportHint); the exit code is the same 6.
 func cliDo(client *http.Client, req *http.Request) (*http.Response, error) {
 	resp, err := client.Do(req)
 	if err != nil {
-		return nil, exitcode.New(exitcode.Server, err)
+		return nil, redactCodedServer(exitcode.New(exitcode.Server, transportHint(req.URL, err)), cliRequestSecrets(req)...)
 	}
 	return resp, nil
 }
@@ -291,7 +294,23 @@ func cliDo(client *http.Client, req *http.Request) (*http.Response, error) {
 // successful `olivares auth login` a command could still say "no server: set
 // --server or OLIVARES_SERVER_URL" without ever mentioning that contexts exist,
 // that one was active, or which one.
+// notSignedIn is the one sentence for a command with nothing to reach: no engine and no
+// sign-in are configured, so the person has not signed in yet (exit 2, like every
+// refusal of the invocation). It names the one command that fixes it, and for scripts the
+// flag and variable; the config file's path is not part of it.
+func notSignedIn(flag, env string) error {
+	return sentence(exitcode.Usage, "Not signed in. Sign in first: olivares login (scripts: %s or %s)", flag, env)
+}
+
 func missingCLIValueError(what, flag, env string, resolved cliResolvedConfig) error {
+	if flag == "--token" {
+		flag = "--token-file" // never point a script at a secret in argv; --token is deprecated
+	}
+	// Nothing configured at all is a person who has not signed in yet: say that,
+	// and name the one command that fixes it.
+	if resolved.ContextName == "" && (what == "server" || what == "token") {
+		return notSignedIn(flag, env)
+	}
 	msg := fmt.Sprintf("no %s: pass %s, set %s, or select a client context with `olivares auth use-context`",
 		what, flag, env)
 	switch {

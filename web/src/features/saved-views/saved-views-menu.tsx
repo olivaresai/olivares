@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 
+import { useModuleOn } from '@/stores/modules'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bookmark, BookmarkPlus, Trash2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
@@ -64,7 +65,9 @@ export function SavedViewsMenu({
   const { activeTenant, activeRole, confinedWorkspace, isSuperadmin, can } =
     useAuth()
   const queryClient = useQueryClient()
-  const canRead = can('consoleviews:view:read')
+  // Saved views live in the consoleviews module: while it is off the menu is not shown.
+  const consoleviewsOn = useModuleOn('consoleviews')
+  const canRead = can('consoleviews:view:read') && consoleviewsOn
   const canWrite = can('consoleviews:view:write')
   // Delete-any is a ROLE power, so it is asked as one. The server's rule is
   // `Superadmin || ((role == admin || role == owner) && !confined)`

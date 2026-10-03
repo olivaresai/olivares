@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Check,
@@ -25,7 +26,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
@@ -137,7 +137,10 @@ export function ApiKeysTab() {
           <Spinner />
         </div>
       ) : tokensQuery.isError ? (
-        <ErrorState retry={() => void tokensQuery.refetch()} />
+        <QueryErrorState
+          error={tokensQuery.error}
+          retry={() => void tokensQuery.refetch()}
+        />
       ) : tokens.length === 0 ? (
         <EmptyState
           title={t('console:apiKeys.none')}

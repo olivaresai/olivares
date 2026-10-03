@@ -10,7 +10,7 @@ draft: false
 ---
 
 :::note[Noms de paquets publiés]
-La release GitHub 26.10.0 publie des artefacts `.deb`, `.rpm` et `.apk` pour `amd64`
+La release GitHub 26.10.1 publie des artefacts `.deb`, `.rpm` et `.apk` pour `amd64`
 et `arm64`, avec `checksums.txt`, `checksums.txt.sig` et `checksums.txt.pem`. Les
 commandes ci-dessous utilisent les noms littéraux `amd64` de cette release ;
 remplacez `amd64` par `arm64` sur un hôte ARM 64 bits. Installez depuis ces artefacts
@@ -84,13 +84,13 @@ Linux portent les mêmes adaptateurs de service : `scripts/install-service.sh` e
 
 ```bash
 # Debian / Ubuntu
-sudo dpkg -i olivares_26.10.0_linux_amd64.deb
+sudo dpkg -i olivares_26.10.1_linux_amd64.deb
 
 # RHEL / Fedora / SUSE
-sudo rpm -Uvh olivares_26.10.0_linux_amd64.rpm
+sudo rpm -Uvh olivares_26.10.1_linux_amd64.rpm
 
 # Alpine
-sudo apk add --allow-untrusted olivares_26.10.0_linux_amd64.apk
+sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk
 ```
 
 L'installation **crée l'utilisateur et le groupe système `olivares`** (avec

@@ -100,6 +100,10 @@ type Event struct {
 	SourceRegistration *SourceRegistration
 	// InventoryMember is stamped only by the registered host after durable admission.
 	InventoryMember *InventoryMember
+	// SessionProjection is stamped by the sessions host only after its managed
+	// row and timeline commit. The internal bus preserves it so sessions skips a
+	// second fold; source/collector ingestion cannot propose this envelope field.
+	SessionProjection bool
 	// Time is when the underlying fact occurred (the connector's clock).
 	Time time.Time
 	// Payload is the fact. For the first-party Types it is a model.Observation;

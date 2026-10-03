@@ -100,6 +100,9 @@ vi.mock('./bindings-tab', () => ({
 vi.mock('./secrets-tab', () => ({
   SecretsTab: () => <div>SecretsTab mounted</div>,
 }))
+vi.mock('./mcp-gateway-tab', () => ({
+  MCPGatewayTab: () => <div>MCPGatewayTab mounted</div>,
+}))
 vi.mock('./connectors-tab', () => ({
   ConnectorsTab: () => <div>ConnectorsTab mounted</div>,
 }))
@@ -206,6 +209,7 @@ describe('ConsoleView — ?tab= deep link', () => {
     ['roles', 'RolesTab mounted'],
     ['bindings', 'BindingsTab mounted'],
     ['secrets', 'SecretsTab mounted'],
+    ['mcpGateway', 'MCPGatewayTab mounted'],
     ['connectors', 'ConnectorsTab mounted'],
     ['wsConnectors', 'WorkspaceConnectorsTab mounted'],
     ['apiKeys', 'ApiKeysTab mounted'],
@@ -213,7 +217,7 @@ describe('ConsoleView — ?tab= deep link', () => {
   ] as const)('opens ?tab=%s', (id, mounted) => {
     renderAt(`?tab=${id}`)
     expect(screen.getByText(mounted)).toBeInTheDocument()
-    expect(screen.getAllByRole('tab')).toHaveLength(11)
+    expect(screen.getAllByRole('tab')).toHaveLength(12)
   })
 })
 

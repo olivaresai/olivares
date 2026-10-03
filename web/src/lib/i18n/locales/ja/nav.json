@@ -30,7 +30,7 @@
     "empty": "「{{query}}」に一致するビューはありません"
   },
   "items": {
-    "home": "概要",
+    "home": "ホーム",
     "onboarding": "セットアップウィザード",
     "inventory": "インベントリ",
     "sessions": "セッションを観測",
@@ -96,7 +96,8 @@
     "providerProfiles": "プロバイダープロファイル",
     "providerBindings": "ソースバインディング",
     "providerAccounts": "プロバイダーアカウント",
-    "agent-tools": "エージェントツール"
+    "agent-tools": "エージェントツール",
+    "mcpServers": "MCP サーバー"
   },
   "workspace": {
     "open": "{{workspace}}を開く",
@@ -104,7 +105,7 @@
     "all": "すべてのワークスペース",
     "allHint": "フィルターなし",
     "default": "デフォルト",
-    "tenantWide": "テナント全体 — ワークスペースフィルターなし",
+    "tenantWide": "すべてのワークスペース",
     "unresolved": "一覧にないワークスペース",
     "truncated": "一覧は不完全です——読み込み済みより多くのワークスペースがあります"
   },
@@ -131,7 +132,7 @@
     "knowledge": "ナレッジベース、RAG、データリネージ",
     "catalog": "キュレーションされ承認されたエージェントとケーパビリティ",
     "killswitch": "緊急停止、二重統制による復旧、ガーディアンによる封じ込め",
-    "work": "セッションをまたぐ永続バックログ：作業項目、依存関係、受入基準、決定",
+    "work": "共有作業：項目、依存関係、受け入れ、決定",
     "agentops": "Claude Code セッションを作成・接続・統制します（SSH 不要）。「セッションを観測」と画面を共有します",
     "agentArtifacts": "Skill、MCP拡張機能、指示ファイル — レジストリ、ポスチャ、サプライチェーンBOM",
     "models": "モデル、ルーティング、プロバイダーキー",
@@ -174,7 +175,8 @@
     "backups": "コントロールプレーンの暗号化された災害復旧スナップショット: 作成、スケジュール、ダウンロード、復元",
     "logs": "エンジンのライブログストリーム。レベルとモジュールのフィルター、検索、一時停止",
     "sourceDiff": "接続された Git リポジトリのベースリビジョンとヘッドリビジョンをファイルごとに比較します",
-    "agent-tools": "このホスト上のエージェントツールを検出・インストール・更新し、各インストールの状況を確認します（デプロイ管理者のみ）"
+    "agent-tools": "このホスト上のエージェントツールを検出・インストール・更新し、各インストールの状況を確認します（デプロイ管理者のみ）",
+    "mcpServers": "リモートの MCP サーバーをこの組織に接続してテストし、セッションが使えるツールを選びます"
   },
   "commandActions": {
     "eventing": {
@@ -185,6 +187,12 @@
     },
     "orchestration": {
       "createSchedule": "新しいスケジュール"
+    },
+    "killswitch": {
+      "engage": "キルスイッチを発動"
+    },
+    "identity": {
+      "invite": "ユーザーを招待"
     }
   },
   "aliases": {
@@ -283,7 +291,7 @@
     "modulesOf": "{{area}}のモジュール",
     "empty": "このエリアで利用できる項目はありません",
     "emptyHint": "現在の組織でのロールがこのエリアのモジュールへのアクセスを許可すると、ここに項目が表示されます。",
-    "backHome": "概要へ",
+    "backHome": "ホームへ",
     "area": "エリア"
   },
   "personal": {
@@ -293,7 +301,8 @@
     "viewAll": "すべて表示（{{count}}）",
     "manage": "お気に入りを管理",
     "empty": "モジュールの星を押すと、ここに保存できます。",
-    "scope": "このブラウザーに、アカウントと組織ごとに保存されます。",
+    "scope": "アカウントに保存され、どのブラウザーでも使えます。",
+    "saveFailed": "お気に入りをアカウントに保存できませんでした。このブラウザーに保持され、次の変更時またはサインイン時に再度保存されます。",
     "temporary": "お気に入りは現在メモリー内にのみ保持されます。",
     "clear": "お気に入りを消去",
     "recents": "最近使ったモジュール",
@@ -351,7 +360,25 @@
       "sessions": "セッション",
       "workspaceDashboard": "ワークスペース",
       "providers": "AI ツール",
-      "deploy": "デプロイ"
+      "deploy": "デプロイ",
+      "work": "作業",
+      "approvals": "承認",
+      "inventory": "インベントリ",
+      "finops": "コストとFinOps",
+      "accessMap": "アクセスマップ",
+      "mcpServers": "MCP サーバー",
+      "knowledge": "ナレッジ",
+      "identity": "アイデンティティとNHI",
+      "claudePolicy": "Claude Codeガバナンス",
+      "audit": "監査台帳",
+      "killswitch": "キルスイッチ",
+      "agent-tools": "AI ツール"
+    },
+    "groups": {
+      "work": "作業",
+      "manage": "管理",
+      "integrate": "統合",
+      "secure": "保護"
     },
     "phoneBarLabel": "メイン",
     "newSession": "新しいセッション",
@@ -388,7 +415,8 @@
       "hours": "{{count}} 時間",
       "days": "{{count}} 日",
       "loading": "セッションを読み込み中…",
-      "error": "セッションを読み込めませんでした。"
+      "error": "セッションを読み込めませんでした。",
+      "approvalsError": "承認を読み込めませんでした。"
     },
     "engine": {
       "checking": "エンジンを確認中",
@@ -410,6 +438,13 @@
       "when": {
         "outsideField": "入力欄の外"
       }
+    },
+    "killswitch": {
+      "estateStopped": "すべてのエージェントを停止中",
+      "estateBody": "2 つのユーザーアカウントが再開を承認するまで、エージェントは操作できません。",
+      "agentStops": "{{count}} 件のエージェント停止がアクティブ",
+      "agentStops_other": "{{count}} 件のエージェント停止がアクティブ",
+      "none": "停止しているものはありません。セッションとエージェントは通常どおり動作しています。"
     }
   }
 }

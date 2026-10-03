@@ -69,7 +69,7 @@ const refresh = vi.fn(async () => {
   try {
     const result = await authApi.refresh()
     useSessionStore.getState().setSession({
-      token: result.token,
+      csrfToken: result.csrf_token,
       sessionId: result.session_id,
       expiresAt: result.expires_at,
     })
@@ -162,7 +162,7 @@ beforeEach(() => {
   __resetRefreshState()
   localStorage.clear()
   useSessionStore.getState().setSession({
-    token: 'n3-f1-defensive-a',
+    csrfToken: 'n3-f1-defensive-a',
     sessionId: 'f1-a',
     expiresAt: '',
   })
@@ -172,7 +172,8 @@ beforeEach(() => {
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   })
   configureApiClient({
-    getToken: () => useSessionStore.getState().token,
+    getToken: () => null,
+    getCSRFToken: () => useSessionStore.getState().csrfToken,
     getTenant: () => useTenantStore.getState().activeTenant,
     getExpiresAt: () => useSessionStore.getState().expiresAt,
     onUnauthorized: unauthorized,
@@ -196,7 +197,7 @@ beforeEach(() => {
             resolve(
               refreshSucceeds
                 ? json({
-                    token: 'n3-f1-defensive-refreshed',
+                    csrf_token: 'n3-f1-defensive-refreshed',
                     session_id: 'f1-renewed',
                     expires_at: '',
                   })
@@ -211,8 +212,7 @@ beforeEach(() => {
                   ),
             )
           else if (
-            flight.headers.get('Authorization') ===
-            'Bearer n3-f1-defensive-refreshed'
+            flight.headers.get('X-CSRF-Token') === 'n3-f1-defensive-refreshed'
           )
             resolve(json(A))
         }),
@@ -242,12 +242,12 @@ it('late 401 from private A cannot refresh, replay or log out established B, or 
   await mount()
   const old = latest
   const first = flights[0]
-  expect(first.headers.get('Authorization')).toBe('Bearer n3-f1-defensive-a')
+  expect(first.headers.get('X-CSRF-Token')).toBe('n3-f1-defensive-a')
   expect(first.headers.get('X-Olivares-Tenant')).toBe('tenant-a')
   let abortedBeforeCommit = false
   act(() => {
     useSessionStore.getState().setSession({
-      token: 'n3-f1-defensive-b',
+      csrfToken: 'n3-f1-defensive-b',
       sessionId: 'f1-b',
       expiresAt: '',
     })
@@ -260,9 +260,7 @@ it('late 401 from private A cannot refresh, replay or log out established B, or 
     )
   })
   await waitFor(() => expect(flights).toHaveLength(2))
-  expect(flights[1].headers.get('Authorization')).toBe(
-    'Bearer n3-f1-defensive-b',
-  )
+  expect(flights[1].headers.get('X-CSRF-Token')).toBe('n3-f1-defensive-b')
   expect(flights[1].headers.get('X-Olivares-Tenant')).toBe('tenant-b')
   await settle(1, json(B))
   await waitFor(() => expect(latest.available).toBe(true))
@@ -274,7 +272,7 @@ it('late 401 from private A cannot refresh, replay or log out established B, or 
   expect(abortedBeforeCommit).toBe(true)
   expect(result).toMatchObject({ name: 'AbortError' })
   expect(flights).toHaveLength(2)
-  expect(useSessionStore.getState().token).toBe('n3-f1-defensive-b')
+  expect(useSessionStore.getState().csrfToken).toBe('n3-f1-defensive-b')
   expect(client.getQueryData(queryKeys.whoami)).toEqual(B)
   act(() => {
     old.setFavorite(home, true)
@@ -287,7 +285,7 @@ it('late 401 from private A cannot refresh, replay or log out established B, or 
 
 it('a current private 200 verifies preferences with real auth/tenant headers and no preventive renewal near expiry', async () => {
   useSessionStore.getState().setSession({
-    token: 'n3-f1-defensive-a',
+    csrfToken: 'n3-f1-defensive-a',
     sessionId: 'f1-a',
     expiresAt: new Date(Date.now() + 90_000).toISOString(),
   })
@@ -296,9 +294,7 @@ it('a current private 200 verifies preferences with real auth/tenant headers and
   await mount()
   expect(latest.available).toBe(false)
   noGlobalEffects()
-  expect(flights[0].headers.get('Authorization')).toBe(
-    'Bearer n3-f1-defensive-a',
-  )
+  expect(flights[0].headers.get('X-CSRF-Token')).toBe('n3-f1-defensive-a')
   expect(flights[0].headers.get('X-Olivares-Tenant')).toBe('tenant-a')
   expect(flights[0].signal?.aborted).toBe(false)
   expect(await settle(0, json(A))).toEqual(A)
@@ -339,7 +335,7 @@ it.each(['401', '503', 'network'] as const)(
       'data-owner',
       A.user_id!,
     )
-    expect(useSessionStore.getState().token).toBe('n3-f1-defensive-a')
+    expect(useSessionStore.getState().csrfToken).toBe('n3-f1-defensive-a')
     expect(client.getQueryState(queryKeys.whoami)?.status).toBe('success')
     expect(client.getQueryData(queryKeys.whoami)).toEqual(A)
     expect(flights).toHaveLength(1)
@@ -450,7 +446,7 @@ it('a successful verification queued before a batched tenant round trip cannot o
 it('ordinary Whoami retains preventive renewal and the default 401 refresh/replay path', async () => {
   refreshSucceeds = true
   useSessionStore.getState().setSession({
-    token: 'n3-f1-defensive-a',
+    csrfToken: 'n3-f1-defensive-a',
     sessionId: 'f1-a',
     expiresAt: new Date(Date.now() + 90_000).toISOString(),
   })
@@ -464,7 +460,7 @@ it('ordinary Whoami retains preventive renewal and the default 401 refresh/repla
   flights = []
   refresh.mockClear()
   useSessionStore.getState().setSession({
-    token: 'n3-f1-defensive-a',
+    csrfToken: 'n3-f1-defensive-a',
     sessionId: 'f1-a',
     expiresAt: '',
   })
@@ -490,7 +486,7 @@ it('ordinary Whoami still logs out when its 401 cannot renew', async () => {
   await expect(ordinary).rejects.toMatchObject({ status: 401 })
   expect(refresh).toHaveBeenCalledOnce()
   expect(unauthorized).toHaveBeenCalledOnce()
-  expect(useSessionStore.getState().token).toBeNull()
+  expect(useSessionStore.getState().csrfToken).toBeNull()
   expect(flights.map((f) => f.path)).toEqual([
     '/v1/auth/whoami',
     '/v1/auth/refresh',

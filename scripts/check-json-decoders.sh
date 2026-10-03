@@ -3,99 +3,127 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# check-json-decoders.sh — every request-body JSON decoder must refuse a body that is not ONE
-# JSON document.
+# check-json-decoders.sh — every request-body JSON decode goes through ONE shared helper,
+# core/api.DecodeRequestBody, so a request body is exactly one JSON document everywhere.
 #
-# WHY (measured 2026-08-06, against a live engine). `json.Decoder.Decode` reads the FIRST value
-# and stops. A helper that decodes once and returns success therefore accepts `{...}{...}`,
-# silently discards everything after the first object, and performs a durable mutation. On the
-# models routing-policy route that answered **201 Created**, and the row was read back with a
-# separate GET to prove the effect was real, not just a hopeful status line. The same
-# concatenation sent to a core route answered 400, which is what made it a drift rather than a
-# property of encoding/json: core/api/render.go has called `dec.More()` since it was written,
-# and **21 of the 22 copies of this helper had drifted from it**.
+# WHY ONE HELPER NOW (2026-10-01, supersedes the 2026-08-06 keep-the-copies decision).
+# The fleet used to be ~32 per-package decodeJSON copies held in line by this gate's
+# file-scoped check, and it drifted three ways the gate could not see:
 #
-# The damage is not exotic. A concatenation bug in a caller becomes an apparently correct
-# action; two layers can disagree about which of the two documents the request meant; and a
-# proxy that reads the second value while the engine reads the first is a request-smuggling
-# shape with a durable write on the end of it.
+#   1. THE SPELLING. The old roster matched `json.NewDecoder((io.LimitReader(|http.
+#      MaxBytesReader()?)r.Body` literally, so it never saw http.MaxBytesReader(w, r.Body)
+#      (the stdlib puts w first), the jsonDecoder(io.LimitReader(r.Body)) wrapper in
+#      modules/sessions, or the bytes-from-Body sites in work_api.go and agenttoolsapi.
+#   2. THE SCOPE. The check was per FILE — any `.More()` or `io.EOF` in the file approved
+#      every decoder in it — so modules/orchestration's decodeOptionalJSON (schedules fire,
+#      workflow run) and modules/governance's (NHI rotate/offboard/finalize) decoded the
+#      first document and returned success with NO trailing-data rejection, in files the
+#      gate reported clean. `{...}{...}` was applied as the first value on routes that
+#      actuate production.
+#   3. THE CHECK ITSELF. dec.More() peeks one byte and answers false for a tail opening
+#      with ']' or '}', so the More()-based copies still accepted `{...}}`, `{...}]`,
+#      `{...}\n]{}` and `{...}\n}null`. The only sound rejection is a second Decode that
+#      must reach io.EOF — what modules/gitpublish landed first (a2b73194).
 #
-# WHY A GATE AND NOT ONE SHARED FUNCTION. Each module deliberately keeps its own small
-# envelope helpers (its own errorBody wording, its own byte ceiling) and 21 packages already
-# carry a near-identical copy. Collapsing them is a separate, larger change; what cannot wait
-# is that the copies AGREE on the property that matters. This is the shared-shape method the
-# repository already uses elsewhere: the copies stay, and one place asserts the invariant over
-# all of them, so a twenty-third copy cannot arrive without it.
+# One defect class, one home: core/api.DecodeRequestBody decodes strictly (exact size cap
+# via http.MaxBytesReader, unknown fields rejected unless the route's contract says
+# otherwise, second Decode must be io.EOF), and every handler calls it. The behavioral
+# anchors live in core/api/decode_test.go (the four malformed tails and a second value,
+# through the helper) and in the per-module route tests.
 #
-# THREE ANSWERS: clean / offenders named / CANNOT LOOK (no tree, no decoders found at all).
+# WHAT THIS GATE ASSERTS, over TRACKED non-test .go files (git ls-files — a filesystem
+# walk crosses node_modules and build caches, and an untracked decoder is not published):
+#
+#   A. No request-body json.NewDecoder outside the helper and the REVIEWED exemptions.
+#      The roster keys on the construction the defect needs — `json.NewDecoder` over a
+#      request .Body, any receiver spelling (r, req, request), bare or wrapped. An
+#      exemption is a file carrying `check-json-decoders: exempt` with its reason, like
+#      the signed JSONL memory-portability stream that is multi-document BY CONTRACT.
+#   B. The helper itself is intact: DecodeRequestBody exists and still bounds the read
+#      (http.MaxBytesReader), rejects unknown fields by default (DisallowUnknownFields)
+#      and rejects a trailing value (io.EOF) — so the property cannot be edited away in
+#      one place while this gate watches the copies.
+#   C. The fleet uses it: api.DecodeRequestBody( appears at a floor of call sites, so a
+#      mass reversion to hand-rolled decoders cannot pass as "no offenders found".
+#
+# THREE ANSWERS: clean / offenders named / CANNOT LOOK (no tree, no helper, roster empty
+# in a repository that has always had request bodies).
 set -uo pipefail
 export LC_ALL=C
 
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 SCAN="${OLIVARES_JSON_DECODER_SCAN:-$ROOT}"
+HELPER_REL="core/api/decode.go"
+EXEMPT_MARK='check-json-decoders: exempt'
+CALL_FLOOR=20
 
 if [ ! -d "$SCAN" ]; then
 	echo "check-json-decoders: CANNOT LOOK — no tree at $SCAN." >&2
 	echo "  Nothing was examined, so nothing is approved." >&2
 	exit 2
 fi
-
-# THE ROSTER IS BEHAVIOURAL, NOT NOMINAL — and the first version of this gate got that
-# wrong (corrected 2026-08-06, hours after it landed, by the adversarial contrast this
-# session commissioned against its own work).
-#
-# It looked for declarations named exactly `func decodeJSON(` and then announced "23
-# request-body decoders examined; every one refuses a body that is not a single JSON
-# document". Measured: the tree holds THIRTY-ONE files that build a json.Decoder over a
-# request body, and seven of them were invisible to that roster because they spell it
-# differently or inline it — modules/sessions/runtime_dto.go declares `decodeJSONBody`,
-# modules/sessions/templates.go decodes inline at three sites, core/api/handlers_scim.go is
-# a one-line helper on the SCIM provisioning path. Every one of the seven had the defect.
-#
-# So the gate written to close "a green about a subject nobody examined" WAS one, in the same
-# session, and its verdict line named a count that made the omission look like coverage. What
-# a decoder is CALLED is a naming convention; what it DOES is the property. This keys on
-# `json.NewDecoder` over `r.Body` (bare, wrapped in io.LimitReader, or wrapped in
-# http.MaxBytesReader), which is what the defect actually needs to exist.
-# TRACKED files only, via git: a filesystem walk of this repository crosses node_modules, the
-# export scratch trees and every build cache, and measured here it takes minutes while a gate
-# is running. `git ls-files` is both faster and more honest — an untracked decoder is not part
-# of what we publish.
 cd "$SCAN" || { echo "check-json-decoders: CANNOT LOOK — cannot enter $SCAN." >&2; exit 2; }
+
+# --- B. the helper is intact ---------------------------------------------------
+if [ ! -f "$HELPER_REL" ] || ! git ls-files --error-unmatch "$HELPER_REL" >/dev/null 2>&1; then
+	echo "check-json-decoders: CANNOT LOOK — $HELPER_REL is absent or untracked." >&2
+	echo "  The single home of the property is missing; nothing else can be approved." >&2
+	exit 2
+fi
+helper_fail=0
+for token in 'func DecodeRequestBody(' 'http.MaxBytesReader' 'DisallowUnknownFields' 'io.EOF'; do
+	if ! grep -qF "$token" "$HELPER_REL"; then
+		echo "$HELPER_REL: lost '$token' — the strict single-document property lives in this" >&2
+		echo "    one function; if it is edited away, every handler loses it at once." >&2
+		helper_fail=1
+	fi
+done
+if [ "$helper_fail" -ne 0 ]; then
+	echo "" >&2
+	echo "check-json-decoders: FAIL — the shared helper no longer decodes strictly." >&2
+	exit 1
+fi
+
+# --- A. the roster -------------------------------------------------------------
 mapfile -t files < <(git ls-files -- '*.go' 2>/dev/null | grep -v '_test\.go$' |
-	xargs -r grep -lE 'json\.NewDecoder\((io\.LimitReader\(|http\.MaxBytesReader\()?r\.Body' 2>/dev/null | sort)
+	xargs -r grep -lE 'json\.NewDecoder\(.*\b(r|req|request)\.Body' 2>/dev/null | sort)
 
 if [ "${#files[@]}" -eq 0 ]; then
-	echo "check-json-decoders: CANNOT LOOK — zero request-body json.Decoder sites found under $SCAN." >&2
-	echo "  This repository has always had some (22 at the time of writing). Finding none means" >&2
-	echo "  the scan stopped matching, not that the decoders stopped existing." >&2
+	echo "check-json-decoders: CANNOT LOOK — zero request-body json.NewDecoder sites found under $SCAN," >&2
+	echo "  not even the helper. The scan stopped matching; the decoders did not stop existing." >&2
 	exit 2
 fi
 
 fail=0
+exempt=0
 for f in "${files[@]}"; do
-	# FILE-SCOPED, deliberately. A decoder can be a named helper or three inline sites in one
-	# handler file, so there is no single "body" to extract; asking whether the FILE that
-	# builds a request-body decoder also contains the rejection is coarse but has no silent
-	# direction — it can ask for a check that is already there, never approve a file with
-	# none. `json.Unmarshal` is out of scope and that was measured, not assumed: on
-	# `{"a":1}{"b":2}` it answers `invalid character '{' after top-level value`, while
-	# NewDecoder().Decode returns nil with the first value and More() true.
-	#
-	# `dec.More()` is the rejection encoding/json gives us; io.EOF on a second Decode is the
-	# other spelling. Either satisfies the property; neither being present does not.
-	if ! grep -qE '\.More\(\)|io\.EOF' "$f"; then
-		echo "$f: builds a request-body json.Decoder and never rejects a trailing value — it" >&2
-		echo "    decodes the first and returns success, so {…}{…} mutates on the first and" >&2
-		echo "    discards the rest. Reject it: if dec.More() { …400… }" >&2
-		fail=1
+	if [ "$f" = "$HELPER_REL" ]; then
+		continue
 	fi
+	if grep -qF "$EXEMPT_MARK" "$f"; then
+		exempt=$((exempt + 1))
+		continue
+	fi
+	echo "$f: builds a request-body json.Decoder outside core/api.DecodeRequestBody — the" >&2
+	echo "    property drifts the day a second copy exists (it already did, three ways: see" >&2
+	echo "    the header). Decode through the helper, or carry a reviewed '$EXEMPT_MARK'" >&2
+	echo "    line saying why this body is not one JSON document by contract." >&2
+	fail=1
 done
 
-if [ "$fail" -ne 0 ]; then
-	echo "" >&2
-	echo "check-json-decoders: FAIL — see the offenders above (${#files[@]} decoders examined)." >&2
+# --- C. the fleet uses the helper ----------------------------------------------
+callers=$(git ls-files -- '*.go' 2>/dev/null | grep -v '_test\.go$' |
+	xargs -r grep -lE 'api\.DecodeRequestBody\(' 2>/dev/null | grep -v "^$HELPER_REL$" | wc -l)
+if [ "$callers" -lt "$CALL_FLOOR" ]; then
+	echo "check-json-decoders: FAIL — only $callers files call api.DecodeRequestBody (floor $CALL_FLOOR)." >&2
+	echo "  The fleet reverted to decoders this roster cannot see, or the call was renamed." >&2
 	exit 1
 fi
 
-echo "check-json-decoders: OK — ${#files[@]} request-body decoders examined; every one refuses a body that is not a single JSON document"
+if [ "$fail" -ne 0 ]; then
+	echo "" >&2
+	echo "check-json-decoders: FAIL — see the offenders above (${#files[@]} request-body decoder files examined, $exempt exempt)." >&2
+	exit 1
+fi
+
+echo "check-json-decoders: OK — one shared strict helper ($HELPER_REL), $callers calling files, $exempt reviewed exemption(s); ${#files[@]} request-body decoder files examined"

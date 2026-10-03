@@ -69,9 +69,41 @@ func (lr *liveRun) cierraVentanaYVuelca() {
 // process exited), it finalizes the run.
 func (m *Module) bridge(lr *liveRun) {
 	ctx := context.Background() // a fresh ctx: the per-run ctx governs the PROCESS, not these DB writes
+	sequenceExhausted := false
 	for frame := range lr.proc.Output() {
 		at := m.now()
+		if codex, ok := lr.session.(*codexSession); ok && frame.Stream == streamStdout {
+			frame.Data = codex.projectProfileModelResponse(frame.Data)
+		}
+		if frame.Stream == streamStdout {
+			// The person's accepted ACP prompt, ahead of the child's next frame and
+			// redacted like it; it is not the child's, so it skips onStdout.
+			for _, prompt := range lr.acpEcho.before(frame.Data) {
+				prompt = lr.redact.apply(prompt)
+				if seq := lr.ring.append(streamStdout, prompt, at); seq != 0 && lr.recordIO {
+					_ = m.rt.recorder.Record(ctx, lr.tenant, lr.runRef, RecordedFrame{Seq: seq, Stream: streamStdout, Data: prompt, At: at})
+				}
+			}
+		}
+		// A session's vault secret values never leave it through its output: they
+		// are withheld before the ring (the attach stream), the recorder and the
+		// frame parser see the line (session_secret_env.go).
+		frame.Data = lr.redact.apply(frame.Data)
 		seq := lr.ring.append(frame.Stream, frame.Data, at)
+		if seq == 0 {
+			if !sequenceExhausted {
+				sequenceExhausted = true
+				lr.mu.Lock()
+				lr.launchFailed = true
+				lr.mu.Unlock()
+				lr.stopDeadline()
+				m.stopRuntimeCredentialHeartbeat(lr)
+				// The existing asynchronous stop keeps this bridge draining and
+				// withdraws both credentials even when Stop cannot confirm exit.
+				m.terminateForRuntimeCredentialFailure(lr, "session output sequence range exhausted")
+			}
+			continue
+		}
 		// Governed I/O recording (default no-op). Only runs when the
 		// LaunchGate flagged this run for recording (CRITICAL/privileged or opted-in 2026-06-16) — a non-recorded run never anchors I/O, keeping the ledger
 		// minimal. Best-effort: a recorder failure must not corrupt the live stream
@@ -86,6 +118,9 @@ func (m *Module) bridge(lr *liveRun) {
 	}
 	// The owned child is gone: fail every in-flight protocol waiter now, so a
 	// handshake or a turn returns an error instead of hanging on a dead process.
+	if err := m.endSessionCalls(lr, ""); err != nil {
+		m.warnf("session tool call cancellation incomplete", "run_ref", lr.runRef)
+	}
 	m.closeDriverSession(lr)
 	lr.ring.close()
 	// flush + seal this run's I/O evidence chain once its I/O has ended
@@ -111,7 +146,13 @@ func (m *Module) onStdout(ctx context.Context, lr *liveRun, data []byte, at time
 		// here precisely because it touches NO row: it resolves an in-memory waiter
 		// and dispatches a protocol reply, and every durable consequence still goes
 		// through the deferral below.
+		turn := lr.session.ActiveTurn()
 		lr.session.Deliver(OutputFrame{Stream: streamStdout, Data: data})
+		if turn != "" && lr.session.ActiveTurn() != turn {
+			m.finishSessionCalls(lr, turn)
+		}
+	} else if frame, ok := parseStreamJSON(data); ok && frame.isResult() {
+		m.finishSessionCalls(lr, "")
 	}
 	aplicar := func() {
 		if lr.session != nil {
@@ -321,6 +362,7 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 	lr.finalized = true
 	requested := lr.stopRequested
 	requestedReason := lr.stopReason
+	ownerAccessEnded := lr.ownerAccessEnded
 	lr.mu.Unlock()
 	// the process is gone, so the template's duration ceiling has nothing left to
 	// end. Released here rather than at the timer's own expiry so a session that exits
@@ -390,17 +432,41 @@ func (m *Module) finalize(lr *liveRun, exit int, waitErr error) {
 		// estaba en el fichero y la llamada siguiente lo olvidaba. Lo midio r25 y me lo
 		// adjudico; el hueco que tapaba es que un rechazo de la guarda —o un fallo de
 		// verdad— dejaba la fila sin asentar y sin que nadie se enterase.
-		// P1: nil means this Process exited under the port contract; an error means
-		// collection was not confirmed. Not childWasReaped, which classifies STOP
-		// errors, not Wait errors.
+		// Wait may report incomplete output after collecting the child. Retain
+		// that failure without turning confirmed reaping into an unknown process.
+		// An unconfirmed collection remains the stronger classification.
 		observation := obsProcessExitObserved
-		if waitErr != nil {
+		if !childWasReaped(waitErr) {
 			observation = obsProcessWaitUnverified
+		}
+		detail := "exit " + strconv.Itoa(exit)
+		if requestedReason != "" {
+			detail = requestedReason
+		}
+		if !requested && exit != 0 {
+			if cause := exitCause(lr.ring); cause != "" {
+				driver := providerDriverClaude // the historical frame-driven path
+				if lr.driver != nil {
+					driver = lr.driver.Key()
+				}
+				detail += ": " + productCause(driver, cause)
+			}
+		}
+		if outputWasIncomplete(lr.proc, waitErr) {
+			detail += "; output incomplete"
+		}
+		if errors.Is(waitErr, ErrOutputLineTooLong) {
+			detail += "; protocol output limit exceeded"
+		}
+		if !requested && exit != 0 {
+			m.warnf("sessions: the session's tool exited on its own",
+				"run_ref", lr.runRef, "exit", exit, "reason", detail)
 		}
 		if _, err := m.transition(ctx, lr.tenant, lr.runRef, transitionInput{
 			event: event, toState: state,
-			detail: "exit " + strconv.Itoa(exit), guard: guardRuntimeLaunch(lr.launchID),
+			detail: detail, guard: guardRuntimeLaunch(lr.launchID),
 			terminalObservation: observation,
+			ownerAccessEnded:    ownerAccessEnded,
 			mutate: func(rec model.Record) {
 				rec[colExitCode] = int64(exit)
 				rec[colStoppedAt] = model.NewTimestamp(m.now()).String()
@@ -488,6 +554,37 @@ func conservaElSelloMasNuevo(rec model.Record, antes string) {
 	}
 }
 
+// claudeBoundProviderEnv holds a Claude Code session on a key from Providers to that key's
+// endpoint and keeps it quiet (Root 2026-10-02 21:22Z and 21:33Z, HU2 019 and 023), with
+// Claude Code's own documented switches (code.claude.com/docs/en/env-vars):
+//   - CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST: the endpoint and key the launch sets win over any
+//     settings file, and managed model pins cannot re-route it;
+//   - CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: no telemetry (HU2 023 saw Claude Code's
+//     log intake), error reporting, release notes or feature-flag fetches;
+//   - CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL: the plugin marketplace install
+//     the previous switch does not cover.
+//
+// The endpoint itself is ANTHROPIC_BASE_URL from the record mint. Only a record-bound launch
+// gets these: a session on the person's own sign-in keeps its own settings, and Remote
+// Control (never record-bound) needs the feature flags.
+var claudeBoundProviderEnv = []EnvVar{
+	{Name: "CLAUDE_CODE_PROVIDER_MANAGED_BY_HOST", Value: "1"},
+	{Name: "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC", Value: "1"},
+	{Name: "CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL", Value: "1"},
+}
+
+// claudeSettingsFlag is Claude Code's flag for settings that outrank the user's and the
+// project's (a file path or inline JSON).
+const claudeSettingsFlag = "--settings"
+
+// claudeBoundSettings repeats the two quiet switches as flag settings. Claude Code applies
+// a saved user or project settings env over the launch environment, so a saved
+// CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC="" would turn the traffic back on (SR2C, SR5C
+// on 3c130b50; measured on 2.1.288: 5 requests to api.anthropic.com came back). Flag
+// settings outrank both, and with them those requests stay at 0. The host pin needs no
+// repeat: Claude Code already ignores settings files for routing under it.
+var claudeBoundSettings = `{"env":{"CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC":"1","CLAUDE_CODE_DISABLE_OFFICIAL_MARKETPLACE_AUTOINSTALL":"1"}}`
+
 // buildLaunchSpec constructs the neutral launch spec from a run's parameters: the
 // argv (a proper []string — never a shell-split string), the EXPLICIT env (the minted
 // inference token by value, used and discarded; optional gateway base URL; the
@@ -521,14 +618,14 @@ func (m *Module) buildLaunchSpec(
 
 	var args []string
 	var driverLaunch DriverLaunch
-	program := m.rt.program
+	program := m.claudeProgram()
 	if driven {
 		// The driver owns its own official argv. resumeID is deliberately NOT a flag
 		// here: an app-server/ACP child resumes through a METHOD on the owned
 		// protocol, and the correlated root response is the only thing allowed to
 		// nominate the conversation.
 		program = m.driverProgram(drv)
-		driverLaunch = DriverLaunch{WorkDir: dir, Model: p.Model, Effort: p.Effort, LocalModelEndpoint: cred.localModelEndpoint}
+		driverLaunch = DriverLaunch{WorkDir: dir, Model: p.Model, Effort: p.Effort, Preset: launchPreset(p), CodexSandboxFallback: p.codexSandboxFallback, LocalModelEndpoint: cred.localModelEndpoint, LocalModels: cred.localModels, BoundProvider: cred.bound}
 		if p.ProviderHome != nil {
 			driverLaunch.ConfigHome = p.ProviderHome.ConfigHome
 			driverLaunch.UserHome = p.ProviderHome.UserHome
@@ -572,6 +669,9 @@ func (m *Module) buildLaunchSpec(
 			// argv with no form flag at all — that would launch the vendor CLI
 			// INTERACTIVELY under a row that claims a bridged session.
 			args = cliruntime.ClaudeArgs(claude)
+			if cred.bound.Kind != "" {
+				args = append(args, claudeSettingsFlag, claudeBoundSettings)
+			}
 		}
 	}
 
@@ -592,6 +692,9 @@ func (m *Module) buildLaunchSpec(
 	// nothing else. Empty under provider_account_home, where the authorized home is
 	// the credential and Olivares injects nothing at all.
 	env = append(env, providerEnv...)
+	// The vault secrets this launch was given, by the names validated against every
+	// reserved variable (session_secret_env.go); opened for this spawn only.
+	env = append(env, p.secretEnvValues...)
 	if workCred.Token != "" {
 		// Exact-session kernel authority. These are explicit launch values, not
 		// inherited host environment, and the token is never persisted/logged.
@@ -641,6 +744,12 @@ func (m *Module) buildLaunchSpec(
 		// driver is downstream of that decision like a caller or a gate.
 		if withEnv, ok := drv.(ProviderDriverLaunchEnv); ok {
 			for _, item := range withEnv.LaunchEnv(driverLaunch) {
+				if driverKey == providerDriverOpenCode && item.Name == envOpenCodeConfigContent {
+					// This is the driver's own non-secret native configuration, not a
+					// caller or launch gate overriding the resolved account homes.
+					env = append(env, item)
+					continue
+				}
 				if providerHomeEnvName(item.Name) ||
 					(driverKey == providerDriverOpenCode && openCodeReservedEnvName(item.Name)) {
 					m.warnf("sessions: a provider driver named a variable the profile owns; it was dropped",
@@ -659,6 +768,9 @@ func (m *Module) buildLaunchSpec(
 		// so inject it explicitly here, where it actually reaches `claude`. It is Claude's
 		// own variable and is not invented for another provider's CLI.
 		env = append(env, EnvVar{Name: "DISABLE_AUTOUPDATER", Value: "1"})
+		if cred.bound.Kind != "" {
+			env = append(env, claudeBoundProviderEnv...)
+		}
 	}
 
 	// the governance env the LaunchGate wants on the child — the OLIVARES_HOOK_PEP_*
@@ -667,15 +779,23 @@ func (m *Module) buildLaunchSpec(
 	// any host value); a per-session PEP bearer is held in memory and never persisted.
 	env = append(env, injectEnv...)
 
+	preset := launchPreset(p)
 	return LaunchSpec{
-		Program:   program,
-		Args:      args,
-		Dir:       dir,
-		Env:       env,
-		EnvAllow:  p.EnvAllow,
-		Isolation: p.Isolation,
-		WaitDelay: m.rt.waitDelay,
-		Workspace: mount,
+		Program:       program,
+		Args:          args,
+		Dir:           dir,
+		Env:           env,
+		BoundProvider: cred.bound,
+		EnvAllow:      p.EnvAllow,
+		Isolation:     p.Isolation,
+		WaitDelay:     m.rt.waitDelay,
+		Workspace:     mount,
+		// The child may write its folder and its account homes, and nothing of
+		// the engine (runtime_confinement.go).
+		Confinement: m.sessionConfinement(dir, p.ProviderHome, preset),
+		// A read-only session's promise is the operating system's: it does not start
+		// where it cannot be confined, whatever the node's own setting.
+		ConfinementRequired: m.rt.confineRequired || preset == PresetReadOnly,
 	}
 }
 
@@ -732,4 +852,14 @@ func runtimeSettleWarrantsWarning(err error) bool {
 		return false
 	}
 	return !isRunConflict(err) && !errors.Is(err, store.ErrConflict)
+}
+
+func outputWasIncomplete(proc Process, waitErr error) bool {
+	if errors.Is(waitErr, ErrOutputAbandoned) {
+		return true
+	}
+	if reporter, ok := proc.(outputCompletionReporter); ok {
+		return reporter.OutputIncomplete()
+	}
+	return false
 }

@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import i18n from 'i18next'
+import i18n, { type BackendModule } from 'i18next'
 import { initReactI18next } from 'react-i18next'
 import LanguageDetector from 'i18next-browser-languagedetector'
 
@@ -12,32 +12,26 @@ import enErrors from './locales/en/errors.json'
 import enSettings from './locales/en/settings.json'
 import esCommon from './locales/es/common.json'
 import esNav from './locales/es/nav.json'
-import esAuth from './locales/es/auth.json'
 import esErrors from './locales/es/errors.json'
 import esSettings from './locales/es/settings.json'
 import zhCommon from './locales/zh/common.json'
 import zhNav from './locales/zh/nav.json'
-import zhAuth from './locales/zh/auth.json'
 import zhErrors from './locales/zh/errors.json'
 import zhSettings from './locales/zh/settings.json'
 import jaCommon from './locales/ja/common.json'
 import jaNav from './locales/ja/nav.json'
-import jaAuth from './locales/ja/auth.json'
 import jaErrors from './locales/ja/errors.json'
 import jaSettings from './locales/ja/settings.json'
 import deCommon from './locales/de/common.json'
 import deNav from './locales/de/nav.json'
-import deAuth from './locales/de/auth.json'
 import deErrors from './locales/de/errors.json'
 import deSettings from './locales/de/settings.json'
 import ruCommon from './locales/ru/common.json'
 import ruNav from './locales/ru/nav.json'
-import ruAuth from './locales/ru/auth.json'
 import ruErrors from './locales/ru/errors.json'
 import ruSettings from './locales/ru/settings.json'
 import frCommon from './locales/fr/common.json'
 import frNav from './locales/fr/nav.json'
-import frAuth from './locales/fr/auth.json'
 import frErrors from './locales/fr/errors.json'
 import frSettings from './locales/fr/settings.json'
 
@@ -72,7 +66,7 @@ export const LANGUAGE_CODES = SUPPORTED_LANGUAGES.map(
   (l) => l.code,
 ) as readonly LanguageCode[]
 
-/** Foundation namespaces bundled at init. Features add theirs at runtime. */
+/** Foundation namespaces available at init. Features add theirs at runtime. */
 export const FOUNDATION_NAMESPACES = [
   'common',
   'nav',
@@ -80,6 +74,43 @@ export const FOUNDATION_NAMESPACES = [
   'errors',
   'settings',
 ] as const
+
+// Keep English fallback available even when a language chunk is unavailable.
+// The other auth dictionaries are separate Vite chunks, loaded only on demand.
+const authLoaders = {
+  es: () => import('./locales/es/auth.json'),
+  zh: () => import('./locales/zh/auth.json'),
+  ja: () => import('./locales/ja/auth.json'),
+  de: () => import('./locales/de/auth.json'),
+  ru: () => import('./locales/ru/auth.json'),
+  fr: () => import('./locales/fr/auth.json'),
+}
+
+export const authBackend: BackendModule = {
+  type: 'backend',
+  init() {},
+  read(language, namespace, callback) {
+    if (namespace === 'auth' && language === 'en') {
+      callback(null, enAuth)
+      return
+    }
+    const load = authLoaders[language as keyof typeof authLoaders]
+    if (namespace !== 'auth' || !load) {
+      callback(new Error('Translation resource is not available'), false)
+      return
+    }
+    void load().then(
+      ({ default: bundle }) => callback(null, bundle),
+      (error: unknown) =>
+        callback(
+          error instanceof Error
+            ? error
+            : new Error('Translation resource could not load'),
+          true,
+        ),
+    )
+  },
+}
 
 const resources = {
   en: {
@@ -92,52 +123,51 @@ const resources = {
   es: {
     common: esCommon,
     nav: esNav,
-    auth: esAuth,
     errors: esErrors,
     settings: esSettings,
   },
   zh: {
     common: zhCommon,
     nav: zhNav,
-    auth: zhAuth,
     errors: zhErrors,
     settings: zhSettings,
   },
   ja: {
     common: jaCommon,
     nav: jaNav,
-    auth: jaAuth,
     errors: jaErrors,
     settings: jaSettings,
   },
   de: {
     common: deCommon,
     nav: deNav,
-    auth: deAuth,
     errors: deErrors,
     settings: deSettings,
   },
   ru: {
     common: ruCommon,
     nav: ruNav,
-    auth: ruAuth,
     errors: ruErrors,
     settings: ruSettings,
   },
   fr: {
     common: frCommon,
     nav: frNav,
-    auth: frAuth,
     errors: frErrors,
     settings: frSettings,
   },
 }
 
-void i18n
+export const i18nReady = i18n
   .use(LanguageDetector)
+  .use(authBackend)
   .use(initReactI18next)
   .init({
     resources,
+    partialBundledLanguages: true,
+    // Fail promptly to bundled English; leave transient failures retryable on
+    // the next language selection or an explicit resource reload.
+    maxRetries: 0,
     fallbackLng: 'en',
     supportedLngs: LANGUAGE_CODES as unknown as string[],
     // Resolve region/script variants to the base language: en-US→en, zh-CN/zh-Hans→zh.
@@ -147,8 +177,8 @@ void i18n
     ns: FOUNDATION_NAMESPACES as unknown as string[],
     interpolation: { escapeValue: false },
     returnNull: false,
-    // Resources are bundled (synchronous) — no need for Suspense fallbacks, and
-    // disabling it keeps tests and the first paint free of a loading boundary.
+    // main.tsx awaits initialization before the first paint. Language changes
+    // load auth before notifying consumers; failed loads retain English fallback.
     react: { useSuspense: false },
     detection: {
       order: ['localStorage', 'navigator', 'htmlTag'],
@@ -165,8 +195,8 @@ syncHtmlLang(i18n.resolvedLanguage ?? i18n.language)
 i18n.on('languageChanged', syncHtmlLang)
 
 /** Switch UI language (persisted by the detector's localStorage cache). */
-export function setLanguage(code: LanguageCode): void {
-  void i18n.changeLanguage(code)
+export async function setLanguage(code: LanguageCode): Promise<void> {
+  await i18n.changeLanguage(code)
 }
 
 /**

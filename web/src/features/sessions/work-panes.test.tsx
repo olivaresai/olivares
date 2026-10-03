@@ -159,13 +159,13 @@ describe('SessionNarrative — work told as work', () => {
     expect(facts).toHaveTextContent('3 events')
   })
 
-  it('says the engine reported no objective when the sentence IS the reference', async () => {
-    // The bottom rung of the ladder is not a description of the work, and letting a
-    // reference read like one is the quiet lie this line exists to stop.
+  it('shows no objective line, and never the reference as one, when the engine reported none', async () => {
+    // The bottom rung of the ladder is not a description of the work, so it is not
+    // printed as one; and a sentence saying "no objective" was empty noise (Root, 09).
     renderNarrative({ live: live({ session_ref: 'sess-a' }) })
-    expect(
-      await screen.findByText(/reported no objective/i),
-    ).toBeInTheDocument()
+    await screen.findByTestId('session-narrative')
+    expect(screen.queryByText(/reported no objective/i)).toBeNull()
+    expect(screen.queryByText('sess-a', { selector: 'p' })).toBeNull()
   })
 
   it('does not say that when the engine DID report one', async () => {
@@ -264,8 +264,19 @@ describe('SessionEvidence — inside the narrative', () => {
     expect(api.timelineById).toHaveBeenCalledTimes(1)
   })
 
+  const FULL_PAGE = page([
+    { at: '2026-09-18T09:00:01Z', kind: 'finding', title: 'one' },
+    {
+      at: '2026-09-18T09:00:02Z',
+      kind: 'tool',
+      tool_ref: 'Read',
+      resource_ref: 'README.md',
+    },
+  ])
+
   it('names its blocks ONE level under the session name, so no heading level is skipped', async () => {
-    api.timelineById.mockResolvedValue(page([]))
+    // Blocks render only with content (Root, 09), so the fixture fills all three.
+    api.timelineById.mockResolvedValue(FULL_PAGE)
     renderNarrative()
     await screen.findByTestId('evidence-toggle-checks')
     const levels = Array.from(
@@ -293,9 +304,7 @@ describe('SessionEvidence — inside the narrative', () => {
   })
 
   it('opens exactly the block the URL names, and the others stay closed', async () => {
-    api.timelineById.mockResolvedValue(
-      page([{ at: '2026-09-18T09:00:02Z', kind: 'tool', tool_ref: 'Read' }]),
-    )
+    api.timelineById.mockResolvedValue(FULL_PAGE)
     renderNarrative({}, { evidence: 'activity' })
     const activity = await screen.findByTestId('evidence-toggle-activity')
     expect(activity).toHaveAttribute('aria-expanded', 'true')
@@ -310,6 +319,7 @@ describe('SessionEvidence — inside the narrative', () => {
 
   it('reports the expansion so the caller can put it in the URL', async () => {
     const user = userEvent.setup()
+    api.timelineById.mockResolvedValue(FULL_PAGE)
     const { onExpandEvidence } = renderNarrative()
     await user.click(await screen.findByTestId('evidence-toggle-resources'))
     expect(onExpandEvidence).toHaveBeenCalledWith('resources')
@@ -514,7 +524,10 @@ describe('SessionContextPane — the scope this session ran under', () => {
     )
     const pane = await screen.findByTestId('session-context')
     expect(within(pane).getByText(/not policed in line/i)).toBeInTheDocument()
-    expect(within(pane).getByText(/not recorded/i)).toBeInTheDocument()
+    // The run's own fact, exactly: rows the run did not report also read "Not recorded".
+    expect(
+      within(pane).getByText('Input and output are not recorded.'),
+    ).toBeInTheDocument()
   })
 
   it('says nothing is selected rather than rendering an empty scope', async () => {

@@ -2,7 +2,7 @@
 title: Installer avec Homebrew
 description: >-
   La coordonnée du cask Homebrew macOS pour Olivares AI, ce que le cask fait
-  avec Gatekeeper, et l’état de publication du bump du tap 26.10.0.
+  avec Gatekeeper, et l’état de publication du bump du tap 26.10.1.
 draft: false
 ---
 
@@ -14,7 +14,7 @@ Gatekeeper. Ce n’est pas le chemin des paquets Linux
 
 :::note[Bêta — le cask 26.10 est publié]
 `Casks/olivares.rb` du tap a été mis à jour pour la 26.10 le 2026-10-01 : il nomme la version
-26.10.0 et quatre archives de plateforme dont les SHA-256 correspondent au `checksums.txt` signé
+26.10.1 et quatre archives de plateforme dont les SHA-256 correspondent au `checksums.txt` signé
 de la release. Le producteur est
 `.goreleaser.yaml` `homebrew_casks:` ; le job de release met à jour le cask du tap. La
 commande ci-dessous est la coordonnée que nomme `INSTALL.md` (`brew install olivaresai/tap/olivares`).

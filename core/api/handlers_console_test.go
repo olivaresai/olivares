@@ -65,6 +65,7 @@ func newConsoleHarness(t *testing.T) *harness {
 
 func TestWorkspaceCRUD(t *testing.T) {
 	h := newHarness(t)
+	h.requirePasskeyStepUp()
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 
@@ -192,6 +193,7 @@ func TestAgentGroupCRUD(t *testing.T) {
 
 func TestOnboardPasswordMode(t *testing.T) {
 	h := newHarness(t)
+	h.requirePasskeyStepUp()
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")
 
@@ -328,6 +330,7 @@ func TestOnboardCeilingAndAuthority(t *testing.T) {
 
 func TestSSOConfigLifecycle(t *testing.T) {
 	h := newConsoleHarness(t)
+	h.requirePasskeyStepUp()
 	admin := h.adminLogin()
 
 	// GET (superadmin, no AAL3 for a read) before any config.

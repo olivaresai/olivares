@@ -53,15 +53,17 @@ func newMCPCmd() *cobra.Command {
 	flags := &authClientFlags{}
 	cmd := &cobra.Command{
 		Use:   "mcp",
-		Short: "Govern Model Context Protocol resources",
-		Long: "Govern Model Context Protocol resources exposed by the control plane. Connection,\n" +
-			"credential and TLS values use the same resolution order and trust controls as `auth`.",
-		Example: `  olivares mcp pins ls
-  olivares mcp --server https://plane.example.com --tenant tenant-a pins ls`,
+		Short: "MCP servers that sessions can use",
+		Long: "The MCP servers sessions can use: add a local one (a command the engine runs next to\n" +
+			"each session) or a remote one (an HTTPS URL), test it to list its tools, then turn it on.",
+		Example: `  olivares mcp add files -- npx -y @modelcontextprotocol/server-filesystem .
+  olivares mcp enable files
+  olivares mcp ls`,
 		Args: cobra.NoArgs,
 	}
 	flags.addPersistent(cmd)
 	cmd.AddCommand(newMCPPinsCmd(flags))
+	cmd.AddCommand(newMCPServerCmds(flags)...)
 	return cmd
 }
 
@@ -92,7 +94,7 @@ func newMCPPinsListCmd(client mcpPinsClient) *cobra.Command {
   olivares mcp pins ls --tenant tenant-a -o json`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			raw, status, bearer, err := client.do(cmd, http.MethodGet, mcpToolPinsPath, nil)
+			raw, status, bearer, err := client.do(cmd, http.MethodGet, mcpToolPinsPath, nil, mcpPinsHTTPError)
 			if err != nil {
 				return err
 			}
@@ -148,20 +150,15 @@ func newMCPPinsApproveCmd(client mcpPinsClient) *cobra.Command {
 			input := mcpToolPinActionInput{
 				Tool: args[0], Fingerprint: fingerprint, FromDrift: fromDrift,
 			}
-			raw, status, bearer, err := client.do(cmd, http.MethodPost, mcpToolPinsPath+"/approve", input)
+			raw, _, _, err := client.do(cmd, http.MethodPost, mcpToolPinsPath+"/approve", input, func(status int, body []byte) error {
+				if status == http.StatusConflict && fromDrift {
+					return exitcode.New(exitcode.Conflict,
+						fmt.Errorf("no current drift to approve for tool %q", safeCLIValue(args[0], "")))
+				}
+				return mcpPinsHTTPError(status, body)
+			})
 			if err != nil {
 				return err
-			}
-			if status == http.StatusConflict && fromDrift {
-				return exitcode.New(exitcode.Conflict,
-					fmt.Errorf("no current drift to approve for tool %q", safeCLIValue(args[0], "")))
-			}
-			if status != http.StatusOK {
-				// THE ERROR BODY IS THE PLANE'S, AND IT MAY CONTAIN OUR BEARER: httpErr
-				// embeds it verbatim. redactCoded scrubs it and keeps the exit code, so
-				// a script can still tell 401 from 500 (bootstrapclient.go:168 does the
-				// same for the first-run families).
-				return redactCoded(mcpPinsHTTPError(status, raw), bearer)
 			}
 			var result mcpToolPinAction
 			if err := json.Unmarshal(raw, &result); err != nil {
@@ -191,7 +188,7 @@ func newMCPPinsRemoveCmd(client mcpPinsClient) *cobra.Command {
 		ValidArgsFunction: completeMCPToolPins,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			raw, status, bearer, err := client.do(cmd, http.MethodPost, mcpToolPinsPath+"/unpin",
-				mcpToolPinActionInput{Tool: args[0]})
+				mcpToolPinActionInput{Tool: args[0]}, mcpPinsHTTPError)
 			if err != nil {
 				return err
 			}
@@ -230,7 +227,9 @@ type mcpPinsClient struct {
 // COULD NOT: resolved.Token died inside this function, so every caller of
 // mcpPinsHTTPError had no secret to hand to redactCoded. That was a structural
 // hole, not an oversight at three call sites.
-func (c mcpPinsClient) do(cmd *cobra.Command, method, path string, body any) ([]byte, int, string, error) {
+// The operation's formatter runs inside the request-aware refusal guard, before
+// the effective credentials are released. This retains operation-specific text.
+func (c mcpPinsClient) do(cmd *cobra.Command, method, path string, body any, refusal func(int, []byte) error) ([]byte, int, string, error) {
 	resolved, err := c.flags.resolve(cmd)
 	if err != nil {
 		return nil, 0, "", redactCoded(err, c.flags.effectiveToken())
@@ -267,9 +266,9 @@ func (c mcpPinsClient) do(cmd *cobra.Command, method, path string, body any) ([]
 		return nil, 0, resolved.Token, redactCodedServer(err, resolved.Token)
 	}
 	defer func() { _ = resp.Body.Close() }()
-	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxMCPCLIResponseSize+1))
+	raw, err := readCLIHTTPResponse(resp, req, maxMCPCLIResponseSize+1, resp.StatusCode == http.StatusOK, refusal)
 	if err != nil {
-		return nil, resp.StatusCode, resolved.Token, exitcode.New(exitcode.Server, fmt.Errorf("read tool-pins response: %w", err))
+		return raw, resp.StatusCode, resolved.Token, wrapCLIResponseReadError(err, "read tool-pins response")
 	}
 	if len(raw) > maxMCPCLIResponseSize {
 		return nil, resp.StatusCode, resolved.Token, exitcode.New(exitcode.Server,
@@ -279,7 +278,7 @@ func (c mcpPinsClient) do(cmd *cobra.Command, method, path string, body any) ([]
 }
 
 func (f *authClientFlags) addPersistent(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringVar(&f.server, "server", "", "control-plane base URL (default $OLIVARES_SERVER_URL, then current context)")
+	cmd.PersistentFlags().StringVar(&f.server, "server", "", "the engine's address, https://<host>:8443 (default $OLIVARES_SERVER_URL, then the saved sign-in)")
 	cmd.PersistentFlags().StringVar(&f.token, "token", "", "API bearer token (prefer --token-file: this form is visible in the process table and in shell history; default $OLIVARES_TOKEN, then current context)")
 	cmd.PersistentFlags().StringVar(&f.tokenFile, "token-file", "", "read the API bearer token from a file, or - for stdin")
 	cmd.PersistentFlags().BoolVar(&f.allowCleartext, "allow-cleartext", false, "allow sending the credential to a non-loopback host over plain HTTP (DANGEROUS: it travels readable)")
@@ -288,6 +287,7 @@ func (f *authClientFlags) addPersistent(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringArrayVar(&f.pins, "pin-sha256", nil, "trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context)")
 	cmd.PersistentFlags().BoolVar(&f.insecure, "insecure", false, "skip TLS certificate verification (DANGEROUS; development only)")
 	cmd.PersistentFlags().DurationVar(&f.timeout, "timeout", defaultCLIRequestTimeout, "request timeout")
+	hideConnectionFlags(cmd.PersistentFlags())
 }
 
 func completeMCPToolPins(_ *cobra.Command, args []string, _ string) ([]string, cobra.ShellCompDirective) {
@@ -298,23 +298,16 @@ func completeMCPToolPins(_ *cobra.Command, args []string, _ string) ([]string, c
 }
 
 // mcpPinsHTTPError names the ONE refusal on these routes that httpErr's generic
-// wording cannot explain: the tool-pin verifier lives in the enterprise add-on
-// and the open-core engine answers 501 by design.
-//
-// THE 501 CODE IS CHOSEN HERE, NOT LEFT TO FALL OUT. A bare fmt.Errorf carries no
-// exitcode.coded, so exitcode.From read it as the generic 1 — right by accident,
-// and only until someone rewrote the line. Through httpErr the same 501 would
-// have been Server(6), i.e. "the plane failed", which an add-on boundary is not.
-// complianceHTTPError (cmd_compliance.go:271) states Err(1) for the identical
-// case; this now says the same thing out loud instead of inheriting it.
+// wording cannot explain: the tool-pin verifier is a Business capability and an
+// engine without it answers 501. That is not a failure of the plane, so it is the
+// edition answer (edition.go), exit 9, never "HTTP 501".
 //
 // It does not redact: it is never handed a secret. Its callers hold the bearer
 // (mcpPinsClient.do returns it) and wrap this in redactCoded, which is the only
 // place that can scrub the plane's body without losing the code above.
 func mcpPinsHTTPError(status int, body []byte) error {
 	if status == http.StatusNotImplemented {
-		return exitcode.New(exitcode.Err,
-			fmt.Errorf("MCP tool pinning requires the enterprise add-on (HTTP 501)"))
+		return notInEdition()
 	}
 	return httpErr(status, body)
 }

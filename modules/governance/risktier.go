@@ -69,6 +69,12 @@ func validRiskTier(s string) bool {
 // families whose actions land later (kill-switch secrets/PKI), and
 // destructive trailing verbs for the data-deletion family. An approval policy
 // with an explicit risk_tier overrides this default per action (configurable by policy).
+//
+// Not in the default CRITICAL set: "sessions.run.launch" (the privileged
+// launch, now only bypassPermissions or an unconfined dontAsk) and
+// "mcp.tool.call" (a destructive MCP tool call). Both default to HIGH: one human
+// approval, which a single administrator can give; a policy with an explicit
+// risk_tier raises either one back to CRITICAL.
 var (
 	criticalDefaultActions = map[string]struct{}{
 		"deploy.apply":                {}, // production deploy
@@ -79,14 +85,6 @@ var (
 		// evidence. The rows remain immutable, but the governance decision is
 		// irreversible and therefore requires two humans with no break-glass path.
 		"audit.ledger.recover": {},
-		// An approval for "mcp.tool.call" is ONLY ever opened for a server-classified
-		// DESTRUCTIVE MCP tool — the inline MCP PEP consults the gate solely when
-		// policy.Destructive (connectors/mcp/rs.go), never for a read-only/benign
-		// tool. So a destructive tool-routed mutation on customer infra (db.drop_table,
-		// a delete operation) is squarely the "data deletion" CRITICAL
-		// class, and dual-control is the secure default. (An operator may downgrade a
-		// tenant's MCP gate to HIGH via an explicit risk_tier policy if too strict.)
-		"mcp.tool.call": {},
 		// NHI lifecycle actuation on customer credential infra. Rotating an NHI
 		// key/secret is a "key custody/rotation change" — explicitly in the default
 		// CRITICAL set — and finalizing an offboarding definitively
@@ -101,13 +99,6 @@ var (
 		// release demands the same two-person floor. Placing a hold is the SAFE
 		// direction (preservation) and is deliberately not gated.
 		"compliance.hold.release": {},
-		// launching/resuming a PRIVILEGED operated Claude Code session — one in
-		// bypassPermissions/dontAsk mode, or with read-write access to a classified
-		// workspace. An approval is opened ONLY for such a launch (the session LaunchGate
-		// gates the privileged set), so the action is CRITICAL: privileged autonomous
-		// operation on customer infra demands the two-person floor + AAL3 step-up, like a
-		// production deploy. A non-privileged session never reaches this approval.
-		"sessions.run.launch": {},
 		// archiving an Anthropic workspace as the FinOps defense-in-depth backstop.
 		// Archiving IMMEDIATELY revokes EVERY API key in the workspace and CANNOT be
 		// undone (claude-api adminactions.go), so it demands the two-person floor — the

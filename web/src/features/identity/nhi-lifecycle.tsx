@@ -5,13 +5,14 @@
 // NHI lifecycle posture and working set. This surface intentionally does not
 // reuse the identity roster: inventory answers what exists; lifecycle answers
 // whether an NHI is stale, governed, blocked, owned or being offboarded.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { ShieldCheck } from 'lucide-react'
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import {
   Select,
   SelectContent,
@@ -20,12 +21,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
-import {
-  MetricStat,
-  SectionCard,
-  SelfAuditNotice,
-  StatGrid,
-} from '@/features/_intel'
+import { MetricStat, SectionCard, StatGrid } from '@/features/_intel'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
@@ -134,7 +130,6 @@ export function NhiLifecycleTab() {
 
   return (
     <div className="flex flex-col gap-4">
-      <SelfAuditNotice />
       <SectionCard
         title={t('lifecycle.posture.title')}
         description={t('lifecycle.posture.description')}
@@ -146,7 +141,10 @@ export function NhiLifecycleTab() {
             {t('lifecycle.loading')}
           </div>
         ) : posture.error ? (
-          <ErrorState retry={() => void posture.refetch()} />
+          <QueryErrorState
+            error={posture.error}
+            retry={() => void posture.refetch()}
+          />
         ) : posture.data ? (
           <StatGrid className="lg:grid-cols-6">
             <MetricStat
@@ -233,7 +231,10 @@ export function NhiLifecycleTab() {
             {t('lifecycle.loading')}
           </div>
         ) : lifecycle.error ? (
-          <ErrorState retry={() => void lifecycle.refetch()} />
+          <QueryErrorState
+            error={lifecycle.error}
+            retry={() => void lifecycle.refetch()}
+          />
         ) : rows.length === 0 ? (
           <EmptyState
             title={t('lifecycle.empty.title')}

@@ -12,9 +12,15 @@ import { useClientSettings } from '@/features/settings/preferences'
 import { useTenantStore } from '@/stores/tenant'
 
 const navigateMock = vi.fn()
+const loginSearch = vi.hoisted(() => ({
+  returnTo: undefined as string | undefined,
+}))
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigateMock,
-  Navigate: ({ to }: { to: string }) => <div data-testid="redirect">{to}</div>,
+  useSearch: () => loginSearch,
+  Navigate: ({ to, href }: { to?: string; href?: string }) => (
+    <div data-testid="redirect">{href ?? to}</div>
+  ),
   Link: ({ children, to }: { children?: ReactNode; to?: string }) => (
     <a href={to}>{children}</a>
   ),
@@ -23,7 +29,8 @@ vi.mock('@tanstack/react-router', () => ({
 const auth = vi.hoisted(() => ({
   status: 'anonymous' as 'anonymous' | 'authenticated',
   login: vi.fn(
-    async () => ({ token: 't', session_id: 's', expires_at: 'soon' }) as const,
+    async () =>
+      ({ csrf_token: 't', session_id: 's', expires_at: 'soon' }) as const,
   ),
   adoptSession: vi.fn(async () => undefined),
   can: (_permission: string): boolean => true,
@@ -32,8 +39,11 @@ vi.mock('@/lib/auth/context', () => ({
   useAuth: () => auth,
 }))
 
+const serverInfo = vi.hoisted(() => ({
+  data: { setup_required: false, version: 'v' } as Record<string, unknown>,
+}))
 vi.mock('@/lib/hooks/use-server-info', () => ({
-  useServerInfo: () => ({ data: { setup_required: false, version: 'v' } }),
+  useServerInfo: () => serverInfo,
 }))
 
 vi.mock('@/features/identity/passkey-address', () => ({
@@ -44,13 +54,15 @@ import { LoginPage } from './login'
 
 beforeEach(() => {
   navigateMock.mockReset()
+  serverInfo.data = { setup_required: false, version: 'v' }
+  loginSearch.returnTo = undefined
   auth.status = 'anonymous'
   auth.can = () => true
   auth.login.mockReset()
   auth.adoptSession.mockReset()
   auth.adoptSession.mockResolvedValue(undefined)
   auth.login.mockResolvedValue({
-    token: 't',
+    csrf_token: 't',
     session_id: 's',
     expires_at: 'soon',
   })
@@ -134,9 +146,147 @@ describe('sign-in opens the stored start page', () => {
           },
         ],
       } satisfies Whoami)
-      return { token: 't', session_id: 's', expires_at: 'soon' } as const
+      return { csrf_token: 't', session_id: 's', expires_at: 'soon' } as const
     })
     await signIn()
     expect(navigateMock).toHaveBeenCalledWith({ to: '/sessions' })
+  })
+})
+
+describe('sign-in returns to the requested console page', () => {
+  it('prefers the deep link, including query and fragment, over the saved start page', async () => {
+    loginSearch.returnTo = '/audit?from=2026-09-30#entry-7'
+    useClientSettings.setState({ startPage: 'sessions' })
+    await signIn()
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/audit',
+      href: '/audit?from=2026-09-30#entry-7',
+      replace: true,
+    })
+  })
+  // RC10 (SC on 6e97de81): the exact deep link SC signed in from.
+  it('returns to /settings?tab=appearance#appearance after the password', async () => {
+    loginSearch.returnTo = '/settings?tab=appearance#appearance'
+    await signIn()
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/settings',
+      href: '/settings?tab=appearance#appearance',
+      replace: true,
+    })
+  })
+  it.each([
+    '//attacker.example',
+    '/\\attacker.example',
+    '/v1/auth/logout',
+    '/login',
+  ])(
+    'uses the normal start page for an unsafe return path (%s)',
+    async (path) => {
+      loginSearch.returnTo = path
+      await signIn()
+      expect(navigateMock).toHaveBeenCalledWith({ to: '/' })
+    },
+  )
+  it('keeps the requested page when the cookie already signed the person in', () => {
+    auth.status = 'authenticated'
+    loginSearch.returnTo = '/settings#appearance'
+    renderLogin()
+    expect(screen.getByTestId('redirect')).toHaveTextContent(
+      '/settings#appearance',
+    )
+  })
+})
+
+describe('SSO sign-in buttons (server-info sso_providers)', () => {
+  const START = '/v1/auth/federation/start?browser_session=1&return_to=%2F'
+
+  it('shows no SSO button when the engine lists no provider', () => {
+    renderLogin()
+    expect(screen.queryByRole('separator', { name: 'or' })).toBeNull()
+    expect(
+      screen.queryByRole('link', { name: /single sign-on|sign in with/i }),
+    ).toBeNull()
+  })
+
+  it('shows one button per provider above the password form, then a quiet "or"', () => {
+    serverInfo.data = {
+      ...serverInfo.data,
+      sso_providers: [
+        { label: 'Single sign-on', start_url: START },
+        {
+          label: 'Keycloak',
+          start_url: START.replace('start?', 'start?idp=kc&'),
+        },
+      ],
+    }
+    renderLogin()
+    const sso = screen.getByRole('link', { name: 'Single sign-on' })
+    const kc = screen.getByRole('link', { name: 'Sign in with Keycloak' })
+    expect(sso).toHaveAttribute('href', START)
+    expect(kc.getAttribute('href')).toContain('idp=kc')
+    expect(screen.getByRole('separator', { name: 'or' })).toBeInTheDocument()
+    // Above the form: the buttons come first in document order.
+    const email = screen.getByLabelText('Email')
+    expect(
+      kc.compareDocumentPosition(email) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+  })
+
+  it('keeps the returnTo the password sign-in uses and always asks for the cookie session', () => {
+    loginSearch.returnTo = '/sessions?tab=live'
+    serverInfo.data = {
+      ...serverInfo.data,
+      sso_providers: [
+        { label: 'Okta', start_url: '/v1/auth/federation/start?return_to=%2F' },
+      ],
+    }
+    renderLogin()
+    const href = screen
+      .getByRole('link', { name: 'Sign in with Okta' })
+      .getAttribute('href') as string
+    const url = new URL(href, window.location.origin)
+    expect(url.pathname).toBe('/v1/auth/federation/start')
+    expect(url.searchParams.get('browser_session')).toBe('1')
+    expect(url.searchParams.get('return_to')).toBe('/sessions?tab=live')
+  })
+
+  it('offers no button for a start address on another origin', () => {
+    serverInfo.data = {
+      ...serverInfo.data,
+      sso_providers: [
+        { label: 'Evil', start_url: 'https://idp.example/start' },
+        { label: 'Also', start_url: '//idp.example/start' },
+      ],
+    }
+    renderLogin()
+    expect(screen.queryByRole('link', { name: /sign in with/i })).toBeNull()
+    expect(screen.queryByRole('separator', { name: 'or' })).toBeNull()
+  })
+})
+
+// The engine's email rule, not the browser's (Root, ID 2026-10-02): an internal-domain
+// address the engine and the CLI accept signs in from the console too, and a malformed one
+// is held here with the engine's own sentence.
+describe('sign-in email: the engine rule', () => {
+  it('an internal-domain address is sent to the engine', async () => {
+    const user = userEvent.setup()
+    renderLogin()
+    await user.type(screen.getByLabelText('Email'), 'ops@corp.internal')
+    await user.type(screen.getByLabelText('Password'), 'secret')
+    await user.click(screen.getByRole('button', { name: /^sign in$/i }))
+    await waitFor(() => expect(auth.login).toHaveBeenCalled())
+    expect(screen.queryByText('Enter a valid email address.')).toBeNull()
+  })
+
+  it('"bad@" is not sent, and says why', async () => {
+    const user = userEvent.setup()
+    renderLogin()
+    await user.type(screen.getByLabelText('Email'), 'bad@')
+    await user.type(screen.getByLabelText('Password'), 'secret')
+    await user.click(screen.getByRole('button', { name: /^sign in$/i }))
+    expect(
+      await screen.findByText('Enter a valid email address.'),
+    ).toBeInTheDocument()
+    expect(auth.login).not.toHaveBeenCalled()
   })
 })

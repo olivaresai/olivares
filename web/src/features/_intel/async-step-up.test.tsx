@@ -66,7 +66,9 @@ describe('shared read sections — assurance is not a missing permission', () =>
     await waitFor(() =>
       expect(screen.queryByText('step-up ceremony')).not.toBeInTheDocument(),
     )
-    expect(screen.getByText(/permission/i)).toBeInTheDocument()
+    expect(
+      screen.getByText('You do not have access to this.'),
+    ).toBeInTheDocument()
   })
 
   it('DeclaredSection offers the ceremony on step_up_required', async () => {

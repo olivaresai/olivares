@@ -5,18 +5,14 @@
 package secure
 
 import (
-	"crypto/ecdsa"
-	"crypto/elliptic"
-	"crypto/rand"
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"crypto/x509/pkix"
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/pem"
+	"errors"
 	"fmt"
-	"math/big"
 	"net"
 	"os"
 	"sync"
@@ -205,77 +201,34 @@ func ClientTLSConfig(caFile, certFile, keyFile, serverName string) (*tls.Config,
 	return cfg, nil
 }
 
-// selfSignedValidity is how long a generated self-signed certificate is valid.
-const selfSignedValidity = 825 * 24 * time.Hour
-
-// EnsureTLSCert ensures a usable certificate/key pair at certPath/keyPath. If
-// both exist it validates the key file's permissions and returns its
-// fingerprint; otherwise it generates a self-signed certificate (for localhost
-// and the host's names) and writes the cert and the 0600 key. created reports
-// whether a new certificate was minted (the caller logs a loud warning + the
-// fingerprint, since a self-signed cert is a dev/first-run default, not a CA cert).
-func EnsureTLSCert(certPath, keyPath string) (created bool, fingerprint string, err error) {
-	if fileExists(certPath) && fileExists(keyPath) {
-		if _, perr := readSecret(keyPath); perr != nil {
-			return false, "", perr
+// EnsureTLSCert creates local TLS material naming localhost and this host's LAN
+// addresses. Managed leaves are renewed when those names change, using the same
+// local CA and leaf key. Existing operator certificates are left intact.
+// The cert file includes the CA, so clients can use it as their trust bundle.
+// Passing operatorProvided=true requires and preserves an explicitly supplied
+// pair, including a copied historical generated certificate. An incomplete or
+// invalid pair is refused before any write. Omitted preserves the original
+// two-argument API and manages the engine's default local material.
+func EnsureTLSCert(certPath, keyPath string, operatorProvided ...bool) (created bool, fingerprint string, err error) {
+	if len(operatorProvided) > 0 && operatorProvided[0] {
+		if _, err := readSecret(keyPath); err != nil {
+			return false, "", fmt.Errorf("secure: load operator TLS key: %w", err)
 		}
-		fp, ferr := certFingerprint(certPath)
-		return false, fp, ferr
+		if _, err := tls.LoadX509KeyPair(certPath, keyPath); err != nil {
+			return false, "", fmt.Errorf("secure: load operator TLS pair: %w", err)
+		}
+		fp, err := certFingerprint(certPath)
+		return false, fp, err
 	}
-	certPEM, keyPEM, fp, err := selfSigned()
-	if err != nil {
-		return false, "", err
+	dns := []string{"localhost"}
+	if host, err := os.Hostname(); err == nil && host != "" && host != "localhost" {
+		dns = append(dns, host)
 	}
-	if err := EnsureDir(dirOf(certPath)); err != nil {
-		return false, "", err
+	ips := []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback}
+	for _, address := range LocalLANAddresses() {
+		ips = append(ips, net.IP(address.AsSlice()))
 	}
-	if err := os.WriteFile(certPath, certPEM, 0o644); err != nil {
-		return false, "", fmt.Errorf("secure: write cert: %w", err)
-	}
-	if err := writeSecret(keyPath, keyPEM); err != nil {
-		return false, "", err
-	}
-	return true, fp, nil
-}
-
-// selfSigned generates a self-signed ECDSA P-256 certificate valid for localhost,
-// loopback addresses and the host's hostname.
-func selfSigned() (certPEM, keyPEM []byte, fingerprint string, err error) {
-	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-	if err != nil {
-		return nil, nil, "", fmt.Errorf("secure: generate key: %w", err)
-	}
-	serial, err := rand.Int(rand.Reader, new(big.Int).Lsh(big.NewInt(1), 128))
-	if err != nil {
-		return nil, nil, "", err
-	}
-	now := time.Now()
-	tmpl := x509.Certificate{
-		SerialNumber:          serial,
-		Subject:               pkix.Name{Organization: []string{"Olivares AI"}, CommonName: "olivares"},
-		NotBefore:             now.Add(-time.Hour),
-		NotAfter:              now.Add(selfSignedValidity),
-		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
-		BasicConstraintsValid: true,
-		DNSNames:              []string{"localhost"},
-		IPAddresses:           []net.IP{net.IPv4(127, 0, 0, 1), net.IPv6loopback},
-	}
-	if host, herr := os.Hostname(); herr == nil && host != "" {
-		tmpl.DNSNames = append(tmpl.DNSNames, host)
-	}
-	der, err := x509.CreateCertificate(rand.Reader, &tmpl, &tmpl, &key.PublicKey, key)
-	if err != nil {
-		return nil, nil, "", fmt.Errorf("secure: create certificate: %w", err)
-	}
-	keyDER, err := x509.MarshalPKCS8PrivateKey(key)
-	if err != nil {
-		return nil, nil, "", err
-	}
-	certPEM = pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
-	keyPEM = pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: keyDER})
-	sum := sha256.Sum256(der)
-	return certPEM, keyPEM, hex.EncodeToString(sum[:]), nil
+	return ensureTLSCert(certPath, keyPath, dns, ips)
 }
 
 // certFingerprint returns the SHA-256 fingerprint of the leaf certificate in a
@@ -329,12 +282,36 @@ func SPKIPin(certPath string) (string, error) {
 	if block == nil {
 		return "", fmt.Errorf("secure: no PEM block in %s", certPath)
 	}
-	leaf, err := x509.ParseCertificate(block.Bytes)
+	pin, err := spkiPinOfDER(block.Bytes)
 	if err != nil {
 		return "", fmt.Errorf("secure: parse certificate %s: %w", certPath, err)
 	}
+	return pin, nil
+}
+
+// spkiPinOfDER is the pin of one DER certificate: base64 (no padding) of the SHA-256
+// of its SubjectPublicKeyInfo, the value --pin-sha256 takes.
+func spkiPinOfDER(der []byte) (string, error) {
+	leaf, err := x509.ParseCertificate(der)
+	if err != nil {
+		return "", err
+	}
 	sum := sha256.Sum256(leaf.RawSubjectPublicKeyInfo)
 	return base64.RawStdEncoding.EncodeToString(sum[:]), nil
+}
+
+// Pin is the --pin-sha256 value of the certificate this loader serves now, the same
+// value SPKIPin gives for its file; it follows a reloaded certificate. It is public by
+// nature: every TLS client receives the certificate.
+func (l *CertificateLoader) Pin() (string, error) {
+	cert, err := l.GetCertificate(nil)
+	if err != nil {
+		return "", err
+	}
+	if cert == nil || len(cert.Certificate) == 0 {
+		return "", errors.New("secure: no certificate loaded")
+	}
+	return spkiPinOfDER(cert.Certificate[0])
 }
 
 func dirOf(path string) string {

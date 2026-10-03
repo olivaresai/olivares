@@ -166,9 +166,7 @@ test.describe('legal hold flow', () => {
         200,
         {
           held: true,
-          holds: [
-            { id: 'lh-9', matter_ref: 'CASE-99', scope_kind: 'subject' },
-          ],
+          holds: [{ id: 'lh-9', matter_ref: 'CASE-99', scope_kind: 'subject' }],
         },
       ],
     })
@@ -180,7 +178,9 @@ test.describe('legal hold flow', () => {
     await page.getByLabel(/subject reference/i).fill('u-7')
 
     // The engine's own matching rule, surfaced BEFORE the operator commits.
-    await expect(page.getByText(/Already covered by 1 active hold/i)).toBeVisible()
+    await expect(
+      page.getByText(/Already covered by 1 active hold/i),
+    ).toBeVisible()
     await expect(page.getByText(/CASE-99/)).toBeVisible()
   })
 
@@ -222,7 +222,9 @@ test.describe('legal hold flow', () => {
 
     const subjectRef = page.getByLabel(/subject reference/i)
     await subjectRef.fill('u-7')
-    await expect(page.getByText(/Already covered by 1 active hold/i)).toBeVisible({
+    await expect(
+      page.getByText(/Already covered by 1 active hold/i),
+    ).toBeVisible({
       timeout: 10_000,
     })
 
@@ -237,12 +239,16 @@ test.describe('legal hold flow', () => {
     await expect(page.getByText(/Already covered/i)).toHaveCount(0, {
       timeout: 200,
     })
-    await expect(page.getByText(/Checking what already preserves this/i)).toBeVisible({
+    await expect(
+      page.getByText(/Checking what already preserves this/i),
+    ).toBeVisible({
       timeout: 1000,
     })
 
     // And the real answer for the new subject does land.
-    await expect(page.getByText(/Nothing currently preserves this/i)).toBeVisible({
+    await expect(
+      page.getByText(/Nothing currently preserves this/i),
+    ).toBeVisible({
       timeout: 10_000,
     })
   })
@@ -437,8 +443,7 @@ test.describe('the regulatory calendar reaches an operator', () => {
             },
           ],
           watchlist: [],
-          disclaimer:
-            'provisional_agreement entries are NOT in-force law',
+          disclaimer: 'provisional_agreement entries are NOT in-force law',
         },
       ],
     })

@@ -9,7 +9,7 @@ package exitcode
 
 import "errors"
 
-// The exit-code contract (documented in the root command's help).
+// The exit-code contract (documented in `olivares help exit-codes`).
 const (
 	// OK — the command succeeded.
 	OK = 0
@@ -39,6 +39,10 @@ const (
 	// it: a clean answer there would be an artifact, not a measurement.
 	// A fleet sweep must treat this as "not yet answered", never as "clean".
 	Indeterminate = 8
+	// Edition — the capability asked for is a Business feature that this build
+	// or this engine does not have. It is not a failure of the request or of the
+	// engine; the answer names where the capability is described.
+	Edition = 9
 )
 
 // coded wraps an error with the exit code the process must return.

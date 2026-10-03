@@ -49,7 +49,7 @@ func addServerAliasFlag(cmd *cobra.Command, target *string, legacyFlag, legacyEn
 	}
 	var canonical string
 	flags.StringVar(&canonical, canonicalServerFlag, "",
-		fmt.Sprintf("control-plane base URL (default $%s; the canonical spelling of --%s)",
+		fmt.Sprintf("engine address (default $%s; the canonical spelling of --%s)",
 			canonicalServerEnv, legacyFlag))
 
 	return func() string {

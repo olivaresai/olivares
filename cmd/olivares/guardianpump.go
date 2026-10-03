@@ -103,5 +103,5 @@ func (p *guardianPump) runOnce(ctx context.Context) error {
 // businessTenants enumerates the orgs to sweep (the eventing pump's rule: the
 // reserved SYSTEM tenant is skipped — guardian state is tenant-scoped fact).
 func (p *guardianPump) businessTenants(ctx context.Context) ([]model.TenantID, error) {
-	return servedBusinessTenants(ctx, p.st)
+	return servedWorkTenants(ctx, p.st)
 }

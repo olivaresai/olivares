@@ -2,12 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// ANT2-04/06 + — read-only posture: External Keys/CMEK and Workspace
-// residency (ingest), plus the panel's own cert-manager TLS and crypto-agility/
-// PQC key inventory. These flow on the connector bus / are not yet HTTP-served
-// (External-Keys/residency), and has NOT built the TLS/PQC posture backend at all
-// (verified ABSENT) — so every section here sits behind a DECLARED interface and says
-// so honestly. Posture, never management.
+// ANT2-04/06 — read-only posture: External Keys/CMEK and Workspace residency (ingest), with their honest unavailable states. Posture, never management.
+//
+// The cert-manager TLS and PQC key inventory sections are gone (EU-CB08, 09b sweep):
+// their routes were never built, and reading them on every visit made 6 GET 404s and
+// console errors per open, under cards that said "Backend pending".
+import { ModuleGate } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -22,22 +22,25 @@ import { useAuth } from '@/lib/auth/context'
 import { identityApi, identityKeys } from './api'
 import { DeclaredSection, PostureUnavailableNotice } from './components'
 import { AuthorityReferences } from './references'
-import type {
-  CryptoInventoryItem,
-  ExternalKeyRef,
-  WorkspaceResidency,
-} from './types'
+import type { ExternalKeyRef, WorkspaceResidency } from './types'
 
 export function PostureTab() {
+  // Keys and residency posture are read from the identity module (EU18).
+  return (
+    <ModuleGate module="identity">
+      <PostureSections />
+    </ModuleGate>
+  )
+}
+
+function PostureSections() {
   return (
     <div className="flex flex-col gap-6">
       <ExternalKeysSection />
       <ResidencySection />
-      <TlsPostureSection />
-      <CryptoInventorySection />
       <AuthorityReferences
         area="posture"
-        keys={['externalKeys', 'workspaceUpdate', 'certManager', 'pqc']}
+        keys={['externalKeys', 'workspaceUpdate']}
       />
     </div>
   )
@@ -216,121 +219,6 @@ function ResidencySection() {
             </div>
           )
         }
-      </DeclaredSection>
-    </SectionCard>
-  )
-}
-
-function TlsPostureSection() {
-  const { t } = useTranslation(['identity', 'common'])
-  const { activeTenant } = useAuth()
-  const q = useQuery({
-    queryKey: identityKeys.tls(activeTenant),
-    queryFn: () => identityApi.tlsPosture(),
-    retry: false,
-  })
-  return (
-    <SectionCard
-      title={t('posture.tls.title')}
-      description={t('posture.tls.description')}
-    >
-      <DeclaredSection
-        query={q}
-        what={t('posture.tls.seamWhat')}
-        skeletonHeight={100}
-      >
-        {(p) => (
-          <KvList>
-            <KvRow label={t('posture.tls.issuer')}>{p.issuer ?? '—'}</KvRow>
-            <KvRow label={t('posture.tls.notAfter')}>
-              {p.not_after ? <RelTimeLabel ts={p.not_after} /> : '—'}
-            </KvRow>
-            <KvRow label={t('posture.tls.autoRenew')}>
-              <StatusBadge status={p.auto_renew ? 'enabled' : 'disabled'} />
-            </KvRow>
-            {p.chain && p.chain.length > 0 ? (
-              <KvRow label={t('posture.tls.chain')} align="start">
-                {p.chain.join(' → ')}
-              </KvRow>
-            ) : null}
-          </KvList>
-        )}
-      </DeclaredSection>
-    </SectionCard>
-  )
-}
-
-function CryptoInventorySection() {
-  const { t } = useTranslation(['identity', 'common'])
-  const { activeTenant } = useAuth()
-  const q = useQuery({
-    queryKey: identityKeys.crypto(activeTenant),
-    queryFn: () => identityApi.cryptoInventory(),
-    retry: false,
-  })
-  const columns = useMemo<TableColumn<CryptoInventoryItem>[]>(
-    () => [
-      { accessorKey: 'usage', header: t('posture.crypto.col.usage') },
-      {
-        accessorKey: 'algorithm',
-        header: t('posture.crypto.col.algorithm'),
-        cell: ({ row }) => (
-          <span className="font-mono text-caption">
-            {row.original.algorithm}
-          </span>
-        ),
-      },
-      {
-        accessorKey: 'family',
-        header: t('posture.crypto.col.family'),
-        cell: ({ row }) => (
-          <Badge
-            variant={row.original.family === 'pqc' ? 'success' : 'neutral'}
-          >
-            {t(`posture.crypto.family.${row.original.family}`, {
-              defaultValue: row.original.family,
-            })}
-          </Badge>
-        ),
-      },
-      {
-        id: 'pqcReady',
-        header: t('posture.crypto.col.pqcReady'),
-        enableSorting: false,
-        cell: ({ row }) =>
-          row.original.pqc_ready ? (
-            <Badge variant="success">{t('posture.crypto.ready')}</Badge>
-          ) : (
-            <Badge variant="warning">{t('posture.crypto.notReady')}</Badge>
-          ),
-      },
-    ],
-    [t],
-  )
-  return (
-    <SectionCard
-      title={t('posture.crypto.title')}
-      description={t('posture.crypto.description')}
-    >
-      <DeclaredSection
-        query={q}
-        what={t('posture.crypto.seamWhat')}
-        skeletonHeight={120}
-      >
-        {(data) => (
-          <DataTable
-            columns={columns}
-            data={data.items}
-            getRowId={(c) => c.id}
-            label={t('posture.crypto.title')}
-            empty={
-              <EmptyState
-                title={t('empty.cryptoInventory.title')}
-                description={t('empty.cryptoInventory.description')}
-              />
-            }
-          />
-        )}
       </DeclaredSection>
     </SectionCard>
   )

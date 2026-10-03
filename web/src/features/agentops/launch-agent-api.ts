@@ -15,7 +15,7 @@ export async function launchRunAsAgent(
   tenant: string | null,
   authority: { dispatchGuard: () => void; signal?: AbortSignal },
 ): Promise<RunDTO> {
-  const { token, credentialGeneration } = useSessionStore.getState()
+  const { csrfToken: token, credentialGeneration } = useSessionStore.getState()
   const dispatchGuard = () => {
     authority.dispatchGuard()
     const current = useSessionStore.getState()
@@ -23,7 +23,7 @@ export async function launchRunAsAgent(
       !actor ||
       !tenant ||
       !token ||
-      current.token !== token ||
+      current.csrfToken !== token ||
       current.credentialGeneration !== credentialGeneration
     )
       throw new AuthorityLostError()
@@ -31,7 +31,7 @@ export async function launchRunAsAgent(
   dispatchGuard()
   const form = new URLSearchParams({
     grant_type: 'urn:ietf:params:oauth:grant-type:token-exchange',
-    subject_token: token!,
+    subject_token: 'browser-session',
     subject_token_type: 'urn:ietf:params:oauth:token-type:access_token',
     requested_actor: actor,
     resource: window.location.origin,

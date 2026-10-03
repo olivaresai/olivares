@@ -165,7 +165,7 @@ func (m *Module) handleCreateCostCenter(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	var out costCenterDTO
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := m.mutate(r.Context(), mc.Tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(costCenterKind)
 		if err != nil {
 			return err
@@ -241,7 +241,7 @@ func (m *Module) handleUpdateCostCenter(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 	var out costCenterDTO
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := m.mutate(r.Context(), mc.Tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(costCenterKind)
 		if err != nil {
 			return err
@@ -298,7 +298,7 @@ func (m *Module) handleDeleteCostCenter(w http.ResponseWriter, r *http.Request, 
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid id"))
 		return
 	}
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := m.mutate(r.Context(), mc.Tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(costCenterKind)
 		if err != nil {
 			return err
@@ -370,7 +370,7 @@ func (m *Module) handleCreateCostCenterMapping(w http.ResponseWriter, r *http.Re
 		return
 	}
 	var out costCenterMappingDTO
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := m.mutate(r.Context(), mc.Tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(costCenterMappingKind)
 		if err != nil {
 			return err
@@ -400,7 +400,7 @@ func (m *Module) handleDeleteCostCenterMapping(w http.ResponseWriter, r *http.Re
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid mapping id"))
 		return
 	}
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	err := m.mutate(r.Context(), mc.Tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(costCenterMappingKind)
 		if err != nil {
 			return err

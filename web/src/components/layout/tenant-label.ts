@@ -30,6 +30,35 @@ export function shortId(id: string): string {
   return id.length > 10 ? `${id.slice(0, 8)}…` : id
 }
 
+/** The organization name a grant of the principal carries, when the engine could read it. */
+export function grantName(
+  grants: readonly { tenant: string; tenant_name?: string }[] | undefined,
+  tenant: string,
+): string | undefined {
+  return (
+    (grants ?? []).find((g) => g.tenant === tenant)?.tenant_name?.trim() ||
+    undefined
+  )
+}
+
+/**
+ * The deployment's organizations, for a superadmin: the one read the switcher, the scope
+ * line and the SSO scope share. A deployment that did not answer it (on R1 08 with
+ * Postgres, GET /v1/system/orgs answered 501 on every screen, N2 J8) is not asked again on
+ * each mount or focus: one answer per session, and the label falls back to the short id.
+ */
+export function useOrgs() {
+  const { isSuperadmin } = useAuth()
+  return useQuery({
+    queryKey: queryKeys.orgs,
+    queryFn: () => systemApi.listOrgs(),
+    enabled: isSuperadmin,
+    staleTime: 60_000,
+    retryOnMount: false,
+    refetchOnWindowFocus: (q) => q.state.status !== 'error',
+  })
+}
+
 /**
  * What to call the active organisation.
  *
@@ -47,16 +76,15 @@ export function useTenantLabel(): {
   name: string | null
   named: boolean
 } {
-  const { activeTenant, isSuperadmin } = useAuth()
-  const orgs = useQuery({
-    queryKey: queryKeys.orgs,
-    queryFn: () => systemApi.listOrgs(),
-    enabled: isSuperadmin,
-    staleTime: 60_000,
-  })
+  const { activeTenant, grants } = useAuth()
+  const orgs = useOrgs()
   if (!activeTenant) return { tenant: null, name: null, named: false }
-  const match = orgs.data?.items.find((o) => o.tenant_id === activeTenant)
-  return match
-    ? { tenant: activeTenant, name: match.name, named: true }
+  // The organization list (superadmin), else the name the principal's own grant carries
+  // (whoami, ARCH e69ad18a), else the short id.
+  const name =
+    orgs.data?.items.find((o) => o.tenant_id === activeTenant)?.name ||
+    grantName(grants, activeTenant)
+  return name
+    ? { tenant: activeTenant, name, named: true }
     : { tenant: activeTenant, name: shortId(activeTenant), named: false }
 }

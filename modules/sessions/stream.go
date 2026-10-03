@@ -133,10 +133,10 @@ func (b *broker) close() {
 // tenant, so a client only ever sees its own tenant's sessions.
 func (m *Module) handleStream(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	// The broker fans out tenant-wide DTOs without workspace admission. Use the
-	// resolved membership, matching the API wrapper's superadmin exception, before
+	// resolved membership, including a superadmin acting as tenant owner, before
 	// any selector, SSE headers or subscription. A future live descriptor with
 	// lineage must not reopen this broker to workspace-confined readers.
-	if _, confined := mc.Principal.ConfinedWorkspaceIn(mc.Tenant); confined && !mc.Principal.Superadmin {
+	if _, confined := mc.Principal.ConfinedWorkspaceIn(mc.Tenant); confined {
 		writeStoreError(w, store.ErrWorkspaceConfinement)
 		return
 	}

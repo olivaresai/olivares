@@ -11,8 +11,10 @@ import { ApiError } from './errors'
  * make isolated ones).
  *
  * Defaults:
- *  - Never retry a 4xx (a 401/403/404 won't fix itself by retrying); retry
- *    transient 5xx/network up to twice with backoff.
+ *  - Never retry a 4xx (a 401/403/404 won't fix itself by retrying) or a 501 (this
+ *    installation does not offer the operation: N2's PostgreSQL run without the admin
+ *    pool answered /v1/system/orgs 501 and the console kept asking); retry transient
+ *    5xx/network up to twice with backoff.
  *  - 30s staleTime — operator data is fresh-ish without hammering the engine;
  *    live views opt into shorter intervals via refetchInterval.
  */
@@ -24,7 +26,11 @@ export function createQueryClient(): QueryClient {
         gcTime: 5 * 60_000,
         refetchOnWindowFocus: true,
         retry: (failureCount, error) => {
-          if (error instanceof ApiError && error.status < 500) return false
+          if (
+            error instanceof ApiError &&
+            (error.status < 500 || error.status === 501)
+          )
+            return false
           return failureCount < 2
         },
       },

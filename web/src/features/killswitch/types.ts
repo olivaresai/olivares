@@ -161,7 +161,12 @@ export const GUARDIAN_MODES: GuardianMode[] = ['auto', 'approval']
  * SUYA: `modules/governance/guardian.go:267-270` rechaza con 400 cualquier otro valor
  * («agent_tier must be one of low, medium, high, critical (or empty for any)»). El vacío
  * NO es un quinto valor: es «cualquier tier», y por eso no viaja en el cuerpo. */
-export const GUARDIAN_AGENT_TIERS = ['low', 'medium', 'high', 'critical'] as const
+export const GUARDIAN_AGENT_TIERS = [
+  'low',
+  'medium',
+  'high',
+  'critical',
+] as const
 export type GuardianAgentTier = (typeof GUARDIAN_AGENT_TIERS)[number]
 
 export const GUARDIAN_SEVERITIES = [
@@ -222,12 +227,7 @@ export interface UpdateGuardianRuleRequest {
 }
 
 export type GuardianActionStatus =
-  | 'pending'
-  | 'executed'
-  | 'rejected'
-  | 'expired'
-  | 'failed'
-  | (string & {})
+  'pending' | 'executed' | 'rejected' | 'expired' | 'failed' | (string & {})
 
 export const GUARDIAN_ACTION_STATUSES: GuardianActionStatus[] = [
   'pending',

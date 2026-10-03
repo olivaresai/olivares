@@ -1,0 +1,220 @@
+{
+  "nfpms": [
+    {
+      "apk": {
+        "scripts": {
+          "postupgrade": "packaging/nfpm/postinstall.sh",
+          "preupgrade": "packaging/nfpm/apk-preupgrade.sh"
+        }
+      },
+      "bindir": "/usr/bin",
+      "contents": [
+        {
+          "dst": "/usr/share/doc/olivares/LICENSE",
+          "src": "LICENSE"
+        },
+        {
+          "dst": "/usr/share/doc/olivares/NOTICE",
+          "src": "NOTICE"
+        },
+        {
+          "dst": "/usr/share/doc/olivares/LICENSING.md",
+          "src": "LICENSING.md"
+        },
+        {
+          "dst": "/usr/share/doc/olivares/DISCLAIMER.md",
+          "src": "DISCLAIMER.md"
+        },
+        {
+          "dst": "/usr/share/doc/olivares/LICENSES",
+          "src": "LICENSES"
+        },
+        {
+          "dst": "/usr/share/olivares/migrate-agentops-dropin.sh",
+          "file_info": {
+            "mode": 493
+          },
+          "src": "packaging/service/migrate-agentops-dropin.sh"
+        },
+        {
+          "dst": "/usr/lib/systemd/system/olivares.service",
+          "packager": "deb",
+          "src": "packaging/systemd/olivares.service"
+        },
+        {
+          "dst": "/usr/lib/systemd/system/olivares.service",
+          "packager": "rpm",
+          "src": "packaging/systemd/olivares.service"
+        },
+        {
+          "dst": "/usr/lib/olivares/package-init",
+          "packager": "deb",
+          "src": "packaging/nfpm/package-init-systemd.txt"
+        },
+        {
+          "dst": "/usr/lib/olivares/package-init",
+          "packager": "rpm",
+          "src": "packaging/nfpm/package-init-systemd.txt"
+        },
+        {
+          "dst": "/etc/init.d/olivares",
+          "file_info": {
+            "mode": 493
+          },
+          "packager": "apk",
+          "src": "packaging/openrc/olivares.sh"
+        },
+        {
+          "dst": "/usr/lib/olivares/openrc-load-env.sh",
+          "packager": "apk",
+          "src": "packaging/openrc/load-env.sh"
+        },
+        {
+          "dst": "/usr/lib/olivares/package-init",
+          "packager": "apk",
+          "src": "packaging/nfpm/package-init-openrc.txt"
+        },
+        {
+          "dst": "/etc/olivares/olivares.env",
+          "packager": "deb",
+          "src": "packaging/olivares.env.example",
+          "type": "config|noreplace"
+        },
+        {
+          "dst": "/etc/olivares/olivares.env",
+          "packager": "rpm",
+          "src": "packaging/olivares.env.example",
+          "type": "config|noreplace"
+        },
+        {
+          "dst": "/usr/share/olivares/olivares.env.example",
+          "packager": "apk",
+          "src": "packaging/olivares.env.example"
+        },
+        {
+          "dst": "/var/lib/olivares",
+          "file_info": {
+            "mode": 488
+          },
+          "packager": "deb",
+          "type": "dir"
+        },
+        {
+          "dst": "/var/lib/olivares",
+          "file_info": {
+            "mode": 488
+          },
+          "packager": "rpm",
+          "type": "dir"
+        }
+      ],
+      "description": "Ground truth for enterprise AI — open, self-hosted AI governance control plane.\nDiscover the agents on your infrastructure, map what they can touch (the read/write\naccess map), surface least-privilege drift, and prove it — without standing in the\ndata path. Single static binary, embedded console, SQLite or Postgres.",
+      "formats": [
+        "deb",
+        "rpm",
+        "apk"
+      ],
+      "homepage": "https://olivares.ai",
+      "id": "olivares-nfpm",
+      "ids": [
+        "olivares",
+        "olivares-ports"
+      ],
+      "license": "AGPL-3.0-only",
+      "maintainer": "Olivares.AI <enterprise@olivares.ai>",
+      "package_name": "olivares",
+      "priority": "optional",
+      "scripts": {
+        "postinstall": "packaging/nfpm/postinstall.sh",
+        "postremove": "packaging/nfpm/postremove.sh",
+        "preremove": "packaging/nfpm/preremove.sh"
+      },
+      "section": "utils",
+      "vendor": "Olivares.AI",
+      "version_schema": "none"
+    },
+    {
+      "archlinux": {
+        "packager": "Olivares.AI <enterprise@olivares.ai>",
+        "scripts": {
+          "postupgrade": "packaging/nfpm/archlinux-postinstall.sh"
+        }
+      },
+      "bindir": "/usr/bin",
+      "contents": [
+        {
+          "dst": "/usr/share/doc/olivares/LICENSE",
+          "src": "LICENSE"
+        },
+        {
+          "dst": "/usr/share/doc/olivares/NOTICE",
+          "src": "NOTICE"
+        },
+        {
+          "dst": "/usr/share/doc/olivares/LICENSING.md",
+          "src": "LICENSING.md"
+        },
+        {
+          "dst": "/usr/share/doc/olivares/DISCLAIMER.md",
+          "src": "DISCLAIMER.md"
+        },
+        {
+          "dst": "/usr/share/doc/olivares/LICENSES",
+          "src": "LICENSES"
+        },
+        {
+          "dst": "/usr/share/licenses/olivares/LICENSE",
+          "src": "LICENSE"
+        },
+        {
+          "dst": "/usr/share/licenses/olivares/NOTICE",
+          "src": "NOTICE"
+        },
+        {
+          "dst": "/usr/share/licenses/olivares/LICENSING.md",
+          "src": "LICENSING.md"
+        },
+        {
+          "dst": "/usr/share/licenses/olivares/DISCLAIMER.md",
+          "src": "DISCLAIMER.md"
+        },
+        {
+          "dst": "/usr/share/licenses/olivares/LICENSES",
+          "src": "LICENSES"
+        },
+        {
+          "dst": "/usr/lib/systemd/system/olivares.service",
+          "src": "packaging/systemd/olivares.service"
+        },
+        {
+          "dst": "/usr/lib/olivares/package-init",
+          "src": "packaging/nfpm/package-init-systemd.txt"
+        },
+        {
+          "dst": "/etc/olivares/olivares.env",
+          "src": "packaging/olivares.env.example",
+          "type": "config|noreplace"
+        }
+      ],
+      "description": "Ground truth for enterprise AI — open, self-hosted AI governance control plane.\nDiscover the agents on your infrastructure, map what they can touch (the read/write\naccess map), surface least-privilege drift, and prove it — without standing in the\ndata path. Single static binary, embedded console, SQLite or Postgres.",
+      "formats": [
+        "archlinux"
+      ],
+      "homepage": "https://olivares.ai",
+      "id": "olivares-nfpm-archlinux",
+      "ids": [
+        "olivares"
+      ],
+      "license": "AGPL-3.0-only",
+      "maintainer": "Olivares.AI <enterprise@olivares.ai>",
+      "package_name": "olivares",
+      "scripts": {
+        "postinstall": "packaging/nfpm/archlinux-postinstall.sh",
+        "postremove": "packaging/nfpm/archlinux-postremove.sh",
+        "preremove": "packaging/nfpm/archlinux-preremove.sh"
+      },
+      "vendor": "Olivares.AI",
+      "version_schema": "none"
+    }
+  ]
+}

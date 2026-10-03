@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Panel } from '@xyflow/react'
 import { useQuery } from '@tanstack/react-query'
 import { Eye, Network, RefreshCw, ShieldCheck } from 'lucide-react'
@@ -10,7 +11,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { CaveatNotice } from '@/features/_intel'
 import { PageHeader } from '@/components/ui/page-header'
 import { Spinner } from '@/components/ui/spinner'
@@ -432,7 +433,10 @@ export function AccessMapView() {
             description={t('forbidden.description')}
           />
         ) : (
-          <ErrorState retry={() => void graphQuery.refetch()} />
+          <QueryErrorState
+            error={graphQuery.error}
+            retry={() => void graphQuery.refetch()}
+          />
         )
       ) : isEmpty ? (
         <EmptyState
@@ -610,7 +614,10 @@ export function AccessMapView() {
                     description={t('drift.forbiddenHint')}
                   />
                 ) : (
-                  <ErrorState retry={() => void driftQuery.refetch()} />
+                  <QueryErrorState
+                    error={driftQuery.error}
+                    retry={() => void driftQuery.refetch()}
+                  />
                 )
               ) : driftQuery.data ? (
                 <DriftList diff={driftQuery.data} onSelect={selectDrift} />

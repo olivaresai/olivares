@@ -20,6 +20,7 @@
 //   - No route lists the mounted module namespaces, so namespaces are authored as
 //     removable chips + an add field; an unknown name is caught by the backend
 //     (400 "unknown module namespace …") and surfaced VERBATIM, not swallowed.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { Lock, Plus, X } from 'lucide-react'
 import { useState } from 'react'
@@ -34,7 +35,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
@@ -117,7 +118,8 @@ export function RecordingPolicyPanel() {
             <Spinner />
           </div>
         ) : configQ.isError ? (
-          <ErrorState
+          <QueryErrorState
+            error={configQ.error}
             title={t('policy.error.title')}
             description={t('policy.error.description')}
             retry={() => void configQ.refetch()}

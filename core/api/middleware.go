@@ -7,6 +7,7 @@ package api
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"strings"
 	"time"
@@ -95,14 +96,28 @@ func (s *Server) accessLog(next http.Handler) http.Handler {
 		dur := time.Since(start)
 		s.mInflight.Dec()
 		s.recordRequest(r.Method, rec.status, dur)
-		s.log.Info("api request",
+		s.log.Log(r.Context(), accessLogLevel(r.Method, rec.status), "api request",
 			"method", r.Method, "path", r.URL.Path, "status", rec.status,
 			"dur_ms", dur.Milliseconds(), "actor", holder.actor,
 			"request_id", requestID(r.Context()))
 	})
 }
 
-// authenticate resolves a bearer credential into the request context. A present
+// accessLogLevel is DEBUG for a read that succeeded and INFO for everything else: a
+// write, a refusal, an error. The console polls (GET /v1/m/sessions/runs about
+// twice a second with a session open), and one INFO line per poll filled
+// olivares.log with polling (HU2-11). The request metrics still count every read.
+func accessLogLevel(method string, status int) slog.Level {
+	switch method {
+	case http.MethodGet, http.MethodHead, http.MethodOptions:
+		if status < http.StatusBadRequest {
+			return slog.LevelDebug
+		}
+	}
+	return slog.LevelInfo
+}
+
+// authenticate resolves an explicit bearer or browser cookie into the request context. A present
 // but invalid credential is rejected immediately (401); an absent credential
 // leaves the request anonymous for routes that allow it (login, setup, health).
 //
@@ -113,33 +128,53 @@ func (s *Server) accessLog(next http.Handler) http.Handler {
 // anonymous).
 func (s *Server) authenticate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if s.isMCPProtocolRequest(r) || (r.URL.Path == "/metrics" && s.metricsGate != nil) {
+			next.ServeHTTP(w, r)
+			return
+		}
+		if r.Header.Get("X-Olivares-Session") == "cookie" && !BrowserSameOrigin(r) {
+			s.writeError(w, r, errForbidden)
+			return
+		}
 		h := r.Header.Get("Authorization")
-		if h == "" {
+		var token string
+		cookieAuth := false
+		if h != "" {
+			var ok bool
+			token, ok = strings.CutPrefix(h, "Bearer ")
+			if !ok {
+				s.writeError(w, r, auth.ErrUnauthenticated)
+				return
+			}
+			token = strings.TrimSpace(token)
+		} else if browserCookieApplies(r) {
+			if cookie, err := r.Cookie(browserSessionCookie); err == nil {
+				token, cookieAuth = cookie.Value, true
+			}
+		}
+		if token == "" {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if s.isMCPProtocolRequest(r) {
-			next.ServeHTTP(w, r)
-			return
-		}
-		if r.URL.Path == "/metrics" && s.metricsGate != nil {
-			next.ServeHTTP(w, r)
-			return
-		}
-		token, ok := strings.CutPrefix(h, "Bearer ")
-		if !ok {
+		p, err := s.authr.Authenticate(r.Context(), token)
+		if err != nil || (cookieAuth && p.Kind != auth.KindUser) {
+			// A late response for a rotated cookie must not delete its successor.
+			// Logout deletes the cookie; browser expiry mirrors the session deadline.
 			s.writeError(w, r, auth.ErrUnauthenticated)
 			return
 		}
-		p, err := s.authr.Authenticate(r.Context(), strings.TrimSpace(token))
-		if err != nil {
-			s.writeError(w, r, auth.ErrUnauthenticated)
-			return
+		if cookieAuth {
+			w.Header().Set("Cache-Control", "no-store")
+			if !validBrowserCSRF(r, token) {
+				s.writeError(w, r, errForbidden)
+				return
+			}
+			r = withBrowserCredential(r, token)
 		}
 		if h := actorHolderFrom(r.Context()); h != nil {
 			h.actor = p.Actor() // attribute the access-log line to the real principal
 		}
-		next.ServeHTTP(w, r.WithContext(withPrincipal(r.Context(), p)))
+		next.ServeHTTP(w, r.WithContext(s.withStepUpPolicy(withPrincipal(r.Context(), p))))
 	})
 }
 
@@ -459,8 +494,11 @@ func (s *Server) authzTenantResourcePolicy(
 			res.WorkspaceID = p.SessionWorkspaceID
 		}
 	}
-	if meta.RequiresStepUp(p.AAL) {
-		s.writeError(w, r, auth.ErrStepUpRequired)
+	if meta.RequiresStepUp(r.Context(), p) {
+		s.authz.RecordStepUpRefusal(r.Context(), auth.Request{
+			Principal: p, Permission: perm, Tenant: tenant, Resource: res, Route: meta,
+		})
+		s.writeError(w, r, auth.StepUpRequiredFor(auth.StepUpPolicyFrom(r.Context())))
 		return auth.Principal{}, "", none, false
 	}
 
@@ -505,6 +543,30 @@ func (s *Server) authzTenantResourcePolicy(
 	})
 	switch {
 	case aerr == nil:
+		ownerScopedGrant := witness.UsesOwnerScopedGrant()
+		if ownerScopedGrant || p.Superadmin {
+			action, source := "auth.superadmin.tenant_entry", "superadmin_tenant_owner"
+			if ownerScopedGrant {
+				action, source = "auth.owner_scoped_grant", "tenant_owner"
+			}
+			err := s.st.Mutate(decisionCtx, tenant, func(sc store.Scope) error {
+				event, err := sc.Audit().Append(decisionCtx, model.AuditDraft{
+					Actor: p.Actor(), ActorKind: p.ActorKind(), Action: action,
+					Meta: map[string]any{"grant_source": source, "role": auth.RoleOwner, "permission": string(perm),
+						"cedar_action": witness.CedarAction.String(), "superadmin": p.Superadmin},
+				})
+				if err == nil && event.Seq == 0 {
+					return store.ErrAuditSpoolFull
+				}
+				return err
+			})
+			if err != nil {
+				s.log.Error("api: tenant owner admission audit unavailable", "err", err)
+				w.Header().Set("Retry-After", "5")
+				s.writeError(w, r, auth.ErrRouteUndecided)
+				return auth.Principal{}, "", none, false
+			}
+		}
 		return p, tenant, witness, true
 
 	// ⛔ EL step-up SIGUE SIENDO SUYO: "vuelve a demostrar quien eres" no es "no puedes", y las
@@ -531,25 +593,35 @@ func (s *Server) authzTenantResourcePolicy(
 	return auth.Principal{}, "", none, false
 }
 
-// requireAAL3 is the assurance gate for privileged CONFIGURE actions: SSO
-// config, scoped-admin delegation, custom-role edits, user onboarding, workspace
-// create/archive. It is ORTHOGONAL to RBAC — assurance never lives in the
-// authorizer (algebra) — so a handler calls it as a SECOND, explicit gate
-// AFTER the RBAC check (authn → RBAC → AAL3), mirroring the credential-lifecycle
-// pattern in core/auth (webauthn.go). A principal below AAL3 gets 403
-// step_up_required and the console routes it to the WebAuthn/PIV step-up. A token
-// principal (AAL=0, never elevatable) can never pass it, so an AAL3-gated route is
-// human-session-only by construction. The principal's AAL is the EFFECTIVE value
-// the authenticate middleware already collapsed through the 15-min TTL, so this
-// reads the live assurance with no extra store round-trip. For writes that change
-// AUTHORITY (grants/roles) the service method re-checks inside its transaction
-// (TOCTOU); this edge gate is sufficient for config CRUD.
-func (s *Server) requireAAL3(w http.ResponseWriter, r *http.Request, p auth.Principal) bool {
-	if p.AAL < auth.AAL3 {
-		s.writeError(w, r, auth.ErrStepUpRequired)
+// requireStepUp is the administrative step-up gate for privileged CONFIGURE
+// actions: SSO config, scoped-admin delegation, custom-role edits, user
+// onboarding, workspace create/archive. It is ORTHOGONAL to RBAC, so a handler
+// calls it as a SECOND, explicit gate AFTER the RBAC check (authn → RBAC →
+// step-up). What it demands is the deployment's admin_step_up policy
+// (auth.StepUpSatisfied): by default nothing beyond the sign-in; "totp" a TOTP
+// sign-in; "passkey" a fresh WebAuthn/PIV step-up (AAL3). A caller who falls
+// short gets 403 step_up_required. A token principal (AAL=0) never passes it, so
+// a gated route stays human-session-only by construction under every policy.
+// For writes that change AUTHORITY (grants/roles) the service method re-checks
+// inside its transaction (TOCTOU); this edge gate is sufficient for config CRUD.
+func (s *Server) requireStepUp(w http.ResponseWriter, r *http.Request, p auth.Principal) bool {
+	if !auth.StepUpSatisfied(r.Context(), p) {
+		s.writeError(w, r, auth.StepUpRequiredFor(auth.StepUpPolicyFrom(r.Context())))
 		return false
 	}
 	return true
+}
+
+// withStepUpPolicy attaches the deployment's administrative step-up policy to a
+// request context and resolves it HERE, before any handler opens a store
+// transaction: a gate evaluated inside a module's transaction must not read the
+// store again (on SQLite that read waits behind the open writer). A request that
+// outlives the cache TTL re-reads it with a bounded wait (auth.WithStepUpSource).
+// An unreadable policy is the strict answer at every gate.
+func (s *Server) withStepUpPolicy(ctx context.Context) context.Context {
+	ctx = auth.WithStepUpSource(ctx, s.authr.CurrentStepUp)
+	auth.StepUpPolicyFrom(ctx) // resolve now, before any handler opens a transaction
+	return ctx
 }
 
 // authzSystem requires a superadmin (the system/cross-tenant role) for a route.
@@ -651,8 +723,11 @@ func (s *Server) authzScopedCollectionPolicy(
 		s.writeError(w, r, err)
 		return auth.Principal{}, "", resource, none, false
 	}
-	if meta.RequiresStepUp(p.AAL) {
-		s.writeError(w, r, auth.ErrStepUpRequired)
+	if meta.RequiresStepUp(r.Context(), p) {
+		s.authz.RecordStepUpRefusal(r.Context(), auth.Request{
+			Principal: p, Permission: perm, Tenant: tenant, Resource: resource, Route: meta,
+		})
+		s.writeError(w, r, auth.StepUpRequiredFor(auth.StepUpPolicyFrom(r.Context())))
 		return auth.Principal{}, "", resource, none, false
 	}
 	if !wellFormed {

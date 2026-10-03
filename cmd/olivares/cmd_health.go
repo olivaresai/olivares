@@ -297,8 +297,8 @@ func streamHealth(cmd *cobra.Command, flags *authClientFlags, q url.Values) erro
 	if resp.StatusCode >= 300 {
 		// A refusal arrives as an ordinary bounded body, so it is safe to read
 		// and classify exactly like every other verb in this command group.
-		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
-		return observeHTTPError(resp.StatusCode, body)
+		body, readErr := readCLIResponse(resp, req, 1<<20, false)
+		return guardCLIRefusalError(observeHTTPError(resp.StatusCode, body), resp.StatusCode, cliRequestSecrets(req), readErr)
 	}
 	out := cmd.OutOrStdout()
 	scanner := bufio.NewScanner(resp.Body)
@@ -1000,7 +1000,7 @@ func newHealthChecksCreateCmd(flags *authClientFlags) *cobra.Command {
 			}
 			if strings.TrimSpace(c.ID) == "" {
 				return exitcode.New(exitcode.Server, fmt.Errorf(
-					"the control plane answered HTTP %d but returned no check id, so nothing can be confirmed as declared",
+					"the engine answered HTTP %d but returned no check id, so nothing can be confirmed as declared",
 					res.status))
 			}
 			return renderHealthCheck(cmd, res.raw, c, "declared check "+observeCell(c.ID))
@@ -1081,7 +1081,7 @@ func newHealthChecksReportCmd(flags *authClientFlags) *cobra.Command {
 		Use:   "report <check-id>",
 		Short: "Post a probe result against a check",
 		Long: "report posts an active probe result. It is how an external checker, a CI step or\n" +
-			"an agent itself tells the control plane what it observed.\n\n" +
+			"an agent itself tells the engine what it observed.\n\n" +
 			"A REPORT CANNOT POST \"unknown\". Only healthy, degraded and down are\n" +
 			"assertable: unknown is what the engine INFERS when nothing reports in time, and\n" +
 			"a prober claiming it would be asserting an absence it cannot have observed.\n\n" +

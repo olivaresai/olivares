@@ -147,7 +147,7 @@ beforeEach(() => {
     activeWorkspaceName: 'Billing',
   })
   useSessionStore.setState({
-    token: 'olvs_first',
+    csrfToken: 'olvs_first',
     sessionId: 'sid',
     expiresAt: EXP,
   })
@@ -450,7 +450,7 @@ describe('CommunicationsView — the scope ends every read of the previous one',
       'same-session credential rotation',
       () =>
         useSessionStore.getState().setSession({
-          token: 'olvs_rotated',
+          csrfToken: 'olvs_rotated',
           sessionId: 'sid',
           expiresAt: EXP,
         }),

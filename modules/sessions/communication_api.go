@@ -7,7 +7,6 @@ package sessions
 import (
 	"context"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -337,22 +336,11 @@ func communicationQueryValues(
 	return result, nil
 }
 
-func decodeCommunicationJSON(r *http.Request, target any) error {
+func decodeCommunicationJSON(w http.ResponseWriter, r *http.Request, target any) error {
 	if r.Body == nil || r.ContentLength == 0 {
 		return errors.New("communication request body is required")
 	}
-	decoder := jsonDecoder(io.LimitReader(r.Body, 1<<20))
-	if err := decoder.Decode(target); err != nil {
-		return err
-	}
-	var extra any
-	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
-		if err == nil {
-			return errors.New("communication request body has trailing data")
-		}
-		return err
-	}
-	return nil
+	return api.DecodeRequestBody(w, r, target, api.RequestBodySpec{MaxBytes: 1 << 20})
 }
 
 func communicationRequestPrincipal(mc api.ModuleContext) (auth.PrincipalRef, error) {
@@ -372,7 +360,7 @@ func (m *Module) handleCommunicationChannelCreate(w http.ResponseWriter, r *http
 		WorkspaceID string `json:"workspace_id"`
 		ChannelCreateCommand
 	}
-	if err := decodeCommunicationJSON(r, &request); err != nil {
+	if err := decodeCommunicationJSON(w, r, &request); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid channel command"))
 		return
 	}
@@ -612,7 +600,7 @@ func (m *Module) handleCommunicationChannelGrantAdministration(w http.ResponseWr
 // preserving the irreversible application-sealed content boundary.
 func (m *Module) handleCommunicationChannelUpdate(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	var cmd ChannelUpdateCommand
-	if err := decodeCommunicationJSON(r, &cmd); err != nil || cmd.ChannelID != model.ID(mc.Resource.ID) {
+	if err := decodeCommunicationJSON(w, r, &cmd); err != nil || cmd.ChannelID != model.ID(mc.Resource.ID) {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid channel update"))
 		return
 	}
@@ -654,7 +642,7 @@ func (m *Module) handleCommunicationChannelGet(w http.ResponseWriter, r *http.Re
 func (m *Module) handleCommunicationChannelGrant(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	id, err := model.ParseID(chi.URLParam(r, "id"))
 	var input ChannelGrantInput
-	if err != nil || decodeCommunicationJSON(r, &input) != nil {
+	if err != nil || decodeCommunicationJSON(w, r, &input) != nil {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid channel grant"))
 		return
 	}
@@ -707,7 +695,7 @@ func (m *Module) handleChannelAdminCommand(
 // handleCommunicationMessageSend publishes one governed direct Message and required Delivery.
 func (m *Module) handleCommunicationMessageSend(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	var cmd DirectNoticePublishCommand
-	if err := decodeCommunicationJSON(r, &cmd); err != nil || cmd.ChannelID.String() != mc.Resource.ID {
+	if err := decodeCommunicationJSON(w, r, &cmd); err != nil || cmd.ChannelID.String() != mc.Resource.ID {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid message command"))
 		return
 	}
@@ -941,7 +929,7 @@ func (m *Module) handleCommunicationDeliveryAck(w http.ResponseWriter, r *http.R
 // handleCommunicationHandoffOffer creates the carrier and WorkItem offer atomically without changing ownership.
 func (m *Module) handleCommunicationHandoffOffer(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	var cmd WorkItemHandoffOfferCommand
-	if err := decodeCommunicationJSON(r, &cmd); err != nil || cmd.ChannelID.String() != mc.Resource.ID {
+	if err := decodeCommunicationJSON(w, r, &cmd); err != nil || cmd.ChannelID.String() != mc.Resource.ID {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid Handoff offer"))
 		return
 	}
@@ -981,7 +969,7 @@ func (m *Module) handleCommunicationHandoffResponse(w http.ResponseWriter, r *ht
 		return
 	}
 	var cmd HandoffResponseCommand
-	if err := decodeCommunicationJSON(r, &cmd); err != nil {
+	if err := decodeCommunicationJSON(w, r, &cmd); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid Handoff response"))
 		return
 	}
@@ -1059,7 +1047,7 @@ func (m *Module) handleCommunicationCursorPut(w http.ResponseWriter, r *http.Req
 		Cursor     string   `json:"cursor"`
 		DeliveryID model.ID `json:"delivery_id"`
 	}
-	if err := decodeCommunicationJSON(r, &body); err != nil ||
+	if err := decodeCommunicationJSON(w, r, &body); err != nil ||
 		body.DeliveryID.IsZero() || body.DeliveryID.String() != mc.Resource.ID {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid cursor command"))
 		return

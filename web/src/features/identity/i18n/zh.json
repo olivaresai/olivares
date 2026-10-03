@@ -1,6 +1,13 @@
 {
   "title": "身份与 NHI",
   "subtitle": "SSO、SCIM、身份清单、NHI 生命周期、WIF 图谱与特权登录——经观测、治理与审计。",
+  "sections": "身份分区",
+  "groups": {
+    "people": "人员",
+    "signIn": "登录",
+    "machines": "机器身份",
+    "posture": "态势"
+  },
   "tabs": {
     "federation": "SSO 与 SCIM",
     "inventory": "身份清单",
@@ -42,7 +49,10 @@
       "nhiLifecycleFinalize": "最终完成非人类身份下线",
       "providers": "注册或吊销提供方凭据",
       "generic": "此操作",
-      "console": "管理连接器"
+      "console": "管理连接器",
+      "stepUpPolicy": "Changing the extra check for administrative actions",
+      "modules": "开启或关闭模块",
+      "signing": "开启或关闭报告签名"
     },
     "aal": {
       "aal1": "AAL1（密码）",
@@ -63,7 +73,12 @@
     "verificationFailed": "无法验证此会话是否满足操作要求。认证可能已完成；此操作尚未继续。",
     "cancelled": "通行密钥操作已取消或超时。您可以开始新的尝试。此操作尚未继续。",
     "cancelHint": "关闭将取消此操作。已发送的注册或认证请求仍可能完成。",
-    "registrationUnknownElsewhere": "无法确认注册结果。通行密钥可能已保存。请关闭此对话框并检查你的通行密钥，然后再开始新的注册。"
+    "registrationUnknownElsewhere": "无法确认注册结果。通行密钥可能已保存。请关闭此对话框并检查你的通行密钥，然后再开始新的注册。",
+    "code": {
+      "title": "Sign in with your authenticator code",
+      "body": "{{action}} needs a sign-in with your authenticator code on this deployment. Sign in again and enter your code.",
+      "signInAgain": "Sign in again"
+    }
   },
   "references": {
     "note": "本面板所遵循的标准。面板进行观测与验证；它不声称获得认证。",
@@ -101,7 +116,7 @@
   },
   "sso": {
     "title": "单点登录（OIDC / SAML）",
-    "description": "联合身份登录已在商业版构建中实现，并在启动时按环境配置。本面板记录该配置、校验精确的重定向 URI 并呈现连接状态——它不写入配置。",
+    "description": "联合身份登录在 SSO / IdP 中配置，或在启动时按环境配置。本面板记录该配置、校验精确的重定向 URI 并呈现连接状态——它不写入配置。",
     "notConfigured": "未配置",
     "notConfiguredHint": "未配置任何身份提供方，因此联合身份请求返回 501。请设置下方的环境密钥并重启引擎以启用 SSO。",
     "seamWhat": "SSO 连接状态摘要",
@@ -280,9 +295,9 @@
       "title": "生命周期操作",
       "reason": "原因",
       "critical": {
-        "twoAccountsAal3": "此关键操作在执行前需要两个不同用户账户的批准，且每个账户均通过 AAL3 会话。引擎强制的是不同的“账户”：它无法证明两个账户属于两个不同的人。 这两个条件取决于当前的风险等级，审批策略可以将其调低。",
-        "breakGlassPossible": "在两个不同用户账户各自通过硬件验证会话批准之前，不会执行任何操作。有效的紧急破窗授权可以替代批准——该次使用会被记录并事后复核。 这两个条件取决于当前的风险等级，审批策略可以将其调低。",
-        "noBreakGlass": "在两个不同用户账户各自通过硬件验证会话批准之前，不会执行任何操作。此操作无法使用破窗授权：不存在绕过第二位批准者的紧急通道。 这两个条件取决于当前的风险等级，审批策略可以将其调低。"
+        "twoAccountsAal3": "此关键操作在执行前需要两个不同用户账户的批准。引擎强制的是不同的“账户”：它无法证明两个账户属于两个不同的人。 这一条件取决于当前的风险等级，审批策略可以将其调低。",
+        "breakGlassPossible": "在两个不同用户账户批准之前，不会执行任何操作。有效的紧急破窗授权可以替代批准——该次使用会被记录并事后复核。 这一条件取决于当前的风险等级，审批策略可以将其调低。",
+        "noBreakGlass": "在两个不同用户账户批准之前，不会执行任何操作。此操作无法使用破窗授权：不存在绕过第二位批准者的紧急通道。 这一条件取决于当前的风险等级，审批策略可以将其调低。"
       },
       "ownership": {
         "button": "分配负责人",
@@ -502,33 +517,6 @@
       "inferenceGeos": "允许的推理区域",
       "unrestricted": "不受限 / 未报告"
     },
-    "tls": {
-      "title": "面板 TLS（cert-manager）",
-      "description": "面板自身的 TLS 态势：颁发者、到期时间、轮换与证书链。",
-      "seamWhat": "面板 cert-manager TLS 态势",
-      "issuer": "颁发者",
-      "notAfter": "到期时间",
-      "autoRenew": "自动续期",
-      "chain": "证书链"
-    },
-    "crypto": {
-      "title": "加密敏捷性 / PQC 清单",
-      "description": "整个身份资产域中的传统算法与后量子算法对比，以及哪些槽位可轮换至 PQC（NIST SP 800-57 r6）。",
-      "seamWhat": "加密敏捷性 / PQC 清单",
-      "ready": "PQC 就绪",
-      "notReady": "仅传统算法",
-      "family": {
-        "classic": "传统",
-        "pqc": "后量子",
-        "hybrid": "混合"
-      },
-      "col": {
-        "usage": "用途",
-        "algorithm": "算法",
-        "family": "族系",
-        "pqcReady": "PQC 敏捷性"
-      }
-    },
     "unavailable": {
       "badge": "无法读取",
       "fallback": "在此部署中无法读取该安全态势。"
@@ -536,11 +524,15 @@
   },
   "login": {
     "statusTitle": "会话保证",
-    "statusDescription": "当前会话的认证器保证级别。敏感视图需要硬件升级认证。",
+    "statusDescription": "您登录此会话的方式。",
     "currentAal": "当前级别",
     "methods": "方法",
     "methodsUnknown": "未报告",
-    "targetStandardsNote": "AAL3（NIST SP 800-63B-4）与 PIV/CAC（FIPS 201-3）是特权登录的目标标准。本面板反映后端所强制执行的内容；它不声称获得任何认证。",
+    "policy": {
+      "none": "此部署在执行管理操作前不要求额外验证。系统管理员可以在“设置 › 登录与安全”中开启。",
+      "totp": "此部署中的管理操作需要使用身份验证器应用的验证码登录。",
+      "passkey": "此部署中的管理操作需要通行密钥。"
+    },
     "passkeyTitle": "注册通行密钥",
     "passkeyDescription": "注册硬件安全密钥或平台认证器（WebAuthn / FIDO2），用于抗钓鱼的特权登录。",
     "registerPasskey": "注册通行密钥",
@@ -573,6 +565,8 @@
       "registerHint": "为您的通行密钥命名以便后续识别。",
       "nameLabel": "通行密钥名称",
       "namePlaceholder": "例如 YubiKey 5C、MacBook Touch ID",
+      "defaultName": "{{device}} 上的通行密钥",
+      "defaultNameNoDevice": "通行密钥",
       "registering": "正在完成仪式…",
       "registered": "通行密钥已注册。",
       "registerFailed": "注册失败。您的浏览器可能不支持 WebAuthn 或仪式被取消。",
@@ -596,10 +590,6 @@
     }
   },
   "empty": {
-    "cryptoInventory": {
-      "title": "尚未盘点加密资产",
-      "description": "此构建声明了 TLS 与后量子态势契约但未提供服务；在其实现能够响应之前，契约待实现通知会取代此面板。"
-    },
     "externalKeys": {
       "title": "尚未报告外部密钥引用",
       "description": "此组织未报告任何客户托管加密密钥。清单已成功读取——这是真实的零，而非缺失的后端。"
@@ -643,5 +633,21 @@
     "policyConfirmOn": "确认：启用",
     "policyDisable": "关闭",
     "policyAal3Note": "更改此策略需要 AAL3 会话。没有因子的账户会在下次登录时进入注册流程——不会被锁定。"
+  },
+  "stepUpPolicy": {
+    "title": "Extra check for administrative actions",
+    "description": "Off by default. Turn it on to ask for an authenticator code or a passkey before administrative changes such as users, identity providers, secrets or tool installs.",
+    "options": {
+      "none": "Off",
+      "totp": "Authenticator code",
+      "passkey": "Passkey"
+    },
+    "saved": "Saved.",
+    "loadFailed": "This setting could not be read. Refresh the page to try again.",
+    "note": "To require a passkey, sign in with your passkey here first. To require an authenticator code, sign in with your code first. You can always turn it off. A change takes effect within a few seconds on every server.",
+    "refused": {
+      "passkey_not_enrolled": "Add a passkey to your account first (Identity > Passkeys), then turn this on.",
+      "totp_sign_in_required": "Set up an authenticator app and sign in with its code first, then turn this on."
+    }
   }
 }

@@ -1,42 +1,44 @@
 {
   "title": "Kill switch",
-  "subtitle": "The estate emergency stop: one click halts every governed actuation surface. Engaging is deliberately cheap; recovery requires two distinct user accounts and a forced post-review.",
+  "subtitle": "Emergency stop for every AI agent on this server, or for one agent. Stopping takes one click; starting again needs the approval of two different user accounts and a review afterwards.",
   "banner": {
-    "estateTitle": "ESTATE STOPPED",
-    "estateBody": "Every governed actuation surface denies until a dual-control re-enable.",
+    "estateTitle": "ALL AGENTS STOPPED",
+    "estateBody": "Agents cannot act until two user accounts approve starting again: sessions end, and tool calls, MCP, schedules, voice, model calls, deployments and event delivery are refused.",
     "agentCount": "{{count}} agent stop active",
     "agentCount_one": "{{count}} agent stop active",
     "agentCount_other": "{{count}} agent stops active",
-    "agentBody": "The stopped agents are denied across every governed actuation surface that carries an agent dimension.",
-    "none": "No active stops — the estate is actuating normally.",
+    "agentBody": "The stopped agents cannot act: their tool calls, MCP calls and other actions are refused.",
+    "none": "Nothing is stopped. Sessions and agents run normally.",
     "engagedBy": "Engaged by",
-    "revoked": "{{count}} pending actuation approval revoked",
-    "revoked_one": "{{count}} pending actuation approval revoked",
-    "revoked_other": "{{count}} pending actuation approvals revoked"
+    "revoked": "{{count}} pending approval request canceled",
+    "revoked_one": "{{count}} pending approval request canceled",
+    "revoked_other": "{{count}} pending approval requests canceled"
   },
   "engage": {
     "title": "Emergency stop",
-    "caption": "Stops the estate (or one agent) across hooks, MCP, orchestration, voice, models, deploy and eventing, and revokes in-scope pending actuation approvals. No approval gate on engage — re-enabling is what dual-control guards.",
+    "caption": "Stops all agents, or one agent: running sessions end, and tool calls, MCP, schedules and workflows, voice, model calls, deployments and event delivery are refused. Pending approval requests for these actions are canceled. Stopping needs no approval; starting again does. The console, the audit trail and sign-in keep working.",
     "scope": "Scope",
-    "scopeEstate": "Estate-wide",
+    "scopeEstate": "All agents",
     "scopeAgent": "Single agent",
     "agentRef": "Agent",
     "agentRefHint": "Agent UUID or external reference. An unknown ref still engages — the stop then matches on that exact string.",
     "reason": "Reason",
-    "reasonHint": "Mandatory — who reads this later: the post-review and the regulator.",
+    "reasonHint": "Required: say why. The review of this stop and later audits read it.",
     "button": "Emergency stop",
-    "confirmTitleEstate": "Stop the entire estate?",
-    "confirmBodyEstate": "Every governed actuation surface denies immediately and in-scope pending actuation approvals are revoked. Re-enabling requires approval by two distinct user accounts plus a mandatory post-review — there is no break-glass path back.",
+    "confirmTitleEstate": "Stop all agents?",
+    "confirmBodyEstate": "Every agent stops at once: running sessions end, their actions are refused, and pending approval requests for those actions are canceled. To start again, two different user accounts must approve, and the stop must be reviewed afterwards. There is no emergency way around this.",
+    "confirmBodyEstateNoRestart": "Every agent stops at once: running sessions end, their actions are refused, and pending approval requests for those actions are canceled. There is no emergency way around this.",
     "confirmTitleAgent": "Stop this agent?",
-    "confirmBodyAgent": "The agent is denied across every governed actuation surface that carries an agent dimension, and its pending actuation approvals are revoked. Re-enabling requires approval by two distinct user accounts plus a mandatory post-review.",
+    "confirmBodyAgent": "This agent stops at once: its actions are refused and its pending approval requests are canceled. To start it again, two different user accounts must approve, and the stop must be reviewed afterwards.",
     "confirm": "Engage kill switch",
     "done": "Kill switch engaged",
     "doneBody": "Stop {{id}} is active. Re-enabling requires dual-control.",
-    "alreadyStopped": "An active stop for this scope already exists"
+    "alreadyStopped": "An active stop for this scope already exists",
+    "restartNeedsAdmins": "Starting again needs two other admin accounts to approve it and one of them to review it afterwards."
   },
   "stops": {
     "title": "Stops",
-    "caption": "The persisted stop rows — who engaged, when, scope, reason and the full re-enable + post-review lifecycle. The row is the single source of truth every actuation gate consults live.",
+    "caption": "Each stop: who started it, when, what it covers, why, and how it was ended and reviewed. Every action checks these stops before it runs.",
     "search": "Search stops…",
     "label": "Kill-switch stops",
     "filterStatus": "Status",
@@ -47,8 +49,8 @@
     "engaged": "Engaged",
     "aalShort": "AAL{{aal}}",
     "aalHint": "Recorded assurance level of the engaging session (forensics; engage itself is never gated on AAL).",
-    "revoked": "Revoked",
-    "revokedHint": "Pending actuation approvals canceled by the engage.",
+    "revoked": "Canceled requests",
+    "revokedHint": "Pending approval requests canceled by this stop.",
     "status": "Status",
     "byRule": "rule",
     "empty": "No stops recorded",
@@ -66,7 +68,7 @@
     "reviewed": "Reviewed"
   },
   "scope": {
-    "estate": "Estate",
+    "estate": "All agents",
     "agent": "Agent"
   },
   "source": {
@@ -75,7 +77,7 @@
   },
   "reenable": {
     "title": "Re-enable this stop",
-    "body": "Re-enabling is never unilateral: it opens a dual-control approval that two distinct user accounts must approve (anti-self-approval, AAL3 per decision). There is deliberately no break-glass path — the stopped estate is the safe state. The engine enforces distinct ACCOUNTS; it cannot prove that two accounts are two different people. The two-account floor is structural; the AAL3 requirement follows the live risk tier, which an approval policy can lower.",
+    "body": "Starting again is never one person's decision: two different user accounts must approve, and no one can approve their own request. Each approver must use a stronger sign-in (AAL3) unless an approval rule lowers this action's risk level; the two-account rule holds even then. There is no emergency way around it, because staying stopped is the safe state. The engine checks that the accounts are different; it cannot check that two different people use them.",
     "reason": "Note",
     "reasonHint": "Optional — carried on the dual-control request for the approvers.",
     "existingApproval": "A dual-control approval ({{id}}) is already open for this stop. Checking reports its progress and completes the re-enable once both accounts approved.",
@@ -87,7 +89,7 @@
     "progress": "{{approved}} of {{required}} approvals",
     "goToApprovals": "Open the approvals queue",
     "done": "Kill switch re-enabled under dual-control",
-    "reviewDue": "Actuation resumes — the mandatory post-review is now due.",
+    "reviewDue": "Agents run again. The review of this stop is now due.",
     "blocked": "Re-enable blocked",
     "dualControl": "Dual-control required"
   },
@@ -108,7 +110,7 @@
   },
   "guardian": {
     "title": "Guardian rules",
-    "caption": "Operator-authored semi-autonomous containment over the finding rail. A rule matches findings by kind and severity floor and fires one containment — immediately (auto) or behind one human approval. It never matches the kill switch's own findings (anti-feedback-loop).",
+    "caption": "Automatic responses to security findings. A rule matches findings by kind and minimum severity and runs one response, at once or after one person approves it. A rule never reacts to the kill switch's own findings, so one stop cannot set off another.",
     "newRule": "New rule",
     "name": "Rule",
     "kinds": "Finding kinds",
@@ -139,7 +141,7 @@
     "actionLabel": {
       "stop_agent": "Stop agent",
       "quarantine_nhi": "Quarantine NHI",
-      "stop_estate": "Stop estate"
+      "stop_estate": "Stop all agents"
     },
     "modeLabel": {
       "auto": "Auto",

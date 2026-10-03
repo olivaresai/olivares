@@ -43,6 +43,7 @@ TimeoutStartSec=15min
 # --- hardening: the product unit's set (packaging/systemd/olivares.service) by the same values,
 # except where a line below says why first boot needs a different one.
 NoNewPrivileges=true
+# ProtectSystem: strict; first boot writes only the explicit ReadWritePaths below, with no agent workspace.
 ProtectSystem=strict
 # Writable: the product configuration the product's generator writes, the drop-in directory, and
 # the Appliance Console's directory, where generate-product-config publishes the console's
@@ -55,6 +56,7 @@ ProtectSystem=strict
 ReadWritePaths=-/etc/olivares -/etc/systemd/system/olivares.service.d -/etc/olivares-portal -/etc/cloud/cloud.cfg.d -/var/lib/olivares
 # ProtectHome: read-only, not true: verify-host-settings reads the authorized SSH keys in /home and /root.
 ProtectHome=read-only
+# PrivateTmp: true; first boot does not share temporary files with agent or MCP runtimes.
 PrivateTmp=true
 PrivateDevices=true
 ProtectClock=true
@@ -66,10 +68,11 @@ RestrictNamespaces=true
 RestrictSUIDSGID=true
 RestrictRealtime=true
 LockPersonality=true
+# MemoryDenyWriteExecute: true; first boot runs Go binaries and requires no executable JIT memory.
 MemoryDenyWriteExecute=true
 SystemCallArchitectures=native
-# SystemCallFilter: the product's set plus @chown, so prepare-setup-delivery can give the minted
-# setup token to the product service account.
+# SystemCallFilter: @chown lets prepare-setup-delivery give the minted token to the product account;
+# first boot launches no agent or MCP children and does not need the product's Landlock calls.
 SystemCallFilter=@system-service
 SystemCallFilter=~@privileged @resources
 SystemCallFilter=@chown

@@ -118,6 +118,7 @@ func egressBoot(cmd *cobra.Command, dataDir, engineName, dsn, adminDSN, ownerDSN
 	return boot(cmd.Context(), bootConfig{
 		DataDir: dataDir, Engine: engineName, DSN: dsn, AdminDSN: adminDSN, OwnerDSN: ownerDSN,
 		Version: version, Logger: slog.Default(), NoImplicitInstall: true,
+		storeEngineExplicit: cmd.Flags().Changed("engine"),
 	})
 }
 
@@ -131,6 +132,7 @@ func egressBootRO(cmd *cobra.Command, dataDir, engineName, dsn, adminDSN, ownerD
 	return boot(cmd.Context(), bootConfig{
 		DataDir: dataDir, Engine: engineName, DSN: dsn, AdminDSN: adminDSN, OwnerDSN: ownerDSN,
 		Version: version, Logger: slog.Default(), ReadOnly: true,
+		storeEngineExplicit: cmd.Flags().Changed("engine"),
 	})
 }
 

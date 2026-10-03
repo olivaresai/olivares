@@ -92,8 +92,8 @@ func (a *Authenticator) OnboardMember(ctx context.Context, actor Principal, tena
 		return OnboardResult{}, ErrWorkspaceConfined
 	}
 	email := normalizeEmail(in.Email)
-	if email == "" {
-		return OnboardResult{}, ErrInvalidToken
+	if err := ValidateEmail(email); err != nil {
+		return OnboardResult{}, err
 	}
 	if !in.Invite { // password mode validates the password up front
 		if len(in.Password) < MinPasswordLen {

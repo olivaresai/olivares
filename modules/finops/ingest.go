@@ -365,7 +365,7 @@ func (m *Module) onCost(ctx context.Context, tenant model.TenantID, cost sdkmode
 		cost.OccurredAt = m.clock.Now().Time()
 	}
 	var effects costIngestEffects
-	if err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	if err := m.mutate(ctx, tenant, func(sc store.Scope) error {
 		var err error
 		// Assigned, never appended: if the store ever re-ran this callback, the
 		// signals of the attempt that did not commit must not be published.

@@ -19,6 +19,7 @@ import (
 	"time"
 
 	jose "github.com/go-jose/go-jose/v4"
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 )
 
 // The standard Google service-account jwt-bearer flow (VERIFIED against the
@@ -169,9 +170,9 @@ func (s *Source) accessToken(ctx context.Context) (string, error) {
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<10))
-		// The excerpt is the provider's error body; the request form is never included.
-		return "", fmt.Errorf("googleagent: token endpoint status %d: %s", resp.StatusCode, strings.TrimSpace(string(excerpt)))
+		excerpt := redact.ReadHTTPError(resp.Body, 2<<10, req, assertion)
+		// Scrub a reflected assertion without reading the request form.
+		return "", fmt.Errorf("googleagent: token endpoint status %d: %s", resp.StatusCode, excerpt)
 	}
 	var tr struct {
 		AccessToken string `json:"access_token"`

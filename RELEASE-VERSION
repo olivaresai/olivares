@@ -5,17 +5,17 @@
 # the docs-site install and verify pages, the trust one-pager, and the deploy/, packaging/ and
 # operator/ coordinates) is checked against this value by scripts/check-release-version.sh on
 # every push and in CI. SECURITY.md is not one of those surfaces: scripts/check-install-docs.sh
-# requires it to contain v<this value> (its supported-release row), and binds this value to its
+# requires it to contain this value (its supported-release row), and binds this value to its
 # dated witness, docs/releases/<this value>-install-surfaces.json.
 #
-# THE VALUE NAMES A PUBLISHED RELEASE, NOT A PLAN. v26.9.0 was: public tag v26.9.0, GitHub
-# release 390836255, published 2026-09-17T16:33:50Z; its install surfaces were read on
-# 2026-09-23 and are recorded in its witness. Both published releases, v26.8.0 and v26.9.0,
-# keep their own CHANGELOG.md sections unchanged.
+# THE VALUE NAMES A PUBLISHED RELEASE, NOT A PLAN. 26.10.0 was: public tag 26.10.0, GitHub
+# release 400733329, published 2026-10-01T07:44:12Z; its install surfaces were read on
+# 2026-10-01 and are recorded in its witness. Every published release (v26.8.0, v26.9.0,
+# 26.10.0) keeps its own CHANGELOG.md section unchanged.
 #
-# THIS IS THE 26.10.0 CUT, PREPARED TO APPLY AT RELEASE TIME: the canon, the dated changelog
-# section and every bound surface in their 26.10.0 state. Its witness,
-# docs/releases/26.10.0-install-surfaces.json, is a STAND-IN, marked so in its $comment: the
+# THIS IS THE 26.10.1 CUT, PREPARED TO APPLY AT RELEASE TIME: the canon, the dated changelog
+# section and every bound surface in their 26.10.1 state. Its witness,
+# docs/releases/26.10.1-install-surfaces.json, is a STAND-IN, marked so in its $comment: the
 # real witness is observed from the published surfaces at publication time and replaces it.
 #
 # HOW A NUMBER IS DERIVED: CalVer takes it from the date of the cut. YY is the two-digit year,
@@ -28,4 +28,4 @@
 # refused before any
 # surface is read, and scripts/check-install-docs.sh binds the current install surfaces to
 # the value below through its dated witness.
-26.10.0
+26.10.1

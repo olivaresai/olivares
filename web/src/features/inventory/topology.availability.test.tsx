@@ -112,14 +112,16 @@ describe('Topology availability', () => {
     expect(screen.queryByText('prod-orchestrator')).toBeNull()
     expect(screen.queryByText('Who acts')).toBeNull()
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.queryByText('Not authorized')).toBeNull()
+    expect(screen.queryByText('You do not have access to this.')).toBeNull()
     expect(screen.queryByText('Nothing discovered yet')).toBeNull()
   })
 
   it('REPRODUCES A DEFECT: an initial 403 is a calm refusal, never a generic error, never a zero estate, never empty', async () => {
     vi.mocked(inventoryApi.entities).mockRejectedValue(forbidden())
     renderTopo()
-    expect(await screen.findByText('Not authorized')).toBeInTheDocument()
+    expect(
+      await screen.findByText('You do not have access to this.'),
+    ).toBeInTheDocument()
     expect(screen.queryByRole('alert')).toBeNull()
     expect(screen.queryByText('Something went wrong')).toBeNull()
     expect(screen.queryByText('prod-orchestrator')).toBeNull()
@@ -135,7 +137,7 @@ describe('Topology availability', () => {
     const alert = await screen.findByRole('alert')
     expect(within(alert).getByText('Something went wrong')).toBeInTheDocument()
     expect(within(alert).getByText('req-500')).toBeInTheDocument()
-    expect(screen.queryByText('Not authorized')).toBeNull()
+    expect(screen.queryByText('You do not have access to this.')).toBeNull()
     expect(screen.queryByText('prod-orchestrator')).toBeNull()
 
     vi.mocked(inventoryApi.entities).mockResolvedValue({
@@ -172,7 +174,7 @@ describe('Topology availability', () => {
       await screen.findByText('Nothing discovered yet'),
     ).toBeInTheDocument()
     expect(screen.queryByRole('alert')).toBeNull()
-    expect(screen.queryByText('Not authorized')).toBeNull()
+    expect(screen.queryByText('You do not have access to this.')).toBeNull()
     expect(screen.queryByText('Who acts')).toBeNull()
   })
 
@@ -198,7 +200,9 @@ describe('Topology availability', () => {
         queryKey: inventoryKeys.entities('t1', { limit: 200 }),
       })
     })
-    expect(await screen.findByText('Not authorized')).toBeInTheDocument()
+    expect(
+      await screen.findByText('You do not have access to this.'),
+    ).toBeInTheDocument()
     expect(screen.queryByText('prod-orchestrator')).toBeNull()
     expect(screen.queryByText('idle-agent')).toBeNull()
     expect(screen.queryByLabelText('2 loaded')).toBeNull()

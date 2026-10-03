@@ -33,9 +33,10 @@ const (
 
 // Module is the live-operation/sessions module.
 type Module struct {
-	log          *slog.Logger
-	data         api.ModuleData
-	recoveryData api.ModuleData
+	publishObservation func(context.Context, event.Event) error
+	log                *slog.Logger
+	data               api.ModuleData
+	recoveryData       api.ModuleData
 	// standing is the standing port of the fenced writers that run outside a
 	// request (account_fence.go). Nil refuses every write that names an account.
 	standing auth.StandingReader
@@ -79,6 +80,17 @@ type Module struct {
 	// wiring, because a directory nobody configured is a directory nobody meant.
 	accountsRoot          string
 	accountHomeCheckpoint func(string) error
+	// profileHomesRoot is where this node creates the HOME of a profile that signs
+	// in with the tool's own login and names no home (provider_profile.go). Empty
+	// refuses such a profile: the engine user's own home is never handed out.
+	profileHomesRoot string
+	// toolLoginsRoot is where the tools' own logins live on this node
+	// (<data-dir>/tool-logins, ToolLoginHome). Empty refuses an own-login profile
+	// that names no homes; the engine user's own home is never used.
+	toolLoginsRoot string
+	// toolLogin reports whether a driver's tool is installed and signed in with its
+	// own login on this node (provider_profile_resolve.go); nil refuses a resolve.
+	toolLogin ToolLoginStatus
 
 	// K3 communication ports are late-bound after Store.Open and core/auth
 	// composition. Nil readiness ports are meaningful OFF witnesses and the
@@ -169,6 +181,7 @@ func (m *Module) UseRuntimeCredentialRecoveryData(d api.ModuleData) {
 // and findings (its anti-evasion/health signals).
 func (m *Module) Init(_ context.Context, host sdk.Host) error {
 	m.log = host.Logger()
+	m.publishObservation = host.Publish
 	cancel, err := host.Subscribe(
 		[]event.Type{event.TypeEdgeObserved, event.TypeCostSampled, event.TypeFindingReported},
 		m.onEvent,
@@ -180,16 +193,45 @@ func (m *Module) Init(_ context.Context, host sdk.Host) error {
 	return nil
 }
 
-// Start launches the OPERATE background work: the active kill-switch sweep,
-// which terminates running sessions that fall under an emergency stop. It is enabled
-// only when the composition root wired a sweep interval (WithKillSwitchSweep) — the
-// observe-only / standalone module starts no goroutine. The SSE broker stays lazy.
-func (m *Module) Start(context.Context) error {
+// Start launches active lifecycle checks when composition binds owner-standing
+// checks or an emergency-stop sweep. Idle runs lose access without needing a tool
+// call. A standalone observe-only module starts no sweep; the SSE broker stays lazy.
+//
+// The sweep starts first and depends on nothing else: an emergency stop reaches
+// running sessions even when the recovery of waiting launches cannot run. Start
+// never fails over that recovery (recoverWaitingLaunches).
+func (m *Module) Start(ctx context.Context) error {
+	m.rt.mu.Lock()
+	m.rt.approvalWorkersStopped = false
+	m.rt.mu.Unlock()
 	if m.data == nil && m.log != nil {
 		m.log.Warn("sessions: started without a data handle; live operation will not persist")
 	}
 	m.startStopSweep()
+	m.recoverWaitingLaunches(ctx)
 	return nil
+}
+
+// recoverWaitingLaunches resumes watching the launches that wait for an approval,
+// in every tenant the composition names (UseApprovalRecoveryTenants). It is best
+// effort: a tenant list or a tenant it cannot read is logged, the other tenants
+// still recover, and the next start tries again.
+func (m *Module) recoverWaitingLaunches(ctx context.Context) {
+	if m.rt.approvalRecoveryTenants == nil {
+		return
+	}
+	tenants, err := m.rt.approvalRecoveryTenants(ctx)
+	if err != nil {
+		m.warnf("sessions: cannot list the tenants whose launches wait for an approval; they resume at the next start",
+			"err", redactErr(err))
+		return
+	}
+	for _, tenant := range tenants {
+		if err := m.RecoverWaitingLaunches(ctx, tenant); err != nil {
+			m.warnf("sessions: cannot recover this tenant's launches that wait for an approval; they resume at the next start",
+				"tenant", tenant.String(), "err", redactErr(err))
+		}
+	}
 }
 
 // Stop unsubscribes, terminates every supervised Claude Code process (their
@@ -204,6 +246,7 @@ func (m *Module) Stop(ctx context.Context) error {
 		cancel()
 	}
 	if m.rt != nil {
+		m.stopApprovalWorkers(ctx)
 		m.stopStopSweep() // end the active kill-switch sweep before tearing down runs
 		stopErr := m.stopAllRuns(ctx)
 		m.broker.close()
@@ -215,7 +258,7 @@ func (m *Module) Stop(ctx context.Context) error {
 
 // onEvent dispatches a delivered observation to the live-state updaters.
 func (m *Module) onEvent(ctx context.Context, e event.Event) error {
-	if m.data == nil {
+	if m.data == nil || e.SessionProjection {
 		return nil
 	}
 	// B2: the HOST-stamped registration snapshot decides the row an observation

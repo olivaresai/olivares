@@ -9,11 +9,14 @@
 // scheduler). Zero invented endpoints: the report catalog, generation and schedule
 // CRUD all hit routes the backend already serves; PDF that the renderer can't produce
 // surfaces the engine's 501 verbatim.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import './i18n'
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import { CalendarClock, FileBarChart, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+import { cn } from '@/lib/utils'
+import { useCommunityBuild } from '@/lib/hooks/use-edition'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -32,7 +35,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/ui/page-header'
@@ -62,10 +65,13 @@ import {
   type ReportFormat,
   type ReportMeta,
   type ScheduleConfig,
+  bundleSignature,
+  type BundleSigning,
 } from './api'
 import { StaticTable } from '@/components/data/static-table'
 
 export function ReportingView() {
+  const communityBuild = useCommunityBuild()
   const { t } = useTranslation(['reporting', 'common'])
   const { can } = useAuth()
   const canRead = can('reporting:report:read')
@@ -101,7 +107,10 @@ export function ReportingView() {
               <Spinner />
             </div>
           ) : reportsQ.isError ? (
-            <ErrorState retry={() => void reportsQ.refetch()} />
+            <QueryErrorState
+              error={reportsQ.error}
+              retry={() => void reportsQ.refetch()}
+            />
           ) : reports.length === 0 ? (
             <EmptyState
               description={t('catalog.emptyHint')}
@@ -166,9 +175,15 @@ export function ReportingView() {
         </CardContent>
       </Card>
 
-      <EnterpriseReportsCard />
-
-      <SchedulesCard canRead={canRead} />
+      {/* Enterprise reports and schedules are served by a Business build only; a
+          Community build answers 501 for both (modules/reporting/enterprise.go), so
+          it shows neither card and makes neither read. */}
+      {communityBuild ? null : (
+        <>
+          <EnterpriseReportsCard signing={reportsQ.data?.bundle_signing} />
+          <SchedulesCard canRead={canRead} />
+        </>
+      )}
 
       {generating ? (
         <GenerateDialog
@@ -202,10 +217,15 @@ const ENTERPRISE_REPORTS = [
   { id: 'bundle', pedir: () => reportingApi.enterpriseBundle() },
 ] as const
 
-function EnterpriseReportsCard() {
+function EnterpriseReportsCard({ signing }: { signing?: BundleSigning }) {
   const { t } = useTranslation(['reporting', 'common'])
   const [pidiendo, setPidiendo] = useState<string | null>(null)
   const [seam, setSeam] = useState<string | null>(null)
+  // What the last bundle download said about its signature: "signed" only when the
+  // engine says so (S, EU-04). Never a promise made in copy.
+  const [signature, setSignature] = useState<ReturnType<
+    typeof bundleSignature
+  > | null>(null)
 
   async function pedir(id: string, fn: () => Promise<unknown>) {
     setPidiendo(id)
@@ -213,6 +233,22 @@ function EnterpriseReportsCard() {
     try {
       const out = await fn()
       descargarJson(`${id}-${new Date().toISOString().slice(0, 10)}.json`, out)
+      if (id === 'bundle') {
+        const sig = bundleSignature(out)
+        setSignature(sig ?? null)
+        if (sig && !sig.signed) {
+          toast.warning(
+            t('enterprise.unsigned', {
+              reason: sig.reason ?? t('enterprise.unsignedUnknown'),
+            }),
+          )
+          return
+        }
+        toast.success(
+          sig?.signed ? t('enterprise.signedDone') : t('enterprise.done'),
+        )
+        return
+      }
       toast.success(t('enterprise.done'))
     } catch (e) {
       // 501 NO es un fallo: es la frontera open-core, y se dice con su nombre.
@@ -247,6 +283,9 @@ function EnterpriseReportsCard() {
                   {t('enterprise.seam')}
                 </span>
               ) : null}
+              {r.id === 'bundle' ? (
+                <BundleSigningLine signing={signing} signature={signature} />
+              ) : null}
             </div>
             <Button
               variant="ghost"
@@ -260,6 +299,54 @@ function EnterpriseReportsCard() {
         ))}
       </CardContent>
     </Card>
+  )
+}
+
+/** The bundle's signature in one line: what the last download said, else whether the
+ * engine is ready to sign. Nothing when the engine says neither. */
+function BundleSigningLine({
+  signing,
+  signature,
+}: {
+  signing?: BundleSigning
+  signature: ReturnType<typeof bundleSignature> | null
+}) {
+  const { t } = useTranslation('reporting')
+  const { isSuperadmin } = useAuth()
+  const text = signature
+    ? signature.signed
+      ? t('enterprise.signed')
+      : t('enterprise.unsigned', {
+          reason: signature.reason ?? t('enterprise.unsignedUnknown'),
+        })
+    : signing && !signing.ready
+      ? t('enterprise.notReady', {
+          reason: signing.reason ?? t('enterprise.unsignedUnknown'),
+        })
+      : null
+  if (!text) return null
+  return (
+    <span
+      className={cn(
+        'text-caption',
+        signature?.signed ? 'text-success' : 'text-warning',
+      )}
+      data-slot="bundle-signing"
+    >
+      {text}
+      {/* Not signed: the system administrator can change it (Settings > Report signing). */}
+      {!signature?.signed && isSuperadmin ? (
+        <>
+          {' '}
+          <a
+            href="/settings?section=signing"
+            className="font-medium text-text underline underline-offset-2"
+          >
+            {t('enterprise.signingSettings')}
+          </a>
+        </>
+      ) : null}
+    </span>
   )
 }
 
@@ -592,7 +679,10 @@ function SchedulesCard({ canRead }: { canRead: boolean }) {
         ) : enterprisePending ? (
           <CaveatNotice tone="info">{t('schedules.enterprise')}</CaveatNotice>
         ) : schedulesQ.isError ? (
-          <ErrorState retry={() => void schedulesQ.refetch()} />
+          <QueryErrorState
+            error={schedulesQ.error}
+            retry={() => void schedulesQ.refetch()}
+          />
         ) : schedules.length === 0 ? (
           <EmptyState
             description={t('schedules.emptyHint')}
@@ -761,7 +851,10 @@ function ScheduleDialog({
           ) : catalogQ.isError ? (
             // Honest fallback: without the server catalog the form does not
             // invent report types — it says so and offers a retry.
-            <ErrorState retry={() => void catalogQ.refetch()} />
+            <QueryErrorState
+              error={catalogQ.error}
+              retry={() => void catalogQ.refetch()}
+            />
           ) : (
             <>
               <Field label={t('schedules.report')}>

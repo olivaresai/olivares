@@ -10,11 +10,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"net"
 	"net/url"
-	"reflect"
 	"regexp"
+	"slices"
 	"strings"
+	"unicode"
+	"unicode/utf8"
 
 	"github.com/olivaresai/olivares/core/egress"
 	"github.com/olivaresai/olivares/core/model"
@@ -57,12 +60,19 @@ type MCPGatewayToolPolicy struct {
 type MCPGatewayTool struct {
 	Name        string `json:"name"`
 	Fingerprint string `json:"fingerprint"`
+	ReadOnly    bool   `json:"read_only,omitempty"`
 }
 
 type MCPGatewayProbe struct {
 	State    string           `json:"state"`
 	TestedAt string           `json:"tested_at,omitempty"`
 	Tools    []MCPGatewayTool `json:"tools"`
+	// Reason says why an "unreachable" test failed, so the console can name the next step:
+	// Remote connection class, or process_start/process_exit for local servers.
+	// Detail is the redacted last stderr line or OS error for a local failure.
+	Reason     string `json:"reason,omitempty"`
+	Detail     string `json:"detail,omitempty"`
+	HTTPStatus int    `json:"http_status,omitempty"`
 }
 
 // Input contains references and public trust anchors only. Discovery is an
@@ -71,6 +81,10 @@ type MCPGatewayServerInput struct {
 	Name          string                 `json:"name"`
 	Transport     string                 `json:"transport"`
 	URL           string                 `json:"url"`
+	Command       string                 `json:"command,omitempty"`
+	Args          []string               `json:"args,omitempty"`
+	Env           map[string]string      `json:"env,omitempty"`
+	EnvSecretRefs map[string]string      `json:"env_secret_refs,omitempty"`
 	CredentialRef string                 `json:"credential_ref,omitempty"`
 	EgressCIDRs   []string               `json:"egress_cidrs"`
 	Trust         MCPGatewayTrust        `json:"trust"`
@@ -82,6 +96,9 @@ type MCPGatewayServer struct {
 	MCPGatewayServerInput
 	ID    string          `json:"id"`
 	Probe MCPGatewayProbe `json:"probe"`
+	// Response-only catalogue hints, never tool authority. A snapshot supplies a
+	// non-nil pointer even for an empty proposal; stored configuration omits it.
+	ProposedAllow *[]string `json:"proposed_allow,omitempty"`
 }
 
 type MCPGatewaySnapshot struct {
@@ -115,6 +132,7 @@ func (s *MCPGatewayStore) load(ctx context.Context, tenant model.TenantID) (mode
 	}
 	cfg := MCPGatewayConfig{Servers: []MCPGatewayServer{}}
 	if !found {
+		cfg.SessionTools = true
 		return row, cfg, nil
 	}
 	if row.Scope != tenant || row.Tenant != tenant.String() || row.Kind != mcpGatewayRosterKind || row.Enabled || row.Plugin != nil || len(row.Config) != 1 {
@@ -136,12 +154,13 @@ func (s *MCPGatewayStore) load(ctx context.Context, tenant model.TenantID) (mode
 		return row, cfg, ErrMCPGatewayUnavailable
 	}
 	ids := map[string]bool{}
-	for _, server := range cfg.Servers {
+	for i, server := range cfg.Servers {
+		cfg.Servers[i].ProposedAllow = nil
 		id, err := model.ParseID(server.ID)
 		if err != nil || id.IsZero() || id.String() != server.ID || ids[server.ID] || validateMCPGatewayServer(server.MCPGatewayServerInput) != nil {
 			return row, cfg, ErrMCPGatewayUnavailable
 		}
-		if server.Enabled && (server.Probe.State != "ok" || server.Trust.Resource == "" || server.Trust.Issuer == "" || (server.Trust.JWKSURL == "" && len(server.Trust.JWKS) == 0)) {
+		if server.Enabled && (server.Probe.State != "ok" || !mcpGatewayTrustComplete(server.Trust)) {
 			return row, cfg, ErrMCPGatewayUnavailable
 		}
 		if !validMCPGatewayProbe(server.Probe, true) {
@@ -157,7 +176,25 @@ func (s *MCPGatewayStore) load(ctx context.Context, tenant model.TenantID) (mode
 
 func (s *MCPGatewayStore) Get(ctx context.Context, tenant model.TenantID) (MCPGatewaySnapshot, error) {
 	row, cfg, err := s.load(ctx, tenant)
-	return MCPGatewaySnapshot{MCPGatewayConfig: cfg, Version: row.Version, Source: "store", SessionEndpoint: "/session/mcp"}, err
+	return mcpGatewaySnapshot(cfg, row.Version), err
+}
+
+func mcpGatewaySnapshot(cfg MCPGatewayConfig, version int64) MCPGatewaySnapshot {
+	// Keep the derived proposal out of the persisted roster. Only the current
+	// successful catalogue contributes names; its declarations prove no safety.
+	cfg.Servers = slices.Clone(cfg.Servers)
+	for i, server := range cfg.Servers {
+		proposal := []string{}
+		if server.Probe.State == "ok" {
+			for _, tool := range server.Probe.Tools {
+				if tool.ReadOnly {
+					proposal = append(proposal, tool.Name)
+				}
+			}
+		}
+		cfg.Servers[i].ProposedAllow = &proposal
+	}
+	return MCPGatewaySnapshot{MCPGatewayConfig: cfg, Version: version, Source: "store", SessionEndpoint: "/session/mcp"}
 }
 
 // mutate reads the CAS version and publishes config plus semantic audit atomically.
@@ -203,18 +240,16 @@ func (s *MCPGatewayStore) mutate(ctx context.Context, actor Principal, tenant mo
 	if err != nil {
 		return MCPGatewaySnapshot{}, err
 	}
-	return MCPGatewaySnapshot{MCPGatewayConfig: cfg, Version: row.Version, Source: "store", SessionEndpoint: "/session/mcp"}, nil
+	return mcpGatewaySnapshot(cfg, row.Version), nil
 }
 
 func (s *MCPGatewayStore) PutServer(ctx context.Context, actor Principal, tenant model.TenantID, version int64, id string, in MCPGatewayServerInput) (MCPGatewaySnapshot, error) {
+	in = in.WithDefaults()
 	if err := validateMCPGatewayServer(in); err != nil {
 		return MCPGatewaySnapshot{}, err
 	}
 	if in.EgressCIDRs == nil {
 		in.EgressCIDRs = []string{}
-	}
-	if in.AllowedTools == nil {
-		in.AllowedTools = []MCPGatewayToolPolicy{}
 	}
 	create := id == ""
 	if create {
@@ -232,6 +267,9 @@ func (s *MCPGatewayStore) PutServer(ctx context.Context, actor Principal, tenant
 			if len(cfg.Servers) >= 32 {
 				return fmt.Errorf("%w: at most 32 servers", ErrMCPGatewayInvalid)
 			}
+			if in.AllowedTools == nil {
+				in.AllowedTools = []MCPGatewayToolPolicy{}
+			}
 			cfg.Servers = append(cfg.Servers, MCPGatewayServer{MCPGatewayServerInput: in, ID: id, Probe: MCPGatewayProbe{State: "never_tested", Tools: []MCPGatewayTool{}}})
 			return nil
 		}
@@ -242,13 +280,23 @@ func (s *MCPGatewayStore) PutServer(ctx context.Context, actor Principal, tenant
 			}
 			// Changing destination, credentials or address grants withdraws the
 			// connection observation. A new destination cannot inherit approval.
-			changed := old.URL != in.URL || old.CredentialRef != in.CredentialRef || !reflect.DeepEqual(old.EgressCIDRs, in.EgressCIDRs)
+			changed := old.Transport != in.Transport || old.URL != in.URL || old.Command != in.Command ||
+				!slices.Equal(old.Args, in.Args) || !maps.Equal(old.Env, in.Env) ||
+				!maps.Equal(old.EnvSecretRefs, in.EnvSecretRefs) || old.CredentialRef != in.CredentialRef || !slices.Equal(old.EgressCIDRs, in.EgressCIDRs)
 			if changed {
 				old.Probe = MCPGatewayProbe{State: "never_tested", Tools: []MCPGatewayTool{}}
 			}
 			if in.Enabled {
-				if old.Probe.State != "ok" || in.Trust.Resource == "" || in.Trust.Issuer == "" || (in.Trust.JWKSURL == "" && len(in.Trust.JWKS) == 0) {
-					return fmt.Errorf("%w: enable requires a current successful test and inbound trust", ErrMCPGatewayInvalid)
+				if old.Probe.State != "ok" || !mcpGatewayTrustComplete(in.Trust) {
+					return fmt.Errorf("%w: enable requires a current successful test and complete trust if supplied", ErrMCPGatewayInvalid)
+				}
+				// Server hints never authorize effects. Omitted policies make every
+				// tested tool Ask; only an explicit administrator list may Allow.
+				// An explicit empty list still grants none.
+				if in.AllowedTools == nil {
+					for _, tool := range old.Probe.Tools {
+						in.AllowedTools = append(in.AllowedTools, MCPGatewayToolPolicy{Name: tool.Name, RequiredScope: "tools:call", Destructive: true})
+					}
 				}
 				observed := map[string]bool{}
 				for _, tool := range old.Probe.Tools {
@@ -259,6 +307,9 @@ func (s *MCPGatewayStore) PutServer(ctx context.Context, actor Principal, tenant
 						return fmt.Errorf("%w: allowed tool was not observed", ErrMCPGatewayInvalid)
 					}
 				}
+			}
+			if in.AllowedTools == nil {
+				in.AllowedTools = []MCPGatewayToolPolicy{}
 			}
 			old.MCPGatewayServerInput = in
 			cfg.Servers[i] = old
@@ -305,20 +356,74 @@ func (s *MCPGatewayStore) SaveProbe(ctx context.Context, actor Principal, tenant
 	})
 }
 
+var mcpProbeReasons = map[string]bool{"dns": true, "tls": true, "timeout": true, "connection_refused": true, "http_status": true, "process_start": true, "process_exit": true}
+
 var mcpProbeStates = map[string]bool{"ok": true, "refused": true, "unreachable": true, "invalid_response": true, "egress_denied": true, "redirect_refused": true, "credential_unavailable": true}
 var mcpToolName = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,128}$`)
 var mcpScope = regexp.MustCompile(`^[A-Za-z0-9_:.-]{1,128}$`)
+var mcpEnvName = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]{0,127}$`)
+
+// The runner supplies a private child home and scratch directory. The roster
+// must not redirect package caches into a project or another account's home.
+func mcpRunnerEnvName(name string) bool {
+	return name == "HOME" || name == "TMPDIR" || name == "TMP" || name == "TEMP"
+}
+
+// WithDefaults selects the transport from the provided command or URL. It does
+// not enable a server or grant tools.
+func (in MCPGatewayServerInput) WithDefaults() MCPGatewayServerInput {
+	if in.Transport == "" {
+		in.Transport = "streamable_http"
+		if in.Command != "" {
+			in.Transport = "stdio"
+		}
+	}
+	return in
+}
+
+func mcpGatewayTrustComplete(trust MCPGatewayTrust) bool {
+	if trust.Resource == "" && trust.Issuer == "" && trust.JWKSURL == "" && len(trust.JWKS) == 0 {
+		return true // exact-session authentication does not need external OAuth trust
+	}
+	return trust.Resource != "" && trust.Issuer != "" && (trust.JWKSURL != "" || len(trust.JWKS) != 0)
+}
 
 func validateMCPGatewayServer(in MCPGatewayServerInput) error {
 	bad := func(message string) error { return fmt.Errorf("%w: %s", ErrMCPGatewayInvalid, message) }
 	if strings.TrimSpace(in.Name) != in.Name || len(in.Name) == 0 || len(in.Name) > 128 || strings.ContainsAny(in.Name, "\r\n\x00") {
 		return bad("provide a bounded server name")
 	}
-	if in.Transport != "streamable_http" {
-		return bad("gateway supports Streamable HTTP")
-	}
-	if !mcpPublicURL(in.URL) {
-		return bad("upstream URL must be HTTPS without credentials, query or fragment")
+	switch in.Transport {
+	case "streamable_http":
+		if !mcpPublicURL(in.URL) || in.Command != "" || len(in.Args)+len(in.Env)+len(in.EnvSecretRefs) != 0 {
+			return bad("provide an HTTPS URL without credentials, query or fragment")
+		}
+	case "stdio":
+		if in.URL != "" || in.CredentialRef != "" || len(in.EgressCIDRs) != 0 || strings.TrimSpace(in.Command) != in.Command || in.Command == "" || len(in.Command) > 4096 || strings.ContainsAny(in.Command, "\r\n\x00") || secret.ContainsInlineCredential(in.Command) {
+			return bad("provide a command without inline credentials; stdio secrets belong in env_secret_refs")
+		}
+		if len(in.Args) > 128 || len(in.Env)+len(in.EnvSecretRefs) > 64 {
+			return bad("at most 128 arguments and 64 environment entries")
+		}
+		for _, arg := range in.Args {
+			if len(arg) > 4096 || strings.ContainsAny(arg, "\r\n\x00") || secret.ContainsInlineCredential(arg) || strings.HasPrefix(arg, "store:") {
+				return bad("arguments must be bounded public values; use env_secret_refs for secrets")
+			}
+		}
+		for name, value := range in.Env {
+			if !mcpEnvName.MatchString(name) || mcpRunnerEnvName(name) || strings.HasPrefix(name, "OLIVARES_") || secret.IsCredentialBearingConfigKey(name) || len(value) > 8192 || strings.ContainsRune(value, '\x00') || secret.ContainsInlineCredential(value) {
+				return bad("env must contain bounded public values; use env_secret_refs for secrets")
+			}
+		}
+		for name, value := range in.EnvSecretRefs {
+			ref, ok := secret.ParseReference(value)
+			_, duplicate := in.Env[name]
+			if !mcpEnvName.MatchString(name) || mcpRunnerEnvName(name) || strings.HasPrefix(name, "OLIVARES_") || duplicate || !ok || ref.Scheme != secret.SchemeStore || ValidateSecretName(ref.Locator) != "" || !strings.HasPrefix(ref.Locator, "mcp/") || value != "store:"+ref.Locator {
+				return bad("env_secret_refs must map unique environment names to tenant store:mcp/ references")
+			}
+		}
+	default:
+		return bad("transport must be stdio or streamable_http")
 	}
 	if in.CredentialRef != "" {
 		ref, ok := secret.ParseReference(in.CredentialRef)
@@ -401,6 +506,16 @@ func validMCPGatewayProbe(probe MCPGatewayProbe, allowNever bool) bool {
 		return false
 	}
 	if len(probe.Tools) > 128 || (probe.State != "ok" && len(probe.Tools) != 0) {
+		return false
+	}
+	if probe.Reason != "" && (probe.State != "unreachable" || !mcpProbeReasons[probe.Reason]) {
+		return false
+	}
+	if len(probe.Detail) > 512 || !utf8.ValidString(probe.Detail) || strings.ContainsFunc(probe.Detail, unicode.IsControl) ||
+		(probe.Detail != "" && (probe.State != "unreachable" || probe.Reason == "")) {
+		return false
+	}
+	if (probe.Reason == "http_status") != (probe.HTTPStatus != 0) || (probe.HTTPStatus != 0 && (probe.HTTPStatus < 400 || probe.HTTPStatus > 599)) {
 		return false
 	}
 	names := map[string]bool{}

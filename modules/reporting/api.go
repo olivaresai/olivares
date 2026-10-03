@@ -31,6 +31,7 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	// the enterprise report engine + schedules/branding/templates.
 	// Every route answers 501 until its seam is wired (enterprise build).
 	m.registerEnterpriseRoutes(reg)
+	m.registerSigningRoutes(reg)
 }
 
 // reportTypes is the catalog of available reports.
@@ -68,7 +69,29 @@ var reportTypes = []ReportMeta{
 }
 
 func (m *Module) handleListReports(w http.ResponseWriter, _ *http.Request, _ api.ModuleContext) {
-	writeJSON(w, http.StatusOK, map[string]any{"items": reportTypes})
+	// Use the same renderer check as generation, without mutating the shared catalog.
+	pdfAvailable := PDFAvailable()
+	items := append([]ReportMeta(nil), reportTypes...)
+	for i := range items {
+		formats := make([]Format, 0, len(items[i].Formats))
+		for _, format := range items[i].Formats {
+			if format != FormatPDF || pdfAvailable {
+				formats = append(formats, format)
+			}
+		}
+		items[i].Formats = formats
+	}
+	ready, reason := false, "evidence bundle engine is unavailable"
+	if m.enterprise != nil {
+		reason = "signing readiness is unavailable"
+		if source, ok := m.enterprise.(interface{ BundleSigningStatus() (bool, string) }); ok {
+			ready, reason = source.BundleSigningStatus()
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"items":          items,
+		"bundle_signing": map[string]any{"ready": ready, "reason": reason},
+	})
 }
 
 func (m *Module) handleGenerateReport(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -443,8 +466,8 @@ func writeStoreError(w http.ResponseWriter, err error) {
 	case errors.Is(err, store.ErrResidencyViolation):
 		writeError(w, http.StatusForbidden, "tenant is not resident in this region")
 	default:
-		status, msg, _ := api.StoreErrorStatus(err)
-		writeError(w, status, msg)
+		status, body, _ := api.StoreErrorBody(err)
+		writeJSON(w, status, body)
 	}
 }
 

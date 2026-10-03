@@ -82,11 +82,17 @@ const activationManifestVersion = "olivares.enterprise.activation.v1"
 func (m *ActivationManifest) activeOverlay() map[string]string {
 	out := make(map[string]string, len(m.Entries))
 	for _, e := range m.Entries {
-		if e.State == ActivationActive && e.Env != "" && e.Value != "" {
+		if e.overlaid() {
 			out[e.Env] = e.Value
 		}
 	}
 	return out
+}
+
+// overlaid reports whether the entry is active with a config to overlay: the
+// add-on runs.
+func (e ActivationEntry) overlaid() bool {
+	return e.State == ActivationActive && e.Env != "" && e.Value != ""
 }
 
 // ActivationManifestPath returns the manifest path within a data dir.

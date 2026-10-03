@@ -29,9 +29,10 @@ Codex ドライバー、Grok ドライバー）、生成された
 起動の前に完了してください。欠けている項目はフォールバックではなく拒否です。
 
 1. Olivares AI がインストール済みで、最初の管理者が存在する。
-   セットアップトークンと AAL3 パスキーの壁は
-   [最初の1時間](/how-to/first-hour/) を参照。ソース作成と特権セッション操作は
-   AAL3 を要求します（`core/api/middleware.go` `requireAAL3`）。
+   セットアップトークンは [最初の1時間](/how-to/first-hour/) を参照。
+   管理操作の追加認証（`admin_step_up`）はデフォルトで `none` です。
+   管理者が `totp` または `passkey` を有効にした場合、特権操作の前に
+   そのポリシーの要件を満たしてください（`core/api/middleware.go` `requireStepUp`）。
 2. 公式プロバイダー CLI が **このノード** に既にインストールされている。
    プロファイルは既に存在するホームを登録します。サーバーはパスを解決します
    （絶対、シンボリックリンク解決済み、既存ディレクトリ）。作成、インストール、
@@ -180,7 +181,7 @@ interrupt は保留中の承認を解決し、取り消し、プロンプト自�
 
 ## 関連
 
-- [最初の1時間](/how-to/first-hour/) — セットアップトークン、AAL3、Claude 資格情報ソース。
+- [最初の1時間](/how-to/first-hour/) — セットアップトークン、管理操作の追加認証、Claude 資格情報ソース。
 - [Olivares で Claude Code を実行する](/how-to/run-claude-code-with-olivares/) — 同居トポロジ。
 - [Codex を統合する](/how-to/integrations/codex/) / [Grok Build を統合する](/how-to/integrations/grok/) — コネクターと PEP hook。
 - [セッションランタイム API](/reference/session-runtime-api/) — 一覧、attach、input、stop。Community PTY とエディション境界。

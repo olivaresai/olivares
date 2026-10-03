@@ -51,6 +51,9 @@ type runEventInput struct {
 	// runtime generation (P1). It is built inside the transaction, from the row as
 	// it stood before the mutation cleared the launch id.
 	terminalEvidence *runtimeTerminalEvidence
+	// ownerAccessEnded is stamped by exact-generation access-loss teardown. It
+	// becomes only a fixed cause code in the existing audit, never owner identity.
+	ownerAccessEnded bool
 }
 
 // The three observations P1 may record. They are separate values because the
@@ -118,6 +121,9 @@ func (e *runtimeTerminalEvidence) validate() error {
 // transaction and returns the per-session sequence number assigned to it (the
 // run row stores it as last_event_seq, an O(1) anchor for per-session reads).
 func appendRunEvent(ctx context.Context, sc store.Scope, in runEventInput) (int64, error) {
+	if in.ownerAccessEnded && (!terminalLifecycle(in.event, in.toState) || in.terminalEvidence == nil) {
+		return 0, fmt.Errorf("%w: access-ended cause requires terminal runtime evidence", errInvalidTerminalEvidence)
+	}
 	repo, err := sc.Ext(runEventKind)
 	if err != nil {
 		return 0, err
@@ -155,6 +161,9 @@ func appendRunEvent(ctx context.Context, sc store.Scope, in runEventInput) (int6
 
 	// 1) Seal in the global hash-chained audit ledger (anchored by PayloadHash).
 	meta := map[string]any{"run_ref": in.runRef, "event": in.event, "to_state": in.toState}
+	if in.ownerAccessEnded {
+		meta["stop_cause"] = "owner_access_ended"
+	}
 	if in.workGeneration != nil {
 		meta[colEvWorkItemID] = in.workGeneration.itemID.String()
 		meta[colEvWorkSID] = in.workGeneration.holderSID

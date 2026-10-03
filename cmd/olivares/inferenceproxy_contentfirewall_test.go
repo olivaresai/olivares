@@ -378,8 +378,10 @@ func TestInferenceProxyContentFirewallBuilderRecordsTheDeciderItServes(t *testin
 		}
 		return true
 	})
-	if noProxy != 3 || built != 1 || records != 4 {
-		t.Fatalf("builder has %d no-proxy returns, %d built returns and %d records; want 3, 1 and 4", noProxy, built, records)
+	// Four no-proxy returns: not provisioned, the inferenceproxy module not enabled on this
+	// node (module profiles, c853069f), an unsupported surface, unwired governance.
+	if noProxy != 4 || built != 1 || records != 5 {
+		t.Fatalf("builder has %d no-proxy returns, %d built returns and %d records; want 4, 1 and 5", noProxy, built, records)
 	}
 }
 

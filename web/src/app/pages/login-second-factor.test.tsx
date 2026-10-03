@@ -11,9 +11,15 @@ import { useTenantStore } from '@/stores/tenant'
 import { SecondFactorPanel } from '@/features/identity/totp-login'
 
 const navigateMock = vi.fn()
+const loginSearch = vi.hoisted(() => ({
+  returnTo: undefined as string | undefined,
+}))
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigateMock,
-  Navigate: ({ to }: { to: string }) => <div data-testid="redirect">{to}</div>,
+  useSearch: () => loginSearch,
+  Navigate: ({ to, href }: { to?: string; href?: string }) => (
+    <div data-testid="redirect">{href ?? to}</div>
+  ),
   Link: ({ children, to }: { children?: ReactNode; to?: string }) => (
     <a href={to}>{children}</a>
   ),
@@ -57,6 +63,7 @@ const challenge = {
 
 beforeEach(() => {
   navigateMock.mockReset()
+  loginSearch.returnTo = undefined
   auth.status = 'anonymous'
   auth.can = () => true
   auth.login.mockReset()
@@ -98,7 +105,7 @@ describe('the second-factor login leg', () => {
   it('swaps the form for the code challenge and completes the login', async () => {
     auth.login.mockResolvedValue(challenge)
     totp.challenge.mockResolvedValue({
-      token: 't2',
+      csrf_token: 't2',
       session_id: 's2',
       expires_at: 'later',
     })
@@ -123,7 +130,7 @@ describe('the second-factor login leg', () => {
   it('accepts a recovery code through the alternate entry', async () => {
     auth.login.mockResolvedValue(challenge)
     totp.challenge.mockResolvedValue({
-      token: 't3',
+      csrf_token: 't3',
       session_id: 's3',
       expires_at: 'later',
     })
@@ -177,7 +184,7 @@ describe('the second-factor login leg', () => {
         }),
       )
     totp.activate.mockResolvedValue({
-      token: 't9',
+      csrf_token: 't9',
       session_id: 's9',
       expires_at: 'later',
       recovery_codes: ['ZZZZZZ-YYYYYY-XXXXXX-WWWWWW'],
@@ -217,7 +224,7 @@ describe('the second-factor login leg', () => {
       qr_png_base64: '',
     })
     totp.activate.mockResolvedValueOnce({
-      token: 't-once',
+      csrf_token: 't-once',
       session_id: 's-once',
       expires_at: 'later',
       recovery_codes: ['AAAAAA-BBBBBB-CCCCCC-DDDDDD'],
@@ -264,7 +271,7 @@ describe('the second-factor login leg', () => {
         'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==',
     })
     totp.activate.mockResolvedValue({
-      token: 't4',
+      csrf_token: 't4',
       session_id: 's4',
       expires_at: 'later',
       recovery_codes: ['AAAAAA-BBBBBB-CCCCCC-DDDDDD'],
@@ -288,4 +295,26 @@ describe('the second-factor login leg', () => {
     await waitFor(() => expect(auth.adoptSession).toHaveBeenCalled())
     await waitFor(() => expect(navigateMock).toHaveBeenCalled())
   })
+})
+
+it('keeps the requested page through the second-factor challenge', async () => {
+  loginSearch.returnTo = '/audit?from=2026-09-30#entry-7'
+  auth.login.mockResolvedValue(challenge)
+  totp.challenge.mockResolvedValue({
+    csrf_token: 'csrf_fixture',
+    session_id: 'sid',
+    expires_at: 'later',
+  })
+  const user = userEvent.setup()
+  await submitPassword()
+  expect(navigateMock).not.toHaveBeenCalled()
+  await user.type(await screen.findByLabelText(/Authenticator code/i), '123456')
+  await user.click(screen.getByRole('button', { name: 'Verify and sign in' }))
+  await waitFor(() =>
+    expect(navigateMock).toHaveBeenCalledWith({
+      to: '/audit',
+      href: '/audit?from=2026-09-30#entry-7',
+      replace: true,
+    }),
+  )
 })

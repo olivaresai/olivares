@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Panel } from '@xyflow/react'
 import { ListTruncationBadge } from '@/features/_intel'
 import { useQuery } from '@tanstack/react-query'
@@ -8,7 +9,7 @@ import { Network } from 'lucide-react'
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Spinner } from '@/components/ui/spinner'
 import { GraphCanvas } from '@/features/shared'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
@@ -81,7 +82,7 @@ export function DependencyMap({ tenant }: { tenant: string | null }) {
         description={t('forbidden.description')}
       />
     ) : (
-      <ErrorState retry={() => void query.refetch()} />
+      <QueryErrorState error={query.error} retry={() => void query.refetch()} />
     )
   }
   if (built.nodes.length === 0) {

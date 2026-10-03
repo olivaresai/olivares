@@ -144,7 +144,7 @@ func (l *admissionReconciler) runOnce(ctx context.Context, job string, pass admi
 		l.log.Debug(job + " skipped: this node is a standby, not the active writer")
 		return nil
 	}
-	tenants, err := servedBusinessTenants(ctx, l.st)
+	tenants, err := servedWorkTenants(ctx, l.st)
 	if err != nil {
 		// An enumeration cut short by the engine lifecycle is shutdown, not a fault.
 		if ctxErr := ctx.Err(); ctxErr != nil {

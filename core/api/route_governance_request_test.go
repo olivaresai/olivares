@@ -181,11 +181,9 @@ func TestAGovernedRouteWithoutReconstructableAuthorityRefusesBeforeTheHandler(t 
 // defect this file had on its first run.
 //
 // ⛔ EL SUPERADMIN NO SIRVE, Y SU 503 PARECÍA DEL MECANISMO. La primera versión autenticaba con
-// h.adminLogin() y recibía 503; el log del productor dijo por qué: «global superadmin session
-// cannot be scoped». La evidencia del principal es TENANT-SCOPED por construcción, así que una
-// sesión global no puede tenerla y el productor se niega — correctamente. Un caso montado sobre
-// ese principal mide esa negativa para siempre y NUNCA el camino de éxito, mientras su fallo se
-// lee como «el mecanismo no funciona». El fixture era el defecto, no el sujeto.
+// h.adminLogin(). The fixture uses an ordinary tenant member so this journey
+// independently exercises membership-derived authority. Explicit-tenant superadmin
+// admission has its own governed-route regression test.
 func witnessTenantPrincipal(t *testing.T, h *harness, admin string, tenant model.TenantID) string {
 	t.Helper()
 	created := h.do("POST", "/v1/users", admin, map[string]any{

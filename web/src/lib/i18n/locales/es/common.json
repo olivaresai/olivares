@@ -195,7 +195,47 @@
   "notifications": {
     "title": "Actividad reciente",
     "empty": "Sin actividad reciente.",
-    "viewAll": "Ver todo en el registro de auditoría"
+    "viewAll": "Ver todo en el registro de auditoría",
+    "events": {
+      "auditCheckpoint": "Punto de control de auditoría creado",
+      "orgCreated": "Organización creada",
+      "loginBlocked": "Se bloqueó un inicio de sesión de {{actor}}",
+      "loginBlocked_you": "Se bloqueó un inicio de sesión tuyo",
+      "ssoLogin": "{{actor}} inició sesión con SSO",
+      "ssoLogin_you": "Iniciaste sesión con SSO",
+      "userInvited": "{{actor}} invitó a alguien",
+      "userInvited_you": "Invitaste a alguien",
+      "userJoined": "{{actor}} se unió",
+      "userJoined_you": "Te uniste",
+      "sessionStarted": "{{actor}} inició una sesión",
+      "sessionStarted_you": "Iniciaste una sesión",
+      "sessionStopped": "{{actor}} detuvo una sesión",
+      "sessionStopped_you": "Detuviste una sesión",
+      "sessionResumed": "{{actor}} reanudó una sesión",
+      "sessionResumed_you": "Reanudaste una sesión",
+      "sessionFailed": "Una sesión no pudo empezar",
+      "approvalRequested": "La sesión de {{actor}} pide aprobación",
+      "approvalRequested_you": "Tu sesión pide aprobación",
+      "killswitchEngaged": "{{actor}} activó el interruptor de emergencia",
+      "killswitchEngaged_you": "Activaste el interruptor de emergencia",
+      "killswitchReleased": "{{actor}} desactivó el interruptor de emergencia",
+      "killswitchReleased_you": "Desactivaste el interruptor de emergencia",
+      "killswitchDenied": "El interruptor de emergencia detuvo una sesión",
+      "toolInstalled": "Se instaló una herramienta de agente",
+      "secretStored": "Se guardó un secreto",
+      "viewSaved": "{{actor}} guardó una vista",
+      "viewSaved_you": "Guardaste una vista",
+      "workspaceCreated": "{{actor}} creó un espacio de trabajo",
+      "workspaceCreated_you": "Creaste un espacio de trabajo",
+      "workspaceUpdated": "{{actor}} actualizó un espacio de trabajo",
+      "workspaceUpdated_you": "Actualizaste un espacio de trabajo"
+    },
+    "actors": {
+      "you": "Tú",
+      "member": "Un miembro",
+      "token": "Un token de API",
+      "system": "Olivares"
+    }
   },
   "passphrase": {
     "tooShort": "La frase de acceso debe tener al menos {{min}} caracteres",
@@ -257,6 +297,15 @@
         "first": "Primer módulo",
         "last": "Último módulo",
         "pin": "Fijar o quitar este módulo de favoritos"
+      },
+      "session": {
+        "new": "Nueva sesión"
+      },
+      "sourceDiff": {
+        "nextFile": "Fichero siguiente",
+        "previousFile": "Fichero anterior",
+        "nextHunk": "Cambio siguiente",
+        "previousHunk": "Cambio anterior"
       }
     },
     "when": {

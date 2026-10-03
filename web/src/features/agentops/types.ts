@@ -64,6 +64,9 @@ export interface RunDTO {
   effort?: Effort | string
   model_ref?: string
   workspace_ref?: string
+  /** The workspace the run is authorized in (MC 850beb3d), separate from its folder;
+   * omitted when the engine recorded none. */
+  authz_workspace_id?: string
   /**
    * The HOST directory this session's child was started in: the registered
    * workspace's canonical root, or the directory of its own the engine created for
@@ -73,6 +76,8 @@ export interface RunDTO {
   workspace_path?: string
   /** The workspace template this run was last launched under, if any.*/
   template_id?: string
+  /** The vault secrets this session receives as environment variables, by name. */
+  secret_env?: SecretEnvRef[]
   isolation: Isolation
   state: RunState
   /** Stored process lifecycle, separate from output-derived activity. Absent on older servers. */
@@ -95,11 +100,19 @@ export interface RunDTO {
   last_activity_at?: string
   stopped_at?: string
 
+  /** MC: present only for a Grok Build or OpenCode run, whose own settings can name MCP
+   * servers Olivares does not govern. The engine's sentence, shown as-is. */
+  mcp_governance_warning?: string
+
   // Optional K2 authority links; legacy and non-work runs omit all four.
   work_item_id?: string
   work_lease_fence?: number
   work_dispatch_key?: string
   work_owner_epoch?: number
+  /** Whether the lease the stamp names is held now (MC): `ended` once it is released,
+   * expired or revoked; `unknown` when the engine could not read it. Omitted with no
+   * binding. */
+  work_lease_state?: 'active' | 'ended' | 'unknown'
 
   // Governance posture persisted on the run — the panel renders these.
   /** The agent NHI dimension the kill-switch / budget scope on (empty for a user actor). */
@@ -111,6 +124,14 @@ export interface RunDTO {
   record_io: boolean
   /** The HITL approval opened for a CRITICAL launch (deep-linkable).*/
   approval_ref?: string
+  /** The approval a tool call of this run is waiting on right now (PEP), absent when
+   * nothing waits. Requested from PEP for HU-R12: the run stays `running` while a hook
+   * call waits, so without it the console cannot say the session needs a person. */
+  pending_approval_ref?: string
+  /** The canonical session ids this run may message or hand work to (COMMS-PATH, MC). */
+  peers?: string[]
+  /** "same-template": every live session of the run's template, resolved at each call. */
+  peers_rule?: 'same-template'
   /** A privileged launch (drove the HITL + mandatory recording floor). */
   critical: boolean
 
@@ -163,6 +184,10 @@ export interface ProviderProfileDTO {
    * authorized authentication source. It is not a launch guarantee and is not
    * the source of the requirements panel; that is GET …/launch-readiness. */
   operable: boolean
+  /** An own-login profile that points at this server's user login (the engine
+   * user's own ~/.claude and the like, how profiles were made before FH 036). It is
+   * not launched; sign in again to use a product login. */
+  server_user_login?: boolean
   /** The AUTHORIZED authentication source: `provider_account_home` uses the saved
    * login inside the profile's own homes, `managed_injection` mints a
    * provider-compatible credential through that driver's governed adapter. They
@@ -230,6 +255,29 @@ export interface CreateProfileRequest {
    * agent is one step rather than a checklist. */
   provider_record_ref?: string
   session_work_grant?: SessionWorkGrantRequest | null
+}
+
+/** The provider record a resolved profile runs on, by reference (never a value). */
+export interface ResolveProviderSource {
+  provider_ref: string
+  kind: string
+  display_name?: string
+}
+
+/** GET /provider-profiles/resolve: what a new session of a tool would run on —
+ * its own login, or the key or local model from Providers the engine's one rule
+ * picks. Nothing is created; a tool with nothing to run on is refused (409) with
+ * the sentence that says what to add. */
+export interface ProfilePreviewDTO {
+  reason: 'own_login' | 'api_key'
+  provider?: ResolveProviderSource
+}
+
+/** POST /provider-profiles/resolve: the same answer, as the profile the session
+ * runs under (reused, or created with the server's own homes). */
+export interface ResolvedProfileDTO extends ProfilePreviewDTO {
+  profile: ProviderProfileDTO
+  created: boolean
 }
 
 /** PATCH /provider-profiles/{ref} body — the ONLY post-creation mutation: a label
@@ -362,6 +410,15 @@ export interface CreateRunRequest {
    * snapshot on the run before the spawn and refuses a disabled, retired, foreign or
    * non-operable profile. Absent ⇒ the legacy launch under the runner's own home. */
   provider_profile_ref?: string
+  /** Vault secrets (env/…) the child receives as environment variables, by NAME. The
+   * server opens the values and needs tenant administration from the caller. */
+  secret_env?: SecretEnvRef[]
+}
+
+/** One vault secret a session receives as an environment variable: names only. */
+export interface SecretEnvRef {
+  env: string
+  secret: string
 }
 
 /** A registered workspace (host root a session works in). No file bytes or secrets. */
@@ -471,4 +528,22 @@ export interface AttachNotice {
   state?: string
   detail?: string
   io_unavailable?: string
+}
+
+/** GET /v1/m/sessions/runs/{ref}/changes: files the session changed in its folder. */
+export interface RunChangesDTO {
+  /** The folder by name; empty when the run has no folder on this node. */
+  folder: string
+  since?: string
+  files: { path: string; size: number; modified_at: string }[]
+  truncated: boolean
+}
+
+/** GET /v1/m/sessions/runs/{ref}/changes/file?path=: one file's current text. */
+export interface RunChangedFileDTO {
+  path: string
+  size: number
+  text: string
+  binary: boolean
+  truncated: boolean
 }

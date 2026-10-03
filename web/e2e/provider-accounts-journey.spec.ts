@@ -123,7 +123,7 @@ function content(page: Page) {
 function overviewRow(page: Page) {
   return page
     .getByRole('navigation', { name: 'Main navigation', exact: true })
-    .getByRole('link', { name: 'Overview', exact: true })
+    .getByRole('link', { name: 'Now', exact: true })
     .and(page.locator('[data-nav-row]'))
 }
 

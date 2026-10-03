@@ -96,7 +96,7 @@ beforeEach(() => {
 function renderSurface(over: Partial<Parameters<typeof WorkSurface>[0]> = {}) {
   const onPane = vi.fn()
   const onOpen = vi.fn()
-  renderIntel(
+  const rendered = renderIntel(
     <WorkSurface
       sessions={sessions}
       loading={false}
@@ -111,7 +111,7 @@ function renderSurface(over: Partial<Parameters<typeof WorkSurface>[0]> = {}) {
       {...over}
     />,
   )
-  return { onPane, onOpen }
+  return { onPane, onOpen, unmount: rendered.unmount }
 }
 
 const pane = (id: string) => document.getElementById(`work-pane-${id}`)
@@ -141,23 +141,77 @@ describe('WorkSurface', () => {
 
   it('reports the chosen pane instead of holding it, so the URL can own it', async () => {
     const user = userEvent.setup()
-    const { onPane } = renderSurface()
+    const { onPane } = renderSurface({
+      address: { address: 'live:lr-a', pane: 'narrative', evidence: 'checks' },
+    })
     await user.click(screen.getByTestId('pane-button-context'))
     expect(onPane).toHaveBeenCalledWith('context')
+    await user.click(screen.getByTestId('pane-button-rail'))
+    expect(onPane).toHaveBeenCalledWith('rail')
   })
 
-  it('marks the pane in front, and names what each button controls', () => {
-    renderSurface()
+  it('gives a narrow screen one way back and, from the work, one way to its context', () => {
+    // The list has no strip: opening a row brings its work forward.
+    const first = renderSurface()
+    expect(screen.queryByTestId('pane-button-rail')).toBeNull()
+    expect(screen.queryByTestId('pane-button-context')).toBeNull()
+    first.unmount()
+    // The work: back to the list, and its context, each naming what it controls.
+    const second = renderSurface({
+      address: { address: 'live:lr-a', pane: 'narrative', evidence: 'checks' },
+    })
     expect(screen.getByTestId('pane-button-rail')).toHaveAttribute(
-      'aria-pressed',
-      'true',
+      'aria-controls',
+      'work-pane-rail',
     )
     expect(screen.getByTestId('pane-button-context')).toHaveAttribute(
       'aria-controls',
       'work-pane-context',
     )
+    second.unmount()
+    // The context: back to the work.
+    renderSurface({
+      address: { address: 'live:lr-a', pane: 'context', evidence: 'checks' },
+    })
+    expect(screen.getByTestId('pane-button-narrative')).toHaveAttribute(
+      'aria-controls',
+      'work-pane-narrative',
+    )
     // Every `aria-controls` names an element that is in the document at every width.
     expect(pane('context')).not.toBeNull()
+  })
+
+  it('opens the context pane on demand beside the work, and closes it again', async () => {
+    const user = userEvent.setup()
+    renderSurface({
+      address: { address: 'live:lr-a', pane: 'narrative', evidence: 'checks' },
+    })
+    const grid = () => document.querySelector('[data-context]') as HTMLElement
+    // Closed by default: the trace takes the width, the pane stays mounted.
+    expect(grid().dataset.context).toBe('closed')
+    expect(pane('context')?.className).toContain('xl:hidden')
+    expect(pane('context')).not.toBeNull()
+    const toggle = screen.getByTestId('context-toggle')
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    expect(toggle).toHaveAttribute('aria-controls', 'work-pane-context')
+    await user.click(toggle)
+    expect(grid().dataset.context).toBe('open')
+    expect(pane('context')?.className).toContain('xl:block')
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    await user.click(screen.getByTestId('context-close'))
+    expect(grid().dataset.context).toBe('closed')
+    await user.click(toggle)
+    await user.keyboard('{Escape}')
+    expect(grid().dataset.context).toBe('closed')
+  })
+
+  it('opens the context pane when the address names it', () => {
+    renderSurface({
+      address: { address: 'live:lr-a', pane: 'context', evidence: 'checks' },
+    })
+    expect(
+      (document.querySelector('[data-context]') as HTMLElement).dataset.context,
+    ).toBe('open')
   })
 
   it('passes the open session to the rail as the selected row', async () => {
@@ -199,5 +253,38 @@ describe('WorkSurface', () => {
     })
     const box = await screen.findByTestId('work-composer')
     expect(box).not.toHaveAttribute('data-attached')
+  })
+
+  // F1 09b sweep: after Pin and a reload the rail said Pinned and the menu still said Pin.
+  // The URL named the session by its run; the menu read that key, the toggle another.
+  it('the menu says Unpin for a pinned session the address names by its run', async () => {
+    const user = userEvent.setup()
+    renderSurface({
+      address: { address: 'run:run-a', pane: 'narrative', evidence: 'checks' },
+      pinned: new Set(['live:lr-a']),
+    })
+    await user.click(await screen.findByTestId('narrative-menu'))
+    expect(
+      await screen.findByRole('menuitem', { name: /unpin/i }),
+    ).toBeInTheDocument()
+  })
+
+  it('a pin stored under the run name is found once the session is live, and Unpin removes it', async () => {
+    const user = userEvent.setup()
+    const managed = mergeSessions(
+      [live({ attribution: 'managed', run_ref: 'run-a' })],
+      [RUN],
+    )[0]
+    expect(managed.key).toBe('live:lr-a')
+    const onTogglePin = vi.fn()
+    renderSurface({
+      address: { address: 'live:lr-a', pane: 'narrative', evidence: 'checks' },
+      resolution: { ...resolution, session: managed },
+      pinned: new Set(['run:run-a']),
+      onTogglePin,
+    })
+    await user.click(await screen.findByTestId('narrative-menu'))
+    await user.click(await screen.findByRole('menuitem', { name: /unpin/i }))
+    expect(onTogglePin).toHaveBeenCalledWith('run:run-a')
   })
 })

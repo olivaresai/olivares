@@ -25,12 +25,12 @@ import { useTenantStore } from '@/stores/tenant'
 
 const expires = () => new Date(Date.now() + 3_600_000).toISOString()
 const sessionA = (): LoginResponse => ({
-  token: 'olvs_witness_A',
+  csrf_token: 'olvs_witness_A',
   session_id: 'witness-session-A',
   expires_at: expires(),
 })
 const sessionB = () => ({
-  token: 'olvs_witness_B',
+  csrfToken: 'olvs_witness_B',
   sessionId: 'witness-session-B',
   expiresAt: expires(),
 })
@@ -50,9 +50,9 @@ const unauthorized = vi.fn(() => useSessionStore.getState().clear())
 let order: string[]
 let calls: { path: string; method: string; owner: 'A' | 'B' | 'none' }[]
 const owner = () =>
-  useSessionStore.getState().token === 'olvs_witness_A'
+  useSessionStore.getState().csrfToken === 'olvs_witness_A'
     ? 'A'
-    : useSessionStore.getState().token === 'olvs_witness_B'
+    : useSessionStore.getState().csrfToken === 'olvs_witness_B'
       ? 'B'
       : 'none'
 function Probe() {
@@ -89,7 +89,8 @@ beforeEach(() => {
     },
   })
   configureApiClient({
-    getToken: () => useSessionStore.getState().token,
+    getToken: () => null,
+    getCSRFToken: () => useSessionStore.getState().csrfToken,
     getTenant: () => useTenantStore.getState().activeTenant,
     getExpiresAt: () => useSessionStore.getState().expiresAt,
     onUnauthorized: unauthorized,
@@ -97,11 +98,11 @@ beforeEach(() => {
   })
   vi.spyOn(globalThis, 'fetch').mockImplementation((url, options) => {
     const path = String(url)
-    const bearer = new Headers(options?.headers).get('Authorization')
+    const bearer = new Headers(options?.headers).get('X-CSRF-Token')
     const requestOwner =
-      bearer === 'Bearer olvs_witness_A'
+      bearer === 'olvs_witness_A'
         ? 'A'
-        : bearer === 'Bearer olvs_witness_B'
+        : bearer === 'olvs_witness_B'
           ? 'B'
           : 'none'
     calls.push({ path, method: options?.method ?? 'GET', owner: requestOwner })
@@ -215,7 +216,7 @@ describe('session adoption credential ownership', () => {
       useSessionStore.getState().setSession(sessionB())
       const a = sessionA()
       useSessionStore.getState().setSession({
-        token: a.token,
+        csrfToken: a.csrf_token,
         sessionId: a.session_id,
         expiresAt: a.expires_at,
       })
@@ -280,8 +281,8 @@ describe('session adoption credential ownership', () => {
       releaseB = resolve
     })
     vi.mocked(globalThis.fetch).mockImplementationOnce((_url, opts) => {
-      expect(new Headers(opts?.headers).get('Authorization')).toBe(
-        'Bearer olvs_witness_B',
+      expect(new Headers(opts?.headers).get('X-CSRF-Token')).toBe(
+        'olvs_witness_B',
       )
       calls.push({ path: '/v1/auth/whoami', method: 'GET', owner: 'B' })
       return bResponse
@@ -290,7 +291,7 @@ describe('session adoption credential ownership', () => {
     act(() => {
       const b = sessionB()
       second = auth.adoptSession({
-        token: b.token,
+        csrf_token: b.csrfToken,
         session_id: b.sessionId,
         expires_at: b.expiresAt,
       })

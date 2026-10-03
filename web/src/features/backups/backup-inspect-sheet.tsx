@@ -7,11 +7,11 @@
 // renders the decoded manifest verbatim: engine, creation time, tenants and sealed
 // key names. The web derives nothing (ARCHITECTURE.md SS8) — an operator reviews exactly
 // what a restore of this bundle would bring back.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { Archive } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
-import { ErrorState } from '@/components/ui/error-state'
 import { KvList, KvRow } from '@/components/ui/kv'
 import {
   Sheet,
@@ -72,7 +72,8 @@ export function BackupInspectSheet({
             <Spinner />
           </div>
         ) : detailQ.isError ? (
-          <ErrorState
+          <QueryErrorState
+            error={detailQ.error}
             title={t('inspect.loadFailed')}
             retry={() => void detailQ.refetch()}
           />

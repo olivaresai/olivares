@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 	"github.com/olivaresai/olivares/connectors/modelprovider"
 )
 
@@ -141,9 +142,9 @@ func (d *httpDriver) openStream(ctx context.Context, body any) (io.ReadCloser, e
 		return nil, err
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		excerpt, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		excerpt := redact.ReadHTTPError(resp.Body, 4096, req, d.cred)
 		_ = resp.Body.Close()
-		return nil, &modelprovider.APIError{Method: http.MethodPost, Path: d.path, Status: resp.StatusCode, Body: strings.TrimSpace(string(excerpt))}
+		return nil, &modelprovider.APIError{Method: http.MethodPost, Path: d.path, Status: resp.StatusCode, Body: excerpt}
 	}
 	return resp.Body, nil
 }

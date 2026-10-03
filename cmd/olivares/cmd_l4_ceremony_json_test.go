@@ -190,7 +190,7 @@ func l4SignedFeed(t *testing.T, advisories ...secadvisory.Advisory) (string, str
 
 func TestL4SecurityCheckBothPanes(t *testing.T) {
 	feed, pub := l4SignedFeed(t, l4Advisory("26.5.0"))
-	unevalFeed, unevalPub := l4SignedFeed(t, l4Advisory("26.5"))
+	unevalFeed, unevalPub := l4SignedFeed(t, l4Advisory("26.5.0.1"))
 
 	t.Run("affected exits 7 on both panes", func(t *testing.T) {
 		args := []string{"security", "check", "--feed", feed, "--pubkey", pub, "--product-version", "26.6.0"}
@@ -297,8 +297,8 @@ func TestL4SecurityCheckBothPanes(t *testing.T) {
 				"  cause:   1 of the 1 advisory(ies) in this feed could not be evaluated, so\n"+
 				"           \"not affected\" would be a claim about advisories this build never\n"+
 				"           read:\n"+
-				"             - OLIVARES-L4-0001: \"introduced\":\"26.5\" is not a version this build can order: "+
-				"release: version \"26.5\" is not MAJOR.MINOR.PATCH\n"+
+				"             - OLIVARES-L4-0001: \"introduced\":\"26.5.0.1\" is not a version this build can order: "+
+				"release: version \"26.5.0.1\" is not MAJOR.MINOR or MAJOR.MINOR.PATCH\n"+
 				"  way out: this is a FEED problem, not a key problem — the signature verified.\n"+
 				"           Take it to the advisory publisher, or upgrade to a build that\n"+
 				"           understands these ranges.\n")
@@ -321,7 +321,7 @@ func TestL4SecurityCheckBothPanes(t *testing.T) {
 		if got, _ := row["id"].(string); got != "OLIVARES-L4-0001" {
 			t.Fatalf("security check -o json unevaluable[0].id = %q, want OLIVARES-L4-0001", got)
 		}
-		if reason, _ := row["reason"].(string); !strings.Contains(reason, "not MAJOR.MINOR.PATCH") {
+		if reason, _ := row["reason"].(string); !strings.Contains(reason, "not MAJOR.MINOR or MAJOR.MINOR.PATCH") {
 			t.Fatalf("security check -o json unevaluable[0].reason = %q, want the ordering failure it names", reason)
 		}
 	})
@@ -340,7 +340,7 @@ func TestL4SecurityCheckBothPanes(t *testing.T) {
 			Affected: []secadvisory.Affected{{
 				Package: secadvisory.Package{Ecosystem: "Go", Name: productModule},
 				Ranges: []secadvisory.Range{{Type: "SEMVER", Events: []secadvisory.Event{
-					{Introduced: "26.5"}, {Fixed: "26.7.1"},
+					{Introduced: "26.5.0.1"}, {Fixed: "26.7.1"},
 				}}},
 			}},
 		}
@@ -354,8 +354,8 @@ func TestL4SecurityCheckBothPanes(t *testing.T) {
 				"  - OLIVARES-L4-0001 [CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H]: L4 witness advisory (fixed in 26.7.1)\n"+
 				"      https://olivares.ai/psirt/L4-0001\n"+
 				"\n1 further advisory(ies) could not be evaluated, so this list may be incomplete:\n"+
-				"  - OLIVARES-L4-0002: \"introduced\":\"26.5\" is not a version this build can order: "+
-				"release: version \"26.5\" is not MAJOR.MINOR.PATCH\n"+
+				"  - OLIVARES-L4-0002: \"introduced\":\"26.5.0.1\" is not a version this build can order: "+
+				"release: version \"26.5.0.1\" is not MAJOR.MINOR or MAJOR.MINOR.PATCH\n"+
 				"\nRun `olivares upgrade` to move to a patched, signed release.\n")
 
 		jout, _, jerr := runLeafCLI(t, append([]string{"-o", "json"}, args...)...)

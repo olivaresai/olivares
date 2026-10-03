@@ -70,7 +70,7 @@ func TestQuickstartDoesNotOfferABlankOneTimeToken(t *testing.T) {
 	if strings.Contains(got, "Complete setup with this one-time token") {
 		t.Errorf("quickstart told the customer to paste a token it does not have:\n%s", got)
 	}
-	for _, want := range []string{"SETUP STILL PENDING", "CANNOT be shown again", "setup.token"} {
+	for _, want := range []string{"Setup is still pending", "cannot be shown again", "--new-token"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("quickstart pending notice lacks %q:\n%s", want, got)
 		}

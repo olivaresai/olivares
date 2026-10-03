@@ -16,23 +16,15 @@ export type ResolvedTheme = 'light' | 'dark'
 const STORAGE_KEY = 'olivares.theme'
 
 /**
- * THE DEFAULT IS DARK, AND IT USED TO BE `system`.
+ * THE DEFAULT FOLLOWS THE SYSTEM (HU-27, Root 2026-10-01). It was DARK from C1 to
+ * 26.10; the hands-on review reversed that: an operator who never chose a theme gets
+ * the one their operating system asks for, and Light or Dark only when they pick one.
+ * The theme toggle still offers all three, and every token pair stays AA+ in both.
  *
- * ⛔ THIS IS A PRODUCT DECISION, NOT A PREFERENCE. Named a dark, quiet surface as
- *    the standard the console is measured against; all 23 of those reference captures
- *    are dark, and none is light. `system` handed the product's own skin to whatever the
- *    operator's OS happened to be set to, so the first thing half the people who opened
- *    the console saw was NOT the product as designed.
- *
- * ⛔ AND NOTHING IS TAKEN AWAY. `light` and `system` remain explicit choices, the theme
- *    toggle offers all three, and every token pair stays AA+ in both themes: the light
- *    theme has parity and is not a courtesy. What changed is which one an operator gets
- *    before they have said anything.
- *
- * ⛔ THE BOOTSTRAP IN `index.html` MUST AGREE WITH THIS FUNCTION BYTE FOR BYTE. It runs
- *    before any bundle, and a disagreement is not a subtle bug — it is a visible flash
- *    of the wrong theme on every cold load. `resolveDark` below is the mirror; the
- *    bootstrap's condition is the same three clauses in the same order.
+ * ⛔ THE BOOTSTRAP IN `index.html` MUST AGREE WITH THIS FUNCTION. It runs before any
+ *    bundle, and a disagreement is a visible flash of the wrong theme on every cold
+ *    load. `resolveDark` below is the mirror; theme.test.ts runs the bootstrap itself
+ *    against both OS preferences, so a drift fails there.
  */
 function readStored(): Theme {
   try {
@@ -41,7 +33,7 @@ function readStored(): Theme {
   } catch {
     /* localStorage may be unavailable (private mode) */
   }
-  return 'dark'
+  return 'system'
 }
 
 function systemPrefersDark(): boolean {

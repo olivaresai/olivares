@@ -55,7 +55,7 @@
   },
   "enterprise": {
     "title": "Enterprise reports",
-    "description": "Live compliance posture, the executive risk summary, and the signed audit evidence bundle.",
+    "description": "Live compliance posture, the executive risk summary, and the audit evidence bundle.",
     "request": "Request",
     "done": "Report downloaded",
     "seam": "This report lives in a module that is not linked to this deployment. Nothing is broken.",
@@ -69,8 +69,14 @@
     },
     "bundle": {
       "title": "Evidence bundle",
-      "description": "The SIGNED audit evidence bundle — what you hand an external auditor."
-    }
+      "description": "The audit evidence bundle you hand an external auditor. It is signed only when a signing key is configured."
+    },
+    "signed": "Signed with the configured key.",
+    "signedDone": "Bundle downloaded and signed.",
+    "unsigned": "Downloaded, not signed: {{reason}}.",
+    "notReady": "Will download unsigned: {{reason}}.",
+    "unsignedUnknown": "the engine gave no reason",
+    "signingSettings": "Report signing settings"
   },
   "runs": {
     "open": "History",

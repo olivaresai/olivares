@@ -160,7 +160,18 @@ type readEvidenceContributions struct {
 	policy policyEvidenceContribution
 }
 
-func (az *Authorizer) authorizeEvidence(ctx context.Context, req Request, consulted *readEvidenceContributions) AuthorizationEvidence {
+func (az *Authorizer) authorizeEvidence(ctx context.Context, req Request, consulted *readEvidenceContributions) (out AuthorizationEvidence) {
+	ctx, capture := beginAuthorizationCapture(ctx, req)
+	at := az.clock()
+	defer func() {
+		if capture != nil {
+			capture.snapshot.Typed = &RetainedChecks{Core: out.CorePermission, ResourceGuard: out.ResourceGuard}
+			if out.Outcome == EvidenceUnknown {
+				capture.snapshot.Complete = false
+			}
+		}
+		finishAuthorizationCapture(ctx, req, capture, at, out.Outcome)
+	}()
 	if az == nil {
 		return unknownAuthorizationEvidence("authorizer_unavailable")
 	}
@@ -230,6 +241,8 @@ func (az *Authorizer) authorizeEvidence(ctx context.Context, req Request, consul
 	// principal authorized by policy on its path.
 	case baseRequest.Route.rbacPermitted(baseRequest, az.rbacAllows(baseRequest)):
 		corePermission = CheckEvidence{Verdict: CheckClean, Code: "rbac_permitted"}
+	case ownerImplicitScopedGrant(baseRequest):
+		corePermission = CheckEvidence{Verdict: CheckClean, Code: "owner_scoped_grant_permitted"}
 	case !scoped.known:
 		// A legacy/unavailable scoped engine might have supplied the positive grant
 		// that RBAC lacks. That is UNKNOWN, not an RBAC business denial.
@@ -291,6 +304,7 @@ func (az *Authorizer) scopedEvidence(
 			known: true,
 		}
 	}
+	requireAuthorizationInputs(ctx, true)
 	if nilEvidenceProducer(az.scoped) {
 		return scopedEvidenceContribution{
 			decision: unknownScopedEvidence("scoped_evidence_unavailable"),
@@ -337,6 +351,7 @@ func (az *Authorizer) policyEvidence(
 			ForbidAbsence: CheckEvidence{Verdict: CheckClean, Code: "policy_forbid_not_configured"},
 		}}
 	}
+	requireAuthorizationInputs(ctx, false)
 	if nilEvidenceProducer(az.eval) {
 		return policyEvidenceContribution{decision: PolicyEvidenceDecision{
 			ForbidAbsence: CheckEvidence{Verdict: CheckUnknown, Code: "policy_evidence_unavailable"},

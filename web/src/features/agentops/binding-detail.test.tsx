@@ -170,7 +170,7 @@ beforeEach(() => {
   auth.tenant = 't1'
   auth.principal = 'u1'
   useSessionStore.setState({
-    token: 'olvs_first',
+    csrfToken: 'olvs_first',
     sessionId: 'sid-1',
     expiresAt: '2030-01-01T00:00:00Z',
   })
@@ -476,7 +476,7 @@ describe('Binding details — the cycle does not outlive its authority', () => {
       'new-session credential',
       () =>
         useSessionStore.getState().setSession({
-          token: 'olvs_next',
+          csrfToken: 'olvs_next',
           sessionId: 'sid-2',
           expiresAt: '2030-01-01T00:00:00Z',
         }),
@@ -486,7 +486,7 @@ describe('Binding details — the cycle does not outlive its authority', () => {
       () => {
         // What POST /v1/auth/refresh really does: a new bearer, the SAME session id.
         useSessionStore.getState().setSession({
-          token: 'olvs_rotated',
+          csrfToken: 'olvs_rotated',
           sessionId: 'sid-1',
           expiresAt: '2030-01-01T00:00:00Z',
         })

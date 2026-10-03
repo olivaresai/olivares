@@ -151,7 +151,7 @@ tar -C "$payload" -czf "$fixture/$archive" README
 write_checksums
 expect_rc 1 "mutant iii: production installer rejects archive without olivares" run_installer \
 	--bindir "$scratch/bin-archive-mutant"
-grep -Fq 'does not contain a top-level olivares binary' "$scratch/err"
+grep -Fq 'could not extract olivares into' "$scratch/err"
 
 # iv. /proc is not a writable install destination even for uid 0. A fake sudo in
 # PATH records any forbidden escalation attempt.

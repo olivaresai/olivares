@@ -140,7 +140,8 @@ func (az *Authorizer) DecideRouteRead(ctx context.Context, req Request) (RouteRe
 	}
 	contributions := readEvidenceContributions{}
 	var ev AuthorizationEvidence
-	if req.Route.RequiresStepUp(req.Principal.AAL) {
+	if req.Route.RequiresStepUp(ctx, req.Principal) {
+		az.RecordStepUpRefusal(ctx, req)
 		ev = AuthorizationEvidence{Outcome: EvidenceDeny, ScopedEffect: EffectAbstain}
 	} else {
 		ev = az.authorizeEvidence(ctx, req, &contributions)

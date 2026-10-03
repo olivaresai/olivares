@@ -42,7 +42,7 @@ while [[ "$#" -gt 0 ]]; do
 done
 
 case "$family" in apt | rpm | apk) ;; *) usage >&2; exit 2 ;; esac
-[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { usage >&2; exit 2; }
+[[ "$version" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || { usage >&2; exit 2; }
 
 fail() { printf 'package-repository-client: HALLAZGO — %s\n' "$*" >&2; exit 1; }
 blind() { printf 'package-repository-client: NO HE PODIDO MIRAR — %s\n' "$*" >&2; exit 2; }

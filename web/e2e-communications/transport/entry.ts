@@ -35,7 +35,7 @@ const tick = () =>
     requestAnimationFrame(() => requestAnimationFrame(() => r())),
   )
 const session = (token: string, ttlMs: number) => ({
-  token,
+  csrfToken: token,
   sessionId: 'same-local-fixture-session',
   expiresAt: new Date(Date.now() + ttlMs).toISOString(),
 })
@@ -99,7 +99,8 @@ window.runCase = async (replay: boolean, rotate: boolean) => {
   root.render(createElement(Harness))
   await tick()
   configureApiClient({
-    getToken: () => useSessionStore.getState().token,
+    getToken: () => null,
+    getCSRFToken: () => useSessionStore.getState().csrfToken,
     getTenant: () => 'tenant',
     onUnauthorized: () => {},
     getExpiresAt: () => useSessionStore.getState().expiresAt,
@@ -205,7 +206,8 @@ window.runQueuedCase = async (rotate: boolean, viaBegin: boolean) => {
   )
   await tick()
   configureApiClient({
-    getToken: () => useSessionStore.getState().token,
+    getToken: () => null,
+    getCSRFToken: () => useSessionStore.getState().csrfToken,
     getTenant: () => 'tenant',
     onUnauthorized: () => {},
     getExpiresAt: () => useSessionStore.getState().expiresAt,

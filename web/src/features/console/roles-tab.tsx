@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import {
   KeyRound,
@@ -26,7 +27,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
@@ -144,6 +144,7 @@ export function RolesTab() {
         agentGroups={agItems}
         loading={grants.isLoading}
         isError={grants.isError}
+        error={grants.error}
         refetch={() => void grants.refetch()}
         canAdmin={canAdmin}
       />
@@ -154,6 +155,7 @@ export function RolesTab() {
         groups={groupItems}
         loading={roles.isLoading}
         isError={roles.isError}
+        error={roles.error}
         refetch={() => void roles.refetch()}
         canAdmin={canAdmin}
       />
@@ -163,6 +165,7 @@ export function RolesTab() {
         groups={groupItems}
         loading={groups.isLoading}
         isError={groups.isError}
+        error={groups.error}
         refetch={() => void groups.refetch()}
         canAdmin={canAdmin}
       />
@@ -261,6 +264,7 @@ function GrantsSection({
   agentGroups,
   loading,
   isError,
+  error,
   refetch,
   canAdmin,
 }: {
@@ -271,6 +275,8 @@ function GrantsSection({
   agentGroups: { slug: string; name: string }[]
   loading: boolean
   isError: boolean
+  /** The read's error, for the one error mapping (QueryErrorState). */
+  error?: unknown
   refetch: () => void
   canAdmin: boolean
 }) {
@@ -312,7 +318,7 @@ function GrantsSection({
           <Spinner />
         </div>
       ) : isError ? (
-        <ErrorState retry={refetch} />
+        <QueryErrorState error={error} retry={refetch} />
       ) : grants.length === 0 ? (
         <EmptyState
           action={
@@ -750,6 +756,7 @@ function RolesSection({
   groups,
   loading,
   isError,
+  error,
   refetch,
   canAdmin,
 }: {
@@ -758,6 +765,8 @@ function RolesSection({
   groups: PermGroupDTO[]
   loading: boolean
   isError: boolean
+  /** The read's error, for the one error mapping (QueryErrorState). */
+  error?: unknown
   refetch: () => void
   canAdmin: boolean
 }) {
@@ -802,7 +811,7 @@ function RolesSection({
           <Spinner />
         </div>
       ) : isError ? (
-        <ErrorState retry={refetch} />
+        <QueryErrorState error={error} retry={refetch} />
       ) : roles.length === 0 ? (
         <EmptyState
           action={
@@ -1133,6 +1142,7 @@ function GroupsSection({
   groups,
   loading,
   isError,
+  error,
   refetch,
   canAdmin,
 }: {
@@ -1140,6 +1150,8 @@ function GroupsSection({
   groups: PermGroupDTO[]
   loading: boolean
   isError: boolean
+  /** The read's error, for the one error mapping (QueryErrorState). */
+  error?: unknown
   refetch: () => void
   canAdmin: boolean
 }) {
@@ -1182,7 +1194,7 @@ function GroupsSection({
           <Spinner />
         </div>
       ) : isError ? (
-        <ErrorState retry={refetch} />
+        <QueryErrorState error={error} retry={refetch} />
       ) : groups.length === 0 ? (
         <EmptyState
           action={

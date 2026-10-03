@@ -24,8 +24,6 @@ const { api, mockNavigate, authState } = vi.hoisted(() => ({
     wifGraph: vi.fn(),
     externalKeys: vi.fn(),
     workspaceResidency: vi.fn(),
-    tlsPosture: vi.fn(),
-    cryptoInventory: vi.fn(),
     pivStatus: vi.fn(),
     webauthnRegisterOptions: vi.fn(),
     webauthnRegister: vi.fn(),
@@ -150,10 +148,6 @@ beforeEach(() => {
     available: false,
     reason: 'the Claude Admin-API connector is not wired',
   })
-  api.tlsPosture.mockRejectedValue(new ApiError(404, 'not_found', 'pending'))
-  api.cryptoInventory.mockRejectedValue(
-    new ApiError(404, 'not_found', 'pending'),
-  )
   api.pivStatus.mockRejectedValue(new ApiError(404, 'not_found', 'pending'))
   api.webauthnCredentials.mockResolvedValue({ items: [] })
 })
@@ -822,6 +816,21 @@ describe('ANT2-08/07 — WIF graph: visualise & lint, never create', () => {
 //the posture tab's three answers. "No customer-managed keys" and "we could not
 // look" are different facts; before this they rendered alike, because the route 404'd
 // and every test in this file mocked the 404 rather than the engine.
+// EU-CB08 (EU sweep on 09b): the posture tab read /v1/m/identity/tls and
+// /crypto-inventory on every visit; neither route exists, so each open made 404s and
+// console errors under "Backend pending" cards. Only the served sections remain.
+describe('Posture reads only the routes the engine serves', () => {
+  it('shows External Keys and residency, and no TLS or PQC section', async () => {
+    wrap(<PostureTab />)
+    await waitFor(() => expect(api.externalKeys).toHaveBeenCalled())
+    expect(api.workspaceResidency).toHaveBeenCalled()
+    expect(screen.queryByText('Panel TLS (cert-manager)')).toBeNull()
+    expect(screen.queryByText('Crypto agility / PQC inventory')).toBeNull()
+    expect(api).not.toHaveProperty('tlsPosture')
+    expect(api).not.toHaveProperty('cryptoInventory')
+  })
+})
+
 describe('External Keys / residency posture — the three answers', () => {
   it('says WHY when the Admin connector is not wired, instead of an empty inventory', async () => {
     wrap(<PostureTab />)

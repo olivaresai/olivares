@@ -82,6 +82,7 @@ for token in (
     '"$installed" version', ' doctor ', ' -o json', '--start',
     'bash "$lib" binary', 'bash "$lib" doctor', 'bash "$lib" redacted',
     'bash "$lib" no-sudo', 'NO HE PODIDO MIRAR',
+    'scripts/session-journey-smoke.sh" --binary "$installed"',
 ):
     assert token in ci
 # The era rule itself: v before 26.10, bare from 26.10 on.

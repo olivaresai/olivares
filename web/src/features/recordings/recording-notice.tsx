@@ -26,9 +26,13 @@ import {
 import { Spinner } from '@/components/ui/spinner'
 import { IntelNotice } from '@/features/_intel'
 import { useAuth } from '@/lib/auth/context'
+import { useServerInfo } from '@/lib/hooks/use-server-info'
+import { useModuleOn } from '@/stores/modules'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { recordingApi, recordingKeys } from './api'
 import './i18n'
+
+const RECORDING = 'recording'
 
 export function RecordingNotice({
   namespace,
@@ -43,10 +47,24 @@ export function RecordingNotice({
 }) {
   const { t } = useTranslation('recordings')
   const { activeTenant } = useAuth()
+  // Recording is off on a default install, and its routes then answer 404
+  // module_not_enabled: six ordinary views made 18 such reads per walk (EU-CB02, SC 59
+  // item 4). The notice is read only once server-info has answered AND lists Recording as
+  // running. The module store alone is not enough: it starts empty ("everything on") until
+  // its effect syncs server-info, which let the first read through.
+  const info = useServerInfo()
+  const storeOn = useModuleOn(RECORDING)
+  const recordingOn =
+    info.isSuccess &&
+    !(info.data?.modules_not_enabled ?? []).some(
+      (m) => m.trim().toLowerCase() === RECORDING,
+    ) &&
+    storeOn
 
   const noticeQuery = useQuery({
     queryKey: recordingKeys.notice(activeTenant),
     queryFn: () => recordingApi.notice(),
+    enabled: recordingOn,
   })
 
   const ack = usePrivilegedMutation({

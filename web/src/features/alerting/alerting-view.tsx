@@ -17,6 +17,7 @@
 // What survives of the old sentence is the part that is still true and is a DIFFERENT
 // object: the delivery LEDGER (GET /deliveries) is append-only and has no retry; the
 // outbox is the state machine, and that is what is requeued.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import './i18n'
 import { useMemo, useState } from 'react'
 import {
@@ -55,7 +56,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { PageHeader } from '@/components/ui/page-header'
@@ -1056,7 +1057,10 @@ function DeliveriesList({
           <Spinner />
         </div>
       ) : deliveriesQ.isError ? (
-        <ErrorState retry={() => void deliveriesQ.refetch()} />
+        <QueryErrorState
+          error={deliveriesQ.error}
+          retry={() => void deliveriesQ.refetch()}
+        />
       ) : items.length === 0 ? (
         <EmptyState
           description={t('deliveries.emptyHint')}

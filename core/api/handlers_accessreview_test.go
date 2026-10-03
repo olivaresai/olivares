@@ -106,6 +106,9 @@ func TestAccessReviewExportSealed(t *testing.T) {
 	tenant := h.createOrg(admin, "acme")
 	editorID, _ := h.authzMember(admin, "ed@acme.io", "editorpass1", auth.RoleEditor, tenant)
 	h.authzMember(admin, "vw@acme.io", "viewerpass1", auth.RoleViewer, tenant)
+	// Members are added before the passkey step-up is required: adding a person asks
+	// for the same step-up (HU-28).
+	h.requirePasskeyStepUp()
 	agentID := h.mkAgent(admin, tenant, "bot")
 
 	body := map[string]any{"resource": map[string]any{"type": "agent", "id": agentID}}

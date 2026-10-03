@@ -30,10 +30,11 @@ Remplissez-les avant un lancement. Un élément manquant est un refus, pas un
 repli.
 
 1. Olivares AI est installé et le premier administrateur existe.
-   Voir [Votre première heure](/fr/how-to/first-hour/) pour le jeton de
-   configuration et la barrière passkey AAL3. La création de sources et les
-   opérations de session privilégiées exigent AAL3
-   (`core/api/middleware.go` `requireAAL3`).
+   Voir [Votre première heure](/fr/how-to/first-hour/) pour le jeton de configuration.
+   L’authentification renforcée administrative (`admin_step_up`) est réglée sur
+   `none` par défaut. Si un administrateur active `totp` ou `passkey`, satisfaites
+   cette politique avant les opérations privilégiées
+   (`core/api/middleware.go` `requireStepUp`).
 2. La CLI officielle du fournisseur est déjà installée sur **ce nœud**. Le
    profil enregistre des homes qui existent déjà. Le serveur résout les chemins
    (absolus, liens symboliques résolus, répertoire existant) et ne crée, n’installe
@@ -191,7 +192,7 @@ accusé de réception confirmé du fournisseur.
 
 ## Pages connexes
 
-- [Votre première heure](/fr/how-to/first-hour/) — jeton de configuration, AAL3, source d’identifiants Claude.
+- [Votre première heure](/fr/how-to/first-hour/) — jeton de configuration, authentification renforcée administrative, source d’identifiants Claude.
 - [Exécuter Claude Code avec Olivares](/how-to/run-claude-code-with-olivares/) — topologies de co-déploiement.
 - [Intégrer Codex](/how-to/integrations/codex/) / [Intégrer Grok Build](/how-to/integrations/grok/) — connecteur et hook PEP.
 - [API d’exécution de session](/reference/session-runtime-api/) — liste, attach, input, stop ; PTY Community et frontière d’édition.

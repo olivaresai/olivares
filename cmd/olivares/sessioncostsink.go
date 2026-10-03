@@ -6,29 +6,20 @@ package main
 
 import (
 	"context"
-	"log/slog"
+	"errors"
 
+	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/sessions"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
 
-// sessioncostsink.go is the composition-root adapter that puts what a GOVERNED
-// SESSION cost onto the same estate cost bus the in-process inference client
-// already feeds.
-//
-// ⛔ WHY IT EXISTS, MEASURED 2026-09-18. A
-// real governed turn answered, the driver reported `total_cost_usd` and the full
-// token usage on its own result frame, and `finops spend summary` over the same
-// window returned `samples 0`. The producers of cost.sampled were the three
-// adapters around the in-process inference client (claude_inference.go,
-// modelsactuate.go, recording.go) and NOTHING in the sessions plane: a FinOps
-// product could not price the sessions it governs. This adapter is the missing
-// producer, and it is a composition-root adapter for the usual reason — the
-// module owns no observation vocabulary and must not import one.
+// sessionCostSink maps governed turn usage to the owning session observation
+// port. That port updates the managed row and publishes the canonical cost event
+// once; a separate unmarked publication would create a legacy duplicate.
 type sessionCostSink struct {
-	sink runtimeObservationSink
-	log  *slog.Logger
+	credentials *auth.SessionCredentials
+	sessions    *sessions.Module
 }
 
 var _ sessions.SessionCostSink = (*sessionCostSink)(nil)
@@ -49,13 +40,20 @@ var _ sessions.SessionCostSink = (*sessionCostSink)(nil)
 func (s *sessionCostSink) PublishSessionCost(
 	ctx context.Context, tenant model.TenantID, sample sessions.SessionCostSample,
 ) error {
-	if s == nil || s.sink == nil {
-		return nil
+	if s == nil || s.credentials == nil || s.sessions == nil {
+		return errors.New("managed session cost publication is unavailable")
+	}
+	principal, scope, err := s.credentials.ResolveRun(ctx, tenant, sample.RunRef)
+	if err != nil {
+		return err
+	}
+	if scope.TenantID != tenant || scope.RunRef != sample.RunRef || sample.SessionRef != "" && sample.SessionRef != scope.SessionRef {
+		return auth.ErrUnauthenticated
 	}
 	cs := sdkmodel.CostSample{
 		ProviderRef:           sample.ProviderRef,
 		ModelRef:              sample.ModelRef,
-		SessionRef:            sample.SessionRef,
+		SessionRef:            scope.SessionRef,
 		InputTokens:           sample.InputTokens,
 		OutputTokens:          sample.OutputTokens,
 		CostMicroUSD:          sample.CostMicroUSD,
@@ -67,11 +65,5 @@ func (s *sessionCostSink) PublishSessionCost(
 		Provenance:            sdkmodel.ProvenanceEstimated,
 		CostType:              "session_usage",
 	}
-	if cs.SessionRef == "" {
-		// The canonical session identity is what a FinOps reader joins on; when
-		// admission gave the launch none, the run reference is the only stable name
-		// this turn has, and naming it is better than posting an unattributable row.
-		cs.SessionRef = sample.RunRef
-	}
-	return s.sink.PublishCostSample(ctx, tenant.String(), cs)
+	return s.sessions.RecordSessionObservation(ctx, principal, cs)
 }

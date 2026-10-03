@@ -30,13 +30,25 @@ const (
 // transcript, or process arguments (minimal-data, docs/SECURITY-HARDENING.md). The inference
 // token is injected in-memory and discarded; only its non-sensitive id lands.
 const (
-	colRunRef         = "run_ref"
-	colRunName        = "name"
-	colTransport      = "transport"
-	colPermissionMode = "permission_mode"
-	colEffort         = "effort"
-	colRunModelRef    = "model_ref"
-	colWorkspaceRef   = "workspace_ref"
+	colRunQueuedUserID            = "queued_user_id"
+	colRunQueuedCredentialID      = "queued_credential_id"
+	colRunQueuedCredentialKind    = "queued_credential_kind"
+	colRunQueuedCredentialVersion = "queued_credential_version"
+	colRunQueuedCredentialSeal    = "queued_credential_seal"
+	colRunQueuedActor             = "queued_actor"
+	colRunQueuedActorKind         = "queued_actor_kind"
+	colRunEnvAllow                = "env_allow_names"
+	colRunSecretEnv               = "secret_env_names"
+	colRunQueuedIntent            = "queued_intent"
+	colRunRef                     = "run_ref"
+	colRunPeers                   = "peers"
+	colRunPeersRule               = "peers_rule"
+	colRunName                    = "name"
+	colTransport                  = "transport"
+	colPermissionMode             = "permission_mode"
+	colEffort                     = "effort"
+	colRunModelRef                = "model_ref"
+	colWorkspaceRef               = "workspace_ref"
 	// colRunWorkspacePath is the EFFECTIVE working directory this run's child was
 	// started in: the canonical root of the registered workspace it named, or the
 	// directory of its own this plane created under the data directory when it
@@ -220,6 +232,19 @@ func (m *Module) registerRuntimeSchema(reg store.ExtensionRegistry) error {
 		Table: runTable,
 		Fields: []model.FieldSpec{
 			{Name: colRunRef, Kind: model.KindText, Principal: pdeclNoneRunRef},
+			// Nullable expansion: historical runs have no peer authority.
+			{Name: colRunPeers, Kind: model.KindText, Nullable: true, Principal: model.Nested([]string{}, model.ClassAuthority, model.Leaf("[]", pdeclNoneSID))},
+			{Name: colRunPeersRule, Kind: model.KindText, Nullable: true, Principal: model.None("the closed same-template peer selection rule, not an identity: session_peers.go:21")},
+			{Name: colRunQueuedUserID, Kind: model.KindUUID, Nullable: true, Principal: model.Ref(model.EncodeUserID, model.ClassAuthority)},
+			{Name: colRunQueuedActor, Kind: model.KindText, Nullable: true, Principal: model.Ref(model.EncodeUserRef, model.ClassAuthority)},
+			{Name: colRunQueuedCredentialID, Kind: model.KindUUID, Nullable: true, Principal: model.Ref(model.EncodeCredentialID, model.ClassAuthority)},
+			{Name: colRunQueuedCredentialKind, Kind: model.KindText, Nullable: true, Principal: model.None("credential discriminator: user session or API token, no identity: runtime.go:1253")},
+			{Name: colRunQueuedCredentialVersion, Kind: model.KindInt, Nullable: true},
+			{Name: colRunQueuedCredentialSeal, Kind: model.KindText, Nullable: true, Principal: model.None("irreversible SHA-256 of a credential verifier; never bearer material or an identity: runtime.go:1253")},
+			{Name: colRunQueuedActorKind, Kind: model.KindText, Nullable: true, Principal: model.None("actor kind of the queued launch, not a principal reference: runtime_approval_wait.go:57")},
+			{Name: colRunEnvAllow, Kind: model.KindText, Nullable: true, Principal: model.None("JSON array of permitted environment variable names; never their values: runtime.go:1332-1333")},
+			{Name: colRunSecretEnv, Kind: model.KindText, Nullable: true, Principal: model.None("JSON array of {env, secret} NAMES of the vault secrets a run is given; never their values: session_secret_env.go:151, session_secret_env.go:165, runtime.go:1499")},
+			{Name: colRunQueuedIntent, Kind: model.KindText, Nullable: true, Principal: model.None("references-only launch question pinned to the original approval: runtime_approval_wait.go:53")},
 			{Name: colRunName, Kind: model.KindText, Nullable: true, Principal: model.None("an operator-chosen run label, shown only: runtime_dto.go:119")},
 			{Name: colTransport, Kind: model.KindText, Principal: model.None("a run transport, a closed set: runtime_ports.go:39-49, runtime_dto.go:120")},
 			{Name: colPermissionMode, Kind: model.KindText, Principal: pdeclNonePermissionMode},

@@ -84,6 +84,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 	"github.com/olivaresai/olivares/connectors/modelprovider"
 )
 
@@ -820,8 +821,8 @@ func (a *Actuator) doWithHeaders(ctx context.Context, method, path string, body 
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		slice, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<10))
-		return fmt.Errorf("claude-admin: %s %s: status %d: %s", method, path, resp.StatusCode, strings.TrimSpace(string(slice)))
+		detail := redact.ReadHTTPError(resp.Body, 2<<10, req, a.adminKey)
+		return fmt.Errorf("claude-admin: %s %s: status %d: %s", method, path, resp.StatusCode, detail)
 	}
 	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<20))
 	return nil

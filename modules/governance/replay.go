@@ -6,6 +6,7 @@ package governance
 
 import (
 	"context"
+	"errors"
 	"strings"
 	"time"
 
@@ -57,6 +58,8 @@ const (
 	MissingPolicyArtifactContent = "policy_artifact.content"
 	MissingEvaluator             = "evaluator"
 	MissingQuestion              = "question"
+	MissingAuthorizationInputs   = "authorization_inputs"
+	MissingRedactedInputs        = "authorization_inputs.redacted"
 	MissingAt                    = "at"
 )
 
@@ -171,7 +174,7 @@ func reconstructInScope(ctx context.Context, sc store.Scope, tenant model.Tenant
 	}
 
 	engineName := strings.ToLower(strings.TrimSpace(artifact.Artifact.Engine))
-	if !cedarEngine(engineName) {
+	if !cedarEngine(engineName) && engineName != retainedAuthorizationEngine {
 		res := unsupported(MissingEvaluator, artifact.Artifact.Engine)
 		res.DecisionID = decision.ID
 		res.ArtifactID = artifact.ID
@@ -183,13 +186,42 @@ func reconstructInScope(ctx context.Context, sc store.Scope, tenant model.Tenant
 		return res, nil
 	}
 
-	outcome, reason, evalErr := evaluateRetainedCedar(artifact.Artifact.Content, tenant, decision.Decision.Question, at)
+	var outcome sdk.AccessDecisionOutcome
+	var reason string
+	var evalErr error
+	if engineName == retainedAuthorizationEngine {
+		var retained auth.EvidenceOutcome
+		if decision.Decision.ReplayCompleteness != sdk.ReplayComplete {
+			evalErr = errRetainedInputsUnavailable
+			if decision.Decision.ReasonCode == "input_redacted" {
+				evalErr = errRetainedInputsRedacted
+			}
+		} else {
+			retained, evalErr = evaluateRetainedAuthorization(artifact.Artifact.Content, tenant, decision.Decision.Question)
+		}
+		outcome = retainedAccessOutcome(retained)
+		reason = "retained_authorization"
+	} else {
+		outcome, reason, evalErr = evaluateRetainedCedar(artifact.Artifact.Content, tenant, decision.Decision.Question, at)
+	}
 	if evalErr != nil {
 		res := unsupported(MissingEvaluator, artifact.Artifact.Engine)
+		if errors.Is(evalErr, errRetainedQuestion) {
+			res = insufficient(MissingQuestion)
+		} else if errors.Is(evalErr, errRetainedInputsUnavailable) {
+			res = insufficient(MissingAuthorizationInputs)
+		} else if errors.Is(evalErr, errRetainedInputsRedacted) {
+			res = insufficient(MissingRedactedInputs)
+			res.ReasonCode = "input_redacted"
+		} else {
+			res.ReasonCode = "evaluator_compile_or_eval"
+		}
 		res.DecisionID = decision.ID
 		res.ArtifactID = artifact.ID
 		res.PolicyVersionID = artifact.ID.String()
-		res.ReasonCode = "evaluator_compile_or_eval"
+		res.PolicyVersionRecorded = decision.PolicyVersionKnown()
+		res.InputsDigest = decision.Decision.InputsDigest
+		res.RecordedOutcome = decision.Decision.Outcome
 		res.At = sdk.FormatEvidenceTime(at)
 		return res, nil
 	}

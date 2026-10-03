@@ -9,10 +9,10 @@
     "active": "Activas",
     "idle": "Inactivas",
     "silentEvasion": "Posible evasión",
-    "total": "Sesiones",
-    "launched": "Lanzadas",
-    "discovered": "Descubiertas",
-    "attention": "Requieren atención"
+    "sessions_one": "{{n}} sesión",
+    "sessions_many": "{{n}} sesiones",
+    "sessions_other": "{{n}} sesiones",
+    "running": "{{n}} en marcha"
   },
   "cols": {
     "session": "Sesión",
@@ -91,7 +91,6 @@
   },
   "operateTitle": "Claude Code",
   "operateSubtitle": "Crea, conéctate y gobierna sesiones de Claude Code, sin SSH. Las sesiones que Olivares solo observa están en esta misma lista y abren la misma ficha.",
-  "unifiedSubtitle": "Todas las sesiones de agente de este plano —las que Olivares ha descubierto y las que ha lanzado— en una sola lista, con qué hace cada una y qué se puede hacer con ella.",
   "launch": "Nueva sesión",
   "allSources": "Todos los orígenes",
   "tabs": {
@@ -140,6 +139,7 @@
       "watch": "Ver su telemetría en vivo y su cronología",
       "attach": "Ver su E/S según ocurre",
       "drive": "Enviarle entrada",
+      "interrupt": "Interrumpir su turno actual",
       "stop": "Pararla",
       "resume": "Reanudarla",
       "cleanup": "Limpiar su espacio de trabajo",
@@ -156,10 +156,11 @@
     "actions": {
       "stop": "Parar",
       "resume": "Reanudar",
+      "startAgain": "Empezar de nuevo",
       "cleanup": "Limpiar",
       "delete": "Borrar",
       "cleanupHint": "Cierra la ejecución y libera su asidero de reanudación, así que ya no se podrá reanudar. Se conserva el registro de ciclo de vida.",
-      "deleteHint": "Elimina el registro de la ejecución. Los eventos de ciclo de vida anclados siguen en el libro de auditoría."
+      "deleteHint": "Elimina la sesión. Ya no se puede continuar; sus eventos de ciclo de vida siguen en el registro de auditoría."
     },
     "transport": {
       "stream-json": "Gobernado (stream-json)",
@@ -252,6 +253,8 @@
   },
   "surface": {
     "paneSwitcher": "Elegir panel",
+    "closeContext": "Cerrar el contexto",
+    "backTo": "Volver a {{pane}}",
     "pane": {
       "rail": "Sesiones",
       "narrative": "Trabajo",
@@ -262,22 +265,19 @@
     "noneTitle": "Selecciona una sesión",
     "noneDescription": "Elige una sesión en el carril para leer lo que hizo, con su evidencia al lado.",
     "openDetail": "Controles completos",
-    "noObjective": "El motor no ha reportado ningún objetivo para esta sesión.",
     "notReadTitle": "No se ha podido leer esta sesión",
-    "menu": "Acciones de {{name}}"
+    "menu": "Acciones de {{name}}",
+    "terminal": "En un terminal"
   },
   "evidence": {
     "checks": {
-      "title": "Comprobaciones",
-      "empty": "Esta sesión no ha reportado hallazgos."
+      "title": "Comprobaciones"
     },
     "activity": {
-      "title": "Últimos turnos",
-      "empty": "Esta sesión no ha hecho llamadas a herramientas ni a MCP."
+      "title": "Últimos turnos"
     },
     "resources": {
-      "title": "Recursos tocados",
-      "empty": "Ninguna entrada nombra un recurso."
+      "title": "Recursos tocados"
     },
     "forbiddenTitle": "Evidencia no autorizada",
     "forbiddenDescription": "Tu rol no incluye permiso para leer la telemetría de sesiones.",
@@ -339,7 +339,9 @@
     "workRoles": {
       "worker": "Trabajador",
       "orchestrator": "Orquestador"
-    }
+    },
+    "details": "Detalles",
+    "echoes": "También registrada como"
   },
   "conversation": {
     "log": "Conversación",
@@ -356,7 +358,46 @@
     "inspect": "Mostrar en el inspector",
     "args": "Argumentos",
     "toolResult": "Resultado",
+    "toolFailed": "Falló",
     "tokens": "{{input}} entrada · {{output}} salida",
-    "cwdWarning": "Esta sesión no tiene espacio de trabajo. El controlador ha informado de su directorio de trabajo como {{cwd}}."
+    "cwdWarning": "Esta sesión no tiene espacio de trabajo. El controlador ha informado de su directorio de trabajo como {{cwd}}.",
+    "protocol": "Tramas de protocolo: {{count}}",
+    "stop": {
+      "cancelled": "Cancelado",
+      "refusal": "Rechazado por el modelo",
+      "maxTokens": "Detenido en el límite de tokens",
+      "maxTurnRequests": "Detenido en el límite de turnos"
+    },
+    "turnFailed": "El turno falló: {{message}}",
+    "retrying": "Reintentando ({{count}}): {{message}}",
+    "keyRefused": "El proveedor rechazó la clave de API. Reemplázala en Proveedores.",
+    "output": "Salida de la herramienta ({{count}}): {{first}}",
+    "notSent": "No se envió: {{reason}}"
+  },
+  "changes": {
+    "title": "Cambios en {{folder}}",
+    "titleNoFolder": "Cambios",
+    "hint": "Ficheros que el agente ha cambiado en su carpeta desde que empezó esta sesión.",
+    "empty": "Todavía no ha cambiado ningún fichero.",
+    "none": "Esta sesión no tiene carpeta en este servidor.",
+    "loading": "Leyendo la carpeta…",
+    "error": "No se pudieron leer los cambios. Vuelve a intentarlo en un momento.",
+    "back": "Todos los cambios",
+    "binary": "Fichero binario, {{size}}.",
+    "fileTruncated": "Se muestran los primeros 256 KB.",
+    "truncated": "Se muestran los {{count}} ficheros más recientes."
+  },
+  "peers": {
+    "button_one": "Puede escribir a {{count}} otra sesión",
+    "button_many": "Puede escribir a {{count}} otras sesiones",
+    "button_other": "Puede escribir a {{count}} otras sesiones",
+    "buttonNone": "No puede escribir a otras sesiones",
+    "template": "Puede escribir a las sesiones de esta plantilla",
+    "title": "Sesiones a las que puede escribir",
+    "hint": "Las sesiones a las que esta puede escribir o pasar trabajo. El motor rechaza cualquier otra.",
+    "sameTemplate": "Sesiones de esta plantilla",
+    "none": "No hay otra sesión activa en este espacio de trabajo.",
+    "save": "Guardar",
+    "saved": "Permisos de mensajes guardados."
   }
 }

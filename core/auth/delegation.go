@@ -763,7 +763,7 @@ func (a *Authenticator) revalidateSubject(ctx context.Context, as store.AuthScop
 	if isToken {
 		curRole = tokenRole
 	} else {
-		grants, groupsByTenant, confined, err := loadGrants(ctx, as, handle.SubjectUserID)
+		grants, groupsByTenant, confined, err := loadGrants(ctx, as, handle.SubjectUserID, u.IsSuperadmin)
 		if err != nil {
 			return "", nil, nil, err
 		}

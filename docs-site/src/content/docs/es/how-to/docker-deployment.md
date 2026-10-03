@@ -8,17 +8,18 @@ description: >-
 ---
 
 Esta guía es para ingenieros y SRE que ponen el control plane de Olivares AI en
-producción con Docker. Todo el producto es una única imagen distroless — el motor
+producción con Docker. Todo el producto es una única imagen — el motor
 con la UI web embebida — de modo que un único host puede ejecutar la topología SQLite sin
 dependencias externas, y un override de Postgres te da la topología multi-tenant
-cuando la necesitas. Cada vía mantiene los mismos valores por defecto seguros: sin credenciales por defecto,
+cuando la necesitas. Las imágenes de contenedor se basan en Debian 13 slim (con Node.js 24 para
+las herramientas de agente) y se ejecutan como usuario no root. Cada vía mantiene los mismos valores por defecto seguros: sin credenciales por defecto,
 un token de configuración de un solo uso y TLS activado por defecto. El puerto del host
 se publica en todas las interfaces, porque esto es un servidor: restríngelo deliberadamente,
 como se muestra abajo.
 
-:::note[Beta — imágenes publicadas para 26.10.0]
-Olivares AI está en **beta**. Las coordenadas de imagen de abajo resuelven: la release `26.10.0` las publicó
-en Docker Hub y `ghcr.io` (testigo de superficies de instalación `docs/releases/26.10.0-install-surfaces.json`).
+:::note[Beta — imágenes publicadas para 26.10.1]
+Olivares AI está en **beta**. Las coordenadas de imagen de abajo resuelven: la release `26.10.1` las publicó
+en Docker Hub y `ghcr.io` (testigo de superficies de instalación `docs/releases/26.10.1-install-surfaces.json`).
 Trátalo como la forma de despliegue que vas a usar, no como una garantía lista para producción.
 :::
 
@@ -32,7 +33,7 @@ la vía Kubernetes/Helm más abajo.
 La descarga principal del contenedor es **Docker Hub**:
 
 ```bash
-docker pull docker.io/olivaresai/olivares:26.10.0
+docker pull docker.io/olivaresai/olivares:26.10.1
 ```
 
 El mismo contenido también se publica en `ghcr.io/olivaresai/olivares` — idéntico por
@@ -40,7 +41,7 @@ digest, usado como copia de respaldo y como registry de build. Docker Hub limita
 descargas **anónimas**; ghcr.io no limita las descargas anónimas de imágenes públicas, así que
 `docker login` o la coordenada de ghcr.io es la salida si un nodo de CI o una flota grande topa
 con el límite. Las tags no llevan **ningún `v` inicial**:
-`:26.10.0` fija una release, `:latest` flota, y `:26.10.0-fips` / `:26.10.0-stig` son
+`:26.10.1` fija una release, `:latest` flota, y `:26.10.1-fips` / `:26.10.1-stig` son
 las variantes endurecidas. Las tags base y `:latest` son multi-arch
 (`linux/amd64`, `linux/arm64`); `fips`/`stig` son solo `amd64`.
 
@@ -51,14 +52,14 @@ Docker Hub mediante `cosign copy`, de modo que el digest es el mismo:
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.10.0")"
+DIGEST="$(crane digest "$IMAGE:26.10.1")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type spdxjson \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
 
@@ -87,7 +88,7 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:26.10.0 \
+  docker.io/olivaresai/olivares:26.10.1 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
@@ -97,7 +98,7 @@ docker run -d --name olivares \
 
 | Flag | Por qué |
 |---|---|
-| `--user 65532:65532` | ejecuta como el UID non-root `nonroot` integrado en la imagen distroless |
+| `--user 65532:65532` | ejecuta como el UID non-root `nonroot` integrado en la imagen |
 | `--read-only` | el sistema de ficheros raíz es inmutable; solo el volumen de datos y `/tmp` son escribibles |
 | `--tmpfs /tmp` | un tmpfs de scratch escribible, requerido porque el rootfs es de solo lectura |
 | `--cap-drop ALL` | el motor no necesita ninguna capability de Linux |
@@ -181,7 +182,7 @@ imagen**, y luego ejecuta el perfil `backup` de una sola vez:
 
 ```bash
 printf 'a strong DR passphrase' > deploy/compose/dr-pass
-# the host stamps the bundle name (the distroless image has no `date`):
+# the host stamps the bundle name:
 BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
@@ -189,7 +190,7 @@ docker compose -f deploy/compose/docker-compose.yml \
 ```
 
 El job comparte el volumen de datos del motor, escribe el bundle en el volumen `olivares-backups`,
-y — como la imagen es distroless — deja la retención al host: poda los bundles antiguos
+y deja la retención al host: poda los bundles antiguos
 con un cron del host (`find <backups> -name '*.drbundle' -mtime +14 -delete`). Envuelve
 la ejecución en un cron del host para un RPO programado y **replica el volumen `olivares-backups`
 fuera del sitio** — una copia en el mismo host no es recuperación ante desastres. Restaura y verifica con:
@@ -203,8 +204,8 @@ del repositorio; el recorrido de más alto nivel es [Copia de seguridad y restau
 
 ## 5. Notas de operación
 
-**Sondea la salud desde el host, no desde el contenedor.** La imagen es **distroless** — no
-tiene shell ni `curl`, así que intencionadamente no hay `HEALTHCHECK` dentro del contenedor.
+**Sondea la salud desde el host, no desde el contenedor.** La imagen
+no define intencionadamente ningún `HEALTHCHECK` dentro del contenedor.
 El motor expone `/livez` y `/readyz` en el puerto HTTPS; sondéalos desde el host
 (o tu orquestador):
 
@@ -299,7 +300,7 @@ imagen antes de recrear.
 
 ## 8. Fija por digest para producción
 
-Las tags mutables (`:26.10.0`, `:latest`) son para evaluación. En producción, fija el
+Las tags mutables (`:26.10.1`, `:latest`) son para evaluación. En producción, fija el
 **digest** que verificaste — un digest es inmutable y es exactamente lo que aprobaste:
 
 ```bash

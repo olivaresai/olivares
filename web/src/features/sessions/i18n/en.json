@@ -9,10 +9,9 @@
     "active": "Active",
     "idle": "Idle",
     "silentEvasion": "Possible evasion",
-    "total": "Sessions",
-    "launched": "Launched",
-    "discovered": "Discovered",
-    "attention": "Needs attention"
+    "sessions_one": "{{n}} session",
+    "sessions_other": "{{n}} sessions",
+    "running": "{{n}} running"
   },
   "cols": {
     "session": "Session",
@@ -91,7 +90,6 @@
   },
   "operateTitle": "Claude Code",
   "operateSubtitle": "Create, attach to and govern Claude Code sessions — no SSH. The sessions Olivares only observes are in this same list, and open the same card.",
-  "unifiedSubtitle": "Every agent session on this plane — the ones Olivares discovered and the ones it launched — in one list, with what each is doing and what can be done with it.",
   "launch": "New session",
   "allSources": "All sources",
   "tabs": {
@@ -140,6 +138,7 @@
       "watch": "Watch its live telemetry and timeline",
       "attach": "See its I/O as it happens",
       "drive": "Send input to it",
+      "interrupt": "Interrupt its current turn",
       "stop": "Stop it",
       "resume": "Resume it",
       "cleanup": "Clean up its workspace",
@@ -156,10 +155,11 @@
     "actions": {
       "stop": "Stop",
       "resume": "Resume",
+      "startAgain": "Start again",
       "cleanup": "Clean up",
       "delete": "Delete",
       "cleanupHint": "Closes the run and releases its resume handle, so it can no longer be resumed. The lifecycle ledger is kept.",
-      "deleteHint": "Removes the run record. The anchored lifecycle events stay in the audit ledger."
+      "deleteHint": "Removes the session. It can no longer be continued; its lifecycle events stay in the audit log."
     },
     "transport": {
       "stream-json": "Governed (stream-json)",
@@ -250,6 +250,8 @@
   },
   "surface": {
     "paneSwitcher": "Choose a pane",
+    "closeContext": "Close the context",
+    "backTo": "Back to {{pane}}",
     "pane": {
       "rail": "Sessions",
       "narrative": "Work",
@@ -260,22 +262,19 @@
     "noneTitle": "Select a session",
     "noneDescription": "Choose a session in the rail to read what it did, with its evidence beside it.",
     "openDetail": "Full controls",
-    "noObjective": "The engine reported no objective for this session.",
     "notReadTitle": "This session could not be read",
-    "menu": "Actions for {{name}}"
+    "menu": "Actions for {{name}}",
+    "terminal": "In a terminal"
   },
   "evidence": {
     "checks": {
-      "title": "Checks",
-      "empty": "This session reported no findings."
+      "title": "Checks"
     },
     "activity": {
-      "title": "Last turns",
-      "empty": "This session made no tool or MCP calls."
+      "title": "Last turns"
     },
     "resources": {
-      "title": "Resources touched",
-      "empty": "No entry names a resource."
+      "title": "Resources touched"
     },
     "forbiddenTitle": "Evidence not authorized",
     "forbiddenDescription": "Your role does not include permission to read session telemetry.",
@@ -335,7 +334,9 @@
     "workRoles": {
       "worker": "Worker",
       "orchestrator": "Orchestrator"
-    }
+    },
+    "details": "Details",
+    "echoes": "Also reported as"
   },
   "conversation": {
     "log": "Conversation",
@@ -352,7 +353,45 @@
     "inspect": "Show in inspector",
     "args": "Arguments",
     "toolResult": "Result",
+    "toolFailed": "Failed",
     "tokens": "{{input}} in · {{output}} out",
-    "cwdWarning": "This session has no workspace. The driver reported its working directory as {{cwd}}."
+    "cwdWarning": "This session has no workspace. The driver reported its working directory as {{cwd}}.",
+    "protocol": "Protocol frames: {{count}}",
+    "stop": {
+      "cancelled": "Cancelled",
+      "refusal": "Refused by the model",
+      "maxTokens": "Stopped at the token limit",
+      "maxTurnRequests": "Stopped at the turn limit"
+    },
+    "turnFailed": "The turn failed: {{message}}",
+    "retrying": "Retrying ({{count}}): {{message}}",
+    "keyRefused": "The provider refused the API key. Replace it under API keys.",
+    "output": "Tool output ({{count}}): {{first}}",
+    "notSent": "Not sent: {{reason}}"
+  },
+  "changes": {
+    "title": "Changes in {{folder}}",
+    "titleNoFolder": "Changes",
+    "hint": "Files the agent changed in its folder since this session started.",
+    "empty": "No file has changed yet.",
+    "none": "This session has no folder on this server.",
+    "loading": "Reading the folder…",
+    "error": "The changes could not be read. Try again in a moment.",
+    "back": "All changes",
+    "binary": "Binary file, {{size}}.",
+    "fileTruncated": "Showing the first 256 KB.",
+    "truncated": "Showing the newest {{count}} files."
+  },
+  "peers": {
+    "button_one": "Can message {{count}} other session",
+    "button_other": "Can message {{count}} other sessions",
+    "buttonNone": "Can message no other session",
+    "template": "Can message sessions from this template",
+    "title": "Sessions this one can message",
+    "hint": "The sessions this one may message or hand work to. The engine refuses any other.",
+    "sameTemplate": "Sessions from this template",
+    "none": "No other live session in this workspace.",
+    "save": "Save",
+    "saved": "Message permissions saved."
   }
 }

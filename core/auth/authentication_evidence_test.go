@@ -10,6 +10,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/core/internal/pgtest"
+	"github.com/olivaresai/olivares/core/internal/store/sqlstore"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -136,73 +138,95 @@ func TestAuthenticationEvidenceBindsExactPrincipalAndDefensiveBundle(t *testing.
 }
 
 func TestAuthenticationEvidenceLegacyFutureAndExpiry(t *testing.T) {
-	for _, tc := range []struct {
-		name        string
-		witness     string
-		expiry      time.Duration
-		wantAAL     int
-		unavailable bool
-	}{
-		{"legacy", "nil", time.Minute, AAL1, false},
-		{"zero", "zero", time.Minute, 0, true},
-		{"future", "future", time.Minute, 0, true},
-		{"negative", "negative", time.Minute, 0, true},
-		{"exact expiry", "valid", 0, AAL1, false},
-		{"one tick before expiry", "valid", time.Nanosecond, AAL3, false},
-		{"six minute ceremony is evidence, age policy is separate", "valid", 9 * time.Minute, AAL3, false},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			f := newPrincipalEvidenceFixture(t)
-			f.now = f.session.CreatedAt.Time().Add(10 * time.Minute)
-			f.hooks.now = model.NewTimestamp(f.now)
-			stamp := model.NewTimestamp(f.now.Add(-6 * time.Minute))
-			until := model.NewTimestamp(f.now.Add(tc.expiry))
-			freshnessSession(t, f, func(s *model.AuthSession) {
-				s.AAL, s.AMR, s.AALExpiresAt = AAL3, []string{"pwd", "piv"}, &until
-				s.AALAuthenticatedAt = &stamp
-				switch tc.witness {
-				case "nil":
-					s.AALAuthenticatedAt = nil
-				case "zero":
-					s.AALAuthenticatedAt = &model.Timestamp{}
-				case "future":
-					v := model.NewTimestamp(f.now.Add(time.Nanosecond))
-					s.AALAuthenticatedAt = &v
-				case "negative":
-					v := model.NewTimestamp(time.Unix(-1, 0))
-					s.AALAuthenticatedAt = &v
+	for _, engine := range store.SupportedEngines() {
+		t.Run(string(engine), func(t *testing.T) {
+			tick := time.Nanosecond
+			if engine == store.EnginePostgres {
+				if !pgtest.Available(t) {
+					t.Skip("Postgres qualification requires its assigned CI database")
 				}
-			})
-			wantHot := tc.wantAAL
-			if tc.unavailable {
-				wantHot = AAL1
+				tick = time.Microsecond
 			}
-			if got := effectiveAAL(f.session, model.NewTimestamp(f.now)); got != wantHot {
-				t.Fatalf("hot authentication assurance = %d, want %d", got, wantHot)
-			}
-			p, err := f.a.ResolvePrincipalScope(f.deadline(30*time.Minute), f.sessionRef(), f.tenant)
-			if tc.unavailable {
-				if !errors.Is(err, ErrPrincipalEvidenceUnavailable) {
-					t.Fatalf("malformed witness: %v", err)
-				}
-				return
-			}
-			if err != nil {
-				t.Fatal(err)
-			}
-			e, ok := p.AuthenticationEvidence()
-			if !ok || e.AAL != tc.wantAAL {
-				t.Fatalf("assurance %d, evidence %t", p.AAL, ok)
-			}
-			want := stamp.Time()
-			if tc.wantAAL == AAL1 {
-				want = f.session.CreatedAt.Time()
-			}
-			if !e.AuthenticatedAt.Equal(want) {
-				t.Fatal("authentication time was inferred or refreshed")
-			}
-			if tc.wantAAL == AAL3 && !e.FreshUntil.Equal(until.Time()) {
-				t.Fatal("assurance deadline was replaced with a five-minute age window")
+			for _, tc := range []struct {
+				name        string
+				witness     string
+				expiry      time.Duration
+				wantAAL     int
+				unavailable bool
+			}{
+				{"legacy", "nil", time.Minute, AAL1, false},
+				{"zero", "zero", time.Minute, 0, true},
+				{"future", "future", time.Minute, 0, true},
+				{"same clock step", "same step", time.Minute, AAL3, false},
+				{"negative", "negative", time.Minute, 0, true},
+				{"exact expiry", "valid", 0, AAL1, false},
+				{"one tick before expiry", "valid", tick, AAL3, false},
+				{"six minute ceremony is evidence, age policy is separate", "valid", 9 * time.Minute, AAL3, false},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					cfg := store.Config{Engine: engine, DSN: ":memory:", Debug: true}
+					if engine == store.EnginePostgres {
+						dsns := pgtest.Isolate(t, sqlstore.ProvisionPostgres, pgtest.SplitOwner)
+						cfg = store.Config{Engine: engine, DSN: dsns.App, OwnerDSN: dsns.Owner, AdminDSN: dsns.Admin, MaxConns: 4}
+					}
+					f := newPrincipalEvidenceFixtureConfig(t, cfg)
+					// Align both engines so the witnesses survive native persistence
+					// exactly on each side of the reviewed one-millisecond ceiling.
+					f.now = f.session.CreatedAt.Time().Add(10 * time.Minute).Truncate(time.Millisecond)
+					f.hooks.now = model.NewTimestamp(f.now)
+					stamp := model.NewTimestamp(f.now.Add(-6 * time.Minute))
+					until := model.NewTimestamp(f.now.Add(tc.expiry))
+					freshnessSession(t, f, func(s *model.AuthSession) {
+						s.AAL, s.AMR, s.AALExpiresAt = AAL3, []string{"pwd", "piv"}, &until
+						s.AALAuthenticatedAt = &stamp
+						switch tc.witness {
+						case "nil":
+							s.AALAuthenticatedAt = nil
+						case "zero":
+							s.AALAuthenticatedAt = &model.Timestamp{}
+						case "future":
+							stamp = model.NewTimestamp(f.now.Add(time.Millisecond))
+						case "same step":
+							stamp = model.NewTimestamp(f.now.Add(time.Millisecond - time.Microsecond))
+						case "negative":
+							v := model.NewTimestamp(time.Unix(-1, 0))
+							s.AALAuthenticatedAt = &v
+						}
+					})
+					wantHot := tc.wantAAL
+					// Hot authentication still downgrades a future witness; only
+					// transaction-clock evidence gets the precision allowance.
+					if tc.unavailable || tc.witness == "same step" {
+						wantHot = AAL1
+					}
+					if got := effectiveAAL(f.session, model.NewTimestamp(f.now)); got != wantHot {
+						t.Fatalf("hot authentication assurance = %d, want %d", got, wantHot)
+					}
+					p, err := f.a.ResolvePrincipalScope(f.deadline(30*time.Minute), f.sessionRef(), f.tenant)
+					if tc.unavailable {
+						if !errors.Is(err, ErrPrincipalEvidenceUnavailable) {
+							t.Fatalf("malformed witness: %v", err)
+						}
+						return
+					}
+					if err != nil {
+						t.Fatal(err)
+					}
+					e, ok := p.AuthenticationEvidence()
+					if !ok || e.AAL != tc.wantAAL {
+						t.Fatalf("assurance %d, evidence %t", p.AAL, ok)
+					}
+					want := stamp.Time()
+					if tc.wantAAL == AAL1 {
+						want = f.session.CreatedAt.Time()
+					}
+					if !e.AuthenticatedAt.Equal(want) {
+						t.Fatal("authentication time was inferred or refreshed")
+					}
+					if tc.wantAAL == AAL3 && !e.FreshUntil.Equal(until.Time()) {
+						t.Fatal("assurance deadline was replaced with a five-minute age window")
+					}
+				})
 			}
 		})
 	}

@@ -1,5 +1,5 @@
 {
-  "title": "控制台",
+  "title": "管理",
   "subtitle": "配置谁可以进入以及他们可以管理什么：为用户办理入驻、连接 SSO，并构建工作区与智能体组。",
   "tabs": {
     "people": "用户与组",
@@ -67,7 +67,7 @@
     "edition": "版本",
     "editions": {
       "community": "社区版",
-      "enterprise": "企业版"
+      "enterprise": "商业版"
     },
     "status": "许可证状态",
     "statuses": {
@@ -112,7 +112,7 @@
   },
   "people": {
     "title": "用户",
-    "caption": "通过管理员设置的密码或电子邮件邀请，将人员入驻到本组织。SSO 用户在首次登录时自动预置。",
+    "caption": "向此组织添加成员：由你设置密码，或通过邮件邀请。",
     "onboard": "入驻用户",
     "pendingTitle": "待处理的邀请",
     "pendingCaption": "等待接受的邀请。一次性链接用于设置密码并激活账户。",
@@ -132,10 +132,10 @@
   },
   "members": {
     "title": "活动成员",
-    "caption": "来自 SCIM 和控制台入驻的租户名册。显示角色、组、状态，以及是否只能通过 SSO 登录。",
+    "caption": "此组织中的所有成员，以及其角色、组和状态。",
     "readOnlyNotice": "需要用户读取权限才能查看活动成员。",
     "none": "没有活动成员。",
-    "noneHint": "成员会在入驻、SCIM 预置或首次 SSO 登录后显示在这里。",
+    "noneHint": "你添加的成员，或首次通过身份提供商登录的成员会显示在这里。",
     "user": "用户",
     "groups": "组",
     "status": "状态",
@@ -168,8 +168,8 @@
     "totpResetDone": "TOTP 因子已重置。"
   },
   "superadmins": {
-    "title": "超级管理员",
-    "caption": "启用或禁用内部超级管理员账户。禁用是可逆且非破坏性的：账户被标记为非活动，其会话和令牌将被吊销，但绝不会被删除。无法禁用最后一个活动的超级管理员。",
+    "title": "安装管理员",
+    "caption": "管理整个安装的账户。停用后会将其登出并撤销其令牌；不会删除任何内容，最后一个无法停用。",
     "statusHeader": "状态",
     "active": "活动",
     "inactive": "已禁用",
@@ -184,10 +184,10 @@
   },
   "onboard": {
     "title": "入驻用户",
-    "body": "在本组织中创建或添加账户。新账户绝不会是超级管理员，且其角色绝不会超过你自己的角色。",
+    "body": "在此组织中创建账户。你授予的角色不能高于你自己的角色。",
     "displayName": "显示名称",
     "displayNameHint": "在控制台中显示的可读标签。",
-    "emailHint": "登录标识符。SSO 用户改为通过 IdP 登录。",
+    "emailHint": "用于登录的地址。",
     "roleHint": "在本组织中授予的内置角色。",
     "mode": "他们的登录方式",
     "modePassword": "设置初始密码",
@@ -268,6 +268,8 @@
     "groups": {
       "title": "组映射与预配",
       "caption": "IdP 的目录组如何变成角色，以及 SCIM 是否是账户的唯一权威。在此配置；由商业版进行映射。",
+      "provisioningTitle": "预配",
+      "provisioningCaption": "SCIM 是否是账户的唯一权威。",
       "scimAuthoritative": "以 SCIM 为权威",
       "scimAuthoritativeHint": "启用时，SSO 登录永不创建账户或更改组成员关系——由 SCIM 管理目录。禁用时，首次登录会预配用户并添加（绝不移除）IdP 声明的组。",
       "unavailableBanner": "此版本会从断言中提取组，但不会将其映射为角色。商业版会在登录时将声明的组转化为授权。"
@@ -282,12 +284,16 @@
       "label": "身份提供商",
       "default": "主要（默认）",
       "add": "+ 添加身份提供商…",
-      "hint": "一个范围可以联合多个身份提供商。按邮箱域名的路由在下方配置。只有租户范围才能同时激活多个提供商：每个额外的提供商都必须声明自己的域名，且许可证仍可能拒绝；整个部署的范围只会激活主提供商。开源版构建只解析整个部署的主提供商。",
+      "hint": "一个租户可以使用多个活动的提供方；每个额外的提供方都必须声明自己的邮箱域名。部署范围只使用其主提供方。",
       "addTitle": "添加身份提供商",
       "addBody": "为新的 IdP 指定一个简短的别名。它在范围内标识此 IdP，并作为登录路由键。",
       "aliasLabel": "别名",
       "aliasHint": "小写字母、数字和连字符（例如“okta”“azure-ad”）。1–31 个字符。",
-      "addConfirm": "继续"
+      "addConfirm": "继续",
+      "on": "登录时启用",
+      "off": "已关闭",
+      "activeNow": "登录时启用：{{names}}。",
+      "noneActive": "登录时没有启用的身份提供方：用户使用密码登录。"
     },
     "domains": {
       "title": "家域路由",
@@ -295,6 +301,29 @@
       "label": "声明的邮箱域名",
       "hint": "每行一个域名（例如 corp.com）。每个域名在所有 IdP 中全局唯一；该域名的邮箱优先登录将路由到此处。",
       "unavailableBanner": "域名已保存，但此版本不按域名路由；家域路由需要商业版。"
+    },
+    "displayName": "登录按钮上的名称",
+    "displayNameHint": "用户会看到“使用 <名称> 登录”。留空则显示“单点登录”。最多 80 个字符。",
+    "displayNameFallback": "单点登录",
+    "mapping": {
+      "title": "计为 MFA 的值",
+      "caption": "此提供方的哪些值计为多因素登录。联合 MFA 最多计为 AAL2，绝不满足 AAL3。每个精确值都是你信任的例外。",
+      "amr": "AMR 值（OIDC）",
+      "acr": "ACR 值（OIDC）",
+      "samlContexts": "身份验证上下文（SAML）",
+      "mode": {
+        "default": "协议默认",
+        "exact": "仅这些值"
+      },
+      "values": "值",
+      "valuesHint": "每行一个值。留空则不信任任何值。",
+      "restore": "恢复协议默认值",
+      "invalid": "最多 32 个值，每个不超过 512 字节，不含通配符（*）和控制字符。",
+      "summary": {
+        "default": "协议默认",
+        "none": "不信任任何值",
+        "values": "仅 {{values}}"
+      }
     }
   },
   "secrets": {
@@ -323,7 +352,8 @@
     "rotated": "密钥已保存。",
     "deleted": "密钥已删除。",
     "deleteTitle": "删除密钥",
-    "deleteBody": "该密钥将从存储中移除。任何引用 store:<name> 的连接器配置在你重新创建之前都将无法解析。"
+    "deleteBody": "该密钥将从存储中移除。任何引用 store:<name> 的连接器配置在你重新创建之前都将无法解析。",
+    "sessionCaption": "会话可以作为环境变量接收的密钥。名称以 env/ 开头。值不会再次显示。"
   },
   "connectors": {
     "title": "连接器",
@@ -584,7 +614,7 @@
     "readOnlyNoticeHint": "此处管理角色、角色权限以及谁可以委派它们。请向管理员申请治理 RBAC 权限。",
     "authority": {
       "title": "您的委派权限",
-      "superadmin": "您是超级管理员——可以在任意范围内委派任意角色。",
+      "superadmin": "你管理此安装：可以在任何范围授予任何角色。",
       "none": "您在本组织中没有委派权限。需先由所有者或管理员授予您一个范围受限的管理员角色。",
       "caption": "您只能在这些范围内委派，且不能超出这些权限。引擎会对每次变更重新核查。",
       "tenantWide": "租户级",
@@ -595,13 +625,13 @@
     },
     "grants": {
       "title": "范围授权",
-      "caption": "在某个范围内将角色授予某位用户或某个内置角色——以此将某人设为工作区管理员或资源类别管理员。",
+      "caption": "只在一个工作区或一种资源中授予角色，而不是整个组织。",
       "create": "新建授权",
       "subject": "主体",
       "role": "角色",
       "scope": "范围",
       "none": "尚无范围授权。",
-      "noneHint": "受限授权在某个工作区或资源内给予主体一个角色，而非在整个租户内。先授予一条。",
+      "noneHint": "尚无仅限于某个工作区或某种资源的角色。",
       "revoke": "撤销",
       "revokeTitle": "撤销授权",
       "revokeBody": "主体将立即失去此范围角色。撤销操作本身也会受委派上限核查。",
@@ -628,7 +658,7 @@
       "scopeRefWorkspace": "工作区",
       "scopeRefGroup": "代理组",
       "scopeRefPlaceholder": "请选择…",
-      "scopeClass": "资源类别",
+      "scopeClass": "资源类型",
       "scopeClassAny": "任意资源",
       "scopeClassHint": "可选。将授权限定为单一资源类型（例如仅限模型）。",
       "note": "备注",
@@ -672,13 +702,13 @@
       "excludesHint": "在基础角色、上方权限以及每个已包含的权限组之后再作减法，因此任何一方都无法把它们加回来。排除基础角色当前并未授予的权限也是有效的：当它授予时，排除依然生效。"
     },
     "groups": {
-      "title": "权限组",
-      "caption": "命名的权限组合，可包含到多个自定义角色中。",
+      "title": "权限集",
+      "caption": "可在多个自定义角色中复用的命名权限集合。",
       "create": "新建权限组",
       "name": "名称",
       "permissions": "权限",
       "none": "尚无权限组。",
-      "noneHint": "权限组把若干权限打包，角色可按名称引用。先创建一个。",
+      "noneHint": "尚无权限集。权限集让多个角色共享相同的权限。",
       "edit": "编辑",
       "delete": "删除",
       "deleteTitle": "删除权限组",
@@ -710,8 +740,8 @@
       "managedBy": "由 {{provisioner}} 管理 · 只读",
       "title": "组主体与层次结构",
       "caption": "向已预置的用户组授予角色并构建组层次结构。子组成员继承父组的授权。",
-      "noGroups": "没有已预置的组。组由身份提供方（SCIM）推送。",
-      "noGroupsHint": "群组通过 SCIM 从你的身份提供方同步而来，控制台从不创建群组。在身份提供方中配置群组后即会显示在这里。",
+      "noGroups": "尚无组。组来自你的身份提供商。",
+      "noGroupsHint": "控制台不会创建组。在身份提供商中添加组后，它会显示在这里。",
       "colName": "组",
       "colParent": "父组",
       "colMembers": "成员",
@@ -874,7 +904,8 @@
     "enableHint": "请查看以下更改。已暂存的模块需要输入后才能激活。",
     "apply": "应用",
     "enabled": "已启用 {{preset}} 预设。",
-    "enableFailed": "无法启用该预设。"
+    "enableFailed": "无法启用该预设。",
+    "restarting": "正在重启引擎…"
   },
   "bindings": {
     "readOnlyNotice": "查看绑定需要来源作用域绑定的访问权限。",
@@ -1071,9 +1102,13 @@
       "active": "开",
       "pending": "待重启",
       "available": "关",
-      "console": "仅控制台"
+      "console": "仅控制台",
+      "staged": "已暂存",
+      "needsSecret": "需要密钥",
+      "needsReview": "需要审核",
+      "needsInput": "需要输入"
     },
-    "binaryUnknownWhy": "此版本（{{edition}}）属于正在运行的二进制。引擎不公布该二进制编译了哪些模块，因此此列对每个模块保持未知。不会从打包方式推断。",
+    "binaryUnknownWhy": "此版本（{{edition}}）属于正在运行的二进制。引擎公布模块是否在此构建中时，此列显示该信息；否则保持未知。不会从打包方式推断。",
     "catalogueSourceHelp": "可用的模块信息取决于已安装的构建。安装许可证会更新许可证详情；模块可用性另行报告。",
     "noAddons": "此安装返回了空的模块目录。",
     "loading": "正在加载模块目录…",
@@ -1091,7 +1126,10 @@
     "licenseRefreshFailedAction": "重试以刷新许可证状态。",
     "licenseRetry": "重试许可证状态",
     "technicalSummary": "技术细节",
-    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}"
+    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}",
+    "inBuild": "在此版本中",
+    "notInBuild": "不在此版本中",
+    "notCovered": "许可证未覆盖"
   },
   "mcpGateway": {
     "title": "MCP 网关",
@@ -1114,37 +1152,35 @@
     "fileOwned": "运营者文件管理其配置的监听器上的 MCP。此视图为只读。已保存的配置保持停用，不会合并或覆盖。",
     "storeOwned": "租户配置管理此安装的 HTTP 监听器上的 MCP。无需配置文件。",
     "sessionTitle": "会话工具",
-    "sessionHint": "默认关闭。只向独立授权的会话令牌开放工作和会话间通信；不会授予新的权限。",
+    "sessionHint": "会话可以互相发送消息并使用分配给它们的工作。这不会给会话任何新权限。",
     "tools": "工具（{{count}}）",
     "observationHint": "发现工具不会授予权限。请为每个工具指定明确的范围，并决定破坏性操作是否需要审批。",
     "destructive": "需要破坏性操作审批",
-    "readTool": "无需破坏性操作审批",
-    "deniedTool": "默认拒绝",
     "credentials": "管理凭据",
     "credentialCaption": "仅包含租户的 MCP 密钥（名称以 mcp/ 开头）。请保存服务器完整的 Authorization 值，例如 Bearer 后接令牌。值会被封存，永不返回。",
-    "noCredential": "无服务器凭据",
-    "name": "服务器名称",
-    "url": "服务器 URL",
-    "urlHint": "通过 HTTPS 使用 Streamable HTTP。请使用不含凭据、查询参数或片段的最终 URL；重定向会被拒绝。stdio 可用于观测连接器，不适用于此网关。",
-    "credential": "凭据引用",
-    "credentialHint": "选择租户存储中的引用。在“管理凭据”中创建或轮换；不会提供全局密钥。",
+    "noCredential": "无需登录",
+    "name": "名称",
+    "url": "服务器地址",
+    "urlHint": "服务器的 HTTPS 端点，通常以 /mcp 结尾。仅支持远程 HTTPS 服务器；不跟随重定向。",
+    "credential": "登录",
+    "credentialHint": "作为 Authorization 请求头发送给服务器的密钥。如果服务器不需要，请选择“无需登录”；在“管理凭据”中添加密钥。",
     "cidrs": "允许的私有地址范围",
-    "cidrsHint": "可选的规范 CIDR，每行一个。私有地址和回环地址需要明确许可。每次连接都会检查 DNS，并固定已批准的地址。",
-    "inboundTrust": "入站身份验证",
-    "resource": "网关资源的公开 URL",
-    "issuer": "受信任的令牌签发者",
-    "jwksURL": "公开 JWKS 的 URL",
-    "jwks": "公开 JWKS 的 JSON",
+    "cidrsHint": "仅用于私有网络中或本机上的服务器，例如 10.0.0.0/8 或 127.0.0.1/32。每行一个范围。",
+    "inboundTrust": "谁可以通过 Olivares 调用此服务器",
+    "resource": "此服务器在 Olivares 上的地址",
+    "issuer": "令牌签发方",
+    "jwksURL": "签发方公钥地址（JWKS URL）",
+    "jwks": "签发方公钥（JWKS）",
     "jwksHint": "提供 JWKS URL 或公开的非对称密钥。私钥和任意凭据字段会被拒绝。",
     "invalidJWKS": "请仅提供公开的非对称密钥。",
-    "resourceHint": "使用此安装的公开 HTTPS 源地址，后接 {{path}}。令牌必须针对该确切资源签发。",
-    "resourceAfterCreate": "创建后显示的路径",
+    "resourceHint": "调用方的令牌必须为这个确切地址签发。默认是此控制台的地址；如果调用方通过其他公共地址访问 Olivares，请修改。",
+    "resourceAfterCreate": "保存后显示：调用方的令牌必须为此服务器在 Olivares 上的地址签发。",
     "policy": "工具权限",
     "allowTool": "允许 {{name}}",
     "scope": "{{name}} 所需的范围",
     "destructiveTool": "要求 {{name}} 的破坏性操作审批",
-    "formHint": "保存后服务器将被禁用。测试已保存的端点、检查工具并配置入站信任，然后明确启用。",
-    "saveDisabled": "保存为禁用",
+    "formHint": "新服务器默认关闭。保存后测试连接、查看其工具并启用它。",
+    "saveDisabled": "保存",
     "removeTitle": "移除 MCP 服务器",
     "removeHint": "从此租户的网关中移除 {{name}}？新的请求会被拒绝；其封存凭据将保留在密钥管理器中。",
     "conflict": "配置已更改。再次提交前请刷新并检查当前版本。",
@@ -1171,7 +1207,10 @@
       "redirects": "重定向",
       "tool_policy": "工具授权",
       "tasks": "持久任务",
-      "subscriptions": "订阅"
+      "subscriptions": "订阅",
+      "local_execution": "本地命令",
+      "process_confinement": "进程隔离",
+      "network_confinement": "网络隔离"
     },
     "governanceValues": {
       "tenant_store": "租户存储",
@@ -1187,7 +1226,68 @@
       "operator_file_not_returned": "不返回文件中的凭据",
       "operator_file_listener": "运营者配置的监听器",
       "operator_provisioned": "运营者预配的策略",
-      "legacy_forwarder": "现有文件转发方式"
-    }
+      "legacy_forwarder": "现有文件转发方式",
+      "session_runner_engine_user_session_folder": "会话运行器，以引擎用户身份，在会话文件夹中",
+      "reported_by_session_runner": "以会话运行器报告的为准",
+      "not_supplied_for_local_commands": "不为本地命令提供"
+    },
+    "nameHint": "显示在服务器列表中。留空则使用服务器的主机名。",
+    "advanced": "高级",
+    "advancedHint": "私有地址范围，以及调用方如何证明身份。公共服务器无需这些即可测试；启用时需要调用方设置。",
+    "issuerHint": "签发调用方令牌的登录服务的 HTTPS 地址，例如你的身份提供商。",
+    "jwksURLHint": "签发方发布其公钥的位置。使用此项或在下方粘贴公钥，二者择一。",
+    "enableNeedsTrust": "要启用它，请在“配置”>“高级”中设置谁可以调用它。",
+    "why": {
+      "dns": "无法解析名称 {{host}}。请检查地址是否有拼写错误，以及此引擎能否解析它。",
+      "tls": "与 {{host}} 的安全连接失败：其证书在此不受信任或与名称不符。请使用公共证书颁发机构的证书。",
+      "timeout": "{{host}} 在 10 秒内没有响应。请检查服务器是否在运行，以及此引擎能否访问它。",
+      "connection_refused": "{{host}} 上没有任何程序接受连接。请检查端口以及服务器是否在运行。",
+      "http_status": "服务器返回了 HTTP {{status}}。请检查路径；MCP 服务器通常以 /mcp 结尾。",
+      "egress_denied": "{{host}} 是私有或本地地址。请在“配置”>“高级”中允许其地址范围。",
+      "refused": "服务器拒绝了登录（HTTP 401 或 403）。请检查“登录”中选择的密钥。",
+      "redirect_refused": "服务器返回了重定向。请使用最终地址。",
+      "invalid_response": "服务器有响应，但不是 MCP 服务器的响应。请检查地址。",
+      "credential_unavailable": "无法读取登录密钥。请在“管理凭据”中重新保存。",
+      "unreachable": "无法访问 {{host}}。请检查地址以及服务器是否在运行。",
+      "stdio": "该命令没有启动可响应的 MCP 服务器。请检查命令及其参数。",
+      "stdioDetail": "未能启动：{{detail}}"
+    },
+    "kind": "Olivares 如何连接它",
+    "kindUrl": "地址 (HTTPS)",
+    "kindCommand": "此服务器上的命令",
+    "command": "命令",
+    "commandHint": "在本机启动服务器的程序，例如 npx。它随每个会话一起在会话的文件夹中运行。",
+    "args": "参数",
+    "argsHint": "每行一个，例如 -y 和 @modelcontextprotocol/server-everything。",
+    "env": "环境变量",
+    "envHint": "每行一个：NAME=值。不要用于密钥。",
+    "envSecrets": "密钥环境变量",
+    "envSecretsHint": "每行一个：NAME=mcp/密钥名称，即在“管理凭据”中保存的密钥。",
+    "pairsInvalid": "每行都需要 NAME=值。",
+    "policiesNotKept": "未保存：引擎没有保留 {{tools}} 的权限。请重试；如仍如此，运行 olivares mcp ls。",
+    "scopeMissing": "每个允许的工具都需要一个范围（会话使用 tools:call）。",
+    "toolCallable": "无需批准即可运行",
+    "toolAsks": "先请求批准",
+    "toolNotCallable": "不允许",
+    "callableOff": "已关闭：会话不能调用其工具。",
+    "trustPartial": "谁可以调用它需要同时提供资源、签发者和密钥，或者都不提供。",
+    "savedTestAgain": "已保存。请再次测试服务器以重新开启。",
+    "formHintEdit": "保存会让服务器保持原样。更改其地址、命令、参数、环境变量或密钥会将其关闭，直到再次测试。",
+    "trust": {
+      "allow": "无需批准即可运行：{{tools}}",
+      "ask": "先请求批准：{{tools}}",
+      "deny": "不允许：{{tools}}"
+    },
+    "enableDialog": {
+      "title": "开启 {{name}}",
+      "body": "选择无需批准即可运行的工具。服务器标为只读的工具已预先选中；决定权在你，而不在服务器。",
+      "readOnlyHint": "服务器称其为只读",
+      "runWithout": "无需批准即可运行 {{tool}}",
+      "others": "其他所有工具都会先请求批准。",
+      "notAllowed": "不允许（在“配置”中更改）",
+      "confirm": "开启"
+    },
+    "sessionOn": "已开启：关闭即可停止。",
+    "sessionOff": "已关闭：会话不能互相发送消息，也不能使用分配的工作。"
   }
 }

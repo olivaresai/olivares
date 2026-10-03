@@ -6,7 +6,11 @@
   },
   "forbidden": {
     "title": "Nicht autorisiert",
-    "description": "Sie haben keine Berechtigung, dies anzuzeigen. Bitten Sie einen Administrator um Zugriff."
+    "description": "Sie haben keine Berechtigung, dies anzuzeigen. Bitten Sie einen Administrator um Zugriff.",
+    "accessTo": "Sie haben keinen Zugriff auf {{subject}}.",
+    "accessToThis": "Sie haben hierauf keinen Zugriff.",
+    "nextStep": "Ihre Rollen oder eine Gruppenrichtlinie erlauben es nicht. Ein Eigentümer oder Administrator dieser Organisation kann es gewähren.",
+    "deniedByPolicy": "Die Richtlinie „{{policy}}“ verweigert es. Ein Eigentümer oder Administrator dieser Organisation kann sie ändern."
   },
   "serverError": {
     "title": "Etwas ist schiefgelaufen",
@@ -38,11 +42,21 @@
     "locked_out": "Zu viele Versuche. Versuchen Sie es in einem Moment erneut.",
     "setup_required": "Die Control Plane benötigt eine Ersteinrichtung.",
     "setup_complete": "Die Einrichtung ist bereits abgeschlossen.",
-    "cross_tenant_admin_pool_not_configured": "Diese Bereitstellung hat keinen mandantenübergreifenden Admin-Datenbankpool. Stellen Sie eine NOSUPERUSER BYPASSRLS-Rolle mit `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` bereit (siehe deploy/postgres/README.md) und starten Sie den Server mit --admin-dsn neu, das auf diese Rolle zeigt.",
+    "cross_tenant_admin_pool_not_configured": "Diese Datenbank kann nicht alle Organisationen auflisten. Führen Sie `olivares db init --superuser-dsn <superuser DSN> --data-dir <data directory> --install-directory-inventory` aus und starten Sie die Engine neu. Oder stellen Sie eine NOSUPERUSER BYPASSRLS-Rolle mit `olivares db init --superuser-dsn <dsn> --admin-role olivares_admin --admin-password-file <file>` bereit (siehe deploy/postgres/README.md) und starten Sie den Server mit --admin-dsn neu, das auf diese Rolle zeigt.",
     "internal": "Ein interner Fehler ist aufgetreten."
   },
   "tenantAdmission": {
     "title": "Zulassung zur Organisation erforderlich",
     "description": "Melden Sie sich mit einer für die Organisation zugelassenen Verzeichnisidentität an. Globale Bootstrap-Berechtigungen erlauben keine Workspace-Kommunikation."
+  },
+  "moduleNotEnabled": {
+    "title": "Auf dieser Installation nicht aktiviert",
+    "description": "Dieser Teil von Olivares ist hier ausgeschaltet und hat nichts anzuzeigen.",
+    "named": "{{module}} ist in dieser Installation nicht aktiviert.",
+    "unnamed": "Dieses Modul ist in dieser Installation nicht aktiviert."
+  },
+  "notInEdition": {
+    "subject": "Diese Edition enthält {{subject}} nicht.",
+    "generic": "Diese Edition enthält dies nicht."
   }
 }

@@ -40,7 +40,7 @@ test('first hour: the onboarding wizard verifies infrastructure against the live
   // screen are the areas and the overview above them, not a leaf like Inventory. The
   // name is exact because neighbouring entries contain it.
   await expect(
-    page.getByRole('link', { name: 'Overview', exact: true }),
+    page.getByRole('link', { name: 'Now', exact: true }),
   ).toBeVisible()
 
   // The actionable onboarding wizard.
@@ -53,9 +53,7 @@ test('first hour: the onboarding wizard verifies infrastructure against the live
   // THE PROOF: the Infrastructure step is verified ONLY because the live engine can
   // reach its database. This copy renders exclusively when the real setup-status
   // database flag is true — a mock could not manufacture it.
-  await expect(
-    page.getByText(/verified automatically/i),
-  ).toBeVisible()
+  await expect(page.getByText(/verified automatically/i)).toBeVisible()
 
   // The remaining actionable steps are present (this is the wizard, not the old
   // passive checklist).

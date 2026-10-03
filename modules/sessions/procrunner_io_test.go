@@ -531,7 +531,7 @@ func TestProcProcessStopClosesTheOutputPipesWhenAHolderEscapedTheGroup(t *testin
 	if stopErr == nil {
 		t.Fatalf("Stop reported a clean teardown although it had to close the output pipes to finish it")
 	}
-	if !strings.Contains(stopErr.Error(), "held the output pipes open") {
+	if !errors.Is(stopErr, ErrOutputAbandoned) || !strings.Contains(stopErr.Error(), "output did not finish within the drain bound") {
 		t.Fatalf("Stop error = %v, want the dropped-tail report", stopErr)
 	}
 	sink.waitClosed(t, 5*time.Second)
@@ -1039,5 +1039,38 @@ func TestProcProcessTheReapingVerdictSeparatesLostOutputFromAnUnstoppedChild(t *
 		if got := childWasReaped(tc.err); got != tc.want {
 			t.Fatalf("%s: childWasReaped = %v, want %v (err %v)", tc.name, got, tc.want, tc.err)
 		}
+	}
+}
+
+func TestProcRunnerOversizedOutputCannotBecomeAProtocolFrame(t *testing.T) {
+	for _, stream := range []string{"stdout"} {
+		t.Run(stream, func(t *testing.T) {
+			script := "#!/bin/sh\nprintf '%s\\n' '" + `{"type":"assistant"}` + strings.Repeat(" ", 1024) + "'"
+			if stream == "stderr" {
+				script += " >&2"
+			}
+			proc, err := (&procRunner{lineCap: 32}).Launch(context.Background(), LaunchSpec{
+				Program: writeOwnedChild(t, script+"\nexec sleep 300\n"), WaitDelay: 50 * time.Millisecond,
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			p := proc.(*procProcess)
+			t.Cleanup(func() { _ = p.Stop(context.Background()) })
+			sink := drainOutput(p)
+			if !p.finishedWithin(2 * time.Second) {
+				t.Fatal("oversized output did not retire")
+			}
+			<-sink.closed
+			if frames := sink.all(); len(frames) != 0 {
+				t.Fatalf("oversized record became %d output frame(s)", len(frames))
+			}
+			if _, err := p.Wait(); !errors.Is(err, ErrOutputLineTooLong) || !errors.Is(err, ErrOutputAbandoned) {
+				t.Fatalf("oversized output classification = %v", err)
+			}
+			if err := p.Stop(context.Background()); !errors.Is(err, ErrOutputLineTooLong) || strings.Contains(err.Error(), "outside its group") {
+				t.Fatalf("Stop lost the framing cause or invented a descriptor holder: %v", err)
+			}
+		})
 	}
 }

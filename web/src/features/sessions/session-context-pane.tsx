@@ -31,6 +31,7 @@ import { useTenantLabel } from '@/components/layout/tenant-label'
 import type { ConversationItem } from './conversation-frames'
 import { primaryRun } from './provenance'
 import { RefChip } from './ref-chip'
+import { SessionChanges } from './session-changes'
 import type { SessionResolution } from './use-session-resolution'
 import './i18n'
 import '@/features/agentops/i18n'
@@ -107,190 +108,226 @@ export function SessionContextPane({
 
   return (
     <div className="flex flex-col gap-4" data-testid="session-context">
-      <section data-testid="context-scope">
-        <h3 className="text-caption font-medium text-foreground">
-          {t('context.scopeTitle')}
-        </h3>
-        <p className="text-caption text-muted-foreground">
-          {t('context.scopeHint')}
-        </p>
-        <dl className="mt-1 divide-y divide-border">
-          <Row label={t('context.tenant')}>
-            <span className="text-caption text-foreground">
-              {org.name || none}
-            </span>
-          </Row>
-          <Row label={t('context.workspace')}>
-            <span className="text-caption text-foreground">
-              {workspaceName || t('context.noWorkspace')}
-            </span>
-          </Row>
-          <Row label={t('context.environment')}>
-            <span className="text-caption text-foreground">
-              {live?.environment_ref || run?.provider_environment_ref
-                ? t('context.thisNode')
-                : notDeclared}
-            </span>
-          </Row>
-          <Row label={t('context.provider')}>
-            {live?.provider || run?.provider_driver ? (
+      {/* What the session changed comes first: it is what a person reviews beside the
+          conversation. The scope it ran under stays one click away. */}
+      {run ? <SessionChanges run={run} /> : null}
+      <details data-testid="context-details">
+        <summary className="cursor-pointer text-caption font-medium text-foreground">
+          {t('context.details')}
+        </summary>
+        <section data-testid="context-scope">
+          <h3 className="text-caption font-medium text-foreground">
+            {t('context.scopeTitle')}
+          </h3>
+          <p className="text-caption text-muted-foreground">
+            {t('context.scopeHint')}
+          </p>
+          <dl className="mt-1 divide-y divide-border">
+            <Row label={t('context.tenant')}>
               <span className="text-caption text-foreground">
-                {live?.provider || run?.provider_driver}
+                {org.name || none}
               </span>
-            ) : (
-              <span className="text-caption text-muted-foreground">
-                {notDeclared}
+            </Row>
+            <Row label={t('context.workspace')}>
+              <span className="text-caption text-foreground">
+                {workspaceName || t('context.noWorkspace')}
               </span>
-            )}
-          </Row>
-          <Row label={t('context.profile')}>
-            {profileName ? (
+            </Row>
+            <Row label={t('context.environment')}>
+              <span className="text-caption text-foreground">
+                {live?.environment_ref || run?.provider_environment_ref
+                  ? t('context.thisNode')
+                  : notDeclared}
+              </span>
+            </Row>
+            <Row label={t('context.provider')}>
+              {live?.provider || run?.provider_driver ? (
+                <span className="text-caption text-foreground">
+                  {live?.provider || run?.provider_driver}
+                </span>
+              ) : (
+                <span className="text-caption text-muted-foreground">
+                  {notDeclared}
+                </span>
+              )}
+            </Row>
+            <Row label={t('context.profile')}>
+              {profileName ? (
+                <span
+                  className="text-caption text-foreground"
+                  title={profileRef || undefined}
+                >
+                  {profileName}
+                </span>
+              ) : (
+                <span className="text-caption text-muted-foreground">
+                  {none}
+                </span>
+              )}
+            </Row>
+          </dl>
+        </section>
+
+        <section data-testid="context-work-scope">
+          <h3 className="text-caption font-medium text-foreground">
+            {t('context.workTitle')}
+          </h3>
+          <p className="text-caption text-muted-foreground">
+            {t('context.workHint')}
+          </p>
+          <dl className="mt-1 divide-y divide-border">
+            <Row label={t('context.processState')}>
               <span
-                className="text-caption text-foreground"
-                title={profileRef || undefined}
+                data-testid="context-process-state"
+                className="text-caption"
               >
-                {profileName}
+                {run?.process_state
+                  ? t(`agentops:state.${run.process_state}`, {
+                      defaultValue: run.process_state,
+                    })
+                  : t('context.notRecorded')}
               </span>
-            ) : (
-              <span className="text-caption text-muted-foreground">{none}</span>
-            )}
-          </Row>
-        </dl>
-      </section>
+            </Row>
+            <Row label={t('context.activityState')}>
+              <span
+                data-testid="context-activity-state"
+                className="text-caption"
+              >
+                {run?.state
+                  ? t(`agentops:state.${run.state}`, {
+                      defaultValue: run.state,
+                    })
+                  : t('context.notRecorded')}
+              </span>
+            </Row>
+            <Row label={t('context.workRole')}>
+              <span className="text-caption">
+                {run?.work_scope
+                  ? t(`context.workRoles.${run.work_scope.role}`)
+                  : t('context.notRecorded')}
+              </span>
+            </Row>
+            <Row label={t('context.workWorkspace')}>
+              <RefChip
+                value={run?.work_scope?.workspace_id}
+                absent={t('context.notRecorded')}
+              />
+            </Row>
+            {run?.work_scope?.capabilities?.length ? (
+              <Row label={t('context.workActions')}>
+                <ul className="text-caption">
+                  {run.work_scope.capabilities.map((action) => (
+                    <li key={action}>
+                      {t(
+                        `agentops:profiles.workGrant.capabilities.${action.replace('.', '_')}`,
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </Row>
+            ) : null}
+          </dl>
+        </section>
 
-      <section data-testid="context-work-scope">
-        <h3 className="text-caption font-medium text-foreground">
-          {t('context.workTitle')}
-        </h3>
-        <p className="text-caption text-muted-foreground">
-          {t('context.workHint')}
-        </p>
-        <dl className="mt-1 divide-y divide-border">
-          <Row label={t('context.processState')}>
-            <span data-testid="context-process-state" className="text-caption">
-              {run?.process_state
-                ? t(`agentops:state.${run.process_state}`, {
-                    defaultValue: run.process_state,
-                  })
-                : t('context.notRecorded')}
-            </span>
-          </Row>
-          <Row label={t('context.activityState')}>
-            <span data-testid="context-activity-state" className="text-caption">
-              {run?.state
-                ? t(`agentops:state.${run.state}`, { defaultValue: run.state })
-                : t('context.notRecorded')}
-            </span>
-          </Row>
-          <Row label={t('context.workRole')}>
-            <span className="text-caption">
-              {run?.work_scope
-                ? t(`context.workRoles.${run.work_scope.role}`)
-                : t('context.notRecorded')}
-            </span>
-          </Row>
-          <Row label={t('context.workWorkspace')}>
-            <RefChip
-              value={run?.work_scope?.workspace_id}
-              absent={t('context.notRecorded')}
-            />
-          </Row>
-          {run?.work_scope?.capabilities?.length ? (
-            <Row label={t('context.workActions')}>
-              <ul className="text-caption">
-                {run.work_scope.capabilities.map((action) => (
-                  <li key={action}>
-                    {t(
-                      `agentops:profiles.workGrant.capabilities.${action.replace('.', '_')}`,
-                    )}
+        <section data-testid="context-identifiers">
+          <h3 className="text-caption font-medium text-foreground">
+            {t('context.identifiersTitle')}
+          </h3>
+          <p className="text-caption text-muted-foreground">
+            {t('context.identifiersHint')}
+          </p>
+          <dl className="mt-1 divide-y divide-border">
+            <Row label={t('context.tenant')}>
+              <RefChip value={org.tenant || activeTenant} absent={none} />
+            </Row>
+            <Row label={t('context.workspace')}>
+              <RefChip value={run?.workspace_ref} absent={none} />
+            </Row>
+            <Row label={t('context.environment')}>
+              <RefChip
+                value={live?.environment_ref || run?.provider_environment_ref}
+                absent={none}
+              />
+            </Row>
+            <Row label={t('context.profile')}>
+              <RefChip value={profileRef} absent={none} />
+            </Row>
+            <Row label={t('context.sessionRef')}>
+              <RefChip value={session.sessionRef} absent={none} />
+            </Row>
+            <Row label={t('context.liveRef')}>
+              <RefChip
+                value={live?.live_ref || session.liveRef}
+                absent={none}
+              />
+            </Row>
+            <Row label={t('context.runRef')}>
+              <RefChip value={run?.run_ref} absent={none} />
+            </Row>
+            {/* Rows the plane wrote for this run on other channels (J5): shown here,
+                not as sessions of their own. */}
+            {session.echoes?.length ? (
+              <Row label={t('context.echoes')}>
+                <span className="flex flex-wrap justify-end gap-1">
+                  {session.echoes.map((e) => (
+                    <RefChip
+                      key={e.live_ref}
+                      value={e.live_ref}
+                      absent={none}
+                    />
+                  ))}
+                </span>
+              </Row>
+            ) : null}
+            {live?.canonical_sid ? (
+              <Row label={t('context.canonicalSid')}>
+                <RefChip value={live.canonical_sid} absent={none} />
+              </Row>
+            ) : null}
+            {live?.source_binding_ref ? (
+              <Row label={t('context.binding')}>
+                <RefChip value={live.source_binding_ref} absent={none} />
+              </Row>
+            ) : null}
+            <Row label={t('context.engine')}>
+              <span className="text-caption text-foreground">
+                {live?.engine || notDeclared}
+              </span>
+            </Row>
+            <Row label={t('context.posture')}>
+              <span className="text-caption text-foreground">
+                {live?.posture
+                  ? t(`card.postureValue.${live.posture}`, {
+                      defaultValue: live.posture,
+                    })
+                  : notDeclared}
+              </span>
+            </Row>
+            {run ? (
+              <Row label={t('context.governance')}>
+                <ul className="flex flex-col gap-0.5 text-caption text-muted-foreground">
+                  <li>
+                    {run.pep_provisioned
+                      ? t('context.pepOn')
+                      : t('context.pepOff')}
                   </li>
-                ))}
-              </ul>
-            </Row>
-          ) : null}
-        </dl>
-      </section>
-
-      <section data-testid="context-identifiers">
-        <h3 className="text-caption font-medium text-foreground">
-          {t('context.identifiersTitle')}
-        </h3>
-        <p className="text-caption text-muted-foreground">
-          {t('context.identifiersHint')}
-        </p>
-        <dl className="mt-1 divide-y divide-border">
-          <Row label={t('context.tenant')}>
-            <RefChip value={org.tenant || activeTenant} absent={none} />
-          </Row>
-          <Row label={t('context.workspace')}>
-            <RefChip value={run?.workspace_ref} absent={none} />
-          </Row>
-          <Row label={t('context.environment')}>
-            <RefChip
-              value={live?.environment_ref || run?.provider_environment_ref}
-              absent={none}
-            />
-          </Row>
-          <Row label={t('context.profile')}>
-            <RefChip value={profileRef} absent={none} />
-          </Row>
-          <Row label={t('context.sessionRef')}>
-            <RefChip value={session.sessionRef} absent={none} />
-          </Row>
-          <Row label={t('context.liveRef')}>
-            <RefChip value={live?.live_ref || session.liveRef} absent={none} />
-          </Row>
-          <Row label={t('context.runRef')}>
-            <RefChip value={run?.run_ref} absent={none} />
-          </Row>
-          {live?.canonical_sid ? (
-            <Row label={t('context.canonicalSid')}>
-              <RefChip value={live.canonical_sid} absent={none} />
-            </Row>
-          ) : null}
-          {live?.source_binding_ref ? (
-            <Row label={t('context.binding')}>
-              <RefChip value={live.source_binding_ref} absent={none} />
-            </Row>
-          ) : null}
-          <Row label={t('context.engine')}>
-            <span className="text-caption text-foreground">
-              {live?.engine || notDeclared}
-            </span>
-          </Row>
-          <Row label={t('context.posture')}>
-            <span className="text-caption text-foreground">
-              {live?.posture
-                ? t(`card.postureValue.${live.posture}`, {
-                    defaultValue: live.posture,
-                  })
-                : notDeclared}
-            </span>
-          </Row>
-          {run ? (
-            <Row label={t('context.governance')}>
-              <ul className="flex flex-col gap-0.5 text-caption text-muted-foreground">
-                <li>
-                  {run.pep_provisioned
-                    ? t('context.pepOn')
-                    : t('context.pepOff')}
-                </li>
-                <li>
-                  {run.record_io
-                    ? t('context.recordOn')
-                    : t('context.recordOff')}
-                </li>
-                {run.approval_ref ? (
-                  <li className="flex items-center gap-1.5">
-                    {t('context.approval')}
-                    <RefChip value={run.approval_ref} absent={none} />
+                  <li>
+                    {run.record_io
+                      ? t('context.recordOn')
+                      : t('context.recordOff')}
                   </li>
-                ) : null}
-              </ul>
-            </Row>
-          ) : null}
-        </dl>
-      </section>
+                  {run.approval_ref ? (
+                    <li className="flex items-center gap-1.5">
+                      {t('context.approval')}
+                      <RefChip value={run.approval_ref} absent={none} />
+                    </li>
+                  ) : null}
+                </ul>
+              </Row>
+            ) : null}
+          </dl>
+        </section>
+      </details>
 
       <section>
         <h3 className="text-caption font-medium text-foreground">

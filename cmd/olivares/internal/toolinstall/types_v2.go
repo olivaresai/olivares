@@ -303,9 +303,15 @@ func (p PlatformV2) validate(driver string) error {
 		return refuse(KindInvalidRequest, "platform arch %q is outside this increment", p.Arch)
 	}
 	switch driver {
-	case DriverCodex, DriverOpenCode:
+	case DriverCodex:
 		if p.Libc != "musl" {
 			return refuse(KindInvalidRequest, "codex platform libc must be musl, got %q", p.Libc)
+		}
+	case DriverOpenCode:
+		// HU-R13: OpenCode's musl build is not static, so PlatformV2For picks the
+		// build the host's own loader runs: glibc or musl.
+		if p.Libc != "glibc" && p.Libc != "musl" {
+			return refuse(KindInvalidRequest, "opencode platform libc must be glibc or musl, got %q", p.Libc)
 		}
 	case DriverGrok, DriverOllama:
 		if p.Libc != "" {
@@ -628,7 +634,8 @@ func (c *CosignProfileV2) validate() error {
 }
 
 func (s SelectionV2) validateClosedCombination() error {
-	if s.Driver == DriverOpenCode || s.Driver == DriverOllama {
+	if s.Driver == DriverOpenCode || s.Driver == DriverOllama ||
+		(s.Driver == DriverCodex && s.PackagePolicyID == PackagePolicyReleaseArchiveV1) {
 		return s.validateReleaseArchiveSelection()
 	}
 	switch s.Driver {
@@ -713,9 +720,18 @@ func (s SelectionV2) bindSubjectsToLayoutAndProofs() error {
 	return nil
 }
 
+// presentFetchURLs lists each URL the plan fetches once. A release archive
+// selected by its exact version has one document for both roles: the release's
+// own tag metadata is its pointer and its checksums (release_archive_policy.go
+// accepts exactly that), fetched once, so it is listed once. Any other repeated
+// URL is still refused by originsCover.
 func (s SelectionV2) presentFetchURLs() []string {
 	var out []string
-	for _, u := range []URLRef{s.Source.Pointer, s.Source.Checksums, s.Source.Package} {
+	sources := []URLRef{s.Source.Pointer, s.Source.Checksums, s.Source.Package}
+	if s.PackagePolicyID == PackagePolicyReleaseArchiveV1 && s.Source.Checksums == s.Source.Pointer {
+		sources = []URLRef{s.Source.Pointer, s.Source.Package}
+	}
+	for _, u := range sources {
 		if u.State == URLStatePresent {
 			out = append(out, u.URL)
 		}

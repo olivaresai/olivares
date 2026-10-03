@@ -278,6 +278,7 @@ GET	/v1/agents/{id}	Returns one agent of the resolved tenant by id.
 PATCH	/v1/agents/{id}	Updates the mutable fields of one agent from the posted document.
 GET	/v1/audit	Reads a page of the tenant evidence ledger. Paging is keyset by SEQUENCE, not a cursor, and the page runs FORWARDS from ?from in ascending sequence order — oldest first. The response carries head_seq, the chain tip, which is what a caller pairs with ?from to address the newest events.
 GET	/v1/audit/export	Streams the tenant ledger in the requested format, carrying the chain-integrity fields so an external archive or SIEM holds an independently verifiable copy. The export is itself recorded in the ledger.
+GET	/v1/audit/recent	Returns the newest ledger events, newest first, leaving out the ledger's own audit.read events. It is the console's notification read: it is not itself recorded, so polling it does not grow the chain. Searching, exporting and verifying the ledger stay recorded.
 GET	/v1/audit/pubkey	Returns the Ed25519 checkpoint verification key in PEM form, so an external party can verify exported checkpoints offline.
 GET	/v1/audit/system	Reads the system-tenant evidence ledger, which records the cross-tenant operations. Superadmin only.
 GET	/v1/audit/verify	Verifies the ledger chain structurally and verifies every signed checkpoint against the engine key. The verification is not itself recorded, so it does not grow the chain it inspects.
@@ -349,5 +350,9 @@ GET	/v1/auth/totp/status	Returns the authenticated account's factor status and r
 DELETE	/v1/auth/totp	Removes the calling account's factor and recovery codes. Requires an authenticated AAL3 session.
 GET	/v1/auth/totp/policy	Returns whether administrators must enrol a factor. Requires system administration authority.
 PUT	/v1/auth/totp/policy	Sets whether administrators must enrol a factor before completing password login. Requires system administration authority and AAL3.
+GET	/v1/auth/step-up-policy	Returns what administrative actions demand beyond the sign-in: nothing (the default), an authenticator code or a passkey. Requires system administration authority.
+PUT	/v1/auth/step-up-policy	Sets what administrative actions demand beyond the sign-in. Lowering it always works; raising it needs the caller's session to meet the new level. Requires system administration authority.
+GET	/v1/auth/browser-session	Restores the browser session's metadata after a reload: its id, expiry and CSRF token, from the HttpOnly session cookie. Signed-in users only.
+POST	/v1/auth/browser-session	Moves a legacy bearer session into the HttpOnly cookie once, rotating the bearer without extending the session's expiry. Needs the bearer and X-Olivares-Session: cookie.
 GET	/v1/users/{id}/totp	Returns a member's factor status in the selected tenant. Foreign accounts return not found. Requires membership read authority.
 POST	/v1/users/{id}/totp/reset	Resets a selected tenant member's factor and recovery codes. Tenant administrators cannot reset shared or holder-controlled accounts. Requires membership write authority and AAL3; a deployment superadmin retains global recovery authority.

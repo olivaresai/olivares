@@ -149,6 +149,8 @@ func addDeprecatedJSONFlag(cmd *cobra.Command) {
 	cmd.Flags().Var(&deprecatedOutputAlias{cmd: cmd, name: "json", boolean: true}, "json",
 		"deprecated alias for -o json")
 	cmd.Flags().Lookup("json").NoOptDefVal = "true"
+	// It keeps working for old scripts; the help shows -o json only.
+	_ = cmd.Flags().MarkHidden("json")
 }
 
 func completeOutput(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {

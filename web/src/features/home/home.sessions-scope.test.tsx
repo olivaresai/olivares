@@ -59,7 +59,7 @@ const authState = vi.hoisted(() => ({
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 
-const TENANT_WIDE_LABEL = 'Tenant-wide — not filtered by workspace'
+const TENANT_WIDE_LABEL = 'All workspaces'
 
 const BOTH = (p: string) =>
   p === 'sessions:live:read' || p === 'inventory:catalog:read'
@@ -244,7 +244,7 @@ describe('HomeView — neither the Sessions nor the Inventory tile pretends the 
     // Each is part of its link's accessible name, so assistive technology reads the
     // scope with the figure, not as a stray footnote.
     const links = screen.getAllByRole('link', {
-      name: /not filtered by workspace/i,
+      name: /All workspaces/i,
     })
     expect(links.map((a) => a.getAttribute('href')).sort()).toEqual([
       '/inventory',

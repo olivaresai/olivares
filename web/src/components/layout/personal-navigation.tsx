@@ -20,8 +20,10 @@ import {
   resolvePersonalLink,
   type PersonalLink,
 } from '@/features/navigation/personal-navigation-store'
-import { resolveLocation, viewLabel } from '@/features/navigation/model'
+import { resolveLocation } from '@/features/navigation/model'
 import { cn } from '@/lib/utils'
+import { destinationLabel } from './shell-destinations'
+import { SHELL_ROW_CLASS } from './shell-row'
 
 /** Explicit save only. Resolves the module, never captures the location's query or data. */
 export function FavoriteButton() {
@@ -39,7 +41,7 @@ export function FavoriteButton() {
   if (!personal?.available || !link || !personal.visible(link)) return null
   const saved = personal.favorites.some((v) => v.id === link.id)
   const label = t(saved ? 'personal.remove' : 'personal.add', {
-    name: viewLabel(t, link.id),
+    name: destinationLabel(t, link.id),
   })
   return (
     <Button
@@ -78,7 +80,7 @@ function PersonalLinks({
       {links.map((link, index) => {
         const target = resolvePersonalLink(link)
         if (!target || !personal?.visible(link)) return null
-        const label = viewLabel(t, link.id)
+        const label = destinationLabel(t, link.id)
         const Icon = target.icon
         return (
           <li key={link.id} className="flex min-w-0 items-center gap-1">
@@ -132,6 +134,47 @@ function PersonalLinks({
         )
       })}
     </ul>
+  )
+}
+
+/** The sidebar list under the journeys: every favorite, one click away. Nothing shows until
+ * the user stars a page; the managers in All areas edit the list. */
+export function SidebarFavorites() {
+  const personal = usePersonalNavigation()
+  const { t } = useTranslation('nav')
+  const headingId = useId()
+  if (!personal?.available || personal.favorites.length === 0) return null
+  return (
+    <nav aria-labelledby={headingId} className="flex shrink-0 flex-col gap-px">
+      <h2
+        id={headingId}
+        className="px-2.5 pt-3 pb-1 text-overline font-semibold text-text-3"
+      >
+        {t('personal.favorites')}
+      </h2>
+      <div className="flex max-h-[30vh] flex-col gap-px overflow-y-auto">
+        {personal.favorites.map((link) => {
+          const target = resolvePersonalLink(link)
+          if (!target) return null
+          const Icon = target.icon
+          return (
+            <Link
+              key={link.id}
+              to={target.path as never}
+              activeOptions={{ exact: true }}
+              activeProps={{ 'aria-current': 'page' }}
+              data-favorite={link.id}
+              className={SHELL_ROW_CLASS}
+            >
+              <Icon aria-hidden />
+              <span className="min-w-0 flex-1 truncate py-1">
+                {destinationLabel(t, link.id)}
+              </span>
+            </Link>
+          )
+        })}
+      </div>
+    </nav>
   )
 }
 

@@ -55,7 +55,7 @@
   },
   "enterprise": {
     "title": "Enterprise-Berichte",
-    "description": "Live-Compliance-Status, die Risikozusammenfassung für die Leitung und das signierte Audit-Nachweispaket.",
+    "description": "Live-Compliance-Status, die Risikozusammenfassung für die Leitung und das Audit-Nachweispaket.",
     "request": "Anfordern",
     "done": "Bericht heruntergeladen",
     "seam": "Dieser Bericht liegt in einem Modul, das mit dieser Installation nicht verknüpft ist. Es ist nichts defekt.",
@@ -69,8 +69,14 @@
     },
     "bundle": {
       "title": "Nachweispaket",
-      "description": "Das SIGNIERTE Audit-Nachweispaket — was Sie einem externen Prüfer übergeben."
-    }
+      "description": "Das Audit-Nachweispaket, das Sie einem externen Prüfer übergeben. Es ist nur signiert, wenn ein Signaturschlüssel eingerichtet ist."
+    },
+    "signed": "Mit dem eingerichteten Schlüssel signiert.",
+    "signedDone": "Paket heruntergeladen und signiert.",
+    "unsigned": "Heruntergeladen, nicht signiert: {{reason}}.",
+    "notReady": "Wird unsigniert heruntergeladen: {{reason}}.",
+    "unsignedUnknown": "die Engine nannte keinen Grund",
+    "signingSettings": "Einstellungen zur Berichtssignierung"
   },
   "runs": {
     "open": "Verlauf",

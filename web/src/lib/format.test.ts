@@ -16,6 +16,7 @@ import {
   formatMicroUsd,
   formatPercent,
   formatScore,
+  formatShortDateTime,
   formatTokens,
   truncateHash,
 } from './format'
@@ -155,5 +156,26 @@ describe('clock preference', () => {
     const twentyFour = formatCalendarDate('2026-06-15', 'en-US')
     expect(twelve).toBe('Jun 15, 2026')
     expect(twentyFour).toBe(twelve)
+  })
+})
+
+describe('formatShortDateTime: the shortest absolute time a table cell needs', () => {
+  const now = new Date('2026-10-02T15:00:00')
+  it('today: the time alone', () => {
+    expect(formatShortDateTime('2026-10-02T13:03:00', 'en', now)).toBe('13:03')
+  })
+  it('this year: the day and the time', () => {
+    expect(formatShortDateTime('2026-09-28T09:05:00', 'en', now)).toBe(
+      'Sep 28, 09:05',
+    )
+  })
+  it('another year: the full date and time', () => {
+    expect(formatShortDateTime('2025-12-31T23:59:00', 'en', now)).toMatch(
+      /2025/,
+    )
+  })
+  it('nothing or nonsense: the dash', () => {
+    expect(formatShortDateTime(undefined, 'en', now)).toBe('—')
+    expect(formatShortDateTime('soon', 'en', now)).toBe('—')
   })
 })

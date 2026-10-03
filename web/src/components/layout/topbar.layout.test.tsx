@@ -25,13 +25,21 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ComponentProps, ReactNode } from 'react'
 import { renderIntel } from '@/test/intel'
 
-const routerState = vi.hoisted(() => ({ pathname: '/console' }))
+const routerState = vi.hoisted(() => ({
+  pathname: '/console',
+  search: {} as Record<string, unknown>,
+}))
 vi.mock('@tanstack/react-router', () => ({
   useRouterState: ({
     select,
   }: {
-    select: (s: { location: { pathname: string } }) => unknown
-  }) => select({ location: { pathname: routerState.pathname } }),
+    select: (s: {
+      location: { pathname: string; search: Record<string, unknown> }
+    }) => unknown
+  }) =>
+    select({
+      location: { pathname: routerState.pathname, search: routerState.search },
+    }),
   useNavigate: () => vi.fn(),
   Link: ({
     children,
@@ -109,6 +117,7 @@ import { Topbar } from './topbar'
 
 afterEach(() => {
   routerState.pathname = '/console'
+  routerState.search = {}
   useWorkspaceStore.setState({
     activeWorkspace: null,
     activeWorkspaceName: null,
@@ -127,11 +136,12 @@ describe('Topbar — responsive structure', () => {
     expect(
       within(header).queryByRole('button', { name: /workspace/i }),
     ).toBeNull()
-    // The trail: the area links, the page does not.
+    // The trail: the parent links, the page does not. Administration belongs to the
+    // footer's Settings, so its parent is Settings.
     const nav = within(header).getByRole('navigation', { name: 'Breadcrumb' })
     expect(
-      within(nav).getAllByRole('link', { name: /System/ })[0],
-    ).toHaveAttribute('href', '/areas/system')
+      within(nav).getAllByRole('link', { name: /^Settings$/ })[0],
+    ).toHaveAttribute('href', '/settings')
     // The places a screen fills are reserved, and empty until it does.
     expect(header.querySelector('[data-slot="page-state"]')).not.toBeNull()
     expect(header.querySelector('[data-slot="page-actions"]')).not.toBeNull()
@@ -161,14 +171,14 @@ describe('Topbar — responsive structure', () => {
       await user.tab()
     }
     const at = (name: string) => order.findIndex((n) => n.includes(name))
-    expect(at('System')).toBeGreaterThanOrEqual(0)
-    expect(at('System')).toBeLessThan(at('Search and commands'))
+    expect(at('Settings')).toBeGreaterThanOrEqual(0)
+    expect(at('Settings')).toBeLessThan(at('Search and commands'))
     expect(at('Search and commands')).toBeLessThan(at('Notifications'))
     expect(at('Notifications')).toBeLessThan(at('Open documentation'))
   })
 
   it('reads a journey the way the sidebar names it, after the workspace it operates on', () => {
-    routerState.pathname = '/providers'
+    routerState.pathname = '/agent-tools'
     useWorkspaceStore.setState({
       activeWorkspace: 'w1',
       activeWorkspaceName: 'Billing operations',
@@ -186,5 +196,47 @@ describe('Topbar — responsive structure', () => {
     expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe(
       'AI tools',
     )
+  })
+
+  it('reads a member of Policies as "Policies / the page", the destination linking home', () => {
+    routerState.pathname = '/routine-policies'
+    const { container } = renderIntel(<Topbar />)
+    const nav = within(
+      container.querySelector('header') as HTMLElement,
+    ).getByRole('navigation', { name: 'Breadcrumb' })
+    expect(nav.textContent?.replace(/\s+/g, ' ')).toMatch(
+      /Policies.*Routine policies/,
+    )
+    // The parent crumb is drawn twice (text, and an icon link below sm); both go home.
+    const home = within(nav).getAllByRole('link', { name: 'Policies' })
+    expect(home.length).toBeGreaterThan(0)
+    for (const a of home) expect(a).toHaveAttribute('href', '/claude-policy')
+    expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe(
+      'Routine policies',
+    )
+  })
+
+  it('reads the Approvals address as the sidebar marks it, after the workspace', () => {
+    routerState.pathname = '/permissions'
+    routerState.search = { tab: 'approvals' }
+    const { container } = renderIntel(<Topbar />)
+    const nav = within(
+      container.querySelector('header') as HTMLElement,
+    ).getByRole('navigation', { name: 'Breadcrumb' })
+    expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe(
+      'Approvals',
+    )
+  })
+
+  it('reads the /agentops door as Sessions itself', () => {
+    routerState.pathname = '/agentops'
+    const { container } = renderIntel(<Topbar />)
+    const nav = within(
+      container.querySelector('header') as HTMLElement,
+    ).getByRole('navigation', { name: 'Breadcrumb' })
+    expect(nav.querySelector('[aria-current="page"]')?.textContent).toBe(
+      'Sessions',
+    )
+    expect(nav.textContent).not.toMatch(/Operate sessions/)
   })
 })

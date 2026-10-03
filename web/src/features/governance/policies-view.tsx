@@ -22,9 +22,10 @@ import { PagePrimaryAction } from '@/components/ui/page-actions'
 /**
  * PoliciesView lists governance policies (ABAC deny + approval rules) and hosts the
  * typed editor and the danger delete. Read gates on governance:policy:read; create /
- * edit / delete on governance:policy:admin. Enforcement is honest: a caption notes an
- * enabled policy is authored + audited but may be inert if its evaluator is unwired —
- * the UI never implies "enforced" from enabled=true.
+ * edit / delete on governance:policy:admin. An enabled policy is enforced from its save:
+ * the engine's request authorizer always composes the governance evaluator
+ * (cmd/olivares/boot.go, auth.NewAuthorizer(gov.RequestEvaluator(), ...)) and each write
+ * invalidates the tenant's cached rule set after commit (modules/governance/policy.go).
  */
 export function PoliciesView() {
   const { t } = useTranslation(['governance', 'common'])
@@ -139,9 +140,6 @@ export function PoliciesView() {
       )}
       <p className="text-caption text-muted-foreground">
         {t('policies.caption')}
-      </p>
-      <p className="text-caption text-muted-foreground">
-        {t('policies.enforcementCaption')}
       </p>
 
       <DataTable

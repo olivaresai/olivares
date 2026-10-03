@@ -4,6 +4,7 @@
 package claude
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,7 +12,18 @@ import (
 
 // canonicalizeHookPayloadPaths rewrites only the copy forwarded to the governed PEP.
 // It runs on the agent host, the only side that can resolve that host's symlinks.
+type hookPathCalls struct {
+	lstat        func(string) (os.FileInfo, error)
+	evalSymlinks func(string) (string, error)
+}
+
+var hostHookPathCalls = hookPathCalls{lstat: os.Lstat, evalSymlinks: filepath.EvalSymlinks}
+
 func canonicalizeHookPayloadPaths(body []byte) []byte {
+	return canonicalizeHookPayloadPathsWith(context.Background(), body, hostHookPathCalls)
+}
+
+func canonicalizeHookPayloadPathsWith(ctx context.Context, body []byte, calls hookPathCalls) []byte {
 	var m map[string]any
 	if err := json.Unmarshal(body, &m); err != nil {
 		return body
@@ -27,7 +39,7 @@ func canonicalizeHookPayloadPaths(body []byte) []byte {
 		if !ok || s == "" {
 			continue
 		}
-		canon, didChange := canonicalizeExistingAncestorPath(s)
+		canon, didChange := canonicalizeExistingAncestorPathWith(ctx, s, calls)
 		if didChange {
 			ti[key] = canon
 			changed = true
@@ -45,6 +57,10 @@ func canonicalizeHookPayloadPaths(body []byte) []byte {
 }
 
 func canonicalizeExistingAncestorPath(p string) (string, bool) {
+	return canonicalizeExistingAncestorPathWith(context.Background(), p, hostHookPathCalls)
+}
+
+func canonicalizeExistingAncestorPathWith(ctx context.Context, p string, calls hookPathCalls) (string, bool) {
 	if !filepath.IsAbs(p) {
 		return p, false
 	}
@@ -52,7 +68,10 @@ func canonicalizeExistingAncestorPath(p string) (string, bool) {
 	clean := filepath.Clean(p)
 	ancestor := clean
 	for {
-		if _, err := os.Lstat(ancestor); err == nil {
+		if ctx.Err() != nil {
+			return p, false
+		}
+		if _, err := calls.lstat(ancestor); err == nil {
 			break
 		} else if !os.IsNotExist(err) {
 			return p, false
@@ -64,7 +83,13 @@ func canonicalizeExistingAncestorPath(p string) (string, bool) {
 		ancestor = parent
 	}
 
-	realAnc, err := filepath.EvalSymlinks(ancestor)
+	if ctx.Err() != nil {
+		return p, false
+	}
+	realAnc, err := calls.evalSymlinks(ancestor)
+	if ctx.Err() != nil {
+		return p, false
+	}
 	if err != nil {
 		return p, false
 	}

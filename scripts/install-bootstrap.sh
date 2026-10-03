@@ -14,7 +14,7 @@ API="${OLIVARES_GITHUB_API_URL:-https://api.github.com}"
 # `v?` — releases before the 2026-09-29 tag-name correction carry the v prefix (v26.9.0);
 # current release tags are bare CalVer (26.10.0). The default's claim is 'this repository's
 # release workflow on a release tag', both shapes of it; pin one release with --source-tag.
-DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+\.[0-9]+$'
+DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$'
 CERT_IDENTITY_REGEXP="${OLIVARES_CERT_IDENTITY:-$DEFAULT_CERT_IDENTITY}"
 CERT_OIDC_ISSUER="${OLIVARES_CERT_OIDC_ISSUER:-https://token.actions.githubusercontent.com}"
 # cosign is the verifier and is never optional. Without cosign on PATH the bootstrap fetches
@@ -42,7 +42,7 @@ have() { command -v "$1" >/dev/null 2>&1; }
 # API tag_name is already the release's identity and is never normalized.
 release_tag() {
   release_version="${1#v}"
-  printf '%s\n' "$release_version" | grep -Eq '^[0-9]+\.[0-9]+\.[0-9]+$' ||
+  printf '%s\n' "$release_version" | grep -Eq '^[0-9]+\.[0-9]+(\.[0-9]+)?$' ||
     err "invalid release version: $1"
   release_major="${release_version%%.*}"
   release_minor="${release_version#*.}"; release_minor="${release_minor%%.*}"
@@ -54,15 +54,16 @@ release_tag() {
 }
 usage() {
   cat <<'EOF'
-Usage: install.sh --version YY.M.PATCH [--bindir DIR]
+Usage: install.sh --version YY.M[.N] [--bindir DIR]
        [--user|--system] [--init auto|systemd|openrc|launchd]
        [--data-dir PATH] [--config PATH] [--start] [--install-cosign] [--dry-run]
        install.sh --uninstall (--plan|--preserve|--purge)
        [--data-dir PATH] [--bindir DIR] [--yes]
 
-CI and piped/non-interactive use must pin --version. Interactive use may omit it
-to resolve the latest release. cosign verifies the second stage and is never
-bypassed: cosign on PATH is used; otherwise a pinned copy is fetched into a
+CI=1/true or OLIVARES_NONINTERACTIVE=1 must pin --version. Other use, including
+piped installation, may omit it to resolve the latest release. cosign verifies
+the second stage and is never bypassed: cosign on PATH is used; otherwise a
+pinned copy is fetched into a
 temporary directory, checked against the SHA-256 embedded in this script and
 removed afterwards (--install-cosign keeps it; OLIVARES_COSIGN=/path uses your
 own). --dry-run prints the trust boundary and actions without downloading or
@@ -140,9 +141,8 @@ fi
 noninteractive=0
 case "${CI:-}" in 1|true|TRUE) noninteractive=1 ;; esac
 [ "${OLIVARES_NONINTERACTIVE:-0}" = 1 ] && noninteractive=1
-[ -t 0 ] || noninteractive=1
 if [ -z "$tag" ] && [ "$noninteractive" -eq 1 ]; then
-  err "non-interactive installation must pin --version YY.M.PATCH"
+  err "non-interactive installation must pin --version YY.M[.N]"
 fi
 
 dl() {
@@ -198,7 +198,7 @@ if [ -z "$tag" ]; then
 else
   tag="$(release_tag "$tag")"
 fi
-printf '%s\n' "$tag" | grep -Eq '^v?[0-9]+\.[0-9]+\.[0-9]+$' ||
+printf '%s\n' "$tag" | grep -Eq '^v?[0-9]+\.[0-9]+(\.[0-9]+)?$' ||
   err "invalid or unresolved release version: $tag"
 
 os="${OLIVARES_OS:-$(uname -s | tr '[:upper:]' '[:lower:]')}"

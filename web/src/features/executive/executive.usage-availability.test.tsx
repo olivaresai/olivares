@@ -228,7 +228,7 @@ describe('ExecutiveView usage pillar — Inventory valid, Sessions not establish
     expect(screen.queryByTestId('executive-usage-inventory-gap')).toBeNull()
     // The scope note still describes what the reads cover; the role may make both.
     expect(screen.getByTestId('executive-usage-scope-note')).toHaveTextContent(
-      'Sessions · Inventory · Tenant-wide — not filtered by workspace',
+      'Sessions · Inventory · All workspaces',
     )
   })
 
@@ -260,9 +260,7 @@ describe('ExecutiveView usage pillar — Inventory valid, Sessions not establish
     )
     // The note describes only the read the role makes: Inventory, not Sessions.
     const note = screen.getByTestId('executive-usage-scope-note')
-    expect(note).toHaveTextContent(
-      'Inventory · Tenant-wide — not filtered by workspace',
-    )
+    expect(note).toHaveTextContent('Inventory · All workspaces')
     expect(note).not.toHaveTextContent('Sessions')
   })
 
@@ -430,9 +428,7 @@ describe('ExecutiveView usage pillar — leaving a successful state', () => {
     )
     // The note stops naming Sessions the moment the role can no longer read it.
     const note = screen.getByTestId('executive-usage-scope-note')
-    expect(note).toHaveTextContent(
-      'Inventory · Tenant-wide — not filtered by workspace',
-    )
+    expect(note).toHaveTextContent('Inventory · All workspaces')
     expect(note).not.toHaveTextContent('Sessions')
   })
 
@@ -552,7 +548,7 @@ describe('ExecutiveView usage pillar — a truncated inventory summary', () => {
     expect(screen.queryByTestId('executive-usage-live-gap')).toBeNull()
     expect(screen.queryByTestId('executive-usage-inventory-gap')).toBeNull()
     expect(screen.getByTestId('executive-usage-scope-note')).toHaveTextContent(
-      'Sessions · Inventory · Tenant-wide — not filtered by workspace',
+      'Sessions · Inventory · All workspaces',
     )
   })
 
@@ -735,7 +731,7 @@ describe('ExecutiveView usage pillar — a live page with more rows', () => {
     expect(screen.queryByTestId('executive-usage-live-gap')).toBeNull()
     expect(screen.queryByTestId('executive-usage-inventory-gap')).toBeNull()
     expect(screen.getByTestId('executive-usage-scope-note')).toHaveTextContent(
-      'Sessions · Inventory · Tenant-wide — not filtered by workspace',
+      'Sessions · Inventory · All workspaces',
     )
   })
 
@@ -956,7 +952,7 @@ describe('ExecutiveView usage pillar — pending reasons (pure flag fixture)', (
     expect(screen.queryByTestId('executive-usage-inventory-gap')).toBeNull()
     expect(screen.queryByTestId('executive-usage-sessions-partial')).toBeNull()
     expect(screen.getByTestId('executive-usage-scope-note')).toHaveTextContent(
-      'Sessions · Inventory · Tenant-wide — not filtered by workspace',
+      'Sessions · Inventory · All workspaces',
     )
     expect(liveRegion()).toHaveTextContent(
       'Sessions: query not started. Inventory: figures available.',
@@ -1340,9 +1336,7 @@ describe('ExecutiveView usage pillar — tenant and permission transitions while
       within(usageTile()).getByText('— live · 25 tracked'),
     ).toBeInTheDocument()
     const note = screen.getByTestId('executive-usage-scope-note')
-    expect(note).toHaveTextContent(
-      'Inventory · Tenant-wide — not filtered by workspace',
-    )
+    expect(note).toHaveTextContent('Inventory · All workspaces')
     expect(note).not.toHaveTextContent('Sessions')
     expect(liveRegion()).toHaveTextContent(
       'Sessions: restricted to your role. Inventory: figures available.',

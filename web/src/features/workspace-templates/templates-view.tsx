@@ -6,6 +6,7 @@
 // Shows a filter toolbar (built-in / custom toggle + show-archived checkbox),
 // a responsive card grid, and a Create button that opens TemplateEditor.
 // Edit actions on cards also open TemplateEditor in edit mode.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import { LayoutTemplate, Plus } from 'lucide-react'
 import { useState } from 'react'
@@ -15,7 +16,7 @@ import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { EmptyState } from '@/components/ui/empty-state'
 import { StepUpRequiredState } from '@/components/layout/step-up-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Label } from '@/components/ui/label'
 import { PageHeader } from '@/components/ui/page-header'
 import {
@@ -178,7 +179,10 @@ export function TemplatesView() {
       ) : query.error instanceof ApiError && query.error.isForbidden ? (
         <ForbiddenState />
       ) : query.error ? (
-        <ErrorState retry={() => void query.refetch()} />
+        <QueryErrorState
+          error={query.error}
+          retry={() => void query.refetch()}
+        />
       ) : items.length === 0 ? (
         <EmptyState
           icon={<LayoutTemplate />}

@@ -115,7 +115,7 @@ func (e *Engine) List(ctx context.Context, rootPath string) (*Inventory, error) 
 				}
 				inv.Leftovers = append(inv.Leftovers, lo)
 			case r.IsDir() && !strings.HasPrefix(r.Name(), "."):
-				inv.Installed = append(inv.Installed, e.inspectRelease(ctx, root, rel, abs, d.Name()))
+				inv.Installed = append(inv.Installed, e.inspectReleaseCached(ctx, root, rel, abs, d.Name()))
 			default:
 				inv.Unexpected = append(inv.Unexpected, abs)
 			}

@@ -27,11 +27,15 @@ import type {
   FileListResponse,
   FileReadResponse,
   PatchProfileRequest,
+  ProfilePreviewDTO,
   ProviderAccountDTO,
   ProviderAccountMetadataPatch,
   ProviderBindingDTO,
   ProviderProfileConfigurationDTO,
   ProviderProfileDTO,
+  ResolvedProfileDTO,
+  RunChangedFileDTO,
+  RunChangesDTO,
   RunDTO,
   RunEventDTO,
   WorkspaceDTO,
@@ -65,7 +69,6 @@ const WORKSPACES = '/v1/m/sessions/workspaces'
 const PROFILES = '/v1/m/sessions/provider-profiles'
 const BINDINGS = '/v1/m/sessions/provider-source-bindings'
 const ACCOUNTS = '/v1/m/sessions/provider-accounts'
-
 const ref = (r: string) => encodeURIComponent(r)
 
 /** The default page of the two profile-plane lists. A caller may narrow or widen it,
@@ -195,7 +198,32 @@ export const agentOpsApi = {
         ? undefined
         : { work_lease_fence: workLeaseFence },
     ),
-  stop: (r: string) => http.post<RunDTO>(`${RUNS}/${ref(r)}/stop`),
+  /** The files the session changed in its folder since it started (read-only). */
+  changes: (r: string, opts?: { signal?: AbortSignal }) =>
+    http.get<RunChangesDTO>(`${RUNS}/${ref(r)}/changes`, {
+      signal: opts?.signal,
+    }),
+  /** One changed file's current text (at most 256 KiB). */
+  changedFile: (r: string, path: string, opts?: { signal?: AbortSignal }) =>
+    http.get<RunChangedFileDTO>(`${RUNS}/${ref(r)}/changes/file`, {
+      query: { path },
+      signal: opts?.signal,
+    }),
+  /** Which sessions this run may message or hand work to (ARCH COMMS-PATH #1, MC): a list
+   * of canonical session ids, or every live session of the run's template. */
+  setPeers: (
+    r: string,
+    body: { peers: string[] } | { peers_rule: 'same-template' },
+  ) => http.put<RunDTO>(`${RUNS}/${ref(r)}/peers`, body),
+  /** Stop the run. A work-bound run presents its fence until its lease has ended
+   * (`currentControlFence`); then the engine applies ordinary control. */
+  stop: (r: string, workLeaseFence?: number) =>
+    http.post<RunDTO>(
+      `${RUNS}/${ref(r)}/stop`,
+      workLeaseFence === undefined
+        ? undefined
+        : { work_lease_fence: workLeaseFence },
+    ),
   resume: (r: string) => http.post<RunDTO>(`${RUNS}/${ref(r)}/resume`),
   cleanup: (r: string) => http.post<RunDTO>(`${RUNS}/${ref(r)}/cleanup`),
   deleteRun: (r: string) =>
@@ -220,6 +248,16 @@ export const agentOpsApi = {
     }),
   createProfile: (body: CreateProfileRequest) =>
     http.post<ProviderProfileDTO>(PROFILES, body),
+  /** Which profile a new session of a tool uses is the engine's one rule (its own
+   * login when signed in, otherwise a key or local model from Providers): the
+   * preview reads the answer, the resolve acts on it. Clients never choose. */
+  previewProfile: (driver: string, opts?: { signal?: AbortSignal }) =>
+    http.get<ProfilePreviewDTO>(`${PROFILES}/resolve`, {
+      query: { driver },
+      signal: opts?.signal,
+    }),
+  resolveProfile: (driver: string) =>
+    http.post<ResolvedProfileDTO>(`${PROFILES}/resolve`, { driver }),
   patchProfile: (
     r: string,
     body: PatchProfileRequest,
@@ -415,6 +453,8 @@ export const agentOpsKeys = {
       : (['agentops', tenant, 'b', epoch, 'runs', params] as const),
   run: (tenant: string | null, r: string) =>
     ['agentops', tenant, 'run', r] as const,
+  runChanges: (tenant: string | null, r: string) =>
+    ['agentops', tenant, 'run', r, 'changes'] as const,
   /**
    * THE PROVIDER-PROFILE PLANE IS PARTITIONED BY AUTHORITY BOUNDARY, not only by
    * tenant. `epoch` is the OPAQUE number useAuthBoundary derives for one

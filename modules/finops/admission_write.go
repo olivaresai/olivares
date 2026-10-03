@@ -52,7 +52,7 @@ var errLegacyPairBusy = errors.New("finops: a hold of the published admission st
 // state before the write, which the caller treats as the rollback it was.
 func (m *Module) mutateClassified(ctx context.Context, tenant model.TenantID, fn func(store.Scope) error) (writeOutcome, error) {
 	done := false
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.mutate(ctx, tenant, func(sc store.Scope) error {
 		done = false
 		if err := fn(sc); err != nil {
 			return err

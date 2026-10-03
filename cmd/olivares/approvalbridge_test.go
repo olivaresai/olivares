@@ -16,8 +16,10 @@ import (
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/deploy"
+	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/orchestration"
 	"github.com/olivaresai/olivares/modules/security"
+	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/modules/voice"
 )
 
@@ -535,5 +537,175 @@ func TestApprovalBridgeLoopbackInsideChiRequestContext(t *testing.T) {
 		Action: "orchestration.workflow.run", SubjectKind: "workflow", SubjectRef: "wf-loopback",
 	}); err != nil || s.Status != orchestration.StatusPending {
 		t.Fatalf("in-request loopback Status = %+v err=%v, want pending", s, err)
+	}
+}
+
+func TestLocalApprovalProposerUsesExistingQueueAndOneHuman(t *testing.T) {
+	h := newHarness(t)
+	b := newApprovalBridge(approvalBridgeConfig{}, discardLog())
+	if b == nil {
+		t.Fatal("default local proposer is missing")
+	}
+	b.localProposer = h.set.gov.EngineApprovals()
+	// No handler or service token is needed for the local proposer.
+	h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
+	gate := &sessionLaunchGate{bridge: b, recordAvailable: true, log: discardLog()}
+	intent := sessions.LaunchIntent{Action: sessions.LaunchActionCreate, Transport: sessions.TransportStreamJSON, PermissionMode: "default", WorkspaceClassified: true, WorkspaceReadWrite: true, WorkspaceRef: "test-folder", Actor: "user:initiator"}
+	decision, err := gate.Authorize(context.Background(), model.TenantID(h.tenantA), intent)
+	if err != nil || decision.Allowed || decision.DeniedStatus != http.StatusAccepted || decision.ApprovalRef == "" {
+		t.Fatalf("waiting=%+v %v", decision, err)
+	}
+	code, body := h.decide(t, h.adminToken, decision.ApprovalRef, "approve")
+	if code != http.StatusOK {
+		t.Fatalf("one human approval=%d %s", code, body)
+	}
+	intent.ApprovalRef = decision.ApprovalRef
+	approved, err := gate.Authorize(context.Background(), model.TenantID(h.tenantA), intent)
+	if err != nil || !approved.Allowed || !approved.RecordIO {
+		t.Fatalf("approved=%+v %v", approved, err)
+	}
+}
+
+func TestProviderApprovalWaitsInExistingQueue(t *testing.T) {
+	h := newHarness(t)
+	b := newApprovalBridge(approvalBridgeConfig{}, discardLog())
+	b.localProposer = h.set.gov.EngineApprovals()
+	tenant := model.TenantID(h.tenantA)
+	ctx, cancel := context.WithTimeout(context.Background(), 4*time.Second)
+	defer cancel()
+	result := make(chan sessions.ProviderApprovalDecision, 1)
+	errs := make(chan error, 1)
+	request := sessions.ProviderApprovalRequest{Driver: "codex", RunRef: "osn_test", SessionRef: "osn_session_test", Principal: auth.Principal{SessionIdentity: "osn_session_test"}, TurnID: "turn-one", Method: "item/permissions/requestApproval", Kind: "permissions", Requested: []string{"fs:write:/project", "network:enabled"}}
+	go func() {
+		decision, err := (providerApprovalAdapter{bridge: b}).Approve(ctx, tenant, request)
+		result <- decision
+		errs <- err
+	}()
+	var ref string
+	for ref == "" && ctx.Err() == nil {
+		items, _, err := b.localProposer.List(ctx, tenant, "sessions.provider.approval", nbPending, "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(items) > 0 {
+			ref = items[0].ID
+			if items[0].RequestedBy != "session:"+request.SessionRef {
+				t.Fatal("agent proposal is attributed to the launching human")
+			}
+			if items[0].SessionRef != request.SessionRef {
+				t.Fatal("approval omits the session principal reference")
+			}
+			if !strings.Contains(items[0].Reason, "fs:write:/project") || !strings.Contains(items[0].Reason, "network:enabled") {
+				t.Fatal("human question omits the requested authority")
+			}
+		} else {
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	if ref == "" {
+		t.Fatal("provider permission did not enter the human queue")
+	}
+	select {
+	case <-result:
+		t.Fatal("provider was answered before a human decided")
+	default:
+	}
+	if code, body := h.decide(t, h.adminToken, ref, "approve"); code != http.StatusOK {
+		t.Fatalf("approve=%d %s", code, body)
+	}
+	select {
+	case decision := <-result:
+		if err := <-errs; err != nil || !decision.Allow || decision.SessionScope || len(decision.Granted) != 2 {
+			t.Fatalf("decision=%+v err=%v", decision, err)
+		}
+	case <-ctx.Done():
+		t.Fatal("approved provider permission was not answered")
+	}
+}
+
+func TestEngineApprovalServiceRequestWaitDecideSharesRESTQueue(t *testing.T) {
+	h := newHarness(t)
+	tenant := model.TenantID(h.tenantA)
+	h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
+	h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(nil))
+	service := h.set.gov.EngineApprovals()
+	human, err := h.authr.Authenticate(context.Background(), h.adminToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The current session authority carries the launcher's user as its ceiling,
+	// but the proposal must name the agent session, so that human can decide.
+	proposer := human
+	proposer.SessionIdentity = "osn_service_session"
+	approval, err := service.Request(context.Background(), tenant, proposer, governance.ApprovalRequest{Action: "sessions.provider.approval", SessionRef: proposer.SessionIdentity, SubjectKind: "session_run", SubjectRef: "owned-run", Reason: "curl https://user:examplepass@host/path token=secretvalue"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if approval.RequestedBy != "session:"+proposer.SessionIdentity || strings.Contains(approval.Reason, "examplepass") || strings.Contains(approval.Reason, "secretvalue") {
+		t.Fatalf("proposal=%+v", approval)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	observed := make(chan governance.Approval, 1)
+	waitError := make(chan error, 1)
+	go func() { out, err := service.Wait(ctx, tenant, approval.ID); observed <- out; waitError <- err }()
+	out, err := service.Decide(ctx, tenant, human, approval.ID, governance.ApprovalDecisionRequest{Decision: "approve"})
+	if err != nil || out.Status != "approved" || out.ApproveCount != 1 {
+		t.Fatalf("decision=%+v err=%v", out, err)
+	}
+	select {
+	case seen := <-observed:
+		if err := <-waitError; err != nil || seen.Status != "approved" {
+			t.Fatalf("wait=%+v err=%v", seen, err)
+		}
+	case <-ctx.Done():
+		t.Fatal("service wait did not observe the human decision")
+	}
+	if got := h.getJSON(h.adminToken, h.tenantA, "/v1/m/governance/approvals/"+approval.ID); got["status"] != "approved" {
+		t.Fatal("REST did not see the service decision")
+	}
+	if _, err := service.Decide(ctx, tenant, human, approval.ID, governance.ApprovalDecisionRequest{Decision: "approve"}); err == nil {
+		t.Fatal("terminal approval accepted a second decision")
+	}
+	pending, err := service.Request(ctx, tenant, proposer, governance.ApprovalRequest{Action: "sessions.provider.approval", SessionRef: proposer.SessionIdentity, SubjectRef: "second-run"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	stopped, stop := context.WithCancel(ctx)
+	stop()
+	if _, err := service.Wait(stopped, tenant, pending.ID); err == nil {
+		t.Fatal("canceled wait survived its caller")
+	}
+	if _, err := service.Request(ctx, tenant, human, governance.ApprovalRequest{Action: "sessions.provider.approval"}); err == nil {
+		t.Fatal("human became the engine proposer")
+	}
+}
+
+type approvalKindPolicy struct{}
+
+func (approvalKindPolicy) Evaluate(ctx context.Context, req auth.Request) (auth.Decision, error) {
+	return auth.Decision{Allow: req.Resource.Kind != "approval", Reason: "approval decisions forbidden"}, nil
+}
+func TestEngineApprovalDecisionUsesRESTPolicyQuestion(t *testing.T) {
+	h := newHarness(t)
+	tenant := model.TenantID(h.tenantA)
+	service := h.set.gov.EngineApprovals()
+	principal, err := h.authr.Authenticate(context.Background(), h.adminToken)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proposer := principal
+	proposer.SessionIdentity = "osn_policy_session"
+	approval, err := service.Request(context.Background(), tenant, proposer, governance.ApprovalRequest{Action: "sessions.provider.approval", SessionRef: proposer.SessionIdentity})
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(approvalKindPolicy{}))
+	if _, err := service.Decide(context.Background(), tenant, principal, approval.ID, governance.ApprovalDecisionRequest{Decision: "approve"}); err == nil {
+		t.Fatal("in-process decision bypassed the REST approval forbid")
+	}
+	out, err := service.Read(context.Background(), tenant, approval.ID)
+	if err != nil || out.Status != "pending" || out.ApproveCount != 0 {
+		t.Fatalf("denied decision changed queue: %+v %v", out, err)
 	}
 }

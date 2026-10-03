@@ -39,6 +39,8 @@ func consoleViewsRequestBodyDeclarationFor(r moduleRoute) (consoleViewsRequestBo
 	switch r.method + " " + r.pattern {
 	case http.MethodPost + " /views", http.MethodPut + " /views/{id}":
 		return consoleViewsRequestBodyDeclaration{kind: consoleViewsBodyful, schema: consoleViewsInputSchema()}, true
+	case http.MethodPut + " /favorites":
+		return consoleViewsRequestBodyDeclaration{kind: consoleViewsBodyful, schema: consoleViewsFavoritesSchema()}, true
 	case http.MethodDelete + " /views/{id}":
 		return consoleViewsRequestBodyDeclaration{kind: consoleViewsBodyless}, true
 	default:
@@ -72,5 +74,28 @@ func consoleViewsInputSchema() map[string]any {
 			"shared", oaObj("anyOf", []any{oaObj("type", "boolean"), oaObj("type", "null")}),
 		),
 		"required", oaEnum("feature_id", "name", "params"),
+	)
+}
+
+// consoleViewsFavoritesSchema mirrors favoritesBody in modules/consoleviews/favorites.go.
+func consoleViewsFavoritesSchema() map[string]any {
+	return oaObj(
+		"type", "object",
+		"properties", oaObj(
+			"favorites", oaObj(
+				"type", "array",
+				"maxItems", 256,
+				"description", "The caller's favorites in display order. The list replaces the stored one; an id may appear once.",
+				"items", oaObj(
+					"type", "object",
+					"properties", oaObj(
+						"kind", oaObj("type", "string", "enum", oaEnum("feature", "utility")),
+						"id", oaObj("type", "string", "pattern", "^[A-Za-z][A-Za-z0-9-]{0,63}$"),
+					),
+					"required", oaEnum("kind", "id"),
+				),
+			),
+		),
+		"required", oaEnum("favorites"),
 	)
 }

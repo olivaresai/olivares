@@ -66,7 +66,7 @@ fixture = era / "release"
 fakebin = era / "bin"
 fixture.mkdir(parents=True)
 fakebin.mkdir()
-for version in ("26.9.0", "26.10.0"):
+for version in ("26.9.0", "26.10.0", "26.11", "26.11.1"):
     payload = era / version
     payload.mkdir()
     binary = payload / "olivares"
@@ -99,7 +99,7 @@ else:
     data = (pathlib.Path(os.environ['ERA_FIXTURE']) / url[len(prefix):]).read_bytes()
     pathlib.Path(args[args.index('-o') + 1]).write_bytes(data)
 """)
-(fakebin / "cosign").write_text("#!/bin/sh\nexit 0\n")
+(fakebin / "cosign").write_text('#!/bin/sh\nprintf "%s\\n" "$*" >>"$ERA_COSIGN_LOG"\nexit 0\n')
 for tool in fakebin.iterdir():
     tool.chmod(0o755)
 
@@ -107,11 +107,20 @@ install = root / "scripts/install.sh"
 bootstrap = root / "scripts/install-bootstrap.sh"
 rendered = fixture / "olivares-install-26.10.0.sh"
 # These expectations are literal; neither the fixture nor the oracle derives tags.
+monthly = fixture / "olivares-install-26.11.sh"
 cases = [
+    ("latest monthly", install, "", "26.11", "26.11"),
+    ("install monthly bare", install, "26.11", "", "26.11"),
+    ("install monthly prefixed", install, "v26.11", "", "26.11"),
+    ("bootstrap monthly", bootstrap, "26.11", "", "26.11"),
+    ("bootstrap monthly prefixed", bootstrap, "v26.11", "", "26.11"),
+    ("rendered monthly pin", monthly, "", "", "26.11"),
+    ("patch monthly", install, "26.11.1", "", "26.11.1"),
     ("latest bare 26.10.0", install, "", "26.10.0", "26.10.0"),
     ("latest historical v26.9.0", install, "", "v26.9.0", "v26.9.0"),
     ("latest tag is verbatim even when noncanonical", install, "", "v26.10.0", "v26.10.0"),
     ("interactive bootstrap latest bare 26.10.0", bootstrap, "", "26.10.0", "26.10.0"),
+    ("piped bootstrap without --version installs latest", bootstrap, "", "26.11", "26.11"),
     ("install --version 26.10.0", install, "26.10.0", "", "26.10.0"),
     ("install --version v26.10.0", install, "v26.10.0", "", "26.10.0"),
     ("install --version 26.9.0", install, "26.9.0", "", "v26.9.0"),
@@ -128,23 +137,29 @@ failures = []
 for index, (label, script, requested, latest, tag) in enumerate(cases):
     url_log = era / f"urls-{index}"
     destination = era / f"installed-{index}"
+    cosign_log = era / f"cosign-{index}"
     env = dict(os.environ, PATH=f"{fakebin}:/usr/bin:/bin", CI="0",
                OLIVARES_NONINTERACTIVE="0", OLIVARES_VERSION="", OLIVARES_COSIGN="",
                OLIVARES_OS="linux", OLIVARES_ARCH="amd64",
                OLIVARES_GITHUB_URL="https://fixture.invalid",
                OLIVARES_GITHUB_API_URL="https://api.fixture.invalid",
                ERA_FIXTURE=str(fixture), ERA_URL_LOG=str(url_log),
-               ERA_LATEST=latest, ERA_EXPECT_TAG=tag)
+               ERA_LATEST=latest, ERA_EXPECT_TAG=tag, ERA_COSIGN_LOG=str(cosign_log))
     args = ["/bin/sh", str(script), "--bindir", str(destination)]
     if requested:
         args += ["--version", requested]
-    master, slave = pty.openpty()
-    try:
-        result = subprocess.run(args, env=env, stdin=slave, capture_output=True,
+    if label == "piped bootstrap without --version installs latest":
+        result = subprocess.run(["/bin/sh", "-s", "--", *args[2:]], env=env,
+                                input=script.read_text(), capture_output=True,
                                 text=True, timeout=20)
-    finally:
-        os.close(slave)
-        os.close(master)
+    else:
+        master, slave = pty.openpty()
+        try:
+            result = subprocess.run(args, env=env, stdin=slave, capture_output=True,
+                                    text=True, timeout=20)
+        finally:
+            os.close(slave)
+            os.close(master)
     urls = url_log.read_text().splitlines() if url_log.exists() else []
     version = tag.removeprefix("v")
     archive_url = f"https://fixture.invalid/olivaresai/olivares/releases/download/{tag}/olivares_{version}_linux_amd64.tar.gz"
@@ -157,8 +172,67 @@ for index, (label, script, requested, latest, tag) in enumerate(cases):
         assert installed.read_bytes() == (era / version / "olivares").read_bytes(), label
         if script == rendered:
             assert not any('/releases/latest' in url for url in urls), label
+        if label == "piped bootstrap without --version installs latest":
+            assert urls[0] == 'https://api.fixture.invalid/repos/olivaresai/olivares/releases/latest', urls
+            calls = cosign_log.read_text().splitlines()
+            assert len(calls) == 2 and all(call.startswith('verify-blob ') for call in calls), calls
         print(f"ok - {label}")
+
+# A pin is required only when automation requests it explicitly, not because the
+# person's one-line installer arrives on stdin through a pipe.
+for variable, value in (("CI", "1"), ("CI", "true"), ("OLIVARES_NONINTERACTIVE", "1")):
+    url_log = era / f"refused-{variable}-{value}"
+    destination = era / f"refused-install-{variable}-{value}"
+    refusal_env = dict(env, **{variable: value}, ERA_URL_LOG=str(url_log))
+    result = subprocess.run(["/bin/sh", "-s", "--", "--bindir", str(destination)],
+                            env=refusal_env, input=bootstrap.read_text(),
+                            capture_output=True, text=True, timeout=20)
+    assert result.returncode == 1 and 'must pin --version' in result.stderr, result.stderr
+    assert not url_log.exists() and not destination.exists(), 'unpinned automation reached the release API or install destination'
+    print(f"ok - explicit {variable}={value} without --version refuses before downloads")
 assert not failures, failures
+
+# Copying the printed export and next command must work for an off-PATH prefix,
+# including shell metacharacters in its literal directory name.
+destination = era / "person's install $literal `text`"
+env = dict(env, PATH=f'{fakebin}:/usr/bin:/bin', ERA_EXPECT_TAG='26.10.0')
+result = subprocess.run(['/bin/sh', str(install), '--version', '26.10.0',
+                         '--bindir', str(destination)],
+                        env=env, capture_output=True, text=True, timeout=20)
+assert result.returncode == 0, result.stderr
+lines = result.stdout.splitlines()
+exports = [line.strip() for line in lines if line.strip().startswith('export PATH=')]
+assert len(exports) == 1, result.stdout
+next_command = next(line.removeprefix('Next: ') for line in lines if line.startswith('Next: '))
+assert lines.index(next(line for line in lines if line.strip() == exports[0])) < lines.index('Next: ' + next_command)
+shell = subprocess.run(['/bin/sh', '-c', exports[0] + '\ncommand -v olivares\n' + next_command],
+                       env=env, capture_output=True, text=True, timeout=20)
+assert shell.returncode == 0, shell.stderr
+assert str(destination / 'olivares') in shell.stdout, shell.stdout
+assert next_command != 'olivares quickstart', next_command
+print('ok - off-PATH install prints a usable export and absolute next command')
+
+# A real tar write failure must not be reported as an archive-layout defect.
+# /dev/full supplies ENOSPC without filling a filesystem shared with other tests.
+if pathlib.Path('/dev/full').exists():
+    faultbin = era / 'write-failure-bin'
+    faultbin.mkdir()
+    (faultbin / 'mktemp').write_text('''#!/bin/sh
+dir=$(/usr/bin/mktemp "$@") || exit
+ln -s /dev/full "$dir/olivares"
+printf '%s\\n' "$dir"
+''')
+    (faultbin / 'mktemp').chmod(0o755)
+    env = dict(env, PATH=f'{faultbin}:{fakebin}:/usr/bin:/bin',
+               TMPDIR=str(era), ERA_EXPECT_TAG='26.10.0')
+    result = subprocess.run(['/bin/sh', str(install), '--version', '26.10.0',
+                             '--bindir', str(era / 'write-failure-prefix')],
+                            env=env, capture_output=True, text=True, timeout=20)
+    assert result.returncode == 1, result.stderr
+    assert 'does not contain a top-level' not in result.stderr, result.stderr
+    assert str(era) in result.stderr and 'TMPDIR' in result.stderr, result.stderr
+    assert not (era / 'write-failure-prefix' / 'olivares').exists()
+    print('ok - tar write failure preserves the cause and names temporary-space recovery')
 PYERA
 
 expect_rc 0 "concurrent renders publish identical complete bytes independently of TMPDIR" \

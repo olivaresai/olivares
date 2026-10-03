@@ -37,6 +37,10 @@ const DefaultSessionTTL = 12 * time.Hour
 // (and on login, writes) only the engine's auth partition. It is safe for
 // concurrent use.
 type Authenticator struct {
+	// stepUp caches the administrative step-up policy (stepup_policy.go) so
+	// every request can carry it without reading inside a store transaction.
+	stepUp stepUpCache
+
 	st         store.Store
 	clock      model.Clock
 	throttle   *throttle
@@ -178,40 +182,51 @@ func (a *Authenticator) authSession(ctx context.Context, selector, secret string
 		if scoped == s.TenantScope.IsZero() {
 			return ErrUnauthenticated
 		}
-		u, err := as.Users().Get(ctx, s.UserID)
-		if err != nil {
-			if errors.Is(err, store.ErrNotFound) {
-				return ErrUnauthenticated
-			}
-			return err
-		}
-		if u.Status != model.StatusActive {
-			return ErrUnauthenticated
-		}
-		if !validPrincipalRef(PrincipalRef{kind: KindUser, credentialID: s.ID, version: s.Version}) {
-			return ErrUnauthenticated
-		}
-		grants, groups, confined, err := loadGrants(ctx, as, u.ID)
-		if err != nil {
-			return err
-		}
-		standing, err := loadStanding(ctx, as, u.ID, s.ID)
-		if err != nil {
-			return err
-		}
-		p = newPrincipal(KindUser, u.ID, s.ID, u.IsSuperadmin, u.DisplayName, grants, groups).
-			withConfinements(confined).withStanding(standing)
-		if scoped {
-			p = p.withSessionScope(s.TenantScope)
-		}
-		p.AAL = effectiveAAL(s, a.clock.Now())
-		p.AMR = s.AMR
-		p = p.withCredentialRef(s.Version)
-		return nil
+		p, err = a.principalFromSession(ctx, as, s)
+		return err
 	})
 	if err != nil {
 		return Principal{}, err
 	}
+	return p, nil
+}
+
+// principalFromSession is the shared, current authority reconstruction for both
+// login bearers and a running session's retained launcher credential.
+func (a *Authenticator) principalFromSession(ctx context.Context, as store.AuthScope, s model.AuthSession) (Principal, error) {
+	if s.Revoked || s.DeletedAt != nil || !a.clock.Now().Time().Before(s.ExpiresAt.Time()) {
+		return Principal{}, ErrUnauthenticated
+	}
+	var p Principal
+	u, err := as.Users().Get(ctx, s.UserID)
+	if err != nil {
+		if errors.Is(err, store.ErrNotFound) {
+			return Principal{}, ErrUnauthenticated
+		}
+		return Principal{}, err
+	}
+	if u.Status != model.StatusActive || u.DeletedAt != nil {
+		return Principal{}, ErrUnauthenticated
+	}
+	if !validPrincipalRef(PrincipalRef{kind: KindUser, credentialID: s.ID, version: s.Version}) {
+		return Principal{}, ErrUnauthenticated
+	}
+	grants, groups, confined, err := loadGrants(ctx, as, u.ID, u.IsSuperadmin)
+	if err != nil {
+		return Principal{}, err
+	}
+	standing, err := loadStanding(ctx, as, u.ID, s.ID)
+	if err != nil {
+		return Principal{}, err
+	}
+	p = newPrincipal(KindUser, u.ID, s.ID, u.IsSuperadmin, u.DisplayName, grants, groups).
+		withConfinements(confined).withStanding(standing)
+	if !s.TenantScope.IsZero() {
+		p = p.withSessionScope(s.TenantScope)
+	}
+	p.AAL = effectiveAAL(s, a.clock.Now())
+	p.AMR = s.AMR
+	p = p.withCredentialRef(s.Version)
 	return p, nil
 }
 
@@ -377,16 +392,17 @@ func lookupAPITokenBySelector(
 // `Group::"<id>"` principal parent (buildPrincipalEntity).
 //
 // THE PER-TENANT GATE: a group ELEVATES an existing direct membership, it never
-// grants base membership — a user a group names but who holds no membership in
-// the group's target tenant gains NOTHING there, NEITHER an elevated role NOR a
-// group identity. This is the deny-closed lynchpin of group mapping: an IdP
+// grants base membership. An ordinary user without a direct membership gains
+// neither an elevated role nor a group identity. A verified superadmin is already
+// admitted as an owner and keeps its stored group subjects, so an authored forbid
+// also restricts that user on legacy routes. This is the group-mapping gate: an IdP
 // roster push can widen a role (or make a member a grant subject) only where a
 // tenant operator already admitted the user, and it can never widen the role
-// DOWN (a higher direct role wins). The gate guards BOTH the MappedRole
-// elevation and the new group-subject propagation identically. Token principals
+// DOWN (a higher direct role wins). MappedRole elevation still requires a direct
+// membership, including for a superadmin. Token principals
 // never pass here: authToken builds its single bound grant itself — least
 // privilege, ceiling-checked at issue time, carrying no group memberships.
-func loadGrants(ctx context.Context, as store.AuthScope, userID model.ID) (map[model.TenantID]string, map[model.TenantID][]string, map[model.TenantID]model.ID, error) {
+func loadGrants(ctx context.Context, as store.AuthScope, userID model.ID, superadmin bool) (map[model.TenantID]string, map[model.TenantID][]string, map[model.TenantID]model.ID, error) {
 	ms, err := drainList(ctx, as.Memberships().List, byEq("user_id", userID.String(), 0))
 	if err != nil {
 		return nil, nil, nil, err
@@ -424,11 +440,11 @@ func loadGrants(ctx context.Context, as store.AuthScope, userID model.ID) (map[m
 		if grp == nil {
 			continue // dangling member row (its group is gone): grants nothing
 		}
-		// THE PER-TENANT GATE (unchanged): a group confers nothing where the user
-		// holds no direct membership — group membership alone never admits. It
-		// guards the group-subject propagation AND the MappedRole elevation below.
+		// Group membership alone never admits an ordinary user. Superadmins keep
+		// their stored subjects without a direct membership; mapped roles below
+		// still require one. The flag comes from the caller's stored user row.
 		cur, member := g[grp.TargetTenantID]
-		if !member {
+		if !member && !superadmin {
 			continue
 		}
 		// S256: the user is a GATED member of this group, so carry the group — and
@@ -445,7 +461,7 @@ func loadGrants(ctx context.Context, as store.AuthScope, userID model.ID) (map[m
 		// Nesting does NOT inherit a parent's MappedRole (a nested group is a
 		// subject relationship, not a role grant); only the directly-named group's
 		// own mapping elevates, exactly as before S256.
-		if IsRole(mapped) && RoleRank(mapped) > RoleRank(cur) {
+		if member && IsRole(mapped) && RoleRank(mapped) > RoleRank(cur) {
 			g[grp.TargetTenantID] = mapped
 		}
 	}
@@ -841,6 +857,16 @@ func (a *Authenticator) mintSessionTx(ctx context.Context, as store.AuthScope, u
 // scope (the session's user, grants and superadmin status are untouched). A non-user
 // principal (an API token) is not renewable here: tokens are reissued via /v1/tokens.
 func (a *Authenticator) RefreshSession(ctx context.Context, actor Principal) (string, model.AuthSession, error) {
+	return a.rotateSession(ctx, actor, true)
+}
+
+// MigrateBrowserSession retires a legacy browser bearer without extending its
+// lifetime or changing its identity, scope or assurance.
+func (a *Authenticator) MigrateBrowserSession(ctx context.Context, actor Principal) (string, model.AuthSession, error) {
+	return a.rotateSession(ctx, actor, false)
+}
+
+func (a *Authenticator) rotateSession(ctx context.Context, actor Principal, renew bool) (string, model.AuthSession, error) {
 	if actor.Kind != KindUser || actor.CredID.IsZero() {
 		return "", model.AuthSession{}, ErrUnauthenticated
 	}
@@ -862,6 +888,11 @@ func (a *Authenticator) RefreshSession(ctx context.Context, actor Principal) (st
 		if s.Revoked || s.ExpiresAt.Before(now) {
 			return ErrUnauthenticated
 		}
+		// Migration is single-use even when two requests authenticated the old
+		// bearer before either reached this transaction.
+		if !renew && actor.credentialRef.version != s.Version {
+			return ErrUnauthenticated
+		}
 		// A scoped session stays scoped: the new token carries the prefix the
 		// row's scope requires, named at its call for the session issuance census.
 		var cred Credential
@@ -876,7 +907,11 @@ func (a *Authenticator) RefreshSession(ctx context.Context, actor Principal) (st
 		token = cred.Token
 		s.Selector = cred.Selector
 		s.SecretHash = cred.SecretHash
-		s.ExpiresAt = model.NewTimestamp(now.Time().Add(a.sessionTTL))
+		action := "auth.session.cookie"
+		if renew {
+			s.ExpiresAt = model.NewTimestamp(now.Time().Add(a.sessionTTL))
+			action = "auth.refresh"
+		}
 		updated, err := as.Sessions().Update(ctx, s)
 		if err != nil {
 			return err
@@ -884,7 +919,7 @@ func (a *Authenticator) RefreshSession(ctx context.Context, actor Principal) (st
 		sess = updated
 		_, err = as.Audit().Append(ctx, model.AuditDraft{
 			Actor: actor.Actor(), ActorKind: actor.ActorKind(),
-			Action: "auth.refresh", TargetKind: "core.auth_session", TargetID: s.ID,
+			Action: action, TargetKind: "core.auth_session", TargetID: s.ID,
 		})
 		return err
 	}); err != nil {

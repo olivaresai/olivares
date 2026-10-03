@@ -7,12 +7,54 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
+
+func TestHookPEPUsesSavedClientContext(t *testing.T) {
+	for _, key := range []string{"OLIVARES_SERVER_URL", "OLIVARES_TOKEN", "OLIVARES_TENANT", "OLIVARES_HOOK_PEP_URL", "OLIVARES_HOOK_PEP_TOKEN"} {
+		t.Setenv(key, "")
+	}
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet || r.URL.Path != hookPEPPDPPath+"versions" {
+			t.Errorf("request = %s %s", r.Method, r.URL.Path)
+		}
+		if r.Header.Get("Authorization") != "Bearer saved-policy-token" {
+			t.Error("policy command did not use the saved credential")
+		}
+		if r.Header.Get("X-Olivares-Tenant") != "tenant-selected" {
+			t.Error("policy command did not use the selected tenant")
+		}
+		_, _ = w.Write([]byte(`{"items":[]}`))
+	}))
+	defer server.Close()
+	ca := filepath.Join(t.TempDir(), "engine.crt")
+	if err := os.WriteFile(ca, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: server.Certificate().Raw}), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	config := filepath.Join(t.TempDir(), "client.yaml")
+	t.Setenv(cliConfigOverrideEnv, config)
+	if err := writeCLIConfig(config, cliConfig{CurrentContext: "selected", Contexts: []cliContext{{
+		Name: "selected", Server: server.URL, Token: "saved-policy-token", Tenant: "tenant-selected", CACert: ca,
+	}}}); err != nil {
+		t.Fatal(err)
+	}
+	cmd := newRootCmd()
+	var output bytes.Buffer
+	cmd.SetOut(&output)
+	cmd.SetErr(&bytes.Buffer{})
+	cmd.SetArgs([]string{"hookpep", "versions", "-o", "json"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("policy versions after login: %v", err)
+	}
+	assertSameJSON(t, `{"items":[]}`, output.String())
+}
 
 func TestHookPEPValidatePrintsServerVerdictAndMapsExit(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

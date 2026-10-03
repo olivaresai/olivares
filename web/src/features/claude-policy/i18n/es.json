@@ -26,7 +26,8 @@
     "docs": "docs",
     "enabled": "Activado",
     "unset": "Sin valor",
-    "listPlaceholder": "valores separados por comas"
+    "listPlaceholder": "valores separados por comas",
+    "objectListInvalid": "Escribe una lista JSON de objetos, por ejemplo [{\"source\": \"github\", \"repo\": \"your-org/*\"}]."
   },
   "panel": {
     "guided": "Guiado",

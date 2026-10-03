@@ -8,6 +8,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/olivaresai/olivares/modules/eventing"
 )
 
 // eventingpump_test.go pins the pump's environment contract (default 15s;
@@ -43,15 +45,15 @@ func TestNewEventingPumpDisableSemantics(t *testing.T) {
 	env := map[string]string{}
 	getenv := func(k string) string { return env[k] }
 
-	if p := newEventingPump(getenv, nil, nil, discardLog()); p == nil || p.interval != defaultEventingPumpInterval {
+	if p := newEventingPump(getenv, nil, &eventing.Module{}, discardLog()); p == nil || p.interval != defaultEventingPumpInterval {
 		t.Fatalf("unset env must yield the default-cadence pump, got %+v", p)
 	}
 	env[eventingPumpIntervalEnv] = "0"
-	if p := newEventingPump(getenv, nil, nil, discardLog()); p != nil {
+	if p := newEventingPump(getenv, nil, &eventing.Module{}, discardLog()); p != nil {
 		t.Fatal("\"0\" must disable the pump (nil)")
 	}
 	env[eventingPumpIntervalEnv] = "45s"
-	if p := newEventingPump(getenv, nil, nil, discardLog()); p == nil || p.interval != 45*time.Second {
+	if p := newEventingPump(getenv, nil, &eventing.Module{}, discardLog()); p == nil || p.interval != 45*time.Second {
 		t.Fatalf("explicit interval not honored: %+v", p)
 	}
 }

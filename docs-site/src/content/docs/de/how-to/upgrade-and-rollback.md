@@ -53,7 +53,7 @@ den Vorgang, statt zu raten. Geben Sie die bekannte Version an; dann bleiben die
 Schutzmechanismen aktiv:
 
 ```sh
-olivares upgrade --check --current-version 26.10.0
+olivares upgrade --check --current-version 26.10.1
 ```
 
 ## Release-Channels

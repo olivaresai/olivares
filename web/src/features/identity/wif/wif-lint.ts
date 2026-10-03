@@ -245,7 +245,10 @@ export function lintDrift(data: WifGraphData): WifLintFinding[] {
         rule: 'drift',
         severity: 'error',
         subjectRef: rule.rule_id,
-        meta: { reason: 'undeclared-rule', serviceAccount: rule.service_account_id },
+        meta: {
+          reason: 'undeclared-rule',
+          serviceAccount: rule.service_account_id,
+        },
       })
     } else if (rule.source === 'declared') {
       out.push({

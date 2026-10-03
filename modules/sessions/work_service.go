@@ -951,13 +951,6 @@ func (m *Module) preflightIdentity(
 			if err != nil {
 				return err
 			}
-			operatedRef, found, err := operatedRunRef(ctx, sc, resolvedSID)
-			if err != nil {
-				return err
-			}
-			if !found || operatedRef != cmd.HolderRunRef {
-				return broken(http.StatusUnprocessableEntity, "owner_ineligible")
-			}
 			runs, err := sc.Ext(runKind)
 			if err != nil {
 				return err
@@ -965,6 +958,12 @@ func (m *Module) preflightIdentity(
 			run, err := findRunRec(ctx, runs, cmd.HolderRunRef)
 			if err != nil {
 				return err
+			}
+			// The run records the exact canonical SID claimed at launch. Read
+			// that binding through the caller's workspace-confined run handle;
+			// the provider alias catalogue grants no workspace authority.
+			if run.String(colRunClaimSID) != resolvedSID {
+				return broken(http.StatusUnprocessableEntity, "owner_ineligible")
 			}
 			runAgentRef = run.String(colRunAgentRef)
 			return nil

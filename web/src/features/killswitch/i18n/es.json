@@ -1,44 +1,46 @@
 {
   "title": "Kill switch",
-  "subtitle": "La parada de emergencia del estate: un clic detiene todas las superficies de actuación gobernadas. Activarla es deliberadamente barato; la recuperación exige dos cuentas de usuario distintas y una revisión posterior forzosa.",
+  "subtitle": "Parada de emergencia para todos los agentes de IA de este servidor, o para uno. Parar requiere un clic; volver a arrancar necesita la aprobación de dos cuentas de usuario distintas y una revisión posterior.",
   "banner": {
-    "estateTitle": "ESTATE DETENIDO",
-    "estateBody": "Todas las superficies de actuación gobernadas deniegan hasta una reactivación con doble control.",
+    "estateTitle": "TODOS LOS AGENTES PARADOS",
+    "estateBody": "Los agentes no pueden actuar hasta que dos cuentas de usuario aprueben volver a arrancar: las sesiones terminan y se rechazan las llamadas a herramientas, MCP, programaciones, voz, llamadas a modelos, despliegues y entrega de eventos.",
     "agentCount": "{{count}} parada de agente activa",
     "agentCount_one": "{{count}} parada de agente activa",
     "agentCount_many": "{{count}} paradas de agente activas",
     "agentCount_other": "{{count}} paradas de agente activas",
-    "agentBody": "Los agentes detenidos quedan denegados en todas las superficies de actuación gobernadas con dimensión de agente.",
-    "none": "No hay paradas activas — el estate actúa con normalidad.",
+    "agentBody": "Los agentes parados no pueden actuar: se rechazan sus llamadas a herramientas, sus llamadas a MCP y sus demás acciones.",
+    "none": "No hay nada parado. Las sesiones y los agentes funcionan con normalidad.",
     "engagedBy": "Activada por",
-    "revoked": "{{count}} aprobación de actuación pendiente revocada",
-    "revoked_one": "{{count}} aprobación de actuación pendiente revocada",
-    "revoked_many": "{{count}} aprobaciones de actuación pendientes revocadas",
-    "revoked_other": "{{count}} aprobaciones de actuación pendientes revocadas"
+    "revoked": "{{count}} solicitud de aprobación pendiente cancelada",
+    "revoked_one": "{{count}} solicitud de aprobación pendiente cancelada",
+    "revoked_many": "{{count}} solicitudes de aprobación pendientes canceladas",
+    "revoked_other": "{{count}} solicitudes de aprobación pendientes canceladas"
   },
   "engage": {
     "title": "Parada de emergencia",
-    "caption": "Detiene el estate (o un agente) en hooks, MCP, orquestación, voz, modelos, despliegue y eventing, y revoca las aprobaciones de actuación pendientes dentro del alcance. Activar no requiere aprobación — lo que el doble control protege es la reactivación.",
+    "caption": "Para todos los agentes, o uno: las sesiones en curso terminan y se rechazan las llamadas a herramientas, MCP, programaciones y flujos de trabajo, voz, llamadas a modelos, despliegues y entrega de eventos. Se cancelan las solicitudes de aprobación pendientes de esas acciones. Parar no necesita aprobación; volver a arrancar, sí. La consola, el registro de auditoría y el inicio de sesión siguen funcionando.",
     "scope": "Alcance",
-    "scopeEstate": "Todo el estate",
+    "scopeEstate": "Todos los agentes",
     "scopeAgent": "Un solo agente",
     "agentRef": "Agente",
     "agentRefHint": "UUID del agente o referencia externa. Una referencia desconocida también activa la parada — entonces coincide solo con esa cadena exacta.",
     "reason": "Motivo",
-    "reasonHint": "Obligatorio — quién lo leerá después: la revisión posterior y el regulador.",
+    "reasonHint": "Obligatorio: di por qué. Lo leen la revisión de esta parada y las auditorías posteriores.",
     "button": "Parada de emergencia",
-    "confirmTitleEstate": "¿Detener todo el estate?",
-    "confirmBodyEstate": "Todas las superficies de actuación gobernadas deniegan de inmediato y se revocan las aprobaciones de actuación pendientes dentro del alcance. Reactivar exige la aprobación de dos cuentas de usuario distintas más una revisión posterior obligatoria — no hay vía de break-glass de vuelta.",
+    "confirmTitleEstate": "¿Parar todos los agentes?",
+    "confirmBodyEstate": "Todos los agentes se paran a la vez: las sesiones en curso terminan, se rechazan sus acciones y se cancelan las solicitudes de aprobación pendientes de esas acciones. Para volver a arrancar deben aprobarlo dos cuentas de usuario distintas, y la parada debe revisarse después. No hay ninguna vía de emergencia para evitarlo.",
+    "confirmBodyEstateNoRestart": "Todos los agentes se paran a la vez: las sesiones en curso terminan, se rechazan sus acciones y se cancelan las solicitudes de aprobación pendientes de esas acciones. No hay ninguna vía de emergencia para evitarlo.",
     "confirmTitleAgent": "¿Detener este agente?",
-    "confirmBodyAgent": "El agente queda denegado en todas las superficies de actuación gobernadas con dimensión de agente y se revocan sus aprobaciones de actuación pendientes. Reactivar exige la aprobación de dos cuentas de usuario distintas más una revisión posterior obligatoria.",
+    "confirmBodyAgent": "Este agente se para a la vez: se rechazan sus acciones y se cancelan sus solicitudes de aprobación pendientes. Para volver a arrancarlo deben aprobarlo dos cuentas de usuario distintas, y la parada debe revisarse después.",
     "confirm": "Activar kill switch",
     "done": "Kill switch activado",
     "doneBody": "La parada {{id}} está activa. Reactivar exige doble control.",
-    "alreadyStopped": "Ya existe una parada activa para este alcance"
+    "alreadyStopped": "Ya existe una parada activa para este alcance",
+    "restartNeedsAdmins": "Volver a arrancar necesita que otras dos cuentas de administrador lo aprueben y que una de ellas lo revise después."
   },
   "stops": {
     "title": "Paradas",
-    "caption": "Las filas de parada persistidas — quién activó, cuándo, alcance, motivo y el ciclo completo de reactivación y revisión posterior. La fila es la única fuente de verdad que cada puerta de actuación consulta en vivo.",
+    "caption": "Cada parada: quién la inició, cuándo, qué abarca, por qué y cómo terminó y se revisó. Cada acción comprueba estas paradas antes de ejecutarse.",
     "search": "Buscar paradas…",
     "label": "Paradas del kill switch",
     "filterStatus": "Estado",
@@ -49,8 +51,8 @@
     "engaged": "Activada",
     "aalShort": "AAL{{aal}}",
     "aalHint": "Nivel de garantía registrado de la sesión que activó (forense; activar nunca se condiciona al AAL).",
-    "revoked": "Revocadas",
-    "revokedHint": "Aprobaciones de actuación pendientes canceladas por la activación.",
+    "revoked": "Solicitudes canceladas",
+    "revokedHint": "Solicitudes de aprobación pendientes canceladas por esta parada.",
     "status": "Estado",
     "byRule": "regla",
     "empty": "No hay paradas registradas",
@@ -68,7 +70,7 @@
     "reviewed": "Revisada"
   },
   "scope": {
-    "estate": "Estate",
+    "estate": "Todos los agentes",
     "agent": "Agente"
   },
   "source": {
@@ -77,7 +79,7 @@
   },
   "reenable": {
     "title": "Reactivar esta parada",
-    "body": "La reactivación nunca es unilateral: abre una aprobación con doble control que deben aprobar dos cuentas de usuario distintas (sin autoaprobación, AAL3 por decisión). Deliberadamente no hay vía de break-glass — el estate detenido es el estado seguro. El motor exige CUENTAS distintas: no puede demostrar que dos cuentas sean dos personas diferentes. El suelo de dos cuentas es estructural; el requisito de AAL3 depende del nivel de riesgo vigente, que una política de aprobación puede rebajar.",
+    "body": "Volver a arrancar nunca es decisión de una sola persona: deben aprobarlo dos cuentas de usuario distintas, y nadie puede aprobar su propia solicitud. Cada aprobador debe usar un inicio de sesión reforzado (AAL3), salvo que una regla de aprobación baje el nivel de riesgo de esta acción; la regla de las dos cuentas se mantiene incluso entonces. No hay ninguna vía de emergencia para evitarlo, porque seguir parado es el estado seguro. El motor comprueba que las cuentas son distintas; no puede comprobar que las usen dos personas distintas.",
     "reason": "Nota",
     "reasonHint": "Opcional — se adjunta a la solicitud de doble control para quienes aprueban.",
     "existingApproval": "Ya hay una aprobación con doble control ({{id}}) abierta para esta parada. Comprobar informa de su progreso y completa la reactivación cuando ambas cuentas hayan aprobado.",
@@ -89,7 +91,7 @@
     "progress": "{{approved}} de {{required}} aprobaciones",
     "goToApprovals": "Abrir la cola de aprobaciones",
     "done": "Kill switch reactivado con doble control",
-    "reviewDue": "La actuación se reanuda — la revisión posterior obligatoria queda ahora pendiente.",
+    "reviewDue": "Los agentes vuelven a funcionar. Ya toca revisar esta parada.",
     "blocked": "Reactivación bloqueada",
     "dualControl": "Se requiere doble control"
   },
@@ -110,7 +112,7 @@
   },
   "guardian": {
     "title": "Reglas guardianas",
-    "caption": "Contención semiautónoma redactada por el operador sobre el raíl de hallazgos. Una regla casa hallazgos por tipo y umbral de severidad y dispara una contención — inmediata (auto) o tras la aprobación de un humano. Nunca casa con los hallazgos del propio kill switch (anti bucle de realimentación).",
+    "caption": "Respuestas automáticas a hallazgos de seguridad. Una regla selecciona hallazgos por tipo y gravedad mínima y ejecuta una respuesta, al momento o después de que una persona la apruebe. Una regla nunca reacciona a los hallazgos del propio Kill switch, así que una parada no puede provocar otra.",
     "newRule": "Nueva regla",
     "name": "Regla",
     "kinds": "Tipos de hallazgo",
@@ -141,7 +143,7 @@
     "actionLabel": {
       "stop_agent": "Detener agente",
       "quarantine_nhi": "Cuarentena de NHI",
-      "stop_estate": "Detener estate"
+      "stop_estate": "Parar todos los agentes"
     },
     "modeLabel": {
       "auto": "Auto",

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery } from '@tanstack/react-query'
 import {
   Bot,
@@ -32,7 +33,7 @@ import {
 } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { PagePrimaryAction } from '@/components/ui/page-actions'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import {
@@ -187,7 +188,11 @@ export function AgentsTab() {
             <Spinner />
           </div>
         ) : agents.isError ? (
-          <ErrorState retry={() => void agents.refetch()} />
+          <QueryErrorState
+            error={agents.error}
+            subject={t('console:agents.title')}
+            retry={() => void agents.refetch()}
+          />
         ) : rows.length === 0 ? (
           /* ⛔ ZERO ROWS TAKES THE SAME REGION THE TABLE WOULD HAVE, and it used to take
              none — the one count where a dead half is CERTAIN was the one count that

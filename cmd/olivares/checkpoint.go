@@ -6,6 +6,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -39,6 +40,8 @@ type checkpointer struct {
 	// mFailures counts failed checkpoint runs (the previously slog-only signal:
 	// a failing off-box KMS signer is alertable via increase(), docs/17 §5).
 	mFailures *metrics.Counter
+	// skips says once that checkpoints wait for a tenant inventory, not every tick.
+	skips enumerationSkips
 }
 
 // startCheckpointer launches the periodic checkpoint loop. interval<=0 disables
@@ -121,9 +124,14 @@ func (c *checkpointer) once(ctx context.Context) {
 		if c.mFailures != nil {
 			c.mFailures.Inc()
 		}
-		c.log.Warn("audit checkpoint failed", "err", err)
+		if errors.Is(err, store.ErrEnumerationNotAuthoritative) {
+			c.skips.skip(c.log, "audit checkpoint", err)
+		} else {
+			c.log.Warn("audit checkpoint failed", "err", err)
+		}
 		return
 	}
+	c.skips.listed(c.log, "audit checkpoint")
 	c.lastSuccess.Store(time.Now().UnixNano())
 	c.log.Debug("audit checkpoint written for all tenants")
 }

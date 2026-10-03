@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -147,7 +146,7 @@ func (m *Module) handleGetConfig(w http.ResponseWriter, r *http.Request, mc api.
 
 // handlePutConfig upserts the tenant's singleton config (admin-tier; self-audited).
 func (m *Module) handlePutConfig(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	if !requireAAL3(w, mc) {
+	if !requireStepUp(w, r, mc) {
 		return
 	}
 	var in configDTO
@@ -324,7 +323,7 @@ func (m *Module) handleListDLPRules(w http.ResponseWriter, r *http.Request, mc a
 // privileged governance; self-audited). Exact tenant rules override seeded defaults;
 // deleting an override restores the secure default for that class.
 func (m *Module) handlePutDLPRule(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	if !requireAAL3(w, mc) {
+	if !requireStepUp(w, r, mc) {
 		return
 	}
 	var req dlpRuleDTO
@@ -390,7 +389,7 @@ func (m *Module) handlePutDLPRule(w http.ResponseWriter, r *http.Request, mc api
 
 // handleDeleteDLPRule removes one DLP rule by id (admin-tier; self-audited).
 func (m *Module) handleDeleteDLPRule(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	if !requireAAL3(w, mc) {
+	if !requireStepUp(w, r, mc) {
 		return
 	}
 	id := model.ID(strings.TrimSpace(chi.URLParam(r, "id")))
@@ -497,15 +496,16 @@ func errorBody(msg string) map[string]any {
 	return map[string]any{"error": map[string]string{"message": msg}}
 }
 
-// requireAAL3 is the second, assurance-only gate on proxy governance writes. Module
+// requireStepUp is the second, assurance-only gate on proxy governance writes. Module
 // routing applies RBAC but has no implicit assurance floor, so every handler that can
 // relax an inference gate, authorize egress, or approve a device calls this before it
-// decodes or mutates anything. Tokens carry AAL0 and therefore fail closed too.
-func requireAAL3(w http.ResponseWriter, mc api.ModuleContext) bool {
-	if mc.Principal.AAL < auth.AAL3 {
+// decodes or mutates anything. What it demands is the deployment's admin_step_up
+// policy (auth.StepUpSatisfied). Tokens carry AAL0 and therefore fail closed too.
+func requireStepUp(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) bool {
+	if !auth.StepUpSatisfied(r.Context(), mc.Principal) {
 		writeJSON(w, http.StatusForbidden, map[string]any{"error": map[string]string{
 			"code":    "step_up_required",
-			"message": "this inference-proxy governance write requires a hardware-verified (AAL3) session; complete the WebAuthn/PIV step-up and retry",
+			"message": "this inference-proxy governance write needs the administrative step-up this deployment requires; complete it and retry",
 		}})
 		return false
 	}
@@ -530,8 +530,8 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusOK, nil)
 		return
 	}
-	status, msg, _ := api.StoreErrorStatus(err)
-	writeJSON(w, status, errorBody(msg))
+	status, body, _ := api.StoreErrorBody(err)
+	writeJSON(w, status, body)
 }
 
 func listQuery(r *http.Request) model.Query {
@@ -552,20 +552,7 @@ func eq(col, val string) model.Filter {
 }
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
-	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
-		return false
-	}
-	// A BODY IS ONE JSON DOCUMENT (2026-08-06). Decode reads the FIRST value and stops,
-	// so `{...}{...}` used to decode the first, silently discard the rest and perform a
-	// durable mutation returning 201. Measured against a live engine on the models route,
-	// with the created row read back by a separate GET; core/api/render.go has rejected
-	// this since it was written, and 21 of the 22 copies of this helper had drifted from
-	// it. A concatenation error becomes an apparently correct action, and two layers can
-	// disagree about which document the request meant.
-	if dec.More() {
+	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 1 << 20}); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
 		return false
 	}

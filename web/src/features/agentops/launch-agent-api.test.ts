@@ -27,9 +27,13 @@ const response = (body: unknown, status = 200) =>
 beforeEach(() => {
   vi.clearAllMocks()
   vi.stubGlobal('fetch', fetcher)
-  useSessionStore.setState({ token: 'fixture-human', credentialGeneration: 1 })
+  useSessionStore.setState({
+    csrfToken: 'fixture-human',
+    credentialGeneration: 1,
+  })
   configureApiClient({
-    getToken: () => useSessionStore.getState().token,
+    getToken: () => null,
+    getCSRFToken: () => useSessionStore.getState().csrfToken,
     getTenant: () => 'tenant-current',
     onUnauthorized: unauthorized,
     refreshSession: refresh,
@@ -59,14 +63,14 @@ it('uses the exchanged agent credential once, audience-bound and down-scoped, wi
   const form = new URLSearchParams(exchange.body)
   expect(form.get('requested_actor')).toBe('agent-fixture')
   expect(form.get('scope')).toBe('write')
-  expect(form.get('subject_token')).toBe('fixture-human')
+  expect(form.get('subject_token')).toBe('browser-session')
   expect(form.get('resource')).toBe(window.location.origin)
   expect(exchange.headers.get('X-Olivares-Tenant')).toBe('tenant-selected')
   const launch = fetcher.mock.calls[1][1]
   expect(launch.headers.get('Authorization')).toBe('Bearer fixture-agent')
   expect(launch.headers.get('X-Olivares-Tenant')).toBe('tenant-selected')
   expect(JSON.parse(launch.body)).toEqual(body)
-  expect(useSessionStore.getState().token).toBe('fixture-human')
+  expect(useSessionStore.getState().csrfToken).toBe('fixture-human')
   expect(refresh).not.toHaveBeenCalled()
   expect(unauthorized).not.toHaveBeenCalled()
 })
@@ -109,12 +113,12 @@ it('does not fall back to human authority or renew it after agent launch denial'
   expect(fetcher).toHaveBeenCalledTimes(2)
   expect(refresh).not.toHaveBeenCalled()
   expect(unauthorized).not.toHaveBeenCalled()
-  expect(useSessionStore.getState().token).toBe('fixture-human')
+  expect(useSessionStore.getState().csrfToken).toBe('fixture-human')
 })
 it('refuses dispatch when the original human credential changes during exchange', async () => {
   fetcher.mockReset().mockImplementationOnce(async () => {
     useSessionStore.setState({
-      token: 'fixture-new-human',
+      csrfToken: 'fixture-new-human',
       credentialGeneration: 2,
     })
     return response({

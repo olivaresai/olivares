@@ -36,7 +36,7 @@
     "openai": "Codex。OPENAI_API_KEY を注入します。",
     "xai": "Grok。XAI_API_KEY を注入します。",
     "openai_compatible": "OpenAI 形式の任意のエンドポイント。OPENAI_API_KEY と OPENAI_BASE_URL を注入します。エンドポイントは必須です。",
-    "ollama": "Codex 用のローカルモデル。API キーは不要です。Ollama のネイティブエンドポイントを使用し、テストではモデルのメタデータを読み取ります。"
+    "ollama": "OpenCode 用のローカルモデル。API キーは不要です。Ollama のネイティブエンドポイントを使用し、テストではモデルのメタデータを読み取ります。"
   },
   "states": {
     "active": "有効",
@@ -88,7 +88,8 @@
     "success": "プロバイダーを登録しました。接続をテストして動作を確認してください。",
     "testNext": "今すぐ接続をテスト",
     "registering": "登録中…",
-    "localNameHint": "このエンドポイントの表示名です。選択リストに表示されます。"
+    "localNameHint": "このエンドポイントの表示名です。選択リストに表示されます。",
+    "advanced": "Advanced: custom endpoint"
   },
   "rotate": {
     "title": "このプロバイダーのキーを交換",
@@ -121,11 +122,6 @@
   "vaultUnavailable": {
     "title": "この配備ではプロバイダーの資格情報を保存できません",
     "description": "封印された資格情報保管庫が接続されていないため、エンジンは保護できないキーを保存する代わりに、保存を拒否します。管理者がシークレット封印器を設定する必要があります。"
-  },
-  "next": {
-    "title": "次は、エージェントを配備します",
-    "description": "プロバイダーを登録するだけではセッションは起動しません。プロバイダープロファイルに紐づけると、新しいセッションで使用されます。",
-    "action": "プロバイダープロファイルへ"
   },
   "truncation": {
     "label": "{{n}} 件のプロバイダーを表示中。さらにあります",

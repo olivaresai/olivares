@@ -61,6 +61,7 @@ import { AppLayout } from './app-layout'
 const TENANT_INDEPENDENT = new Set([
   '/v1/server-info',
   '/v1/auth/whoami',
+  '/v1/auth/browser-session',
   '/v1/auth/logout',
   // Added 2026-08-17 by the maintainer, resolving a collision between two changes that were
   // each correct alone: the PROACTIVE session refresh landed (the console schedules it from the
@@ -187,7 +188,7 @@ async function settle() {
 beforeEach(() => {
   localStorage.clear()
   useSessionStore.setState({
-    token: 'olvs_test',
+    csrfToken: 'olvs_test',
     sessionId: 's-1',
     expiresAt: '2099-01-01T00:00:00Z',
   })

@@ -325,11 +325,11 @@ func TestMCPAddOnBoundaryStatesItsExitCode(t *testing.T) {
 	if err == nil {
 		t.Fatal("the community 501 must fail")
 	}
-	if got := exitcode.From(err); got != exitcode.Err {
+	if got := exitcode.From(err); got != exitcode.Edition {
 		t.Fatalf("exit code = %d, want %d — an add-on boundary is not a server failure: %v",
-			got, exitcode.Err, err)
+			got, exitcode.Edition, err)
 	}
-	if !strings.Contains(err.Error(), "enterprise add-on") {
+	if !strings.Contains(err.Error(), "Business feature") {
 		t.Fatalf("the 501 is not actionable: %v", err)
 	}
 }

@@ -227,7 +227,7 @@ func (m *Module) hostToolProgram(driver string) string {
 		return m.driverProgram(d)
 	}
 	if driver == providerDriverClaude {
-		return m.rt.program
+		return m.claudeProgram()
 	}
 	return ""
 }

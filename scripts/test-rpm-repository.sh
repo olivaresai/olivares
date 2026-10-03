@@ -175,6 +175,24 @@ PY
 
 RELEASE_BASE_URL=https://github.com/olivaresai/olivares/releases/download
 
+# The installer's release_tag era rule: historical v tags before 26.10,
+# bare tags from 26.10 on. Native asset versions never carry the v prefix.
+release_tag() {
+	local version="${1:-}" major minor
+	[[ "$version" =~ ^[0-9]{2}\.([1-9]|1[0-2])(\.(0|[1-9][0-9]*))?$ ]] ||
+		blind "release version must be YY.M or YY.M.N"
+	major="${version%%.*}"
+	minor="${version#*.}"; minor="${minor%%.*}"
+	[[ "$major" -ge 26 ]] || blind "release version predates this product's releases"
+	if [[ "$major" -eq 26 && "$minor" -lt 10 ]]; then
+		[[ "$version" == *.*.* ]] || blind "historical release tags require YY.M.PATCH"
+		printf 'v%s\n' "$version"
+	else
+		[[ "$version" != *.0 || "$version" == 26.10.0 ]] || blind "monthly release tags omit the zero patch"
+		printf '%s\n' "$version"
+	fi
+}
+
 # Download the published amd64 rpm and checksums.txt, then check the rpm against
 # its own line. GitHub answers a release asset with a redirect to its storage
 # host; without --location curl writes the empty 302 body and exits 0. curl(1):
@@ -182,7 +200,8 @@ RELEASE_BASE_URL=https://github.com/olivaresai/olivares/releases/download
 # HTTPS, --fail turns an HTTP error into a non-zero exit.
 fetch_release() {
 	local version="${1:-}" dest="${2:-}"
-	[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || blind "release version must be MAJOR.MINOR.PATCH"
+	local tag
+	tag=$(release_tag "$version") || exit 2
 	[[ "$dest" == /* ]] || blind "release destination must be an absolute path"
 	mkdir -p -- "$dest"
 	local name="olivares_${version}_linux_amd64.rpm" asset
@@ -191,7 +210,7 @@ fetch_release() {
 		rm -f -- "${dest:?}/$asset"
 		curl --fail --silent --show-error --location --max-redirs 5 \
 			--proto '=https' --proto-redir '=https' --tlsv1.2 \
-			--output "$dest/$asset" "${RELEASE_BASE_URL}/v${version}/${asset}" ||
+			--output "$dest/$asset" "${RELEASE_BASE_URL}/${tag}/${asset}" ||
 			fail "release asset download failed: ${asset}"
 		[[ -f "$dest/$asset" && -s "$dest/$asset" ]] || fail "release asset is zero bytes: ${asset}"
 	done
@@ -769,9 +788,9 @@ PY
 	paths_repo=$(scratch_dir)
 	write_stub_tools "$tools"
 	write_stub_key "$keys"
-	write_fixture_rpm "$paths_repo/olivares-26.10.0-1.x86_64.rpm"
+	write_fixture_rpm "$paths_repo/olivares-26.10.1-1.x86_64.rpm"
 	rc=0
-	run_with_stubs "$tools" "$keys" python3 "$signer" --rpm "$paths_repo/olivares-26.10.0-1.x86_64.rpm" \
+	run_with_stubs "$tools" "$keys" python3 "$signer" --rpm "$paths_repo/olivares-26.10.1-1.x86_64.rpm" \
 		>/dev/null 2>"$tools/sign.err" || rc=$?
 	[[ "$rc" -eq 0 ]] || { cat "$tools/sign.err" >&2; fail "signer with stub tools exited ${rc}, want 0"; }
 	stub_called "$tools/calls.jsonl" rpmsign --addsign --key-id "$STUB_FINGERPRINT" ||
@@ -791,13 +810,18 @@ PY
 	curl_bin=$(scratch_dir)
 	fetched=$(scratch_dir)
 	write_stub_curl "$curl_bin"
-	rc=0
-	(
-		export STUB_LOG="$curl_bin/calls.jsonl" PATH="$curl_bin:$PATH"
-		fetch_release 26.9.0 "$fetched/ok"
-	) >/dev/null 2>"$fetched/ok.err" || rc=$?
-	[[ "$rc" -eq 0 ]] || { cat "$fetched/ok.err" >&2; fail "release fetch exited ${rc}, want 0"; }
-	python3 - "$curl_bin/calls.jsonl" <<'PY' || fail "a release GET is not redirect-following, HTTPS-only and failing on HTTP errors"
+	local release_case release_version release_tag
+	for release_case in 26.9.0:v26.9.0 26.10.1:26.10.1 26.11:26.11; do
+		release_version="${release_case%%:*}"
+		release_tag="${release_case#*:}"
+		: >"$curl_bin/calls.jsonl"
+		rc=0
+		(
+			export STUB_LOG="$curl_bin/calls.jsonl" PATH="$curl_bin:$PATH"
+			fetch_release "$release_version" "$fetched/ok-$release_version"
+		) >/dev/null 2>"$fetched/ok.err" || rc=$?
+		[[ "$rc" -eq 0 ]] || { cat "$fetched/ok.err" >&2; fail "release fetch exited ${rc}, want 0"; }
+		python3 - "$curl_bin/calls.jsonl" "$release_tag" "$release_version" <<'PY' || fail "a release GET is not redirect-following, HTTPS-only and failing on HTTP errors"
 import json
 import sys
 from pathlib import Path
@@ -811,9 +835,11 @@ for call in calls:
         raise SystemExit(1)
     if ("--proto", "=https") not in pairs or ("--proto-redir", "=https") not in pairs:
         raise SystemExit(1)
-    if not call[-1].startswith("https://"):
-        raise SystemExit(1)
+    asset = f"olivares_{sys.argv[3]}_linux_amd64.rpm" if not call[-1].endswith("/checksums.txt") else "checksums.txt"
+    if call[-1] != f"https://github.com/olivaresai/olivares/releases/download/{sys.argv[2]}/{asset}":
+        raise SystemExit(f"wrong release URL: {call[-1]}")
 PY
+	done
 	local fetch_case
 	for fetch_case in empty empty-rpm mismatch; do
 		rc=0
@@ -827,9 +853,17 @@ PY
 	grep -q 'is zero bytes: olivares_26.9.0_linux_amd64.rpm' "$fetched/empty-rpm.err" ||
 		fail "a zero-byte rpm with a matching sha256 was not refused as zero bytes"
 	grep -q 'does not match published checksums.txt' "$fetched/mismatch.err" || fail "checksum mismatch was not named"
-	rc=0
-	(fetch_release 26.9 "$fetched/bad-version") >/dev/null 2>&1 || rc=$?
-	[[ "$rc" -eq 2 ]] || fail "release version 26.9 exited ${rc}, want 2"
+	local bad_release
+	for bad_release in 26.9 26.11.0 26.11.1.2 v26.9.0 26.011; do
+		: >"$curl_bin/calls.jsonl"
+		rc=0
+		(
+			export STUB_LOG="$curl_bin/calls.jsonl" PATH="$curl_bin:$PATH"
+			fetch_release "$bad_release" "$fetched/bad-version"
+		) >/dev/null 2>&1 || rc=$?
+		[[ "$rc" -eq 2 ]] || fail "release version $bad_release exited ${rc}, want 2"
+		[[ ! -s "$curl_bin/calls.jsonl" ]] || fail "invalid release $bad_release reached curl"
+	done
 	printf 'test-rpm-repository: release fetch follows HTTPS redirects and refuses zero bytes\n'
 
 	expect_verify good 0
@@ -898,10 +932,10 @@ PY
 	# The signer's own invariant: rpmsign may change only the signature header.
 	local tampered_rpm
 	tampered_rpm=$(scratch_dir)
-	write_fixture_rpm "$tampered_rpm/olivares-26.10.0-1.x86_64.rpm"
+	write_fixture_rpm "$tampered_rpm/olivares-26.10.1-1.x86_64.rpm"
 	rc=0
 	STUB_RPMSIGN_TAMPER=1 run_with_stubs "$tools" "$keys" python3 "$signer" \
-		--rpm "$tampered_rpm/olivares-26.10.0-1.x86_64.rpm" >/dev/null 2>"$tampered_rpm/sign.err" || rc=$?
+		--rpm "$tampered_rpm/olivares-26.10.1-1.x86_64.rpm" >/dev/null 2>"$tampered_rpm/sign.err" || rc=$?
 	check_rc "rpmsign that changes the payload" 1 "$rc" "$tampered_rpm/sign.err"
 	grep -q 'outside its signature header' "$tampered_rpm/sign.err" || fail "the payload change was not named"
 	printf 'test-rpm-repository: a payload changed by rpmsign is refused\n'
@@ -934,7 +968,7 @@ PY
 	ln -s "$(command -v python3)" "$lockedbin/python3"
 	local locked_case want reason
 	for locked_case in passphrase wrong-passphrase none; do
-		write_fixture_rpm "$locked/olivares-26.10.0-1.x86_64.rpm"
+		write_fixture_rpm "$locked/olivares-26.10.1-1.x86_64.rpm"
 		want=2
 		reason='cannot sign unattended'
 		[[ "$locked_case" == passphrase ]] && want=0
@@ -944,7 +978,7 @@ PY
 				OLIVARES_PACKAGE_REPO_KEY_DESCRIPTOR_FILE="$locked-descriptor/descriptor.json" \
 				OLIVARES_PACKAGE_REPO_OPENPGP_SECRET_KEY_FILE="$locked/openpgp-secret.asc"
 			[[ "$locked_case" == none ]] || export OLIVARES_PACKAGE_REPO_OPENPGP_PASSPHRASE_FILE="$locked/$locked_case"
-			python3 "$signer" --rpm "$locked/olivares-26.10.0-1.x86_64.rpm"
+			python3 "$signer" --rpm "$locked/olivares-26.10.1-1.x86_64.rpm"
 		) >/dev/null 2>"$locked/$locked_case.err" || rc=$?
 		[[ "$rc" -eq "$want" ]] || { cat "$locked/$locked_case.err" >&2; fail "locked key with ${locked_case} exited ${rc}, want ${want}"; }
 		[[ "$want" -eq 0 ]] || grep -q "$reason" "$locked/$locked_case.err" || fail "locked key with ${locked_case} did not name: ${reason}"
@@ -958,7 +992,7 @@ PY
 	delivery=$(scratch_dir)
 	good="$delivery/appliance"
 	mkdir -p "$good"
-	printf 'stub olivares\n' >"$good/olivares-26.10.0-1.x86_64.rpm"
+	printf 'stub olivares\n' >"$good/olivares-26.10.1-1.x86_64.rpm"
 	printf 'stub appliance base\n' >"$good/olivares-appliance-base-26.9.0-1.noarch.rpm"
 	local appliance=(--expect-package olivares --expect-package olivares-appliance-base)
 	rc=0
@@ -971,7 +1005,7 @@ import sys
 
 document = json.load(open(sys.argv[1], encoding="utf-8"))
 want_packages = [
-    ["olivares", "olivares-26.10.0-1.x86_64", "x86_64", "olivares-26.10.0-1.x86_64.rpm"],
+    ["olivares", "olivares-26.10.1-1.x86_64", "x86_64", "olivares-26.10.1-1.x86_64.rpm"],
     ["olivares-appliance-base", "olivares-appliance-base-26.9.0-1.noarch", "noarch",
      "olivares-appliance-base-26.9.0-1.noarch.rpm"],
 ]
@@ -997,7 +1031,7 @@ PY
 	expect_delivery one-expected 1 'package set is not exactly' "$good" "$delivery/one" --expect-package olivares
 	local solo="$delivery/solo"
 	mkdir -p "$solo"
-	printf 'stub olivares\n' >"$solo/olivares-26.10.0-1.x86_64.rpm"
+	printf 'stub olivares\n' >"$solo/olivares-26.10.1-1.x86_64.rpm"
 	rc=0
 	run_with_stubs "$tools" "$keys" python3 "$renderer" render --repo "$solo" "${appliance[@]}" \
 		>/dev/null 2>"$delivery/solo.err" || rc=$?
@@ -1005,7 +1039,7 @@ PY
 	grep -q 'package set is not exactly' "$delivery/solo.err" || fail "the appliance package set refusal was not named"
 	local other="$delivery/other-signer"
 	mkdir -p "$other"
-	printf 'stub olivares\n' >"$other/olivares-26.10.0-1.x86_64.rpm"
+	printf 'stub olivares\n' >"$other/olivares-26.10.1-1.x86_64.rpm"
 	rc=0
 	STUB_GPG_SIGN_AS="$(printf 'F%.0s' {1..40})" run_with_stubs "$tools" "$keys" \
 		python3 "$renderer" render --repo "$other" >/dev/null 2>"$delivery/other.err" || rc=$?
@@ -1021,7 +1055,7 @@ PY
 	ln -s "$(command -v gpg)" "$realbin/gpg"
 	ln -s "$(command -v python3)" "$realbin/python3"
 	mkdir -p "$real"
-	printf 'stub olivares\n' >"$real/olivares-26.10.0-1.x86_64.rpm"
+	printf 'stub olivares\n' >"$real/olivares-26.10.1-1.x86_64.rpm"
 	printf 'stub appliance base\n' >"$real/olivares-appliance-base-26.9.0-1.noarch.rpm"
 	rc=0
 	STUB_LOG="$tools/calls.jsonl" PATH="$realbin" OLIVARES_PACKAGE_REPO_TEST_ONLY=1 \
@@ -1235,6 +1269,47 @@ if key_mounts != want or any(keys + ":" in v for v in volumes) or any("apk-priva
     raise SystemExit(1)
 PY
 	printf 'test-rpm-repository: the publish container mounts four key files read-only, not the key directory\n'
+
+	# Current patch and monthly versions pass both publish entry points unchanged.
+	local version_assets version_tree
+	for release_version in 26.10.1 26.11; do
+		version_assets="$publish_dir/assets-$release_version"
+		version_tree="$publish_dir/tree-$release_version"
+		mkdir -p "$version_assets"
+		write_fixture_rpm "$version_assets/olivares_${release_version}_linux_amd64.rpm"
+		write_fixture_rpm "$version_assets/olivares_${release_version}_linux_arm64.rpm"
+		(cd "$version_assets" && sha256sum "olivares_${release_version}_linux_amd64.rpm" \
+			"olivares_${release_version}_linux_arm64.rpm" >checksums.txt)
+		rc=0
+		(
+			export OLIVARES_PACKAGE_REPO_TEST_ONLY=1
+			fixture_publish_tree --assets "$version_assets" --version "$release_version" --key-dir "$anchors/approved" \
+				--out "$version_tree"
+		) >/dev/null 2>"$publish_dir/tree-$release_version.err" || rc=$?
+		check_rc "inside publish preserves $release_version" 0 "$rc" "$publish_dir/tree-$release_version.err"
+		for channel in stable security; do
+			for arch_dir in x86_64 aarch64; do
+				[[ -s "$version_tree/$channel/rpm/$arch_dir/delivery.json" ]] ||
+					fail "publish tree for $release_version lacks $channel/$arch_dir delivery"
+			done
+		done
+		rc=0
+		(
+			export PATH="$publish_bin:$PATH" STUB_RPM_Q="${TOOL_NEVRAS[*]}" STUB_DOCKER_LOG="$publish_bin/run.args" \
+				OLIVARES_PACKAGE_REPO_TEST_ONLY=1 \
+				OLIVARES_PACKAGE_REPO_KEY_DESCRIPTOR_FILE="$publish_keys/descriptor.json" \
+				OLIVARES_PACKAGE_REPO_OPENPGP_SECRET_KEY_FILE="$publish_keys/openpgp-secret.asc" \
+				OLIVARES_PACKAGE_REPO_OPENPGP_PASSPHRASE_FILE="$publish_keys/passphrase"
+			unset GITHUB_STEP_SUMMARY
+			bash "$0" --publish-rpm --assets "$version_assets" --version "$release_version" \
+				--public-key "$publish_keys/openpgp-public.asc" --out "$publish_dir/published-$release_version" \
+				--work "$publish_bin/work-$release_version"
+		) >/dev/null 2>"$publish_bin/publish-$release_version.err" || rc=$?
+		check_rc "publish preserves $release_version" 0 "$rc" "$publish_bin/publish-$release_version.err"
+		[[ ! -e "$publish_bin/work-$release_version" ]] || fail "publish left $release_version work directory"
+		grep -qx -- "$release_version" "$publish_bin/run.args" || fail "publish changed the $release_version version"
+	done
+	printf 'test-rpm-repository: historical, patch and monthly release identities are preserved\n'
 
 	# RPM-07: exact tool NEVRAs, installed and checked, and the tools image run
 	# by the ID docker build wrote, never by a tag.
@@ -1777,7 +1852,7 @@ publish_rpm() {
 		*) blind "unknown publish argument: $1" ;;
 		esac
 	done
-	[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || blind "--version must be MAJOR.MINOR.PATCH"
+	release_tag "$version" >/dev/null || exit 2
 	[[ "$assets" == /* && -d "$assets" && -f "$assets/checksums.txt" ]] || blind "--assets must hold checksums.txt"
 	[[ "$out" == /* && ! -e "$out" && -d "$(dirname -- "$out")" ]] || blind "--out must be a new absolute path"
 	local descriptor="${OLIVARES_PACKAGE_REPO_KEY_DESCRIPTOR_FILE:-}"
@@ -1881,7 +1956,7 @@ inside_publish_rpm() {
 		esac
 	done
 	[[ -d "$input" && -d "$out" && -f "$public_key" ]] || blind "inside publish mounts are absent"
-	[[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || blind "--version must be MAJOR.MINOR.PATCH"
+	release_tag "$version" >/dev/null || exit 2
 	command -v python3 >/dev/null 2>&1 || blind "python3 is absent from the tools image; TOOL_NEVRAS pins it"
 	local fingerprint
 	fingerprint=$(python3 -c 'import json, os; print(json.load(open(os.environ["OLIVARES_PACKAGE_REPO_KEY_DESCRIPTOR_FILE"]))["openpgp_fingerprint"])') ||

@@ -46,6 +46,8 @@ config_py() {
 	python3 - "$root/.goreleaser.yaml" "$1" <<'PY'
 import re
 import sys
+import json
+from pathlib import Path
 
 text, mode = open(sys.argv[1], encoding="utf-8").read(), sys.argv[2]
 
@@ -59,13 +61,16 @@ def entries(block):
     return ["  - " + p for p in parts]
 
 def field(entry, key):
+    if isinstance(entry, dict): return entry.get(key)
     m = re.search(rf"^\s*(?:- )?{key}: (.*)$", entry, re.M)
     return m.group(1).strip() if m else None
 
 def flow(value):
+    if isinstance(value, list): return value
     return [v.strip() for v in value.split("#")[0].strip().strip("[]").split(",")] if value else []
 
 def contents_of(entry):
+    if isinstance(entry, dict): return entry["contents"]
     m = re.search(r"^    contents:\n(.*?)(?=^    \S)", entry, re.S | re.M)
     out = []
     for item in re.split(r"^      - ", m.group(1), flags=re.M)[1:] if m else []:
@@ -77,7 +82,9 @@ def contents_of(entry):
         out.append(c)
     return out
 
-nfpms = entries(section("nfpms"))
+nfpms = json.loads((Path(sys.argv[1]).parent / "packaging/nfpm/packages.json").read_text())["nfpms"]
+assert all(e.get("version_schema") == "none" for e in nfpms)
+assert "nfpms:" not in text
 arch_entries = [e for e in nfpms if "archlinux" in flow(field(e, "formats"))]
 assert len(arch_entries) == 1, "exactly one nfpms entry builds archlinux"
 arch = arch_entries[0]
@@ -129,15 +136,11 @@ elif mode == "amd64":
     base = [i for i in builds if i != "olivares-fips"]
     assert len({body(builds[i]) for i in base}) == 1, f"the base builds {base} are not in lockstep"
 elif mode == "scripts":
-    s = arch
-    for key, script in (("postinstall", "archlinux-postinstall.sh"), ("preremove", "archlinux-preremove.sh"),
-                        ("postremove", "archlinux-postremove.sh")):
-        assert re.search(rf"^\s+{key}: packaging/nfpm/{script}$", s, re.M), f"{key}: {script}"
-    assert "preinstall" not in s
-    assert re.search(r"^\s+postupgrade: packaging/nfpm/archlinux-postinstall.sh$", s, re.M), "archlinux.scripts.postupgrade"
-    assert "preupgrade" not in s, "an upgrade must not stop the service"
-    assert re.search(r"^\s+packager: \S", s, re.M), "archlinux.packager"
-    assert "file_name_template" not in s, "release tooling admits only olivares_<version>_* names"
+    assert arch["scripts"] == {"postinstall": "packaging/nfpm/archlinux-postinstall.sh", "preremove": "packaging/nfpm/archlinux-preremove.sh", "postremove": "packaging/nfpm/archlinux-postremove.sh"}
+    assert arch["archlinux"]["scripts"] == {"postupgrade": "packaging/nfpm/archlinux-postinstall.sh"}
+    assert arch["archlinux"]["packager"]
+    assert "file_name_template" not in arch
+
 PY
 }
 config_py contents || fail 'the Arch package lacks its licence texts, unit, stamp or backup env file'

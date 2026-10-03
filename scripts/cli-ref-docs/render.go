@@ -278,30 +278,40 @@ func inspect(d cliDump, codes []exitCode) ([]string, error) {
 		// every other cell.
 		problems = append(problems, checkProse(exitCodeRel, fmt.Sprintf("exit code %d (%s)", c.Value, c.Name), c.Meaning)...)
 	}
-	var rootLong string
+	// The contract is the `exit-codes` help topic (`olivares help exit-codes`), which
+	// the root help names: the root help stays one screen (state, next step, the verbs
+	// to start with). A tree without the topic is read from the root help as before.
+	var rootLong, topicLong string
 	for _, c := range d.Commands {
-		if c.Path == d.Root {
+		switch c.Path {
+		case d.Root:
 			rootLong = c.Long
+		case d.Root + " exit-codes":
+			topicLong = c.Long
 		}
 	}
-	if strings.TrimSpace(rootLong) == "" {
-		return problems, cannot("the root command has no Long help, so the exit-code contract it is " +
-			"supposed to restate could not be read")
+	helpLong := topicLong
+	if strings.TrimSpace(helpLong) == "" {
+		helpLong = rootLong
 	}
-	listed, err := exitCodesInHelp(rootLong)
+	if strings.TrimSpace(helpLong) == "" {
+		return problems, cannot("neither the `exit-codes` help topic nor the root command has Long help, so " +
+			"the exit-code contract it is supposed to restate could not be read")
+	}
+	listed, err := exitCodesInHelp(helpLong)
 	if err != nil {
 		return problems, err
 	}
 	for value, name := range declared {
 		if !listed[value] {
-			problems = append(problems, fmt.Sprintf("exit code %d (%s) is declared in %s but the root "+
-				"command's help does not list it; the package doc says the contract is documented there",
+			problems = append(problems, fmt.Sprintf("exit code %d (%s) is declared in %s but the exit-code "+
+				"help (`olivares help exit-codes`) does not list it; the package doc says the contract is documented there",
 				value, name, exitCodeRel))
 		}
 	}
 	for value := range listed {
 		if _, ok := declared[value]; !ok {
-			problems = append(problems, fmt.Sprintf("the root command's help lists exit code %d, which "+
+			problems = append(problems, fmt.Sprintf("the exit-code help lists exit code %d, which "+
 				"no constant in %s declares", value, exitCodeRel))
 		}
 	}
@@ -326,7 +336,8 @@ func checkProse(path, where, text string) []string {
 
 var helpCodeRe = regexp.MustCompile(`^\s+(\d+)\s`)
 
-// exitCodesInHelp reads the "Exit codes:" block out of the root command's help.
+// exitCodesInHelp reads the "Exit codes:" block out of the exit-code help topic (or,
+// in a tree without it, the root command's help).
 // Continuation lines of a wrapped entry start with spaces but not with a digit,
 // so they are skipped rather than mistaken for codes.
 func exitCodesInHelp(long string) (map[int]bool, error) {

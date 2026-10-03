@@ -306,7 +306,7 @@ func (m *Module) handleGenerateStatements(w http.ResponseWriter, r *http.Request
 	now := m.clock.Now().Time()
 
 	var out []statementDTO
-	mutErr := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
+	mutErr := m.mutate(r.Context(), mc.Tenant, func(sc store.Scope) error {
 		var e error
 		out, e = generateStatements(r.Context(), sc, in.Period, pStart, pEnd, now)
 		return e

@@ -296,6 +296,42 @@ func TestDoctorManifestClaimingAnotherDataDirIsDrift(t *testing.T) {
 	}
 }
 
+func TestDoctorReportsRetainedAgentOpsOverrideWithoutReadingItsValues(t *testing.T) {
+	o, deps := doctorFixture(t)
+	path := o.unit + ".d/agentops.conf"
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("[Service]\nProtectHome=tmpfs\nEnvironment=SECRET=never-print-this-override\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	read := deps.readFile
+	deps.readFile = func(name string) ([]byte, error) {
+		if name == path {
+			t.Fatal("doctor must not read unrecorded override values")
+		}
+		return read(name)
+	}
+	report, code, err := runDoctor(context.Background(), o, deps)
+	if err != nil || code != exitcode.OK {
+		t.Fatalf("doctor with a custom override: code=%d err=%v", code, err)
+	}
+	c := doctorCheckByName(report, "service-overrides")
+	if c.Status != "warn" || c.Required || !strings.Contains(c.Detail, path) || !strings.Contains(c.Detail, "overrides the base service unit") {
+		t.Fatalf("retained drop-in diagnostic = %+v", c)
+	}
+	body, err := json.Marshal(report)
+	if err != nil || bytes.Contains(body, []byte("never-print-this-override")) {
+		t.Fatal("doctor disclosed an override value")
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if c := doctorServiceOverridesCheck(deps, *o); c.Status != "not_applicable" {
+		t.Fatalf("absent override: %+v", c)
+	}
+}
+
 func TestDoctorAgentOpsLayoutIsNotApplicableWithoutRecordedFiles(t *testing.T) {
 	o, deps := doctorFixture(t)
 	report, code, err := runDoctor(context.Background(), o, deps)

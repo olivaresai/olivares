@@ -43,6 +43,9 @@ export interface MetricStatProps {
   aside?: ReactNode
   /** Tone tints the value (used sparingly — e.g. a budget over its limit). */
   tone?: 'default' | 'success' | 'warning' | 'danger'
+  /** `compact` for a narrow side column (Now's estate summary): smaller figure and
+   *  padding, the same label, caption, trend and honest states. */
+  density?: 'default' | 'compact'
   className?: string
 }
 
@@ -61,10 +64,18 @@ export function MetricStat({
   trend,
   aside,
   tone = 'default',
+  density = 'default',
   className,
 }: MetricStatProps) {
+  const compact = density === 'compact'
   return (
-    <Card className={cn('flex flex-col gap-2 p-4', className)}>
+    <Card
+      className={cn(
+        'flex flex-col',
+        compact ? 'gap-1.5 p-3' : 'gap-2 p-4',
+        className,
+      )}
+    >
       <div className="flex items-start justify-between gap-2">
         <div className="flex items-center gap-2">
           {/* The label text carries the meaning, so the leading icon is decorative —
@@ -86,7 +97,9 @@ export function MetricStat({
       <div className="flex flex-col gap-0.5">
         <span
           className={cn(
-            'font-display text-display tabular-nums',
+            compact
+              ? 'font-display text-heading font-semibold tabular-nums'
+              : 'font-display text-display tabular-nums',
             VALUE_TONE[tone],
           )}
         >

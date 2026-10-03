@@ -25,6 +25,8 @@ export interface CodeLineProps extends Omit<
   command: string
   /** The chip form for a sentence: no heading, no prompt sign. */
   inline?: boolean
+  /** The block's heading; `null` when the block sits under a heading of its own. */
+  label?: string | null
 }
 
 type Copied = 'idle' | 'copied' | 'failed'
@@ -32,6 +34,7 @@ type Copied = 'idle' | 'copied' | 'failed'
 export function CodeLine({
   command,
   inline = false,
+  label,
   className,
   ...props
 }: CodeLineProps) {
@@ -122,9 +125,11 @@ export function CodeLine({
       className={cn('flex min-w-0 flex-col gap-1.5', className)}
       {...props}
     >
-      <span className="text-overline text-text-3">
-        {t('ui.codeLine.label')}
-      </span>
+      {label === null ? null : (
+        <span className="text-overline text-text-3">
+          {label ?? t('ui.codeLine.label')}
+        </span>
+      )}
       <div className="flex min-w-0 items-start gap-2 rounded-card border border-line bg-frame py-2 ps-3.5 pe-1.5">
         <span
           data-slot="code-line-prompt"

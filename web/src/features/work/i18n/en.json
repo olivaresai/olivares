@@ -106,7 +106,7 @@
   },
   "decisions": {
     "title": "Decisions",
-    "subtitle": "The append-only decision record and its current-state projection.",
+    "subtitle": "Every decision as it was recorded, and the ones in force now.",
     "view": {
       "effective": "In force",
       "revoked": "Revoked",
@@ -125,11 +125,11 @@
     "empty": {
       "effective": {
         "title": "No decisions in force",
-        "body": "The engine read the current-state projection and found none in force."
+        "body": "No decision is in force."
       },
       "revoked": {
         "title": "No revoked decisions",
-        "body": "The engine read the current-state projection and found none revoked."
+        "body": "No decision has been revoked."
       },
       "history": {
         "title": "No decisions recorded",
@@ -175,12 +175,12 @@
   },
   "items": {
     "title": "Work items",
-    "subtitle": "Filters narrow the whole store, not just the page you are looking at.",
+    "subtitle": "Filters search every work item, not only this page.",
     "empty": {
       "title": "No work items match",
-      "body": "Nothing in the store matches these filters. This is a real, complete answer — the engine read the store and found none.",
+      "body": "No work item matches these filters.",
       "allTitle": "No work items yet",
-      "allBody": "Work items appear here as sessions, agents and operators record them. This is a real, complete answer: the engine read the store and found none.",
+      "allBody": "Work items appear here as sessions, agents and people record them.",
       "start": "Start a session"
     }
   },
@@ -228,7 +228,7 @@
     "error": "Stream interrupted",
     "unavailableBody": "The list on screen may be out of date, and nothing else will tell you so. Refresh to read the store directly."
   },
-  "subtitle": "The durable cross-session backlog: work items, ownership, dependencies, acceptance criteria and decisions. Every change is planned before it is applied.",
+  "subtitle": "Work that sessions and people share: items, owners, dependencies, acceptance criteria and decisions. Each change is shown before it is applied.",
   "tabs": {
     "items": "Work items",
     "decisions": "Decisions"
@@ -276,6 +276,7 @@
     "noPermission": "Your role cannot offer a handoff. That act needs sessions:message-send:write."
   },
   "url": {
-    "invalidItem": "The address names an item id this screen cannot use, so it was ignored."
+    "invalidItem": "The address names an item id this screen cannot use, so it was ignored.",
+    "invalidFilter": "The address names a filter this screen does not offer, so every item is shown."
   }
 }

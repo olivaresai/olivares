@@ -10,6 +10,7 @@
 // diferencia entre «retirar el servicio» y «secuestrar los datos de un cliente». Un diálogo que
 // sólo preguntara «¿suspender?» escondería la parte que un operador necesita para decidir, y la que
 // un cliente necesita que sea cierta.
+import { QueryErrorState } from '@/components/layout/query-error-state'
 import './i18n'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
@@ -20,7 +21,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { ErrorState, ForbiddenState } from '@/components/ui/error-state'
+import { ForbiddenState } from '@/components/ui/error-state'
 import { PageHeader } from '@/components/ui/page-header'
 import { Spinner } from '@/components/ui/spinner'
 import { ListTruncationBadge } from '@/features/_intel'
@@ -119,7 +120,7 @@ export function TenantsView() {
               <Spinner />
             </div>
           ) : q.isError ? (
-            <ErrorState retry={() => void q.refetch()} />
+            <QueryErrorState error={q.error} retry={() => void q.refetch()} />
           ) : (q.data?.items ?? []).length === 0 ? (
             <EmptyState
               icon={<Building2 />}

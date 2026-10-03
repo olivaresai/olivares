@@ -169,7 +169,8 @@ func TestEvidenceAndLegacyAgreeOnTheRBACTermForEveryRouteMetadata(t *testing.T) 
 					// sites in the same direction still fails here. It does NOT pin
 					// rbacPermitted's own rule — that is routemetadata_test.go's battery,
 					// which asserts against literals, and this test rests on it.
-					wantTerm := tc.meta.rbacPermitted(req, az.rbacAllows(req))
+					wantTerm := tc.meta.rbacPermitted(req, az.rbacAllows(req)) ||
+						(role == RoleOwner && tc.meta.RequireScopedGrant)
 					if legacy.Allow != wantTerm {
 						t.Fatalf("Authorize.Allow = %t, want the metadata algebra's %t (%+v)",
 							legacy.Allow, wantTerm, legacy)

@@ -8,7 +8,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -59,8 +58,8 @@ func writeStoreError(w http.ResponseWriter, err error) {
 		writeJSON(w, http.StatusOK, nil)
 		return
 	}
-	status, msg, _ := api.StoreErrorStatus(err)
-	writeJSON(w, status, errorBody(msg))
+	status, body, _ := api.StoreErrorBody(err)
+	writeJSON(w, status, body)
 }
 
 // isConflict reports whether err is the store's optimistic-concurrency / unique
@@ -70,20 +69,7 @@ func isConflict(err error) bool { return errors.Is(err, store.ErrConflict) }
 // decodeJSON reads a JSON body into v, bounding the read and rejecting unknown
 // fields. It returns false (and writes a 400) on failure.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
-	dec := json.NewDecoder(io.LimitReader(r.Body, 1<<20))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
-		return false
-	}
-	// A BODY IS ONE JSON DOCUMENT (2026-08-06). Decode reads the FIRST value and stops,
-	// so `{...}{...}` used to decode the first, silently discard the rest and perform a
-	// durable mutation returning 201. Measured against a live engine on the models route,
-	// with the created row read back by a separate GET; core/api/render.go has rejected
-	// this since it was written, and 21 of the 22 copies of this helper had drifted from
-	// it. A concatenation error becomes an apparently correct action, and two layers can
-	// disagree about which document the request meant.
-	if dec.More() {
+	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 1 << 20}); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
 		return false
 	}

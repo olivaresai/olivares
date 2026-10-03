@@ -35,7 +35,7 @@ var credentialBindingDescriptor = model.EntityDescriptor{
 		pdecl(field("credential_kind", model.KindText, false),
 			model.None("the closed credential kind user or token, switched on: core/auth/credential_binding.go:702")),
 		pdecl(field("credential_id", model.KindUUID, false),
-			model.None("the session or token row, reloaded as such when bound and at every resolution: core/auth/credential_binding.go:704, core/auth/credential_binding.go:716, core/auth/principal_evidence.go:248, core/auth/principal_evidence.go:338")),
+			model.None("the session or token row, reloaded as such when bound and at every resolution: core/auth/credential_binding.go:704, core/auth/credential_binding.go:716, core/auth/principal_evidence.go:246, core/auth/principal_evidence.go:339")),
 		field("credential_version", model.KindInt, false),
 		// The subject's authority ceiling, copied from its first binding into
 		// every successor and sealed with the row.

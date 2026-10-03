@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/olivaresai/olivares/connectors/identitysource"
+	"github.com/olivaresai/olivares/connectors/internal/redact"
 	"github.com/olivaresai/olivares/connectors/modelprovider"
 )
 
@@ -191,12 +192,14 @@ func (a *Actuator) setStatus(ctx context.Context, op identitysource.LifecycleOp,
 		return identitysource.ActuationReceipt{}, fmt.Errorf("claude-wif: %s: post: %w", op, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		resp.Request = httpReq
+		detail := redact.ReadHTTPError(resp.Body, 2<<10, httpReq, a.adminKey)
+		return identitysource.ActuationReceipt{}, actuationError(op, resp, []byte(detail), a.adminKey)
+	}
 	raw, err := io.ReadAll(io.LimitReader(resp.Body, maxActuationBody))
 	if err != nil {
 		return identitysource.ActuationReceipt{}, fmt.Errorf("claude-wif: %s: read response: %w", op, err)
-	}
-	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return identitysource.ActuationReceipt{}, actuationError(op, resp, raw)
 	}
 
 	var out apiKey
@@ -219,8 +222,9 @@ func (a *Actuator) setStatus(ctx context.Context, op identitysource.LifecycleOp,
 // status, the Anthropic error type, a bounded message excerpt and the request
 // id (header or body) for support correlation — never the admin key (the
 // exchangeError pattern).
-func actuationError(op identitysource.LifecycleOp, resp *http.Response, raw []byte) error {
-	reqID := resp.Header.Get("request-id")
+func actuationError(op identitysource.LifecycleOp, resp *http.Response, raw []byte, credentials ...string) error {
+	raw = []byte(redact.HTTPError(raw, 2<<10, resp.Request, credentials...))
+	reqID := redact.HTTPError([]byte(resp.Header.Get("request-id")), maxActuationExcerpt, resp.Request, credentials...)
 	var parsed struct {
 		Error struct {
 			Type    string `json:"type"`

@@ -93,7 +93,8 @@ jobs:
           mkdir -p "$context"
           cp bin/olivares dist/olivares-appliance-base.deb appliance/layer/base/fixture/cloud-init.conf \
             packaging/systemd/olivares.service packaging/nfpm/package-init-systemd.txt \
-            packaging/olivares.env.example packaging/nfpm/postinstall.sh "$context/"
+            packaging/olivares.env.example packaging/nfpm/postinstall.sh \
+            packaging/service/migrate-agentops-dropin.sh "$context/"
           docker build --file appliance/layer/base/fixture/Containerfile --tag appliance-a1-fixture "$context"
           # The base is pinned by digest in the Containerfile; a digest-pinned build need not
           # leave a local debian:13 tag, so the reference is printed from the file.
@@ -162,7 +163,8 @@ jobs:
           mkdir -p "$context"
           cp bin/olivares dist/olivares-appliance-base.rpm appliance/layer/base/fixture/cloud-init.conf \
             packaging/systemd/olivares.service packaging/nfpm/package-init-systemd.txt \
-            packaging/olivares.env.example packaging/nfpm/postinstall.sh "$context/"
+            packaging/olivares.env.example packaging/nfpm/postinstall.sh \
+            packaging/service/migrate-agentops-dropin.sh "$context/"
           docker build --file appliance/layer/base/fixture/fedora/Containerfile --tag appliance-a1-fixture-fedora "$context"
           sed -n 's/^FROM //p' appliance/layer/base/fixture/fedora/Containerfile
       - name: run the first-boot battery

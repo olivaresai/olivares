@@ -21,14 +21,16 @@ import (
 // silently discarded the rest, and performed a durable mutation — measured against a live
 // engine on this very route, which answered 201 Created and left a row a separate GET could
 // read back. The same bytes sent to a core route answered 400, which is what made it drift
-// rather than a property of encoding/json: core/api/render.go has called dec.More() since it
-// was written, and 21 of the 22 streaming copies had lost it.
+// rather than a property of encoding/json: core/api/render.go has rejected a second value
+// since it was written, and 21 of the 22 streaming copies had lost the check.
 //
-// The textual gate (scripts/check-json-decoders.sh) asserts the property across all 22 at
-// once, because 21 packages cannot each grow a test like this one. THIS test is the
-// behavioral anchor underneath it: a gate that only reads source can be satisfied by code
-// that looks right, and one live route proving the refusal is what makes the other 21
-// believable.
+// 2026-10-01: the copies also taught us dec.More() is not the rejection — it accepts a
+// tail opening with '}' or ']' — so the whole fleet now decodes through ONE shared helper
+// (api.DecodeRequestBody), whose second Decode must reach io.EOF. The textual gate
+// (scripts/check-json-decoders.sh) asserts every handler goes through it, because twenty
+// packages cannot each grow a test like this one. THIS test is the behavioral anchor
+// underneath it: a gate that only reads source can be satisfied by code that looks right,
+// and one live route proving the refusal is what makes the rest believable.
 //
 // It is written with a RAW body on purpose. The harness marshals from a Go value, which can
 // only ever produce one document — a fixture that cannot express the defect cannot detect it.
@@ -62,6 +64,10 @@ func TestModuleRouteRefusesABodyThatIsTwoJSONDocuments(t *testing.T) {
 		{"a second object after a newline", one + "\n" + `{"name":"ghost2","strategy":"cost"}`},
 		{"trailing garbage that is not JSON at all", one + ` not-json`},
 		{"a second scalar", one + ` 42`},
+		{"a stray closing brace dec.More() used to accept", one + `}`},
+		{"a stray closing bracket dec.More() used to accept", one + `]`},
+		{"a newline, a bracket, then an object", one + "\n]" + `{"name":"ghost3","strategy":"cost"}`},
+		{"a newline, a brace, then null", one + "\n}null"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			code, body := raw(tc.body)

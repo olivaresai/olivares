@@ -39,7 +39,7 @@ etwas noch nicht abdeckt, sagt die Seite das, statt es zu suggerieren.
 - **Releases sind signiert und verifizierbar.** Signatur, SLSA-Provenienz, SBOM und OpenVEX lassen sich allesamt
   [verifizieren](/de/how-to/verify-a-release/). Die Verifikation ist noch nicht vollständig ohne Netzwerk möglich: schlüssellose
   Prüfungen brauchen Sigstore-Trusted-Root-Material, und der SLSA-Schritt hat keinen Offline-Modus. Das Produkt liefert ein
-  [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das neueste getaggte Release, **26.10.0**, ist mit signierten Archiven, nativen Paketen und Container-Images veröffentlicht; APIs, Schemata und die Modul-Oberfläche können sich vor 1.0 noch ändern.
+  [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das neueste getaggte Release, **26.10.1**, ist mit signierten Archiven, nativen Paketen und Container-Images veröffentlicht; APIs, Schemata und die Modul-Oberfläche können sich vor 1.0 noch ändern.
 
 ## Open Core — was offen ist vs. Enterprise
 
@@ -154,7 +154,7 @@ Progress**, sofern eine Seite nichts anderes angibt.
   vermittelte Frontier-Modelle können das nicht.
 - **Modul-Routen sind ein separater, Beta-Vertrag.** Die Modul-Endpunkte (zum
   Beispiel der Access-Map-Graph und der Drift) sind nicht Teil des stabilen
-  67-Pfad-Core-Vertrags; sie werden als separates **Beta**-Dokument veröffentlicht —
+  70-Pfad-Core-Vertrags; sie werden als separates **Beta**-Dokument veröffentlicht —
   die [Modul-Routen-Referenz](/reference/api-beta/) (ausgeliefert unter
   `/openapi.beta.json`). Beta bedeutet, dass sich die Formen mit Vorankündigung
   ändern können, und der Detailgrad auf Feldebene lebt weiterhin in den typisierten

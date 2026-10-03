@@ -13,6 +13,7 @@
 // emission are DECLARED — no engine /v1/m route re-exposes them yet (ingest is
 //), and the events path differs between the live docs (/v1/sessions/{id}/
 // events) and the connector (/threads/:tid/events). Shown with a pending seam.
+import { ModuleGate } from '@/components/layout/query-error-state'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useFailedActionReporter } from '@/lib/hooks/use-privileged-mutation'
 import { Check, X } from 'lucide-react'
@@ -27,7 +28,6 @@ import {
   CaveatNotice,
   SectionCard,
   SeamBadge,
-  SelfAuditNotice,
   ListTruncationBadge,
 } from '@/features/_intel'
 import { RelTimeLabel } from '@/features/shared'
@@ -39,6 +39,15 @@ import { ContractPendingNotice, DeclaredSection } from './components'
 import type { PolicyDriftFinding, ThreadEvent } from './types'
 
 export function ManagedAgentsHitl({ active }: { active: boolean }) {
+  // The waiting tool calls are read from the security module's findings (EU18).
+  return (
+    <ModuleGate module="security">
+      <ManagedAgentsHitlReads active={active} />
+    </ModuleGate>
+  )
+}
+
+function ManagedAgentsHitlReads({ active }: { active: boolean }) {
   const { t } = useTranslation('claudePolicy')
   const { activeTenant, can } = useAuth()
   const canRead = can('governance:approval:read')
@@ -57,7 +66,6 @@ export function ManagedAgentsHitl({ active }: { active: boolean }) {
           {t('hitl.postV1Hint')}
         </span>
       </div>
-      <SelfAuditNotice />
       <CaveatNotice tone="warning">{t('hitl.vaultsRisk')}</CaveatNotice>
       <CaveatNotice tone="info">{t('hitl.endpointNote')}</CaveatNotice>
 
@@ -151,11 +159,14 @@ function HitlRow({
         </Button>
       </div>
       {open && (
-        <HitlDetail
-          id={detailId}
-          sessionRef={sessionRef}
-          canDecide={canDecide}
-        />
+        // The thread and its confirmations are the claude-agents module's.
+        <ModuleGate module="claude-agents">
+          <HitlDetail
+            id={detailId}
+            sessionRef={sessionRef}
+            canDecide={canDecide}
+          />
+        </ModuleGate>
       )}
     </li>
   )

@@ -64,7 +64,7 @@ func TestAgentSessionInputArgvSendsOnlyWithCredentials(t *testing.T) {
 
 func TestHooksConformArgvReachesEditionBoundaryOnlyForValidArgs(t *testing.T) {
 	_, _, err := execRoot(t, "hooks", "conform")
-	if err == nil || !strings.Contains(err.Error(), "hooks-hardening add-on not available") {
+	if err == nil || err.Error() != "Hook hardening is a Business feature: "+pricingURL {
 		t.Fatalf("hooks conform error = %v, want the honest edition boundary", err)
 	}
 

@@ -1,5 +1,5 @@
 {
-  "title": "Console de contrôle",
+  "title": "Administration",
   "subtitle": "Configurez qui accède et ce qu'il peut administrer : intégrez des utilisateurs, connectez le SSO et façonnez les espaces de travail et les groupes d'agents.",
   "tabs": {
     "people": "Utilisateurs et groupes",
@@ -67,7 +67,7 @@
     "edition": "Édition",
     "editions": {
       "community": "Community",
-      "enterprise": "Enterprise"
+      "enterprise": "Business"
     },
     "status": "Statut de la licence",
     "statuses": {
@@ -112,7 +112,7 @@
   },
   "people": {
     "title": "Utilisateurs",
-    "caption": "Intégrez une personne dans cette organisation avec un mot de passe défini par un administrateur ou une invitation par e-mail. Les utilisateurs SSO sont provisionnés automatiquement à la première connexion.",
+    "caption": "Ajoutez une personne à cette organisation, avec un mot de passe que vous définissez ou une invitation par e-mail.",
     "onboard": "Intégrer un utilisateur",
     "pendingTitle": "Invitations en attente",
     "pendingCaption": "Invitations en attente d'acceptation. Le lien à usage unique définit le mot de passe et active le compte.",
@@ -132,10 +132,10 @@
   },
   "members": {
     "title": "Membres actifs",
-    "caption": "Répertoire du tenant issu de SCIM et de l'intégration dans la console. Affiche les rôles, les groupes, le statut et si la connexion est réservée au SSO.",
+    "caption": "Toutes les personnes de cette organisation, avec leur rôle, leurs groupes et leur statut.",
     "readOnlyNotice": "Vous devez disposer d'un accès en lecture aux utilisateurs pour voir les membres actifs.",
     "none": "Aucun membre actif.",
-    "noneHint": "Les membres apparaîtront ici après l'intégration, le provisionnement SCIM ou la première connexion SSO.",
+    "noneHint": "Les personnes apparaissent ici quand vous les ajoutez, ou après leur première connexion via votre fournisseur d’identité.",
     "user": "Utilisateur",
     "groups": "Groupes",
     "status": "Statut",
@@ -168,8 +168,8 @@
     "totpResetDone": "Facteur TOTP réinitialisé."
   },
   "superadmins": {
-    "title": "Superadministrateurs",
-    "caption": "Activez ou désactivez les comptes de superadministrateur interne. La désactivation est réversible et non destructive : le compte est marqué inactif et ses sessions et jetons sont révoqués, jamais supprimés. Le dernier superadministrateur actif ne peut pas être désactivé.",
+    "title": "Administrateurs de l’installation",
+    "caption": "Comptes qui administrent toute l’installation. En désactiver un le déconnecte et révoque ses jetons ; rien n’est supprimé, et le dernier ne peut pas être désactivé.",
     "statusHeader": "Statut",
     "active": "Actif",
     "inactive": "Désactivé",
@@ -184,10 +184,10 @@
   },
   "onboard": {
     "title": "Intégrer un utilisateur",
-    "body": "Créez ou ajoutez un compte à cette organisation. Un nouveau compte n'est jamais superadministrateur, et son rôle ne peut jamais dépasser le vôtre.",
+    "body": "Créez un compte dans cette organisation. Le rôle attribué ne peut jamais dépasser le vôtre.",
     "displayName": "Nom affiché",
     "displayNameHint": "Un libellé lisible affiché dans la console.",
-    "emailHint": "L'identifiant de connexion. Les utilisateurs SSO se connectent plutôt via l'IdP.",
+    "emailHint": "L’adresse avec laquelle la personne se connecte.",
     "roleHint": "Le rôle intégré octroyé dans cette organisation.",
     "mode": "Mode de connexion",
     "modePassword": "Définir un mot de passe initial",
@@ -268,6 +268,8 @@
     "groups": {
       "title": "Mappage des groupes et provisionnement",
       "caption": "Comment les groupes d'annuaire de l'IdP deviennent des rôles, et si SCIM est la seule autorité pour les comptes. Configuré ici ; mappé par l'édition business.",
+      "provisioningTitle": "Provisionnement",
+      "provisioningCaption": "Si SCIM est la seule autorité pour les comptes.",
       "scimAuthoritative": "SCIM fait autorité",
       "scimAuthoritativeHint": "Si activé, une connexion SSO ne crée jamais de compte ni ne modifie l'appartenance aux groupes — SCIM gouverne l'annuaire. Si désactivé, la première connexion provisionne l'utilisateur et ajoute (sans jamais retirer) les groupes affirmés par l'IdP.",
       "unavailableBanner": "Cette édition extrait les groupes de l'assertion mais ne les mappe pas vers des rôles. L'édition business transforme les groupes affirmés en autorisations à la connexion."
@@ -282,12 +284,16 @@
       "label": "Fournisseur d'identité",
       "default": "Principal (par défaut)",
       "add": "+ Ajouter un fournisseur d'identité…",
-      "hint": "Un périmètre peut fédérer plusieurs fournisseurs d'identité. Le routage par domaine d'e-mail se configure ci-dessous. Seul un périmètre de locataire peut avoir plusieurs fournisseurs actifs à la fois : chaque fournisseur supplémentaire doit revendiquer ses propres domaines, et votre licence peut malgré tout le refuser ; le périmètre de l'ensemble du déploiement n'active que le principal. La build ouverte résout uniquement le principal du déploiement.",
+      "hint": "Une organisation peut utiliser plusieurs fournisseurs actifs ; chaque fournisseur supplémentaire doit revendiquer ses propres domaines de messagerie. La portée de tout le déploiement n’utilise que son fournisseur principal.",
       "addTitle": "Ajouter un fournisseur d'identité",
       "addBody": "Attribuez au nouvel IdP un alias court. Il identifie cet IdP au sein du périmètre et sert de clé de routage à la connexion.",
       "aliasLabel": "Alias",
       "aliasHint": "Lettres minuscules, chiffres et traits d'union (p. ex. « okta », « azure-ad »). 1 à 31 caractères.",
-      "addConfirm": "Continuer"
+      "addConfirm": "Continuer",
+      "on": "actif à la connexion",
+      "off": "désactivé",
+      "activeNow": "Actif à la connexion : {{names}}.",
+      "noneActive": "Aucun fournisseur d’identité n’est actif à la connexion : la connexion se fait par mot de passe."
     },
     "domains": {
       "title": "Routage home-realm",
@@ -295,6 +301,29 @@
       "label": "Domaines de messagerie revendiqués",
       "hint": "Un domaine par ligne (p. ex. corp.com). Chaque domaine est unique globalement entre les IdP ; une connexion email-first pour ce domaine est acheminée ici.",
       "unavailableBanner": "Les domaines sont enregistrés mais ce build ne route pas selon eux ; le routage home-realm nécessite l'édition business."
+    },
+    "displayName": "Nom sur le bouton de connexion",
+    "displayNameHint": "Les utilisateurs voient « Se connecter avec <nom> ». Laissez vide pour afficher « Authentification unique ». 80 caractères au maximum.",
+    "displayNameFallback": "Authentification unique",
+    "mapping": {
+      "title": "Valeurs qui comptent comme MFA",
+      "caption": "Quelles valeurs de ce fournisseur comptent comme connexion multifacteur. La MFA fédérée compte au plus comme AAL2 et ne satisfait jamais AAL3. Chaque valeur exacte est une exception à laquelle vous faites confiance.",
+      "amr": "Valeurs AMR (OIDC)",
+      "acr": "Valeurs ACR (OIDC)",
+      "samlContexts": "Contextes d’authentification (SAML)",
+      "mode": {
+        "default": "Valeur par défaut du protocole",
+        "exact": "Uniquement ces valeurs"
+      },
+      "values": "Valeurs",
+      "valuesHint": "Une valeur par ligne. Laissez vide pour ne faire confiance à aucune valeur.",
+      "restore": "Rétablir les valeurs par défaut du protocole",
+      "invalid": "Jusqu’à 32 valeurs, de 512 octets au plus chacune, sans joker (*) ni caractère de contrôle.",
+      "summary": {
+        "default": "valeur par défaut du protocole",
+        "none": "aucune valeur de confiance",
+        "values": "uniquement {{values}}"
+      }
     }
   },
   "secrets": {
@@ -323,7 +352,8 @@
     "rotated": "Secret enregistré.",
     "deleted": "Secret supprimé.",
     "deleteTitle": "Supprimer le secret",
-    "deleteBody": "Le secret est retiré du coffre. Toute configuration de connecteur référençant store:<name> échouera à se résoudre jusqu'à ce que vous le recréiez."
+    "deleteBody": "Le secret est retiré du coffre. Toute configuration de connecteur référençant store:<name> échouera à se résoudre jusqu'à ce que vous le recréiez.",
+    "sessionCaption": "Secrets qu’une session peut recevoir en variables d’environnement. Les noms commencent par env/. Une valeur n’est plus jamais affichée."
   },
   "connectors": {
     "title": "Connecteurs",
@@ -584,7 +614,7 @@
     "readOnlyNoticeHint": "Les rôles, leurs permissions et qui peut les déléguer se gèrent ici. Demandez à un administrateur la permission RBAC de gouvernance.",
     "authority": {
       "title": "Votre autorité de délégation",
-      "superadmin": "Vous êtes superadministrateur — vous pouvez déléguer n'importe quel rôle dans n'importe quel périmètre.",
+      "superadmin": "Vous administrez cette installation : vous pouvez attribuer n’importe quel rôle, partout.",
       "none": "Vous n'avez aucune autorité de délégation dans cette organisation. Un propriétaire ou un administrateur doit d'abord vous octroyer un rôle d'administrateur délimité.",
       "caption": "Vous ne pouvez déléguer qu'au sein de ces périmètres, et jamais plus que ces permissions. Le moteur revérifie chaque modification.",
       "tenantWide": "Tout le tenant",
@@ -595,13 +625,13 @@
     },
     "grants": {
       "title": "Octrois délimités",
-      "caption": "Attribuez un rôle à un utilisateur ou à un rôle intégré au sein d'un périmètre — c'est ainsi que vous faites de quelqu'un un administrateur d'espace de travail ou un administrateur de classe de ressource.",
+      "caption": "Donnez à une personne un rôle dans un espace de travail ou pour un type de ressource, plutôt que dans toute l’organisation.",
       "create": "Nouvel octroi",
       "subject": "Sujet",
       "role": "Rôle",
       "scope": "Périmètre",
       "none": "Aucun octroi délimité pour le moment.",
-      "noneHint": "Une attribution restreinte donne à un sujet un rôle dans un espace de travail ou une ressource, pas sur tout le locataire. Attribuez-en une pour commencer.",
+      "noneHint": "Aucun rôle n’est encore limité à un espace de travail ou à un type de ressource.",
       "revoke": "Révoquer",
       "revokeTitle": "Révoquer l'octroi",
       "revokeBody": "Le sujet perd immédiatement ce rôle délimité. La révocation est elle-même soumise au plafond de délégation.",
@@ -628,7 +658,7 @@
       "scopeRefWorkspace": "Espace de travail",
       "scopeRefGroup": "Groupe d'agents",
       "scopeRefPlaceholder": "Sélectionner…",
-      "scopeClass": "Classe de ressource",
+      "scopeClass": "Type de ressource",
       "scopeClassAny": "Toute ressource",
       "scopeClassHint": "Facultatif. Restreint l'octroi à un seul type de ressource (p. ex. uniquement les modèles).",
       "note": "Note",
@@ -672,13 +702,13 @@
       "excludesHint": "Soustraites après la base, les permissions ci-dessus et chaque groupe inclus — rien ne peut donc les rajouter. Exclure une permission que la base n'accorde pas aujourd'hui est valide : l'exclusion tient toujours quand elle l'accordera."
     },
     "groups": {
-      "title": "Groupes de permissions",
-      "caption": "Ensembles nommés de permissions que vous pouvez inclure dans plusieurs rôles personnalisés.",
+      "title": "Ensembles de permissions",
+      "caption": "Ensembles nommés de permissions, réutilisables dans plusieurs rôles personnalisés.",
       "create": "Nouveau groupe",
       "name": "Nom",
       "permissions": "Permissions",
       "none": "Aucun groupe de permissions pour le moment.",
-      "noneHint": "Un groupe de permissions regroupe des permissions afin qu’un rôle puisse les inclure par leur nom. Créez-en un pour commencer.",
+      "noneHint": "Aucun ensemble de permissions pour l’instant. Un ensemble permet à plusieurs rôles de partager les mêmes permissions.",
       "edit": "Modifier",
       "delete": "Supprimer",
       "deleteTitle": "Supprimer le groupe de permissions",
@@ -710,8 +740,8 @@
       "managedBy": "Géré par {{provisioner}} · lecture seule",
       "title": "Groupes sujets et hiérarchie",
       "caption": "Accordez des rôles aux groupes d'utilisateurs provisionnés et configurez la hiérarchie des groupes. Les membres d'un groupe enfant héritent des octrois du parent.",
-      "noGroups": "Aucun groupe provisionné. Les groupes sont poussés par le fournisseur d'identité (SCIM).",
-      "noGroupsHint": "Les groupes proviennent de votre fournisseur d’identité via SCIM ; la console n’en crée jamais. Provisionnez-en un là-bas et il apparaîtra ici.",
+      "noGroups": "Aucun groupe pour l’instant. Les groupes viennent de votre fournisseur d’identité.",
+      "noGroupsHint": "La console ne crée pas de groupes. Ajoutez un groupe chez votre fournisseur d’identité et il apparaîtra ici.",
       "colName": "Groupe",
       "colParent": "Parent",
       "colMembers": "Membres",
@@ -876,7 +906,8 @@
     "enableHint": "Vérifiez les changements ci-dessous. Les modules préparés nécessitent une saisie avant leur activation.",
     "apply": "Appliquer",
     "enabled": "Preset {{preset}} activé.",
-    "enableFailed": "Impossible d'activer le preset."
+    "enableFailed": "Impossible d'activer le preset.",
+    "restarting": "Redémarrage du moteur…"
   },
   "bindings": {
     "readOnlyNotice": "Vous devez disposer d’un accès aux liaisons de portée de source pour les afficher.",
@@ -1073,9 +1104,13 @@
       "active": "activé",
       "pending": "redémarrage en attente",
       "available": "désactivé",
-      "console": "console uniquement"
+      "console": "console uniquement",
+      "staged": "préparé",
+      "needsSecret": "secret requis",
+      "needsReview": "revue requise",
+      "needsInput": "saisie requise"
     },
-    "binaryUnknownWhy": "Cette édition ({{edition}}) appartient au binaire en cours d'exécution. Le moteur ne publie pas quels modules ce binaire a compilés, donc cette colonne reste non connue par module. Elle n'est pas déduite de l'empaquetage.",
+    "binaryUnknownWhy": "Cette édition ({{edition}}) appartient au binaire en cours d'exécution. Quand le moteur publie si un module est dans ce build, la colonne l'affiche ; sinon elle reste non connue. Elle n'est pas déduite de l'empaquetage.",
     "catalogueSourceHelp": "Les informations de modules disponibles dépendent de la compilation installée. L'installation d'une licence met à jour les détails de licence ; la disponibilité des modules est indiquée séparément.",
     "noAddons": "Cette installation a renvoyé un catalogue de modules vide.",
     "loading": "Chargement du catalogue de modules…",
@@ -1093,7 +1128,10 @@
     "licenseRefreshFailedAction": "Réessayez pour actualiser l'état de la licence.",
     "licenseRetry": "Réessayer l'état de la licence",
     "technicalSummary": "Détail technique",
-    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}"
+    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}",
+    "inBuild": "dans cette édition",
+    "notInBuild": "absent de cette édition",
+    "notCovered": "non couvert par la licence"
   },
   "mcpGateway": {
     "title": "Passerelle MCP",
@@ -1116,37 +1154,35 @@
     "fileOwned": "Le fichier de l'opérateur gouverne MCP sur son listener configuré. Cette vue est en lecture seule. La configuration stockée reste inactive, sans fusion ni remplacement.",
     "storeOwned": "La configuration du tenant gouverne MCP sur le listener HTTP de cette installation. Aucun fichier de configuration n'est nécessaire.",
     "sessionTitle": "Outils de session",
-    "sessionHint": "Désactivés par défaut. Le travail et la communication entre sessions ne sont exposés qu'aux jetons de session autorisés indépendamment ; aucune nouvelle autorité n'est accordée.",
+    "sessionHint": "Les sessions peuvent s’envoyer des messages et utiliser le travail qui leur est attribué. Cela ne donne aux sessions aucune nouvelle autorisation.",
     "tools": "Outils ({{count}})",
     "observationHint": "La découverte n'accorde aucune autorité. Autorisez chaque outil avec un scope explicite et indiquez si les actions destructives nécessitent une approbation.",
     "destructive": "Approbation destructive requise",
-    "readTool": "Sans approbation destructive",
-    "deniedTool": "Refusé par défaut",
     "credentials": "Gérer les identifiants",
     "credentialCaption": "Uniquement les secrets MCP du tenant (noms mcp/). Stockez la valeur Authorization complète du serveur, par exemple Bearer suivi du jeton. Les valeurs sont scellées et jamais renvoyées.",
-    "noCredential": "Aucun identifiant du serveur",
-    "name": "Nom du serveur",
-    "url": "URL du serveur",
-    "urlHint": "Streamable HTTP sur HTTPS. Utilisez l'URL finale sans identifiants, query ni fragment ; les redirections sont refusées. Stdio est disponible dans les connecteurs d'observation, pas dans cette passerelle.",
-    "credential": "Référence d'identifiant",
-    "credentialHint": "Sélectionnez une référence du magasin du tenant. Créez-la ou faites-la tourner dans Gérer les identifiants ; aucun secret global n'est proposé.",
+    "noCredential": "Sans connexion",
+    "name": "Nom",
+    "url": "Adresse du serveur",
+    "urlHint": "Le point de terminaison HTTPS du serveur, se terminant généralement par /mcp. Serveurs HTTPS distants uniquement ; les redirections ne sont pas suivies.",
+    "credential": "Connexion",
+    "credentialHint": "Le secret envoyé au serveur dans l’en-tête Authorization. Choisissez Sans connexion si le serveur n’en demande pas ; ajoutez un secret avec Gérer les identifiants.",
     "cidrs": "Plages privées autorisées",
-    "cidrsHint": "CIDR canoniques facultatifs, un par ligne. Les adresses privées et loopback exigent une autorisation explicite. Le DNS est vérifié et les adresses admises sont fixées à chaque connexion.",
-    "inboundTrust": "Authentification entrante",
-    "resource": "URL publique de la ressource de passerelle",
-    "issuer": "Émetteur de jetons approuvé",
-    "jwksURL": "URL du JWKS public",
-    "jwks": "JSON du JWKS public",
+    "cidrsHint": "Uniquement pour un serveur sur un réseau privé ou sur cette machine, par exemple 10.0.0.0/8 ou 127.0.0.1/32. Une plage par ligne.",
+    "inboundTrust": "Qui peut appeler ce serveur via Olivares",
+    "resource": "Adresse de ce serveur sur Olivares",
+    "issuer": "Émetteur des jetons",
+    "jwksURL": "Adresse des clés publiques de l’émetteur (URL JWKS)",
+    "jwks": "Clés publiques de l’émetteur (JWKS)",
     "jwksHint": "Fournissez une URL JWKS ou des clés asymétriques publiques. Les clés privées et champs d'identifiants arbitraires sont refusés.",
     "invalidJWKS": "Fournissez uniquement des clés asymétriques publiques.",
-    "resourceHint": "Utilisez l'origine HTTPS publique de cette installation suivie de {{path}}. Les jetons doivent être émis pour cette ressource exacte.",
-    "resourceAfterCreate": "le chemin affiché après la création",
+    "resourceHint": "Les jetons des appelants doivent être émis pour cette adresse exacte. Par défaut, c’est l’adresse de cette console ; changez-la si les appelants joignent Olivares par une autre adresse publique.",
+    "resourceAfterCreate": "Affichée après l’enregistrement : les jetons des appelants doivent être émis pour l’adresse de ce serveur sur Olivares.",
     "policy": "Autorisations des outils",
     "allowTool": "Autoriser {{name}}",
     "scope": "Scope requis pour {{name}}",
     "destructiveTool": "Exiger une approbation destructive pour {{name}}",
-    "formHint": "L'enregistrement désactive le serveur. Testez l'endpoint enregistré, vérifiez ses outils, configurez la confiance entrante et activez-le explicitement.",
-    "saveDisabled": "Enregistrer désactivé",
+    "formHint": "Un nouveau serveur démarre désactivé. Enregistrez-le, testez la connexion, examinez ses outils et activez-le.",
+    "saveDisabled": "Enregistrer",
     "removeTitle": "Supprimer le serveur MCP",
     "removeHint": "Supprimer {{name}} de la passerelle de ce tenant ? Les nouvelles requêtes seront refusées ; son identifiant scellé restera dans le gestionnaire de secrets.",
     "conflict": "La configuration a changé. Actualisez et vérifiez la version actuelle avant un nouvel envoi.",
@@ -1173,7 +1209,10 @@
       "redirects": "Redirections",
       "tool_policy": "Autorisation des outils",
       "tasks": "Tâches durables",
-      "subscriptions": "Abonnements"
+      "subscriptions": "Abonnements",
+      "local_execution": "Commandes locales",
+      "process_confinement": "Confinement du processus",
+      "network_confinement": "Confinement réseau"
     },
     "governanceValues": {
       "tenant_store": "Magasin du tenant",
@@ -1189,7 +1228,68 @@
       "operator_file_not_returned": "Les identifiants du fichier ne sont pas renvoyés",
       "operator_file_listener": "Listener configuré par l'opérateur",
       "operator_provisioned": "Politique provisionnée par l'opérateur",
-      "legacy_forwarder": "Transfert historique du fichier"
-    }
+      "legacy_forwarder": "Transfert historique du fichier",
+      "session_runner_engine_user_session_folder": "Exécuteur de sessions, en tant qu'utilisateur du moteur, dans le dossier de la session",
+      "reported_by_session_runner": "Tel que signalé par l'exécuteur de sessions",
+      "not_supplied_for_local_commands": "Non fourni pour les commandes locales"
+    },
+    "nameHint": "Affiché dans la liste des serveurs. Vide, il prend le nom d’hôte du serveur.",
+    "advanced": "Avancé",
+    "advancedHint": "Plages d’adresses privées et manière dont les appelants prouvent leur identité. Un serveur public peut être testé sans elles ; l’activer demande les réglages des appelants.",
+    "issuerHint": "L’adresse HTTPS du service de connexion qui émet les jetons des appelants, par exemple votre fournisseur d’identité.",
+    "jwksURLHint": "L’endroit où l’émetteur publie ses clés publiques. Utilisez ceci ou collez les clés ci-dessous, pas les deux.",
+    "enableNeedsTrust": "Pour l’activer, indiquez qui peut l’appeler dans Configurer > Avancé.",
+    "why": {
+      "dns": "Le nom {{host}} n’a pas pu être résolu. Vérifiez l’adresse et que ce moteur peut la résoudre.",
+      "tls": "La connexion sécurisée à {{host}} a échoué : son certificat n’est pas approuvé ici ou ne correspond pas au nom. Utilisez un certificat d’une autorité publique.",
+      "timeout": "{{host}} n’a pas répondu en 10 secondes. Vérifiez que le serveur fonctionne et que ce moteur peut le joindre.",
+      "connection_refused": "Rien n’a accepté la connexion sur {{host}}. Vérifiez le port et que le serveur fonctionne.",
+      "http_status": "Le serveur a répondu HTTP {{status}}. Vérifiez le chemin ; les serveurs MCP se terminent généralement par /mcp.",
+      "egress_denied": "{{host}} est une adresse privée ou locale. Autorisez sa plage dans Configurer > Avancé.",
+      "refused": "Le serveur a refusé la connexion (HTTP 401 ou 403). Vérifiez le secret choisi sous Connexion.",
+      "redirect_refused": "Le serveur a répondu par une redirection. Utilisez l’adresse finale.",
+      "invalid_response": "Le serveur a répondu, mais pas comme un serveur MCP. Vérifiez l’adresse.",
+      "credential_unavailable": "Le secret de connexion n’a pas pu être lu. Enregistrez-le à nouveau dans Gérer les identifiants.",
+      "unreachable": "{{host}} est injoignable. Vérifiez l’adresse et que le serveur fonctionne.",
+      "stdio": "La commande n’a pas démarré un serveur MCP qui réponde. Vérifiez la commande et ses arguments.",
+      "stdioDetail": "N'a pas démarré : {{detail}}"
+    },
+    "kind": "Comment Olivares le joint",
+    "kindUrl": "Adresse (HTTPS)",
+    "kindCommand": "Commande sur ce serveur",
+    "command": "Commande",
+    "commandHint": "Le programme qui démarre le serveur sur cette machine, par exemple npx. Il s’exécute avec chaque session, dans le dossier de la session.",
+    "args": "Arguments",
+    "argsHint": "Un par ligne, par exemple -y et @modelcontextprotocol/server-everything.",
+    "env": "Environnement",
+    "envHint": "Un par ligne : NOM=valeur. Pas pour les secrets.",
+    "envSecrets": "Environnement secret",
+    "envSecretsHint": "Un par ligne : NOM=mcp/nom-du-secret, un secret enregistré dans Gérer les identifiants.",
+    "pairsInvalid": "Chaque ligne doit contenir NOM=valeur.",
+    "policiesNotKept": "Non enregistré : le moteur n'a pas conservé l'autorisation pour {{tools}}. Réessayez ; si cela persiste, lancez olivares mcp ls.",
+    "scopeMissing": "Chaque outil autorisé a besoin d'une portée (les sessions utilisent tools:call).",
+    "toolCallable": "S’exécute sans approbation",
+    "toolAsks": "Demande une approbation d’abord",
+    "toolNotCallable": "Non autorisé",
+    "callableOff": "Désactivé : les sessions ne peuvent pas appeler ses outils.",
+    "trustPartial": "Qui peut l'appeler demande la ressource, l'émetteur et les clés, ou aucun des trois.",
+    "savedTestAgain": "Enregistré. Testez à nouveau le serveur pour le réactiver.",
+    "formHintEdit": "Enregistrer laisse le serveur tel quel. Modifier son adresse, sa commande, ses arguments, son environnement ou ses secrets le désactive jusqu'à un nouveau test.",
+    "trust": {
+      "allow": "Sans approbation : {{tools}}",
+      "ask": "Approbation d’abord : {{tools}}",
+      "deny": "Non autorisés : {{tools}}"
+    },
+    "enableDialog": {
+      "title": "Activer {{name}}",
+      "body": "Choisissez les outils qui s’exécutent sans approbation. Ceux que le serveur dit en lecture seule sont présélectionnés ; c’est votre choix, pas celui du serveur.",
+      "readOnlyHint": "lecture seule selon le serveur",
+      "runWithout": "Exécuter {{tool}} sans approbation",
+      "others": "Tous les autres outils demandent une approbation d’abord.",
+      "notAllowed": "non autorisé (à changer dans Configurer)",
+      "confirm": "Activer"
+    },
+    "sessionOn": "Activé : désactivez-le pour l’arrêter.",
+    "sessionOff": "Désactivé : les sessions ne peuvent ni s’envoyer de messages ni utiliser le travail attribué."
   }
 }
