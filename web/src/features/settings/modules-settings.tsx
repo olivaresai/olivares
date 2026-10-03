@@ -89,7 +89,7 @@ export function ModulesSettings() {
   const queryClient = useQueryClient()
   const query = useQuery({
     queryKey: modulesKey,
-    queryFn: modulesApi.get,
+    queryFn: () => modulesApi.get(),
     retry: false,
   })
   const [draft, setDraft] = useState<Set<string> | null>(null)
@@ -99,7 +99,7 @@ export function ModulesSettings() {
   const addOnRun = (query.data?.modules ?? []).some(byAddOn)
   const activation = useQuery({
     queryKey: consoleKeys.activation(),
-    queryFn: consoleApi.getActivation,
+    queryFn: () => consoleApi.getActivation(),
     enabled: addOnRun,
     retry: false,
   })

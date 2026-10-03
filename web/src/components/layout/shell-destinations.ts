@@ -15,6 +15,7 @@ import {
   authorizedSections,
   viewById,
   viewLabel,
+  type GatedSection,
   type ViewGate,
 } from '@/features/navigation/model'
 import { NAV_AREAS, type NavArea } from '@/features/registry'
@@ -31,14 +32,12 @@ import { NAV_AREAS, type NavArea } from '@/features/registry'
  * may open the view AND holds the section's own permission, and it links with the
  * section's search so the view opens on it.
  */
-export interface ShellSection {
+export interface ShellSection extends GatedSection {
   /** The label key under `nav:shell.journeys` and the key its count is given under. */
   key: string
   /** The registry view that holds the section. */
   view: string
   search: Readonly<Record<string, string>>
-  /** The section's own permission, on top of the view's. */
-  requires: string
 }
 
 export const APPROVALS_SECTION: ShellSection = {
@@ -226,9 +225,8 @@ export function shellDestinations(
     const section = typeof entry === 'string' ? null : entry
     const view = viewById(section ? section.view : (entry as string))
     if (!view || view.hideInNav || view.navigation.kind === 'detail') return []
-    if (!gate(view)) return []
-    // The section's own permission goes through the SAME gate, as if the view asked it.
-    if (section && !gate({ ...view, permission: section.requires })) return []
+    // The section's own permission goes through the SAME gate, on top of the view's.
+    if (!gate(view, section ?? undefined)) return []
     return [
       {
         id: view.id,

@@ -55,7 +55,8 @@ function waitsASignInCannotPaint(file: string, src: string): string[] {
 
 describe('live end-to-end specs name what the console paints', () => {
   it('the operate portal is reached by its nav name and its heading', () => {
-    const src = spec('sessions-unified.spec.ts')
+    // Read as one line: the formatter may wrap a locator's options over several lines.
+    const src = spec('sessions-unified.spec.ts').replace(/\s+/g, ' ')
     expect(src).toContain(`getByRole('link', { name: '${nav.items.agentops}'`)
     // The entry lives inside a nav AREA, and a fresh sign-in leaves the console at
     // the root with every area but the active one closed. The spec must reach the

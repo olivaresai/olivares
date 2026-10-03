@@ -7,8 +7,10 @@ package main
 import (
 	"context"
 	"errors"
+	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -78,6 +80,36 @@ func TestSeedDemoThenSelfRestartReachesReadiness(t *testing.T) {
 	if t2 != tenant || ws2 != ws || ag2 != ag {
 		t.Fatalf("estate after restart: tenant %s ws %d agents %d, want %s %d %d", t2, ws2, ag2, tenant, ws, ag)
 	}
+	assertGraph := func(t *testing.T, eng *engine, want int) {
+		t.Helper()
+		if _, err := eng.authr.BootstrapSuperadmin(context.Background(), demoEmail, demoPassword); err != nil {
+			t.Fatal(err)
+		}
+		h := eng.api.Handler()
+		code, login, _ := doDemoViewJSON(t, h, http.MethodPost, "/v1/auth/login", "", "", map[string]any{
+			"email": demoEmail, "password": demoPassword,
+		})
+		if code != http.StatusOK {
+			t.Fatalf("demo login = %d", code)
+		}
+		token, _ := login["token"].(string)
+		if code, _, raw := doDemoViewJSON(t, h, http.MethodGet, "/v1/m/accessmap/graph?limit=200", token, eng.demoTenant.String(), nil); code != want {
+			t.Fatalf("demo access graph = %d: %s, want %d", code, raw, want)
+		}
+	}
+	assertGraph(t, second, http.StatusOK)
+	t.Run("explicit selection stays authoritative", func(t *testing.T) {
+		dir := t.TempDir()
+		if err := saveNodeModuleSelection(dir, []string{"consoleviews"}, time.Now()); err != nil {
+			t.Fatal(err)
+		}
+		eng, err := bootDemo(t, dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = eng.Close() }()
+		assertGraph(t, eng, http.StatusNotFound)
+	})
 }
 
 // A second ordinary start (a service manager restart) with --seed-demo starts on

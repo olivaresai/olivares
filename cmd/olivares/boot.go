@@ -1377,6 +1377,11 @@ func boot(ctx context.Context, cfg bootConfig) (*engine, error) {
 			// first import also accounts for any demo/seeded module data.
 			if _, found, readErr := loadNodeModuleDocument(cfg.DataDir); readErr == nil && !found {
 				initial := moduleSelectionDoc{Selected: standardModuleSelection(), ImportPending: true}
+				if cfg.DemoSeed {
+					// The demo promises its access graph. Its rows belong to the
+					// core, so the module-table census cannot select its reader.
+					initial.Selected = append(initial.Selected, "accessmap")
+				}
 				if err := saveNodeModuleDocument(cfg.DataDir, initial, time.Now()); err != nil {
 					_ = st.Close()
 					return nil, fmt.Errorf("preserve the fresh module selection before initialization: %w", err)

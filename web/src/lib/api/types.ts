@@ -90,8 +90,13 @@ export interface ServerInfo {
 /** A background job this node does not run, and why (server-info jobs_not_running). */
 export interface JobNotRunning {
   job:
-    'retention' | 'legal_hold_archive' | 'audit_checkpoints' | 'audit_archive' | 'directory_synchronization'
-  reason: 'no_tenant_inventory' | 'addon_requires_license' | 'directory_unavailable'
+    | 'retention'
+    | 'legal_hold_archive'
+    | 'audit_checkpoints'
+    | 'audit_archive'
+    | 'directory_synchronization'
+  reason:
+    'no_tenant_inventory' | 'addon_requires_license' | 'directory_unavailable'
 }
 
 /** One SSO sign-in provider: its label and the same-origin path that starts it. */

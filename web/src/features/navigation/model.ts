@@ -73,7 +73,13 @@ export type PermissionCheck = (permission: string) => boolean
  *    what keeps every registry permission literal resolvable by the console-permission
  *    census, which reads `can()` call sites and fails on an argument it cannot read.
  */
-export type ViewGate = (view: FeatureView) => boolean
+/** A part of a view the navigation offers on its own (the approvals tab of Permissions), with
+ * the permission it needs on top of the view's. */
+export interface GatedSection {
+  requires: string
+}
+
+export type ViewGate = (view: FeatureView, section?: GatedSection) => boolean
 
 /**
  * The historical permission-only predicate, as a view gate. For a caller that genuinely
@@ -85,7 +91,9 @@ export type ViewGate = (view: FeatureView) => boolean
  *    capability-backed view from the reflection — the exact defect G1-B closes.
  */
 export function permissionGate(permits: PermissionCheck): ViewGate {
-  return (view) => !view.permission || permits(view.permission)
+  return (view, section) =>
+    (!view.permission || permits(view.permission)) &&
+    (!section || permits(section.requires))
 }
 
 export function areaById(id: string): NavArea | undefined {

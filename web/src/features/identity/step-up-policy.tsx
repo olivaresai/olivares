@@ -36,7 +36,7 @@ export function StepUpPolicySetting() {
   const [refusal, setRefusal] = useState<string | null>(null)
   const policy = useQuery({
     queryKey: policyKey,
-    queryFn: stepUpPolicyApi.get,
+    queryFn: () => stepUpPolicyApi.get(),
     enabled: allowed,
   })
   const save = usePrivilegedMutation({

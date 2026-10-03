@@ -56,7 +56,7 @@ function ReportSigningControl({ heading }: { heading: boolean }) {
   const key = reportingKeys.signing(activeTenant)
   const query = useQuery({
     queryKey: key,
-    queryFn: reportingApi.signing,
+    queryFn: () => reportingApi.signing(),
     retry: false,
   })
   // The engine's own sentence for a refusal that is not a step-up. On 09 Business a missing
