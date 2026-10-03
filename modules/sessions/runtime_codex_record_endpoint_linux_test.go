@@ -7,10 +7,20 @@
 package sessions
 
 import (
+	"bytes"
 	"context"
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
+	cryptotls "crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"fmt"
+	"log/slog"
+	"math/big"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -31,14 +41,26 @@ import (
 // and loopback servers. The tracer observes attempts (including refused connects)
 // over the entire process tree, from spawn through stop and the resumed process.
 func TestCodexRegisteredKeyNativeStartAndResumeReachOnlyTheBoundEndpoint(t *testing.T) {
-	codexNativeBoundEndpointFixture(t, ProviderKindOpenAICompatible)
+	codexNativeBoundEndpointFixture(t, ProviderKindOpenAICompatible, "session")
 }
 
 func TestCodexLocalRecordRejectsSavedCommandAuthBeforeNativeStartAndResume(t *testing.T) {
-	codexNativeBoundEndpointFixture(t, ProviderKindOllama)
+	codexNativeBoundEndpointFixture(t, ProviderKindOllama, "session")
 }
 
-func codexNativeBoundEndpointFixture(t *testing.T, kind string) {
+func TestCodexBoundNativeModelChoiceRefusesClearlyThenStarts(t *testing.T) {
+	for _, kind := range []string{ProviderKindOpenAI, ProviderKindOpenAICompatible, ProviderKindOllama} {
+		t.Run(kind, func(t *testing.T) { codexNativeBoundEndpointFixture(t, kind, "choose") })
+	}
+}
+
+func TestCodexBoundNativeStartCarriesTheProfileDefaultModel(t *testing.T) {
+	for _, kind := range []string{ProviderKindOpenAI, ProviderKindOpenAICompatible, ProviderKindOllama} {
+		t.Run(kind, func(t *testing.T) { codexNativeBoundEndpointFixture(t, kind, "profile") })
+	}
+}
+
+func codexNativeBoundEndpointFixture(t *testing.T, kind, modelChoice string) {
 	t.Helper()
 	if os.Getenv("OLIVARES_TEST_CODEX_ENDPOINT_PRIVACY") != "1" {
 		t.Skip("set OLIVARES_TEST_CODEX_ENDPOINT_PRIVACY=1 with the native Codex and strace programs")
@@ -58,7 +80,7 @@ func codexNativeBoundEndpointFixture(t *testing.T, kind string) {
 	for _, endpointUp := range []bool{true, false} {
 		t.Run(map[bool]string{true: "up", false: "down"}[endpointUp], func(t *testing.T) {
 			var boundRequests, otherRequests, foreignKeyExposures atomic.Int64
-			bound := codexPrivacyEndpoint(t, &boundRequests, nil)
+			bound := codexPrivacyEndpoint(t, &boundRequests, nil, kind == ProviderKindOpenAI)
 			other := codexPrivacyEndpoint(t, &otherRequests, &foreignKeyExposures)
 			if !endpointUp {
 				bound.Close()
@@ -86,10 +108,20 @@ func codexNativeBoundEndpointFixture(t *testing.T, kind string) {
 					}
 				})
 			}
+			if kind == ProviderKindOpenAI {
+				ca := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: bound.TLS.Certificates[0].Certificate[1]})
+				if err := os.WriteFile(filepath.Join(configHome, "native-ca.pem"), ca, 0o600); err != nil {
+					t.Fatal(err)
+				}
+			}
 			wrapper := filepath.Join(configHome, "codex-traced")
 			// Zero string bytes keeps payloads out of the capture; decoded socket
 			// descriptors distinguish native Unix IPC from network sends.
-			script := "#!/bin/sh\nexec " + codexPrivacyShellWord(tracer) +
+			script := "#!/bin/sh\n"
+			if kind == ProviderKindOpenAI {
+				script += "export CODEX_CA_CERTIFICATE=\"$CODEX_HOME/native-ca.pem\"\n"
+			}
+			script += "exec " + codexPrivacyShellWord(tracer) +
 				` -ff -s 0 -yy -o "$CODEX_HOME/traffic" -e trace=connect,sendto,sendmsg,sendmmsg ` +
 				codexPrivacyShellWord(native) + ` "$@"` + "\n"
 			if err := os.WriteFile(wrapper, []byte(script), 0o700); err != nil {
@@ -124,6 +156,7 @@ base_url = ` + strconv.Quote(other.URL+"/v1") + `
 wire_api = "responses"
 env_key = "OPENAI_API_KEY"
 requires_openai_auth = false
+experimental_bearer_token = "N1C_SYNTHETIC_CONFIG_SECRET_20261003"
 request_max_retries = 0
 stream_max_retries = 0
 [model_providers.olivares_record]
@@ -143,17 +176,25 @@ request_max_retries = 0
 				nativeConfig = strings.ReplaceAll(nativeConfig, "env_key = \"OPENAI_API_KEY\"\n", "")
 			}
 			cleanConfig := nativeConfig
+			if modelChoice == "choose" {
+				nativeConfig = strings.Replace(nativeConfig, "model = \"fixture-model\"\n", "", 1)
+				cleanConfig = nativeConfig
+			}
 			if kind == ProviderKindOllama {
 				nativeConfig += authConfig
 			}
 			if err := os.WriteFile(filepath.Join(configHome, "config.toml"), []byte(nativeConfig), 0o600); err != nil {
 				t.Fatal(err)
 			}
+			recorder := &capturingRecorder{}
+			var runtimeLog bytes.Buffer
 			m, _, tenant, _ := newRuntimeHarness(t,
 				WithRunner(NewProcRunner()), WithProviderDriver(NewCodexDriver()),
 				WithDriverProgram(providerDriverCodex, wrapper), WithProductVersion("test"),
 				WithProviderSecretVault(newFakeVault()), WithProviderProbe(&fakeProbe{}),
-				WithStopWaitDelay(2*time.Second), WithDriverTimeouts(20*time.Second, 2*time.Second))
+				WithStopWaitDelay(2*time.Second), WithDriverTimeouts(20*time.Second, 2*time.Second),
+				WithRecorder(recorder), WithLaunchGate(&spyGate{inner: LaunchDecision{Allowed: true, RecordIO: true}}))
+			m.log = slog.New(slog.NewTextHandler(&runtimeLog, nil))
 			m.UseExecutionEnvironmentRef(testEnvRef)
 			record := mustCreateRecord(t, m, tenant, CreateProviderRecordInput{
 				Kind: kind, DisplayName: "Bound loopback provider", BaseURL: baseURL, APIKey: key,
@@ -169,6 +210,9 @@ request_max_retries = 0
 				Actor: "user:u1", ActorKind: model.ActorUser, Model: "fixture-model",
 				PermissionMode: permModeBypass, MayRunUnrestricted: true,
 			}
+			if modelChoice != "session" {
+				params.Model = ""
+			}
 			run, err := m.createRun(ctx, tenant, params)
 			if kind == ProviderKindOllama {
 				if err == nil {
@@ -180,6 +224,18 @@ request_max_retries = 0
 					}
 					run, err = m.createRun(ctx, tenant, params)
 				}
+			}
+			if modelChoice == "choose" {
+				var refused *runErr
+				if !errors.As(err, &refused) || refused.status != http.StatusConflict || !strings.Contains(refused.msg, "Choose a model") {
+					t.Fatalf("bound launch without a selected/profile model did not explain the model choice before thread/start: %v", err)
+				}
+				if boundRequests.Load() != 0 || otherRequests.Load() != 0 {
+					t.Fatal("missing-model refusal contacted an inference endpoint")
+				}
+				t.Log("missing model refused before thread/start; choosing the session model now")
+				params.Model = "fixture-model"
+				run, err = m.createRun(ctx, tenant, params)
 			}
 			if err != nil {
 				t.Fatalf("native create: %v", err)
@@ -244,8 +300,36 @@ request_max_retries = 0
 						t.Fatalf("generation %d did not complete its native turn", generation)
 					}
 				}
+				live, _ := m.rt.getLive(tenant, run.RunRef)
 				if _, err := m.stopRun(ctx, tenant, run.RunRef, "user:u1", model.ActorUser); err != nil {
 					t.Fatalf("native stop: %v", err)
+				}
+				select {
+				case <-live.finalizedCh:
+				case <-ctx.Done():
+					t.Fatal("native finalization did not finish")
+				}
+				for _, frame := range live.ring.readFrom(0).frames {
+					if bytes.Contains(frame.Data, []byte("N1C_SYNTHETIC_CONFIG_SECRET_20261003")) {
+						t.Error("saved-config synthetic secret reached the attach ring")
+					}
+				}
+				recorder.mu.Lock()
+				for _, frame := range recorder.frames {
+					if bytes.Contains(frame.Data, []byte("N1C_SYNTHETIC_CONFIG_SECRET_20261003")) {
+						t.Error("saved-config synthetic secret reached the recorder")
+					}
+				}
+				recorded := len(recorder.frames)
+				recorder.mu.Unlock()
+				if recorded == 0 {
+					t.Error("synthetic secret check had no recorded frames")
+				}
+				if bytes.Contains(runtimeLog.Bytes(), []byte("N1C_SYNTHETIC_CONFIG_SECRET_20261003")) {
+					t.Error("saved-config synthetic secret reached runtime logs")
+				}
+				if !t.Failed() {
+					t.Logf("generation %d: saved-config synthetic secret ring=0 recorder=0 logs=0; recorded frames=%d", generation, recorded)
 				}
 				// Retain both generations rather than overwriting the first trace.
 				traces, _ := filepath.Glob(filepath.Join(configHome, "traffic.*"))
@@ -302,9 +386,9 @@ func codexPrivacyShellWord(s string) string {
 	return "'" + strings.ReplaceAll(s, "'", "'\"'\"'") + "'"
 }
 
-func codexPrivacyEndpoint(t *testing.T, requests, exposedKeys *atomic.Int64) *httptest.Server {
+func codexPrivacyEndpoint(t *testing.T, requests, exposedKeys *atomic.Int64, tls ...bool) *httptest.Server {
 	t.Helper()
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
 		if exposedKeys != nil && r.Header.Get("Authorization") == "Bearer "+testProviderKey {
 			exposedKeys.Add(1)
@@ -325,6 +409,31 @@ func codexPrivacyEndpoint(t *testing.T, requests, exposedKeys *atomic.Int64) *ht
 			_, _ = fmt.Fprintf(w, "event: %s\ndata: %s\n\n", event["type"], data)
 		}
 	}))
+	if len(tls) != 0 && tls[0] {
+		// Go's default httptest certificate is a CA. Native rustls requires a
+		// distinct server leaf, so trust only this task-owned CA and leaf chain.
+		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		if err != nil {
+			t.Fatal(err)
+		}
+		ca := &x509.Certificate{SerialNumber: big.NewInt(1), IsCA: true, BasicConstraintsValid: true,
+			NotBefore: time.Now().Add(-time.Hour), NotAfter: time.Now().Add(time.Hour), KeyUsage: x509.KeyUsageCertSign}
+		root, err := x509.CreateCertificate(rand.Reader, ca, ca, &key.PublicKey, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		leaf := &x509.Certificate{SerialNumber: big.NewInt(2), BasicConstraintsValid: true,
+			NotBefore: ca.NotBefore, NotAfter: ca.NotAfter, KeyUsage: x509.KeyUsageDigitalSignature,
+			ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}, IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}}
+		cert, err := x509.CreateCertificate(rand.Reader, leaf, ca, &key.PublicKey, key)
+		if err != nil {
+			t.Fatal(err)
+		}
+		server.TLS = &cryptotls.Config{Certificates: []cryptotls.Certificate{{Certificate: [][]byte{cert, root}, PrivateKey: key}}}
+		server.StartTLS()
+	} else {
+		server.Start()
+	}
 	t.Cleanup(server.Close)
 	return server
 }

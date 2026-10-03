@@ -106,6 +106,7 @@ func TestCodexBoundThreadPinsAndChecksProviderBeforeInput(t *testing.T) {
 			t.Run("resume="+resume+"/response="+responseProvider, func(t *testing.T) {
 				peer := newCodexPeer(t, func(cfg *DriverSessionConfig) {
 					cfg.BoundProvider = BoundProvider{Kind: ProviderKindOpenAI, Endpoint: "https://bound.example/v1"}
+					cfg.Model = "selected-model"
 					cfg.ResumeConversationID = resume
 				})
 				done := make(chan error, 1)

@@ -55,6 +55,7 @@ const (
 	codexMethodInitialize        = "initialize"
 	codexMethodInitialized       = "initialized"
 	codexMethodAccountRead       = "account/read"
+	codexMethodConfigRead        = "config/read"
 	codexMethodThreadStart       = "thread/start"
 	codexMethodThreadResume      = "thread/resume"
 	codexMethodThreadUnsubscribe = "thread/unsubscribe"
@@ -180,11 +181,6 @@ func (codexDriver) LaunchTerms() DriverLaunchTerms {
 // the launch drift apart without a test going red.
 func (d codexDriver) LaunchArgs(l DriverLaunch) []string {
 	args := cliruntime.CodexArgs(l.cliRuntimeRequest())
-	// Native config overrides apply before startup work as well as to resumed
-	// threads. Olivares owns installs; a session does not sync the plugin catalog
-	// or export analytics, feedback or telemetry from its authorized home.
-	args = append([]string{"-c", "analytics.enabled=false", "-c", "features.plugins=false",
-		"-c", "feedback.enabled=false", "-c", `otel.exporter="none"`, "-c", `otel.trace_exporter="none"`}, args...)
 	if d.launchPolicy(l.Preset, l.CodexSandboxFallback).sandbox() == CodexSandboxDangerFull {
 		// Full is explicitly authorized, or the bounded native probe established
 		// that this host needs the required OS-confinement fallback.
@@ -227,7 +223,7 @@ func codexBoundProviderID(bound BoundProvider) string {
 
 func (d codexDriver) OpenSession(cfg DriverSessionConfig) DriverSession {
 	s := &codexSession{cfg: cfg, policy: d.launchPolicy(cfg.Preset, cfg.CodexSandboxFallback), pending: map[string]*codexServerRequest{}}
-	s.conn = newRPCConn(cfg.Send, false)
+	s.conn = newRPCConn(s.send, false)
 	s.conn.onRequest = s.onServerRequest
 	s.conn.onNotify = s.onNotification
 	return s
@@ -264,6 +260,7 @@ type codexSession struct {
 	conn   *rpcConn
 
 	mu            sync.Mutex
+	configReadID  string
 	threadID      string
 	turnID        string
 	authState     string
@@ -312,6 +309,17 @@ type codexAccountReadParams struct {
 type codexAccountReadResponse struct {
 	Account            json.RawMessage `json:"account"`
 	RequiresOpenaiAuth bool            `json:"requiresOpenaiAuth"`
+}
+
+type codexConfigReadParams struct {
+	Cwd           *string `json:"cwd,omitempty"`
+	IncludeLayers bool    `json:"includeLayers"`
+}
+
+type codexConfigReadResponse struct {
+	Config struct {
+		Model string `json:"model"`
+	} `json:"config"`
 }
 
 type codexThreadStartParams struct {
@@ -391,6 +399,43 @@ type codexTurnCompletedNotification struct {
 
 // --- session ------------------------------------------------------------------
 
+// Keep the config/read identity before sending: its reply can contain saved
+// provider secrets, even with includeLayers=false. The bridge projects that one
+// response before any attach, recording or protocol consumer sees it.
+func (s *codexSession) send(ctx context.Context, data []byte) error {
+	var request requestOut
+	if json.Unmarshal(data, &request) == nil && request.Method == codexMethodConfigRead {
+		s.mu.Lock()
+		s.configReadID = strconv.FormatInt(request.ID, 10)
+		s.mu.Unlock()
+	}
+	return s.cfg.Send(ctx, data)
+}
+
+func (s *codexSession) projectProfileModelResponse(data []byte) []byte {
+	s.mu.Lock()
+	id := s.configReadID
+	s.mu.Unlock()
+	if id == "" {
+		return data
+	}
+	var frame struct {
+		ID, Method, Result, Error json.RawMessage
+	}
+	decodeErr := json.Unmarshal(data, &frame)
+	if decodeErr == nil && ((len(frame.Method) != 0 && string(frame.Method) != "null" && string(frame.Method) != `""`) || string(frame.ID) != id) {
+		return data
+	}
+	var model codexConfigReadResponse
+	var reply any = responseOut{ID: frame.ID, Result: &model}
+	if decodeErr != nil || (len(frame.Error) != 0 && string(frame.Error) != "null") || json.Unmarshal(frame.Result, &model) != nil {
+		// Native errors or an unterminated EOF prefix can quote saved values.
+		reply = errorOut{ID: json.RawMessage(id), Error: rpcError{Code: -32603, Message: "Codex's configured model could not be read"}}
+	}
+	projected, _ := json.Marshal(reply)
+	return projected
+}
+
 func (s *codexSession) Deliver(frame OutputFrame) {
 	if frame.Stream != streamStdout {
 		return
@@ -431,6 +476,25 @@ func (s *codexSession) Handshake(ctx context.Context) (DriverHandshake, error) {
 	model := codexOptionalString(s.cfg.Model)
 	providerID := codexBoundProviderID(s.cfg.BoundProvider)
 	modelProvider := codexOptionalString(providerID)
+	if model == nil && providerID != "" && strings.TrimSpace(s.cfg.ResumeConversationID) == "" {
+		// Bound catalogs cannot discover a default. Let the native tool resolve
+		// its profile layers, then carry that configured model explicitly. Resume
+		// keeps the stored conversation's model when none was selected here.
+		config, err := s.conn.call(ctx, codexMethodConfigRead, codexConfigReadParams{
+			Cwd: cwd, IncludeLayers: false,
+		}, s.cfg.CallTimeout)
+		if err != nil {
+			return DriverHandshake{}, codexHandshakeErr("profile model read", err)
+		}
+		var reply codexConfigReadResponse
+		if err := json.Unmarshal(config, &reply); err != nil {
+			return DriverHandshake{}, &runErr{http.StatusBadGateway, "Codex's configured model could not be read"}
+		}
+		model = codexOptionalString(reply.Config.Model)
+		if model == nil {
+			return DriverHandshake{}, &runErr{http.StatusConflict, "Choose a model in this session's settings or in its Codex profile configuration before starting it"}
+		}
+	}
 	if resume := strings.TrimSpace(s.cfg.ResumeConversationID); resume != "" {
 		raw, err = s.conn.call(ctx, codexMethodThreadResume, codexThreadResumeParams{
 			ThreadID: resume, Cwd: cwd, ApprovalPolicy: s.policy.approval(), Sandbox: s.policy.sandbox(), Model: model, ModelProvider: modelProvider,

@@ -72,6 +72,9 @@ func (m *Module) bridge(lr *liveRun) {
 	sequenceExhausted := false
 	for frame := range lr.proc.Output() {
 		at := m.now()
+		if codex, ok := lr.session.(*codexSession); ok && frame.Stream == streamStdout {
+			frame.Data = codex.projectProfileModelResponse(frame.Data)
+		}
 		if frame.Stream == streamStdout {
 			// The person's accepted ACP prompt, ahead of the child's next frame and
 			// redacted like it; it is not the child's, so it skips onStdout.

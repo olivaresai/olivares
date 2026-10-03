@@ -61,6 +61,9 @@ section is dated only then.
 - If this host has a non-empty system-wide OpenCode config (`/etc/opencode/opencode.json` or `.jsonc`), OpenCode
   sessions on a provider key are refused until it is removed. OpenCode's own sign-in is not affected.
 
+- The engine re-issues its self-signed certificate with the same key. A CLI pinned to the key keeps working; a browser
+  that trusted the old certificate asks once more.
+
 ### New
 
 - Modules: an installation runs only the modules it selects (**Settings > Edition & modules**). A module that is off
@@ -131,6 +134,9 @@ section is dated only then.
   asks to install bubblewrap instead of failing with HTTP 502. Grok is not offered on such a host.
 - When the engine supplied the credential, a refusal by the provider says so and asks the operator to replace it.
 
+- A Codex session on a provider key or local model starts with the session's model, or Codex's own default; with no
+  model to use, it stops before start and says where to choose one.
+
 ### Known limits
 
 - The Helm chart and Compose deployments still expand database URLs into process arguments. Fixed in the next release.
@@ -138,6 +144,10 @@ section is dated only then.
   `olivares serve --dsn` accepts it.
 - OpenCode approvals show "Command not shown for this tool yet" when the tool does not send the command.
 - Host managed-policy checks for macOS are implemented but not yet verified on a Mac.
+
+- A Codex session on a provider key or local model needs a model chosen when it is created (with `--model` on `olivares session start`, in
+  the console's advanced launch options, or in its Codex profile configuration). Without one it stops before start and says so. A default model per
+  provider key comes in a later release.
 
 ## [26.10.0] - 2026-10-01
 

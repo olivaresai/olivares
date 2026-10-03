@@ -132,7 +132,11 @@ func ClaudeLaunchTerms() LaunchTerms {
 
 // CodexArgs is the owned stdio app-server of the official Codex CLI.
 func CodexArgs(LaunchRequest) []string {
-	return []string{"-c", "check_for_update_on_startup=false", "app-server", "--listen", "stdio://"}
+	// Olivares owns installs; every owned session disables catalog sync,
+	// analytics, feedback and telemetry before startup or resumed work.
+	return []string{"-c", "analytics.enabled=false", "-c", "features.plugins=false",
+		"-c", "feedback.enabled=false", "-c", `otel.exporter="none"`, "-c", `otel.trace_exporter="none"`,
+		"-c", "check_for_update_on_startup=false", "app-server", "--listen", "stdio://"}
 }
 
 // GrokArgs is the owned non-leader stdio agent of the official Grok CLI.

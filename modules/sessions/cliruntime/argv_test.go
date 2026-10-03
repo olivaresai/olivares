@@ -30,7 +30,8 @@ func TestLaunchArgs_CodexIsOwnedStdioAppServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if strings.Join(args, " ") != "-c check_for_update_on_startup=false app-server --listen stdio://" {
+	// The reviewed privacy defaults apply through the shared table to every owned launch.
+	if strings.Join(args, " ") != `-c analytics.enabled=false -c features.plugins=false -c feedback.enabled=false -c otel.exporter="none" -c otel.trace_exporter="none" -c check_for_update_on_startup=false app-server --listen stdio://` {
 		t.Fatalf("codex argv = %v", args)
 	}
 	for _, forbidden := range []string{"--remote", "serve", "daemon"} {
