@@ -189,7 +189,7 @@ def advisories(doc):
     found = {}
     for v in (doc.get('advisories') or {}).values():
         sev = (v.get('severity') or '?').lower()
-        m = GHSA.search(json.dumps(v))
+        m = GHSA.search(v.get('github_advisory_id', '') or '') or GHSA.search(json.dumps(v))
         if m:
             found[m.group(0)] = sev
     for v in (doc.get('vulnerabilities') or {}).values():

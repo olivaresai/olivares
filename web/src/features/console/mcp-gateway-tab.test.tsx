@@ -48,6 +48,7 @@ vi.mock('./api', async (original) => ({
   },
 }))
 import { MCPGatewayTab } from './mcp-gateway-tab'
+import { MCPServersView } from './mcp-servers-view'
 const snapshot = {
   version: 1,
   source: 'store',
@@ -603,5 +604,26 @@ describe('MCP console governance', () => {
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument(),
     )
     expect(api.put).not.toHaveBeenCalled()
+  })
+})
+
+describe('MCP servers page headings', () => {
+  it('the gateway sections sit right under the page title, with no level skipped', async () => {
+    render(
+      <QueryClientProvider
+        client={
+          new QueryClient({ defaultOptions: { queries: { retry: false } } })
+        }
+      >
+        <MCPServersView />
+      </QueryClientProvider>,
+    )
+    await screen.findByText('Fixture MCP')
+    const levels = screen
+      .getAllByRole('heading')
+      .map((h) => Number(h.tagName.slice(1)))
+    expect(levels[0]).toBe(1)
+    for (let i = 1; i < levels.length; i++)
+      expect(levels[i] - levels[i - 1]).toBeLessThanOrEqual(1)
   })
 })

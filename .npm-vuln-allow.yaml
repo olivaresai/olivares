@@ -1,39 +1,25 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# Dated, justified allowlist for the fail-closed npm/JS dependency-vulnerability gate
-# (scripts/npm-vuln-gate.sh). Same rules and same reader as .govulncheck-allow.yaml:
-#   - A blocking-severity advisory NOT listed here fails the gate.
-#   - Every entry MUST carry an `expires` date (YYYY-MM-DD, UTC); past it the gate fails,
-#     so a temporary exception can never become a silent forever-exception.
-#
-# ⛔ THESE ENTRIES ARE NOT A VERDICT, AND NOBODY HAS ASSESSED THEM.
-#
-# They are the advisories that ALREADY EXISTED on the day this gate was introduced
-# (2026-08-07), recorded so the gate can start blocking REGRESSIONS from its first run instead
-# of waiting for a triage that had never happened at all — before today nothing in this
-# repository scanned npm dependencies, so none of these had ever been seen by a gate.
-#
-# They share one expiry ON PURPOSE. That date is when somebody has to look, and the gate turns
-# red until they do. Whoever triages should SPLIT this list: real exceptions keep an entry with
-# their own reason and their own date; everything else gets fixed by bumping the dependency.
-#
-# npm audit has NO reachability analysis, so unlike govulncheck none of these can be dismissed
-# with "the vulnerable symbol is not reachable". Triage means reading each one.
-#
-# Derived from the gate's OWN run, not from a separate sweep by hand: a hand sweep missed one
-# (GHSA-8r6m-32jq-jx6q, in connectors/backstage/plugin-frontend) because it looked at six
-# workspaces where the gate enumerates eight from git.
-#
-# 2026-09-07: the shared expiry did its job. The gate went red on the first CI run after
-# 2026-09-06 (mainline run 34131797918, job 101773451524, step 10) and the twenty entries were
-# triaged: every one was a published fix reachable by a patch/minor bump, so NONE became a real
-# exception. Ten had already left the graphs before the expiry (astro, fast-uri x3, ws, sharp,
-# form-data, undici x3 - all at or past their first patched version in every lockfile); the
-# other ten (svgo, brace-expansion x3, undici, js-yaml x2, fast-xml-parser, postcss, adm-zip)
-# were cured by moving the vulnerable nodes inside their parents' existing ranges, each one
-# recorded with its advisory and its bump in the triage that produced this file.
-# The list is empty on purpose: an entry here is a decision with a reason and a date, and
-# today there is nothing to decide. A blocking advisory that cannot be bumped gets its own
-# entry, its own reason and its own date - never a renewed blanket expiry.
-allow: []
+# Dated operation-specific exceptions for scripts/npm-vuln-gate.sh.
+# Reviewed 2026-10-03; reassess if another caller uses the vulnerable operation.
+# No fixed upstream versions exist. Unlisted blocking advisories still fail.
+allow:
+  - id: GHSA-86w9-cpqp-85rv
+    expires: 2026-11-02
+    reason: >-
+      Backstage's development server verifies only its newly generated local
+      certificate; it supplies no attacker key or signature to node-forge.
+      https://github.com/advisories/GHSA-86w9-cpqp-85rv
+  - id: GHSA-ch52-4w7c-c8xp
+    expires: 2026-11-02
+    reason: >-
+      Astro's static build never evaluates max-stale; Yarn publishing provenance
+      is opt-in and supplies no cache path, so make-fetch-happen bypasses caching.
+      https://github.com/advisories/GHSA-ch52-4w7c-c8xp
+  - id: GHSA-vfj7-8cjw-p6xm
+    expires: 2026-11-02
+    reason: >-
+      Backstage's development proxy uses picomatch's own parser for configured
+      patterns; incoming pathnames never reach braces' recursive AST walkers.
+      https://github.com/advisories/GHSA-vfj7-8cjw-p6xm

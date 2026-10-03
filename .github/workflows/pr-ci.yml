@@ -296,7 +296,7 @@ jobs:
           trap 'sudo systemctl stop olivares.service 2>/dev/null || true' EXIT
           ready() {
             sudo systemctl restart olivares.service
-            for attempt in {1..40}; do
+            for _ in {1..40}; do
               if [[ "$(sudo curl -sS --max-time 2 --cacert /var/lib/olivares/tls.crt \
                 --output "$proof/logs/$1-readyz.json" --write-out '%{http_code}' \
                 https://127.0.0.1:8443/readyz 2>/dev/null || true)" == 200 ]]; then
@@ -311,7 +311,9 @@ jobs:
           }
           remove_package() {
             sudo dpkg --purge olivares
-            ! sudo systemctl is-active --quiet olivares.service
+            if sudo systemctl is-active --quiet olivares.service; then
+              return 1
+            fi
             [[ ! -e /usr/bin/olivares ]]
           }
           sudo dpkg -i "$proof/candidate.deb"
@@ -338,7 +340,8 @@ jobs:
           ready previous
           sudo mkdir -p /etc/systemd/system/olivares.service.d
           printf '[Service]\nProtectHome=tmpfs\n# operator edit: retain my policy\n' | \
-            sudo tee /etc/systemd/system/olivares.service.d/agentops.conf > "$proof/edited-dropin.conf"
+            tee "$proof/edited-dropin.conf" | \
+            sudo tee /etc/systemd/system/olivares.service.d/agentops.conf > /dev/null
           sudo dpkg -i "$proof/candidate.deb"
           cmp "$proof/edited-dropin.conf" /etc/systemd/system/olivares.service.d/agentops.conf
           cmp bin/olivares /usr/bin/olivares
@@ -346,8 +349,8 @@ jobs:
           pid="$(sudo systemctl show --property MainPID --value olivares.service)"
           sudo cmp bin/olivares "/proc/$pid/exe"
           doctor_rc=0
-          sudo /usr/bin/olivares doctor --data-dir /var/lib/olivares --output json \
-            > "$proof/logs/doctor.json" || doctor_rc=$?
+          sudo /usr/bin/olivares doctor --data-dir /var/lib/olivares --output json | \
+            tee "$proof/logs/doctor.json" > /dev/null || doctor_rc=$?
           [[ "$doctor_rc" -le 1 ]]
           grep -Fq 'overrides the base service unit' "$proof/logs/doctor.json"
           remove_package
@@ -395,7 +398,7 @@ jobs:
       # rest of the suite — which is the report the author needs most at that moment.
       fail-fast: false
       matrix:
-        shard: [root-a, root-b, root-c, root-rest, store-a, store-b, store-rest, sessions, modules]
+        shard: [root-a, root-b, root-c, root-d, root-e, root-f, root-g, root-h, root-rest, root-core, store-a, store-b, store-rest, sessions, modules]
     runs-on: ubuntu-latest
     # The gate pins these ceilings to ci/pr-suite-shards.txt. Hosted root-rest
     # exhausted 35m twice; allow the measured 1.8x variation over its 19.8m cmd group

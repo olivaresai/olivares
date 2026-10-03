@@ -1443,6 +1443,7 @@ tasks:
       - bash scripts/test-check-boundary.sh
       - bash scripts/check-boundary.sh
       - bash scripts/test-gates-failclosed.sh fast
+      - python3 scripts/test-govulncheck-gate.py
 
   cosign:guard:
     desc: >-

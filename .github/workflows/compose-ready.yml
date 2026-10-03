@@ -33,7 +33,7 @@ jobs:
   qualify-compose-ready:
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
     runs-on: [self-hosted, linux, x64, "${{ vars.CI_RUNNER || 'self-hosted' }}"]
-    timeout-minutes: 105
+    timeout-minutes: 115
     # The owned identities, spelled once. Every step that touches Docker validates them with
     # `check-compose-ready.sh owner` first. Build metadata stays the source commit.
     env:

@@ -87,9 +87,8 @@ func ensureTLSCert(certPath, keyPath string, dns []string, ips []net.IP) (bool, 
 		}
 	}
 	caPath, caKeyPath := certPath+".ca", keyPath+".ca"
-	// Only our own historical generated leaf can be upgraded automatically.
-	// A supplied operator certificate must never be replaced by local material.
-	if existing != nil && !legacyLocalTLSCert(existing) {
+	// Only local-CA-signed leaves can be renewed without changing client trust.
+	if existing != nil {
 		managed := bundledCA != nil && bundledCA.IsCA &&
 			bundledCA.Subject.CommonName == "Olivares AI local CA" && existing.CheckSignatureFrom(bundledCA) == nil
 		if managed && !fileExists(caPath) {
@@ -116,8 +115,8 @@ func ensureTLSCert(certPath, keyPath string, dns []string, ips []net.IP) (bool, 
 		return false, "", err
 	}
 	if existing != nil {
-		if !legacyLocalTLSCert(existing) && (existing.CheckSignatureFrom(ca) != nil ||
-			(bundledCA != nil && !bytes.Equal(bundledCA.Raw, ca.Raw))) {
+		if existing.CheckSignatureFrom(ca) != nil ||
+			(bundledCA != nil && !bytes.Equal(bundledCA.Raw, ca.Raw)) {
 			return false, "", fmt.Errorf("secure: local TLS CA does not match the server certificate: restore %s and %s", caPath, caKeyPath)
 		}
 		if existing.CheckSignatureFrom(ca) == nil && sameTLSNames(existing, dns, ips) &&
@@ -150,20 +149,6 @@ func ensureTLSCert(certPath, keyPath string, dns []string, ips []net.IP) (bool, 
 	}
 	fp, err := certFingerprint(certPath)
 	return true, fp, err
-}
-
-func legacyLocalTLSCert(cert *x509.Certificate) bool {
-	key, ok := cert.PublicKey.(*ecdsa.PublicKey)
-	return ok && key.Curve == elliptic.P256() && cert.SignatureAlgorithm == x509.ECDSAWithSHA256 &&
-		!cert.IsCA && len(cert.Subject.Names) == 2 && cert.Subject.CommonName == "olivares" &&
-		slices.Equal(cert.Subject.Organization, []string{"Olivares AI"}) &&
-		cert.NotAfter.Sub(cert.NotBefore) == selfSignedValidity+time.Hour &&
-		cert.KeyUsage == x509.KeyUsageDigitalSignature|x509.KeyUsageKeyEncipherment &&
-		slices.Equal(cert.ExtKeyUsage, []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}) &&
-		len(cert.DNSNames) >= 1 && len(cert.DNSNames) <= 2 && cert.DNSNames[0] == "localhost" &&
-		len(cert.IPAddresses) == 2 && cert.IPAddresses[0].Equal(net.IPv4(127, 0, 0, 1)) && cert.IPAddresses[1].Equal(net.IPv6loopback) &&
-		bytes.Equal(cert.RawIssuer, cert.RawSubject) &&
-		cert.CheckSignature(cert.SignatureAlgorithm, cert.RawTBSCertificate, cert.Signature) == nil
 }
 
 func sameTLSNames(cert *x509.Certificate, dns []string, ips []net.IP) bool {

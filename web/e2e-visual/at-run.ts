@@ -55,7 +55,7 @@ import {
   type Page,
 } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
-import { fixtureFor } from './fixtures.ts'
+import { browserSession, fixtureFor, memberWhoami } from './fixtures.ts'
 import { AUTH_ROUTES, PUBLIC_ROUTES } from './routes.ts'
 import { derivePairs, type DerivedPair } from './at-pairs.ts'
 
@@ -64,6 +64,11 @@ const OUT_DIR = join(HERE, '__at__')
 const DIST = join(HERE, '..', '..', 'core', 'internal', 'webui', 'dist')
 const ORIGIN = 'http://localhost:5210'
 const ORIGIN_HOST = 'localhost:5210'
+// The browser session the engine keeps in a protected cookie (core/api/browser_session.go): a
+// synthetic one here, set when the console migrates the bearer the harness seeds.
+const SESSION_COOKIE = 'olivares_session'
+// What each context was answered on /v1/auth/browser-session, in order, for the recovery proof.
+const sessionAnswers = new WeakMap<BrowserContext, string[]>()
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -440,35 +445,35 @@ const CONTRAST_DEBT: {
   // tokens for the methods" does not reach the beta marker, so do not read this
   // as one fix. The `-600`/`-400` Tailwind ramp is off-brand to begin with.
   {
-    origin: 'web/src/features/api-playground/request-panel.tsx:415',
+    origin: 'web/src/features/api-playground/request-panel.tsx:419',
     pair: 'emerald-600 on emerald-500/15',
     theme: 'light',
     ratio: 3.17,
     why: RAMP,
   },
   {
-    origin: 'web/src/features/api-playground/request-panel.tsx:415',
+    origin: 'web/src/features/api-playground/request-panel.tsx:419',
     pair: 'blue-600 on blue-500/15',
     theme: 'light',
     ratio: 4.39,
     why: RAMP,
   },
   {
-    origin: 'web/src/features/api-playground/request-panel.tsx:415',
+    origin: 'web/src/features/api-playground/request-panel.tsx:419',
     pair: 'amber-600 on amber-500/15',
     theme: 'light',
     ratio: 2.85,
     why: RAMP,
   },
   {
-    origin: 'web/src/features/api-playground/request-panel.tsx:415',
+    origin: 'web/src/features/api-playground/request-panel.tsx:419',
     pair: 'orange-600 on orange-500/15',
     theme: 'light',
     ratio: 3.05,
     why: RAMP,
   },
   {
-    origin: 'web/src/features/api-playground/request-panel.tsx:415',
+    origin: 'web/src/features/api-playground/request-panel.tsx:419',
     pair: 'red-600 on red-500/15',
     theme: 'light',
     ratio: 3.85,
@@ -485,7 +490,11 @@ const CONTRAST_DEBT: {
   // palette: the orange as text is #ff9b3d there and passes on every dark surface.
 ]
 
-async function serve(context: BrowserContext) {
+async function serve(
+  context: BrowserContext,
+  profile: 'admin' | 'member' = 'admin',
+) {
+  sessionAnswers.set(context, [])
   await context.route('**/*', async (route) => {
     const u = new URL(route.request().url())
     if (u.host !== ORIGIN_HOST) return route.fulfill({ status: 204, body: '' })
@@ -514,6 +523,76 @@ async function serve(context: BrowserContext) {
         body: ': connected\n\n',
       })
     }
+    // The console recovers its session from /v1/auth/browser-session (src/lib/auth/browser-session.ts),
+    // and this answers it the way the engine does: a GET with the session cookie returns the
+    // session, without it 401; a POST that migrates the seeded bearer sets the cookie and returns the
+    // session. Answered by the default list reply, recovery threw and every authenticated route
+    // rendered the sign-in page (77 "sesion-perdida" in the dark run on main). A context without the
+    // seeded bearer stays signed out, as the public routes need.
+    if (p.endsWith('/v1/auth/browser-session')) {
+      const request = route.request()
+      const headers = await request.allHeaders()
+      const migrate =
+        request.method() === 'POST' &&
+        (headers['authorization'] ?? '').startsWith('Bearer olvs_')
+      const cookie = (headers['cookie'] ?? '')
+        .split(/;\s*/)
+        .includes(`${SESSION_COOKIE}=synthetic`)
+      if (migrate)
+        await context.addCookies([
+          {
+            name: SESSION_COOKIE,
+            value: 'synthetic',
+            url: ORIGIN,
+            httpOnly: true,
+            sameSite: 'Strict',
+          },
+        ])
+      const ok = migrate || (request.method() === 'GET' && cookie)
+      sessionAnswers.get(context)?.push(`${request.method()} ${ok ? 200 : 401}`)
+      return route.fulfill({
+        status: ok ? 200 : 401,
+        contentType: 'application/json',
+        body: JSON.stringify(
+          ok
+            ? browserSession
+            : { error: { code: 'unauthenticated', message: 'no session' } },
+        ),
+      })
+    }
+    // The member context answers as a tenant member with current admission: its principal, and
+    // every capability question it asks, as the engine answers an admitted member.
+    if (profile === 'member' && p.endsWith('/v1/auth/whoami'))
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(memberWhoami),
+      })
+    if (
+      profile === 'member' &&
+      p.endsWith('/v1/auth/capabilities') &&
+      route.request().method() === 'POST'
+    ) {
+      const asked = (route.request().postDataJSON() ?? {}) as {
+        questions?: { id: string; kind: 'surface' | 'operation' }[]
+      }
+      const observedAt = new Date().toISOString()
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          schema_version: 2,
+          results: (asked.questions ?? []).map((q) => ({
+            id: q.id,
+            kind: q.kind,
+            state: q.kind === 'surface' ? 'reachable' : 'allowed',
+            code: q.kind === 'surface' ? 'admitted' : 'authorized',
+            observed_at: observedAt,
+            refresh_after_ms: 30_000,
+          })),
+        }),
+      })
+    }
     const fx = fixtureFor(p)
     return route.fulfill({
       status: 200,
@@ -521,6 +600,45 @@ async function serve(context: BrowserContext) {
       body: JSON.stringify(fx ?? { items: [], has_more: false }),
     })
   })
+}
+
+/**
+ * The fixture must recover a session the way the engine does, or every authenticated route measures
+ * the sign-in page. One bounded sequence proves it before anything is measured: the first load is
+ * refused (GET 401) and migrates once (POST 200, which sets the cookie), a reload restores the session
+ * from the cookie (GET 200) without migrating again, and an anonymous context stays at GET 401.
+ */
+async function proveSessionRecovery(
+  authed: BrowserContext,
+  page: Page,
+  anon: BrowserContext,
+) {
+  await page.goto(ORIGIN + '/', { waitUntil: 'domcontentloaded' })
+  await esperaContenido(page)
+  await page.reload({ waitUntil: 'domcontentloaded' })
+  await esperaContenido(page)
+  const anonPage = await anon.newPage()
+  await anonPage.goto(ORIGIN + '/login', { waitUntil: 'domcontentloaded' })
+  await esperaContenido(anonPage)
+  await anonPage.close()
+  const seen = sessionAnswers.get(authed) ?? []
+  const anonSeen = sessionAnswers.get(anon) ?? []
+  const recovered =
+    seen[0] === 'GET 401' &&
+    seen[1] === 'POST 200' &&
+    seen.length > 2 &&
+    seen.slice(2).every((answer) => answer === 'GET 200')
+  const anonymous =
+    anonSeen.length > 0 && anonSeen.every((answer) => answer === 'GET 401')
+  if (!recovered || !anonymous)
+    throw new Error(
+      `the session fixture does not recover like the engine: authenticated ${JSON.stringify(seen)}, ` +
+        `want GET 401, POST 200, then only GET 200; anonymous ${JSON.stringify(anonSeen)}, want only GET 401`,
+    )
+  // eslint-disable-next-line no-console
+  console.log(
+    `  session recovery: ${seen.join(' → ')} · anonymous: ${anonSeen.join(' → ')}`,
+  )
 }
 
 async function structuralSummary(page: Page) {
@@ -937,6 +1055,7 @@ async function auditRoute(
   route: string,
   theme: Theme,
   authed: boolean,
+  expectTab?: string,
 ) {
   let rendered = true
   // ⛔ POR QUÉ SE CAPTURA EL ERROR Y NO SÓLO EL VEREDICTO. Este arnés sabía decir «CRASHED» y no
@@ -990,6 +1109,18 @@ async function auditRoute(
   //    entera. Con el módulo aparte, la regla se puede testificar; y hay UNA sola copia, que es
   //    lo que impide que las dos envejezcan por separado.
   const medible = await esperaContenido(page)
+  // A route measured for its body names the tab that body is, so a screen that stands in for it
+  // (a workspace prompt, a module-off notice) is never what gets measured.
+  const bodyShown = expectTab
+    ? await page
+        .getByRole('tab', { name: expectTab, selected: true })
+        .first()
+        .waitFor({ timeout: 15_000 })
+        .then(
+          () => true,
+          () => false,
+        )
+    : true
   // Cinturón sobre el `reducedMotion` del contexto: una animación que NO consulte
   // `prefers-reduced-motion` seguiría corriendo, y medirla a medias es el defecto de arriba.
   const animQuietas = await esperaAnimaciones(page)
@@ -1075,6 +1206,7 @@ async function auditRoute(
     // Cuántas regiones `main` expone la ruta. Sale del inventario de landmarks que este arnés YA
     // recogía, no de axe — ver el bloque `sinMain` más abajo para por qué eso importa.
     mains: summary.landmarks.filter((l) => l.role === 'main').length,
+    bodyShown,
     crashed,
     axe,
   }
@@ -1101,7 +1233,10 @@ async function main() {
   const browser = await chromium.launch({
     args: ['--no-sandbox', '--disable-dev-shm-usage'],
   })
-  async function makeContext(withSession: boolean) {
+  async function makeContext(
+    withSession: boolean,
+    profile: 'admin' | 'member' = 'admin',
+  ) {
     const c = await browser.newContext({
       viewport: { width: 1440, height: 900 },
       baseURL: ORIGIN,
@@ -1145,11 +1280,37 @@ async function main() {
       },
       { t: theme, sess: withSession },
     )
-    await serve(c)
+    if (profile === 'member')
+      await c.addInitScript(() =>
+        localStorage.setItem(
+          'olivares.workspace',
+          JSON.stringify({
+            state: {
+              activeWorkspace: 'w-default',
+              activeWorkspaceName: 'Default',
+            },
+            version: 0,
+          }),
+        ),
+      )
+    await serve(c, profile)
     return c
   }
+  // The communication pages are measured as a tenant member in a selected workspace, each with
+  // the tab its body is: a global account gets no tenant-member admission, and without a
+  // workspace the page only asks for one.
+  const COMMUNICATION_TABS: Record<string, string> = {
+    '/communications': 'Channels',
+    '/communications/inbox': 'Inbox',
+    '/communications/handoffs': 'Handoffs',
+    '/communications/new': 'New channel',
+    '/communications/administration': 'Administration',
+  }
+  let memberPage: Page | null = null
   const authedContext = await makeContext(true)
   const page = await authedContext.newPage()
+  const anonContext = await makeContext(false)
+  await proveSessionRecovery(authedContext, page, anonContext)
 
   // eslint-disable-next-line no-console
   console.log(
@@ -1159,10 +1320,15 @@ async function main() {
   let anonPage: Page | null = null
   for (const route of routes) {
     const authed = !PUBLIC_ROUTES.includes(route)
-    if (authed) {
+    const tab = COMMUNICATION_TABS[route]
+    if (tab) {
+      if (!memberPage)
+        memberPage = await (await makeContext(true, 'member')).newPage()
+      routeResults.push(await auditRoute(memberPage, route, theme, authed, tab))
+    } else if (authed) {
       routeResults.push(await auditRoute(page, route, theme, authed))
     } else {
-      if (!anonPage) anonPage = await (await makeContext(false)).newPage()
+      if (!anonPage) anonPage = await anonContext.newPage()
       routeResults.push(await auditRoute(anonPage, route, theme, authed))
     }
   }
@@ -1454,7 +1620,17 @@ async function main() {
         r.headings.some((h) => /^sign in$/i.test(h.text.trim())),
     )
     .map((r) => r.route)
+  const crashedRoutes = routeResults
+    .filter((r) => r.crashed)
+    .map((r) => r.route)
+  const bodyMissing = routeResults
+    .filter((r) => !r.bodyShown)
+    .map((r) => `${r.route} — the intended view did not render`)
   const blocking = [
+    ...crashedRoutes.map(
+      (x) => `crashed ${x} — rendered the error boundary, not its view`,
+    ),
+    ...bodyMissing.map((x) => `body-missing ${x}`),
     ...desautenticadas.map(
       (x) =>
         `sesion-perdida ${x} — renderizó la pantalla de acceso, no la vista`,
@@ -1476,10 +1652,9 @@ async function main() {
       console.log(`    DEBT ${d.pair} @ ${d.ratio} — ${d.origin} — ${d.why}`)
   }
   // A crashed route is NOT clean evidence, and the structural checks cannot tell
-  // the difference. Reported, counted and written to the report — deliberately
-  // NOT blocking, because the 13 that fail today are a fixture/harness problem
-  // this change does not own, and a gate nobody can run is worth nothing. But
-  // never again silent: the count is the first thing a reader sees.
+  // the difference. It blocks: every walked route now has a fixture in the shape
+  // its view reads, so a crash is a broken view or a fixture that lost its
+  // contract, and either one is fixed, not measured.
   //
   // ⭐ Y ESO YA NO ES UNA SUPOSICIÓN: está MEDIDO (2026-08-18). «Es problema de fixture» era una
   //    lectura razonable que nadie había comprobado — y si estuviera equivocada serían TRECE
@@ -1516,9 +1691,6 @@ async function main() {
         `and they are NOT counted as findings either **\n     ${sinMedir.join(' ')}`,
     )
   }
-  const crashedRoutes = routeResults
-    .filter((r) => r.crashed)
-    .map((r) => r.route)
   if (crashedRoutes.length) {
     // eslint-disable-next-line no-console
     console.log(

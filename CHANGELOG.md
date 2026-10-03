@@ -60,9 +60,7 @@ section is dated only then.
   are not affected.
 - If this host has a non-empty system-wide OpenCode config (`/etc/opencode/opencode.json` or `.jsonc`), OpenCode
   sessions on a provider key are refused until it is removed. OpenCode's own sign-in is not affected.
-
-- The engine re-issues its self-signed certificate with the same key. A CLI pinned to the key keeps working; a browser
-  that trusted the old certificate asks once more.
+- An upgrade keeps the certificate the engine already serves, so clients that trust it keep working. A new installation gets a local CA that also covers the server's LAN addresses.
 
 ### New
 
@@ -117,6 +115,8 @@ section is dated only then.
 - Models routing sends a request only to the provider it selected. With Models enabled and an Anthropic key configured,
   a request routed to another provider could reach Anthropic. Default installs were not affected.
 - `olivares dr` dump and restore and the backup scripts no longer put database passwords in process arguments.
+- Tool downloads are verified with a maintained OpenPGP implementation; a signature file with several or mixed signatures is refused.
+- DOMPurify is updated to 3.4.16, the docs site's devalue and fast-uri are patched, and the Backstage plugin build no longer pulls in vm2.
 
 ### Fixed
 
@@ -133,7 +133,6 @@ section is dated only then.
 - Grok Build on Linux without bubblewrap, with Grok's sandbox on (the default for new sessions), stops before start and
   asks to install bubblewrap instead of failing with HTTP 502. Grok is not offered on such a host.
 - When the engine supplied the credential, a refusal by the provider says so and asks the operator to replace it.
-
 - A Codex session on a provider key or local model starts with the session's model, or Codex's own default; with no
   model to use, it stops before start and says where to choose one.
 
@@ -144,7 +143,6 @@ section is dated only then.
   `olivares serve --dsn` accepts it.
 - OpenCode approvals show "Command not shown for this tool yet" when the tool does not send the command.
 - Host managed-policy checks for macOS are implemented but not yet verified on a Mac.
-
 - A Codex session on a provider key or local model needs a model chosen when it is created (with `--model` on `olivares session start`, in
   the console's advanced launch options, or in its Codex profile configuration). Without one it stops before start and says so. A default model per
   provider key comes in a later release.

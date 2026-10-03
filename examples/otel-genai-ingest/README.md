@@ -49,6 +49,8 @@ TENANT=$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST localho
   -d '{"name":"Agents","slug":"agents"}' | jq -r .tenant_id)
 ```
 
+Turn on FinOps in the console (keep the other modules on) and wait for the engine to restart.
+
 ## 2. Wire the OTEL source with the GenAI profile on
 
 Point `OLIVARES_SOURCES_CONFIG` at a `claude`-kind source for your tenant and turn on

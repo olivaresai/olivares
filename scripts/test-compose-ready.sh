@@ -40,7 +40,7 @@ cp "$scratch/control/go.mod" "$scratch/mutant/go.mod"
 
 (
 	cd "$scratch/control"
-	GOCACHE="$scratch/go-cache" GOTOOLCHAIN=local go test ./readyzprobe
+	GOWORK=off GOCACHE="$scratch/go-cache" GOTOOLCHAIN=local go test ./readyzprobe
 ) >"$scratch/control.out" 2>&1
 printf '%s\n' 'ok 1 - local HTTP/TLS fixtures prove ready, not-ready and unmeasurable outcomes'
 
@@ -55,7 +55,7 @@ mv "$scratch/mutant/readyzprobe/probe.go.next" "$scratch/mutant/readyzprobe/prob
 set +e
 (
 	cd "$scratch/mutant"
-	GOCACHE="$scratch/go-cache" GOTOOLCHAIN=local go test ./readyzprobe
+	GOWORK=off GOCACHE="$scratch/go-cache" GOTOOLCHAIN=local go test ./readyzprobe
 ) >"$scratch/mutant.out" 2>&1
 mutant_rc=$?
 set -e

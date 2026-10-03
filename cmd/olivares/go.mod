@@ -7,6 +7,7 @@ module github.com/olivaresai/olivares/cmd/olivares
 go 1.26.5
 
 require (
+	github.com/ProtonMail/go-crypto v1.4.1
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/go-jose/go-jose/v4 v4.1.5
 	github.com/google/uuid v1.6.0
@@ -40,6 +41,7 @@ require (
 	github.com/cedar-policy/cedar-go v1.8.0 // indirect
 	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/cloudflare/circl v1.6.3 // indirect
 	github.com/coreos/go-oidc/v3 v3.21.0 // indirect
 	github.com/crewjam/saml v0.5.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect

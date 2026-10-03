@@ -131,12 +131,8 @@ fi
 
 mkdir -p /usr/lib/olivares /etc/init.d /usr/share/olivares /var/lib/olivares /var/log /run /opt/fakebin /out
 
-cp /witness/package-init /usr/lib/olivares/package-init
-cp /witness/olivares.init /etc/init.d/olivares
-chmod 0755 /etc/init.d/olivares
-if [ -f /witness/olivares.env.example ]; then
-  cp /witness/olivares.env.example /usr/share/olivares/olivares.env.example
-fi
+# Install as container root; do not import the host extractor's ownership.
+cp -R /witness/payload/. /
 if [ -f /witness/plant-upgrade ]; then
   : >/run/olivares.pkg-upgrade-was-active
 fi
@@ -236,6 +232,17 @@ exit 0
 INNER
 }
 
+prepare_witness() {
+	local dest=$1 hook=$2 plant_upgrade=$3 payload=$4
+	mkdir -p "$dest/payload"
+	emit_inner "$dest/inner.sh"
+	cp "$hook" "$dest/post-install"
+	cp -a "$payload/." "$dest/payload/"
+	if [[ "$plant_upgrade" == yes ]]; then
+		: >"$dest/plant-upgrade"
+	fi
+}
+
 # The manifest the host judge reads is an exported COPY: the harness is root inside the
 # container, the host judge is not, and the packaged hook leaves the product manifest
 # 0640 root:olivares. These controls run the real export operation out of the emitted
@@ -326,7 +333,7 @@ selftest_primary_alpine_pin() {
 }
 
 selftest_static() {
-	local tmp call_line def_line host
+	local tmp call_line def_line host stamp init_unit example
 	host="$root/scripts/nfpm-apk-postinstall-runtime.sh"
 	tmp="$(mktemp -d "${TMPDIR:-/tmp}/nfpm-apk-pi-static.XXXXXX")"
 	# shellcheck disable=SC2064
@@ -367,6 +374,24 @@ selftest_static() {
 
 	# ... and its export operation publishes a manifest the unprivileged host can read.
 	selftest_export_controls "$tmp" "$tmp/inner.sh"
+
+	# The hook invokes packaged helpers as well as the init stamp and service unit.
+	mkdir -p "$tmp/payload/usr/lib/olivares" "$tmp/payload/etc/init.d" "$tmp/payload/usr/share/olivares"
+	stamp="$tmp/payload/usr/lib/olivares/package-init"
+	init_unit="$tmp/payload/etc/init.d/olivares"
+	example="$tmp/payload/usr/share/olivares/olivares.env.example"
+	cp "$root/packaging/nfpm/package-init-openrc.txt" "$stamp"
+	cp "$root/packaging/openrc/olivares.sh" "$init_unit"
+	cp "$root/packaging/olivares.env.example" "$example"
+	cp "$root/packaging/service/migrate-agentops-dropin.sh" "$tmp/payload/usr/share/olivares/"
+	chmod 0755 "$tmp/payload/usr/share/olivares/migrate-agentops-dropin.sh"
+	prepare_witness "$tmp/witness" "$root/packaging/nfpm/postinstall.sh" no "$tmp/payload"
+	cmp -s "$tmp/payload/usr/share/olivares/migrate-agentops-dropin.sh" \
+		"$tmp/witness/payload/usr/share/olivares/migrate-agentops-dropin.sh" ||
+		fail "witness staging omitted or changed the packaged migration helper"
+	[[ "$(stat -c '%a' "$tmp/witness/payload/usr/share/olivares/migrate-agentops-dropin.sh")" == 755 ]] ||
+		fail "witness staging changed the packaged helper mode"
+	printf '%s\n' 'ok - witness staging preserves the packaged migration helper bytes and mode'
 
 	# Standalone call vs function definition.
 	# A grep failure must reach its diagnostic under set -e; -m avoids a head/SIGPIPE pipeline.
@@ -1008,7 +1033,6 @@ grep -E 'usr/lib/olivares/package-init' "$list" >/dev/null || fail "apk missing 
 bsdtar -x -f "$apk" -C "$aroot"
 stamp="$aroot/usr/lib/olivares/package-init"
 init_unit="$aroot/etc/init.d/olivares"
-example="$aroot/usr/share/olivares/olivares.env.example"
 [[ -f "$stamp" ]] || fail "apk package-init was not extracted"
 [[ "$(tr -d '\n' <"$stamp")" == openrc ]] || fail "apk package-init is not openrc"
 [[ -f "$init_unit" ]] || fail "apk OpenRC unit was not extracted"
@@ -1050,23 +1074,8 @@ if [[ "$scratch_bytes" -gt 1073741824 ]]; then
 		"$scratch_bytes" >&2
 fi
 
-prepare_witness() {
-	local dest=$1 hook=$2 plant_upgrade=$3
-	mkdir -p "$dest"
-	emit_inner "$dest/inner.sh"
-	cp "$hook" "$dest/post-install"
-	cp "$stamp" "$dest/package-init"
-	cp "$init_unit" "$dest/olivares.init"
-	if [[ -f "$example" ]]; then
-		cp "$example" "$dest/olivares.env.example"
-	fi
-	if [[ "$plant_upgrade" == yes ]]; then
-		: >"$dest/plant-upgrade"
-	fi
-}
-
 # P1 fresh OpenRC
-prepare_witness "$scratch/cases/p1/witness" "$post" no
+prepare_witness "$scratch/cases/p1/witness" "$post" no "$aroot"
 run_container p1 "$scratch/cases/p1/witness" "$scratch/cases/p1/out"
 set +e
 judge_case "$scratch/cases/p1/out" fresh_openrc \
@@ -1083,7 +1092,7 @@ fi
 printf '%s\n' 'ok - P1 fresh APK post-install records init=openrc, OpenRC unit 0755, no service start'
 
 # P2 active upgrade
-prepare_witness "$scratch/cases/p2/witness" "$post" yes
+prepare_witness "$scratch/cases/p2/witness" "$post" yes "$aroot"
 run_container p2 "$scratch/cases/p2/witness" "$scratch/cases/p2/out"
 set +e
 judge_case "$scratch/cases/p2/out" upgrade_openrc \
@@ -1103,7 +1112,7 @@ run_n1() {
 	local nid=$1 plant=$2 judge_mode=$3
 	stage_n1_mutant "$scratch/cases/$nid" "$post" ||
 		fail "N1 $nid: could not insert the assignment mutant into extracted .post-install"
-	prepare_witness "$scratch/cases/$nid/witness" "$scratch/cases/$nid/mutant.post-install" "$plant"
+	prepare_witness "$scratch/cases/$nid/witness" "$scratch/cases/$nid/mutant.post-install" "$plant" "$aroot"
 	run_container "$nid" "$scratch/cases/$nid/witness" "$scratch/cases/$nid/out"
 	set +e
 	judge_case "$scratch/cases/$nid/out" "$judge_mode" \

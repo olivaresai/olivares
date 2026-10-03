@@ -93,7 +93,7 @@ wait_health() {
   return 1
 }
 
-api_get() { printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf "$BASE$1" -H @- -H "X-Olivares-Tenant: $TENANT"; }
+api_get() { printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf --max-time 2 "$BASE$1" -H @- -H "X-Olivares-Tenant: $TENANT"; }
 
 # The Claude/OTEL source ships embedded as an out-of-process plugin binary, so the
 # binary must be built with `task build:bin` (which runs build:connectors). A plain
@@ -127,6 +127,30 @@ TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "$BASE
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
 [ -n "$TENANT" ] || fail "could not create the tenant"
 note "tenant: $TENANT"
+
+# Fresh installations leave optional modules off. Keep the administrator's
+# selection and enable FinOps through the same API the console uses.
+note "enable FinOps and wait for the module-selection restart"
+api_get '/v1/console/modules' | python3 -c '
+import json,sys
+modules=json.load(sys.stdin)["modules"]
+selected=[m["name"] for m in modules if m["selected"]]
+if "finops" not in selected: selected.append("finops")
+json.dump({"selected":selected},sys.stdout)' > "$WORK/modules.json"
+printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf --max-time 10 \
+  -X PUT "$BASE/v1/console/modules" -H @- -H 'Content-Type: application/json' \
+  --data-binary @"$WORK/modules.json" >/dev/null || fail "could not enable FinOps"
+FINOPS_RUNNING=""
+for _ in $(seq 1 240); do
+  if api_get '/v1/console/modules' 2>/dev/null | python3 -c '
+import json,sys
+sys.exit(not any(m["name"]=="finops" and m["running"]
+                 for m in json.load(sys.stdin)["modules"]))' 2>/dev/null; then
+    FINOPS_RUNNING=1; break
+  fi
+  sleep 0.5
+done
+[ -n "$FINOPS_RUNNING" ] || fail "FinOps never became running after restart"
 
 kill "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; PID=""
 
