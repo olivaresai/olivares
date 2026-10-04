@@ -451,7 +451,9 @@ describe('SessionsWorkspaceView — two doors, one room', () => {
     } as never)
     const user = userEvent.setup()
     renderView('operate')
-    expect(await screen.findByText('No results')).toBeInTheDocument()
+    expect(
+      await screen.findByText('No sessions match these filters'),
+    ).toBeInTheDocument()
     expect(screen.queryByText('No sessions yet')).toBeNull()
     await user.click(screen.getByRole('button', { name: 'Clear filters' }))
     // Both discovered sessions are back in the table.

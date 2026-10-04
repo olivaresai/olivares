@@ -329,8 +329,8 @@ if [ -n "$service_mode" ]; then
   OLIVARES_ASSET_ROOT="$tmp/service-assets" "$@"
 fi
 mkdir -p "$bindir" || err "cannot create $bindir; create it with the intended owner and retry"
-stage="$(mktemp "$bindir/.olivares-install.XXXXXX")"
-install -m 0755 "$tmp/olivares" "$stage" ||
+stage="$(mktemp "$bindir/.olivares-install.XXXXXX")" &&
+  install -m 0755 "$tmp/olivares" "$stage" ||
   err "cannot write $bindir; choose a writable --bindir or perform the privilege step explicitly"
 # Probe on the destination filesystem before replacing a working installation.
 # A wrong architecture, missing loader or noexec mount leaves the old binary intact.

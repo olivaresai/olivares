@@ -59,7 +59,7 @@ if ! awk -v d="$data" -v w="$workspace" -v h="$(quote "$home")" -v run="$(quote 
 ' "$snapshot" > "$normalized"; then keep; fi
 digest=$(sha256sum "$normalized" | cut -d' ' -f1)
 # SHA-256 of the shipped 26.10 template with its two access markers removed.
-if [ "$digest" != 79baa9597505c950795823497e7ae549e22a06a2115eb6ad7d47929132d0e3b8 ]; then keep; fi
+if [ "$digest" != da1e4406c5a5d4e332a8d9d5d547920b61cb3f4d34620a764f55e90c93a15f64 ]; then keep; fi
 # Keep the installed HOME and runtime configuration: subscriptions already stored
 # there must remain usable. Replace the old directory masks with the base unit's
 # policy, including when this drop-in accompanies an older native unit.

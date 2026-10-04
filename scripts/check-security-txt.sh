@@ -98,7 +98,7 @@ CONTACT_EMAIL="security@olivares.ai"
 # than MAX_RECORD_AGE_DAYS, and `--probe` (network, never run by the hook) re-measures and prints
 # the lines to paste back, so "re-measure" never means "remember how".
 MAX_RECORD_AGE_DAYS=45
-SERVED_CANONICALS="https://olivares.ai/.well-known/security.txt 2026-08-19"
+SERVED_CANONICALS="https://olivares.ai/.well-known/security.txt 2026-10-04"
 
 fail() { echo "security-txt: FAIL — $1" >&2; exit 1; }
 

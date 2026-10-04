@@ -83,6 +83,10 @@
     "title": "暂无会话",
     "description": "智能体一开始工作，会话就会出现在这里：既有 Olivares 通过连接器发现的，也有你从本页启动的。"
   },
+  "filtered": {
+    "title": "没有符合这些筛选条件的会话",
+    "description": "清除筛选条件即可显示你的会话。"
+  },
   "forbidden": {
     "title": "未授权访问会话",
     "description": "你的角色不包含查看实时会话的权限。"

@@ -1,0 +1,1 @@
+import{Qr as e,li as t}from"./index-D4143u4R.js";function n(n){return t(e,n)}export{n as t};

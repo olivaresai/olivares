@@ -84,6 +84,10 @@
     "title": "Noch keine Sitzungen",
     "description": "Sitzungen erscheinen hier, sobald Agenten zu arbeiten beginnen: die, die Olivares über seine Konnektoren entdeckt, und die, die Sie hier starten."
   },
+  "filtered": {
+    "title": "Keine Sitzungen entsprechen diesen Filtern",
+    "description": "Setzen Sie die Filter zurück, um Ihre Sitzungen zu sehen."
+  },
   "forbidden": {
     "title": "Sitzungen nicht autorisiert",
     "description": "Ihre Rolle umfasst keine Berechtigung zum Anzeigen von Live-Sitzungen."

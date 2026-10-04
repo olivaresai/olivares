@@ -1768,8 +1768,8 @@ function Inner({
                 sessions.length > 0 ? (
                   <EmptyState
                     icon={<Activity />}
-                    title={t('common:states.noResults')}
-                    description={t('common:states.noResultsHint')}
+                    title={t('filtered.title')}
+                    description={t('filtered.description')}
                     action={
                       <Button
                         variant="secondary"
