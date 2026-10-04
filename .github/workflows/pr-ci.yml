@@ -585,6 +585,8 @@ jobs:
           retention-days: 7
           compression-level: 0
           if-no-files-found: error
+      - name: formatting debt does not grow
+        run: task lint:format-ratchet
       - name: the console checks, and the embedded bundle matches its sources
         run: task check:web web:check
       # The generated CLI reference (seven locale pages) and the console/gRPC/upgrade guides are

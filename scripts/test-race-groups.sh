@@ -184,34 +184,28 @@ run check
 if [ "$(rc)" = 1 ] && errhas "sus familias son rancias"; then ok "mutante (turno que no casa con ningun test) muere"
 else bad "turno fantasma no detectado (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
-# (m) ⛔ EL DE VERDAD: una familia que es PREFIJO de otra en OTRO turno hace que sus
-#     tests corran DOS veces. Se midieron 53 pares al escribir esto.
+# (m) A family prefix in another shard must cause duplicate test ownership.
+#     Construct the overlap; a valid partition need not contain redundant prefixes.
 stage
 python3 - "${SPEC}" <<'PY'
 import json, sys
 p = sys.argv[1]
 d = json.load(open(p, encoding="utf-8"))
-own = {f: s["name"] for s in d["root_shards"] for f in s["families"]}
-# se busca un par prefijo dentro del MISMO turno y se separa: eso crea el doble
 for s in d["root_shards"]:
-    for f in list(s["families"]):
-        for g in s["families"]:
-            if g != f and g.startswith(f):
-                s["families"].remove(g)
-                other = [x for x in d["root_shards"] if x["name"] != s["name"]][0]
-                other["families"].append(g)
-                for x in d["root_shards"]:
-                    x["tests_now"] = -1
-                json.dump(d, open(p, "w", encoding="utf-8"))
-                sys.exit(0)
-raise SystemExit("no encontre un par prefijo que separar: el fixture cambio")
+    for f in s["families"]:
+        if len(f) > 1:
+            other = next(x for x in d["root_shards"] if x["name"] != s["name"])
+            other["families"].append(f[:-1])
+            for x in d["root_shards"]:
+                x["tests_now"] = -1
+            json.dump(d, open(p, "w", encoding="utf-8"))
+            sys.exit(0)
+raise SystemExit("no root family can form a nonempty proper prefix")
 PY
 run check
-# ⛔ Y MUERE POR EL MOTIVO CORRECTO, que es la mitad que faltaba: si el control de la
-# cifra fuese lo primero, este mutante moriria por «cifra rancia» y el de DOBLES no se
-# habria ejecutado nunca. Se exige el mensaje.
-if [ "$(rc)" = 1 ] && errhas "caen en DOS turnos"; then ok "mutante (familia prefijo separada en otro turno) muere por DOBLE, no por la cifra"
-else bad "el doble conteo pasó o murió por otro motivo (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+# Require the duplicate-ownership diagnosis, not an unrelated count failure.
+if [ "$(rc)" = 1 ] && errhas "caen en DOS turnos"; then ok "mutant (overlapping prefix in another root shard) rejected for duplicate ownership"
+else bad "duplicate ownership passed or failed for another reason (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (n) el -timeout de la raiz tambien va POR DEBAJO de su techo
 stage
@@ -285,7 +279,7 @@ run check
 if [ "$(rc)" = 1 ] && errhas "no caen en ningun turno"; then ok "mutante (familia retirada de un turno de grupo) muere"
 else bad "huerfanos de grupo no detectados (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
-# (s) y una familia PREFIJO separada en el otro turno: sus tests correrian DOS veces
+# (s) Construct the same prefix overlap between shards of a workspace group.
 stage
 python3 - "${SPEC}" <<'PY'
 import json, sys
@@ -293,20 +287,18 @@ p = sys.argv[1]
 d = json.load(open(p, encoding="utf-8"))
 for g in d["groups"]:
     sh = g.get("shards")
-    if not sh:
+    if not sh or len(sh) < 2:
         continue
-    for f in list(sh[0]["families"]):
-        for h in sh[0]["families"]:
-            if h != f and h.startswith(f):
-                sh[0]["families"].remove(h)
-                sh[1]["families"].append(h)
-                json.dump(d, open(p, "w", encoding="utf-8"))
-                sys.exit(0)
-raise SystemExit("no encontre un par prefijo en un turno de grupo")
+    for f in sh[0]["families"]:
+        if len(f) > 1:
+            sh[1]["families"].append(f[:-1])
+            json.dump(d, open(p, "w", encoding="utf-8"))
+            sys.exit(0)
+raise SystemExit("no group family can form a nonempty proper prefix")
 PY
 run check
-if [ "$(rc)" = 1 ] && errhas "caen en DOS turnos"; then ok "mutante (prefijo separado entre turnos de grupo) muere"
-else bad "el doble conteo de grupo pasó (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
+if [ "$(rc)" = 1 ] && errhas "caen en DOS turnos"; then ok "mutant (overlapping prefix in another group shard) rejected for duplicate ownership"
+else bad "group duplicate ownership passed (rc=$(rc): $(head -1 "${TMP}/err"))"; fi
 
 # (t) un grupo cuyo `go_timeout_minutes` se pasa del techo del PASO. Sin la guarda por grupo el
 #     campo seria decoracion: el reloj del paso mata al job antes de que Go diga por que, y se

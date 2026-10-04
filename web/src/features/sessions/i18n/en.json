@@ -84,6 +84,10 @@
     "title": "No sessions yet",
     "description": "Sessions appear here as soon as agents start working — the ones Olivares discovers through its connectors, and the ones you launch from this screen."
   },
+  "filtered": {
+    "title": "No sessions match these filters",
+    "description": "Clear the filters to show your sessions."
+  },
   "forbidden": {
     "title": "Sessions not authorized",
     "description": "Your role does not include permission to view live sessions."

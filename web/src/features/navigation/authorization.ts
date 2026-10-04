@@ -41,6 +41,7 @@ import {
   type NormalizedCapabilityQuestion,
 } from '@/lib/auth/capabilities'
 import { useAuth } from '@/lib/auth/context'
+import type { ViewGate } from '@/features/navigation/model'
 import { moduleEnabled, useModulesStore } from '@/stores/modules'
 import { useWorkspaceStore } from '@/stores/workspace'
 
@@ -53,9 +54,6 @@ import { useWorkspaceStore } from '@/stores/workspace'
  *                 and it is never rendered as a refusal.
  */
 export type ViewAccessState = 'allowed' | 'denied' | 'unknown'
-
-/** The predicate every navigation projection consumes. */
-export type ViewGate = (view: FeatureView) => boolean
 
 export interface ViewAccess {
   /** The established answer for one view. */
@@ -130,9 +128,14 @@ export function useViewAccess(): ViewAccess {
     // route says so plainly (RequirePermission).
     return {
       state,
-      navigable: (view) =>
+      // A section is asked with its own literal permission, never as a copy of its view: a
+      // copy hides the view's permission and capability from the census.
+      navigable: (view, section) =>
         state(view) !== 'denied' &&
-        moduleEnabled(modulesOff, view.permission, view.id),
+        moduleEnabled(modulesOff, view.permission, view.id) &&
+        (!section ||
+          (can(section.requires) &&
+            moduleEnabled(modulesOff, section.requires, view.id))),
     }
   }, [can, observation.access, modulesOff])
 }

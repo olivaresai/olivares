@@ -85,6 +85,10 @@
     "title": "Aucune session pour l’instant",
     "description": "Les sessions apparaissent ici dès que les agents commencent à travailler : celles qu’Olivares découvre via ses connecteurs et celles que vous lancez depuis cet écran."
   },
+  "filtered": {
+    "title": "Aucune session ne correspond à ces filtres",
+    "description": "Effacez les filtres pour afficher vos sessions."
+  },
   "forbidden": {
     "title": "Sessions non autorisées",
     "description": "Votre rôle n’inclut pas la permission de consulter les sessions en direct."

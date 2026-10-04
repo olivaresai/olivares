@@ -239,6 +239,29 @@ TENANT="$(printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf -X POST "$BASE
 [ -n "$TENANT" ] || fail "could not create the production tenant"
 note "production tenant: $TENANT"
 
+# Match the ordinary-install guide: optional modules are selected explicitly.
+note "PATH B: enable Access Map and wait for the module-selection restart"
+api_get '/v1/console/modules' | python3 -c '
+import json,sys
+modules=json.load(sys.stdin)["modules"]
+selected=[m["name"] for m in modules if m["selected"]]
+if "accessmap" not in selected: selected.append("accessmap")
+json.dump({"selected":selected},sys.stdout)' > "$WORK/modules.json"
+printf 'Authorization: Bearer %s\n' "$TOKEN" | curl -sf --max-time 10 \
+  -X PUT "$BASE/v1/console/modules" -H @- -H 'Content-Type: application/json' \
+  --data-binary @"$WORK/modules.json" >/dev/null || fail "could not enable Access Map"
+ACCESSMAP_RUNNING=""
+for _ in $(seq 1 240); do
+  if api_get '/v1/console/modules' 2>/dev/null | python3 -c '
+import json,sys
+sys.exit(not any(m["name"]=="accessmap" and m["running"]
+                 for m in json.load(sys.stdin)["modules"]))' 2>/dev/null; then
+    ACCESSMAP_RUNNING=1; break
+  fi
+  sleep 0.5
+done
+[ -n "$ACCESSMAP_RUNNING" ] || fail "Access Map never became running after restart"
+
 kill "$PID" 2>/dev/null || true; wait "$PID" 2>/dev/null || true; PID=""
 
 note "PATH B: restart with the pgAudit connector wired (OLIVARES_SOURCES_CONFIG)"

@@ -89,3 +89,43 @@ func TestReportingSigningUsesSystemRoutesAndRejectsInvalidUpdates(t *testing.T) 
 		t.Fatal("signing documentation does not match the strict enabled decoder")
 	}
 }
+
+func TestReportingSigningBodyLimitAndTrailingRefusals(t *testing.T) {
+	body := `{"enabled":true}`
+	for _, tc := range []struct {
+		name, body, message string
+		status              int
+	}{
+		{"exact limit", body + strings.Repeat(" ", 1024-len(body)), "", http.StatusOK},
+		{"over limit", body + strings.Repeat(" ", 1025-len(body)), "Send one signing setting.", http.StatusBadRequest},
+		{"second document", body + `{}`, "Send one signing setting.", http.StatusBadRequest},
+		{"malformed tail", body + `]`, "Send one signing setting.", http.StatusBadRequest},
+		{"missing choice precedes tail", `{}]`, "Choose whether report signing is enabled.", http.StatusBadRequest},
+		{"unknown field", `{"enabled":true,"other":false}`, "Choose whether report signing is enabled.", http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			source := &managedSigningSource{}
+			m := New(WithEnterpriseReports(source))
+			rec := httptest.NewRecorder()
+			m.handleSetSigning(rec, httptest.NewRequest(http.MethodPut, "/signing", strings.NewReader(tc.body)), api.ModuleContext{})
+			if rec.Code != tc.status {
+				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+			}
+			if tc.status == http.StatusOK {
+				if source.writes != 1 || !source.status.Enabled {
+					t.Fatal("valid signing choice was not applied")
+				}
+				return
+			}
+			var response struct {
+				Error struct{ Message string } `json:"error"`
+			}
+			if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
+				t.Fatal(err)
+			}
+			if source.writes != 0 || response.Error.Message != tc.message {
+				t.Fatalf("refusal changed or wrote signing state: writes=%d body=%s", source.writes, rec.Body.String())
+			}
+		})
+	}
+}

@@ -179,7 +179,11 @@ TENANT="$(curl -sf -X POST "$BASE/v1/system/orgs" -H "Authorization: Bearer $TOK
   -H 'Content-Type: application/json' -d '{"name":"Production","slug":"prod"}' \
   | python3 -c 'import sys,json;print(json.load(sys.stdin)["tenant_id"])')"
 echo "tenant: $TENANT"
+```
 
+Turn on Access Map in the console (keep the other modules on) and wait for the engine to restart.
+
+```bash
 kill "$SERVER"                  # stop the first-run server; we restart it with pgAudit wired
 ```
 

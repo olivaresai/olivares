@@ -5,9 +5,7 @@
 package reporting
 
 import (
-	"encoding/json"
 	"errors"
-	"io"
 	"net/http"
 
 	"github.com/olivaresai/olivares/core/api"
@@ -60,16 +58,12 @@ func (m *Module) handleSetSigning(w http.ResponseWriter, r *http.Request, mc api
 	var input struct {
 		Enabled *bool `json:"enabled"`
 	}
-	r.Body = http.MaxBytesReader(w, r.Body, 1024)
-	decoder := json.NewDecoder(r.Body)
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&input); err != nil || input.Enabled == nil {
-		writeError(w, http.StatusBadRequest, "Choose whether report signing is enabled.")
-		return
-	}
-	var trailing any
-	if err := decoder.Decode(&trailing); err != io.EOF {
-		writeError(w, http.StatusBadRequest, "Send one signing setting.")
+	if err := api.DecodeRequestBody(w, r, &input, api.RequestBodySpec{MaxBytes: 1024}); err != nil || input.Enabled == nil {
+		message := "Choose whether report signing is enabled."
+		if input.Enabled != nil && errors.Is(err, api.ErrTrailingJSON) {
+			message = "Send one signing setting."
+		}
+		writeError(w, http.StatusBadRequest, message)
 		return
 	}
 	manager, ok := m.enterprise.(SigningManager)

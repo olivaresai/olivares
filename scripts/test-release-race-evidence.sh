@@ -111,9 +111,14 @@ check "the step is extracted from the workflow and starts with set -euo pipefail
 # `uses:` above it: the job that runs this step checks out FULL history, which is what makes
 # "the clone is shallow" a defect rather than the configured state. If someone sets a depth on
 # that checkout, the refusal below starts firing on every release and this row says why.
-_ck_line="$(command grep -n '      - uses: actions/checkout@' "$WF_REAL" | head -2 | tail -1 | cut -d: -f1)"
-[ -n "$_ck_line" ] && _ck_with="$(command sed -n "$((_ck_line + 1)),$((_ck_line + 3))p" "$WF_REAL")" &&
-	command grep -q 'fetch-depth: 0' <<<"$_ck_with"
+_ck_with="$(awk -v step="      - name: $STEP_NAME" '
+	/^  [a-zA-Z0-9_-]+:$/ { checkout = ""; collecting = 0 }
+	/^      - / { collecting = 0 }
+	/^(      - |        )uses: actions\/checkout@/ { checkout = ""; collecting = 1 }
+	collecting { checkout = checkout $0 "\n" }
+	$0 == step { printf "%s", checkout; exit }
+' "$WF_REAL")"
+command grep -qE '^          fetch-depth: 0([[:space:]]|$)' <<<"$_ck_with"
 check "the job that runs this step checks out full history" "fetch-depth: 0" $?
 
 # --- stub gh ------------------------------------------------------------------------------------

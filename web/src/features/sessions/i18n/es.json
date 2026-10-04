@@ -85,6 +85,10 @@
     "title": "Todavía no hay sesiones",
     "description": "Las sesiones aparecen aquí en cuanto los agentes empiezan a trabajar: las que Olivares descubre por sus conectores y las que lances desde esta pantalla."
   },
+  "filtered": {
+    "title": "Ninguna sesión coincide con estos filtros",
+    "description": "Quita los filtros para ver tus sesiones."
+  },
   "forbidden": {
     "title": "Sesiones no autorizadas",
     "description": "Tu rol no incluye permiso para ver las sesiones en vivo."

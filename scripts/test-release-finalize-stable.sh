@@ -1667,7 +1667,7 @@ check "a relative OLIVARES_COSIGN_BIN refuses" "a name is not an authenticated b
 # that is not the expected one does not verify — so these rows measure the anchor rather than
 # an exit code.
 # ============================================================================================
-PROD_ID='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/26\.9\.0$'
+PROD_ID='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/26\.11$'
 build_release_state || blind "fixture"
 run_finalizer COSIGN_EXPECT_IDENTITY="$PROD_ID"
 [ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ]
@@ -1705,7 +1705,7 @@ REPO="$PREPROD_REPO"
 build_release_state || blind "preprod fixture"
 run_finalizer GITHUB_REPOSITORY="$PREPROD_REPO" OLIVARES_RELEASE_PROFILE=preprod \
 	OLIVARES_PREPROD_MAKE_LATEST=false \
-	COSIGN_EXPECT_IDENTITY='^https://github\.com/acme/product-preprod/\.github/workflows/release\.yml@refs/tags/26\.9\.0$'
+	COSIGN_EXPECT_IDENTITY='^https://github\.com/acme/product-preprod/\.github/workflows/release\.yml@refs/tags/26\.11$'
 [ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ]
 check "the PREPROD profile completes under ITS OWN derived identity" "both supported profiles" $?
 command grep -qF -- "--source-uri github.com/${PREPROD_REPO}" "$WORK/slsa.log.$n"
@@ -1716,7 +1716,7 @@ for _policy in false legacy; do
 	build_release_state || blind "preprod fixture"
 	run_finalizer GITHUB_REPOSITORY="$PREPROD_REPO" OLIVARES_RELEASE_PROFILE=preprod \
 		OLIVARES_PREPROD_MAKE_LATEST="$_policy" GH_ORIGIN_STATUS=503 \
-		COSIGN_EXPECT_IDENTITY='^https://github\.com/acme/product-preprod/\.github/workflows/release\.yml@refs/tags/26\.9\.0$'
+		COSIGN_EXPECT_IDENTITY='^https://github\.com/acme/product-preprod/\.github/workflows/release\.yml@refs/tags/26\.11$'
 	[ "$rc" -eq 0 ] && [ "$(patch_count)" -eq 1 ] &&
 		! command grep -qF -- "repos/${PREPROD_REPO}/releases/latest" "$WORK/gh.log.$n"
 	check "preprod $_policy preserves its explicit pointer policy" "no latest read or successor claim" $?
