@@ -126,7 +126,7 @@ RUN FIPS_JSON="$(GODEBUG=fips140=on /out/olivares version -o json)" && \
 
 # ---- runtime: retain UBI 9 for the matching RHEL STIG/SCAP profile ------------
 # The official Node binary supports glibc >= 2.28; UBI 9 provides glibc 2.34.
-FROM node:24-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe AS node-runtime
+FROM node:26-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1 AS node-runtime
 FROM registry.access.redhat.com/ubi9/ubi-minimal:9.8@sha256:1d7c5517a4a1a8e2688620b39ee980e82505ca1ab7ae5541b5463120ae9b3897
 # hadolint ignore=DL3041
 RUN microdnf install -y --setopt=install_weak_deps=0 \

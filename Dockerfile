@@ -61,7 +61,7 @@ RUN BUILD_DATE="$(date -u -d "@${SOURCE_DATE_EPOCH}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/
 # ---- final stage: non-root agent runtime ----------------------------------
 # Runtime support only; agent CLIs are installed by Olivares into the data volume.
 # Node 24 is LTS; this official image uses Debian 13 (trixie) and includes npm/npx.
-FROM node:24-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe
+FROM node:26-trixie-slim@sha256:ec7758ee051e457b468b32bde57b0879010b325bb9862718e9615225ce4aaae1
 # hadolint ignore=DL3008
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates git python3 python3-venv \
