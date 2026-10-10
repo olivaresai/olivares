@@ -330,7 +330,7 @@
     "send": "Send",
     "turnPlaceholder": "Send a sentence…",
     "turnAria": "Session turn",
-    "attachedWaiting": "Waiting for you",
+    "attachedWaiting": "Needs you",
     "advanced": "Advanced",
     "advancedHint": "Send one NDJSON line to stdin. The sentence field is the default.",
     "wirePlaceholder": "Send an NDJSON line to stdin…",

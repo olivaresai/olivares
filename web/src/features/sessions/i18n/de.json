@@ -28,8 +28,8 @@
   "untitled": "Unbenannte Sitzung",
   "allStates": "Alle Zustände",
   "summary": {
-    "active": "Aktiv",
-    "idle": "Inaktiv",
+    "active": "Läuft",
+    "idle": "Untätig",
     "silentEvasion": "Mögliche Umgehung",
     "sessions_one": "{{n}} Sitzung",
     "sessions_other": "{{n}} Sitzungen",
@@ -51,8 +51,8 @@
     "instanceUnknown": "Name des Anbieterprofils nicht bekannt"
   },
   "state": {
-    "active": "Aktiv",
-    "idle": "Inaktiv",
+    "active": "Läuft",
+    "idle": "Untätig",
     "ended": "Beendet",
     "silent_evasion": "Mögliche Umgehung"
   },
@@ -239,7 +239,7 @@
   "runState": {
     "pending": "Ausstehend",
     "running": "Läuft",
-    "idle": "Inaktiv",
+    "idle": "Läuft",
     "stopped": "Gestoppt",
     "failed": "Fehlgeschlagen",
     "cleaned": "Aufgeräumt"
@@ -352,6 +352,14 @@
     "workHint": "Für den letzten Start aufgezeichnet. Jede Aktion prüft die aktuelle Berechtigung.",
     "processState": "Prozesszustand",
     "activityState": "Aktivität",
+    "lifecycle": {
+      "pending": "Ausstehend",
+      "running": "Läuft",
+      "idle": "Inaktiv",
+      "stopped": "Gestoppt",
+      "failed": "Fehlgeschlagen",
+      "cleaned": "Bereinigt"
+    },
     "toolMode": "Modus laut Werkzeug",
     "workRole": "Erteilte Rolle",
     "workWorkspace": "Arbeitsbereich",
@@ -471,7 +479,7 @@
     "group": {
       "attention": "Braucht Sie",
       "active": "Läuft",
-      "settled": "Untätig"
+      "settled": "Früher"
     },
     "more": "Mehr",
     "back": "Zurück zu den Sitzungen",

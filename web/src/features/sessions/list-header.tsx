@@ -60,7 +60,7 @@ export function SessionsListHeader({
 }: {
   /** Sessions in the list; nothing is printed at zero. */
   count: number
-  /** The count in words ("12 sessions · 3 running"), for the hover and the reader. */
+  /** The count in words ("12 sessions · 3 working"), for the hover and the reader. */
   countLabel: string
   /** Starts a session; absent when this person may not (or the empty list says it). */
   onNew?: (event: { currentTarget: HTMLElement }) => void

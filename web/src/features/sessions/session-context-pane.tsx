@@ -304,7 +304,7 @@ export function SessionContextPane({
                 className="text-caption"
               >
                 {run?.process_state
-                  ? t(`agentops:state.${run.process_state}`, {
+                  ? t(`context.lifecycle.${run.process_state}`, {
                       defaultValue: run.process_state,
                     })
                   : t('context.notRecorded')}
@@ -316,7 +316,7 @@ export function SessionContextPane({
                 className="text-caption"
               >
                 {run?.state
-                  ? t(`agentops:state.${run.state}`, {
+                  ? t(`context.lifecycle.${run.state}`, {
                       defaultValue: run.state,
                     })
                   : t('context.notRecorded')}

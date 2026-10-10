@@ -37,6 +37,40 @@ func (b hookProjectionBus) Publish(ctx context.Context, e event.Event) error {
 	return b.rt.Ingest(ctx, e.Tenant, e.Source, e.Payload.(sdkmodel.Observation))
 }
 
+// assertManagedFinopsSpend checks the FinOps spend route per edition: Business serves the
+// session bucket; Community answers 501 (modules/finops/edition_noenterprise.go), so its
+// canonical session cost is proved by the core cost ledger in the caller.
+func assertManagedFinopsSpend(t *testing.T, h *harness, sessionRef string, wantCost int64) {
+	t.Helper()
+	if thisEdition.name != "enterprise" {
+		if code, _ := h.req(http.MethodGet, "/v1/m/finops/spend?dimension=session", h.adminToken, h.tenantA, nil); code != http.StatusNotImplemented {
+			t.Fatalf("Community finops spend=%d; want 501", code)
+		}
+		return
+	}
+	deadline := time.Now().Add(3 * time.Second)
+	for {
+		var spend struct {
+			Buckets []struct {
+				Key  string `json:"key"`
+				Cost int64  `json:"cost_micro_usd"`
+			} `json:"buckets"`
+		}
+		if code := h.reqInto(http.MethodGet, "/v1/m/finops/spend?dimension=session", h.adminToken, h.tenantA, nil, &spend); code != http.StatusOK {
+			t.Fatalf("finops=%d", code)
+		}
+		for _, bucket := range spend.Buckets {
+			if bucket.Key == sessionRef && bucket.Cost == wantCost {
+				return
+			}
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("FinOps did not receive canonical session cost: %+v", spend)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+}
+
 func TestSessionClaudeHookUpdatesOnlyManagedLiveRow(t *testing.T) {
 	h := newHarness(t)
 	m := h.set.sessions
@@ -154,31 +188,7 @@ func TestSessionClaudeHookUpdatesOnlyManagedLiveRow(t *testing.T) {
 		}
 	}
 	assertManaged(17, 2)
-	deadline = time.Now().Add(3 * time.Second)
-	for {
-		var spend struct {
-			Buckets []struct {
-				Key  string `json:"key"`
-				Cost int64  `json:"cost_micro_usd"`
-			} `json:"buckets"`
-		}
-		if code := h.reqInto(http.MethodGet, "/v1/m/finops/spend?dimension=session", h.adminToken, h.tenantA, nil, &spend); code != http.StatusOK {
-			t.Fatalf("finops=%d", code)
-		}
-		found := false
-		for _, bucket := range spend.Buckets {
-			if bucket.Key == scope.SessionRef && bucket.Cost == 17 {
-				found = true
-			}
-		}
-		if found {
-			break
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("FinOps did not receive canonical session cost: %+v", spend)
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
+	assertManagedFinopsSpend(t, h, scope.SessionRef, 17)
 	assertAttemptCost := func(wantRows int) string {
 		t.Helper()
 		var dto struct {

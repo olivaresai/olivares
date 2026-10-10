@@ -37,7 +37,7 @@
     },
     "sessions": {
       "label": "Live-Sitzungen",
-      "caption": "{{idle}} jetzt inaktiv",
+      "caption": "{{idle}} jetzt untätig",
       "silent": "{{count}} verstummt (mögliche Umgehung)"
     },
     "security": {

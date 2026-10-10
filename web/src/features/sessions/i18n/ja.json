@@ -28,8 +28,8 @@
   "untitled": "無題のセッション",
   "allStates": "すべての状態",
   "summary": {
-    "active": "アクティブ",
-    "idle": "アイドル",
+    "active": "実行中",
+    "idle": "待機中",
     "silentEvasion": "回避の可能性",
     "sessions_other": "{{n}} 件のセッション",
     "running": "{{n}} 件実行中"
@@ -50,8 +50,8 @@
     "instanceUnknown": "プロバイダープロファイル名は不明"
   },
   "state": {
-    "active": "アクティブ",
-    "idle": "アイドル",
+    "active": "実行中",
+    "idle": "待機中",
     "ended": "終了",
     "silent_evasion": "回避の可能性"
   },
@@ -238,7 +238,7 @@
   "runState": {
     "pending": "保留中",
     "running": "実行中",
-    "idle": "アイドル",
+    "idle": "実行中",
     "stopped": "停止",
     "failed": "失敗",
     "cleaned": "クリーンアップ済み"
@@ -347,6 +347,14 @@
     "workHint": "最後の起動時の記録です。各操作は現在の権限を確認します。",
     "processState": "プロセスの状態",
     "activityState": "アクティビティ",
+    "lifecycle": {
+      "pending": "保留中",
+      "running": "実行中",
+      "idle": "アイドル",
+      "stopped": "停止",
+      "failed": "失敗",
+      "cleaned": "クリーンアップ済み"
+    },
     "toolMode": "ツールが報告するモード",
     "workRole": "付与された役割",
     "workWorkspace": "作業ワークスペース",
@@ -464,7 +472,7 @@
     "group": {
       "attention": "対応が必要",
       "active": "実行中",
-      "settled": "待機中"
+      "settled": "以前"
     },
     "more": "その他",
     "back": "セッションに戻る",

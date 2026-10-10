@@ -15,7 +15,7 @@
   "state": {
     "pending": "En attente",
     "running": "En cours",
-    "idle": "Inactive",
+    "idle": "En cours",
     "stopped": "Arrêtée",
     "failed": "Échec",
     "cleaned": "Nettoyée"
@@ -49,7 +49,7 @@
   "summary": {
     "total": "Total",
     "running": "En cours",
-    "idle": "Inactives",
+    "idle": "Inactive",
     "stopped": "Arrêtées"
   },
   "allStates": "Tous les états",

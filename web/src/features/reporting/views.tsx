@@ -2,4 +2,4 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 import type { ViewEntry } from '@/features/registry'
 
-export const VIEWS: readonly ViewEntry[] = Object.freeze([])
+export const VIEWS: readonly ViewEntry[] = []

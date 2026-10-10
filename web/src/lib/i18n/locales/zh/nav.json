@@ -330,7 +330,7 @@
     "send": "发送",
     "turnPlaceholder": "发送一句话…",
     "turnAria": "会话回合",
-    "attachedWaiting": "等待你",
+    "attachedWaiting": "需要你处理",
     "advanced": "高级",
     "advancedHint": "向 stdin 发送一行 NDJSON。默认是句子栏。",
     "wirePlaceholder": "向 stdin 发送一行 NDJSON…",

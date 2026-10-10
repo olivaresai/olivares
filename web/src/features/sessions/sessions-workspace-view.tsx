@@ -288,7 +288,10 @@ interface Selection {
 // cc_state; the run states are the runtime's stored lifecycle. They are prefixed
 // because they are different vocabularies that share words ("idle" means "quiet within
 // tolerance" on one side and "no recent activity, process alive" on the other), and
-// collapsing them would filter for a state the operator did not choose.
+// collapsing them would filter for a state the operator did not choose. The run half is a
+// LIFECYCLE control, so it spells the lifecycle words (`context.lifecycle`): the chip's
+// `runState` says Working for a running AND an idle run, which would list two options
+// under one label.
 //
 // The run half is here because `/agentops` HAD it (origin/main
 // web/src/features/agentops/agentops-view.tsx:36-45) and a unified screen that could no
@@ -1782,7 +1785,9 @@ function Inner({
                         ))}
                         {RUN_STATES.map((s) => (
                           <SelectItem key={`run:${s}`} value={`run:${s}`}>
-                            {t('facet.run', { state: t(`runState.${s}`) })}
+                            {t('facet.run', {
+                              state: t(`context.lifecycle.${s}`),
+                            })}
                           </SelectItem>
                         ))}
                       </SelectContent>

@@ -28,7 +28,7 @@
   "untitled": "未命名会话",
   "allStates": "所有状态",
   "summary": {
-    "active": "活跃",
+    "active": "运行中",
     "idle": "空闲",
     "silentEvasion": "可能存在规避",
     "sessions_other": "{{n}} 个会话",
@@ -50,7 +50,7 @@
     "instanceUnknown": "提供方配置名称未知"
   },
   "state": {
-    "active": "活跃",
+    "active": "运行中",
     "idle": "空闲",
     "ended": "已结束",
     "silent_evasion": "可能存在规避"
@@ -238,7 +238,7 @@
   "runState": {
     "pending": "待启动",
     "running": "运行中",
-    "idle": "空闲",
+    "idle": "运行中",
     "stopped": "已停止",
     "failed": "失败",
     "cleaned": "已清理"
@@ -347,6 +347,14 @@
     "workHint": "记录于上次启动。每项操作都会检查当前授权。",
     "processState": "进程状态",
     "activityState": "活动",
+    "lifecycle": {
+      "pending": "待处理",
+      "running": "运行中",
+      "idle": "空闲",
+      "stopped": "已停止",
+      "failed": "已失败",
+      "cleaned": "已清理"
+    },
     "toolMode": "工具报告的模式",
     "workRole": "授予的角色",
     "workWorkspace": "工作空间",
@@ -464,7 +472,7 @@
     "group": {
       "attention": "需要你处理",
       "active": "运行中",
-      "settled": "空闲"
+      "settled": "更早"
     },
     "more": "更多",
     "back": "返回会话",

@@ -2501,8 +2501,17 @@ func (b *bootState) buildAPI(ctx context.Context) (err error) {
 	// no license state — valid, expired or absent — changes that. The wiring stays so
 	// the enterprise overlay keeps its injection point and the console keeps its
 	// (usage-only) figure. Set once here, before the server is built — race-free.
-	// The overlay binds all license consumers here, from the same live holder.
-	b.authr.WithSeatPolicy(thisEdition.seatPolicy(licHolder, crlViewFromDataDir(b.cfg.DataDir)))
+	// The overlay binds all license consumers here, from the same live holder. A
+	// policy that owns process-scoped state ends it with this engine: it is closed
+	// with the other edition resources, on Close or on a failed boot, so a command
+	// that boots one engine after another in a process (dr drill) never has two
+	// live at once. It goes first so it closes last: the other resources shut down
+	// while the engine's license state is still published.
+	seats := thisEdition.seatPolicy(licHolder, crlViewFromDataDir(b.cfg.DataDir))
+	if c, ok := seats.(io.Closer); ok {
+		b.editionResources = append([]io.Closer{c}, b.editionResources...)
+	}
+	b.authr.WithSeatPolicy(seats)
 
 	// Login enforcement: require-SSO + network/IP allow-list over the login
 	// surface. The default (AGPL) build wires nil (no loginPolicy port → no enforcement,

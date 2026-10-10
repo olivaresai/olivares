@@ -15,7 +15,7 @@
   "state": {
     "pending": "待处理",
     "running": "运行中",
-    "idle": "空闲",
+    "idle": "运行中",
     "stopped": "已停止",
     "failed": "已失败",
     "cleaned": "已清理"

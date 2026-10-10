@@ -15,7 +15,7 @@
   "state": {
     "pending": "保留中",
     "running": "実行中",
-    "idle": "アイドル",
+    "idle": "実行中",
     "stopped": "停止",
     "failed": "失敗",
     "cleaned": "クリーンアップ済み"
@@ -49,7 +49,7 @@
   "summary": {
     "total": "合計",
     "running": "実行中",
-    "idle": "アイドル",
+    "idle": "待機中",
     "stopped": "停止"
   },
   "allStates": "すべての状態",

@@ -41,7 +41,7 @@ func bootedEngineForLogWiring(t *testing.T) *engine {
 	if err != nil {
 		t.Fatalf("boot: %v", err)
 	}
-	t.Cleanup(func() { _ = eng.store.Close() })
+	t.Cleanup(func() { _ = eng.Close() })
 	if eng.logBroker == nil {
 		t.Fatal("boot did not build a log broker; the console log surface is unwired")
 	}

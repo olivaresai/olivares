@@ -330,7 +330,7 @@
     "send": "Enviar",
     "turnPlaceholder": "Envía una frase…",
     "turnAria": "Turno de la sesión",
-    "attachedWaiting": "Te espera",
+    "attachedWaiting": "Te necesita",
     "advanced": "Avanzado",
     "advancedHint": "Envía una línea NDJSON a stdin. El campo de frase es el valor por defecto.",
     "wirePlaceholder": "Envía una línea NDJSON a stdin…",

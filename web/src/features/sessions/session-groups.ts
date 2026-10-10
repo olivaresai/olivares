@@ -18,7 +18,7 @@
 //    that decided "this one needs you" from elapsed time would be inventing the one
 //    thing the operator is reading it for.
 //
-// ⛔ AND "WAITING FOR YOU" IS NOT "SOMETHING IS WRONG". A failed run and a provider
+// ⛔ AND "NEEDS YOU" IS NOT "SOMETHING IS WRONG". A failed run and a provider
 //    asking to be logged in are both work FOR A PERSON; a session that went quiet
 //    within tolerance is not. Collapsing the two would make the group the operator is
 //    supposed to trust the one they learn to ignore.

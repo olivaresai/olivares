@@ -175,7 +175,7 @@ describe('thread header — one line', () => {
     renderThread()
     const h = header()
     expect(h.className).toContain('h-12')
-    expect(within(h).getByRole('img', { name: 'Running' })).toBeTruthy()
+    expect(within(h).getByRole('img', { name: 'Working' })).toBeTruthy()
     expect(within(h).getByRole('heading', { level: 2 })).toHaveTextContent(
       'calc-review',
     )

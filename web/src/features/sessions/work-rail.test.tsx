@@ -121,7 +121,7 @@ describe('WorkRail — what a row says', () => {
       expect.arrayContaining(['h-14', 'min-[761px]:h-[52px]']),
     )
     // The state is a dot with the state's word as its name; the time is whole.
-    expect(within(rowEl).getByRole('img', { name: 'Running' })).toBeTruthy()
+    expect(within(rowEl).getByRole('img', { name: 'Working' })).toBeTruthy()
     const age = rowEl.querySelector('time')
     expect(age).not.toBeNull()
     expect(age!.className.split(/\s+/)).toEqual(
@@ -171,7 +171,7 @@ describe('WorkRail — what a row says', () => {
     // ⛔ ONE LINE. The row used to paint the name, then the state with an
     //    elapsed time, then the observed clause — three lines, 92 px measured in a real
     //    browser, in a 256 px rail. What an operator picks a row BY stays painted:
-    expect(within(first).getByRole('img', { name: 'Active' })).toBeTruthy()
+    expect(within(first).getByRole('img', { name: 'Working' })).toBeTruthy()
     // …and the NAME is what the session is doing, never its reference. `sess-a` was
     // the second rung of the old label, so a rail of discovered sessions read as six
     // machine ids. The reference is on the name's own `title`.
@@ -292,20 +292,20 @@ describe('WorkRail — what a row says', () => {
     renderRail({ sessions: [working] })
     expect(screen.getByText('Working')).toBeInTheDocument()
     expect(screen.queryByText('Needs you')).toBeNull()
-    expect(screen.queryByText('Idle')).toBeNull()
+    expect(screen.queryByText('Earlier')).toBeNull()
     // No sentence stands in for a group that has no rows.
     expect(screen.queryByText(/Nothing is waiting for you/)).toBeNull()
     expect(screen.queryByText(/No session has settled yet/)).toBeNull()
     expect(screen.getByRole('group', { name: /^Working\s*1$/ })).toBeTruthy()
   })
 
-  it('lists Needs you first, then Working, then Idle', () => {
+  it('lists Needs you first, then Working, then Earlier', () => {
     renderRail()
     const names = screen
       .getAllByRole('group')
       .map((g) => g.getAttribute('aria-labelledby'))
       .map((id) => document.getElementById(id as string)?.textContent)
-    expect(names).toEqual(['Needs you 1', 'Working 1', 'Idle 1'])
+    expect(names).toEqual(['Needs you 1', 'Working 1', 'Earlier 1'])
     expect(rows().map((r) => r.getAttribute('data-address'))).toEqual([
       'live:lr-b',
       'live:lr-a',

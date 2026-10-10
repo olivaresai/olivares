@@ -14,8 +14,8 @@
   },
   "state": {
     "pending": "Pending",
-    "running": "Running",
-    "idle": "Idle",
+    "running": "Working",
+    "idle": "Working",
     "stopped": "Stopped",
     "failed": "Failed",
     "cleaned": "Cleaned"
@@ -48,7 +48,7 @@
   },
   "summary": {
     "total": "Total",
-    "running": "Running",
+    "running": "Working",
     "idle": "Idle",
     "stopped": "Stopped"
   },

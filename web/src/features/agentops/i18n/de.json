@@ -15,7 +15,7 @@
   "state": {
     "pending": "Ausstehend",
     "running": "Läuft",
-    "idle": "Inaktiv",
+    "idle": "Läuft",
     "stopped": "Gestoppt",
     "failed": "Fehlgeschlagen",
     "cleaned": "Bereinigt"
@@ -49,7 +49,7 @@
   "summary": {
     "total": "Gesamt",
     "running": "Läuft",
-    "idle": "Inaktiv",
+    "idle": "Untätig",
     "stopped": "Gestoppt"
   },
   "allStates": "Alle Zustände",

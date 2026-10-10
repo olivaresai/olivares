@@ -28,8 +28,8 @@
   "untitled": "Session sans titre",
   "allStates": "Tous les états",
   "summary": {
-    "active": "Actif",
-    "idle": "Inactif",
+    "active": "En cours",
+    "idle": "Inactive",
     "silentEvasion": "Évasion possible",
     "sessions_one": "{{n}} session",
     "sessions_many": "{{n}} sessions",
@@ -52,9 +52,9 @@
     "instanceUnknown": "Nom du profil de fournisseur inconnu"
   },
   "state": {
-    "active": "Actif",
-    "idle": "Inactif",
-    "ended": "Terminé",
+    "active": "En cours",
+    "idle": "Inactive",
+    "ended": "Terminée",
     "silent_evasion": "Évasion possible"
   },
   "stateHint": {
@@ -240,7 +240,7 @@
   "runState": {
     "pending": "En attente",
     "running": "En cours",
-    "idle": "Inactive",
+    "idle": "En cours",
     "stopped": "Arrêtée",
     "failed": "Échouée",
     "cleaned": "Nettoyée"
@@ -357,6 +357,14 @@
     "workHint": "Enregistrée pour le dernier lancement. Chaque action vérifie l’autorisation actuelle.",
     "processState": "État du processus",
     "activityState": "Activité",
+    "lifecycle": {
+      "pending": "En attente",
+      "running": "En cours",
+      "idle": "Inactive",
+      "stopped": "Arrêtée",
+      "failed": "Échec",
+      "cleaned": "Nettoyée"
+    },
     "toolMode": "Mode selon l'outil",
     "workRole": "Rôle accordé",
     "workWorkspace": "Espace de travail autorisé",
@@ -478,7 +486,7 @@
     "group": {
       "attention": "Vous attend",
       "active": "En cours",
-      "settled": "Inactive"
+      "settled": "Plus tôt"
     },
     "more": "Plus",
     "back": "Retour aux sessions",

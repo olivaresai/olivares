@@ -43,5 +43,4 @@
 /session-viewer/$id	-	The full timeline of one recorded session, reached from a row in Recordings rather than from the sidebar.
 /setup	First-run setup	The one-time page that turns a fresh deployment into a usable one: it consumes the setup token and creates the first owner account.
 /status-page	Public status	Component health for people who are not signed in, refreshed on its own while the page is open.
-/team-costs	-	-
 /workspace-templates	-	-

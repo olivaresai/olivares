@@ -367,7 +367,7 @@ function renderView(qc = makeClient()) {
  * The figure the summary reports for one count.
  *
  * ⛔ THE HEADER STATES TWO FIGURES NOW (Root review, 09: counts only):
- *    `2 sessions · 2 running`. The launched, discovered and attention figures and the
+ *    `2 sessions · 2 working`. The launched, discovered and attention figures and the
  *    scope note left the header; a row's origin is still asserted on the row itself.
  *    Every fixture session here is active, so where the run half was read, running
  *    equals the session count. Where the launched half was not read, a launched
@@ -382,8 +382,8 @@ function summaryText(): string {
   return screen.queryByTestId('sessions-summary')?.getAttribute('title') ?? ''
 }
 
-function tileValue(label: 'Sessions' | 'Running'): string | undefined {
-  const whole = label === 'Sessions' ? /^(.+?) sessions?$/ : /^(.+?) running$/
+function tileValue(label: 'Sessions' | 'Working'): string | undefined {
+  const whole = label === 'Sessions' ? /^(.+?) sessions?$/ : /^(.+?) working$/
   for (const segment of summaryText().split('·')) {
     const match = segment.trim().match(whole)
     if (match) return match[1]
@@ -550,7 +550,7 @@ describe('SessionsWorkspaceView — both halves admitted (controls)', () => {
       .toBeInTheDocument()
     expect.soft(tileValue('Sessions'), 'spr-auth/healthy/total-count').toBe('2')
     expect
-      .soft(tileValue('Running'), 'spr-auth/healthy/running-count')
+      .soft(tileValue('Working'), 'spr-auth/healthy/running-count')
       .toBe('2')
     expect
       .soft(
@@ -679,7 +679,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
       .toBe('1')
     expect
       .soft(
-        tileValue('Running'),
+        tileValue('Working'),
         'spr-auth/live-403/running-count-healthy-only',
       )
       .toBe('1')
@@ -787,7 +787,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
     //    left out of the header (no dash: Root review, 09), never stated as `0`.
     expect
       .soft(
-        tileValue('Running'),
+        tileValue('Working'),
         'spr-auth/run-stepup/running-count-not-stated',
       )
       .toBeUndefined()
@@ -874,7 +874,7 @@ describe('SessionsWorkspaceView — one half refused, the other still admitted',
       )
       .not.toBeInTheDocument()
     expect
-      .soft(tileValue('Running'), 'spr-auth/live-5xx/running-count-kept')
+      .soft(tileValue('Working'), 'spr-auth/live-5xx/running-count-kept')
       .toBe('2')
     await user.click(runRow)
     expect
@@ -976,7 +976,7 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
       .soft(tileValue('Sessions'), 'spr-auth/live-bit/total-count-run-only')
       .toBe('1')
     expect
-      .soft(tileValue('Running'), 'spr-auth/live-bit/running-count-one')
+      .soft(tileValue('Working'), 'spr-auth/live-bit/running-count-one')
       .toBe('1')
     expect
       .soft(
@@ -1075,7 +1075,7 @@ describe('SessionsWorkspaceView — a read bit that leaves, and comes back', () 
       )
       .not.toBeInTheDocument()
     expect
-      .soft(tileValue('Running'), 'spr-auth/run-bit/running-count-not-stated')
+      .soft(tileValue('Working'), 'spr-auth/run-bit/running-count-not-stated')
       .toBeUndefined()
     expect
       .soft(tileValue('Sessions'), 'spr-auth/run-bit/total-count-live-only')
@@ -1204,7 +1204,7 @@ describe('SessionsWorkspaceView — a JOINED row loses exactly the half that lef
       .toBe('1')
     expect
       .soft(
-        tileValue('Running'),
+        tileValue('Working'),
         'spr-auth/joined-run-out/running-count-not-stated',
       )
       .toBeUndefined()
@@ -1270,7 +1270,7 @@ describe('SessionsWorkspaceView — a JOINED row loses exactly the half that lef
       .soft(tileValue('Sessions'), 'spr-auth/joined-live-out/total-still-one')
       .toBe('1')
     expect
-      .soft(tileValue('Running'), 'spr-auth/joined-live-out/running-count-one')
+      .soft(tileValue('Working'), 'spr-auth/joined-live-out/running-count-one')
       .toBe('1')
     await user.click(row)
     // Opened by the id the RUN captured (`claude_session_id`), which is the run half's
@@ -2260,7 +2260,7 @@ describe('SessionsWorkspaceView — a stream frame is a hint, never a row', () =
     expect(
       screen.getByTestId('sessions-summary').getAttribute('title'),
       'R3/6/counts-present',
-    ).toMatch(/^\d+ sessions?( · \d+ running)?$/)
+    ).toMatch(/^\d+ sessions?( · \d+ working)?$/)
     expect
       .soft(
         screen.queryByText(/most recent page, not the whole estate/i),

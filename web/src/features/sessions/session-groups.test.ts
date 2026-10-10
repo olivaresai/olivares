@@ -57,7 +57,7 @@ describe('groupOf — membership is a field the engine sent', () => {
     // means quiet within tolerance. The two vocabularies share a word and mean
     // different things, and the rail follows the run: there is a process.
     ['a run is idle but alive', row(undefined, { state: 'idle' })],
-  ])('puts it under Active when %s', (_why, s) => {
+  ])('puts it under Working when %s', (_why, s) => {
     expect(groupOf(s)).toBe('active')
   })
 
@@ -80,7 +80,7 @@ describe('groupOf — membership is a field the engine sent', () => {
         pending_approval_ref: 'apr_2',
       }),
     ],
-  ])('puts it under Waiting for you when %s', (_why, s) => {
+  ])('puts it under Needs you when %s', (_why, s) => {
     expect(groupOf(s)).toBe('attention')
   })
 
@@ -99,7 +99,7 @@ describe('groupOf — membership is a field the engine sent', () => {
         { claude_session_id: 'sess-1', state: 'stopped' },
       ),
     ],
-  ])('puts it under Settled when %s', (_why, s) => {
+  ])('puts it under Earlier when %s', (_why, s) => {
     expect(groupOf(s)).toBe('settled')
   })
 
@@ -142,7 +142,7 @@ describe('groupSessions — the rail in reading order', () => {
   })
 
   it('keeps the three sections and their order', () => {
-    // Needs you, Working, Idle: what asks for the person comes first.
+    // Needs you, Working, Earlier: what asks for the person comes first.
     expect(groupSessions([done, working, asking]).map((g) => g.id)).toEqual([
       'attention',
       'active',

@@ -330,7 +330,7 @@
     "send": "Отправить",
     "turnPlaceholder": "Отправить предложение…",
     "turnAria": "Ход сессии",
-    "attachedWaiting": "Ждёт вас",
+    "attachedWaiting": "Нужны вы",
     "advanced": "Дополнительно",
     "advancedHint": "Отправить одну строку NDJSON в stdin. Поле предложения — значение по умолчанию.",
     "wirePlaceholder": "Отправить строку NDJSON в stdin…",
@@ -362,7 +362,7 @@
       "all": "Все",
       "groups": {
         "needsYou": "Нужны вы",
-        "working": "Выполняются",
+        "working": "Выполняется",
         "earlier": "Ранее"
       },
       "empty": {

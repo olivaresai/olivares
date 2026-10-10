@@ -330,7 +330,7 @@
     "send": "送信",
     "turnPlaceholder": "文を送信…",
     "turnAria": "セッションのターン",
-    "attachedWaiting": "あなたの応答待ち",
+    "attachedWaiting": "対応が必要",
     "advanced": "詳細",
     "advancedHint": "NDJSON 行を stdin に送ります。既定は文の欄です。",
     "wirePlaceholder": "NDJSON 行を stdin に送信…",

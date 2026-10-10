@@ -452,6 +452,22 @@ describe('SessionsWorkspaceView — the third answer', () => {
     expect(screen.getByText('broken')).toBeInTheDocument()
   })
 
+  it('lists every state option under its own label, so two run states are never one word', async () => {
+    // The chip says "Working" for a running AND an idle run (one word per state group);
+    // the filter is a lifecycle control, so the two options it offers must stay apart.
+    const user = userEvent.setup()
+    renderView()
+    await screen.findByText('Untitled session')
+    await user.click(screen.getByLabelText('All states'))
+    const labels = (await screen.findAllByRole('option')).map(
+      (option) => option.textContent,
+    )
+    expect(labels).toEqual(
+      expect.arrayContaining(['Run: Running', 'Run: Idle']),
+    )
+    expect(new Set(labels).size).toBe(labels.length)
+  })
+
   it('says the observed half was not read when live-read is missing', async () => {
     perms.delete('sessions:live:read')
     renderView()
@@ -918,12 +934,12 @@ describe('SessionsWorkspaceView — one chrome row above the work', () => {
     expect(screen.queryByRole('tablist')).toBeNull()
   })
 
-  it('the count is a number, and says sessions and running on its hover (no engine wording)', async () => {
+  it('the count is a number, and says sessions and working on its hover (no engine wording)', async () => {
     renderSurface()
     const summary = await screen.findByTestId('sessions-summary')
     expect(summary.textContent).toMatch(/^\d+$/)
     expect(summary.getAttribute('title')).toMatch(
-      /^\d+ sessions?( · \d+ running)?$/,
+      /^\d+ sessions?( · \d+ working)?$/,
     )
     expect(summary).toHaveAttribute('aria-hidden', 'true')
     expect(
@@ -934,7 +950,7 @@ describe('SessionsWorkspaceView — one chrome row above the work', () => {
     expect(screen.queryByTestId('sessions-scope-note')).toBeNull()
   })
 
-  // CLX via Root: with no sessions the header said "0 sessions · 0 running" above the
+  // CLX via Root: with no sessions the header said "0 sessions · 0 working" above the
   // empty state. The empty state is the whole answer.
   it('with no sessions the header shows no count, only the empty state speaks', async () => {
     vi.mocked(sessionsApi.live).mockResolvedValue({

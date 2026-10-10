@@ -94,7 +94,7 @@ const RUNNING: RunDTO = {
 }
 
 describe('WorkComposer permissions', () => {
-  it('opens the pending approval from Waiting for you', async () => {
+  it('opens the pending approval from Needs you', async () => {
     const user = userEvent.setup()
     const root = createRootRoute({ component: Outlet })
     const session = createRoute({
@@ -119,7 +119,7 @@ describe('WorkComposer permissions', () => {
       history: createMemoryHistory({ initialEntries: ['/'] }),
     })
     renderIntel(<RouterProvider router={router} />)
-    const link = await screen.findByRole('link', { name: 'Waiting for you' })
+    const link = await screen.findByRole('link', { name: 'Needs you' })
     expect(link).toHaveAttribute(
       'href',
       '/permissions?tab=approvals&approval=apr_7',
@@ -156,7 +156,7 @@ describe('WorkComposer permissions', () => {
       history: createMemoryHistory({ initialEntries: ['/'] }),
     })
     renderIntel(<RouterProvider router={router} />)
-    const link = await screen.findByRole('link', { name: 'Waiting for you' })
+    const link = await screen.findByRole('link', { name: 'Needs you' })
     expect(link).toHaveAttribute(
       'href',
       '/permissions?tab=approvals&approval=apr_launch',
@@ -190,8 +190,8 @@ describe('WorkComposer permissions', () => {
     // No status line under the field: without the read permission there is no approval to
     // open, so the composer says nothing of it.
     await screen.findByTestId('composer-send')
-    expect(screen.queryByText('Waiting for you')).toBeNull()
-    expect(screen.queryByRole('link', { name: 'Waiting for you' })).toBeNull()
+    expect(screen.queryByText('Needs you')).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Needs you' })).toBeNull()
   })
 
   it('a running session whose launch was approved does not link the old approval', async () => {
@@ -204,8 +204,8 @@ describe('WorkComposer permissions', () => {
       />,
     )
     await screen.findByTestId('composer-send')
-    expect(screen.queryByText('Waiting for you')).toBeNull()
-    expect(screen.queryByRole('link', { name: 'Waiting for you' })).toBeNull()
+    expect(screen.queryByText('Needs you')).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Needs you' })).toBeNull()
   })
 
   it.each(['governance:approval:read', 'governance:identity:read'])(
@@ -221,8 +221,8 @@ describe('WorkComposer permissions', () => {
         />,
       )
       await screen.findByTestId('composer-send')
-      expect(screen.queryByText('Waiting for you')).toBeNull()
-      expect(screen.queryByRole('link', { name: 'Waiting for you' })).toBeNull()
+      expect(screen.queryByText('Needs you')).toBeNull()
+      expect(screen.queryByRole('link', { name: 'Needs you' })).toBeNull()
     },
   )
 
@@ -355,7 +355,7 @@ describe('WorkComposer layout and disclosure', () => {
     expect(screen.getByTestId('composer-send')).toBeInTheDocument()
     // No status line under the field, and no dashed Send.
     expect(screen.queryByTestId('composer-session-state')).toBeNull()
-    expect(screen.queryByText('Running')).toBeNull()
+    expect(screen.queryByText('Working')).toBeNull()
     expect(screen.getByTestId('composer-send').className).not.toMatch(
       /(^|\s)border-dashed/,
     )

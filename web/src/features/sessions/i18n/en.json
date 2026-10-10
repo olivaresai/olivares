@@ -28,12 +28,12 @@
   "untitled": "Untitled session",
   "allStates": "All states",
   "summary": {
-    "active": "Active",
+    "active": "Working",
     "idle": "Idle",
     "silentEvasion": "Possible evasion",
     "sessions_one": "{{n}} session",
     "sessions_other": "{{n}} sessions",
-    "running": "{{n}} running"
+    "running": "{{n}} working"
   },
   "cols": {
     "session": "Session",
@@ -51,7 +51,7 @@
     "instanceUnknown": "Provider profile name not known"
   },
   "state": {
-    "active": "Active",
+    "active": "Working",
     "idle": "Idle",
     "ended": "Ended",
     "silent_evasion": "Possible evasion"
@@ -238,8 +238,8 @@
   },
   "runState": {
     "pending": "Pending",
-    "running": "Running",
-    "idle": "Idle",
+    "running": "Working",
+    "idle": "Working",
     "stopped": "Stopped",
     "failed": "Failed",
     "cleaned": "Cleaned"
@@ -352,6 +352,14 @@
     "workHint": "Recorded for the last launch. Every action checks current authorization.",
     "processState": "Process state",
     "activityState": "Activity",
+    "lifecycle": {
+      "pending": "Pending",
+      "running": "Running",
+      "idle": "Idle",
+      "stopped": "Stopped",
+      "failed": "Failed",
+      "cleaned": "Cleaned"
+    },
     "toolMode": "Mode as the tool reports it",
     "workRole": "Granted role",
     "workWorkspace": "Work workspace",
@@ -471,7 +479,7 @@
     "group": {
       "attention": "Needs you",
       "active": "Working",
-      "settled": "Idle"
+      "settled": "Earlier"
     },
     "more": "More",
     "back": "Back to sessions",

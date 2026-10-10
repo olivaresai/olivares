@@ -330,7 +330,7 @@
     "send": "Senden",
     "turnPlaceholder": "Einen Satz senden…",
     "turnAria": "Sitzungszug",
-    "attachedWaiting": "Wartet auf Sie",
+    "attachedWaiting": "Braucht Sie",
     "advanced": "Erweitert",
     "advancedHint": "Eine NDJSON-Zeile an stdin senden. Das Satzfeld ist die Vorgabe.",
     "wirePlaceholder": "Eine NDJSON-Zeile an stdin senden…",

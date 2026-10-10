@@ -627,14 +627,7 @@ function PaletteBody() {
           <CommandGroup heading={t('common:commandPalette.recentSessions')}>
             {recentSessions.map((row) => {
               const title = row.title ?? row.reference
-              const state =
-                row.state === 'need'
-                  ? t('common:ui.status.needsYou')
-                  : row.state === 'live'
-                    ? t('common:ui.status.working')
-                    : row.state === 'ended'
-                      ? t('common:ui.status.done')
-                      : t('common:ui.status.idle')
+              const state = t(`nav:shell.rail.state.${row.state}`)
               return (
                 <CommandItem
                   key={row.key}

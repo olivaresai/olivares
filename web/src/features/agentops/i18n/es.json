@@ -14,8 +14,8 @@
   },
   "state": {
     "pending": "Pendiente",
-    "running": "En ejecución",
-    "idle": "Inactiva",
+    "running": "En marcha",
+    "idle": "En marcha",
     "stopped": "Parada",
     "failed": "Fallida",
     "cleaned": "Limpiada"
@@ -48,8 +48,8 @@
   },
   "summary": {
     "total": "Total",
-    "running": "En ejecución",
-    "idle": "Inactivas",
+    "running": "En marcha",
+    "idle": "Inactiva",
     "stopped": "Paradas"
   },
   "allStates": "Todos los estados",

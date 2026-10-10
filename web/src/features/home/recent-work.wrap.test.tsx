@@ -85,7 +85,7 @@ describe('a recent-session row grows instead of cutting', () => {
   it('the state badge and the time stay whole', () => {
     renderIntel(<RecentWork sessions={asSessions([row()])} state="ready" />)
     const rowEl = screen.getByTestId('home-recent-row')
-    const badge = screen.getByText('Active').closest('span') as HTMLElement
+    const badge = screen.getByText('Working').closest('span') as HTMLElement
     const time = rowEl.querySelector('time') as HTMLElement
     for (const el of [badge, time]) {
       expect(classes(el)).toEqual(

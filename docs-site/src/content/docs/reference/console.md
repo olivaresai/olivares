@@ -62,7 +62,7 @@ Deployment, Observability & evidence, then System & settings.
 
 <!-- BEGIN GENERATED olivares-console-routes — regenerate with `bash scripts/check-guide-docs.sh --write`; do not edit by hand -->
 
-The console publishes **83 routes**. Every one of them is in the tables below, with the
+The console publishes **77 routes**. Every one of them is in the tables below, with the
 permission it requires and the reference page its in-product help link opens.
 
 ### Now
@@ -83,7 +83,7 @@ permission it requires and the reference page its in-product help link opens.
 
 | Screen | Path | What it is | Requires | Reference |
 |---|---|---|---|---|
-| Agent tools | `/agent-tools` | Detect, install and update the agent tools on this host and follow each install; deployment administrators only | `system:admin` | [how-to/add-a-provider](/how-to/add-a-provider/) |
+| AI tools | `/agent-tools` | Detect, install and update the agent tools on this host and follow each install; deployment administrators only | `system:admin` | [how-to/add-a-provider](/how-to/add-a-provider/) |
 | Sessions | `/agentops` | Start sessions and follow what each one does, including the ones Olivares finds | `sessions:run:read` | [how-to/run-claude-code-with-olivares](/how-to/run-claude-code-with-olivares/) |
 | MCP servers | `/mcp-servers` | Connect remote MCP servers to this organization, test them and choose which tools sessions may use | `tenant:admin` | [how-to/connectors/mcp-governance](/how-to/connectors/mcp-governance/) |
 | Model Operations | `/model-operations` | Owned models, admission and deployments | `models:registry:read` | [reference/modules/xxiii-model-operations](/reference/modules/xxiii-model-operations/) |
@@ -126,9 +126,7 @@ permission it requires and the reference page its in-product help link opens.
 | Screen | Path | What it is | Requires | Reference |
 |---|---|---|---|---|
 | Alerting | `/alerting` | Route findings to destinations and inspect deliveries | `notify:route:read` | [reference/modules/xv-notify](/reference/modules/xv-notify/) |
-| Automations | `/automations` | All three automation rails and their trigger catalog | `orchestration:schedule:read` | [reference/modules/iv-orchestration](/reference/modules/iv-orchestration/) |
 | Webhooks & events | `/eventing` | Outbound webhook subscriptions, the captured event log, deliveries and the dead-letter queue | `eventing:subscription:read` | [reference/modules/eventing](/reference/modules/eventing/) |
-| Orchestration | `/orchestration` | Agent-to-agent coordination and schedules | `orchestration:graph:read` | [reference/modules/iv-orchestration](/reference/modules/iv-orchestration/) |
 
 ### Security & identity
 
@@ -141,7 +139,6 @@ permission it requires and the reference page its in-product help link opens.
 | Inference proxy | `/inference-proxy` | Proxy gates, egress DLP rules and device approvals | `inferenceproxy:config:read` | [reference/modules/inferenceproxy](/reference/modules/inferenceproxy/) |
 | Kill switch | `/killswitch` | Emergency stop, dual-control recovery and guardian containment | `governance:killswitch:read` | [how-to/cookbook/kill-switch-drill](/how-to/cookbook/kill-switch-drill/) |
 | Permissions | `/permissions` | Identity, roles and approvals | `governance:identity:read` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
-| Red-teaming | `/red-team` | Adversarial testing of your agents | `redteam:target:read` | [reference/modules/xviii-redteam](/reference/modules/xviii-redteam/) |
 | Data residency | `/residency` | Pin each org to a region, or leave it unpinned | `system:admin` | [reference/modules/xiii-compliance](/reference/modules/xiii-compliance/) |
 | Routine policies | `/routine-policies` | Cadence floors, concurrency caps, approval requirements, cron allowlists and blocked environments for Claude Code routines | `governance:routine:read` | [reference/modules/vi-governance](/reference/modules/vi-governance/) |
 | Security | `/security` | Guardrails, forensics and anomalies | `security:finding:read` | [reference/modules/ix-security](/reference/modules/ix-security/) |
@@ -163,14 +160,11 @@ permission it requires and the reference page its in-product help link opens.
 | Compliance | `/compliance` | Frameworks, controls and evidence | `compliance:framework:read` | [reference/modules/xiii-compliance](/reference/modules/xiii-compliance/) |
 | Dashboards | `/dashboards` | Executive KPIs and reporting | any signed-in user | [reference/modules/xxi-executive-dashboards](/reference/modules/xxi-executive-dashboards/) |
 | Evals | `/evals` | Quality, evals and regression | `evals:run:read` | [reference/modules/xii-evals](/reference/modules/xii-evals/) |
-| Cost & FinOps | `/finops` | Token cost, budgets and spend | `finops:spend:read` | [reference/modules/xi-finops](/reference/modules/xi-finops/) |
 | Health & SLA | `/health` | Agent and MCP uptime and SLAs | `health:status:read` | [reference/modules/xxii-health](/reference/modules/xxii-health/) |
 | Observability | `/observability` | Ingestion health by standard and trace drill-down | `health:status:read` | [reference/modules/observability](/reference/modules/observability/) |
-| Posture export | `/posture-export` | Export ground-truth posture for a control tower | `posture:export:read` | [reference/modules/posture-export](/reference/modules/posture-export/) |
 | Recordings | `/recordings` | Privileged session recording and replay | `recording:session:admin` | [reference/modules/recording](/reference/modules/recording/) |
-| Reports | `/reporting` | Generate and download governance reports | `reporting:report:read` | [reference/modules/reporting](/reference/modules/reporting/) |
 | Session viewer | `/session-viewer/$id` (deep link only) | The full timeline of one recorded session, reached from a row in Recordings rather than from the sidebar. | `recording:session:admin` | [reference/modules/recording](/reference/modules/recording/) |
-| Team costs | `/team-costs` | Cost attribution by team: sessions, tokens and spend, with a daily trend and a per-project and per-model breakdown | `finops:spend:read` | [reference/modules/xi-finops](/reference/modules/xi-finops/) |
+| Budgets | `/stored-budgets` | Consumption against each stored limit. Reserved capacity counts toward the limit. | `finops:budget:read` | [reference/modules/xi-finops](/reference/modules/xi-finops/) |
 
 ### System & settings
 

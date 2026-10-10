@@ -482,12 +482,44 @@ for (const p of census.paths) {
   if (typeof p !== 'string' || !p.startsWith('/')) die(`${CENSUS_REL} lists a path that is not a route: ${JSON.stringify(p)}`)
 }
 
+// --- redirects and the approved Business placement ---------------------------------
+// The census keeps published history. A ROUTE_ALIASES source is mounted only as a
+// redirect to its target, and census.business_paths are not mounted by Community
+// (registry.route-conservation.test.ts excludes them the same way). Neither is a page
+// the Community guide can describe, so neither is carried into the guide's census.
+const business = new Set(census.business_paths ?? [])
+for (const p of business) {
+  if (typeof p !== 'string' || !census.paths.includes(p)) die(`${CENSUS_REL} lists a business path that is not in "paths": ${JSON.stringify(p)}`)
+}
+const aliasSources = new Set()
+for (const stmt of registry.statements) {
+  if (!ts.isVariableStatement(stmt)) continue
+  for (const d of stmt.declarationList.declarations) {
+    if (!ts.isIdentifier(d.name) || d.name.text !== 'ROUTE_ALIASES') continue
+    let init = d.initializer
+    // registry.tsx drops an alias whose source a FEATURE_VIEW mounts: `[...].filter(...)`.
+    if (init && ts.isCallExpression(init) && ts.isPropertyAccessExpression(init.expression) && init.expression.name.text === 'filter') {
+      init = init.expression.expression
+    }
+    if (!init || !ts.isArrayLiteralExpression(init)) {
+      die(`${REGISTRY_REL} declares ROUTE_ALIASES not as an array literal (optionally filtered), so its redirects could not be read`)
+    }
+    for (const el of init.elements) {
+      if (!ts.isObjectLiteralExpression(el)) die(`a ROUTE_ALIASES element at ${where(el, registry)} is not an object literal`)
+      const from = literal(el, 'from')
+      if (typeof from !== 'string' || !from.startsWith('/')) die(`a ROUTE_ALIASES element at ${where(el, registry)} has no literal "from" path`)
+      if (!views.some((v) => v.path === from)) aliasSources.add(from)
+    }
+  }
+}
+const guideCensus = census.paths.filter((p) => !business.has(p) && !aliasSources.has(p))
+
 process.stdout.write(
   JSON.stringify(
     {
       schema: 'olivares.console.routes/2',
       areaOrder,
-      census: [...census.paths].sort(),
+      census: [...guideCensus].sort(),
       views: views.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
       standalone: standalone.sort((a, b) => (a.path < b.path ? -1 : a.path > b.path ? 1 : 0)),
     },
