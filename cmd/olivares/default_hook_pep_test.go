@@ -119,6 +119,7 @@ func TestDefaultHookPEPAllowDenyKillSwitchAndAudit(t *testing.T) {
 
 func claimHookTestSession(t *testing.T, h *harness, p auth.Principal, tenant model.TenantID, run string) sessions.LaunchIntent {
 	t.Helper()
+	hookTestRunID(t, h.st, tenant, run)
 	sid, err := h.set.sessions.ResolveSession(context.Background(), tenant, sessions.SessionBinding{Provider: sessions.ProviderOperated, ExternalID: run, Origin: sessions.OriginOperated})
 	if err != nil {
 		t.Fatal(err)
@@ -128,6 +129,44 @@ func claimHookTestSession(t *testing.T, h *harness, p auth.Principal, tenant mod
 		t.Fatal(err)
 	}
 	return sessions.LaunchIntent{PermissionMode: "dontAsk", TemplateBuiltin: true, AllowedTools: []string{"Read", "Edit", "Write", "Bash"}, RunRef: run, Actor: p.Actor(), ActorKind: p.ActorKind(), ClaimSID: sid, Holder: lease.Holder, Fence: lease.Fence}
+}
+
+// hookTestRunID stores the run row a launched session names, as the runtime does
+// before it mints the session's credential, and returns the row's stored ID.
+func hookTestRunID(t *testing.T, st store.Store, tenant model.TenantID, run string) model.ID {
+	t.Helper()
+	ctx := context.Background()
+	var id model.ID
+	if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		runs, err := sc.Ext("sessions.run")
+		if err != nil {
+			return err
+		}
+		rows, _, err := runs.List(ctx, model.Query{Filters: []model.Filter{{Column: "run_ref", Op: model.OpEq, Value: run}}, Limit: 1})
+		if err != nil {
+			return err
+		}
+		if len(rows) == 1 {
+			id = model.ID(rows[0].String(model.ColID))
+			return nil
+		}
+		workspace, err := sc.DefaultWorkspace(ctx)
+		if err != nil {
+			return err
+		}
+		row, err := runs.Create(ctx, model.Record{"run_ref": run, "transport": "stream-json", "permission_mode": "", "isolation": "native", "state": "stopped", "last_event_seq": int64(0), "authz_workspace_id": workspace.ID.String()})
+		if err != nil {
+			return err
+		}
+		id = model.ID(row.String(model.ColID))
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if id.IsZero() || id.String() == run {
+		t.Fatal("fixture run reference must name a distinct stored row")
+	}
+	return id
 }
 
 func TestSessionHookCredentialIsScopedRotatedAndRevoked(t *testing.T) {
@@ -321,7 +360,7 @@ func TestScopedGrantLauncherIsAdmittedAtToolCalls(t *testing.T) {
 		t.Fatal(err)
 	}
 	launch := auth.Request{Principal: p, Tenant: tenant, Permission: "sessions:run:write",
-		Resource: auth.ResourceAttrs{Kind: auth.Permission("sessions:run:write").Resource(), ID: scope.RunRef, WorkspaceID: scope.WorkspaceID}}
+		Resource: auth.ResourceAttrs{Kind: auth.Permission("sessions:run:write").Resource(), ID: hookTestRunID(t, h.st, tenant, scope.RunRef).String(), WorkspaceID: scope.WorkspaceID}}
 	if d := authz.Authorize(ctx, launch); !d.Allow || !strings.Contains(d.Reason, "scoped grant") {
 		t.Fatalf("the scoped grant does not admit the launch question: %+v", d)
 	}

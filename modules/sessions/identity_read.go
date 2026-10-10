@@ -341,3 +341,26 @@ func (m *Module) ReadRunWorkspacePath(ctx context.Context, tenant model.TenantID
 	}
 	return dir, nil
 }
+
+// StoredRunID reads the stored row ID of the run runRef names. The native run
+// routes name a run by its public run_ref but authorize this ID (runtimeRoutes),
+// so a question about a run asked anywhere else names the same resource.
+func StoredRunID(ctx context.Context, st store.Store, tenant model.TenantID, runRef string) (model.ID, error) {
+	if st == nil {
+		return "", errors.New("sessions: run reader has no store")
+	}
+	var id model.ID
+	err := st.View(ctx, tenant, func(sc store.Scope) error {
+		runs, err := sc.Ext(runKind)
+		if err != nil {
+			return err
+		}
+		rec, err := findRunRec(ctx, runs, runRef)
+		if err != nil {
+			return err
+		}
+		id = model.ID(rec.String(model.ColID))
+		return nil
+	})
+	return id, err
+}

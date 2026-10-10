@@ -118,7 +118,7 @@ func (m *Module) authorizeManagedStop(
 		Permission: permRunWrite,
 		Resource: auth.ResourceAttrs{
 			Kind:        permRunWrite.Resource(),
-			ID:          req.RunRef,
+			ID:          facts.runID.String(),
 			WorkspaceID: out.workspace,
 		},
 		Route: managedRunStopMetadata,
@@ -172,6 +172,8 @@ func managedStopAuthOutcome(err error) ManagedStopOutcome {
 // managedStopTargetFacts are the server-owned facts Phase B reads. Not one of
 // them comes from the request.
 type managedStopTargetFacts struct {
+	// runID is the run's stored ID, the resource the native run routes authorize.
+	runID         model.ID
 	workspace     model.ID
 	claimSID      string
 	bound         bool
@@ -251,7 +253,7 @@ func readManagedStopTarget(
 		// actually requires: the run's OWN lineage is the authorization scope.
 		return out, errManagedStopConcealed
 	}
-	out.workspace, out.claimSID = ws, rec.String(colRunClaimSID)
+	out.runID, out.workspace, out.claimSID = model.ID(rec.String(model.ColID)), ws, rec.String(colRunClaimSID)
 
 	bound := runCarriesWorkStamp(rec)
 	switch {

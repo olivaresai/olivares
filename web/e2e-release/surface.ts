@@ -6,6 +6,19 @@ import { fileURLToPath } from 'node:url'
 import { expect, type Page } from '@playwright/test'
 import auth from '../src/lib/i18n/locales/en/auth.json' with { type: 'json' }
 
+/** The release grammar: bare MAJOR.MINOR, the one scripts/release-first-hour.sh admits. */
+export const RELEASE_VERSION = /^\d+\.\d+$/
+
+/** Where the console says which deployment this is: the shell and the signed-out line.
+ * ponytail: any visible leaf in the sidebar that is exactly a version (a workspace named
+ * "2.0") is read as one; give the sidebar version a data-testid and scan only that. */
+const IDENTITY =
+  'aside[aria-label="Primary"], [data-testid="deployment-identity"]'
+
+/** An identity element that is only a version (0.1, v1.0, 26.10.1, 1.0-rc1), never a host
+ * such as 127.0.0.1:8443. A bare MAJOR.MINOR elsewhere is prose (CVSS v3.1, SCIM 2.0). */
+const VERSION_DISPLAY = /^v?\d+\.\d+(?:\.\d+)?(?:[-+][\w.+-]+)?$/
+
 export async function expectReleaseVersion(
   page: Page,
   version: string,
@@ -13,11 +26,7 @@ export async function expectReleaseVersion(
   // Dialogs hide the sidebar from the accessibility tree, but its version stays
   // painted. Match the deployment identity itself, never a release in page copy.
   await expect(
-    page
-      .locator(
-        'aside[aria-label="Primary"], [data-testid="deployment-identity"]',
-      )
-      .getByText(version, { exact: true }),
+    page.locator(IDENTITY).getByText(version, { exact: true }),
     `release version ${version} must be visible in the console identity`,
   ).toBeVisible()
 }
@@ -50,6 +59,8 @@ export const SLOW_MS = 5000
 
 export function surfaceOptions(version: string): {
   version: string
+  identity: string
+  versionDisplay: string
   translationKeys: string[]
   pendingLabels: string[]
   readyMs: number
@@ -57,6 +68,8 @@ export function surfaceOptions(version: string): {
 } {
   return {
     version,
+    identity: IDENTITY,
+    versionDisplay: VERSION_DISPLAY.source,
     translationKeys: [...translationKeys],
     pendingLabels: [auth.setup.creating, auth.login.signingIn],
     readyMs: READY_MS,
@@ -69,12 +82,15 @@ declare global {
     __firstHourFinding: (message: string) => Promise<void>
     __firstHourSlow?: (message: string) => Promise<void>
     __firstHourLoading?: () => boolean
+    __firstHourVersions?: () => string[]
   }
 }
 
 /** Runs in the page, across SPA transitions; report text, never input values. */
 export function watchSurface({
   version,
+  identity,
+  versionDisplay,
   translationKeys,
   pendingLabels,
   readyMs,
@@ -98,6 +114,21 @@ export function watchSurface({
     void window.__firstHourSlow?.(message).catch(() => undefined)
   // The gate asks this at every stage end, and waits for false (#1177).
   window.__firstHourLoading = () => loadingSince !== undefined
+  // The versions the identity paints right now: the one thing a stale deployment
+  // changes. A number in page copy is not an identity, so only these are compared.
+  const display = new RegExp(versionDisplay)
+  const identityVersions = (): string[] => {
+    const found = new Set<string>()
+    for (const region of document.querySelectorAll(identity)) {
+      for (const element of [region, ...region.querySelectorAll('*')]) {
+        if (element.childElementCount > 0) continue
+        const text = element.textContent?.trim() ?? ''
+        if (display.test(text) && visible(element)) found.add(text)
+      }
+    }
+    return [...found]
+  }
+  window.__firstHourVersions = identityVersions
   const report = (problem: string) => {
     const message = `${location.pathname}: ${problem}`
     if (!reported.has(message)) {
@@ -150,9 +181,7 @@ export function watchSurface({
     ) {
       report('HTTP status code shown to the user')
     }
-    for (const found of text.match(
-      /\bv?\d{2}\.\d{1,2}\.\d+(?:[-+][\w.-]+)?\b/g,
-    ) ?? []) {
+    for (const found of identityVersions()) {
       if (found !== version)
         report(`page version ${found} differs from release ${version}`)
     }

@@ -34,6 +34,7 @@ import { addressOf, type EvidenceBlock } from './session-address'
 import { hasThread } from './has-thread'
 import { SessionConversation } from './session-conversation'
 import { SessionOverview } from './session-overview'
+import { SessionFailure } from './session-failure'
 import type { SessionResolution } from './use-session-resolution'
 import { ThreadHeader } from './thread-header'
 import './i18n'
@@ -158,6 +159,12 @@ export function SessionNarrative({
           {run.mcp_governance_warning}
         </p>
       ) : null}
+
+      {grants.runRead && run?.state === 'failed' && (
+        <div className="px-4 py-3">
+          <SessionFailure run={run} />
+        </div>
+      )}
 
       {hasThread(resolution) && run ? (
         <SessionConversation

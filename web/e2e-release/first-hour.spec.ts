@@ -12,6 +12,7 @@ import {
 import {
   expectReleaseVersion,
   READY_MS,
+  RELEASE_VERSION,
   SLOW_MS,
   surfaceOptions,
   watchSurface,
@@ -67,7 +68,7 @@ test('release container: a fresh administrator reaches a first answer and the co
   expect(
     version,
     'release version is mandatory; never skip qualification',
-  ).toMatch(/^\d{2}\.\d+\.\d+$/)
+  ).toMatch(RELEASE_VERSION)
   expect(tokenFile, 'fresh Compose setup token file is mandatory').toBeTruthy()
   test.setTimeout(25 * 60_000)
   const token = readFileSync(tokenFile!, 'utf8').trim()
@@ -123,13 +124,31 @@ test('release container: a fresh administrator reaches a first answer and the co
         `${name}: ${error instanceof Error ? error.message : String(error)}`,
       )
     }
-    const versions: string[] =
-      (await page.locator('body').innerText()).match(
-        /\bv?\d{2}\.\d{1,2}\.\d+(?:[-+][\w.-]+)?\b/g,
-      ) ?? []
-    console.log(
-      `UI version ${name}: ${[...new Set(versions)].join(', ') || 'missing'}`,
-    )
+    // Compared here as well as on the watcher's tick, so a stage never ends on an
+    // identity nobody read, or on a page the watcher is not installed on.
+    try {
+      const versions = await page.evaluate(() => window.__firstHourVersions?.())
+      if (!versions)
+        record(`${name}: the surface watcher is not installed on this page`)
+      else {
+        console.log(
+          `UI version ${name}: ${redact(versions.join(', ')) || 'missing'}`,
+        )
+        for (const found of versions)
+          if (found !== version)
+            record(
+              `${name}: page version ${found} differs from release ${version}`,
+            )
+        if (!versions.includes(version!))
+          record(
+            `${name}: release version ${version} was not read from the console identity`,
+          )
+      }
+    } catch (error) {
+      record(
+        `${name}: identity versions unreadable: ${error instanceof Error ? error.message : String(error)}`,
+      )
+    }
     const path = info.outputPath(`${name}.png`)
     await page.screenshot({
       path,

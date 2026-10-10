@@ -1014,7 +1014,8 @@ regexes = [
 # between them (PushTarget assertions and the next test declaration). There is
 # no encoded key body. The test checks the transport/header shape, not SSH
 # authentication. Match the entire captured source fragment, never a PEM
-# opening marker alone. SHA256 prefix 13e96149ef60f93f.
+# opening marker alone. SHA256 prefix 13e96149ef60f93f. Since fcbd2917 the current
+# file builds that header at run time and has no capture; the block covers the history.
 [[allowlists]]
   description = "Exact synthetic fixture: connectors/gitpublish/plaingit_test.go"
   targetRules = ["private-key"]

@@ -131,13 +131,29 @@ export function runAwaitedApproval(run: RunDTO): string | undefined {
 }
 
 /**
- * A stopped or failed run can always be continued. `stream-json` resumes with
+ * A stopped or failed run can be continued unless the host refused isolation.
+ * `stream-json` resumes with
  * `claude --resume <claude_session_id>`; a run that never captured an id never got
  * going, and the engine starts it again with the same settings (startsAgain). The
  * backend is the source of truth and refuses regardless.
  */
 export function isResumableRun(run: RunDTO): boolean {
-  return RESUMABLE_RUN_STATES.includes(run.state)
+  return (
+    RESUMABLE_RUN_STATES.includes(run.state) && !hostIsolationUnavailable(run)
+  )
+}
+
+/** The engine's namespace refusal requires a host change before another launch. */
+export function hostIsolationUnavailable(run: RunDTO): boolean {
+  return (
+    run.state === 'failed' &&
+    !!run.reason?.startsWith(
+      'the session was not started because its network boundary could not be set up:',
+    ) &&
+    /unprivileged user(?: and network|\/network) namespaces and Landlock/.test(
+      run.reason,
+    )
+  )
 }
 
 /** True when continuing this run starts a new conversation rather than resuming one. */

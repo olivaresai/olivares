@@ -1,12 +1,26 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { expect, test } from '@playwright/test'
-import { expectReleaseVersion } from '../e2e-release/surface'
+import { expect, type Page, test } from '@playwright/test'
+import {
+  expectReleaseVersion,
+  surfaceOptions,
+  watchSurface,
+} from '../e2e-release/surface'
 import { SESSION_TOOLS } from '../src/features/agentops/tool-names'
 import { browserSession, fixtureFor, serverInfo } from './fixtures'
 
 test.use({ screenshot: 'only-on-failure' })
+
+// The first-hour gate compares what its watcher reads from the identity. Run it on
+// the real console, at every layout, so a nested or re-marked identity cannot
+// leave it reading nothing while the exact-text check still passes.
+async function expectIdentityRead(page: Page, version: string) {
+  await expectReleaseVersion(page, version)
+  expect(await page.evaluate(() => window.__firstHourVersions?.())).toEqual([
+    version,
+  ])
+}
 
 for (const theme of ['light', 'dark']) {
   for (const width of [1280, 390]) {
@@ -14,7 +28,7 @@ for (const theme of ['light', 'dark']) {
       page,
     }, testInfo) => {
       await page.setViewportSize({ width, height: 900 })
-      let version = '26.10.1'
+      let version = '0.1'
       await page.route('**/v1/**', async (route) => {
         const path = new URL(route.request().url()).pathname
         if (path.endsWith('/stream'))
@@ -39,6 +53,8 @@ for (const theme of ['light', 'dark']) {
                 : (fixtureFor(path) ?? { items: [], has_more: false })
         await route.fulfill({ json })
       })
+      await page.exposeFunction('__firstHourFinding', () => undefined)
+      await page.addInitScript(watchSurface, surfaceOptions('0.1'))
       await page.addInitScript(
         ({ theme }) => {
           localStorage.setItem(
@@ -51,12 +67,12 @@ for (const theme of ['light', 'dark']) {
         { theme },
       )
 
-      for (const release of ['26.10.1', '1.0']) {
+      for (const release of ['0.1', '1.0', '10.12']) {
         version = release
         for (const path of ['/sessions', '/session-viewer/sess-a11y']) {
           await page.goto(path)
           await expect(page.locator('[data-slot="app-frame"]')).toBeVisible()
-          await expectReleaseVersion(page, version)
+          await expectIdentityRead(page, version)
           if (width === 1280)
             await expect(
               page.locator('aside[aria-label="Primary"]'),
@@ -75,7 +91,7 @@ for (const theme of ['light', 'dark']) {
           page.getByRole('tabpanel', { name: 'Workspaces', exact: true }),
         ).toBeVisible()
         await page.mouse.move(width - 1, 899)
-        await expectReleaseVersion(page, version)
+        await expectIdentityRead(page, version)
         await page.screenshot({
           path: testInfo.outputPath(`workspaces-${release}.png`),
         })
@@ -93,7 +109,7 @@ for (const theme of ['light', 'dark']) {
         await page
           .getByRole('button', { name: 'More options', exact: true })
           .click()
-        await expectReleaseVersion(page, version)
+        await expectIdentityRead(page, version)
         const identity = page
           .locator(
             'aside[aria-label="Primary"], [data-testid="deployment-identity"]',
@@ -130,7 +146,7 @@ for (const theme of ['light', 'dark']) {
       await page.keyboard.press('Escape')
       for (const edge of [760, 761]) {
         await page.setViewportSize({ width: edge, height: 900 })
-        await expectReleaseVersion(page, version)
+        await expectIdentityRead(page, version)
       }
     })
   }

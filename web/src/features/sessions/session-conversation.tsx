@@ -22,6 +22,7 @@ import {
   type ConversationItem,
 } from './conversation-frames'
 import { systemFailed, systemText } from './conversation-text'
+import { hostIsolationUnavailable } from './provenance'
 import { unechoedTurns, useRunSentTurns, type SentTurn } from './sent-turns'
 import './i18n'
 
@@ -169,6 +170,7 @@ export function SessionConversation({
           ) : null}
           {items.length === 0 &&
           pending.length === 0 &&
+          !hostIsolationUnavailable(run) &&
           status !== 'error' &&
           status !== 'connecting' ? (
             <p className="py-2 text-caption text-muted-foreground">

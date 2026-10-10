@@ -38,6 +38,7 @@ import type { RunDTO } from '@/features/agentops/types'
 import { cn } from '@/lib/utils'
 import { runFolder } from './folder'
 import type { Capability, UnifiedSession } from './provenance'
+import { hostIsolationUnavailable } from './provenance'
 import { IconTip } from './icon-tip'
 import { RunActions } from './run-actions'
 import { StateDot } from './session-state-dot'
@@ -68,8 +69,12 @@ function terminalCommands(run: RunDTO): string[] {
   return [
     `olivares session follow ${run.run_ref}`,
     `olivares session follow ${run.run_ref} -o json`,
-    `olivares session send ${run.run_ref} "…"`,
-    `olivares session ${live ? 'stop' : 'resume'} ${run.run_ref}`,
+    ...(hostIsolationUnavailable(run)
+      ? []
+      : [
+          `olivares session send ${run.run_ref} "…"`,
+          `olivares session ${live ? 'stop' : 'resume'} ${run.run_ref}`,
+        ]),
   ]
 }
 

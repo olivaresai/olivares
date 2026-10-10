@@ -27,7 +27,7 @@ type crossFolderPeerPolicy struct {
 
 func (p *crossFolderPeerPolicy) Evaluate(_ context.Context, req auth.Request) (auth.Decision, error) {
 	if req.Permission == permRunRead && req.Resource.ID == p.runID {
-		return auth.Decision{Allow: !p.deny.Load() && req.Resource.Kind == "sessions.run" && req.Resource.WorkspaceID == p.workspace}, nil
+		return auth.Decision{Allow: !p.deny.Load() && req.Resource.Kind == "run" && req.Resource.WorkspaceID == p.workspace}, nil
 	}
 	return auth.Decision{Allow: true}, nil
 }

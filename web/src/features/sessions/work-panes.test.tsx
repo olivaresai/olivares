@@ -153,6 +153,31 @@ function renderNarrative(over: Partial<SessionResolution> = {}, props = {}) {
 }
 
 describe('SessionNarrative — work told as work', () => {
+  it('does not show a cached failure reason after run-read permission is lost', () => {
+    renderNarrative({
+      runs: [
+        run({ state: 'failed', reason: 'Sensitive cached failure reason' }),
+      ],
+      grants: {
+        liveRead: true,
+        runRead: false,
+        runWrite: false,
+        runAdmin: false,
+      },
+    })
+    expect(
+      screen.queryByText('Sensitive cached failure reason'),
+    ).not.toBeInTheDocument()
+  })
+  it('puts a failed launch reason in the session view without a retry dead end', async () => {
+    const reason =
+      'the session was not started because its network boundary could not be set up: the host or container must allow unprivileged user and network namespaces and Landlock: operation not permitted'
+    renderNarrative({ runs: [run({ state: 'failed', reason })] })
+    expect(await screen.findByText(reason)).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Start again' }),
+    ).not.toBeInTheDocument()
+  })
   it('tells the sentence and the figures the engine sent', async () => {
     renderNarrative({ live: live({ summary: 'Filed PR #7723' }) })
     expect(await screen.findByText('Filed PR #7723')).toBeInTheDocument()
@@ -179,7 +204,7 @@ describe('SessionNarrative — work told as work', () => {
 
   it('separates "no telemetry yet" from "the read failed"', async () => {
     renderNarrative({ live: undefined, observeUnknown: false })
-    expect(await screen.findByText(/Nothing observed/i)).toBeInTheDocument()
+    expect(await screen.findByText(/No session activity/i)).toBeInTheDocument()
 
     renderNarrative({ live: undefined, observeUnknown: true })
     expect(await screen.findByText(/could not be read/i)).toBeInTheDocument()

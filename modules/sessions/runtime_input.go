@@ -58,6 +58,8 @@ type RuntimeInputAuthority struct {
 
 // RuntimeInputRunQuestion is the existing run-input permission on the target's
 // stored workspace. An owner asks the composed authorizer this exact question.
+// Its ID is still the run reference, not the stored ID the native run routes
+// authorize; the target cannot carry that ID without its Business caller (#1417).
 func RuntimeInputRunQuestion(principal auth.Principal, target RuntimeInputTarget) auth.Request {
 	return auth.Request{Principal: principal, Tenant: target.Tenant, Permission: permRunWrite,
 		Resource: auth.ResourceAttrs{Kind: permRunWrite.Resource(), ID: target.RunRef, WorkspaceID: target.WorkspaceID}}

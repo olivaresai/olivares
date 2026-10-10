@@ -213,6 +213,29 @@ describe('controlLevel — what the PLANE can do, never what the caller can', ()
 })
 
 describe('isResumableRun', () => {
+  it.each([
+    'the session was not started because its network boundary could not be set up: connection temporarily unavailable',
+    'The tool mentioned unprivileged user and network namespaces and Landlock.',
+  ])('keeps other failures retryable: %s', (reason) => {
+    expect(isResumableRun(run('r', { state: 'failed', reason }))).toBe(true)
+  })
+  it.each([
+    'the host or container must allow unprivileged user and network namespaces and Landlock: operation not permitted',
+    'session network boundary could not be established ("Landlock setup failed"); enable unprivileged user/network namespaces and Landlock on the engine host',
+  ])(
+    'withholds retry for a host isolation refusal but keeps cleanup and deletion: %s',
+    (detail) => {
+      const refused = run('r', {
+        state: 'failed',
+        reason: `the session was not started because its network boundary could not be set up: ${detail}`,
+      })
+      expect(isResumableRun(refused)).toBe(false)
+      const caps = capabilities({ runs: [refused] }, ALL_GRANTS)
+      expect(caps.find((c) => c.id === 'resume')?.available).toBe(false)
+      expect(caps.find((c) => c.id === 'cleanup')?.available).toBe(true)
+      expect(caps.find((c) => c.id === 'delete')?.available).toBe(true)
+    },
+  )
   it('continues a stream-json run with or without a captured id', () => {
     expect(isResumableRun(run('r', { state: 'failed' }))).toBe(true)
     expect(startsAgain(run('r', { state: 'failed' }))).toBe(true)

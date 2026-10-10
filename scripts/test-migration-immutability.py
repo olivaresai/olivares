@@ -113,6 +113,21 @@ func buildCoreMigrations() []migrate.Migration {
         path.write_text(source.replace('migrate.Apply(', 'plan = nil\n migrate.Apply('))
         self.assert_rejected('runner/')
 
+    def test_declared_epoch_restarts_history_once(self):
+        self.write('core/migrate/EPOCH.txt', '0.1\n')
+        self.sql.write_text('CREATE TABLE example (id TEXT PRIMARY KEY, label TEXT);\n')
+        result = self.gate()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn('epoch 0.1', result.stdout + result.stderr)
+
+    def test_epoch_in_the_baseline_keeps_history_immutable(self):
+        self.write('core/migrate/EPOCH.txt', '0.1\n')
+        self.git('add', '.')
+        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.invalid',
+                 'commit', '-qm', 'epoch')
+        self.sql.write_text('CREATE TABLE example (id TEXT PRIMARY KEY, label TEXT);\n')
+        self.assert_rejected('0001_create.sql')
+
     def test_edited_sql_is_rejected_even_when_additive(self):
         self.sql.write_text('CREATE TABLE example (id TEXT PRIMARY KEY, label TEXT);\n')
         self.assert_rejected('0001_create.sql')

@@ -25,8 +25,10 @@ EXPECTED = collections.Counter({
     ("cmd/olivares/cmd_setup_existing_env_test.go", "generic-api-key"): 1,
     ("cmd/olivares/internal/agenttoolsapi/signin_failure_test.go", "jwt"): 1,
     ("cmd/olivares/cmd_dr_sealer_test.go", "generic-api-key"): 4,
-    ("connectors/gitpublish/plaingit_test.go", "private-key"): 1,
 })
+# connectors/gitpublish/plaingit_test.go is not a source here: since fcbd2917 it builds its
+# fake SSH key header at run time, so the current file has no private-key capture. Its exact
+# block in .gitleaks.toml stays for the history commits (78f0810e, 360a20de) that carry one.
 
 
 def run(args: list[str], cwd: Path) -> subprocess.CompletedProcess:
@@ -115,7 +117,7 @@ def main() -> None:
         pem = key.read_text()
         for mode in ("dir", "git"):
             baseline = scan(work, control, sources, mode)
-            check(baseline, EXPECTED, f"{mode}: no-exception control detects all seven captures")
+            check(baseline, EXPECTED, f"{mode}: no-exception control detects all {sum(EXPECTED.values())} captures")
             check(scan(work, config, sources, mode), collections.Counter(),
                   f"{mode}: exact fixtures are clean")
             elsewhere = {"probe/" + path: text for path, text in sources.items()}

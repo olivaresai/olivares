@@ -417,84 +417,87 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
   })
 
   // --- 6 · Automations: real parent → workflow create → editor ----------------
-  if ((await (await page.request.get('/v1/server-info')).json()).edition !== 'community') {
-  await test.step('Automations: the parent creates a workflow and opens its editor', async () => {
-    const workflowName = 'Live composition workflow'
-    await page.goto('/automations')
-    const listed = expectResponse(page, '/v1/m/orchestration/workflows', 200)
-    const panel = await openTab(page, /^Workflows$/i)
-    const workflowPage = (await (await listed).json()) as { items: unknown[] }
-    expect(
-      workflowPage.items,
-      'automations Rendered: the disposable engine was not workflow-empty',
-    ).toEqual([])
+  if (
+    (await (await page.request.get('/v1/server-info')).json()).edition !==
+    'community'
+  ) {
+    await test.step('Automations: the parent creates a workflow and opens its editor', async () => {
+      const workflowName = 'Live composition workflow'
+      await page.goto('/automations')
+      const listed = expectResponse(page, '/v1/m/orchestration/workflows', 200)
+      const panel = await openTab(page, /^Workflows$/i)
+      const workflowPage = (await (await listed).json()) as { items: unknown[] }
+      expect(
+        workflowPage.items,
+        'automations Rendered: the disposable engine was not workflow-empty',
+      ).toEqual([])
 
-    // A virgin list deliberately offers the action in both the card header and
-    // EmptyState. Use the latter so this click proves the empty composition works.
-    const empty = panel
-      .locator('[data-slot="empty-state"]')
-      .filter({ hasText: /no workflows yet/i })
-    const createButton = empty.getByRole('button', {
-      name: /^new workflow$/i,
+      // A virgin list deliberately offers the action in both the card header and
+      // EmptyState. Use the latter so this click proves the empty composition works.
+      const empty = panel
+        .locator('[data-slot="empty-state"]')
+        .filter({ hasText: /no workflows yet/i })
+      const createButton = empty.getByRole('button', {
+        name: /^new workflow$/i,
+      })
+      await expect(
+        createButton,
+        'automations Rendered: the real parent did not mount New workflow',
+      ).toBeEnabled()
+      await createButton.click()
+
+      const dialog = page.getByRole('dialog')
+      await expect(
+        dialog,
+        'automations Rendered: the parent action did not mount the create dialog',
+      ).toBeVisible()
+      const workflowNameInput = dialog.getByLabel(/^Name/i)
+      await expect(
+        workflowNameInput,
+        'automations Rendered: create dialog did not expose its required Name field',
+      ).toBeVisible()
+      await workflowNameInput.fill(workflowName)
+
+      const posted = observeResponse(
+        page,
+        '/v1/m/orchestration/workflows',
+        'POST',
+      )
+      const detail = page.waitForResponse(
+        (response) => {
+          const path = new URL(response.url()).pathname
+          return (
+            path.startsWith('/v1/m/orchestration/workflows/') &&
+            response.request().method() === 'GET'
+          )
+        },
+        { timeout: 30_000 },
+      )
+      await dialog.getByRole('button', { name: /create workflow/i }).click()
+      const created = await posted
+      expect(
+        created.status(),
+        'automations Fired: workflow POST did not return 201',
+      ).toBe(201)
+      const workflow = (await created.json()) as { id: string; name: string }
+      expect(
+        workflow.name,
+        'automations Fired: the engine did not receive the authored workflow name',
+      ).toBe(workflowName)
+      const read = await detail
+      expect(
+        read.status(),
+        'automations Effect: the editor detail GET did not return 200',
+      ).toBe(200)
+      expect(
+        new URL(read.url()).pathname,
+        'automations Effect: the editor did not read the created workflow',
+      ).toBe(`/v1/m/orchestration/workflows/${workflow.id}`)
+      await expectPainted(
+        page.getByText(/back to workflows/i),
+        'automations Effect: the successful create did not open the real editor',
+      )
     })
-    await expect(
-      createButton,
-      'automations Rendered: the real parent did not mount New workflow',
-    ).toBeEnabled()
-    await createButton.click()
-
-    const dialog = page.getByRole('dialog')
-    await expect(
-      dialog,
-      'automations Rendered: the parent action did not mount the create dialog',
-    ).toBeVisible()
-    const workflowNameInput = dialog.getByLabel(/^Name/i)
-    await expect(
-      workflowNameInput,
-      'automations Rendered: create dialog did not expose its required Name field',
-    ).toBeVisible()
-    await workflowNameInput.fill(workflowName)
-
-    const posted = observeResponse(
-      page,
-      '/v1/m/orchestration/workflows',
-      'POST',
-    )
-    const detail = page.waitForResponse(
-      (response) => {
-        const path = new URL(response.url()).pathname
-        return (
-          path.startsWith('/v1/m/orchestration/workflows/') &&
-          response.request().method() === 'GET'
-        )
-      },
-      { timeout: 30_000 },
-    )
-    await dialog.getByRole('button', { name: /create workflow/i }).click()
-    const created = await posted
-    expect(
-      created.status(),
-      'automations Fired: workflow POST did not return 201',
-    ).toBe(201)
-    const workflow = (await created.json()) as { id: string; name: string }
-    expect(
-      workflow.name,
-      'automations Fired: the engine did not receive the authored workflow name',
-    ).toBe(workflowName)
-    const read = await detail
-    expect(
-      read.status(),
-      'automations Effect: the editor detail GET did not return 200',
-    ).toBe(200)
-    expect(
-      new URL(read.url()).pathname,
-      'automations Effect: the editor did not read the created workflow',
-    ).toBe(`/v1/m/orchestration/workflows/${workflow.id}`)
-    await expectPainted(
-      page.getByText(/back to workflows/i),
-      'automations Effect: the successful create did not open the real editor',
-    )
-  })
   }
 
   // --- 7 · Backups: real parent → accepted job → JobProgress ------------------

@@ -184,6 +184,70 @@ beforeEach(() => {
   vi.mocked(agentOpsApi.getRun).mockResolvedValue(run)
 })
 
+describe('failed session explanation', () => {
+  const reason =
+    'the session was not started because its network boundary could not be set up: the host or container must allow unprivileged user and network namespaces and Landlock: operation not permitted'
+
+  it('shows the engine refusal and host remedy without offering the same failed launch', async () => {
+    perms.add('sessions:run:write')
+    vi.mocked(agentOpsApi.getRun).mockResolvedValue({
+      ...run,
+      state: 'failed',
+      claude_session_id: undefined,
+      reason,
+    })
+    renderCard({ runRef: 'run-1' })
+    expect(await screen.findByText(reason)).toBeInTheDocument()
+    expect(
+      screen.getByText(
+        'Ask the server administrator to allow unprivileged user and network namespaces and Landlock, then start the session again.',
+      ),
+    ).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: 'Start again' }),
+    ).not.toBeInTheDocument()
+    expect(screen.queryByText(/no telemetry/i)).not.toBeInTheDocument()
+  })
+
+  it('shows a runtime failure even when activity exists and keeps retry available', async () => {
+    perms.add('sessions:run:write')
+    vi.mocked(agentOpsApi.listRuns).mockResolvedValue({
+      items: [
+        {
+          ...run,
+          state: 'failed',
+          reason: 'The provider is temporarily unavailable.',
+        },
+      ],
+      has_more: false,
+    })
+    renderCard({ sessionRef: 'sess-ours' })
+    expect(
+      await screen.findByText('The provider is temporarily unavailable.'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Resume' })).toBeInTheDocument()
+  })
+
+  it.each([undefined, '', '  '])(
+    'says when a failed run has no reported reason (%s)',
+    async (reason) => {
+      vi.mocked(agentOpsApi.getRun).mockResolvedValue({
+        ...run,
+        state: 'failed',
+        claude_session_id: undefined,
+        reason,
+      })
+      renderCard({ runRef: 'run-1' })
+      expect(
+        await screen.findByText(
+          'This session failed. The server did not report a reason.',
+        ),
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/no telemetry/i)).not.toBeInTheDocument()
+    },
+  )
+})
+
 describe('SessionCard — provenance comes from the engine', () => {
   it('asks the engine which runs drive THIS session, by its id', async () => {
     renderCard({ sessionRef: 'sess-ours' })
@@ -403,7 +467,7 @@ describe('SessionCard — control is what can be done, not what fits', () => {
     )
     renderCard({ sessionRef: 'sess-ours' })
     expect(
-      await screen.findByText(/Nothing observed for this session yet/i),
+      await screen.findByText(/No session activity yet/i),
     ).toBeInTheDocument()
   })
 
@@ -418,7 +482,7 @@ describe('SessionCard — control is what can be done, not what fits', () => {
       await screen.findByText(/observed half was not read/i),
     ).toBeInTheDocument()
     expect(
-      screen.queryByText(/Nothing observed for this session yet/i),
+      screen.queryByText(/No session activity yet/i),
     ).not.toBeInTheDocument()
   })
 
@@ -775,8 +839,7 @@ describe('SessionCard — a scoped row is named by its live_ref', () => {
     // Twice on purpose: the overview says it and the capability list gives it as
     // the reason nothing can be watched.
     expect(
-      (await screen.findAllByText(/Nothing observed for this session yet/i))
-        .length,
+      (await screen.findAllByText(/No session activity yet/i)).length,
     ).toBeGreaterThan(0)
     expect(vi.mocked(sessionsApi.liveOne)).not.toHaveBeenCalled()
     expect(vi.mocked(sessionsApi.liveById)).not.toHaveBeenCalled()

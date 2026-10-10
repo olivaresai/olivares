@@ -650,14 +650,10 @@ export function stringConsts(code, literals) {
   return consts
 }
 
-// joinConcatenated reproduces what the compiler does to `"a" + "b"` and `"a" + NAME`
-// written across lines. Without it the first-boot TLS line does not exist as a string
-// anywhere and the gate would report that the documentation quotes something the engine
-// never says.
-export function joinConcatenated(code, literals, consts = new Map()) {
-  // Atoms are the things that can take part in a compile-time string concatenation:
-  // literals, and identifiers naming a string constant. Identifiers found INSIDE a
-  // literal are text, not code.
+// The atoms are the things that can take part in a compile-time string concatenation:
+// literals, and identifiers naming a string constant. Identifiers found INSIDE a literal
+// are text, not code.
+function chainAtoms(code, literals, consts) {
   const atoms = literals.map((l) => ({ start: l.start, end: l.end, text: l.text }))
   if (consts.size) {
     const names = [...consts.keys()].map((k) => k.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')
@@ -668,6 +664,23 @@ export function joinConcatenated(code, literals, consts = new Map()) {
     }
     atoms.sort((a, b) => a.start - b.start)
   }
+  return atoms
+}
+
+// joinConcatenated reproduces what the compiler does to `"a" + "b"` and `"a" + NAME`
+// written across lines. Without it the first-boot TLS line does not exist as a string
+// anywhere and the gate would report that the documentation quotes something the engine
+// never says.
+//
+// It is the DEFINITION of what the gate treats as a string the engine contains: every atom
+// alone and every contiguous sub-chain of atoms joined by `+`. It is also quadratic in the
+// strings and cubic in the characters of a chain, which is what made the full-tree run
+// exceed its memory limit (#1149), so the gate does NOT call it: readEngine holds each
+// chain once (chainRuns) and the checks answer for its sub-chains from the atom boundaries
+// (runBounded, chainFragments). The self-test holds the two equal, and this function is the
+// reference they are held to.
+export function joinConcatenated(code, literals, consts = new Map()) {
+  const atoms = chainAtoms(code, literals, consts)
   const out = []
   for (let i = 0; i < atoms.length; i++) {
     out.push(atoms[i].text)
@@ -680,6 +693,81 @@ export function joinConcatenated(code, literals, consts = new Map()) {
     }
   }
   return out
+}
+
+// chainRuns returns each maximal chain of atoms joined only by `+` ONCE: its whole text,
+// and `ends`, where atom k stops inside that text (the last entry is the text's length).
+// Atom k starts where atom k-1 stops, so the boundaries are all that is needed to name any
+// contiguous sub-chain, and a chain of N atoms costs N numbers instead of N(N+1)/2 strings.
+export function chainRuns(code, literals, consts = new Map()) {
+  const atoms = chainAtoms(code, literals, consts)
+  const runs = []
+  for (let i = 0; i < atoms.length; ) {
+    let text = atoms[i].text
+    const ends = [text.length]
+    let k = i
+    while (k + 1 < atoms.length && /^\s*\+\s*$/.test(code.slice(atoms[k].end, atoms[k + 1].start))) {
+      text += atoms[k + 1].text
+      ends.push(text.length)
+      k++
+    }
+    runs.push({ text, ends })
+    i = k + 1
+  }
+  return runs
+}
+
+// runBounded: does `needle` occur in the run so that, in some sub-chain, it ENDS WHERE A
+// LINE ENDS: at the end of that sub-chain or before a newline? The sub-chain that stops at
+// the atom boundary where the occurrence stops contains it, so an occurrence qualifies when
+// it stops at the end of the text, before a newline, or on an atom boundary. That is the
+// predicate check 1 asked of every sub-chain string, answered without building them.
+export function runBounded(run, needle) {
+  let at = run.text.indexOf(needle)
+  while (at >= 0) {
+    const after = at + needle.length
+    if (after === run.text.length || run.text[after] === '\n' || run.ends.includes(after)) return true
+    at = run.text.indexOf(needle, at + 1)
+  }
+  return false
+}
+
+// chainFragments yields each distinct-by-caller trimmed output line, of at least
+// `minLength` characters, that appears in some sub-chain of the run: split on newlines, a
+// sub-chain has the whole lines between its newlines and, at its two ends, the part of a
+// line that begins or ends on an atom boundary. So a line of the run is cut at the atom
+// boundaries inside it, and every pair of cuts (or the line's own ends) is a fragment.
+//
+// `keep` is asked about each fragment and must be MONOTONE: if it rejects a string it
+// rejects every string that contains it. A fragment is a substring of the longer fragment
+// that starts at the same place, so a rejection ends that start. That is what keeps this
+// from being quadratic in the boundaries of a line when the question is "is it quoted by
+// the documentation?", which almost never holds past the first few atoms.
+export function* chainFragments({ text, ends }, minLength, keep = () => true) {
+  let k = 0
+  for (let ls = 0; ls <= text.length; ) {
+    let le = text.indexOf('\n', ls)
+    if (le < 0) le = text.length
+    const cuts = []
+    while (k < ends.length && ends[k] < le) {
+      if (ends[k] > ls) cuts.push(ends[k])
+      k++
+    }
+    if (le - ls >= minLength) {
+      const from = [ls, ...cuts]
+      const to = [...cuts, le]
+      for (const x of from) {
+        for (const y of to) {
+          if (y <= x) continue
+          const fragment = text.slice(x, y).trim()
+          if (fragment.length < minLength) continue
+          if (!keep(fragment)) break
+          yield fragment
+        }
+      }
+    }
+    ls = le + 1
+  }
 }
 
 // --- filesystem helpers ------------------------------------------------------------
@@ -718,12 +806,13 @@ export function readEngine(root, goRoots = GO_ROOTS) {
     const into = constsByDir.get(l.dir)
     for (const [k, v] of stringConsts(l.code, l.literals)) into.set(k, v)
   }
+  // One entry per maximal `+` chain (see chainRuns), never one per sub-chain.
   const strings = []
   let codeBlob = ''
   for (const l of lexed) {
     codeBlob += l.code + '\n'
-    for (const text of joinConcatenated(l.code, l.literals, constsByDir.get(l.dir))) {
-      strings.push({ text, file: l.file })
+    for (const run of chainRuns(l.code, l.literals, constsByDir.get(l.dir))) {
+      strings.push({ ...run, file: l.file })
     }
   }
   return { strings, codeBlob, files: lexed.length }
@@ -900,15 +989,7 @@ export function check({ root, docsRoot, citations = CITATIONS, exemptions = NON_
     // check stayed green while the documentation kept the shorter, now-misleading version.
     // Requiring the match to be followed by a newline or the end of the literal makes a
     // suffix a change, which is what it is.
-    const bounded = hits.some((h) => {
-      let at = h.text.indexOf(c.emitted)
-      while (at >= 0) {
-        const after = at + c.emitted.length
-        if (after === h.text.length || h.text[after] === '\n') return true
-        at = h.text.indexOf(c.emitted, at + 1)
-      }
-      return false
-    })
+    const bounded = hits.some((h) => runBounded(h, c.emitted))
     if (!bounded) {
       problems.push(
         `${c.id}: the engine still contains this text, but it no longer ENDS there — something ` +
@@ -956,23 +1037,28 @@ export function check({ root, docsRoot, citations = CITATIONS, exemptions = NON_
   // lines and — measured — missed the banner THIS FILE registers. Splitting the literals
   // into lines first asks the question the fence actually answers.
   const registered = citations.map((c) => c.emitted)
-  const engineLines = new Map() // trimmed output line -> file that emits it
-  for (const s of engine.strings) {
-    for (const raw of s.text.split('\n')) {
-      const t = raw.trim()
-      if (t.length >= MIN_QUOTED_LENGTH && !engineLines.has(t)) engineLines.set(t, s.file)
-    }
-  }
-  const found = new Map() // engine output line -> first documentation location
+  // Only an engine line some fence line CONTAINS can be found, so the fence lines are
+  // collected first and an engine line is looked up in them, not the other way round. They
+  // hold no newline, and neither does a fragment, so one `includes` over their join is
+  // exact. Engine lines are never listed: a full tree has hundreds of thousands.
+  const fences = [] // fence lines of at least MIN_QUOTED_LENGTH, in documentation order
   for (const doc of docs) {
     for (const { line, n } of fenceLines(doc.text)) {
-      if (line.length < MIN_QUOTED_LENGTH) continue
-      for (const [t] of engineLines) {
-        if (line.includes(t) && !found.has(t)) found.set(t, `${doc.rel}:${n}`)
-      }
+      if (line.length >= MIN_QUOTED_LENGTH) fences.push({ line, where: `${doc.rel}:${n}` })
     }
   }
-  const unregistered = [...found.keys()].filter((t) => !registered.some((r) => t.includes(r) || r.includes(t)))
+  const fenceText = fences.map((f) => f.line).join('\n')
+  const found = new Map() // engine output line -> first documentation location
+  for (const s of engine.strings) {
+    for (const t of chainFragments(s, MIN_QUOTED_LENGTH, (f) => fenceText.includes(f))) {
+      if (!found.has(t)) found.set(t, fences.findIndex((f) => f.line.includes(t)))
+    }
+  }
+  // Reported in documentation order; lines that share a fence line keep the order of the text.
+  const unregistered = [...found.keys()]
+    .sort((a, b) => found.get(a) - found.get(b))
+    .filter((t) => !registered.some((r) => t.includes(r) || r.includes(t)))
+  for (const t of found.keys()) found.set(t, fences[found.get(t)].where)
   for (const t of unregistered) {
     problems.push(
       `a text fence quotes an engine string that is NOT in the registry, at ${found.get(t)}:\n` +
@@ -1543,6 +1629,310 @@ function selfTest() {
       run(dir),
       'NO string literal in the engine sources contains it',
     )
+  }
+
+  // THE SPACE CLAUSES (#1149). A string the engine assembles from N literals joined by `+` is
+  // ONE chain, and it must be held ONCE. The reader used to materialise every contiguous
+  // sub-chain of it, N(N+1)/2 strings of up to N literals each, so a generated help table of
+  // 622 lines (and a 311-literal protobuf descriptor) exhausted the JavaScript heap of the
+  // full-tree run at about 3.5 GB. A fixture of 150 literals shows the same growth in a
+  // fraction of a second: it is quadratic in strings and cubic in characters. The second
+  // fixture interleaves a constant, because a chain that a constant takes part in is built
+  // by a different branch and a regression limited to it would pass the first.
+  for (const [name, preamble, line, runs] of [
+    [
+      'green: a long + chain is held once, not once per sub-chain',
+      '',
+      (n) => `\t"line ${n} of a long generated help text\\n"`,
+      1,
+    ],
+    [
+      'green: a long + chain that interleaves a constant is held once',
+      'const sep = "--\\n"\n',
+      (n) => `\t"line ${n} of a long generated help text\\n" + sep`,
+      3,
+    ],
+  ]) {
+    const lines = Array.from({ length: 150 }, (_, n) => line(n))
+    const dir = tmpTree(selfTestRoot)
+    writeTree(dir, { 'core/x.go': `package x\n${preamble}var help = \n${lines.join(' +\n')}\n` })
+    const { strings } = readEngine(dir, ['core'])
+    const held = strings.reduce((n, s) => n + s.text.length, 0)
+    const source = lines.reduce((n, l) => n + l.length, 0)
+    // A fixture that was never read holds nothing, which is not the same as holding it once.
+    const ok = strings.length > 0 && held > 0 && strings.length <= runs && held <= source
+    cases.push({
+      name,
+      ok,
+      expectRed: false,
+      got: ok ? [] : [`${strings.length} strings, ${held} characters held for a ${source}-character chain`],
+    })
+  }
+
+  // …and what keeps check 3 linear in the cuts of ONE line: a filter that rejects is asked
+  // about a start once and that start ends. Output alone cannot see it, so the calls are
+  // counted: 200 literals with no newline are one line with 199 cuts.
+  {
+    const atoms = Array.from({ length: 200 }, (_, i) => `"word${i} "`)
+    const { code, literals } = lexGo(`package x\nvar s = ${atoms.join(' + ')}\n`)
+    const [one] = chainRuns(code, literals, new Map())
+    let calls = 0
+    for (const _ of chainFragments(one, 12, () => (calls++, false))) {
+      // drained
+    }
+    const ok = calls > 0 && calls <= 2 * one.ends.length
+    cases.push({
+      name: 'green: a rejecting filter is asked about a line once per cut, not once per pair',
+      ok,
+      expectRed: false,
+      got: ok ? [] : [`asked ${calls} times for ${one.ends.length} atoms`],
+    })
+  }
+
+  // THE EQUIVALENCE CLAUSE (#1149). Holding a chain once must not change a verdict: every
+  // question the checks used to ask of the sub-chain strings is answered from the atom
+  // boundaries now, and joinConcatenated stays as the definition they are held to. Random
+  // sources, a fixed seed: chains of 1..12 literals and constants whose pieces end in a
+  // newline or not, so that an occurrence can stop on a boundary, before a newline, or in
+  // the middle of an atom, and a line can begin or end inside an atom; empty, blank,
+  // exactly-MIN, tabbed and non-ASCII pieces; and gaps that do and do not join (`+`, a
+  // comment, a call, a comma).
+  {
+    let seed = 20261010
+    const rnd = (n) => {
+      seed = (seed + 0x6d2b79f5) >>> 0
+      let t = seed
+      t = Math.imul(t ^ (t >>> 15), t | 1)
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61)
+      return ((t ^ (t >>> 14)) >>> 0) % n
+    }
+    const pick = (list) => list[rnd(list.length)]
+    const PIECES = [
+      'the engine prints this part, ',
+      'and then continues here\\n',
+      'a second line that is long enough ',
+      'tail\\n',
+      'x',
+      ' | ',
+      'short\\n',
+      '  indented words of a third line  ',
+      '',
+      ' ',
+      '\\n\\n',
+      'twelve chars',
+      'twelve chars\\n',
+      'a line ended the windows way, long enough\\r\\n',
+      '\\ttabbed\\ttext here\\t',
+      'ñandú — ünïcode 😀 longer text',
+    ]
+    const GAPS = [' + ', ' + ', ' +\n\t\t', '+', ' + /* c */ ', ' + // c\n\t\t', ' + f(x) + ', ', ']
+    const MIN = 12
+    const endsWhereALineEnds = (s, needle) => {
+      for (let at = s.indexOf(needle); at >= 0; at = s.indexOf(needle, at + 1)) {
+        const after = at + needle.length
+        if (after === s.length || s[after] === '\n') return true
+      }
+      return false
+    }
+    const ITERATIONS = 1000
+    let mismatch = ''
+    let compared = 0
+    for (let n = 0; n < ITERATIONS && !mismatch; n++) {
+      const names = ['KA', 'KB', 'KC']
+      const decls = names.map((k) => `const ${k} = "${pick(PIECES)}"`)
+      const stmts = []
+      for (let s = 1 + rnd(3); s > 0; s--) {
+        const atoms = Array.from({ length: 1 + rnd(12) }, () => (rnd(3) === 0 ? pick(names) : `"${pick(PIECES)}"`))
+        stmts.push(`\tv${s} := ${atoms.map((a, i) => (i === 0 ? a : pick(GAPS) + a)).join('')}`)
+      }
+      const src = `package x\n${decls.join('\n')}\nfunc f() {\n${stmts.join('\n')}\n}\n`
+      // The first line is the one the report prints, so it carries the case.
+      const fail = (what) => (mismatch ||= `${what} at iteration ${n}, source ${JSON.stringify(src)}`)
+      const { code, literals } = lexGo(src)
+      const consts = stringConsts(code, literals)
+      const reference = joinConcatenated(code, literals, consts)
+      const runs = chainRuns(code, literals, consts)
+      const needles = Array.from({ length: 6 }, () => {
+        const s = pick(reference)
+        const from = rnd(s.length)
+        return s.slice(from, from + 1 + rnd(30))
+      }).filter(Boolean)
+      for (const needle of needles) {
+        compared++
+        const want = reference.some((s) => endsWhereALineEnds(s, needle))
+        const got = runs.some((r) => runBounded(r, needle))
+        if (want !== got) fail(`bounded(${JSON.stringify(needle)}): reference ${want}, runs ${got}`)
+        if (reference.some((s) => s.includes(needle)) !== runs.some((r) => r.text.includes(needle))) {
+          fail(`contains(${JSON.stringify(needle)}) differs`)
+        }
+      }
+      const lines = new Set()
+      for (const s of reference) for (const raw of s.split('\n')) if (raw.trim().length >= MIN) lines.add(raw.trim())
+      const every = new Set(runs.flatMap((r) => [...chainFragments(r, MIN)]))
+      if ([...lines].sort().join('\0') !== [...every].sort().join('\0')) {
+        fail(`fragments differ: reference ${JSON.stringify([...lines].sort())}, runs ${JSON.stringify([...every].sort())}`)
+      }
+      // …and under a monotone filter, which is how check 3 asks: "does a fence quote it?".
+      const quoted = [...lines].filter(() => rnd(3) === 0).join('\n')
+      const keep = (f) => quoted.includes(f)
+      const wantQuoted = [...lines].filter(keep).sort().join('\0')
+      const gotQuoted = [...new Set(runs.flatMap((r) => [...chainFragments(r, MIN, keep)]))].sort().join('\0')
+      if (wantQuoted !== gotQuoted) fail(`quoted fragments differ for ${JSON.stringify(quoted)}`)
+    }
+    cases.push({
+      name: 'green: chain runs answer exactly as the sub-chain strings did',
+      ok: mismatch === '' && compared > 0,
+      expectRed: false,
+      got: mismatch === '' && compared > 0 ? [] : [mismatch || 'no needle was compared'],
+    })
+  }
+
+  // CHECK 1, ON A CHAIN. A registered sentence that is a whole literal of a LONGER chain
+  // stays anchored: the sub-chain that stops where the literal stops has always satisfied
+  // "ends where a line ends", and reading only the whole chain would turn this red. Pinned
+  // because this change must not alter a verdict; whether that leniency should go is its own
+  // cause, not this one. One bounded occurrence is enough, and so is a registered sentence
+  // the engine builds from two literals when the page quotes it whole.
+  record(
+    'green: a registered sentence that is one literal of a longer chain stays anchored',
+    false,
+    run(
+      base(
+        'package x\nfunc f() { log.Warn("the estate runs on no live traffic at all, which is deliberate" + " and a tail follows") }\n',
+        GOOD_DOC,
+      ),
+    ),
+  )
+  record(
+    'green: one occurrence that ends its line is enough, whatever the others do',
+    false,
+    run(
+      base(
+        'package x\nfunc f() { log.Warn("the estate runs on no live traffic at all, which is deliberate") }\n' +
+          'func g() { log.Warn("the estate runs on no live traffic at all, which is deliberate; and more") }\n',
+        GOOD_DOC,
+      ),
+    ),
+  )
+  {
+    const a = 'the estate runs on no live traffic at all, which is deliberate, '
+    const b = 'and the second literal is long enough to be a line by itself'
+    record(
+      'green: a registered sentence built from two literals, quoted whole',
+      false,
+      run(
+        base(`package x\nfunc f() { log.Warn("${a}" + "${b}") }\n`, '```text\n' + a + b + '\n```\n'),
+        [{ id: 't2', emitted: a + b, source: 'core/x.go', cited: ['how-to/p.md'], why: 'self-test' }],
+      ),
+    )
+  }
+
+  // …and what makes a chain one string and not several: only `+` between atoms joins them.
+  // A runtime operand in between, or a comma, means the compiler never builds the sentence.
+  {
+    const a = 'the estate runs on no live traffic at all, '
+    const b = 'which is deliberate'
+    const missing = 'NO string literal in the engine sources contains it'
+    record(
+      'red: a runtime operand between two literals does not join them',
+      true,
+      run(base(`package x\nfunc g(r string) { log.Warn("${a}" + r + "${b}") }\n`, GOOD_DOC)),
+      missing,
+    )
+    record(
+      'red: two arguments are not one string',
+      true,
+      run(base(`package x\nfunc g() { log.Warn("${a}", "${b}") }\n`, GOOD_DOC)),
+      missing,
+    )
+    // A constant from ANOTHER FILE of the package is an atom like any other.
+    {
+      const dir = tmpTree(selfTestRoot)
+      writeTree(dir, {
+        'core/a.go': `package x\nconst advice = "${b}"\n`,
+        'core/x.go': `package x\nfunc f() { log.Warn("${a}" + advice) }\n`,
+        'docs/how-to/p.md': GOOD_DOC,
+        ...Object.fromEntries(['de', 'es', 'fr', 'ja', 'ru', 'zh'].map((l) => [`docs/${l}/how-to/p.md`, GOOD_DOC])),
+      })
+      record('green: a constant from a sibling file resolves through the chain', false, run(dir))
+    }
+  }
+
+  // CHECK 3, ON A CHAIN. A fence line is found when it contains an engine line, and an engine
+  // line may be built from several literals: whole (each part below the quotation length, the
+  // joined line above it), or only its first literal quoted.
+  {
+    const fence = (...lines) => '\n```text\n' + lines.join('\n') + '\n```\n'
+    const notRegistered = 'NOT in the registry'
+    const x = 'first half of an engine line, '
+    const y = 'second half of that same line'
+    record(
+      'red: unregistered fence quotation of a line built from two literals',
+      true,
+      run(base(GOOD_GO + `func g() { log.Warn("${x}" + "${y}") }\n`, GOOD_DOC + fence(x + y))),
+      [notRegistered, 'first half'],
+    )
+    const head = 'a literal of forty or more characters is here,'
+    record(
+      'red: a fence quoting only the first literal of a longer chain is found',
+      true,
+      run(
+        base(
+          GOOD_GO + `func g() { log.Warn("${head}" + " and a tail that the fence does not quote at all") }\n`,
+          GOOD_DOC + fence(head),
+        ),
+      ),
+      [notRegistered, head],
+    )
+    // The boundary is `>=`, on both sides of the engine and of the fence.
+    const s40 = 'engine line '.padEnd(40, 'z')
+    const s39 = 'engine line '.padEnd(39, 'z')
+    record(
+      'red: a 40-character engine line quoted in a fence must be registered',
+      true,
+      run(base(GOOD_GO + `func g() { log.Warn("${s40}") }\n`, GOOD_DOC + fence(s40))),
+      [notRegistered, s40],
+    )
+    record(
+      'green: a 39-character engine line is a fragment, not a quotation',
+      false,
+      run(base(GOOD_GO + `func g() { log.Warn("${s39}") }\n`, GOOD_DOC + fence(s39))),
+    )
+    // Reported in documentation order, and located at the FIRST fence that quotes the line.
+    const alpha = 'alpha: an unregistered engine sentence of enough length to count'
+    const omega = 'omega: another unregistered engine sentence of enough length too'
+    {
+      const res = run(
+        base(
+          GOOD_GO + `func g() { log.Warn("${alpha}") }\nfunc h() { log.Warn("${omega}") }\n`,
+          GOOD_DOC + fence(omega) + fence(alpha),
+        ),
+      )
+      const first = (t) => res.problems.findIndex((p) => p.includes(t))
+      const ok = first('omega:') >= 0 && first('alpha:') >= 0 && first('omega:') < first('alpha:')
+      cases.push({
+        name: 'green: problems are reported in documentation order, not engine order',
+        ok,
+        expectRed: false,
+        got: ok ? [] : res.problems.map((p) => p.split('\n')[0]),
+      })
+    }
+    {
+      const doc = GOOD_DOC + fence(omega) + '\nprose\n' + fence(omega)
+      const dir = base(GOOD_GO + `func h() { log.Warn("${omega}") }\n`, doc)
+      for (const l of ['de', 'es', 'fr', 'ja', 'ru', 'zh']) {
+        fs.writeFileSync(path.join(dir, 'docs', l, 'how-to', 'p.md'), GOOD_DOC)
+      }
+      const where = `how-to/p.md:${doc.split('\n').indexOf(omega) + 1}`
+      const res = run(dir)
+      const ok = res.problems.some((p) => p.includes(`at ${where}:`))
+      cases.push({
+        name: 'green: the first documentation location of a quoted line is the one reported',
+        ok,
+        expectRed: false,
+        got: ok ? [] : [`expected ${where}`, ...res.problems.map((p) => p.split('\n')[0])],
+      })
+    }
   }
 
   const failed = cases.filter((c) => !c.ok)

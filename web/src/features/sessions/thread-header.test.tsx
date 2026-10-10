@@ -371,6 +371,25 @@ describe('thread header — the ⋯ menu', () => {
     const dialog = await screen.findByTestId('narrative-cli')
     expect(dialog).toHaveTextContent('olivares session follow run-1 -o json')
     expect(dialog).toHaveTextContent('olivares session stop run-1')
+    expect(dialog).toHaveTextContent('olivares session send run-1')
+  })
+
+  it('does not recommend terminal resume for a host isolation refusal', async () => {
+    renderThread(
+      run({
+        state: 'failed',
+        reason:
+          'the session was not started because its network boundary could not be set up: the host or container must allow unprivileged user and network namespaces and Landlock: operation not permitted',
+      }),
+    )
+    openMenu()
+    act(() => {
+      fireEvent.click(screen.getByRole('menuitem', { name: 'In a terminal' }))
+    })
+    const dialog = await screen.findByTestId('narrative-cli')
+    expect(dialog).not.toHaveTextContent('olivares session resume')
+    expect(dialog).not.toHaveTextContent('olivares session send')
+    expect(dialog).toHaveTextContent('olivares session follow run-1')
   })
 
   it('copies the session reference', async () => {

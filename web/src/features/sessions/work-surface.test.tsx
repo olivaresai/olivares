@@ -107,6 +107,37 @@ function renderSurface(over: Partial<Parameters<typeof WorkSurface>[0]> = {}) {
 const pane = (id: string) => document.getElementById(`work-pane-${id}`)
 
 describe('WorkSurface', () => {
+  it('does not offer a composer for a host isolation refusal', () => {
+    const failed = {
+      ...RUN,
+      state: 'failed' as const,
+      reason:
+        'the session was not started because its network boundary could not be set up: the host or container must allow unprivileged user and network namespaces and Landlock: operation not permitted',
+    }
+    renderSurface({
+      resolution: {
+        ...resolution,
+        runs: [failed],
+        session: mergeSessions([], [failed])[0],
+      },
+    })
+    expect(screen.queryByTestId('work-composer')).not.toBeInTheDocument()
+  })
+  it('keeps the composer for a retryable failure', () => {
+    const failed = {
+      ...RUN,
+      state: 'failed' as const,
+      reason: 'provider temporarily unavailable',
+    }
+    renderSurface({
+      resolution: {
+        ...resolution,
+        runs: [failed],
+        session: mergeSessions([], [failed])[0],
+      },
+    })
+    expect(screen.getByTestId('work-composer')).toBeInTheDocument()
+  })
   it('mounts all three panes whatever is in front', async () => {
     renderSurface()
     await screen.findByTestId('work-rail')

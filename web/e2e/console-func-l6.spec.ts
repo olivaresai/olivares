@@ -1462,7 +1462,11 @@ test('deploy plans GitOps live and governs desired-state authoring end to end', 
 test('orchestration governs topology, schedules, revisions, and a two-person fire live', async ({
   page,
 }) => {
-  test.skip((await (await page.request.get('/v1/server-info')).json()).edition === 'community', 'Orchestration is Business Identity & Scale; Community refusal is qualified separately.')
+  test.skip(
+    (await (await page.request.get('/v1/server-info')).json()).edition ===
+      'community',
+    'Orchestration is Business Identity & Scale; Community refusal is qualified separately.',
+  )
   const token = await loginDemo(page)
   const secondAdminToken = await loginAPI(
     page,

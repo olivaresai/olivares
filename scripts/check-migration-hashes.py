@@ -83,6 +83,14 @@ def main():
         if refs.strip() and baseline == git('rev-parse', 'HEAD').decode().strip():
             baseline = 'HEAD^'
     sha = git('rev-parse', '--verify', baseline + '^{commit}').decode().strip()
+    # A release that starts a fresh-install line (0.1: no upgrade from 26.10.x) declares the epoch in
+    # core/migrate/EPOCH.txt. A baseline without that file predates it, so history restarts once; every
+    # baseline that carries the file is compared in full again.
+    epoch = ROOT / 'core/migrate/EPOCH.txt'
+    if epoch.is_file() and subprocess.run(['git', 'cat-file', '-e', f'{sha}:core/migrate/EPOCH.txt'],
+                                          cwd=ROOT, capture_output=True).returncode != 0:
+        print(f'✓ migration epoch {epoch.read_text().strip()}: baseline {sha[:12]} predates it; history restarts here')
+        return 0
     before = baseline_files(sha)
     paths = git('ls-files', '-z', '--cached', '--others', '--exclude-standard').decode().split('\0')
     after = {}

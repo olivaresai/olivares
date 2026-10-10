@@ -88,9 +88,7 @@ test('palette opens known sessions, installed tools and settings at both widths'
   ).toBeVisible({ timeout: 60_000 })
   const sessionURL = new URL(page.url())
   expect(sessionURL.searchParams.get('session')).toBeTruthy()
-  const railTitle = page
-    .getByTestId('rail-row-name')
-    .first()
+  const railTitle = page.getByTestId('rail-row-name').first()
   await expect(railTitle).toBeAttached()
   const title = (await railTitle.textContent())?.trim()
   expect(title).toBeTruthy()
@@ -130,7 +128,10 @@ test('palette opens known sessions, installed tools and settings at both widths'
       for (const object of ['session', 'tool', 'setting'] as const) {
         await page.goto('/sessions')
         await expect(
-          page.getByRole('listbox', { name: 'Work rail' }).getByRole('option').first(),
+          page
+            .getByRole('listbox', { name: 'Work rail' })
+            .getByRole('option')
+            .first(),
         ).toBeAttached()
         await page.keyboard.press('Control+k')
         const palette = page.getByRole('dialog')
@@ -249,7 +250,10 @@ test('palette opens known sessions, installed tools and settings at both widths'
     await reader.waitForURL((url) => url.pathname !== '/login')
     await reader.goto(new URL('/settings', page.url()).href)
     await expect(
-      reader.getByRole('navigation', { name: 'Settings sections', exact: true }),
+      reader.getByRole('navigation', {
+        name: 'Settings sections',
+        exact: true,
+      }),
     ).toBeVisible()
     await reader.keyboard.press('Control+k')
     const palette = reader.getByRole('dialog')

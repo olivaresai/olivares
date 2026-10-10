@@ -143,7 +143,7 @@ export function SessionOverview({
             description={t('card.observedNotRead')}
           />
         )
-      ) : (
+      ) : run?.state === 'failed' ? null : (
         <p className="text-body text-muted-foreground">
           {t('card.noObservationYet')}
         </p>

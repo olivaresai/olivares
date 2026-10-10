@@ -26,6 +26,7 @@ import { Spinner } from '@/components/ui/spinner'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { toast } from '@/components/ui/toaster'
 import { sessionNameLadder } from '@/features/home/work-line'
+import { isResumableRun } from '@/features/sessions/provenance'
 import { RelTimeLabel } from '@/features/shared'
 import { NamedRef } from '@/features/shared/named-ref'
 import { useClientSettings } from '@/features/settings/preferences'
@@ -217,7 +218,7 @@ export function RunDetailSheet({
 
     const stoppable = ['pending', 'running', 'idle'].includes(run.state)
     // A stream-json run that never captured a session starts again with the same settings.
-    const resumable = ['stopped', 'failed'].includes(run.state)
+    const resumable = isResumableRun(run)
     const startsAgain =
       run.transport === 'stream-json' && !run.claude_session_id
     const cleanable = ['stopped', 'failed'].includes(run.state)

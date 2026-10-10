@@ -158,7 +158,13 @@ const ROUTES = [
   'security',
   'red-team',
   'compliance',
-  ...(existsSync(fileURLToPath(new URL('../src/features/orchestration/views.tsx', import.meta.url))) ? ['orchestration'] : []),
+  ...(existsSync(
+    fileURLToPath(
+      new URL('../src/features/orchestration/views.tsx', import.meta.url),
+    ),
+  )
+    ? ['orchestration']
+    : []),
   'voice',
 ]
 

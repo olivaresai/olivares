@@ -50,7 +50,8 @@ a session prompt and response, Settings, Deploy, Workspaces and Sessions. The on
 stand-in is a labelled local model provider; vendor-account qualification is not
 claimed. O1 covers setup through the first answer. O7 rejects unresolved translation
 keys, HTTP codes shown to users, loading over five seconds, console errors,
-unexplained disabled primary actions, version drift and filesystem-path fields.
+unexplained disabled primary actions, a console identity whose version differs from
+the release, and filesystem-path fields.
 Both must PASS.
 
 Artifacts retain the image and executable identities, binary/UI versions, videos,

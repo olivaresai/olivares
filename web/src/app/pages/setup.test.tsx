@@ -12,8 +12,9 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18n from 'i18next'
 import type { ReactNode } from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mockNavigate = vi.fn()
 vi.mock('@tanstack/react-router', () => ({
@@ -458,5 +459,89 @@ describe('SetupPage', () => {
       ).toContain(
         '`olivares first-boot --data-dir <data directory> --new-token`',
       )
+  })
+
+  // The engine names the first organization "Default Organization" when setup sends no
+  // name (core/api/handlers_auth.go firstOrgNaming), and the console shows the stored
+  // name as is: a Spanish setup left a Spanish sidebar with one English label (#1116).
+  // The page sends the name in the language the person set up in; English sends none, so
+  // the engine's published default (name and "default" handle) stays what it was.
+  describe('first organization name', () => {
+    afterEach(async () => {
+      await i18n.changeLanguage('en')
+    })
+
+    async function submitSetup() {
+      const user = userEvent.setup()
+      mockSetup.mockResolvedValue({
+        id: 'u-1',
+        email: 'admin@example.com',
+        status: 'active',
+        is_superadmin: true,
+        created_at: '2026-08-05T10:00:00Z',
+      })
+      render(<SetupPage />, { wrapper: Wrapper })
+      await user.type(
+        await screen.findByLabelText(i18n.t('auth:setup.token')),
+        'olv_tok',
+      )
+      await user.type(
+        screen.getByLabelText(i18n.t('auth:setup.email')),
+        'admin@example.com',
+      )
+      await user.type(
+        screen.getByLabelText(i18n.t('auth:setup.password')),
+        'correct-horse-battery',
+      )
+      await user.click(
+        screen.getByRole('button', { name: i18n.t('auth:setup.submit') }),
+      )
+      await waitFor(() => expect(mockSetup).toHaveBeenCalledTimes(1))
+      return mockSetup.mock.calls[0]![0] as Record<string, unknown>
+    }
+
+    it.each(['en', 'en-US'])(
+      'sends no name in %s, so the engine default stays',
+      async (lng) => {
+        await i18n.changeLanguage(lng)
+        const sent = await submitSetup()
+        expect(sent).toStrictEqual({
+          token: 'olv_tok',
+          email: 'admin@example.com',
+          password: 'correct-horse-battery',
+        })
+      },
+    )
+
+    // A catalog that has not loaded answers with the English text; that must not
+    // reach the engine as a name (it would take the handle "default-organization").
+    it('sends no name when the language catalog did not load', async () => {
+      await i18n.changeLanguage('es')
+      i18n.removeResourceBundle('es', 'auth')
+      try {
+        const sent = await submitSetup()
+        expect(sent).not.toHaveProperty('organization')
+      } finally {
+        i18n.addResourceBundle(
+          'es',
+          'auth',
+          authLocales['/src/lib/i18n/locales/es/auth.json']!,
+        )
+      }
+    })
+
+    it.each(LANGUAGE_CODES.filter((l) => l !== 'en'))(
+      'sends the organization name in %s, not the English default',
+      async (lng) => {
+        await i18n.changeLanguage(lng)
+        const sent = await submitSetup()
+        const expected =
+          authLocales[`/src/lib/i18n/locales/${lng}/auth.json`]!.setup
+            .organization
+        expect(expected, `${lng} setup.organization`).toBeTruthy()
+        expect(sent.organization).toBe(expected)
+        expect(sent.organization).not.toBe('Default Organization')
+      },
+    )
   })
 })

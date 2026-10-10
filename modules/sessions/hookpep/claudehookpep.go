@@ -592,15 +592,19 @@ func (d *Decider) startToolSpan(authErr error, scope auth.SessionScope, in claud
 	return d.Tracer.ExecuteTool(parent, scope.AgentRef, in.Tool, scope.RunRef)
 }
 
-// sessionRunAdmitted asks the authorizer that admits a launch whether p still holds perm
+// SessionRunAdmitted asks the authorizer that admits a launch whether p still holds perm
 // on the session's run: RBAC or a scoped grant, then scoped forbids and the deny-overlay.
-// A nil authorizer refuses.
-func SessionRunAdmitted(ctx context.Context, authz *auth.Authorizer, p auth.Principal, tenant model.TenantID, perm auth.Permission, runRef string, workspace model.ID) auth.Decision {
+// run is the run's stored ID (sessions.StoredRunID), the resource the native run routes
+// authorize. A nil authorizer or an unknown run refuses.
+func SessionRunAdmitted(ctx context.Context, authz *auth.Authorizer, p auth.Principal, tenant model.TenantID, perm auth.Permission, run model.ID, workspace model.ID) auth.Decision {
 	if authz == nil {
 		return auth.Decision{Reason: "session run authorizer is not wired"}
 	}
+	if run.IsZero() {
+		return auth.Decision{Reason: "session run is unknown"}
+	}
 	return authz.Authorize(ctx, auth.Request{Principal: p, Tenant: tenant, Permission: perm,
-		Resource: auth.ResourceAttrs{Kind: perm.Resource(), ID: runRef, WorkspaceID: workspace}})
+		Resource: auth.ResourceAttrs{Kind: perm.Resource(), ID: run.String(), WorkspaceID: workspace}})
 }
 
 // shadowVerdict is the record of a would-be AUTHORED-policy verdict that observe mode
@@ -689,7 +693,13 @@ func (d *Decider) decide(ctx context.Context, in claude.HookDecisionInput, princ
 		if in.Mode == "read" {
 			verb = auth.VerbRead
 		}
-		if admitted := SessionRunAdmitted(ctx, d.Authz, principal, tenant, auth.Permission("sessions:run:"+verb), principal.SessionRunRef, principal.SessionWorkspaceID); !admitted.Allow {
+		admitted := auth.Decision{Reason: "session run could not be read"}
+		if run, err := sessions.StoredRunID(ctx, d.Store, tenant, principal.SessionRunRef); err != nil {
+			admitted.Reason += ": " + err.Error()
+		} else {
+			admitted = SessionRunAdmitted(ctx, d.Authz, principal, tenant, auth.Permission("sessions:run:"+verb), run, principal.SessionWorkspaceID)
+		}
+		if !admitted.Allow {
 			// The agent gets the fixed reason; the operator gets the authorizer's own,
 			// so an unwired authorizer or a policy outage is not read as lost authority.
 			if d.Log != nil {

@@ -87,6 +87,26 @@ beforeEach(() => {
 })
 
 describe('SessionConversation', () => {
+  it('keeps the empty conversation prompt for a retryable failure', () => {
+    attachStatus.value = 'closed'
+    wrap({ state: 'failed', reason: 'provider temporarily unavailable' })
+    expect(
+      screen.getByText('No turns yet. Send a sentence below.'),
+    ).toBeInTheDocument()
+  })
+  it('does not ask for a sentence after a host isolation refusal', () => {
+    attachStatus.value = 'closed'
+    wrap({
+      state: 'failed',
+      reason:
+        'the session was not started because its network boundary could not be set up: the host or container must allow unprivileged user and network namespaces and Landlock: operation not permitted',
+    })
+    expect(
+      screen.queryByText('No turns yet. Send a sentence below.'),
+    ).not.toBeInTheDocument()
+    act(() => onHistoryRef.current?.(JSON.stringify(nativeHistory)))
+    expect(screen.getByText('initial CLI prompt')).toBeInTheDocument()
+  })
   it('shows native stored earlier turns on a fresh view and clears words on tenant or sign-in change', async () => {
     wrap({ state: 'stopped' })
     act(() => onHistoryRef.current?.(JSON.stringify(nativeHistory)))

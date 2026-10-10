@@ -148,6 +148,6 @@ func firstNonEmptyStr(a, b string) string {
 	return b
 }
 
-func sessionRunAdmitted(ctx context.Context, authz *auth.Authorizer, p auth.Principal, tenant model.TenantID, perm auth.Permission, runRef string, workspace model.ID) auth.Decision {
-	return hookpep.SessionRunAdmitted(ctx, authz, p, tenant, perm, runRef, workspace)
+func sessionRunAdmitted(ctx context.Context, authz *auth.Authorizer, p auth.Principal, tenant model.TenantID, perm auth.Permission, run model.ID, workspace model.ID) auth.Decision {
+	return hookpep.SessionRunAdmitted(ctx, authz, p, tenant, perm, run, workspace)
 }

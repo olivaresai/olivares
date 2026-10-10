@@ -200,8 +200,9 @@ func (m *Module) sessionPeerReadable(ctx context.Context, tenant model.TenantID,
 	if err != nil {
 		return false
 	}
+	// The resource the native run routes authorize: kind "run" and the stored ID.
 	resource := auth.ResourceFor(permRunRead)
-	resource.Kind, resource.ID, resource.WorkspaceID = string(runKind), peer.String(model.ColID), workspace
+	resource.ID, resource.WorkspaceID = peer.String(model.ColID), workspace
 	return m.WorkAuthorizer.Authorize(ctx, auth.Request{Principal: p, Tenant: tenant, Permission: permRunRead, Resource: resource}).Allow
 }
 

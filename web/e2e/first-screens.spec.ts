@@ -217,7 +217,10 @@ test.describe('the first screens', () => {
       '/models',
       '/evals',
       '/reporting',
-      ...((await (await page.request.get('/v1/server-info')).json()).edition === 'community' ? [] : ['/orchestration']),
+      ...((await (await page.request.get('/v1/server-info')).json()).edition ===
+      'community'
+        ? []
+        : ['/orchestration']),
       '/knowledge',
       '/compliance',
       '/security',

@@ -45,7 +45,7 @@ func TestSR2ProviderFullRequiresCurrentRunAdministratorAuthorization(t *testing.
 			if code != 201 {
 				t.Fatalf("publish current administration forbid: %d %s", code, raw)
 			}
-			current, err := h.set.gov.Evaluator().Evaluate(t.Context(), auth.Request{Principal: human, Tenant: tenant, Permission: "sessions:run:admin", Resource: auth.ResourceAttrs{Kind: "session_run", ID: intent.RunRef, WorkspaceID: scope.WorkspaceID}})
+			current, err := h.set.gov.Evaluator().Evaluate(t.Context(), auth.Request{Principal: human, Tenant: tenant, Permission: "sessions:run:admin", Resource: auth.ResourceAttrs{Kind: "run", ID: hookTestRunID(t, h.st, tenant, intent.RunRef).String(), WorkspaceID: scope.WorkspaceID}})
 			if err != nil || current.Allow {
 				t.Fatalf("control: current administration was not forbidden: %+v %v", current, err)
 			}

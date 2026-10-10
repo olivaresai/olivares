@@ -106,6 +106,7 @@ func endpointSessionHook(t *testing.T, eng *engine, run string) (string, string,
 	if err != nil {
 		t.Fatal(err)
 	}
+	hookTestRunID(t, eng.store, tenant, run)
 	sid, err := eng.sessionsMod.ResolveSession(ctx, tenant, sessions.SessionBinding{Provider: sessions.ProviderOperated, ExternalID: run, Origin: sessions.OriginOperated})
 	if err != nil {
 		t.Fatal(err)

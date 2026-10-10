@@ -12,6 +12,7 @@ import { KEYBINDINGS } from '@/lib/keybindings/table'
 import { cn } from '@/lib/utils'
 import type { ConversationItem } from './conversation-frames'
 import {
+  hostIsolationUnavailable,
   operatorName,
   primaryRun,
   sessionShortId,
@@ -332,7 +333,7 @@ export function WorkSurface({
             back={back}
             peerSessions={sessions}
           />
-          {run ? (
+          {run && !hostIsolationUnavailable(run) ? (
             <WorkComposer
               frame="docked"
               attached={{

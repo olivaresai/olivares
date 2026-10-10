@@ -72,6 +72,20 @@ async function clickStop() {
   return user
 }
 
+it('withholds Start again for a host isolation refusal in the legacy run sheet', async () => {
+  wrap({
+    ...unnamed,
+    state: 'failed',
+    reason:
+      'the session was not started because its network boundary could not be set up: the host or container must allow unprivileged user and network namespaces and Landlock: operation not permitted',
+  })
+  await screen.findByText('Failed')
+  expect(
+    screen.queryByRole('button', { name: 'Start again' }),
+  ).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'Clean up' })).toBeInTheDocument()
+})
+
 describe('Stop asks when confirm-before-stop is on', () => {
   it('sends no stop when the operator cancels', async () => {
     wrap(unnamed)
