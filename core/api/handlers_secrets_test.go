@@ -5,11 +5,15 @@
 package api_test
 
 import (
+	"context"
+	"errors"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
 )
 
 // newSecretsHarness wires a server WITH the runtime secret store over the
@@ -18,6 +22,75 @@ func newSecretsHarness(t *testing.T) *harness {
 	return newHarnessOpts(t, func(o *api.Options) {
 		o.SecretStore = auth.NewSecretStore(o.Store, fakeSealer{})
 	})
+}
+
+func TestSecretsGlobalScopeRefusesSessionEnvWrites(t *testing.T) {
+	h := newSecretsHarness(t)
+	admin := h.adminLogin()
+	h.elevate(admin)
+	for _, name := range []string{"env/x", " \t env/x \n"} {
+		t.Run(name, func(t *testing.T) {
+			got := h.do("PUT", "/v1/console/secrets", admin, map[string]any{
+				"name": name, "value": "fixture-session-value",
+			}, nil)
+			if got.code != http.StatusBadRequest {
+				t.Fatalf("global env/ PUT = %d %s, want 400", got.code, got.raw)
+			}
+			errBody := got.body["error"].(map[string]any)
+			message, _ := errBody["message"].(string)
+			if errBody["code"] != "bad_request" || !strings.Contains(message, "New session > More options > Manage session secrets") ||
+				!strings.Contains(message, "scope=tenant") {
+				t.Fatalf("refusal must name the tenant store: %s", got.raw)
+			}
+			if strings.Contains(got.raw, "fixture-session-value") {
+				t.Fatal("refusal leaked the value")
+			}
+		})
+	}
+	listed := h.do("GET", "/v1/console/secrets", admin, nil, nil)
+	if listed.code != http.StatusOK || len(listed.body["secrets"].([]any)) != 0 {
+		t.Fatalf("refused write persisted a global secret: %s", listed.raw)
+	}
+}
+
+func TestSecretsGlobalLegacySessionEnvRemainsReadableAndDeletable(t *testing.T) {
+	h := newSecretsHarness(t)
+	admin := h.adminLogin()
+	h.elevate(admin)
+	// Seed through the store to represent an existing deployment-wide connector
+	// reference. The API guard must not change store:<name> resolution or DELETE.
+	svc := auth.NewSecretStore(h.st, fakeSealer{})
+	ctx := context.Background()
+	actor := auth.Principal{Kind: auth.KindUser, UserID: model.NewID(), Superadmin: true}
+	view, err := svc.Put(ctx, actor, auth.GlobalSecretScope, "env/legacy", "fixture-legacy-value", "existing connector")
+	if err != nil {
+		t.Fatal(err)
+	}
+	listed := h.do("GET", "/v1/console/secrets", admin, nil, nil)
+	items, _ := listed.body["secrets"].([]any)
+	if listed.code != http.StatusOK || len(items) != 1 || items[0].(map[string]any)["name"] != view.Name {
+		t.Fatalf("legacy secret is not listed: %s", listed.raw)
+	}
+	if strings.Contains(listed.raw, "fixture-legacy-value") {
+		t.Fatal("list leaked the value")
+	}
+	got := h.do("PUT", "/v1/console/secrets", admin, map[string]any{
+		"name": view.Name, "value": "fixture-replacement-value",
+	}, nil)
+	if got.code != http.StatusBadRequest {
+		t.Fatalf("global env/ update = %d %s, want 400", got.code, got.raw)
+	}
+	value, err := svc.Resolve(ctx, auth.GlobalSecretScope, view.Name)
+	if err != nil || string(value) != "fixture-legacy-value" {
+		t.Fatal("refused update changed legacy resolution")
+	}
+	deleted := h.do("DELETE", "/v1/console/secrets", admin, map[string]any{"name": view.Name}, nil)
+	if deleted.code != http.StatusNoContent {
+		t.Fatalf("legacy DELETE = %d %s, want 204", deleted.code, deleted.raw)
+	}
+	if _, err := svc.Resolve(ctx, auth.GlobalSecretScope, view.Name); !errors.Is(err, auth.ErrSecretNotFound) {
+		t.Fatalf("deleted secret still resolves: %v", err)
+	}
 }
 
 func TestSecretsConsoleLifecycle(t *testing.T) {

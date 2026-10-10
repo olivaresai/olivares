@@ -530,7 +530,7 @@ func TestS504MRTRToolResultMediatedRelease(t *testing.T) {
 	//
 	// This leg used to assert that a NIL mediator means no release child: "no
 	// mediator ⇒ no release child". The community build is exactly that
-	// composition (cmd/olivares/wire_noenterprise.go:362-375 returns nil), so the
+	// composition (cmd/olivares/edition_ports.go: no mcpElicitationMediator port), so the
 	// default artifact released governed MRTR bytes with no release operation for
 	// the evidence journal to refuse — measured: 200, the input-request payload in
 	// the body, zero releases.

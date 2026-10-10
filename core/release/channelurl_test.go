@@ -25,49 +25,49 @@ func TestResolveChannelReleaseAssets(t *testing.T) {
 			endpoint:    "https://github.com/olivaresai/olivares",
 			wantTag:     "",
 			wantMani:    "https://github.com/olivaresai/olivares/releases/latest/download/stable-manifest.json",
-			wantArtifac: "https://github.com/olivaresai/olivares/releases/download/v26.8.0/olivares_26.8.0_linux_amd64.tar.gz",
+			wantArtifac: "https://github.com/olivaresai/olivares/releases/download/26.800/olivares_26.800_linux_amd64.tar.gz",
 		},
 		{
 			name:        "a trailing slash changes nothing",
 			endpoint:    "https://github.com/olivaresai/olivares/",
 			wantTag:     "",
 			wantMani:    "https://github.com/olivaresai/olivares/releases/latest/download/stable-manifest.json",
-			wantArtifac: "https://github.com/olivaresai/olivares/releases/download/v26.8.0/olivares_26.8.0_linux_amd64.tar.gz",
+			wantArtifac: "https://github.com/olivaresai/olivares/releases/download/26.800/olivares_26.800_linux_amd64.tar.gz",
 		},
 		{
 			name:        "an explicit latest-download base",
 			endpoint:    "https://github.com/olivaresai/olivares/releases/latest/download",
 			wantTag:     "",
 			wantMani:    "https://github.com/olivaresai/olivares/releases/latest/download/stable-manifest.json",
-			wantArtifac: "https://github.com/olivaresai/olivares/releases/download/v26.8.0/olivares_26.8.0_linux_amd64.tar.gz",
+			wantArtifac: "https://github.com/olivaresai/olivares/releases/download/26.800/olivares_26.800_linux_amd64.tar.gz",
 		},
 		{
 			name:        "a release PAGE url pins that release",
 			endpoint:    "https://github.com/example-owner/example-rehearsal/releases/tag/v0.0.0-rehearsal.1",
 			wantTag:     "v0.0.0-rehearsal.1",
 			wantMani:    "https://github.com/example-owner/example-rehearsal/releases/download/v0.0.0-rehearsal.1/stable-manifest.json",
-			wantArtifac: "https://github.com/example-owner/example-rehearsal/releases/download/v0.0.0-rehearsal.1/olivares_26.8.0_linux_amd64.tar.gz",
+			wantArtifac: "https://github.com/example-owner/example-rehearsal/releases/download/v0.0.0-rehearsal.1/olivares_26.800_linux_amd64.tar.gz",
 		},
 		{
 			name:        "a release DOWNLOAD base pins that release",
 			endpoint:    "https://github.com/example-owner/example-rehearsal/releases/download/v0.0.0-rehearsal.1",
 			wantTag:     "v0.0.0-rehearsal.1",
 			wantMani:    "https://github.com/example-owner/example-rehearsal/releases/download/v0.0.0-rehearsal.1/stable-manifest.json",
-			wantArtifac: "https://github.com/example-owner/example-rehearsal/releases/download/v0.0.0-rehearsal.1/olivares_26.8.0_linux_amd64.tar.gz",
+			wantArtifac: "https://github.com/example-owner/example-rehearsal/releases/download/v0.0.0-rehearsal.1/olivares_26.800_linux_amd64.tar.gz",
 		},
 		{
 			name:        "the bare releases page means the latest release",
 			endpoint:    "https://github.com/olivaresai/olivares/releases",
 			wantTag:     "",
 			wantMani:    "https://github.com/olivaresai/olivares/releases/latest/download/stable-manifest.json",
-			wantArtifac: "https://github.com/olivaresai/olivares/releases/download/v26.8.0/olivares_26.8.0_linux_amd64.tar.gz",
+			wantArtifac: "https://github.com/olivaresai/olivares/releases/download/26.800/olivares_26.800_linux_amd64.tar.gz",
 		},
 		{
 			name:        "a mirror serving the release shape from another host is accepted",
 			endpoint:    "https://mirror.example.test/olivaresai/olivares/releases/latest/download",
 			wantTag:     "",
 			wantMani:    "https://mirror.example.test/olivaresai/olivares/releases/latest/download/stable-manifest.json",
-			wantArtifac: "https://mirror.example.test/olivaresai/olivares/releases/download/v26.8.0/olivares_26.8.0_linux_amd64.tar.gz",
+			wantArtifac: "https://mirror.example.test/olivaresai/olivares/releases/download/26.800/olivares_26.800_linux_amd64.tar.gz",
 		},
 	}
 	for _, c := range cases {
@@ -89,7 +89,7 @@ func TestResolveChannelReleaseAssets(t *testing.T) {
 			if got := l.SignatureURL(); got != c.wantMani+".sig" {
 				t.Fatalf("SignatureURL() = %q, want the manifest URL plus .sig", got)
 			}
-			got, err := l.ArtifactURL("26.8.0", "olivares_26.8.0_linux_amd64.tar.gz")
+			got, err := l.ArtifactURL("26.800", "olivares_26.800_linux_amd64.tar.gz")
 			if err != nil {
 				t.Fatalf("ArtifactURL: %v", err)
 			}
@@ -120,11 +120,11 @@ func TestResolveChannelDirectoryLayout(t *testing.T) {
 	if want := "https://updates.example.test/olivares/security/manifest.json"; l.ManifestURL() != want {
 		t.Fatalf("ManifestURL() = %q, want %q", l.ManifestURL(), want)
 	}
-	got, err := l.ArtifactURL("26.8.0", "olivares_26.8.0_linux_amd64.tar.gz")
+	got, err := l.ArtifactURL("26.800", "olivares_26.800_linux_amd64.tar.gz")
 	if err != nil {
 		t.Fatalf("ArtifactURL: %v", err)
 	}
-	if want := "https://updates.example.test/olivares/security/olivares_26.8.0_linux_amd64.tar.gz"; got != want {
+	if want := "https://updates.example.test/olivares/security/olivares_26.800_linux_amd64.tar.gz"; got != want {
 		t.Fatalf("ArtifactURL() = %q, want %q", got, want)
 	}
 }
@@ -183,7 +183,7 @@ func TestResolveChannelRefusals(t *testing.T) {
 				t.Fatal(err)
 			}
 			for _, name := range []string{"../etc/passwd", "a/b.tar.gz", `a\b.tar.gz`, ""} {
-				if _, err := l.ArtifactURL("26.8.0", name); err == nil {
+				if _, err := l.ArtifactURL("26.800", name); err == nil {
 					t.Fatalf("%s: artifact name %q must be refused", ep, name)
 				}
 			}
@@ -197,7 +197,7 @@ func TestResolveChannelRefusals(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err := l.ArtifactURL("", "olivares_26.8.0_linux_amd64.tar.gz"); err == nil {
+		if _, err := l.ArtifactURL("", "olivares_26.800_linux_amd64.tar.gz"); err == nil {
 			t.Fatal("an empty version must be refused, not turned into the tag \"v\"")
 		}
 		// A pinned endpoint does not need one — it already names the release.
@@ -219,7 +219,7 @@ func TestResolveChannelRefusals(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, name := range []string{".", ".."} {
-			if got, err := l.ArtifactURL("26.8.0", name); err == nil {
+			if got, err := l.ArtifactURL("26.800", name); err == nil {
 				t.Fatalf("artifact name %q must be refused; got %q", name, got)
 			}
 		}
@@ -240,7 +240,7 @@ func TestResolveChannelRefusals(t *testing.T) {
 			}
 		}
 		// NON-FIRING: a real version still resolves.
-		if _, err := l.ArtifactURL("26.8.0", "x.tar.gz"); err != nil {
+		if _, err := l.ArtifactURL("26.800", "x.tar.gz"); err != nil {
 			t.Fatalf("a stamped version must still resolve: %v", err)
 		}
 	})
@@ -337,33 +337,17 @@ func TestResolveChannelRefusals(t *testing.T) {
 		}
 	})
 
-	t.Run("the derived tag follows the release era, whatever prefix the version carries", func(t *testing.T) {
-		t.Parallel()
-		// Releases from 26.10 on are tagged with the bare version; every earlier release was
-		// cut and published as v<version>. The era decides the prefix, never the manifest's
-		// spelling. A 26.9.0-or-older binary ADDED the prefix for every version, which is
-		// why its default-endpoint upgrade against a bare-tag release answers 404 and the
-		// documented step for those installs pins the release with /releases/tag/<tag>.
+	t.Run("the derived tag is the manifest version", func(t *testing.T) {
 		l, err := ResolveChannel("https://github.com/o/r", ChannelStable)
 		if err != nil {
 			t.Fatal(err)
 		}
-		for version, tag := range map[string]string{
-			"26.8.0":       "v26.8.0",
-			"v26.8.0":      "v26.8.0",
-			"26.9.0":       "v26.9.0",
-			"25.12.3":      "v25.12.3",
-			"26.10.0":      "26.10.0",
-			"v26.10.0":     "26.10.0",
-			"26.10.0-rc.1": "26.10.0-rc.1",
-			"26.11.2":      "26.11.2",
-			"27.1.0":       "27.1.0",
-		} {
+		for _, version := range []string{"1.0", "1.10", "2.0"} {
 			got, err := l.ArtifactURL(version, "x.tar.gz")
 			if err != nil {
 				t.Fatal(err)
 			}
-			if want := "https://github.com/o/r/releases/download/" + tag + "/x.tar.gz"; got != want {
+			if want := "https://github.com/o/r/releases/download/" + version + "/x.tar.gz"; got != want {
 				t.Fatalf("ArtifactURL(%q) = %q, want %q", version, got, want)
 			}
 		}

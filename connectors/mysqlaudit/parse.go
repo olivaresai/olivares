@@ -72,10 +72,19 @@ func tableOpToMode(op string) (model.AccessMode, bool) {
 // access mode and the upper-cased verb (used as ToolRef). The statement is read
 // only far enough to read the first keyword; the body is never retained. An
 // unrecognized or ambiguous verb yields ModeUnknown — the read/write nature is
-// never guessed (ARCHITECTURE.md).
+// never guessed (ARCHITECTURE.md). Unrecognized text uses the safe QUERY fallback.
 func classifyVerb(sql string) (model.AccessMode, string) {
 	s := strings.TrimSpace(strings.Trim(strings.TrimSpace(sql), "'"))
-	verb := firstWord(s)
+	end := strings.IndexFunc(s, func(r rune) bool {
+		return r != '_' && r != '$' && r < 0x80 && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9')
+	})
+	if end < 0 {
+		end = len(s)
+	}
+	if strings.IndexFunc(s[:end], func(r rune) bool { return r >= 0x80 }) >= 0 {
+		return model.ModeUnknown, "QUERY"
+	}
+	verb := strings.ToUpper(s[:end])
 	switch verb {
 	case "SELECT", "SHOW", "DESC", "DESCRIBE", "EXPLAIN", "HANDLER":
 		return model.ModeRead, verb
@@ -83,10 +92,15 @@ func classifyVerb(sql string) (model.AccessMode, string) {
 		return model.ModeWrite, verb
 	case "CREATE", "ALTER", "DROP", "RENAME", "GRANT", "REVOKE":
 		return model.ModeWrite, verb // DDL/DCL — a write
-	case "":
-		return model.ModeUnknown, "QUERY"
-	default:
+	case "ANALYZE", "BEGIN", "BINLOG", "CACHE", "CALL", "CASE", "CHANGE", "CHECK", "CHECKSUM",
+		"CLONE", "CLOSE", "COMMIT", "DEALLOCATE", "DECLARE", "DO", "EXECUTE", "FETCH", "FLUSH",
+		"GET", "HELP", "IF", "IMPORT", "INSTALL", "ITERATE", "KILL", "LEAVE", "LOCK", "LOOP",
+		"OPEN", "OPTIMIZE", "PREPARE", "PURGE", "RELEASE", "REPAIR", "REPEAT", "RESET", "RESIGNAL",
+		"RESTART", "RETURN", "ROLLBACK", "SAVEPOINT", "SET", "SHUTDOWN", "SIGNAL", "START", "STOP",
+		"TABLE", "UNINSTALL", "UNLOCK", "USE", "VALUES", "WITH", "XA":
 		return model.ModeUnknown, verb
+	default:
+		return model.ModeUnknown, "QUERY"
 	}
 }
 

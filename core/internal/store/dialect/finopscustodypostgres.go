@@ -189,8 +189,13 @@ func (postgresDialect) FinOpsCustodyControlStmts() []string {
 	// also the only custody ACL statement that is correct under EVERY topology: PUBLIC is
 	// never the owner, never the application role, and a grant to it would hand the three
 	// relations to every role in the cluster including ones created later.
-	out = append(out, "REVOKE ALL ON TABLE "+strings.Join(FinOpsCustodyControlTables(), ", ")+" FROM PUBLIC")
+	out = append(out, PostgresFinOpsCustodyPublicACLStmt())
 	return out
+}
+
+// PostgresFinOpsCustodyPublicACLStmt removes public access during creation and logical restore.
+func PostgresFinOpsCustodyPublicACLStmt() string {
+	return "REVOKE ALL ON TABLE " + strings.Join(FinOpsCustodyControlTables(), ", ") + " FROM PUBLIC"
 }
 
 // postgresFinOpsCustodyTrigger is one trigger attachment of §4.2.

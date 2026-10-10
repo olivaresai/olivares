@@ -1,0 +1,23 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# CI-only final layer for scripts/release-first-hour.sh, so the first-hour gate can run on a
+# daemon that other runs share (the Hetzner runners). It changes WHERE the stack is reachable,
+# never what it runs. Compare docker-compose.ready-no-ports.ci.yml, which drops the ports
+# because its workflow has no host-side consumer; the browser journey needs the console.
+#
+# 1. CONTAINER NAME. The base pins `container_name: olivares`, unique per daemon. `!reset`
+#    lets Compose derive the name from the run's own project.
+#
+# 2. PORTS. The base publishes 8443 and 8444 on fixed host ports. Here only the console is
+#    published, on loopback, and Docker picks a free host port; the script reads it back with
+#    `docker compose port`. The journey never uses the gRPC port, so it stays unpublished.
+#    `!override` replaces the base list; a plain list would merge into it.
+#
+# Both tags need Compose >= 2.24.4; an older Compose refuses the file and the gate fails.
+# Volumes and the network already carry the run's project name.
+services:
+  olivares:
+    container_name: !reset null
+    ports: !override
+      - "127.0.0.1::8443"

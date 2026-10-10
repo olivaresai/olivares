@@ -20,8 +20,9 @@ const (
 
 // Module is the report-generation module.
 type Module struct {
-	log  *slog.Logger
-	data api.ModuleData
+	packsAuthorize func(string) error
+	log            *slog.Logger
+	data           api.ModuleData
 
 	compliance ComplianceSource
 
@@ -36,6 +37,11 @@ type Module struct {
 
 // Option configures the module.
 type Option func(*Module)
+
+// WithCompliancePacksAuthorizer binds the private edition authorization seam.
+func WithCompliancePacksAuthorizer(authorize func(string) error) Option {
+	return func(m *Module) { m.packsAuthorize = authorize }
+}
 
 func WithComplianceSource(s ComplianceSource) Option { return func(m *Module) { m.compliance = s } }
 func WithScheduler(s ReportScheduler) Option         { return func(m *Module) { m.scheduler = s } }
@@ -75,10 +81,6 @@ func (m *Module) UseData(d api.ModuleData) {
 	// Propagate the late-bound data handle to any wired provider or the
 	// enterprise report source (they are constructed before the store exists).
 	for _, p := range []any{m.scheduler, m.branding, m.customTmpl, m.enterprise} {
-		if b, ok := p.(dataBinder); ok {
-			b.bindData(d)
-			continue
-		}
 		if c, ok := p.(api.DataConsumer); ok {
 			c.UseData(d)
 		}

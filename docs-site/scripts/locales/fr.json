@@ -1,0 +1,8 @@
+{
+  "source": "enregistre ce pilote|enregistre le pilote ACP|en épinglant un binaire|ne sont pas lançables|ne peuvent pas être lancés",
+  "flags": "i",
+  "noProvider": {
+    "source": "ne désignent aucun fournisseur",
+    "flags": ""
+  }
+}

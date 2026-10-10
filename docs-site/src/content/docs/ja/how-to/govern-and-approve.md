@@ -3,6 +3,10 @@ title: "ガバナンスと承認（human-in-the-loop）"
 description: "運用者が estate をどうガバナンスするか: アイデンティティと権限、deny-by-default の RBAC モデル、restrict 専用のポリシーシーム、そして意思決定が監査台帳に記録される human-in-the-loop の運用形態。"
 ---
 
+:::note[Business]
+監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、`olivares audit verify`、`olivares dr backup` を引き続き利用できます。エクスポートは HTTP 501 または終了コード 9 を返します。監査転送および監査セグメントを含む DDIL 転送にも Business が必要です。
+:::
+
 このページは、少なくとも1つのソースを接続し、これから estate を **ガバナンス** する必要のある
 運用者向けです: 誰が・何が行動できるかを決め、プラットフォームが提示するものをレビューし、
 それに対処する。ガバナンスは **モジュール VI（アイデンティティ、権限、ガバナンス）** に存在し、
@@ -194,3 +198,7 @@ RLS をバイパスするロール）とチェックポイント削除に対し�
 - [モジュールカタログ](/ja/reference/modules/overview/) ── アイデンティティ、権限、ガバナンス
   （モジュール VI）が、access map（モジュール III）と検出結果（モジュール IX）とどう合成するか。
 - [ソースを接続する](/ja/how-to/connect-a-source/) ── drift と検出結果が構築される元となるシグナルを配線する。
+
+## 承認のエディション境界（0.1）
+
+Community は承認エンジン、CRITICAL 操作に対する異なる2人の承認、kill-switch の二重管理、およびレビューを要求するかリスク階層・承認人数を引き上げるポリシーを維持します。リスク階層を引き下げる承認ポリシーと break-glass 緊急アクセスは Business 基本版に含まれます。保存済みデータは読み取り・エクスポートできますが、Community の既定の要件を下げたり緊急アクセスを許可したりすることはできません。

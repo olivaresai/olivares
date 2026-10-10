@@ -10,7 +10,9 @@
 # its sha256 from that release's signed checksums.txt.
 
 pkgname=olivares-bin
-pkgver=26.10.1
+# release
+pkgver=0.1
+# /release
 pkgrel=1
 pkgdesc='Open, self-hosted AI governance control plane (release binary)'
 arch=('x86_64')
@@ -24,6 +26,9 @@ source=('olivares-sysusers.conf'
 sha256sums=('764f423d1407aed39273615f494133b1572be792013a7e7961fc096a1a20f3de'
             '6195db3366a4e196dd81262c260c5f36cd0c57f90e745018c003e198c7aca038')
 source_x86_64=("https://github.com/olivaresai/olivares/releases/download/${pkgver}/olivares_${pkgver}_linux_amd64.tar.gz")
+# Publication pending: this retained checksum is from the previous archive, not
+# a verified archive of this release. Replace it from the signed checksums.txt
+# and regenerate .SRCINFO before publishing this recipe; never use SKIP.
 sha256sums_x86_64=('85d1873266ec940734578b5c3f92cdba79eb53453f7ca715b7bf6f7d1093a1c2')
 
 package() {
@@ -37,6 +42,7 @@ package() {
       -e 's|@DATA_DIR@|/var/lib/olivares|' \
       -e 's|@CONFIG@|/etc/olivares/olivares.env|' \
       -e '/@BIND_PATHS@/d' \
+      -e '/^@STATE_DIRECTORY_LINE@$/d' \
       "${srcdir}/packaging/service/systemd.service" > "${srcdir}/olivares.service"
   if grep -q '@[A-Z_]*@' "${srcdir}/olivares.service"; then
     echo 'the release unit template has a placeholder this PKGBUILD does not render' >&2

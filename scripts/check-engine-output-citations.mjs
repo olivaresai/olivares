@@ -183,33 +183,25 @@ const MIN_QUOTED_LENGTH = 40
 // everywhere — it is terminal output, not prose).
 const CITATIONS = [
   {
-    id: 'quickstart-banner-tls-warning',
-    emitted: '     (HTTPS with a self-signed certificate on first boot — your browser will',
+    id: 'quickstart-next-fresh-setup',
+    emitted: 'Next: Open the console; it guides setup, sign-in and your first session.',
     source: 'cmd/olivares/cmd_quickstart.go',
     cited: ['how-to/first-hour.md'],
-    why:
-      'The quickstart banner has its OWN copy of this sentence (:158), separate from the serve ' +
-      'banner already registered as first-boot-banner-transport. Two sources, two entries: ' +
-      'registering one would leave the other free to drift.',
+    why: 'The next step for a fresh native setup; the token is printed separately.',
   },
   {
-    id: 'quickstart-banner-tls-warning-tail',
-    emitted: '      warn once; that is expected for a local install.)',
+    id: 'quickstart-next-returning-user',
+    emitted: 'Next: Open the console and sign in to continue your work.',
     source: 'cmd/olivares/cmd_quickstart.go',
     cited: ['how-to/first-hour.md'],
-    why:
-      'The second line of the same paragraph, and a SEPARATE string literal (:159). Anchored ' +
-      'apart because the gate flags it apart: an entry spanning both would hide which half moved.',
+    why: 'An initialized engine directs the operator to sign in, not create another administrator.',
   },
   {
-    id: 'quickstart-banner-setup-token',
-    emitted: '  2. Complete setup with this one-time token (shown once, single-use):',
+    id: 'quickstart-next-pending-setup',
+    emitted: 'Next: Open the console to finish setup with the one-time token issued earlier.',
     source: 'cmd/olivares/cmd_quickstart.go',
     cited: ['how-to/first-hour.md'],
-    why:
-      'The line the reader is told to look for to obtain the token (:160). This is the family ' +
-      'that produced the 60-occurrence sweep: the documented way of finding the token drifted ' +
-      'from the banner and every page printed everything except the token.',
+    why: 'Pending setup keeps its issued token; this advice must not promise to display it again.',
   },
   {
     id: 'session-runtime-no-credential-source',
@@ -435,15 +427,6 @@ const CITATIONS = [
 // identifiers. Each needs a reason: the point of the list is that somebody had to look.
 // It is compared as a SET — an entry that stops being needed fails the gate, so the list
 // cannot quietly accumulate.
-// ⛔ SIETE ENTRADAS DE AP2 RETIRADAS EL 2026-08-25, Y NO PORQUE SU RAZÓN DEJARA DE SER CIERTA.
-//    `allowed_merchants`, `allowed_payees`, `allowed_payment_instruments`, `amount_range`,
-//    `execution_date`, `sd_hash` y `transaction_id` SIGUEN sin ser identificadores del motor —
-//    verificado: ninguno aparece en core/, modules/ ni cmd/. Lo que desapareció es el SUJETO:
-//    los citaba la página publicada de ADR-0026, y la sección ADR entera salió del docs-site ese
-//    día por orden de. Sin página que haga la cita, no hay nada que eximir, y este gate
-//    compara la lista como un CONJUNTO: una entrada que deja de hacer falta lo pone rojo.
-//    Es la segunda exención que esa retirada dejó huérfana — la otra fue `waivers.tsv:39` de
-//    commerce-lint. Quien retire una superficie hereda las exenciones que la citaban.
 const NON_ENGINE_IDENTIFIERS = new Map([
   ['addon_airs', 'private add-on build constraint; it is not a Community engine output identifier'],
   ['addon_reg', 'private add-on build constraint; it is not a Community engine output identifier'],
@@ -1585,7 +1568,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     // El punto ciego se mira ANTES y sale 2: cero hallazgos sobre cero material no es un aprobado,
     // y un 1 lo haría indistinguible de un defecto real para quien consuma el veredicto.
     if (blindSpots.length) {
-      console.error('engine-output-citations: NO HE PODIDO MIRAR — el examen no ha ocurrido.\n')
+      console.error('engine-output-citations: COULD NOT LOOK — the examination did not run.\n')
       for (const b of blindSpots) console.error(`  - ${b}\n`)
       process.exit(2)
     }

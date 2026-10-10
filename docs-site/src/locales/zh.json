@@ -1,0 +1,308 @@
+{
+  "API & manage-as-code (platform)": {
+    "zh-CN": "API 与代码化管理（平台）"
+  },
+  "API stability & deprecation policy": {
+    "zh-CN": "API 稳定性与弃用策略"
+  },
+  "Access & resource map (R/RW)": {
+    "zh-CN": "访问与资源映射（R/RW）"
+  },
+  "Agent simulation/testing sandbox": {
+    "zh-CN": "智能体模拟/测试沙箱"
+  },
+  "Architecture": {
+    "zh-CN": "架构"
+  },
+  "Architecture decisions (ADR)": {
+    "zh-CN": "架构决策（ADR）"
+  },
+  "Back up and restore": {
+    "zh-CN": "备份与恢复"
+  },
+  "Build and ship a connector": {
+    "zh-CN": "构建并发布连接器"
+  },
+  "CLI": {
+    "zh-CN": "CLI"
+  },
+  "Claude Code adoption": {
+    "zh-CN": "Claude Code 采用情况"
+  },
+  "Compliance & regulatory": {
+    "zh-CN": "合规与监管"
+  },
+  "Console screens & permissions": {
+    "zh-CN": "控制台页面与权限"
+  },
+  "Configuration": {
+    "zh-CN": "配置"
+  },
+  "Connect & observe": {
+    "zh-CN": "连接与观测"
+  },
+  "Connect Claude Code": {
+    "zh-CN": "接入 Claude Code"
+  },
+  "Connect a source": {
+    "zh-CN": "连接数据源"
+  },
+  "Connector guides": {
+    "zh-CN": "连接器指南"
+  },
+  "Connectors & coverage tiers": {
+    "zh-CN": "连接器与覆盖层级"
+  },
+  "Cookbook": {
+    "zh-CN": "实战手册"
+  },
+  "Cost & AI FinOps": {
+    "zh-CN": "成本与 AI FinOps"
+  },
+  "Data, knowledge & context": {
+    "zh-CN": "数据、知识与上下文"
+  },
+  "Deploy with Docker": {
+    "zh-CN": "使用 Docker 部署"
+  },
+  "Deployment & integration": {
+    "zh-CN": "部署与集成"
+  },
+  "EU AI Act evidence from runtime data": {
+    "zh-CN": "从运行时数据生成 EU AI Act 证据"
+  },
+  "Enterprise OTel for Claude Code": {
+    "zh-CN": "面向 Claude Code 的企业级 OTel"
+  },
+  "Event bus (AsyncAPI 3.0)": {
+    "zh-CN": "事件总线（AsyncAPI 3.0）"
+  },
+  "Eventing & webhooks": {
+    "zh-CN": "事件与 Webhook"
+  },
+  "Executive dashboards & reporting (console)": {
+    "zh-CN": "管理层仪表盘与报表（控制台）"
+  },
+  "Explanation": {
+    "zh-CN": "原理说明"
+  },
+  "Forward to Splunk": {
+    "zh-CN": "转发至 Splunk"
+  },
+  "From zero to a read/write access graph": {
+    "zh-CN": "从零构建读写访问图"
+  },
+  "Getting started by scenario": {
+    "zh-CN": "按场景快速上手"
+  },
+  "gRPC services & methods": {
+    "zh-CN": "gRPC 服务与方法"
+  },
+  "Glossary": {
+    "zh-CN": "术语表"
+  },
+  "Govern & build": {
+    "zh-CN": "治理与构建"
+  },
+  "Govern and approve": {
+    "zh-CN": "治理与审批"
+  },
+  "Govern Postgres content": {
+    "zh-CN": "治理 Postgres 内容"
+  },
+  "Govern your file server": {
+    "zh-CN": "治理你的文件服务器"
+  },
+  "Governed data for Claude": {
+    "zh-CN": "面向 Claude 的受治理数据"
+  },
+  "Harden a deployment": {
+    "zh-CN": "强化部署安全"
+  },
+  "Health, SLA & uptime": {
+    "zh-CN": "健康状况、SLA 与可用性"
+  },
+  "Honesty & limits": {
+    "zh-CN": "诚实声明与局限"
+  },
+  "How this documentation is organized": {
+    "zh-CN": "本文档的组织方式"
+  },
+  "How-to guides": {
+    "zh-CN": "操作指南"
+  },
+  "Identity, permissions & governance": {
+    "zh-CN": "身份、权限与治理"
+  },
+  "Inline inference proxy (PEP)": {
+    "zh-CN": "内联推理代理（PEP）"
+  },
+  "Install & operate": {
+    "zh-CN": "安装与运维"
+  },
+  "Install air-gapped": {
+    "zh-CN": "离线（隔离网络）安装"
+  },
+  "Install from a package": {
+    "zh-CN": "从软件包安装"
+  },
+  "Install with Homebrew": {
+    "zh-CN": "使用 Homebrew 安装"
+  },
+  "Internal catalog & marketplace": {
+    "zh-CN": "内部目录与市场"
+  },
+  "Inventory & discovery": {
+    "zh-CN": "清点与发现"
+  },
+  "Live operation & sessions": {
+    "zh-CN": "实时运维与会话"
+  },
+  "Live-ingest": {
+    "zh-CN": "实时采集"
+  },
+  "MCP, skills & capabilities": {
+    "zh-CN": "MCP、技能与能力"
+  },
+  "Manage as code (Terraform)": {
+    "zh-CN": "代码化管理（Terraform）"
+  },
+  "Model & provider management": {
+    "zh-CN": "模型与供应商管理"
+  },
+  "Model operations (own models)": {
+    "zh-CN": "模型运维（自有模型）"
+  },
+  "Modules catalog": {
+    "zh-CN": "模块目录"
+  },
+  "Monitor with Prometheus": {
+    "zh-CN": "使用 Prometheus 监控"
+  },
+  "Multi-tenancy & org management (platform)": {
+    "zh-CN": "多租户与组织管理（平台）"
+  },
+  "Observability": {
+    "zh-CN": "可观测性"
+  },
+  "Olivares AI control plane API": {
+    "zh-CN": "Olivares AI 控制平面 API"
+  },
+  "Open core & licensing": {
+    "zh-CN": "开放核心与许可"
+  },
+  "Supporting the project": {
+    "zh-CN": "支持该项目"
+  },
+  "Orchestration & A2A": {
+    "zh-CN": "编排与 A2A"
+  },
+  "Output integrations & notifications": {
+    "zh-CN": "输出集成与通知"
+  },
+  "Overview": {
+    "zh-CN": "概览"
+  },
+  "Overview — the 35 selectable modules": {
+    "zh-CN": "概览 —— 35 个可选模块"
+  },
+  "Skills catalog & assignments": {
+    "zh-CN": "技能目录与分配"
+  },
+  "Fine-tuning & inference execution (planned)": {
+    "zh-CN": "微调与推理执行（规划中）"
+  },
+  "Paths by role": {
+    "zh-CN": "按角色划分的路径"
+  },
+  "Positioning & fit": {
+    "zh-CN": "定位与适用场景"
+  },
+  "Posture export to control towers": {
+    "zh-CN": "态势导出至控制塔"
+  },
+  "Privileged-session recording": {
+    "zh-CN": "特权会话录制"
+  },
+  "Quality, evals & testing": {
+    "zh-CN": "质量、评估与测试"
+  },
+  "Quickstart": {
+    "zh-CN": "快速开始"
+  },
+  "REST API": {
+    "zh-CN": "REST API"
+  },
+  "Red-teaming & adversarial testing": {
+    "zh-CN": "红队与对抗测试"
+  },
+  "Reference": {
+    "zh-CN": "参考"
+  },
+  "Reporting (HTML/PDF)": {
+    "zh-CN": "报告（HTML/PDF）"
+  },
+  "Run Claude Code with Olivares": {
+    "zh-CN": "在 Olivares 中运行 Claude Code"
+  },
+  "Add a provider and launch an agent": {
+    "zh-CN": "添加提供方并启动代理"
+  },
+  "Operate a provider session": {
+    "zh-CN": "运行提供商会话"
+  },
+  "SIEM/ITSM forwarder": {
+    "zh-CN": "SIEM/ITSM 转发器"
+  },
+  "Session cockpit (availability)": {
+    "zh-CN": "会话驾驶舱（可用性）"
+  },
+  "Saved console views": {
+    "zh-CN": "已保存的控制台视图"
+  },
+  "Security & threat model": {
+    "zh-CN": "安全与威胁模型"
+  },
+  "Security, guardrails & audit": {
+    "zh-CN": "安全、护栏与审计"
+  },
+  "Self-host the control plane": {
+    "zh-CN": "自托管控制平面"
+  },
+  "Source & credential scoping": {
+    "zh-CN": "数据源与凭据范围限定"
+  },
+  "Start here": {
+    "zh-CN": "从这里开始"
+  },
+  "Troubleshooting": {
+    "zh-CN": "故障排查"
+  },
+  "Tutorials": {
+    "zh-CN": "教程"
+  },
+  "Upgrade and roll back": {
+    "zh-CN": "升级与回滚"
+  },
+  "Use the client SDKs": {
+    "zh-CN": "使用客户端 SDK"
+  },
+  "SIEM & telemetry egress": {
+    "zh-CN": "SIEM 与遥测出口"
+  },
+  "Verified connectors (third-party)": {
+    "zh-CN": "已验证连接器（第三方）"
+  },
+  "Verify a release": {
+    "zh-CN": "验证发行版"
+  },
+  "Voice & realtime agents": {
+    "zh-CN": "语音与实时智能体"
+  },
+  "What is Olivares AI?": {
+    "zh-CN": "什么是 Olivares AI？"
+  },
+  "Your first hour (local, team, hybrid)": {
+    "zh-CN": "第一个小时（本地、团队、混合）"
+  }
+}

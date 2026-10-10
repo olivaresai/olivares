@@ -41,6 +41,20 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
+# Release checksum signing first inspects every checksummed built artifact.
+# Strip this launcher-only option before authenticating and invoking cosign;
+# the existing signing-mode and per-invocation digest controls remain in force.
+if [[ "${1:-}" == --scan-checksums ]]; then
+	shift
+	checksums="${1:?checksums required}"
+	shift
+	if [[ "${1:-}" != sign-blob ]]; then
+		echo 'artifact-secrets: checksum scan requires sign-blob; signing blocked' >&2
+		exit 2
+	fi
+	python3 "$ROOT/scripts/check-artifact-secrets.py" --checksums "$checksums"
+fi
+
 bin="${OLIVARES_COSIGN_BIN:-}"
 if [ -z "$bin" ]; then
 	echo "::error::cosign-verified: OLIVARES_COSIGN_BIN is not set." >&2

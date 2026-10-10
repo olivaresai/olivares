@@ -299,7 +299,7 @@ func TestTerminalEvidenceForcedRetryKeepsOnlyTheWinningAttempt(t *testing.T) {
 	ref, launchID := launchedRun(t, m, tenant)
 	before := listRunEvents(t, st, tenant, ref)
 
-	forced := &conflictOnceData{ModuleData: m.data}
+	forced := &conflictOnceData{ModuleData: m.Data}
 	m.UseData(forced)
 	t.Cleanup(func() { m.UseData(forced.ModuleData) })
 
@@ -344,20 +344,23 @@ func TestTerminalEvidenceAppendBoundaryRejectsAndRollsBack(t *testing.T) {
 		evidence *runtimeTerminalEvidence
 		event    string
 		toState  string
+		cause    runtimeAccessStopCause
 	}{
 		{"malformed uuid", &runtimeTerminalEvidence{
 			observation: obsProcessExitObserved, launchID: model.ID("not-a-uuid")},
-			"stopped", stateStopped},
+			"stopped", stateStopped, accessStopNone},
 		{"process observation without an id", &runtimeTerminalEvidence{
-			observation: obsProcessExitObserved}, "stopped", stateStopped},
+			observation: obsProcessExitObserved}, "stopped", stateStopped, accessStopNone},
 		{"id without a kind", &runtimeTerminalEvidence{
-			launchID: model.ID(frozenLaunchID)}, "stopped", stateStopped},
+			launchID: model.ID(frozenLaunchID)}, "stopped", stateStopped, accessStopNone},
 		{"unknown kind", &runtimeTerminalEvidence{
 			observation: "process_probably_died", launchID: model.ID(frozenLaunchID)},
-			"stopped", stateStopped},
+			"stopped", stateStopped, accessStopNone},
 		{"complete evidence on a non-terminal pair", &runtimeTerminalEvidence{
 			observation: obsProcessExitObserved, launchID: model.ID(frozenLaunchID)},
-			"stopping", stateRunning},
+			"stopping", stateRunning, accessStopNone},
+		{"expiry cause without terminal evidence", nil, "stopped", stateStopped, accessStopCredentialExpired},
+		{"unknown access-stop cause", &runtimeTerminalEvidence{observation: obsProcessExitObserved, launchID: model.ID(frozenLaunchID)}, "stopped", stateStopped, runtimeAccessStopCause(99)},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			fr := &fakeRunner{}
@@ -372,7 +375,7 @@ func TestTerminalEvidenceAppendBoundaryRejectsAndRollsBack(t *testing.T) {
 			beforeEvents := listRunEvents(t, st, tenant, ref)
 			beforeAudit := auditHead(t, st, tenant)
 
-			err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+			err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 				repo, rerr := sc.Ext(runKind)
 				if rerr != nil {
 					return rerr
@@ -392,7 +395,7 @@ func TestTerminalEvidenceAppendBoundaryRejectsAndRollsBack(t *testing.T) {
 					runID: model.ID(rec.String(model.ColID)), runRef: ref,
 					event: tc.event, fromState: beforeRun.String(colState), toState: tc.toState,
 					detail: "boundary probe", actor: "user:u1", actorKind: model.ActorUser,
-					at: m.now(), terminalEvidence: tc.evidence,
+					at: m.now(), terminalEvidence: tc.evidence, accessStopCause: tc.cause,
 				})
 				return aerr
 			})

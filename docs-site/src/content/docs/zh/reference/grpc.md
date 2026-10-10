@@ -10,9 +10,10 @@ Olivares AI 在两个位置使用 gRPC，方向彼此相反：
 - **引擎的控制平面 API**（`olivares.api.v1.ControlPlane`）——REST 表面的一个小型
   镜像，供偏好类型化 stub 的调用方使用。[API 参考](/reference/api/)中的 REST
   契约仍是二者中更广泛的契约。
-- **插件传输契约**（`olivares.sdk.v1.*`）——每个进程外连接器和模块使用的版本化
+- **插件传输契约**（`olivares.sdk.v1.*`）——每个进程外连接器使用的版本化
   契约。当你使用 Go 以外的语言[构建连接器](/zh/how-to/build-a-connector/)时，
-  要实现的就是这个契约。
+  要实现的就是这个契约。（冻结的传输契约上存在一对模块服务，但它已被弃用，
+  且从未被提供；模块只在进程内运行。）
 
 本页**由服务器交给 gRPC 的注册表生成**，而不是从 `.proto` 文件生成。这个区别正是
 重点：只编辑 `.proto` 而不重新生成，会描述一个二进制文件并未提供的服务；本页背后的
@@ -73,9 +74,9 @@ Olivares AI 在两个位置使用 gRPC，方向彼此相反：
 
 | 方法 | 完整方法 | 类型 | 请求 | 响应 | 用途 |
 |---|---|---|---|---|---|
-| `Log` | `/olivares.sdk.v1.HostService/Log` | unary | `LogRecord` | `Empty` | 通过引擎写入一条结构化日志记录，使进程外模块与进程内模块写入同一位置。 |
-| `Publish` | `/olivares.sdk.v1.HostService/Publish` | unary | `Event` | `Empty` | 代表进程外模块在引擎总线上发布一个事件。 |
-| `Subscribe` | `/olivares.sdk.v1.HostService/Subscribe` | server-streaming | `SubscribeRequest` | `Event` (stream) | 将总线事件流式传给模块，并按模块请求的事件类型过滤。空过滤器表示所有类型。 |
+| `Log` | `/olivares.sdk.v1.HostService/Log` | unary | `LogRecord` | `Empty` | 随从未接线的进程外模块传输一并弃用：没有任何东西提供 HostService。原本应通过引擎写入一条结构化日志记录，使进程外模块与进程内模块写入同一位置。 |
+| `Publish` | `/olivares.sdk.v1.HostService/Publish` | unary | `Event` | `Empty` | 随从未接线的进程外模块传输一并弃用：没有任何东西提供 HostService。原本应代表进程外模块在引擎总线上发布一个事件。 |
+| `Subscribe` | `/olivares.sdk.v1.HostService/Subscribe` | server-streaming | `SubscribeRequest` | `Event` (stream) | 随从未接线的进程外模块传输一并弃用：没有任何东西提供 HostService。原本应将总线事件流式传给模块，并按请求的事件类型过滤；空过滤器表示所有类型。 |
 
 ### `olivares.sdk.v1.IngestService`
 
@@ -91,10 +92,10 @@ Olivares AI 在两个位置使用 gRPC，方向彼此相反：
 
 | 方法 | 完整方法 | 类型 | 请求 | 响应 | 用途 |
 |---|---|---|---|---|---|
-| `Describe` | `/olivares.sdk.v1.ModuleService/Describe` | unary | `Empty` | `DescribeResponse` | 返回模块描述符：模块身份及其接受的配置。 |
-| `Init` | `/olivares.sdk.v1.ModuleService/Init` | unary | `InitRequest` | `Empty` | 将配置交给模块，让它在任何内容启动前做好准备。 |
-| `Start` | `/olivares.sdk.v1.ModuleService/Start` | unary | `Empty` | `Empty` | 在 `Init` 成功后启动模块工作。 |
-| `Stop` | `/olivares.sdk.v1.ModuleService/Stop` | unary | `Empty` | `Empty` | 停止模块，并允许它释放持有的内容。 |
+| `Describe` | `/olivares.sdk.v1.ModuleService/Describe` | unary | `Empty` | `DescribeResponse` | 随从未接线的进程外模块传输一并弃用：没有任何宿主分发 ModuleService。原本应返回模块描述符：模块身份及其接受的配置。 |
+| `Init` | `/olivares.sdk.v1.ModuleService/Init` | unary | `InitRequest` | `Empty` | 随从未接线的进程外模块传输一并弃用：没有任何宿主分发 ModuleService。原本应将配置交给模块，让它在任何内容启动前做好准备。 |
+| `Start` | `/olivares.sdk.v1.ModuleService/Start` | unary | `Empty` | `Empty` | 随从未接线的进程外模块传输一并弃用：没有任何宿主分发 ModuleService。原本应在 `Init` 成功后启动模块工作。 |
+| `Stop` | `/olivares.sdk.v1.ModuleService/Stop` | unary | `Empty` | `Empty` | 随从未接线的进程外模块传输一并弃用：没有任何宿主分发 ModuleService。原本应停止模块，并允许它释放持有的内容。 |
 
 ### `olivares.sdk.v1.OutputService`
 

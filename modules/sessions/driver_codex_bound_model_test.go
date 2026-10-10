@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCodexBoundStartCarriesSelectedOrNativeProfileModel(t *testing.T) {
@@ -110,5 +111,48 @@ func TestCodexProfileModelReplyWithholdsSavedValuesAndNativeErrors(t *testing.T)
 		if string(session.projectProfileModelResponse([]byte(unrelated))) != unrelated {
 			t.Fatal("config model projection changed an unrelated protocol frame")
 		}
+	}
+}
+
+// A key-bound Codex names its provider "olivares_record" (the alias the engine
+// configures), which no price table carries. A turn on an OpenAI record is reported
+// under "openai", so it is priced at OpenAI's list price; one on a compatible or
+// local server keeps the alias and is never priced as OpenAI.
+func TestCodexBoundUsageNamesTheRecordsProvider(t *testing.T) {
+	for kind, want := range map[string]string{
+		ProviderKindOpenAI:           "openai",
+		ProviderKindOpenAICompatible: "olivares_record",
+		ProviderKindOllama:           "olivares_ollama",
+	} {
+		t.Run(kind, func(t *testing.T) {
+			reports := make(chan resultUsage, 1)
+			peer := newCodexPeer(t, func(cfg *DriverSessionConfig) {
+				cfg.Model = "gpt-6-astra"
+				cfg.BoundProvider = BoundProvider{Kind: kind, Endpoint: "https://bound.example/v1"}
+				cfg.OnUsage = func(u resultUsage, _ bool) { reports <- u }
+			})
+			done := make(chan error, 1)
+			go func() { _, err := peer.session.Handshake(t.Context()); done <- err }()
+			id, _, _ := peer.nextRequest()
+			peer.reply(id, map[string]any{})
+			id, _, _ = peer.nextRequest()
+			peer.reply(id, map[string]any{"account": nil, "requiresOpenaiAuth": false})
+			id, _, _ = peer.nextRequest()
+			alias := codexBoundProviderID(BoundProvider{Kind: kind})
+			peer.reply(id, map[string]any{"thread": map[string]any{"id": "thread-bound"}, "model": "gpt-6-astra", "modelProvider": alias})
+			if err := <-done; err != nil {
+				t.Fatal(err)
+			}
+			peer.notify("thread/tokenUsage/updated", map[string]any{"threadId": "thread-bound", "turnId": "t1",
+				"tokenUsage": map[string]any{"total": map[string]any{"inputTokens": 2000, "cachedInputTokens": 500, "outputTokens": 12}}})
+			select {
+			case u := <-reports:
+				if u.Provider != want {
+					t.Fatalf("usage provider = %q, want %q", u.Provider, want)
+				}
+			case <-time.After(3 * time.Second):
+				t.Fatal("no usage report")
+			}
+		})
 	}
 }

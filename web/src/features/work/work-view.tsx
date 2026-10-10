@@ -28,13 +28,17 @@ import { useOwnerLabel } from './owner-label'
 import { useAuth } from '@/lib/auth/context'
 import { useUrlState } from '@/lib/hooks/use-url-state'
 import {
+  buildIntent,
   getWorkItem,
   listWorkItems,
   workKeys,
   type ListWorkParams,
+  type WorkIntent,
 } from './api'
+import { ApplyFlow } from './apply-flow'
 import { DecisionsPanel } from './decisions-panel'
 import { ItemDetailSheet, type WorkDetailTab } from './item-detail'
+import { NewItemDialog } from './new-item'
 import { StatusBadge } from './status-badge'
 import { useWorkStream } from './stream'
 import { WorkSection } from './work-section'
@@ -127,10 +131,20 @@ function decodeArchived(raw: string | undefined): ArchivedFilter {
 export function WorkView() {
   const etiquetaDuenno = useOwnerLabel()
   const { t } = useTranslation('work')
-  const { activeTenant, can } = useAuth()
-  // Quién puede EMPEZAR trabajo: lanzar una sesión es lo que hace que aparezcan
-  // unidades aquí, y es el permiso que el compositor del turno ya comprueba.
+  const { activeTenant, can, principal } = useAuth()
+  // Who may START work: launching a session, which records items through its agents,
+  // and the permission the turn composer already checks.
   const canStartWork = can('sessions:run:write')
+  // Who may RECORD an item here: the engine's create permission, held by a signed-in
+  // person, because the person becomes the owner (owner_ref is their bare user id).
+  const ownerRef = principal?.kind === 'user' ? principal.user_id : ''
+  const canCreateItem = can('sessions:work:write') && ownerRef !== ''
+  const [newItemOpen, setNewItemOpen] = useState(false)
+  /** One item.create intention: its key is minted once, when the form is complete. */
+  const [createIntent, setCreateIntent] = useState<WorkIntent | null>(null)
+  const createdItem = useRef<string | null>(null)
+  /** Bumped once an item exists, so the next New item starts from an empty draft. */
+  const [draftGeneration, setDraftGeneration] = useState(0)
   const qc = useQueryClient()
 
   const [url, patchUrl] = useUrlState(WORK_URL_KEYS)
@@ -258,6 +272,12 @@ export function WorkView() {
     [activeTenant],
   )
 
+  const startSession = (variant: 'primary' | 'outline') => (
+    <Button variant={variant} size="sm" asChild>
+      <Link to={'/sessions' as never}>{t('items.empty.start')}</Link>
+    </Button>
+  )
+
   return (
     <IntelPage
       icon={ClipboardList}
@@ -274,6 +294,11 @@ export function WorkView() {
           >
             {t('common.refresh')}
           </Button>
+          {canCreateItem ? (
+            <Button size="sm" onClick={() => setNewItemOpen(true)}>
+              {t('create.action')}
+            </Button>
+          ) : null}
         </div>
       }
       notices={
@@ -427,11 +452,11 @@ export function WorkView() {
                     description={t(
                       hayFiltro ? 'items.empty.body' : 'items.empty.allBody',
                     )}
-                    /* Con filtro, la siguiente acción es quitarlo. SIN filtro, la
-                       siguiente acción es EMPEZAR trabajo: las unidades aparecen aquí
-                       según las registran las sesiones, así que la puerta es donde se
-                       lanza una — y sólo se ofrece a quien puede lanzarla, que no se
-                       encuentre con un 403 al otro lado. */
+                    /* With a filter, the next action is to clear it. WITHOUT one, the
+                       next action is to record an item (#505: the copy says people
+                       record them, and a handoff starts from one); starting a session
+                       stays beside it as the quieter door. Each is offered only to
+                       whoever may use it, so nobody meets a 403 on the other side. */
                     action={
                       hayFiltro ? (
                         <Button
@@ -447,13 +472,22 @@ export function WorkView() {
                         >
                           {t('filters.clear')}
                         </Button>
-                      ) : canStartWork ? (
-                        <Button variant="primary" size="sm" asChild>
-                          <Link to={'/sessions' as never}>
-                            {t('items.empty.start')}
-                          </Link>
+                      ) : canCreateItem ? (
+                        <Button
+                          variant="primary"
+                          size="sm"
+                          onClick={() => setNewItemOpen(true)}
+                        >
+                          {t('create.action')}
                         </Button>
+                      ) : canStartWork ? (
+                        startSession('primary')
                       ) : null
+                    }
+                    secondaryAction={
+                      !hayFiltro && canCreateItem && canStartWork
+                        ? startSession('outline')
+                        : undefined
                     }
                   />
                 ) : (
@@ -545,6 +579,38 @@ export function WorkView() {
         getOpener={() => offerOpener.current}
         getFallbackFocus={() => refreshRef.current}
         onTargetConsumed={() => setOfferTarget(null)}
+      />
+      <NewItemDialog
+        key={draftGeneration}
+        open={newItemOpen}
+        onOpenChange={setNewItemOpen}
+        ownerRef={ownerRef}
+        onContinue={(body) => {
+          setNewItemOpen(false)
+          createdItem.current = null
+          setCreateIntent(
+            buildIntent({ tenant: activeTenant, command: 'item.create', body }),
+          )
+        }}
+      />
+      {/* The same plan-then-apply path as every other work change: the engine's plan
+          is shown before anything is written, and one key carries every retry. */}
+      <ApplyFlow
+        open={createIntent !== null}
+        onOpenChange={(open) => {
+          if (open) return
+          setCreateIntent(null)
+          // Opened only once the dialog is gone, so the item sheet does not stack on it.
+          if (createdItem.current) patchUrl({ item: createdItem.current })
+          createdItem.current = null
+        }}
+        intent={createIntent}
+        title={t('create.title')}
+        onApplied={(outcome) => {
+          createdItem.current = outcome.result.result_id ?? null
+          setDraftGeneration((n) => n + 1)
+          refresh()
+        }}
       />
     </IntelPage>
   )

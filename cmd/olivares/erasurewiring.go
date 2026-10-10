@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
 	"strings"
 	"sync"
 	"time"
@@ -181,7 +180,7 @@ type claudeEraserConfig struct {
 }
 
 func loadClaudeEraserConfig(_ *slog.Logger) (claudeEraserConfig, error) {
-	path := os.Getenv("OLIVARES_CLAUDE_ERASER_CONFIG")
+	path := osGetenv("OLIVARES_CLAUDE_ERASER_CONFIG")
 	if path == "" {
 		return claudeEraserConfig{}, nil
 	}
@@ -238,7 +237,7 @@ func (p *providerEraserAdapter) EraseProviderContent(ctx context.Context, tenant
 		Version:   p.cfg.Version,
 		DeleteKey: p.cfg.DeleteKey,
 		Allowlist: claudecompliance.NewEraseAllowlist(p.cfg.Allowlist),
-		Gate:      p.bridge.eraseGate(tenant),
+		Gate:      p.bridge.EraseGate(tenant),
 		Auditor:   slogEraseAuditor{log: p.log},
 	})
 	spec := claudecompliance.EraseSpec{Tenant: tenant.String(), RequestedBy: req.RequestedBy, CaseRef: req.CaseRef}

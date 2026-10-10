@@ -8,6 +8,8 @@ sidebar:
   order: 1
 ---
 
+**エディション:** permit と forbid を含むカスタム Cedar ポリシーの作成・編集には Business が必要です。Community は保存済みポリシー、カスタムロール、スコープ付き権限の適用を維持し、閲覧と取り消しを許可します。`DELETE /v1/m/governance/pdp/active?engine=cedar` は作成済み Cedar ポリシーだけを無効化し、履歴、管理対象の権限、採用済みポリシーを保持します。組み込みロール、ネイティブ拒否ルール、緊急停止は Community に残ります。このレシピの外部 PDP はアクセスを制限するだけですが、作成した Cedar permit はスコープ内のアクセスを付与できます。
+
 **目的:** deny-by-default の RBAC の上に属性ベースの制限を追加する —
 たとえば「ロールが何と言おうと、`secret` とタグ付けされたリソースには誰も触れない」。
 
@@ -58,7 +60,7 @@ default allow := true
 
 allow := false if {
   input.resource.sensitivity == "secret"
-  input.action == "read"
+  endswith(input.permission, ":read")
 }
 ```
 
@@ -72,15 +74,17 @@ allow := false if {
 盲目的に投入されることはない:
 
 ```bash
+# policy.cedar is the Cedar policy above; jq 1.6 or newer builds the JSON bodies.
 # Compile-check the source:
 curl -ks -X POST "$BASE/v1/m/governance/pdp/validate" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
-  -d @policy.json
+  -d "$(jq -n --rawfile source policy.cedar '{engine:"cedar",$source}')"
 
 # Pre-flight a decision WITHOUT audit side effects:
 curl -ks -X POST "$BASE/v1/m/governance/pdp/dry-run" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
-  -d '{"principal":"…","action":"…","resource":{"kind":"credential","sensitivity":"secret"}}'
+  -d "$(jq -n --rawfile source policy.cedar --argjson request '{"principal":{"kind":"user","id":"u1"},"permission":"models:keys:read","resource":{"kind":"credential","sensitivity":"secret"}}' \
+        '{engine:"cedar",$source,$request}')"
 
 # Then publish (policy-admin permission):
 curl -ks -X POST "$BASE/v1/m/governance/pdp/publish" …

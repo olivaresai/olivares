@@ -60,8 +60,8 @@ start_pre() {
 	set +f
 	# The loopback interface is still needed for the local readiness probe and
 	# for `olivares readyz`. `use net` does not start
-	# networking, and `need net` refuses when there is no uplink (Alpine
-	# 3.22 OpenRC 0.62.6, -nic none): wget to 127.0.0.1 then fails with
+	# networking, and `need net` refuses when there is no uplink
+	# (Alpine 3.22, OpenRC 0.62.6, -nic none): wget to 127.0.0.1 then fails with
 	# "Network unreachable".
 	if command -v ip >/dev/null 2>&1; then
 		ip link set lo up 2>/dev/null || true

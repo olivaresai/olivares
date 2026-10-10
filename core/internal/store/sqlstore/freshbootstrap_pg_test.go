@@ -175,7 +175,7 @@ func TestPostgresFreshBootstrapInventoryCoversTheInstalledProfile(t *testing.T) 
 				t.Fatal(err)
 			}
 			reg := freshBootstrapRegistry(t, tc.register)
-			set, err := buildManagedObjectSet(dia, coreDescriptors(), reg, freshBootstrapPlans(t, dia, reg))
+			set, err := buildCurrentManagedObjectSet(dia, coreDescriptors(), reg, freshBootstrapPlans(t, dia, reg))
 			if err != nil {
 				t.Fatalf("build the managed object set: %v", err)
 			}
@@ -262,6 +262,10 @@ func TestPostgresFreshBootstrapRefusesAPrecreatedManagedObject(t *testing.T) {
 		// exact by construction rather than by a body somebody typed out.
 		realSeed func(dialect.Dialect) []string
 	}{
+		{
+			name:     "custody foundation exactly as its constructor renders it",
+			realSeed: func(dia dialect.Dialect) []string { return dia.FinOpsCustodyControlStmts() },
+		},
 		{
 			name: "orgs in a foreign shape holding a row",
 			seed: []string{
@@ -454,7 +458,7 @@ LANGUAGE sql IMMUTABLE AS $$ SELECT review $$`,
 
 	// The registry Open closes, core invariants included, so the census is built from the
 	// same declaration the boot uses.
-	set, err := buildManagedObjectSet(dia, coreDescriptors(), freshBootstrapRegistry(t, nil), nil)
+	set, err := buildCurrentManagedObjectSet(dia, coreDescriptors(), freshBootstrapRegistry(t, nil), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -855,7 +859,7 @@ func TestPostgresFreshBootstrapDoesNotMatchARoutineByArity(t *testing.T) {
 	ctx := context.Background()
 	_, owner, dia := accessEvidencePGStore(t)
 	reg := coreOnlyRegistry(t)
-	set, err := buildManagedObjectSet(dia, coreDescriptors(), reg, nil)
+	set, err := buildCurrentManagedObjectSet(dia, coreDescriptors(), reg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -903,7 +907,7 @@ func TestPostgresFreshBootstrapDoesNotMatchARoutineByArity(t *testing.T) {
 func TestPostgresLineageGuardStillRefusesAReservedNameOverload(t *testing.T) {
 	ctx := context.Background()
 	cfg, owner, dia := accessEvidencePGStore(t)
-	set, err := buildManagedObjectSet(dia, coreDescriptors(), coreOnlyRegistry(t), nil)
+	set, err := buildCurrentManagedObjectSet(dia, coreDescriptors(), coreOnlyRegistry(t), nil)
 	if err != nil {
 		t.Fatal(err)
 	}

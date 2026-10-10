@@ -125,7 +125,7 @@ func newProtocolBindingAPIHarness(t *testing.T) (*harness, *protocolBindingAPIRe
 		WithWorkContentGuard(allowWorkContent{}),
 	)
 	remote := &protocolBindingAPIRemote{module: module}
-	module.UseProtocolBindingRemoteReconciler(remote)
+	module.ProtocolBindingReconciler = remote
 	module.UseProtocolBindingSpecValidator(BindingProtocolA2A, remote)
 	module.UseProtocolBindingSpecValidator(BindingProtocolMCP, remote)
 	return newHarness(t, module), remote
@@ -315,7 +315,7 @@ func TestProtocolBindingAPIReconcileModesAndPreconditions(t *testing.T) {
 			applied.code, applied.raw, applied.header, remote.lastRequest, remote.reconcileCalls)
 	}
 
-	h.m.UseProtocolBindingRemoteReconciler(nil)
+	h.m.ProtocolBindingReconciler = nil
 	currentPlan := h.doJSON(http.MethodPost, path+"?mode=plan", admin, map[string]any{}, tenantHdr(tenant))
 	currentHash, _ := currentPlan.body["plan_hash"].(string)
 	unwired := h.doJSON(http.MethodPost, path+"?mode=apply", admin, map[string]any{},

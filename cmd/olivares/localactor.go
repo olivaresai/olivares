@@ -62,18 +62,19 @@ func localOperator(via, actor, reason string) (auth.Principal, error) {
 // the set is enumerable — the shape test walks it and asserts every one of them
 // produces a distinguishable audit subject.
 const (
-	viaCLISecrets    = "cli:secrets"
-	viaCLISources    = "cli:sources"
-	viaCLISuperadmin = "cli:superadmin"
-	viaCLIEventing   = "cli:eventing"
-	viaBootSeed      = "boot/seed"
-	viaHostSIGHUP    = "sighup/host-operator"
+	viaCLISecrets      = "cli:secrets"
+	viaCLISources      = "cli:sources"
+	viaCLISuperadmin   = "cli:superadmin"
+	viaCLIAdminRecover = "cli:admin-recover"
+	viaCLIEventing     = "cli:eventing"
+	viaBootSeed        = "boot/seed"
+	viaHostSIGHUP      = "sighup/host-operator"
 )
 
 // localPaths is every declared local privileged path. A new one added without
 // being listed here is caught by the shape test, which requires each to be
 // attributable and to carry its provenance.
 var localPaths = []string{
-	viaCLISecrets, viaCLISources, viaCLISuperadmin,
+	viaCLISecrets, viaCLISources, viaCLISuperadmin, viaCLIAdminRecover,
 	viaCLIEventing, viaBootSeed, viaHostSIGHUP,
 }

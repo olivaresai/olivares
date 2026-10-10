@@ -34,7 +34,6 @@ func TestRuntimeWorkAPIFencedTextReachesTheDriver(t *testing.T) {
 		WithWorkContentGuard(allowWorkContent{}),
 	)
 	m.UseExecutionEnvironmentRef(testEnvRef)
-	m.EnableProfiledLaunches()
 	h := newHarness(t, m)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "runtime-work-text")

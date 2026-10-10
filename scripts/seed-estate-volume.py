@@ -2,37 +2,17 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-"""Llena la finca de demo hasta el objetivo por superficie, para que una captura ENSEÑE algo.
+"""Populate declared demo surfaces to their target row counts through the public API.
 
-⛔ POR QUE EXISTE, y es una medida, no una intuicion. El 2026-08-30 a las 13:55Z, sobre motor
-   virgen y despues de correr la cadena entera de verificacion (--seed-demo -> seed-demo-work.py
-   -> verify-seed-payloads.py -> seed-adoption-otlp.py), 20 superficies tenian contenido y solo
-   SEIS llegaban a cuatro filas; nueve tenian exactamente UNA. El verificador siembra una fila por
-   superficie A PROPOSITO: acredita que el payload entra, no llena la pantalla. Quien lea su
-   «18/18 limpios» como «finca lista» corre la campana de capturas para nada.
+Exit 0 when every declared surface meets its target, 1 when a surface is below its
+named target, or 2 when targets, engine, permission, or generator declarations
+cannot be verified. Repeated runs create only missing rows with stable markers.
+Every request body passes the shared secret-value guard before it is sent.
+Surfaces unavailable through the API are reported with their declared evidence.
 
-CONTRATO DE SALIDA (regla 5 del canon), y las tres son distintas:
-  0 · todas las superficies DECLARADAS llegan a su objetivo.
-  1 · alguna se queda por debajo — se nombra ella y su objetivo.
-  2 · NO HE PODIDO MIRAR: sin fichero de objetivos, sin motor, sin permiso, o declaracion y
-      generadores no casan. Un 2 jamas se confunde con un 0.
-
-CUATRO INVARIANTES, y cada una tiene mutante en `scripts/test-seed-estate-volume.sh`:
-  · IDEMPOTENTE de verdad: la segunda corrida hace CERO POST. No se logra «con cuidado» sino
-    contando: se crean `objetivo - filas_que_ya_hay`, y las filas propias llevan un marcador
-    derivado y estable, asi que una corrida a medias se completa en vez de duplicar.
-  # export-closure: absent-by-design docs/launch/objetivos-sembrado.json — es el catalogo de
-  # objetivos de sembrado del LANZAMIENTO, y esta curacion retira `docs/launch` ENTERO
-  # (scripts/export-public.sh). Aqui es DATO, no una llamada: en el arbol publicado la ruta
-  # simplemente nunca casa, nada la ejecuta y por tanto no hay llamada que guardar. Declararlo
-  # hub-only seria la clase equivocada, y retirar el guion COLGO a sus dos llamadores y esos a
-  # TRES mas — la cascada probo que lo ausente es el fichero de datos, no el guion.
-  · EL OBJETIVO NO VIVE AQUI. Lo lee de `docs/launch/objetivos-sembrado.json`. Quien lo cambie
-    edita datos, no codigo — y el rc 1 nombra la superficie y el numero que no alcanzo.
-  · CERO VALORES SECRETOS. Lo unico que viaja son LOCALIZADORES (`ref_kind: env` + el nombre de
-    la variable). Un guardian mira CADA cuerpo antes de enviarlo y aborta con 2 si huele a valor.
-  · SOLO API PUBLICA. Si una superficie no se puede llenar por API, no se cura aqui: se declara
-    en `no_sembrables_por_api` con su ruta y su evidencia, y es un hallazgo para BACKEND.
+# export-closure: absent-by-design docs/launch/objetivos-sembrado.json — the launch
+# target catalogue is excluded from the public export. This path is input data,
+# not an executable caller; a missing catalogue yields exit 2.
 """
 from __future__ import annotations
 
@@ -45,17 +25,13 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
-# ⛔ REDACCION EN LA FRONTERA, Y COMPARTIDA (the reviewer, A-05). `_pide` devolvia el cuerpo HTTP CRUDO
-#    y `salir` lo imprimia: un receptor que refleje la cabecera `Authorization` filtraba el token.
-#    La cura no es un `replace` en el sitio que fugo —eso ya se probo en el otro guion y dejo dos
-#    caminos abiertos— sino que TODA salida pase por una funcion, y que esa funcion sea LA MISMA
-#    que cerro el caso de la adopcion. Vive en `scripts/lib/redaccion.py` para que no vuelva a
-#    haber dos implementaciones con agujeros distintos.
-#    ⛔ Y LA LIBRERIA SE BUSCA, no se asume al lado: este guion se COPIA (los mutantes del banco
-#       viven en un temporal), y derivar la ruta solo de `__file__` la rompe para cualquier copia.
-#       Se prueban tres sitios y, si no aparece ninguna, el guion NO CORRE: sin redaccion no hay
-#       forma de prometer que un token no salga, y arrancar igual seria justo el fallo que esta
-#       libreria existe para cerrar. Fail-closed, y con rc 2, que es «no he podido mirar».
+# Redact at the shared boundary (the reviewer, A-05). `_pide` returned raw HTTP bodies and
+# `salir` printed them, leaking tokens from a receiver reflecting Authorization.
+# A local replacement already left two paths open in the other script. Route all
+# output through the same scripts/lib/redaccion.py helper used for adoption.
+# Find the library in three locations rather than assuming __file__'s directory:
+# tests copy this script into temporary mutant trees. If absent, refuse with rc 2
+# instead of running without the redaction needed to prevent token disclosure.
 def _busca_lib():
     # ⛔ EL OVERRIDE EXPLICITO VA PRIMERO. Lo tenia detras del directorio del guion, y eso hacia
     #    INERTE a `OLIVARES_LIB_DIR`: el banco preparaba una libreria mutada, la exportaba, y el
@@ -75,8 +51,8 @@ def _busca_lib():
 
 _lib = _busca_lib()
 if _lib is None:
-    print("seed-estate-volume: ⛔ NO HE PODIDO MIRAR: no encuentro `scripts/lib/redaccion.py`. "
-          "Sin redaccion de salidas no arranco: un cuerpo HTTP ajeno puede repetir el token.",
+    print("seed-estate-volume: ⛔ COULD NOT LOOK: cannot find `scripts/lib/redaccion.py`. "
+          "Without output redaction, execution is refused: an external HTTP body could repeat the token.",
           file=sys.stderr)
     sys.exit(2)
 sys.path.insert(0, _lib)
@@ -84,7 +60,7 @@ from redaccion import Redactor, abre, instala_excepthook  # noqa: E402
 
 redacta = Redactor()
 
-RC_LIMPIO, RC_POR_DEBAJO, RC_NO_PUDE_MIRAR = 0, 1, 2
+RC_LIMPIO, RC_POR_DEBAJO, RC_UNAVAILABLE = 0, 1, 2
 
 
 def di(*partes):
@@ -133,7 +109,7 @@ def huele_a_secreto(nodo, ruta="cuerpo"):
             if k == exenta:
                 continue
             if isinstance(v, str) and _clave_normalizada(k) in CLAVES_DE_VALOR_SECRETO:
-                return (f"la clave `{k}` lleva un VALOR, no un localizador", f"{ruta}.{k}")
+                return (f"key `{k}` contains a VALUE, not a locator", f"{ruta}.{k}")
             m, d = huele_a_secreto(v, f"{ruta}.{k}")
             if m:
                 return m, d
@@ -145,7 +121,7 @@ def huele_a_secreto(nodo, ruta="cuerpo"):
     elif isinstance(nodo, str):
         for nombre, rx in FORMAS_DE_CREDENCIAL:
             if rx.search(nodo):
-                return (f"el texto casa la forma `{nombre}`", ruta)
+                return (f"the text matches pattern `{nombre}`", ruta)
     return (None, None)
 
 
@@ -192,16 +168,16 @@ class Motor:
         try:
             d = json.loads(cuerpo)
         except Exception:
-            return None, f"GET {ruta} -> 200 con un cuerpo que no es JSON"
+            return None, f"GET {ruta} -> 200 with a non-JSON body"
         filas = d.get(bajo)
         if not isinstance(filas, list):
-            return None, f"GET {ruta} -> 200 pero `{bajo}` no es una lista (claves: {sorted(d)[:6]})"
+            return None, f"GET {ruta} -> 200 but `{bajo}` is not a list (keys: {sorted(d)[:6]})"
         return filas, None
 
     def crear(self, ruta, cuerpo):
         motivo, donde = huele_a_secreto(cuerpo)
         if motivo:
-            raise Secreto(f"{ruta}: {motivo} en {donde}")
+            raise Secreto(f"{ruta}: {motivo} at {donde}")
         st, resp = self._pide(ruta, cuerpo, "POST")
         return st, resp
 
@@ -382,15 +358,15 @@ def comprueba_marcadores():
     for sid in ORDEN:
         campo, _ruta, fabrica, modo = GENERADORES[sid]
         if modo not in MODOS:
-            malas.append(f"`{sid}` declara un modo desconocido: {modo!r}")
+            malas.append(f"`{sid}` declares an unknown mode: {modo!r}")
             continue
-        valor = str(fabrica(testigo, 0, ctx).get(campo, "<AUSENTE>"))
+        valor = str(fabrica(testigo, 0, ctx).get(campo, "<MISSING>"))
         if modo == "igual" and valor != testigo:
-            malas.append(f"`{sid}` declara `igual` y su campo `{campo}` guarda {valor[:40]!r}")
+            malas.append(f"`{sid}` declares `igual` and its `{campo}` field contains {valor[:40]!r}")
         elif modo == "contiene" and testigo not in valor:
-            malas.append(f"`{sid}` declara `contiene` y su campo `{campo}` guarda {valor[:40]!r}")
+            malas.append(f"`{sid}` declares `contiene` and its `{campo}` field contains {valor[:40]!r}")
         elif modo == "sujeto" and testigo in valor:
-            malas.append(f"`{sid}` declara `sujeto` pero SI lleva la marca en `{campo}`")
+            malas.append(f"`{sid}` declares `sujeto` but DOES contain the marker in `{campo}`")
     return malas
 # El orden de siembra: los que fabrican sujetos, antes que los que los consumen.
 ORDEN = ["agents", "alerting", "guardian-rules", "routine-policies", "agent-artifacts",
@@ -406,7 +382,7 @@ SUJETO_UNICO = {"health": "subject_ref", "killswitch": "scope_ref", "redteam": "
 
 
 def salir(rc, msg):
-    etiqueta = "⛔ NO HE PODIDO MIRAR" if rc == RC_NO_PUDE_MIRAR else "POR DEBAJO DEL OBJETIVO"
+    etiqueta = "⛔ COULD NOT LOOK" if rc == RC_UNAVAILABLE else "BELOW TARGET"
     print(redacta(f"seed-estate-volume: {etiqueta}: {msg}"), file=sys.stderr)
     return rc
 
@@ -417,29 +393,29 @@ def carga_objetivos(ruta):
         with open(ruta, encoding="utf-8") as f:
             d = json.load(f)
     except FileNotFoundError:
-        return None, None, f"no encuentro el fichero de objetivos `{ruta}`"
+        return None, None, f"cannot find target file `{ruta}`"
     except json.JSONDecodeError as e:
-        return None, None, f"`{ruta}` no es JSON valido: {e}"
+        return None, None, f"`{ruta}` is not valid JSON: {e}"
     sup = d.get("superficies")
     if not isinstance(sup, list) or not sup:
-        return None, None, f"`{ruta}` no trae una lista `superficies` con contenido"
+        return None, None, f"`{ruta}` contains no populated `superficies` list"
     decl = {}
     for s in sup:
         for campo in ("id", "objetivo", "listar", "bajo"):
             if campo not in s:
-                return None, None, f"una superficie de `{ruta}` no declara `{campo}`: {s}"
+                return None, None, f"a surface in `{ruta}` does not declare `{campo}`: {s}"
         if not isinstance(s["objetivo"], int) or s["objetivo"] < 1:
-            return None, None, f"`{s['id']}` declara un objetivo que no es un entero positivo"
+            return None, None, f"`{s['id']}` declares a target that is not a positive integer"
         decl[s["id"]] = s
     # ⛔ LAS DOS DIRECCIONES, y la segunda es la que un mutante rompe sin que se note: una
     #    superficie con generador y SIN declarar se sembraria sin objetivo y sin aparecer en el
     #    reparto — es decir, trabajo invisible que nadie podria auditar.
-    faltan_gen = sorted(set(decl) - set(GENERADORES))
-    if faltan_gen:
-        return None, None, f"declaradas en `{ruta}` y SIN generador en el guion: {faltan_gen}"
-    faltan_decl = sorted(set(GENERADORES) - set(decl))
-    if faltan_decl:
-        return None, None, f"con generador en el guion y SIN declarar en `{ruta}`: {faltan_decl}"
+    missing_generators = sorted(set(decl) - set(GENERADORES))
+    if missing_generators:
+        return None, None, f"declared in `{ruta}` with NO generator in the script: {missing_generators}"
+    missing_declarations = sorted(set(GENERADORES) - set(decl))
+    if missing_declarations:
+        return None, None, f"with a generator in the script but NOT declared in `{ruta}`: {missing_declarations}"
     return decl, d.get("no_sembrables_por_api", []), None
 
 
@@ -447,33 +423,33 @@ def main(argv):
     # ⛔ La frontera cubre TAMBIEN lo que salga por una excepcion no capturada. Se instala aqui y no
     #    en el import: un banco que importe este guion como modulo no debe heredar el hook.
     instala_excepthook(redacta, "seed-estate-volume")
-    p = argparse.ArgumentParser(description="Llena la finca de demo hasta el objetivo por superficie.")
+    p = argparse.ArgumentParser(description="Fill the demo estate to each surface target.")
     p.add_argument("base"); p.add_argument("token"); p.add_argument("tenant")
     p.add_argument("--workspace", default="billing")
     p.add_argument("--objetivos", default=OBJETIVOS_POR_DEFECTO)
     p.add_argument("--prefijo", default=PREFIJO_POR_DEFECTO)
     p.add_argument("--solo-medir", action="store_true",
-                   help="cuenta y reparte SIN enviar un solo POST (cero efectos)")
+                   help="count and distribute WITHOUT sending a POST (no side effects)")
     a = p.parse_args(argv[1:])
 
     decl, no_sembrables, motivo = carga_objetivos(a.objetivos)
     if motivo:
-        return salir(RC_NO_PUDE_MIRAR, motivo)
+        return salir(RC_UNAVAILABLE, motivo)
     malas = comprueba_marcadores()
     if malas:
-        return salir(RC_NO_PUDE_MIRAR, "un generador no cumple el modo de marcador que declara, "
-                                       "asi que su comprobacion de idempotencia estaria muerta: "
+        return salir(RC_UNAVAILABLE, "a generator violates its declared marker mode, "
+                                       "so its idempotency check would be ineffective: "
                                        + "; ".join(malas))
-    di(f"seed-estate-volume: objetivos de `{a.objetivos}` · {len(decl)} superficies "
-          f"declaradas · {len(no_sembrables)} no sembrables por API")
+    di(f"seed-estate-volume: targets from `{a.objetivos}` · {len(decl)} surfaces "
+          f"declared · {len(no_sembrables)} cannot be seeded through the API")
 
     m = Motor(a.base, a.token, a.tenant)
     ctx = {"workspace_slug": a.workspace, "agentes": [], "libres": {}}
 
     filas, mal = m.listar("/v1/agents", "items")
     if mal:
-        return salir(RC_NO_PUDE_MIRAR, f"no puedo listar los agentes, que son la raiz de otras cuatro "
-                                       f"superficies: {mal}")
+        return salir(RC_UNAVAILABLE, f"cannot list agents, the basis of four other "
+                                       f"surfaces: {mal}")
 
     reparto, creados_total, fallos = [], 0, []
     # ⛔ SE ITERA SOBRE LO DECLARADO, no sobre ORDEN a secas, y esto es la cura de A-04
@@ -487,33 +463,33 @@ def main(argv):
         campo, ruta, fabrica, modo = GENERADORES[sid]
         filas, mal = m.listar(s["listar"], s["bajo"])
         if mal:
-            return salir(RC_NO_PUDE_MIRAR, f"`{sid}`: {mal}")
+            return salir(RC_UNAVAILABLE, f"`{sid}`: {mal}")
         antes = len(filas)
         objetivo = s["objetivo"]
-        faltan = max(0, objetivo - antes)
+        missing_inputs = max(0, objetivo - antes)
 
         ags, mal_ag = m.listar("/v1/agents", "items")
         if mal_ag:
-            return salir(RC_NO_PUDE_MIRAR, f"`{sid}` cuelga de los agentes y no puedo listarlos: {mal_ag}")
+            return salir(RC_UNAVAILABLE, f"`{sid}` depends on agents, which cannot be listed: {mal_ag}")
         ctx["agentes"] = [x["id"] for x in ags]
         if sid in SUJETO_UNICO:
             campo_sujeto = SUJETO_UNICO[sid]
             usados = {f.get(campo_sujeto) for f in filas}
             libres = [x for x in ctx["agentes"] if x not in usados]
             ctx["libres"][sid] = list(libres)
-            if faltan > len(libres):
-                fallos.append(f"`{sid}` cuelga de un sujeto UNICO (`{campo_sujeto}`): objetivo "
-                              f"{objetivo}, hay {antes} y solo quedan {len(libres)} agentes sin "
-                              f"una; para subirlo hay que sembrar mas agentes primero")
-                faltan = len(libres)
+            if missing_inputs > len(libres):
+                fallos.append(f"`{sid}` depends on a UNIQUE subject (`{campo_sujeto}`): target "
+                              f"{objetivo}, currently {antes}, and only {len(libres)} agents remain without "
+                              f"one; seed more agents before increasing it")
+                missing_inputs = len(libres)
         elif sid == "deploy" and not ctx["agentes"]:
-            return salir(RC_NO_PUDE_MIRAR, "`deploy` cuelga de un agente y no hay ninguno")
+            return salir(RC_UNAVAILABLE, "`deploy` depends on an agent, but none exists")
 
         creados, conflictos, ultimo = 0, 0, ""
         if not a.solo_medir:
             usadas = {str(f.get(campo, "")) for f in filas}
             i = 0
-            while creados < faltan and i < faltan + objetivo + 50:
+            while creados < missing_inputs and i < missing_inputs + objetivo + 50:
                 marca = f"{a.prefijo}-{sid}-{i:02d}"
                 i += 1
                 if marca_reconocible(modo, marca, usadas):
@@ -521,9 +497,9 @@ def main(argv):
                 try:
                     st, resp = m.crear(ruta, fabrica(marca, creados, ctx))
                 except Secreto as e:
-                    return salir(RC_NO_PUDE_MIRAR, f"guardian de secretos: {e}")
+                    return salir(RC_UNAVAILABLE, f"secret guard: {e}")
                 except IndexError:
-                    fallos.append(f"`{sid}`: me quede sin sujetos libres a la {creados + 1}a fila")
+                    fallos.append(f"`{sid}`: no free subjects remain at row {creados + 1}")
                     break
                 if st in (200, 201):
                     creados += 1
@@ -537,35 +513,35 @@ def main(argv):
                 else:
                     fallos.append(f"`{sid}`: POST {ruta} -> {st} {resp[:110]}")
                     break
-            if creados < faltan and conflictos and not any(f.startswith(f"`{sid}`") for f in fallos):
-                fallos.append(f"`{sid}`: {conflictos} conflictos 409 y solo {creados} de {faltan} "
-                              f"filas creadas — el servidor rechaza duplicados: {ultimo}")
+            if creados < missing_inputs and conflictos and not any(f.startswith(f"`{sid}`") for f in fallos):
+                fallos.append(f"`{sid}`: {conflictos} HTTP 409 conflicts and only {creados} of {missing_inputs} "
+                              f"rows created — the server rejects duplicates: {ultimo}")
 
         despues_filas, mal = m.listar(s["listar"], s["bajo"])
         if mal:
-            return salir(RC_NO_PUDE_MIRAR, f"`{sid}`: no puedo releer tras sembrar: {mal}")
+            return salir(RC_UNAVAILABLE, f"`{sid}`: could not reread after seeding: {mal}")
         despues = len(despues_filas)
         creados_total += creados
         reparto.append((sid, antes, creados, despues, objetivo))
 
     di()
-    di(f"  {'SUPERFICIE':18s} {'ANTES':>6s} {'CREADAS':>8s} {'DESPUES':>8s} {'OBJETIVO':>9s}  VEREDICTO")
+    di(f"  {'SURFACE':18s} {'BEFORE':>6s} {'CREATED':>8s} {'AFTER':>8s} {'TARGET':>9s}  VERDICT")
     debajo = []
     for sid, antes, creados, despues, objetivo in reparto:
-        v = "ok" if despues >= objetivo else "⛔ POR DEBAJO"
+        v = "ok" if despues >= objetivo else "⛔ BELOW TARGET"
         if despues < objetivo:
             debajo.append((sid, despues, objetivo))
         di(f"  {sid:18s} {antes:6d} {creados:8d} {despues:8d} {objetivo:9d}  {v}")
-    di(f"\n  {creados_total} filas creadas en esta corrida"
-       + ("  (modo --solo-medir: cero POST)" if a.solo_medir else ""))
+    di(f"\n  {creados_total} rows created in this run"
+       + ("  (--solo-medir mode: zero POSTs)" if a.solo_medir else ""))
     for f in fallos:
         di(f"  ⚠ {f}")
     for ns in no_sembrables:
-        di(f"  ⓘ `{ns.get('id')}` NO se siembra por API ({ns.get('ruta')}): {ns.get('evidencia', '')[:100]}")
+        di(f"  ⓘ `{ns.get('id')}` cannot be seeded through the API ({ns.get('ruta')}): {ns.get('evidencia', '')[:100]}")
 
     if debajo:
-        return salir(RC_POR_DEBAJO, "; ".join(f"`{s}` se queda en {d} de {o}" for s, d, o in debajo))
-    di("  ⇒ todas las superficies declaradas llegan a su objetivo.")
+        return salir(RC_POR_DEBAJO, "; ".join(f"`{s}` remains at {d} of {o}" for s, d, o in debajo))
+    di("  ⇒ all declared surfaces meet their targets.")
     return RC_LIMPIO
 
 

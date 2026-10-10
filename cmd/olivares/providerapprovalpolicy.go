@@ -18,6 +18,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 // Native provider approvals use the same principal, live PDP, authored review
@@ -26,6 +27,7 @@ type sessionProviderPolicy struct {
 	credentials   *auth.SessionCredentials
 	eval          auth.PolicyEvaluator
 	scoped        auth.ScopedAuthorizer
+	authz         *auth.Authorizer // the launch's authorizer; nil denies (see claudeHookDecider.authz)
 	approvals     *governance.EngineApprovals
 	store         store.Store
 	redactSecrets func(model.TenantID, string, []byte) ([]byte, []sessions.SecretMaskSpan, bool)
@@ -248,8 +250,7 @@ func (g sessionProviderPolicy) verdict(ctx context.Context, tenant model.TenantI
 	if err != nil || req.SessionRef == "" || scope.SessionRef != req.SessionRef || req.Principal.SessionIdentity != req.SessionRef || req.Principal.SessionFence != p.SessionFence {
 		return refuse("session authority is unavailable or changed")
 	}
-	role, member := p.RoleIn(tenant)
-	if !member || !auth.RoleGrants(role, "sessions:run:write") {
+	if !sessionRunAdmitted(ctx, g.authz, p, tenant, "sessions:run:write", scope.RunRef, scope.WorkspaceID).Allow {
 		return refuse("launcher's current authority does not permit this provider action")
 	}
 	mode, kind, resource := "unknown", "provider.tool", req.Kind
@@ -293,7 +294,7 @@ func (g sessionProviderPolicy) verdict(ctx context.Context, tenant model.TenantI
 		}
 	}
 	if scope.Preset == sessions.PresetFull {
-		if !auth.RoleGrants(role, "sessions:run:admin") {
+		if !sessionRunAdmitted(ctx, g.authz, p, tenant, "sessions:run:admin", scope.RunRef, scope.WorkspaceID).Allow {
 			return refuse("launcher's current authority does not permit full session permissions")
 		}
 		full := auth.Request{Principal: p, Tenant: tenant, Permission: "sessions:run:admin",
@@ -314,7 +315,7 @@ func (g sessionProviderPolicy) verdict(ctx context.Context, tenant model.TenantI
 	}
 	preset := claude.DecisionAllow
 	if scope.Preset != sessions.PresetNone {
-		preset, err = sessionPresetDecision(scope.Preset, mode)
+		preset, err = hookpep.SessionPresetDecision(scope.Preset, mode)
 		if err != nil {
 			return refuse("session permission preset is unavailable")
 		}

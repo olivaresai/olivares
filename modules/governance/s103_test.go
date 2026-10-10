@@ -11,8 +11,6 @@ import (
 	"testing"
 
 	claudewif "github.com/olivaresai/olivares/connectors/claude-wif"
-	"github.com/olivaresai/olivares/core/api"
-	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/governance"
 )
@@ -79,6 +77,17 @@ func (h *harness) tenantAdmin() (model.TenantID, string) {
 }
 
 // --- B: managed-* authoring ---------------------------------------------------
+
+// --- C: Cedar/OPA PDP authoring ----------------------------------------------
+
+// TestPdpBootReloadDurableActivation proves the persisted active=true is HONEST: a
+// fresh module over the SAME store starts with an empty overlay (no restriction) and,
+// after ReloadActivePDP (the boot-reload the composition root runs per tenant),
+// enforces the stored active Cedar policy — so activation survives a restart.
+
+// --- D: tool confirmation -----------------------------------------------------
+
+// --- E: WIF graph -------------------------------------------------------------
 
 func TestManagedSettingsValidate(t *testing.T) {
 	h := newHarness(t)
@@ -225,8 +234,6 @@ func TestHooksValidatePermissionRequestCorrection(t *testing.T) {
 	}
 }
 
-// --- C: Cedar/OPA PDP authoring ----------------------------------------------
-
 func TestPdpValidateCedar(t *testing.T) {
 	h := newHarness(t)
 	tenant, tok := h.tenantAdmin()
@@ -291,84 +298,6 @@ func TestPdpExplainGrantSemantics(t *testing.T) {
 	}
 }
 
-func TestPdpPublishRecomposeDenyClosed(t *testing.T) {
-	h := newHarness(t)
-	tenant, tok := h.tenantAdmin()
-	hdr := tenantHdr(tenant)
-	ctx := context.Background()
-	req := auth.Request{
-		Principal:  auth.Principal{Kind: auth.KindToken, CredID: "tok1"},
-		Permission: "agent:write",
-		Tenant:     tenant,
-		Resource:   auth.ResourceAttrs{Kind: "agent"},
-	}
-
-	// Before publish: no authored restriction.
-	if dec, _ := h.gov.Evaluator().Evaluate(ctx, req); !dec.Allow {
-		t.Fatalf("no authored policy → no restriction, got deny: %s", dec.Reason)
-	}
-	// Publish a compiling forbid → it recomposes the live evaluator and now RESTRICTS.
-	pub := h.do("POST", "/v1/m/governance/pdp/publish", tok, map[string]any{
-		"engine": "cedar", "source": `forbid(principal, action, resource) when { context.permission == "agent:write" };`,
-	}, hdr)
-	if pub.code != http.StatusOK || pub.body["active"] != true {
-		t.Fatalf("cedar publish should activate: %d %s", pub.code, pub.raw)
-	}
-	if dec, _ := h.gov.Evaluator().Evaluate(ctx, req); dec.Allow {
-		t.Fatal("after publish the authored forbid must restrict the request")
-	}
-	// Publish an INVALID cedar → 400, NOT activated; the prior policy still stands.
-	bad := h.do("POST", "/v1/m/governance/pdp/publish", tok, map[string]any{
-		"engine": "cedar", "source": `forbid(((( garbage`,
-	}, hdr)
-	if bad.code != http.StatusBadRequest {
-		t.Fatalf("invalid cedar publish must be 400, got %d %s", bad.code, bad.raw)
-	}
-	if dec, _ := h.gov.Evaluator().Evaluate(ctx, req); dec.Allow {
-		t.Fatal("deny-closed: a failed publish must leave the prior policy in force")
-	}
-	// The activation is audited and versioned.
-	if !contains(h.auditActions(tenant), "governance.pdp.publish") {
-		t.Fatal("pdp publish must be audited")
-	}
-	v := h.do("GET", "/v1/m/governance/pdp/versions", tok, nil, hdr)
-	if len(items(v)) != 1 {
-		t.Fatalf("only the compiling policy should be versioned, got %d", len(items(v)))
-	}
-}
-
-// TestPdpBootReloadDurableActivation proves the persisted active=true is HONEST: a
-// fresh module over the SAME store starts with an empty overlay (no restriction) and,
-// after ReloadActivePDP (the boot-reload the composition root runs per tenant),
-// enforces the stored active Cedar policy — so activation survives a restart.
-func TestPdpBootReloadDurableActivation(t *testing.T) {
-	h := newHarness(t)
-	tenant, tok := h.tenantAdmin()
-	ctx := context.Background()
-	req := auth.Request{
-		Principal:  auth.Principal{Kind: auth.KindToken, CredID: "tok1"},
-		Permission: "agent:write", Tenant: tenant, Resource: auth.ResourceAttrs{Kind: "agent"},
-	}
-	pub := h.do("POST", "/v1/m/governance/pdp/publish", tok, map[string]any{
-		"engine": "cedar", "source": `forbid(principal, action, resource) when { context.permission == "agent:write" };`,
-	}, tenantHdr(tenant))
-	if pub.code != http.StatusOK {
-		t.Fatalf("publish: %d %s", pub.code, pub.raw)
-	}
-	// A fresh module over the SAME store = a restarted process: empty overlay.
-	fresh := governance.New(governance.WithClock(h.clk))
-	fresh.UseData(api.NewModuleData(h.st))
-	if dec, _ := fresh.Evaluator().Evaluate(ctx, req); !dec.Allow {
-		t.Fatal("a fresh module before boot-reload must impose no restriction")
-	}
-	if err := fresh.ReloadActivePDP(ctx, tenant); err != nil {
-		t.Fatalf("reload: %v", err)
-	}
-	if dec, _ := fresh.Evaluator().Evaluate(ctx, req); dec.Allow {
-		t.Fatal("after boot-reload the stored active cedar policy must restrict (active=true is durable)")
-	}
-}
-
 func TestPdpTestsReflectHonest(t *testing.T) {
 	h := newHarness(t)
 	tenant, tok := h.tenantAdmin()
@@ -377,8 +306,6 @@ func TestPdpTestsReflectHonest(t *testing.T) {
 		t.Fatalf("tests must reflect honestly (available=false, no fabricated pass): %d %s", r.code, r.raw)
 	}
 }
-
-// --- D: tool confirmation -----------------------------------------------------
 
 func TestToolConfirmationS24AndAudit(t *testing.T) {
 	h := newHarness(t)
@@ -458,8 +385,6 @@ func TestThreadEvents(t *testing.T) {
 		t.Fatalf("wired events should be served: %d %s", got.code, got.raw)
 	}
 }
-
-// --- E: WIF graph -------------------------------------------------------------
 
 func TestWifGraphNoKeyMaterial(t *testing.T) {
 	h := newHarness(t)

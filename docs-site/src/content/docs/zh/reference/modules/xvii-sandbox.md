@@ -55,9 +55,36 @@ runner 运行了它、该 runner 是否为 `isolated`、临时状态是否被 `d
   但未评分——绝非一次静默通过。
 - **重放对缺口保持诚实。** 如果历史源无法重建一条有序的时间线，该重放会被报告为零步骤的降级，
   绝不编造。
-- **没有合成数据生成。** 这只是一个有记录的 post-v1 扩展点；本模块不随附任何生成器，
-  不为其暴露任何路由，也产出零样本。
+- **本地数据生成.** 通过沙盒 API 使用有大小限制的本地模板，生成可重现的场景输入。不会请求模型或网络。
 :::
+
+## 运行生成的场景
+
+用 `olivares modules on sandbox` 启用该可选模块。生成、场景创建和执行需要编辑者或管理员权限；查看者可以检查保存的场景、运行和输出。
+
+创建不含末尾换行的模板：
+
+```sh
+printf '%s' '{{subject_kind}}:user{{index}}@example.test' > seed.txt
+```
+
+将此合成响应保存为 `mocks.json`：
+
+```json
+[{"resource":"agent:user1@example.test","response":"first synthetic account"}]
+```
+
+```sh
+olivares sandbox generate --count 2 --seed-file seed.txt -o json > steps.json
+olivares sandbox scenarios create --name generated --steps-file steps.json --mocks-file mocks.json -o json
+olivares sandbox scenarios run <scenario-id> --variant candidate -o json
+olivares sandbox runs get <run-id> -o json
+olivares sandbox runs outputs <run-id> -o json
+```
+
+使用创建返回的场景 ID，再使用执行返回的运行 ID。默认 `inproc-mock` runner 将第一个输入解析为上述响应；第二个返回 `[[mock-miss:agent:user2@example.test]]`。mock 未命中增加 `steps_error`，但这是预期合成结果：运行仍记录 `status: completed`、`steps_total: 2`、`steps_ok: 1`、`steps_error: 1`、`isolated: true` 和 `destroyed: true`。它不向真实资源发出请求。本例不请求评分，也不证明操作系统级运行时的适用性。匹配使用精确输入文本，包括模板文件中的换行。
+
+场景、运行和输出在引擎重启后仍可用。关闭模块会移除路由访问，而不删除已保存数据；重新开启恢复访问。这些记录限定到租户，其他组织无法读取。
 
 ## 相关内容
 

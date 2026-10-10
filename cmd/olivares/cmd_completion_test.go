@@ -12,9 +12,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/spf13/cobra"
-
+	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/audit"
+	"github.com/spf13/cobra"
 )
 
 func TestCompletionBashOutput(t *testing.T) {
@@ -90,7 +90,6 @@ func TestFlagCompletions(t *testing.T) {
 		{"eventing-create-role", eventingSubCreateCmd, "role", []string{"viewer", "editor", "admin", "owner"}},
 		{"eventing-create-auth-type", eventingSubCreateCmd, "auth-type", []string{"none", "bearer", "basic", "header"}},
 		{"eventing-deliveries-status", eventingDeliveriesListCmd, "status", []string{"queued", "delivering", "delivered", "dead", "denied"}},
-		{"keys-wrap-purpose", keysWrapCmd, "purpose", []string{"audit", "catalog", "policy"}},
 		{"db-check-engine", dbCheckCmd, "engine", []string{"sqlite", "postgres"}},
 		{"db-init-sslmode", dbInitCmd, "sslmode", []string{"disable", "allow", "prefer", "require", "verify-ca", "verify-full"}},
 		{"eventing-format", newEventingCmd, "format", []string{"text", "json"}},
@@ -253,6 +252,12 @@ func TestAuditExportFormatSurfacesDeriveFromTheEngineRegistry(t *testing.T) {
 	err := bad.Execute()
 	if err == nil {
 		t.Fatal("an unknown --format must fail")
+	}
+	if !audit.ExportLinked {
+		if exitcode.From(err) != exitcode.Edition {
+			t.Fatalf("Community export = %v, want edition refusal", err)
+		}
+		return
 	}
 	if !strings.Contains(err.Error(), list) {
 		t.Errorf("error %q does not name the accepted formats %q", err, list)

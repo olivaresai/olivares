@@ -6,7 +6,6 @@ package inferenceproxy
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strconv"
@@ -484,17 +483,9 @@ func auditEvent(ctx context.Context, sc store.Scope, mc api.ModuleContext, actio
 // while it serializes as `{"items":[]}` next door (core/api/listresponse.go).
 type listResponse[T any] = api.ListResponse[T]
 
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	if v != nil {
-		_ = json.NewEncoder(w).Encode(v)
-	}
-}
+var writeJSON = api.WriteJSON
 
-func errorBody(msg string) map[string]any {
-	return map[string]any{"error": map[string]string{"message": msg}}
-}
+var errorBody = api.ModuleErrorBody
 
 // requireStepUp is the second, assurance-only gate on proxy governance writes. Module
 // routing applies RBAC but has no implicit assurance floor, so every handler that can
@@ -523,8 +514,8 @@ func requireStepUp(w http.ResponseWriter, r *http.Request, mc api.ModuleContext)
 // tenant_suspended, tenant_not_in_service, not_leader and residency_violation —
 // were absent from all but two of the thirty-six copies, so the same refusal was
 // answered 423/503/403 by a core route and 500 "internal error" by every module
-// route. The per-arm reasoning (ADR-0024 Q2 for the audit spool/B-03 for
-// workspace confinement for the standby) now lives beside statusFor, once.
+// route. The per-arm reasoning (audit-spool policy for audit spool capacity and
+// standby workspace confinement) now lives beside statusFor, once.
 func writeStoreError(w http.ResponseWriter, err error) {
 	if err == nil {
 		writeJSON(w, http.StatusOK, nil)
@@ -553,7 +544,7 @@ func eq(col, val string) model.Filter {
 
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 1 << 20}); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid JSON body")))
 		return false
 	}
 	return true

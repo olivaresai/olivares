@@ -156,6 +156,7 @@ func TestPrivilegedCommandsRefuseWithoutAttribution(t *testing.T) {
 		{"sources rm", []string{"sources", "rm", "--name", "x", "--yes"}},
 		{"superadmin enable", []string{"superadmin", "enable", "--email", "a@b.c"}},
 		{"superadmin disable", []string{"superadmin", "disable", "--email", "a@b.c"}},
+		{"admin recover", []string{"admin", "recover", "--email", "a@b.c", "--yes"}},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {

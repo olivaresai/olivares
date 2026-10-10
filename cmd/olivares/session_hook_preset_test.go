@@ -19,6 +19,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 func TestSessionClaudePresetAskQueuesBeforeCommand(t *testing.T) {
@@ -42,7 +43,7 @@ func TestSessionClaudePresetAskQueuesBeforeCommand(t *testing.T) {
 	service := h.set.gov.EngineApprovals()
 	h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 	h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-	d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow"}, authr: c, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: service, store: h.st, clock: time.Now, log: discardLog()}
+	d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: c, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, Store: h.st, Clock: time.Now, Log: discardLog()})
 	raw, _ := json.Marshal(map[string]any{"hook_event_name": "PreToolUse", "session_id": "untrusted-session", "permission_mode": "bypassPermissions", "tool_name": "Bash", "tool_input": map[string]any{"command": "printf preset-proof"}})
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
@@ -54,7 +55,7 @@ func TestSessionClaudePresetAskQueuesBeforeCommand(t *testing.T) {
 	defer func() { cancel(); <-done }()
 	var pending governance.Approval
 	for pending.ID == "" {
-		items, _, err := service.List(ctx, tenant, hookActionCapability, "pending", "")
+		items, _, err := service.List(ctx, tenant, hookpep.ActionCapability, "pending", "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -116,7 +117,7 @@ func TestSessionClaudePresetsWithRealHookDecoder(t *testing.T) {
 			service := h.set.gov.EngineApprovals()
 			h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 			h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-			d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow"}, authr: credentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: service, store: h.st, clock: time.Now, log: discardLog()}
+			d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, Store: h.st, Clock: time.Now, Log: discardLog()})
 			for i, tool := range []string{"Read", "Write", "Bash"} {
 				t.Run(tool, func(t *testing.T) {
 					assertPresetHook(t, d, service, tenant, human, token, intent.ClaimSID, "PreToolUse", tool, tc.want[i])
@@ -157,7 +158,7 @@ func TestSessionClaudePresetCombinesTenantRestrictions(t *testing.T) {
 			service := h.set.gov.EngineApprovals()
 			h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 			h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-			d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: tc.tenantDecision}, authr: credentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: service, store: h.st, clock: time.Now, log: discardLog()}
+			d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: tc.tenantDecision}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, Store: h.st, Clock: time.Now, Log: discardLog()})
 			assertPresetHook(t, d, service, tenant, human, token, intent.ClaimSID, "PreToolUse", "Write", tc.want)
 		})
 	}
@@ -185,7 +186,7 @@ func TestSessionClaudeUnknownBoundPresetRefuses(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow"}, authr: credentials, eval: h.set.gov.Evaluator(), store: h.st, clock: time.Now, log: discardLog()}
+	d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Store: h.st, Clock: time.Now, Log: discardLog()})
 	assertPresetHook(t, d, h.set.gov.EngineApprovals(), tenant, human, token, intent.ClaimSID, "PreToolUse", "Read", "deny")
 }
 
@@ -219,7 +220,7 @@ func TestSessionClaudePresetRelaunchBindsCurrentTemplate(t *testing.T) {
 	if err != nil || scope.Preset != sessions.PresetCustom || len(scope.AllowedTools) != 1 || scope.AllowedTools[0] != "Read" {
 		t.Fatalf("relaunch scope=%+v, err=%v", scope, err)
 	}
-	d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow"}, authr: credentials, eval: h.set.gov.Evaluator(), store: h.st, clock: time.Now, log: discardLog()}
+	d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Store: h.st, Clock: time.Now, Log: discardLog()})
 	assertPresetHook(t, d, h.set.gov.EngineApprovals(), tenant, human, old, intent.ClaimSID, "PreToolUse", "Read", "deny")
 	assertPresetHook(t, d, h.set.gov.EngineApprovals(), tenant, human, fresh, intent.ClaimSID, "PreToolUse", "Read", "allow")
 	assertPresetHook(t, d, h.set.gov.EngineApprovals(), tenant, human, fresh, intent.ClaimSID, "PreToolUse", "Bash", "deny")
@@ -241,7 +242,7 @@ func TestSessionClaudeCustomPresetRetainsArgumentRestrictions(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow"}, authr: credentials, eval: h.set.gov.Evaluator(), store: h.st, clock: time.Now, log: discardLog()}
+	d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Store: h.st, Clock: time.Now, Log: discardLog()})
 	for _, tc := range []struct{ name, command, want string }{
 		{"allowed-command", "printf preset-proof", "allow"},
 		{"bare-command", "printf", "allow"},
@@ -259,11 +260,11 @@ func TestSessionClaudeCustomPresetRetainsArgumentRestrictions(t *testing.T) {
 
 // Exercise the public hook decoder, credential resolver and human queue together.
 // The untrusted provider-mode and session hints must not change the launch choice.
-func assertPresetHook(t *testing.T, d *claudeHookDecider, service *governance.EngineApprovals, tenant model.TenantID, human auth.Principal, token, sid, event, tool, want string, inputs ...map[string]any) {
+func assertPresetHook(t *testing.T, d *hookpep.Decider, service *governance.EngineApprovals, tenant model.TenantID, human auth.Principal, token, sid, event, tool, want string, inputs ...map[string]any) {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(t.Context(), 3*time.Second)
 	defer cancel()
-	before, _, err := service.List(ctx, tenant, hookActionCapability, "approved", "")
+	before, _, err := service.List(ctx, tenant, hookpep.ActionCapability, "approved", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -281,7 +282,7 @@ func assertPresetHook(t *testing.T, d *claudeHookDecider, service *governance.En
 	if want == "ask" {
 		var pending governance.Approval
 		for pending.ID == "" {
-			items, _, err := service.List(ctx, tenant, hookActionCapability, "pending", "")
+			items, _, err := service.List(ctx, tenant, hookpep.ActionCapability, "pending", "")
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -333,7 +334,7 @@ func assertPresetHook(t *testing.T, d *claudeHookDecider, service *governance.En
 	} else if response.Decision == "block" || (response.Continue != nil && !*response.Continue) {
 		t.Fatalf("post/lifecycle event blocked: %s", rec.Body.String())
 	}
-	after, _, err := service.List(ctx, tenant, hookActionCapability, "approved", "")
+	after, _, err := service.List(ctx, tenant, hookpep.ActionCapability, "approved", "")
 	wantCount := len(before)
 	if want == "ask" {
 		wantCount++
@@ -341,7 +342,7 @@ func assertPresetHook(t *testing.T, d *claudeHookDecider, service *governance.En
 	if err != nil || len(after) != wantCount {
 		t.Fatalf("approval count=%d, want=%d, err=%v", len(after), wantCount, err)
 	}
-	pending, _, err := service.List(ctx, tenant, hookActionCapability, "pending", "")
+	pending, _, err := service.List(ctx, tenant, hookpep.ActionCapability, "pending", "")
 	if err != nil || len(pending) != 0 {
 		t.Fatalf("pending approvals=%d, want=0, err=%v", len(pending), err)
 	}

@@ -29,11 +29,9 @@ import (
 // in the commercial add-on enterprise/doraregister, wired ONLY under -tags enterprise (the
 // ProfileResolver / oscalingest pattern). The open binary never links it.
 //
-// No rug-pull (LICENSING.md): the open dora.go "ICT-risk view" export (GET /dora) is
-// UNCHANGED and stays open. Without a wired packager the new register/incident endpoints
-// answer 501; the default binary is byte-identical. The seam interface and its value
-// objects live here so both sides share them without the open module importing the closed
-// add-on.
+// The ICT-risk view (GET /dora) is Business Compliance Packs. Without a wired
+// packager the register/incident endpoints answer 501. Their shared persistence
+// and export interfaces remain available without importing the private add-on.
 //
 // Honesty (docs/SECURITY-HARDENING.md, SESSIONS-PLAN:114-116): the add-on HELPS COMPLY — it automates
 // register population and report drafting from the control plane's AI/ICT telemetry; it
@@ -255,7 +253,7 @@ func countErrors(issues []RegisterIssue) int {
 // date is a query parameter.
 func (m *Module) handleGenerateDORARegister(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	if m.regPackager == nil {
-		writeJSON(w, http.StatusNotImplemented, errorBody("DORA Register of Information generation requires the Olivares enterprise add-on (doraregister); not linked in this build"))
+		writeJSON(w, http.StatusNotImplemented, errorBody("DORA Register of Information generation requires the Olivares Business edition (doraregister); not linked in this build"))
 		return
 	}
 	doc, ok := readBoundedBody(w, r, "DORA register document")

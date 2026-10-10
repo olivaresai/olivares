@@ -1067,7 +1067,7 @@ func TestWorkEventTimelineAndStreamRequireLeaseReadForLeasePayloads(t *testing.T
 	// route's primary work:read check has already admitted the request; the
 	// module's secondary decision must preserve sequence continuity while
 	// replacing the lease authority document with the stable redacted payload.
-	h.m.UseWorkAuthorizer(permissionSetWorkAuthorizer{permWorkRead: true})
+	WithWorkAuthorizer(permissionSetWorkAuthorizer{permWorkRead: true})(h.m)
 	eventsPath := "/v1/m/sessions/work-items/" + itemID + "/events"
 	filteredRows := workAPICollectChildren(t, h, admin, tenant, eventsPath, 1)
 	if len(filteredRows) != 3 {
@@ -1120,10 +1120,10 @@ func TestWorkEventTimelineAndStreamRequireLeaseReadForLeasePayloads(t *testing.T
 
 	// Positive direction: the same mixed surfaces retain both ordinary and lease
 	// events once the caller also holds the explicit lease read permission.
-	h.m.UseWorkAuthorizer(permissionSetWorkAuthorizer{
+	WithWorkAuthorizer(permissionSetWorkAuthorizer{
 		permWorkRead:  true,
 		permLeaseRead: true,
-	})
+	})(h.m)
 	privileged := h.do(http.MethodGet, eventsPath, admin, tenantHdr(tenant))
 	privilegedItems, _ := privileged.body["items"].([]any)
 	if privileged.code != http.StatusOK || len(privilegedItems) != 3 ||
@@ -1198,7 +1198,7 @@ func TestLegacyWorkStreamExcludesMessageAggregate(t *testing.T) {
 	mc := api.ModuleContext{Data: workStreamDataForTest{scope: workStreamScopeForTest{events: repo}}}
 	request := httptest.NewRequest(http.MethodGet, "/v1/m/sessions/work-stream", nil)
 	var output bytes.Buffer
-	emitted, cursor, err := (&Module{}).streamWorkEvents(request, mc, &output, "")
+	emitted, cursor, err := (&Module{Dependencies: &Dependencies{}}).streamWorkEvents(request, mc, &output, "")
 	if err != nil || !emitted || cursor != workEventID.String() {
 		t.Fatalf("legacy work stream = emitted %v cursor %q err %v", emitted, cursor, err)
 	}
@@ -1250,7 +1250,7 @@ func TestWorkAPIWorkspaceConfinementFiltersRowsAndMutations(t *testing.T) {
 	}
 	assignment := map[string]any{"owner_kind": "user", "owner_ref": "owner:confined"}
 	sink := &recordingWorkSink{}
-	h.m.UseWorkEventSink(sink)
+	WithWorkEventSink(sink)(h.m)
 	allowed := h.doJSON(http.MethodPost, path+"/"+idA+"/assignments?mode=apply", confined, assignment,
 		workAPIHeaders(tenant, map[string]string{"Idempotency-Key": model.NewID().String(), "If-Match": `"v1"`}))
 	if allowed.code != http.StatusOK || allowed.body["verdict"] != string(VerdictClean) {
@@ -1579,5 +1579,27 @@ func TestWorkAPIChildCollectionsMutateAndPaginate(t *testing.T) {
 	)
 	if missingParent.code != http.StatusNotFound || workAPIErrorCode(missingParent) != "not_found" {
 		t.Fatalf("missing parent timeline = %d %s", missingParent.code, missingParent.raw)
+	}
+}
+
+func TestWorkDecodeErrorsNameFields(t *testing.T) {
+	for _, body := range []string{`{"request":{"bogus":"private-value"}}`, `{"request":{"name":42}}`} {
+		var v struct {
+			Request struct {
+				Name string `json:"name"`
+			} `json:"request"`
+		}
+		rec := httptest.NewRecorder()
+		req := httptest.NewRequest(http.MethodPost, "/", strings.NewReader(body))
+		if decodeWorkJSON(rec, req, &v) {
+			t.Fatal("invalid body accepted")
+		}
+		field := "request.name"
+		if strings.Contains(body, "bogus") {
+			field = "request.bogus"
+		}
+		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"code":"invalid_command"`) || !strings.Contains(rec.Body.String(), field) || strings.Contains(rec.Body.String(), "private-value") {
+			t.Fatalf("work field diagnostic = %d %s", rec.Code, rec.Body.String())
+		}
 	}
 }

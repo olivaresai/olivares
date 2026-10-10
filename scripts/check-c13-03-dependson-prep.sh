@@ -29,7 +29,7 @@ grep -q 'HOLD' "$DOC" || fail "prepare doc lost HOLD"
 grep -q 'DependsOn not honoured' "$DOC" \
   || fail "prepare doc lost the honour pin"
 if grep -qiE 'DependsOn honoured on overlay main|FIRMA A claimed' "$DOC"; then
-  fail "prepare doc claims a close this lote does not have"
+  fail "prepare doc claims a close this batch does not have"
 fi
 
 python3 - "$JSON" <<'PY' || exit $?

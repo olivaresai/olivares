@@ -8,6 +8,9 @@ sidebar:
   order: 21
 ---
 
+FinOps budgets and spend analysis are **[Business](https://olivares.ai/pricing)** features. Community keeps per-session cost tracking and data export. Budgets stored before 0.1 remain readable and removable, and enforce while the FinOps module is on; Community cannot create or change them. Evaluations and sandboxes remain Community features.
+
+
 A billable effect **reserves** its estimated spend before it runs and receives
 **one handle**. When the effect has run, the caller **commits** the measured cost
 with that handle. When it did not run, the caller **releases** the hold. The

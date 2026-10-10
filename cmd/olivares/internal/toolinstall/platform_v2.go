@@ -32,9 +32,9 @@ func PlatformV2For(driver string, host Platform) (PlatformV2, string, error) {
 			return p, "linux-arm64", nil
 		}
 		return PlatformV2{}, "", refuse(KindUnsupportedPlatform, "OpenCode release is unavailable for this architecture")
-	case DriverOllama:
+	case DriverOllama, DriverGemini:
 		if host.Arch != "amd64" && host.Arch != "arm64" {
-			return PlatformV2{}, "", refuse(KindUnsupportedPlatform, "Ollama release is unavailable for this architecture")
+			return PlatformV2{}, "", refuse(KindUnsupportedPlatform, "%s release is unavailable for this architecture", driver)
 		}
 		return PlatformV2{OS: "linux", Arch: host.Arch}, "linux-" + host.Arch, nil
 	case DriverGrok:
@@ -66,7 +66,7 @@ func validateRequestV2(req RequestV2) error {
 	if req.Driver == "" {
 		return refuse(KindInvalidRequest, "a driver is required")
 	}
-	if req.Driver != DriverCodex && req.Driver != DriverGrok && req.Driver != DriverOpenCode && req.Driver != DriverOllama {
+	if req.Driver != DriverCodex && req.Driver != DriverGrok && req.Driver != DriverOpenCode && req.Driver != DriverOllama && req.Driver != DriverGemini {
 		return refuse(KindUnsupportedProvider, "driver %q is not a v2 installer", req.Driver)
 	}
 	if !filepath.IsAbs(req.DestRoot) || filepath.Clean(req.DestRoot) != req.DestRoot || req.DestRoot == string(filepath.Separator) {

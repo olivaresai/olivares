@@ -34,6 +34,8 @@ export interface FieldRenderProps {
   'aria-describedby'?: string
   /** `true` when `error` is set, for `aria-invalid`. */
   'aria-invalid'?: boolean
+  /** `true` when the Field is marked required; native validation stays with the control. */
+  'aria-required'?: boolean
 }
 
 export interface FieldProps {
@@ -134,6 +136,7 @@ export function Field({
     'aria-labelledby': labelId,
     'aria-describedby': describedBy,
     'aria-invalid': error ? true : undefined,
+    'aria-required': required ? true : undefined,
   }
 
   // For plain (non-render-prop) children, auto-associate id + labelling + the
@@ -151,12 +154,15 @@ export function Field({
       'aria-labelledby'?: string
       'aria-describedby'?: string
       'aria-invalid'?: boolean
+      'aria-required'?: React.AriaAttributes['aria-required']
     }
     content = cloneElement(children, {
       id: childProps.id ?? controlId,
       'aria-labelledby': childProps['aria-labelledby'] ?? labelId,
       'aria-describedby': childProps['aria-describedby'] ?? describedBy,
       'aria-invalid': childProps['aria-invalid'] ?? (error ? true : undefined),
+      'aria-required':
+        childProps['aria-required'] ?? renderProps['aria-required'],
     } as Partial<typeof childProps>)
   } else {
     content = children

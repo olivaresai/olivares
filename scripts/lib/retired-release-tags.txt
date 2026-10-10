@@ -1,0 +1,14 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+#
+# The published release tags before the MAJOR.MINOR line, exactly as tagged: the complete list,
+# read from the public repository's tag list (`git ls-remote --tags`) on 2026-10-08. Releases
+# from 1.0 on are bare MAJOR.MINOR and never belong here.
+#
+# One list for two readers in two languages: scripts/check-release-version.sh admits these, and
+# only these, as retired history, and scripts/release-finalize-stable.sh lets 1.0 succeed `latest`
+# only when `latest` is one of these exact tag names. Any other origin stays refused.
+v26.8.0
+v26.9.0
+26.10.0
+26.10.1

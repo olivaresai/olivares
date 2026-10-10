@@ -121,6 +121,11 @@ type CollectionScopeRouteRegistrar interface {
 // of whatever a schema author happened to call a field. The module says it explicitly or
 // the route stays collection-level.
 type EntityRef struct {
+	// BodyKindField selects one declared entity reference by a top-level JSON
+	// string. BodyKinds is a closed allowlist; unknown or duplicate selectors are
+	// refused before any row is read. Selected references carry their own locator.
+	BodyKindField string
+	BodyKinds     map[string]EntityRef
 	// Kind is the store entity kind the route acts on ("<ns>.<entity>").
 	Kind model.Kind
 	// CoreKind declares a CORE entity kind instead of Kind, for a route whose
@@ -175,6 +180,12 @@ type EntityRef struct {
 	// This changes only denial presentation and never grants the action. It requires
 	// ConcealDeniedAsNotFound; blank preserves unconditional concealment.
 	DeniedReadPermission auth.Permission
+	// DeniedReadRoleOnly confines read-based disclosure to callers whose role
+	// does not grant the action. This opt-in preserves concealment for policy or
+	// scope denials on assignment targets; existing read-disclosure routes keep
+	// their historical behavior when it is false. On body-kind routes, declare
+	// it on the outer reference, with a read permission on a selected reference.
+	DeniedReadRoleOnly bool
 }
 
 // ModuleHandler is a module route handler. It receives the authorized principal,
@@ -183,6 +194,7 @@ type ModuleHandler func(w http.ResponseWriter, r *http.Request, mc ModuleContext
 
 // ModuleContext is what a module route handler is given.
 type ModuleContext struct {
+	operation *moduleOperationScope
 	// Principal is the authenticated, authorized caller.
 	Principal auth.Principal
 	// Tenant is the single canonical resolved tenant for the request.
@@ -196,6 +208,11 @@ type ModuleContext struct {
 	// this request. Collection routes carry the permission-derived kind with no ID;
 	// entity routes additionally carry the target ID and its STORED workspace.
 	Resource auth.ResourceAttrs
+	// BodyEntityFields retains the canonical body selector/locator values used
+	// for entity admission. Unlike Resource.ID, a locator remains the public
+	// reference even when lookup resolves a different stored primary ID. Nil
+	// on collection and path-only routes; handlers can corroborate their decode.
+	BodyEntityFields map[string]string
 	// Authorization is the witness that permitted THIS request, for a route registered
 	// through the governed door. It is the zero value for the ungoverned doors.
 	//
@@ -210,6 +227,20 @@ type ModuleContext struct {
 	// through before it stores a reference that lets the account act in the tenant
 	// or binds it to a duty there (auth.FencedWrite).
 	Standing auth.StandingReader
+	// Admission is the admission seam's in-handler door (Server.Admits), set on a module
+	// route. Read it through Admits: a context built without it refuses.
+	Admission func(context.Context, auth.Request) bool
+}
+
+// Admits asks the admission seam whether the request's principal holds perm over resource
+// in the request's tenant. A handler uses it for a branch the route's own permission does
+// not cover, instead of comparing the rank of the principal's role. A context with no
+// Admission (an in-process call, a pump) refuses: deny closed.
+func (mc ModuleContext) Admits(ctx context.Context, perm auth.Permission, resource auth.ResourceAttrs) bool {
+	if mc.Admission == nil {
+		return false
+	}
+	return mc.Admission(ctx, auth.Request{Principal: mc.Principal, Permission: perm, Tenant: mc.Tenant, Resource: resource})
 }
 
 // ScopedData is the tenant-PINNED data handle a module ROUTE handler receives. It

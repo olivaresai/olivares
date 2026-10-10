@@ -2,19 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// C07-04 — las dieciséis rutas de evals que la consola nunca llamaba, contrastadas contra el
-// contrato que el motor EXIGE.
+// C07-04 — the sixteen evals routes the console never called, checked against the engine
+// contract.
 //
-// ⛔ POR QUÉ ESTE FICHERO NO MOCKEA `./api`, que es lo que haría el camino corto: `evals.test.tsx`
-// hace `vi.mock('./api')` y por tanto afirma contra un doble que acepta lo que la vista le dé. Ese
-// doble estuvo contento durante meses mientras el endpoint real contestaba 400 — está escrito en
-// `ab-contract.test.ts:5-9`. Aquí corre el cliente REAL contra `http.*`, y sólo se sustituye
-// `fetch`, así que la aserción es sobre **los bytes que saldrían del navegador**.
+// This file does not mock `./api`. `evals.test.tsx` does, producing a double that accepts
+// whatever the view passes. That double passed for months while the real endpoint returned
+// 400 (`ab-contract.test.ts:5-9`). Here the real client runs against `http.*` with only
+// `fetch` replaced, so assertions inspect the bytes the browser would send.
 //
-// ⛔ Y LA RUTA ES LA ASERCIÓN, no que la función se llamara. Un botón cableado al generador
-// equivocado manda una petición bien formada a otro sitio: el mismo defecto que el contraste
-// the model encontró en la pestaña de regops (F4), donde el botón de OSCAL apuntaba a
-// `generateUsLawPack` y las 40 casillas seguían verdes.
+// Assert the route, not merely a function call. A button wired to the wrong generator sends
+// a valid request to the wrong place. The the model review found this in the RegOps tab
+// (F4): the OSCAL button called `generateUsLawPack` while all 40 tests passed.
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { configureApiClient } from '@/lib/api/client'
 import { evalsApi } from './api'

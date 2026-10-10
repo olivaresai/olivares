@@ -15,11 +15,10 @@ import (
 	"sort"
 	"strings"
 	"sync"
-	"time"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/olivaresai/olivares/core/secret"
 	"github.com/olivaresai/olivares/core/secure"
-	"github.com/olivaresai/olivares/core/secure/kmswrap"
 )
 
 // Key-custody governance: the OPTIONAL customer-managed KEK (CMEK) that
@@ -71,273 +70,6 @@ const (
 	envCatalogWrapped = "OLIVARES_CATALOG_SIGNING_KEY_WRAPPED_FILE"
 	envPolicyWrapped  = "OLIVARES_POLICY_SIGNING_KEY_WRAPPED_FILE"
 )
-
-// kmsCallTimeout bounds every boot/CLI KEK round-trip (the checkpointer's 30s
-// precedent): a hung KMS must fail the operation, not wedge the boot forever.
-const kmsCallTimeout = 30 * time.Second
-
-// keyWrapConfig is the parsed OLIVARES_KEY_WRAP_* surface. It is parsed once and
-// turned into a backend per use, because the Azure unwrap path may need to
-// re-pin the KEK version recorded in the envelope being opened.
-type keyWrapConfig struct {
-	kind string
-	// envPrefix is the env NAMESPACE this identity was parsed from
-	// (envKeyWrap for the configured KEK, envKeyWrapOld for a declared migration
-	// source). It is kept because the AWS credential lookup happens when the
-	// wrapper is BUILT rather than when the config is parsed, so it has to know
-	// which namespace's overrides to prefer.
-	envPrefix string
-
-	awsRegion string
-	awsKeyID  string
-
-	gcpKey   string
-	gcpToken kmswrap.TokenSource
-
-	azureVaultURL string
-	azureKeyName  string
-	azureVersion  string
-	azureToken    kmswrap.TokenSource
-}
-
-// loadKeyWrapConfig parses OLIVARES_KEY_WRAP — the KEK the engine and every
-// ceremony SEAL under. (nil, nil) when none is configured; an unknown kind or an
-// incomplete backend config is an error (a custody config typo must never
-// silently mean "no custody").
-//
-// This is the ONLY custody config the boot path ever reads. The migration
-// namespace is parsed by the same code through a different prefix, but only the
-// CLI ceremonies call for it (loadOldKeyWrapConfig, cmd_keys.go): a running
-// engine has exactly one custody root, and adding a second one to the env must
-// not be able to change that.
-func loadKeyWrapConfig() (*keyWrapConfig, error) {
-	return parseKeyWrapConfig(envKeyWrap)
-}
-
-// parseKeyWrapConfig parses one KEK identity out of an env NAMESPACE: prefix is
-// the variable naming the backend kind, and every backend setting hangs off it
-// (`<prefix>_AWS_REGION`, `<prefix>_AZURE_VAULT_URL`, …). The prefix reaches the
-// ERROR MESSAGES too — an operator who mistyped a variable has to be told the
-// name they actually have to fix, not the name of the namespace they are not
-// using.
-//
-// Names are read EXACTLY, never by prefix scan, so declaring a second namespace
-// cannot change the meaning of a config that does not use one.
-func parseKeyWrapConfig(prefix string) (*keyWrapConfig, error) {
-	get := func(suffix string) string { return strings.TrimSpace(os.Getenv(prefix + suffix)) }
-	kind := strings.TrimSpace(os.Getenv(prefix))
-	switch kind {
-	case "":
-		return nil, nil
-	case "aws-kms":
-		c := &keyWrapConfig{kind: kind, envPrefix: prefix,
-			awsRegion: get("_AWS_REGION"),
-			awsKeyID:  get("_AWS_KEY_ID"),
-		}
-		if c.awsRegion == "" || c.awsKeyID == "" {
-			return nil, fmt.Errorf("%s=aws-kms needs %s_AWS_REGION and %s_AWS_KEY_ID", prefix, prefix, prefix)
-		}
-		return c, nil
-	case "gcp-kms":
-		ts, err := wrapTokenSource(prefix + "_GCP_TOKEN")
-		if err != nil {
-			return nil, err
-		}
-		c := &keyWrapConfig{kind: kind, envPrefix: prefix, gcpKey: get("_GCP_KEY"), gcpToken: ts}
-		if c.gcpKey == "" {
-			return nil, fmt.Errorf("%s=gcp-kms needs %s_GCP_KEY (a cryptoKeys resource name)", prefix, prefix)
-		}
-		return c, nil
-	case "azure-kv":
-		ts, err := wrapTokenSource(prefix + "_AZURE_TOKEN")
-		if err != nil {
-			return nil, err
-		}
-		c := &keyWrapConfig{kind: kind, envPrefix: prefix,
-			azureVaultURL: get("_AZURE_VAULT_URL"),
-			azureKeyName:  get("_AZURE_KEY_NAME"),
-			azureVersion:  get("_AZURE_KEY_VERSION"),
-			azureToken:    ts,
-		}
-		if c.azureVaultURL == "" || c.azureKeyName == "" {
-			return nil, fmt.Errorf("%s=azure-kv needs %s_AZURE_VAULT_URL and %s_AZURE_KEY_NAME", prefix, prefix, prefix)
-		}
-		return c, nil
-	default:
-		return nil, fmt.Errorf("%s=%q unknown (use \"\"|aws-kms|gcp-kms|azure-kv)", prefix, kind)
-	}
-}
-
-// wrapTokenSource builds a bearer TokenSource from <prefix>_FILE (re-read each
-// call so the operator's refresher keeps it fresh) or <prefix> (static) — the
-// exact model of the ledger signer's tokenSourceFromEnv.
-func wrapTokenSource(prefix string) (kmswrap.TokenSource, error) {
-	ts, err := tokenSourceFromEnv(prefix)
-	if err != nil {
-		return nil, err
-	}
-	return kmswrap.TokenSource(ts), nil
-}
-
-// wrapper builds the KEK backend for WRAP-side operations (sealing, minting,
-// rewrapping): it targets the CONFIGURED KEK as-is.
-func (c *keyWrapConfig) wrapper() (secure.KeyWrapper, error) {
-	return c.wrapperPinned("", "")
-}
-
-// wrapperFor builds the KEK backend for UNWRAP-side operations on a specific
-// envelope, pinning what the envelope RECORDS over what the env configures —
-// unwrap must target the key/version that actually wrapped the DEK:
-//
-//   - Azure: unwrapKey addressed at a different version than the wrapping one
-//     fails, so the version recorded in the envelope's key id wins — even over a
-//     configured _AZURE_KEY_VERSION (which otherwise points rewrap's open side
-//     at the POST-rotation version and bricks the documented rewrap ceremony).
-//     The recorded id must reference the configured vault and key name; anything
-//     else is a custody mismatch reported loudly, not silently tried.
-//   - AWS: Decrypt pinned to an ALIAS resolves at call time, so after the
-//     operator repoints the alias (manual rotation) an alias-pinned unwrap
-//     throws IncorrectKeyException; the envelope records the RESOLVED key ARN
-//     (kmswrap.AWS.KeyID after wrap), so unwrap pins that ARN. A tampered
-//     recorded ARN fails closed at the KMS (wrong key ⇒ error), never open.
-//   - GCP: decrypt is key-scoped and version-auto-detecting — nothing to pin.
-func (c *keyWrapConfig) wrapperFor(e *secure.SealedEnvelope) (secure.KeyWrapper, error) {
-	if e == nil {
-		return c.wrapperPinned("", "")
-	}
-	switch {
-	case c.kind == "azure-kv" && e.Provider == kmswrap.ProviderAzure:
-		vault, name, version, err := kmswrap.ParseAzureKeyID(e.KeyID)
-		if err != nil {
-			// Not an Azure key identifier at all: nothing to pin, and nothing that
-			// can be compared to the configured KEK either.
-			return c.wrapperPinned("", "")
-		}
-		// The vault/key comparison comes FIRST, before the version is considered.
-		// ParseAzureKeyID models an EMPTY version as valid, so an id naming another
-		// vault without a version used to skip this check entirely and be answered
-		// with a wrapper for the configured key — silently trying a different KEK,
-		// which is exactly what this branch says it never does (Codex contrast
-		// 2026-08-06, F-03).
-		if !strings.EqualFold(vault, strings.TrimSuffix(c.azureVaultURL, "/")) || !strings.EqualFold(name, c.azureKeyName) {
-			return nil, fmt.Errorf("sealed envelope was wrapped by Azure KEK %s, but the KEK being used to open it is %s/keys/%s — point %s_AZURE_* at that key, or, to MIGRATE custody between vaults, declare the source vault in %s_AZURE_* and run `keys rewrap`", e.KeyID, c.azureVaultURL, c.azureKeyName, c.envPrefix, envKeyWrapOld)
-		}
-		if version == "" {
-			// Same vault and key, no recorded version: the configured pin (or the
-			// current version) is the only answer available.
-			return c.wrapperPinned("", "")
-		}
-		return c.wrapperPinned(version, "")
-	case c.kind == "aws-kms" && e.Provider == kmswrap.ProviderAWS:
-		// Pin whatever CONCRETE key identity the envelope recorded — a key ARN or a
-		// bare key id. The test used to be `HasPrefix("arn:")`, which meant a
-		// recorded bare key id lost to a configured alias even though AWS accepts
-		// "key id, key ARN or alias" and the wrapper records the configured id
-		// verbatim when an Encrypt response carries no KeyId. An ALIAS is the one
-		// thing not worth pinning: it is late-bound and moves on rotation, which is
-		// the failure the re-pin exists to prevent — and "alias" means both of its
-		// accepted spellings, which is why this asks isAWSAlias rather than testing
-		// a prefix.
-		if recorded := strings.TrimSpace(e.KeyID); recorded != "" &&
-			!isAWSAlias(recorded) && recorded != c.awsKeyID {
-			return c.wrapperPinned("", recorded)
-		}
-	}
-	return c.wrapperPinned("", "")
-}
-
-// isAWSAlias reports whether an AWS KMS key identifier names an ALIAS rather than
-// a concrete key. Both accepted alias forms count: the bare name `alias/Example`
-// and the alias ARN `arn:aws:kms:eu-west-1:111:alias/Example`. An alias is
-// late-bound — it resolves at call time and moves when the operator repoints it —
-// so it is never what an envelope should pin.
-func isAWSAlias(keyID string) bool {
-	return strings.HasPrefix(keyID, "alias/") || strings.Contains(keyID, ":alias/")
-}
-
-// awsEnv resolves one AWS credential/endpoint setting for THIS identity: the
-// namespaced override first (`<prefix>_AWS_ACCESS_KEY_ID`), then the standard AWS
-// variable. The namespaced form exists because a migration BETWEEN AWS accounts
-// needs two different principals in one process, and the standard AWS_* names can
-// only hold one. Everything else keeps working untouched: with no override set,
-// this is the plain os.Getenv it replaced.
-//
-// The lookup stays here, at wrapper-BUILD time, rather than moving into the
-// parser — the ledger-signer model this borrowed from re-reads credentials per
-// use so an operator's refresher keeps them fresh, and caching them at parse time
-// would silently break that.
-func (c *keyWrapConfig) awsEnv(suffix, std string) string {
-	if c.envPrefix != "" {
-		if v := strings.TrimSpace(os.Getenv(c.envPrefix + suffix)); v != "" {
-			return v
-		}
-	}
-	return os.Getenv(std)
-}
-
-func (c *keyWrapConfig) wrapperPinned(azureVersion, awsKeyARN string) (secure.KeyWrapper, error) {
-	switch c.kind {
-	case "aws-kms":
-		keyID := c.awsKeyID
-		if awsKeyARN != "" {
-			keyID = awsKeyARN
-		}
-		return kmswrap.NewAWS(kmswrap.AWSConfig{
-			Region: c.awsRegion,
-			KeyID:  keyID,
-			Creds: kmswrap.AWSCreds{
-				AccessKeyID:     c.awsEnv("_AWS_ACCESS_KEY_ID", "AWS_ACCESS_KEY_ID"),
-				SecretAccessKey: c.awsEnv("_AWS_SECRET_ACCESS_KEY", "AWS_SECRET_ACCESS_KEY"),
-				SessionToken:    c.awsEnv("_AWS_SESSION_TOKEN", "AWS_SESSION_TOKEN"),
-			},
-			Endpoint: strings.TrimSpace(c.awsEnv("_AWS_ENDPOINT_URL_KMS", "AWS_ENDPOINT_URL_KMS")),
-		})
-	case "gcp-kms":
-		return kmswrap.NewGCP(kmswrap.GCPConfig{KeyName: c.gcpKey, Token: c.gcpToken})
-	case "azure-kv":
-		v := c.azureVersion
-		if azureVersion != "" {
-			v = azureVersion // the envelope's recorded wrapping version wins
-		}
-		return kmswrap.NewAzure(kmswrap.AzureConfig{
-			VaultURL: c.azureVaultURL, KeyName: c.azureKeyName, KeyVersion: v, Token: c.azureToken,
-		})
-	default:
-		return nil, fmt.Errorf("no key wrapper configured")
-	}
-}
-
-// describe is the non-secret posture label logged at boot and shown by
-// `keys status`.
-func (c *keyWrapConfig) describe() string {
-	switch c.kind {
-	case "aws-kms":
-		return "aws-kms " + c.awsKeyID
-	case "gcp-kms":
-		return "gcp-kms " + c.gcpKey
-	case "azure-kv":
-		id := c.azureVaultURL + "/keys/" + c.azureKeyName
-		if c.azureVersion != "" {
-			id += "/" + c.azureVersion
-		}
-		return "azure-kv " + id
-	default:
-		return "none"
-	}
-}
-
-// openSealedEnvelope unwraps a sealed envelope under the configured KEK with the
-// boot/CLI timeout. It is the single unwrap choke point: key loads and sealed
-// operator configs both go through it.
-func openSealedEnvelope(ctx context.Context, cfg *keyWrapConfig, e *secure.SealedEnvelope, purpose string) ([]byte, error) {
-	w, err := cfg.wrapperFor(e)
-	if err != nil {
-		return nil, err
-	}
-	cctx, cancel := context.WithTimeout(ctx, kmsCallTimeout)
-	defer cancel()
-	return e.Open(cctx, w, purpose)
-}
 
 // sealedCfgErr records the FIRST sealed-config custody failure, checked by the
 // boot/collector entry points AFTER all loaders ran. Why a deferred check
@@ -433,7 +165,7 @@ func warnUnsealedSecretConfigs(log *slog.Logger) {
 		return
 	}
 	kekConfigured := false
-	if kw, err := loadKeyWrapConfig(); err == nil && kw != nil {
+	if strings.TrimSpace(envconfig.Get(envKeyWrap)) != "" {
 		kekConfigured = true
 	}
 	for _, p := range paths {
@@ -586,18 +318,7 @@ func readOperatorConfig(path string) ([]byte, error) {
 		}
 		return b, nil
 	}
-	e, err := secure.DecodeSealedEnvelope(b)
-	if err != nil {
-		return nil, noteSealedConfigFailure(path, err)
-	}
-	cfg, err := loadKeyWrapConfig()
-	if err != nil {
-		return nil, noteSealedConfigFailure(path, err)
-	}
-	if cfg == nil {
-		return nil, noteSealedConfigFailure(path, fmt.Errorf("no KEK is configured (%s) — the envelope cannot be opened without the customer-managed key", envKeyWrap))
-	}
-	pt, err := openSealedEnvelope(context.Background(), cfg, e, secure.PurposeOperatorConfig)
+	pt, err := openCMEKOperatorConfig(context.Background(), b)
 	if err != nil {
 		return nil, noteSealedConfigFailure(path, err)
 	}
@@ -638,9 +359,9 @@ func loadOperatorInlineJSONConfig(envName, raw string, dst any) error {
 // (their Secret / their KMS envelope), so a bundle without key material is the
 // correct outcome there, not a packaging failure.
 func externalKeyCustodyConfigured() bool {
-	return strings.TrimSpace(os.Getenv(envAuditKey)) != "" ||
-		strings.TrimSpace(os.Getenv(envAuditKeyFile)) != "" ||
-		strings.TrimSpace(os.Getenv(envAuditWrapped)) != ""
+	return strings.TrimSpace(envconfig.Get(envAuditKey)) != "" ||
+		strings.TrimSpace(envconfig.Get(envAuditKeyFile)) != "" ||
+		strings.TrimSpace(envconfig.Get(envAuditWrapped)) != ""
 }
 
 // orDash renders an absent value as a dash — for structured logs, and for the
@@ -661,8 +382,8 @@ type custodyAssertions struct {
 
 func loadCustodyAssertions() (custodyAssertions, error) {
 	a := custodyAssertions{
-		auditKey: strings.TrimSpace(os.Getenv(envKeyCustody)),
-		ledger:   strings.TrimSpace(os.Getenv(envLedgerCustody)),
+		auditKey: strings.TrimSpace(envconfig.Get(envKeyCustody)),
+		ledger:   strings.TrimSpace(envconfig.Get(envLedgerCustody)),
 	}
 	switch a.auditKey {
 	case "", "byok", "cmek":

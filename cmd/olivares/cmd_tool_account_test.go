@@ -127,3 +127,61 @@ func TestToolAccountStatusOffersAValidInstallCommand(t *testing.T) {
 		t.Fatalf("invalid install guidance: %q (%v)", out, err)
 	}
 }
+
+// The tools `tool login` accepts are the ones whose facts declare a sign-in. Its
+// usage line and its refusal are built from them, so a tool that gains a sign-in
+// needs no edit here; the sentences themselves still name the four of today.
+func TestToolLoginNamesTheToolsThatCanSignIn(t *testing.T) {
+	if want := "login <claude|codex|grok|opencode|gemini>"; newToolLoginCmd().Use != want {
+		t.Errorf("Use = %q, want %q", newToolLoginCmd().Use, want)
+	}
+	_, _, err := execSessionCLI(t, nil, "tool", "login", "ollama", "--server", "http://127.0.0.1:1", "--token", "t", "--tenant", "tenant-a")
+	if exitcode.From(err) != exitcode.Usage || err == nil || !strings.Contains(err.Error(), "Use claude, codex, grok, opencode or gemini.") {
+		t.Errorf("login of a tool without sign-in = %v, want a usage refusal that lists the tools that can", err)
+	}
+}
+
+// `tool login --method <id>` sends the method id with the start. An id the
+// engine does not know is refused with its list and exits with the usage code.
+func TestToolLoginMethodReachesTheEngine(t *testing.T) {
+	var sent map[string]any
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		switch {
+		case r.URL.Path == agentToolsPath+"/sign-in" && r.Method == "GET":
+			_ = json.NewEncoder(w).Encode(map[string]any{"driver": "opencode", "installed": true, "signed_in": false})
+		case r.URL.Path == agentToolsPath+"/sign-in" && r.Method == "POST":
+			sent = map[string]any{}
+			_ = json.NewDecoder(r.Body).Decode(&sent)
+			if sent["method"] != "chatgpt-headless" {
+				w.WriteHeader(400)
+				_, _ = w.Write([]byte(`{"error":{"code":"bad_request","message":"OpenCode has no sign-in method \"browser\". Use one of: chatgpt-headless."}}`))
+				return
+			}
+			w.WriteHeader(202)
+			_ = json.NewEncoder(w).Encode(map[string]any{"id": "login-m", "state": "signed_in"})
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(404)
+		}
+	}))
+	defer server.Close()
+
+	_, errb, err := execSessionCLI(t, nil, append([]string{"tool", "login", "opencode", "--method", "chatgpt-headless"}, sessionCreds(server.URL)...)...)
+	if err != nil || sent["method"] != "chatgpt-headless" || sent["driver"] != "opencode" {
+		t.Fatalf("login with a method: %v %s sent=%v", err, errb, sent)
+	}
+
+	sent = nil
+	_, _, err = execSessionCLI(t, nil, append([]string{"tool", "login", "opencode", "--method", "browser"}, sessionCreds(server.URL)...)...)
+	if exitcode.From(err) != exitcode.Usage || err == nil || !strings.Contains(err.Error(), "chatgpt-headless") {
+		t.Fatalf("unknown method = %v (exit %d), want a usage refusal that lists the valid ids", err, exitcode.From(err))
+	}
+
+	// Without --method the body carries none: the call is what it always was.
+	sent = nil
+	_, _, _ = execSessionCLI(t, nil, append([]string{"tool", "login", "opencode"}, sessionCreds(server.URL)...)...)
+	if _, has := sent["method"]; has {
+		t.Fatalf("a login without --method sent a method: %v", sent)
+	}
+}

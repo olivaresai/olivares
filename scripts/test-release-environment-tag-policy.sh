@@ -22,9 +22,9 @@ check() {
   printf 'ok - %s\n' "$label"
 }
 printf '%s\n' '{"branch_policies":[{"type":"tag","name":"[0-9]*.[0-9]*"},{"type":"tag","name":"v*"}]}' > "$FIXTURE_POLICY"
-check 0 'monthly and patch policy, historical v policy retained'
+check 0 'MAJOR.MINOR admission policy; unrelated historical policy is ignored'
 printf '%s\n' '{"branch_policies":[{"type":"tag","name":"[0-9]*.[0-9]*.[0-9]*"}]}' > "$FIXTURE_POLICY"
-check 1 'three-number policy alone refuses monthly admission'
+check 1 'three-number policy alone refuses MAJOR.MINOR admission'
 printf '%s\n' '{"branch_policies":[{"type":"branch","name":"[0-9]*.[0-9]*"}]}' > "$FIXTURE_POLICY"
 check 1 'branch policy never substitutes for tag policy'
 printf '%s\n' '{"branch_policies":[{"type":"tag","name":"*"}]}' > "$FIXTURE_POLICY"
@@ -36,9 +36,9 @@ check 1 'malformed policy response refuses'
 FIXTURE_UNAVAILABLE=1 check 2 'API read failure is explicit'
 python3 - <<'PY'
 import fnmatch
-for tag in ['26.11','26.11.1','26.12','27.1']:
+for tag in ['1.0','1.1','1.10','1.299','2.0']:
  assert fnmatch.fnmatchcase(tag,'[0-9]*.[0-9]*'),tag
-assert not fnmatch.fnmatchcase('26.11','[0-9]*.[0-9]*.[0-9]*')
+assert not fnmatch.fnmatchcase('1.0','[0-9]*.[0-9]*.[0-9]*')
 assert not fnmatch.fnmatchcase('main','[0-9]*.[0-9]*')
-print('ok - documented deployment glob monthly/patch and negative controls')
+print('ok - deployment glob admits release numbers; preflight enforces the exact grammar')
 PY

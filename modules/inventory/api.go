@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"slices"
 	"strconv"
 
 	"github.com/go-chi/chi/v5"
@@ -114,7 +115,7 @@ func (m *Module) handleGetEntity(w http.ResponseWriter, r *http.Request, mc api.
 		}
 		found = true
 		out.Entry = toEntryDTO(recs[0])
-		out.Detail = coreDetail(r.Context(), sc, kind, id)
+		out.Detail = coreDetail(r.Context(), sc, kind, id, slices.Contains(out.Entry.SignalSources, string(aiEndpointSignal)))
 		return nil
 	})
 	if err != nil {
@@ -227,7 +228,7 @@ func (m *Module) handleSummary(w http.ResponseWriter, r *http.Request, mc api.Mo
 // coreDetail projects the underlying core entity of a catalog entry to a small,
 // non-sensitive map for the detail view. An unknown kind or a missing entity
 // yields nil (the catalog entry alone is still returned).
-func coreDetail(ctx context.Context, sc store.Scope, kind string, id model.ID) map[string]any {
+func coreDetail(ctx context.Context, sc store.Scope, kind string, id model.ID, aiObserved bool) map[string]any {
 	switch kind {
 	case kindSession:
 		if s, err := sc.Sessions().Get(ctx, id); err == nil {
@@ -254,7 +255,14 @@ func coreDetail(ctx context.Context, sc store.Scope, kind string, id model.ID) m
 		}
 	case kindResource:
 		if rs, err := sc.Resources().Get(ctx, id); err == nil {
-			return map[string]any{"name": rs.Name, "kind": rs.Kind, "uri": rs.URI}
+			detail := map[string]any{"name": rs.Name, "kind": rs.Kind, "uri": rs.URI}
+			if aiObserved && (rs.Kind == "http.api" || rs.Kind == "net.endpoint") {
+				detail["ai_discovery"] = "unknown"
+				if rs.Metadata[aiDiscoveryMetadata] == aiUnregisteredAtDiscovery {
+					detail["ai_discovery"] = aiUnregisteredAtDiscovery
+				}
+			}
+			return detail
 		}
 	case kindSkill:
 		if s, err := sc.Skills().Get(ctx, id); err == nil {
@@ -287,9 +295,7 @@ func listQuery(r *http.Request) model.Query {
 }
 
 // errorBody is the small error envelope module endpoints return.
-func errorBody(msg string) map[string]any {
-	return map[string]any{"error": map[string]string{"message": msg}}
-}
+var errorBody = api.ModuleErrorBody
 
 // writeStoreError maps a store error to an HTTP status. THE MAPPING ITSELF IS NOT
 // HERE: it is api.StoreErrorStatus (core/api/moduleerrors.go), which derives the
@@ -302,8 +308,8 @@ func errorBody(msg string) map[string]any {
 // tenant_suspended, tenant_not_in_service, not_leader and residency_violation —
 // were absent from all but two of the thirty-six copies, so the same refusal was
 // answered 423/503/403 by a core route and 500 "internal error" by every module
-// route. The per-arm reasoning (ADR-0024 Q2 for the audit spool/B-03 for
-// workspace confinement for the standby) now lives beside statusFor, once.
+// route. The per-arm reasoning (audit-spool policy for audit spool capacity and
+// standby workspace confinement) now lives beside statusFor, once.
 func writeStoreError(w http.ResponseWriter, err error) {
 	if err == nil {
 		writeJSON(w, http.StatusOK, nil)

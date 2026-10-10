@@ -40,7 +40,7 @@ want="regulated ai-runtime-security compliance-packs identity-scale"
 got="${canon_ids[*]}"
 [ "$got" = "$want" ] || fail "fused canon ids are [$got], not [$want]"
 
-grep -q 'catalog-v8' "$CANON" || fail "canon lost catalog-v8 — the fused source this lote measured"
+grep -q 'catalog-v8' "$CANON" || fail "canon lost catalog-v8 — the fused source this batch measured"
 grep -q 'sales_lane:' "$CANON" || fail "canon lost sales_lane — MATRIZ said that lived only on #467"
 
 # The CLI allowlist is the same four, no extras, no invented fifth.

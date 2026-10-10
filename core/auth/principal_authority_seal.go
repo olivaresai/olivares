@@ -49,13 +49,20 @@ const (
 
 // computePrincipalAuthoritySeal validates and seals the complete authority
 // shape carried by a resolved Principal. The provenance seal bytes themselves
-// are the sole excluded field: including them would make the digest recursive.
+// are excluded to avoid recursion. Email is display-only on the hot path and
+// must be empty in the closed evidence shape; v4 therefore encodes no email.
 func computePrincipalAuthoritySeal(p Principal) ([sha256.Size]byte, error) {
 	if !validPrincipalAuthorityShape(p) {
 		return [sha256.Size]byte{}, errInvalidPrincipalAuthoritySeal
 	}
 
 	w := newPrincipalAuthoritySealWriter()
+	if p.credentialRef.installation {
+		// Only this new, closed OS profile uses the installation domain. Every
+		// ordinary/workflow v4 preimage remains byte-for-byte unchanged.
+		w.h.Reset()
+		_, _ = w.h.Write([]byte("olivares.auth.os-account-installation-seal.v1\x00"))
+	}
 	w.str(string(p.Kind))
 	w.id(p.UserID)
 	w.id(p.CredID)
@@ -116,7 +123,7 @@ func validPrincipalAuthoritySeal(p Principal) bool {
 // that tenant bound into the seal and SessionScope. Global tokens, synthetic,
 // ambiguous delegation/act-as and local principals remain ineligible.
 func validPrincipalAuthorityShape(p Principal) bool {
-	if p.localVia != "" || p.localSubject != "" || len(p.localMeta) != 0 || p.localSystem ||
+	if p.Email != "" || p.sessionOrigin != nil || p.localVia != "" || p.localSubject != "" || len(p.localMeta) != 0 || p.localSystem ||
 		(p.Superadmin && p.Kind != KindUser) || !validPrincipalAuthorityProvenanceShape(p) || !validPrincipalReadAuthorityShape(p) ||
 		len(p.grants) != 1 {
 		return false
@@ -125,7 +132,12 @@ func validPrincipalAuthorityShape(p Principal) bool {
 	if !admitted {
 		return false
 	}
-	if p.Superadmin && (role != RoleOwner || p.sessionScope != p.evidence.tenant) {
+	if p.credentialRef.installation {
+		if !p.Superadmin || role != RoleOwner || !p.sessionScope.IsZero() ||
+			p.credentialRef.binding.subject.Tenant != p.evidence.tenant || p.credentialRef.binding.subject.User != p.UserID {
+			return false
+		}
+	} else if p.Superadmin && (role != RoleOwner || p.sessionScope != p.evidence.tenant) {
 		return false
 	}
 
@@ -451,6 +463,14 @@ func (w *principalAuthoritySealWriter) ref(ref PrincipalRef) {
 	w.str(string(ref.kind))
 	w.id(ref.credentialID)
 	w.i64(ref.version)
+	if ref.installation {
+		w.id(ref.binding.id)
+		w.tenant(ref.binding.subject.Tenant)
+		w.str(ref.binding.subject.Kind)
+		w.id(ref.binding.subject.User)
+		w.i64(int64(ref.binding.subject.OSUID))
+		w.str(ref.binding.subject.OSAccount)
+	}
 }
 
 func (w *principalAuthoritySealWriter) fact(fact store.AuthorizationFactRef) {

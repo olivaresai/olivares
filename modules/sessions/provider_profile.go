@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -122,8 +123,8 @@ var (
 	// whose environment is not this node's.
 	ErrProfileForeignEnvironment = &runErr{http.StatusConflict, "provider profile belongs to another execution environment"}
 	// ErrEnvironmentUnavailable is the deny-closed answer when the node has no
-	// persistent execution-environment identity: the profiled path cannot be used,
-	// the legacy path stays as documented.
+	// persistent execution-environment identity: launches and continuations
+	// require a proven local provider home.
 	ErrEnvironmentUnavailable = &runErr{http.StatusServiceUnavailable, "execution environment identity is not available on this node; profiled launches are deny-closed"}
 	// ErrProfileDriverNotOperable refuses to LAUNCH a profile whose driver has no
 	// operated runner here. Such a profile may still be observed and bound.
@@ -140,17 +141,20 @@ type ProviderProfile struct {
 	UserHome       string
 	DisplayName    string
 	Accent         string
-	State          string
+	// AccountName is the profile's account name (provider_account.go), "" for a
+	// profile nobody has named. It is display and lookup only: no launch path
+	// reads it and it never enters ProviderHomeSnapshot.
+	AccountName string
+	State       string
 	// AuthSource is the authorized authentication source ("" = none authorized).
 	AuthSource string
 	// ProviderRecordRef names the provider record this profile's managed launches
-	// use ("" = none; the host-wide source decides, as it always has).
+	// use ("" = none; AuthSource still governs launch authentication).
 	ProviderRecordRef string
 	// SessionTools / SessionToolsDeclared and SessionPermissionMode are the
-	// DECLARED session policy (provider_profile_policy.go). Undeclared is
-	// deny-closed at launch, so the two are kept apart: a nil declaration is "the
-	// operator said nothing" and an empty declared list is "the operator said
-	// none".
+	// declared session policy (provider_profile_policy.go). An undeclared tool
+	// surface uses the tool's default; an explicitly empty list disables all
+	// built-in tools. SessionToolsDeclared keeps those choices distinct.
 	SessionTools          []string
 	SessionToolsDeclared  bool
 	SessionPermissionMode string
@@ -209,8 +213,8 @@ type CreateProfileInput struct {
 	// and not a checklist. Empty leaves the profile on the host-wide credential.
 	ProviderRecordRef string
 	// SessionTools declares the tool surface every session under this profile gets
-	// (provider_profile_policy.go). A nil declaration is UNDECLARED, which is
-	// deny-closed at launch; a non-nil empty declaration says "no tools" out loud.
+	// (provider_profile_policy.go). SessionToolsDeclared false selects the tool's
+	// default surface; true with an empty list disables all built-in tools.
 	SessionTools         []string
 	SessionToolsDeclared bool
 	// SessionPermissionMode declares the permission mode those sessions run under.
@@ -382,12 +386,10 @@ func (m *Module) UseProfileHomesRoot(root string) {
 	m.profileHomesRoot = root
 }
 
-// standardConfigDirs is each tool's configuration directory, relative to a home.
-var standardConfigDirs = map[string]string{
-	providerDriverClaude: ".claude",
-	"codex":              ".codex",
-	"grok":               ".grok",
-	"opencode":           filepath.Join(".config", "opencode"),
+// standardConfigDir is a supported session driver's configuration directory.
+func standardConfigDir(driver string) (string, bool) {
+	facts, ok := driverfacts.Lookup(driver)
+	return filepath.FromSlash(facts.ConfigDir), ok && facts.Session
 }
 
 // ToolLoginHome is where a tenant's own login of a tool lives on this node: a HOME
@@ -401,7 +403,7 @@ var standardConfigDirs = map[string]string{
 // inherits CLAUDE_CONFIG_DIR, CODEX_HOME or the like from its environment. It is
 // per tenant: a subscription one organization signs in never serves another.
 func ToolLoginHome(root string, tenant model.TenantID, driver string) (home, configDir string, ok bool) {
-	rel, known := standardConfigDirs[driver]
+	rel, known := standardConfigDir(driver)
 	root = strings.TrimSpace(root)
 	if !known || root == "" || !filepath.IsAbs(root) || tenant.IsZero() || tenant.IsSystem() {
 		return "", "", false
@@ -451,6 +453,35 @@ func (m *Module) refuseForeignToolLogin(tenant model.TenantID, driver string, ho
 	return nil
 }
 
+// usesOwnToolLogin reports a run on the organization's own login of its tool
+// (ToolLoginHome), the instance the providers view names
+// driverfacts.OlivaresLoginInstance. Only the PATH is compared, as in
+// usesServerUserLogin; no file under it is opened.
+func (m *Module) usesOwnToolLogin(tenant model.TenantID, driver, authSource, configHome string) bool {
+	if authSource != AuthSourceAccountHome || strings.TrimSpace(configHome) == "" {
+		return false
+	}
+	_, want, ok := m.OwnToolLoginHomes(tenant, driver)
+	if !ok {
+		return false
+	}
+	// The plain path first: it decides the common case without touching the
+	// file system on every run a list renders.
+	have := filepath.Clean(configHome)
+	if have == filepath.Clean(want) {
+		return true
+	}
+	// Only the tool-logins root can be a link (as refuseForeignToolLogin reads it):
+	// a home not ending in <tenant>/<driver>/<config dir> is another login, and the
+	// file system is not asked.
+	if rel, err := filepath.Rel(filepath.Clean(strings.TrimSpace(m.toolLoginsRoot)), want); err == nil &&
+		!strings.HasSuffix(have, string(filepath.Separator)+rel) {
+		return false
+	}
+	real, err := filepath.EvalSymlinks(want)
+	return err == nil && have == real
+}
+
 // serverUserLoginSentence refuses a profile that runs on this server's user login.
 const serverUserLoginSentence = "This profile uses this server's user login; sign in again to use a product login."
 
@@ -460,7 +491,7 @@ const serverUserLoginSentence = "This profile uses this server's user login; sig
 // is shown as such and not launched, until an administrator chooses what to do with
 // it. Only the PATH is compared; no file under it is opened.
 func usesServerUserLogin(driver, authSource, configHome string) bool {
-	rel, ok := standardConfigDirs[driver]
+	rel, ok := standardConfigDir(driver)
 	if !ok || authSource != AuthSourceAccountHome || strings.TrimSpace(configHome) == "" {
 		return false
 	}
@@ -490,7 +521,7 @@ func (m *Module) UseToolLoginsRoot(root string) {
 // ownLoginConfigHome is the tool's own-login configuration directory on this
 // node, created (0700) when missing.
 func (m *Module) ownLoginConfigHome(tenant model.TenantID, driver string) (string, error) {
-	if _, ok := standardConfigDirs[driver]; !ok {
+	if _, ok := standardConfigDir(driver); !ok {
 		return "", badRequest("config_home and user_home are required for this driver")
 	}
 	home, configHome, ok := ToolLoginHome(m.toolLoginsRoot, tenant, driver)
@@ -514,9 +545,10 @@ func (m *Module) ownLoginConfigHome(tenant model.TenantID, driver string) (strin
 // creates for this profile (<profile homes root>/<profile ref>, 0700), so a
 // session never runs with the operator's ~/.ssh, other projects or dotfiles as
 // its home. Only the tool's own variable (CLAUDE_CONFIG_DIR, CODEX_HOME, …)
-// points at the login.
+// points at the login. OpenCode stores auth under HOME, so its default profile
+// shares the product-created login HOME instead.
 func (m *Module) standardAccountHomes(tenant model.TenantID, driver, ref string) (configHome, userHome string, err error) {
-	if _, ok := standardConfigDirs[driver]; !ok {
+	if _, ok := standardConfigDir(driver); !ok {
 		return "", "", badRequest("config_home and user_home are required for this driver")
 	}
 	if m.profileHomesRoot == "" {
@@ -526,6 +558,11 @@ func (m *Module) standardAccountHomes(tenant model.TenantID, driver, ref string)
 		return "", "", err
 	}
 	userHome = filepath.Join(m.profileHomesRoot, ref)
+	if driver == providerDriverOpenCode {
+		// OPENCODE_CONFIG_DIR does not relocate auth.json. OpenCode's own
+		// login and session must share the native XDG data home under HOME.
+		userHome, _, _ = ToolLoginHome(m.toolLoginsRoot, tenant, driver)
+	}
 	if err := os.MkdirAll(userHome, 0o700); err != nil {
 		return "", "", &runErr{http.StatusUnprocessableEntity, "the profile's home directory could not be created on this execution environment"}
 	}
@@ -538,7 +575,7 @@ func (m *Module) standardAccountHomes(tenant model.TenantID, driver, ref string)
 // configuration directory sits inside it, so a key-backed session never shares
 // the tool's own login folder with the operator's subscription sign-in.
 func (m *Module) managedProfileHomes(driver, ref string) (configHome, userHome string, err error) {
-	rel, ok := standardConfigDirs[driver]
+	rel, ok := standardConfigDir(driver)
 	if !ok {
 		return "", "", badRequest("config_home and user_home are required for this driver")
 	}
@@ -641,6 +678,7 @@ func profileFromRecord(rec model.Record) ProviderProfile {
 		UserHome:              rec.String(colPPUserHome),
 		DisplayName:           rec.String(colPPDisplayName),
 		Accent:                rec.String(colPPAccent),
+		AccountName:           rec.String(colPPAccountName),
 		State:                 rec.String(colPPState),
 		AuthSource:            rec.String(colPPAuthSource),
 		ProviderRecordRef:     rec.String(colPPProviderRecordRef),
@@ -697,6 +735,9 @@ func validateRecordBinding(ctx context.Context, sc store.Scope, driver, ref stri
 	if rec.String(colPRState) != ProviderRecordActive {
 		return ErrProviderRecordRevoked
 	}
+	if rec.String("service") != "" {
+		return errServiceProviderNative
+	}
 	if !recordServesDriver(rec.String(colPRKind), rec.String(colPRBaseURL), driver) {
 		return &runErr{http.StatusUnprocessableEntity, recordDriverRefusal(driver, rec.String(colPRDisplayName), rec.String(colPRKind))}
 	}
@@ -721,7 +762,7 @@ func refuseKeyUnderOwnLogin(source, recordRef string) error {
 // the server did not compute. A concurrent create of the same home loses on the
 // unique index and is answered as the conflict it is.
 func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in CreateProfileInput) (ProviderProfile, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ProviderProfile{}, errNoData
 	}
 	env, err := m.localEnvironment()
@@ -780,7 +821,7 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 		return ProviderProfile{}, err
 	}
 	var out ProviderProfile
-	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, _, err := accountHomeAdmission(ctx, sc, tenant)
 		if err != nil {
 			return err
@@ -812,9 +853,8 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 
 			colPPProviderRecordRef: recordRef,
 		}
-		// The declaration is written only when there IS one: an absent column is the
-		// deny-closed "nothing was declared", and writing "" would make the two
-		// indistinguishable.
+		// Store only declared values. An absent tool declaration uses the tool's
+		// default surface; the JSON array [] explicitly disables built-in tools.
 		setIf(rec, colPPSessionWorkGrant, encodeProfileWorkGrant(grant))
 		setIf(rec, colPPSessionTools, policyTools)
 		setIf(rec, colPPSessionPermissionMode, policyMode)
@@ -839,14 +879,14 @@ func (m *Module) CreateProfile(ctx context.Context, tenant model.TenantID, in Cr
 
 // GetProfile reads one profile by ref.
 func (m *Module) GetProfile(ctx context.Context, tenant model.TenantID, ref string) (ProviderProfile, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ProviderProfile{}, errNoData
 	}
 	if !validProfileRef(ref) {
 		return ProviderProfile{}, ErrProfileNotFound
 	}
 	var out ProviderProfile
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		rec, err := findProfileRec(ctx, sc, ref)
 		if err != nil {
 			return err
@@ -860,7 +900,7 @@ func (m *Module) GetProfile(ctx context.Context, tenant model.TenantID, ref stri
 // ListProfiles returns the tenant's profiles, newest first, optionally narrowed
 // to one state. It pages by the store's keyset cursor.
 func (m *Module) ListProfiles(ctx context.Context, tenant model.TenantID, state string, q model.Query) ([]ProviderProfile, model.Page, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return nil, model.Page{}, errNoData
 	}
 	if state != "" {
@@ -868,7 +908,7 @@ func (m *Module) ListProfiles(ctx context.Context, tenant model.TenantID, state 
 	}
 	var out []ProviderProfile
 	var page model.Page
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(providerProfileKind)
 		if err != nil {
 			return err
@@ -904,9 +944,9 @@ type ProfilePatch struct {
 	// child keeps the record its own launch resolved.
 	ProviderRecordRef *string
 	// SessionTools re-declares the tool surface, and a non-nil pointer to a nil
-	// slice WITHDRAWS the declaration (back to deny-closed). Like the two above it
-	// is an authorization and not identity, and like them it does not reach a live
-	// child: a running session keeps the surface its own launch was given.
+	// slice withdraws the declaration (back to the tool's default surface). Like
+	// the two above it is an authorization and not identity, and it does not reach
+	// a live child: a running session keeps the surface its own launch was given.
 	SessionTools *[]string
 	// SessionPermissionMode re-declares the permission mode; "" withdraws it.
 	SessionPermissionMode *string
@@ -919,7 +959,7 @@ type ProfilePatch struct {
 // frees the home slot for a NEW id and stamps retired_at; nothing else is rewritten
 // — runs, aliases and history keep pointing at this id.
 func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref string, p ProfilePatch) (ProviderProfile, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ProviderProfile{}, errNoData
 	}
 	if !validProfileRef(ref) {
@@ -965,7 +1005,7 @@ func (m *Module) PatchProfile(ctx context.Context, tenant model.TenantID, ref st
 		return ProviderProfile{}, grantErr
 	}
 	var out ProviderProfile
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, _, err := accountHomeAdmission(ctx, sc, tenant)
 		if err != nil {
 			return err
@@ -1187,10 +1227,7 @@ func (m *Module) revalidateStoredProfile(ctx context.Context, tenant model.Tenan
 		ProviderRecordRef: rec.String(colRunProviderRecordRef),
 	}
 	if stored.ProfileID == "" {
-		if m.rt.profiledLaunchesEnabled {
-			return ProviderHomeSnapshot{}, sessionPolicy{}, conflictErr("legacy session has no proven provider home and cannot be continued")
-		}
-		return ProviderHomeSnapshot{}, sessionPolicy{}, nil // a legacy run: no profile was ever persisted
+		return ProviderHomeSnapshot{}, sessionPolicy{}, conflictErr("legacy session has no proven provider home and cannot be continued")
 	}
 	env, err := m.localEnvironment()
 	if err != nil {

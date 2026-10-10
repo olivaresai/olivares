@@ -30,9 +30,9 @@ func ConfigureClaudeHookPEP(spec *LaunchSpec, dataDir, runRef, olivaresBinary st
 	var endpoint, token string
 	for _, v := range spec.Env {
 		switch v.Name {
-		case "OLIVARES_HOOK_PEP_URL":
+		case envHookPEPURL:
 			endpoint = v.Value
-		case "OLIVARES_HOOK_PEP_TOKEN":
+		case envHookPEPToken:
 			token = v.Value
 		}
 	}

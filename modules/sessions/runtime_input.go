@@ -281,7 +281,7 @@ func (m *Module) runtimeInputTargetInScope(ctx context.Context, raw store.Scope,
 // locking InputForWork/TextForWork entries.
 func (m *Module) DeliverRuntimeInput(ctx context.Context, request RuntimeInputRequest) (RuntimeInputResult, error) {
 	refused := RuntimeInputResult{Outcome: RuntimeInputRefused}
-	if ctx == nil || m == nil || m.data == nil || m.rt == nil {
+	if ctx == nil || m == nil || m.Data == nil || m.rt == nil {
 		return refused, ErrRuntimeInputAuthority
 	}
 	if err := validateRuntimeInputTarget(request.Target); err != nil {
@@ -310,7 +310,7 @@ func (m *Module) DeliverRuntimeInput(ctx context.Context, request RuntimeInputRe
 	}
 	defer release()
 	var rec model.Record
-	err = m.data.Mutate(ctx, request.Target.Tenant, func(sc store.Scope) error {
+	err = m.Data.Mutate(ctx, request.Target.Tenant, func(sc store.Scope) error {
 		clock, ok := sc.(store.TransactionClock)
 		if !ok {
 			return ErrRuntimeInputAuthority
@@ -424,7 +424,7 @@ const maxCheckedRuntimeInputLease = 250 * time.Millisecond
 // write. This method is not a receiver-side instantaneous revocation protocol.
 func (m *Module) DeliverRuntimeInputChecked(ctx context.Context, request RuntimeInputRequest, checks RuntimeInputChecks) (RuntimeInputResult, error) {
 	refused := RuntimeInputResult{Outcome: RuntimeInputRefused}
-	if ctx == nil || m == nil || m.data == nil || m.rt == nil || nilRuntimeInputChecks(checks) {
+	if ctx == nil || m == nil || m.Data == nil || m.rt == nil || nilRuntimeInputChecks(checks) {
 		return refused, ErrRuntimeInputAuthority
 	}
 	deadline, ok := ctx.Deadline()
@@ -463,7 +463,7 @@ func (m *Module) DeliverRuntimeInputChecked(ctx context.Context, request Runtime
 	defer release()
 	var rec model.Record
 	var admitted *liveRun
-	err = m.data.Mutate(ctx, request.Target.Tenant, func(sc store.Scope) error {
+	err = m.Data.Mutate(ctx, request.Target.Tenant, func(sc store.Scope) error {
 		clock, ok := sc.(store.TransactionClock)
 		if !ok {
 			return ErrRuntimeInputAuthority

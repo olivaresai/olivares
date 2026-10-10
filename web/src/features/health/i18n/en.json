@@ -335,7 +335,7 @@
     }
   },
   "statusPage": {
-    "title": "Olivares Control Plane — Status",
+    "title": "Olivares AI — Status",
     "subtitle": "Current operational status of all components.",
     "unavailable": "Status information is currently unavailable.",
     "lastUpdated": "Last updated: {{time}}",
@@ -371,7 +371,11 @@
     "checked": "Update check completed",
     "advisories": "Security advisories fixed",
     "checkNow": "Check now",
-    "unconfigured": "Update checking is not configured. This is expected for air-gapped deployments."
+    "unconfigured": "Update checking is not configured. No update has been checked; network checks stay off.",
+    "unavailable": "Check unavailable",
+    "instructions": "Update instructions",
+    "configure": "To enable checks, use an official release with its embedded verification key. Set OLIVARES_UPDATE_ENDPOINT to your approved signed channel in the service configuration, then restart Olivares. Leave it unset to keep network checks off.",
+    "manual": "To update manually, back up your data, verify the new package or image, and upgrade using your installation method. Keep the same data directory. A development build without a verification key cannot check a signed channel."
   },
   "system": {
     "title": "System health",
@@ -459,10 +463,9 @@
     "download": "Download support bundle",
     "generate": "Generate and download",
     "confirmTitle": "Generate a support bundle?",
-    "confirmDescription": "This privileged AAL3 action is recorded in the audit ledger.",
+    "confirmDescription": "This privileged action is recorded in the audit ledger.",
     "contents": "The bundle contains redacted effective configuration, operational status and logs. Review it before sharing.",
     "downloaded": "Support bundle downloaded",
-    "needsAal3": "Hardware-backed AAL3 step-up is required to generate a support bundle.",
     "failed": "Support bundle generation failed."
   },
   "auditSpool": {

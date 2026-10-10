@@ -19,7 +19,7 @@ import (
 // budgetgate.go is the FinOps↔actuation seam adapter (FIN-08): it implements the
 // orchestration / voice / models BudgetGate ports by asking the FinOps module's
 // admission (finops.Module.Reserve). Like orchdispatch.go /
-// voicedispatch.go / approvalbridge.go it lives in the composition root (cmd, AGPL)
+// voicedispatch.go / internal/approvalbridge it lives in the composition root (cmd, AGPL)
 // because it bridges three AGPL module ports to a fourth AGPL module — which none of
 // them may import directly (the in-process seam convention, modules/*/ports.go).
 //
@@ -45,11 +45,11 @@ import (
 //
 // It is deliberately NOT the session launch gate's availability posture
 // (resolveAvailabilityPosture, sessiongov.go). That one answers a control the launch gate
-// could not READ, and its community default is fail-open; reading it here would let an
-// unset environment variable make a WRITE fail-open on a community install, where
-// admission would report a hold that does not exist and concurrent launches would
-// over-admit against one cap. What the launch posture still decides is what the LAUNCH
-// does with admission's refusal, a separate branch in sessionLaunchGate.Authorize.
+// could not READ, and an operator may set it to fail-open; reading it here would let that
+// environment variable make a WRITE fail-open, where admission would report a hold that
+// does not exist and concurrent launches would over-admit against one cap. What the
+// launch posture still decides is what the LAUNCH does with admission's refusal, a
+// separate branch in sessionLaunchGate.Authorize.
 const engineReserveUnreachable = finops.UnreachableDeny
 
 // engineGateNoEstimate is the amount EVERY in-process YES/NO gate reserves, and it is zero

@@ -32,8 +32,9 @@ télémétrie. Le PEP gouverné est une surface distincte : il utilise son propr
 authentifie chaque requête et enregistre chaque décision.
 
 1. Ouvrez la **Control console** (`/console`) et sélectionnez l'onglet **Connectors**. Le roster des
-   connecteurs est global : un compte superadmin est requis, et l'enregistrement, le test et le
-   rechargement nécessitent une élévation AAL3.
+   connecteurs est global : un compte superadmin est requis. L'enregistrement, le test et le
+   rechargement suivent la politique d’authentification renforcée administrative
+   (`admin_step_up`, `none` par défaut).
 2. Ajoutez une source de type `claude`, avec un nom opérationnel stable tel que
    `claude-code-prod`, le tenant approprié, le mode `live`, l'intervalle `0` et l'état activé. Un
    intervalle nul est correct : ce connecteur maintient des récepteurs au lieu d'effectuer des

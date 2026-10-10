@@ -150,6 +150,11 @@ export type HandoffContent = HandoffOfferInput['handoff']
 export type HandoffArtifactRef = NonNullable<
   HandoffContent['artifact_refs']
 >[number]
+/** The optional git position a handoff names (K4.A2): the branch the work is on and the
+ * full commit it is at. Declared here beside the generated content type, which carries
+ * them once the API types are regenerated; the intersection is then redundant.
+ * ponytail: delete this and read the generated fields when RM regenerates the types. */
+export type HandoffGitRefs = { branch?: string; sha?: string }
 export type HandoffRecipient = HandoffOfferInput['recipient']
 export type HandoffRecipientKind = HandoffRecipient['kind']
 /** 201 created and 200 replayed carry the same body; `replayed` and the status

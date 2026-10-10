@@ -19,7 +19,6 @@ import { installTrustedTypes } from '@/security/trusted-types'
 // any DOM sink is governed from the first paint under `require-trusted-types-for`.
 installTrustedTypes()
 
-// Do not paint an untranslated login while the selected auth dictionary loads.
 void i18nReady.then(() => {
   createRoot(document.getElementById('root')!).render(
     <StrictMode>

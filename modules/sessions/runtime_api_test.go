@@ -8,15 +8,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/olivaresai/olivares/core/api"
-	"github.com/olivaresai/olivares/core/auth"
-	"github.com/olivaresai/olivares/core/model"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/olivaresai/olivares/core/api"
+	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/secret"
 )
 
 // TestRuntimeAPI_HTTP drives the operate endpoints through the REAL api.Server
@@ -63,7 +65,7 @@ func TestRuntimeAPI_HTTP(t *testing.T) {
 	}
 
 	// Create (write tier).
-	r := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{
+	r := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{"provider_profile_ref": ensureRuntimeTestProfileRef(t, h.m, tenantA),
 		"transport": "stream-json", "permission_mode": "default", "isolation": "native",
 		"workspace_ref": wsRef, "name": "via-http",
 	}, tenantHdr(tenantA))
@@ -90,7 +92,7 @@ func TestRuntimeAPI_HTTP(t *testing.T) {
 	}
 
 	// Validation: a bad permission mode is rejected at the API.
-	if r := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{
+	if r := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{"provider_profile_ref": ensureRuntimeTestProfileRef(t, h.m, tenantA),
 		"transport": "stream-json", "permission_mode": "nonsense", "isolation": "native",
 	}, tenantHdr(tenantA)); r.code != http.StatusBadRequest {
 		t.Errorf("bad permission_mode = %d, want 400", r.code)
@@ -142,6 +144,42 @@ func (g *controlledLaunchApproval) Authorize(ctx context.Context, _ model.Tenant
 	return LaunchDecision{DeniedStatus: http.StatusAccepted, Reason: "waiting for human approval", ApprovalRef: "test-approval", Critical: true, RecordIO: true}, nil
 }
 
+// TestRuntimeAPIResumeWaitingForApprovalNamesTheApproval: a resume whose launch
+// gate opens a human approval answers 409 approval_required naming it, leaves the
+// run stopped, and resumes once the approval is granted.
+func TestRuntimeAPIResumeWaitingForApprovalNamesTheApproval(t *testing.T) {
+	gate := &controlledLaunchApproval{}
+	gate.approved.Store(true)
+	runner := &fakeRunner{initSID: "resumable-session"}
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(runner), WithCredentialSource(staticCred()), WithLaunchGate(gate))
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "resume-approval")
+	run := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{"provider_profile_ref": ensureRuntimeTestProfileRef(t, h.m, tenant), "name": "classified"}, tenantHdr(tenant))
+	if run.code != http.StatusCreated {
+		t.Fatalf("create=%d %s", run.code, run.raw)
+	}
+	path := "/v1/m/sessions/runs/" + run.body["run_ref"].(string)
+	if stopped := h.doJSON("POST", path+"/stop", admin, nil, tenantHdr(tenant)); stopped.code != http.StatusOK {
+		t.Fatalf("stop=%d %s", stopped.code, stopped.raw)
+	}
+	gate.approved.Store(false)
+	resumed := h.doJSON("POST", path+"/resume", admin, nil, tenantHdr(tenant))
+	refusal, _ := resumed.body["error"].(map[string]any)
+	message, _ := refusal["message"].(string)
+	if resumed.code != http.StatusConflict || refusal["code"] != "approval_required" ||
+		!strings.Contains(message, "/v1/m/governance/approvals/test-approval") {
+		t.Fatalf("resume waiting for approval=%d %s", resumed.code, resumed.raw)
+	}
+	if got := h.do("GET", path, admin, tenantHdr(tenant)); got.body["state"] != stateStopped {
+		t.Fatalf("run after the resume that waits for approval: %s", got.raw)
+	}
+	gate.approved.Store(true)
+	if again := h.doJSON("POST", path+"/resume", admin, nil, tenantHdr(tenant)); again.code != http.StatusOK {
+		t.Fatalf("resume after the approval=%d %s", again.code, again.raw)
+	}
+}
+
 func TestRuntimeAPIApprovalWaitRestoresAuthenticatedLauncher(t *testing.T) {
 	gate := &controlledLaunchApproval{}
 	runner := &fakeRunner{initSID: "approved-session"}
@@ -150,10 +188,10 @@ func TestRuntimeAPIApprovalWaitRestoresAuthenticatedLauncher(t *testing.T) {
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "credential-handoff")
 	issuer := auth.NewAuthenticator(h.st, nil)
-	m.UseQueuedCredentialCapture(issuer.BindQueuedCredential)
-	m.UseQueuedLaunchAuthorization(func(ctx context.Context, _ model.TenantID, credential auth.QueuedCredential, _ string, _ model.ID) (auth.Principal, error) {
+	m.QueuedCredentialCapture = issuer.BindQueuedCredential
+	m.QueuedLaunchAuthorization = func(ctx context.Context, _ model.TenantID, credential auth.QueuedCredential, _ string, _ model.ID) (auth.Principal, error) {
 		return issuer.RevalidateQueuedCredential(ctx, credential)
-	})
+	}
 	checked := make(chan error, 1)
 	gate.onApproved = func(ctx context.Context, intent LaunchIntent) error {
 		principal := intent.LauncherPrincipal
@@ -175,7 +213,7 @@ func TestRuntimeAPIApprovalWaitRestoresAuthenticatedLauncher(t *testing.T) {
 		checked <- err
 		return err
 	}
-	response := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{"name": "pending"}, tenantHdr(tenant))
+	response := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{"provider_profile_ref": ensureRuntimeTestProfileRef(t, h.m, tenant), "name": "pending"}, tenantHdr(tenant))
 	if response.code != http.StatusAccepted {
 		t.Fatalf("create=%d %s", response.code, response.raw)
 	}
@@ -227,7 +265,7 @@ func TestRuntimeAPIImmediateLaunchCarriesAuthenticatedLauncher(t *testing.T) {
 	h := newHarness(t, New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(runner), WithCredentialSource(staticCred()), WithLaunchGate(gate)))
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "immediate-credential")
-	response := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{"name": "immediate"}, tenantHdr(tenant))
+	response := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{"provider_profile_ref": ensureRuntimeTestProfileRef(t, h.m, tenant), "name": "immediate"}, tenantHdr(tenant))
 	if response.code != http.StatusCreated || response.body["state"] != stateRunning || launchCount(runner) != 1 {
 		t.Fatalf("immediate credential handoff did not launch: %d %s", response.code, response.raw)
 	}
@@ -249,7 +287,11 @@ func TestRuntimeAPIApprovalWaitOutlivesRequest(t *testing.T) {
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "approval-wait")
 	requestCtx, cancelRequest := context.WithCancel(context.Background())
-	request := httptest.NewRequest("POST", "/v1/m/sessions/runs", bytes.NewBufferString(`{"name":"review this launch"}`)).WithContext(requestCtx)
+	body, err := json.Marshal(map[string]any{"name": "review this launch", "provider_profile_ref": ensureRuntimeTestProfileRef(t, m, tenant)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	request := httptest.NewRequest("POST", "/v1/m/sessions/runs", bytes.NewReader(body)).WithContext(requestCtx)
 	request.RemoteAddr = "10.0.0.1:1234"
 	request.Header.Set("Authorization", "Bearer "+admin)
 	request.Header.Set("X-Olivares-Tenant", tenant.String())
@@ -283,6 +325,38 @@ func TestRuntimeAPIApprovalWaitOutlivesRequest(t *testing.T) {
 	t.Fatalf("approved run did not start automatically: %d %s", result.code, result.raw)
 }
 
+// TestRuntimeAPIApprovalRefusesEnvAllowThatBecameAnEngineSecret: a queued launch's
+// stored env_allow is checked again at approval. A name an `env:` reference resolved
+// after the launch was queued declines it with a reason naming the variable, and
+// no child starts, instead of a child silently missing the variable.
+func TestRuntimeAPIApprovalRefusesEnvAllowThatBecameAnEngineSecret(t *testing.T) {
+	const name = "SESSIONS_TEST_LATE_ENGINE_SECRET"
+	gate := &controlledLaunchApproval{}
+	runner := &fakeRunner{initSID: "late-engine-secret"}
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(runner), WithCredentialSource(staticCred()), WithLaunchGate(gate))
+	h := newHarness(t, m)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "late-engine-secret")
+	queued := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{"provider_profile_ref": ensureRuntimeTestProfileRef(t, h.m, tenant), "name": "queued", "env_allow": []string{name}}, tenantHdr(tenant))
+	if queued.code != http.StatusAccepted {
+		t.Fatalf("queued = %d %s", queued.code, queued.raw)
+	}
+	if _, err := (secret.EnvHandler{Lookup: func(string) (string, bool) { return "postgres://x", true }}).
+		Resolve(context.Background(), name); err != nil {
+		t.Fatal(err)
+	}
+	gate.approved.Store(true)
+	ref, _ := queued.body["run_ref"].(string)
+	var got resp
+	waitFor(t, "the approved launch to be declined", func() bool {
+		got = h.do("GET", "/v1/m/sessions/runs/"+ref, admin, tenantHdr(tenant))
+		return got.body["state"] == stateDeclined
+	})
+	if reason, _ := got.body["reason"].(string); !strings.Contains(reason, name) || launchCount(runner) != 0 {
+		t.Fatalf("declined run = %s, launches %d; want a reason naming %s and no launch", got.raw, launchCount(runner), name)
+	}
+}
+
 func TestRuntimeAPIApprovalTerminalDecisionNeverLaunches(t *testing.T) {
 	for _, status := range []string{"rejected", "expired"} {
 		t.Run(status, func(t *testing.T) {
@@ -292,7 +366,7 @@ func TestRuntimeAPIApprovalTerminalDecisionNeverLaunches(t *testing.T) {
 			h := newHarness(t, m)
 			admin := h.adminLogin()
 			tenant := h.createOrg(admin, "terminal-approval")
-			response := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{"name": "pending"}, tenantHdr(tenant))
+			response := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{"provider_profile_ref": ensureRuntimeTestProfileRef(t, h.m, tenant), "name": "pending"}, tenantHdr(tenant))
 			if response.code != http.StatusAccepted {
 				t.Fatalf("create=%d %s", response.code, response.raw)
 			}
@@ -326,11 +400,11 @@ func TestRuntimeAPIApprovalWaitRechecksRevokedCredential(t *testing.T) {
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "revoked-approval")
 	issuer := auth.NewAuthenticator(h.st, nil)
-	m.UseQueuedCredentialCapture(issuer.BindQueuedCredential)
-	m.UseQueuedLaunchAuthorization(func(ctx context.Context, _ model.TenantID, credential auth.QueuedCredential, _ string, _ model.ID) (auth.Principal, error) {
+	m.QueuedCredentialCapture = issuer.BindQueuedCredential
+	m.QueuedLaunchAuthorization = func(ctx context.Context, _ model.TenantID, credential auth.QueuedCredential, _ string, _ model.ID) (auth.Principal, error) {
 		return issuer.RevalidateQueuedCredential(ctx, credential)
-	})
-	response := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{"name": "pending"}, tenantHdr(tenant))
+	}
+	response := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{"provider_profile_ref": ensureRuntimeTestProfileRef(t, h.m, tenant), "name": "pending"}, tenantHdr(tenant))
 	if response.code != http.StatusAccepted {
 		t.Fatalf("create=%d %s", response.code, response.raw)
 	}

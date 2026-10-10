@@ -10,10 +10,12 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/inferencepep"
 	"github.com/olivaresai/olivares/core/auth"
 	coreengine "github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 func workSessionEdgePrincipals(
@@ -70,11 +72,11 @@ func workSessionEdgePrincipals(
 func TestWorkSessionCredentialCannotBypassPurposeCeilingAtMembershipEdges(t *testing.T) {
 	a, tenant, ordinaryToken, ordinary, workToken, work := workSessionEdgePrincipals(t)
 
-	proxy := &inferenceProxyDecider{tenantHint: tenant}
-	if _, ok := proxy.resolveTenant(work); ok {
+	proxy := &inferencepep.Decider{TenantHint: tenant}
+	if _, ok := proxy.ResolveTenant(work); ok {
 		t.Fatal("inference proxy accepted work-session membership as gateway authority")
 	}
-	if got, ok := proxy.resolveTenant(ordinary); !ok || got != tenant {
+	if got, ok := proxy.ResolveTenant(ordinary); !ok || got != tenant {
 		t.Fatalf("ordinary inference control = tenant %s ok=%v", got, ok)
 	}
 
@@ -97,21 +99,13 @@ func TestWorkSessionCredentialCannotBypassPurposeCeilingAtMembershipEdges(t *tes
 		t.Fatal("apps bearer authentication rejected ordinary control")
 	}
 
-	hook := &claudeHookDecider{tenants: map[model.TenantID]resolvedTenant{
-		tenant: {tenant: tenant},
-	}}
-	if got, resolution := hook.resolveTenant(tenant.String(), work, nil); resolution.found || !got.IsZero() {
-		t.Fatalf("Claude hook accepted work-session membership: tenant=%s found=%v", got, resolution.found)
-	}
-	if got, resolution := hook.resolveTenant(tenant.String(), ordinary, nil); !resolution.found || got != tenant {
-		t.Fatalf("ordinary Claude hook control: tenant=%s found=%v", got, resolution.found)
-	}
+	// The Claude hook edge is pinned with its decider (modules/sessions/hookpep).
 
 	codex := &codexHookDecider{authr: a}
-	if _, _, tier := codex.principalOf(context.Background(), workToken); tier != tierUnknown {
+	if _, _, tier := codex.principalOf(context.Background(), workToken); tier != hookpep.TierUnknown {
 		t.Fatalf("Codex hook work-session tier = %q, want unknown", tier)
 	}
-	if _, _, tier := codex.principalOf(context.Background(), ordinaryToken); tier != tierFirm {
+	if _, _, tier := codex.principalOf(context.Background(), ordinaryToken); tier != hookpep.TierFirm {
 		t.Fatalf("Codex hook ordinary tier = %q, want firm", tier)
 	}
 }

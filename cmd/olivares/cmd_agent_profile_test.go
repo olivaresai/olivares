@@ -127,6 +127,95 @@ func TestAgentSessionCreateSendsProviderProfileRefOnExplicitFlag(t *testing.T) {
 	if !strings.Contains(out, "run-lab-1") {
 		t.Fatalf("stdout must name the created run, got %q", out)
 	}
+	for _, tc := range []struct{ name, payload string }{
+		{"non_json", `queued test-token`},
+		{"array", `["reflected test-token"]`},
+		{"string", `"queued test-token"`},
+		{"empty_array", `[]`},
+	} {
+		t.Run(tc.name+"_202_stays_a_guarded_refusal", func(t *testing.T) {
+			p := newCreateProbe(t, http.StatusAccepted, tc.payload)
+			out, stderr, err := execRoot(t, createArgs(p.URL, "--provider-profile", "prof-fixture-1", "-o", "json")...)
+			if err == nil || out != "" {
+				t.Fatalf("a non-approval 202 must refuse without stdout: err=%v stdout=%s", err, out)
+			}
+			if p.calls.Load() != 1 || p.lastMethod() != http.MethodPost || p.lastPath() != "/v1/m/sessions/runs" {
+				t.Fatalf("refused create made another request: calls=%d method=%s path=%s", p.calls.Load(), p.lastMethod(), p.lastPath())
+			}
+			var renderedJSON, renderedText strings.Builder
+			if err := printCLIErrorAs(&renderedJSON, err, true); err != nil {
+				t.Fatal(err)
+			}
+			var got struct {
+				Error struct {
+					Status int `json:"status"`
+				} `json:"error"`
+			}
+			if err := json.Unmarshal([]byte(renderedJSON.String()), &got); err != nil || got.Error.Status != http.StatusAccepted {
+				t.Errorf("JSON refusal must keep status 202: %s (decode=%v)", renderedJSON.String(), err)
+			}
+			if err := printCLIErrorAs(&renderedText, err, false); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(renderedText.String(), "HTTP 202") {
+				t.Errorf("text refusal must keep HTTP 202: %s", renderedText.String())
+			}
+			if strings.Contains(out+stderr+err.Error()+renderedJSON.String()+renderedText.String(), "test-token") {
+				t.Fatal("non-approval refusal disclosed the request credential")
+			}
+		})
+	}
+	t.Run("non_approval_202_stays_a_redacted_refusal", func(t *testing.T) {
+		p := newCreateProbe(t, http.StatusAccepted, `{"error":{"message":"reflected test-token"}}`)
+		out, stderr, err := execRoot(t, createArgs(p.URL, "--provider-profile", "prof-fixture-1")...)
+		if err == nil || strings.TrimSpace(out) != "" {
+			t.Fatalf("a non-approval 202 must remain a refusal: err=%v stdout=%s", err, out)
+		}
+		if strings.Contains(out+stderr+err.Error(), "test-token") {
+			t.Fatal("non-approval refusal disclosed the request credential")
+		}
+		if p.calls.Load() != 1 {
+			t.Fatalf("non-approval refusal retried: calls=%d", p.calls.Load())
+		}
+	})
+	for _, mode := range []string{"text", "json", "legacy-json"} {
+		t.Run("waiting_approval_"+mode, func(t *testing.T) {
+			const payload = `{"run_ref":"run-lab-approval","name":"feature-work","state":"waiting_approval","driver":"claude","transport":"stream-json","isolation":"native","workspace_path":"/workspace/fixture","approval_ref":"approval-fixture","extra":"future-field"}`
+			p := newCreateProbe(t, http.StatusAccepted, payload)
+			args := createArgs(p.URL, "--provider-profile", "prof-fixture-1")
+			if mode == "json" {
+				args = append(args, "-o", "json")
+			} else if mode == "legacy-json" {
+				args = append(args, "--json")
+			}
+			out, stderr, err := execRoot(t, args...)
+			if err != nil {
+				t.Fatalf("pending approval must not be a refusal: err=%v stderr=%s stdout=%s", err, stderr, out)
+			}
+			if p.calls.Load() != 1 || p.lastMethod() != http.MethodPost || p.lastPath() != "/v1/m/sessions/runs" {
+				t.Fatalf("pending create made another request: calls=%d method=%s path=%s", p.calls.Load(), p.lastMethod(), p.lastPath())
+			}
+			if mode != "text" {
+				got, want := decodeCreateBody(t, out), decodeCreateBody(t, payload)
+				if len(got) != len(want) {
+					t.Fatalf("pending JSON fields changed: %s", out)
+				}
+				for key, value := range want {
+					if got[key] != value {
+						t.Errorf("pending JSON %s = %v, want %v", key, got[key], value)
+					}
+				}
+				return
+			}
+			if !strings.Contains(out, "waits for approval before it starts") || !strings.Contains(out, "approval-fixture") ||
+				!strings.Contains(out, p.URL+"/permissions?tab=approvals") {
+				t.Fatalf("pending create needs truthful status, approval reference and link: %s", out)
+			}
+			if strings.Contains(out, "Started ") || strings.Contains(out, "turn finished") {
+				t.Fatalf("pending create claimed execution: %s", out)
+			}
+		})
+	}
 }
 
 func TestAgentSessionCreateOmitsProviderProfileRefWhenFlagOmitted(t *testing.T) {
@@ -199,5 +288,36 @@ func TestAgentSessionCreateUnknownFlagIsUsage(t *testing.T) {
 	}
 	if p.calls.Load() != 0 {
 		t.Fatalf("a usage error must not open a connection, calls=%d", p.calls.Load())
+	}
+}
+
+// A profile that carries an account name shows it in the list and the detail, so
+// a person can pick by name; -o json passes the field through untouched.
+func TestAgentProfileShowsTheAccountName(t *testing.T) {
+	named := map[string]any{"profile_ref": "ppf_a", "driver": "claude", "state": "active", "account_name": "claude-b", "display_name": "Claude Code"}
+	plain := map[string]any{"profile_ref": "ppf_p", "driver": "claude", "state": "active", "display_name": "Claude Code"}
+	var out strings.Builder
+	if err := printProfileTable(&out, []map[string]any{named, plain}); err != nil {
+		t.Fatal(err)
+	}
+	lines := strings.Split(out.String(), "\n")
+	if !strings.Contains(strings.ToLower(lines[0]), "account") {
+		t.Fatalf("header = %q, want an account column", lines[0])
+	}
+	var namedLine, plainLine string
+	for _, l := range lines {
+		switch {
+		case strings.Contains(l, "ppf_a"):
+			namedLine = l
+		case strings.Contains(l, "ppf_p"):
+			plainLine = l
+		}
+	}
+	if !strings.Contains(namedLine, "claude-b") || strings.Contains(plainLine, "claude-b") {
+		t.Fatalf("rows = %q / %q", namedLine, plainLine)
+	}
+	out.Reset()
+	if err := printProfileRecord(&out, named); err != nil || !strings.Contains(out.String(), "claude-b") {
+		t.Fatalf("detail = %q (%v), want the account name", out.String(), err)
 	}
 }

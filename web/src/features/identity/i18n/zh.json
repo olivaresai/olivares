@@ -30,15 +30,14 @@
       "insecureTitle": "此页面不是安全上下文。",
       "insecureBody": "浏览器仅在安全上下文中运行通行密钥 API，因此此处无法注册或使用通行密钥。请通过 HTTPS 或在本地主机上访问此控制台。",
       "unsupportedTitle": "此浏览器不支持通行密钥。",
-      "unsupportedBody": "此浏览器未提供 WebAuthn API，因此此处无法注册或使用通行密钥。请使用支持通行密钥的浏览器，或出示 PIV/CAC 卡。",
+      "unsupportedBody": "此浏览器未提供 WebAuthn API，因此此处无法注册或使用通行密钥。请使用支持通行密钥的浏览器。",
       "sameDevice": "在此设备上，同一控制台也可通过以下地址访问："
     },
     "stepUpTitle": "需要升级认证",
     "stepUpBody": "{{action}} 需要 {{required}}。当前会话为 {{current}}。请使用设备上的通行密钥或安全密钥继续。",
     "authenticate": "使用通行密钥认证",
-    "authenticatePiv": "使用 PIV/CAC 卡进行身份验证",
     "authenticating": "正在等待您的认证器……",
-    "seamWhat": "特权登录流程（WebAuthn 升级认证）",
+    "seamWhat": "使用 WebAuthn 升级认证的特权登录",
     "unsupported": "此浏览器不支持 WebAuthn。特权操作需要支持抗钓鱼认证器的平台。",
     "failed": "升级认证未完成。该操作仍被拒绝。",
     "relyingPartyUnusable": "本部署无法使用通行密钥：对于当前提供控制台的地址，引擎没有可用的依赖方。运维人员需要配置有效的依赖方域名（含点号的主机名，或在适当情况下使用 localhost），通过该已声明的安全源访问控制台，并在更改后重启引擎。仅在其他地址重试无法修复此问题。",
@@ -60,10 +59,10 @@
       "aal3": "AAL3（抗钓鱼）"
     },
     "unenrolled": "您的账户尚未注册通行密钥。请在“特权登录”选项卡中注册设备通行密钥或安全密钥，然后进行认证。",
-    "unenrolledInline": "您的账户尚未注册通行密钥。请在下方注册，或使用已出示的 PIV/CAC 卡。",
+    "unenrolledInline": "您的账户尚未注册通行密钥。请在下方注册。",
     "enrollHint": "在此设备或安全密钥上注册您的第一个通行密钥。仅注册不会认证会话，也不会完成待处理的操作。",
     "passkeyName": "通行密钥名称",
-    "enrollUnsupported": "此浏览器无法注册通行密钥。请使用支持通行密钥的浏览器，或已出示的 PIV/CAC 卡。",
+    "enrollUnsupported": "此浏览器无法注册通行密钥。请使用支持通行密钥的浏览器。",
     "registered": "通行密钥已注册。请进行认证以验证此会话，然后检查并完成待处理的操作。",
     "registrationUnknown": "无法确认注册结果。通行密钥可能已保存。请选择“认证”进行检查；不会自动重新发送注册请求。",
     "authenticationUnknown": "无法确认认证结果。会话可能已获得更高认证级别。请先检查会话，再重试。",
@@ -90,7 +89,6 @@
       "pkce": "PKCE（RFC 7636）",
       "oauthSecurityBcp": "OAuth 2.0 Security BCP（RFC 9700）",
       "webauthn": "NIST SP 800-63B-4（认证器保证）",
-      "piv": "FIPS 201-3（PIV）",
       "certManager": "cert-manager（CNCF）",
       "pqc": "NIST SP 800-57 Part 1 r6（密钥管理）",
       "wifReference": "Anthropic WIF 参考",
@@ -295,9 +293,9 @@
       "title": "生命周期操作",
       "reason": "原因",
       "critical": {
-        "twoAccountsAal3": "此关键操作在执行前需要两个不同用户账户的批准。引擎强制的是不同的“账户”：它无法证明两个账户属于两个不同的人。 这一条件取决于当前的风险等级，审批策略可以将其调低。",
-        "breakGlassPossible": "在两个不同用户账户批准之前，不会执行任何操作。有效的紧急破窗授权可以替代批准——该次使用会被记录并事后复核。 这一条件取决于当前的风险等级，审批策略可以将其调低。",
-        "noBreakGlass": "在两个不同用户账户批准之前，不会执行任何操作。此操作无法使用破窗授权：不存在绕过第二位批准者的紧急通道。 这一条件取决于当前的风险等级，审批策略可以将其调低。"
+        "twoAccountsAal3": "此关键操作在执行前需要两个不同用户账户的批准。引擎强制的是不同的“账户”：它无法证明两个账户属于两个不同的人。 Business 允许通过策略降低当前风险等级；Community 保留默认的最低审批要求。",
+        "breakGlassPossible": "在两个不同用户账户批准之前，不会执行任何操作。有效的紧急破窗授权可以替代批准——该次使用会被记录并事后复核。 Business 允许通过策略降低当前风险等级；Community 保留默认的最低审批要求。",
+        "noBreakGlass": "在两个不同用户账户批准之前，不会执行任何操作。此操作无法使用破窗授权：不存在绕过第二位批准者的紧急通道。 Business 允许通过策略降低当前风险等级；Community 保留默认的最低审批要求。"
       },
       "ownership": {
         "button": "分配负责人",
@@ -348,7 +346,7 @@
         "button": "最终完成",
         "title": "最终完成下线",
         "description": "永久吊销先前已可恢复删除的 NHI。",
-        "irreversible": "最终完成不可逆。此处不适用 break-glass；无法绕过第二个不同用户账户和 AAL3 的要求。",
+        "irreversible": "最终完成不可逆。此处不适用 break-glass；无法绕过第二个不同用户账户的要求。",
         "confirm": "永久最终完成"
       },
       "restore": {
@@ -424,7 +422,7 @@
     "noPassthrough": "令牌透传按设计被禁止：本面板进行观测与内省，绝不转发或重放 MCP 令牌。"
   },
   "wif": {
-    "gatedNote": "Workload Identity Federation 图谱是一个特权、受审计的视图；它需要硬件升级认证。",
+    "gatedNote": "Workload Identity Federation 图谱是一个特权、受审计的视图。",
     "consoleOnly": "工作负载身份联合对象（颁发者、规则、服务账户）仅在 Anthropic Console 中管理。本面板将其可视化并加以检查——它绝不创建或编辑它们。",
     "openConsole": "在 Anthropic Console 中打开",
     "graphTitle": "WIF 对象图谱",
@@ -541,17 +539,6 @@
     "registered": "通行密钥已注册。",
     "unsupported": "此浏览器不支持 WebAuthn。",
     "registerFailed": "注册未完成。",
-    "pivTitle": "PIV / CAC（智能卡）",
-    "pivDescription": "X.509 客户端证书登录，具备证书到角色的映射与 OCSP 吊销，读取自 mTLS 连接。",
-    "pivSeamWhat": "PIV/CAC 客户端证书状态",
-    "pivPresented": "客户端证书",
-    "pivAbsent": "未出示",
-    "pivSubject": "Subject",
-    "pivRole": "映射的角色",
-    "pivOcsp": "OCSP",
-    "pivNote": "证书链与 OCSP 验证由后端执行；本面板反映其结果。",
-    "pivNotConfigured": "此部署未配置 PIV/CAC 智能卡登录，因此此处无法使用智能卡。管理员需要在引擎上完成配置后才可使用。",
-    "pivSetupGuide": "运营者指南：配置 PIV/CAC 登录",
     "ocsp": {
       "good": "良好",
       "revoked": "已吊销",
@@ -567,9 +554,9 @@
       "namePlaceholder": "例如 YubiKey 5C、MacBook Touch ID",
       "defaultName": "{{device}} 上的通行密钥",
       "defaultNameNoDevice": "通行密钥",
-      "registering": "正在完成仪式…",
+      "registering": "正在注册通行密钥…",
       "registered": "通行密钥已注册。",
-      "registerFailed": "注册失败。您的浏览器可能不支持 WebAuthn 或仪式被取消。",
+      "registerFailed": "通行密钥注册失败。您的浏览器可能不支持 WebAuthn，或注册已被取消。",
       "unsupported": "此浏览器不支持 WebAuthn/FIDO2。",
       "none": "未注册通行密钥",
       "noneHint": "注册通行密钥以启用抗钓鱼的硬件绑定登录 (AAL3)。",
@@ -585,8 +572,7 @@
       "deleteTitle": "删除通行密钥",
       "deleteBody": "删除通行密钥 \"{{name}}\"？此操作不可撤销。您需要另一个已注册的通行密钥来维持 AAL3 访问。",
       "deleted": "通行密钥已删除。",
-      "lastCredential": "无法删除您唯一的通行密钥。请先注册另一个。",
-      "stepUpRequired": "删除通行密钥需要活跃的 AAL3 会话。请先完成升级认证。"
+      "lastCredential": "无法删除您唯一的通行密钥。请先注册另一个。"
     }
   },
   "empty": {
@@ -601,7 +587,7 @@
   },
   "totp": {
     "title": "TOTP 第二因子",
-    "description": "基于时间的一次性密码（RFC 6238），作为本地账户的附加因子。它与通行密钥和 PIV 并存，绝不取代它们。",
+    "description": "基于时间的一次性密码（RFC 6238），作为本地账户的附加因子。它与通行密钥 并存，绝不取代它们。",
     "state": "因子",
     "enrolled": "已注册",
     "notEnrolled": "未注册",
@@ -621,7 +607,7 @@
     "codeLabel": "应用显示的代码",
     "recoveryWarning": "这些恢复代码仅显示一次。请立即保存——丢失设备时每个代码只能使用一次。",
     "savedCodes": "我已保存这些代码",
-    "stepUpRequired": "此操作需要新的 AAL3 会话。请先完成通行密钥或 PIV 步进验证。",
+    "stepUpRequired": "此操作需要完成此部署要求的管理操作额外验证。请先完成。",
     "sealerUnavailable": "此部署上的 TOTP 种子封印器不可用；在操作员修复之前，注册保持禁用。",
     "loadFailed": "无法加载因子状态。",
     "policyTitle": "要求管理员使用 TOTP",
@@ -635,19 +621,19 @@
     "policyAal3Note": "更改此策略需要 AAL3 会话。没有因子的账户会在下次登录时进入注册流程——不会被锁定。"
   },
   "stepUpPolicy": {
-    "title": "Extra check for administrative actions",
-    "description": "Off by default. Turn it on to ask for an authenticator code or a passkey before administrative changes such as users, identity providers, secrets or tool installs.",
+    "title": "管理操作的额外验证",
+    "description": "默认关闭。开启后，在用户、身份提供方、密钥或工具安装等管理更改之前，要求输入验证器代码或使用通行密钥。",
     "options": {
-      "none": "Off",
-      "totp": "Authenticator code",
-      "passkey": "Passkey"
+      "none": "关闭",
+      "totp": "验证器代码",
+      "passkey": "通行密钥"
     },
-    "saved": "Saved.",
-    "loadFailed": "This setting could not be read. Refresh the page to try again.",
-    "note": "To require a passkey, sign in with your passkey here first. To require an authenticator code, sign in with your code first. You can always turn it off. A change takes effect within a few seconds on every server.",
+    "saved": "已保存。",
+    "loadFailed": "无法读取此设置。请刷新页面重试。",
+    "note": "要强制使用通行密钥，请先在此处用通行密钥登录。要强制使用验证器代码，请先用代码登录。要关闭或降低它，请先通过当前的验证。更改会在几秒内对所有服务器生效。",
     "refused": {
-      "passkey_not_enrolled": "Add a passkey to your account first (Identity > Passkeys), then turn this on.",
-      "totp_sign_in_required": "Set up an authenticator app and sign in with its code first, then turn this on."
+      "passkey_not_enrolled": "请先为您的账户添加通行密钥（身份与 NHI > 通行密钥），然后再开启。",
+      "totp_sign_in_required": "请先设置验证器应用并用其代码登录，然后再开启。"
     }
   }
 }

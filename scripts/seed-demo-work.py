@@ -63,8 +63,8 @@ def _busca_lib():
 
 _lib = _busca_lib()
 if _lib is None:
-    print("%s: \u26d4 NO HE PODIDO MIRAR: no encuentro `scripts/lib/redaccion.py`. Sin la frontera "
-          "de salida no arranco: `urlopen` sigue los 30x y copia `Authorization` a OTRO origen."
+    print("%s: \u26d4 COULD NOT LOOK: cannot find `scripts/lib/redaccion.py`. Without the output "
+          "boundary, execution is refused: `urlopen` follows 30x redirects and copies `Authorization` to ANOTHER origin."
           % _ETIQUETA, file=sys.stderr)
     sys.exit(2)
 sys.path.insert(0, _lib)
@@ -194,24 +194,24 @@ def sembrar_decisiones(base, token, tenant, work_item_id, version, cantidad):
     path = "/v1/m/sessions/decisions?effective=true&limit=%d" % DECISION_PAGE_SIZE
     code, page = pedir(base, token, tenant, "GET", path)
     if code != 200:
-        print("ERROR: no pude releer la primera pagina de decisiones (%s) %s"
+        print("ERROR: could not reread the first decisions page (%s) %s"
               % (code, page), file=sys.stderr)
         return 1
     items = page.get("items") or []
     cursor = page.get("next_cursor")
     if len(items) != DECISION_PAGE_SIZE or page.get("has_more") is not True or not cursor:
-        print("ERROR: paginacion no demostrada: items=%d has_more=%r next_cursor=%r"
+        print("ERROR: pagination not demonstrated: items=%d has_more=%r next_cursor=%r"
               % (len(items), page.get("has_more"), bool(cursor)), file=sys.stderr)
         return 1
     second_path = path + "&" + urllib.parse.urlencode({"cursor": cursor})
     code, second = pedir(base, token, tenant, "GET", second_path)
     second_items = second.get("items") or []
     if code != 200 or not second_items:
-        print("ERROR: el cursor existe pero la segunda pagina no se puede releer (%s) %s"
+        print("ERROR: the cursor exists but the second page could not be reread (%s) %s"
               % (code, second), file=sys.stderr)
         return 1
-    print("decisiones sembradas y RELEIDAS: %d · primera pagina %d · segunda pagina %d · "
-          "has_more=true · next_cursor=presente"
+    print("decisions seeded and REREAD: %d · first page %d · second page %d · "
+          "has_more=true · next_cursor=present"
           % (cantidad, len(items), len(second_items)))
     return 0
 
@@ -266,11 +266,11 @@ def sembrar_catalogo(base, token, tenant):
                   "version": e["version"], "summary": e["summary"]}
         code, hecho = pedir(base, token, tenant, "POST", "/v1/m/catalog/entries", cuerpo)
         if code not in (200, 201):
-            print("ERROR: catalogo %s -> %s %s" % (e["slug"], code, hecho), file=sys.stderr)
+            print("ERROR: catalog %s -> %s %s" % (e["slug"], code, hecho), file=sys.stderr)
             return 1
         eid = hecho.get("id")
         if not eid:
-            print("ERROR: la entrada %s no devuelve id: %s" % (e["slug"], list(hecho)[:8]),
+            print("ERROR: entry %s returns no id: %s" % (e["slug"], list(hecho)[:8]),
                   file=sys.stderr)
             return 1
         creadas += 1
@@ -282,24 +282,24 @@ def sembrar_catalogo(base, token, tenant):
             code, r = pedir(base, token, tenant, "POST",
                             "/v1/m/catalog/entries/%s/%s" % (eid, paso), {})
             if code not in (200, 201):
-                print("ERROR: catalogo %s %s -> %s %s" % (e["slug"], paso, code, r),
+                print("ERROR: catalog %s %s -> %s %s" % (e["slug"], paso, code, r),
                       file=sys.stderr)
                 return 1
 
     # La misma regla que en work: se releen los ESTADOS, no el recuento.
     code, lista = pedir(base, token, tenant, "GET", "/v1/m/catalog/entries?limit=100")
     if code != 200:
-        print("ERROR: no pude releer el catalogo (%s) %s" % (code, lista), file=sys.stderr)
+        print("ERROR: could not reread the catalog (%s) %s" % (code, lista), file=sys.stderr)
         return 1
     items = lista.get("items") or []
     estados = {}
     for it in items:
         estados[it.get("status")] = estados.get(it.get("status"), 0) + 1
     if len(items) < len(ENTRADAS) or len(estados) < 3:
-        print("ERROR: catalogo sembrado %d, lista %d, estados %s"
+        print("ERROR: catalog seeded %d, list %d, states %s"
               % (creadas, len(items), estados), file=sys.stderr)
         return 1
-    print("catalogo sembrado y RELEIDO: %d · estados %s" % (len(items), estados))
+    print("catalog seeded and REREAD: %d · states %s" % (len(items), estados))
     return 0
 
 
@@ -316,11 +316,11 @@ def sembrar_deploy(base, token, tenant):
     # embebido publica las dos formas para familias distintas y la equivocada da 404, no vacio).
     code, ags = pedir(base, token, tenant, "GET", "/v1/agents?limit=100")
     if code != 200:
-        print("ERROR: no pude leer los agentes (%s) %s" % (code, ags), file=sys.stderr)
+        print("ERROR: could not read agents (%s) %s" % (code, ags), file=sys.stderr)
         return 1
     agentes = [a for a in (ags.get("items") or []) if a.get("id")]
     if not agentes:
-        print("ERROR: cero agentes sembrados: no hay sujeto que desplegar", file=sys.stderr)
+        print("ERROR: no seeded agents: there is no deployment subject", file=sys.stderr)
         return 1
 
     ENTORNOS = [
@@ -351,15 +351,15 @@ def sembrar_deploy(base, token, tenant):
 
     code, lista = pedir(base, token, tenant, "GET", "/v1/m/deploy/definitions?limit=100")
     if code != 200:
-        print("ERROR: no pude releer deploy (%s) %s" % (code, lista), file=sys.stderr)
+        print("ERROR: could not reread deploy (%s) %s" % (code, lista), file=sys.stderr)
         return 1
     items = lista.get("items") or []
     if len(items) < creadas:
-        print("ERROR: deploy sembre %d y la lista devuelve %d" % (creadas, len(items)),
+        print("ERROR: seeded %d deployments but the list returns %d" % (creadas, len(items)),
               file=sys.stderr)
         return 1
     entornos = sorted({it.get("environment") for it in items})
-    print("deploy sembrado y RELEIDO: %d definiciones · entornos %s" % (len(items), entornos))
+    print("deploy seeded and REREAD: %d definitions · environments %s" % (len(items), entornos))
     return 0
 
 
@@ -400,11 +400,11 @@ CHEQUEOS = [
 def sembrar_health(base, token, tenant):
     code, ags = pedir(base, token, tenant, "GET", "/v1/agents?limit=100")
     if code != 200:
-        print("ERROR: no pude leer los agentes (%s) %s" % (code, ags), file=sys.stderr)
+        print("ERROR: could not read agents (%s) %s" % (code, ags), file=sys.stderr)
         return 1
     agentes = [a for a in (ags.get("items") or []) if a.get("id")]
     if not agentes:
-        print("ERROR: cero agentes: no hay sujeto que vigilar", file=sys.stderr)
+        print("ERROR: no agents: there is no monitoring subject", file=sys.stderr)
         return 1
 
     creados = 0
@@ -437,7 +437,7 @@ def sembrar_health(base, token, tenant):
         #    una casa real.
         cid = hecho.get("id")
         if not cid:
-            print("ERROR: el chequeo %s no devuelve id: %s" % (spec["nombre"], list(hecho)[:8]),
+            print("ERROR: check %s returns no id: %s" % (spec["nombre"], list(hecho)[:8]),
                   file=sys.stderr)
             return 1
         code, r = pedir(base, token, tenant, "POST",
@@ -450,11 +450,11 @@ def sembrar_health(base, token, tenant):
 
     code, lista = pedir(base, token, tenant, "GET", "/v1/m/health/checks?limit=100")
     if code != 200:
-        print("ERROR: no pude releer health (%s) %s" % (code, lista), file=sys.stderr)
+        print("ERROR: could not reread health (%s) %s" % (code, lista), file=sys.stderr)
         return 1
     items = lista.get("items") or []
     if len(items) < creados:
-        print("ERROR: health sembre %d y la lista devuelve %d" % (creados, len(items)),
+        print("ERROR: seeded %d health checks but the list returns %d" % (creados, len(items)),
               file=sys.stderr)
         return 1
     # Se releen los ESTADOS, no el recuento: tres chequeos «sin noticias» darian el mismo numero
@@ -463,7 +463,7 @@ def sembrar_health(base, token, tenant):
     for it in items:
         estados[it.get("state") or it.get("status")] = \
             estados.get(it.get("state") or it.get("status"), 0) + 1
-    print("health sembrado y RELEIDO: %d chequeos · estados %s" % (len(items), estados))
+    print("health seeded and REREAD: %d checks · states %s" % (len(items), estados))
     return 0
 
 
@@ -534,14 +534,14 @@ def sembrar_coste(base, token, tenant, dias=30):
     #    por clave natural, asi que «202 aceptado» no promete una fila nueva.
     code, res = pedir(base, token, tenant, "GET", "/v1/m/finops/spend/summary")
     if code != 200:
-        print("ERROR: no pude releer el resumen de gasto (%s) %s" % (code, res), file=sys.stderr)
+        print("ERROR: could not reread the spending summary (%s) %s" % (code, res), file=sys.stderr)
         return 1
     visto = res.get("total_micro_usd") or 0
     if visto < total_micro * 0.5:
-        print("ERROR: envie %.2f USD y el resumen ve %.2f — la ingesta no cuajo"
+        print("ERROR: sent %.2f USD but the summary shows %.2f — ingestion did not complete"
               % (total_micro / 1e6, visto / 1e6), file=sys.stderr)
         return 1
-    print("coste sembrado y RELEIDO: %d muestras · resumen $%.2f · %d modelos"
+    print("cost seeded and REREAD: %d samples · summary $%.2f · %d models"
           % (enviadas, visto / 1e6, len(res.get("by_model") or [])))
     return 0
 
@@ -599,16 +599,16 @@ def sembrar_consola(base, token, tenant):
                         {"email": p["email"], "display_name": p["nombre"],
                          "password": "olivares-demo-estate", "superadmin": False})
         if code not in (200, 201):
-            print("ERROR: crear usuario %s -> %s %s" % (p["email"], code, u), file=sys.stderr)
+            print("ERROR: create user %s -> %s %s" % (p["email"], code, u), file=sys.stderr)
             return 1
         uid = u.get("id") or u.get("user_id")
         if not uid:
-            print("ERROR: /v1/users no devuelve id: %s" % list(u)[:8], file=sys.stderr)
+            print("ERROR: /v1/users returns no id: %s" % list(u)[:8], file=sys.stderr)
             return 1
         code, g = pedir(base, token, tenant, "POST", "/v1/memberships",
                         {"user_id": uid, "tenant": tenant, "role": p["rol"]})
         if code not in (200, 201):
-            print("ERROR: membresia %s -> %s %s" % (p["email"], code, g), file=sys.stderr)
+            print("ERROR: membership %s -> %s %s" % (p["email"], code, g), file=sys.stderr)
             return 1
         altas += 1
 
@@ -616,15 +616,15 @@ def sembrar_consola(base, token, tenant):
     #    invitaciones dejaria el hueco igual que estaba y el recuento diria que todo fue bien.
     code, miembros = pedir(base, token, tenant, "GET", "/v1/members")
     if code != 200:
-        print("ERROR: no pude releer el padron (%s) %s" % (code, miembros), file=sys.stderr)
+        print("ERROR: could not reread the membership list (%s) %s" % (code, miembros), file=sys.stderr)
         return 1
     n_miembros = len(miembros.get("items") or [])
     con_nombre = sum(1 for m in (miembros.get("items") or []) if m.get("display_name"))
     if n_miembros < altas:
-        print("ERROR: %d altas y el padron devuelve %d" % (altas, n_miembros), file=sys.stderr)
+        print("ERROR: %d registrations but the membership list returns %d" % (altas, n_miembros), file=sys.stderr)
         return 1
-    print("consola sembrada y RELEIDA: %d miembros (%d con nombre) · invitaciones NO sembradas "
-          "(exigen AAL3, por dise\u00f1o)" % (n_miembros, con_nombre))
+    print("console seeded and REREAD: %d members (%d named) · invitations NOT seeded "
+          "(require AAL3 by design)" % (n_miembros, con_nombre))
     return 0
 
 
@@ -661,24 +661,24 @@ def sembrar_permisos(base, token, tenant):
                   "expires_in_seconds": a["expira"]}
         code, hecho = pedir(base, token, tenant, "POST", "/v1/m/governance/approvals", cuerpo)
         if code not in (200, 201):
-            print("ERROR: aprobacion %s -> %s %s" % (a["accion"], code, hecho), file=sys.stderr)
+            print("ERROR: approval %s -> %s %s" % (a["accion"], code, hecho), file=sys.stderr)
             return 1
         creadas += 1
 
     code, lista = pedir(base, token, tenant, "GET", "/v1/m/governance/approvals?limit=100")
     if code != 200:
-        print("ERROR: no pude releer la cola (%s) %s" % (code, lista), file=sys.stderr)
+        print("ERROR: could not reread the queue (%s) %s" % (code, lista), file=sys.stderr)
         return 1
     items = lista.get("items") or []
     if len(items) < creadas:
-        print("ERROR: cree %d aprobaciones y la cola devuelve %d" % (creadas, len(items)),
+        print("ERROR: created %d approvals but the queue returns %d" % (creadas, len(items)),
               file=sys.stderr)
         return 1
     estados = {}
     for it in items:
         estados[it.get("status") or it.get("state")] = \
             estados.get(it.get("status") or it.get("state"), 0) + 1
-    print("permisos sembrados y RELEIDOS: %d en cola · estados %s" % (len(items), estados))
+    print("permissions seeded and REREAD: %d queued · states %s" % (len(items), estados))
     return 0
 
 
@@ -707,17 +707,17 @@ def sembrar_politica(base, token, tenant):
                       "/v1/m/claude-policy/managed-settings/publish",
                       {"content": POLITICA, "note": "Baseline for the demo estate"})
     if code not in (200, 201):
-        print("ERROR: publicar politica -> %s %s" % (code, pub), file=sys.stderr)
+        print("ERROR: publish policy -> %s %s" % (code, pub), file=sys.stderr)
         return 1
     art = pub.get("artifact") or {}
     rev, sha, huella = pub.get("revision"), art.get("artifact_sha256"), art.get("key_fingerprint")
     if not (rev and sha and huella):
-        print("ERROR: la publicacion no devuelve revision/sha/huella: %s" % list(pub)[:8],
+        print("ERROR: publication returns no revision/SHA/fingerprint: %s" % list(pub)[:8],
               file=sys.stderr)
         return 1
     # ⛔ El motor lo dice el mismo: sin observacion NO calcula deriva, y no finge un «sin deriva».
     if pub.get("drift_computed"):
-        print("AVISO: la publicacion dice haber calculado deriva sin observacion todavia",
+        print("WARNING: publication claims to have calculated drift before any observation",
               file=sys.stderr)
 
     derivas = 0
@@ -735,13 +735,13 @@ def sembrar_politica(base, token, tenant):
     code, lista = pedir(base, token, tenant, "GET",
                         "/v1/m/security/findings?kind=policy_drift&limit=100")
     if code != 200:
-        print("ERROR: no pude releer los findings (%s) %s" % (code, lista), file=sys.stderr)
+        print("ERROR: could not reread findings (%s) %s" % (code, lista), file=sys.stderr)
         return 1
     items = lista.get("items") or []
     if not items:
-        print("ERROR: %d derivas en los check-in y la pantalla ve 0" % derivas, file=sys.stderr)
+        print("ERROR: %d drifts in the check-ins but the screen shows 0" % derivas, file=sys.stderr)
         return 1
-    print("politica sembrada y RELEIDA: rev %s · %d hosts · %d deriva(s) que ve la pantalla"
+    print("policy seeded and REREAD: rev %s · %d hosts · %d drift(s) visible on the screen"
           % (rev, len(HOSTS), len(items)))
     return 0
 
@@ -763,12 +763,12 @@ def perfil_lanzable_ahora(base, token, tenant, profile_ref):
                         "/v1/m/sessions/provider-profiles/"
                         + urllib.parse.quote(profile_ref, safe=""))
     if code != 200 or leido.get("profile_ref") not in (None, profile_ref):
-        print("ERROR: el perfil %s no se pudo releer: %s %s" % (profile_ref, code, leido),
+        print("ERROR: profile %s could not be reread: %s %s" % (profile_ref, code, leido),
               file=sys.stderr)
         return False
     if (leido.get("driver") != PROFILE_DRIVER or leido.get("state") != "active"
             or leido.get("local_environment") is not True or leido.get("operable") is not True):
-        print("ERROR: el perfil %s no es lanzable en este nodo ahora mismo: %s"
+        print("ERROR: profile %s cannot be launched on this node right now: %s"
               % (profile_ref, leido), file=sys.stderr)
         return False
     return True
@@ -786,7 +786,7 @@ def resolver_perfil_por_identidad(base, token, tenant, config_home, user_home):
             ruta += "&" + urllib.parse.urlencode({"cursor": cursor})
         code, pagina = pedir(base, token, tenant, "GET", ruta)
         if code != 200:
-            print("ERROR: no se pudo listar los perfiles activos (%s) %s" % (code, pagina),
+            print("ERROR: could not list active profiles (%s) %s" % (code, pagina),
                   file=sys.stderr)
             return None
         vistas += 1
@@ -799,7 +799,7 @@ def resolver_perfil_por_identidad(base, token, tenant, config_home, user_home):
         if not cursor:
             break
         if vistas > 1000:
-            print("ERROR: la lista de perfiles no termina (has_more sin fin)", file=sys.stderr)
+            print("ERROR: the profile list never ends (unending has_more)", file=sys.stderr)
             return None
 
     exactos = []
@@ -810,7 +810,7 @@ def resolver_perfil_por_identidad(base, token, tenant, config_home, user_home):
         code, conf = pedir(base, token, tenant, "GET",
                            "/v1/m/sessions/provider-profiles/%s/configuration" % escapado)
         if code != 200:
-            print("   perfil %s: configuracion no autorizada o no legible (%s); descartado"
+            print("   profile %s: unauthorized or unreadable configuration (%s); discarded"
                   % (ref, code), file=sys.stderr)
             continue
         code, detalle = pedir(base, token, tenant, "GET",
@@ -829,11 +829,11 @@ def resolver_perfil_por_identidad(base, token, tenant, config_home, user_home):
     if len(exactos) == 1:
         return exactos[0]
     if not exactos:
-        print("ERROR: ningun perfil activo de este entorno tiene exactamente estas homes "
-              "(%d candidato(s) en %d pagina(s)); no se lanza con una identidad no verificada"
+        print("ERROR: no active profile in this environment has these exact homes "
+              "(%d candidate(s) in %d page(s)); will not launch with an unverified identity"
               % (len(candidatos), vistas), file=sys.stderr)
     else:
-        print("ERROR: %d perfiles reclaman la misma identidad (%s); ambiguedad, no se lanza"
+        print("ERROR: %d profiles claim the same identity (%s); ambiguous, refusing to launch"
               % (len(exactos), ", ".join(exactos)), file=sys.stderr)
     return None
 
@@ -846,7 +846,7 @@ def resolver_perfil_por_identidad(base, token, tenant, config_home, user_home):
 def sembrar_workspace_y_run(base, token, tenant, root):
     root = os.path.realpath(root)
     if not os.path.isabs(root) or not os.path.isdir(root):
-        print("ERROR: la raiz del workspace no es un directorio absoluto: %r" % root,
+        print("ERROR: the workspace root is not an absolute directory: %r" % root,
               file=sys.stderr)
         return 1
 
@@ -866,7 +866,7 @@ def sembrar_workspace_y_run(base, token, tenant, root):
         return 1
     workspace_ref = created_ws.get("workspace_ref")
     if not workspace_ref:
-        print("ERROR: la respuesta no trae workspace_ref: %s" % list(created_ws)[:10],
+        print("ERROR: the response contains no workspace_ref: %s" % list(created_ws)[:10],
               file=sys.stderr)
         return 1
 
@@ -874,11 +874,11 @@ def sembrar_workspace_y_run(base, token, tenant, root):
     code, read_ws = pedir(base, token, tenant, "GET",
                            "/v1/m/sessions/workspaces/" + escaped_ws)
     if code != 200:
-        print("ERROR: no pude releer el workspace (%s) %s" % (code, read_ws), file=sys.stderr)
+        print("ERROR: could not reread the workspace (%s) %s" % (code, read_ws), file=sys.stderr)
         return 1
     if (read_ws.get("state"), read_ws.get("mount_mode"), read_ws.get("root_path")) != \
             ("active", "ro", root):
-        print("ERROR: workspace releido con otra postura: %s" % read_ws, file=sys.stderr)
+        print("ERROR: reread workspace has a different access mode: %s" % read_ws, file=sys.stderr)
         return 1
 
     # Browse files uses this exact jailed listing. A registered but empty/unreadable root would
@@ -888,7 +888,7 @@ def sembrar_workspace_y_run(base, token, tenant, root):
     names = {entry.get("name") for entry in (files.get("entries") or [])}
     required = {"README.md", "deploy", "src"}
     if code != 200 or not required.issubset(names):
-        print("ERROR: Browse files no relee el arbol esperado (%s), nombres=%s respuesta=%s"
+        print("ERROR: Browse files does not return the expected tree (%s), names=%s response=%s"
               % (code, sorted(n for n in names if n), files), file=sys.stderr)
         return 1
 
@@ -947,7 +947,7 @@ def sembrar_workspace_y_run(base, token, tenant, root):
         return 1
     run_ref = created_run.get("run_ref")
     if not run_ref:
-        print("ERROR: la respuesta no trae run_ref: %s" % list(created_run)[:10],
+        print("ERROR: the response contains no run_ref: %s" % list(created_run)[:10],
               file=sys.stderr)
         return 1
 
@@ -966,7 +966,7 @@ def sembrar_workspace_y_run(base, token, tenant, root):
             break
         time.sleep(0.1)
     else:
-        print("ERROR: el run no quedo vivo y unido a %s: code=%s run=%s"
+        print("ERROR: the run is not live and bound to %s: code=%s run=%s"
               % (DEMO_LIVE_SESSION, code, read_run), file=sys.stderr)
         return 1
     live_ref = read_run["live_ref"]
@@ -975,19 +975,19 @@ def sembrar_workspace_y_run(base, token, tenant, root):
     code, joined = pedir(base, token, tenant, "GET", "/v1/m/sessions/runs?" + query)
     refs = {item.get("run_ref") for item in (joined.get("items") or [])}
     if code != 200 or run_ref not in refs:
-        print("ERROR: la consulta de procedencia por live_ref no devuelve el run %s (%s) %s"
+        print("ERROR: the provenance query by live_ref does not return run %s (%s) %s"
               % (run_ref, code, joined), file=sys.stderr)
         return 1
 
     code, live = pedir(base, token, tenant, "GET",
                        "/v1/m/sessions/live/by-id/" + urllib.parse.quote(live_ref, safe=""))
     if code != 200 or live.get("session_ref") != DEMO_LIVE_SESSION:
-        print("ERROR: la fila gestionada %s no aparece en /live/by-id (%s) %s"
+        print("ERROR: managed row %s is missing from /live/by-id (%s) %s"
               % (live_ref, code, live), file=sys.stderr)
         return 1
 
-    print("agentops sembrado y RELEIDO: workspace %s ro con Browse files · perfil %s · run %s %s · "
-          "origen Launched unido a %s por la fila %s"
+    print("agentops seeded and REREAD: workspace %s ro with Browse files · profile %s · run %s %s · "
+          "Launched origin bound to %s through row %s"
           % (workspace_ref, profile_ref, run_ref, read_run.get("state"), DEMO_LIVE_SESSION,
              live_ref))
     return 0
@@ -995,24 +995,24 @@ def sembrar_workspace_y_run(base, token, tenant, root):
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Siembra por API el contenido real que usan las capturas del estate demo.")
+        description="Seed the real content used by demo estate captures through the API.")
     parser.add_argument("base_url")
     parser.add_argument("token")
     parser.add_argument("tenant")
     parser.add_argument("workspace_root",
-                        help="raiz desechable que registrar para Browse files")
+                        help="disposable root to register for Browse files")
     parser.add_argument(
         "--decision-count", type=int, default=DEFAULT_DECISION_COUNT, metavar="N",
-        help="cabezas efectivas (por defecto: una pagina de consola mas una fila)")
+        help="effective heads (default: one console page plus one row)")
     args = parser.parse_args()
     if args.decision_count <= DECISION_PAGE_SIZE:
-        parser.error("--decision-count debe superar el tamano de pagina (%d)"
+        parser.error("--decision-count must exceed the page size (%d)"
                      % DECISION_PAGE_SIZE)
     base, token, tenant = args.base_url, args.token, args.tenant
 
     code, ws = pedir(base, token, tenant, "GET", "/v1/workspaces")
     if code != 200 or not ws.get("items"):
-        print("ERROR: no pude resolver un workspace (%s) %s" % (code, ws), file=sys.stderr)
+        print("ERROR: could not resolve a workspace (%s) %s" % (code, ws), file=sys.stderr)
         return 1
     # El workspace POR DEFECTO, no el primero que llegue: el orden de la lista no es contrato y
     # la consola navega en el por defecto.
@@ -1021,12 +1021,12 @@ def main():
 
     code, quien = pedir(base, token, tenant, "GET", "/v1/auth/whoami")
     if code != 200:
-        print("ERROR: whoami fallo (%s) %s" % (code, quien), file=sys.stderr)
+        print("ERROR: whoami failed (%s) %s" % (code, quien), file=sys.stderr)
         return 1
     # El dueño es el usuario demo, que a esta altura YA existe (el token lo prueba).
     owner = quien.get("user_id") or quien.get("id") or quien.get("subject")
     if not owner:
-        print("ERROR: whoami no trae un id de usuario: %s" % list(quien)[:8], file=sys.stderr)
+        print("ERROR: whoami returns no user id: %s" % list(quien)[:8], file=sys.stderr)
         return 1
 
     creados = []
@@ -1054,7 +1054,7 @@ def main():
         code, hecho = pedir(base, token, tenant, "POST",
                             "/v1/m/sessions/work-items?mode=apply", cuerpo)
         if code not in (200, 201):
-            print("ERROR: creando %r -> %s %s" % (spec["title"][:40], code, hecho), file=sys.stderr)
+            print("ERROR: creating %r -> %s %s" % (spec["title"][:40], code, hecho), file=sys.stderr)
             return 1
         # ⛔ La respuesta es un CommandResult, no el item: el id viene en `result_id` y la version
         #    en `version`. Y si no viene, esto es un ERROR, no un salto silencioso — la primera
@@ -1064,7 +1064,7 @@ def main():
         wid = hecho.get("result_id")
         version = hecho.get("version")
         if not wid or not version:
-            print("ERROR: la respuesta no trae result_id/version: %s" % list(hecho)[:10],
+            print("ERROR: the response contains no result_id/version: %s" % list(hecho)[:10],
                   file=sys.stderr)
             return 1
         creados.append(wid)
@@ -1093,11 +1093,11 @@ def main():
     #    consola. Si aqui sale 0, la siembra no ocurrio por mucho que los POST dijeran 201.
     code, lista = pedir(base, token, tenant, "GET", "/v1/m/sessions/work-items?limit=100")
     if code != 200:
-        print("ERROR: no pude releer la lista (%s) %s" % (code, lista), file=sys.stderr)
+        print("ERROR: could not reread the list (%s) %s" % (code, lista), file=sys.stderr)
         return 1
     items = lista.get("items") or []
     if len(items) < len(ITEMS):
-        print("ERROR: sembre %d y la lista devuelve %d" % (len(ITEMS), len(items)), file=sys.stderr)
+        print("ERROR: seeded %d but the list returns %d" % (len(ITEMS), len(items)), file=sys.stderr)
         return 1
     # ⛔ Y SE COMPRUEBAN LOS ESTADOS, no solo cuantos hay. La primera version de esta comprobacion
     #    contaba filas, y por eso dio VERDE cuando las cinco habian quedado en `draft` porque las
@@ -1108,13 +1108,13 @@ def main():
         estados[it.get("status")] = estados.get(it.get("status"), 0) + 1
     esperados = {"draft", "ready", "blocked"}
     if not esperados.issubset(set(estados)):
-        print("ERROR: esperaba estados %s y la lista trae %s"
+        print("ERROR: expected states %s but the list contains %s"
               % (sorted(esperados), estados), file=sys.stderr)
         return 1
     print("work items sembrados y RELEIDOS: %d · estados %s" % (len(items), estados))
 
     if item_para_decisiones is None:
-        print("ERROR: no hay work item al que adjuntar las decisiones", file=sys.stderr)
+        print("ERROR: no work item to attach decisions to", file=sys.stderr)
         return 1
     decision_item, decision_version = item_para_decisiones
     rc = sembrar_decisiones(base, token, tenant, decision_item, decision_version,

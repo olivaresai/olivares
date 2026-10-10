@@ -25,8 +25,8 @@ import (
 // import-profile + implemented-requirements) — lives in the commercial add-on
 // enterprise/oscalingest, wired ONLY under -tags enterprise (the federation/multi-IdP
 // pattern). The open binary never links it; without a wired resolver the ingestion
-// endpoint answers 501 and the OSCAL export is BYTE-IDENTICAL to the prior behavior
-// (include-all, no profile props). The seam interface and its value objects live here
+// endpoint answers 501. Business OSCAL export includes all controls without profile
+// properties; Community OSCAL export is 501. The seam and its value objects live here
 // so both sides share them without the open module importing the closed one.
 //
 // Honesty (docs/SECURITY-HARDENING.md): a resolved selection is a SUBSET of an EXISTING known framework
@@ -44,7 +44,7 @@ import (
 // ProfileResolver parses and resolves an operator-supplied OSCAL document (profile,
 // catalog or system-security-plan) into a deterministic control selection over a known
 // framework. The default is nil — without a wired resolver the ingestion endpoint is
-// unavailable (501) and the export keeps its include-all behavior. The real
+// unavailable (501) and Business OSCAL export keeps its include-all behavior. The real
 // implementation is enterprise/oscalingest, wired only under -tags enterprise.
 type ProfileResolver interface {
 	// Resolve parses+validates an OSCAL document and resolves its control selection
@@ -52,7 +52,7 @@ type ProfileResolver interface {
 	// an invalid/unsupported document, an unresolvable framework, or an empty resulting
 	// selection — never a silent partial selection. cat lets the resolver map an OSCAL
 	// import/catalog href to a known framework and bound the selection to that
-	// framework's controls (the open catalog stays open; the resolver never embeds it).
+	// framework's controls (the resolver never embeds the private catalog).
 	Resolve(ctx context.Context, in ProfileInput, cat FrameworkCatalog) (*ResolvedProfile, error)
 }
 
@@ -67,7 +67,7 @@ type ProfileInput struct {
 	Framework string
 }
 
-// FrameworkCatalog exposes the open framework catalog to the resolver without the
+// FrameworkCatalog exposes the edition's framework catalog to the resolver without the
 // resolver importing the catalog internals: it maps a known framework id and an OSCAL
 // source/import href to that framework's ordered control-id list.
 type FrameworkCatalog interface {
@@ -127,16 +127,13 @@ type ProfileRef struct {
 	SelectedIDs       []string
 }
 
-// NewFrameworkCatalog returns the open framework-catalog view (FrameworkCatalog) over the
-// in-repo catalog — the bridge the OSCAL resolver consumes to map an import/source href to
-// a known framework and to bound a selection to that framework's controls. The module uses
-// it internally at ingestion; it is exported so the commercial resolver can be exercised
-// against the REAL catalog (integration tests, composition root) without the open module
-// exposing its internals or importing the closed add-on.
+// NewFrameworkCatalog returns the edition's catalog adapter. The OSCAL resolver uses
+// it to map import/source hrefs and bound control selections. Business supplies the
+// private catalog; Community returns no frameworks.
 func NewFrameworkCatalog() FrameworkCatalog { return frameworkCatalogAdapter{} }
 
-// frameworkCatalogAdapter is the open implementation of FrameworkCatalog over the
-// in-repo framework catalog (frameworks.go). It is the ONLY view of the catalog the
+// frameworkCatalogAdapter is the shared implementation of FrameworkCatalog over the
+// edition's framework map. It is the ONLY view of the catalog the
 // resolver gets — it never sees control text, capabilities or status.
 type frameworkCatalogAdapter struct{}
 
@@ -254,7 +251,7 @@ func recordToProfileDTO(rec model.Record) registeredProfileDTO {
 // file directly); the optional framework hint and scope note are query parameters.
 func (m *Module) handleRegisterOSCALProfile(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	if m.profileResolver == nil {
-		writeJSON(w, http.StatusNotImplemented, errorBody("OSCAL profile/SSP ingestion requires the Olivares enterprise add-on (oscalingest); not linked in this build"))
+		writeJSON(w, http.StatusNotImplemented, errorBody("OSCAL profile/SSP ingestion requires the Olivares Business edition (oscalingest); not linked in this build"))
 		return
 	}
 	doc, ok := readBoundedBody(w, r, "OSCAL document")

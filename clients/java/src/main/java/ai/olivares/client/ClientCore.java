@@ -7,9 +7,11 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLEncoder;
+import java.net.UnknownHostException;
 import java.net.http.HttpClient;
 import java.net.http.HttpHeaders;
 import java.net.http.HttpRequest;
@@ -19,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Set;
@@ -51,6 +54,7 @@ public abstract class ClientCore {
     private static final char[] HEX = "0123456789ABCDEF".toCharArray();
 
     private final String endpoint;
+    private final String endpointOrigin;
     private final String token;
     private final String tenant;
     private final int maxRetries;
@@ -77,15 +81,16 @@ public abstract class ClientCore {
             ep = ep.substring(0, ep.length() - 1);
         }
         this.endpoint = ep;
+        this.endpointOrigin = origin(u);
         this.token = options.token;
         this.tenant = options.tenant;
         this.maxRetries = options.maxRetries;
         this.timeout = options.timeout;
         String ua = "olivares-client-java/" + VERSION + " (api " + ApiMetadata.API_VERSION + ")";
         this.userAgent = options.userAgent != null ? options.userAgent + " " + ua : ua;
-        // A control plane does not 3xx its JSON endpoints; never follow redirects,
-        // which would forward the bearer token + tenant header cross-origin. A 3xx
-        // surfaces as an OlivaresApiException (code http_3xx) instead.
+        // The default transport never follows redirects (3xx stays an API error).
+        // A supplied client's own policy applies; check its final response origin
+        // before consuming the body, without cloning or replacing that client.
         this.httpClient = options.httpClient != null ? options.httpClient
                 : HttpClient.newBuilder()
                         .followRedirects(HttpClient.Redirect.NEVER)
@@ -260,6 +265,11 @@ public abstract class ClientCore {
 
         byte[] raw;
         try (InputStream in = resp.body()) {
+            String finalOrigin = origin(resp.uri());
+            if (!endpointOrigin.equals(finalOrigin)) {
+                throw new IllegalStateException("olivares: the server redirected to " + finalOrigin
+                        + "; set the client's base URL to it");
+            }
             raw = readLimited(in);
         } catch (IOException e) {
             throw new UncheckedIOException(e);
@@ -272,6 +282,31 @@ public abstract class ClientCore {
             return text;
         }
         throw apiError(status, text, resp.headers());
+    }
+
+    private static String origin(URI uri) {
+        String scheme = uri.getScheme().toLowerCase(Locale.ROOT);
+        String host = uri.getHost();
+        if (host.startsWith("[")) {
+            // Parse the numeric address without looking up its case-sensitive zone.
+            // Keep IPv4-mapped IPv6 distinct from IPv4 despite JDK unmapping.
+            int scope = host.indexOf('%');
+            String zone = scope < 0 ? "" : host.substring(scope, host.length() - 1);
+            String numeric = scope < 0 ? host : host.substring(0, scope) + "]";
+            try {
+                String address = InetAddress.getByName(numeric).getHostAddress();
+                host = "[" + (address.contains(":") ? address : "::ffff:" + address) + zone + "]";
+            } catch (UnknownHostException e) {
+                throw new IllegalArgumentException("invalid IPv6 origin", e);
+            }
+        } else {
+            host = host.toLowerCase(Locale.ROOT);
+        }
+        int port = uri.getPort();
+        if ((scheme.equals("http") && port == 80) || (scheme.equals("https") && port == 443)) {
+            port = -1;
+        }
+        return scheme + "://" + host + (port < 0 ? "" : ":" + port);
     }
 
     private static byte[] readLimited(InputStream in) throws IOException {

@@ -108,7 +108,7 @@ func TestTenantCommunicationDataBindsTenantWithoutNestedUnitOfWork(t *testing.T)
 	tenant := model.NewTenantID()
 	scope := &communicationTxCapabilityScope{}
 	recording := &recordingCommunicationModuleData{scope: scope}
-	m := &Module{data: recording}
+	m := &Module{Dependencies: &Dependencies{Data: recording}}
 	data := m.communicationData(tenant)
 
 	viewCallbacks := 0
@@ -149,7 +149,7 @@ func TestTenantCommunicationDataBindsTenantWithoutNestedUnitOfWork(t *testing.T)
 	}
 
 	invalidData := &recordingCommunicationModuleData{scope: scope}
-	invalidModule := &Module{data: invalidData}
+	invalidModule := &Module{Dependencies: &Dependencies{Data: invalidData}}
 	if err := invalidModule.viewCommunication(ctx, DirectoryScopeRef{}, func(store.Scope) error {
 		return nil
 	}); !errors.Is(err, ErrInvalidCommunicationModel) {
@@ -1228,8 +1228,8 @@ func TestCommunicationRequestAuthorityRejectsReenteredModuleMutationCallback(t *
 	request := communicationObservedRequestAuthoritySnapshot(
 		t, fixture, now.Add(-time.Minute), now.Add(time.Minute),
 	)
-	reentering := &reenteringCommunicationModuleData{inner: fixture.m.data}
-	fixture.m.data = reentering
+	reentering := &reenteringCommunicationModuleData{inner: fixture.m.Data}
+	fixture.m.Data = reentering
 	callbackCalls := 0
 	err := fixture.m.mutateCommunicationTransaction(
 		ctx,
@@ -1994,8 +1994,8 @@ func TestCommunicationClaimAuthorityFinalDBTimeRollsBackExpiredEffect(t *testing
 			// this Claim is live. Only communicationTx's post-lock observations are
 			// advanced, deterministically modeling time passing after the OCC touch.
 			finalClock := &testClock{now: lease.ExpiresAt.Add(-time.Minute)}
-			fixture.m.data = &communicationGuardRollbackClockData{
-				inner: fixture.m.data, clock: finalClock,
+			fixture.m.Data = &communicationGuardRollbackClockData{
+				inner: fixture.m.Data, clock: finalClock,
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 			defer cancel()
@@ -2145,7 +2145,7 @@ func TestCommunicationRequestAuthorityFinalDBTimeRollsBackEffect(t *testing.T) {
 	for _, backend := range communicationSchemaBackends(t) {
 		t.Run(backend.name, func(t *testing.T) {
 			fixture := communicationOpenFixtureWithClock(t, backend, model.SystemClock{})
-			baseData := fixture.m.data
+			baseData := fixture.m.Data
 			for _, test := range []struct {
 				name      string
 				finalTime func(time.Time, time.Time) time.Time
@@ -2173,7 +2173,7 @@ func TestCommunicationRequestAuthorityFinalDBTimeRollsBackEffect(t *testing.T) {
 						t, fixture, observedAt, freshUntil,
 					)
 					finalClock := &testClock{now: base}
-					fixture.m.data = &communicationRequestRollbackClockData{
+					fixture.m.Data = &communicationRequestRollbackClockData{
 						inner: baseData, clock: finalClock,
 					}
 					scope := DirectoryScopeRef{
@@ -2324,8 +2324,8 @@ func TestCommunicationTxAuditAppenderIsNarrowAndSharesMutation(t *testing.T) {
 	directoryScope := DirectoryScopeRef{
 		TenantID: fixture.tenant, WorkspaceID: fixture.workspace,
 	}
-	counting := &countingCommunicationModuleData{inner: fixture.m.data}
-	fixture.m.data = counting
+	counting := &countingCommunicationModuleData{inner: fixture.m.Data}
+	fixture.m.Data = counting
 
 	var committed model.AuditEvent
 	err := fixture.m.mutateCommunication(ctx, directoryScope, func(tx *communicationTx) error {
@@ -2453,8 +2453,8 @@ func TestMutateCommunicationRejectsForeignWorkspaceWithoutNestedTransaction(t *t
 		t.Fatalf("read foreign workspace: %v", err)
 	}
 
-	counting := &countingCommunicationModuleData{inner: fixture.m.data}
-	fixture.m.data = counting
+	counting := &countingCommunicationModuleData{inner: fixture.m.Data}
+	fixture.m.Data = counting
 	callbackCalls := 0
 	err := fixture.m.mutateCommunication(ctx, DirectoryScopeRef{
 		TenantID: fixture.tenant, WorkspaceID: foreignWorkspace,

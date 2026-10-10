@@ -114,7 +114,7 @@ if [ -n "$others" ]; then
 fi
 if grep -Eq 'release[[:space:]]+sign-manifest' "$REL"; then
   grep -Eq '^[[:space:]]*environment:' "$REL" \
-    || fail "release.yml signs the manifest but declares no environment — the mitigation for orden 37 is the protected environment, and without it the private half is readable by any run"
+    || fail "release.yml signs the manifest but declares no environment — the mitigation for order 37 is the protected environment, and without it the private half is readable by any run"
 fi
 
 # The OTA private half may be named ONLY in release.yml and ONLY as a secrets.*

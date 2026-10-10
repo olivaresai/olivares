@@ -254,8 +254,8 @@ func TestDeliveryDispatchSuccessorRollsBackBothRowsOnCreateFailure(t *testing.T)
 	fixture, service := newDeliveryDispatchSuccessorFixture(t)
 	failed := deliveryDispatchSuccessorRowsForTest(t, fixture)[0]
 	failure := errors.New("successor create failed")
-	fixture.m.data = &directNoticeExactAckWriteFailureData{
-		inner: fixture.m.data, kind: deliveryDispatchKind,
+	fixture.m.Data = &directNoticeExactAckWriteFailureData{
+		inner: fixture.m.Data, kind: deliveryDispatchKind,
 		operation: "create_with_id", failure: failure,
 	}
 	_, err := service.CreateSuccessor(context.Background(), fixture.scope,

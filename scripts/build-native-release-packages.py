@@ -20,19 +20,15 @@ from package_repository_lib import read_checksum_rows, digest_file, regular_file
 
 
 def valid_version(version: str, snapshot: bool) -> bool:
-    if snapshot:
-        return bool(re.fullmatch(r"[0-9]+\.[0-9]+(?:\.[0-9]+)?-[A-Za-z0-9.-]+", version))
-    if re.fullmatch(r"[0-9]{2}\.(?:[1-9]|1[0-2])(?:\.[1-9][0-9]*)?", version):
-        return True
-    # Reproducing historical packages is a reader operation, never a new tag cut.
-    if re.fullmatch(r"[0-9]{2}\.(?:[1-9]|1[0-2])\.0", version):
-        return tuple(map(int, version.split('.')[:2])) <= (26, 10)
-    return False
+    # Rehearsal drafts keep the bare version; local GoReleaser snapshots may
+    # carry a commit suffix. Production never admits that suffix.
+    shape = r"[0-9]+\.[0-9]+(?:-SNAPSHOT-[A-Za-z0-9]+)?" if snapshot else r"[0-9]+\.[0-9]+"
+    return bool(re.fullmatch(shape, version))
 
 
 def build(root: Path, dist: Path, version: str, epoch: int, recipe: Path, snapshot: bool) -> list[Path]:
     if not valid_version(version, snapshot):
-        raise ValueError('version must be YY.M or YY.M.N with N >= 1; zero patches are historical only')
+        raise ValueError('version must be MAJOR.MINOR (or its build snapshot)')
     if epoch < 0:
         raise ValueError('source date epoch must be nonnegative')
     stamp = datetime.datetime.fromtimestamp(epoch, datetime.timezone.utc).isoformat().replace('+00:00', 'Z')
@@ -49,7 +45,11 @@ def build(root: Path, dist: Path, version: str, epoch: int, recipe: Path, snapsh
     # A private stage keeps a failed build from replacing an admitted artifact set.
     with tempfile.TemporaryDirectory(prefix='native-release-', dir=dist) as temporary:
         stage = Path(temporary)
+        unit = stage / 'olivares.service'
+        unit.write_bytes(subprocess.check_output(['sh', str(root / 'scripts/render-package-systemd.sh')]))
+        unit.chmod(0o644)
         binaries: dict[str, Path] = {}
+        notices: dict[str, Path] = {}
         for arch in ('amd64', 'arm64'):
             archive = dist / f'olivares_{version}_linux_{arch}.tar.gz'
             regular_file(archive, 'base archive')
@@ -59,6 +59,13 @@ def build(root: Path, dist: Path, version: str, epoch: int, recipe: Path, snapsh
                 members = [m for m in bundle.getmembers() if Path(m.name).name == 'olivares']
                 if len(members) != 1 or not members[0].isfile() or not members[0].mode & 0o111:
                     raise ValueError('archive must carry exactly one regular executable olivares binary')
+                notice_members = [m for m in bundle.getmembers() if m.name == 'NOTICE']
+                if len(notice_members) != 1 or not notice_members[0].isfile() or notice_members[0].size == 0:
+                    raise ValueError('archive must carry exactly one nonempty regular NOTICE')
+                notice = stage / f'NOTICE-{arch}'
+                with bundle.extractfile(notice_members[0]) as source, notice.open('wb') as target:
+                    shutil.copyfileobj(source, target)
+                notices[arch] = notice
                 binary = stage / f'olivares-{arch}'
                 with bundle.extractfile(members[0]) as source, binary.open('wb') as target:
                     shutil.copyfileobj(source, target)
@@ -77,6 +84,11 @@ def build(root: Path, dist: Path, version: str, epoch: int, recipe: Path, snapsh
                 for key in ('id', 'ids', 'formats'):
                     config.pop(key, None)
                 config.update(version=version, arch=arch, platform='linux', mtime=stamp)
+                for content in config['contents']:
+                    if content.get('src') == 'NOTICE':
+                        content['src'] = str(notices[arch])
+                    if content.get('src') == 'packaging/systemd/olivares.service':
+                        content['src'] = str(unit)
                 config['contents'].append({'src': str(binaries[arch]), 'dst': f'{bindir}/olivares',
                                            'file_info': {'mode': 0o755, 'mtime': stamp}})
                 config_file = stage / f'config-{arch}.json'

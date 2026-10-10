@@ -43,6 +43,53 @@ einer festen Per-Agent-Attribution, die die harte Abhängigkeit bleibt (ein gete
 selbst einen Clean-Tier-Store auf `approximate` zusammenbrechen).
 :::
 
+## Prozessmodus je Typ
+
+Jeder Typ läuft in genau einem von der Engine festgelegten Prozessmodus:
+
+- **Out-of-Process-Plugin.** Die Engine bettet den Connector als separates Programm
+  ein, startet es als eingegrenzten Unterprozess (begrenzte Umgebung; dedizierter
+  Nutzer und cgroup, soweit der Host sie erlaubt) und kommuniziert über gRPC mit
+  AutoMTLS. Seine Abhängigkeiten werden nie in die Engine gelinkt. Quelltypen:
+  `claude`, `cowork`, `kafka`, `amqp`, `nats`, `mqtt`, `cloudqueue`, `debezium`,
+  `envoy`, `hubble`. Zieltypen: `kafka`, `amqp`, `cloudqueue`. Ein Build ohne
+  `task build:connectors` bettet sie nicht ein; beim Boot wird für jeden
+  konfigurierten Connector gewarnt.
+- **In-Process.** Alle anderen Typen dieser Seite. Der Connector wird in das
+  Engine-Binary gelinkt und läuft im Engine-Prozess; eine Panic wird abgefangen,
+  die Quelle als `failed` markiert.
+- **Externes Plugin.** Eine mit `plugin` konfigurierte Quelle oder ein Ziel
+  (Binary-Pfad, gepinnter Digest und gegen `connector_trust` geprüfte Signatur)
+  läuft stets außerhalb des Prozesses, ebenso eingegrenzt. Die Programme unter
+  `connectors/<kind>/cmd/` für In-Process-Typen sind nicht Teil des Releases.
+  Bauen Sie eines und lassen Sie es als externes Plugin zu
+  ([Plugin betreiben](/de/how-to/build-a-connector/#5-betreiben-was-ihre-benutzer-tun)),
+  um den Connector in einem eigenen Prozess zu betreiben.
+
+Stirbt der Prozess eines **Quell**-Plugins, startet die Engine dasselbe Binary
+erneut, prüft bei externen Plugins den gepinnten Digest nochmals, öffnet es mit
+den Quelleinstellungen und setzt die Erfassung fort. Vor dem ersten Neustart
+wartet sie etwa eine Sekunde; die Wartezeit verdoppelt sich bei weiteren Neustarts
+bis auf fünf Minuten und fällt nach fünf Minuten Laufzeit wieder auf eine Sekunde.
+Vom Erkennen des toten Prozesses bis zum Start des neuen meldet die Quelle `failed`,
+bei fehlgeschlagenen Versuchen mit dem Neustartfehler.
+
+Ein **Ziel**-Plugin wird ebenso neu gestartet, wenn eine Lieferung scheitert und
+sein Prozess als tot erkannt wird: Die Engine startet das Binary erneut (bei
+externen Plugins nach erneuter Digest-Prüfung) und öffnet es mit den Zieleinstellungen.
+Die Lieferung, die den toten Prozess erkannt hat, bleibt fehlgeschlagen, bei
+verweigertem Neustart mit dessen Fehler. Die Benachrichtigungs-Retry-Leiter
+wiederholt sie gegen den neuen Prozess. Der erste Neustart erfolgt sofort;
+spätere Versuche warten eine Sekunde, verdoppeln bis auf fünf Minuten und beginnen
+von vorn, sobald der letzte Versuch älter als fünf Minuten ist. Ein Ziel ohne
+Lieferung wird erst neu gestartet, wenn eine Lieferung eintrifft.
+
+Ein neu gestartetes Plugin verwendet seine ursprünglichen Connector-Einstellungen.
+Ein geändertes oder rotiertes Secret erreicht es deshalb erst beim Neuladen der
+Konfiguration oder Neustart der Engine, wie bei einem nie abgestürzten Plugin.
+Ein Plugin mit lebendem Prozess, dessen Erfassung oder Lieferung scheitert, wird
+nicht neu gestartet: Dieser Fehler gehört zum Connector selbst.
+
 ## Cooperative — Claude & Vendor-Telemetrie
 
 Die Quellen mit der höchsten Genauigkeit, wenn vorhanden. Die Claude-Code-Runtime-Quelle läuft
@@ -189,9 +236,10 @@ Framework natives OTEL besitzt, kommt Live-Nutzung weiterhin über den obigen `g
 | `openhands` | OpenHands `config.toml` + Umgebung → Sandbox-/Model-Pinning-/Credential-/Telemetry-Posture, permitted MCP-/Action-Kanten | Nur per Konfiguration deklariert; Live-Nutzung über natives OTEL `gen_ai.*` |
 | `goose` | Goose (Block) `profiles.yaml` + Umgebung → Admin-Settings-/Model-Pinning-/Extension-/Tool-Approval-Posture, permitted Extension-Kanten | Nur per Konfiguration deklariert |
 | `cline` | Cline-/Kilo-Code-VSCode-Namespaces in `settings.json` → Auto-Approve-/MCP-Allowlist-/Credential-/Model-Pinning-Posture | Nur per Konfiguration deklariert; upstream kein natives OTEL |
-| `grok` | Grok Build (xAI) — der Terminal-Coding-Agent, gelesen aus seiner LOKALEN Konfiguration: Hook-Verdrahtung, Events mit dokumentiertem Veto und deklarierbare Governance-Posture | **Nicht der xAI-API-Connector** (`xai` liest Katalog und Kosten, darunter `grok-build-0.1` als MODELL). Dieser liest den AGENT, die beiden überschneiden sich nicht. Die BEOBACHTUNGSHÄLFTE läuft über den OTLP-Ingest, den Grok Build bereits emittiert. `PostureEnforced` beansprucht nur `PreToolUse`, das einzige Event mit dokumentiertem Veto; der Rest ist `observed` |
+| `grok` | Grok Build (xAI), der Terminal-Coding-Agent: lokale Konfiguration, Hook-Verdrahtung, Events mit dokumentiertem Veto und deklarierte Governance-Posture | Konfigurationsdeklarierte Agenten-Posture. Der `xai`-API-Connector liest Modellkatalog und Kosten einschließlich `grok-build-0.1` als Modell; dieser Connector liest den Agenten. Live-Beobachtung nutzt Grok Builds OTLP-Ingest. `PostureEnforced` gilt nur für `PreToolUse`, das einzige Event mit dokumentiertem Veto; andere Events sind `observed` |
 | `openclaw` | OpenClaw `openclaw.json` (JSON5-Erkennung, begrenztes `$include`) → Gateway-/Channel-/Tool-/Sandbox-/Skill-/Model-Posture pro Agent, deklarierte Channel-/Skill-/Model-Kanten | Nur per Konfiguration deklariert; upstream kein Inline-PEP-Hook verifiziert |
 | `hermes` | Hermes Agent `config.yaml` + Profilbäume + Managed-Scope → Terminal-/Channel-/Skill-/Security-/Model-/MCP-Posture, deklarierte Kanten | Nur per Konfiguration deklariert; upstream weder Inline-PEP-Hook noch natives OTEL verifiziert |
+| `paperclip` | Paperclip-REST-API (Board-API-Key, nur GET) → Unternehmen als Gruppensammlungen und Agenten als NHI-Roster-Zeilen (`paperclip/<adapterType>`, Rolle, Titel, `reports_to`), Laufzahlen abgeschlossener Tage, beratende Kostensamples (`cost_type=paperclip`) | Nur Beobachtung: startet oder beschränkt Paperclips Agenten nicht. Kosten sind Tagesaggregate, da Paperclip keine Rohkosten-Eventliste hat; ein verweigerter Teilabruf wird als Coverage-Finding gemeldet |
 | `google-adk` | Exportierte Google-ADK-2.0-Session-JSON → Agent-/App-Inventar, Subagents, Tool-Funktionsaufrufe, Transfers, Approved-Tool-Drift, Vertex-`reasoningEngine`-Korrelation | Read-only-Export; niemals Nachrichteninhalt. Verschieden von der `google-agent`-Plattformoberfläche |
 | `agents-md` | Repo-Walk von Agent-Instruktionsdateien (AGENTS.md und Agent-spezifische Memory-/Instruktionsdateien) → SHA-256-Baseline-Drift + Scan auf Instruction Injection / verstecktes Unicode / Secrets | Minimal Data: bereinigte Pfade + gehashte Details, niemals Inhalt |
 | `mcpb` | Installierte / verteilte `.mcpb`-Desktop-Erweiterungen → Manifest-Posture-Scan, Enterprise-Allowlist-Drift, PKCS#7-Signaturprüfung | PERMITTED-vs-OBSERVED auf der Extension-Oberfläche |
@@ -225,9 +273,10 @@ Client der Org-/Tenant-Control-Plane einer Cloud: er entdeckt die Resource-**Top
 (Inventar-Kanten, `mode=unknown`, attributed) und liest den nativen **Audit-Feed** der Cloud
 für Control-Plane-**Aktivität** (`identity→…api`-Kanten, read/write klassifiziert). Sie
 vervollständigen die Matrix, die AWS bereits mit `s3cloudtrail` (Data Plane) plus dem
-Account-Level-IAM/CloudTrail-`aws`-Connector verankert. Beide laufen **in-process** und sind
-**offline-safe** (keine Credential ⇒ Gather ist ein No-op); beide beobachten nur die Control Plane —
-niemals einen Payload, ein Secret, einen Key oder eine Resource-Eigenschaft.
+Account-Level-IAM/CloudTrail-`aws`-Connector verankert. Beide laufen **in-process**, wie jeder Typ, der unter
+[Prozessmodus je Typ](#prozessmodus-je-typ) nicht als Plugin aufgeführt ist.
+Für einen eigenen Prozess bauen Sie das Programm `connectors/<kind>/cmd/`
+und lassen es als externes Plugin zu.
 
 | Kind | Beobachtet | Ehrliche Coverage |
 |---|---|---|
@@ -310,6 +359,7 @@ Rolle / einem Prozess / einer geteilten Credential statt einem aufgelösten Agen
 | `egress-proxy` | Egress-Proxy-Verdict-Log → L7-Egress-Kanten | approximate |
 | `kong-audit` | Kong-Audit-Logs → Config-Change-Findings | approximate |
 | `ai-gateway` | Envoy AI Gateway Usage-Records → **Kosten**-Proben (FinOps) | Cost-Stream |
+| `git` | Bindung für Plain-Git-Veröffentlichung: der Roster-Eintrag, der ein SSH- oder HTTPS-Git-Remote für gitpublish-Pushes genehmigt | Beobachtet nichts; nur Push (ein einfaches Remote hat keine Pull-Request- oder Merge-API) |
 | `github` | GitHub-Repositories als Agent-Datenquellen → beobachtete R/RW-Zugriffskanten (Webhook-first, API-Poll-Reconciliation) + permitted ACL-Kanten | observed + permitted; Streaming (`poll_seconds: 0`) |
 | `gitlab` | GitLab-Repositories → beobachtete R/RW-Zugriffskanten + permitted ACL-Kanten | observed + permitted; Streaming (`poll_seconds: 0`) |
 
@@ -464,7 +514,7 @@ keine Coverage-Stufe. Sie werden separat von Quellen verdrahtet.
 
 In-process-Ziel-Kinds: `slack`, `teams`, `pagerduty`, `opsgenie`, `webhook`, `siem`,
 `splunkhec`, `syslog`, `servicenow`, `jira`, `email`, `twilio`, `chronicle`, `datadog`,
-`elastic`, `snmp`, `filelog`, `otlplog` (OTLP/HTTP-Logs) und `s3archive` (der S3-Object-
+`elastic`, `snmp`, `filelog`, `otlplog` (OTLP/HTTP-Logs) und `s3archive` (Business: Regulated Operations) (der S3-Object-
 Lock-WORM-Sink — ein unveränderliches, auf Lock geprüftes Objekt pro Benachrichtigung).
 
 Drei Broker-Egress-Kinds laufen **out-of-process** als eingebettete Plugins (ihre Wire-Protocol-

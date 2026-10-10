@@ -3,6 +3,10 @@ title: "Governance und Freigabe (Human-in-the-Loop)"
 description: "Wie ein Operator das Estate steuert: Identität und Berechtigungen, das Deny-by-Default-RBAC-Modell, die Restrict-only-Policy-Naht und die Human-in-the-Loop-Posture, bei der Entscheidungen im Audit-Ledger festgehalten werden."
 ---
 
+:::note[Business]
+Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, `olivares audit verify` und `olivares dr backup`; Export liefert HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und DDIL-Transfers mit Audit-Segmenten erfordern ebenfalls Business.
+:::
+
 Diese Seite ist für den Operator, der mindestens eine Quelle verbunden hat und nun das
 Estate **steuern** (governance) muss: entscheiden, wer und was handeln darf, prüfen, was die Plattform
 zur Oberfläche bringt, und darauf reagieren. Governance lebt in **Modul VI (Identität, Berechtigungen,
@@ -205,3 +209,7 @@ alles andere, weshalb das Lesen davon eine Editor-und-aufwärts-Aktion ist.
   (Modul IX) komponieren.
 - [Eine Quelle verbinden](/de/how-to/connect-a-source/) — die Signale verdrahten, aus denen Drift und
   Findings gebaut werden.
+
+## Editionen und Genehmigungen (0.1)
+
+Community behält die Genehmigungsengine, mindestens zwei verschiedene Personen für CRITICAL-Aktionen, die doppelte Kontrolle des Kill-Switch und Richtlinien, die eine Prüfung verlangen oder Risikostufe beziehungsweise Quorum erhöhen. Richtlinien zur Senkung der Risikostufe und der Notfallzugriff per Break-glass gehören zur Business-Basis. Gespeicherte Daten bleiben lesbar und exportierbar, dürfen aber weder Community-Standardwerte senken noch Notfallzugriffe erlauben.

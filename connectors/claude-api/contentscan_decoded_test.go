@@ -217,7 +217,7 @@ func TestCollectDecodedArgumentVariantsAndMalformedEncoding(t *testing.T) {
 	for _, text := range []string{encoded, url.QueryEscape(plain), plain} {
 		requireCollectedChannel(t, c, ChannelServerToolUse, roleAssistant, text)
 	}
-	for _, value := range []string{"%41%GG", "////////////"} {
+	for _, value := range []string{"%41%GG", "++++++++++++", "//////////8="} {
 		c := CollectRequestContent(reqWithUserBlocks(TextBlock(value)))
 		if !c.Unscanned {
 			t.Fatal("explicit malformed or binary encoding lost its opaque marker")
@@ -631,7 +631,7 @@ func countOpaqueRef(c CollectedContent, kind, role, ref string) int {
 func TestCollectDecodedOpaqueMarkersArePerSource(t *testing.T) {
 	const reason = "encoded/undecodable-or-oversized"
 	// 10,000 explicit-alphabet candidates that decode to no printable text.
-	invalid := strings.Repeat("//////////// ", 10000)
+	invalid := strings.Repeat("++++++++++++ ", 10000)
 	c := CollectRequestContent(reqWithUserBlocks(TextBlock(invalid)))
 	if n := countOpaqueRef(c, ChannelMessageText, roleUser, reason); !c.Unscanned || n != 1 {
 		t.Fatalf("one text source carries %d opaque markers, want 1", n)

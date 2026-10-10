@@ -19,6 +19,7 @@ import (
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/governance"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 func TestSessionClaudeApprovalPublishesStructuredReview(t *testing.T) {
@@ -36,7 +37,7 @@ func TestSessionClaudeApprovalPublishesStructuredReview(t *testing.T) {
 	service := f.h.set.gov.EngineApprovals()
 	var pending governance.Approval
 	for pending.ID == "" {
-		items, _, err := service.List(ctx, f.tenant, hookActionCapability, "pending", "")
+		items, _, err := service.List(ctx, f.tenant, hookpep.ActionCapability, "pending", "")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -120,7 +121,7 @@ func TestSessionClaudeStructuredReviewMatchesEffectiveCommandAndPaths(t *testing
 			service := h.set.gov.EngineApprovals()
 			h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 			h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-			d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow", Rules: []hookPolicyRule{{Tool: tool, Decision: "ask", Rewrite: map[string]any{field: effective}}}}, authr: credentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: service, store: h.st, clock: time.Now, log: discardLog()}
+			d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow", Rules: []hookpep.PolicyRule{{Tool: tool, Decision: "ask", Rewrite: map[string]any{field: effective}}}}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, Store: h.st, Clock: time.Now, Log: discardLog()})
 			input := map[string]any{field: original}
 			const privateContent = "private-file-content-must-never-be-reviewed"
 			if tool != "Bash" {
@@ -137,7 +138,7 @@ func TestSessionClaudeStructuredReviewMatchesEffectiveCommandAndPaths(t *testing
 			defer func() { cancel(); <-done }()
 			var pending governance.Approval
 			for pending.ID == "" {
-				items, _, err := service.List(ctx, tenant, hookActionCapability, "pending", "")
+				items, _, err := service.List(ctx, tenant, hookpep.ActionCapability, "pending", "")
 				if err != nil {
 					t.Fatal(err)
 				}

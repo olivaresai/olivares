@@ -57,7 +57,7 @@ let manifest
 try {
   manifest = JSON.parse(readFileSync(join(ROOT, 'brand.manifest.json'), 'utf8'))
 } catch (e) {
-  unverified(`no pude leer brand.manifest.json: ${e.message}`)
+  unverified(`could not read brand.manifest.json: ${e.message}`)
 }
 
 /** El naranja de marca, tomado del canon y no escrito aquí: si cambia allí, cambia el gate. */
@@ -77,7 +77,7 @@ function brandAccent() {
 // --- descubrimiento: quién es superficie de portal ---------------------------------------------
 function portalSources() {
   const dir = join(ROOT, PORTAL_DIR)
-  if (!existsSync(dir)) unverified(`no existe ${PORTAL_DIR}`)
+  if (!existsSync(dir)) unverified(`${PORTAL_DIR} does not exist`)
   const out = []
   const walk = (d, rel) => {
     for (const e of readdirSync(d, { withFileTypes: true })) {
@@ -128,7 +128,7 @@ function pairFromRule(src, re) {
 
 const problems = []
 const sources = portalSources()
-if (sources.length === 0) unverified('el descubrimiento no encontró NINGUNA fuente de portal')
+if (sources.length === 0) unverified('discovery found NO portal source files')
 
 const allSrc = sources.map((s) => readFileSync(s.abs, 'utf8')).join('\n')
 
@@ -136,14 +136,14 @@ const allSrc = sources.map((s) => readFileSync(s.abs, 'utf8')).join('\n')
 for (const p of PAIRS) {
   const found = pairFromRule(allSrc, p.sel)
   if (!found) {
-    problems.push(`${p.where}: no pude extraer el par color/fondo — la regla cambió de forma`)
+    problems.push(`${p.where}: could not extract the foreground/background pair — the rule format changed`)
     continue
   }
   const ratio = contrast(found.fg, found.bg)
   if (ratio < 4.5) {
     problems.push(
-      `${p.where}: ${found.fg} sobre ${found.bg} = ${ratio.toFixed(2)}:1, por debajo de AA (4.5:1). ` +
-      `El token accent-foreground existe para esto.`,
+      `${p.where}: ${found.fg} on ${found.bg} = ${ratio.toFixed(2)}:1, below AA (4.5:1). ` +
+      `Use the accent-foreground token for this.`,
     )
   }
 }
@@ -159,29 +159,29 @@ for (const p of PAIRS) {
 // cambia el naranja del botón, esto lo dice; si cambia el canon y no el portal, también.
 const accent = brandAccent()
 if (!accent) {
-  unverified('el naranja de marca no aparece en brand.manifest.json: el canon cambió')
+  unverified('the brand orange is absent from brand.manifest.json: the canonical reference changed')
 }
 for (const p of PAIRS) {
   const found = pairFromRule(allSrc, p.sel)
   if (!found) continue // ya reportado arriba
   if (found.bg.toLowerCase() !== accent.toLowerCase()) {
     problems.push(
-      `${p.where}: el relleno es ${found.bg} y el naranja del canon es ${accent}. ` +
-      `O el portal derivó, o el canon cambió y nadie lo trajo aquí.`,
+      `${p.where}: the fill is ${found.bg}, but the canonical orange is ${accent}. ` +
+      `Either the portal drifted, or the canonical reference changed without updating the portal.`,
     )
   }
 }
 
 if (problems.length > 0) {
-  console.error(`check-portal-brand: BROKEN — ${problems.length} problema(s) en ${sources.length} fuente(s):`)
+  console.error(`check-portal-brand: BROKEN — ${problems.length} problem(s) across ${sources.length} source file(s):`)
   for (const p of problems) console.error(`  · ${p}`)
   console.error('')
-  console.error('  El portal es lo primero que ve un cliente que acaba de pagar. Un par por debajo')
-  console.error('  de AA es accesibilidad, y hay un VPAT publicado que responde por ello.')
+  console.error('  The portal is the first thing a customer sees after paying. A pair below')
+  console.error('  AA is an accessibility issue covered by the published VPAT.')
   process.exit(1)
 }
 
 console.log(
-  `check-portal-brand: CLEAN — ${sources.length} fuente(s) de portal, ${PAIRS.length} par(es) de ` +
-  `contraste sobre AA, y el naranja del canon (${accent}) presente.`,
+  `check-portal-brand: CLEAN — ${sources.length} portal source file(s), ${PAIRS.length} contrast pair(s) ` +
+  `above AA, with the canonical orange (${accent}) present.`,
 )

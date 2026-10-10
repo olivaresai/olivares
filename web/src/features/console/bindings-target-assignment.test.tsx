@@ -2,21 +2,17 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md.
 //
-// EL SUJETO SOBRE EL QUE SE DECIDE, EN LA PANTALLA QUE DECIDE.
+// Show the subject of a decision on the screen where that decision is made.
 //
-// Puso en esta cola el PERFIL —de qué a qué— y quedaba la otra mitad: SOBRE QUÉ. La fila
-// pintaba `target_id` CRUDO (`bindings-tab.tsx`, celda de operación), un identificador opaco al
-// lado de una decisión de seguridad: no dice si la asignación es de lectura o de escritura, ni a
-// qué espacio va, ni si está activa.
+// Added the profile (from/to), but the subject was still missing. The operation cell
+// in `bindings-tab.tsx` displayed raw `target_id`: an opaque identifier beside a security
+// decision. It cannot identify read/write mode, the target workspace, or active status.
 //
-// ⛔ CUATRO RESPUESTAS, Y NINGUNA PUEDE COLAPSARSE EN OTRA:
-//   resuelta · sin permiso · no encontrada · no se sabe
-//
-// Las dos que la tentación funde son «sin permiso» y «no encontrada»: la primera se sabe sin
-// mirar el listado; la segunda es una AFIRMACIÓN sobre el estado del mundo que sólo se puede
-// hacer con el listado COMPLETO. Y `handleListAssignments` devuelve `has_more` sin drenar el
-// cursor (`assignment.go:109`) sobre un repositorio que pagina a 100, así que la lista puede
-// venir truncada — la misma trampa que documentó para `guard-postures`.
+// Keep four outcomes distinct: resolved, no permission, not found, and unknown.
+// Lack of permission can be determined without reading the list; not-found is a factual
+// claim requiring a complete list. `handleListAssignments` returns `has_more` without
+// draining the cursor (`assignment.go:109`) over a repository that paginates at 100.
+// The list can therefore be truncated, the same trap documented for `guard-postures`.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
 import type { ReactElement, ReactNode } from 'react'

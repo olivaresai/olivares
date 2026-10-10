@@ -311,19 +311,25 @@ func installDirectoryInventoryTx(ctx context.Context, tx *sql.Tx, roles guardRol
 		_, err := verifyPostgresDirectoryInventory(ctx, tx, roles)
 		return err
 	}
-	for _, stmt := range []string{
-		"GRANT USAGE ON SCHEMA public TO " + directoryInventoryOwner,
-		"GRANT SELECT(id,tenant_id) ON public.orgs TO " + directoryInventoryOwner,
-		"GRANT SELECT(id,tenant_id,version) ON public.core_directory_epoch TO " + directoryInventoryOwner,
-		postgresDirectoryInventoryDDL,
-		"ALTER FUNCTION public.olivares_directory_inventory_v1() OWNER TO " + directoryInventoryOwner,
-		"REVOKE ALL ON FUNCTION public.olivares_directory_inventory_v1() FROM PUBLIC",
-		"GRANT EXECUTE ON FUNCTION public.olivares_directory_inventory_v1() TO " + quoteIdent(app),
-	} {
+	stmts := []string{postgresDirectoryInventoryDDL}
+	stmts = append(stmts, directoryInventoryAuthorityStmts(app)...)
+	for _, stmt := range stmts {
 		if _, err := tx.ExecContext(ctx, stmt); err != nil {
 			return err
 		}
 	}
 	_, err := verifyPostgresDirectoryInventory(ctx, tx, roles)
 	return err
+}
+
+// directoryInventoryAuthorityStmts is shared by DBA installation and explicit logical recovery.
+func directoryInventoryAuthorityStmts(app string) []string {
+	return []string{
+		"GRANT USAGE ON SCHEMA public TO " + directoryInventoryOwner,
+		"GRANT SELECT(id,tenant_id) ON public.orgs TO " + directoryInventoryOwner,
+		"GRANT SELECT(id,tenant_id,version) ON public.core_directory_epoch TO " + directoryInventoryOwner,
+		"ALTER FUNCTION public.olivares_directory_inventory_v1() OWNER TO " + directoryInventoryOwner,
+		"REVOKE ALL ON FUNCTION public.olivares_directory_inventory_v1() FROM PUBLIC",
+		"GRANT EXECUTE ON FUNCTION public.olivares_directory_inventory_v1() TO " + quoteIdent(app),
+	}
 }

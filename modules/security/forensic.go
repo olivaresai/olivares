@@ -13,8 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
-
+	chi "github.com/go-chi/chi/v5"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/model"
@@ -711,92 +710,4 @@ type exportResponse struct {
 	Count     int      `json:"count"`
 	Integrity bool     `json:"integrity_ok"`
 	Lines     []string `json:"lines"`
-}
-
-// handleExportCase exports a case's relevant ledger events in a SIEM format
-// (every format audit.Formats() lists), re-verifiable offline. Self-audited (an evidence
-// export is a privileged, recon-relevant action).
-func (m *Module) handleExportCase(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	caseID, ok := idParam(chi.URLParam(r, "id"))
-	if !ok {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid id"))
-		return
-	}
-	format := audit.Format(strings.TrimSpace(r.URL.Query().Get("format")))
-	if format == "" {
-		format = audit.DefaultFormat()
-	}
-	if !audit.ValidFormat(format) {
-		writeJSON(w, http.StatusBadRequest, errorBody("format must be one of "+audit.FormatList()))
-		return
-	}
-
-	out := exportResponse{Format: string(format), Lines: []string{}}
-	notFound := false
-	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
-		caseRepo, err := sc.Ext(caseKind)
-		if err != nil {
-			return err
-		}
-		rec, err := caseRepo.Get(r.Context(), caseID)
-		if err != nil {
-			if isNotFound(err) {
-				notFound = true
-				return nil
-			}
-			return err
-		}
-		c := toCaseDTO(rec)
-		if err := auditEvent(r.Context(), sc, mc, "security.case.export", caseKind, caseID, map[string]any{"format": string(format)}); err != nil {
-			return err
-		}
-		integ, err := m.verifyLedgerIntegrity(r.Context(), sc)
-		if err != nil {
-			return err
-		}
-		out.Integrity = integ.ChainOK
-
-		linkRepo, err := sc.Ext(caseLinkKind)
-		if err != nil {
-			return err
-		}
-		linkRecs, err := listAll(r.Context(), linkRepo, eq(colCaseRef, caseID.String()))
-		if err != nil {
-			return err
-		}
-		linkedSeq := map[int64]bool{}
-		for _, lr := range linkRecs {
-			if lr.String(colLinkKind) == "audit_seq" {
-				if n, perr := strconv.ParseInt(lr.String(colLinkRef), 10, 64); perr == nil {
-					linkedSeq[n] = true
-				}
-			}
-		}
-		subjectRef := strings.TrimSpace(c.SubjectRef)
-		return sc.Audit().Walk(r.Context(), 1, func(ev model.AuditEvent) error {
-			relevant := linkedSeq[ev.Seq]
-			if !relevant && subjectRef != "" {
-				relevant = ev.TargetID.String() == subjectRef || strings.Contains(ev.Actor, subjectRef) || metaRefers(ev.Meta, subjectRef)
-			}
-			if !relevant {
-				return nil
-			}
-			line, ferr := audit.FormatEvent(ev, format)
-			if ferr != nil {
-				return ferr
-			}
-			out.Lines = append(out.Lines, line)
-			return nil
-		})
-	})
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	if notFound {
-		writeJSON(w, http.StatusNotFound, errorBody("not found"))
-		return
-	}
-	out.Count = len(out.Lines)
-	writeJSON(w, http.StatusOK, out)
 }

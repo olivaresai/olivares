@@ -58,7 +58,12 @@ func testLineageProjectionMatrix(t *testing.T, st store.Store) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	for _, rel := range lineageRelations {
+	for _, rel := range lineageRelationsEdition2() {
+		// Pin these inputs independently of the generator so dropping either
+		// workspace tree column from its projection still exercises the ABA.
+		if rel.kind == workspaceKind {
+			rel.columns = []string{"slug", "parent_id", "path"}
+		}
 		for _, column := range rel.columns {
 			t.Run(rel.table+"/"+column, func(t *testing.T) {
 				before := lineageTestFacts(t, st, tenant)
@@ -106,7 +111,7 @@ func testLineageProjectionMatrix(t *testing.T, st store.Store) {
 	}
 	// A physical removal also closes a previously nonempty query, even for tables
 	// whose normal repository exposes a soft deletion.
-	for _, rel := range lineageRelations {
+	for _, rel := range lineageRelationsEdition2() {
 		before := lineageTestFacts(t, st, tenant)
 		if err := st.Mutate(ctx, tenant, func(sc store.Scope) error {
 			ts := sc.(*tenantScope)

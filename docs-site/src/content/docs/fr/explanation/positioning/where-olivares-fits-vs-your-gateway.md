@@ -18,10 +18,15 @@ Guardrails, c'est la sûreté du contenu sur cet appel. Les deux sont réels, le
 sont bons à ce qu'ils font, et ni l'un ni l'autre n'est ce qu'est Olivares.
 
 :::tip[La version courte]
-**Olivares AI n'est pas une passerelle IA.** Il ne route pas, ne met pas en cache,
-n'équilibre pas la charge et ne se place pas sur le chemin critique de votre trafic
-de modèles, et il ne le fera jamais. Il se place **à côté et derrière** votre
-passerelle en tant que *plan de gouvernance et de preuve* : application in-process
+**Olivares AI complète votre AI gateway.** Les appels aux modèles des sessions
+contournent par défaut le proxy d’inférence Olivares. Les appels explicitement routés
+par ce proxy passent par son application inline avant d’être transmis. La carte
+d’accès observe hors du chemin des données ; une panne de collecteur réduit la
+couverture. Les sessions Claude Code gérées installent par défaut des hooks d’appel
+d’outil qui contactent le PEP du moteur. S’il est inaccessible pendant une panne ou
+un redémarrage, les hooks refusent tout appel d’outil gouverné (deny-closed).
+
+Olivares ajoute le *plan de gouvernance et de preuves* : application in-process
 au sein du runtime de l'agent, un registre de preuves à altération détectable, cycle de vie
 d'identité non humaine, et human-in-the-loop / break-glass / kill-switch sur les
 **sessions en direct**. Votre passerelle gouverne la *requête* ; Olivares gouverne

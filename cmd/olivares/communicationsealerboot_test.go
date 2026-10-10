@@ -11,8 +11,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-
-	"github.com/olivaresai/olivares/core/secure"
 )
 
 func TestCommunicationContentKeyringFileIsAnExactConfigKey(t *testing.T) {
@@ -21,54 +19,6 @@ func TestCommunicationContentKeyringFileIsAnExactConfigKey(t *testing.T) {
 	}
 	if mode := configEnvKeyMode(envCommunicationContentKeyringFile); mode != configKeyExact {
 		t.Fatalf("%s registry mode = %v, want exact", envCommunicationContentKeyringFile, mode)
-	}
-}
-
-func TestBootBindsCMEKCommunicationSealerButKeepsK3Off(t *testing.T) {
-	startFakeKEKServer(t)
-	ctx := context.Background()
-	raw := communicationContentTestKeyring(t, "seal-v1", "digest-v1",
-		communicationContentTestRoot{"seal-v1", communicationContentTestRootBytes(0x81)},
-		communicationContentTestRoot{"digest-v1", communicationContentTestRootBytes(0x82)},
-	)
-	custody, err := loadKeyWrapConfig()
-	if err != nil || custody == nil {
-		t.Fatalf("load key-wrap config = %+v, %v", custody, err)
-	}
-	wrapper, err := custody.wrapper()
-	if err != nil {
-		t.Fatal(err)
-	}
-	envelope, err := secure.Seal(ctx, wrapper, secure.PurposeOperatorConfig, raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	path := filepath.Join(t.TempDir(), "communication-keyring.sealed")
-	if err := secure.WriteSealedFile(path, envelope); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv(envCommunicationContentKeyringFile, path)
-
-	eng, err := boot(ctx, bootConfig{
-		DataDir: t.TempDir(), Engine: "sqlite", DSN: ":memory:", Version: "test", NoIngest: true,
-	})
-	if err != nil {
-		t.Fatalf("boot with communication content custody: %v", err)
-	}
-	t.Cleanup(func() { _ = eng.Close() })
-	if eng.sessionsMod == nil {
-		t.Fatal("boot did not construct sessions module")
-	}
-
-	readiness, err := eng.sessionsMod.EvaluateCommunicationReadiness(ctx)
-	if err != nil {
-		t.Fatalf("evaluate communication readiness: %v", err)
-	}
-	if !readiness.Components.SealerReady || readiness.Components.PumpReady || readiness.Effective {
-		t.Fatalf("sealer-only composition readiness = %+v", readiness)
-	}
-	if eng.sessionsMod.CommunicationSessionCredentialsEnabled() {
-		t.Fatal("binding the content sealer enabled communication-session credentials")
 	}
 }
 

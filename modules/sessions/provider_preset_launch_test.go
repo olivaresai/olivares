@@ -27,7 +27,7 @@ func TestProviderSessionPresetsReachNativeControls(t *testing.T) {
 					answer = launchTermsCodexAnswer
 				case providerDriverGrok:
 					answer = func(method string, params map[string]any) (any, bool) {
-						if method == grokMethodSessionNew {
+						if method == acpMethodSessionNew {
 							return map[string]any{"sessionId": "grok-preset", "modes": map[string]any{"currentModeId": "default", "availableModes": []any{map[string]any{"id": "default", "name": "Ask"}, map[string]any{"id": "plan", "name": "Read only"}, map[string]any{"id": "acceptEdits", "name": "Edits"}}}}, true
 						}
 						if method == "session/set_mode" {
@@ -97,7 +97,7 @@ func TestGrokPresetRefusesAnUnchangeableWiderNativeMode(t *testing.T) {
 				if err := json.Unmarshal(raw, &response); err != nil {
 					t.Fatal(err)
 				}
-				s := grokSession{cfg: DriverSessionConfig{Preset: preset}}
+				s := grokSession{acpSession: acpSession{cfg: DriverSessionConfig{Preset: preset}}}
 				if err := s.selectPresetMode(t.Context(), response.SessionID, response); err == nil {
 					t.Fatal("a wider current mode survived the chosen preset")
 				}

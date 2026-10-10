@@ -8,6 +8,12 @@ description: >-
 sidebar:
   order: 6
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
+
+:::note[Business]
+La exportación de auditoría (`GET /v1/audit/export`, `olivares audit export`), los archivos en directorios y la verificación de archivos externos requieren Business. Community conserva el registro firmado, `olivares audit verify` y `olivares dr backup`; la exportación devuelve HTTP 501 o código de salida 9. El reenvío de auditoría y las transferencias DDIL con segmentos de auditoría también requieren Business.
+:::
 
 **Objetivo:** tu SIEM recibe los hallazgos del control plane *y* su audit
 ledger con alteraciones detectables como push, sin que un forwarder vaya leyendo ficheros (tail).
@@ -18,6 +24,15 @@ totalmente soportadas — el pull sigue siendo la forma correcta para archivado 
 re-verificación offline; el push es la forma correcta para la ingesta en vivo del SIEM.
 
 ## 1. Crea la suscripción del sink
+
+Activa primero el forwarder seleccionable del ledger; esto también activa su dependencia de eventing:
+
+```bash
+olivares modules on siemforward
+```
+
+Espera a que termine el reinicio del motor. Después ejecuta `olivares modules ls`
+y confirma que `siemforward` y `eventing` están en ejecución antes de crear la suscripción.
 
 ```bash
 curl -ks -X POST "$BASE/v1/m/eventing/subscriptions" \
@@ -73,9 +88,9 @@ curl -ks -X POST "$BASE/v1/m/eventing/subscriptions/$ID/test" \
 
 ## 2. El push del ledger, descrito con honestidad
 
-Suscribirse a **`audit.recorded`** activa la bomba del ledger: el forwarder
-recorre el audit ledger sellado de cada tenant desde un cursor por tenant y encola
-cada registro en el motor de entrega duradero — **al menos una vez**, en orden,
+Con **`siemforward` activado**, la bomba recorre el ledger sellado desde el cursor
+por tenant. Una suscripción de **`audit.recorded`** recibe registros encolados
+tras su creación en el motor de entrega duradero — **al menos una vez**,
 reanudable. Cada registro lleva sus campos de integridad de cadena literalmente, de modo que la
 copia del SIEM permite exactamente lo que permite el pull export: el
 ENLACE de la cadena (`prev_hash` de n+1 igual a `hash` de n) y una firma de
@@ -100,8 +115,10 @@ compromiso.
 
 Tres propiedades que conviene conocer:
 
-- **Sin suscripción, no hay trabajo.** Sin ningún suscriptor de `audit.recorded`, la bomba
-  no escribe nada — la vía no cuesta nada hasta que la pides.
+- **El cursor avanza sin una suscripción.** Sin suscriptores de `audit.recorded`
+  no se encola ninguna entrega, pero la bomba activada guarda su cursor.
+  Un sink nuevo no reenvía registros ya pasados por ese cursor;
+  usa el pull export para los registros históricos.
 - **«Al menos una vez» significa que son posibles los duplicados** en la reentrega; deduplica
   por el número de secuencia del registro por tenant.
 - **La bomba está controlada por líder (leader-gated)** en HA — exactamente un nodo reenvía.

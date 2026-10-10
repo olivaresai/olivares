@@ -11,7 +11,7 @@ description: >-
 estate，而模块 II 则在同一条观测流之上为每个会话维护一个**实时运行叠加层**——并且只展示
 该流如实承载的内容。
 
-26.10.1 还会在 [提供商配置文件](/how-to/operate-provider-sessions/) 下把官方提供商
+Olivares <!-- release -->0.1<!-- /release --> 还会在 [提供商配置文件](/how-to/operate-provider-sessions/) 下把官方提供商
 CLI **作为自有子进程启动**。该受管路径是同一模块。它不替代叠加层，也不合并两个
 宣布同一提供商会话 id 的主目录（`CHANGELOG.md` `[26.9.0]` B1/B2）。
 
@@ -63,10 +63,11 @@ home 是两行、两条时间线。用 `GET /v1/m/sessions/live/by-id/{live_ref}
 （及其 timeline / stream / runs 查询）读取一行。裸外部 id 路由仍在，且是
 **legacy**：只回答 legacy 行。
 
-驱动程序通过固定官方二进制 **按节点** 注册（`OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`、
-`_CODEX_BIN`、`_GROK_BIN` — 见 [配置](/reference/configuration/)）。未设置时，
-该驱动程序的配置文件仍可观察但不能启动。操作步骤：
-[运行提供商会话](/how-to/operate-provider-sessions/)。
+驱动程序在每个节点启动时注册。启动会话时，引擎先使用最新的已验证托管安装，
+再查找自身 `PATH` 中的 CLI。`OLIVARES_SESSION_RUNTIME_CLAUDE_BIN`、`_CODEX_BIN`、
+`_GROK_BIN` 和 `_OPENCODE_BIN` 显式覆盖此查找过程（见 [配置](/reference/configuration/)）。
+找不到可执行文件时，引擎会拒绝启动。配置文件认证、启动策略等其他就绪检查仍然适用。
+操作步骤：[运行提供商会话](/how-to/operate-provider-sessions/)。
 
 ## 它消费什么（以及它派生什么）
 

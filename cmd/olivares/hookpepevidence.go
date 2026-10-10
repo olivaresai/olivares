@@ -15,33 +15,26 @@ import (
 	"github.com/olivaresai/olivares/sdk"
 )
 
-// hookpepevidence.go es el núcleo de EVIDENCIA compartido por los PEP de hook de todos los
-// motores. Sale de `codexhookpep.go` sin cambiarle una coma a lo que hacía: los tres dominios de
-// hash, el reparto operación/efecto y el trato de los fallos del registro son idénticos.
+// hookpepevidence.go shares evidence handling between the Codex and Grok hook PEPs.
+// Extracting it from codexhookpep.go preserved the three hash domains, the separation
+// of operations from effects, and ledger error handling.
 //
-// ⛔ POR QUÉ SE EXTRAE EN VEZ DE COPIARSE. Este código lleva dentro TRES correcciones ganadas en
-//    contraste —la clave por id EXTERNO y no por el sid resuelto, el discriminador que cae al
-//    digest del payload cuando no hay id de llamada, y el ROL que dice lo que una entrada ES y
-//    nunca lo que el veredicto FUE—. Una segunda copia para el segundo motor no habría heredado
-//    esas tres razones, sólo su código, y la primera vez que alguien tocara una de las dos
-//    volverían a divergir. El tipo `hookGovernanceProfile` ya estaba escrito como «la identidad
-//    por motor de una superficie de hook gobernada»: el hueco estaba previsto.
+// Sharing rather than copying preserves three corrections: key by external session
+// ID rather than resolved SID; use the payload digest when no call ID exists; and
+// encode what an entry IS in its role, never what its verdict WAS. Separate copies
+// could drift when one changes. hookGovernanceProfile supplies each engine's identity.
 //
-// ⛔⛔ Y HAY UNA TERCERA IMPLEMENTACIÓN QUE **NO** SE TOCA, Y CONVIENE SABER POR QUÉ.
-//     `claudehookpep.go:952` tiene su propio `hookEvidenceBinding`, y no es una copia con otro
-//     nombre: es otro MODELO DE IDEMPOTENCIA. Claude clava la operación en un **nonce por
-//     decisión** (`claudehookpep.go:778`, «per-decision nonce (dedupe an ambiguous-commit
-//     double-write)»), compartido entre la decisión y su compensación. Codex la clava en la
-//     LLAMADA —alias, evento, discriminador, rol— sin nada del resultado.
+// Claude's `hookEvidenceBinding` in `modules/sessions/hookpep/claudehookpep.go` uses
+// a different idempotency contract. Its per-decision nonce
+// (`hookpep.MetaDecisionAttemptID`) is shared by a decision and its compensation to
+// deduplicate an internal double-write after an ambiguous commit. Codex keys the call
+// by alias, event, discriminator and role, independently of its outcome, to deduplicate
+// a hook redelivered by the agent. Unifying them would change the ledger contract;
+// this core is shared by Codex/Grok while Claude keeps its own implementation.
 //
-//     Resuelven cosas distintas: el nonce deduplica una doble escritura INTERNA de una misma
-//     decisión; la clave derivada deduplica una REENTREGA del mismo hook por parte del agente.
-//     Unificarlos sería un cambio de contrato del registro, no una limpieza, así que este
-//     núcleo lo comparten los motores de la familia Codex/Grok y deja a Claude donde está.
-//
-// ⛔ Y LO QUE NO SE COMPARTE, que es igual de importante: los dominios de hash y el `ActionRoot`
-//    van EN EL PERFIL, uno por motor. Compartirlos haría indistinguibles en el registro las
-//    decisiones de dos motores, que es justo lo que `TestLedgerActionIsCodexNotClaude` impide.
+// Hash domains and ActionRoot remain in each engine's profile. Sharing them would
+// make different engines' decisions indistinguishable in the ledger, which
+// TestLedgerActionIsCodexNotClaude prevents.
 
 // hookFact es la vista NEUTRA de una llamada gobernada y su respuesta. Existe porque cada motor
 // tiene su propio paquete de sesión con sus propios tipos, y el núcleo de evidencia no puede

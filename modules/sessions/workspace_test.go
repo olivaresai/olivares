@@ -164,7 +164,7 @@ func TestWorkspace_DLPLabelAndDeny(t *testing.T) {
 	ctx := context.Background()
 	secret := "API_KEY=THIS_IS_SECRET"
 
-	// label mode (default): the read returns the content + the sensitivity label.
+	// Explicit label mode: the read returns the content + the sensitivity label.
 	mLabel, _, tenL, _ := newRuntimeHarness(t, WithClassifier(fakeClassifier{trigger: "SECRET"}))
 	wsL := mkWorkspace(t, mLabel, tenL, CreateWorkspaceParams{DLPMode: dlpLabel})
 	if _, err := mLabel.writeFile(ctx, tenL, wsL.WorkspaceRef, "c.env", []byte(secret), actorU, actorKindU); err != nil {
@@ -225,7 +225,7 @@ func TestWorkspace_LaunchResolution(t *testing.T) {
 
 	// Unregistered workspace_ref → launch denied (deny-closed).
 	mU, _, tenU, _ := newRuntimeHarness(t, WithRunner(&fakeRunner{}), WithCredentialSource(staticCred()))
-	if _, err := mU.createRun(ctx, tenU, CreateRunParams{
+	if _, err := createProfiledTestRun(t, mU, ctx, tenU, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceRef: "nope",
 		Actor: actorU, ActorKind: actorKindU,
 	}); !isStatus(err, 400) {
@@ -236,7 +236,7 @@ func TestWorkspace_LaunchResolution(t *testing.T) {
 	frN := &fakeRunner{initSID: "s"}
 	mN, _, tenN, _ := newRuntimeHarness(t, WithRunner(frN), WithCredentialSource(staticCred()))
 	wsN := mkWorkspace(t, mN, tenN, CreateWorkspaceParams{})
-	if _, err := mN.createRun(ctx, tenN, CreateRunParams{
+	if _, err := createProfiledTestRun(t, mN, ctx, tenN, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, WorkspaceRef: wsN.WorkspaceRef,
 		Actor: actorU, ActorKind: actorKindU,
 	}); err != nil {
@@ -250,7 +250,7 @@ func TestWorkspace_LaunchResolution(t *testing.T) {
 	frC := &fakeRunner{initSID: "s"}
 	mC, _, tenC, _ := newRuntimeHarness(t, WithRunner(frC), WithCredentialSource(staticCred()))
 	wsC := mkWorkspace(t, mC, tenC, CreateWorkspaceParams{MountMode: mountRO, ContainerTarget: "/ws"})
-	if _, err := mC.createRun(ctx, tenC, CreateRunParams{
+	if _, err := createProfiledTestRun(t, mC, ctx, tenC, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationContainer, WorkspaceRef: wsC.WorkspaceRef,
 		Actor: actorU, ActorKind: actorKindU,
 	}); err != nil {

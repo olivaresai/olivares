@@ -767,3 +767,27 @@ func TestBoundedReaderPostgresEligibilityAndModeFacts(t *testing.T) {
 		t.Errorf("serialization failure classified as unavailable: %v", err)
 	}
 }
+
+// Optional bounded reads remain PG16-only. The scheduled matrix must witness
+// the native refusal on the other majors instead of running PG16 positives.
+func TestBoundedReaderPostgresNativeMajorContract(t *testing.T) {
+	pg := isolatedPGSplit(t)
+	major := drMeasuredMajor(t, drOpenSuper(t, pg.Superuser))
+	st := openBoundedPG(t, pg, pgExecModeCacheStatement)
+	t.Cleanup(func() { _ = st.Close() })
+	tenant := provisionTenant(t, st, "bounded-major-contract")
+	if err := st.View(context.Background(), tenant, func(sc store.Scope) error {
+		reader, probe := boundedGroupReader(t, sc, boundedTestLimits(), 0)
+		_, err := reader.GetExtension(context.Background(), boundedTestEntity.Kind, model.NewID())
+		if major == 16 {
+			if !errors.Is(err, store.ErrNotFound) {
+				t.Fatalf("qualified PG16 empty read: %v", err)
+			}
+		} else if !errors.Is(err, store.ErrBoundedReadUnavailable) || probe.counts["representation"] != 1 || len(probe.statements) != 1 {
+			t.Fatalf("PG%d must refuse before row statements: %v, statements=%v", major, err, probe.counts)
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+}

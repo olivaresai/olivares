@@ -29,19 +29,26 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "$0")/.." && pwd)"
 cd "${repo_root}"
 
-target_goos="${1:-$(go env GOOS)}"
-target_goarch="${2:-$(go env GOARCH)}"
+# Listing is consumed by the distribution license gate; it neither builds nor
+# clears payloads, and uses exactly the same inventory as the builder below.
+if [ "${1:-}" = --list ]; then
+  build() { printf '%s\n' "$2"; }
+else
+  target_goos="${1:-$(go env GOOS)}"
+  target_goarch="${2:-$(go env GOARCH)}"
 
-bins_dir="cmd/olivares/firstparty/bins"
-mkdir -p "${bins_dir}"
-find "${bins_dir}" -type f ! -name PLACEHOLDER -delete
+  bins_dir="cmd/olivares/firstparty/bins"
+  mkdir -p "${bins_dir}"
+  find "${bins_dir}" -type f ! -name PLACEHOLDER -delete
 
-# CGO_ENABLED=0 + -trimpath match the engine's static reproducible-leaning build;
-# -s -w -buildid= keeps the (14x) embedded payload small and content-deterministic.
-build() {
-  CGO_ENABLED=0 GOOS="${target_goos}" GOARCH="${target_goarch}" \
-    go build -trimpath -ldflags "-s -w -buildid=" -o "${bins_dir}/$1" "$2"
-}
+  # CGO_ENABLED=0 + -trimpath match the engine's static reproducible-leaning build;
+  # -s -w -buildid= keeps the (14x) embedded payload small and content-deterministic.
+  build() {
+    CGO_ENABLED=0 GOOS="${target_goos}" GOARCH="${target_goarch}" \
+      go build -trimpath -ldflags "-s -w -buildid=" -o "${bins_dir}/$1" "$2"
+  }
+
+fi
 
 # The Claude Code/Claude estate observer — the flagship source.
 build claude-source ./connectors/claude/cmd/claude-source
@@ -68,5 +75,7 @@ build debezium-source ./connectors/debezium/cmd/debezium-source
 build envoy-source ./connectors/envoy/cmd/envoy-source
 build hubble-source ./connectors/hubble/cmd/hubble-source
 
-count="$(find "${bins_dir}" -type f ! -name PLACEHOLDER | wc -l | tr -d ' ')"
-echo "build-connectors: ${count} first-party connector plugin(s) built for ${target_goos}/${target_goarch} -> ${bins_dir}/"
+if [ "${1:-}" != --list ]; then
+  count="$(find "${bins_dir}" -type f ! -name PLACEHOLDER | wc -l | tr -d ' ')"
+  echo "build-connectors: ${count} first-party connector plugin(s) built for ${target_goos}/${target_goarch} -> ${bins_dir}/"
+fi

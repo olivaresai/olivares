@@ -113,7 +113,7 @@ func runtimeInputTargetForTest(t *testing.T, f *managedStopFixture, runRef strin
 func TestRuntimeInputOriginalTargetAndUnknownAfterWrite(t *testing.T) {
 	runner := &workControlRunner{}
 	f := newManagedStopFixtureWith(t, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true}, WithRunner(runner), WithCredentialSource(staticCred()))
-	dto, err := f.m.createRun(context.Background(), f.tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:launch", ActorKind: model.ActorUser})
+	dto, err := createProfiledTestRun(t, f.m, context.Background(), f.tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:launch", ActorKind: model.ActorUser})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -196,7 +196,7 @@ func runtimeInputRawFixtureWith(t *testing.T, cfg store.Config) (*managedStopFix
 	t.Helper()
 	runner := &workControlRunner{}
 	f := newManagedStopFixtureWith(t, cfg, WithRunner(runner), WithCredentialSource(staticCred()))
-	dto, err := f.m.createRun(context.Background(), f.tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:launch", ActorKind: model.ActorUser})
+	dto, err := createProfiledTestRun(t, f.m, context.Background(), f.tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:launch", ActorKind: model.ActorUser})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -250,7 +250,7 @@ func TestRuntimeInputOriginalAdmissionDoesNotFollowAResume(t *testing.T) {
 	runner := &fakeRunner{initSID: "input-original-session"}
 	f := newManagedStopFixtureWith(t, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true}, WithRunner(runner), WithCredentialSource(staticCred()))
 	ctx := context.Background()
-	completion, err := f.m.LaunchRunWithCompletion(ctx, f.tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:launch", ActorKind: model.ActorUser})
+	completion, err := f.m.LaunchRunWithCompletion(ctx, f.tenant, CreateRunParams{ProviderProfileRef: ensureRuntimeTestProfileRef(t, f.m, f.tenant), Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:launch", ActorKind: model.ActorUser})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -385,7 +385,7 @@ func TestRuntimeInputCancellationAndCommitUncertaintyDoNotWrite(t *testing.T) {
 			if failure == "cancelled" {
 				cancel()
 			} else {
-				f.m.data = &runtimeInputLostCommitData{ModuleData: f.m.data}
+				f.m.Data = &runtimeInputLostCommitData{ModuleData: f.m.Data}
 			}
 			result, err := f.m.DeliverRuntimeInput(ctx, request)
 			if err == nil || result.Attempted || proc.sentCount() != 0 {
@@ -547,7 +547,7 @@ func TestRuntimeInputLostClaimAfterWriteRecordsWorkAmbiguity(t *testing.T) {
 func TestRuntimeWorkReplayDoesNotManufactureOriginalCompletion(t *testing.T) {
 	f, _ := newManagedStopWorkFixture(t, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true})
 	item, _, owner := f.readyBoundWorkItem(t)
-	spec := workLaunchSpec(item, owner)
+	spec := workLaunchSpec(t, f.m, f.tenant, item, owner)
 	first, err := f.m.LaunchForWork(context.Background(), f.tenant, spec)
 	if err != nil {
 		t.Fatal(err)

@@ -82,8 +82,8 @@ def _busca_lib():
 
 _lib = _busca_lib()
 if _lib is None:
-    print("%s: \u26d4 NO HE PODIDO MIRAR: no encuentro `scripts/lib/redaccion.py`. Sin la frontera "
-          "de salida no arranco: `urlopen` sigue los 30x y copia `Authorization` a OTRO origen."
+    print("%s: \u26d4 COULD NOT LOOK: cannot find `scripts/lib/redaccion.py`. Without the "
+          "output boundary, execution is refused: `urlopen` follows 30x and copies `Authorization` to ANOTHER origin."
           % _ETIQUETA, file=sys.stderr)
     sys.exit(2)
 sys.path.insert(0, _lib)
@@ -103,7 +103,7 @@ def di(*partes):
     print(redacta(" ".join(str(p) for p in partes)))
 
 
-RC_LIMPIO, RC_RECHAZADO, RC_NO_PUDE_MIRAR = 0, 1, 2
+RC_LIMPIO, RC_RECHAZADO, RC_UNAVAILABLE = 0, 1, 2
 
 # ── Guarda 3 · ningun valor de secreto sale de este proceso ──────────────────────────────────
 #
@@ -230,7 +230,7 @@ def guarda_sin_secretos(nodo, ruta="cuerpo", clave=None, bajo_secreto=False):
            {"password": {"v": "hunter2"}}   -> PASABA
 
        Y propagar `clave` NO basta: al bajar a un dict anidado, `clave` pasa a ser la clave INTERNA
-       («v») y el contexto «voy bajo password» se pierde. Hace falta un estado que sobreviva al
+       («v») y el contexto «voy bajo password» se pierde. Hace missing_items un estado que sobreviva al
        descenso, no un parametro que se sobrescriba. Una guarda que una lista desactiva no es una
        guarda: es una convencion sobre como escribir el payload.
     """
@@ -257,7 +257,7 @@ def guarda_sin_secretos(nodo, ruta="cuerpo", clave=None, bajo_secreto=False):
         for nombre, rx in FORMAS_DE_CREDENCIAL:
             if rx.search(nodo):
                 raise SecretoEnPayload(
-                    f"{ruta} contiene algo con forma de credencial ({nombre})", forma=nombre)
+                    f"{ruta} contains a credential-shaped value ({nombre})", forma=nombre)
         # La CONTEXTUAL va antes que la regla de clave: un `global_api_key` con 40 hex se nombra
         # `cloudflare-legacy-key`, que dice QUE credencial es. Con la regla de clave delante esa
         # forma dejaba de acreditarse, y lo dijo la autocomprobacion con nombre y apellido.
@@ -266,16 +266,16 @@ def guarda_sin_secretos(nodo, ruta="cuerpo", clave=None, bajo_secreto=False):
             for nombre, rx in FORMAS_CON_CONTEXTO:
                 if rx.search(nodo):
                     raise SecretoEnPayload(
-                        f"{ruta} tiene forma de {nombre} y su clave sugiere credencial",
+                        f"{ruta} matches {nombre} and its key suggests a credential",
                         forma=nombre)
         if bajo_secreto and nodo.strip():
             raise SecretoEnPayload(
-                f"{ruta} lleva un valor bajo una clave de secreto", forma="clave-de-secreto")
+                f"{ruta} contains a value under a secret key", forma="clave-de-secreto")
         if any(p in k for p in PISTAS_DE_CLAVE):
             for nombre, rx in FORMAS_CON_CONTEXTO:
                 if rx.search(nodo):
                     raise SecretoEnPayload(
-                        f"{ruta} tiene forma de {nombre} y su clave sugiere credencial",
+                        f"{ruta} matches {nombre} and its key suggests a credential",
                         forma=nombre)
 
 
@@ -295,11 +295,11 @@ def guarda_ambito_de_parada(ruta, cuerpo):
         return
     if cuerpo.get("scope_kind") != "agent":
         raise AmbitoPeligroso(
-            f"scope_kind={cuerpo.get('scope_kind')!r}: una parada que no sea de ambito `agent` "
-            "congela el estate y deja el resto de las capturas en denegado")
+            f"scope_kind={cuerpo.get('scope_kind')!r}: a stop outside the `agent` scope "
+            "freezes the estate and causes the remaining captures to be denied")
 
 
-class NoPudeMirar(Exception):
+class CouldNotCheck(Exception):
     """Ceguera, no veredicto: el motor no contesto, o contesto que la ruta no existe."""
 
 
@@ -329,10 +329,10 @@ class Motor:
         except urllib.error.HTTPError as e:
             cuerpo_err = e.read().decode()
             if e.code in (404, 405):
-                raise NoPudeMirar(f"{metodo} {ruta} -> {e.code}: la ruta no acepta esto") from e
+                raise CouldNotCheck(f"{metodo} {ruta} -> {e.code}: the route does not accept this") from e
             return e.code, cuerpo_err
         except Exception as e:  # red, DNS, timeout: ceguera
-            raise NoPudeMirar(redacta(f"{metodo} {ruta}: {type(e).__name__}: {e}")) from e
+            raise CouldNotCheck(redacta(f"{metodo} {ruta}: {type(e).__name__}: {e}")) from e
 
 
 def mensaje(cuerpo):
@@ -359,12 +359,12 @@ def _diagnostico(msg):
        manda a quien lo lee al sitio equivocado, y con confianza.
     """
     if "invalid JSON body" in msg:
-        return ("400 generico. El motor no dice cual de estas es y desde aqui NO se distingue; van "
-                "ordenadas por lo que cuesta descartarlas: (1) un campo DESCONOCIDO en el payload, "
-                "si ese handler usa `DisallowUnknownFields` —22 de los 86 sitios que emiten este "
-                "mensaje—: compara el payload con los tags json del struct Go, no con el plan; "
-                "(2) un tipo que no casa, p.ej. un numero donde se espera cadena; (3) JSON "
-                "malformado; (4) un cuerpo que el handler no pudo leer entero")
+        return ("Generic 400. The engine does not identify the cause, and it cannot be determined here. Candidates are "
+                "ordered by the effort needed to rule them out: (1) an UNKNOWN field in the payload, "
+                "if the handler uses `DisallowUnknownFields` —22 of the 86 sites emitting this "
+                "message—: compare the payload with the Go struct JSON tags; "
+                "(2) a type mismatch, such as a number where a string is expected; (3) malformed JSON; "
+                "(4) a body the handler could not read in full")
     return ""
 
 
@@ -553,14 +553,14 @@ def cadena_claude_policy(motor, refs):
     s, b = motor.pedir("POST", "/v1/m/claude-policy/managed-settings/publish",
                        {"content": doc, "note": "Baseline for the billing workspace."})
     if not (200 <= s < 300):
-        return RC_RECHAZADO, f"publish rechazado: {mensaje(b)}"
+        return RC_RECHAZADO, f"publish rejected: {mensaje(b)}"
     s, b = motor.pedir("GET", "/v1/m/claude-policy/managed-settings/artifact")
     if not (200 <= s < 300):
-        return RC_RECHAZADO, f"artifact rechazado: {mensaje(b)}"
+        return RC_RECHAZADO, f"artifact rejected: {mensaje(b)}"
     art = json.loads(b)
     sha, rev = art.get("artifact_sha256"), art.get("revision")
     if not sha or not rev:
-        return RC_NO_PUDE_MIRAR, "el artefacto no trajo artifact_sha256/revision: no puedo atestiguar"
+        return RC_UNAVAILABLE, "the artifact contains no artifact_sha256/revision: attestation cannot be verified"
     desviado = doc.replace('"Bash(curl:*)"', '"Bash(nope:*)"')
     llamadas = [
         ("dev-laptop-01", rev, sha, doc),                 # conforme
@@ -585,15 +585,15 @@ def cadena_claude_policy(motor, refs):
             revision_enviada = False
         s, b = motor.pedir("POST", "/v1/m/claude-policy/managed-settings/checkin", cuerpo_checkin)
         if not (200 <= s < 300):
-            return RC_RECHAZADO, f"checkin de {scope} rechazado: {mensaje(b)}"
+            return RC_RECHAZADO, f"checkin for {scope} rejected: {mensaje(b)}"
         derivas += [(d.get("kind"), d.get("severity")) for d in json.loads(b).get("drift", [])]
     # A · contrato del SEMBRADOR
     if not derivas:
-        culpa = ("y el cuerpo NO llevaba `revision`, que es la causa medida de este vacio"
+        culpa = ("and the body omitted `revision`, the measured cause of this absence"
                  if not revision_enviada
-                 else "y el cuerpo SI llevaba `revision`, asi que la causa NO es esa: mirala aparte")
-        return RC_RECHAZADO, (f"A/sembrador: las tres llamadas salieron 200 y no produjeron NINGUNA "
-                              f"deriva, {culpa}")
+                 else "and the body included `revision`, so that is NOT the cause: investigate separately")
+        return RC_RECHAZADO, (f"A/seeder: all three calls returned 200 and produced NO "
+                              f"drift, {culpa}")
     # B · contrato del MOTOR, versionado
     altas = [d for d in derivas if d[1] == "high"]
     if not altas:
@@ -604,14 +604,14 @@ def cadena_claude_policy(motor, refs):
         #    distinguirlo seria repetir el defecto que la separacion A/B existe para corregir:
         #    nombrar una causa que no se ha medido.
         if not revision_enviada:
-            return RC_RECHAZADO, (f"A/sembrador: hubo deriva {derivas} pero ninguna HIGH, y el cuerpo "
-                                  "NO llevaba `revision`: la atestacion del sha ni se evaluo, asi "
-                                  "que esto es del sembrado y NO del motor")
-        return RC_RECHAZADO, (f"B/motor: hubo deriva {derivas} y `revision` SI iba en el cuerpo, "
-                              "pero ninguna de severidad HIGH — el check-in con sha que no casa "
-                              "dejo de valorarse HIGH: es un cambio del motor, no del sembrado")
-    return RC_LIMPIO, (f"A/sembrador OK (deriva {derivas}) · B/motor OK ({len(altas)} fila(s) HIGH "
-                       "por el sha que no casa)")
+            return RC_RECHAZADO, (f"A/seeder: drift {derivas} occurred, but none was HIGH, and the body "
+                                  "omitted `revision`: SHA attestation was never evaluated, so "
+                                  "this is a seeding issue")
+        return RC_RECHAZADO, (f"B/engine: drift {derivas} occurred and the body included `revision`, "
+                              "but none had HIGH severity — the check-in with a mismatched SHA "
+                              "is no longer rated HIGH: this is an engine change")
+    return RC_LIMPIO, (f"A/seeder OK (drift {derivas}) · B/engine OK ({len(altas)} HIGH row(s) "
+                       "for the mismatched SHA)")
 
 
 def cadena_redteam_consent(motor, refs):
@@ -625,10 +625,10 @@ def cadena_redteam_consent(motor, refs):
     """
     s, b = motor.pedir("GET", "/v1/m/redteam/targets")
     if not (200 <= s < 300):
-        return RC_NO_PUDE_MIRAR, f"no puedo releer los targets: {s}"
+        return RC_UNAVAILABLE, f"cannot reread the targets: {s}"
     filas = json.loads(b).get("items") or []
     if not filas:
-        return RC_NO_PUDE_MIRAR, "no hay ningun target que autorizar (siembra el caso `redteam` antes)"
+        return RC_UNAVAILABLE, "no targets to authorize (seed the `redteam` case first)"
     # ⛔ NO SE JUZGA SOBRE `filas[0]`. Esa lista es del TENANT y viene paginada: la primera fila no
     #    tiene por que ser la que este guion siembra, y puede ser de otro carril. Con la version
     #    anterior, si esa fila cualquiera ya estaba autorizada, la cadena devolvia LIMPIO **sin
@@ -636,33 +636,36 @@ def cadena_redteam_consent(motor, refs):
     #    como «se mando el payload y el motor lo juzgo». Certificaba una llamada que no hizo.
     sin_autorizar = [f for f in filas if not f.get("authorized")]
     if not sin_autorizar:
-        return RC_NO_PUDE_MIRAR, (
-            f"los {len(filas)} targets visibles ya estan autorizados: no puedo ejercer `authorize` "
-            "sin repetir el consentimiento de otro, y decir «limpio» seria certificar un POST que "
-            "no he mandado. Siembra un target nuevo con el caso `redteam` y vuelve a pasar.")
+        return RC_UNAVAILABLE, (
+            f"all {len(filas)} visible targets are already authorized: cannot exercise `authorize` "
+            "without repeating another party’s consent; declaring success would certify a POST that "
+            "was never sent. Seed a new target with the `redteam` case and rerun.")
     objetivo = sin_autorizar[0]
     s, b = motor.pedir("POST", f"/v1/m/redteam/targets/{objetivo['id']}/authorize", {"authorized": True})
     if not (200 <= s < 300):
-        return RC_RECHAZADO, f"authorize rechazado: {mensaje(b)}"
+        return RC_RECHAZADO, f"authorize rejected: {mensaje(b)}"
     j = json.loads(b)
     if not j.get("authorized") or not j.get("authorized_by"):
-        return RC_RECHAZADO, "authorize devolvio 200 sin dejar `authorized`/`authorized_by`: no queda rastro"
-    return RC_LIMPIO, f"consentimiento registrado y atribuido a {j.get('authorized_by')}"
+        return RC_RECHAZADO, "authorize returned 200 without persisting `authorized`/`authorized_by`: no record remains"
+    return RC_LIMPIO, f"consent recorded and attributed to {j.get('authorized_by')}"
 
 
 def cadena_protocol_binding_spec(motor, refs):
     """plan -> plan_hash -> apply. PRUEBA que sale un `spec_id` y dice por que se queda en draft.
 
-    ⛔ ES LA MAS CARA DEL PLAN Y POR UNA RAZON QUE EL PLAN NO DA: **todos los 400 de esta superficie
-       se ven IGUALES en el cable**. El codigo interno distingue (`invalid_spec_query`,
-       `invalid_spec`, `invalid_spec_generation`), y lo que sale es siempre
-       `{"code":"invalid_command"}`. Medido: incluso un `GET` de la lista SIN `workspace_id`
-       —obligatorio, `communication_binding_spec_api.go:465-473`— contesta `invalid_command`. Un
-       payload equivocado, una query incompleta y un workspace ajeno son indistinguibles desde
-       fuera, asi que aqui no sirve la conversacion con el motor que resuelve las demas: hay que
-       leer el struct.
+    This is the most expensive step in the plan because these refusals share the
+    same HTTP 400 code. Internal errors distinguish `invalid_spec_query`,
+    `invalid_spec` and `invalid_spec_generation`, but the response code is always
+    `invalid_command`. List routes name some rejected query parameters through
+    `evidence_ref`, such as `workspace_id`, required unless the principal is
+    confined to one workspace. Invalid enum and `binding_key` values, and UUIDv4
+    IDs rejected during normalization, still have no field hint. These shared
+    response codes do not explain the payload requirements, so this step also
+    requires reading the struct instead of relying on diagnostics. Invalid
+    payloads return HTTP 400; a confined principal targeting a foreign workspace
+    receives HTTP 404 instead.
 
-    ⛔ Y el plan dice «un work item por fila». NO hace falta: `local_kind` admite
+    ⛔ Y el plan dice «un work item por fila». NO hace missing_items: `local_kind` admite
        work_item|agent|model|channel, asi que un binding de AGENTE evita crear el work item. Se deja
        `work_item` porque es lo que el propio test del modulo ejercita, pero el camino barato existe
        y conviene saberlo antes de presupuestar cinco filas.
@@ -677,7 +680,7 @@ def cadena_protocol_binding_spec(motor, refs):
     """
     ws = refs.get("workspace_id")
     if not ws:
-        return RC_NO_PUDE_MIRAR, "no resolvi ningun workspace: la spec no se puede construir"
+        return RC_UNAVAILABLE, "no workspace was resolved: the spec cannot be built"
     cuerpo = {
         "workspace_id": ws, "binding_key": "a2a-billing-reviewer", "generation": 1,
         "protocol": "a2a", "protocol_version": "1.0.1", "direction": "outbound",
@@ -694,7 +697,7 @@ def cadena_protocol_binding_spec(motor, refs):
     # `workspace_id` es OBLIGATORIO en la lista; sin el, el GET contesta el mismo `invalid_command`.
     s, b = motor.pedir("GET", f"/v1/m/sessions/protocol-binding-specs?workspace_id={ws}")
     if not (200 <= s < 300):
-        return RC_NO_PUDE_MIRAR, f"no puedo listar las specs: {s} {mensaje(b)}"
+        return RC_UNAVAILABLE, f"cannot list the specs: {s} {mensaje(b)}"
     ya = next((f for f in (json.loads(b).get("items") or [])
                if f.get("binding_key") == cuerpo["binding_key"]), None)
     if ya is not None:
@@ -713,30 +716,30 @@ def cadena_protocol_binding_spec(motor, refs):
         #    devuelva lo que por diseño rehusa. Se exime SOLO ella y SOLO aqui.
         ok, malas = revalidar(ya, cuerpo, ignorar={"validation"})
         if not ok:
-            return RC_NO_PUDE_MIRAR, (f"existe una spec con mi `binding_key` y OTRO cuerpo, asi que "
-                                      f"no puedo afirmar que este payload este verificado: "
+            return RC_UNAVAILABLE, (f"a spec exists with this `binding_key` and a DIFFERENT body, so "
+                                      f"this payload cannot be declared verified: "
                                       f"{'; '.join(malas)[:180]}")
-        return RC_LIMPIO, (f"ya sembrada ({cuerpo['binding_key']}) y REVALIDADA contra la fila "
-                           "persistida; el indice rechazaria el duplicado, asi que no lo intento")
+        return RC_LIMPIO, (f"already seeded ({cuerpo['binding_key']}) and REVALIDATED against the persisted "
+                           "row; the index would reject a duplicate, so it is not attempted")
     s, b = motor.pedir("POST", "/v1/m/sessions/protocol-binding-specs?mode=plan", cuerpo)
     if not (200 <= s < 300):
-        return RC_RECHAZADO, (f"plan rechazado ({mensaje(b) or s}) — recuerda que este codigo NO "
-                              "distingue payload de query de workspace")
+        return RC_RECHAZADO, (f"plan rejected ({mensaje(b) or s}) — this code CANNOT "
+                              "distinguish a payload error from a workspace query error")
     plan_hash = json.loads(b).get("plan_hash")
     if not plan_hash:
-        return RC_NO_PUDE_MIRAR, "el plan salio 200 sin `plan_hash`: no puedo encadenar el apply"
+        return RC_UNAVAILABLE, "the plan returned 200 without `plan_hash`: cannot proceed to apply"
     import uuid as _uuid
     s, b = motor.pedir(
         "POST", "/v1/m/sessions/protocol-binding-specs?mode=apply", cuerpo,
         cabeceras={"Idempotency-Key": str(_uuid.uuid4()), "If-Plan-Hash": plan_hash})
     if not (200 <= s < 300):
-        return RC_RECHAZADO, f"apply rechazado: {mensaje(b) or s}"
+        return RC_RECHAZADO, f"apply rejected: {mensaje(b) or s}"
     j = json.loads(b)
     if not j.get("spec_id"):
-        return RC_RECHAZADO, "apply salio 2xx sin `spec_id`: no ha quedado ninguna generacion"
+        return RC_RECHAZADO, "apply returned 2xx without `spec_id`: no generation was persisted"
     codigo = (j.get("validation") or {}).get("code")
-    return RC_LIMPIO, (f"spec {j['spec_id'][:13]}… creada en estado draft; validation.code="
-                       f"{codigo} (por eso NINGUNA llega a `active`, como avisa el plan)")
+    return RC_LIMPIO, (f"spec {j['spec_id'][:13]}… created in draft state; validation.code="
+                       f"{codigo} (so NONE reaches `active`, as the plan warns)")
 
 
 CADENAS = [
@@ -750,23 +753,23 @@ CADENAS = [
 # intentarlo.
 NO_VIABLES = [
     ("eventing", "/v1/m/eventing/subscriptions",
-     "El plan la marca «viable: si, 6 filas» por API y NO lo es por API: el modulo registra para la "
-     "politica de egress **solo lecturas** (`modules/eventing/eventing.go:457-461` — GET "
-     "/egress-policy, POST /egress-policy/check, GET /egress-policy/compat), y PUT/POST sobre "
-     "/egress-policy dan 405 mientras /egress-policy/commit da 404. Sin politica el motor contesta "
-     "«no policy has been authored yet» y rechaza CUALQUIER destino: es deny-closed a proposito. "
-     "⭐ PERO SI ES SEMBRABLE, y esto CORRIGE lo que publique a las 10:21Z: la politica la redacta "
-     "el OPERADOR por entorno, y el arnes de capturas es el operador de su propio motor. Medido: "
-     "`OLIVARES_EVENTING_EGRESS_POLICY` apunta a un fichero "
+     "The plan marks this as API-seedable with 6 rows, but it is NOT: the module registers "
+     "**read-only** egress policy routes (`modules/eventing/eventing.go:457-461` — GET "
+     "/egress-policy, POST /egress-policy/check, GET /egress-policy/compat), and PUT/POST to "
+     "/egress-policy return 405 while /egress-policy/commit returns 404. Without a policy the engine says "
+     "“no policy has been authored yet” and rejects EVERY destination: it deliberately denies by default. "
+     "⭐ IT CAN BE SEEDED; this CORRECTS the 10:21Z report: the policy is authored by "
+     "the OPERATOR through the environment, and the capture harness operates its own engine. Measured: "
+     "`OLIVARES_EVENTING_EGRESS_POLICY` points to a file "
      "`{\"default\":{\"allow\":[{\"cidr\":\"…\"},{\"host\":\"*.dominio\"}]}}` "
-     "(`cmd/olivares/eventingegress.go:36-53`) y el motor arranca diciendo «egress destination "
-     "policy IN FORCE; source=OLIVARES_EVENTING_EGRESS_POLICY», con `in_force: true`. Quedan DOS "
-     "condiciones mas, las dos descubiertas al intentarlo y ninguna en el plan: el destino tiene "
-     "que RESOLVER en DNS (un host de demo inventado da «did not resolve, so it cannot be checked») "
-     "y el endpoint tiene que ser **https** (loopback http se rechaza con «endpoint must use "
-     "https»). ⇒ la fila del plan pasa de «no viable» a «viable con arranque del arnes y un destino "
-     "https resoluble», y por eso sigue AQUI: quien la siembre tiene que cambiar el ARRANQUE, no "
-     "solo mandar un POST."),
+     "(`cmd/olivares/eventingegress.go:36-53`) and the engine starts with “egress destination "
+     "policy IN FORCE; source=OLIVARES_EVENTING_EGRESS_POLICY”, with `in_force: true`. TWO more "
+     "conditions were discovered during the attempt and neither appears in the plan: the destination must "
+     "RESOLVE in DNS (an invented demo host returns “did not resolve, so it cannot be checked”) "
+     "and the endpoint must use **https** (loopback http is rejected with “endpoint must use "
+     "https”). ⇒ The plan row changes from “not viable” to “viable with harness startup and a resolvable "
+     "https destination”, and remains HERE because seeding requires changing STARTUP, "
+     "rather than merely sending a POST."),
 ]
 
 
@@ -786,27 +789,27 @@ def resolver_refs(motor):
         """
         st, cuerpo = motor.pedir("GET", ruta)
         if not (200 <= st < 300):
-            raise NoPudeMirar(
-                f"{ruta} contesto HTTP {st}: no puedo resolver refs contra el estate, y esto NO es "
-                "«el estate esta vacio» — es que no he podido leerlo")
+            raise CouldNotCheck(
+                f"{ruta} returned HTTP {st}: cannot resolve refs against the estate; this does NOT mean "
+                "“the estate is empty” — it could not be read")
         try:
             d = json.loads(cuerpo)
         except Exception as e:
-            raise NoPudeMirar(f"{ruta} contesto 2xx con un cuerpo que no es JSON: {type(e).__name__}")
+            raise CouldNotCheck(f"{ruta} returned 2xx with a non-JSON body: {type(e).__name__}")
         if not isinstance(d, dict) or "items" not in d:
-            raise NoPudeMirar(f"{ruta} contesto 2xx sin la clave `items`: la respuesta cambio de forma")
+            raise CouldNotCheck(f"{ruta} returned 2xx without the `items` key: the response format changed")
         return d["items"] or []
 
     agentes = [a for a in lista("/v1/agents") if a.get("name")]
     if not agentes:
-        raise NoPudeMirar("el estate no tiene ni un agente con nombre: no hay contra que resolver")
+        raise CouldNotCheck("the estate has no named agents: refs cannot be resolved")
     refs["agent_id"] = agentes[0]["id"]
     ws = lista("/v1/workspaces")
     # El binding quiere el SLUG. Se prefiere uno que no sea `default`, que es el del arranque.
     slugs = [w.get("slug") for w in ws if w.get("slug")]
     refs["workspace_slug"] = next((x for x in slugs if x != "default"), slugs[0] if slugs else "")
     if not refs["workspace_slug"]:
-        raise NoPudeMirar("ningun workspace con slug: el binding no se puede construir")
+        raise CouldNotCheck("no workspace has a slug: the binding cannot be built")
     # El binding de consola quiere el SLUG y la spec de protocolo quiere el ID: dos superficies
     # del mismo estate pidiendo la misma cosa con dos formas distintas. Se resuelven las dos.
     porslug = {w.get("slug"): w.get("id") for w in ws if w.get("slug")}
@@ -821,10 +824,10 @@ def resolver_refs(motor):
     #    exactamente lo que el paso 13 del plan avisa que no se haga. Una garantia escrita donde no
     #    hay control.
     if not aparte:
-        raise NoPudeMirar(
-            "el estate solo tiene UN agente con nombre, asi que no hay uno APARTE sobre el que "
-            "parar: una parada sobre el agente que usan compliance/redteam/guardrails les cambia "
-            "la foto a todos. Siembra un segundo agente y vuelve a pasar.")
+        raise CouldNotCheck(
+            "the estate has only ONE named agent, so there is no SEPARATE agent to "
+            "stop: stopping the agent used by compliance/redteam/guardrails changes "
+            "all their captures. Seed a second agent and rerun.")
     refs["agent_aparte"] = aparte[0]["id"]
     return refs
 
@@ -845,11 +848,11 @@ def fila_sembrada(motor, caso, refs):
     campo, valor = marcador(refs) if callable(marcador) else marcador
     s, b = motor.pedir("GET", caso["listar"])
     if not (200 <= s < 300):
-        raise NoPudeMirar(f"no puedo releer {caso['listar']}: {s}")
+        raise CouldNotCheck(f"cannot reread {caso['listar']}: {s}")
     j = json.loads(b)
     filas = j.get(caso["bajo"]) if caso.get("bajo") else j
     if not isinstance(filas, list):
-        raise NoPudeMirar(f"{caso['listar']} no devolvio una lista bajo {caso['bajo']!r}")
+        raise CouldNotCheck(f"{caso['listar']} did not return a list under {caso['bajo']!r}")
     for f in filas:
         if isinstance(f, dict) and f.get(campo) == valor:
             return f
@@ -864,10 +867,10 @@ def fila_sembrada(motor, caso, refs):
     #    un contrato de cursor que este guion no conoce, y afirmar sobre una sola pagina es lo que
     #    esta linea corrige.
     if isinstance(j, dict) and j.get("has_more"):
-        raise NoPudeMirar(
-            f"{caso['listar']} dice `has_more`: la fila con {campo}={valor!r} podria estar en otra "
-            "pagina, asi que NO puedo concluir que no este sembrada — y concluirlo haria que se "
-            "re-mandara el payload sobre un estate que ya lo tiene")
+        raise CouldNotCheck(
+            f"{caso['listar']} reports `has_more`: the row with {campo}={valor!r} could be on another "
+            "page, so its absence CANNOT be confirmed — claiming absence would cause the "
+            "payload to be resent to an estate that already contains it")
     return None
 
 
@@ -890,7 +893,7 @@ def revalidar(fila, cuerpo, ignorar=()):
     def compara(mio, suyo, ruta):
         if isinstance(mio, dict):
             if not isinstance(suyo, dict):
-                malas.append(f"{ruta}: persistido no es un objeto")
+                malas.append(f"{ruta}: persisted value is not an object")
                 return
             for k, v in mio.items():
                 if k not in suyo:
@@ -904,20 +907,20 @@ def revalidar(fila, cuerpo, ignorar=()):
                     #    campos ausentes se leia como REVALIDADA. Ahora ausente es discrepancia y
                     #    se NOMBRA; si una superficie omite de verdad, su exencion va por caso,
                     #    medida y con su razon, nunca como regla general.
-                    malas.append(f"{ruta}.{k}: la fila persistida NO trae esta clave")
+                    malas.append(f"{ruta}.{k}: persisted row is MISSING this key")
                     continue
                 compara(v, suyo[k], f"{ruta}.{k}")
         elif isinstance(mio, list):
             if not isinstance(suyo, list):
-                malas.append(f"{ruta}: persistido no es una lista")
+                malas.append(f"{ruta}: persisted value is not a list")
                 return
             if len(mio) != len(suyo):
-                malas.append(f"{ruta}: {len(suyo)} elementos persistidos != {len(mio)} mios")
+                malas.append(f"{ruta}: {len(suyo)} persisted elements != {len(mio)} expected elements")
                 return
             for i, (a, b) in enumerate(zip(mio, suyo)):
                 compara(a, b, f"{ruta}[{i}]")
         elif mio != suyo:
-            malas.append(f"{ruta}: persistido {suyo!r} != mio {mio!r}")
+            malas.append(f"{ruta}: persisted {suyo!r} != expected {mio!r}")
 
     for k, v in cuerpo.items():
         if k in ignorar:
@@ -925,7 +928,7 @@ def revalidar(fila, cuerpo, ignorar=()):
             #    Quien la pone tiene que poder citar por que el motor NO devuelve lo que le mando.
             continue
         if k not in fila:
-            malas.append(f"{k}: la fila persistida NO trae esta clave")
+            malas.append(f"{k}: persisted row is MISSING this key")
             continue
         compara(v, fila[k], k)
     return (not malas), malas
@@ -937,10 +940,10 @@ def main():
     ap.add_argument("token")
     ap.add_argument("tenant")
     ap.add_argument("--solo-revalidar", action="store_true",
-                    help="no manda NI UN POST: revalida contra lo persistido, y el id que no pueda "
-                         "revalidar sale 2")
+                    help="sends NO POST requests: revalidates persisted rows; any ID that cannot be "
+                         "revalidated causes exit code 2")
     ap.add_argument("--autocomprobar", action="store_true",
-                    help="control positivo de la guarda de secretos y sale")
+                    help="runs the positive control for the secret guard and exits")
     args = ap.parse_args()
 
     if args.autocomprobar:
@@ -958,13 +961,13 @@ def main():
     try:
         s, _ = motor.pedir("GET", "/healthz")
         if not (200 <= s < 300):
-            print(redacta(f"verify-seed-payloads: NO HE PODIDO MIRAR: /healthz -> {s}"),
+            print(redacta(f"verify-seed-payloads: COULD NOT LOOK: /healthz -> {s}"),
                   file=sys.stderr)
-            return RC_NO_PUDE_MIRAR
+            return RC_UNAVAILABLE
         refs = resolver_refs(motor)
-    except NoPudeMirar as e:
-        print(redacta(f"verify-seed-payloads: NO HE PODIDO MIRAR: {e}"), file=sys.stderr)
-        return RC_NO_PUDE_MIRAR
+    except CouldNotCheck as e:
+        print(redacta(f"verify-seed-payloads: COULD NOT LOOK: {e}"), file=sys.stderr)
+        return RC_UNAVAILABLE
 
     # ── EL LEDGER · guarda 2 ─────────────────────────────────────────────────────────────────
     #
@@ -988,10 +991,10 @@ def main():
         estado[ident], motivo[ident] = est, por
 
     limpios = rechazados = ciegos = 0
-    di(f"verify-seed-payloads: motor {args.base_url} · tenant {args.tenant}")
-    print(f"  refs resueltas del estate vivo: agent_id={refs['agent_id']} "
+    di(f"verify-seed-payloads: engine {args.base_url} · tenant {args.tenant}")
+    print(f"  refs resolved from the live estate: agent_id={refs['agent_id']} "
           f"workspace_slug={refs['workspace_slug']}\n")
-    print(f"  {'CASO':22s} {'rc':>2s} {'HTTP':>5s}  estado / veredicto")
+    print(f"  {'CASE':22s} {'rc':>2s} {'HTTP':>5s}  state / verdict")
     for caso in CASOS:
         ident = caso["id"]
         try:
@@ -1000,13 +1003,13 @@ def main():
             if fila is not None:
                 ok, malas = revalidar(fila, cuerpo)
                 if ok:
-                    print(f"  {ident:22s} {RC_LIMPIO:>2d} {'—':>5s}  REVALIDADO contra la fila persistida")
-                    anota(ident, "revalidado", "la fila que ya estaba casa con mi payload")
+                    print(f"  {ident:22s} {RC_LIMPIO:>2d} {'—':>5s}  REVALIDATED against the persisted row")
+                    anota(ident, "revalidado", "the existing row matches this payload")
                     limpios += 1
                 else:
                     # NO es «rechazado»: el motor no ha juzgado nada. Es que NO PUEDO afirmar que
                     # este payload este verificado, porque lo sembrado es otra cosa con mi marcador.
-                    print(f"  {ident:22s} {RC_NO_PUDE_MIRAR:>2d} {'—':>5s}  MARCADOR IGUAL, CUERPO DISTINTO: "
+                    print(f"  {ident:22s} {RC_UNAVAILABLE:>2d} {'—':>5s}  SAME MARKER, DIFFERENT BODY: "
                           f"{'; '.join(malas)[:150]}")
                     anota(ident, "discrepante", "; ".join(malas)[:200])
                     ciegos += 1
@@ -1014,59 +1017,59 @@ def main():
             if args.solo_revalidar:
                 # ⛔ NO HAY POST EN ESTE MODO, Y POR ESO UN ID SIN FILA NO PUEDE ALCANZAR ESTADO
                 #    TERMINAL: no es «limpio» ni «rechazado», es que no lo he podido verificar.
-                print(f"  {ident:22s} {RC_NO_PUDE_MIRAR:>2d} {'—':>5s}  SIN SEMBRAR y --solo-revalidar: "
-                      "no mando el POST, asi que no puedo verificar este payload")
-                anota(ident, "ciego", "no sembrado y el modo prohibe mandarlo")
+                print(f"  {ident:22s} {RC_UNAVAILABLE:>2d} {'—':>5s}  NOT SEEDED and --solo-revalidar: "
+                      "no POST is sent, so this payload cannot be verified")
+                anota(ident, "ciego", "not seeded and this mode forbids sending it")
                 ciegos += 1
                 continue
             s, b = motor.pedir("POST", caso["ruta"], cuerpo)
         except SecretoEnPayload as e:
-            di(f"  {ident:22s} {RC_RECHAZADO:>2d} {'—':>5s}  GUARDA DE SECRETOS: {e}")
-            anota(ident, "cortado", f"cortado por la guarda de secretos: {e}")
+            di(f"  {ident:22s} {RC_RECHAZADO:>2d} {'—':>5s}  SECRET GUARD: {e}")
+            anota(ident, "cortado", f"blocked by the secret guard: {e}")
             rechazados += 1
             continue
         except AmbitoPeligroso as e:
-            print(f"  {ident:22s} {RC_RECHAZADO:>2d} {'—':>5s}  GUARDA DE AMBITO: {e}")
-            anota(ident, "cortado", f"cortado por la guarda de ambito: {e}")
+            print(f"  {ident:22s} {RC_RECHAZADO:>2d} {'—':>5s}  SCOPE GUARD: {e}")
+            anota(ident, "cortado", f"blocked by the scope guard: {e}")
             rechazados += 1
             continue
-        except NoPudeMirar as e:
-            print(f"  {ident:22s} {RC_NO_PUDE_MIRAR:>2d} {'—':>5s}  NO HE PODIDO MIRAR: {e}")
+        except CouldNotCheck as e:
+            print(f"  {ident:22s} {RC_UNAVAILABLE:>2d} {'—':>5s}  COULD NOT LOOK: {e}")
             anota(ident, "ciego", str(e))
             ciegos += 1
             continue
         if 200 <= s < 300:
-            print(f"  {ident:22s} {RC_LIMPIO:>2d} {s:>5d}  EJERCIDO · ACEPTADO")
+            print(f"  {ident:22s} {RC_LIMPIO:>2d} {s:>5d}  EXERCISED · ACCEPTED")
             anota(ident, "ejercido", f"HTTP {s}")
             limpios += 1
         else:
             msg = mensaje(b)
             diag = _diagnostico(msg)
-            print(f"  {ident:22s} {RC_RECHAZADO:>2d} {s:>5d}  EJERCIDO · RECHAZADO: {msg}")
+            print(f"  {ident:22s} {RC_RECHAZADO:>2d} {s:>5d}  EXERCISED · REJECTED: {msg}")
             if diag:
-                print(f"  {'':22s} {'':>2s} {'':>5s}  causa real: {diag}")
+                print(f"  {'':22s} {'':>2s} {'':>5s}  diagnostic: {diag}")
             anota(ident, "ejercido", f"HTTP {s}: {msg}")
             rechazados += 1
 
     # ── Las cadenas van DESPUES de los casos planos: leen lo que estos dejaron puesto ───────
     print()
-    print(f"  {'CADENA':22s} {'rc':>2s}         veredicto")
+    print(f"  {'CHAIN':22s} {'rc':>2s}         verdict")
     for ident, fn in CADENAS:
         if args.solo_revalidar:
             # Las tres cadenas ESCRIBEN (publican, autorizan, aplican un plan). En este modo no se
             # corren, y por tanto tampoco alcanzan estado terminal: el ledger lo dira.
-            print(f"  {ident:22s} {RC_NO_PUDE_MIRAR:>2d}         --solo-revalidar: esta cadena escribe, no la corro")
-            anota(ident, "ciego", "la cadena escribe y el modo lo prohibe")
+            print(f"  {ident:22s} {RC_UNAVAILABLE:>2d}         --solo-revalidar: this chain writes data and will not run")
+            anota(ident, "ciego", "the chain writes data and this mode forbids it")
             ciegos += 1
             continue
         try:
             rc, veredicto = fn(motor, refs)
-        except NoPudeMirar as e:
-            rc, veredicto = RC_NO_PUDE_MIRAR, f"NO HE PODIDO MIRAR: {e}"
+        except CouldNotCheck as e:
+            rc, veredicto = RC_UNAVAILABLE, f"COULD NOT LOOK: {e}"
         except SecretoEnPayload as e:
-            rc, veredicto = RC_RECHAZADO, f"GUARDA DE SECRETOS: {e}"
+            rc, veredicto = RC_RECHAZADO, f"SECRET GUARD: {e}"
         except AmbitoPeligroso as e:
-            rc, veredicto = RC_RECHAZADO, f"GUARDA DE AMBITO: {e}"
+            rc, veredicto = RC_RECHAZADO, f"SCOPE GUARD: {e}"
         print(f"  {ident:22s} {rc:>2d}         {veredicto}")
         if rc == RC_LIMPIO:
             anota(ident, "ejercido", veredicto)
@@ -1079,7 +1082,7 @@ def main():
             ciegos += 1
 
     print()
-    print("  SUPERFICIES QUE EL PLAN DA POR VIABLES Y NO LO SON:")
+    print("  SURFACES MARKED VIABLE BY THE PLAN THAT REQUIRE EXTRA SETUP:")
     for ident, ruta, razon in NO_VIABLES:
         print(f"    · {ident} ({ruta})")
         for linea in razon.split(". "):
@@ -1101,24 +1104,24 @@ def main():
     no_terminales = [i for i in ESPERADOS if estado.get(i) in ("ciego", "discrepante")]
 
     print()
-    print(f"  LEDGER: {len(ESPERADOS)} declarados · {ejercidos} ejercidos · {cortados} cortados "
-          f"por guarda local · {revalidados} revalidados · {len(no_terminales)} sin estado terminal "
-          f"· {len(sin_estado)} sin visitar")
+    print(f"  LEDGER: {len(ESPERADOS)} declared · {ejercidos} exercised · {cortados} blocked "
+          f"by local guards · {revalidados} revalidated · {len(no_terminales)} without a terminal state "
+          f"· {len(sin_estado)} unvisited")
     for i in no_terminales + sin_estado:
-        print(f"    ⛔ {i}: {motivo.get(i, 'no llego a visitarse')}")
-    print(f"verify-seed-payloads: {limpios} limpios · {rechazados} rechazados · {ciegos} sin poder mirar "
-          f"· {len(NO_VIABLES)} declarados no viables")
+        print(f"    ⛔ {i}: {motivo.get(i, 'was not visited')}")
+    print(f"verify-seed-payloads: {limpios} passed · {rechazados} rejected · {ciegos} unverified "
+          f"· {len(NO_VIABLES)} declared as requiring extra setup")
 
     # ⛔ EL ORDEN IMPORTA: un id sin estado terminal es «no he podido mirar» y gana sobre cualquier
     #    otra cosa, porque significa que este pase NO puede afirmar nada sobre ese payload.
     if sin_estado or no_terminales:
-        print("verify-seed-payloads: ⛔ NO HE PODIDO MIRAR: "
-              f"{len(sin_estado) + len(no_terminales)} de {len(ESPERADOS)} ids declarados no "
-              "alcanzaron un estado terminal (ejercido, cortado o revalidado).",
+        print("verify-seed-payloads: ⛔ COULD NOT LOOK: "
+              f"{len(sin_estado) + len(no_terminales)} of {len(ESPERADOS)} declared IDs did not "
+              "reach a terminal state (exercised, blocked or revalidated).",
               file=sys.stderr)
-        return RC_NO_PUDE_MIRAR
+        return RC_UNAVAILABLE
     if ciegos:
-        return RC_NO_PUDE_MIRAR
+        return RC_UNAVAILABLE
     if rechazados:
         return RC_RECHAZADO
     return RC_LIMPIO
@@ -1138,10 +1141,10 @@ def autocomprobar():
     #    acreditadas de una vez — y la undecima que alguien añada tambien.
     debe_cortar = [
         ("aws-access-key",       "aws-access-key",       {"note": "the key is AKIAIOSFODNN7EXAMPLE"}),
-        ("clave password",       "clave-de-secreto",     {"password": "hunter2"}),
-        ("clave camelCase",      "clave-de-secreto",     {"apiToken": "aaaaaaaaaaaaaaaaaaaa"}),
-        ("clave con guion",      "clave-de-secreto",     {"api-token": "aaaaaaaaaaaaaaaaaaaa"}),
-        ("clave MAYUS_GUION",    "clave-de-secreto",     {"CLIENT_SECRET": "aaaaaaaaaaaaaaaaaaaa"}),
+        ("password key",       "clave-de-secreto",     {"password": "hunter2"}),
+        ("camelCase key",      "clave-de-secreto",     {"apiToken": "aaaaaaaaaaaaaaaaaaaa"}),
+        ("hyphenated key",      "clave-de-secreto",     {"api-token": "aaaaaaaaaaaaaaaaaaaa"}),
+        ("UPPER_SNAKE key",    "clave-de-secreto",     {"CLIENT_SECRET": "aaaaaaaaaaaaaaaaaaaa"}),
         ("jwt",                  "jwt",                  {"note": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJkZW1vIn0.c2lnbmF0dXJlX2Zha2U"}),
         ("webhook-secret",       "webhook-secret",       {"note": "whsec_YWJjZGVmZ2hpamtsbW5vcHFy"}),
         ("dodo-key",             "dodo-key",             {"note": "dodo_test_abcdefghijklmnopqrstuv"}),
@@ -1156,44 +1159,44 @@ def autocomprobar():
         #    `github-token`: asi este fixture acreditaba LA FORMA, no el ANIDAMIENTO que su nombre
         #    promete, y al comprobarse las formas primero quedo al descubierto. Un fixture que puede
         #    pasar por dos razones no acredita ninguna.
-        ("anidado en lista",     "clave-de-secreto",     {"secret_refs": [{"name": "X", "ref_kind": "env",
+        ("nested in a list",     "clave-de-secreto",     {"secret_refs": [{"name": "X", "ref_kind": "env",
                                                                             "ref": "Y", "token": "valor-sin-forma-reconocible-99"}]}),
     ]
     # ⛔ La direccion de NO-DISPARO, que es la mitad que un rechaza-todo aprobaria. `ref` y `name`
     #    de un `secret_refs` son LOCALIZADORES y son el modo sancionado de nombrar un secreto: si
     #    esta guarda los cortara, cerraria el unico camino correcto que la API ofrece.
     debe_pasar = [
-        ("localizador legitimo", {"secret_refs": [{"name": "GITHUB_TOKEN", "ref_kind": "env",
+        ("valid locator", {"secret_refs": [{"name": "GITHUB_TOKEN", "ref_kind": "env",
                                                    "ref": "GITHUB_TOKEN", "hint": "platform"}]}),
-        ("clave vacia",          {"token": ""}),
-        ("prosa que NOMBRA",     {"note": "rotate the token via the platform"}),
-        ("sha256 de 64 hex",     {"artifact_sha256": "0" * 64}),
-        ("id con guiones",       {"scope_ref": "01a0522e-c78e-729d-9027-28a5c41c22b8"}),
-        ("documento de politica", {"content": '{"permissions":{"allow":["Bash(git status:*)"],'
+        ("empty key",          {"token": ""}),
+        ("prose NAMING a secret",     {"note": "rotate the token via the platform"}),
+        ("64-digit hex sha256",     {"artifact_sha256": "0" * 64}),
+        ("hyphenated ID",       {"scope_ref": "01a0522e-c78e-729d-9027-28a5c41c22b8"}),
+        ("policy document", {"content": '{"permissions":{"allow":["Bash(git status:*)"],'
                                               '"deny":["Bash(curl:*)"]}}'}),
         # ⛔ EL CASO QUE OBLIGO A HACER CONTEXTUAL LA FORMA DE 40 HEX: un SHA de git tiene esa
         #    forma exacta y nuestros asientos los citan a todas horas. Bajo una clave neutra PASA.
-        ("sha de git en una nota", {"note": "landed as a5433047d14e6ef418a6f438e837e188f030f430"}),
-        ("sha de 40 hex pelado",   {"note": "0123456789abcdef0123456789abcdef01234567"}),
+        ("git SHA in a note", {"note": "landed as a5433047d14e6ef418a6f438e837e188f030f430"}),
+        ("bare 40-digit hex SHA",   {"note": "0123456789abcdef0123456789abcdef01234567"}),
     ]
     for etiqueta, forma_esperada, c in debe_cortar:
         try:
             guarda_sin_secretos(c)
-            print(f"  FAIL  no corto: {etiqueta}")
+            print(f"  FAIL  did not block: {etiqueta}")
             fallos += 1
         except SecretoEnPayload as e:
             if e.forma != forma_esperada:
                 # Corto, si — pero por OTRA forma, asi que la declarada sigue SIN acreditar.
-                print(f"  FAIL  {etiqueta}: corto `{e.forma}` y la acreditada es `{forma_esperada}`")
+                print(f"  FAIL  {etiqueta}: blocked `{e.forma}` but the expected shape is `{forma_esperada}`")
                 fallos += 1
             else:
-                print(f"  ok    corto `{e.forma}`: {etiqueta}")
+                print(f"  ok    blocked `{e.forma}`: {etiqueta}")
     for etiqueta, c in debe_pasar:
         try:
             guarda_sin_secretos(c)
-            print(f"  ok    dejo pasar: {etiqueta}")
+            print(f"  ok    allowed: {etiqueta}")
         except SecretoEnPayload as e:
-            print(f"  FAIL  corto de mas: {etiqueta} — {e}")
+            print(f"  FAIL  blocked unexpectedly: {etiqueta} — {e}")
             fallos += 1
 
     # ── y la guarda de ambito, por sus DOS direcciones ────────────────────────────────────────
@@ -1209,20 +1212,20 @@ def autocomprobar():
     for ruta, c in ambito_debe_cortar:
         try:
             guarda_ambito_de_parada(ruta, c)
-            print(f"  FAIL  la guarda de ambito NO corto: {c}")
+            print(f"  FAIL  scope guard did NOT block: {c}")
             fallos += 1
         except AmbitoPeligroso:
-            print(f"  ok    la guarda de ambito corto: scope_kind={c.get('scope_kind')!r}")
+            print(f"  ok    scope guard blocked: scope_kind={c.get('scope_kind')!r}")
     for ruta, c in ambito_debe_pasar:
         try:
             guarda_ambito_de_parada(ruta, c)
-            print(f"  ok    la guarda de ambito dejo pasar: {ruta.rsplit('/', 1)[-1]} "
+            print(f"  ok    scope guard allowed: {ruta.rsplit('/', 1)[-1]} "
                   f"scope_kind={c.get('scope_kind')!r}")
         except AmbitoPeligroso as e:
-            print(f"  FAIL  la guarda de ambito corto de mas: {ruta} — {e}")
+            print(f"  FAIL  scope guard blocked unexpectedly: {ruta} — {e}")
             fallos += 1
 
-    print(f"\nautocomprobacion: {fallos} fallos")
+    print(f"\nself-test: {fallos} failures")
     return RC_RECHAZADO if fallos else RC_LIMPIO
 
 

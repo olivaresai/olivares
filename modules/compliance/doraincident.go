@@ -91,7 +91,7 @@ func recordToIncidentDTO(rec model.Record, includeBody bool) classifiedIncidentD
 // the request BODY; the incident reference and optional finding link are query parameters.
 func (m *Module) handleClassifyIncident(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	if m.regPackager == nil {
-		writeJSON(w, http.StatusNotImplemented, errorBody("DORA major-incident classification requires the Olivares enterprise add-on (doraregister); not linked in this build"))
+		writeJSON(w, http.StatusNotImplemented, errorBody("DORA major-incident classification requires the Olivares Business edition (doraregister); not linked in this build"))
 		return
 	}
 	reference := strings.TrimSpace(r.URL.Query().Get("reference"))

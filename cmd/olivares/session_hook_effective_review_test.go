@@ -21,6 +21,7 @@ import (
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/governance"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 func TestSessionClaudeReviewDescribesEffectiveRewrite(t *testing.T) {
@@ -57,7 +58,7 @@ func TestSessionClaudeReviewDescribesEffectiveRewrite(t *testing.T) {
 			service := h.set.gov.EngineApprovals()
 			h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 			h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-			d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow", Rules: []hookPolicyRule{{Tool: tool, Decision: "ask", Rewrite: map[string]any{field: effective}}}}, authr: credentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: service, store: h.st, clock: time.Now, log: discardLog()}
+			d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow", Rules: []hookpep.PolicyRule{{Tool: tool, Decision: "ask", Rewrite: map[string]any{field: effective}}}}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, Store: h.st, Clock: time.Now, Log: discardLog()})
 			input := map[string]any{field: original}
 			if tool == "Write" {
 				input["content"] = "private-file-content-not-for-review"
@@ -73,7 +74,7 @@ func TestSessionClaudeReviewDescribesEffectiveRewrite(t *testing.T) {
 			defer func() { cancel(); <-done }()
 			var pending governance.Approval
 			for pending.ID == "" {
-				items, _, err := service.List(t.Context(), tenant, hookActionCapability, "pending", "")
+				items, _, err := service.List(t.Context(), tenant, hookpep.ActionCapability, "pending", "")
 				if err != nil {
 					t.Fatal(err)
 				}

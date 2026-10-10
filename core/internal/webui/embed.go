@@ -7,10 +7,11 @@
 //
 // The embed directive can only reference files at or below this file's own
 // directory, so the web (Vite) build MUST output to core/internal/webui/dist/
-// (its build.outDir). A placeholder dist/index.html is committed so the binary
-// compiles before the web app is ever built; the embed pattern fails at compile
-// time with "no matching files found" if dist/ has no committed file. The
-// "all:" pattern prefix also includes files whose names start with "." or "_"
+// (its build.outDir). task web:check builds and verifies the generated bundle;
+// PR Go builds reuse that output. Only dist/PLACEHOLDER is committed so Go can
+// compile before the web app is built. The embed pattern fails at compile time
+// if dist/ has no matching files. The "all:" pattern prefix also includes files
+// whose names start with "." or "_"
 // (Vite emits such asset dirs).
 package webui
 

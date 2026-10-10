@@ -45,7 +45,9 @@ type ModelPricing struct {
 	// SHORT-TTL (5-minute) rate — the standard cache-write tier (~1.25× base input).
 	// It is 0 when the model has no cache-write tier. It is also the rate applied to
 	// untiered cache-write tokens (Usage.CacheWriteTokens) from providers that do not
-	// split cache writes by TTL.
+	// split cache writes by TTL. Dataset-derived rows price a tier the dataset does
+	// not declare at the base input rate (what those tokens actually cost), so there
+	// a rate equal to InputPerMTokUSD means "no separate published tier".
 	CacheWritePerMTokUSD float64
 	// CacheWrite1hPerMTokUSD is the price per million 1-hour-TTL cache-write tokens
 	// (~2.0× base input — distinct from, and higher than, the 5m rate). 0 means "use
@@ -53,7 +55,9 @@ type ModelPricing struct {
 	// not "free": pricing a 1h write at 0 would silently drop the dimension.
 	CacheWrite1hPerMTokUSD float64
 	// CacheReadPerMTokUSD is the price per million cache-read input tokens
-	// (0 when the model has no cache-read tier).
+	// (0 when the model has no cache-read tier; dataset-derived rows instead
+	// carry the base input rate when the dataset declares no read tier — see
+	// CacheWritePerMTokUSD).
 	CacheReadPerMTokUSD float64
 	// Currency is the ISO-4217 code; "USD" for v1 (CostSample is micro-USD).
 	Currency string

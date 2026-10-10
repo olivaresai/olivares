@@ -7,7 +7,10 @@ package cliruntime
 import (
 	"context"
 	"errors"
+	"slices"
 	"time"
+
+	"github.com/olivaresai/olivares/core/driverfacts"
 )
 
 // Official CLI kinds. These strings match the sessions module driver keys.
@@ -143,28 +146,18 @@ var (
 // ConfigHomeEnv is the vendor variable that selects that CLI's configuration
 // home on the child. Empty for an unknown kind.
 func ConfigHomeEnv(kind string) string {
-	switch kind {
-	case KindClaude:
-		return "CLAUDE_CONFIG_DIR"
-	case KindCodex:
-		return "CODEX_HOME"
-	case KindGrok:
-		return "GROK_HOME"
-	default:
+	if !slices.Contains(Kinds(), kind) {
 		return ""
 	}
+	facts, _ := driverfacts.Lookup(kind)
+	return facts.ConfigHomeEnv
 }
 
 // OfficialProgram is the vendor executable name for a kind.
 func OfficialProgram(kind string) string {
-	switch kind {
-	case KindClaude:
-		return "claude"
-	case KindCodex:
-		return "codex"
-	case KindGrok:
-		return "grok"
-	default:
+	if !slices.Contains(Kinds(), kind) {
 		return ""
 	}
+	facts, _ := driverfacts.Lookup(kind)
+	return facts.Program
 }

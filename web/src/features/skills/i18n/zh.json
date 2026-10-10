@@ -1,0 +1,52 @@
+{
+  "title": "技能目录",
+  "subtitle": "为本组织安装的技能包。打开一个技能包，查看其中的技能以及它已分配到的部门、组和智能体。",
+  "packs": {
+    "name": "技能包",
+    "state": "状态",
+    "revision": "修订",
+    "updated": "更新时间",
+    "enabled": "已启用",
+    "retired": "已停用",
+    "search": "搜索技能包",
+    "emptyTitle": "尚未安装技能包",
+    "emptyDescription": "使用 olivares skills install 安装技能包后，它会出现在这里以供分配。",
+    "truncated": "显示前 {{n}} 个技能包",
+    "truncatedHint": "使用 olivares skills ls --cursor 列出其余技能包。"
+  },
+  "detail": {
+    "skills": "此技能包中的技能",
+    "revisions": "修订",
+    "revision": "修订 {{n}}",
+    "revisionLine": "修订 {{n}}，来源 {{source}}"
+  },
+  "kind": {
+    "workspace": "部门",
+    "agent_group": "智能体组",
+    "agent": "智能体",
+    "template": "模板",
+    "session": "会话"
+  },
+  "uses": {
+    "title": "已分配到",
+    "none": "此技能包未分配给你可见的任何部门、组或智能体。",
+    "unassign": "取消分配",
+    "unassigned": "已取消分配技能包",
+    "confirmTitle": "取消分配此技能包？",
+    "confirmDescription": "{{target}} 的新会话将不再获得这些技能。已记录的对话保留其快照。",
+    "truncated": "显示前 {{n}} 个分配",
+    "truncatedHint": "使用 olivares skills assignments --pack 加 --cursor 列出其余分配。",
+    "unassignFrom": "取消分配给 {{target}}"
+  },
+  "assign": {
+    "title": "分配",
+    "kind": "分配给",
+    "target": "目标",
+    "choose": "选择目标",
+    "revision": "修订",
+    "noTargets": "没有你可读取的此类目标。",
+    "submit": "分配",
+    "done": "已分配技能包",
+    "directoryFailed": "无法加载目标。关闭并重新打开技能包以重试。"
+  }
+}

@@ -18,7 +18,7 @@
 //
 // THREE QUESTIONS, all of which must be answerable or the gate fails:
 //
-//   1. DERIVATION — are the generated bundles what web/tokens + email/copy
+//   1. DERIVATION — are the generated bundles what web/tokens + email/locales
 //      currently produce? Delegated to `node email/build.mjs --check`, which also
 //      measures every foreground/background pair against WCAG 2.2 AA. Change a
 //      token and this goes red until the artefacts are regenerated; regenerate
@@ -361,7 +361,7 @@ const TRANSPORT_ONLY = [
 
 // Copy is prose. It may not carry markup, colour or anything else that belongs to
 // the layout — a translator handed a `<div style=...>` will eventually change one.
-const COPY_GLOB = 'email/copy/'
+const COPY_GLOB = 'email/locales/'
 
 // Generated bundles legitimately contain every literal in the palette. They are
 // exempt from rule 2 and covered instead by rule 1, which pins them byte for byte
@@ -428,10 +428,10 @@ const NOT_A_SURFACE = [
     else vistos.set(n.path, n.why)
   }
   if (repetidos.length > 0) {
-    console.error('check-email-brand: NO_HE_PODIDO_MIRAR — NOT_A_SURFACE declara la misma ruta más de una vez:')
+    console.error('check-email-brand: NO_HE_PODIDO_MIRAR — NOT_A_SURFACE declares the same path more than once:')
     for (const r of repetidos) console.error(`    ${r}`)
-    console.error('  Deja UNA entrada con la razón completa. Dos razones para la misma ruta no se pueden')
-    console.error('  auditar: la segunda es invisible para quien lee la primera.')
+    console.error('  Keep ONE entry with the complete reason. Two reasons for the same path cannot be')
+    console.error('  audited: the second is invisible to readers of the first.')
     process.exit(2)
   }
 }
@@ -524,7 +524,7 @@ function run() {
     notes.push(out.trim())
   } catch (e) {
     problems.push(
-      `derivation: the generated bundles are not what web/tokens + email/copy produce.\n` +
+      `derivation: the generated bundles are not what web/tokens + email/locales produce.\n` +
         `${(e.stdout ?? '').trim()}\n${(e.stderr ?? '').trim()}`.trim(),
     )
   }

@@ -10,13 +10,13 @@ import (
 
 // pyPathExpr renders the Python expression building a request path:
 // /v1/agents/{id} → "/v1/agents/" + quote(str(id), safe="").
-func pyPathExpr(path string) string {
+func pyPathExpr(path string, params map[string]string) string {
 	var parts []string
 	lit := ""
 	for _, seg := range strings.Split(path, "/")[1:] {
 		if strings.HasPrefix(seg, "{") && strings.HasSuffix(seg, "}") {
 			parts = append(parts, fmt.Sprintf("%q", lit+"/"))
-			parts = append(parts, `quote(str(`+paramIdent(seg[1:len(seg)-1])+`), safe="")`)
+			parts = append(parts, `quote(str(`+params[seg[1:len(seg)-1]]+`), safe="")`)
 			lit = ""
 			continue
 		}
@@ -26,6 +26,41 @@ func pyPathExpr(path string) string {
 		parts = append(parts, fmt.Sprintf("%q", lit))
 	}
 	return strings.Join(parts, " + ")
+}
+
+// pyPathParams keeps working keyword calls intact and aliases only names that
+// collide with the method's receiver, transport arguments or typed parameters.
+func pyPathParams(op Operation) map[string]string {
+	reserved := map[string]bool{"self": true, "tenant": true, "query": true}
+	if op.HasBody {
+		reserved["body"] = true
+	}
+	if op.sessionsCommunicationTyped() {
+		reserved["headers"] = true
+		for _, p := range op.Parameters {
+			reserved[paramIdent(p.Name)] = true
+		}
+	}
+	// Reserve existing path identifiers before allocating aliases, so {tenant}
+	// cannot steal the working keyword name of a sibling {tenant_path}.
+	used := make(map[string]bool)
+	for name := range reserved {
+		used[name] = true
+	}
+	for _, p := range op.PathParams {
+		used[paramIdent(p)] = true
+	}
+	params := make(map[string]string, len(op.PathParams))
+	for _, p := range op.PathParams {
+		name := paramIdent(p)
+		if reserved[name] {
+			for name += "_path"; used[name]; name += "_path" {
+			}
+		}
+		params[p] = name
+		used[name] = true
+	}
+	return params
 }
 
 func emitPython(doc *Document) []byte {
@@ -49,9 +84,10 @@ func emitPython(doc *Document) []byte {
 			continue
 		}
 		var args []string
+		params := pyPathParams(op)
 		args = append(args, "self")
 		for _, p := range op.PathParams {
-			args = append(args, paramIdent(p))
+			args = append(args, params[p])
 		}
 		if op.HasBody {
 			if op.bodyRequiredInSignature() {
@@ -74,7 +110,7 @@ func emitPython(doc *Document) []byte {
 		// the core dedups deprecation signals per ENDPOINT, not per resource.
 		if op.RawBody {
 			fmt.Fprintf(&b, "        return self._do_raw(%q, %q, %s, query=query, tenant=tenant)\n",
-				op.Method, op.Path, pyPathExpr(op.Path))
+				op.Method, op.Path, pyPathExpr(op.Path, params))
 			continue
 		}
 		bodyArg := ""
@@ -95,15 +131,16 @@ func emitPython(doc *Document) []byte {
 			}
 		}
 		fmt.Fprintf(&b, "        return self.%s(%q, %q, %s, %squery=query, tenant=tenant)\n",
-			jsonSeam, op.Method, op.Path, pyPathExpr(op.Path), bodyArg)
+			jsonSeam, op.Method, op.Path, pyPathExpr(op.Path, params), bodyArg)
 	}
 	return []byte(b.String())
 }
 
 func emitPythonSessionsCommunicationOp(b *strings.Builder, op Operation) {
+	params := pyPathParams(op)
 	args := []string{"self"}
 	for _, p := range op.PathParams {
-		args = append(args, paramIdent(p)+": str")
+		args = append(args, params[p]+": str")
 	}
 	if bodyType := op.sessionsCommunicationBodyType(); bodyType != "" {
 		args = append(args, "body: "+bodyType)
@@ -152,5 +189,5 @@ func emitPythonSessionsCommunicationOp(b *strings.Builder, op Operation) {
 		seam = "_do_json_required"
 	}
 	fmt.Fprintf(b, "        return cast(%s, self.%s(%q, %q, %s, %squery=query, headers=headers, tenant=tenant))\n",
-		op.sessionsCommunicationResultType(), seam, op.Method, op.Path, pyPathExpr(op.Path), body)
+		op.sessionsCommunicationResultType(), seam, op.Method, op.Path, pyPathExpr(op.Path, params), body)
 }

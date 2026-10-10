@@ -11,7 +11,7 @@ slug: 2026-06/tutorials/getting-started/kubernetes
 
 import { Steps, Aside } from '@astrojs/starlight/components'
 
-The Helm chart at `deploy/helm/olivares` deploys the control
+The Helm chart at `./business-chart` deploys the control
 plane with the same secure defaults as every other path: a **core
 StatefulSet** (non-root, read-only root filesystem, all capabilities dropped),
 TLS on, loopback-equivalent exposure (a `ClusterIP` Service — nothing public
@@ -43,7 +43,7 @@ configurations and the chart's own guard rails). The chart requires
   1. Install from the checkout:
 
      ```bash
-     helm install olivares deploy/helm/olivares
+     helm install olivares ./business-chart
      ```
 
      This renders exactly three workload objects — a `StatefulSet` (1 replica,
@@ -84,11 +84,11 @@ Alternatively, with no Helm at all, the repository ships a flat manifest with
 the same safe single-node defaults, regenerated from the chart by CI:
 
 ```bash
-kubectl apply -f deploy/manifests/install.yaml
+kubectl apply -f ./business-install.yaml
 ```
 
 For Argo CD / Flux / Kustomize (`kustomize build --enable-helm`), see
-`deploy/gitops/` — declarative wrappers over this same chart.
+Business GitOps distribution — declarative wrappers over this same chart.
 
 ## 2. Postgres (multi-tenant)
 
@@ -102,7 +102,7 @@ as a pre-install Job), put the DSN in a Secret, and point the chart at it:
 kubectl create secret generic olivares-pg \
   --from-literal=dsn='postgres://olivares_app:***@db:5432/olivares?sslmode=verify-full'
 
-helm install olivares deploy/helm/olivares \
+helm install olivares ./business-chart \
   --set core.engine=postgres \
   --set postgres.dsnSecret=olivares-pg
 ```
@@ -130,7 +130,7 @@ verified the guards render as hard failures, not warnings):
 kubectl create secret generic olivares-audit-key \
   --from-file=audit-signing.key=<base64-ed25519-private-key-file>
 
-helm install olivares deploy/helm/olivares \
+helm install olivares ./business-chart \
   --set core.engine=postgres \
   --set postgres.dsnSecret=olivares-pg \
   --set core.replicaCount=3 \
@@ -151,7 +151,7 @@ your KEK + per-tenant chain-tip manifest):
 ```bash
 kubectl create secret generic dr-kek --from-literal=passphrase='<strong passphrase>'
 
-helm upgrade olivares deploy/helm/olivares --reuse-values \
+helm upgrade olivares ./business-chart --reuse-values \
   --set backup.enabled=true \
   --set backup.kekSecret=dr-kek
 ```
@@ -170,7 +170,7 @@ have no inbound listener. The chart requires an ingest token and accepts
 optional mTLS material:
 
 ```bash
-helm upgrade olivares deploy/helm/olivares --reuse-values \
+helm upgrade olivares ./business-chart --reuse-values \
   --set collectors.enabled=true \
   --set collectors.ingestTokenSecret=olivares-ingest-token   # ingest:write bearer token
 ```

@@ -68,13 +68,13 @@ case "$PROFILE" in
 production) ANCHOR_PREFIX=prod ;;
 preprod) ANCHOR_PREFIX=sandbox ;;
 *)
-	echo "check-release-anchor-identity: perfil de release desconocido '$PROFILE'." >&2
-	echo "  Perfiles conocidos: production, preprod. Fija OLIVARES_RELEASE_PROFILE a uno de ellos." >&2
+	echo "check-release-anchor-identity: unknown release profile '$PROFILE'." >&2
+	echo "  Known profiles: production, preprod. Set OLIVARES_RELEASE_PROFILE to one of them." >&2
 	exit 2
 	;;
 esac
 
-fail2() { echo "check-release-anchor-identity: ⛔ NO HE PODIDO MIRAR: $1" >&2; exit 2; }
+fail2() { echo "check-release-anchor-identity: ⛔ COULD NOT CHECK: $1" >&2; exit 2; }
 
 if [ "${1:-}" = "--selftest" ]; then
 	exec sh "$ROOT/scripts/test-release-anchor-identity.sh"
@@ -150,21 +150,16 @@ for name in LICENSE OTA; do
 
 	if [ "$LIVE" -eq 1 ]; then
 		command -v gh >/dev/null 2>&1 || fail2 "--live needs 'gh' and it is not on this host."
-		# ⛔ ORDEN DELIBERADO AL RESOLVER (rebase, 2026-08-31): mi guarda de coherencia
-		# perfil/repositorio va PRIMERO porque es una PRECONDICION —si los entornos no casan,
-		# la comparacion no significa nada y no hay que gastar la llamada—; la lectura de abajo
-		# es la de `main` (040e4c207), NO la mia. La mia era la version de UNA linea cuyo `| trim`
-		# se comia el codigo de salida de `gh`, que es exactamente el defecto que ese commit cura:
-		# quedarme con mi lado entero habria REVERTIDO su arreglo mientras el fichero parecia mio.
-		# ⛔ EL PERFIL Y EL REPOSITORIO TIENEN QUE CASAR, y este guard existe por un defecto que
-		# introduje yo al dar conciencia de perfil (2026-08-30). `REPO` cae por defecto al
-		# repo de PRODUCCION y `PROFILE` cae por defecto a `production` — coherente mientras nadie
-		# toque uno solo. Fijar OLIVARES_RELEASE_PROFILE=preprod SIN fijar OLIVARES_RELEASE_REPO
-		# leeria las variables vivas de PRODUCCION y las juzgaria contra las anclas de SANDBOX:
-		# mismatch garantizado y falso. Antes de mi cambio no podia pasar, porque el perfil no
-		# existia para este guion. No se adivina cual de los dos quiso decir: se rehusa.
+		# Resolve profile/repository coherence first (rebase, 2026-08-31): mismatched
+		# environments invalidate the comparison, so avoid the network call. Preserve the
+		# read from main 040e4c207: the older one-line pipe to trim swallowed gh's exit code.
+		# Taking that older version wholesale would have reverted the main fix.
+		# The profile guard fixes (2026-08-30): REPO and PROFILE both default to
+		# production, but setting only OLIVARES_RELEASE_PROFILE=preprod would compare live
+		# production variables against sandbox anchors. Reject that guaranteed false mismatch
+		# rather than guess which environment the caller intended.
 		if [ "$ANCHOR_PREFIX" != prod ] && [ "$REPO" = "olivaresai/olivares" ]; then
-			fail2 "--live con perfil '$PROFILE' contra el repositorio de produccion ($REPO). Las variables vivas y las anclas revisadas serian de entornos distintos, y la comparacion no significaria nada. Fija OLIVARES_RELEASE_REPO al repositorio de ese perfil."
+			fail2 "--live with profile '$PROFILE' against the production repository ($REPO). Live variables and reviewed anchors would belong to different environments, making the comparison invalid. Set OLIVARES_RELEASE_REPO to that profile's repository."
 		fi
 
 		# ⛔ NOT `gh ... | trim` IN ONE GO, and this is measured, not stylistic (2026-08-29).
@@ -214,29 +209,22 @@ for name in LICENSE OTA; do
 	fi
 done
 
-# ⛔ UN VERDE DE preprod NO SE PUEDE SOSTENER, y el defecto es MIO: lo introduje al dar perfiles a
-# este control. `preprod` resuelve a an internal design note (not shipped) (huella 11a7693c), que
-# es el REGISTRO de la ceremonia O03 y NO la clave con la que firma el worker de sandbox
-# desplegado — un tercer par independiente (key id 0e73e1a0) cuya mitad publica ni siquiera vive
-# en el arbol. Medido por contra el despliegue vivo y escrito al lado del propio fichero,
-# en an internal design note (not shipped): `license verify` con el registro da rc=1
-# «signature invalid», y con la clave real rc=0.
-#
-# Asi que casar con el registro NO prueba que el ancla sea la correcta: es un VERDE FALSO. Y no
-# se arregla apuntando a la otra, porque cual de los dos registros manda es una pregunta de la
-# CEREMONIA y no de la medida (por eso ese LEEME no toca el .pub: falsear un acta seria peor que
-# el desacuerdo). Este control dice entonces lo unico que puede sostener — que no ha podido
-# mirar — en vez de bendecir un ancla que no ha comparado con quien firma.
-#
-# Se rehusa AQUI, y no en el `case` de perfil de arriba, a proposito: alli cortaria antes de la
-# guarda de coherencia de --live y antes de detectar las anclas de PROD embarcadas en un preprod,
-# que son DOS hallazgos verdaderos. Un rojo real vale mas que un «no he podido mirar».
+# A preprod success cannot prove anchor identity. Its an internal design note (not shipped)
+# is the O03 ceremony record (fingerprint 11a7693c), not the deployed sandbox Worker's
+# independent signing key (id 0e73e1a0), whose public half is absent from the tree.
+# measured license verify returning rc 1 “signature invalid” with the record,
+# but rc 0 with the actual key; see an internal design note (not shipped)
+# Matching the record would certify a false anchor. Choosing a different ceremonial
+# record is outside this measurement, so report could-not-check rather than false success.
+# Defer this refusal until here: rejecting in the profile case above would skip the
+# --live coherence guard and production-anchor detection under preprod, two real findings.
+# A real finding takes precedence over an unperformed check.
 if [ "$rc" -eq 0 ] && [ "$ANCHOR_PREFIX" != prod ]; then
-	echo "check-release-anchor-identity: ⛔ NO HE PODIDO MIRAR: las anclas de '$PROFILE' casan con el" >&2
-	echo "    registro de la ceremonia O03 ($DIR/${ANCHOR_PREFIX}-license.pub), que NO es la clave con" >&2
-	echo "    la que firma el worker de sandbox (key id 0e73e1a0). Casar con el registro no prueba" >&2
-	echo "    identidad. Ver design/claves-o03/LEEME-SANDBOX-LICENSE.md; cual de las dos manda lo" >&2
-	echo "    decide la ceremonia, no este gate." >&2
+	echo "check-release-anchor-identity: ⛔ COULD NOT CHECK: '$PROFILE' anchors match the" >&2
+	echo "    O03 ceremony record ($DIR/${ANCHOR_PREFIX}-license.pub), which is not the key" >&2
+	echo "    used by the sandbox worker (key id 0e73e1a0). Matching the record does not prove" >&2
+	echo "    identity. See design/claves-o03/LEEME-SANDBOX-LICENSE.md; the ceremony determines" >&2
+	echo "    which key is authoritative, not this check." >&2
 	exit 2
 fi
 [ "$rc" -eq 0 ] && echo "check-release-anchor-identity: OK — both anchors in effect are the reviewed ones."

@@ -1,6 +1,7 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
+import { FEATURE_EXTENSIONS } from '@/features/extensions'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
@@ -8,7 +9,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RunDTO } from './types'
 
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ activeTenant: 't1', can: () => true }),
+  useAuth: () => ({
+    activeTenant: 't1',
+    can: (p: string) => auth.allow === null || auth.allow.has(p),
+  }),
 }))
 vi.mock('@tanstack/react-router', () => ({
   //useUrlState follows the location, so the mock has to answer it.
@@ -28,6 +32,9 @@ vi.mock('@/features/governance/api', () => ({
 import { governanceApi } from '@/features/governance/api'
 import { killswitchApi } from '@/features/killswitch/api'
 import { GovernancePanel } from './governance-panel'
+
+const business = FEATURE_EXTENSIONS.some((view) => view.id === 'finops')
+const auth = vi.hoisted(() => ({ allow: null as Set<string> | null }))
 
 const baseRun: RunDTO = {
   run_ref: 'run-x',
@@ -54,9 +61,27 @@ function renderPanel(run: RunDTO) {
 
 beforeEach(() => {
   vi.clearAllMocks()
+  auth.allow = null
 })
 
 describe('GovernancePanel', () => {
+  it.each([
+    ['finops:budget:read', !business],
+    ['finops:spend:read', business],
+  ])(
+    'offers stored budgets only with the destination permission %s',
+    (permission, visible) => {
+      auth.allow = new Set([permission])
+      renderPanel(baseRun)
+      const link = screen.queryByRole('link', { name: /finops|budgets/i })
+      if (visible)
+        expect(link).toHaveAttribute(
+          'href',
+          business ? '/finops' : '/stored-budgets',
+        )
+      else expect(link).toBeNull()
+    },
+  )
   it('shows the governed/recording posture from the run facts and live HITL status', async () => {
     vi.mocked(killswitchApi.state).mockResolvedValue({
       estate_stopped: false,

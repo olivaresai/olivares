@@ -143,8 +143,8 @@ func wantNull(t *testing.T, what, key string, doc map[string]any) {
 // security check
 // ---------------------------------------------------------------------------
 
-// l4Advisory is the witness advisory: it affects this product from 26.5.0 and is
-// fixed in 26.7.1, so 26.6.0 is AFFECTED and 26.7.1 is CLEAN off one feed.
+// l4Advisory is the witness advisory: it affects this product from 26.500 and is
+// fixed in 26.701, so 26.600 is AFFECTED and 26.701 is CLEAN off one feed.
 func l4Advisory(introduced string) secadvisory.Advisory {
 	return secadvisory.Advisory{
 		SchemaVersion: "1.6.0",
@@ -156,7 +156,7 @@ func l4Advisory(introduced string) secadvisory.Advisory {
 		Affected: []secadvisory.Affected{{
 			Package: secadvisory.Package{Ecosystem: "Go", Name: productModule},
 			Ranges: []secadvisory.Range{{Type: "SEMVER", Events: []secadvisory.Event{
-				{Introduced: introduced}, {Fixed: "26.7.1"},
+				{Introduced: introduced}, {Fixed: "26.701"},
 			}}},
 		}},
 		References: []secadvisory.Ref{{Type: "ADVISORY", URL: "https://olivares.ai/psirt/L4-0001"}},
@@ -189,11 +189,11 @@ func l4SignedFeed(t *testing.T, advisories ...secadvisory.Advisory) (string, str
 }
 
 func TestL4SecurityCheckBothPanes(t *testing.T) {
-	feed, pub := l4SignedFeed(t, l4Advisory("26.5.0"))
+	feed, pub := l4SignedFeed(t, l4Advisory("26.500"))
 	unevalFeed, unevalPub := l4SignedFeed(t, l4Advisory("26.5.0.1"))
 
 	t.Run("affected exits 7 on both panes", func(t *testing.T) {
-		args := []string{"security", "check", "--feed", feed, "--pubkey", pub, "--product-version", "26.6.0"}
+		args := []string{"security", "check", "--feed", feed, "--pubkey", pub, "--product-version", "26.600"}
 
 		out, errOut, err := runLeafCLI(t, args...)
 		wantRC(t, "security check (affected, text)", err, 7)
@@ -201,8 +201,8 @@ func TestL4SecurityCheckBothPanes(t *testing.T) {
 			t.Fatalf("security check wrote to stderr on the text pane: %q", errOut)
 		}
 		wantText(t, "security check (affected)", l4Norm(out, [2]string{feed, "<FEED>"}),
-			"olivares 26.6.0 is AFFECTED by 1 advisory(ies):\n"+
-				"  - OLIVARES-L4-0001 [CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H]: L4 witness advisory (fixed in 26.7.1)\n"+
+			"olivares 26.600 is AFFECTED by 1 advisory(ies):\n"+
+				"  - OLIVARES-L4-0001 [CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H]: L4 witness advisory (fixed in 26.701)\n"+
 				"      https://olivares.ai/psirt/L4-0001\n"+
 				"\nRun `olivares upgrade` to move to a patched, signed release.\n")
 
@@ -211,7 +211,7 @@ func TestL4SecurityCheckBothPanes(t *testing.T) {
 		doc, keys := leafJSONKeys(t, jout)
 		wantKeys(t, "security check", keys,
 			[]string{"affected", "cause", "determined", "feed_advisories", "findings", "unevaluable", "version"})
-		wantString(t, "security check", "version", doc, "26.6.0")
+		wantString(t, "security check", "version", doc, "26.600")
 		wantBool(t, "security check", "determined", doc, true)
 		wantBool(t, "security check", "affected", doc, true)
 		wantString(t, "security check", "cause", doc, "")
@@ -225,7 +225,7 @@ func TestL4SecurityCheckBothPanes(t *testing.T) {
 			"id":        "OLIVARES-L4-0001",
 			"summary":   "L4 witness advisory",
 			"severity":  "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
-			"fixed_in":  "26.7.1",
+			"fixed_in":  "26.701",
 			"reference": "https://olivares.ai/psirt/L4-0001",
 		} {
 			if got, _ := f[key].(string); got != want {
@@ -238,12 +238,12 @@ func TestL4SecurityCheckBothPanes(t *testing.T) {
 	})
 
 	t.Run("clean exits 0 and affected is FALSE, not null", func(t *testing.T) {
-		args := []string{"security", "check", "--feed", feed, "--pubkey", pub, "--product-version", "26.7.1"}
+		args := []string{"security", "check", "--feed", feed, "--pubkey", pub, "--product-version", "26.701"}
 
 		out, _, err := runLeafCLI(t, args...)
 		wantRC(t, "security check (clean, text)", err, 0)
 		wantText(t, "security check (clean)", l4Norm(out),
-			"olivares 26.7.1: no known advisory affects this version (feed verified, 1 advisories).\n")
+			"olivares 26.701: no known advisory affects this version (feed verified, 1 advisories).\n")
 
 		jout, _, jerr := runLeafCLI(t, append([]string{"-o", "json"}, args...)...)
 		wantRC(t, "security check (clean, json)", jerr, 0)
@@ -271,7 +271,7 @@ func TestL4SecurityCheckBothPanes(t *testing.T) {
 				"           here would be an artifact of comparing against version zero, not a\n"+
 				"           measurement.\n"+
 				"  way out: name the version to check —\n"+
-				"             olivares security check --feed <FEED> --product-version <MAJOR.MINOR.PATCH>\n"+
+				"             olivares security check --feed <FEED> --product-version <MAJOR.MINOR>\n"+
 				"           A released binary carries its own stamp; only a build from source does not.\n"+
 				"  the feed itself verified fine (1 advisories) — it is the VERSION that is unknown.\n")
 
@@ -288,17 +288,17 @@ func TestL4SecurityCheckBothPanes(t *testing.T) {
 	})
 
 	t.Run("an unevaluable range exits 8 and affected is NULL", func(t *testing.T) {
-		args := []string{"security", "check", "--feed", unevalFeed, "--pubkey", unevalPub, "--product-version", "26.6.0"}
+		args := []string{"security", "check", "--feed", unevalFeed, "--pubkey", unevalPub, "--product-version", "26.600"}
 
 		out, _, err := runLeafCLI(t, args...)
 		wantRC(t, "security check (unevaluable, text)", err, 8)
 		wantText(t, "security check (unevaluable)", l4Norm(out),
-			"olivares 26.6.0: CANNOT DETERMINE whether any advisory affects this version.\n"+
+			"olivares 26.600: CANNOT DETERMINE whether any advisory affects this version.\n"+
 				"  cause:   1 of the 1 advisory(ies) in this feed could not be evaluated, so\n"+
 				"           \"not affected\" would be a claim about advisories this build never\n"+
 				"           read:\n"+
 				"             - OLIVARES-L4-0001: \"introduced\":\"26.5.0.1\" is not a version this build can order: "+
-				"release: version \"26.5.0.1\" is not MAJOR.MINOR or MAJOR.MINOR.PATCH\n"+
+				"release: version \"26.5.0.1\" must be MAJOR.MINOR\n"+
 				"  way out: this is a FEED problem, not a key problem — the signature verified.\n"+
 				"           Take it to the advisory publisher, or upgrade to a build that\n"+
 				"           understands these ranges.\n")
@@ -321,7 +321,7 @@ func TestL4SecurityCheckBothPanes(t *testing.T) {
 		if got, _ := row["id"].(string); got != "OLIVARES-L4-0001" {
 			t.Fatalf("security check -o json unevaluable[0].id = %q, want OLIVARES-L4-0001", got)
 		}
-		if reason, _ := row["reason"].(string); !strings.Contains(reason, "not MAJOR.MINOR or MAJOR.MINOR.PATCH") {
+		if reason, _ := row["reason"].(string); !strings.Contains(reason, "must be MAJOR.MINOR") {
 			t.Fatalf("security check -o json unevaluable[0].reason = %q, want the ordering failure it names", reason)
 		}
 	})
@@ -340,22 +340,22 @@ func TestL4SecurityCheckBothPanes(t *testing.T) {
 			Affected: []secadvisory.Affected{{
 				Package: secadvisory.Package{Ecosystem: "Go", Name: productModule},
 				Ranges: []secadvisory.Range{{Type: "SEMVER", Events: []secadvisory.Event{
-					{Introduced: "26.5.0.1"}, {Fixed: "26.7.1"},
+					{Introduced: "26.5.0.1"}, {Fixed: "26.701"},
 				}}},
 			}},
 		}
-		mixedFeed, mixedPub := l4SignedFeed(t, l4Advisory("26.5.0"), both)
-		args := []string{"security", "check", "--feed", mixedFeed, "--pubkey", mixedPub, "--product-version", "26.6.0"}
+		mixedFeed, mixedPub := l4SignedFeed(t, l4Advisory("26.500"), both)
+		args := []string{"security", "check", "--feed", mixedFeed, "--pubkey", mixedPub, "--product-version", "26.600"}
 
 		out, _, err := runLeafCLI(t, args...)
 		wantRC(t, "security check (affected+incomplete, text)", err, 7)
 		wantText(t, "security check (affected+incomplete)", l4Norm(out),
-			"olivares 26.6.0 is AFFECTED by 1 advisory(ies):\n"+
-				"  - OLIVARES-L4-0001 [CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H]: L4 witness advisory (fixed in 26.7.1)\n"+
+			"olivares 26.600 is AFFECTED by 1 advisory(ies):\n"+
+				"  - OLIVARES-L4-0001 [CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H]: L4 witness advisory (fixed in 26.701)\n"+
 				"      https://olivares.ai/psirt/L4-0001\n"+
 				"\n1 further advisory(ies) could not be evaluated, so this list may be incomplete:\n"+
 				"  - OLIVARES-L4-0002: \"introduced\":\"26.5.0.1\" is not a version this build can order: "+
-				"release: version \"26.5.0.1\" is not MAJOR.MINOR or MAJOR.MINOR.PATCH\n"+
+				"release: version \"26.5.0.1\" must be MAJOR.MINOR\n"+
 				"\nRun `olivares upgrade` to move to a patched, signed release.\n")
 
 		jout, _, jerr := runLeafCLI(t, append([]string{"-o", "json"}, args...)...)
@@ -376,7 +376,7 @@ func TestL4SecurityCheckBothPanes(t *testing.T) {
 	})
 
 	t.Run("--quiet silences BOTH panes when unaffected", func(t *testing.T) {
-		args := []string{"security", "check", "--feed", feed, "--pubkey", pub, "--product-version", "26.7.1", "--quiet"}
+		args := []string{"security", "check", "--feed", feed, "--pubkey", pub, "--product-version", "26.701", "--quiet"}
 
 		out, _, err := runLeafCLI(t, args...)
 		wantRC(t, "security check (quiet, text)", err, 0)
@@ -411,7 +411,7 @@ func TestL4SecurityCheckBothPanes(t *testing.T) {
 	})
 
 	t.Run("an explicit -o text is byte-identical to no flag", func(t *testing.T) {
-		args := []string{"security", "check", "--feed", feed, "--pubkey", pub, "--product-version", "26.6.0"}
+		args := []string{"security", "check", "--feed", feed, "--pubkey", pub, "--product-version", "26.600"}
 		plain, plainErr, err1 := runLeafCLI(t, args...)
 		explicit, explicitErr, err2 := runLeafCLI(t, append([]string{"-o", "text"}, args...)...)
 		if plain != explicit || plainErr != explicitErr {
@@ -517,7 +517,7 @@ func TestL4SecurityAdvisoriesBothPanes(t *testing.T) {
 	key, expectPub := l4SigningKey(t)
 	draft, err := json.Marshal(advisoryDraft{
 		Author:     "psirt@olivares.ai",
-		Advisories: []secadvisory.Advisory{l4Advisory("26.5.0")},
+		Advisories: []secadvisory.Advisory{l4Advisory("26.500")},
 	})
 	if err != nil {
 		t.Fatal(err)
@@ -650,7 +650,7 @@ func l4Manifest(t *testing.T, minVersion, notes string) *l4ManifestFixture {
 	var arts []release.Artifact
 	var sums strings.Builder
 	for _, plat := range [][2]string{{"darwin", "arm64"}, {"linux", "amd64"}} {
-		name := release.ExpectedArtifactName("26.8.0", plat[0], plat[1], "")
+		name := release.ExpectedArtifactName("26.800", plat[0], plat[1], "")
 		body := []byte("L4 witness archive for " + plat[0] + "/" + plat[1] + "\n")
 		if err := os.WriteFile(filepath.Join(dir, name), body, 0o600); err != nil {
 			t.Fatal(err)
@@ -667,7 +667,7 @@ func l4Manifest(t *testing.T, minVersion, notes string) *l4ManifestFixture {
 	m := release.Manifest{
 		SchemaVersion: release.ManifestSchemaVersion,
 		Channel:       release.ChannelStable,
-		Version:       "26.8.0",
+		Version:       "26.800",
 		MinVersion:    minVersion,
 		ReleasedAt:    released,
 		Expires:       &expires,
@@ -743,16 +743,16 @@ func TestL4ReleaseSignManifestBothPanes(t *testing.T) {
 	// min_version and notes are set so the block has ALERT rows and CheckPolicy
 	// produces a warning: an empty warnings array proves nothing about a field that
 	// carries warnings.
-	f := l4Manifest(t, "26.0.0", "L4 witness release")
+	f := l4Manifest(t, "26.0", "L4 witness release")
 	subs := [][2]string{{f.checksums, "<CHECKSUMS>"}, {f.manifest, "<MANIFEST>"}, {f.dir, "<DIR>"}}
 
 	wantBlock := "\n=== POLICY THE SIGNATURE WILL COVER — READ EVERY LINE BEFORE SIGNING ===\n" +
 		"    (these fields are NOT bound by checksums.txt; only your review binds them)\n" +
 		"   schema_version: 1\n" +
 		"   channel:        stable\n" +
-		"   version:        26.8.0\n" +
+		"   version:        26.800\n" +
 		"   released_at:    <TS>\n" +
-		"!! min_version:    26.0.0  <- deployments BELOW this are refused the upgrade\n" +
+		"!! min_version:    26.0  <- deployments BELOW this are refused the upgrade\n" +
 		"   expires:        <TS> (in <DUR>)\n" +
 		"   rollout:        100% (omitted — the whole fleet)\n" +
 		"   security:       false\n" +
@@ -791,7 +791,7 @@ func TestL4ReleaseSignManifestBothPanes(t *testing.T) {
 		wantString(t, "release sign-manifest", "manifest", doc, f.manifest)
 		wantString(t, "release sign-manifest", "signature", doc, sigOut)
 		wantString(t, "release sign-manifest", "channel", doc, "stable")
-		wantString(t, "release sign-manifest", "version", doc, "26.8.0")
+		wantString(t, "release sign-manifest", "version", doc, "26.800")
 		wantString(t, "release sign-manifest", "checksums", doc, f.checksums)
 		wantBool(t, "release sign-manifest", "cross_checked", doc, true)
 		wantNumber(t, "release sign-manifest", "artifacts_matched", doc, 2)
@@ -878,7 +878,7 @@ func TestL4ReleaseVerifyManifestBothPanes(t *testing.T) {
 		wantString(t, "release verify-manifest", "key_source", doc, "")
 		wantString(t, "release verify-manifest", "key_fingerprint", doc, "")
 		wantString(t, "release verify-manifest", "channel", doc, "stable")
-		wantString(t, "release verify-manifest", "version", doc, "26.8.0")
+		wantString(t, "release verify-manifest", "version", doc, "26.800")
 		wantString(t, "release verify-manifest", "max_freshness_window", doc,
 			release.DefaultMaxFreshnessWindow.String())
 		wantNumber(t, "release verify-manifest", "artifacts_matched", doc, 2)
@@ -891,7 +891,7 @@ func TestL4ReleaseVerifyManifestBothPanes(t *testing.T) {
 	t.Run("post-ceremony, --sig and --dir bind the published bytes", func(t *testing.T) {
 		args := []string{"release", "verify-manifest", "--manifest", f.manifest, "--sig", f.sig,
 			"--pubkey", f.pubB64, "--checksums", f.checksums, "--dir", f.dir,
-			"--expect-channel", "stable", "--expect-version", "26.8.0"}
+			"--expect-channel", "stable", "--expect-version", "26.800"}
 
 		out, _, err := runLeafCLI(t, args...)
 		wantRC(t, "release verify-manifest (signed, text)", err, 0)
@@ -901,7 +901,7 @@ func TestL4ReleaseVerifyManifestBothPanes(t *testing.T) {
 				"    (these fields are NOT bound by checksums.txt; only your review binds them)\n"+
 				"   schema_version: 1\n"+
 				"   channel:        stable\n"+
-				"   version:        26.8.0\n"+
+				"   version:        26.800\n"+
 				"   released_at:    <TS>\n"+
 				"   min_version:    none (any version may jump directly to this release)\n"+
 				"   expires:        <TS> (in <DUR>)\n"+
@@ -916,7 +916,7 @@ func TestL4ReleaseVerifyManifestBothPanes(t *testing.T) {
 				"digests:   all 2 manifest artifact(s) match <CHECKSUMS>\n"+
 				fmt.Sprintf("bytes:     %s (%d B) re-hashed and bound\n", f.artifacts[0], f.sizes[0])+
 				fmt.Sprintf("bytes:     %s (%d B) re-hashed and bound\n", f.artifacts[1], f.sizes[1])+
-				"OK: stable manifest for 26.8.0 is bound to the signed checksums and to the published bytes, and its policy is within bounds.\n"+
+				"OK: stable manifest for 26.800 is bound to the signed checksums and to the published bytes, and its policy is within bounds.\n"+
 				"    STILL YOURS TO CONFIRM (no machine can): that the POLICY block above is the policy you intended —\n"+
 				"    min_version, rollout, expires, security/advisories and notes. `OK:` means plausible, not intended.\n")
 
@@ -1031,7 +1031,7 @@ var l4UpgradeKeys = []string{
 }
 
 func TestL4UpgradeReadOnlyBothPanes(t *testing.T) {
-	target := writeTarget(t, l4Script("26.0.0"))
+	target := writeTarget(t, l4Script("26.0"))
 	dataDir := t.TempDir()
 
 	cases := []struct {
@@ -1045,20 +1045,20 @@ func TestL4UpgradeReadOnlyBothPanes(t *testing.T) {
 		eligible   bool
 	}{
 		{
-			name: "check", version: "26.8.0", wantAction: upgradeActionChecked,
+			name: "check", version: "26.800", wantAction: upgradeActionChecked,
 			wantStatus: upgradeStatusAvailable, eligible: true,
 			wantFinal: "\n--check OK: manifest verifies and an upgrade is available. Re-run without --check to install.\n",
 		},
 		{
-			name: "up to date", version: "26.0.0", wantAction: upgradeActionUpToDate,
+			name: "up to date", version: "26.0", wantAction: upgradeActionUpToDate,
 			wantStatus: upgradeStatusUpToDate, eligible: true,
-			wantFinal: "\nalready on 26.0.0 (channel stable) — nothing to do.\n",
+			wantFinal: "\nalready on 26.0 (channel stable) — nothing to do.\n",
 		},
 		{
-			name: "out of cohort", version: "26.8.0", rollout: func() *int { z := 0; return &z }(),
+			name: "out of cohort", version: "26.800", rollout: func() *int { z := 0; return &z }(),
 			extraArgs: []string{"--if-eligible"}, wantAction: upgradeActionNotInCohor,
 			wantStatus: upgradeStatusAvailable, eligible: false,
-			wantFinal: "\nnot in the staged-rollout cohort for 26.8.0 yet — skipping (this is expected during a partial rollout).\n",
+			wantFinal: "\nnot in the staged-rollout cohort for 26.800 yet — skipping (this is expected during a partial rollout).\n",
 		},
 	}
 
@@ -1084,7 +1084,7 @@ func TestL4UpgradeReadOnlyBothPanes(t *testing.T) {
 				"OTA key: --pubkey (fingerprint <FP>)\n"+
 					"source: air-gap bundle <BUNDLE>\n"+
 					"channel:   stable\n"+
-					"current:   26.0.0\n"+
+					"current:   26.0\n"+
 					"available: "+tc.version+" (released <DATE>)\n"+
 					"status:    "+map[bool]string{true: "up to date", false: "upgrade available"}[tc.wantStatus == upgradeStatusUpToDate]+"\n"+
 					cohortLine+tc.wantFinal)
@@ -1101,7 +1101,7 @@ func TestL4UpgradeReadOnlyBothPanes(t *testing.T) {
 			wantString(t, "upgrade "+tc.name, "action", doc, tc.wantAction)
 			wantString(t, "upgrade "+tc.name, "status", doc, tc.wantStatus)
 			wantString(t, "upgrade "+tc.name, "channel", doc, "stable")
-			wantString(t, "upgrade "+tc.name, "current", doc, "26.0.0")
+			wantString(t, "upgrade "+tc.name, "current", doc, "26.0")
 			wantString(t, "upgrade "+tc.name, "available", doc, tc.version)
 			wantString(t, "upgrade "+tc.name, "ota_key", doc, "--pubkey")
 			wantString(t, "upgrade "+tc.name, "source", doc, "air-gap bundle "+b.dir)
@@ -1120,14 +1120,14 @@ func TestL4UpgradeDeclaredCurrentIsMarkedAsAClaim(t *testing.T) {
 	// The contrafactual for current_declared: the SAME leaf, the same version, and
 	// only the way it was learned differs. Without this the false above could be a
 	// field that is never true.
-	b := l4Bundle(t, "26.8.0", nil, l4Script("26.8.0"))
+	b := l4Bundle(t, "26.800", nil, l4Script("26.800"))
 	dataDir := t.TempDir()
 	out, _, err := runLeafCLI(t, "-o", "json", "upgrade", "--bundle", b.dir, "--check",
-		"--pubkey", b.pubB64, "--target", "/bin/false", "--current-version", "26.0.0",
+		"--pubkey", b.pubB64, "--target", "/bin/false", "--current-version", "26.0",
 		"--data-dir", dataDir, "--os", "linux", "--arch", "amd64")
 	wantRC(t, "upgrade (declared, json)", err, 0)
 	doc, _ := leafJSONKeys(t, out)
-	wantString(t, "upgrade (declared)", "current", doc, "26.0.0")
+	wantString(t, "upgrade (declared)", "current", doc, "26.0")
 	wantBool(t, "upgrade (declared)", "current_declared", doc, true)
 }
 
@@ -1137,10 +1137,10 @@ func TestL4UpgradeInstalledBothPanes(t *testing.T) {
 	// gate C02-20 added checks.
 	run := func(t *testing.T, jsonPane bool) (string, string, error) {
 		t.Helper()
-		target := writeTarget(t, l4Script("26.0.0"))
+		target := writeTarget(t, l4Script("26.0"))
 		dataDir := t.TempDir()
 		installDevLicense(t, dataDir)
-		b := l4Bundle(t, "26.8.0", nil, l4Script("26.8.0"))
+		b := l4Bundle(t, "26.800", nil, l4Script("26.800"))
 		args := []string{"upgrade", "--bundle", b.dir, "--pubkey", b.pubB64, "--target", target,
 			"--data-dir", dataDir, "--os", "linux", "--arch", "amd64", "--yes"}
 		if jsonPane {
@@ -1148,7 +1148,7 @@ func TestL4UpgradeInstalledBothPanes(t *testing.T) {
 		}
 		out, errOut, err := runLeafCLI(t, args...)
 		// The swap really happened, or the desenlace under test was never reached.
-		if got := runsVersion(t, target); !strings.Contains(got, "26.8.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.800") {
 			t.Fatalf("the target was not swapped: %s still reports %q", target, got)
 		}
 		return out, errOut, err
@@ -1157,7 +1157,7 @@ func TestL4UpgradeInstalledBothPanes(t *testing.T) {
 	t.Run("text", func(t *testing.T) {
 		out, _, err := run(t, false)
 		wantRC(t, "upgrade (installed, text)", err, 0)
-		for _, want := range []string{"installed: ", " is now olivares 26.8.0", "rollback: the previous binary is backed up at "} {
+		for _, want := range []string{"installed: ", " is now olivares 26.800", "rollback: the previous binary is backed up at "} {
 			if !strings.Contains(out, want) {
 				t.Fatalf("upgrade (installed) text pane lost %q:\n%s", want, out)
 			}
@@ -1171,7 +1171,7 @@ func TestL4UpgradeInstalledBothPanes(t *testing.T) {
 		wantKeys(t, "upgrade (installed)", keys, l4UpgradeKeys)
 		wantString(t, "upgrade (installed)", "action", doc, upgradeActionInstalled)
 		wantString(t, "upgrade (installed)", "status", doc, upgradeStatusAvailable)
-		if installed, _ := doc["installed"].(string); !strings.Contains(installed, "26.8.0") {
+		if installed, _ := doc["installed"].(string); !strings.Contains(installed, "26.800") {
 			t.Fatalf("upgrade (installed) -o json installed = %q, want the version the swap probed", installed)
 		}
 		backup, _ := doc["backup"].(string)

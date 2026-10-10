@@ -201,11 +201,13 @@ func (m *Module) handleStream(w http.ResponseWriter, r *http.Request, mc api.Mod
 }
 
 // writeFrame arms a finite per-write deadline (so a stalled client cannot pin the
-// goroutine), writes the frame and flushes it. SetWriteDeadline is best-effort:
+// goroutine), writes the frame and flushes it, then clears the deadline while
+// waiting for the next frame. SetWriteDeadline is best-effort:
 // if the wrapped writer does not support it (e.g. a test recorder), the write
 // still proceeds under whatever deadline applies.
 func writeFrame(rc *http.ResponseController, w io.Writer, frame string) error {
 	_ = rc.SetWriteDeadline(time.Now().Add(streamWriteTimeout))
+	defer func() { _ = rc.SetWriteDeadline(time.Time{}) }()
 	if _, err := io.WriteString(w, frame); err != nil {
 		return err
 	}

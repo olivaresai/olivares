@@ -42,18 +42,18 @@ const PIN = process.env.OLIVARES_CLI_PIN || ''
 const PROFUNDIDAD = Number(process.env.OLIVARES_CLI_DEPTH || '3')
 
 function morir(msg) {
-  console.error(`cli-walk: NO HE PODIDO MIRAR — ${msg}`)
+  console.error(`cli-walk: COULD NOT LOOK — ${msg}`)
   process.exit(2)
 }
-if (!BIN) morir('falta OLIVARES_CLI_BIN. Sin binario no hay nada que recorrer, y eso no es un verde.')
-if (!existsSync(BIN)) morir(`OLIVARES_CLI_BIN=${BIN} no existe.`)
+if (!BIN) morir('missing OLIVARES_CLI_BIN. Without a binary, there is nothing to exercise; this cannot pass.')
+if (!existsSync(BIN)) morir(`OLIVARES_CLI_BIN=${BIN} does not exist.`)
 
 function correr(args, timeout = 90_000) {
   try {
     const out = execFileSync(BIN, args, { encoding: 'utf8', timeout, stdio: ['ignore', 'pipe', 'pipe'] })
     return { rc: 0, out, err: '' }
   } catch (e) {
-    if (e.code === 'ETIMEDOUT' || e.signal) return { rc: -1, out: '', err: `tiempo agotado tras ${timeout} ms` }
+    if (e.code === 'ETIMEDOUT' || e.signal) return { rc: -1, out: '', err: `timed out after ${timeout} ms` }
     return { rc: typeof e.status === 'number' ? e.status : -1, out: e.stdout || '', err: e.stderr || '' }
   }
 }
@@ -96,8 +96,8 @@ while (pila.length) {
     if (n.length < PROFUNDIDAD) pila.push(n)
   }
 }
-if (mandatos.length === 0) morir('cero mandatos descubiertos. Un recorrido vacío no es limpio.')
-console.log(`cli-walk: ${mandatos.length} mandato(s) descubierto(s) del propio binario (profundidad ${PROFUNDIDAD}).`)
+if (mandatos.length === 0) morir('no commands discovered. An empty walkthrough does not demonstrate a clean result.')
+console.log(`cli-walk: ${mandatos.length} command(s) discovered from the binary itself (depth ${PROFUNDIDAD}).`)
 
 // ── 1. el contrato que el binario PUBLICA en su propia ayuda ─────────────────────────────────
 // «2 usage error (unknown flag or bad arguments)» — es un contrato escrito, así que se comprueba.
@@ -107,22 +107,22 @@ let usageOK = 0
 for (const r of mandatos) {
   const h = ayuda(r)
   if (h.rc !== 0 || !h.out.includes('Usage:')) {
-    hallazgos.push({ tipo: 'ayuda', cmd: r.join(' '), detalle: `--help rc=${h.rc}${h.out.includes('Usage:') ? '' : ', sin línea Usage:'}` })
+    hallazgos.push({ tipo: 'help', cmd: r.join(' '), detalle: `--help rc=${h.rc}${h.out.includes('Usage:') ? '' : ', missing Usage: line'}` })
   } else ayudaOK++
   const f = correr([...r, '--esta-bandera-no-existe-jamas'], 60_000)
   if (f.rc !== 2) {
-    hallazgos.push({ tipo: 'usage', cmd: r.join(' '), detalle: `bandera desconocida devolvió ${f.rc}, el binario promete 2` })
+    hallazgos.push({ tipo: 'usage', cmd: r.join(' '), detalle: `unknown flag returned ${f.rc}; the binary promises 2` })
   } else usageOK++
 }
-console.log(`cli-walk: contrato local — ayuda ${ayudaOK}/${mandatos.length}, «bandera desconocida ⇒ 2» ${usageOK}/${mandatos.length}.`)
+console.log(`cli-walk: local contract — help ${ayudaOK}/${mandatos.length}, unknown flag ⇒ 2 ${usageOK}/${mandatos.length}.`)
 
 // ── 2. contra un motor vivo: 404 es hallazgo, 401/403 es una puerta funcionando ───────────────
 let alcanzados = 0
 let noAlcanzados = 0
 if (!BASE) {
-  console.log('cli-walk: SIN OLIVARES_CLI_BASE — no se ha recorrido nada contra un motor. El contrato')
-  console.log('          local NO cubre «el CLI llama a una ruta que el motor no registra», que es')
-  console.log('          justo lo que esta herramienta existe para ver.')
+  console.log('cli-walk: NO OLIVARES_CLI_BASE — no commands were exercised against an engine. The local')
+  console.log('          contract does NOT cover the CLI calling a route the engine does not register, which is')
+  console.log('          what this tool exists to detect.')
 } else {
   // ⛔ NO TODO MANDATO HABLA POR RED, y suponerlo fue un error medido el 2026-08-19: la primera
   //    versión pasaba `--server` a todos los de lectura, y `audit ls`, `connector ls`, `keys ls` y
@@ -145,25 +145,25 @@ if (!BASE) {
     if (p.rc === 2) { noAlcanzados++; continue }
     alcanzados++
     if (/\b(404|501)\b/.test(texto) || /not found|no such route|unknown endpoint/i.test(texto)) {
-      hallazgos.push({ tipo: 'ruta', cmd: r.join(' '), detalle: texto.trim().replace(/\s+/g, ' ').slice(0, 200) })
+      hallazgos.push({ tipo: 'route', cmd: r.join(' '), detalle: texto.trim().replace(/\s+/g, ' ').slice(0, 200) })
     }
   }
-  console.log(`cli-walk: contra el motor — ${alcanzados} de ${candidatos.length} mandato(s) de RED llegaron;`)
-  console.log(`          ${noAlcanzados} se quedaron en usage error por argumentos que este recorrido no sabe`)
-  console.log(`          inventar (NO son cobertura, y decirlo es el punto de esta línea).`)
-  console.log(`cli-walk: ${locales.length} mandato(s) de lectura son LOCALES (no declaran --server): fuera de`)
-  console.log(`          alcance de la mitad viva, y no se cuentan ni a favor ni en contra.`)
+  console.log(`cli-walk: against the engine — ${alcanzados} of ${candidatos.length} NETWORK command(s) reached it;`)
+  console.log(`          ${noAlcanzados} stopped with usage errors for arguments this walkthrough cannot`)
+  console.log(`          supply (these do NOT count as coverage).`)
+  console.log(`cli-walk: ${locales.length} read command(s) are LOCAL (no --server flag): outside the`)
+  console.log(`          live-engine scope, and count as neither passes nor failures.`)
   if (alcanzados === 0) {
-    console.error('cli-walk: NO HE PODIDO MIRAR — con motor configurado, NINGÚN mandato llegó a él.')
-    console.error('          Un recorrido que no alcanza el sujeto no es limpio: es ciego.')
+    console.error('cli-walk: COULD NOT LOOK — an engine is configured, but NO command reached it.')
+    console.error('          A walkthrough that never reaches its subject is unverified.')
     process.exit(2)
   }
 }
 
 if (hallazgos.length > 0) {
-  console.error(`cli-walk: ⛔ ${hallazgos.length} hallazgo(s):`)
+  console.error(`cli-walk: ⛔ ${hallazgos.length} finding(s):`)
   for (const h of hallazgos) console.error(`    [${h.tipo}] ${h.cmd} — ${h.detalle}`)
   process.exit(1)
 }
-console.log(`cli-walk: LIMPIO — ${mandatos.length} mandato(s), ${alcanzados} contra el motor${BASE ? '' : ' (0: sin motor)'}.`)
+console.log(`cli-walk: CLEAN — ${mandatos.length} command(s), ${alcanzados} against the engine${BASE ? '' : ' (0: no engine)'}.`)
 process.exit(0)

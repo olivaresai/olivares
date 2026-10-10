@@ -29,7 +29,7 @@ grep -q 'HOLD' "$DOC" || fail "prepare doc lost HOLD"
 grep -q 'Producer not on main' "$DOC" || fail "prepare doc lost Producer not on main"
 grep -q 'land_key_before_producer' "$DOC" || fail "prepare doc lost the order pin"
 if grep -qiE 'producer landed on main|FIRMA A claimed' "$DOC"; then
-  fail "prepare doc claims a close this lote does not have"
+  fail "prepare doc claims a close this batch does not have"
 fi
 
 python3 - "$JSON" <<'PY' || exit $?

@@ -18,12 +18,7 @@ Lizenz schaltet keine Funktionalität ab, und keine Lizenz begrenzt Benutzerkont
 gehostete Benutzer sind in jeder Stufe unbegrenzt. Sie ist eine signierte Aussage über Ihre
 Berechtigung und kein Schlüssel, der bereits auf Ihrer Festplatte vorhandenen Code freischaltet.
 
-**Was sie hingegen sperrt, ist der ZUGRIFF AUF ARTEFAKTE**, und dieser Unterschied macht das
-gesamte Modell aus: Eine aktive Lizenz ist erforderlich, um das Enterprise-Build herunterzuladen
-und aus einem lokalen Bundle zu installieren (`olivares upgrade --bundle`); sie wird offline
-anhand des in Ihrem Binary eingebetteten Schlüssels geprüft. Deshalb ist die Enterprise-Edition
-ein anderes Binary, das Sie mit einem Token abrufen, statt eines Feature-Flags, das im bereits
-vorhandenen Binary umgelegt wird — und deshalb wäre die Aussage „sie sperrt nichts“ falsch.
+**Eine aktive Lizenz gewährt Zugang zu kommerziellen Artefakten.** Die Offline-Installation (`olivares upgrade --bundle`) erfordert das Enterprise-Binary. Enterprise installiert ein signiertes Community-Bundle ohne Lizenz; ein kommerzielles Bundle erfordert eine aktive, offline geprüfte Lizenz. Community und Business unterstützen `--bundle --check`, ohne eine Lizenz zu lesen oder das Bundle zu installieren.
 :::
 
 ## Was Sie erhalten haben
@@ -31,7 +26,7 @@ vorhandenen Binary umgelegt wird — und deshalb wäre die Aussage „sie sperrt
 | Ihr Kauf | Was Sie erhalten | Was Sie damit tun |
 |---|---|---|
 | Community | nichts zu installieren | läuft bereits — nichts auf dieser Seite ist anwendbar |
-| Business / Enterprise, selbst gehostet | eine **Lizenzdatei** und ein **Download-Token** | Lizenz installieren, dann zum Enterprise-Binary wechseln |
+| Business / Enterprise, selbst gehostet | eine **Lizenzdatei** und ein **Download-Token** | Lizenz installieren, dann zum kommerziellen Binary wechseln |
 | Cloud | Zugangsdaten für einen gehosteten Tenant | auf einem eigenen Host ist nichts zu installieren |
 
 Die Lizenz ist ein einzelner signierter Blob. Speichern Sie ihn als Datei —
@@ -124,14 +119,14 @@ AI Runtime Security, Compliance Packs und Identity & Scale in einem Abonnement.
 Jede Familie kann aktiviert oder deaktiviert werden; keine wird separat verkauft.
 :::
 
-Mit installierter Lizenz ist das Enterprise-Binary nur noch einen Download entfernt. Nichts
+Mit installierter Lizenz ist das kommerzielle Binary nur noch einen Download entfernt. Nichts
 wird neu installiert, und keine Daten werden verschoben:
 
 ```sh
 olivares upgrade --enterprise --token <TOKEN>
 ```
 
-Der Befehl lädt den signierten Enterprise-Build für Ihre Plattform herunter und **verifiziert
+Der Befehl lädt den signierten kommerziellen Build für Ihre Plattform herunter und **verifiziert
 die Signatur offline** — ein manipuliertes Artefakt bricht das Upgrade ab, während das
 laufende Binary unverändert bleibt. Anschließend tauscht er es atomar aus und behält ein
 Backup des vorigen Binary. Verwenden Sie zuerst `--check`, wenn Sie den Plan sehen möchten,
@@ -147,10 +142,11 @@ Starten Sie den Dienst neu und schalten Sie anschließend die Module ein:
 olivares enterprise enable <preset>     # starter | regulated | full
 ```
 
+Der Befehl und die Preset-Namen sind das, was das kommerzielle Binary akzeptiert. Die Presets sind keine Editionen und entsprechen nicht eins zu eins den vier Business-Funktionsfamilien.
 Die Aktivierung wird gesteuert und auditiert: Sie sehen zuerst einen Diff, und jedes Modul,
 das ein Secret oder eine Prüfung benötigt, wird bereitgestellt statt nur teilweise aktiviert.
 `olivares enterprise status` meldet, was aktiv ist. Diese Befehle gibt es **nur im
-Enterprise-Binary** — wenn `olivares enterprise` kein Befehl ist, führen Sie noch den
+kommerziellen Binary** — wenn `olivares enterprise` kein Befehl ist, führen Sie noch den
 Community-Build aus, und der obige Austausch hat noch nicht stattgefunden.
 
 :::caution[Vor dem Austausch sichern]
@@ -172,7 +168,7 @@ Stelle: Ein `--license`-Flag, das einer separat laufenden Engine übergeben wurd
 unsichtbar. Dies ist die Offline-Hälfte des konsoleneigenen `DELETE /v1/console/license`.
 
 Das Entfernen der Lizenz deaktiviert **nichts**, was bereits ausgeführt wurde. Es zieht die
-Attestierung zurück; das Enterprise-Binary verhält sich weiter wie das Enterprise-Binary,
+Attestierung zurück; das kommerzielle Binary verhält sich weiter wie das kommerzielle Binary,
 bis Sie es zurücktauschen.
 
 ## Was auf dieser Seite *nicht* behandelt wird

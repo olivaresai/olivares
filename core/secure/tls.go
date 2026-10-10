@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 )
@@ -24,8 +25,9 @@ import (
 // certificate is immutable, so GetCertificate and NotAfter are safe to call
 // concurrently from HTTP, gRPC, and metrics scrapes.
 type CertificateLoader struct {
-	certFile string
-	keyFile  string
+	certFile   string
+	keyFile    string
+	publicFile string
 
 	mu      sync.RWMutex
 	modTime time.Time
@@ -37,6 +39,19 @@ type CertificateLoader struct {
 // perform only a certificate-file stat while the mtime is unchanged.
 func NewCertificateLoader(certFile, keyFile string) (*CertificateLoader, error) {
 	loader := &CertificateLoader{certFile: certFile, keyFile: keyFile}
+	if err := loader.Load(); err != nil {
+		return nil, err
+	}
+	return loader, nil
+}
+
+// NewCertificateLoaderWithPublicCertificate also publishes the served certificate
+// chain for consumers that must not have access to the engine's private material.
+func NewCertificateLoaderWithPublicCertificate(certFile, keyFile, publicFile string) (*CertificateLoader, error) {
+	if publicFile == "" || filepath.Clean(publicFile) == filepath.Clean(certFile) || filepath.Clean(publicFile) == filepath.Clean(keyFile) {
+		return nil, fmt.Errorf("secure: a distinct public certificate path is required")
+	}
+	loader := &CertificateLoader{certFile: certFile, keyFile: keyFile, publicFile: publicFile}
 	if err := loader.Load(); err != nil {
 		return nil, err
 	}
@@ -87,6 +102,11 @@ func (l *CertificateLoader) Load() error {
 		}
 		cert.Leaf = leaf
 	}
+	if l.publicFile != "" {
+		if err := publishTLSCertificate(l.publicFile, cert.Certificate); err != nil {
+			return fmt.Errorf("secure: publish server certificate: %w", err)
+		}
+	}
 	l.cert = &cert
 	l.modTime = info.ModTime()
 	return nil
@@ -129,8 +149,8 @@ func (l *CertificateLoader) NotAfter() (time.Time, bool) {
 // requires and verifies a client certificate chaining to a CA in that bundle —
 // so only collectors holding a certificate signed by an operator-trusted CA can
 // connect (docs/SECURITY-HARDENING.md collector→core, §3). Empty clientCAFile keeps server-only
-// TLS (the single-node default, where the gRPC port binds localhost and clients
-// authenticate with a bearer token); there is never a plaintext fallback here.
+// TLS (the single-node default, where clients of the gRPC port authenticate with
+// a bearer token); there is never a plaintext fallback here.
 func ServerTLSConfig(certFile, keyFile, clientCAFile string) (*tls.Config, error) {
 	loader, err := NewCertificateLoader(certFile, keyFile)
 	if err != nil {

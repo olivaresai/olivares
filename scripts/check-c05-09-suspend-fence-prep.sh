@@ -63,17 +63,17 @@ grep -F -q 'Polar missing outer timestamp is not refuse' "$DOC" \
 grep -F -q 'Suspend/Reactivate/UpdatePlan take `provider billing.WebhookProvider`' "$DOC" \
   || fail "prepare doc lost the 2026-09-06 provider-scope remeasure"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|EventNotStale landed' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 grep -q 'func BelongingSubscription' "$FENCE" \
   || fail "BelongingSubscription is gone — UpdatePlan fence on origin/main must stay"
 if grep -q 'func EventNotStale' "$FENCE"; then
-  fail "EventNotStale landed — this HOLD lote does not apply C05-09 remainder"
+  fail "EventNotStale landed — this HOLD batch does not apply C05-09 remainder"
 fi
 
 if grep -q 'suspend not applied — subscription fence' "$POLAR"; then
-  fail "Suspend foreign-miss settlement landed — this HOLD lote does not apply C05-09 remainder"
+  fail "Suspend foreign-miss settlement landed — this HOLD batch does not apply C05-09 remainder"
 fi
 grep -q 'reason": "foreign-subscription"' "$POLAR" \
   || fail "UpdatePlan foreign-miss 2xx settlement drifted"
@@ -124,7 +124,7 @@ if data.get("schema") != "c05-09-suspend-fence-prep/v2":
     fail("unknown schema %r (v2 pins the parameter lists; a v1 JSON predates the provider scope)"
          % data.get("schema"))
 if data.get("lote") != "C05-09":
-    fail("lote drifted")
+    fail("batch identifier drifted")
 if data.get("update_plan_fenced") is not True:
     fail("update_plan_fenced must stay true")
 if data.get("suspend_takes_subscription_id") is not False:
@@ -203,7 +203,7 @@ for name in ("Suspend", "Reactivate", "UpdatePlan"):
         fail("%s is gone from manager.go" % name)
     recv, params = methods[name]
     if name != "UpdatePlan" and subscription_named(params):
-        fail("%s takes subscriptionID — this HOLD lote does not apply C05-09 remainder" % name)
+        fail("%s takes subscriptionID — this HOLD batch does not apply C05-09 remainder" % name)
     if params != pins[name]:
         fail("%s signature drifted from the remeasured pin: manager.go has (%s); the JSON pins (%s)"
              % (name, ", ".join(params), ", ".join(pins[name])))
@@ -219,7 +219,7 @@ for name in ("Suspend", "Reactivate", "UpdatePlan"):
         if CALL_FENCE not in body_calls:
             fail("UpdatePlan no longer calls BelongingSubscription")
     elif body_idents & {"BelongingSubscription", "EventNotStale"}:
-        fail("%s applies a subscription fence — this HOLD lote does not apply C05-09 remainder" % name)
+        fail("%s applies a subscription fence — this HOLD batch does not apply C05-09 remainder" % name)
 
 # ── the handler: what it hands to each method, by the parameter it lands on ──
 EXPECT = {
@@ -245,7 +245,7 @@ for name in ("Suspend", "Reactivate", "UpdatePlan"):
         # Comparisons ignore spaces (the parser prints gofmt's one-line form; the pins are
         # written without them); no pinned argument carries a space inside a string.
         if name != "UpdatePlan" and any("data.Subscription.ID" in a.replace(" ", "") for a in printed):
-            fail("handler %s passes subscription id — this HOLD lote does not apply C05-09 remainder"
+            fail("handler %s passes subscription id — this HOLD batch does not apply C05-09 remainder"
                  % name)
         if len(args) != len(names):
             fail("handler %s passes %d argument(s) to a method pinned with %d parameter(s): (%s)"

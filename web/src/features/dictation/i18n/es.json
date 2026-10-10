@@ -1,0 +1,10 @@
+{
+  "dictate": "Dictar",
+  "hint": "Dictar. Tu voz no sale de este navegador.",
+  "loading": "Cargando el reconocimiento de voz…",
+  "listening": "Escuchando. Pulsa otra vez o Esc para terminar.",
+  "transcribing": "Transcribiendo…",
+  "nothing": "No se ha oído nada.",
+  "failed": "No se pudo dictar. Inténtalo de nuevo.",
+  "blocked": "El navegador ha bloqueado el micrófono."
+}

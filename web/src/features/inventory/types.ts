@@ -66,7 +66,7 @@ export interface EntityDetail {
 }
 
 // Collection coverage — a mirror of GET /v1/m/inventory/collections as published in
-// core/api/openapi_inventory_contracts.go (DTOs in modules/inventory/coverage_read.go).
+// modules/inventory/openapi.go (DTOs in modules/inventory/coverage_read.go).
 // Coverage describes ONE opened registration's versioned query over its observed
 // interval: not a global estate snapshot, not a provider authorization.
 

@@ -554,7 +554,7 @@ if (process.argv.includes('--self-test')) {
   //    nada, lo que diga sobre hallazgos no significa nada — cero hallazgos sobre cero material no
   //    es un aprobado, y un `1` lo haría indistinguible de un defecto real para quien lo consuma.
   if (blindSpots.length > 0) {
-    console.error('check-i18n-disclaimers: NO HE PODIDO MIRAR')
+    console.error('check-i18n-disclaimers: COULD NOT CHECK')
     for (const b of blindSpots) console.error(`  - ${b}`)
     process.exit(2)
   }

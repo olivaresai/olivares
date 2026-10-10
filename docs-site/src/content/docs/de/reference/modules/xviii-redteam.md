@@ -7,6 +7,9 @@ description: >-
   ehrlichen Grenzen.
 ---
 
+Red-Team-Katalog, Ziele und Testläufe gehören zu **[Business](https://olivares.ai/pricing)**. Community antwortet auf diese API-Routen mit 501 und zeigt weder die Befehlsgruppe noch die Konsolenseite. Gespeicherte Ziele, Läufe und Ergebnisse bleiben in Datenexporten und Wiederherstellungssicherungen erhalten. Auswertungen und Testumgebungen bleiben in Community.
+
+
 Modul XVIII ist ein **defensives Robustheits-Harness**. Es sondiert die **eigenen**
 gegovernten Agenten des Kunden mit einer Batterie veröffentlichter adversarialer
 Testfälle — Prompt-Injection, Jailbreak, Exfiltration, Tool-Poisoning — und bewertet

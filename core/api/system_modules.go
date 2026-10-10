@@ -26,7 +26,7 @@ func (cr chiRegistrar) HandleSystem(method, pattern string, h ModuleHandler) {
 	cr = cr.withResponseHeaders(NoStoreResponseHeaders())
 	method = strings.ToUpper(method)
 	cr.declareRouteResponseHeaders(method, pattern)
-	cr.r.MethodFunc(method, pattern, func(w http.ResponseWriter, r *http.Request) {
+	registerPolicyRoute(cr.r, method, pattern, "system:admin", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		for name, value := range cr.responseHeaders {
 			w.Header().Set(name, value)
 		}
@@ -36,12 +36,12 @@ func (cr chiRegistrar) HandleSystem(method, pattern string, h ModuleHandler) {
 		}
 		// Keep the system role explicit even if a policy adapter someday delegates a permission.
 		if !p.Superadmin {
-			cr.s.writeError(w, r, errForbidden)
+			cr.s.writeError(w, r, forbiddenFor("system:admin", true))
 			return
 		}
 		h(w, r, ModuleContext{Principal: p, Tenant: model.SystemTenantID,
 			Resource: auth.ResourceFor("system:admin"), Data: NewScopedData(cr.s.st, model.SystemTenantID), Standing: cr.s.standing})
-	})
+	}))
 }
 func (r recordingRegistrar) HandleSystem(method, pattern string, _ ModuleHandler) {
 	*r.out = append(*r.out, moduleRoute{ns: r.ns, method: strings.ToUpper(method), pattern: pattern, perm: "system:admin", system: true})

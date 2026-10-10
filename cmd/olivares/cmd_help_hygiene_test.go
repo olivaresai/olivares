@@ -63,6 +63,25 @@ func TestHelpSaysEngineNotControlPlane(t *testing.T) {
 	})
 }
 
+func TestConfigHelpEnvironmentDescriptionsSayEngine(t *testing.T) {
+	help := helpFor(t, "config")
+	for _, name := range []string{
+		"OLIVARES_BASE_URL", "OLIVARES_OIDC_CLIENT_ID", "OLIVARES_OIDC_CLIENT_SECRET",
+		"OLIVARES_SAML_SP_ENTITY_ID", "OLIVARES_SERVER_URL",
+	} {
+		t.Run(name, func(t *testing.T) {
+			_, description, found := strings.Cut(help, "  "+name+"\n    ")
+			if !found {
+				t.Fatalf("config help omits %s", name)
+			}
+			description, _, _ = strings.Cut(description, "\n")
+			if !strings.Contains(description, "engine") {
+				t.Errorf("%s description = %q; want engine wording", name, description)
+			}
+		})
+	}
+}
+
 // TestConnectionFlagsAreListedOnlyInLogin: the CLI audit of 09b counted the connection
 // flags as 9 of the 12-18 flags in the help of every basic command, though a person signs
 // in once. Every command that carries the engine connection set hides them; `login` (and

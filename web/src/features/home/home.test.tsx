@@ -4,7 +4,14 @@
 import type { ReactNode } from 'react'
 import { onlineManager } from '@tanstack/react-query'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { renderIntel, screen, waitFor } from '@/test/intel'
+import {
+  createTestQueryClient,
+  renderIntel,
+  screen,
+  userEvent,
+  waitFor,
+  within,
+} from '@/test/intel'
 import { expectNoRawI18nKeys } from '@/test/i18n-keys'
 // NO hand-registered namespaces here. This file used to import `@/features/_intel`
 // and `@/features/executive/i18n` for their side effect — which is precisely what
@@ -12,15 +19,19 @@ import { expectNoRawI18nKeys } from '@/test/i18n-keys'
 // front door printed `cost.deltaUp`. The modules that translate now register their
 // own namespaces; if that regresses, this test goes red with the raw key.
 import { ApiError } from '@/lib/api/errors'
+import { FEATURE_EXTENSIONS } from '@/features/extensions'
+
+const businessFinops = FEATURE_EXTENSIONS.some((view) => view.id === 'finops')
 import { finopsApi } from '@/features/finops/api'
 import { governanceApi } from '@/features/governance/api'
 import { killswitchApi } from '@/features/killswitch/api'
 import { securityApi } from '@/features/security/api'
 import { healthApi } from '@/features/health/api'
 import { complianceApi } from '@/features/compliance/api'
-import { providersApi } from '@/features/providers/api'
+import { readinessOf } from '@/features/first-hour/readiness.fixture'
 import { signInApi } from '@/features/first-hour/api'
 import { sessionsApi } from '@/features/sessions/api'
+import { inventoryApi } from '@/features/inventory/api'
 import { agentOpsApi } from '@/features/agentops/api'
 import { useModulesStore } from '@/stores/modules'
 import {
@@ -38,11 +49,20 @@ import './i18n'
 
 // Render TanStack Router <Link> as a plain anchor (no RouterProvider in jsdom) — the
 // established pattern across the view tests.
+const panels = vi.hoisted(() => ({
+  complianceView: undefined as undefined | (() => null),
+}))
+vi.mock('@/features/extensions', () => ({
+  PANEL_EXTENSIONS: panels,
+  FEATURE_EXTENSIONS: [],
+}))
+
+const navigate = vi.hoisted(() => vi.fn())
 vi.mock('@tanstack/react-router', () => ({
   //useUrlState follows the location, so the mock has to answer it.
   useRouterState: () => '',
   // Home mounts `WorkComposer`, which navigates to the started run.
-  useNavigate: () => () => {},
+  useNavigate: () => navigate,
   Link: ({ children, to }: { children: ReactNode; to: string }) => (
     <a href={to}>{children}</a>
   ),
@@ -60,11 +80,16 @@ const authState = vi.hoisted(() => ({
   activeTenant: 'demo' as string | null,
   // The tools' own status is a system administrator's read (useToolStatus).
   isSuperadmin: true,
+  principal: { superadmin: true, grants: [] },
 }))
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 
 afterEach(() => {
+  panels.complianceView = undefined
+
   vi.restoreAllMocks()
+  compliance.opened = false
+  navigate.mockReset()
   authState.can = () => true
   authState.isSuperadmin = true
 })
@@ -218,21 +243,31 @@ describe('HomeView (RBAC gating + honest states)', () => {
 
     const { container } = renderIntel(<HomeView />)
 
-    expect(await screen.findByText('Spend')).toBeInTheDocument()
-    expect(screen.getByText('Security')).toBeInTheDocument()
+    expect(await screen.findByText('Security')).toBeInTheDocument()
+    if (businessFinops) {
+      // The paid hook's answers can change the overview layout while this tile mounts.
+      await waitFor(() => expect(screen.getByText('Spend')).toBeInTheDocument())
+    } else {
+      expect(screen.queryByText('Spend')).toBeNull()
+      expect(finopsApi.summary).not.toHaveBeenCalled()
+      expect(finopsApi.trend).not.toHaveBeenCalled()
+      expect(finopsApi.forecast).not.toHaveBeenCalled()
+    }
     // The front door reuses the executive tiles, whose namespace this chunk has to
     // carry: `DeltaCaption` printed `cost.deltaUp` here until executive/components.tsx
     // started registering it. Wait for that caption to MOUNT before sweeping — it
     // arrives with the trend query, one tick after "Spend", and a sweep that runs
     // early passes over an empty slot. The wait keys on the icon, not on the text, so
     // it cannot depend on the namespace under scrutiny.
-    await waitFor(() =>
-      expect(
-        container.querySelector(
-          'svg.lucide-trending-up, svg.lucide-trending-down, svg.lucide-minus',
-        ),
-      ).not.toBeNull(),
-    )
+    if (businessFinops) {
+      await waitFor(() =>
+        expect(
+          container.querySelector(
+            'svg.lucide-trending-up, svg.lucide-trending-down, svg.lucide-minus',
+          ),
+        ).not.toBeNull(),
+      )
+    }
     expectNoRawI18nKeys(container)
     // A viewer never sees a KPI whose module their role could not open (docs/SECURITY-HARDENING.md).
     expect(screen.queryByText('Live sessions')).toBeNull()
@@ -261,7 +296,7 @@ describe('HomeView (RBAC gating + honest states)', () => {
     } as never)
     renderIntel(<HomeView />)
     // This file's Link double renders href and children only, so the row is read by text.
-    const action = await screen.findByText('deploy.promote')
+    const action = await screen.findByText('Deploy promote')
     expect(action.closest('a')).toHaveAttribute('href', '/permissions')
     expect(screen.queryByText(/Nothing to show yet/i)).toBeNull()
   })
@@ -297,6 +332,19 @@ describe('HomeView (RBAC gating + honest states)', () => {
     expect(screen.getByText(/Nothing to show yet/i)).toBeInTheDocument()
     // No tiles, no fabricated numbers.
     expect(screen.queryByRole('link')).toBeNull()
+  })
+
+  it('offers a key manager who cannot start a session "Add a provider", to /providers', async () => {
+    // A viewer who also holds a custom role with the provider key permissions, and no
+    // sessions:run:write: Home shows it the generic next steps, and the provider one
+    // opens the key page (#336).
+    authState.isSuperadmin = false
+    authState.can = (p) =>
+      p.endsWith(':read') || p === 'sessions:provider:write'
+    renderIntel(<HomeView />)
+    expect(
+      await screen.findByRole('link', { name: /Add a provider/ }),
+    ).toHaveAttribute('href', '/providers')
   })
 
   it('does not add a 16 px stack gap above the work', () => {
@@ -380,7 +428,8 @@ describe('HomeView (RBAC gating + honest states)', () => {
     expect(await screen.findByText('Health & SLA')).toBeInTheDocument()
   })
 
-  it('shows the compliance score only after Compliance was opened', async () => {
+  it('shows the Business compliance score only after Compliance was opened', async () => {
+    panels.complianceView = () => null
     authState.can = (p) => p === 'compliance:framework:read'
     const summary = vi
       .spyOn(complianceApi, 'summary')
@@ -392,7 +441,81 @@ describe('HomeView (RBAC gating + honest states)', () => {
     compliance.opened = true
     renderIntel(<HomeView />)
     expect(await screen.findByText('Compliance')).toBeInTheDocument()
-    compliance.opened = false
+  })
+
+  it('does not turn Business framework gaps into a fresh-install Home score', async () => {
+    panels.complianceView = () => null
+    authState.can = (p) =>
+      [
+        'compliance:framework:read',
+        'inventory:catalog:read',
+        'sessions:live:read',
+      ].includes(p)
+    // A new install still has framework assessments from platform defaults. An
+    // empty frameworks array would miss the reported 9% / 68 gaps regression.
+    const summary = vi.spyOn(complianceApi, 'summary').mockResolvedValue({
+      ...complianceSummary,
+      frameworks: [
+        {
+          ...complianceSummary.frameworks[0]!,
+          summary: {
+            total: 100,
+            satisfied: 0,
+            by_design: 9,
+            partial: 6,
+            gap: 68,
+            unmapped: 17,
+          },
+        },
+      ],
+    })
+    vi.spyOn(inventoryApi, 'summary').mockResolvedValue({
+      by_kind: {},
+      by_source: {},
+      total: 0,
+    })
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue({
+      items: [],
+      has_more: false,
+    })
+    renderIntel(<HomeView />)
+    await waitFor(() => expect(summary).toHaveBeenCalled())
+    await waitFor(() => expect(screen.queryByText('Inventory')).toBeNull())
+    await waitFor(() =>
+      expect(screen.queryByTestId('home-sessions-scope-note')).toBeNull(),
+    )
+    expect(screen.queryByText('Compliance')).toBeNull()
+    expect(screen.queryByText('9%')).toBeNull()
+    expect(screen.queryByText(/68 gaps/)).toBeNull()
+    expect(screen.queryByText('All workspaces')).toBeNull()
+    expect(screen.queryByText(/Tenant-wide/)).toBeNull()
+  })
+
+  it('keeps a seeded Business compliance assessment available after Compliance was opened', async () => {
+    panels.complianceView = () => null
+    authState.can = (p) => p === 'compliance:framework:read'
+    vi.spyOn(complianceApi, 'summary').mockResolvedValue({
+      ...complianceSummary,
+      frameworks: [
+        {
+          ...complianceSummary.frameworks[0]!,
+          summary: {
+            total: 10,
+            satisfied: 4,
+            by_design: 2,
+            partial: 1,
+            gap: 2,
+            unmapped: 1,
+          },
+        },
+      ],
+    })
+    compliance.opened = true
+    renderIntel(<HomeView />)
+    const tile = await screen.findByRole('link', { name: /Compliance/ })
+    expect(tile).toHaveAttribute('href', '/compliance')
+    expect(within(tile).getByText('60%')).toBeInTheDocument()
+    expect(within(tile).getByText('2 gaps · 1 unmapped')).toBeInTheDocument()
   })
 
   it('renders a source error as unavailable, never a fabricated 0', async () => {
@@ -437,12 +560,18 @@ describe('HomeView (RBAC gating + honest states)', () => {
       trend_projected_micro_usd: projected,
     })
     renderIntel(<HomeView />)
+    if (!businessFinops) {
+      expect(screen.queryByText('Spend')).toBeNull()
+      expect(finopsApi.forecast).not.toHaveBeenCalled()
+      return null
+    }
     await screen.findByText('Spend')
     return await screen.findByTestId('estate-tile-state')
   }
 
   it('over its run-rate: the spend tile says so in WORDS, not only in amber', async () => {
     const state = await spendCaption(9_000_000, 1_000_000)
+    if (state === null) return
     await waitFor(() => expect(state).toHaveClass('text-warning'))
     expect(state).toHaveTextContent(/projected at run-rate/i)
     expect(state).toHaveTextContent(/above spend so far/i)
@@ -452,6 +581,7 @@ describe('HomeView (RBAC gating + honest states)', () => {
     // The CONTROL for the case above: without it "says so in words" would hold for a
     // caption that says the same thing in both states.
     const state = await spendCaption(1_000_000, 9_000_000)
+    if (state === null) return
     expect(state).toHaveTextContent(/projected at run-rate/i)
     expect(state).not.toHaveTextContent(/above spend so far/i)
     expect(state.className).not.toMatch(/text-warning/)
@@ -498,28 +628,108 @@ describe('HomeView (RBAC gating + honest states)', () => {
   })
 })
 
+describe('Now — the executive report', () => {
+  // The report rolls up what the agents did in the period. On an empty install it has
+  // nothing to say, so Now offers it once there is a session in Recent work or spend.
+  const role = (p: string) =>
+    p === 'sessions:live:read' ||
+    p === 'sessions:run:read' ||
+    p === 'finops:spend:read'
+  const stub = ({
+    sessions,
+    spend,
+    tokens = 0,
+  }: {
+    sessions: boolean
+    spend: number
+    tokens?: number
+  }) => {
+    const page = (items: unknown[]) => ({ items, has_more: false }) as never
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue(page([]))
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue(
+      page(
+        sessions
+          ? [
+              {
+                run_ref: 'run-1',
+                tenant_id: 'demo',
+                state: 'stopped',
+                name: 'Nightly report',
+                created_at: '2026-10-03T08:00:00Z',
+              },
+            ]
+          : [],
+      ),
+    )
+    vi.spyOn(finopsApi, 'summary').mockResolvedValue({
+      ...finopsSummaryFixture,
+      total_micro_usd: spend,
+      input_tokens: tokens,
+      output_tokens: 0,
+    })
+    vi.spyOn(finopsApi, 'trend').mockResolvedValue(finopsTrendFixture)
+    vi.spyOn(finopsApi, 'forecast').mockResolvedValue(finopsForecastFixture)
+  }
+  const report = () => screen.queryByRole('link', { name: /Executive report/ })
+
+  it('is not offered on an empty install', async () => {
+    authState.can = role
+    stub({ sessions: false, spend: 0 })
+    const queryClient = createTestQueryClient()
+    renderIntel(<HomeView />, { queryClient })
+    expect(await screen.findByText('No sessions yet')).toBeInTheDocument()
+    // Every read has answered (zero spend, so Now draws no Spend tile) before the header
+    // is judged.
+    await waitFor(() => expect(queryClient.isFetching()).toBe(0))
+    expect(report()).toBeNull()
+  })
+
+  it('is offered once a session is in Recent work', async () => {
+    authState.can = role
+    stub({ sessions: true, spend: 0 })
+    renderIntel(<HomeView />)
+    await waitFor(() => expect(report()).toHaveAttribute('href', '/dashboards'))
+  })
+
+  it('is offered on tokens a local model ran for $0', async () => {
+    authState.can = (p) => p === 'finops:spend:read'
+    stub({ sessions: false, spend: 0, tokens: 4200 })
+    renderIntel(<HomeView />)
+    if (businessFinops) {
+      await waitFor(() =>
+        expect(report()).toHaveAttribute('href', '/dashboards'),
+      )
+    } else {
+      expect(report()).toBeNull()
+      expect(finopsApi.summary).not.toHaveBeenCalled()
+    }
+  })
+
+  it('is offered on spend alone, for a role that reads no sessions', async () => {
+    authState.can = (p) => p === 'finops:spend:read'
+    stub({ sessions: false, spend: 1_250_000 })
+    renderIntel(<HomeView />)
+    if (businessFinops) {
+      await waitFor(() =>
+        expect(report()).toHaveAttribute('href', '/dashboards'),
+      )
+    } else {
+      expect(report()).toBeNull()
+      expect(finopsApi.summary).not.toHaveBeenCalled()
+    }
+  })
+})
+
 describe('Now — the next step once a coding tool is ready (HU 022)', () => {
-  // What each tool runs on is the engine's answer (GET provider-profiles/resolve):
-  // a tool missing from the map is refused with the engine's 409 sentence.
-  const runsOn = (
-    answers: Partial<
-      Record<string, Awaited<ReturnType<typeof agentOpsApi.previewProfile>>>
-    >,
-  ) =>
+  // What each tool runs on is the engine's answer (GET provider-profiles/readiness):
+  // a tool missing from the map has nothing to run on.
+  const runsOn = (answers: Parameters<typeof readinessOf>[0]) =>
     vi
-      .spyOn(agentOpsApi, 'previewProfile')
-      .mockImplementation(async (driver) => {
-        const answer = answers[driver]
-        if (answer) return answer
-        throw new ApiError(
-          409,
-          'conflict',
-          `${driver} has nothing to run on yet.`,
-        )
-      })
+      .spyOn(agentOpsApi, 'toolsReadiness')
+      .mockResolvedValue(readinessOf(answers))
 
   it('drops the generic next steps when a tool is signed in; New session is the action', async () => {
-    runsOn({ claude: { reason: 'own_login' } })
+    runsOn({ claude: 'own_login' })
     vi.spyOn(signInApi, 'status').mockImplementation(
       async (driver) =>
         ({
@@ -533,6 +743,30 @@ describe('Now — the next step once a coding tool is ready (HU 022)', () => {
     expect(screen.queryByTestId('home-next-step')).toBeNull()
   })
 
+  it('offers one start on an empty Now: the start line, not a second one in Recent work', async () => {
+    runsOn({ claude: 'own_login' })
+    vi.spyOn(signInApi, 'status').mockImplementation(
+      async (driver) =>
+        ({
+          driver,
+          installed: driver === 'claude',
+          signed_in: driver === 'claude',
+        }) as Awaited<ReturnType<typeof signInApi.status>>,
+    )
+    vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue({
+      items: [],
+      has_more: false,
+    } as never)
+    vi.spyOn(sessionsApi, 'live').mockResolvedValue({
+      items: [],
+      has_more: false,
+    } as never)
+    renderIntel(<HomeView />)
+    expect(await screen.findByTestId('now-start')).toBeInTheDocument()
+    expect(await screen.findByText('No sessions yet')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Start a session' })).toBeNull()
+  })
+
   it('a tool that runs on an API key from Providers is ready too (HU 029)', async () => {
     vi.spyOn(signInApi, 'status').mockImplementation(async (driver) => ({
       driver,
@@ -540,24 +774,8 @@ describe('Now — the next step once a coding tool is ready (HU 022)', () => {
       signed_in: false,
     }))
     runsOn({
-      claude: {
-        reason: 'api_key',
-        provider: { provider_ref: 'prv_1', kind: 'anthropic' },
-      },
+      claude: { provider: { provider_ref: 'prv_1', kind: 'anthropic' } },
     })
-    // Changed, stated (SR4C on b569f2e8): a key is ready once its last test is read and
-    // was not refused, so the key's record is read here too.
-    vi.spyOn(providersApi, 'list').mockResolvedValue({
-      items: [
-        {
-          provider_ref: 'prv_1',
-          kind: 'anthropic',
-          state: 'active',
-          probe_state: 'ok',
-        },
-      ],
-      has_more: false,
-    } as never)
     renderIntel(<HomeView />)
     expect(await screen.findByTestId('now-start')).toHaveTextContent(
       'Claude Code is ready.',
@@ -565,11 +783,65 @@ describe('Now — the next step once a coding tool is ready (HU 022)', () => {
     expect(screen.queryByTestId('home-next-step')).toBeNull()
   })
 
+  it('sends an installed tool with a refused API key to Providers instead of sign-in', async () => {
+    const user = userEvent.setup()
+    vi.spyOn(signInApi, 'status').mockImplementation(async (driver) => ({
+      driver,
+      installed: driver === 'claude',
+      signed_in: false,
+    }))
+    runsOn({
+      claude: {
+        provider: {
+          provider_ref: 'prv_1',
+          kind: 'anthropic',
+          display_name: 'Anthropic',
+        },
+        refused: true,
+      },
+    })
+    renderIntel(<HomeView />)
+    const start = await screen.findByTestId('now-start')
+    expect(start).toHaveTextContent(
+      'The API key Anthropic was refused. Replace it under API keys.',
+    )
+    expect(within(start).queryByRole('button', { name: 'Sign in' })).toBeNull()
+    await user.click(
+      within(start).getByRole('button', { name: 'Open Providers' }),
+    )
+    expect(navigate).toHaveBeenCalledWith({ to: '/providers' })
+  })
+
+  // Without Providers access the refusal's only action would open a page this person
+  // cannot read: Now says to sign the tool in, as before the engine judged the key.
+  it('does not send someone who cannot open Providers there for a refused key', async () => {
+    authState.can = (p) => p !== 'sessions:provider:read'
+    vi.spyOn(signInApi, 'status').mockImplementation(async (driver) => ({
+      driver,
+      installed: driver === 'claude',
+      signed_in: false,
+    }))
+    runsOn({
+      claude: {
+        provider: { provider_ref: 'prv_1', kind: 'anthropic' },
+        refused: true,
+      },
+    })
+    renderIntel(<HomeView />)
+    const start = await screen.findByTestId('now-start')
+    expect(
+      within(start).queryByRole('button', { name: 'Open Providers' }),
+    ).toBeNull()
+    expect(
+      within(start).getByRole('button', { name: 'Sign in' }),
+    ).toBeInTheDocument()
+  })
+
   // WEB on 09b: an editor's Home asked GET agenttools/sign-in for both tools and got
   // 403 twice per load. Only a system administrator may read it, so nobody else asks.
   it('never asks for the tools\u2019 own status for someone who is not a system administrator', async () => {
     authState.isSuperadmin = false
-    runsOn({ claude: { reason: 'own_login' } })
+    runsOn({ claude: 'own_login' })
     const status = vi.spyOn(signInApi, 'status')
     renderIntel(<HomeView />)
     expect(await screen.findByTestId('now-start')).toHaveTextContent(
@@ -674,4 +946,15 @@ describe('Now counts sessions, not the rows each one wrote (HU 029)', () => {
       ).toBe('1')
     })
   })
+})
+
+it('does not fetch Business compliance assessments in Community', async () => {
+  compliance.opened = true
+  authState.can = (p) => p === 'compliance:framework:read'
+  const summary = vi
+    .spyOn(complianceApi, 'summary')
+    .mockResolvedValue(complianceSummary)
+  renderIntel(<HomeView />)
+  await waitFor(() => expect(screen.queryByText('Compliance')).toBeNull())
+  expect(summary).not.toHaveBeenCalled()
 })

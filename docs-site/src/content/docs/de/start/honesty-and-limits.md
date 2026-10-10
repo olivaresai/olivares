@@ -5,6 +5,10 @@ description: >-
   und was das Produkt bewusst nicht tut. Keine erfundenen Fähigkeiten.
 ---
 
+:::note[Business]
+Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, `olivares audit verify` und `olivares dr backup`; Export liefert HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und DDIL-Transfers mit Audit-Segmenten erfordern ebenfalls Business.
+:::
+
 Eine Control Plane für KI ist ein Sicherheitsprodukt. Wenn sie überzeichnet, was
 sie abdeckt, vermittelt sie ein falsches Sicherheitsgefühl — was schlimmer ist als
 gar kein Werkzeug. Deshalb ist diese Seite der explizite Vertrag darüber, **was
@@ -12,6 +16,8 @@ heute läuft, was geplant ist und was bewusst außerhalb des Geltungsbereichs li
 Die restliche Dokumentation hält sich daran: Befehle in Tutorials und How-to-Guides
 sind so gemeint, dass sie wie geschrieben ausgeführt werden, und wo das Produkt
 etwas noch nicht abdeckt, sagt die Seite das, statt es zu suggerieren.
+
+**NATS-Ereigniszustellung:** Die Core-NATS-Brücke und NATS JetStream benötigen Business Identity & Scale. Community stellt Ereignisse innerhalb des Prozesses zu.
 
 ## Was heute läuft
 
@@ -25,10 +31,12 @@ etwas noch nicht abdeckt, sagt die Seite das, statt es zu suggerieren.
 - **Die Ersteinrichtung ist credential-frei.** Eine frische Installation hat
   **keine Standard-Credentials**; die Engine gibt beim ersten Boot ein einmaliges,
   nur einmal verwendbares Setup-Token aus.
-- **Offizielle Codex- und Grok-CLIs sind Session-Treiber, wenn sie gepinnt sind.**
-  `OLIVARES_SESSION_RUNTIME_CODEX_BIN` oder `OLIVARES_SESSION_RUNTIME_GROK_BIN`
-  zu setzen registriert diesen Treiber auf dem Knoten. Ungesetzt bleiben Profile
-  dieses Treibers beobachtbar und sind nicht startbar. Starts laufen über ein
+- **Offizielle Codex-, Grok- und OpenCode-CLIs können als Anbieter-Sitzungen laufen.**
+  Die Engine registriert diese Treiber beim Start. Beim Sitzungsstart verwendet
+  sie die neueste verifizierte verwaltete Installation, danach die CLI im `PATH`
+  der Engine. `OLIVARES_SESSION_RUNTIME_CODEX_BIN`, `OLIVARES_SESSION_RUNTIME_GROK_BIN`
+  und `OLIVARES_SESSION_RUNTIME_OPENCODE_BIN` überschreiben diese Auflösung.
+  Wird keine Programmdatei gefunden, wird der Start verweigert. Starts laufen über ein
   [Anbieterprofil](/how-to/operate-provider-sessions/).
   `CHANGELOG.md` `[26.9.0]` behauptet **keine** Kompatibilität mit einem
   authentifizierten offiziellen Grok-Konto.
@@ -39,23 +47,23 @@ etwas noch nicht abdeckt, sagt die Seite das, statt es zu suggerieren.
 - **Releases sind signiert und verifizierbar.** Signatur, SLSA-Provenienz, SBOM und OpenVEX lassen sich allesamt
   [verifizieren](/de/how-to/verify-a-release/). Die Verifikation ist noch nicht vollständig ohne Netzwerk möglich: schlüssellose
   Prüfungen brauchen Sigstore-Trusted-Root-Material, und der SLSA-Schritt hat keinen Offline-Modus. Das Produkt liefert ein
-  [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das neueste getaggte Release, **26.10.1**, ist mit signierten Archiven, nativen Paketen und Container-Images veröffentlicht; APIs, Schemata und die Modul-Oberfläche können sich vor 1.0 noch ändern.
+  [Air-Gap-Bundle](/de/how-to/air-gap-install/). Das nächste Release ist **<!-- release -->0.1<!-- /release -->**, noch nicht veröffentlicht. Bauen Sie bis zur Veröffentlichung aus dem Quellcode.
 
-## Open Core — was offen ist vs. Enterprise
+## Open Core — was offen ist vs. kommerziell
 
 Das Produkt ist **Open Core**: Das Standard-Binary (AGPL) ist die gesamte
 Governance-Plattform, und eine kleine, **additive** kommerzielle Linie
-(`enterprise/`, ausschließlich mit `-tags enterprise` gebaut, nie im öffentlichen
+(Business und Enterprise; das Verzeichnis `enterprise/`, ausschließlich mit `-tags enterprise` gebaut, nie im öffentlichen
 Binary) enthält die reservierten Funktionen. Zwei Grenzen sind für den täglichen
 Gebrauch relevant, und das offene Build beantwortet sie ehrlich, statt sie
 vorzutäuschen:
 
 - **SSO ist offen für einen einzelnen IdP.** Single-IdP-Login — **OIDC**
   (Authorization Code + PKCE) und **SAML 2.0** (signierte Responses, Anti-Replay) —
-  läuft im Standard-Binary **ohne** `-tags enterprise`. **Mehr als einen aktiven
-  IdP** zu betreiben (pro Tenant / nach Domain), die **SSO-Durchsetzung**
-  (SSO-Pflicht / Passwort-Login blockieren) und **managed SCIM** sind die
-  reservierte Enterprise-Linie; das Aktivieren eines zweiten aktiven IdP gibt
+  läuft im Standard-Binary **ohne** `-tags enterprise`, ebenso das eingehende
+  **SCIM**. **Mehr als einen aktiven IdP** zu betreiben (pro Tenant / nach Domain)
+  und die **SSO-Durchsetzung** (SSO-Pflicht / Passwort-Login blockieren) gehören zu
+  Business (Identity & Scale); das Aktivieren eines zweiten aktiven IdP gibt
   `multi_idp_requires_enterprise` zurück — eine explizite Produktgrenze, niemals ein
   vorgetäuschtes 501.
 - **Es gibt kein Benutzerlimit — Konten sind in jeder Edition unbegrenzt.** Community,
@@ -69,12 +77,12 @@ vorzutäuschen:
 - **Der Rest der Plattform ist offen.** Die gesamte Governance-Schleife — Inventar,
   die R/RW-Access-Map, RBAC-/ABAC-/Cedar-Policy, das versiegelte Audit-Ledger,
   FinOps, Compliance, SIEM-Egress, MCP, HA/verteilt — läuft im offenen Binary ohne
-  Lizenzprüfung. Die additiven `enterprise/`-Module (Multi-IdP-Federation, Content
-  Firewall/DLP, Hook-Hardening, der kompilierte Threat-Intel-Katalog, Server-Tool-Egress, der
-  CyberArk-Conjur-Connector und der Incident-Close-Loop)
-  sind neuer Code, der nie im offenen Produkt enthalten war, keine daraus entfernten
-  Funktionen. Die Lizenzvalidierung im offenen Binary ist **attestierungs-only** —
-  sie aktiviert, deaktiviert oder blockiert nie etwas (siehe
+  Lizenzprüfung. Die additiven `enterprise/`-Module sind neuer Code, der nie im
+  offenen Produkt enthalten war, keine daraus entfernten Funktionen; welche Fähigkeit
+  in welcher Edition liegt, steht nur einmal, in
+  `docs/editions.md` im Repository. Die Lizenzvalidierung im offenen Binary ist **attestierungs-only** —
+  sie aktiviert, deaktiviert oder blockiert nie etwas, außer dass die Installation eines
+  Update-Bundles, das nicht die Community-Edition nennt, eine aktive Lizenz benötigt (siehe
   [Open Core & Lizenzierung](/de/explanation/open-core-and-licensing/)).
 
 ## Was sich im Design-Stadium oder vor 1.0 befindet
@@ -154,7 +162,7 @@ Progress**, sofern eine Seite nichts anderes angibt.
   vermittelte Frontier-Modelle können das nicht.
 - **Modul-Routen sind ein separater, Beta-Vertrag.** Die Modul-Endpunkte (zum
   Beispiel der Access-Map-Graph und der Drift) sind nicht Teil des stabilen
-  70-Pfad-Core-Vertrags; sie werden als separates **Beta**-Dokument veröffentlicht —
+  128-Pfad-Core-Vertrags; sie werden als separates **Beta**-Dokument veröffentlicht —
   die [Modul-Routen-Referenz](/reference/api-beta/) (ausgeliefert unter
   `/openapi.beta.json`). Beta bedeutet, dass sich die Formen mit Vorankündigung
   ändern können, und der Detailgrad auf Feldebene lebt weiterhin in den typisierten

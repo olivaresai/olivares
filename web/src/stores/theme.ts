@@ -15,6 +15,9 @@ export type ResolvedTheme = 'light' | 'dark'
 
 const STORAGE_KEY = 'olivares.theme'
 
+/** The theme of an operator who never chose one (see readStored). Settings resets to it. */
+export const DEFAULT_THEME: Theme = 'system'
+
 /**
  * THE DEFAULT FOLLOWS THE SYSTEM (HU-27, Root 2026-10-01). It was DARK from C1 to
  * 26.10; the hands-on review reversed that: an operator who never chose a theme gets
@@ -33,7 +36,7 @@ function readStored(): Theme {
   } catch {
     /* localStorage may be unavailable (private mode) */
   }
-  return 'system'
+  return DEFAULT_THEME
 }
 
 function systemPrefersDark(): boolean {

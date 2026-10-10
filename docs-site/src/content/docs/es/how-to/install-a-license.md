@@ -9,7 +9,7 @@ description: >-
 Has comprado un plan y has recibido una licencia. Esta página explica qué hacer con ella:
 dónde guardar el fichero, cómo aplicarla a un motor en ejecución, cómo leer qué hay instalado
 y, si has comprado un plan Business, cómo cambiar el binario de Community por el
-enterprise sin reinstalar nada.
+comercial sin reinstalar nada.
 
 :::note[Una licencia es una atestación, no un interruptor en tiempo de ejecución]
 **No bloquea ninguna función del software que estás ejecutando.** Una licencia caducada o
@@ -17,12 +17,7 @@ ausente no desactiva funcionalidades, y ninguna licencia limita las cuentas de u
 usuarios autoalojados son ilimitados en todos los niveles. Es una declaración firmada de
 aquello a lo que tienes derecho, no una clave que desbloquee código que ya está en tu disco.
 
-**Lo que sí bloquea es el ACCESO A LOS ARTEFACTOS**, y esa distinción es la base de todo el
-modelo: se necesita una licencia vigente para descargar el binario enterprise y para instalar
-desde un bundle local (`olivares upgrade --bundle`); la licencia se comprueba offline frente a
-la clave integrada en tu binario. Por eso la edición enterprise es un binario diferente que
-descargas con un token, en lugar de una feature flag que se activa en el que ya tienes, y por
-eso decirte que «no bloquea nada» sería incorrecto.
+**Una licencia vigente permite acceder a los artefactos comerciales.** La instalación offline (`olivares upgrade --bundle`) requiere el binario Enterprise. Enterprise instala un bundle Community firmado sin licencia; un bundle comercial necesita una licencia vigente, verificada offline. Community y Business admiten `--bundle --check` sin leer una licencia ni instalar el bundle.
 :::
 
 ## Qué has recibido
@@ -30,7 +25,7 @@ eso decirte que «no bloquea nada» sería incorrecto.
 | Has comprado | Qué recibes | Qué haces con ello |
 |---|---|---|
 | Community | nada que instalar | ya está en ejecución; nada de esta página se aplica |
-| Business / Enterprise, autoalojado | un **fichero de licencia** y un **token de descarga** | instala la licencia y cambia al binario enterprise |
+| Business / Enterprise, autoalojado | un **fichero de licencia** y un **token de descarga** | instala la licencia y cambia al binario comercial |
 | Cloud | credenciales para un tenant alojado | nada que instalar en un host tuyo |
 
 La licencia es un único blob firmado. Guárdalo como fichero —`customer.license`, o con
@@ -121,14 +116,14 @@ AI Runtime Security, Compliance Packs e Identity & Scale en una suscripción.
 Cada familia se puede activar o desactivar; ninguna se vende por separado.
 :::
 
-Con una licencia instalada, el binario enterprise está a una descarga de distancia. No se
+Con una licencia instalada, el binario comercial está a una descarga de distancia. No se
 reinstala nada ni se mueve ningún dato:
 
 ```sh
 olivares upgrade --enterprise --token <TOKEN>
 ```
 
-Descarga la compilación enterprise firmada para tu plataforma y **verifica la firma
+Descarga la compilación comercial firmada para tu plataforma y **verifica la firma
 offline**; un artefacto manipulado aborta la actualización y deja intacto el binario en
 ejecución. Después lo sustituye de forma atómica y conserva una copia de seguridad del
 anterior. Usa primero `--check` si quieres ver el plan sin aplicarlo:
@@ -143,10 +138,11 @@ Reinicia el servicio y activa después los módulos:
 olivares enterprise enable <preset>     # starter | regulated | full
 ```
 
+El comando y los nombres de preset son lo que acepta el binario comercial. Los presets no son ediciones y no se corresponden uno a uno con las cuatro familias de capacidades de Business.
 La activación está gobernada y auditada: primero muestra un diff y deja en preparación
 cualquier módulo que necesite un secreto o una revisión, en lugar de activarlo a medias.
 `olivares enterprise status` informa de qué está activo. Estos comandos existen **solo en el
-binario enterprise**: si `olivares enterprise` no es un comando, todavía ejecutas la
+binario comercial**: si `olivares enterprise` no es un comando, todavía ejecutas la
 compilación Community y el cambio anterior aún no se ha producido.
 
 :::caution[Haz una copia de seguridad antes del cambio]
@@ -168,7 +164,7 @@ en vigor, por lo que eliminarlo no cambiaría nada; y tiene el mismo punto ciego
 mitad offline del propio `DELETE /v1/console/license` de la consola.
 
 Retirar la licencia **no** desactiva nada de lo que estabas ejecutando. Retira la atestación;
-el binario enterprise sigue comportándose como tal hasta que vuelvas a cambiarlo.
+el binario comercial sigue comportándose como tal hasta que vuelvas a cambiarlo.
 
 ## Qué *no* contiene esta página
 

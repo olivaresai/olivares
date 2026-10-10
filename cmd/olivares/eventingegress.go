@@ -8,10 +8,10 @@ import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/olivaresai/olivares/core/egress"
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/eventing"
@@ -210,7 +210,7 @@ func newEventingWriterFence(st store.Store) (eventingWriterFence, bool) {
 // found — so an existing grandfathered destination reads as refused rather than as
 // permitted.
 func cliEventingEndpointChecker(st store.Store, purpose eventing.EgressPurpose, subRef model.ID) (eventing.EndpointChecker, error) {
-	pol, err := loadEventingEgressPolicy(os.Getenv)
+	pol, err := loadEventingEgressPolicy(envconfig.Get)
 	if err != nil {
 		return eventing.EndpointChecker{}, err
 	}
@@ -230,7 +230,7 @@ func cliEventingEndpointChecker(st store.Store, purpose eventing.EgressPurpose, 
 	if pol != nil {
 		polSrc = pol
 	}
-	c := eventing.NewEndpointChecker(eventingAllowLoopback(os.Getenv), polSrc, rollout, data, nil)
+	c := eventing.NewEndpointChecker(eventingAllowLoopback(envconfig.Get), polSrc, rollout, data, nil)
 	// The PURPOSE, not only the reference. Setting the reference alone left the checker at its
 	// create default, and a create deliberately ignores the reference — so `subscriptions test`
 	// asked as a destination that does not exist yet and refused the very endpoint whose real
@@ -246,5 +246,5 @@ func cliEventingEndpointChecker(st store.Store, purpose eventing.EgressPurpose, 
 // http.Transport hands its dialer "hostname:port" — so every hostname destination was
 // unreachable, and it carried a smaller reserved-address set than the engine's.
 func cliGuardedClient() *http.Client {
-	return eventing.GuardedClient(eventingAllowLoopback(os.Getenv))
+	return eventing.GuardedClient(eventingAllowLoopback(envconfig.Get))
 }

@@ -1009,7 +1009,7 @@ func (target boundedTarget) where(tenant model.TenantID, filters []model.Filter,
 		parts = append(parts, "deleted_at IS NULL")
 	}
 	for _, f := range filters {
-		frag, value, err := target.sql.filterFragment(f)
+		frag, values, err := target.sql.filterFragment(f)
 		if err != nil {
 			return "", nil, err
 		}
@@ -1022,9 +1022,7 @@ func (target boundedTarget) where(tenant model.TenantID, filters []model.Filter,
 			frag = "(" + guard + " AND " + frag + ")"
 		}
 		parts = append(parts, frag)
-		if f.Op != model.OpIsNull && f.Op != model.OpNotNull {
-			args = append(args, value)
-		}
+		args = append(args, values...)
 	}
 	return strings.Join(parts, " AND "), args, nil
 }

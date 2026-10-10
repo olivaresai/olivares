@@ -146,6 +146,28 @@ describe('la ejecución de una política de enrutado', () => {
    * CostSample redactado). Decirlo es la diferencia entre que alguien copie el resultado ahora o
    * lo busque mañana en un sitio donde nunca estuvo.
    */
+  // Real use on a built binary (SQLite and PostgreSQL): the result read `served.model`, which the
+  // engine does not send, and never showed the output the CLI prints.
+  it('shows the model that served and its answer, as text', async () => {
+    // prettier-ignore
+    const output = 'Hola <b>mundo</b>\nsegunda línea' // language-data: Unicode output and literal markup fixture
+    executeMock.mockResolvedValue({
+      decision: {},
+      served: { provider_ref: 'prv-1', model_ref: 'claude-opus-5-5' },
+      fallback_used: false,
+      output,
+      input_tokens: 10,
+      output_tokens: 20,
+      refusal: false,
+    })
+    const user = userEvent.setup()
+    await ejecutar(user)
+    expect(await screen.findByText('claude-opus-5-5')).toBeInTheDocument()
+    const answer = await screen.findByText(/Hola <b>mundo<\/b>/)
+    expect(answer.querySelector('b')).toBeNull()
+    expect(answer.textContent).toBe(output)
+  })
+
   it('dice que la salida no se guarda en ningún sitio', async () => {
     const user = userEvent.setup()
     await ejecutar(user)

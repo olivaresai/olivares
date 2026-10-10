@@ -1,10 +1,9 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-import { grantName, shortId, useOrgs } from '@/components/layout/tenant-label'
 import { useQuery } from '@tanstack/react-query'
 import { KeyRound, ShieldAlert, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, type ComponentType, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -38,6 +37,7 @@ import {
   MappingSummary,
   mappingProblem,
 } from './sso-assurance-mapping'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
@@ -54,65 +54,11 @@ import {
   type SSOConfigInput,
 } from './api'
 
+/** Console › SSO: the deployment-wide identity provider, for a superadmin. A Business
+ * build replaces the tab with its own (PANEL_EXTENSIONS.ssoTab). */
 export function SSOTab() {
-  const { t } = useTranslation(['console', 'common'])
-  const { isSuperadmin, grants } = useAuth()
-  const [editOpen, setEditOpen] = useState(false)
-  const [removeOpen, setRemoveOpen] = useState(false)
-  const [addOpen, setAddOpen] = useState(false)
-  const [newAlias, setNewAlias] = useState('')
-  //U6: '' = the deployment-wide global config; a tenant id = that tenant's IdP.
-  const [scope, setScope] = useState('')
-  //U4: which IdP within the scope; "default" = the scope's primary IdP.
-  const [idp, setIdp] = useState('default')
-
-  // Reset the selected IdP to the scope's primary whenever the scope changes.
-  function selectScope(next: string) {
-    setScope(next)
-    setIdp('default')
-  }
-
-  const orgs = useOrgs()
-
-  // The IdPs configured under the current scope (U4) — feeds the IdP selector.
-  const idps = useQuery({
-    queryKey: consoleKeys.ssoIdps(scope || undefined),
-    queryFn: () => consoleApi.listIdPs(scope || undefined),
-    enabled: isSuperadmin,
-  })
-
-  const sso = useQuery({
-    queryKey: consoleKeys.sso(scope || undefined, idp),
-    queryFn: () => consoleApi.getSSO(scope || undefined, idp),
-    enabled: isSuperadmin,
-  })
-
-  const removeMutation = usePrivilegedMutation<void, void>({
-    mutationFn: () => consoleApi.deleteSSO(scope || undefined, idp),
-    invalidateKeys: () => [
-      consoleKeys.sso(scope || undefined, idp),
-      consoleKeys.ssoIdps(scope || undefined),
-    ],
-    successMessage: t('console:sso.deleted'),
-    // Removing a non-default IdP frees its slot; fall back to the primary.
-    onDone: () => {
-      setRemoveOpen(false)
-      if (idp !== 'default') setIdp('default')
-    },
-  })
-
-  // Normalize a candidate alias the way the backend does (trim + lowercase), so the
-  // client shows the operator exactly what will be stored / used as the routing key.
-  const normalizedNewAlias = newAlias.trim().toLowerCase()
-  const addValid = /^[a-z0-9](?:[a-z0-9-]{0,30})$/.test(normalizedNewAlias)
-
-  function confirmAddIdp() {
-    setIdp(normalizedNewAlias)
-    setAddOpen(false)
-    setNewAlias('')
-    setEditOpen(true)
-  }
-
+  const { t } = useTranslation(['console'])
+  const { isSuperadmin } = useAuth()
   if (!isSuperadmin) {
     return (
       <div className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/5 px-4 py-3 text-body text-muted-foreground">
@@ -124,14 +70,83 @@ export function SSOTab() {
       </div>
     )
   }
+  const Replacement = PANEL_EXTENSIONS.ssoTab
+  return Replacement ? <Replacement /> : <SingleProviderTab />
+}
+
+/** The one identity provider people sign in with: the deployment-wide default. */
+function SingleProviderTab() {
+  const { t } = useTranslation(['console'])
+  const [editOpen, setEditOpen] = useState(false)
+  const [removeOpen, setRemoveOpen] = useState(false)
+
+  const sso = useQuery({
+    queryKey: consoleKeys.sso(),
+    queryFn: () => consoleApi.getSSO(),
+  })
+
+  const removeMutation = usePrivilegedMutation<void, void>({
+    mutationFn: () => consoleApi.deleteSSO(),
+    invalidateKeys: () => [consoleKeys.sso()],
+    successMessage: t('console:sso.deleted'),
+    onDone: () => setRemoveOpen(false),
+  })
 
   const cfg = sso.data
-  // The server answers routed_by "unavailable" when this build cannot select among
-  // several IdPs (no per-tenant or by-domain selection). Unread yet: offer nothing.
-  const multiIdp = cfg ? cfg.routed_by !== 'unavailable' : false
 
   return (
     <div className="flex flex-col gap-4 pt-4">
+      <SSOOverview
+        cfg={cfg}
+        loading={sso.isLoading}
+        onEdit={() => setEditOpen(true)}
+        onRemove={() => setRemoveOpen(true)}
+      />
+
+      <Dialog open={editOpen} onOpenChange={setEditOpen}>
+        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
+          {editOpen && cfg && (
+            <RequireAssurance minAal={AAL.HARDWARE} action="console">
+              <SSOForm current={cfg} onClose={() => setEditOpen(false)} />
+            </RequireAssurance>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={removeOpen}
+        onOpenChange={setRemoveOpen}
+        title={t('console:sso.deleteTitle')}
+        description={t('console:sso.deleteBody')}
+        confirmLabel={t('console:sso.delete')}
+        tone="danger"
+        pending={removeMutation.isPending}
+        onConfirm={() => removeMutation.mutate()}
+      />
+    </div>
+  )
+}
+
+/** The heading with its Configure/Edit and Remove actions, then one provider's status
+ * card. `controls` sits between the two; `children` closes the card. */
+export function SSOOverview({
+  cfg,
+  loading,
+  onEdit,
+  onRemove,
+  controls,
+  children,
+}: {
+  cfg?: SSOConfigDTO
+  loading: boolean
+  onEdit: () => void
+  onRemove: () => void
+  controls?: ReactNode
+  children?: ReactNode
+}) {
+  const { t } = useTranslation(['console'])
+  return (
+    <>
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-heading text-foreground">
@@ -143,12 +158,12 @@ export function SSOTab() {
         </div>
         <div className="flex gap-2">
           {cfg?.configured && (
-            <Button variant="ghost" onClick={() => setRemoveOpen(true)}>
+            <Button variant="ghost" onClick={onRemove}>
               <Trash2 />
               {t('console:sso.delete')}
             </Button>
           )}
-          <Button onClick={() => setEditOpen(true)}>
+          <Button onClick={onEdit}>
             <KeyRound />
             {cfg?.configured
               ? t('console:sso.edit')
@@ -157,110 +172,9 @@ export function SSOTab() {
         </div>
       </div>
 
-      {/*U6: a superadmin manages the deployment-wide IdP or a specific tenant's
-          IdP. Only a build that selects among several IdPs (routed_by, the server's
-          multi-IdP answer) offers the scope and IdP choice; one that cannot manages
-          the deployment-wide default IdP, the only one its login resolves. */}
-      {multiIdp && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="sso-scope">{t('console:sso.scope.label')}</Label>
-            <Select
-              value={scope || 'global'}
-              onValueChange={(v) => selectScope(v === 'global' ? '' : v)}
-            >
-              <SelectTrigger id="sso-scope">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="global">
-                  {t('console:sso.scope.global')}
-                </SelectItem>
-                {/* The organization list, else the principal's own grants by name
-                    (whoami tenant_name) where the list is not served. */}
-                {(
-                  orgs.data?.items.map((o) => ({
-                    id: o.tenant_id,
-                    name: o.name,
-                  })) ??
-                  (grants ?? []).map((g) => ({
-                    id: g.tenant,
-                    name: grantName(grants, g.tenant) ?? shortId(g.tenant),
-                  }))
-                ).map((o) => (
-                  <SelectItem key={o.id} value={o.id}>
-                    {o.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <p className="text-caption text-muted-foreground">
-              {scope
-                ? t('console:sso.scope.tenantHint')
-                : t('console:sso.scope.globalHint')}
-            </p>
-          </div>
+      {controls}
 
-          {/*U4: a scope can federate more than one IdP (first-class IdP entity,
-            keyed by alias). "default" is the primary. U5 HAS landed: a tenant scope may
-            run several active IdPs when each extra one claims its own domains, subject to
-            the MultiIDP entitlement; the GLOBAL scope still activates only "default". */}
-          <div className="flex flex-col gap-1.5">
-            <Label htmlFor="sso-idp">{t('console:sso.idp.label')}</Label>
-            <div className="flex gap-2">
-              <Select
-                value={idp}
-                onValueChange={(v) => {
-                  if (v === '__add__') setAddOpen(true)
-                  else setIdp(v)
-                }}
-              >
-                <SelectTrigger id="sso-idp">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {idpAliases(idps.data?.idps, idp).map((a) => {
-                    // The administrator's name first, the alias only as its fallback, and
-                    // whether people can sign in with it now (multi-IdP clarity).
-                    const row = idps.data?.idps.find(
-                      (i) => (i.alias || 'default') === a,
-                    )
-                    const name = idpName(t, a, row?.display_name)
-                    return (
-                      <SelectItem key={a} value={a}>
-                        {row
-                          ? `${name} · ${
-                              row.status === 'active'
-                                ? t('console:sso.idp.on')
-                                : t('console:sso.idp.off')
-                            }`
-                          : name}
-                      </SelectItem>
-                    )
-                  })}
-                  <SelectItem value="__add__">
-                    {t('console:sso.idp.add')}
-                  </SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <p className="text-caption text-muted-foreground">
-              {t('console:sso.idp.hint')}
-            </p>
-            {idps.data ? (
-              <p className="text-body text-foreground" data-slot="sso-active">
-                {activeNames(t, idps.data.idps).length > 0
-                  ? t('console:sso.idp.activeNow', {
-                      names: activeNames(t, idps.data.idps).join(', '),
-                    })
-                  : t('console:sso.idp.noneActive')}
-              </p>
-            ) : null}
-          </div>
-        </div>
-      )}
-
-      {sso.isLoading ? (
+      {loading ? (
         <div className="flex justify-center py-8">
           <Spinner />
         </div>
@@ -315,211 +229,46 @@ export function SSOTab() {
               mono
             />
           </Field>
-
-          {/* Login enforcement is shown only by a build that enforces it. Where the
-              server reports it unavailable (the Community build), there is no control to
-              show: a stored posture is kept as it is, and nothing here claims otherwise. */}
-          {cfg && cfg.enforced_by !== 'unavailable' && (
-            <div className="flex flex-col gap-2 border-t border-border pt-3">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="text-body font-medium text-foreground">
-                  {t('console:sso.enforcement.title')}
-                </span>
-                {(() => {
-                  // Honest badge: only warn "stored, not enforced" when a posture is
-                  // actually set. With nothing stored, neither build is "enforcing"
-                  // anything, so show a neutral "no enforcement configured" instead of
-                  // overstating what exists (the banner below is gated the same way).
-                  const postureSet =
-                    cfg.require_sso || cfg.network_allowlist.length > 0
-                  if (!postureSet) {
-                    return (
-                      <Badge variant="neutral">
-                        {t('console:sso.enforcement.notConfigured')}
-                      </Badge>
-                    )
-                  }
-                  // THREE answers, not two. "out_of_scope" means the build DOES enforce
-                  // but not over THIS row, so neither the green "enforced" nor the
-                  // "rebuild with the enterprise tag" advice is true. Collapsing it into
-                  // either one is the false claim this fixes.
-                  if (cfg.enforced_by === 'out_of_scope') {
-                    return (
-                      <Badge variant="warning">
-                        {t('console:sso.enforcement.enforcedOutOfScope')}
-                      </Badge>
-                    )
-                  }
-                  return (
-                    <Badge variant="success">
-                      {t('console:sso.enforcement.enforcedEnterprise')}
-                    </Badge>
-                  )
-                })()}
-              </div>
-              <p className="text-body text-muted-foreground">
-                {cfg.require_sso
-                  ? t('console:sso.enforcement.requireSsoOn')
-                  : t('console:sso.enforcement.requireSsoOff')}
-              </p>
-              <div className="flex flex-col gap-1">
-                <span className="text-body text-muted-foreground">
-                  {t('console:sso.enforcement.networkAllowlist')}
-                </span>
-                {cfg.network_allowlist.length > 0 ? (
-                  <div className="flex flex-wrap gap-1.5">
-                    {cfg.network_allowlist.map((cidr) => (
-                      <code
-                        key={cidr}
-                        className="rounded border border-border bg-muted px-1.5 py-0.5 font-mono text-caption text-foreground"
-                      >
-                        {cidr}
-                      </code>
-                    ))}
-                  </div>
-                ) : (
-                  <span className="text-body text-muted-foreground">
-                    {t('console:sso.enforcement.noNetworkRestriction')}
-                  </span>
-                )}
-              </div>
-              {/* A build that enforces login policy, but not over THIS row: the posture
-                  stored here is not the one the engine reads, so say so. */}
-              {cfg.enforced_by === 'out_of_scope' &&
-                (cfg.require_sso || cfg.network_allowlist.length > 0) && (
-                  <p className="flex items-start gap-2 text-body text-warning">
-                    <ShieldAlert
-                      className="mt-0.5 size-4 shrink-0"
-                      aria-hidden
-                    />
-                    {t('console:sso.enforcement.outOfScopeBanner')}
-                  </p>
-                )}
-            </div>
-          )}
+          {children}
         </div>
       )}
-
-      <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
-          {editOpen && cfg && (
-            <RequireAssurance minAal={AAL.HARDWARE} action="console">
-              <SSOForm
-                current={cfg}
-                scope={scope || undefined}
-                alias={idp}
-                onClose={() => setEditOpen(false)}
-              />
-            </RequireAssurance>
-          )}
-        </DialogContent>
-      </Dialog>
-
-      {/*U4: add an additional IdP to the current scope by choosing an alias. */}
-      <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t('console:sso.idp.addTitle')}</DialogTitle>
-            <DialogDescription>
-              {t('console:sso.idp.addBody')}
-            </DialogDescription>
-          </DialogHeader>
-          <Field
-            label={t('console:sso.idp.aliasLabel')}
-            htmlFor="sso-new-alias"
-            description={t('console:sso.idp.aliasHint')}
-          >
-            <Input
-              id="sso-new-alias"
-              value={newAlias}
-              onChange={(e) => setNewAlias(e.target.value)}
-              placeholder="okta"
-              mono
-            />
-          </Field>
-          <DialogFooter>
-            <Button variant="secondary" onClick={() => setAddOpen(false)}>
-              {t('common:actions.cancel', { defaultValue: 'Cancel' })}
-            </Button>
-            <Button
-              variant="primary"
-              disabled={!addValid || normalizedNewAlias === 'default'}
-              onClick={confirmAddIdp}
-            >
-              {t('console:sso.idp.addConfirm')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <ConfirmDialog
-        open={removeOpen}
-        onOpenChange={setRemoveOpen}
-        title={t('console:sso.deleteTitle')}
-        description={t('console:sso.deleteBody')}
-        confirmLabel={t('console:sso.delete')}
-        tone="danger"
-        pending={removeMutation.isPending}
-        onConfirm={() => removeMutation.mutate()}
-      />
-    </div>
+    </>
   )
 }
 
-// idpAliases lists the scope's IdP aliases for the selector: "default" first, then the
-// rest alphabetically, always including the current selection (so a brand-new alias
-// being added is selectable before it exists on the server).
-function idpAliases(
-  list: SSOConfigDTO[] | undefined,
-  current: string,
-): string[] {
-  const set = new Set<string>(['default', current])
-  for (const i of list ?? []) set.add(i.alias || 'default')
-  return [...set].sort((a, b) =>
-    a === 'default' ? -1 : b === 'default' ? 1 : a.localeCompare(b),
-  )
+/** Stored with each provider and replaced verbatim by every save, so the form sends them
+ * back as stored. Only a form that offers them (`extra`) changes them. */
+export interface SSOStoredFields {
+  require_sso: boolean
+  network_allowlist: string[]
+  oidc_groups_claim: string
+  saml_groups_attr: string
+  claimed_domains: string[]
 }
 
-/** A provider's name: the administrator's display name, else the primary's label or the
- * alias. The alias stays the selection key; it is not the name people read. */
-function idpName(
-  t: (key: string) => string,
-  alias: string,
-  displayName?: string,
-): string {
-  return (
-    displayName?.trim() ||
-    (alias === 'default' ? t('console:sso.idp.default') : alias)
-  )
+/** Fields a Business form adds to the provider form, after the protocol fields. */
+export interface SSOFormExtraProps {
+  current: SSOConfigDTO
+  protocol: string
+  enabled: boolean
+  value: SSOStoredFields
+  onChange: (next: SSOStoredFields) => void
 }
 
-/** The providers people can sign in with now, by name. */
-function activeNames(
-  t: (key: string) => string,
-  list: SSOConfigDTO[],
-): string[] {
-  return list
-    .filter((i) => i.status === 'active')
-    .map((i) => idpName(t, i.alias || 'default', i.display_name))
-}
-
-function SSOForm({
+export function SSOForm({
   current,
   scope,
-  alias,
+  alias = 'default',
   onClose,
+  extra: Extra,
 }: {
   current: SSOConfigDTO
   scope?: string
-  alias: string
+  alias?: string
   onClose: () => void
+  extra?: ComponentType<SSOFormExtraProps>
 }) {
   const { t } = useTranslation(['console', 'common'])
-  // What THIS build serves, as the server reports it per IdP row. A control the build
-  // cannot serve is not offered; its stored value travels unchanged in the save below.
-  const enforces = current.enforced_by !== 'unavailable'
-  const mapsGroups = current.groups_mapped_by !== 'unavailable'
-  const routes = current.routed_by !== 'unavailable'
   const [protocol, setProtocol] = useState(current.protocol || 'oidc')
   const [enabled, setEnabled] = useState(current.status === 'active')
   // The name on the sign-in button: sent only when changed (omitted keeps the stored one;
@@ -552,40 +301,25 @@ function SSOForm({
     current.saml_sp_sign_cert_pem ?? '',
   )
   const [spSignKey, setSpSignKey] = useState('')
-  // Login-enforcement posture — protocol-independent, applies to both OIDC and SAML.
-  const [requireSso, setRequireSso] = useState(current.require_sso)
-  const [allowlistText, setAllowlistText] = useState(
-    current.network_allowlist.join('\n'),
-  )
-  // Group mapping + JIT coherence. The claim/attr is protocol-specific; SCIM
-  // authority is protocol-independent.
-  const [groupsClaim, setGroupsClaim] = useState(
-    current.oidc_groups_claim ?? '',
-  )
-  const [groupsAttr, setGroupsAttr] = useState(current.saml_groups_attr ?? '')
+  // SCIM authority over accounts (inbound SCIM), protocol-independent.
   const [scimAuthoritative, setScimAuthoritative] = useState(
     current.scim_authoritative,
   )
-  //U5 home-realm domains (protocol-independent), one per line.
-  const [domainsText, setDomainsText] = useState(
-    current.claimed_domains.join('\n'),
-  )
+  const [stored, setStored] = useState<SSOStoredFields>({
+    require_sso: current.require_sso,
+    network_allowlist: current.network_allowlist,
+    oidc_groups_claim: current.oidc_groups_claim ?? '',
+    saml_groups_attr: current.saml_groups_attr ?? '',
+    claimed_domains: current.claimed_domains,
+  })
 
-  // The enforcement posture is parsed identically regardless of protocol. The
-  // backend validates the CIDRs and rejects malformed ones (HTTP 400).
-  // Posture + JIT coherence are protocol-independent; the groups claim/attr is set
-  // per protocol in buildInput.
+  // Protocol-independent fields; the groups claim/attr is set per protocol in buildInput.
+  // The backend validates CIDRs (400) and domains (400/409).
   const posture = {
-    require_sso: requireSso,
-    network_allowlist: allowlistText
-      .split('\n')
-      .map((s) => s.trim())
-      .filter(Boolean),
+    require_sso: stored.require_sso,
+    network_allowlist: stored.network_allowlist,
     scim_authoritative: scimAuthoritative,
-    claimed_domains: domainsText
-      .split('\n')
-      .map((s) => s.trim())
-      .filter(Boolean),
+    claimed_domains: stored.claimed_domains,
   }
 
   const naming = {
@@ -604,7 +338,7 @@ function SSOForm({
         oidc_issuer: issuer.trim(),
         oidc_client_id: clientId.trim(),
         oidc_client_secret: clientSecret,
-        oidc_groups_claim: groupsClaim.trim(),
+        oidc_groups_claim: stored.oidc_groups_claim.trim(),
         ...posture,
       }
     }
@@ -617,7 +351,7 @@ function SSOForm({
       saml_acs_url: acsUrl.trim(),
       saml_idp_sso_url: idpSsoUrl.trim(),
       saml_email_attr: emailAttr.trim(),
-      saml_groups_attr: groupsAttr.trim(),
+      saml_groups_attr: stored.saml_groups_attr.trim(),
       saml_sp_cert_pem: spCert.trim(),
       saml_sp_key_pem: spKey,
       // Both halves of the SIGNING keypair travel too. Omitting either one is not a
@@ -632,10 +366,7 @@ function SSOForm({
 
   const save = usePrivilegedMutation<void, SSOConfigDTO>({
     mutationFn: () => consoleApi.putSSO(buildInput(), scope, alias),
-    invalidateKeys: () => [
-      consoleKeys.sso(scope, alias),
-      consoleKeys.ssoIdps(scope),
-    ],
+    invalidateKeys: () => [consoleKeys.sso(scope, alias)],
     successMessage: t('console:sso.saved'),
     onDone: onClose,
   })
@@ -652,16 +383,18 @@ function SSOForm({
       await consoleApi.testSSO(buildInput(), scope, alias)
       toast.success(t('console:sso.tested'))
     } catch (err) {
-      // ⛔ ASEGURAMIENTO ANTES QUE ROJO. Este `test` es una escritura gateada por AAL3
-      // (core/api/server.go:672 → handleTestSSOConfig), y este `catch` pintaba cualquier `ApiError.message` en rojo —
-      // incluido el `step_up_required`, que NO es un fallo sino una ceremonia pendiente.
+      // Handle step-up before displaying a red error. This test performs an AAL3-gated write
+      // (core/api/server.go:672 -> handleTestSSOConfig). The catch previously displayed every
+      // `ApiError.message`
+      // as a failure, including `step_up_required`, which requests step-up.
       //
-      // Y NO BASTA con que el diálogo esté envuelto en `RequireAssurance`: ese pre-gate decide
-      // sobre el `principal.aal` CACHEADO (identity/assurance.tsx:49-78) y `whoami` no tiene
-      // `refetchInterval` (lib/auth/context.tsx:68-78), mientras el motor degrada AAL3 a AAL1
-      // a los 15 minutos (core/auth/assurance.go:31-54). La caché puede decir AAL3 con el
-      // motor en AAL1: el pre-gate deja pasar y el rechazo llega igual.
-      // **Pre-gateado no es cubierto** — lo levantó el contraste de.
+      // `RequireAssurance` alone does not cover this: it reads cached `principal.aal`
+      // (`identity/assurance.tsx:49-78`), and `whoami` has no `refetchInterval`
+      // (`lib/auth/context.tsx:68-78`). The engine downgrades AAL3 to AAL1 after 15 minutes
+      // (`core/auth/assurance.go:31-54`). The cache can still say AAL3 while the engine says
+      // AAL1,
+      // allowing the write through the pre-gate before the engine rejects it.
+      // The review identified this gap: a pre-gate does not fully cover step-up handling.
       if (err instanceof ApiError && err.isStepUpRequired) {
         report(
           err,
@@ -777,20 +510,6 @@ function SSOForm({
                 onChange={(e) => setClientSecret(e.target.value)}
               />
             </Field>
-            {mapsGroups && (
-              <Field
-                label={t('console:sso.groupsClaim')}
-                htmlFor="oidc-groups"
-                description={t('console:sso.groupsClaimHint')}
-              >
-                <Input
-                  id="oidc-groups"
-                  value={groupsClaim}
-                  onChange={(e) => setGroupsClaim(e.target.value)}
-                  mono
-                />
-              </Field>
-            )}
           </div>
         ) : (
           <div className="flex flex-col gap-4">
@@ -858,20 +577,6 @@ function SSOForm({
                 />
               </Field>
             </div>
-            {mapsGroups && (
-              <Field
-                label={t('console:sso.groupsAttr')}
-                htmlFor="saml-groups"
-                description={t('console:sso.groupsAttrHint')}
-              >
-                <Input
-                  id="saml-groups"
-                  value={groupsAttr}
-                  onChange={(e) => setGroupsAttr(e.target.value)}
-                  mono
-                />
-              </Field>
-            )}
             <Field label={t('console:sso.spCert')} htmlFor="saml-cert">
               <Textarea
                 id="saml-cert"
@@ -932,77 +637,23 @@ function SSOForm({
           </div>
         )}
 
-        {/* Login-enforcement posture — applies to both OIDC and SAML. Offered only by a
-            build that enforces it; a hidden field keeps its stored value on save. */}
-        {enforces && (
-          <div className="flex flex-col gap-4 border-t border-border pt-4">
-            <div>
-              <h3 className="text-body font-medium text-foreground">
-                {t('console:sso.enforcement.title')}
-              </h3>
-              <p className="text-body text-muted-foreground">
-                {t('console:sso.enforcement.caption')}
-              </p>
-            </div>
-            <div className="flex items-start gap-2">
-              <Switch
-                id="sso-require"
-                checked={requireSso}
-                onCheckedChange={setRequireSso}
-                className="mt-0.5"
-              />
-              <div className="flex flex-col gap-1">
-                <Label htmlFor="sso-require">
-                  {t('console:sso.enforcement.requireSso')}
-                </Label>
-                <p className="text-body text-muted-foreground">
-                  {t('console:sso.enforcement.requireSsoHint')}
-                </p>
-                {requireSso && !enabled && (
-                  <p className="flex items-start gap-2 text-body text-warning">
-                    <ShieldAlert
-                      className="mt-0.5 size-4 shrink-0"
-                      aria-hidden
-                    />
-                    {t('console:sso.enforcement.noIdpWarning')}
-                  </p>
-                )}
-              </div>
-            </div>
-            <Field
-              label={t('console:sso.enforcement.networkAllowlist')}
-              htmlFor="sso-allowlist"
-              description={t('console:sso.enforcement.networkAllowlistHint')}
-            >
-              <Textarea
-                id="sso-allowlist"
-                value={allowlistText}
-                onChange={(e) => setAllowlistText(e.target.value)}
-                rows={3}
-                mono
-              />
-            </Field>
-            {current.enforced_by === 'out_of_scope' && (
-              <p className="flex items-start gap-2 text-body text-warning">
-                <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-                {t('console:sso.enforcement.outOfScopeBanner')}
-              </p>
-            )}
-          </div>
+        {Extra && (
+          <Extra
+            current={current}
+            protocol={protocol}
+            enabled={enabled}
+            value={stored}
+            onChange={setStored}
+          />
         )}
 
-        {/* Group mapping + JIT coherence — protocol-independent. */}
         <div className="flex flex-col gap-4 border-t border-border pt-4">
           <div>
             <h3 className="text-body font-medium text-foreground">
-              {mapsGroups
-                ? t('console:sso.groups.title')
-                : t('console:sso.groups.provisioningTitle')}
+              {t('console:sso.groups.provisioningTitle')}
             </h3>
             <p className="text-body text-muted-foreground">
-              {mapsGroups
-                ? t('console:sso.groups.caption')
-                : t('console:sso.groups.provisioningCaption')}
+              {t('console:sso.groups.provisioningCaption')}
             </p>
           </div>
           <div className="flex items-start gap-2">
@@ -1023,33 +674,6 @@ function SSOForm({
           </div>
         </div>
 
-        {/* Home-realm routing (U5) — protocol-independent. Offered only by a build
-            that routes by domain; a hidden field keeps its stored value on save. */}
-        {routes && (
-          <div className="flex flex-col gap-4 border-t border-border pt-4">
-            <div>
-              <h3 className="text-body font-medium text-foreground">
-                {t('console:sso.domains.title')}
-              </h3>
-              <p className="text-body text-muted-foreground">
-                {t('console:sso.domains.caption')}
-              </p>
-            </div>
-            <Field
-              label={t('console:sso.domains.label')}
-              htmlFor="sso-domains"
-              description={t('console:sso.domains.hint')}
-            >
-              <Textarea
-                id="sso-domains"
-                value={domainsText}
-                onChange={(e) => setDomainsText(e.target.value)}
-                rows={3}
-                mono
-              />
-            </Field>
-          </div>
-        )}
         <AssuranceMappingEditor
           protocol={protocol}
           value={mapping}

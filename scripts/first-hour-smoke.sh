@@ -37,8 +37,8 @@ chmod 711 "$WORK"
 # shellcheck source=/dev/null
 . "$ROOT/scripts/lib/exec-tmpdir.sh"
 EXEC_TMP="$(olivares_exec_tmpdir)" || {
-  echo "$(basename "$0"): ⛔ NO ARRANCO: ningun directorio temporal EJECUTA." >&2
-  echo "   Remedio: exporta OLIVARES_EXEC_TMPDIR a un directorio que ejecute." >&2
+  echo "$(basename "$0"): ⛔ CANNOT START: no temporary directory allows EXECUTION." >&2
+  echo "   Remedy: export OLIVARES_EXEC_TMPDIR pointing to a directory that permits execution." >&2
   exit 2
 }
 

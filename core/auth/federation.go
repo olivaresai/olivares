@@ -20,6 +20,12 @@ import (
 // and managed SCIM are the reserved enterprise line (LICENSING.md).
 var ErrSSONotConfigured = errors.New("auth: SSO not configured")
 
+// ErrSSOProviderUnavailable means an IdP IS configured but its provider could not be
+// resolved: it does not build (a broken SP keypair, an unreachable IdP metadata URL),
+// the store failed, or its SP metadata cannot be produced. It is distinct from
+// ErrSSONotConfigured so an operator can tell a misconfiguration from an absent IdP.
+var ErrSSOProviderUnavailable = errors.New("auth: SSO provider unavailable")
+
 // Protocol names the federation protocol a provider speaks.
 const (
 	// ProtocolOIDC is OpenID Connect (Authorization Code + PKCE).
@@ -33,7 +39,7 @@ const (
 // them (state for CSRF, nonce for OIDC replay binding, the PKCE verifier — only
 // the S256 challenge is handed to the provider — and the SAML AuthnRequest id);
 // the provider only assembles the IdP redirect from them. Keeping the PKCE
-// verifier and nonce in core means go-oidc/crewjam handle protocol crypto while
+// verifier and nonce in core means go-oidc/gosaml2 handle protocol crypto while
 // the secret-bearing flow state never leaves the engine.
 type AuthParams struct {
 	// State is the opaque CSRF token echoed back on the callback.
@@ -79,7 +85,7 @@ type FederatedIdentity struct {
 	// Subject is the IdP's stable subject identifier.
 	Subject string
 	// Issuer is the VERIFIED issuing IdP identity (U3): the OIDC `iss` the
-	// verifier enforced against discovery, or the SAML IdP entityID crewjam enforced
+	// verifier enforced against discovery, or the SAML IdP entityID gosaml2 enforced
 	// against the trusted metadata. It qualifies Subject so a bare subject value can
 	// never select the wrong account across IdPs. Empty only for a provider that does
 	// not surface one (then correlation falls back to email, the pre-U3 behavior).
@@ -189,7 +195,7 @@ func unkeyablePart(part string) string {
 }
 
 // Federation is the SSO seam. The open-core single-IdP OIDC (go-oidc) / SAML
-// (crewjam/saml) provider implements it in core/auth/federation and links into the
+// (gosaml2) provider implements it in core/auth/federation and links into the
 // base build, so the default binary does real single-IdP login;
 // NoFederation is the unconfigured default. Validating a JWT/SAML assertion happens
 // behind this seam, NEVER for first-party sessions (which are opaque tokens).
@@ -205,8 +211,14 @@ type Federation interface {
 	ValidateAssertion(ctx context.Context, a Assertion) (FederatedIdentity, error)
 }
 
-// NoFederation is the default provider: SSO is not configured.
-type NoFederation struct{}
+// NoFederation is the default provider: SSO is not configured. Cause is set when an
+// IdP is configured but could not be resolved (see ErrSSOProviderUnavailable), with
+// that IdP's protocol in ConfiguredProtocol when known: login still fails closed as
+// not configured, and the SP metadata endpoint reports the cause for a SAML IdP.
+type NoFederation struct {
+	Cause              error
+	ConfiguredProtocol string
+}
 
 // Protocol reports the unconfigured protocol.
 func (NoFederation) Protocol() string { return "" }

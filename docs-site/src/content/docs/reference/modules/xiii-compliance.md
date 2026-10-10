@@ -13,6 +13,8 @@ intelligence-layer module: it captures **nothing new** — it aggregates and tra
 what the core and the other modules already record, and it **never claims
 certification**.
 
+**Edition:** Business Compliance Packs provides framework catalogs, assessments, the regulatory calendar, DORA/HIPAA views, evidence sealing, OSCAL exports and on-demand HTML/PDF reports. Community returns `501` for those capabilities and retains risk, residency, records management, and JSON/CSV exports of stored evidence. Upgrades preserve existing records.
+
 ## What it is
 
 Module XIII has five surfaces, all read-and-derive over existing data:

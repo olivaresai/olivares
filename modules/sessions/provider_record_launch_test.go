@@ -183,7 +183,7 @@ func TestBoundRecord_AccountHomeStillInjectsNothing(t *testing.T) {
 		Driver: "claude", ConfigHome: configHome, UserHome: userHome, DisplayName: "home-auth",
 		AuthSource: AuthSourceAccountHome,
 	})
-	if err := m.data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+	if err := m.Data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(providerProfileKind)
 		if err != nil {
 			return err
@@ -249,7 +249,7 @@ func TestRecordBinding_ValidatedOnWrite(t *testing.T) {
 	if !errors.As(err, &re) || re.status != http.StatusUnprocessableEntity {
 		t.Fatalf("binding an openai credential to a claude profile = %v, want 422", err)
 	}
-	// The one sentence names the tool as a person knows it (Root 2026-10-02 21:16Z).
+	// The one sentence names the tool as a person knows it.
 	if !strings.Contains(re.msg, ProviderKindOpenAI) || !strings.Contains(re.msg, "Claude Code") {
 		t.Fatalf("the refusal must name both the kind and the driver, got %q", re.msg)
 	}

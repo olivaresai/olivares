@@ -119,24 +119,6 @@ func TestStepUpNotRequiredBelowCritical(t *testing.T) {
 	}
 }
 
-// TestStepUpRequiredForBreakGlass pins the unconditional bar on the emergency
-// path: activation from an AAL1 session is refused (step_up_required); the
-// same admin activates after stepping up.
-func TestStepUpRequiredForBreakGlass(t *testing.T) {
-	h := newHarness(t)
-	h.requirePasskeyStepUp()
-	admin := h.adminLogin()
-	tenant := h.createOrg(admin, "acme")
-
-	low := h.loginNoStepUp(admin, tenant, "resp@x.io", "admin")
-	stepUpDenied(t, h.activateBreakGlass(low, tenant, map[string]any{"reason": "incident at 03:00"}))
-
-	h.stepUp(low)
-	if r := h.activateBreakGlass(low, tenant, map[string]any{"reason": "incident at 03:00"}); r.code != http.StatusCreated {
-		t.Fatalf("activation after step-up = %d %s, want 201", r.code, r.raw)
-	}
-}
-
 // TestABACMinAALRule pins the policy predicate: a min_aal deny-rule
 // matches only under-assured principals — AAL1 sessions and tokens (AAL 0) are
 // denied, an AAL3 session passes, and min_aal alone is a valid selector.

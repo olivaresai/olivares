@@ -4,13 +4,12 @@
 package a2a
 
 import (
+	"github.com/olivaresai/olivares/connectors/internal/redact"
+	"github.com/olivaresai/olivares/sdk/model"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/olivaresai/olivares/connectors/internal/redact"
-	"github.com/olivaresai/olivares/sdk/model"
 )
 
 // Origin/resource kinds emitted by this connector (documented in the contract).
@@ -128,7 +127,7 @@ func oauthHygieneFinding(agent string, card AgentCard, at time.Time) (model.Find
 }
 
 // capabilityFinding inventories the SKILLS and capabilities a discovered agent declares —
-// the discovery half of "Agent Cards firmados: verificación de capacidades". It is
+// the discovery half of signed Agent Cards and capability verification. It is
 // catalog metadata (Info) feeding module IV/V: the skills a peer claims and the protocol
 // capabilities (streaming/push/extensions) it advertises. The trust dimension is explicit:
 // only a `verified` card's declarations are cryptographically attributed; for any other

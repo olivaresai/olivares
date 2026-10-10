@@ -28,21 +28,21 @@ LIKE_LITERAL_MSG='RECORDINGS_LIKE_LITERAL_CONTRACT: subject_contains must escape
 SQL_ESCAPE_MSG='SQL_LIKE_ESCAPE_CONTRACT: OpLike must emit an explicit ESCAPE clause and preserve the bound pattern'
 
 cannot() {
-	printf '%s: NO PUDE MIRAR — %s\n' "$NAME" "$*" >&2
+	printf '%s: COULD NOT CHECK — %s\n' "$NAME" "$*" >&2
 	exit 2
 }
 
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd) ||
-	cannot 'no resuelvo el directorio del oráculo'
-. "$HERE/lib/git-env.sh" || cannot 'no cargo el aislamiento git-env'
-. "$HERE/lib/exec-workdir.sh" || cannot 'no cargo el selector de scratch ejecutable'
+	cannot 'cannot resolve the oracle directory'
+. "$HERE/lib/git-env.sh" || cannot 'cannot load git-env isolation'
+. "$HERE/lib/exec-workdir.sh" || cannot 'cannot load the executable scratch selector'
 
 for command_name in git pnpm go grep mktemp timeout; do
-	command -v "$command_name" >/dev/null 2>&1 || cannot "$command_name no está disponible"
+	command -v "$command_name" >/dev/null 2>&1 || cannot "$command_name is unavailable"
 done
 
 ROOT=${OLIVARES_S993_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null)}
-[ -n "$ROOT" ] || cannot 'no resuelvo la raíz del repositorio'
+[ -n "$ROOT" ] || cannot 'cannot resolve the repository root'
 WEB=${OLIVARES_S993_WEB_DIR:-$ROOT/web}
 
 CONFIRM_TEST="$WEB/src/components/ui/confirm-dialog.test.tsx"
@@ -62,14 +62,14 @@ for required in \
 	"$LIKE_UNIT_TEST" \
 	"$LIKE_HANDLER_TEST" \
 	"$SQL_TEST"; do
-	[ -r "$required" ] || cannot "no leo $required"
+	[ -r "$required" ] || cannot "cannot read $required"
 done
 
 require_marker_count() {
 	local file=$1 message=$2 expected=$3 count
 	count=$(grep -F -c -- "$message" "$file" || true)
 	[ "$count" -eq "$expected" ] ||
-		cannot "cardinalidad del diagnóstico $message en $file: $count, quiero $expected"
+		cannot "diagnostic $message occurs $count time(s) in $file; expected $expected"
 }
 
 require_marker_count "$CONFIRM_TEST" "$CONFIRM_MSG" 1
@@ -90,31 +90,31 @@ require_marker_count "$LIKE_UNIT_TEST" "$LIKE_LITERAL_MSG" 1
 require_marker_count "$LIKE_HANDLER_TEST" "$LIKE_LITERAL_MSG" 1
 require_marker_count "$SQL_TEST" "$SQL_ESCAPE_MSG" 1
 
-TMP=$(olivares_pick_exec_workdir s993-salvage) || cannot 'no encuentro scratch ejecutable'
-[ -d "$TMP" ] || cannot 'el selector de scratch no devolvió un directorio'
-touch "$TMP/.s993-salvage-scratch" || cannot 'no marco el scratch para limpieza segura'
+TMP=$(olivares_pick_exec_workdir s993-salvage) || cannot 'cannot find executable scratch space'
+[ -d "$TMP" ] || cannot 'scratch selector did not return a directory'
+touch "$TMP/.s993-salvage-scratch" || cannot 'cannot mark scratch space for safe cleanup'
 cleanup() {
 	local original_rc=$?
 	trap - EXIT HUP INT TERM
 	if [ ! -f "$TMP/.s993-salvage-scratch" ]; then
-		printf '%s: NO PUDE MIRAR — scratch sin marcador de propiedad: %s\n' \
+		printf '%s: COULD NOT CHECK — scratch space has no ownership marker: %s\n' \
 			"$NAME" "$TMP" >&2
 		exit 2
 	fi
 	if ! rm -rf -- "$TMP"; then
-		printf '%s: NO PUDE MIRAR — no retiro el scratch validado %s\n' \
+		printf '%s: COULD NOT CHECK — cannot remove validated scratch space %s\n' \
 			"$NAME" "$TMP" >&2
 		exit 2
 	fi
 	exit "$original_rc"
 }
 trap cleanup EXIT HUP INT TERM
-mkdir -p "$TMP/tmp" "$TMP/go-tmp" || cannot 'no preparo temporales de ejecución'
+mkdir -p "$TMP/tmp" "$TMP/go-tmp" || cannot 'cannot prepare execution temporary directories'
 
 TIMEOUT_SECONDS=${OLIVARES_S993_TIMEOUT_SECONDS:-300}
 case "$TIMEOUT_SECONDS" in
-	''|*[!0-9]*) cannot 'OLIVARES_S993_TIMEOUT_SECONDS no es un entero positivo' ;;
-	0) cannot 'OLIVARES_S993_TIMEOUT_SECONDS debe ser mayor que cero' ;;
+	''|*[!0-9]*) cannot 'OLIVARES_S993_TIMEOUT_SECONDS is not a positive integer' ;;
+	0) cannot 'OLIVARES_S993_TIMEOUT_SECONDS must be greater than zero' ;;
 esac
 
 (
@@ -148,17 +148,17 @@ cat "$TMP/web.log" "$TMP/recording.log" "$TMP/sql.log"
 
 if [ "$web_rc" -eq 0 ] && [ "$recording_rc" -eq 0 ] && [ "$sql_rc" -eq 0 ]; then
 	grep -Eq '^[[:space:]]*Test Files[[:space:]]+4 passed \(4\)[[:space:]]*$' \
-		"$TMP/web.log" || cannot 'vitest rc0 sin las cuatro suites focales'
+		"$TMP/web.log" || cannot 'vitest exited 0 without running the four focused suites'
 	grep -Eq '^[[:space:]]*Tests[[:space:]]+79 passed \(79\)[[:space:]]*$' \
-		"$TMP/web.log" || cannot 'vitest rc0 sin las 79 celdas focales'
+		"$TMP/web.log" || cannot 'vitest exited 0 without running the 79 focused cases'
 	grep -Fq -- '--- PASS: TestLiteralContainsPattern' "$TMP/recording.log" ||
-		cannot 'go recording rc0 sin TestLiteralContainsPattern'
+		cannot 'go recording exited 0 without TestLiteralContainsPattern'
 	grep -Fq -- '--- PASS: TestListSessions_FilterBySubjectContains' \
 		"$TMP/recording.log" ||
-		cannot 'go recording rc0 sin TestListSessions_FilterBySubjectContains'
+		cannot 'go recording exited 0 without TestListSessions_FilterBySubjectContains'
 	grep -Fq -- '--- PASS: TestFilterFragmentLikeUsesExplicitEscape' "$TMP/sql.log" ||
-		cannot 'go sqlstore rc0 sin TestFilterFragmentLikeUsesExplicitEscape'
-	printf '%s: FUNCIONA — 4 web suites/79 tests and 3 Go contracts\n' "$NAME"
+		cannot 'go sqlstore exited 0 without TestFilterFragmentLikeUsesExplicitEscape'
+	printf '%s: PASS — 4 web suites/79 tests and 3 Go contracts\n' "$NAME"
 	exit 0
 fi
 
@@ -180,7 +180,7 @@ if [ "$web_rc" -eq 1 ] && [ "$recording_rc" -eq 0 ] && [ "$sql_rc" -eq 0 ]; then
 		"$SEARCH_RESPONSES_MSG"; do
 		if grep -Fq -- "Error: $message" "$TMP/web.log" ||
 			grep -Fq -- "AssertionError: $message" "$TMP/web.log"; then
-			printf '%s: ROTO — %s\n' "$NAME" "$message" >&2
+			printf '%s: FAIL — %s\n' "$NAME" "$message" >&2
 			exit 1
 		fi
 	done
@@ -188,13 +188,13 @@ fi
 
 if [ "$web_rc" -eq 0 ] && [ "$recording_rc" -eq 1 ] && [ "$sql_rc" -eq 0 ] &&
 	grep -Fq -- "$LIKE_LITERAL_MSG" "$TMP/recording.log"; then
-	printf '%s: ROTO — %s\n' "$NAME" "$LIKE_LITERAL_MSG" >&2
+	printf '%s: FAIL — %s\n' "$NAME" "$LIKE_LITERAL_MSG" >&2
 	exit 1
 fi
 
 if [ "$web_rc" -eq 0 ] && [ "$recording_rc" -eq 0 ] && [ "$sql_rc" -eq 1 ] &&
 	grep -Fq -- "$SQL_ESCAPE_MSG" "$TMP/sql.log"; then
-	printf '%s: ROTO — %s\n' "$NAME" "$SQL_ESCAPE_MSG" >&2
+	printf '%s: FAIL — %s\n' "$NAME" "$SQL_ESCAPE_MSG" >&2
 	exit 1
 fi
 

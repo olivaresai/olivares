@@ -23,27 +23,19 @@ documentados del stack (`deploy/compose/*.yml`), y el flujo de primer arranque q
 es el mismo que se verifica de extremo a extremo contra el binario en el
 [tutorial de nodo único](/tutorials/getting-started/single-node/).
 
-<Aside type="caution" title="Fija por digest la imagen publicada de 26.10.1">
-La release **26.10.1** publicó las imágenes firmadas: el testigo de superficies de
-instalación registra Docker Hub y GHCR como **published** para `26.10.1`
-(`docs/releases/26.10.1-install-surfaces.json`). La misma nota está en
-[Desplegar con Docker](/how-to/docker-deployment/). Establece
-`OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>` y
-[verifícala](/how-to/verify-a-release/) primero — por digest, nunca un tag. Para ejecutar el
-árbol de desarrollo en su lugar, compila la imagen endurecida desde el código fuente
-y apunta el stack a ella:
-
-```bash
-task image                                   # builds olivares:dev
-echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
-```
+{/* release */}
+<Aside type="caution" title="Olivares 0.1">
+La próxima release es `0.1`; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en `docs/releases/0.1-install-surfaces.json`.
 </Aside>
+{/* /release */}
 
 ## 1. Levanta el stack de nodo único (SQLite)
 
 <Steps>
 
 1. Arráncalo:
+
+   En hosts donde AppArmor controla la creación de espacios de nombres de usuario, completa "Session confinement on AppArmor hosts" en `deploy/compose/README.md` en el host del daemon de Docker antes de iniciar la pila.
 
    ```bash
    docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
@@ -82,6 +74,14 @@ echo 'OLIVARES_IMAGE=olivares:dev' >> deploy/compose/.env
    ```
 
 </Steps>
+
+<Aside type="note" title="Contrato actual y cualificación en el host">
+**Contrato de disponibilidad de Compose.** Las fixtures locales herméticas de
+HTTP/TLS prueban las tres respuestas de la sonda: 200 → rc 0, una respuesta no-200
+→ rc 1, y un fallo de entrada/TLS/transporte → rc 2. **La cualificación Docker
+sigue sin medirse hasta que el workflow de dispatch termine correctamente** para
+este commit; un workflow guardado no es evidencia de que se ejecutó.
+</Aside>
 
 <Aside type="tip" title="¿Te perdiste el token?">
 Un reinicio no lo vuelve a imprimir (solo se almacena su hash). Mientras no exista ningún
@@ -144,16 +144,26 @@ montado de solo lectura dentro del contenedor.
 ## 3. Copias de seguridad DR cifradas (el perfil `backup`)
 
 El stack incluye un servicio de copia de seguridad de un solo disparo que produce un bundle
-**cifrado y con continuidad de ledger segura** (`olivares dr backup`) y poda los bundles
-con más de 14 días de antigüedad:
+**cifrado y con continuidad de ledger segura** (`olivares dr backup`):
+
+Guarda la passphrase en un archivo privado fuera del repositorio y de la imagen,
+y conserva una copia en un lugar seguro fuera de este host: sin ella no se puede
+restaurar ningún bundle. Dale al contenedor de backup acceso de solo lectura
+(la imagen se ejecuta con el UID `65532`):
 
 ```bash
-# Write your KEK passphrase once (keep it OUT of the repo / image):
-printf 'a strong DR passphrase' > deploy/compose/dr-pass
+sudo install -d -o 65532 -g 65532 -m 0700 /srv/olivares-dr
+sudo install -o 65532 -g 65532 -m 0400 /path/to/private-passphrase /srv/olivares-dr/dr-pass
 
+BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
-               --profile backup run --rm backup
+               -f - --profile backup run --rm backup <<'YAML'
+services:
+  backup:
+    volumes:
+      - /srv/olivares-dr/dr-pass:/run/secrets/dr-pass:ro
+YAML
 ```
 
 Envuelve ese comando en el cron del host para un RPO programado, y **espeja el
@@ -170,9 +180,18 @@ superuser, sin `BYPASSRLS` — el motor *se niega* a arrancar contra un rol priv
 porque la seguridad a nivel de fila es el backstop del tenant), y apunta el
 motor a él:
 
+El override también aprovisiona `olivares_admin`, un rol separado con
+`NOSUPERUSER BYPASSRLS` y acceso de solo lectura a las tablas del motor. El motor
+lo usa mediante `--admin-dsn` para lecturas entre tenants, incluida la
+configuración inicial.
+
+Fija primero tres contraseñas distintas, usando solo `A-Z a-z 0-9 . _ ~ -`
+para esta demo de Compose, y luego levanta el stack:
+
 ```bash
 cp deploy/compose/.env.example deploy/compose/.env
-# set POSTGRES_SUPERUSER_PASSWORD and OLIVARES_DB_PASSWORD in .env
+# set three distinct passwords in deploy/compose/.env:
+# POSTGRES_SUPERUSER_PASSWORD, OLIVARES_DB_PASSWORD, OLIVARES_ADMIN_PASSWORD
 
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.postgres.yml up -d

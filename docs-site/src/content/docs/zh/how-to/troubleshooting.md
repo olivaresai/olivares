@@ -78,7 +78,11 @@ required。引擎打印的修复字符串包括
 ingest: no observation sources configured (OLIVARES_SOURCES_CONFIG.sources is empty); no connector will ingest — the estate runs on no live traffic
 ```
 
-缺失、不可读或无效的 sources 文件会 **告警并继续**（启动绝不会因此崩溃）— 因此一个看起来健康、访问图却为空的引擎，通常意味着配置从未加载。修复文件/路径并重启；成功的样子是每个数据源都有一行 `ingest: wired source … kind=…`。构造失败的数据源会记录 `ingest: failed to register in-process source; not wired` 并附上原因 — 它会被报告，绝不会被静默丢弃。
+### 指定数据源配置后引擎无法启动
+
+如果 `OLIVARES_SOURCES_CONFIG` 指向缺失、不可读或 JSON 无效的文件，`olivares serve` 会以退出码 `1` 退出。请查找启动错误 `load sources operator config: OLIVARES_SOURCES_CONFIG`，其中包含 `refusing to start instead of silently omitting operator configuration`。检查服务或容器实际看到的路径，确认其运行用户能够读取文件，验证 JSON，然后重启。此文件错误会阻止启动，不会让引擎带着空的访问图继续运行。
+
+启动成功后，每个数据源应有一行 `ingest: wired source … kind=…`。构造失败的数据源会记录 `ingest: failed to register in-process source; not wired` 并附上原因。
 
 ### pgAudit 已接入但没有边到达
 

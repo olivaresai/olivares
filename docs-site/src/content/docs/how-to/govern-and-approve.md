@@ -3,6 +3,10 @@ title: "Govern and approve (human-in-the-loop)"
 description: "How an operator governs the estate: identity and permissions, the deny-by-default RBAC model, the restrict-only policy seam, and the human-in-the-loop posture where decisions are recorded in the audit ledger."
 ---
 
+:::note[Business]
+Audit export (`GET /v1/audit/export`, `olivares audit export`), directory archives and external archive verification require Business. Community keeps the signed ledger, `olivares audit verify` and `olivares dr backup`; export routes and commands return HTTP 501 or exit 9. Audit forwarding and DDIL transfers carrying audit segments also require Business.
+:::
+
 This page is for the operator who has connected at least one source and now needs
 to **govern** the estate: decide who and what can act, review what the platform
 surfaces, and act on it. Governance lives in **module VI (identity, permissions,
@@ -206,3 +210,7 @@ everything else, which is why reading it is an editor-and-up action.
   (module IX).
 - [Connect a source](/how-to/connect-a-source/) — wire the signals that drift and
   findings are built from.
+
+## Approval editions (0.1)
+
+Community retains the approval engine, the two-distinct-human CRITICAL floor, kill-switch dual control, and policies that require review or raise tier or quorum. Tier-lowering approval policies and break-glass belong to the Business base line. Stored lowering policies and emergency grants remain readable/exportable, but cannot lower Community defaults or authorize emergency access.

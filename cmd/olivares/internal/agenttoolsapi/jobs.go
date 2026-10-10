@@ -156,6 +156,11 @@ func (m *Module) run(j *savedJob, p *Plan, mc api.ModuleContext) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.active = false
+	for key := range m.statusReads {
+		if key.driver == p.Driver {
+			delete(m.statusReads, key)
+		}
+	}
 	j.State = "succeeded"
 	j.Receipt = receipt
 	if err != nil {

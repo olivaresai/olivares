@@ -26,6 +26,7 @@ import {
   useMinuteClock,
   useOfferedHandoffs,
 } from '@/components/layout/use-session-rail'
+import { ApprovalRequestCell } from '@/features/governance/approval-preview'
 import type { ApprovalDTO } from '@/features/governance/types'
 import '@/features/governance/i18n'
 import type { LiveDTO } from '@/features/sessions/types'
@@ -77,10 +78,6 @@ function QueueRow({ row }: { row: RailRow }) {
 
 function ApprovalRow({ approval }: { approval: ApprovalDTO }) {
   const { t } = useTranslation(['governance'])
-  const subject =
-    [approval.subject_kind, approval.subject_ref].filter(Boolean).join(' ') ||
-    t('governance:approvals.noSubject')
-  const meta = [subject, approval.requested_by].filter(Boolean).join(' · ')
   return (
     <li className="border-b border-line last:border-b-0">
       <Link
@@ -92,11 +89,11 @@ function ApprovalRow({ approval }: { approval: ApprovalDTO }) {
         <span className="grid size-7 shrink-0 place-items-center rounded-lg bg-warning-soft text-warning">
           <ShieldCheck aria-hidden className="size-4" />
         </span>
-        <span className="flex min-w-0 flex-1 flex-col">
-          <span className="truncate font-mono text-mono font-medium text-text">
-            {approval.action ?? approval.id}
-          </span>
-          <span className="truncate text-caption text-text-2">{meta}</span>
+        <span className="min-w-0 flex-1">
+          <ApprovalRequestCell
+            approval={approval}
+            className="w-full max-w-full"
+          />
         </span>
         <span className="shrink-0 text-caption text-text-3 tabular-nums">
           {t('governance:approvals.progressOf', {

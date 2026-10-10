@@ -22,7 +22,8 @@ func (m *Module) registerSigningRoutes(reg api.RouteRegistrar) {
 	}
 }
 
-func (m *Module) OperationDocumentation(method, pattern string) (api.ModuleOperationDocumentation, bool) {
+// signingOperationDocumentation publishes the signing switch's body and success.
+func signingOperationDocumentation(method, pattern string) (api.ModuleOperationDocumentation, bool) {
 	if method != http.MethodPut || pattern != "/signing" {
 		return api.ModuleOperationDocumentation{}, false
 	}
@@ -50,7 +51,7 @@ func (m *Module) handleSigningStatus(w http.ResponseWriter, r *http.Request, _ a
 		writeError(w, http.StatusServiceUnavailable, "Report signing status is unavailable. Retry or check the engine log.")
 		return
 	}
-	writeJSON(w, http.StatusOK, status)
+	writeResponse(w, http.StatusOK, status)
 }
 
 // handleSetSigning turns evidence bundle signing on or off for the whole deployment and answers with the resulting signing status. Enabling signing needs a valid license covering reporting; system administrators only.
@@ -63,7 +64,7 @@ func (m *Module) handleSetSigning(w http.ResponseWriter, r *http.Request, mc api
 		if input.Enabled != nil && errors.Is(err, api.ErrTrailingJSON) {
 			message = "Send one signing setting."
 		}
-		writeError(w, http.StatusBadRequest, message)
+		writeError(w, http.StatusBadRequest, api.RequestBodyErrorMessage(err, message))
 		return
 	}
 	manager, ok := m.enterprise.(SigningManager)
@@ -74,7 +75,7 @@ func (m *Module) handleSetSigning(w http.ResponseWriter, r *http.Request, mc api
 	status, err := manager.SetReportingSigning(r.Context(), mc.Principal, *input.Enabled)
 	if err != nil {
 		if errors.Is(err, license.ErrAddonRequiresLicense) {
-			writeJSON(w, http.StatusForbidden, map[string]any{"error": map[string]string{"code": "addon_requires_license", "message": err.Error()}})
+			writeResponse(w, http.StatusForbidden, map[string]any{"error": map[string]string{"code": "addon_requires_license", "message": err.Error()}})
 			return
 		}
 		if m.log != nil {
@@ -83,5 +84,5 @@ func (m *Module) handleSetSigning(w http.ResponseWriter, r *http.Request, mc api
 		writeError(w, http.StatusServiceUnavailable, "Report signing could not be updated. Retry or check the engine log.")
 		return
 	}
-	writeJSON(w, http.StatusOK, status)
+	writeResponse(w, http.StatusOK, status)
 }

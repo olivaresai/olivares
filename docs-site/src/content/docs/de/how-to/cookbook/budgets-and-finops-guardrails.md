@@ -9,6 +9,9 @@ sidebar:
   order: 2
 ---
 
+FinOps-Budgets und Ausgabenanalysen gehören zu **[Business](https://olivares.ai/pricing)**. Community behält die Kostenverfolgung pro Sitzung und den Datenexport. Vor 0.1 gespeicherte Budgets bleiben lesbar und löschbar und werden bei aktivem FinOps-Modul durchgesetzt; Community kann sie nicht erstellen oder ändern. Auswertungen und Testumgebungen bleiben in Community.
+
+
 **Ziel:** „die Agenten dieses Teams hören bei 500 $/Monat auf zu geben“ —
 einmal deklariert, live durchgesetzt, mit Alert-Schwellenwerten auf dem Weg
 nach oben.

@@ -6,6 +6,12 @@ description: >-
   升级与 digest 固定。
 ---
 
+> 部署包通过 Business 渠道提供；此处未验证其发布状态。使用本地 chart 前，请按渠道说明验证包及其发布者。清单示例使用 Business 提供的 `business-install.yaml`。隔离环境安装需要 Enterprise。
+
+
+> Helm, Kubernetes operators, Terraform, appliance and FIPS/STIG images are Business deployment artifacts. The source paths below are in the Business distribution. Air-gapped installation requires Enterprise.
+
+
 本指南面向用 Docker 将 Olivares AI control plane 投入生产的工程师与 SRE。
 整个产品是一个单镜像——引擎内嵌 web UI——因此单台主机即可运行
 SQLite 拓扑而无需任何外部依赖，在需要时通过 Postgres override 即可获得多租户拓扑。
@@ -13,11 +19,11 @@ SQLite 拓扑而无需任何外部依赖，在需要时通过 Postgres override 
 每条路径都保持相同的安全默认值：无默认凭据、一次性 setup token、默认开启 TLS，
 以及默认启用的 TLS。主机端口默认发布在所有网络接口上，因为这是一台服务器——请按下文有意识地加以限制。
 
-:::note[Beta——26.10.1 镜像已发布]
-Olivares AI 处于 **beta** 阶段。下文的镜像坐标可以解析：版本 `26.10.1` 已将其发布到
-Docker Hub 与 `ghcr.io`（安装面证人 `docs/releases/26.10.1-install-surfaces.json`）。
-请将其视为你将要使用的部署形态，而非可投入生产的保证。
+<!-- release -->
+:::note[Olivares 0.1]
+下一个版本是 `0.1`，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 `docs/releases/0.1-install-surfaces.json`。
 :::
+<!-- /release -->
 
 要从决策页的角度查看所有部署选项及其默认值，参见
 [自托管 control plane](/how-to/self-hosting/)。对于断网站点，参见
@@ -28,15 +34,17 @@ Docker Hub 与 `ghcr.io`（安装面证人 `docs/releases/26.10.1-install-surfac
 
 主要的容器拉取来源是 **Docker Hub**：
 
+<!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:26.10.1
+docker pull docker.io/olivaresai/olivares:0.1
 ```
+<!-- /release -->
 
 相同的内容也发布到 `ghcr.io/olivaresai/olivares`——按 digest 完全一致，
 用作备份和构建 registry。Docker Hub 对**匿名**拉取施加速率限制；ghcr.io 不对公共镜像的匿名拉取
 限速——因此当 CI 节点或大规模集群触及上限时，可以先 `docker login`，或改用 ghcr.io 坐标。
-Tag **不带前导 `v`**：
-`:26.10.1` 固定一个版本，`:latest` 浮动，而 `:26.10.1-fips` / `:26.10.1-stig`
+Tag **不带前导 `v`**： <!-- release -->
+`:0.1`<!-- /release --> 固定一个版本，`:latest` 浮动，而 <!-- release -->`:0.1-fips`<!-- /release --> / <!-- release -->`:0.1-stig`<!-- /release -->
 是加固变体。基础 tag 和 `:latest` 是多架构的
 （`linux/amd64`、`linux/arm64`）；`fips`/`stig` 仅有 `amd64`。
 
@@ -45,18 +53,20 @@ control plane 是一款安全产品，所以运行前先验证。签名是
 并且对任一 registry 工作方式相同——签名与证明（attestation）通过
 `cosign copy` 复制到 Docker Hub，因此 digest 相同：
 
+<!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.10.1")"
+DIGEST="$(crane digest "$IMAGE:0.1")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type spdxjson \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
+<!-- /release -->
 
 完整的信任链——校验和签名、SBOM、OpenVEX、SLSA provenance——在
 [验证你下载的内容](/how-to/verify-a-release/)中。验证完成后，
@@ -71,6 +81,7 @@ cosign verify-attestation "$REF" --type spdxjson \
 主机侧端口映射决定暴露面：下面发布在所有主机接口上——改用 `-p 127.0.0.1:8443:8443` 可把控制台留在本机。以非 root、只读、丢弃所有
 capabilities 的方式运行：
 
+<!-- release -->
 ```bash
 docker volume create olivares-data
 
@@ -83,13 +94,14 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:26.10.1 \
+  docker.io/olivaresai/olivares:0.1 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
     --data-dir=/var/lib/olivares \
     --checkpoint-interval=1h
 ```
+<!-- /release -->
 
 | 标志 | 原因 |
 |---|---|
@@ -147,10 +159,12 @@ docker compose -f deploy/compose/docker-compose.yml down
 ## 3. 多租户 Postgres
 
 对于多租户拓扑，在基础文件之上叠加 Postgres override。
-先设置两个密码，再拉起 stack：
+首先设置三个不同的密码。此 Compose 演示只允许使用 `A-Z a-z 0-9 . _ ~ -`，
+然后启动栈：
 
 ```bash
-cp deploy/compose/.env.example deploy/compose/.env   # set POSTGRES_SUPERUSER_PASSWORD + OLIVARES_DB_PASSWORD
+cp deploy/compose/.env.example deploy/compose/.env   # set three distinct passwords in deploy/compose/.env:
+# POSTGRES_SUPERUSER_PASSWORD, OLIVARES_DB_PASSWORD, OLIVARES_ADMIN_PASSWORD
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.postgres.yml up -d
 ```
@@ -160,6 +174,10 @@ docker compose -f deploy/compose/docker-compose.yml \
 规范的 `deploy/postgres/01-app-role.sql`），并用 `--engine=postgres` 将引擎
 指向该非超级用户角色。这使得 FORCE-RLS 租户兜底真正生效：
 引擎面对超级用户/`BYPASSRLS` 角色时**拒绝启动**。
+
+覆盖文件还会创建 `olivares_admin`，这是一个独立的 `NOSUPERUSER BYPASSRLS`
+角色，对引擎表只有只读访问权限。引擎通过 `--admin-dsn` 使用它进行跨租户读取，
+包括首次设置。
 
 :::caution[`sslmode=disable` 仅用于网内演示]
 override 中的 DSN 使用 `sslmode=disable`，因为两个容器共享同一个 Docker
@@ -171,16 +189,25 @@ override 中的 DSN 使用 `sslmode=disable`，因为两个容器共享同一个
 ## 4. 灾难恢复备份
 
 backup profile 生成定时的、账本连续性安全的 DR 包：存储快照加上签名密钥，
-在你的 KEK 下加密，并附带一份各租户链尖（chain tip）的清单。先将你的口令写入
-一个**置于仓库与镜像之外**保存的文件，然后运行一次性的 `backup` profile：
+在你的 KEK 下加密，并附带一份各租户链尖（chain tip）的清单。
+
+将口令保存在仓库和镜像之外的私密文件中，并在这台主机之外的安全位置保留一份副本：
+没有口令，任何备份包都无法恢复。让备份容器以只读方式访问该文件
+（镜像以 UID `65532` 运行）：
 
 ```bash
-printf 'a strong DR passphrase' > deploy/compose/dr-pass
-# the host stamps the bundle name:
+sudo install -d -o 65532 -g 65532 -m 0700 /srv/olivares-dr
+sudo install -o 65532 -g 65532 -m 0400 /path/to/private-passphrase /srv/olivares-dr/dr-pass
+
 BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
-               --profile backup run --rm backup
+               -f - --profile backup run --rm backup <<'YAML'
+services:
+  backup:
+    volumes:
+      - /srv/olivares-dr/dr-pass:/run/secrets/dr-pass:ro
+YAML
 ```
 
 该作业共享引擎的数据卷，将包写入 `olivares-backups` 卷，并且
@@ -190,7 +217,7 @@ cron 以实现定时 RPO，并**将 `olivares-backups` 卷异地镜像**——�
 不构成灾难恢复。用以下命令恢复并验证：
 
 ```bash
-olivares dr restore --in <bundle> --data-dir <dir> --passphrase-file dr-pass
+olivares dr restore --in <bundle> --data-dir <dir> --passphrase-file /path/to/private-passphrase
 ```
 
 完整的 RPO/RTO、密钥保管和 DR 演练流程随仓库的 DR runbook 一同提供；
@@ -290,7 +317,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. 生产环境按 digest 固定
 
-可变 tag（`:26.10.1`、`:latest`）用于评估。在生产环境中，请固定你所验证的
+可变 tag（<!-- release -->`:0.1`<!-- /release -->、`:latest`）用于评估。在生产环境中，请固定你所验证的
 **digest**——digest 不可变，且正是你签字确认过的东西：
 
 ```bash
@@ -303,7 +330,7 @@ docker run ... docker.io/olivaresai/olivares@sha256:<digest> serve ...
 OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
 ```
 
-对于横向扩展和多节点，请使用 `deploy/helm/olivares` 中的 Helm chart，
+对于横向扩展和多节点，请使用 `./business-chart` 中的 Helm chart，
 并按 digest 固定已发布的镜像。该 chart 的 OCI 发布未经验证（`publication-unverified`：从未从本仓库发布过，registry 一侧无法观测）。
 源 chart 命令参见[自托管 control plane](/how-to/self-hosting/)，
 完全断网站点参见[在 air-gapped 环境中安装](/how-to/air-gap-install/)。

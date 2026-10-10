@@ -70,6 +70,8 @@ export interface DRJob {
   /** 0–100 integer percentage. */
   progress: number
   error?: string
+  /** Engine custody and preservation receipt; contains no key material. */
+  notes?: string
   created_at: string
   finished_at?: string
 }

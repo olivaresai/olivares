@@ -22,7 +22,7 @@ DOC="${OLIVARES_C1303_DOC:-design/C13-03-DEPENDSON-HOLD-2026-08-20.md}"
 grep -q 'HOLD' "$DOC" || fail "$DOC lost HOLD"
 grep -q 'DependsOn not honoured' "$DOC" || fail "$DOC lost the honour pin"
 if grep -qiE 'DependsOn honoured on overlay main|FIRMA A claimed' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 
 python3 - "$JSON" <<'PY' || fail "JSON flags drifted"

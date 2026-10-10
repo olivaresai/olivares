@@ -83,3 +83,7 @@ curl -ks -X POST "$BASE/v1/m/governance/approvals/$ID/decisions" \
 - 取消（`POST …/{id}/cancel`）供请求者或管理员针对待决请求使用；它同样会被记录。
 - 仍在成熟中的是更丰富的评审 **控制台**；上述引擎侧的保证均为可用
   （[诚实的范围](/zh/how-to/govern-and-approve/)）。
+
+## 审批版本边界（0.1）
+
+Community 保留审批引擎、CRITICAL 操作至少由两名不同人员审批的要求、kill-switch 双人控制，以及要求审核或提高风险等级、审批人数的策略。降低风险等级的审批策略和 break-glass 紧急访问属于 Business 基础版。已保存的数据仍可读取和导出，但不能降低 Community 的默认要求或授权紧急访问。

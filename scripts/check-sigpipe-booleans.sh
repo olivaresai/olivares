@@ -119,17 +119,17 @@ export LC_ALL
 
 RAIZ="${OLIVARES_CLONE:-$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")/.." && pwd -P)}"
 cd "$RAIZ" 2>/dev/null || {
-	echo "check-sigpipe-booleans: ⛔ NO HE PODIDO MIRAR: no existe $RAIZ" >&2
+	echo "check-sigpipe-booleans: ⛔ COULD NOT CHECK: missing $RAIZ" >&2
 	exit 2
 }
 BASE="${OLIVARES_SIGPIPE_BASELINE:-docs/sigpipe-booleans-baseline.txt}"
 # El analizador de la forma 2 vive al lado del guion: es codigo, no configuracion.
 AWK_M2="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/sigpipe-m2.awk"
-[ -r "$AWK_M2" ] || { echo "check-sigpipe-booleans: ⛔ NO HE PODIDO MIRAR: falta $AWK_M2" >&2; exit 2; }
+[ -r "$AWK_M2" ] || { echo "check-sigpipe-booleans: ⛔ COULD NOT CHECK: missing $AWK_M2" >&2; exit 2; }
 DIRS="${OLIVARES_SIGPIPE_DIRS:-scripts .githooks}"
 for d in $DIRS; do
 	[ -d "$d" ] || {
-		echo "check-sigpipe-booleans: ⛔ NO HE PODIDO MIRAR: no existe $d" >&2
+		echo "check-sigpipe-booleans: ⛔ COULD NOT CHECK: missing $d" >&2
 		exit 2
 	}
 done
@@ -169,21 +169,15 @@ censo() {
 		# Forma 1: el consumidor booleano. `--quiet` es la forma larga de `-q` y hoy no la usa
 		# nadie (+0), pero cuesta cero y cierra el hueco antes de que alguien la escriba.
 		m1="$(sed 's/^[[:space:]]*#.*$//' "$f" | grep -cE '(^|[^|])\| *(command +|builtin +|[A-Za-z_][A-Za-z0-9_]*=[^ ]* +)*grep +(-[a-zA-Z]*q|--quiet)' 2>/dev/null || true)"
-		# ⛔ Forma 2: LA ASIGNACION CUYO rc SE PRUEBA. `VAR="$( … | consumidor )" || …` — el rc de
-		# la asignacion ES el de la tuberia, y el `||` lo prueba. Aqui SI cuentan `head` y `read`,
-		# porque en esta forma su rc se lee de verdad.
-		#
-		# ⛔ Y SE ANALIZA CAMINANDO LA LINEA, NO CON UN PATRON, porque un patron por linea no
-		# distingue un comando de la misma palabra DENTRO DE UNAS COMILLAS. the reviewer lo rompio dos
-		# veces y las dos las reproduje: `X="$(printf '%s\n' 'cat f | head -1')"` no ejecuta
-		# ninguna tuberia y daba positivo (A-05), y `X="$(yes x | builtin read -r y)"` SI la
-		# ejecuta —141 real— y daba negativo porque el patron no admitia `builtin` (A-06, que la
-		# forma 1 si admitia: dos ramas del mismo guion con reglas distintas).
-		#
-		# El analizador lleva estado de comillas, respeta la anidacion de parentesis, ignora el `||`
-		# (que no es una tuberia) y exige el consumidor en POSICION DE COMANDO tras la barra, con
-		# sus prefijos `command`/`builtin`/`VAR=val`. Verificado sobre los cuatro casos: texto entre
-		# comillas simples 0, entre dobles 0, `builtin read` 1, tuberia real 1.
+		# Form 2: assignments whose rc is tested. In `VAR="$( … | consumer )" || …`,
+		# the assignment inherits the pipeline rc; head and read count because || checks it.
+		# Walk the line with a parser rather than a per-line regex. the reviewer found two defects:
+		# `X="$(printf '%s\n' 'cat f | head -1')"` executes no pipeline yet matched (A-05);
+		# `X="$(yes x | builtin read -r y)"` executes one with rc 141 yet missed (A-06),
+		# although form 1 already supported builtin. Track quotes and nested parentheses,
+		# ignore ||, and require the consumer in command position after | with optional
+		# command/builtin/VAR=val prefixes. Verified: single/double-quoted text 0;
+		# builtin read and a real pipeline 1.
 		m2="$(awk -f "$AWK_M2" "$f" 2>/dev/null || echo 0)"
 		m=$(( ${m1:-0} + ${m2:-0} ))
 		[ "${m:-0}" -gt 0 ] && printf '%s\t%s\n' "$m" "$f"
@@ -205,12 +199,12 @@ done
 # CONTROL POSITIVO: la sonda tiene que poder encontrar algo. Con cero ficheros y sin línea base, un
 # patrón caducado y un árbol limpio son indistinguibles, y el segundo aprobaría cualquier cosa.
 if [ "${N_FICH:-0}" -eq 0 ] && [ ! -r "$BASE" ]; then
-	echo "check-sigpipe-booleans: ⛔ NO HE PODIDO MIRAR: cero coincidencias y sin línea base." >&2
+	echo "check-sigpipe-booleans: ⛔ COULD NOT CHECK: no matches and no baseline." >&2
 	exit 2
 fi
 if [ ! -r "$BASE" ]; then
-	echo "check-sigpipe-booleans: ⛔ NO HE PODIDO MIRAR: no leo la línea base $BASE" >&2
-	echo "                        Una línea base ausente no es «cero deuda»; es no haber mirado." >&2
+	echo "check-sigpipe-booleans: ⛔ COULD NOT CHECK: cannot read baseline $BASE" >&2
+	echo "                        A missing baseline does not prove an empty backlog; nothing was checked." >&2
 	exit 2
 fi
 
@@ -234,28 +228,23 @@ MALA="$(awk -F'\t' '
 	$0 !~ /^[0-9]+\t/ || NF != 2 || $2 == "" { printf "%d: %s\n", FNR, $0; salidas++ }
 	END { exit (salidas > 0 ? 1 : 0) }' "$BASE_LIMPIA" 2>/dev/null)"
 if [ -n "$MALA" ]; then
-	echo "check-sigpipe-booleans: ⛔ NO HE PODIDO MIRAR: $BASE tiene lineas que no son" >&2
-	echo "                        \`<entero><TAB><ruta>\` — marcadores de conflicto sin resolver," >&2
-	echo "                        una cuenta que no es entera o una ruta vacia:" >&2
+	echo "check-sigpipe-booleans: ⛔ COULD NOT CHECK: $BASE contains lines not in" >&2
+	echo "                        \`<integer><TAB><path>\` format: unresolved conflict markers," >&2
+	echo "                        a noninteger count, or an empty path:" >&2
 	printf '%s\n' "$MALA" | sed 's/^/                          /' >&2
-	echo "                        Una linea base que no se entiende NO es «cero deuda» ni «la deuda" >&2
-	echo "                        baja»: es no haber mirado." >&2
+	echo "                        An unreadable baseline cannot prove an empty or shrinking" >&2
+	echo "                        backlog; nothing was checked." >&2
 	exit 2
 fi
 
-# ⛔ SE COMPARA EL NÚMERO POR RUTA, NO LA FILA ENTERA — y la diferencia no es cosmética: un
-# trinquete que pone ROJO a quien REDUCE deuda enseña a no reducirla. La comparación anterior era
-# `grep -vxF` sobre `<n>\t<ruta>`, así que bajar de 2 a 1 en un fichero producía una fila «nueva»
-# y un `exit 1`. Lo destapó the reviewer al contrastar el ensanche, y me había mordido a mí el mismo día:
-# una cura mía bajó `check-git-env-isolation.sh` de 4 a 3 y el gate me paró el commit — lo
-# racionalicé como «el trinquete pide bajar la línea base» en vez de verlo como el defecto que es.
-# Ahora: SUBIR (o aparecer) es rojo; BAJAR (o desaparecer) es una mejora que se anuncia.
-# ⛔ SE SEPARAN LOS DOS FICHEROS POR FILENAME, NO POR `NR == FNR`. Con la linea base VACIA —el
-# caso al que este repo quiere llegar— `NR == FNR` es cierto para el PRIMER registro de la entrada
-# siguiente, asi que la primera linea del censo se traga como si fuera linea base y el veredicto
-# sale invertido: lo destapo mi propio banco al exigir el mensaje literal, que reportaba
-# «BAJA sujeto.sh: 1 -> 0» donde debia decir «SUBE 0 -> 1». Un cero en el suelo no puede volver
-# ciega la comparacion que existe para vigilarlo.
+# Compare counts by path, not whole rows: a ratchet must not reject debt reductions.
+# The former grep -vxF on <n>\t<path> treated 2 → 1 as a new row and returned 1.
+# the reviewer exposed it; reducing check-git-env-isolation.sh from 4 to 3 hit the same bug.
+# Increases/new paths fail; decreases/disappearing paths are reported improvements.
+# Distinguish input files by FILENAME, not NR == FNR. With an empty baseline,
+# NR == FNR consumes the first census row as baseline and reverses the verdict.
+# The test expected SUBE 0 → 1 but got BAJA sujeto.sh: 1 → 0. An empty debt floor
+# must not make its guard blind.
 VEREDICTO="$(printf '%s\n' "$ACTUAL" | awk -F'\t' -v BASEF="$BASE_LIMPIA" '
 	# ⛔ UNA LINEA VACIA NO ES UNA ENTRADA. Con el censo VACIO —el caso «desaparece la ultima
 	# tuberia», que es adonde queremos llegar— `printf '%s\n' ""` emite UN registro vacio, y sin
@@ -275,17 +264,17 @@ VEREDICTO="$(printf '%s\n' "$ACTUAL" | awk -F'\t' -v BASEF="$BASE_LIMPIA" '
 SUBEN="$(printf '%s\n' "$VEREDICTO" | awk -F'\t' '$1 == "TOTALES" { print $2 }')"
 BAJAN="$(printf '%s\n' "$VEREDICTO" | awk -F'\t' '$1 == "TOTALES" { print $3 }')"
 
-echo "check-sigpipe-booleans: $N_TUB tubería(s) en $N_FICH fichero(s) con pipefail · línea base $(grep -c . <"$BASE_LIMPIA") · suben ${SUBEN:-0} · bajan ${BAJAN:-0}"
+echo "check-sigpipe-booleans: $N_TUB pipeline(s) in $N_FICH file(s) with pipefail · baseline $(grep -c . <"$BASE_LIMPIA") · increased ${SUBEN:-0} · decreased ${BAJAN:-0}"
 
 if [ "${SUBEN:-0}" -gt 0 ]; then
-	echo "check-sigpipe-booleans: ⛔ la deuda SUBE — tubería(s) que pueden devolver 141 EN ÉXITO:" >&2
+	echo "check-sigpipe-booleans: ⛔ backlog increased; pipeline(s) that may return 141 on success:" >&2
 	printf '%s\n' "$VEREDICTO" | awk -F'\t' '$1 == "SUBE" { printf "                          %s: %d -> %d\n", $2, $3, $4 }' >&2
-	echo "                        Sin tubería:  l=\"\$(lista)\"; case \"\$l\" in …  ·  o  grep -q X <(lista)" >&2
+	echo "                        Without a pipeline:  l=\"\$(lista)\"; case \"\$l\" in …  ·  or  grep -q X <(lista)" >&2
 	exit 1
 fi
 if [ "${BAJAN:-0}" -gt 0 ]; then
-	echo "check-sigpipe-booleans: ✔ la deuda BAJA en ${BAJAN} entrada(s) — baja la línea base en el mismo commit:"
+	echo "check-sigpipe-booleans: ✔ backlog decreased by ${BAJAN} entry/entries; reduce the baseline in this commit:"
 	printf '%s\n' "$VEREDICTO" | awk -F'\t' '$1 == "BAJA" { printf "                          %s: %d -> %d\n", $2, $3, $4 }'
 fi
-echo "check-sigpipe-booleans: OK — la deuda no sube."
+echo "check-sigpipe-booleans: OK — the backlog has not increased."
 exit 0

@@ -28,7 +28,7 @@ func withoutBubblewrap(t *testing.T) {
 	t.Cleanup(func() { grokLookPath = old })
 }
 
-// HU2-34: without bubblewrap a Grok launch whose preset runs Grok's sandbox is refused before
+// Without bubblewrap a Grok launch whose preset runs Grok's sandbox is refused before
 // anything is spawned, with the reason, instead of "the owned provider process ended during
 // initialize (HTTP 502)".
 func TestGrokLaunchWithoutBubblewrapIsRefusedWithTheReason(t *testing.T) {

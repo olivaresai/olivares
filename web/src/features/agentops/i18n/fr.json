@@ -85,10 +85,17 @@
     "attach": "Attacher",
     "detach": "Détacher"
   },
+  "discardWorktree": {
+    "label": "Supprimer aussi le worktree et la branche {{branch}}",
+    "hint": "Supprimés lorsque la branche est fusionnée et que le worktree est propre. Cochez pour abandonner un travail non fusionné ou non validé."
+  },
   "create": {
     "title": "Nouvelle session",
     "titleTool": "Nouvelle session {{tool}}",
-    "description": "Olivares lance et gouverne le processus — l’équivalent visuel du lancement en CLI, avec la politique en ligne.",
+    "description": "Dites quoi faire en premier. Les autres choix de lancement sont dans Options avancées.",
+    "prompt": "Premier message (facultatif)",
+    "promptPlaceholder": "Que doit-il faire en premier ?",
+    "advanced": "Options avancées",
     "name": "Nom",
     "namePlaceholder": "Un libellé d’affichage (facultatif)",
     "transport": "Transport",
@@ -97,34 +104,36 @@
     "effortDefault": "Valeur par défaut du modèle",
     "model": "Modèle",
     "modelPlaceholder": "opus  ·  claude-opus-4-8  (facultatif)",
-    "workspace": "Espace de travail",
-    "workspaceNone": "Aucun (répertoire de travail par défaut du runner)",
+    "workspace": "Dossier",
+    "workspaceNone": "Dossier temporaire de cette session",
+    "worktree": "Travailler dans un nouveau worktree git",
+    "worktreeHint": "Crée une nouvelle branche dans un worktree dédié, pour que les sessions d'un même dépôt ne partagent pas de fichiers. Le dossier doit être la racine du dépôt.",
+    "worktreeFrom": "Part de",
     "isolation": "Isolation",
     "isolationNativeOnly": "Seul le mode natif est câblé dans cette version ; conteneur/bac à sable sont refusés.",
     "envAllow": "Transférer l’env de l’hôte (noms)",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "Liste d’autorisation des NOMS de variables d’env de l’hôte à transmettre (les valeurs ne sont jamais envoyées).",
-    "submit": "Demander le lancement",
-    "submitting": "Demande…",
+    "submit": "Démarrer",
+    "submitting": "Démarrage…",
     "criticalWarning": "Il s’agit d’un lancement privilégié (il supprime l’invite par outil). Il requiert une approbation à deux personnes et est enregistré — il peut rester en attente jusqu’à approbation.",
     "classifiedWarning": "Un montage en lecture-écriture d’un espace de travail classifié est un lancement privilégié (approbation + enregistrement).",
     "success": "Session lancée",
     "template": "Modèle",
     "templateNone": "Aucun modèle",
-    "templateHint": "Le moteur fusionne les termes du modèle par-dessus les champs ci-dessus avant les contrôles de lancement, puis les écrit dans le processus de la session — la restriction tient donc même pour un appelant qui n'ouvre jamais cette console.",
+    "templateHint": "Les règles d’un modèle remplacent les choix correspondants ici et s’appliquent pendant toute la session.",
     "templateUnenforceable": "Ce modèle déclare des termes que ce lancement ne peut pas appliquer ; il est donc refusé plutôt que démarré sans eux :",
     "templateOverrides_one": "Le modèle remplace {{count}} de vos choix :",
     "templateOverrides_many": "Le modèle remplace {{count}} de vos choix :",
     "templateOverrides_other": "Le modèle remplace {{count}} de vos choix :",
     "profile": "Profil de fournisseur",
     "profileNone": "Sélectionner un profil",
-    "profileHint": "Sélectionnez le profil fournisseur de cette session. Un profil est obligatoire. Les exigences locales sont lues pour la sélection actuelle après l’aperçu du modèle.",
     "profileNotOperable": "non activé dans cet environnement",
-    "profilesNotRead": "Les profils de fournisseur n’ont pas pu être lus ; le lancement reste possible sans profil.",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME et GROK_HOME appartiennent au profil : un lancement qui transmet l’une d’elles est refusé ici. Les autres noms restent soumis à la validation du serveur.",
     "identity": {
       "title": "Identité de lancement",
       "hint": "Choisissez un agent admis agissant pour son sponsor humain. L’accès humain seul ne donne aucune autorité d’agent.",
+      "humanHint": "La session s’exécute avec votre propre accès.",
       "human": "Opérateur humain actuel",
       "agent": "Agent admis (pour le sponsor)",
       "required": "Un profil d’orchestration exige une identité d’agent authentifiée séparément.",
@@ -135,6 +144,19 @@
       "loading": "Chargement des identités…",
       "loadFailed": "Liste des identités indisponible.",
       "loadMore": "Charger plus d’identités"
+    },
+    "blocked": {
+      "profilesForbidden": "Votre rôle ne peut pas lire les profils de fournisseur (sessions:profile:read) : aucune session ne peut démarrer ici.",
+      "profilesFailed": "Les profils de fournisseur n’ont pas pu être lus.",
+      "profilesLoading": "Lecture des profils de fournisseur…",
+      "noProfile": "Aucun profil de fournisseur pour l’instant. Ajoutez d’abord un fournisseur.",
+      "openProviders": "Ouvrir Fournisseurs",
+      "chooseProfile": "Choisissez un profil de fournisseur.",
+      "worktreeFolder": "Choisissez un dossier de dépôt pour le worktree.",
+      "chooseAgent": "Choisissez l’agent admis sous lequel cette session s’exécute, ou exécutez-la en votre nom.",
+      "envConflict": "Transférer l’env de l’hôte nomme une variable qui appartient au profil : retirez-la dans Options avancées.",
+      "templateRefused": "Le modèle demande des conditions que ce lancement ne peut pas appliquer : choisissez-en un autre dans Options avancées.",
+      "readinessFailed": "Les exigences du profil n’ont pas pu être lues."
     }
   },
   "detail": {
@@ -160,6 +182,7 @@
     "workspace": "Espace de travail",
     "workspaceDirectory": "Répertoire de travail",
     "workspaceDirectoryOwn": "son propre répertoire pour cette session",
+    "worktreeBranch": "Branche du worktree",
     "created": "Créée",
     "started": "Démarrée",
     "lastActivity": "Dernière activité",
@@ -197,7 +220,13 @@
     "interruptFailed": "Impossible d’interrompre le tour.",
     "interruptFenceUnavailable": "Actualisez l’exécution pour obtenir sa génération de travail actuelle avant de l’interrompre.",
     "interruptUnknown": "Le résultat de l’interruption est inconnu. Vérifiez la session avant de réessayer.",
-    "interruptWorkConflict": "L’état de travail actuel de la session ne permet pas cette interruption. Actualisez l’exécution pour vérifier son état."
+    "interruptWorkConflict": "L’état de travail actuel de la session ne permet pas cette interruption. Actualisez l’exécution pour vérifier son état.",
+    "blocked": {
+      "notLive": "Démarrez ou reprenez la session pour envoyer.",
+      "approval": "Le lancement attend une approbation ; l’envoi sera possible une fois approuvé.",
+      "sending": "Envoi en cours… Attendez que la session l’accepte.",
+      "empty": "Saisissez quelque chose à envoyer."
+    }
   },
   "gov": {
     "title": "Posture de gouvernance",
@@ -296,7 +325,20 @@
     "deleteBody": "Ceci supprime uniquement l’enregistrement — cela ne touche jamais aux fichiers de l’hôte. Les sessions qui le visent échoueront au lancement.",
     "deleteConfirm": "Désenregistrer",
     "deleted": "Espace de travail désenregistré",
-    "open": "Parcourir les fichiers"
+    "open": "Parcourir les fichiers",
+    "readOnly": {
+      "title": "Dossiers en lecture seule",
+      "description": "Les dossiers en lecture seule protègent le contenu des fichiers et les entrées de répertoire (aucune écriture, troncature, création, suppression ni renommage) ; les permissions, le propriétaire, les attributs étendus et les horodatages suivent les permissions habituelles de l’hôte.",
+      "empty": "Aucun dossier en lecture seule.",
+      "folder": "Dossier sur ce serveur",
+      "folderPlaceholder": "/srv/reference",
+      "add": "Ajouter",
+      "remove": "Retirer",
+      "removeLabel": "Retirer {{folder}}",
+      "discard": "Annuler les modifications",
+      "save": "Enregistrer les dossiers",
+      "saved": "Dossiers en lecture seule enregistrés."
+    }
   },
   "browser": {
     "title": "Fichiers",
@@ -753,9 +795,9 @@
     "requesting": "Demande…",
     "requestHintReady": "Demander un lancement exécute encore l’autorisation, le mint et le démarrage. Ce n’est pas une preuve que le fournisseur est connecté.",
     "requestHintUnknown": "La vérification est incomplète. Vous pouvez quand même demander le lancement ; le serveur revalidera tout. Ce n’est pas un verdict « prêt ».",
-    "requestBlocked": "Aucune demande de lancement n’est proposée : cette sélection est connue comme non viable.",
-    "noWrite": "Vous pouvez voir ces exigences, mais demander un lancement nécessite sessions:run:write.",
-    "waitingPreview": "En attente de l’aperçu du modèle avant de lire les exigences du transport effectif.",
+    "requestBlocked": "Ce profil ne peut pas démarrer de session ici. Ses exigences, dans Options avancées, disent pourquoi.",
+    "noWrite": "Démarrer une session nécessite l’autorisation sessions:run:write.",
+    "waitingPreview": "Lecture du modèle avant de vérifier le profil…",
     "providerAuth": "La connexion au fournisseur n’est pas observée ici. Un home ou un binaire valides ne sont pas un compte authentifié.",
     "launchAuth": "L’autorisation de lancement se décide à l’envoi et nécessite sessions:run:write.",
     "remoteControl": "Cycle de vie uniquement — la conversation reste chez le fournisseur ; il n’y a pas de console de tours bridgée.",
@@ -860,6 +902,7 @@
       "codex_app_server": "Codex app-server",
       "grok_acp": "Grok ACP",
       "opencode_acp": "OpenCode ACP",
+      "gemini_acp": "Gemini CLI ACP",
       "unknown": "Protocole inconnu"
     }
   },

@@ -1,12 +1,5 @@
 {
   "search": "検索…",
-  "hubs": {
-    "operate": "運用",
-    "automate": "自動化",
-    "connect": "接続",
-    "govern": "統制",
-    "prove": "証明"
-  },
   "nouns": {
     "sessions": "セッション",
     "agents": "エージェント",
@@ -30,13 +23,15 @@
     "empty": "「{{query}}」に一致するビューはありません"
   },
   "items": {
+    "estate": "環境",
     "home": "ホーム",
     "onboarding": "セットアップウィザード",
     "inventory": "インベントリ",
-    "sessions": "セッションを観測",
+    "sessions": "セッション",
     "accessMap": "アクセスマップ",
     "health": "正常性とSLA",
     "capabilities": "MCPとスキル",
+    "skills": "スキルカタログ",
     "protocolBindings": "プロトコルバインディング",
     "communications": "コミュニケーション",
     "communicationsInbox": "コミュニケーション受信箱",
@@ -55,20 +50,17 @@
     "catalog": "カタログ",
     "killswitch": "キルスイッチ",
     "work": "作業",
-    "agentops": "セッションを運用",
+    "agentops": "セッション",
     "agentArtifacts": "エージェントアーティファクト",
     "models": "モデル",
     "modelOps": "モデル運用",
-    "finops": "コストとFinOps",
     "adoption": "Claude Code の導入状況",
     "evals": "評価",
     "security": "セキュリティ",
     "recordings": "記録",
     "compliance": "コンプライアンス",
-    "orchestration": "オーケストレーション",
     "voice": "音声",
     "sandbox": "サンドボックス",
-    "redteam": "レッドチーミング",
     "dashboards": "ダッシュボード",
     "observability": "可観測性",
     "platforms": "プラットフォーム",
@@ -81,23 +73,20 @@
     "workspace-templates": "ワークスペーステンプレート",
     "eventing": "Webhookとイベント",
     "session-viewer": "セッションビューア",
-    "team-costs": "チームコスト",
     "backups": "バックアップ",
     "logs": "ログ",
     "residency": "データレジデンシー",
     "tenants": "テナント",
     "inferenceProxy": "推論プロキシ",
     "alerting": "アラート",
-    "reporting": "レポート",
-    "postureExport": "ポスチャエクスポート",
-    "automations": "オートメーション",
     "agentcoreExport": "AgentCore エクスポート",
     "providers": "プロバイダー",
     "providerProfiles": "プロバイダープロファイル",
     "providerBindings": "ソースバインディング",
     "providerAccounts": "プロバイダーアカウント",
-    "agent-tools": "エージェントツール",
-    "mcpServers": "MCP サーバー"
+    "agent-tools": "AI ツール",
+    "mcpServers": "MCP サーバー",
+    "storedBudgets": "予算"
   },
   "workspace": {
     "open": "{{workspace}}を開く",
@@ -110,13 +99,15 @@
     "truncated": "一覧は不完全です——読み込み済みより多くのワークスペースがあります"
   },
   "descriptions": {
+    "estate": "設定済みリソースとその関係を確認し、作業項目の依存関係を調べます。",
     "home": "エステートの概要と正常性を一目で把握",
     "onboarding": "ステップバイステップのデプロイメント設定",
     "inventory": "コネクタが観察したエージェント、MCP サーバー、モデルを検出してカタログ化",
-    "sessions": "ライブおよび検出されたセッションとそのタイムラインを観測します。「セッションを運用」と画面を共有します",
+    "sessions": "セッションを開始し、Olivares が見つけたものも含めて、それぞれの動きを追います",
     "accessMap": "各エージェントが読み書きする対象（R/RW）",
     "health": "エージェントとMCPの稼働状況とSLA",
     "capabilities": "MCPサーバー、スキル、ツールを統制",
+    "skills": "スキルパックを閲覧し、部門、エージェントグループ、エージェントに割り当てる",
     "protocolBindings": "管理された A2A/MCP バインディングを構成・調整",
     "communications": "選択中ワークスペースのチャネル、ダイレクト通知、個人受信箱",
     "communicationsInbox": "自分宛ての配信だけを新規に読み取り、明示的に確認する正確な受信箱",
@@ -133,7 +124,7 @@
     "catalog": "キュレーションされ承認されたエージェントとケーパビリティ",
     "killswitch": "緊急停止、二重統制による復旧、ガーディアンによる封じ込め",
     "work": "共有作業：項目、依存関係、受け入れ、決定",
-    "agentops": "Claude Code セッションを作成・接続・統制します（SSH 不要）。「セッションを観測」と画面を共有します",
+    "agentops": "セッションを開始し、Olivares が見つけたものも含めて、それぞれの動きを追います",
     "agentArtifacts": "Skill、MCP拡張機能、指示ファイル — レジストリ、ポスチャ、サプライチェーンBOM",
     "models": "モデル、ルーティング、プロバイダーキー",
     "modelOps": "自社モデル、承認とデプロイ",
@@ -143,7 +134,6 @@
     "security": "ガードレール、フォレンジック、異常",
     "recordings": "特権セッションの記録と再生",
     "compliance": "フレームワーク、統制、証拠",
-    "orchestration": "エージェント間の連携とスケジュール",
     "voice": "音声およびリアルタイムセッション",
     "sandbox": "分離されたエージェントのテストと再生",
     "redteam": "エージェントに対する敵対的テスト",
@@ -162,7 +152,6 @@
     "alerting": "検出結果を宛先にルーティングし配信を確認",
     "reporting": "ガバナンスレポートを生成・ダウンロード",
     "postureExport": "コントロールタワー向けにグラウンドトゥルースのポスチャをエクスポート",
-    "automations": "3つのオートメーションレールとトリガーカタログ",
     "providers": "セッションが起動するときに使う API キーとエンドポイントを登録し、テスト・交換・失効を行います",
     "providerProfiles": "セッションの起動元となるプロバイダーのホームを登録・管理し、必要に応じてその設定を読み取る",
     "providerBindings": "構成済みソースを、このノードが適用したリビジョンでプロバイダープロファイルに専用化する",
@@ -176,7 +165,8 @@
     "logs": "エンジンのライブログストリーム。レベルとモジュールのフィルター、検索、一時停止",
     "sourceDiff": "接続された Git リポジトリのベースリビジョンとヘッドリビジョンをファイルごとに比較します",
     "agent-tools": "このホスト上のエージェントツールを検出・インストール・更新し、各インストールの状況を確認します（デプロイ管理者のみ）",
-    "mcpServers": "リモートの MCP サーバーをこの組織に接続してテストし、セッションが使えるツールを選びます"
+    "mcpServers": "リモートの MCP サーバーをこの組織に接続してテストし、セッションが使えるツールを選びます",
+    "storedBudgets": "保存済みの各上限に対する消費を表示します。予約済みキャパシティは上限にカウントされます。"
   },
   "commandActions": {
     "eventing": {
@@ -196,8 +186,8 @@
     }
   },
   "aliases": {
-    "sessions": "セッション",
-    "agentops": "Claude Code · agentops",
+    "sessions": "セッション · セッションを観測 · セッションを運用 · Claude Code · agentops",
+    "agentops": "セッションを運用 · Claude Code · agentops",
     "console": "統制コンソール · テナント管理"
   },
   "areas": {
@@ -224,16 +214,14 @@
       "question": "どのナレッジ、ケイパビリティ、アーティファクトを接続または再利用しますか？",
       "sections": {
         "capabilities": "ケイパビリティ",
-        "knowledge": "ナレッジ",
-        "artifacts": "アーティファクト"
+        "knowledge": "ナレッジとアーティファクト"
       }
     },
     "work-communications": {
       "label": "作業とコミュニケーション",
       "question": "どの作業を調整し、それはどのように連絡しますか？",
       "sections": {
-        "work": "作業",
-        "communications": "コミュニケーション"
+        "work": "作業とコミュニケーション"
       }
     },
     "automation": {
@@ -249,9 +237,8 @@
       "question": "誰が、どのルールでアクセスし、環境をどう保護しますか？",
       "sections": {
         "access": "アイデンティティとアクセス",
-        "policy": "ポリシー",
-        "defense": "保護と対応",
-        "boundaries": "ガバナンスの境界"
+        "policy": "ポリシーとガバナンスの境界",
+        "defense": "保護と対応"
       }
     },
     "deployment": {
@@ -267,8 +254,7 @@
       "sections": {
         "operations": "状態とアクティビティ",
         "cost-adoption": "コストと導入",
-        "audit-recordings": "監査と記録",
-        "evaluation-evidence": "評価とエビデンス"
+        "audit-recordings": "監査、評価とエビデンス"
       }
     },
     "system": {
@@ -292,7 +278,8 @@
     "empty": "このエリアで利用できる項目はありません",
     "emptyHint": "現在の組織でのロールがこのエリアのモジュールへのアクセスを許可すると、ここに項目が表示されます。",
     "backHome": "ホームへ",
-    "area": "エリア"
+    "area": "エリア",
+    "off": "オフ"
   },
   "personal": {
     "favorites": "お気に入り",
@@ -343,42 +330,23 @@
     "send": "送信",
     "turnPlaceholder": "文を送信…",
     "turnAria": "セッションのターン",
-    "attachedRunning": "実行中",
     "attachedWaiting": "あなたの応答待ち",
-    "attachedSettled": "終了",
     "advanced": "詳細",
     "advancedHint": "NDJSON 行を stdin に送ります。既定は文の欄です。",
     "wirePlaceholder": "NDJSON 行を stdin に送信…",
     "wireAria": "セッション入力行",
     "turnFailed": "セッションはこのターンを受け付けられませんでした。",
-    "sendBackgroundHint": "Ctrl+Enter で送信し、次の文の下書きを残します。"
+    "sendBackgroundHint": "Ctrl+Enter で送信し、次の文の下書きを残します。",
+    "messagePlaceholder": "{{title}} にメッセージ…"
   },
   "shell": {
     "journeysLabel": "作業の流れ",
     "journeys": {
       "home": "ホーム",
       "sessions": "セッション",
-      "workspaceDashboard": "ワークスペース",
-      "providers": "AI ツール",
-      "deploy": "デプロイ",
-      "work": "作業",
       "approvals": "承認",
-      "inventory": "インベントリ",
-      "finops": "コストとFinOps",
-      "accessMap": "アクセスマップ",
-      "mcpServers": "MCP サーバー",
-      "knowledge": "ナレッジ",
-      "identity": "アイデンティティとNHI",
-      "claudePolicy": "Claude Codeガバナンス",
-      "audit": "監査台帳",
-      "killswitch": "キルスイッチ",
+      "storedBudgets": "予算",
       "agent-tools": "AI ツール"
-    },
-    "groups": {
-      "work": "作業",
-      "manage": "管理",
-      "integrate": "統合",
-      "secure": "保護"
     },
     "phoneBarLabel": "メイン",
     "newSession": "新しいセッション",
@@ -398,9 +366,7 @@
         "earlier": "以前"
       },
       "empty": {
-        "needsYou": "待っているものはありません。",
-        "working": "実行中のものはありません。",
-        "earlier": "以前のセッションはありません。"
+        "needsYou": "待っているものはありません。"
       },
       "state": {
         "need": "対応が必要",

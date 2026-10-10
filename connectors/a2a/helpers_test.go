@@ -8,13 +8,11 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
+	jose "github.com/go-jose/go-jose/v4"
+	"github.com/olivaresai/olivares/sdk/model"
 	"strings"
 	"sync"
 	"testing"
-
-	jose "github.com/go-jose/go-jose/v4"
-
-	"github.com/olivaresai/olivares/sdk/model"
 )
 
 // --- fakeSink ----------------------------------------------------------------

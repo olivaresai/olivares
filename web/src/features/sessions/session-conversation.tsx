@@ -5,15 +5,17 @@
 // THE NARRATIVE AS A CONVERSATION. Attach frames are mapped before they are
 // painted: the default view is operator, assistant, tool, system, result. The
 // raw line is one click away (inspect), never the row itself.
-import { ChevronDown, Wrench } from 'lucide-react'
+import { Check, Eye, Pencil, Terminal, Wrench } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
-import { LiveDot } from '@/features/shared'
 import { useRunAttach } from '@/features/agentops/attach'
 import type { AttachFrame, RunDTO } from '@/features/agentops/types'
 import { formatDuration, formatInt } from '@/lib/format'
+import '@/features/shared/i18n'
 import { cn } from '@/lib/utils'
+import { useSessionStore } from '@/stores/session'
+import { useTenantStore } from '@/stores/tenant'
 import {
   conversationCwd,
   mapConversationFrames,
@@ -46,17 +48,30 @@ export function SessionConversation({
   run,
   selectedId,
   onInspect,
-  workspaceRef,
+  onFolder,
 }: {
   run: RunDTO
   selectedId?: string | null
   onInspect?: (item: ConversationItem) => void
-  /** Absent workspace is a value: the warning names the driver's cwd rather than hiding it. */
-  workspaceRef?: string | null
+  /** The folder the tool's own first frame names, for the Context pane to say. */
+  onFolder?: (cwd: string | null) => void
 }) {
   const { t } = useTranslation('sessions')
+  const { t: tShared } = useTranslation('shared')
   const [frames, setFrames] = useState<AttachFrame[]>([])
+  const [history, setHistory] = useState<string | null>(null)
   const [dropped, setDropped] = useState(0)
+  const generation = useSessionStore((s) => s.credentialGeneration)
+  const tenant = useTenantStore((s) => s.activeTenant)
+  const ownerKey = `${run.run_ref}\n${tenant ?? ''}\n${generation}`
+  const [owner, setOwner] = useState(ownerKey)
+  // Clear before painting a different run, tenant or signed-in identity.
+  if (owner !== ownerKey) {
+    setOwner(ownerKey)
+    setFrames([])
+    setHistory(null)
+    setDropped(0)
+  }
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const [autoscroll, setAutoscroll] = useState(true)
 
@@ -79,12 +94,20 @@ export function SessionConversation({
     enabled: !isRemote,
     sessionKey: `${run.state}:${run.transport}`,
     onFrame,
+    onHistory: setHistory,
     onLag,
   })
 
+  // Protocol bookkeeping (handshakes, replies, lifecycle notifications) is no row: it read
+  // "Protocol frames: N" between every turn and told nothing. Every frame stays one command
+  // away under "In a terminal" (`session follow -o json`); a protocol error is still shown.
   const items = useMemo(
-    () => mapConversationFrames(frames.map((f) => f.line)),
-    [frames],
+    () =>
+      mapConversationFrames([
+        ...(history ? [history] : []),
+        ...frames.map((f) => f.line),
+      ]).filter((item) => item.systemKind !== 'protocol'),
+    [frames, history],
   )
   // The first message the console sent, until the tool shows it itself (HU2-27).
   const sent = useRunSentTurns(run.run_ref)
@@ -92,8 +115,11 @@ export function SessionConversation({
     () => (sent ? unechoedTurns(items, sent) : []),
     [items, sent],
   )
-  const cwd = conversationCwd(items)
-  const showCwdWarning = !workspaceRef && !!cwd
+  const frameCwd = conversationCwd(items)
+  useEffect(() => {
+    onFolder?.(frameCwd ?? null)
+    return () => onFolder?.(null)
+  }, [frameCwd, onFolder])
 
   useEffect(() => {
     if (!autoscroll) return
@@ -110,24 +136,12 @@ export function SessionConversation({
 
   return (
     <div
-      className="flex min-h-0 flex-col gap-2"
+      className="flex min-h-0 flex-1 flex-col gap-2"
       data-testid="session-conversation"
     >
-      <div className="flex items-center gap-2 text-caption text-muted-foreground">
-        <LiveDot status={status} />
-        {ended ? <span>{t('conversation.ended')}</span> : null}
-      </div>
       {dropped > 0 ? (
         <p className="text-caption text-warning">
           {t('conversation.lag', { count: dropped })}
-        </p>
-      ) : null}
-      {showCwdWarning ? (
-        <p
-          data-testid="conversation-cwd-warning"
-          className="rounded-md border border-warning-line bg-warning-soft px-2.5 py-1.5 text-caption text-warning"
-        >
-          {t('conversation.cwdWarning', { cwd })}
         </p>
       ) : null}
       <div
@@ -136,32 +150,130 @@ export function SessionConversation({
         tabIndex={0}
         role="log"
         aria-label={t('conversation.log')}
-        className="min-h-0 flex-1 overflow-auto focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+        className="min-h-0 flex-1 overflow-auto focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset"
       >
-        {items.length === 0 && pending.length === 0 ? (
-          <p className="px-1 py-2 text-caption text-muted-foreground">
-            {status === 'open'
-              ? t('conversation.waiting')
-              : t('conversation.empty')}
-          </p>
-        ) : (
-          <ol className="flex flex-col">
-            {items.map((item) => (
-              <ConversationRow
-                key={item.id}
-                item={item}
-                selected={selectedId === item.id}
-                onInspect={onInspect}
-              />
-            ))}
-            {pending.map((turn, i) => (
-              <SentTurnRow key={`sent-${i}`} turn={turn} />
-            ))}
-          </ol>
-        )}
+        {/* ONE CENTERED COLUMN, 760 px: the transcript is read, not scanned, and a line
+            longer than that is a line nobody follows. */}
+        <div className="mx-auto w-full max-w-[760px] px-4 py-4">
+          {/* A LINK THAT DROPPED OR IS COMING UP SAYS SO, ONCE, QUIETLY, while the turns
+              already read stay on the page. Without it a stale transcript reads as a
+              finished one. */}
+          {status === 'error' || status === 'connecting' ? (
+            <p
+              role="status"
+              data-testid="conversation-link"
+              className="mb-2 text-center text-overline font-normal text-text-3"
+            >
+              {tShared(`live.${status}`)}
+            </p>
+          ) : null}
+          {items.length === 0 &&
+          pending.length === 0 &&
+          status !== 'error' &&
+          status !== 'connecting' ? (
+            <p className="py-2 text-caption text-muted-foreground">
+              {status === 'open'
+                ? t('conversation.waiting')
+                : t('conversation.empty')}
+            </p>
+          ) : (
+            <ol className="flex flex-col gap-1">
+              {foldTools(items).map((part) =>
+                part.kind === 'fold' ? (
+                  <li key={`fold-${part.items[0]!.id}`}>
+                    <details data-testid="conversation-tools-fold">
+                      <summary className="flex min-h-8 cursor-pointer list-none items-center gap-2 rounded-ctl px-2 text-caption text-text-3 outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus [&::-webkit-details-marker]:hidden">
+                        {t('conversation.toolsFolded', {
+                          count: part.items.length,
+                        })}
+                      </summary>
+                      <ol className="flex flex-col">
+                        {part.items.map((item) => (
+                          <ConversationRow
+                            key={item.id}
+                            item={item}
+                            selected={selectedId === item.id}
+                            onInspect={onInspect}
+                          />
+                        ))}
+                      </ol>
+                    </details>
+                  </li>
+                ) : (
+                  <ConversationRow
+                    key={part.item.id}
+                    item={part.item}
+                    selected={selectedId === part.item.id}
+                    onInspect={onInspect}
+                  />
+                ),
+              )}
+              {pending.map((turn, i) => (
+                <SentTurnRow key={`sent-${i}`} turn={turn} />
+              ))}
+            </ol>
+          )}
+        </div>
       </div>
+      {ended ? (
+        <p className="text-center text-overline font-normal text-text-3">
+          {t('conversation.ended')}
+        </p>
+      ) : null}
     </div>
   )
+}
+
+/** Tool calls beyond the latest three in a row of them fold under "+N tool calls". */
+const VISIBLE_TOOL_CALLS = 3
+
+type Part =
+  | { kind: 'item'; item: ConversationItem }
+  | { kind: 'fold'; items: ConversationItem[] }
+
+/**
+ * The items as the thread paints them: a run of consecutive tool calls longer than
+ * three keeps its latest three on the page, and the older ones fold into one line that
+ * opens them. Nothing is dropped: every folded row is still in the document.
+ */
+function foldTools(items: readonly ConversationItem[]): Part[] {
+  const parts: Part[] = []
+  let at = 0
+  while (at < items.length) {
+    if (items[at]!.kind !== 'tool') {
+      parts.push({ kind: 'item', item: items[at]! })
+      at += 1
+      continue
+    }
+    let end = at
+    while (end < items.length && items[end]!.kind === 'tool') end += 1
+    const run = items.slice(at, end)
+    const folded = run.length - VISIBLE_TOOL_CALLS
+    if (folded > 0) parts.push({ kind: 'fold', items: run.slice(0, folded) })
+    for (const item of folded > 0 ? run.slice(folded) : run)
+      parts.push({ kind: 'item', item })
+    at = end
+  }
+  return parts
+}
+
+/** The glyph of a tool call: what it does to the folder, not which tool does it. */
+function ToolGlyph({ name, command }: { name?: string; command?: string }) {
+  const cls = 'size-3.5 shrink-0 text-text-3'
+  if (command) return <Terminal aria-hidden className={cls} />
+  switch ((name ?? '').toLowerCase()) {
+    case 'read':
+    case 'grep':
+    case 'glob':
+    case 'search':
+      return <Eye aria-hidden className={cls} />
+    case 'edit':
+    case 'write':
+    case 'multiedit':
+      return <Pencil aria-hidden className={cls} />
+    default:
+      return <Wrench aria-hidden className={cls} />
+  }
 }
 
 function ConversationRow({
@@ -177,58 +289,48 @@ function ConversationRow({
   const inspect = () => onInspect?.(item)
 
   if (item.kind === 'tool') {
+    const target = item.toolCommand ?? item.toolArgsSummary
     return (
       <li>
         <details
           data-testid="conversation-item"
           data-kind="tool"
-          className={cn(
-            'group border-l-2 border-transparent',
-            'hover:bg-muted',
-            selected && 'border-l-accent bg-accent-soft',
-          )}
+          className={cn('group rounded-ctl', selected && 'bg-active')}
         >
+          {/* A TOOL CALL IS A 13 px ROW: the glyph, the verb, the target in the machine
+              face, and at the right the check once the tool answered. */}
           <summary
             className={cn(
-              'flex min-h-9 cursor-pointer list-none items-center gap-2 px-2 py-1',
-              'text-caption text-foreground outline-none',
-              'focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
+              'flex min-h-8 cursor-pointer list-none items-center gap-2 rounded-ctl px-2 py-1',
+              'text-caption text-text outline-none hover:bg-hover',
+              'focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
               '[&::-webkit-details-marker]:hidden',
             )}
           >
-            <ChevronDown
-              className="size-3.5 shrink-0 text-muted-foreground transition-transform group-open:rotate-0 -rotate-90"
-              aria-hidden
-            />
-            <Wrench
-              className="size-3.5 shrink-0 text-muted-foreground"
-              aria-hidden
-            />
-            <span className="min-w-0 flex-1 truncate font-medium">
+            <ToolGlyph name={item.toolName} command={item.toolCommand} />
+            <span className="shrink-0 font-medium">
               {item.toolName ?? t('conversation.tool')}
             </span>
+            {target ? (
+              <span
+                className="min-w-0 flex-1 truncate font-mono text-text-2"
+                title={item.toolCommand ?? target}
+              >
+                {target}
+              </span>
+            ) : (
+              <span className="flex-1" />
+            )}
             {item.toolFailed ? (
               <span className="shrink-0 text-danger">
                 {t('conversation.toolFailed')}
               </span>
-            ) : null}
-            {item.toolCommand ? (
-              // A command reads as itself, in one line; the whole of it is below.
-              <span
-                className="min-w-0 max-w-[60%] truncate font-mono text-muted-foreground"
-                title={item.toolCommand}
-              >
-                {item.toolCommand}
-              </span>
-            ) : item.toolArgsSummary ? (
-              <span className="min-w-0 max-w-[50%] truncate text-muted-foreground">
-                {item.toolArgsSummary}
-              </span>
-            ) : null}
-            {item.toolElapsedSeconds !== undefined ? (
-              <span className="shrink-0 tabular-nums text-muted-foreground">
+            ) : item.toolElapsedSeconds !== undefined ? (
+              <span className="shrink-0 tabular-nums text-text-3">
                 {formatDuration(item.toolElapsedSeconds * 1000)}
               </span>
+            ) : item.toolResultSummary !== undefined ? (
+              <Check aria-hidden className="size-3.5 shrink-0 text-text-3" />
             ) : null}
           </summary>
           <div className="space-y-1 px-8 pb-2 text-caption text-muted-foreground">
@@ -274,14 +376,27 @@ function ConversationRow({
           data-kind="system"
           onClick={inspect}
           className={cn(
-            'flex w-full min-h-7 items-center gap-2 border-l-2 border-transparent px-2 py-0.5 text-left',
+            'flex min-h-7 w-full items-center gap-2 rounded-ctl px-2 py-0.5 text-left',
             'text-caption outline-none',
-            systemFailed(item) ? 'text-danger' : 'text-muted-foreground',
-            'hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-            selected && 'border-l-accent bg-accent-soft text-foreground',
+            // The engine's notice reads as the terminal's warning does (`session follow`).
+            systemFailed(item)
+              ? 'text-danger'
+              : item.systemKind === 'notice'
+                ? 'text-warning'
+                : 'text-muted-foreground',
+            'hover:bg-hover focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
+            selected && 'bg-active text-text',
           )}
         >
-          <span className="min-w-0 truncate">{systemText(t, item)}</span>
+          {/* A notice is the reason itself: it wraps instead of being cut on a phone. */}
+          <span
+            className={cn(
+              'min-w-0',
+              item.systemKind === 'notice' ? 'whitespace-normal' : 'truncate',
+            )}
+          >
+            {systemText(t, item)}
+          </span>
         </button>
       </li>
     )
@@ -304,74 +419,124 @@ function ConversationRow({
             maximumFractionDigits: 4,
           }).format(item.costUsd)
         : null,
-      item.durationMs !== undefined ? formatDuration(item.durationMs) : null,
     ].filter(Boolean)
+    // THE END OF A TURN IS A DIVIDER, not a bare "Result" button: "Worked for 8s" when
+    // the tool said how long, "Result" when it did not. It opens what the button showed
+    // inline: how the turn stopped, the model, the tokens, the cost and the raw frame.
+    // A failed turn keeps its duration: "Result · 8.0s", never a silent "Worked for".
+    const label =
+      item.durationMs === undefined
+        ? t('conversation.result')
+        : item.resultFailed
+          ? `${t('conversation.result')} · ${formatDuration(item.durationMs)}`
+          : t('conversation.workedFor', {
+              duration: formatDuration(item.durationMs),
+            })
     return (
       <li>
-        <button
-          type="button"
+        <details
           data-testid="conversation-item"
           data-kind="result"
-          onClick={inspect}
-          className={cn(
-            'flex w-full flex-wrap items-center gap-x-2 gap-y-0.5 border-l-2 border-transparent px-2 py-1.5 text-left',
-            'text-caption text-muted-foreground outline-none',
-            'hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
-            selected && 'border-l-accent bg-accent-soft text-foreground',
-          )}
+          className={cn('group my-2 rounded-ctl', selected && 'bg-active')}
         >
-          <span
+          <summary
             className={cn(
-              'font-medium',
-              item.resultFailed ? 'text-danger' : 'text-foreground',
+              'flex cursor-pointer list-none items-center gap-3 rounded-ctl px-2 py-1 outline-none',
+              'text-overline font-normal text-text-3 hover:text-text-2',
+              'focus-visible:ring-2 focus-visible:ring-focus focus-visible:ring-inset',
+              '[&::-webkit-details-marker]:hidden',
             )}
           >
-            {t('conversation.result')}
-          </span>
-          {facts.map((fact) => (
-            <span key={String(fact)}>· {fact}</span>
-          ))}
-          {/* A failed result's text IS the failure (F1C: a failed start showed only
-              "Result" while the run's stored reason and the CLI had the sentence). A
-              successful result's text repeats the last reply, so it stays out. */}
-          {item.resultFailed && item.text ? (
+            <span aria-hidden className="h-px flex-1 bg-line" />
             <span
-              data-slot="result-failure"
-              className="basis-full whitespace-pre-wrap break-words text-danger"
+              className={cn(
+                'tabular-nums',
+                item.resultFailed && 'font-medium text-danger',
+              )}
             >
-              {item.text}
+              {label}
             </span>
-          ) : null}
-        </button>
+            <span aria-hidden className="h-px flex-1 bg-line" />
+          </summary>
+          <div className="flex flex-col items-center gap-1 px-2 pb-1 text-center text-caption text-text-2">
+            {facts.length > 0 ? <p>{facts.join(' · ')}</p> : null}
+            <InspectButton onClick={inspect} />
+          </div>
+        </details>
+        {/* A failed result's text IS the failure (F1C: a failed start showed only
+            "Result" while the run's stored reason and the CLI had the sentence). A
+            successful result's text repeats the last reply, so it stays out. */}
+        {item.resultFailed && item.text ? (
+          <p
+            data-slot="result-failure"
+            className="whitespace-pre-wrap break-words px-2 pb-1 text-caption text-danger"
+          >
+            {item.text}
+          </p>
+        ) : null}
       </li>
     )
   }
 
-  const align = item.kind === 'operator' ? 'items-end' : 'items-start'
-  const bubble =
-    item.kind === 'operator'
-      ? 'bg-accent-soft text-foreground'
-      : item.kind === 'unknown'
-        ? 'border border-border bg-surface text-foreground'
-        : 'bg-muted text-foreground'
+  // THE PERSON'S TURN IS A QUIET BLOCK AND THE ASSISTANT'S IS PLAIN TEXT. No right-aligned
+  // bubble and no "YOU" / "ASSISTANT" label above it: who spoke is what the block is, and
+  // the assistant is the page itself.
+  if (item.kind === 'operator')
+    return (
+      <li className="my-2">
+        <button
+          type="button"
+          data-testid="conversation-item"
+          data-kind="operator"
+          onClick={inspect}
+          className={cn(
+            'w-full rounded-[12px] bg-muted px-4 py-3 text-left text-body-l text-text outline-none',
+            'focus-visible:ring-2 focus-visible:ring-focus',
+            selected && 'ring-1 ring-line-strong',
+          )}
+        >
+          <span className="whitespace-pre-wrap break-words">
+            {item.text || item.summary}
+          </span>
+        </button>
+      </li>
+    )
+
+  if (item.kind === 'unknown')
+    return (
+      <li className="flex flex-col gap-0.5 py-1">
+        <span className="text-overline uppercase text-text-3">
+          {t('conversation.unknown')}
+        </span>
+        <button
+          type="button"
+          data-testid="conversation-item"
+          data-kind="unknown"
+          onClick={inspect}
+          className={cn(
+            'w-full rounded-md border border-line px-2.5 py-1.5 text-left text-body text-text outline-none',
+            'focus-visible:ring-2 focus-visible:ring-focus',
+            selected && 'bg-active',
+          )}
+        >
+          <span className="whitespace-pre-wrap break-words">
+            {item.text || item.summary}
+          </span>
+        </button>
+      </li>
+    )
 
   return (
-    <li className={cn('flex flex-col gap-0.5 px-2 py-1', align)}>
-      <span className="text-overline uppercase text-muted-foreground">
-        {t(`conversation.${item.kind}`)}
-      </span>
+    <li className="py-1">
       <button
         type="button"
         data-testid="conversation-item"
         data-kind={item.kind}
         onClick={inspect}
         className={cn(
-          'max-w-[42rem] rounded-md px-2.5 py-1.5 text-left text-body leading-snug outline-none',
-          'border-l-2 border-transparent',
-          'focus-visible:ring-2 focus-visible:ring-ring',
-          'hover:brightness-[1.03]',
-          bubble,
-          selected && 'border-l-accent ring-1 ring-accent-line',
+          'w-full rounded-ctl text-left text-body-l text-text outline-none',
+          'focus-visible:ring-2 focus-visible:ring-focus',
+          selected && 'bg-active',
         )}
       >
         <span className="whitespace-pre-wrap break-words">
@@ -383,23 +548,22 @@ function ConversationRow({
 }
 
 /** The person's message as the console sent it: there is no frame to inspect. A message
- * the engine refused says so, with the engine's reason, in the danger color. */
+ * the engine refused says so, with the engine's reason, in the danger color; one held
+ * for its launch's approval says it goes when the session runs. */
 function SentTurnRow({ turn }: { turn: SentTurn }) {
   const { t } = useTranslation('sessions')
   return (
-    <li
-      className="flex flex-col items-end gap-0.5 px-2 py-1"
-      data-testid="conversation-sent"
-    >
-      <span className="text-overline uppercase text-muted-foreground">
-        {t('conversation.operator')}
-      </span>
-      <p className="max-w-[42rem] rounded-md bg-accent-soft px-2.5 py-1.5 text-body leading-snug text-foreground">
+    <li className="my-2 flex flex-col gap-1" data-testid="conversation-sent">
+      <p className="rounded-[12px] bg-muted px-4 py-3 text-body-l text-text">
         <span className="whitespace-pre-wrap break-words">{turn.text}</span>
       </p>
       {turn.refused !== undefined ? (
-        <p className="max-w-[42rem] text-caption text-danger">
+        <p className="px-1 text-caption text-danger">
           {t('conversation.notSent', { reason: turn.refused })}
+        </p>
+      ) : turn.waiting ? (
+        <p className="px-1 text-caption text-muted-foreground">
+          {t('conversation.waitingApproval')}
         </p>
       ) : null}
     </li>
@@ -413,7 +577,7 @@ function InspectButton({ onClick }: { onClick?: () => void }) {
     <button
       type="button"
       onClick={onClick}
-      className="text-caption text-accent-text underline-offset-2 hover:underline focus-visible:ring-2 focus-visible:ring-ring"
+      className="text-caption text-text-2 underline underline-offset-[3px] hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
     >
       {t('conversation.inspect')}
     </button>

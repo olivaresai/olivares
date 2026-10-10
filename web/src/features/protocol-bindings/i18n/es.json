@@ -62,10 +62,10 @@
   },
   "outcome": {
     "unknownTitle": "No se ha afirmado ningún estado",
-    "unknownBody": "El plano de control no pudo completar la observación. Vuelve a leer la evidencia antes de decidir.",
+    "unknownBody": "No se pudo completar la observación. Actualiza la evidencia antes de decidir.",
     "brokenTitle": "No se cumplió la condición solicitada",
     "brokenBody": "Revisa el código y el plan antes de continuar.",
-    "replayed": "The control plane replayed the already committed result; it did not apply a second change."
+    "replayed": "Se devolvió el resultado ya confirmado. No se aplicó un segundo cambio."
   },
   "composer": {
     "title": "Componer borrador de enlace de protocolo",

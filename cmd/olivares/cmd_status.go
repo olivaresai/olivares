@@ -55,12 +55,17 @@ type statusComponent struct {
 }
 
 func newStatusCmd() *cobra.Command {
-	var cfg statusClientConfig
+	var (
+		cfg     statusClientConfig
+		verbose bool
+	)
 	cmd := &cobra.Command{
 		Use:   "status",
 		Short: "Show whether the engine is up and which parts are configured",
-		Long: "Reads the existing unauthenticated GET /status endpoint and prints the engine\n" +
-			"status plus the knowledge embedder posture (semantic vs local-hash).",
+		Long: "Reads the unauthenticated GET /status endpoint and prints whether the engine is up,\n" +
+			"what `olivares` alone says about this installation (who is signed in, the next step)\n" +
+			"and one row per component. --verbose adds the knowledge search posture (embedder,\n" +
+			"semantic retrieval, guard). -o json prints the endpoint's document as it is.",
 		Example: "  olivares status --server https://127.0.0.1:8443 --insecure",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -88,9 +93,26 @@ func newStatusCmd() *cobra.Command {
 			}
 			if err := renderOut(cmd, func(out io.Writer) error {
 				r := renderTo(out)
-				head := []termrender.Field{{Key: "status", Value: res.Status, Role: componentRole(res.Status)}}
-				// Name the unprovisioned capabilities up front: exiting 0 must
-				// never be read as "everything is configured here".
+				// The status a person reads first, then what `olivares` alone says
+				// about this installation; the knowledge posture is under --verbose. The
+				// unprovisioned capabilities are named in the status sentence itself:
+				// exiting 0 must never be read as "everything is configured here".
+				head := []termrender.Field{{Key: "status", Value: statusSentence(res), Role: componentRole(res.Status)}}
+				if !cfg.serverExplicit {
+					overview := rootStatus(cmd.Context())
+					if overview.SignedIn != "" {
+						head = append(head, termrender.Field{Key: "signed in", Value: overview.SignedIn})
+					}
+					if overview.Next != "" {
+						head = append(head, termrender.Field{Key: "next", Value: overview.Next})
+					}
+				}
+				if !verbose {
+					r.Fields(head)
+					r.Blank()
+					r.Table(statusComponentTable(res.Components, false))
+					return nil
+				}
 				if pending := notConfiguredComponents(res.Components); len(pending) > 0 {
 					head = append(head, termrender.Field{
 						Key: "not_configured", Value: strings.Join(pending, " "), Role: termrender.RoleWarn,
@@ -117,19 +139,7 @@ func newStatusCmd() *cobra.Command {
 				}
 				r.Fields(head)
 				r.Blank()
-				tbl := termrender.Table{
-					Header: []string{"component", "status", "detail"},
-					Empty:  "this engine reports no component",
-				}
-				for _, c := range res.Components {
-					detail := c.Reason
-					if c.Name == "knowledge" {
-						detail = fmt.Sprintf("embedder=%s semantic=%t guard=%s guard_downgrades=%d reason=%s guard_warning=%s", c.EmbedderKind, boolValue(c.RetrievalSemantic), c.GuardProfile, c.GuardDowngradeCount, c.Reason, c.GuardWarning)
-					}
-					tbl.Rows = append(tbl.Rows, []string{c.Name, c.Status, detail})
-					tbl.Roles = append(tbl.Roles, []termrender.Role{0, componentRole(c.Status)})
-				}
-				r.Table(tbl)
+				r.Table(statusComponentTable(res.Components, true))
 				return nil
 			}, json.RawMessage(raw)); err != nil {
 				return err
@@ -142,6 +152,7 @@ func newStatusCmd() *cobra.Command {
 	cmd.Flags().StringArrayVar(&cfg.pins, "pin-sha256", nil, "trusted leaf SPKI SHA-256 pin, base64 or hex, repeatable — the engine prints it as pin_sha256 on the line reporting its certificate (default: current context)")
 	cmd.Flags().BoolVar(&cfg.insecure, "insecure", false, "skip TLS certificate verification (self-signed development engines only)")
 	cmd.Flags().DurationVar(&cfg.timeout, "timeout", 10*time.Second, "request timeout")
+	cmd.Flags().BoolVar(&verbose, "verbose", false, "also print the knowledge search posture (embedder, semantic retrieval, guard)")
 	hideConnectionFlags(cmd.Flags())
 	addDeprecatedJSONFlag(cmd)
 	return cmd
@@ -162,6 +173,9 @@ func (c *statusClientConfig) fetch(ctx context.Context) (statusResponse, []byte,
 	if err != nil {
 		return statusResponse{}, nil, 0, err
 	}
+	// HU-R36: on the engine's host, before any sign-in, status reads the same engine
+	// `olivares login` finds. /status is public, so no credential is involved.
+	resolved, _ = localEngineFallback(resolved, c.serverExplicit || c.server != "")
 	if resolved.Server == "" {
 		return statusResponse{}, nil, 0, notSignedIn("--server", "OLIVARES_SERVER_URL")
 	}
@@ -235,6 +249,48 @@ func componentRole(status string) termrender.Role {
 	default:
 		return termrender.RoleNone
 	}
+}
+
+// statusSentence is the engine's verdict in a person's words: "running" when it is
+// healthy, and the capabilities nobody set up named after it (a working
+// install read "not_configured"); any other verdict as the engine gave it.
+func statusSentence(res statusResponse) string {
+	switch res.Status {
+	case statusOperational:
+		return "running"
+	case statusNotConfigured:
+		var gaps []string
+		for _, name := range notConfiguredComponents(res.Components) {
+			if name == "knowledge" {
+				gaps = append(gaps, "knowledge search not set up")
+			} else {
+				gaps = append(gaps, name+" not set up")
+			}
+		}
+		if len(gaps) == 0 {
+			return "running"
+		}
+		return "running; " + strings.Join(gaps, "; ")
+	}
+	return res.Status
+}
+
+// statusComponentTable is one row per component; the knowledge row's posture
+// (embedder, semantic, guard) only when verbose.
+func statusComponentTable(components []statusComponent, verbose bool) termrender.Table {
+	tbl := termrender.Table{
+		Header: []string{"component", "status", "detail"},
+		Empty:  "this engine reports no component",
+	}
+	for _, c := range components {
+		detail := c.Reason
+		if c.Name == "knowledge" && verbose {
+			detail = fmt.Sprintf("embedder=%s semantic=%t guard=%s guard_downgrades=%d reason=%s guard_warning=%s", c.EmbedderKind, boolValue(c.RetrievalSemantic), c.GuardProfile, c.GuardDowngradeCount, c.Reason, c.GuardWarning)
+		}
+		tbl.Rows = append(tbl.Rows, []string{c.Name, c.Status, detail})
+		tbl.Roles = append(tbl.Roles, []termrender.Role{0, componentRole(c.Status)})
+	}
+	return tbl
 }
 
 func notConfiguredComponents(components []statusComponent) []string {

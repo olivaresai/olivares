@@ -36,11 +36,12 @@ func (pr *procRunner) launchPTY(cmd *exec.Cmd, waitDelay time.Duration, release 
 	}
 	defer stderrWrite.Close()
 	cmd.Stderr = stderrWrite
-	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Setsid:  true,
-		Setctty: true,
-		Ctty:    0, // stdin is the slave, so the child's fd 0 is the tty
+	if cmd.SysProcAttr == nil {
+		cmd.SysProcAttr = &syscall.SysProcAttr{}
 	}
+	cmd.SysProcAttr.Setsid = true
+	cmd.SysProcAttr.Setctty = true
+	cmd.SysProcAttr.Ctty = 0 // stdin is the slave, so the child's fd 0 is the tty
 	cmd.Cancel = func() error { return procGroupKill(cmd) }
 	if err := cmd.Start(); err != nil {
 		_ = stderr.Close()

@@ -35,13 +35,13 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 # lib/exec-workdir.sh PRUEBA que un candidato puede crear y EJECUTAR: no se elige el directorio, se
 # demuestra. En estos contenedores /tmp está montado noexec y execve da 126 allí.
 . "$ROOT/scripts/lib/exec-workdir.sh" || {
-	echo "check-ci-env-reach: NO HE PODIDO MIRAR: falta scripts/lib/exec-workdir.sh" >&2
+	echo "check-ci-env-reach: COULD NOT CHECK: missing scripts/lib/exec-workdir.sh" >&2
 	exit 2
 }
 export CI_ENV_REACH_ROOT="${CI_ENV_REACH_ROOT:-$ROOT}"
 
 BINDIR="$(olivares_pick_exec_workdir gatebin)" || {
-	echo "check-ci-env-reach: NO HE PODIDO MIRAR: no puedo crear el directorio del binario" >&2
+	echo "check-ci-env-reach: COULD NOT CHECK: cannot create the binary directory" >&2
 	exit 2
 }
 cleanup() { rm -rf "$BINDIR"; }
@@ -50,8 +50,8 @@ trap cleanup EXIT HUP INT TERM
 # El `cd` va GUARDADO: sin esto `set -e` cortaría con el error crudo del shell y rc 1, es decir, un
 # veredicto de ceguera degradado a hallazgo — la misma distinción que este gate defiende.
 if ! cd "$ROOT/cmd/olivares" 2>/dev/null; then
-	echo "check-ci-env-reach: NO HE PODIDO MIRAR: falta $ROOT/cmd/olivares, así que no puedo" >&2
-	echo "check-ci-env-reach: construir la herramienta que juzga." >&2
+	echo "check-ci-env-reach: COULD NOT CHECK: missing $ROOT/cmd/olivares, so cannot" >&2
+	echo "check-ci-env-reach: build the checker." >&2
 	exit 2
 fi
 
@@ -59,7 +59,7 @@ fi
 # «exit status 2» y sale 1), y con él la TERCERA RESPUESTA. Medido el 2026-08-15 y documentado en
 # check-ci-ports.sh.
 if ! go build -o "$BINDIR/checkcienvreach" ./tools/checkcienvreach; then
-	echo "check-ci-env-reach: NO HE PODIDO MIRAR: la herramienta no compila" >&2
+	echo "check-ci-env-reach: COULD NOT CHECK: the checker does not compile" >&2
 	exit 2
 fi
 "$BINDIR/checkcienvreach"

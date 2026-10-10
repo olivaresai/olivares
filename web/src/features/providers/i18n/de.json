@@ -1,11 +1,12 @@
 {
   "title": "Anbieter",
-  "subtitle": "Ein Cloud-Zugangsschlüssel oder ein lokaler Modell-Endpunkt, ausgewählt über ein Anbieterprofil.",
+  "subtitle": "Ein Cloud-Zugangsschlüssel oder ein lokaler Modell-Endpunkt, mit dem Ihre Agentenwerkzeuge arbeiten.",
   "nav": "Anbieter",
   "add": "Anbieter hinzufügen",
+  "rowMenu": "Zeilenaktionen für {{name}}",
   "empty": {
     "title": "Noch kein Anbieter registriert",
-    "description": "Verbinden Sie Anthropic, OpenAI oder xAI mit einem API-Schlüssel oder fügen Sie Ollama lokal ohne Schlüssel hinzu. Testen Sie die Verbindung und binden Sie sie an ein Profil.",
+    "description": "Verbinden Sie Anthropic, OpenAI oder xAI mit einem API-Schlüssel oder fügen Sie Ollama lokal ohne Schlüssel hinzu, und testen Sie dann die Verbindung.",
     "action": "Ersten Anbieter hinzufügen"
   },
   "emptyFiltered": {
@@ -28,6 +29,7 @@
     "anthropic": "Anthropic",
     "openai": "OpenAI",
     "xai": "xAI",
+    "gemini": "Gemini",
     "openai_compatible": "OpenAI-kompatibel",
     "ollama": "Ollama"
   },
@@ -35,6 +37,7 @@
     "anthropic": "Claude Code. Setzt ANTHROPIC_API_KEY.",
     "openai": "Codex. Setzt OPENAI_API_KEY.",
     "xai": "Grok. Setzt XAI_API_KEY.",
+    "gemini": "Gemini CLI über die offizielle Google-API. Verwendet einen Gemini-API-Schlüssel.",
     "openai_compatible": "Jeder Endpunkt in OpenAI-Form. Setzt OPENAI_API_KEY und OPENAI_BASE_URL; der Endpunkt ist erforderlich.",
     "ollama": "Lokale Modelle für OpenCode. Kein API-Schlüssel. Verwenden Sie den nativen Ollama-Endpunkt; der Test liest Modellmetadaten."
   },
@@ -78,6 +81,7 @@
     "namePlaceholder": "Anthropic (Produktion)",
     "baseURL": "Endpunkt",
     "baseURLHint": "Leer lassen für den offiziellen Endpunkt des Anbieters. Muss https sein.",
+    "baseURLLocalHint": "Leer lassen für den offiziellen Endpunkt des Anbieters. Sonst https oder unverschlüsseltes http an einer Loopback- oder privaten Netzwerkadresse.",
     "baseURLPlaceholder": "https://llm.beispiel.de",
     "apiKey": "API-Schlüssel",
     "apiKeyHint": "Einmal gesendet, von der Engine versiegelt, nie an diesen Browser zurückgegeben.",
@@ -85,11 +89,13 @@
     "submit": "Anbieter hinzufügen",
     "submitting": "Wird versiegelt…",
     "cancel": "Abbrechen",
-    "success": "Anbieter registriert. Testen Sie die Verbindung, um zu bestätigen, dass er funktioniert.",
+    "success": "Anbieter hinzugefügt.",
     "testNext": "Verbindung jetzt testen",
     "registering": "Wird registriert…",
     "localNameHint": "Ihre Bezeichnung für diesen Endpunkt. Sie erscheint in der Auswahl.",
-    "advanced": "Advanced: custom endpoint"
+    "advanced": "Advanced: custom endpoint",
+    "missingFields": "Füllen Sie die fehlenden Felder aus: {{fields}}.",
+    "requiredEndpointHint": "Geben Sie den Endpunkt des Dienstes ein: https oder unverschlüsseltes http an einer Loopback- oder privaten Netzwerkadresse."
   },
   "rotate": {
     "title": "Schlüssel dieses Anbieters wechseln",
@@ -137,5 +143,24 @@
     "unavailable": "Profilrechte oder ein kompatibles aktives Profil fehlen.",
     "loadError": "Profile konnten nicht geladen werden.",
     "success": "Anbieter an das Profil gebunden."
+  },
+  "defaultModel": {
+    "title": "Standardmodell",
+    "model": "Modell",
+    "hint": "Neue Sitzungen verwenden dieses Modell, sofern kein anderes gewählt wird.",
+    "modelsHint": "Modelle aus dem letzten Verbindungstest dieses Anbieters.",
+    "native": "Kein gespeichertes Standardmodell",
+    "save": "Speichern",
+    "success": "Standardmodell gespeichert.",
+    "createHint": "Optional. Leer lassen, um nach dem Verbindungstest ein Modell zu wählen."
+  },
+  "prepare": {
+    "pending": "{{tool}} wird für Ihre erste Sitzung vorbereitet…",
+    "installing": "{{tool}} wird für Ihre erste Sitzung installiert: {{progress}}",
+    "ready": "Bereit zum Starten einer Sitzung.",
+    "start": "Neue Sitzung",
+    "failed": "Anbieter gespeichert. Sitzungsvorbereitung fehlgeschlagen: {{error}}",
+    "retry": "Vorbereitung wiederholen",
+    "incomplete": "Die Tool-Installation hat den Status {{state}}. Prüfen Sie die KI-Tools und versuchen Sie es erneut."
   }
 }

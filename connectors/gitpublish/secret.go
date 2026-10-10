@@ -65,6 +65,9 @@ type Token struct {
 	Repositories []string
 }
 
+// NewToken wraps one credential as a token.
+func NewToken(v Secret) Token { return Token{secret: v} }
+
 // Value returns the token's secret.
 func (t Token) Value() Secret { return t.secret }
 

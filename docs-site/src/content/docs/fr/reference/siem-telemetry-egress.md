@@ -7,6 +7,12 @@ description: >-
   transport, et les deux endroits où une projection n'est pas une enveloppe
   complète.
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
+
+:::note[Business]
+L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, `olivares audit verify` et `olivares dr backup` ; l’export renvoie HTTP 501 ou le code de sortie 9. Le transfert d’audit et les transferts DDIL contenant des segments d’audit nécessitent aussi Business.
+:::
 
 Cette page est le **contrat de sortie** : ce qui quitte le plan de contrôle, dans
 quel dialecte, sur quel transport, et ce qu'un récepteur en fait. Elle est écrite
@@ -55,7 +61,7 @@ dérivé d'un catalogue unique pour que les listes ne puissent plus diverger :
 |---|---|---|
 | Export du journal (`GET /v1/audit/export?format=…`) | `cef\|leef\|syslog\|otlp\|otlp_envelope\|otlp_log_record\|ocsf` | `cef` |
 | Sink d'eventing (`sink_format` d'un abonnement push) | `ocsf\|cef\|leef\|syslog\|otlp\|otlp_envelope\|json` | `ocsf` |
-| Connecteurs de notification (`filelog`, `splunkhec`, `s3archive`, `siem`) | `json\|cef\|leef\|syslog\|otlp\|otlp_envelope\|ocsf\|asim` | `json` |
+| Connecteurs de notification (`filelog`, `splunkhec`, `s3archive` (Business: Regulated Operations), `siem`) | `json\|cef\|leef\|syslog\|otlp\|otlp_envelope\|ocsf\|asim` | `json` |
 | Connecteur syslog | `syslog\|cef\|leef` | `syslog` |
 
 L'export du journal n'a pas de passthrough JSON brut — ses formes JSON sont les
@@ -64,7 +70,7 @@ d'eventing publie l'enveloppe brute de l'événement capturé (le passthrough
 structuré, sans transformation de dialecte), tandis que les connecteurs de
 notification ne rendent qu'une projection de notification minimale — les champs
 affichables, pas la charge utile d'origine. Les quatre connecteurs de
-notification acceptent `asim`, `s3archive` compris. Un format hors de la liste
+notification acceptent `asim`, `s3archive` (Business: Regulated Operations) compris. Un format hors de la liste
 de sa surface est rejeté : une coquille à la rédaction ou à la configuration
 reçoit une erreur qui nomme les jetons acceptés de la surface, et une valeur
 stockée corrompue est refusée à l'encodage (en nommant la graphie corrompue, pas

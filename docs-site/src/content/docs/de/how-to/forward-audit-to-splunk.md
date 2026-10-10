@@ -6,6 +6,10 @@ description: >-
   Splunk-zu-Splunk-Emitter. Ehrlich darüber, welcher Stream welcher ist.
 ---
 
+:::note[Business]
+Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, `olivares audit verify` und `olivares dr backup`; Export liefert HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und DDIL-Transfers mit Audit-Segmenten erfordern ebenfalls Business.
+:::
+
 Sie können Olivares-AI-Daten **heute** in Splunk bekommen, ohne auf einen nativen
 Connector zu warten: Schreiben Sie die Daten in eine Datei und richten Sie einen **Splunk Universal Forwarder (UF)**
 darauf. Der UF übernimmt den Splunk-zu-Splunk-Hop (S2S) zu Ihrem Indexer.

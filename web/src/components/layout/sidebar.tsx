@@ -74,12 +74,14 @@ import {
   fold,
   rankNavMatches,
   resolveLocation,
+  viewById,
   sectionLabel,
   viewLabel,
   type AreaSection,
   type NavSearchEntry,
   type ViewGate,
 } from '@/features/navigation/model'
+import { OffTag } from '@/features/navigation/off-tag'
 import { railKey, type RailRow } from '@/features/navigation/rail-keys'
 import { usePersonalNavigation } from '@/features/navigation/personal-navigation'
 import { personalLink } from '@/features/navigation/personal-navigation-store'
@@ -95,10 +97,8 @@ export { fold }
 const ROW_CLASS = cn(
   'group relative flex min-h-8 min-w-0 items-center gap-2.5 rounded-md px-2.5 py-1 text-body text-muted-foreground outline-none transition-colors',
   'hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring',
-  'data-[status=active]:bg-accent-soft data-[status=active]:font-medium data-[status=active]:text-foreground',
-  'before:absolute before:top-1/2 before:left-0 before:h-4 before:w-0.5 before:-translate-y-1/2 before:rounded-r-full before:bg-transparent',
-  'data-[status=active]:before:bg-accent-text',
-  'data-[status=active]:[&_svg]:text-accent-text [&_svg]:size-4 [&_svg]:shrink-0',
+  'data-[status=active]:bg-active data-[status=active]:font-medium data-[status=active]:text-foreground',
+  '[&_svg]:size-4 [&_svg]:shrink-0',
 )
 
 interface NavItemProps {
@@ -114,6 +114,10 @@ interface NavItemProps {
   depth?: 0 | 1
   /** The feature id this row pins, when the principal has a personal partition. */
   pinId?: string
+  /** The current page reached through a second door into this row's view (`doorTo`). */
+  current?: boolean
+  /** The page's module is off here: a dimmed label and an "Off" tag; still a link. */
+  off?: boolean
 }
 
 /**
@@ -140,6 +144,8 @@ function NavItem({
   className,
   depth = 0,
   pinId,
+  current,
+  off,
 }: NavItemProps) {
   const link = (
     <Link
@@ -149,6 +155,11 @@ function NavItem({
       // WCAG 4.1.2 / 2.4.8: announce the current page to assistive tech (the router
       // only sets data-status, so set aria-current explicitly when active).
       activeProps={{ 'aria-current': 'page' }}
+      // A row reached through its view's second door reads as the current page, the
+      // way the router marks an active link (`data-status` carries the styling).
+      {...(current
+        ? { 'aria-current': 'page' as const, 'data-status': 'active' }
+        : {})}
       onClick={onNavigate}
       // The rail is ONE tab stop with a roving tabindex (see `useRailKeyboard`), so every
       // row starts untabbable and the hook promotes exactly one.
@@ -160,13 +171,19 @@ function NavItem({
     >
       <Icon />
       {!context && (
-        <span className="min-w-0 break-words" title={label}>
+        <span
+          className={cn('min-w-0 flex-1 break-words', off && 'text-text-3')}
+          title={label}
+        >
           {label}
         </span>
       )}
       {context && (
-        <span className="flex min-w-0 flex-col">
-          <span className="break-words" title={label}>
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span
+            className={cn('break-words', off && 'text-text-3')}
+            title={label}
+          >
             {label}
           </span>
           <span
@@ -177,6 +194,7 @@ function NavItem({
           </span>
         </span>
       )}
+      {off ? <OffTag /> : null}
     </Link>
   )
   if (!pinId) return link
@@ -250,6 +268,7 @@ function AreaSections({
   idPrefix,
   onNavigate,
   dense,
+  doorTo,
 }: {
   area: NavArea
   sections: AreaSection[]
@@ -257,8 +276,11 @@ function AreaSections({
   idPrefix: string
   onNavigate?: () => void
   dense?: boolean
+  /** The view the current page is a second door into: its row is the current page. */
+  doorTo?: string
 }) {
   const { t } = useTranslation('nav')
+  const { isOff } = useViewAccess()
   return (
     <>
       {sections.map((s) => {
@@ -268,7 +290,7 @@ function AreaSections({
             <p
               id={headingId}
               className={cn(
-                'break-words px-2.5 pb-0.5 text-overline text-muted-foreground uppercase',
+                'break-words px-2.5 pb-0.5 text-caption font-medium text-text-3',
                 dense ? 'pt-1' : 'pt-1.5',
               )}
             >
@@ -284,6 +306,8 @@ function AreaSections({
                     onNavigate={onNavigate}
                     depth={1}
                     pinId={v.id}
+                    current={v.id === doorTo}
+                    off={isOff(v)}
                   />
                 </li>
               ))}
@@ -349,8 +373,14 @@ function useRailKeyboard(
   // permission projection and the personal partition, and the tab stop has to follow it.
   // `nearest` rather than `center` — a rail that jumps on every navigation is its own
   // defect.
+  const scrolledTo = useRef<HTMLElement | null>(null)
   useEffect(() => {
-    settle()?.scrollIntoView({ block: 'nearest' })
+    const row = settle()
+    // Only when the current row changed: a live count re-renders the sidebar, and a person
+    // reading further down it must not be pulled back to the current page.
+    if (row && row !== scrolledTo.current)
+      row.scrollIntoView({ block: 'nearest' })
+    scrolledTo.current = row ?? null
   })
 
   return (event: React.KeyboardEvent<HTMLElement>) => {
@@ -431,17 +461,25 @@ function useRankedMatches(
   )
 }
 
-function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
+/**
+ * The areas of the product, grouped and folding: the header with "expand all", then one
+ * block per area this principal may open (its link, a fold button and its sections).
+ * Arriving inside an area opens it. The "All areas" sheet and the full sidebar both render
+ * this, so the two cannot disagree about which areas exist or which are open.
+ */
+function AreaGroups({
+  idPrefix,
+  onNavigate,
+}: {
+  /** This instance's id namespace, so `aria-controls` names the panel it renders. */
+  idPrefix: string
+  onNavigate?: () => void
+}) {
   const { t } = useTranslation('nav')
-  // ⛔ ONE projection, shared with the palette, the shortcuts and the nine directories.
-  //    `useAuth().can` is no longer read here: a view whose authority is a registered
-  //    capability question would answer from the reflection, and the sidebar would offer
-  //    a door the route then refuses (or hide one the engine allows).
-  const { navigable } = useViewAccess()
+  const { listed } = useViewAccess()
   const pathname = useRouterState({ select: (s) => s.location.pathname })
   const location = useMemo(() => resolveLocation(pathname), [pathname])
   const activeAreaId = activeAreaOf(location)
-
   const expansion = usePreferencesStore((s) => s.navAreas)
   const setAreaOpen = usePreferencesStore((s) => s.setAreaOpen)
   const setAreasOpen = usePreferencesStore((s) => s.setAreasOpen)
@@ -450,6 +488,157 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   useEffect(() => {
     if (activeAreaId) revealArea(activeAreaId)
   }, [activeAreaId, revealArea])
+  const areas = useProjectedAreas(listed)
+  const visibleIds = areas.map((a) => a.area.id)
+  const allOpen =
+    visibleIds.length > 0 &&
+    visibleIds.every((id) => isAreaOpen(expansion, id, activeAreaId))
+  return (
+    <>
+      {areas.length > 0 && (
+        <div className="mt-1 flex items-center justify-between px-2.5 pb-0.5">
+          <span className="text-caption font-medium text-text-3">
+            {t('directory.areas')}
+          </span>
+          <button
+            type="button"
+            onClick={() => setAreasOpen(visibleIds, !allOpen)}
+            aria-label={
+              allOpen ? t('directory.collapseAll') : t('directory.expandAll')
+            }
+            className="rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            {allOpen ? (
+              <ChevronsDownUp aria-hidden="true" className="size-3.5" />
+            ) : (
+              <ChevronsUpDown aria-hidden="true" className="size-3.5" />
+            )}
+          </button>
+        </div>
+      )}
+
+      {areas.map(({ area, sections }) => {
+        const label = areaLabel(t, area.id)
+        const isBranch = activeAreaId === area.id
+        const Icon = area.icon
+
+        const open = isAreaOpen(expansion, area.id, activeAreaId)
+        const panelId = `${idPrefix}nav-area-${area.id}`
+        return (
+          <div
+            key={area.id}
+            data-nav-area={area.id}
+            data-branch={isBranch ? 'active' : undefined}
+            className="flex flex-col gap-0.5"
+          >
+            <div className="flex items-center gap-0.5">
+              <Link
+                to={area.path as never}
+                activeOptions={{ exact: true }}
+                activeProps={{ 'aria-current': 'page' }}
+                onClick={onNavigate}
+                tabIndex={-1}
+                data-nav-row=""
+                data-depth="0"
+                data-nav-area-row={area.id}
+                data-area-open={open ? 'true' : 'false'}
+                className={cn(
+                  ROW_CLASS,
+                  'flex-1',
+                  isBranch && 'text-foreground',
+                )}
+              >
+                <Icon />
+                <span className="min-w-0 break-words" title={label}>
+                  {label}
+                </span>
+              </Link>
+              <button
+                type="button"
+                onClick={() => setAreaOpen(area.id, !open)}
+                aria-expanded={open}
+                aria-controls={panelId}
+                tabIndex={-1}
+                aria-label={
+                  open
+                    ? t('directory.collapse', { area: label })
+                    : t('directory.expand', { area: label })
+                }
+                className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <ChevronDown
+                  aria-hidden="true"
+                  className={cn(
+                    'size-3.5 transition-transform',
+                    !open && '-rotate-90',
+                  )}
+                />
+              </button>
+            </div>
+            <div
+              id={panelId}
+              className={cn(
+                'ml-4 flex flex-col gap-0.5 border-l border-border pl-1',
+                !open && 'hidden',
+              )}
+            >
+              <AreaSections
+                area={area}
+                sections={sections}
+                idPrefix={`${idPrefix}nav-area-`}
+                onNavigate={onNavigate}
+                doorTo={
+                  location.kind === 'view' ? location.view.doorTo : undefined
+                }
+              />
+            </div>
+          </div>
+        )
+      })}
+    </>
+  )
+}
+
+/**
+ * The areas inside the full sidebar, under the pinned destinations: the same groups as the
+ * "All areas" sheet, with the rail's one-tab-stop keyboard over their rows. It scrolls with
+ * the sidebar; the rail and the phone open the sheet instead.
+ */
+export function SidebarAreas({ onNavigate }: { onNavigate?: () => void }) {
+  const { t } = useTranslation('nav')
+  const uid = useId()
+  const setAreaOpen = usePreferencesStore((s) => s.setAreaOpen)
+  const ref = useRef<HTMLElement>(null)
+  const onKeyDown = useRailKeyboard(ref, {
+    onExpand: (id) => setAreaOpen(id as AreaId, true),
+    onFold: (id) => setAreaOpen(id as AreaId, false),
+  })
+  return (
+    <nav
+      ref={ref}
+      aria-label={t('directory.areas')}
+      aria-keyshortcuts="p"
+      data-slot="sidebar-areas"
+      onKeyDown={onKeyDown}
+      className="flex flex-col gap-0.5"
+    >
+      <AreaGroups idPrefix={`${uid}sb-`} onNavigate={onNavigate} />
+    </nav>
+  )
+}
+
+function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
+  const { t } = useTranslation('nav')
+  // ⛔ ONE projection, shared with the palette, the shortcuts and the nine directories.
+  //    `useAuth().can` is no longer read here: a view whose authority is a registered
+  //    capability question would answer from the reflection, and the sidebar would offer
+  //    a door the route then refuses (or hide one the engine allows).
+  const { listed, isOff } = useViewAccess()
+  const setAreaOpen = usePreferencesStore((s) => s.setAreaOpen)
+  const isEntryOff = (e: NavSearchEntry) => {
+    const found = viewById(e.id)
+    return !!found && isOff(found)
+  }
 
   const [query, setQuery] = useState('')
   // One namespace per rendered body: the desktop sidebar, the drawer and each rail flyout
@@ -458,8 +647,7 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
   const searchId = `${uid}filter`
   const filtering = query.trim().length > 0
   const index = useMemo(() => buildNavSearchIndex(t), [t])
-  const areas = useProjectedAreas(navigable)
-  const ranked = useRankedMatches(index, navigable, query)
+  const ranked = useRankedMatches(index, listed, query)
   const homeLabel = viewLabel(t, 'home')
   const settingsLabel = viewLabel(t, SETTINGS_UTILITY.id)
   const homeIcon = index.find((e) => e.kind === 'view' && e.id === 'home')?.icon
@@ -475,11 +663,6 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
     onExpand: (id) => setAreaOpen(id as AreaId, true),
     onFold: (id) => setAreaOpen(id as AreaId, false),
   })
-
-  const visibleIds = areas.map((a) => a.area.id)
-  const allOpen =
-    visibleIds.length > 0 &&
-    visibleIds.every((id) => isAreaOpen(expansion, id, activeAreaId))
 
   return (
     // The rail's keyboard region is the WHOLE body, not just the tree: `Settings` is a
@@ -603,6 +786,7 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
                     }
                     exact={e.path === '/' || e.kind === 'area'}
                     onNavigate={onNavigate}
+                    off={e.kind === 'view' && isEntryOff(e)}
                   />
                 </li>
               ))}
@@ -622,106 +806,7 @@ function SidebarBody({ onNavigate }: { onNavigate?: () => void }) {
 
           {!filtering && <PersonalNavigation onNavigate={onNavigate} />}
 
-          {!filtering && areas.length > 0 && (
-            <div className="mt-1 flex items-center justify-between px-2.5 pb-0.5">
-              <span className="text-overline text-muted-foreground uppercase">
-                {t('directory.areas')}
-              </span>
-              <button
-                type="button"
-                onClick={() => setAreasOpen(visibleIds, !allOpen)}
-                aria-label={
-                  allOpen
-                    ? t('directory.collapseAll')
-                    : t('directory.expandAll')
-                }
-                className="rounded p-1 text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                {allOpen ? (
-                  <ChevronsDownUp aria-hidden="true" className="size-3.5" />
-                ) : (
-                  <ChevronsUpDown aria-hidden="true" className="size-3.5" />
-                )}
-              </button>
-            </div>
-          )}
-
-          {!filtering &&
-            areas.map(({ area, sections }) => {
-              const label = areaLabel(t, area.id)
-              const isBranch = activeAreaId === area.id
-              const Icon = area.icon
-
-              const open = isAreaOpen(expansion, area.id, activeAreaId)
-              const panelId = `${uid}nav-area-${area.id}`
-              return (
-                <div
-                  key={area.id}
-                  data-nav-area={area.id}
-                  data-branch={isBranch ? 'active' : undefined}
-                  className="flex flex-col gap-0.5"
-                >
-                  <div className="flex items-center gap-0.5">
-                    <Link
-                      to={area.path as never}
-                      activeOptions={{ exact: true }}
-                      activeProps={{ 'aria-current': 'page' }}
-                      onClick={onNavigate}
-                      tabIndex={-1}
-                      data-nav-row=""
-                      data-depth="0"
-                      data-nav-area-row={area.id}
-                      data-area-open={open ? 'true' : 'false'}
-                      className={cn(
-                        ROW_CLASS,
-                        'flex-1',
-                        isBranch && 'text-foreground',
-                      )}
-                    >
-                      <Icon />
-                      <span className="min-w-0 break-words" title={label}>
-                        {label}
-                      </span>
-                    </Link>
-                    <button
-                      type="button"
-                      onClick={() => setAreaOpen(area.id, !open)}
-                      aria-expanded={open}
-                      aria-controls={panelId}
-                      tabIndex={-1}
-                      aria-label={
-                        open
-                          ? t('directory.collapse', { area: label })
-                          : t('directory.expand', { area: label })
-                      }
-                      className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none hover:bg-muted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      <ChevronDown
-                        aria-hidden="true"
-                        className={cn(
-                          'size-3.5 transition-transform',
-                          !open && '-rotate-90',
-                        )}
-                      />
-                    </button>
-                  </div>
-                  <div
-                    id={panelId}
-                    className={cn(
-                      'ml-4 flex flex-col gap-0.5 border-l border-border pl-1',
-                      !open && 'hidden',
-                    )}
-                  >
-                    <AreaSections
-                      area={area}
-                      sections={sections}
-                      idPrefix={`${uid}nav-area-`}
-                      onNavigate={onNavigate}
-                    />
-                  </div>
-                </div>
-              )
-            })}
+          {!filtering && <AreaGroups idPrefix={uid} onNavigate={onNavigate} />}
 
           {filtering && hits === 0 && (
             <p className="px-2.5 py-4 text-body text-muted-foreground">

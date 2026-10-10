@@ -35,20 +35,20 @@ grep -F -q 'HOLD. NOT APPLIED.' "$DOC" \
 grep -F -q 'expectedDodoBusinessId not landed' "$DOC" \
   || fail "prepare doc lost fence HOLD"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|expectedDodoBusinessId landed' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 if grep -q 'expectedDodoBusinessId' "$ENVF"; then
-  fail "expectedDodoBusinessId landed — this HOLD lote does not apply CFG-04"
+  fail "expectedDodoBusinessId landed — this HOLD batch does not apply CFG-04"
 fi
 if grep -q 'DODO_BUSINESS_ID' "$ENVF"; then
-  fail "DODO_BUSINESS_ID landed — this HOLD lote does not apply CFG-04"
+  fail "DODO_BUSINESS_ID landed — this HOLD batch does not apply CFG-04"
 fi
 if grep -q 'expectedDodoBusinessId' "$WH"; then
-  fail "webhook consults expectedDodoBusinessId — this HOLD lote does not apply CFG-04"
+  fail "webhook consults expectedDodoBusinessId — this HOLD batch does not apply CFG-04"
 fi
 if grep -q 'FOREIGN_BUSINESS' "$WH"; then
-  fail "FOREIGN_BUSINESS quarantine landed — this HOLD lote does not apply CFG-04"
+  fail "FOREIGN_BUSINESS quarantine landed — this HOLD batch does not apply CFG-04"
 fi
 
 python3 - "$JSON" <<'PY' || exit $?

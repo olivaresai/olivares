@@ -51,7 +51,7 @@ func newRetiredProfileFixture(t *testing.T) *retiredProfileFixture {
 		Driver: providerDriverClaude, ConfigHome: config, UserHome: home,
 		DisplayName: "raw-plane", AuthSource: AuthSourceAccountHome,
 	})
-	run, err := m.createRun(ctx, tenant, CreateRunParams{
+	run, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:profile-revocation", ActorKind: model.ActorUser,
 		ProviderProfileRef: prof.Ref,
@@ -80,7 +80,7 @@ func newRetiredProfileFixture(t *testing.T) *retiredProfileFixture {
 func (fx *retiredProfileFixture) deleteProfileRow(t *testing.T) {
 	t.Helper()
 	ctx := context.Background()
-	if err := fx.m.data.Mutate(ctx, fx.tenant, func(sc store.Scope) error {
+	if err := fx.m.Data.Mutate(ctx, fx.tenant, func(sc store.Scope) error {
 		rec, err := findProfileRec(ctx, sc, fx.prof.Ref)
 		if err != nil {
 			return err
@@ -191,7 +191,7 @@ func TestAuthorityKeepsAnUnreadableProfileUnavailableInsteadOfCached(t *testing.
 
 	fx := newRetiredProfileFixture(t)
 	boom := errors.New("test: the profile table cannot be read")
-	fx.m.UseData(&profileReadFailureData{inner: fx.m.data, err: boom})
+	fx.m.UseData(&profileReadFailureData{inner: fx.m.Data, err: boom})
 
 	err := fx.m.sendInput(context.Background(), fx.tenant, fx.runRef, []byte(`{"type":"unreadable"}`))
 	if err == nil {

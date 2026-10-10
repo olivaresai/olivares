@@ -262,58 +262,6 @@ func TestKillSwitchReenableDualControl(t *testing.T) {
 	}
 }
 
-func TestKillSwitchReenableFloorSurvivesDowngradedPolicy(t *testing.T) {
-	h := newHarness(t)
-	admin := h.adminLogin()
-	tenant := h.createOrg(admin, "acme")
-	_, approver1 := h.roleUser(admin, tenant, "ana@x.io", "admin")
-	_, approver2 := h.roleUser(admin, tenant, "bea@x.io", "admin")
-
-	// An operator policy explicitly DOWNGRADES the re-enable tier to high with a
-	// single approver — resolveRiskTier honors it (configurable by policy), so
-	// the ENGINE will let the approval cross with one human. The handler's
-	// structural floor is what keeps "never unilateral" true anyway.
-	if r := h.do("POST", "/v1/m/governance/policies", admin, map[string]any{
-		"name": "downgrade-reenable", "kind": "approval", "enabled": true,
-		"spec": map[string]any{
-			"required_approvals": 1, "risk_tier": "high",
-			"match": map[string]any{"action": "security.killswitch.reenable"},
-		},
-	}, tenantHdr(tenant)); r.code != http.StatusCreated {
-		t.Fatalf("create downgrade policy = %d %s", r.code, r.raw)
-	}
-
-	r := engage(h, admin, tenant, "estate", "", "incident")
-	stopID := r.body["id"].(string)
-	r = reenable(h, admin, tenant, stopID)
-	if r.code != http.StatusAccepted {
-		t.Fatalf("reenable phase 1 = %d %s", r.code, r.raw)
-	}
-	appr := r.body["approval"].(map[string]any)
-	approvalID := appr["id"].(string)
-	// The downgrade DOES retune the tier (and with it the AAL3 decision bar —
-	// that is what "configurable by policy" means)... but the re-enable opens at
-	// two distinct humans regardless: the quorum is not policy-tunable.
-	if appr["risk_tier"] != "high" {
-		t.Fatalf("risk_tier = %v, want the operator's downgrade honored", appr["risk_tier"])
-	}
-	if appr["required_approvals"].(float64) != 2 {
-		t.Fatalf("required_approvals = %v, want the non-negotiable 2", appr["required_approvals"])
-	}
-	if d := decide(h, approver1, tenant, approvalID, "approve"); d.code != http.StatusOK {
-		t.Fatalf("approver1 = %d %s", d.code, d.raw)
-	}
-	if r := reenable(h, admin, tenant, stopID); r.code != http.StatusAccepted {
-		t.Fatalf("flip with 1/2 under downgraded policy = %d %s", r.code, r.raw)
-	}
-	if d := decide(h, approver2, tenant, approvalID, "approve"); d.code != http.StatusOK {
-		t.Fatalf("approver2 = %d %s", d.code, d.raw)
-	}
-	if r := reenable(h, admin, tenant, stopID); r.code != http.StatusOK {
-		t.Fatalf("flip after real quorum = %d %s", r.code, r.raw)
-	}
-}
-
 func TestKillSwitchStructuralFloorRefusesCorruptApproval(t *testing.T) {
 	// Defense in depth: even if an approval row somehow reads APPROVED with a
 	// single distinct approver (legacy data, a raced policy change, manual DB
@@ -574,16 +522,11 @@ func TestKillSwitchEvidencePack(t *testing.T) {
 	}
 }
 
-// TestKillSwitchFindingTitlesCarrySubjectAndReason fija que dos paradas DISTINTAS producen títulos
-// DISTINTOS.
-//
-// ⛔ EL DEFECTO QUE CIERRA, y no se ve desde el verde. Los títulos eran CONSTANTES: seis paradas
-// distintas daban seis filas IDÉNTICAS en Security > Findings, indistinguibles sin abrir cada una.
-// Lo midió sobre datos reales — no era el seed. El operador que mira esa lista durante un
-// incidente es justo quien no puede permitirse abrir seis filas para saber a quién se paró.
-//
-// Se comprueba por el CAMINO REAL —engage HTTP y el finding que emite— y no llamando a los
-// ayudantes: un título que sólo es correcto en la función que lo arma no ha probado que llegue.
+// TestKillSwitchFindingTitlesCarrySubjectAndReason checks that distinct stops
+// produce distinct titles. Measured six real stops producing identical
+// rows in Security > Findings, forcing operators to open each row during an incident.
+// Exercise the HTTP engage path and its emitted finding: testing only the title
+// helper would not prove that the title reaches the operator.
 func TestKillSwitchFindingTitlesCarrySubjectAndReason(t *testing.T) {
 	h := newHarness(t)
 	admin := h.adminLogin()

@@ -23,7 +23,7 @@ CANON="${OLIVARES_ECO06_CANON:-design/PRICING-CANON.md}"
 
 grep -q 'NOT CONFIGURED' "$DOC" || fail "$DOC lost NOT CONFIGURED"
 if grep -qiE 'retries applied|account retries set|168 h configured in the account' "$DOC"; then
-	fail "$DOC claims an account write this lote does not have"
+	fail "$DOC claims an account write this batch does not have"
 fi
 grep -q 'renewal_retries_policy: within-published-168h-window' "$CANON" || \
 	fail "canon lost renewal_retries_policy"

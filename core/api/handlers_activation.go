@@ -29,10 +29,7 @@ func (s *Server) activationSvc(w http.ResponseWriter, r *http.Request) (Activati
 	return s.activation, true
 }
 
-func (s *Server) handleActivationStatus(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleActivationStatus(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	svc, ok := s.activationSvc(w, r)
 	if !ok {
 		return
@@ -45,10 +42,7 @@ func (s *Server) handleActivationStatus(w http.ResponseWriter, r *http.Request) 
 	writeJSON(w, http.StatusOK, st)
 }
 
-func (s *Server) handleActivationPreview(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleActivationPreview(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	svc, ok := s.activationSvc(w, r)
 	if !ok {
 		return
@@ -57,7 +51,7 @@ func (s *Server) handleActivationPreview(w http.ResponseWriter, r *http.Request)
 		Preset string `json:"preset"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	if strings.TrimSpace(in.Preset) == "" {
@@ -72,11 +66,8 @@ func (s *Server) handleActivationPreview(w http.ResponseWriter, r *http.Request)
 	writeJSON(w, http.StatusOK, plan)
 }
 
-func (s *Server) handleActivationApply(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handleActivationApply(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -90,7 +81,7 @@ func (s *Server) handleActivationApply(w http.ResponseWriter, r *http.Request) {
 		Addon  string `json:"addon"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	switch in.Action {

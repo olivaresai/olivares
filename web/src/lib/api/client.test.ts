@@ -5,8 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   __resetRefreshState,
   apiFetch,
+  apiFetchRaw,
   configureApiClient,
-  ensureFreshSession,
   http,
 } from './client'
 import { ApiError, NetworkError } from './errors'
@@ -403,28 +403,6 @@ describe('apiFetch', () => {
     expect(refrescos).toBe(1)
   })
 
-  it('ensureFreshSession renueva para los caminos que rodean apiFetch', async () => {
-    // Las descargas (CSV, NDJSON, PDF, bundle) no pasan por `apiFetch`. Sin esta puerta
-    // serían las ÚNICAS peticiones de la consola que siguen muriendo por caducidad.
-    const refreshSession = vi.fn(async () => true)
-    configureApiClient({
-      getToken: () => 'olvs_x',
-      refreshSession,
-      getExpiresAt: () => new Date(Date.now() + 30_000).toISOString(),
-    })
-    await ensureFreshSession()
-    expect(refreshSession).toHaveBeenCalledTimes(1)
-
-    // Y el control: con margen de sobra no toca la credencial.
-    refreshSession.mockClear()
-    __resetRefreshState()
-    configureApiClient({
-      getExpiresAt: () => new Date(Date.now() + 3_600_000).toISOString(),
-    })
-    await ensureFreshSession()
-    expect(refreshSession).not.toHaveBeenCalled()
-  })
-
   it('does NOT call onUnauthorized for an anonymous 401 (e.g. a bad login)', async () => {
     const onUnauthorized = vi.fn()
     configureApiClient({ onUnauthorized })
@@ -568,4 +546,101 @@ it('cookie transport pins CSRF and rejects caller-supplied bearer authority', as
   } finally {
     configureApiClient({ getCSRFToken: undefined })
   }
+})
+
+describe('apiFetchRaw', () => {
+  it('returns the response unread so a download keeps the exact bytes', async () => {
+    configureApiClient({
+      getToken: () => 'olvs_abc',
+      getTenant: () => 'tenant-1',
+    })
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      lastUrl = String(url)
+      lastInit = init
+      return new Response('a,b\n1,2\n', {
+        status: 200,
+        headers: { 'Content-Type': 'text/csv' },
+      })
+    }) as never
+    const res = await apiFetchRaw('/v1/m/finops/spend/export', {
+      query: { format: 'focus' },
+      headers: { Accept: 'text/csv' },
+    })
+    expect(await res.text()).toBe('a,b\n1,2\n')
+    expect(lastUrl).toBe('/v1/m/finops/spend/export?format=focus')
+    expect(header('Accept')).toBe('text/csv')
+    expect(header('Authorization')).toBe('Bearer olvs_abc')
+    expect(header('X-Olivares-Tenant')).toBe('tenant-1')
+  })
+
+  it('renews a session about to expire before the download goes out', async () => {
+    const refreshSession = vi.fn(async () => true)
+    configureApiClient({
+      getToken: () => 'olvs_x',
+      refreshSession,
+      getExpiresAt: () => new Date(Date.now() + 30_000).toISOString(),
+    })
+    mock(200, {})
+    await apiFetchRaw('/v1/audit/export')
+    expect(refreshSession).toHaveBeenCalledTimes(1)
+  })
+
+  it('maps the error envelope to an ApiError like every other request', async () => {
+    mock(
+      403,
+      { error: { code: 'step_up_required', message: 'step up' } },
+      { 'X-Request-ID': 'req-9' },
+    )
+    const err = await apiFetchRaw('/v1/console/support-bundle', {
+      method: 'POST',
+    }).catch((e: unknown) => e)
+    expect(err).toBeInstanceOf(ApiError)
+    expect(err).toMatchObject({
+      status: 403,
+      code: 'step_up_required',
+      requestId: 'req-9',
+    })
+  })
+
+  it('rotates the credential and replays a download on a recoverable 401', async () => {
+    const onUnauthorized = vi.fn()
+    let n = 0
+    globalThis.fetch = vi.fn(async () => {
+      n += 1
+      if (n === 1)
+        return new Response(
+          JSON.stringify({ error: { code: 'unauthenticated', message: 'x' } }),
+          { status: 401, headers: { 'Content-Type': 'application/json' } },
+        )
+      return new Response('bytes', { status: 200 })
+    }) as never
+    configureApiClient({
+      getToken: () => 'olvs_x',
+      onUnauthorized,
+      refreshSession: vi.fn(async () => true),
+    })
+    const res = await apiFetchRaw('/v1/audit/export')
+    expect(await res.text()).toBe('bytes')
+    expect(n).toBe(2)
+    expect(onUnauthorized).not.toHaveBeenCalled()
+  })
+
+  it('signs out on a 401 the refresh cannot recover', async () => {
+    const onUnauthorized = vi.fn()
+    configureApiClient({ getToken: () => 'olvs_x', onUnauthorized })
+    mock(401, { error: { code: 'unauthenticated', message: 'revoked' } })
+    await expect(apiFetchRaw('/v1/audit/export')).rejects.toBeInstanceOf(
+      ApiError,
+    )
+    expect(onUnauthorized).toHaveBeenCalledTimes(1)
+  })
+
+  it('throws a NetworkError when the download never returns', async () => {
+    globalThis.fetch = vi.fn(async () => {
+      throw new TypeError('Failed to fetch')
+    }) as never
+    await expect(apiFetchRaw('/v1/audit/export')).rejects.toBeInstanceOf(
+      NetworkError,
+    )
+  })
 })

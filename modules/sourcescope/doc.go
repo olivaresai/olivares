@@ -30,7 +30,9 @@
 // the agent/session NAMED by the caller's actor reference — a control-plane assertion
 // of "on behalf of which agent" (the SAME agent-centric model the retrieval guard
 // already uses), gated by the route permission. The scope VALUES are read from the
-// stored row (a caller cannot inject a workspace directly), but the CHOICE of agent is
+// stored row (a caller cannot inject a workspace directly) by the scope-tree lineage
+// module (core/store scopetree.go, store.Ancestors), the same walk the Cedar scope
+// resolver and the delegation ceiling use, but the CHOICE of agent is
 // the caller's; binding the reference to the authenticated principal's identity:
 // when the auth.Principal carries an AgentIdentity, the resolver uses it
 // instead of the caller-declared reference, closing the confused-deputy

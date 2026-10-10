@@ -31,8 +31,8 @@
 /areas/data-context	Data & context	Directory of the Data & context area: capabilities, knowledge and artifacts. Lists the entries your permissions allow.
 /areas/deployment	Deployment	Directory of the Deployment area: how deployments are prepared and controlled. Lists the entries your permissions allow.
 /areas/infrastructure	Infrastructure	Directory of the Infrastructure area: the inventory and workspaces of the estate. Lists the entries your permissions allow.
-/areas/observation	Observability & evidence	Directory of the Observability & evidence area: status and activity, costs and adoption, audit and recordings, evaluation and evidence. Lists the entries your permissions allow.
-/areas/security-identity	Security & identity	Directory of the Security & identity area: identity and access, policies, protection and response, governance boundaries. Lists the entries your permissions allow.
+/areas/observation	Observability & evidence	Directory of the Observability & evidence area: status and activity, costs and adoption, audit, evaluation and evidence. Lists the entries your permissions allow.
+/areas/security-identity	Security & identity	Directory of the Security & identity area: identity and access, policies and governance boundaries, protection and response. Lists the entries your permissions allow.
 /areas/system	System & settings	Directory of the System & settings area: administration, installation and maintenance, developer tools and personal preferences. Lists the entries your permissions allow.
 /areas/work-communications	Work & communications	Directory of the Work & communications area: the durable cross-session work backlog and governed communications. Lists the entries your permissions allow.
 /backups	-	-

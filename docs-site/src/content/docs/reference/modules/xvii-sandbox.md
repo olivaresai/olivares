@@ -72,9 +72,80 @@ audited** action (editor and up to run; the deploy comparison is an admin decisi
   scorer adapter is recorded as executed but unscored — never a silent pass.
 - **Replay is honest about gaps.** If the history source cannot reconstruct an ordered
   timeline, the replay is reported degraded with zero steps, never fabricated.
-- **No synthetic-data generation.** This is a documented post-v1 extension point only;
-  the module ships no generator, exposes no route for it, and produces zero samples.
+- **Local data generation.** Generate reproducible scenario inputs through the sandbox API using bounded local templates. No model or network request is made.
 :::
+
+## Generate scenario inputs
+
+The CLI can write generated inputs directly into the step format used by scenario creation:
+
+```sh
+olivares sandbox generate --count 2 --seed-file seed.txt -o json > steps.json
+olivares sandbox scenarios create --name generated --steps-file steps.json
+```
+
+`--seed-file -` reads the template from stdin. Omit the flag to use the default
+template. The file's newlines are preserved; use synthetic text only.
+
+`POST /v1/m/sandbox/synthetic-data` requires the same permission as creating a
+scenario. It returns `samples`, each with `key` and `input`, ready to use as a
+scenario's `steps`. Generation itself does not save the inputs; its audit event
+contains only the sample count. Use synthetic text, not secrets or production data.
+
+```json
+{"subject_kind":"agent","count":2,"seed":"{{subject_kind}}:user{{index}}@example.test"}
+```
+
+The two inputs are `agent:user1@example.test` and `agent:user2@example.test`.
+The only substitutions are `{{index}}` (starting at 1) and `{{subject_kind}}`;
+all other text is literal. This is local fixture generation, not model-generated
+language or a statistical simulation. Defaults are subject `agent`, count `10`
+and seed `{{subject_kind}}-sample-{{index}}`. Count is limited to 100, subject to
+200 bytes, and both seed and each generated input to 8192 bytes. Oversized
+requests fail without returning a partial sample set.
+The encoded batch must also fit the scenario API's 1 MiB request limit, including
+JSON escaping and room for the bounded name, description and subject. Additional
+mocks and formatting still count toward that request limit.
+
+## Run a generated scenario
+
+Enable the selectable module with `olivares modules on sandbox`. Generation,
+scenario creation and execution require an editor or administrator; a viewer
+can inspect saved scenarios, runs and outputs.
+
+Create a template without a trailing newline:
+
+```sh
+printf '%s' '{{subject_kind}}:user{{index}}@example.test' > seed.txt
+```
+
+Save this synthetic response in `mocks.json`:
+
+```json
+[{"resource":"agent:user1@example.test","response":"first synthetic account"}]
+```
+
+```sh
+olivares sandbox generate --count 2 --seed-file seed.txt -o json > steps.json
+olivares sandbox scenarios create --name generated --steps-file steps.json --mocks-file mocks.json -o json
+olivares sandbox scenarios run <scenario-id> --variant candidate -o json
+olivares sandbox runs get <run-id> -o json
+olivares sandbox runs outputs <run-id> -o json
+```
+
+Use the scenario ID returned by creation, then the run ID returned by execution.
+With the default `inproc-mock` runner, the first input resolves to the response
+above; the second returns `[[mock-miss:agent:user2@example.test]]`. A mock miss
+increments `steps_error` but is an expected synthetic result: the run still
+records `status: completed`, `steps_total: 2`, `steps_ok: 1`, `steps_error: 1`,
+`isolated: true` and `destroyed: true`. It makes no request to a real resource.
+This example does not request scoring or qualify an OS-level runtime.
+Matching uses the exact input text, including any newlines in a template file.
+
+Scenarios, runs and outputs remain available after an engine restart. Turning
+the module off removes access to its routes without deleting its saved data;
+turning it back on restores access. These are tenant-scoped records: another
+organization cannot read them.
 
 ## Related
 

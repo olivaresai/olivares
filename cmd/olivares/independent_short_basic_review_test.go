@@ -9,12 +9,14 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"log/slog"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
+	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 )
 
 func TestIndependentStaticShortBasicPasswordCannotReachToolsListClient(t *testing.T) {
@@ -57,7 +59,7 @@ func TestIndependentStaticShortBasicPasswordCannotReachToolsListClient(t *testin
 	t.Cleanup(func() { http.DefaultTransport = original })
 	// No native account, administrator role, or OAuth scope is assigned to this caller.
 	token, jwks := mintReviewToken(t, mcpReviewResource, "")
-	cfg := &mcpGatewayConfig{Resource: mcpReviewResource, AuthorizationServers: []string{"https://auth.review.example"}, Issuer: "https://auth.review.example", IssuerJWKS: jwks, Tenant: f.tenant.String(), UpstreamURL: upstream.URL, UpstreamAuth: header, Tools: []mcpc.ToolPolicy{{Name: "search", RequiredScope: "tools:read"}}}
+	cfg := &mcpgateway.MCPConfig{Resource: mcpReviewResource, AuthorizationServers: []string{"https://auth.review.example"}, Issuer: "https://auth.review.example", IssuerJWKS: jwks, Tenant: f.tenant.String(), UpstreamURL: upstream.URL, UpstreamAuth: header, Tools: []mcpc.ToolPolicy{{Name: "search", RequiredScope: "tools:read"}}}
 	var logBytes bytes.Buffer
 	logger := slog.New(slog.NewJSONHandler(&logBytes, nil))
 	rs, _, err := buildMCPResourceServer(&engine{store: f.store, log: logger}, cfg, logger)

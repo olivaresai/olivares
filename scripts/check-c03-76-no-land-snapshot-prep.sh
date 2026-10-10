@@ -34,7 +34,7 @@ grep -q 'TestSnapshotIsDeliberatelyUngated' "$DOC" \
   || fail "prepare doc lost the overlay-main test name"
 grep -q 'EntitlementFunc' "$DOC" || fail "prepare doc lost EntitlementFunc"
 if grep -qiE 'landed overlay #76|snapshot now gated on overlay main|FIRMA A claimed' "$DOC"; then
-  fail "prepare doc claims a close this lote does not have"
+  fail "prepare doc claims a close this batch does not have"
 fi
 grep -q 'C03-04' "$BACKLOG" || fail "backlog lost the C03-04 row"
 grep -q 'ACCUMULATE AND CONTINUE' "$ROSTER" \

@@ -109,6 +109,16 @@ func TestAccessEdgeDrift(t *testing.T) {
 		if kinds[model.DriftUnusedGrant] != 1 || kinds[model.DriftViolation] != 1 {
 			t.Fatalf("drift kinds = %v, want one of each", kinds)
 		}
+		// A caller filter binds as one scalar argument, not as a []any.
+		filtered, err := sc.AccessEdges().Drift(ctx, model.Query{Filters: []model.Filter{
+			{Column: "origin_id", Op: model.OpEq, Value: origin.String()},
+		}})
+		if err != nil {
+			return err
+		}
+		if len(filtered) != 2 {
+			t.Fatalf("filtered drift count = %d, want 2", len(filtered))
+		}
 		return nil
 	}); err != nil {
 		t.Fatalf("drift: %v", err)

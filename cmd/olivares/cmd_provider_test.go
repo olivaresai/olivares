@@ -73,6 +73,44 @@ func providerArgs(server string, extra ...string) []string {
 	}, extra...)
 }
 
+func TestProviderAddDeepSeekServiceUsesTheExistingCredentialInput(t *testing.T) {
+	p := newProviderProbeServer(t, http.StatusCreated, providerRecordJSON)
+	if _, errb, err := execRootStdin(t, "fixture-deepseek-key\n", providerArgs(p.URL, "--kind", "openai_compatible", "--service", "deepseek")...); err != nil {
+		t.Fatalf("add service: %v %s", err, errb)
+	}
+	var body map[string]any
+	if err := json.Unmarshal([]byte(p.lastBody()), &body); err != nil {
+		t.Fatal(err)
+	}
+	if body["service"] != "deepseek" || body["kind"] != "openai_compatible" || body["api_key"] != "fixture-deepseek-key" {
+		t.Fatal("service registration changed credential input")
+	}
+	for _, tc := range []struct{ name, key string }{{"key_prefix", "sk-fixture-service-key"}, {"opaque_key", "fixture-service-key"}} {
+		t.Run("service_defaults/"+tc.name, func(t *testing.T) {
+			p := newProviderProbeServer(t, http.StatusCreated, providerRecordJSON)
+			_, _, err := execRootStdin(t, tc.key+"\n", "provider", "add", "--service", "deepseek", "--no-test",
+				"--server", p.URL, "--token", "test-token", "--tenant", "tenant-a")
+			if err != nil {
+				t.Fatalf("known service must infer kind and name: exit=%d", exitcode.From(err))
+			}
+			var body map[string]any
+			if err := json.Unmarshal([]byte(p.lastBody()), &body); err != nil {
+				t.Fatal(err)
+			}
+			if body["kind"] != "openai_compatible" || body["display_name"] != "OpenAI-compatible" || p.calls.Load() != 1 {
+				t.Fatalf("service defaults: kind=%v name=%v calls=%d", body["kind"], body["display_name"], p.calls.Load())
+			}
+		})
+	}
+	t.Run("native_binding_refused_before_registration", func(t *testing.T) {
+		p := newProviderProbeServer(t, http.StatusCreated, providerRecordJSON)
+		_, _, err := execRootStdin(t, "fixture-deepseek-key\n", providerArgs(p.URL, "--kind", "openai_compatible", "--service", "deepseek", "--profile", "ppf_fixture")...)
+		if exitcode.From(err) != exitcode.Usage || p.calls.Load() != 0 {
+			t.Fatal("service/native binding must refuse before registering or probing a credential")
+		}
+	})
+}
+
 // The credential arrives on stdin and reaches the control plane in the body.
 func TestProviderAddReadsTheKeyFromStdin(t *testing.T) {
 	p := newProviderProbeServer(t, http.StatusCreated, providerRecordJSON)
@@ -298,8 +336,8 @@ func TestAgentDeployRegistersTheProfileAndBindsTheProvider(t *testing.T) {
 	}
 }
 
-// Without --provider the profile is registered and NOT authorised for injection:
-// the host's own variables decide, which is exactly the behaviour before v26.10.
+// Without --provider the profile uses its authorized account home, without
+// managed injection.
 //
 // UPDATED 2026-09-18 after the first-hour walk. This test used to assert that
 // `auth_source` was ABSENT, and that assertion had stopped serving its own

@@ -1,6 +1,28 @@
 {
+  "git": {
+    "title": "Git",
+    "branch": "Branche",
+    "newBranch": "Nouvelle branche",
+    "branchName": "Nom de la branche",
+    "createBranch": "Créer la branche",
+    "commitMessage": "Message du commit",
+    "commit": "Créer le commit",
+    "stage": "Indexer {{path}}",
+    "unstage": "Désindexer {{path}}",
+    "stageButton": "Indexer",
+    "unstageButton": "Désindexer",
+    "refresh": "Actualiser l’état Git",
+    "loading": "Lecture de l’état Git…",
+    "readOnly": "Les permissions de cette session ne permettent pas de modifications Git.",
+    "clean": "Arbre de travail propre.",
+    "detached": "HEAD détachée",
+    "cancel": "Annuler",
+    "truncated": "Affichage des 200 premiers fichiers ou branches. Actualisez après avoir réduit les modifications.",
+    "fileStatus": "Index : {{index}} ; arbre de travail : {{worktree}}",
+    "commitHint": "Seules les modifications indexées sont incluses, avec le nom et l’adresse de votre profil.",
+    "working": "Traitement…"
+  },
   "title": "Sessions",
-  "subtitle": "Opération des agents en direct — ce que chaque session fait à l’instant même, ses tokens, son coût et sa cadence, mis à jour via un flux en direct.",
   "refresh": "Actualiser",
   "search": "Rechercher une session, un agent, une action…",
   "untitled": "Session sans titre",
@@ -83,7 +105,7 @@
   },
   "empty": {
     "title": "Aucune session pour l’instant",
-    "description": "Les sessions apparaissent ici dès que les agents commencent à travailler : celles qu’Olivares découvre via ses connecteurs et celles que vous lancez depuis cet écran."
+    "description": "Les sessions que vous lancez, et celles qu’Olivares trouve, apparaissent ici."
   },
   "filtered": {
     "title": "Aucune session ne correspond à ces filtres",
@@ -93,8 +115,6 @@
     "title": "Sessions non autorisées",
     "description": "Votre rôle n’inclut pas la permission de consulter les sessions en direct."
   },
-  "operateTitle": "Claude Code",
-  "operateSubtitle": "Créez, rejoignez et gouvernez des sessions Claude Code, sans SSH. Les sessions qu’Olivares se contente d’observer figurent dans cette même liste et ouvrent la même fiche.",
   "launch": "Nouvelle session",
   "allSources": "Toutes les origines",
   "tabs": {
@@ -237,26 +257,13 @@
   },
   "rail": {
     "label": "Rail de travail",
-    "group": {
-      "active": "Actives",
-      "attention": "En attente de vous",
-      "settled": "Terminées"
-    },
-    "groupEmpty": {
-      "active": "Rien ne tourne en ce moment.",
-      "attention": "Rien ne vous attend.",
-      "settled": "Aucune session n’est encore terminée."
-    },
     "pin": "Épingler",
     "unpin": "Détacher",
     "pinnedMark": "Épinglée",
     "rowMenu": "Actions pour {{name}}",
-    "noObservation": "Aucune télémétrie n’est encore arrivée pour cette session.",
-    "emptyTitle": "Aucune session pour l’instant",
-    "emptyDescription": "Chaque session que ce déploiement observe ou lance apparaît ici, groupée selon ce qu’elle attend de vous."
+    "noObservation": "Aucune télémétrie n’est encore arrivée pour cette session."
   },
   "surface": {
-    "paneSwitcher": "Choisir un volet",
     "closeContext": "Fermer le contexte",
     "backTo": "Retour à {{pane}}",
     "pane": {
@@ -272,6 +279,20 @@
     "notReadTitle": "Cette session n’a pas pu être lue",
     "menu": "Actions pour {{name}}",
     "terminal": "Dans un terminal"
+  },
+  "meter": {
+    "mode": "Mode : {{mode}}",
+    "modeTitle": "Le mode tel que {{tool}} l'indique",
+    "theTool": "l'outil",
+    "usageLabel": "Consommation de cette session",
+    "tokens": "{{input}} en entrée / {{output}} en sortie (jetons)",
+    "costTitle": "Une estimation, pas une facture : le chiffre de l'outil lui-même, ou le prix catalogue d'un tour qu'il n'a pas chiffré",
+    "costUnknown": "coût non communiqué",
+    "planLabel": "Fenêtres d'utilisation du forfait de la connexion de cette session",
+    "planNotRead": "fenêtre du forfait non lue",
+    "resets": "Réinitialisation {{when}} ({{at}})",
+    "stale": "dernière valeur connue",
+    "readAt": "Lu {{at}}"
   },
   "evidence": {
     "checks": {
@@ -298,7 +319,7 @@
     "noneTitle": "Aucune session sélectionnée",
     "noneDescription": "La portée sous laquelle une session s’est exécutée, et les références pour la retrouver, apparaissent ici.",
     "scopeTitle": "Portée",
-    "scopeHint": "Ce à quoi cette session s’applique. Ce sont les valeurs sous lesquelles elle s’est exécutée, pas celles sélectionnées maintenant.",
+    "scopeHint": "Ce à quoi cette session s’applique. Ce sont les valeurs sous lesquelles elle s’est exécutée, pas celles sélectionnées maintenant. Les dossiers en lecture seule protègent le contenu des fichiers et les entrées de répertoire (aucune écriture, troncature, création, suppression ou modification de nom) ; les permissions, la propriété, les attributs étendus et les horodatages suivent les permissions normales de l’hôte.",
     "tenant": "Organisation",
     "workspace": "Espace de travail",
     "environment": "Environnement",
@@ -330,8 +351,6 @@
     "wireHint": "Le cadre brut de la ligne sélectionnée. La conversation est la vue par défaut.",
     "wireEmpty": "Sélectionnez une ligne de la conversation pour voir son cadre brut.",
     "thisNode": "Ce nœud",
-    "noWorkspace": "Aucun espace de travail",
-    "cwdWarning": "Cette session n’a pas d’espace de travail. Le pilote a déclaré son répertoire de travail comme {{cwd}}.",
     "workTitle": "Autorité de travail de la session",
     "workHint": "Enregistrée pour le dernier lancement. Chaque action vérifie l’autorisation actuelle.",
     "processState": "État du processus",
@@ -345,7 +364,17 @@
       "orchestrator": "Orchestrateur"
     },
     "details": "Détails",
-    "echoes": "Également signalée comme"
+    "echoes": "Également signalée comme",
+    "folder": "Dossier",
+    "temporaryFolder": "Dossier temporaire de cette session",
+    "panels": "Panneaux",
+    "tabChanges": "Modifications",
+    "tabFiles": "Fichiers",
+    "noFiles": "Cette session n'a pas de dossier à parcourir.",
+    "noChanges": "Olivares n'a pas démarré cette session : il n'y a pas de modifications à montrer.",
+    "filesUnavailable": "Ce dossier ne peut pas être parcouru.",
+    "filesNoAccess": "Votre rôle ne permet pas de parcourir ce dossier.",
+    "filesFailed": "Le dossier n'a pas pu être lu."
   },
   "conversation": {
     "log": "Conversation",
@@ -353,10 +382,7 @@
     "empty": "Pas encore de tours. Envoyez une phrase ci-dessous.",
     "ended": "Le flux d’E/S de la session est terminé.",
     "lag": "{{count}} cadre(s) perdu(s) — la sortie ci-dessous reprend après le trou.",
-    "operator": "Vous",
-    "assistant": "Assistant",
     "tool": "Outil",
-    "system": "Système",
     "result": "Résultat",
     "unknown": "Cadre non reconnu",
     "inspect": "Afficher dans l’inspecteur",
@@ -364,7 +390,6 @@
     "toolResult": "Résultat",
     "toolFailed": "Échec",
     "tokens": "{{input}} entrées · {{output}} sorties",
-    "cwdWarning": "Cette session n’a pas d’espace de travail. Le pilote a déclaré son répertoire de travail comme {{cwd}}.",
     "protocol": "Trames de protocole : {{count}}",
     "stop": {
       "cancelled": "Annulé",
@@ -376,7 +401,14 @@
     "retrying": "Nouvelle tentative ({{count}}) : {{message}}",
     "keyRefused": "Le fournisseur a refusé la clé d’API. Remplacez-la dans Fournisseurs.",
     "output": "Sortie de l’outil ({{count}}) : {{first}}",
-    "notSent": "Non envoyé : {{reason}}"
+    "notSent": "Non envoyé : {{reason}}",
+    "waitingApproval": "Sera envoyé une fois le lancement approuvé et la session démarrée.",
+    "workingFolder": "Dossier de travail : {{cwd}}",
+    "temporaryFolder": "Dossier de travail : dossier temporaire de cette session",
+    "workedFor": "A travaillé {{duration}}",
+    "toolsFolded_one": "+{{count}} appel d'outil",
+    "toolsFolded_many": "+{{count}} appels d'outils",
+    "toolsFolded_other": "+{{count}} appels d'outils"
   },
   "changes": {
     "title": "Modifications dans {{folder}}",
@@ -391,11 +423,46 @@
     "fileTruncated": "Affichage des 256 premiers Ko.",
     "truncated": "Affichage des {{count}} fichiers les plus récents."
   },
+  "preview": {
+    "title": "Aperçu",
+    "hint": "L'application que cette session sert sur un port local. Elle s'exécute dans votre navigateur, isolée de la console et hors des limites réseau de la session.",
+    "loading": "Recherche des ports de la session…",
+    "none": "Cette session ne sert rien sur un port local.",
+    "notRunning": "La session n'est pas en cours : elle ne sert rien.",
+    "error": "Les ports de la session n'ont pas pu être lus. Réessayez dans un instant.",
+    "notAllowed": "Ouvrir un aperçu nécessite l'autorisation d'opérer cette session.",
+    "port": "Port",
+    "path": "Chemin",
+    "open": "Ouvrir",
+    "reload": "Recharger",
+    "newTab": "Ouvrir dans un nouvel onglet",
+    "openError": "L'aperçu n'a pas pu être ouvert. Le port s'est peut-être fermé.",
+    "frameTitle": "Aperçu du port {{port}}"
+  },
+  "branchChanges": {
+    "title": "Modifications de la branche",
+    "hint": "Ce que la branche de cette session contient et que le commit actuel de l'espace de travail ne contient pas. Travail validé (commits) uniquement.",
+    "range": "De {{base}} à {{head}}",
+    "loading": "Lecture de la branche…",
+    "error": "Les modifications de la branche n'ont pas pu être lues. Réessayez dans un instant.",
+    "empty": "Cette branche ne contient rien que le commit actuel de l'espace de travail ne contienne pas.",
+    "back": "Toutes les modifications de la branche",
+    "binary": "Fichier binaire, non affiché.",
+    "truncated": "Affichage des {{count}} premiers fichiers modifiés.",
+    "fileTruncated": "Affichage des 64 premiers Ko de chaque côté.",
+    "original": "À la base",
+    "modified": "En tête de branche",
+    "status": {
+      "added": "Ajouté",
+      "modified": "Modifié",
+      "deleted": "Supprimé"
+    }
+  },
   "peers": {
     "button_one": "Peut écrire à {{count}} autre session",
     "button_many": "Peut écrire à {{count}} autres sessions",
     "button_other": "Peut écrire à {{count}} autres sessions",
-    "buttonNone": "Ne peut écrire à aucune autre session",
+    "buttonNone": "Choisir les sessions à contacter",
     "template": "Peut écrire aux sessions de ce modèle",
     "title": "Sessions auxquelles elle peut écrire",
     "hint": "Les sessions auxquelles celle-ci peut écrire ou confier du travail. Le moteur refuse toute autre.",
@@ -403,5 +470,21 @@
     "none": "Aucune autre session active dans cet espace de travail.",
     "save": "Enregistrer",
     "saved": "Autorisations de messages enregistrées."
+  },
+  "list": {
+    "group": {
+      "attention": "Vous attend",
+      "active": "En cours",
+      "settled": "Inactive"
+    },
+    "more": "Plus",
+    "back": "Retour aux sessions",
+    "showTable": "Afficher en tableau",
+    "filter": "Filtrer les sessions…",
+    "noMatch": "Aucune session ne correspond."
+  },
+  "thread": {
+    "copyReference": "Copier la référence",
+    "terminalHint": "La même session depuis un terminal."
   }
 }

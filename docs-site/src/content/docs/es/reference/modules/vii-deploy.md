@@ -42,6 +42,48 @@ Nomad, Crossplane) más una fuente de credenciales de vida corta, por operación
 atestiguada se conectan **solo bajo configuración del operador**; en su ausencia, el
 módulo nunca actúa en silencio.
 
+## Conectar un ejecutor
+
+Mientras un administrador no conecte un ejecutor, Deploy guarda tus definiciones de despliegue
+y no cambia ninguna infraestructura. Para conectar uno:
+
+1. Escribe un archivo JSON con un bloque por cada runtime en el que despliegas (`docker`,
+   `k8s`, `nomad`, `tofu`, `terraform`, `gitops` o `crossplane`) y un bloque `credential`.
+   Solo se conectan los runtimes que figuran en el archivo. Para Docker en el mismo host:
+
+   ```json
+   {
+     "docker": { "socket_path": "/var/run/docker.sock" },
+     "credential": {
+       "kind": "file",
+       "path_template": "/run/olivares/deploy/{env}-{mode}.token",
+       "ttl_seconds": 900
+     }
+   }
+   ```
+
+   En cada operación Olivares lee un token de corta duración desde `path_template`: `{env}`
+   es el entorno de la definición y `{mode}` es `read` (Plan, Verificar) o `write` (Aplicar,
+   Retirar). Una herramienta que ya ejecutas, como Vault Agent o un asistente SPIFFE, crea ese
+   directorio y escribe y rota los archivos de token. Sin token, se rechaza cada operación. Para
+   Docker, el usuario de servicio `olivares` también debe poder abrir el socket; pertenecer al grupo `docker` le da acceso de
+   root a ese host.
+2. Indica a Olivares dónde está el archivo. Con el paquete deb o rpm, añade esta línea a
+   `/etc/olivares/olivares.env`:
+
+   ```sh
+   OLIVARES_DEPLOY_EXECUTOR_CONFIG=/etc/olivares/deploy-executor.json
+   ```
+
+   El usuario `olivares` debe poder leer el archivo JSON, por ejemplo con propietario
+   `root:olivares` y modo `0640`.
+
+3. Reinicia Olivares con `sudo systemctl restart olivares`. Si el archivo no se puede leer o no
+   es válido, Olivares no arranca y su registro dice por qué.
+
+La página Deploy ofrece entonces **Declarar despliegue** como acción principal, y Plan y
+Aplicar llegan al runtime. Cada Aplicar y Retirar sigue esperando una aprobación.
+
 ## Entidades y el contrato declarado
 
 El módulo declara cuatro entidades con namespace propio más el `Deployment` del

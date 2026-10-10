@@ -158,8 +158,8 @@
     }
   },
   "seam": {
-    "synthetic": "合成数据：未接线",
-    "syntheticData": "合成数据生成是一个有文档记录的 v1 后扩展点——本版本尚未实现。"
+    "synthetic": "本地数据生成",
+    "syntheticData": "通过沙盒 API 使用有大小限制的本地模板，生成可重现的场景输入。不会请求模型或网络。"
   },
   "empty": {
     "runs": {

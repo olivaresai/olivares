@@ -7,6 +7,12 @@ description: >-
   закрепление по digest.
 ---
 
+> Пакеты развёртывания предоставляются через канал Business; их публикация здесь не подтверждена. Перед использованием локального чарта проверьте пакет и издателя по инструкции канала. Пример манифеста использует файл Business `business-install.yaml`. Изолированная установка требует Enterprise.
+
+
+> Helm, Kubernetes operators, Terraform, appliance and FIPS/STIG images are Business deployment artifacts. The source paths below are in the Business distribution. Air-gapped installation requires Enterprise.
+
+
 Это руководство для инженеров и SRE, выводящих control plane Olivares AI в
 продакшен с Docker. Весь продукт — это один образ — движок со
 встроенным веб-интерфейсом — поэтому один хост может запускать топологию SQLite
@@ -17,12 +23,11 @@ description: >-
 настройки и TLS, включённый по умолчанию. Порт хоста публикуется на всех интерфейсах,
 потому что это сервер — ограничивайте его осознанно, как показано ниже.
 
-:::note[Бета — образы 26.10.1 опубликованы]
-Olivares AI находится в **бете**. Координаты образа ниже разрешаются: релиз `26.10.1`
-опубликовал их в Docker Hub и `ghcr.io` (свидетель поверхностей установки
-`docs/releases/26.10.1-install-surfaces.json`). Воспринимайте это как форму развёртывания,
-которую вы будете использовать, а не как гарантию готовности к продакшену.
+<!-- release -->
+:::note[Olivares 0.1]
+Следующий выпуск — `0.1`; его релиз на GitHub ещё не опубликован. Команды ниже описывают планируемые артефакты. До публикации собирайте из исходников, а после публикации проверяйте каждый артефакт перед использованием. Наблюдаемый статус записан в `docs/releases/0.1-install-surfaces.json`.
 :::
+<!-- /release -->
 
 Обзор всех вариантов развёртывания и их значений по умолчанию на странице
 решений см. в разделе [Самостоятельный хостинг control plane](/ru/how-to/self-hosting/).
@@ -33,17 +38,19 @@ Olivares AI находится в **бете**. Координаты образ�
 
 Основная загрузка контейнера — **Docker Hub**:
 
+<!-- release -->
 ```bash
-docker pull docker.io/olivaresai/olivares:26.10.1
+docker pull docker.io/olivaresai/olivares:0.1
 ```
+<!-- /release -->
 
 То же содержимое также публикуется в `ghcr.io/olivaresai/olivares` — идентичное
 по digest, используется как резерв и как реестр сборки. Docker Hub ограничивает частоту
 **анонимных** пулов; ghcr.io не ограничивает анонимные пулы публичных образов — поэтому
 `docker login` или координата ghcr.io и есть выход, если узел CI или большой парк упирается
 в лимит. Теги несут **без
-ведущего `v`**: `:26.10.1` закрепляет релиз, `:latest` плавает, а
-`:26.10.1-fips` / `:26.10.1-stig` — усиленные варианты. Базовый тег и `:latest`
+ведущего `v`**: <!-- release -->`:0.1`<!-- /release --> закрепляет релиз, `:latest` плавает, а <!-- release -->
+`:0.1-fips`<!-- /release --> / <!-- release -->`:0.1-stig`<!-- /release --> — усиленные варианты. Базовый тег и `:latest`
 мультиархитектурные (`linux/amd64`, `linux/arm64`); `fips`/`stig` — только
 `amd64`.
 
@@ -52,18 +59,20 @@ Control plane — это продукт безопасности, поэтому
 работает одинаково с любым из реестров — подписи и аттестации копируются в
 Docker Hub через `cosign copy`, поэтому digest тот же:
 
+<!-- release -->
 ```bash
 IMAGE=docker.io/olivaresai/olivares          # fallback: ghcr.io/olivaresai/olivares (same digest)
-DIGEST="$(crane digest "$IMAGE:26.10.1")"
+DIGEST="$(crane digest "$IMAGE:0.1")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type spdxjson \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
+<!-- /release -->
 
 Полная цепочка — подпись контрольных сумм, SBOM, OpenVEX, происхождение SLSA —
 в разделе [Проверьте то, что вы загрузили](/ru/how-to/verify-a-release/). После
@@ -80,6 +89,7 @@ cosign verify-attestation "$REF" --type spdxjson \
 `-p 127.0.0.1:8443:8443`, чтобы оставить консоль только на хосте. Запускайте его не от root, в
 режиме read-only, со сброшенными всеми capabilities:
 
+<!-- release -->
 ```bash
 docker volume create olivares-data
 
@@ -92,13 +102,14 @@ docker run -d --name olivares \
   -v olivares-data:/var/lib/olivares \
   -p 8443:8443 \
   -p 8444:8444 \
-  docker.io/olivaresai/olivares:26.10.1 \
+  docker.io/olivaresai/olivares:0.1 \
   serve \
     --listen=0.0.0.0:8443 \
     --grpc-listen=0.0.0.0:8444 \
     --data-dir=/var/lib/olivares \
     --checkpoint-interval=1h
 ```
+<!-- /release -->
 
 | Флаг | Зачем |
 |---|---|
@@ -159,10 +170,12 @@ Hub); для проверяемого продакшен-развёртыван�
 ## 3. Мультиарендный Postgres
 
 Для мультиарендной топологии наложите переопределение Postgres поверх базового
-файла. Сначала задайте два пароля, затем поднимите стек:
+файла. Сначала задайте три разных пароля, используя только `A-Z a-z 0-9 . _ ~ -`
+для этой демо-топологии Compose, затем поднимите стек:
 
 ```bash
-cp deploy/compose/.env.example deploy/compose/.env   # set POSTGRES_SUPERUSER_PASSWORD + OLIVARES_DB_PASSWORD
+cp deploy/compose/.env.example deploy/compose/.env   # set three distinct passwords in deploy/compose/.env:
+# POSTGRES_SUPERUSER_PASSWORD, OLIVARES_DB_PASSWORD, OLIVARES_ADMIN_PASSWORD
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.postgres.yml up -d
 ```
@@ -173,6 +186,10 @@ docker compose -f deploy/compose/docker-compose.yml \
 `initdb/10-app-role.sh`) и направляет движок на эту не-суперпользовательскую
 роль через `--engine=postgres`. Это делает реальным арендный заслон FORCE-RLS:
 движок **отказывается стартовать** против роли суперпользователя/`BYPASSRLS`.
+
+Override также создаёт `olivares_admin`, отдельную роль `NOSUPERUSER BYPASSRLS`
+с доступом только для чтения к таблицам движка. Движок использует её через
+`--admin-dsn` для чтения данных разных арендаторов, в том числе при первичной настройке.
 
 :::caution[`sslmode=disable` только для демо внутри сети]
 DSN в переопределении использует `sslmode=disable`, потому что оба контейнера
@@ -186,17 +203,26 @@ DSN в Secret и управляемым (или собственным) Postgres
 
 Профиль бэкапа создаёт запланированные, безопасные для непрерывности журнала
 DR-бандлы: снимок хранилища плюс ключи подписи, зашифрованные под вашим KEK, с
-манифестом верхушек цепочек по каждому арендатору. Запишите свою кодовую фразу в
-файл, хранимый **вне репозитория и образа**, затем запустите одноразовый профиль
-`backup`:
+манифестом верхушек цепочек по каждому арендатору.
+
+Храните парольную фразу в закрытом файле вне репозитория и образа, а её копию —
+в безопасном месте вне этого хоста: без неё нельзя восстановить ни один бандл.
+Предоставьте контейнеру резервного копирования доступ к файлу только для чтения
+(образ запускается с UID `65532`):
 
 ```bash
-printf 'a strong DR passphrase' > deploy/compose/dr-pass
-# the host stamps the bundle name:
+sudo install -d -o 65532 -g 65532 -m 0700 /srv/olivares-dr
+sudo install -o 65532 -g 65532 -m 0400 /path/to/private-passphrase /srv/olivares-dr/dr-pass
+
 BACKUP_TS="$(date -u +%Y%m%dT%H%M%SZ)" \
 docker compose -f deploy/compose/docker-compose.yml \
                -f deploy/compose/docker-compose.backup.yml \
-               --profile backup run --rm backup
+               -f - --profile backup run --rm backup <<'YAML'
+services:
+  backup:
+    volumes:
+      - /srv/olivares-dr/dr-pass:/run/secrets/dr-pass:ro
+YAML
 ```
 
 Задание разделяет том данных движка, пишет бандл в том `olivares-backups` и
@@ -207,7 +233,7 @@ docker compose -f deploy/compose/docker-compose.yml \
 аварийным восстановлением. Восстановите и проверьте через:
 
 ```bash
-olivares dr restore --in <bundle> --data-dir <dir> --passphrase-file dr-pass
+olivares dr restore --in <bundle> --data-dir <dir> --passphrase-file /path/to/private-passphrase
 ```
 
 Полная процедура RPO/RTO, ответственного хранения ключей и DR-учений живёт
@@ -315,7 +341,7 @@ docker compose -f deploy/compose/docker-compose.yml up -d
 
 ## 8. Закрепление по digest для продакшена
 
-Изменяемые теги (`:26.10.1`, `:latest`) — для оценки. В продакшене закрепляйте
+Изменяемые теги (<!-- release -->`:0.1`<!-- /release -->, `:latest`) — для оценки. В продакшене закрепляйте
 **digest**, который вы проверили — digest неизменяем и есть ровно то, что вы
 утвердили:
 
@@ -330,7 +356,7 @@ OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
 ```
 
 Для масштабирования вширь и мультинодовых конфигураций используйте чарт из
-`deploy/helm/olivares` и закрепляйте опубликованный образ по digest. Публикация чарта в OCI
+`./business-chart` и закрепляйте опубликованный образ по digest. Публикация чарта в OCI
 не подтверждена (`publication-unverified`): из этого репозитория он ни разу не публиковался, а сторона реестра не наблюдаема. См. [Самостоятельный хостинг control plane](/ru/how-to/self-hosting/)
 для команды из исходников и [Установку в air-gapped окружении](/ru/how-to/air-gap-install/)
 для полностью отключённых площадок.

@@ -18,7 +18,7 @@ export LC_ALL=C
 
 RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GUION="$RAIZ/scripts/report-prep-gate-pins.sh"
-[ -f "$GUION" ] || { echo "test-prep-gate-pins: ⛔ no encuentro el sujeto"; exit 2; }
+[ -f "$GUION" ] || { echo "test-prep-gate-pins: ⛔ cannot find the subject"; exit 2; }
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/pins-bat.XXXXXX")" || exit 2
 trap 'rm -rf "$TMP"' EXIT
 pasa=0; falla=0
@@ -26,7 +26,7 @@ pasa=0; falla=0
 # `cd ""` SALE 0 y trabajaria en el repo real: el guardia es la primera casilla, no una nota.
 banco() {
 	local d="$TMP/$1"
-	case "$d" in "$TMP"/*) : ;; *) echo "⛔ banco fuera del sandbox"; exit 2 ;; esac
+	case "$d" in "$TMP"/*) : ;; *) echo "⛔ test outside the sandbox"; exit 2 ;; esac
 	mkdir -p "$d/scripts" || return 1
 	git -c init.defaultBranch=main init -q "$d" >/dev/null 2>&1 || return 1
 	git -C "$d" config user.email t@t; git -C "$d" config user.name t
@@ -64,11 +64,11 @@ comprueba() { # $1 nombre · $2 rc esperado · $3 patron (vacio = no se mira) ·
 	# HERE-STRING, NO TUBERIA: `printf | grep -q` devuelve 141 EN EXITO bajo pipefail.
 	if [ -n "$pat" ] && ! grep -q -- "$pat" <<<"$out"; then ok=0; fi
 	if [ "$ok" = 1 ]; then printf '  ok   %-56s rc=%s\n' "$n" "$rc"; pasa=$((pasa+1))
-	else printf '  FALLA %-55s rc=%s (esperaba %s) pat=%s\n' "$n" "$rc" "$rc_esp" "${pat:-<ninguno>}"
+	else printf '  FAIL  %-55s rc=%s (expected %s) pat=%s\n' "$n" "$rc" "$rc_esp" "${pat:-<none>}"
 		printf '%s\n' "$out" | sed 's/^/        /' | head -8; falla=$((falla+1)); fi
 }
 
-echo "report-prep-gate-pins: batería"
+echo "report-prep-gate-pins: test suite"
 
 # ── 1. Censo: la variable del gate lleva DIGITOS. Con `[A-Z_]+` este gate no se ve, y ese fue el
 #    defecto que hizo publicar 15 donde hay 32.
@@ -79,9 +79,9 @@ git -C "$d" add -A >/dev/null 2>&1; git -C "$d" commit -qm base --no-verify >/de
 # (el censo se comprueba abajo leyendo la salida; una llamada silenciada aqui sumaba un fallo
 #  invisible al contador — medido al escribir esta bateria)
 out="$(OLIVARES_PINS_NO_NET=1 corre "$d")" && rc=0 || rc=$?
-if grep -q '1 anclan CODIGO' <<<"$out" && [ "$rc" = 0 ]; then
-	printf '  ok   %-56s rc=0\n' "un gate con DIGITOS en la variable entra en el censo"; pasa=$((pasa+1))
-else printf '  FALLA %-55s rc=%s\n' "un gate con DIGITOS en la variable entra en el censo" "$rc"
+if grep -q '1 anchor CODE' <<<"$out" && [ "$rc" = 0 ]; then
+	printf '  ok   %-56s rc=0\n' "a gate with DIGITS in the variable is counted"; pasa=$((pasa+1))
+else printf '  FAIL  %-55s rc=%s\n' "a gate with DIGITS in the variable is counted" "$rc"
 	printf '%s\n' "$out" | sed 's/^/        /' | head -6; falla=$((falla+1)); fi
 
 # ── 2. Polaridad: un gate que SOLO dice «lost …» (debe-seguir) NO puede bloquear un aterrizaje y
@@ -108,9 +108,9 @@ exit 0
 G2
 git -C "$d" add -A >/dev/null 2>&1; git -C "$d" commit -qm base --no-verify >/dev/null 2>&1
 out="$(OLIVARES_PINS_NO_NET=1 corre "$d" || true)"
-if grep -q '0 anclan CODIGO' <<<"$out" || grep -q 'NO HE PODIDO MIRAR' <<<"$out"; then
-	printf '  ok   %-56s\n' "un gate SOLO debe-seguir NO se cuenta como bloqueante"; pasa=$((pasa+1))
-else printf '  FALLA %-55s\n' "un gate SOLO debe-seguir NO se cuenta como bloqueante"
+if grep -q '0 anchor CODE' <<<"$out" || grep -q 'COULD NOT LOOK' <<<"$out"; then
+	printf '  ok   %-56s\n' "a gate requiring only preservation is NOT counted as blocking"; pasa=$((pasa+1))
+else printf '  FAIL  %-55s\n' "a gate requiring only preservation is NOT counted as blocking"
 	printf '%s\n' "$out" | sed 's/^/        /' | head -6; falla=$((falla+1)); fi
 
 # ── 3. Linea base: un gate YA ROJO sobre el arbol limpio se NOMBRA, y su rojo no acusa a nadie.
@@ -122,9 +122,9 @@ git -C "$d" add -A >/dev/null 2>&1; git -C "$d" commit -qm base --no-verify >/de
 # casilla mide es la LINEA BASE, no la fase de PRs. Mi primera version esperaba 0 y acusaba al
 # sujeto de un acierto suyo.
 out="$(OLIVARES_PINS_NO_NET=1 corre "$d")" && rc=0 || rc=$?
-if [ "$rc" = 0 ] && grep -q 'YA ROJO sobre el arbol limpio' <<<"$out" && grep -q 'linea base — 1' <<<"$out"; then
-	printf '  ok   %-56s rc=0\n' "un gate YA ROJO en la base se nombra y no acusa a una PR"; pasa=$((pasa+1))
-else printf '  FALLA %-55s rc=%s\n' "un gate YA ROJO en la base se nombra y no acusa a una PR" "$rc"
+if [ "$rc" = 0 ] && grep -q 'ALREADY FAILING on the clean tree' <<<"$out" && grep -q 'baseline — 1' <<<"$out"; then
+	printf '  ok   %-56s rc=0\n' "a gate ALREADY RED on the baseline is named and not attributed to a PR"; pasa=$((pasa+1))
+else printf '  FAIL  %-55s rc=%s\n' "a gate ALREADY RED on the baseline is named and not attributed to a PR" "$rc"
 	printf '%s\n' "$out" | sed 's/^/        /' | head -6; falla=$((falla+1)); fi
 
 # ── 4. Fail-closed: sin PRs y sin `gh` no se dice «cero clavadas», se dice que no se pudo mirar.
@@ -133,9 +133,9 @@ mkdir -p "$d/cmd"; printf 'anchor_must_stay\n' > "$d/cmd/thing.go"
 gate "$d" "c99-04-nonet" "cmd/thing.go" "forbidden_symbol"
 git -C "$d" add -A >/dev/null 2>&1; git -C "$d" commit -qm base --no-verify >/dev/null 2>&1
 out="$( (cd "$d" && OLIVARES_ROOT="$d" PATH=/usr/bin:/bin timeout 120 bash "$GUION" 2>&1) || true)"
-if grep -q 'NO HE PODIDO MIRAR' <<<"$out"; then
-	printf '  ok   %-56s\n' "sin cola consultable dice NO HE PODIDO MIRAR, no «cero»"; pasa=$((pasa+1))
-else printf '  FALLA %-55s\n' "sin cola consultable dice NO HE PODIDO MIRAR, no «cero»"
+if grep -q 'COULD NOT LOOK' <<<"$out"; then
+	printf '  ok   %-56s\n' "an inaccessible queue reports COULD NOT LOOK, not «zero»"; pasa=$((pasa+1))
+else printf '  FAIL  %-55s\n' "an inaccessible queue reports COULD NOT LOOK, not «zero»"
 	printf '%s\n' "$out" | sed 's/^/        /' | head -6; falla=$((falla+1)); fi
 
 # ── 5. El arbol sucio se RECHAZA: la medida escribe y restaura, y sobre trabajo sin commitear eso
@@ -146,15 +146,15 @@ gate "$d" "c99-05-dirty" "cmd/thing.go" "forbidden_symbol"
 git -C "$d" add -A >/dev/null 2>&1; git -C "$d" commit -qm base --no-verify >/dev/null 2>&1
 printf 'sin commitear\n' > "$d/cmd/otro.go"
 out="$( (cd "$d" && OLIVARES_ROOT="$d" timeout 120 bash "$GUION" 999 2>&1) || true)"
-if grep -q 'NO esta limpio' <<<"$out"; then
-	printf '  ok   %-56s\n' "un arbol SUCIO se rechaza antes de escribir nada"; pasa=$((pasa+1))
-else printf '  FALLA %-55s\n' "un arbol SUCIO se rechaza antes de escribir nada"
+if grep -q 'is NOT clean' <<<"$out"; then
+	printf '  ok   %-56s\n' "a DIRTY tree is rejected before any writes"; pasa=$((pasa+1))
+else printf '  FAIL  %-55s\n' "a DIRTY tree is rejected before any writes"
 	printf '%s\n' "$out" | sed 's/^/        /' | head -6; falla=$((falla+1)); fi
 
 # ── 6. Control positivo del guardia del sandbox.
 if ( case "/etc" in "$TMP"/*) exit 0;; *) exit 2;; esac ) 2>/dev/null; then
-	echo "  FALLA el guardia acepto /etc"; falla=$((falla+1))
-else printf '  ok   %-56s\n' "el guardia rechaza una ruta fuera del sandbox"; pasa=$((pasa+1)); fi
+	echo "  FAIL the guard accepted /etc"; falla=$((falla+1))
+else printf '  ok   %-56s\n' "the guard rejects a path outside the sandbox"; pasa=$((pasa+1)); fi
 
 printf 'report-prep-gate-pins: %s passed, %s failed\n' "$pasa" "$falla"
 [ "$falla" -eq 0 ]

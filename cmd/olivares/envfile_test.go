@@ -62,6 +62,41 @@ func TestInstallPlanValidate(t *testing.T) {
 			p.Engine = "postgres"
 			p.DSNArg = "host=db user=olivares_app password=SECRET dbname=olivares"
 		}, true},
+		{"inline password URL query rejected", func(p *installPlan) {
+			p.Profile = profileK8s
+			p.Engine = "postgres"
+			p.DSNArg = "postgres://olivares_app@db/olivares?password=synthetic-secret"
+		}, true},
+		{"inline password encoded URL query rejected", func(p *installPlan) {
+			p.Profile = profileK8s
+			p.Engine = "postgres"
+			p.DSNArg = "postgres://olivares_app@db/olivares?%70assword=synthetic-secret"
+		}, true},
+		{"inline TLS key password keyword rejected", func(p *installPlan) {
+			p.Profile = profileK8s
+			p.Engine = "postgres"
+			p.DSNArg = "host=db sslpassword=synthetic-secret dbname=olivares"
+		}, true},
+		{"inline TLS key password query rejected", func(p *installPlan) {
+			p.Profile = profileK8s
+			p.Engine = "postgres"
+			p.DSNArg = "postgres://app@db/olivares?sslpassword=synthetic-secret"
+		}, true},
+		{"inline OAuth client secret keyword rejected", func(p *installPlan) {
+			p.Profile = profileK8s
+			p.Engine = "postgres"
+			p.DSNArg = "host=db oauth_client_secret=synthetic-secret dbname=olivares"
+		}, true},
+		{"inline OAuth client secret query rejected", func(p *installPlan) {
+			p.Profile = profileK8s
+			p.Engine = "postgres"
+			p.DSNArg = "postgres://app@db/olivares?oauth_client_secret=synthetic-secret"
+		}, true},
+		{"malformed credential URL rejected", func(p *installPlan) {
+			p.Profile = profileK8s
+			p.Engine = "postgres"
+			p.DSNArg = "postgres://app@db/%ZZ?password=synthetic-secret"
+		}, true},
 		{"passwordless postgres URL ok", func(p *installPlan) {
 			p.Profile = profileK8s
 			p.Engine = "postgres"

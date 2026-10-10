@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/core/auth"
@@ -22,7 +23,7 @@ import (
 
 func resolveMessageClientConfig(cfg *agentClientConfig) error {
 	if !cfg.changed("token") && cfg.token == "" {
-		cfg.token = os.Getenv("OLIVARES_COMMUNICATION_TOKEN")
+		cfg.token = envconfig.Get("OLIVARES_COMMUNICATION_TOKEN")
 	}
 	return cfg.resolve()
 }
@@ -36,7 +37,7 @@ func newMessageCmd() *cobra.Command {
 	for _, action := range []string{"inbox", "get", "offer", "respond"} {
 		handoff.AddCommand(newMessageActionCmd("handoff-" + action))
 	}
-	root.AddCommand(handoff)
+	root.AddCommand(handoff, newMessageDecisionCmd())
 	return root
 }
 
@@ -117,7 +118,7 @@ func newMessageActionCmd(action string) *cobra.Command {
 				}
 				var content sessions.HandoffContent
 				if err := strictSessionJSON(bytes.NewReader(data), &content); err != nil {
-					return errors.New("--context-file must contain HandoffContent JSON (summary, next_action, optional risk/artifact_refs)")
+					return errors.New("--context-file must contain HandoffContent JSON (summary, next_action, optional risk/branch/sha/artifact_refs)")
 				}
 				input = sessionHandoffOfferArgs{ChannelID: model.ID(channel), WorkItemID: model.ID(item), ToSID: sid, Handoff: content, AckDeadline: deadline, ExpectedOwnerEpoch: ownerEpoch, Version: version, IdempotencyKey: key}
 			case "handoff-respond":

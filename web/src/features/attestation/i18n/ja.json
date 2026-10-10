@@ -161,15 +161,15 @@
     }
   },
   "airgap": {
-    "title": "エアギャップバンドル & OCI Helm チャート",
-    "description": "オフラインで検証できるバンドルと、二重署名された OCI Helm チャート。この経路では外部への通信は行いません。",
-    "bundleTitle": "エアギャップバンドル",
-    "bundleIntro": "キーベースの経路には Rekor も Fulcio も不要です。メンテナーはオンラインで自己完結型バンドルを一度ビルドし、切断された拠点がそれを検証してミラーします。",
+    "title": "オフラインバンドル & Business Helm パッケージ",
+    "description": "プライベート配布の仕様：オフラインバンドルと署名済み Business チャートパッケージ。公開は未検証です。",
+    "bundleTitle": "オフラインバンドル",
+    "bundleIntro": "キーベース経路には Rekor も Fulcio も不要です。メンテナーは組み立て済みプライベート配布からオンラインで一度バンドルを作成し、切断された拠点が検証してミラーします。",
     "buildCommand": "ビルド（オンラインで一度）",
     "mirrorCommand": "ミラー（インターネット不要）",
-    "chartTitle": "OCI Helm チャート",
-    "ociCoordinate": "OCI 座標",
-    "cosignManifest": "cosign（マニフェスト）",
+    "chartTitle": "Business Helm パッケージ",
+    "distribution": "配布",
+    "cosignPackage": "cosign（パッケージ）",
     "gpgProv": "GPG .prov",
     "verifyCommand": "検証コマンド"
   },

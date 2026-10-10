@@ -33,11 +33,11 @@ trap 'rm -rf "$TMP"' EXIT
 pasa=0; falla=0
 sandbox() { # se INVOCA en el shell principal: un exit aquí mata la batería, que es lo que se quiere
 	case "$1" in
-		"") echo "⛔ ruta de fixture VACÍA — 'cd \"\"' sale 0 y trabajaría en el repo." >&2; exit 2;;
+		"") echo "⛔ EMPTY fixture path — 'cd \"\"' returns 0 and would operate in the repository." >&2; exit 2;;
 		"$TMP"/*) : ;;
-		*) echo "⛔ fixture FUERA del sandbox: '$1' no cuelga de '$TMP'." >&2; exit 2;;
+		*) echo "⛔ fixture OUTSIDE the sandbox: '$1' is not under '$TMP'." >&2; exit 2;;
 	esac
-	[ -d "$1" ] || { echo "⛔ fixture inexistente: '$1'." >&2; exit 2; }
+	[ -d "$1" ] || { echo "⛔ nonexistent fixture: '$1'." >&2; exit 2; }
 }
 
 comprueba() { # nombre · rc esperado · patrón esperado (vacío = no se mira) · dir
@@ -55,7 +55,7 @@ comprueba() { # nombre · rc esperado · patrón esperado (vacío = no se mira) 
 	# push de los cinco carriles hasta que `lint:sigpipe-booleans` lo nombró.
 	if [ -n "$pat" ] && ! grep -q -- "$pat" <<<"$out"; then ok=0; fi
 	if [ "$ok" = 1 ]; then printf '  ok   %-52s rc=%s\n' "$n" "$rc"; pasa=$((pasa+1))
-	else printf '  FALLA %-51s rc=%s (esperaba %s) pat=%s\n' "$n" "$rc" "$rc_esp" "${pat:-<ninguno>}"
+	else printf '  FAIL  %-51s rc=%s (expected %s) pat=%s\n' "$n" "$rc" "$rc_esp" "${pat:-<none>}"
 	     printf '%s\n' "$out" | sed 's/^/        /' | head -6; falla=$((falla+1)); fi
 }
 
@@ -81,33 +81,33 @@ commit_con_edad() { # $1 dir · $2 segundos de antigüedad · $3 texto
 	GIT_AUTHOR_DATE="$fecha" GIT_COMMITTER_DATE="$fecha" git -C "$1" commit -qm "$3"
 }
 
-echo "watchdog-unpublished-work: batería"
+echo "watchdog-unpublished-work: test suite"
 
 d="$(nuevo_repo limpio)"
-comprueba "todo publicado es limpio" 0 "nada olvidado" "$d"
+comprueba "all work published is clean" 0 "nothing forgotten" "$d"
 
 d="$(nuevo_repo envuelo)"; commit_con_edad "$d" 60 "recien"
-comprueba "un commit de hace 1 min es EN VUELO, no aviso" 0 "en-vuelo=1" "$d"
+comprueba "a commit from 1 minute ago is IN FLIGHT, not a warning" 0 "in-progress=1" "$d"
 
 d="$(nuevo_repo aviso)"; commit_con_edad "$d" 3600 "de hace una hora"
-comprueba "una hora sin publicar es AVISO, no bloqueo" 0 "avisos=1" "$d"
+comprueba "one hour unpublished is a WARNING, not a block" 0 "warnings=1" "$d"
 
 d="$(nuevo_repo olvidado)"; commit_con_edad "$d" 90000 "de anteayer"
-comprueba "más de 4 h es OLVIDADO y sale 1" 1 "OLVIDADO" "$d"
+comprueba "more than 4 h is FORGOTTEN and returns 1" 1 "FORGOTTEN" "$d"
 
 # El caso que motivó el diseño: punta fresca sobre trabajo viejo. Si la edad se tomara de HEAD
 # esto saldría EN VUELO y el trabajo de anteayer seguiría invisible.
 d="$(nuevo_repo apilado)"; commit_con_edad "$d" 90000 "viejo"; commit_con_edad "$d" 30 "punta fresca"
-comprueba "la edad es la del commit MÁS VIEJO, no la de la punta" 1 "OLVIDADO" "$d"
+comprueba "age comes from the OLDEST commit, not the tip" 1 "FORGOTTEN" "$d"
 
 d="$(nuevo_repo sinremoto)"; commit_con_edad "$d" 90000 "x"; git -C "$d" remote remove origin
-comprueba "sin refs remotas es NO HE PODIDO MIRAR, no limpio" 2 "NO HE PODIDO MIRAR" "$d"
+comprueba "no remote refs is COULD NOT LOOK, not clean" 2 "COULD NOT LOOK" "$d"
 
 d="$(nuevo_repo umbralmalo)"; commit_con_edad "$d" 90000 "x"
-comprueba "umbral no numérico es NO HE PODIDO MIRAR" 2 "NO HE PODIDO MIRAR" "$d" OLIVARES_WATCHDOG_STALE_SECS=diez
+comprueba "nonnumeric threshold is COULD NOT LOOK" 2 "COULD NOT LOOK" "$d" OLIVARES_WATCHDOG_STALE_SECS=diez
 
 d="$(nuevo_repo umbralinvertido)"; commit_con_edad "$d" 90000 "x"
-comprueba "FORGOTTEN<=STALE se corrige y SE DICE" 1 "derivo FORGOTTEN" "$d" \
+comprueba "FORGOTTEN<=STALE is corrected and REPORTED" 1 "using FORGOTTEN" "$d" \
 	OLIVARES_WATCHDOG_STALE_SECS=100 OLIVARES_WATCHDOG_FORGOTTEN_SECS=50
 
 # ⛔ LA CLASE QUE FALTABA: una rama BORRADA en el servidor deja aquí su ref de seguimiento, y con
@@ -123,15 +123,15 @@ git -C "$d.remoto" update-ref -d refs/heads/rama
 # ⚠ EL ORDEN ES PARTE DEL CASO: `--prune` es PERSISTENTE. Si el positivo corriera primero
 # dejaría el fixture ya podado y el control negativo mediría el estado del anterior, no el suyo
 # — que es exactamente lo que hizo la primera versión de esta casilla.
-comprueba "la ref muerta falsea el respaldo a limpio (control negativo)" 0 "nada olvidado" "$d"
-comprueba "…y con fetch --prune la misma rama sale OLVIDADO" 1 "OLVIDADO" "$d" \
+comprueba "stale ref falsely reports work as backed up and clean (negative control)" 0 "nothing forgotten" "$d"
+comprueba "…and with fetch --prune the same branch is FORGOTTEN" 1 "FORGOTTEN" "$d" \
 	OLIVARES_WATCHDOG_NO_FETCH=0
 
 # Control positivo del guardián: el propio sandbox tiene que negarse a salir de $TMP.
 if ( sandbox "/etc" ) 2>/dev/null; then
-	echo "  FALLA el guardián de sandbox ACEPTÓ /etc"; falla=$((falla+1))
+	echo "  FAIL the sandbox guard ACCEPTED /etc"; falla=$((falla+1))
 else
-	echo "  ok   el guardián rechaza una ruta fuera del sandbox         rc=2"; pasa=$((pasa+1))
+	echo "  ok   the guard rejects a path outside the sandbox         rc=2"; pasa=$((pasa+1))
 fi
 
 echo "watchdog-unpublished-work: $pasa passed, $falla failed"

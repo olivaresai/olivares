@@ -49,14 +49,24 @@ func TestReconcileCoreDataRebindsPersistedSQLiteScope(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open raw sqlite: %v", err)
 	}
-	if _, err := raw.ExecContext(ctx,
+	defer raw.Close() //nolint:errcheck // closed before reopening below
+	tx, err := raw.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin legacy fixture: %v", err)
+	}
+	defer tx.Rollback() //nolint:errcheck // no-op after commit
+	if _, err := tx.ExecContext(ctx,
 		"UPDATE federation_configs SET alias = NULL WHERE id = ?", configID.String()); err != nil {
 		t.Fatalf("restore legacy NULL alias: %v", err)
 	}
+	untrackFederationDataMigration(t, ctx, tx)
 	businessPin := model.NewTenantID()
-	if _, err := raw.ExecContext(ctx,
+	if _, err := tx.ExecContext(ctx,
 		"UPDATE "+dialect.ScopeTenantTable+" SET tenant_id = ?", businessPin.String()); err != nil {
 		t.Fatalf("leave business scope pin: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit legacy fixture: %v", err)
 	}
 	if err := raw.Close(); err != nil {
 		t.Fatalf("close raw sqlite: %v", err)
@@ -67,6 +77,10 @@ func TestReconcileCoreDataRebindsPersistedSQLiteScope(t *testing.T) {
 		t.Fatalf("reopen with business scope pin: %v", err)
 	}
 	defer reopened.Close() //nolint:errcheck
+	dia, _ := dialect.New(store.EngineSQLite)
+	if alias := rawFederationAlias(t, ctx, reopened.(*sqlStore).db, dia, model.SystemTenantID, configID.String()); alias != model.DefaultFederationAlias {
+		t.Errorf("stored alias = %q, want default", alias)
+	}
 	if err := reopened.AuthView(ctx, func(as store.AuthScope) error {
 		got, getErr := as.FederationConfigs().Get(ctx, configID)
 		if getErr != nil {

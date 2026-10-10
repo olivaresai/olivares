@@ -7,6 +7,21 @@ physical deletes and visibility changes participate; presentation and no-op
 updates do not advance lineage. A transaction advances each affected relation
 once. Directory generations retain their separate, broader causal contract.
 
+## Guard editions
+
+The workspace guard has two editions, because a workspace's place in the
+organization tree (core v25 `parent_id` and `path`) is lineage once the resolver
+walks it (`store.WorkspaceLineage`). Edition 1 is the core v8 text and projects
+`slug`. Edition 2 projects `slug`, `parent_id` and `path`. Version 1 of
+`schema_migrations_lineage_guards` installs edition 1 and is never edited; version
+2 (`lineage_workspace_tree.go`) runs after core v25 has added the columns and moves
+the workspace guard to edition 2. The tracker names the edition: the boot preflight,
+the source-trigger census and the restore check verify that edition and no other, so
+an edition 1 guard under a version 2 record, or an altered edition 1 guard, is
+refused. SQLite drops and recreates the three triggers; PostgreSQL replaces the
+function in place and keeps its trigger, owner and ACL. A transaction that rewrites a
+subtree advances the workspace generation once.
+
 ## Writers and trust
 
 Business Mutate obtains a shared PostgreSQL L0 gate and an exclusive L1 for its

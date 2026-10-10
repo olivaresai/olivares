@@ -25,6 +25,19 @@ type auditReader struct {
 // OpenAuditReader performs catalog reads only. Normal serving admission and
 // migrations remain in Open; this handle cannot publish a runtime or a writer.
 func OpenAuditReader(ctx context.Context, cfg store.Config) (store.AuditReader, error) {
+	reader, err := openOfflineReader(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+	return reader, nil
+}
+
+// OpenAuthReader shares the offline pool's database identity and role checks.
+func OpenAuthReader(ctx context.Context, cfg store.Config) (*auditReader, error) {
+	return openOfflineReader(ctx, cfg)
+}
+
+func openOfflineReader(ctx context.Context, cfg store.Config) (*auditReader, error) {
 	dia, ok := dialect.New(cfg.Engine)
 	if !ok {
 		return nil, fmt.Errorf("sqlstore: unsupported engine %q", cfg.Engine)
@@ -58,7 +71,7 @@ func OpenAuditReader(ctx context.Context, cfg store.Config) (store.AuditReader, 
 	if err != nil {
 		return nil, err
 	}
-	fail := func(err error) (store.AuditReader, error) {
+	fail := func(err error) (*auditReader, error) {
 		_ = db.Close()
 		return nil, err
 	}
@@ -135,6 +148,11 @@ func auditDatabaseIdentity(ctx context.Context, db *sql.DB) (string, error) {
 }
 
 func (r *auditReader) Close() error { return r.db.Close() }
+
+func (r *auditReader) AuthView(ctx context.Context, fn func(store.AuthScope) error) error {
+	s := &sqlStore{engine: r.dia.Name(), db: r.db, dia: r.dia, clock: model.SystemClock{}}
+	return s.authView(ctx, fn, false)
+}
 
 func (r *auditReader) ViewAudit(ctx context.Context, tenant model.TenantID, fn func(store.AuditLog) error) error {
 	if tenant.IsZero() {

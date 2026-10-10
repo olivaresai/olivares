@@ -55,6 +55,8 @@
       "maxDuration": "最大セッション時間 (分)",
       "allowedTools": "許可ツール",
       "allowedToolsPlaceholder": "例: Bash,Read,Edit",
+      "requireTruncateProtection": "読み取り専用セッションでファイル切り詰めの防止を必須にする",
+      "truncateProtectionHint": "このテンプレートの読み取り専用セッションは、この保護を実施できない古いカーネルでは開始しません。",
       "recordIo": "I/Oを記録",
       "peersSameTemplate": "このテンプレートのセッション同士でメッセージを送れる"
     }

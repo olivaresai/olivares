@@ -251,6 +251,31 @@ export interface SessionsCommunicationCursorTokenResult {
   version: number;
 }
 
+export interface SessionsCommunicationDecisionRequestResponseBody {
+  blocker_work_item_id?: string;
+  response: SessionsCommunicationDecisionRequestResponseBodyResponse;
+  transition: string;
+}
+
+export interface SessionsCommunicationDecisionRequestResponseBodyResponse {
+  choice_key?: string;
+  reason: SessionsCommunicationReason;
+}
+
+export interface SessionsCommunicationDecisionRequestResponseResult {
+  audit_seq: number;
+  command_id: string;
+  etag: string;
+  event_id: string;
+  message_id: string;
+  request_id: string;
+  response_id: string;
+  state: string;
+  version: number;
+  work_decision_id?: string;
+  work_item_id: string;
+}
+
 export interface SessionsCommunicationDeliveryView {
   ack_due_at?: string | null;
   acknowledged_at?: string | null;
@@ -277,8 +302,10 @@ export interface SessionsCommunicationFulfillment {
 
 export interface SessionsCommunicationHandoffContent {
   artifact_refs?: SessionsCommunicationContentReference[];
+  branch?: string;
   next_action: string;
   risk?: string;
+  sha?: string;
   summary: string;
 }
 
@@ -498,6 +525,12 @@ export interface PostV1MSessionsChannelsByIDGrantsByGrantIDRevokeInput {
   if_match: string;
 }
 
+export interface PostV1MSessionsDecisionRequestsByIDResponsesInput {
+  body: SessionsCommunicationDecisionRequestResponseBody;
+  if_match: string;
+  idempotency_key: string;
+}
+
 export interface PostV1MSessionsDeliveriesByIDAckInput {
   if_match: string;
   idempotency_key: string;
@@ -575,6 +608,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /openapi.beta.json — The BETA module-route OpenAPI document (/v1/m/<ns>/…), reflected from the routes the modules register.
+   *
+   * Stability: stable.
+   */
+  getOpenapiBetaJson(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/openapi.beta.json", "/openapi.beta.json", undefined, opts);
+  }
+
+  /**
    * GET /openapi.json — This OpenAPI document.
    *
    * Stability: stable.
@@ -617,6 +659,87 @@ export class Client extends ClientCore {
    */
   getV1AccessEdges(opts?: RequestOptions): Promise<Json> {
     return this.do("GET", "/v1/access-edges", "/v1/access-edges", undefined, opts);
+  }
+
+  /**
+   * POST /v1/account/password — Change your password and revoke your other sign-ins; requires the current password and a human session.
+   *
+   * Stability: stable.
+   */
+  postV1AccountPassword(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/account/password", "/v1/account/password", body, opts);
+  }
+
+  /**
+   * GET /v1/agent-groups — List agent groups in the resolved tenant.
+   *
+   * Stability: stable.
+   */
+  getV1AgentGroups(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/agent-groups", "/v1/agent-groups", undefined, opts);
+  }
+
+  /**
+   * POST /v1/agent-groups — Create an agent group (name, slug and optional workspace scope)
+   *
+   * Stability: stable.
+   */
+  postV1AgentGroups(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/agent-groups", "/v1/agent-groups", body, opts);
+  }
+
+  /**
+   * GET /v1/agent-groups/{id} — Get an agent group by ID.
+   *
+   * Stability: stable.
+   */
+  getV1AgentGroupsById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/agent-groups/{id}", `/v1/agent-groups/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * PATCH /v1/agent-groups/{id} — Update an agent group; only fields present in the request are touched.
+   *
+   * Stability: stable.
+   */
+  patchV1AgentGroupsById(id: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PATCH", "/v1/agent-groups/{id}", `/v1/agent-groups/${encodeURIComponent(id)}`, body, opts);
+  }
+
+  /**
+   * DELETE /v1/agent-groups/{id} — Delete a group and its roster (the membership rows), never the member agents themselves.
+   *
+   * Stability: stable.
+   */
+  deleteV1AgentGroupsById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/agent-groups/{id}", `/v1/agent-groups/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/agent-groups/{id}/members — List the agents that are members of one group.
+   *
+   * Stability: stable.
+   */
+  getV1AgentGroupsByIdMembers(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/agent-groups/{id}/members", `/v1/agent-groups/${encodeURIComponent(id)}/members`, undefined, opts);
+  }
+
+  /**
+   * PUT /v1/agent-groups/{id}/members/{agentID} — Add an agent to a group. Idempotent: 200 with the existing row when already a member, 201 for a fresh add.
+   *
+   * Stability: stable.
+   */
+  putV1AgentGroupsByIdMembersByAgentid(id: string, agentid: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PUT", "/v1/agent-groups/{id}/members/{agentID}", `/v1/agent-groups/${encodeURIComponent(id)}/members/${encodeURIComponent(agentid)}`, body, opts);
+  }
+
+  /**
+   * DELETE /v1/agent-groups/{id}/members/{agentID} — Remove an agent from a group (404 when the agent is not a member)
+   *
+   * Stability: stable.
+   */
+  deleteV1AgentGroupsByIdMembersByAgentid(id: string, agentid: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/agent-groups/{id}/members/{agentID}", `/v1/agent-groups/${encodeURIComponent(id)}/members/${encodeURIComponent(agentid)}`, undefined, opts);
   }
 
   /**
@@ -746,6 +869,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/auth/effective-rights — One trustee's effective rights over one node: the subject, the node, the assurance the answer holds, the lineage path and each right's state. Needs authz:admin; answers 404 while the operator has the AuthZEN search surface disabled and 403 outside its permitted network.
+   *
+   * Stability: stable.
+   */
+  getV1AuthEffectiveRights(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/auth/effective-rights", "/v1/auth/effective-rights", undefined, opts);
+  }
+
+  /**
    * POST /v1/auth/login — Exchange email/password for a session token.
    *
    * Stability: stable.
@@ -761,6 +893,60 @@ export class Client extends ClientCore {
    */
   postV1AuthLogout(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
     return this.do("POST", "/v1/auth/logout", "/v1/auth/logout", body, opts);
+  }
+
+  /**
+   * POST /v1/auth/os-account-bindings — Start an OS-account binding under the current administrator's user authorization and configured step-up; direct TLS required.
+   *
+   * Stability: stable.
+   */
+  postV1AuthOsAccountBindings(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/auth/os-account-bindings", "/v1/auth/os-account-bindings", body, opts);
+  }
+
+  /**
+   * POST /v1/auth/os-account-bindings/complete — Complete from the subject's own session with fresh native PAM authentication and Account validation; direct TLS required. Returns public mapping metadata only.
+   *
+   * Stability: stable.
+   */
+  postV1AuthOsAccountBindingsComplete(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/auth/os-account-bindings/complete", "/v1/auth/os-account-bindings/complete", body, opts);
+  }
+
+  /**
+   * GET /v1/auth/os-account-bindings/{id} — Read administrative mapping metadata and its audit digest; direct TLS and current administrative step-up required.
+   *
+   * Stability: stable.
+   */
+  getV1AuthOsAccountBindingsById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/auth/os-account-bindings/{id}", `/v1/auth/os-account-bindings/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * DELETE /v1/auth/os-account-bindings/{id} — Revoke current authority while permanently retaining the immutable account/UID/subject reservation; direct TLS and current administrative step-up required.
+   *
+   * Stability: stable.
+   */
+  deleteV1AuthOsAccountBindingsById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/auth/os-account-bindings/{id}", `/v1/auth/os-account-bindings/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/auth/piv/elevate — Verify the presented PIV certificate (chain, OCSP, user binding) and elevate the calling session to AAL3 (method piv)
+   *
+   * Stability: stable.
+   */
+  postV1AuthPivElevate(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/auth/piv/elevate", "/v1/auth/piv/elevate", body, opts);
+  }
+
+  /**
+   * GET /v1/auth/piv/status — The calling session's presented PIV smart-card certificate status (501 when no PIV verifier roots are configured)
+   *
+   * Stability: stable.
+   */
+  getV1AuthPivStatus(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/auth/piv/status", "/v1/auth/piv/status", undefined, opts);
   }
 
   /**
@@ -854,6 +1040,69 @@ export class Client extends ClientCore {
   }
 
   /**
+   * POST /v1/auth/webauthn/authenticate — Verify the browser's assertion and elevate the calling session to AAL3.
+   *
+   * Stability: stable.
+   */
+  postV1AuthWebauthnAuthenticate(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/auth/webauthn/authenticate", "/v1/auth/webauthn/authenticate", body, opts);
+  }
+
+  /**
+   * POST /v1/auth/webauthn/authenticate/options — Issue WebAuthn assertion options (challenge) for a step-up of the calling session.
+   *
+   * Stability: stable.
+   */
+  postV1AuthWebauthnAuthenticateOptions(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/auth/webauthn/authenticate/options", "/v1/auth/webauthn/authenticate/options", body, opts);
+  }
+
+  /**
+   * GET /v1/auth/webauthn/credentials — The calling user's registered authenticators — id, label and registration time only, never key material.
+   *
+   * Stability: stable.
+   */
+  getV1AuthWebauthnCredentials(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/auth/webauthn/credentials", "/v1/auth/webauthn/credentials", undefined, opts);
+  }
+
+  /**
+   * PATCH /v1/auth/webauthn/credentials/{id} — Update the display name of one of the calling user's authenticators (owner-only, no step-up: a metadata change)
+   *
+   * Stability: stable.
+   */
+  patchV1AuthWebauthnCredentialsById(id: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PATCH", "/v1/auth/webauthn/credentials/{id}", `/v1/auth/webauthn/credentials/${encodeURIComponent(id)}`, body, opts);
+  }
+
+  /**
+   * DELETE /v1/auth/webauthn/credentials/{id} — Unregister one of the calling user's authenticators (lost/stolen-key remediation; step-up required)
+   *
+   * Stability: stable.
+   */
+  deleteV1AuthWebauthnCredentialsById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/auth/webauthn/credentials/{id}", `/v1/auth/webauthn/credentials/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/auth/webauthn/register — Verify the browser's attestation and persist the credential (403 on any ceremony failure, 409 on an already-registered credential id)
+   *
+   * Stability: stable.
+   */
+  postV1AuthWebauthnRegister(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/auth/webauthn/register", "/v1/auth/webauthn/register", body, opts);
+  }
+
+  /**
+   * POST /v1/auth/webauthn/register/options — Issue WebAuthn creation options (challenge) to register a new authenticator for the calling session's user.
+   *
+   * Stability: stable.
+   */
+  postV1AuthWebauthnRegisterOptions(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/auth/webauthn/register/options", "/v1/auth/webauthn/register/options", body, opts);
+  }
+
+  /**
    * GET /v1/auth/whoami — The calling principal and its tenant grants.
    *
    * Stability: stable.
@@ -869,6 +1118,33 @@ export class Client extends ClientCore {
    */
   getV1ConnectorsHealth(opts?: RequestOptions): Promise<Json> {
     return this.do("GET", "/v1/connectors/health", "/v1/connectors/health", undefined, opts);
+  }
+
+  /**
+   * GET /v1/console/activation — The edition's activation view: current edition and preset, each add-on's state and each preset's add-on keys.
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleActivation(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/console/activation", "/v1/console/activation", undefined, opts);
+  }
+
+  /**
+   * POST /v1/console/activation/apply — Enable or disable a preset, or promote one add-on (AAL3 step-up; 501 without the activation service)
+   *
+   * Stability: stable.
+   */
+  postV1ConsoleActivationApply(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/console/activation/apply", "/v1/console/activation/apply", body, opts);
+  }
+
+  /**
+   * POST /v1/console/activation/preview — Preview a preset change as a per-add-on diff (activate, stage, unchanged or console) without applying it.
+   *
+   * Stability: stable.
+   */
+  postV1ConsoleActivationPreview(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/console/activation/preview", "/v1/console/activation/preview", body, opts);
   }
 
   /**
@@ -926,6 +1202,123 @@ export class Client extends ClientCore {
   }
 
   /**
+   * POST /v1/console/dr/backup — Start an encrypted disaster-recovery backup and return its job id (501 without the DR service)
+   *
+   * Stability: stable.
+   */
+  postV1ConsoleDrBackup(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/console/dr/backup", "/v1/console/dr/backup", body, opts);
+  }
+
+  /**
+   * GET /v1/console/dr/backups — List the backup directory's .drbundle files, newest first, with each bundle's manifest summary.
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleDrBackups(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/console/dr/backups", "/v1/console/dr/backups", undefined, opts);
+  }
+
+  /**
+   * GET /v1/console/dr/backups/{id} — One backup's manifest and size by bundle id.
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleDrBackupsById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/console/dr/backups/{id}", `/v1/console/dr/backups/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * DELETE /v1/console/dr/backups/{id} — Delete one backup bundle by id.
+   *
+   * Stability: stable.
+   */
+  deleteV1ConsoleDrBackupsById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/console/dr/backups/{id}", `/v1/console/dr/backups/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/console/dr/backups/{id}/download — Download one backup bundle's verbatim bytes (.drbundle)
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleDrBackupsByIdDownload(id: string, opts?: RequestOptions): Promise<string> {
+    return this.doRaw("GET", "/v1/console/dr/backups/{id}/download", `/v1/console/dr/backups/${encodeURIComponent(id)}/download`, opts);
+  }
+
+  /**
+   * GET /v1/console/dr/jobs — The DR job list (backup and restore) with phase and progress.
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleDrJobs(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/console/dr/jobs", "/v1/console/dr/jobs", undefined, opts);
+  }
+
+  /**
+   * GET /v1/console/dr/jobs/{id}/stream — Server-Sent Events stream of one DR job's progress: event: job frames with the DRJob payload, heartbeats as comments, until the job completes or fails.
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleDrJobsByIdStream(id: string, opts?: RequestOptions): Promise<string> {
+    return this.doRaw("GET", "/v1/console/dr/jobs/{id}/stream", `/v1/console/dr/jobs/${encodeURIComponent(id)}/stream`, opts);
+  }
+
+  /**
+   * GET /v1/console/dr/restore/pending — Restore requests awaiting a second approver, newest first, so a distinct admin can find and approve one.
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleDrRestorePending(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/console/dr/restore/pending", "/v1/console/dr/restore/pending", undefined, opts);
+  }
+
+  /**
+   * POST /v1/console/dr/restore/upload — Upload a raw .drbundle file for restore pre-flight (the body is the file's verbatim bytes, at most 10 GiB); the manifest is inspected and returned with the upload id.
+   *
+   * Stability: stable.
+   */
+  postV1ConsoleDrRestoreUpload(body?: Uint8Array, opts?: RequestOptions): Promise<Json> {
+    return this.doReqRawWithType("POST", "/v1/console/dr/restore/upload", "/v1/console/dr/restore/upload", body, "application/octet-stream", opts);
+  }
+
+  /**
+   * POST /v1/console/dr/restore/{id}/apply — Apply an uploaded bundle: with the dual-control gate armed this records an intent for a second administrator to approve (request_id); otherwise it starts the restore job (job_id)
+   *
+   * Stability: stable.
+   */
+  postV1ConsoleDrRestoreByIdApply(id: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/console/dr/restore/{id}/apply", `/v1/console/dr/restore/${encodeURIComponent(id)}/apply`, body, opts);
+  }
+
+  /**
+   * POST /v1/console/dr/restore/{id}/approve — Approve a dual-control restore as a DISTINCT administrator account (403 when the requester self-approves)
+   *
+   * Stability: stable.
+   */
+  postV1ConsoleDrRestoreByIdApprove(id: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/console/dr/restore/{id}/approve", `/v1/console/dr/restore/${encodeURIComponent(id)}/approve`, body, opts);
+  }
+
+  /**
+   * GET /v1/console/dr/schedule — The scheduled-backup configuration and its last run's outcome.
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleDrSchedule(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/console/dr/schedule", "/v1/console/dr/schedule", undefined, opts);
+  }
+
+  /**
+   * PUT /v1/console/dr/schedule — Save the schedule (enabled, cron, retention); the dual-control restore gate's armed state is preserved, and server-owned bookkeeping fields are ignored.
+   *
+   * Stability: stable.
+   */
+  putV1ConsoleDrSchedule(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PUT", "/v1/console/dr/schedule", "/v1/console/dr/schedule", body, opts);
+  }
+
+  /**
    * GET /v1/console/health-summary — Operational health summary for the console dashboard.
    *
    * Stability: stable.
@@ -968,6 +1361,24 @@ export class Client extends ClientCore {
    */
   deleteV1ConsoleLicense(opts?: RequestOptions): Promise<Json> {
     return this.do("DELETE", "/v1/console/license", "/v1/console/license", undefined, opts);
+  }
+
+  /**
+   * GET /v1/console/logs/buffer — The engine log's ring-buffer snapshot, newest last, with the match total and whether older matches were left out.
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleLogsBuffer(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/console/logs/buffer", "/v1/console/logs/buffer", undefined, opts);
+  }
+
+  /**
+   * GET /v1/console/logs/stream — Server-Sent Events stream of the engine log: event: log frames with one entry's payload, heartbeats as comments; filtered by the same parameters as the buffer.
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleLogsStream(opts?: RequestOptions): Promise<string> {
+    return this.doRaw("GET", "/v1/console/logs/stream", "/v1/console/logs/stream", opts);
   }
 
   /**
@@ -1022,6 +1433,33 @@ export class Client extends ClientCore {
    */
   putV1ConsoleMcpGatewaySessionTools(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
     return this.do("PUT", "/v1/console/mcp-gateway/session-tools", "/v1/console/mcp-gateway/session-tools", body, opts);
+  }
+
+  /**
+   * GET /v1/console/modules — The module catalog and, for each module, whether it is selected, running, always-on, holds data, and who keeps it on.
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleModules(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/console/modules", "/v1/console/modules", undefined, opts);
+  }
+
+  /**
+   * PUT /v1/console/modules — Set which optional modules the engine runs; the engine restarts itself to apply the change (AAL3 step-up)
+   *
+   * Stability: stable.
+   */
+  putV1ConsoleModules(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PUT", "/v1/console/modules", "/v1/console/modules", body, opts);
+  }
+
+  /**
+   * POST /v1/console/runtime/reload — Reconcile the durable source roster against the running engine and re-resolve the license (AAL3 step-up); the report names what applied and what needs a restart.
+   *
+   * Stability: stable.
+   */
+  postV1ConsoleRuntimeReload(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/console/runtime/reload", "/v1/console/runtime/reload", body, opts);
   }
 
   /**
@@ -1088,6 +1526,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/console/sources/diff — A bounded content diff between two refs of one repository owned by a configured source (501 when no git-host diff reader is wired; 422 when the diff exceeds the read cap)
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleSourcesDiff(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/console/sources/diff", "/v1/console/sources/diff", undefined, opts);
+  }
+
+  /**
    * GET /v1/console/sso — Current SSO/IdP configuration.
    *
    * Stability: stable.
@@ -1112,6 +1559,132 @@ export class Client extends ClientCore {
    */
   deleteV1ConsoleSso(opts?: RequestOptions): Promise<Json> {
     return this.do("DELETE", "/v1/console/sso", "/v1/console/sso", undefined, opts);
+  }
+
+  /**
+   * GET /v1/console/sso/idps — List every IdP configured under the deployment-wide global scope, default first; no secrets, only hints.
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleSsoIdps(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/console/sso/idps", "/v1/console/sso/idps", undefined, opts);
+  }
+
+  /**
+   * GET /v1/console/sso/idps/{alias} — Get one additional IdP's configuration by alias.
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleSsoIdpsByAlias(alias: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/console/sso/idps/{alias}", `/v1/console/sso/idps/${encodeURIComponent(alias)}`, undefined, opts);
+  }
+
+  /**
+   * PUT /v1/console/sso/idps/{alias} — Create or update one additional IdP by alias (AAL3 step-up)
+   *
+   * Stability: stable.
+   */
+  putV1ConsoleSsoIdpsByAlias(alias: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PUT", "/v1/console/sso/idps/{alias}", `/v1/console/sso/idps/${encodeURIComponent(alias)}`, body, opts);
+  }
+
+  /**
+   * DELETE /v1/console/sso/idps/{alias} — Remove one additional IdP by alias (AAL3 step-up)
+   *
+   * Stability: stable.
+   */
+  deleteV1ConsoleSsoIdpsByAlias(alias: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/console/sso/idps/{alias}", `/v1/console/sso/idps/${encodeURIComponent(alias)}`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/console/sso/idps/{alias}/test — Validate a candidate additional-IdP config (OIDC discovery / SAML metadata fetch) without persisting it; 501 when no SSO provider service is wired.
+   *
+   * Stability: stable.
+   */
+  postV1ConsoleSsoIdpsByAliasTest(alias: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/console/sso/idps/{alias}/test", `/v1/console/sso/idps/${encodeURIComponent(alias)}/test`, body, opts);
+  }
+
+  /**
+   * GET /v1/console/sso/tenants/{tenant} — Get the tenant's primary SSO/IdP configuration.
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleSsoTenantsByTenant(tenant: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/console/sso/tenants/{tenant}", `/v1/console/sso/tenants/${encodeURIComponent(tenant)}`, undefined, opts);
+  }
+
+  /**
+   * PUT /v1/console/sso/tenants/{tenant} — Create or update the tenant's primary SSO/IdP configuration (AAL3 step-up)
+   *
+   * Stability: stable.
+   */
+  putV1ConsoleSsoTenantsByTenant(tenant: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PUT", "/v1/console/sso/tenants/{tenant}", `/v1/console/sso/tenants/${encodeURIComponent(tenant)}`, body, opts);
+  }
+
+  /**
+   * DELETE /v1/console/sso/tenants/{tenant} — Remove the tenant's primary SSO/IdP configuration (AAL3 step-up)
+   *
+   * Stability: stable.
+   */
+  deleteV1ConsoleSsoTenantsByTenant(tenant: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/console/sso/tenants/{tenant}", `/v1/console/sso/tenants/${encodeURIComponent(tenant)}`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/console/sso/tenants/{tenant}/idps — List every IdP configured under the tenant's scope, default first; no secrets, only hints.
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleSsoTenantsByTenantIdps(tenant: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/console/sso/tenants/{tenant}/idps", `/v1/console/sso/tenants/${encodeURIComponent(tenant)}/idps`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/console/sso/tenants/{tenant}/idps/{alias} — Get one of the tenant's additional IdPs by alias.
+   *
+   * Stability: stable.
+   */
+  getV1ConsoleSsoTenantsByTenantIdpsByAlias(tenant: string, alias: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/console/sso/tenants/{tenant}/idps/{alias}", `/v1/console/sso/tenants/${encodeURIComponent(tenant)}/idps/${encodeURIComponent(alias)}`, undefined, opts);
+  }
+
+  /**
+   * PUT /v1/console/sso/tenants/{tenant}/idps/{alias} — Create or update one of the tenant's additional IdPs by alias (AAL3 step-up)
+   *
+   * Stability: stable.
+   */
+  putV1ConsoleSsoTenantsByTenantIdpsByAlias(tenant: string, alias: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PUT", "/v1/console/sso/tenants/{tenant}/idps/{alias}", `/v1/console/sso/tenants/${encodeURIComponent(tenant)}/idps/${encodeURIComponent(alias)}`, body, opts);
+  }
+
+  /**
+   * DELETE /v1/console/sso/tenants/{tenant}/idps/{alias} — Remove one of the tenant's additional IdPs by alias (AAL3 step-up)
+   *
+   * Stability: stable.
+   */
+  deleteV1ConsoleSsoTenantsByTenantIdpsByAlias(tenant: string, alias: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/console/sso/tenants/{tenant}/idps/{alias}", `/v1/console/sso/tenants/${encodeURIComponent(tenant)}/idps/${encodeURIComponent(alias)}`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/console/sso/tenants/{tenant}/idps/{alias}/test — Validate a candidate tenant-scoped IdP config without persisting it; 501 when no SSO provider service is wired.
+   *
+   * Stability: stable.
+   */
+  postV1ConsoleSsoTenantsByTenantIdpsByAliasTest(tenant: string, alias: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/console/sso/tenants/{tenant}/idps/{alias}/test", `/v1/console/sso/tenants/${encodeURIComponent(tenant)}/idps/${encodeURIComponent(alias)}/test`, body, opts);
+  }
+
+  /**
+   * POST /v1/console/sso/tenants/{tenant}/test — Test the tenant's primary SSO/IdP connectivity (AAL3 step-up)
+   *
+   * Stability: stable.
+   */
+  postV1ConsoleSsoTenantsByTenantTest(tenant: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/console/sso/tenants/{tenant}/test", `/v1/console/sso/tenants/${encodeURIComponent(tenant)}/test`, body, opts);
   }
 
   /**
@@ -1142,6 +1715,78 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/groups — List the tenant's provisioned groups with their mapped roles and member counts — the operator's view of what the IdP pushed and what each group confers.
+   *
+   * Stability: stable.
+   */
+  getV1Groups(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/groups", "/v1/groups", undefined, opts);
+  }
+
+  /**
+   * PUT /v1/groups/{id}/parent — Nest (or, with an empty parent_id, un-nest) a group under another group of the same tenant; a member of the child is then also a member of the parent for authorization (409 on a cycle)
+   *
+   * Stability: stable.
+   */
+  putV1GroupsByIdParent(id: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PUT", "/v1/groups/{id}/parent", `/v1/groups/${encodeURIComponent(id)}/parent`, body, opts);
+  }
+
+  /**
+   * PUT /v1/groups/{id}/role — Set (or clear, with an empty role) the role a group's members are elevated to in the group's tenant; ceiling-checked against the caller's authority.
+   *
+   * Stability: stable.
+   */
+  putV1GroupsByIdRole(id: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PUT", "/v1/groups/{id}/role", `/v1/groups/${encodeURIComponent(id)}/role`, body, opts);
+  }
+
+  /**
+   * PUT /v1/groups/{id}/workspace — Place a user group in a workspace of the same tenant, or clear its place with an empty workspace_id; membership and authorization are unchanged.
+   *
+   * Stability: stable.
+   */
+  putV1GroupsByIdWorkspace(id: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PUT", "/v1/groups/{id}/workspace", `/v1/groups/${encodeURIComponent(id)}/workspace`, body, opts);
+  }
+
+  /**
+   * GET /v1/invites — List the tenant's pending (unaccepted, unexpired) invitations, without any token material.
+   *
+   * Stability: stable.
+   */
+  getV1Invites(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/invites", "/v1/invites", undefined, opts);
+  }
+
+  /**
+   * POST /v1/invites/accept — Redeem an invitation token: set the password, activate the account and mint a session (the single-use token is the gate; no authentication)
+   *
+   * Stability: stable.
+   */
+  postV1InvitesAccept(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/invites/accept", "/v1/invites/accept", body, opts);
+  }
+
+  /**
+   * DELETE /v1/invites/{id} — Delete a pending invitation.
+   *
+   * Stability: stable.
+   */
+  deleteV1InvitesById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/invites/{id}", `/v1/invites/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/invites/{id}/resend — Rotate a pending invitation's secret and mail the new link to the invitee (409 invite_delivery_unavailable without a mailer)
+   *
+   * Stability: stable.
+   */
+  postV1InvitesByIdResend(id: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/invites/{id}/resend", `/v1/invites/${encodeURIComponent(id)}/resend`, body, opts);
+  }
+
+  /**
    * GET /v1/members — List the resolved tenant's member roster (role, workspace scoping, groups)
    *
    * Stability: stable.
@@ -1157,6 +1802,15 @@ export class Client extends ClientCore {
    */
   postV1Memberships(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
     return this.do("POST", "/v1/memberships", "/v1/memberships", body, opts);
+  }
+
+  /**
+   * POST /v1/onboard — Create-or-reuse an account and grant its tenant membership (membership:write, AAL3 step-up; mode invite emails a single-use token)
+   *
+   * Stability: stable.
+   */
+  postV1Onboard(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/onboard", "/v1/onboard", body, opts);
   }
 
   /**
@@ -1241,7 +1895,25 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/tokens — List API tokens for the calling user.
+   * GET /v1/system/tracing — Read saved and effective tracing settings (superadmin)
+   *
+   * Stability: stable.
+   */
+  getV1SystemTracing(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/system/tracing", "/v1/system/tracing", undefined, opts);
+  }
+
+  /**
+   * PUT /v1/system/tracing — Save and apply tracing settings (superadmin, configured step-up)
+   *
+   * Stability: stable.
+   */
+  putV1SystemTracing(body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PUT", "/v1/system/tracing", "/v1/system/tracing", body, opts);
+  }
+
+  /**
+   * GET /v1/tokens — List API tokens visible to the caller.
    *
    * Stability: stable.
    */
@@ -1373,6 +2045,33 @@ export class Client extends ClientCore {
    */
   patchV1WorkspacesById(id: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
     return this.do("PATCH", "/v1/workspaces/{id}", `/v1/workspaces/${encodeURIComponent(id)}`, body, opts);
+  }
+
+  /**
+   * GET /v1/workspaces/{id}/contents — Every kind that declares workspace lineage, counted in the workspace and sorted by kind; a capped count is a floor (501 when the census is not wired)
+   *
+   * Stability: stable.
+   */
+  getV1WorkspacesByIdContents(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/workspaces/{id}/contents", `/v1/workspaces/${encodeURIComponent(id)}/contents`, undefined, opts);
+  }
+
+  /**
+   * PUT /v1/workspaces/{id}/parent — Place a workspace (a department) under another workspace of the same tenant, or make it a root with an empty parent_id; the subtree moves with it (owner, AAL3 step-up)
+   *
+   * Stability: stable.
+   */
+  putV1WorkspacesByIdParent(id: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("PUT", "/v1/workspaces/{id}/parent", `/v1/workspaces/${encodeURIComponent(id)}/parent`, body, opts);
+  }
+
+  /**
+   * GET /v1/workspaces/{id}/summary — A workspace with counts of its scoped entities; a *_capped count is a FLOOR (at least N), never a total.
+   *
+   * Stability: stable.
+   */
+  getV1WorkspacesByIdSummary(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/workspaces/{id}/summary", `/v1/workspaces/${encodeURIComponent(id)}/summary`, undefined, opts);
   }
 
   /**
@@ -1574,7 +2273,16 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/agenttools/sign-in — Reports what an installed Claude Code, Codex or Grok Build says about its own login on this node: installed, signed in, and with which account.
+   * GET /v1/m/agenttools/providers — Reports one snapshot per tool instance on this node.
+   *
+   * Stability: beta.
+   */
+  getV1MAgenttoolsProviders(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/agenttools/providers", "/v1/m/agenttools/providers", undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/agenttools/sign-in — Reports the tool's native login status and the active flow for this selection, so a reloaded page can continue polling the same flow.
    *
    * Stability: beta.
    */
@@ -2816,6 +3524,24 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/consoleviews/ui-state — Returns the caller's own console interface state; stored is false when none was saved yet.
+   *
+   * Stability: beta.
+   */
+  getV1MConsoleviewsUiState(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/consoleviews/ui-state", "/v1/m/consoleviews/ui-state", undefined, opts);
+  }
+
+  /**
+   * PUT /v1/m/consoleviews/ui-state — Replaces the caller's console interface state.
+   *
+   * Stability: beta.
+   */
+  putV1MConsoleviewsUiState(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("PUT", "/v1/m/consoleviews/ui-state", "/v1/m/consoleviews/ui-state", body, opts);
+  }
+
+  /**
    * GET /v1/m/consoleviews/views — Returns the caller's own views plus the tenant's shared views, optionally scoped with ?feature_id=.
    *
    * Stability: beta.
@@ -2957,6 +3683,42 @@ export class Client extends ClientCore {
    */
   postV1MDeployDefinitionsByIdVerify(id: string, opts?: RequestOptions): Promise<Json> {
     return this.do("POST", "/v1/m/deploy/definitions/{id}/verify", `/v1/m/deploy/definitions/${encodeURIComponent(id)}/verify`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/deploy/executor — Reports whether a runtime executor is configured, which plan, verify, apply and retire need to reach infrastructure.
+   *
+   * Stability: beta.
+   */
+  getV1MDeployExecutor(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/deploy/executor", "/v1/m/deploy/executor", undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/deploy/executor/config — deploy module route (requires deploy:deployment:admin)
+   *
+   * Stability: beta.
+   */
+  getV1MDeployExecutorConfig(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/deploy/executor/config", "/v1/m/deploy/executor/config", undefined, opts);
+  }
+
+  /**
+   * PUT /v1/m/deploy/executor/config — deploy module route (requires deploy:deployment:admin)
+   *
+   * Stability: beta.
+   */
+  putV1MDeployExecutorConfig(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("PUT", "/v1/m/deploy/executor/config", "/v1/m/deploy/executor/config", body, opts);
+  }
+
+  /**
+   * POST /v1/m/deploy/executor/test — deploy module route (requires deploy:deployment:admin)
+   *
+   * Stability: beta.
+   */
+  postV1MDeployExecutorTest(opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/m/deploy/executor/test", "/v1/m/deploy/executor/test", undefined, opts);
   }
 
   /**
@@ -3410,7 +4172,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/finops/analytics/team-summary — Returns team-level cost aggregation with project/model breakdown and a per-calendar-day trend series for a fixed period (7d/30d/90d).
+   * GET /v1/m/finops/analytics/team-summary — finops module route (requires finops:spend:read)
    *
    * Stability: beta.
    */
@@ -3473,7 +4235,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/finops/comparison — Serves GET /comparison — the model cost comparison endpoint.
+   * GET /v1/m/finops/comparison — finops module route (requires finops:spend:read)
    *
    * Stability: beta.
    */
@@ -3572,7 +4334,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/finops/model-rates — Lists rate catalog entries with optional provider/model filters, sorted by effective_from descending (most recent first).
+   * GET /v1/m/finops/model-rates — finops module route (requires finops:spend:read)
    *
    * Stability: beta.
    */
@@ -3581,7 +4343,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/finops/model-rates — Creates a new rate catalog entry after validating input and checking uniqueness of the (provider, model, effective_from) tuple.
+   * POST /v1/m/finops/model-rates — finops module route (requires finops:budget:write)
    *
    * Stability: beta.
    */
@@ -3590,7 +4352,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/finops/model-rates/{id} — Returns a single rate catalog entry by ID.
+   * GET /v1/m/finops/model-rates/{id} — finops module route (requires finops:spend:read)
    *
    * Stability: beta.
    */
@@ -3599,7 +4361,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * PUT /v1/m/finops/model-rates/{id} — Replaces a rate catalog entry by ID.
+   * PUT /v1/m/finops/model-rates/{id} — finops module route (requires finops:budget:write)
    *
    * Stability: beta.
    */
@@ -3608,7 +4370,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * DELETE /v1/m/finops/model-rates/{id} — Removes a rate catalog entry by ID.
+   * DELETE /v1/m/finops/model-rates/{id} — finops module route (requires finops:budget:write)
    *
    * Stability: beta.
    */
@@ -3617,7 +4379,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/finops/outcomes — Lists graded outcomes, optionally filtered by subject.
+   * GET /v1/m/finops/outcomes — finops module route (requires finops:spend:read)
    *
    * Stability: beta.
    */
@@ -3626,7 +4388,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/finops/outcomes — Ingests one graded outcome over HTTP (the operator/automation bridge), auditing the principal's privileged write atomically with its effect.
+   * POST /v1/m/finops/outcomes — finops module route (requires finops:outcomes:write)
    *
    * Stability: beta.
    */
@@ -3644,7 +4406,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/finops/seats — Upserts one provider/day seat snapshot (202 Accepted: a re-posted day replaces its values — a snapshot, never additive).
+   * POST /v1/m/finops/seats — finops module route (requires finops:seats:write)
    *
    * Stability: beta.
    */
@@ -3653,7 +4415,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/finops/seats/utilization — Joins the seat denominators with the per-day distinct active actors for a provider over an inclusive [from, to] day range.
+   * GET /v1/m/finops/seats/utilization — finops module route (requires finops:spend:read)
    *
    * Stability: beta.
    */
@@ -3761,7 +4523,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/finops/value — Serves the cost-per-outcome breakdown by ?dimension (agent|identity| session, default agent) over the standard since/until window.
+   * GET /v1/m/finops/value — finops module route (requires finops:spend:read)
    *
    * Stability: beta.
    */
@@ -3770,7 +4532,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/finops/value/summary — Serves the CFO panel (totals + cancellation-risk list).
+   * GET /v1/m/finops/value/summary — finops module route (requires finops:spend:read)
    *
    * Stability: beta.
    */
@@ -3869,7 +4631,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/gitpublish/targets/{id}/merges — Merges one pull request only while its head is still the reviewed expected_head, and returns the publication intent with the merge commit and tree it recorded.
+   * POST /v1/m/gitpublish/targets/{id}/merges — gitpublish module route (requires gitpublish:merge:admin)
    *
    * Stability: beta.
    */
@@ -3878,7 +4640,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/gitpublish/targets/{id}/pull-requests — Opens a pull request from a branch under the target's push prefix into an allowed merge base, or adopts the matching open one, and returns the publication intent with its receipt.
+   * POST /v1/m/gitpublish/targets/{id}/pull-requests — gitpublish module route (requires gitpublish:pull_request:write)
    *
    * Stability: beta.
    */
@@ -3887,7 +4649,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/gitpublish/targets/{id}/pushes — Pushes one exact commit to a branch under the target's push prefix, leased on the branch's expected current value, and returns the publication intent with its receipt.
+   * POST /v1/m/gitpublish/targets/{id}/pushes — gitpublish module route (requires gitpublish:push:write)
    *
    * Stability: beta.
    */
@@ -4067,7 +4829,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/governance/breakglass — Lists grants, optionally filtered by stored status; a grant past its expiry reads as "expired" in its DTO regardless.
+   * GET /v1/m/governance/breakglass — governance module route (requires governance:breakglass:read)
    *
    * Stability: beta.
    */
@@ -4076,7 +4838,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/governance/breakglass — Opens an emergency window.
+   * POST /v1/m/governance/breakglass — governance module route (requires governance:breakglass:admin)
    *
    * Stability: beta.
    */
@@ -4094,7 +4856,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/governance/breakglass/{id} — Returns one grant with its effective status.
+   * GET /v1/m/governance/breakglass/{id} — governance module route (requires governance:breakglass:read)
    *
    * Stability: beta.
    */
@@ -4103,7 +4865,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/governance/breakglass/{id}/review — Records the FORCED post-review of a terminal grant.
+   * POST /v1/m/governance/breakglass/{id}/review — governance module route (requires governance:breakglass:admin)
    *
    * Stability: beta.
    */
@@ -4112,7 +4874,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/governance/breakglass/{id}/revoke — Closes an active grant early.
+   * POST /v1/m/governance/breakglass/{id}/revoke — governance module route (requires governance:breakglass:admin)
    *
    * Stability: beta.
    */
@@ -4121,7 +4883,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/governance/breakglass/{id}/uses — Returns the immutable use trail for a grant — what actually proceeded under the emergency window (the post-review's evidence).
+   * GET /v1/m/governance/breakglass/{id}/uses — governance module route (requires governance:breakglass:read)
    *
    * Stability: beta.
    */
@@ -4400,6 +5162,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * DELETE /v1/m/governance/pdp/active — Selects a fixed empty authored Cedar policy; it cannot accept replacement source or reactivate history.
+   *
+   * Stability: beta.
+   */
+  deleteV1MGovernancePdpActive(opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/m/governance/pdp/active", "/v1/m/governance/pdp/active", undefined, opts);
+  }
+
+  /**
    * POST /v1/m/governance/pdp/dry-run — governance module route (requires governance:policy:read)
    *
    * Stability: beta.
@@ -4418,7 +5189,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/governance/pdp/publish — Persists a versioned Cedar/OPA policy and, for Cedar, ACTIVATES it on the live hot path (recomposes the per-tenant overlay).
+   * POST /v1/m/governance/pdp/publish — Publishes and selects an authored policy revision.
    *
    * Stability: beta.
    */
@@ -4427,7 +5198,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/governance/pdp/rollback — Re-activates an existing immutable revision by appending an activation record.
+   * POST /v1/m/governance/pdp/rollback — Selects a prior immutable policy revision.
    *
    * Stability: beta.
    */
@@ -4568,6 +5339,42 @@ export class Client extends ClientCore {
    */
   deleteV1MGovernanceRbacGrantsById(id: string, opts?: RequestOptions): Promise<Json> {
     return this.do("DELETE", "/v1/m/governance/rbac/grants/{id}", `/v1/m/governance/rbac/grants/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/governance/rbac/inheritance-filters — governance module route (requires governance:rbac:read)
+   *
+   * Stability: beta.
+   */
+  getV1MGovernanceRbacInheritanceFilters(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/governance/rbac/inheritance-filters", "/v1/m/governance/rbac/inheritance-filters", undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/governance/rbac/inheritance-filters — governance module route (requires governance:rbac:admin)
+   *
+   * Stability: beta.
+   */
+  postV1MGovernanceRbacInheritanceFilters(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/governance/rbac/inheritance-filters", "/v1/m/governance/rbac/inheritance-filters", body, opts);
+  }
+
+  /**
+   * GET /v1/m/governance/rbac/inheritance-filters/{id} — governance module route (requires governance:rbac:read)
+   *
+   * Stability: beta.
+   */
+  getV1MGovernanceRbacInheritanceFiltersById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/governance/rbac/inheritance-filters/{id}", `/v1/m/governance/rbac/inheritance-filters/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * DELETE /v1/m/governance/rbac/inheritance-filters/{id} — governance module route (requires governance:rbac:admin)
+   *
+   * Stability: beta.
+   */
+  deleteV1MGovernanceRbacInheritanceFiltersById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/m/governance/rbac/inheritance-filters/{id}", `/v1/m/governance/rbac/inheritance-filters/${encodeURIComponent(id)}`, undefined, opts);
   }
 
   /**
@@ -5570,6 +6377,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * GET /v1/m/models/availability — Lists the tenant's observed model IDs and discovery states for configured providers and tool accounts without triggering discovery.
+   *
+   * Stability: beta.
+   */
+  getV1MModelsAvailability(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/models/availability", "/v1/m/models/availability", undefined, opts);
+  }
+
+  /**
    * GET /v1/m/models/catalog — Returns the declared reference catalog.
    *
    * Stability: beta.
@@ -6236,7 +7052,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/observability/traces/{id}/export — Exports one trace as OTLP-compatible JSON so the operator can import it into Jaeger, Grafana Tempo, Datadog, or any OTLP-aware tool.
+   * GET /v1/m/observability/traces/{id}/export — observability module route (requires observability:traces:read)
    *
    * Stability: beta.
    */
@@ -6245,7 +7061,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/orchestration/decisions — Lists the whole append-only fire/miss ledger for the tenant.
+   * GET /v1/m/orchestration/decisions — orchestration module route (requires orchestration:schedule:read)
    *
    * Stability: beta.
    */
@@ -6254,7 +7070,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/orchestration/flows — Returns the derived multi-agent flows (a supervisor and the workers it delegates to) with a read-time-derived lifecycle state — a privileged, self-audited read.
+   * GET /v1/m/orchestration/flows — orchestration module route (requires orchestration:graph:read)
    *
    * Stability: beta.
    */
@@ -6263,7 +7079,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/orchestration/graph — Returns the React-Flow communication/delegation graph, derived from the relation table, with honest coverage.
+   * GET /v1/m/orchestration/graph — orchestration module route (requires orchestration:graph:read)
    *
    * Stability: beta.
    */
@@ -6272,7 +7088,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/orchestration/graph/neighbors — Returns the subgraph around one node (its incoming and/or outgoing relations) — a privileged, self-audited read.
+   * GET /v1/m/orchestration/graph/neighbors — orchestration module route (requires orchestration:graph:read)
    *
    * Stability: beta.
    */
@@ -6281,7 +7097,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/orchestration/schedules — Lists governed schedules.
+   * GET /v1/m/orchestration/schedules — orchestration module route (requires orchestration:schedule:read)
    *
    * Stability: beta.
    */
@@ -6290,7 +7106,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/orchestration/schedules — Declares a governed schedule (write-tier, self-audited).
+   * POST /v1/m/orchestration/schedules — orchestration module route (requires orchestration:schedule:write)
    *
    * Stability: beta.
    */
@@ -6299,7 +7115,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/orchestration/schedules/{id} — Returns one schedule with its derived health and last observed activity.
+   * GET /v1/m/orchestration/schedules/{id} — orchestration module route (requires orchestration:schedule:read)
    *
    * Stability: beta.
    */
@@ -6308,7 +7124,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * PATCH /v1/m/orchestration/schedules/{id} — Enables/disables/retargets a schedule (write-tier, self-audited).
+   * PATCH /v1/m/orchestration/schedules/{id} — orchestration module route (requires orchestration:schedule:write)
    *
    * Stability: beta.
    */
@@ -6317,7 +7133,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/orchestration/schedules/{id}/decisions — Lists the append-only fire/miss ledger for one schedule.
+   * GET /v1/m/orchestration/schedules/{id}/decisions — orchestration module route (requires orchestration:schedule:read)
    *
    * Stability: beta.
    */
@@ -6335,7 +7151,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/orchestration/schedules/{id}/restore — Re-applies the mutable shape of an earlier revision via the patch verb's exact application path (same validation, same cadence-miss clearing, same plan_hash consequence).
+   * POST /v1/m/orchestration/schedules/{id}/restore — orchestration module route (requires orchestration:schedule:write)
    *
    * Stability: beta.
    */
@@ -6344,7 +7160,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/orchestration/schedules/{id}/revisions — Lists a schedule's revision ledger, keyset-paginated by the time-ordered row id (chronological by ingestion, the decision-ledger convention).
+   * GET /v1/m/orchestration/schedules/{id}/revisions — orchestration module route (requires orchestration:schedule:read)
    *
    * Stability: beta.
    */
@@ -6353,7 +7169,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/orchestration/stream — Serves the live comm graph as server-sent events, pinned to the request's single authorized tenant so a client only ever sees its own tenant's relations.
+   * GET /v1/m/orchestration/stream — orchestration module route (requires orchestration:graph:read)
    *
    * Stability: beta.
    */
@@ -6362,7 +7178,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/orchestration/timeline — Returns one subject's merged orchestration history (its delegation activity and its fire/miss decisions) in reverse-chronological order — a privileged, self-audited read.
+   * GET /v1/m/orchestration/timeline — orchestration module route (requires orchestration:graph:read)
    *
    * Stability: beta.
    */
@@ -6371,7 +7187,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/orchestration/workflows — Lists the tenant's workflows (list shape, no graphs).
+   * GET /v1/m/orchestration/workflows — orchestration module route (requires orchestration:workflow:read)
    *
    * Stability: beta.
    */
@@ -6380,7 +7196,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/orchestration/workflows — Declares a workflow (write-tier, self-audited, revisioned).
+   * POST /v1/m/orchestration/workflows — orchestration module route (requires orchestration:workflow:write)
    *
    * Stability: beta.
    */
@@ -6389,7 +7205,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/orchestration/workflows/{id} — Returns one workflow with its full canonical graph.
+   * GET /v1/m/orchestration/workflows/{id} — orchestration module route (requires orchestration:workflow:read)
    *
    * Stability: beta.
    */
@@ -6398,7 +7214,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * PATCH /v1/m/orchestration/workflows/{id} — Updates description/enabled (write-tier, revisioned).
+   * PATCH /v1/m/orchestration/workflows/{id} — orchestration module route (requires orchestration:workflow:write)
    *
    * Stability: beta.
    */
@@ -6407,7 +7223,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/orchestration/workflows/{id}/dry-run — Computes the execution plan for a workflow as declared, with ZERO effects (read-tier).
+   * POST /v1/m/orchestration/workflows/{id}/dry-run — orchestration module route (requires orchestration:workflow:read)
    *
    * Stability: beta.
    */
@@ -6416,7 +7232,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/orchestration/workflows/{id}/restore — Re-applies the MUTABLE shape of an earlier revision — description, enabled, steps — through the exact same validation as the live verbs (the restore rule).
+   * POST /v1/m/orchestration/workflows/{id}/restore — orchestration module route (requires orchestration:workflow:write)
    *
    * Stability: beta.
    */
@@ -6425,7 +7241,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/orchestration/workflows/{id}/revisions — Lists a workflow's append-only revision ledger.
+   * GET /v1/m/orchestration/workflows/{id}/revisions — orchestration module route (requires orchestration:workflow:read)
    *
    * Stability: beta.
    */
@@ -6443,7 +7259,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/orchestration/workflows/{id}/runs — Lists a workflow's runs, newest-first pagination by id.
+   * GET /v1/m/orchestration/workflows/{id}/runs — orchestration module route (requires orchestration:workflow:read)
    *
    * Stability: beta.
    */
@@ -6452,7 +7268,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/orchestration/workflows/{id}/runs/{run} — Returns one run's timeline.
+   * GET /v1/m/orchestration/workflows/{id}/runs/{run} — orchestration module route (requires orchestration:workflow:read)
    *
    * Stability: beta.
    */
@@ -6461,7 +7277,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/orchestration/workflows/{id}/runs/{run}/reauthorize — Continues a run paused for reauthentication: it binds the caller's own fresh credential as the run's successor binding and resumes the paused steps.
+   * POST /v1/m/orchestration/workflows/{id}/runs/{run}/reauthorize — orchestration module route (requires orchestration:workflow:admin)
    *
    * Stability: beta.
    */
@@ -6470,7 +7286,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * PUT /v1/m/orchestration/workflows/{id}/steps — Replaces the whole step graph atomically (write-tier, revisioned).
+   * PUT /v1/m/orchestration/workflows/{id}/steps — orchestration module route (requires orchestration:workflow:write)
    *
    * Stability: beta.
    */
@@ -6479,7 +7295,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/posture/export — Assembles the posture projection inside ONE audited tenant scope and returns it.
+   * GET /v1/m/posture/export — posture module route (requires posture:export:read)
    *
    * Stability: beta.
    */
@@ -6605,7 +7421,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/redteam/catalog — Returns the battery taxonomy (metadata + OWASP/ATLAS coverage).
+   * GET /v1/m/redteam/catalog — redteam module route (requires redteam:run:read)
    *
    * Stability: beta.
    */
@@ -6614,7 +7430,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/redteam/runs — Lists the tenant's red-team runs (newest selectable by target).
+   * GET /v1/m/redteam/runs — redteam module route (requires redteam:run:read)
    *
    * Stability: beta.
    */
@@ -6623,7 +7439,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/redteam/runs — Runs a battery against an AUTHORIZED target and records the scorecard.
+   * POST /v1/m/redteam/runs — redteam module route (requires redteam:scan:admin)
    *
    * Stability: beta.
    */
@@ -6632,7 +7448,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/redteam/runs/{id} — Returns one run with its per-family breakdown recomputed from the stored result rows (the run row holds the aggregates; the breakdown is derived).
+   * GET /v1/m/redteam/runs/{id} — redteam module route (requires redteam:run:read)
    *
    * Stability: beta.
    */
@@ -6641,7 +7457,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/redteam/runs/{id}/results — Lists one run's per-probe results.
+   * GET /v1/m/redteam/runs/{id}/results — redteam module route (requires redteam:run:read)
    *
    * Stability: beta.
    */
@@ -6650,7 +7466,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/redteam/targets — Lists the tenant's registered targets.
+   * GET /v1/m/redteam/targets — redteam module route (requires redteam:target:read)
    *
    * Stability: beta.
    */
@@ -6659,7 +7475,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/redteam/targets — Registers a client-governed agent as a candidate target.
+   * POST /v1/m/redteam/targets — redteam module route (requires redteam:target:admin)
    *
    * Stability: beta.
    */
@@ -6668,7 +7484,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/redteam/targets/{id} — Returns one target.
+   * GET /v1/m/redteam/targets/{id} — redteam module route (requires redteam:target:read)
    *
    * Stability: beta.
    */
@@ -6677,7 +7493,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * POST /v1/m/redteam/targets/{id}/authorize — Grants or revokes CONSENT to red-team a target.
+   * POST /v1/m/redteam/targets/{id}/authorize — redteam module route (requires redteam:target:admin)
    *
    * Stability: beta.
    */
@@ -6956,6 +7772,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * POST /v1/m/sandbox/synthetic-data — Generates bounded local template samples for scenario steps and audits only their count, without storing inputs or making network requests.
+   *
+   * Stability: beta.
+   */
+  postV1MSandboxSyntheticData(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sandbox/synthetic-data", "/v1/m/sandbox/synthetic-data", body, opts);
+  }
+
+  /**
    * GET /v1/m/security/anomalies — Computes the tenant's prioritized anomalies on demand: the permitted-vs-observed drift (consumed via the store, not recomputed), egress/exfil-relevant drift labeled from the resource, and the correlated/high security findings (incl. the joined anti_evasion mark).
    *
    * Stability: beta.
@@ -7001,7 +7826,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/security/cases/{id}/export — Exports a case's relevant ledger events in a SIEM format (every format audit.Formats() lists), re-verifiable offline.
+   * GET /v1/m/security/cases/{id}/export — security module route (requires security:case:read)
    *
    * Stability: beta.
    */
@@ -7215,6 +8040,19 @@ export class Client extends ClientCore {
     headers["If-Match"] = input.if_match;
     const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };
     return this.do("POST", "/v1/m/sessions/channels/{id}/grants/{grant_id}/revoke", `/v1/m/sessions/channels/${encodeURIComponent(id)}/grants/${encodeURIComponent(grant_id)}/revoke`, undefined, callOpts) as unknown as Promise<SessionsCommunicationChannelMutationResult>;
+  }
+
+  /**
+   * POST /v1/m/sessions/decision-requests/{id}/responses — Resolves or dismisses a decision request with current authority.
+   * Stability: beta.
+   */
+  postV1MSessionsDecisionRequestsByIdResponses(id: string, input: PostV1MSessionsDecisionRequestsByIDResponsesInput, opts?: RequestOptions): Promise<SessionsCommunicationDecisionRequestResponseResult> {
+    const query: Record<string, string> = {};
+    const headers: Record<string, string> = {};
+    headers["If-Match"] = input.if_match;
+    headers["Idempotency-Key"] = input.idempotency_key;
+    const callOpts: RequestOptions = { ...opts, query: { ...(opts?.query ?? {}), ...query }, headers: { ...(opts?.headers ?? {}), ...headers } };
+    return this.doJsonRequired("POST", "/v1/m/sessions/decision-requests/{id}/responses", `/v1/m/sessions/decision-requests/${encodeURIComponent(id)}/responses`, input.body as unknown as JsonInput, callOpts) as unknown as Promise<SessionsCommunicationDecisionRequestResponseResult>;
   }
 
   /**
@@ -7541,7 +8379,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * PATCH /v1/m/sessions/provider-accounts/{ref} — Edits the display name and/or color without changing the account's stable name, reference, home or launch configuration; an empty string clears that field.
+   * PATCH /v1/m/sessions/provider-accounts/{ref} — Edits the account's name, display label and/or color; a rename changes only the name, never the reference, home or launch configuration, and an empty display label or color clears that field.
    *
    * Stability: beta.
    */
@@ -7574,6 +8412,15 @@ export class Client extends ClientCore {
    */
   postV1MSessionsProviderProfiles(body: JsonInput, opts?: RequestOptions): Promise<Json> {
     return this.doJsonRequired("POST", "/v1/m/sessions/provider-profiles", "/v1/m/sessions/provider-profiles", body, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/provider-profiles/readiness — Answers whether a new session can start on each tool now: what it would run on (its own login, or a key or local model from Providers), or a stable code and the one sentence that says why not (not installed, nothing to run on, a refused key, an unreadable sign-in); it creates nothing.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsProviderProfilesReadiness(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/provider-profiles/readiness", "/v1/m/sessions/provider-profiles/readiness", undefined, opts);
   }
 
   /**
@@ -7793,7 +8640,7 @@ export class Client extends ClientCore {
   }
 
   /**
-   * GET /v1/m/sessions/runs/{ref}/changes/file — Returns the current text of one file in the run's folder (?path=, relative to the folder; at most 256 KiB).
+   * GET /v1/m/sessions/runs/{ref}/changes/file — Returns the current text of one file in the run's folder, or with rev=HEAD the text git HEAD holds for it (?path=, relative to the folder; at most 256 KiB; 404 when the folder has no readable git history or HEAD has no such file).
    *
    * Stability: beta.
    */
@@ -7802,12 +8649,38 @@ export class Client extends ClientCore {
   }
 
   /**
+   * POST /v1/m/sessions/runs/{ref}/cleanup without a request body.
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefCleanup(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.postV1MSessionsRunsByRefCleanupWithBody(ref, undefined, opts);
+  }
+
+  /**
    * POST /v1/m/sessions/runs/{ref}/cleanup — sessions module route (requires sessions:run:admin)
    *
    * Stability: beta.
    */
-  postV1MSessionsRunsByRefCleanup(ref: string, opts?: RequestOptions): Promise<Json> {
-    return this.do("POST", "/v1/m/sessions/runs/{ref}/cleanup", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/cleanup`, undefined, opts);
+  postV1MSessionsRunsByRefCleanupWithBody(ref: string, body?: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.do("POST", "/v1/m/sessions/runs/{ref}/cleanup", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/cleanup`, body, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/runs/{ref}/diff — Lists the paths the run's worktree branch changed since it left the workspace's current commit.
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsRunsByRefDiff(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/runs/{ref}/diff", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/diff`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/runs/{ref}/diff/file — Returns one path of the run's worktree branch at the base and at the branch tip (?path=, relative to the repository's top folder; each side keeps the workspace's read limit and the 64 KiB Git output cap).
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsRunsByRefDiffFile(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/runs/{ref}/diff/file", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/diff/file`, undefined, opts);
   }
 
   /**
@@ -7817,6 +8690,51 @@ export class Client extends ClientCore {
    */
   getV1MSessionsRunsByRefEvents(ref: string, opts?: RequestOptions): Promise<Json> {
     return this.do("GET", "/v1/m/sessions/runs/{ref}/events", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/events`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/runs/{ref}/git — sessions module route (requires sessions:run:read)
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsRunsByRefGit(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/runs/{ref}/git", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/git`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/runs/{ref}/git/branch — sessions module route (requires sessions:run:write)
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefGitBranch(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/runs/{ref}/git/branch", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/git/branch`, body, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/runs/{ref}/git/commit — sessions module route (requires sessions:run:write)
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefGitCommit(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/runs/{ref}/git/commit", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/git/commit`, body, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/runs/{ref}/git/stage — sessions module route (requires sessions:run:write)
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefGitStage(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/runs/{ref}/git/stage", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/git/stage`, body, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/runs/{ref}/git/unstage — sessions module route (requires sessions:run:write)
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefGitUnstage(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/runs/{ref}/git/unstage", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/git/unstage`, body, opts);
   }
 
   /**
@@ -7844,6 +8762,24 @@ export class Client extends ClientCore {
    */
   putV1MSessionsRunsByRefPeers(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
     return this.doJsonRequired("PUT", "/v1/m/sessions/runs/{ref}/peers", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/peers`, body, opts);
+  }
+
+  /**
+   * GET /v1/m/sessions/runs/{ref}/preview — sessions module route (requires sessions:run:read)
+   *
+   * Stability: beta.
+   */
+  getV1MSessionsRunsByRefPreview(ref: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/sessions/runs/{ref}/preview", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/preview`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/sessions/runs/{ref}/preview — sessions module route (requires sessions:run:write)
+   *
+   * Stability: beta.
+   */
+  postV1MSessionsRunsByRefPreview(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/sessions/runs/{ref}/preview", `/v1/m/sessions/runs/${encodeURIComponent(ref)}/preview`, body, opts);
   }
 
   /**
@@ -8162,6 +9098,15 @@ export class Client extends ClientCore {
   }
 
   /**
+   * PATCH /v1/m/sessions/workspaces/{ref} — Replaces a workspace's additional read-only host folders.
+   *
+   * Stability: beta.
+   */
+  patchV1MSessionsWorkspacesByRef(ref: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("PATCH", "/v1/m/sessions/workspaces/{ref}", `/v1/m/sessions/workspaces/${encodeURIComponent(ref)}`, body, opts);
+  }
+
+  /**
    * DELETE /v1/m/sessions/workspaces/{ref} — sessions module route (requires sessions:workspace:admin)
    *
    * Stability: beta.
@@ -8231,6 +9176,96 @@ export class Client extends ClientCore {
    */
   getV1MSessionsWorkspacesByRefFilesStat(ref: string, opts?: RequestOptions): Promise<Json> {
     return this.do("GET", "/v1/m/sessions/workspaces/{ref}/files/stat", `/v1/m/sessions/workspaces/${encodeURIComponent(ref)}/files/stat`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/skills/assignments — Lists pinned skills assignments for an authorized workspace, template, agent group, agent, or session target with cursor pagination.
+   *
+   * Stability: beta.
+   */
+  getV1MSkillsAssignments(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/skills/assignments", "/v1/m/skills/assignments", undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/skills/assignments — Creates or updates a target's pin to an immutable skills revision and selected members for new conversations.
+   *
+   * Stability: beta.
+   */
+  postV1MSkillsAssignments(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/skills/assignments", "/v1/m/skills/assignments", body, opts);
+  }
+
+  /**
+   * PUT /v1/m/skills/assignments/{id} — Creates or updates a target's pin to an immutable skills revision and selected members for new conversations.
+   *
+   * Stability: beta.
+   */
+  putV1MSkillsAssignmentsById(id: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("PUT", "/v1/m/skills/assignments/{id}", `/v1/m/skills/assignments/${encodeURIComponent(id)}`, body, opts);
+  }
+
+  /**
+   * DELETE /v1/m/skills/assignments/{id} — Removes a skills assignment from its authorized target at the expected version so new conversations no longer inherit that pin.
+   *
+   * Stability: beta.
+   */
+  deleteV1MSkillsAssignmentsById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/m/skills/assignments/{id}", `/v1/m/skills/assignments/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/skills/packs — Lists the tenant's skills packs, including retired packs, with cursor pagination.
+   *
+   * Stability: beta.
+   */
+  getV1MSkillsPacks(opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/skills/packs", "/v1/m/skills/packs", undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/skills/packs — Validates a Git, registered-workspace, or uploaded archive source and publishes an immutable skills revision, creating or updating a pack.
+   *
+   * Stability: beta.
+   */
+  postV1MSkillsPacks(body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/skills/packs", "/v1/m/skills/packs", body, opts);
+  }
+
+  /**
+   * GET /v1/m/skills/packs/{id} — Returns a skills pack and a cursor-paged history of its complete immutable revisions, including manifests and import provenance.
+   *
+   * Stability: beta.
+   */
+  getV1MSkillsPacksById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/skills/packs/{id}", `/v1/m/skills/packs/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * DELETE /v1/m/skills/packs/{id} — Retires an unreferenced skills pack at the expected version while retaining its immutable revisions and provenance.
+   *
+   * Stability: beta.
+   */
+  deleteV1MSkillsPacksById(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("DELETE", "/v1/m/skills/packs/{id}", `/v1/m/skills/packs/${encodeURIComponent(id)}`, undefined, opts);
+  }
+
+  /**
+   * GET /v1/m/skills/packs/{id}/assignments — Lists the pinned skills assignments of an authorized pack whose targets the caller can read natively, with cursor pagination.
+   *
+   * Stability: beta.
+   */
+  getV1MSkillsPacksByIdAssignments(id: string, opts?: RequestOptions): Promise<Json> {
+    return this.do("GET", "/v1/m/skills/packs/{id}/assignments", `/v1/m/skills/packs/${encodeURIComponent(id)}/assignments`, undefined, opts);
+  }
+
+  /**
+   * POST /v1/m/skills/packs/{id}/revisions — Validates a Git, registered-workspace, or uploaded archive source and publishes an immutable skills revision, creating or updating a pack.
+   *
+   * Stability: beta.
+   */
+  postV1MSkillsPacksByIdRevisions(id: string, body: JsonInput, opts?: RequestOptions): Promise<Json> {
+    return this.doJsonRequired("POST", "/v1/m/skills/packs/{id}/revisions", `/v1/m/skills/packs/${encodeURIComponent(id)}/revisions`, body, opts);
   }
 
   /**

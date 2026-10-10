@@ -14,7 +14,7 @@ import (
 // AWSCreds is the minimal credential triple a SigV4 signer needs. Token is the
 // optional STS session token (assumed-role / IRSA). These live only in memory and
 // are NEVER logged or emitted (docs/SECURITY-HARDENING.md). It aliases the shared core signer
-// (core/internal/sigv4) so the custody KEK wrapper (core/secure/kmswrap)
+// (core/internal/sigv4) so the custody KEK wrapper (Business CMEK)
 // and this ledger signer sign requests with the SAME audited implementation.
 type AWSCreds = sigv4.Credentials
 

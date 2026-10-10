@@ -30,7 +30,7 @@ import (
 // circuit breaker — it is what happens when a gate is added to the struct and forgotten in the
 // literal — so pinning only the known case would leave the next one free.
 func TestTheInferenceDeciderIsWiredWithEveryGateItReads(t *testing.T) {
-	const file = "inferenceproxy.go"
+	const file = "inferenceproxyserver.go"
 	fset := token.NewFileSet()
 	f, err := parser.ParseFile(fset, file, nil, parser.SkipObjectResolution)
 	if err != nil {
@@ -40,7 +40,7 @@ func TestTheInferenceDeciderIsWiredWithEveryGateItReads(t *testing.T) {
 	// THE GATES, WRITTEN DOWN. A list derived from the struct definition would shrink with it —
 	// the "expectation derived from the thing under test" defect this repository has paid for
 	// more than once. Adding a gate is a deliberate edit here as well as there.
-	gates := []string{"killSwitch", "circuitBreaker", "egress", "inspector", "computerUse", "residency"}
+	gates := []string{"KillSwitch", "CircuitBreaker", "Egress", "Inspector", "ComputerUse", "Residency"}
 
 	assigned := map[string]bool{}
 	found := false
@@ -54,8 +54,11 @@ func TestTheInferenceDeciderIsWiredWithEveryGateItReads(t *testing.T) {
 			if !ok {
 				return true
 			}
-			id, ok := lit.Type.(*ast.Ident)
-			if !ok || id.Name != "inferenceProxyDecider" {
+			sel, ok := lit.Type.(*ast.SelectorExpr)
+			if !ok || sel.Sel.Name != "Decider" {
+				return true
+			}
+			if pkg, ok := sel.X.(*ast.Ident); !ok || pkg.Name != "inferencepep" {
 				return true
 			}
 			found = true
@@ -77,7 +80,7 @@ func TestTheInferenceDeciderIsWiredWithEveryGateItReads(t *testing.T) {
 	// struct would empty `assigned`, every gate would report missing, and the failure would name
 	// the wrong thing — or, worse, a future refactor could make this test vacuous while green.
 	if !found {
-		t.Fatalf("no inferenceProxyDecider literal was found inside buildClaudeMessagesProxyServer in %s: this test can no longer see what it claims to check", file)
+		t.Fatalf("no inferencepep.Decider literal was found inside buildClaudeMessagesProxyServer in %s: this test can no longer see what it claims to check", file)
 	}
 	for _, gate := range gates {
 		if !assigned[gate] {

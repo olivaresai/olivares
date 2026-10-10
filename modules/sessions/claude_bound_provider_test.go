@@ -17,7 +17,7 @@ import (
 )
 
 // A Claude Code session on a key from Providers is told that key's endpoint by name, with
-// Claude Code's host pin, and its non-essential traffic is off (HU2 019 and 023).
+// Claude Code's host pin, and its non-essential traffic is off.
 func TestClaudeKeyLaunchIsHeldToItsEndpointAndQuiet(t *testing.T) {
 	for _, tc := range []struct{ name, baseURL, want string }{
 		{"vendor API", "", "https://api.anthropic.com"},
@@ -58,7 +58,7 @@ func TestClaudeOwnLoginLaunchKeepsItsOwnSettings(t *testing.T) {
 	configHome, userHome, _, _ := twoHomes(t)
 	prof := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: providerDriverClaude, ConfigHome: configHome, UserHome: userHome,
 		DisplayName: "own", AuthSource: AuthSourceAccountHome})
-	if _, err := m.createRun(context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative,
+	if _, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:d19", ActorKind: model.ActorUser, ProviderProfileRef: prof.Ref}); err != nil {
 		t.Fatalf("launch: %v", err)
 	}
@@ -83,7 +83,7 @@ func argAfter(args []string, flag string) (string, int) {
 }
 
 // The quiet switches also travel as flag settings, which outrank a saved user or project
-// settings env (SR2C, SR5C on 3c130b50); an own-login launch gets none.
+// settings env; an own-login launch gets none.
 func TestClaudeKeyLaunchCarriesTheQuietSwitchesAsFlagSettings(t *testing.T) {
 	runner := &fakeRunner{}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(&countingCredentialSource{}), WithProviderSecretVault(newFakeVault()))

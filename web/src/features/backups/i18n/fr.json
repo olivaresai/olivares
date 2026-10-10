@@ -1,6 +1,6 @@
 {
   "title": "Sauvegarde et restauration",
-  "description": "Gérez les instantanés de reprise après sinistre du plan de contrôle.",
+  "description": "Gérez les instantanés de reprise après sinistre d’Olivares AI.",
   "tabs": {
     "backups": "Sauvegardes",
     "schedule": "Planification"
@@ -75,7 +75,7 @@
   "trigger": {
     "started": "Sauvegarde démarrée",
     "title": "Créer une sauvegarde",
-    "description": "Créez un instantané chiffré de tout le plan de contrôle.",
+    "description": "Créez un instantané chiffré d’Olivares AI.",
     "notes": "Notes",
     "notesPlaceholder": "Description facultative pour cette sauvegarde",
     "passphrase": "Phrase secrète",
@@ -110,7 +110,7 @@
     "uploadFailed": "Échec du téléversement",
     "started": "Restauration démarrée",
     "title": "Restaurer depuis une sauvegarde",
-    "description": "Téléversez un fichier .drbundle pour restaurer l'état du plan de contrôle.",
+    "description": "Téléversez un fichier .drbundle pour restaurer l’état d’Olivares AI.",
     "apply": "Appliquer la restauration",
     "confirmTitle": "Confirmer la restauration",
     "confirmDescription": "Cela écrasera toutes les données actuelles avec le contenu de la sauvegarde. Cette opération est irréversible.",
@@ -149,7 +149,7 @@
   "empty": {
     "backup": {
       "title": "Aucun instantané de sauvegarde créé",
-      "description": "Créez une sauvegarde chiffrée depuis cette console avec SQLite ; avec PostgreSQL, créez le paquet à l’aide de la CLI de reprise après sinistre dans le répertoire de sauvegarde configuré."
+      "description": "Créez une sauvegarde chiffrée depuis cette console."
     }
   }
 }

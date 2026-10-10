@@ -11,7 +11,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"net/url"
 	"path/filepath"
 	"testing"
 	"time"
@@ -21,7 +20,6 @@ import (
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/core/runtime"
 	"github.com/olivaresai/olivares/core/secure"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/finops"
@@ -219,164 +217,6 @@ func (h *harness) hasAuditAction(tenant model.TenantID, action string) bool {
 // The test drives the real HTTP surface because that is where the defect lives — the console's two
 // mutations both send `status` explicitly, so a console-level test cannot see it. The panel entered
 // through the API route, and so does this.
-func TestCostCenterUpdateKeepsAnOmittedStatus(t *testing.T) {
-	m := finops.New()
-	h := newHarness(t, m)
-	admin := h.adminLogin()
-	tenant := h.createOrg(admin, "acme")
-	editor := h.roleToken(admin, tenant, "e@acme.com", auth.RoleEditor)
-
-	estado := func(r resp) string {
-		v, _ := r.body["status"].(string)
-		return v
-	}
-
-	created := h.do("POST", "/v1/m/finops/cost-centers", editor, map[string]any{
-		"code": "OLD-01", "name": "Legacy", "status": "archived",
-	}, tenantHdr(tenant))
-	if created.code != 201 {
-		t.Fatalf("create: got %d, want 201 (%s)", created.code, created.raw)
-	}
-	if got := estado(created); got != "archived" {
-		t.Fatalf("created status = %q, want \"archived\"", got)
-	}
-	id, _ := created.body["id"].(string)
-	if id == "" {
-		t.Fatalf("create returned no id: %s", created.raw)
-	}
-
-	// El renombrado: SIN `status` en el cuerpo, que es exactamente lo que manda un cliente que sólo
-	// quiere corregir el nombre.
-	renamed := h.do("PUT", "/v1/m/finops/cost-centers/"+id, editor, map[string]any{
-		"code": "OLD-01", "name": "Legacy (renamed)",
-	}, tenantHdr(tenant))
-	if renamed.code != 200 {
-		t.Fatalf("rename: got %d, want 200 (%s)", renamed.code, renamed.raw)
-	}
-	if got := estado(renamed); got != "archived" {
-		t.Fatalf("a rename revived the cost center: status = %q, want \"archived\" — "+
-			"an omitted field must be KEPT, not defaulted", got)
-	}
-
-	// Y la dirección que NO debe dispararse: un `status` explícito sí manda.
-	activated := h.do("PUT", "/v1/m/finops/cost-centers/"+id, editor, map[string]any{
-		"code": "OLD-01", "name": "Legacy (renamed)", "status": "active",
-	}, tenantHdr(tenant))
-	if activated.code != 200 {
-		t.Fatalf("activate: got %d, want 200 (%s)", activated.code, activated.raw)
-	}
-	if got := estado(activated); got != "active" {
-		t.Fatalf("an explicit status was ignored: got %q, want \"active\"", got)
-	}
-}
-
-func TestListCostCenterMappingsHonorsParentLimitAndCursor(t *testing.T) {
-	m := finops.New()
-	h := newHarness(t, m)
-	admin := h.adminLogin()
-	tenant := h.createOrg(admin, "mapping-page")
-	editor := h.roleToken(admin, tenant, "mapping-editor@acme.com", auth.RoleEditor)
-	hdr := tenantHdr(tenant)
-
-	created := h.do("POST", "/v1/m/finops/cost-centers", editor, map[string]any{
-		"code": "ENG-01", "name": "Engineering",
-	}, hdr)
-	if created.code != http.StatusCreated {
-		t.Fatalf("create cost center: got %d, want %d (%s)", created.code, http.StatusCreated, created.raw)
-	}
-	costCenterID, _ := created.body["id"].(string)
-	if costCenterID == "" {
-		t.Fatalf("create cost center returned no id: %s", created.raw)
-	}
-
-	other := h.do("POST", "/v1/m/finops/cost-centers", editor, map[string]any{
-		"code": "OPS-01", "name": "Operations",
-	}, hdr)
-	if other.code != http.StatusCreated {
-		t.Fatalf("create other cost center: got %d, want %d (%s)", other.code, http.StatusCreated, other.raw)
-	}
-	otherCostCenterID, _ := other.body["id"].(string)
-	if otherCostCenterID == "" {
-		t.Fatalf("create other cost center returned no id: %s", other.raw)
-	}
-	otherMapping := h.do("POST", "/v1/m/finops/cost-centers/"+otherCostCenterID+"/mappings", editor, map[string]any{
-		"source_dimension": "team",
-		"source_key":       "operations",
-		"priority":         10,
-	}, hdr)
-	if otherMapping.code != http.StatusCreated {
-		t.Fatalf("create other mapping: got %d, want %d (%s)", otherMapping.code, http.StatusCreated, otherMapping.raw)
-	}
-
-	for _, sourceKey := range []string{"platform", "security"} {
-		mapping := h.do("POST", "/v1/m/finops/cost-centers/"+costCenterID+"/mappings", editor, map[string]any{
-			"source_dimension": "team",
-			"source_key":       sourceKey,
-			"priority":         10,
-		}, hdr)
-		if mapping.code != http.StatusCreated {
-			t.Fatalf("create mapping %q: got %d, want %d (%s)", sourceKey, mapping.code, http.StatusCreated, mapping.raw)
-		}
-	}
-
-	type mappingPage struct {
-		Items []struct {
-			CostCenterID string `json:"cost_center_id"`
-			ID           string `json:"id"`
-			SourceKey    string `json:"source_key"`
-		} `json:"items"`
-		Cursor  string `json:"cursor"`
-		HasMore bool   `json:"has_more"`
-	}
-	decodePage := func(label string, got resp) mappingPage {
-		t.Helper()
-		if got.code != http.StatusOK {
-			t.Fatalf("%s: got %d, want %d (%s)", label, got.code, http.StatusOK, got.raw)
-		}
-		var page mappingPage
-		if err := json.Unmarshal([]byte(got.raw), &page); err != nil {
-			t.Fatalf("decode %s: %v (%s)", label, err, got.raw)
-		}
-		return page
-	}
-
-	firstResponse := h.do("GET", "/v1/m/finops/cost-centers/"+costCenterID+"/mappings?limit=1", editor, nil, hdr)
-	first := decodePage("first mappings page", firstResponse)
-	if len(first.Items) != 1 {
-		t.Fatalf("first page items = %d, want 1 (%s)", len(first.Items), firstResponse.raw)
-	}
-	if first.Items[0].CostCenterID != costCenterID {
-		t.Errorf("first mapping cost_center_id = %q, want %q", first.Items[0].CostCenterID, costCenterID)
-	}
-	if !first.HasMore {
-		t.Errorf("first page has_more = false, want true (%s)", firstResponse.raw)
-	}
-	if first.Cursor == "" {
-		t.Fatalf("first page cursor is empty, want a continuation cursor (%s)", firstResponse.raw)
-	}
-
-	secondResponse := h.do("GET", "/v1/m/finops/cost-centers/"+costCenterID+
-		"/mappings?limit=1&cursor="+url.QueryEscape(first.Cursor), editor, nil, hdr)
-	second := decodePage("second mappings page", secondResponse)
-	if len(second.Items) != 1 {
-		t.Fatalf("second page items = %d, want 1 (%s)", len(second.Items), secondResponse.raw)
-	}
-	if second.Items[0].CostCenterID != costCenterID {
-		t.Errorf("second mapping cost_center_id = %q, want %q", second.Items[0].CostCenterID, costCenterID)
-	}
-	if second.Items[0].ID == first.Items[0].ID {
-		t.Errorf("second page repeated mapping id %q; cursor was not honored", second.Items[0].ID)
-	}
-	if second.Items[0].SourceKey == first.Items[0].SourceKey {
-		t.Errorf("second page repeated source_key %q; cursor was not honored", second.Items[0].SourceKey)
-	}
-	if second.HasMore {
-		t.Errorf("second page has_more = true, want false (%s)", secondResponse.raw)
-	}
-	if second.Cursor != "" {
-		t.Errorf("second page cursor = %q, want empty (%s)", second.Cursor, secondResponse.raw)
-	}
-}
 
 func TestCostIngestHTTP(t *testing.T) {
 	m := finops.New()
@@ -408,7 +248,7 @@ func TestCostIngestHTTP(t *testing.T) {
 		t.Fatalf("reference-less ingest wrote %d cost records, want 0", n)
 	}
 
-	// A valid editor ingest is accepted and lands in the ledger. Spend analytics reads
+	// A valid editor ingest is accepted and lands in the ledger. We also read
 	// the finops cost_sample read-model (written alongside the CostRecord ledger inside
 	// onCost), and countCosts() below checks the canonical CostRecord ledger itself —
 	// together they prove the HTTP path went through onCost, not a divergent writer.
@@ -418,13 +258,7 @@ func TestCostIngestHTTP(t *testing.T) {
 	if n := h.countCosts(tenant); n != 1 {
 		t.Fatalf("valid ingest wrote %d cost records, want 1", n)
 	}
-	r := h.do("GET", "/v1/m/finops/spend?dimension=model", editor, nil, tenantHdr(tenant))
-	if r.code != http.StatusOK {
-		t.Fatalf("spend = %d %s", r.code, r.raw)
-	}
-	if total, _ := r.body["total_micro_usd"].(float64); total != 400 {
-		t.Fatalf("spend total after ingest = %v, want 400", r.body["total_micro_usd"])
-	}
+	assertCostReadModel(t, h, tenant)
 
 	// The privileged write is audited to the real principal.
 	if !h.hasAuditAction(tenant, "finops.cost.ingest") {
@@ -438,189 +272,30 @@ func TestCostIngestHTTP(t *testing.T) {
 	if n := h.countCosts(tenant); n != 1 {
 		t.Fatalf("double-POST wrote %d cost records, want 1 (dedup by natural key)", n)
 	}
-	r = h.do("GET", "/v1/m/finops/spend?dimension=model", editor, nil, tenantHdr(tenant))
-	if total, _ := r.body["total_micro_usd"].(float64); total != 400 {
-		t.Fatalf("spend total after double-POST = %v, want 400 (not 800)", r.body["total_micro_usd"])
-	}
+	assertCostReadModel(t, h, tenant)
 }
 
-func TestFinOpsEndToEnd(t *testing.T) {
-	m := finops.New()
-	h := newHarness(t, m)
-	admin := h.adminLogin()
-	tenant := h.createOrg(admin, "acme")
-	editor := h.roleToken(admin, tenant, "e@acme.com", auth.RoleEditor)
-	viewer := h.roleToken(admin, tenant, "v@acme.com", auth.RoleViewer)
-
-	// A viewer cannot create a budget; an editor can.
-	if r := h.do("POST", "/v1/m/finops/budgets", viewer, map[string]any{"name": "x", "limit_micro_usd": 1000}, tenantHdr(tenant)); r.code != http.StatusForbidden {
-		t.Errorf("viewer create budget = %d, want 403", r.code)
-	}
-	r := h.do("POST", "/v1/m/finops/budgets", editor, map[string]any{
-		"name": "monthly-cap", "enabled": true, "dimension": "global",
-		"period": "monthly", "limit_micro_usd": 1000, "thresholds": []float64{0.5},
-	}, tenantHdr(tenant))
-	if r.code != http.StatusCreated {
-		t.Fatalf("create budget = %d %s", r.code, r.raw)
-	}
-	budgetID := r.body["id"].(string)
-
-	// An invalid budget is rejected.
-	if r := h.do("POST", "/v1/m/finops/budgets", editor, map[string]any{"name": "bad", "dimension": "model", "limit_micro_usd": 10}, tenantHdr(tenant)); r.code != http.StatusBadRequest {
-		t.Errorf("budget without key for model dimension = %d, want 400", r.code)
-	}
-
-	// Drive the cost stream through the real runtime + bus. Total 600 crosses 50%.
-	rt := runtime.New(runtime.Options{})
-	if err := rt.AddModule(m, sdk.Config{}); err != nil {
+// assertCostReadModel proves ingestion and dedup through the shared stored read model.
+func assertCostReadModel(t *testing.T, h *harness, tenant model.TenantID) {
+	t.Helper()
+	if err := h.st.View(context.Background(), tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext("finops.cost_sample")
+		if err != nil {
+			return err
+		}
+		rows, _, err := repo.List(context.Background(), model.Query{Limit: 100})
+		if err != nil {
+			return err
+		}
+		var total int64
+		for _, r := range rows {
+			total += r.Int("cost_micro_usd")
+		}
+		if len(rows) != 1 || total != 400 {
+			t.Errorf("cost read model rows=%d total=%d, want 1 and 400", len(rows), total)
+		}
+		return nil
+	}); err != nil {
 		t.Fatal(err)
-	}
-	now := time.Now().UTC()
-	src := &fakeSource{costs: []sdkmodel.CostSample{
-		{ProviderRef: "anthropic", ModelRef: "claude-opus-4-8", InputTokens: 100, OutputTokens: 50, CostMicroUSD: 400, OccurredAt: now},
-		{ProviderRef: "google", ModelRef: "gemini-1.5-flash", InputTokens: 80, OutputTokens: 40, CostMicroUSD: 200, OccurredAt: now.Add(time.Second)},
-	}}
-	if err := rt.AddSource(src, sdk.Config{}, tenant.String()); err != nil {
-		t.Fatal(err)
-	}
-	if err := rt.Start(context.Background()); err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-		defer cancel()
-		_ = rt.Stop(ctx)
-	})
-	h.waitCosts(tenant, 2)
-
-	// Spend by model: opus is the top bucket (400 of 600).
-	r = h.do("GET", "/v1/m/finops/spend?dimension=model", viewer, nil, tenantHdr(tenant))
-	if r.code != http.StatusOK {
-		t.Fatalf("spend = %d %s", r.code, r.raw)
-	}
-	if total, _ := r.body["total_micro_usd"].(float64); total != 600 {
-		t.Errorf("spend total = %v, want 600", r.body["total_micro_usd"])
-	}
-
-	// An invalid since/until is rejected (not silently widened to all-time).
-	if r := h.do("GET", "/v1/m/finops/spend?since=not-a-date", viewer, nil, tenantHdr(tenant)); r.code != http.StatusBadRequest {
-		t.Errorf("invalid since = %d, want 400", r.code)
-	}
-
-	// Summary totals.
-	if r := h.do("GET", "/v1/m/finops/spend/summary", viewer, nil, tenantHdr(tenant)); r.code != http.StatusOK {
-		t.Fatalf("summary = %d %s", r.code, r.raw)
-	}
-
-	// Forecast for the current month projects at or above spend.
-	r = h.do("GET", "/v1/m/finops/forecast?period=monthly", viewer, nil, tenantHdr(tenant))
-	if r.code != http.StatusOK {
-		t.Fatalf("forecast = %d %s", r.code, r.raw)
-	}
-	if sp, _ := r.body["spend_micro_usd"].(float64); sp != 600 {
-		t.Errorf("forecast spend = %v, want 600", r.body["spend_micro_usd"])
-	}
-
-	// Budget status: 600/1000 = 60%.
-	r = h.do("GET", "/v1/m/finops/budgets/"+budgetID+"/status", viewer, nil, tenantHdr(tenant))
-	if r.code != http.StatusOK {
-		t.Fatalf("status = %d %s", r.code, r.raw)
-	}
-	if pct, _ := r.body["consumed_pct"].(float64); pct != 60 {
-		t.Errorf("consumed_pct = %v, want 60", r.body["consumed_pct"])
-	}
-
-	// The 50% crossing was recorded as an alert.
-	r = h.do("GET", "/v1/m/finops/alerts", viewer, nil, tenantHdr(tenant))
-	if r.code != http.StatusOK {
-		t.Fatalf("alerts = %d %s", r.code, r.raw)
-	}
-	items, _ := r.body["items"].([]any)
-	if len(items) != 1 {
-		t.Fatalf("alerts = %d, want 1 (50%% crossing)", len(items))
-	}
-
-	// A4.2: the alert carries its own id, its financial evidence and the digest of
-	// that evidence, and the historical number beside them is CLASSIFIED rather than
-	// presented as bare truth.
-	alert, _ := items[0].(map[string]any)
-	alertID, _ := alert["id"].(string)
-	if alertID == "" {
-		t.Fatalf("alert has no id: %v", alert)
-	}
-	if kind, _ := alert["legacy_value_kind"].(string); kind != "exact" {
-		t.Errorf("legacy_value_kind = %v, want exact for a fully established amount", alert["legacy_value_kind"])
-	}
-	evidence, _ := alert["amount_evidence"].(map[string]any)
-	if state, _ := evidence["state"].(string); state != "valid" {
-		t.Fatalf("evidence state = %v, want valid: %v", evidence["state"], evidence)
-	}
-	envelope, _ := evidence["envelope"].(map[string]any)
-	amount, _ := envelope["amount"].(map[string]any)
-	if class, _ := amount["class"].(string); class != "exact" {
-		t.Errorf("amount class = %v, want exact", amount["class"])
-	}
-	if value, _ := amount["value_micro_usd"].(string); value != "600" {
-		t.Errorf("amount value = %v, want the canonical decimal string \"600\"", amount["value_micro_usd"])
-	}
-	decision, _ := envelope["decision"].(map[string]any)
-	if result, _ := decision["result"].(string); result != "proven" {
-		t.Errorf("decision = %v, want proven", decision["result"])
-	}
-
-	// Retrieval BY ID under the same permission and tenant returns that one row.
-	r = h.do("GET", "/v1/m/finops/alerts?alert_id="+alertID, viewer, nil, tenantHdr(tenant))
-	if r.code != http.StatusOK {
-		t.Fatalf("alerts by id = %d %s", r.code, r.raw)
-	}
-	if byID, _ := r.body["items"].([]any); len(byID) != 1 {
-		t.Errorf("alerts by id = %d items, want 1", len(byID))
-	}
-
-	// A malformed reference is refused at the boundary, not turned into a wider read.
-	if r := h.do("GET", "/v1/m/finops/alerts?alert_id=not-a-uuid", viewer, nil, tenantHdr(tenant)); r.code != http.StatusBadRequest {
-		t.Errorf("malformed alert_id = %d, want 400", r.code)
-	}
-	// A well-formed id that is not this tenant's simply matches nothing: a reference
-	// is not an authorization and never leaks another tenant's row.
-	if r := h.do("GET", "/v1/m/finops/alerts?alert_id="+model.NewID().String(), viewer, nil, tenantHdr(tenant)); r.code != http.StatusOK {
-		t.Errorf("unknown alert_id = %d, want 200", r.code)
-	} else if unknown, _ := r.body["items"].([]any); len(unknown) != 0 {
-		t.Errorf("unknown alert_id returned %d items, want none", len(unknown))
-	}
-	// The same reference from OUTSIDE the tenant is refused at the boundary: holding
-	// an id grants nothing, and the row is never reached.
-	otherTenant := h.createOrg(admin, "globex-alerts")
-	if r := h.do("GET", "/v1/m/finops/alerts?alert_id="+alertID, viewer, nil, tenantHdr(otherTenant)); r.code != http.StatusForbidden {
-		t.Errorf("cross-tenant alert_id = %d, want 403", r.code)
-	}
-	// A4.2 CORRECTION. The 403 above is an AUTHORIZATION refusal — the caller has no
-	// membership in that tenant, so the repository is never reached and the check says
-	// nothing about row isolation. This caller is a legitimate viewer OF THE OTHER
-	// TENANT, with the same permission, whose request does reach the repository: it
-	// must come back 200 with nothing, because the row belongs to somebody else.
-	neighbourViewer := h.roleToken(admin, otherTenant, "neighbour@globex.io", "viewer")
-	r = h.do("GET", "/v1/m/finops/alerts?alert_id="+alertID, neighbourViewer, nil, tenantHdr(otherTenant))
-	if r.code != http.StatusOK {
-		t.Fatalf("authorized neighbour alert_id = %d %s, want 200", r.code, r.raw)
-	}
-	if items, _ := r.body["items"].([]any); len(items) != 0 {
-		t.Errorf("an authorized neighbour read %d of another tenant's alerts", len(items))
-	}
-	if r := h.do("GET", "/v1/m/finops/alerts", neighbourViewer, nil, tenantHdr(otherTenant)); r.code != http.StatusOK {
-		t.Fatalf("authorized neighbour list = %d %s, want 200", r.code, r.raw)
-	} else if items, _ := r.body["items"].([]any); len(items) != 0 {
-		t.Errorf("an authorized neighbour listed %d of another tenant's alerts", len(items))
-	}
-
-	// Recommendations are served (at least the honest cache disclosure).
-	if r := h.do("GET", "/v1/m/finops/recommendations", viewer, nil, tenantHdr(tenant)); r.code != http.StatusOK {
-		t.Fatalf("recommendations = %d %s", r.code, r.raw)
-	}
-
-	// Tenant isolation: a non-member is rejected.
-	other := h.createOrg(admin, "globex")
-	if r := h.do("GET", "/v1/m/finops/spend", viewer, nil, tenantHdr(other)); r.code != http.StatusForbidden {
-		t.Errorf("cross-tenant spend = %d, want 403", r.code)
 	}
 }

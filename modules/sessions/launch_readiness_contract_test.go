@@ -181,7 +181,7 @@ func TestLaunchReadinessPublishedVocabularyIsClosedOverTheCode(t *testing.T) {
 	protocol, _ := capProps["protocol"].(map[string]any)
 	assertSameSet(t, "protocol", enumStrings(t, protocol), []string{
 		protocolClaudeStreamJSON, protocolClaudeRemoteControl, protocolCodexAppServer,
-		protocolGrokACP, protocolOpenCodeACP, protocolUnknown,
+		protocolGrokACP, protocolOpenCodeACP, protocolGeminiACP, protocolUnknown,
 	})
 	io, _ := capProps["io"].(map[string]any)
 	assertSameSet(t, "io", enumStrings(t, io), []string{ioBidirectional, ioLifecycleOnly, ioUnknown})
@@ -339,10 +339,13 @@ func TestLaunchReadinessConflictErrorKeepsItsStatusForEverySerializer(t *testing
 		t.Fatalf("the shared writer answered %d for a wrapped conflict; wrapping exists so a "+
 			"serializer that does not know this type still answers the right status", shared.Code)
 	}
-	// It legitimately does NOT carry the code — that is the scoping, not a defect:
-	// the shared envelope is unchanged for every other route.
-	if _, carries := decode(shared)["code"]; carries {
-		t.Fatal("the shared writer grew a code field; this correction must not re-shape every run error")
+	// It legitimately does NOT carry THIS route's code — that is the scoping, not
+	// a defect. The shared envelope every run error answers with gained the generic
+	// module_error code when the beta envelope was shared (038549a1, spec and
+	// console client updated with it); what stays scoped to the readiness writer is
+	// profile_changed itself.
+	if got, _ := decode(shared)["code"].(string); got == codeProfileChanged {
+		t.Fatalf("the shared writer stamped %q; this correction must not leak the readiness code into every run error", got)
 	}
 
 	// And a plain runErr is untouched by the new writer.
@@ -351,8 +354,8 @@ func TestLaunchReadinessConflictErrorKeepsItsStatusForEverySerializer(t *testing
 	if plain.Code != http.StatusBadRequest {
 		t.Fatalf("plain runErr through the readiness writer = %d, want 400", plain.Code)
 	}
-	if _, carries := decode(plain)["code"]; carries {
-		t.Fatal("an uncoded error gained a code")
+	if got, _ := decode(plain)["code"].(string); got == codeProfileChanged {
+		t.Fatalf("an uncoded error gained the readiness code %q", got)
 	}
 }
 

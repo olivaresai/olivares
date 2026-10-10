@@ -86,6 +86,9 @@ func TestCoverageJobsSayOnceThatTheyCannotListEveryTenant(t *testing.T) {
 			return func() { c.once(context.Background()) }
 		}},
 	} {
+		if tc.job == "audit-archive" && !audit.ExportLinked {
+			continue
+		}
 		t.Run(tc.job, func(t *testing.T) {
 			log, buf := captureLog()
 			tick := tc.tick(&cannotListEveryTenant{}, log)

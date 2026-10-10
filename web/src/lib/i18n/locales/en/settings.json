@@ -22,13 +22,14 @@
     "edition": "Edition & modules",
     "about": "About",
     "sections": "Settings sections",
-    "signing": "Report signing"
+    "signing": "Report signing",
+    "tracing": "Tracing"
   },
   "general": {
     "title": "General",
     "scope": "Your own preferences. They follow you to every workspace on this installation.",
     "theme": "Theme",
-    "themeHint": "Dark unless you choose light, or follow the system.",
+    "themeHint": "Follows the system unless you choose light or dark.",
     "density": "Density",
     "densityHint": "Compact shows more rows; comfortable is easier to read.",
     "language": "Language",
@@ -46,8 +47,7 @@
   },
   "unavailable": {
     "notifications": "Notification preferences are not stored on this installation yet.",
-    "sessionDefaults": "Session defaults are not stored on this installation yet.",
-    "signIn": "Sign-in policy is not edited from this screen yet."
+    "sessionDefaults": "Session defaults are not stored on this installation yet."
   },
   "keyboard": {
     "title": "Keyboard",
@@ -55,37 +55,38 @@
   },
   "edition": {
     "title": "Edition & modules",
-    "scope": "The edition of this build, the modules it runs, and what a Business build adds.",
+    "scope": "The edition of this build, the modules it runs, and what Business adds.",
     "label": "Edition",
     "unknown": "Not reported by this engine",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
-    "businessAdds": "A Business build adds",
+    "businessAdds": "Business adds",
     "adds": {
       "loginEnforcement": "Login enforcement: require SSO and a network allow-list",
       "identityProviders": "Several identity providers, per organization and routed by email domain",
       "groupMapping": "Directory groups mapped to roles at sign-in",
       "regulatory": "Regulatory operations: DORA registers, NIS 2 incident classification, OSCAL profiles, US and sector packs, and continuous control monitoring",
-      "reports": "Enterprise reports and scheduled reports",
+      "reports": "Business reports and scheduled reports",
       "toolPins": "Tool pins"
     }
   },
   "about": {
     "title": "About",
-    "scope": "This installation and the principal signed in.",
+    "scope": "This installation and the signed-in person.",
     "version": "Version",
     "engine": "Store engine",
     "edition": "Edition",
-    "community": "Community edition (free)",
+    "community": "Community edition — no license needed",
     "license": "License status",
     "licensee": "Licensed to",
     "none": "None",
     "displayName": "Display name",
-    "actor": "Principal",
+    "actor": "Principal ID",
     "role": "Role in this organization",
-    "memberships": "Organizations"
+    "memberships": "Organizations",
+    "email": "Email"
   },
   "stopConfirm": {
     "title": "Stop this session?",
@@ -94,11 +95,18 @@
   },
   "modules": {
     "title": "Modules",
-    "description": "Turn the parts of Olivares this installation runs on or off. Apply restarts the engine once to take the change.",
+    "description": "Turn the parts of Olivares this installation runs on or off. Apply restarts the engine once to take the change, and the restart stops the running sessions.",
     "apply_one": "Apply 1 change",
     "apply_other": "Apply {{count}} changes",
     "applied": "Module selection saved.",
     "restarting": "Restarting the engine…",
+    "restartWarning": {
+      "title": "Restart the engine?",
+      "stop_one": "{{count}} running session stops. It can be resumed after the restart.",
+      "stop_other": "{{count}} running sessions stop. Each one can be resumed after the restart.",
+      "unknown": "Every running session stops. Each one can be resumed after the restart.",
+      "confirm": "Restart and apply"
+    },
     "pending_one": "1 change waits for Apply.",
     "pending_other": "{{count}} changes wait for Apply.",
     "unavailable": "Modules cannot be chosen on this engine.",
@@ -186,6 +194,8 @@
       "sourcescope": "Which sources agents may read.",
       "voice": "Voice agents and calls."
     },
+    "noChanges": "No changes to apply. Turn a module on or off first.",
+    "saving": "Saving module selection…",
     "applyNone": "Apply",
     "whenOffDefault": "Its data is kept, but nothing uses it while the module is off.",
     "whenOff": {
@@ -205,7 +215,13 @@
       "claude-policy": "Managed Claude Code settings are no longer checked."
     },
     "turnOn": "Turn on {{name}}",
-    "activatedBy": "Enabled by {{addons}}. It stays on while that add-on is active."
+    "activatedBy": "Enabled by {{addons}}. It stays on while that add-on is active.",
+    "turnOnPlain": "Turn on",
+    "alsoTurnsOn": "Turning this on also turns on {{names}} and restarts the engine.",
+    "openEdition": "Open Edition & modules",
+    "askAdmin": "Ask an administrator to turn it on.",
+    "notSetUp": "It is not set up on this installation yet.",
+    "stillRestarting": "Still restarting. Reload the page."
   },
   "signing": {
     "title": "Report signing",
@@ -234,5 +250,37 @@
     "turnOn": "Turn on signing",
     "turnOff": "Turn off signing",
     "offKeepsKey": "Turning it off keeps the key, so bundles signed before can still be verified."
+  },
+  "tracing": {
+    "description": "Export traces and metrics to your collector. Changes apply without restarting the engine.",
+    "enabled": "Enable tracing",
+    "endpoint": "Collector endpoint",
+    "protocol": "Protocol",
+    "insecure": "Allow plaintext on a trusted network",
+    "sampleRatio": "Sample ratio (0–1)",
+    "serviceName": "Service name",
+    "compat": "Include legacy GenAI attributes",
+    "overrides": "Environment overrides: {{names}}",
+    "active": "Tracing is enabled.",
+    "inactive": "Tracing is off.",
+    "apply": "Apply",
+    "saved": "Tracing settings saved.",
+    "businessRequired": "SIEM delivery and external telemetry export require Business. Stored settings are preserved; Community does not send them."
+  },
+  "signIn": {
+    "methods": "Sign-in methods",
+    "password": "Password",
+    "sso": "Single sign-on: {{providers}}",
+    "noSso": "No single sign-on provider is available on the sign-in page.",
+    "manageSso": "Manage identity providers",
+    "session": "Session lifetime",
+    "hours_one": "{{count}} hour",
+    "hours_other": "{{count}} hours",
+    "sessionHint": "The engine sets this lifetime at sign-in and renews it when the session is refreshed. It is not configurable.",
+    "passwordAvailable": "Local password sign-in is available.",
+    "passwordBlocked": "Single sign-on is required. Local password sign-in is blocked.",
+    "ssoNotEnforced": "Single sign-on is requested, but this build does not enforce that policy. Check the identity provider settings before signing out.",
+    "passwordManaged": "Your organization administrator manages password sign-in.",
+    "ssoInactive": "Single sign-on is requested, but its identity provider is inactive. This requirement does not block password sign-in."
   }
 }

@@ -9,6 +9,7 @@ import (
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
@@ -37,11 +38,9 @@ func (s *Server) mcpGatewayAdmission(w http.ResponseWriter, r *http.Request, wri
 }
 
 // handleMCPGateway Read the tenant’s effective gateway source, reference-only upstream inventory and applied governance. Operator-file configuration is read-only and store records remain inactive while it governs.
-func (s *Server) handleMCPGateway(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.mcpGatewayAdmission(w, r, false)
-	if !ok {
-		return
-	}
+func (s *Server) handleMCPGateway(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	out, err := s.mcpGateway.Get(r.Context(), tenant)
 	if err != nil {
 		s.writeError(w, r, err)
@@ -68,17 +67,15 @@ func (s *Server) handleMCPGateway(w http.ResponseWriter, r *http.Request) {
 }
 
 // handlePutMCPGatewayServer Add or update a tenant upstream with sealed credential references and public inbound trust. New servers and edited configurations are enabled only by an explicit administrator write after a successful current connection test; discovery grants no tool authority.
-func (s *Server) handlePutMCPGatewayServer(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.mcpGatewayAdmission(w, r, true)
-	if !ok {
-		return
-	}
+func (s *Server) handlePutMCPGatewayServer(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	var in struct {
 		Version *int64                     `json:"version"`
 		Server  auth.MCPGatewayServerInput `json:"server"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil || in.Version == nil || *in.Version < 0 {
-		s.badRequest(w, r, "provide version and a reference-only server configuration")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "provide version and a reference-only server configuration"))
 		return
 	}
 	out, err := s.mcpGateway.PutServer(r.Context(), p, tenant, *in.Version, chi.URLParam(r, "id"), in.Server)
@@ -94,16 +91,14 @@ func (s *Server) handlePutMCPGatewayServer(w http.ResponseWriter, r *http.Reques
 }
 
 // handleDeleteMCPGatewayServer Remove a tenant upstream after checking the current configuration version. New requests are refused; its independently managed sealed credential is preserved.
-func (s *Server) handleDeleteMCPGatewayServer(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.mcpGatewayAdmission(w, r, true)
-	if !ok {
-		return
-	}
+func (s *Server) handleDeleteMCPGatewayServer(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	var in struct {
 		Version *int64 `json:"version"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil || in.Version == nil || *in.Version < 0 {
-		s.badRequest(w, r, "provide the current version")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "provide the current version"))
 		return
 	}
 	out, err := s.mcpGateway.DeleteServer(r.Context(), p, tenant, *in.Version, chi.URLParam(r, "id"))
@@ -115,16 +110,14 @@ func (s *Server) handleDeleteMCPGatewayServer(w http.ResponseWriter, r *http.Req
 }
 
 // handleTestMCPGatewayServer Initialize an upstream and list its tools within bounded connection and catalog limits. No tools are called; the verdict is audited, and failed tests disable forwarding.
-func (s *Server) handleTestMCPGatewayServer(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.mcpGatewayAdmission(w, r, true)
-	if !ok {
-		return
-	}
+func (s *Server) handleTestMCPGatewayServer(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	var in struct {
 		Version *int64 `json:"version"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil || in.Version == nil || *in.Version < 0 {
-		s.badRequest(w, r, "provide the current version")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "provide the current version"))
 		return
 	}
 	out, err := s.mcpGateway.TestServer(r.Context(), p, tenant, *in.Version, chi.URLParam(r, "id"))
@@ -136,17 +129,15 @@ func (s *Server) handleTestMCPGatewayServer(w http.ResponseWriter, r *http.Reque
 }
 
 // handleMCPGatewaySessionTools Set the tenant’s default-off session MCP switch after checking its current configuration version. Enabling preserves independently authenticated session purposes, workspace grants and process fencing; it confers no additional authority.
-func (s *Server) handleMCPGatewaySessionTools(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.mcpGatewayAdmission(w, r, true)
-	if !ok {
-		return
-	}
+func (s *Server) handleMCPGatewaySessionTools(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	var in struct {
 		Version *int64 `json:"version"`
 		Enabled *bool  `json:"enabled"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil || in.Enabled == nil || in.Version == nil || *in.Version < 0 {
-		s.badRequest(w, r, "provide version and enabled")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "provide version and enabled"))
 		return
 	}
 	out, err := s.mcpGateway.SetSessionTools(r.Context(), p, tenant, *in.Version, *in.Enabled)

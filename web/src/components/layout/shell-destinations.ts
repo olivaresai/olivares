@@ -2,81 +2,60 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// THE SHELL'S DESTINATIONS, AS REGISTRY IDS.
+// THE SIDEBAR'S DESTINATIONS, AS REGISTRY IDS.
 //
-// The sidebar's destinations and the phone bar name registry views by id and nothing
-// else. Path, icon and permission are read from the registry entry at render time, so a
-// journey can never point at a route the registry does not hold, and a principal is never
-// offered a door the route guard then refuses. `registry.shell-destinations.test.tsx`
-// proves both.
+// Every page sits in ONE place: the area and section its own entry declares
+// (FeatureView.navigation). All areas, the area directories, the breadcrumb, the palette and
+// the row of pages above a page all read that place. The sidebar adds no grouping of its
+// own: it pins the first job and a pin stays current on every page of its section.
+// The phone bar is the first three pins.
+//
+// Path, icon and permission are read from the registry entry at render time, so a pin can
+// never point at a route the registry does not hold, and a principal is never offered a door
+// the route guard then refuses.
 import type { TFunction } from 'i18next'
 import type { LucideIcon } from 'lucide-react'
 import {
+  SETTINGS_UTILITY,
+  areaOfView,
   authorizedSections,
+  breadcrumbTrail,
   viewById,
   viewLabel,
-  type GatedSection,
+  type Crumb,
+  type NavLocation,
   type ViewGate,
 } from '@/features/navigation/model'
-import { NAV_AREAS, type NavArea } from '@/features/registry'
+import { NAV_AREAS, type FeatureView, type NavArea } from '@/features/registry'
 
-/**
- * THE SIDEBAR'S GROUPS (console remake 26.10, CONCEPT-IA): a short work section, then the
- * product's three verbs — Manage, Integrate, Secure. Each entry is ONE existing registry view;
- * a destination that merges several views (Agents, Identities & access, Approvals) replaces its
- * entry here in its own slice. Everything else stays one step away in All areas and ⌘K.
- */
-/**
- * A destination that is a SECTION of a registry view rather than the view itself: the
- * approval queue is the first tab of Permissions. It is offered only when the principal
- * may open the view AND holds the section's own permission, and it links with the
- * section's search so the view opens on it.
- */
-export interface ShellSection extends GatedSection {
-  /** The label key under `nav:shell.journeys` and the key its count is given under. */
-  key: string
-  /** The registry view that holds the section. */
-  view: string
-  search: Readonly<Record<string, string>>
-}
+import { APPROVALS_SECTION, type ShellSection } from './shell-sections'
 
-export const APPROVALS_SECTION: ShellSection = {
-  key: 'approvals',
-  view: 'permissions',
-  search: { tab: 'approvals' },
-  requires: 'governance:approval:read',
-}
+export { APPROVALS_SECTION, type ShellSection } from './shell-sections'
 
 type ShellEntry = string | ShellSection
 
-export const SHELL_GROUPS = [
-  { id: 'work', ids: ['home', 'sessions', 'work', APPROVALS_SECTION] },
-  { id: 'manage', ids: ['inventory', 'finops', 'accessMap', 'deploy'] },
-  // MCP servers opens the page where servers are added, tested and enabled (HU 025): the
-  // discovered catalog ("MCP & skills") stays in All areas, not as a second MCP page.
-  { id: 'integrate', ids: ['agent-tools', 'mcpServers', 'knowledge'] },
-  { id: 'secure', ids: ['identity', 'claudePolicy', 'audit', 'killswitch'] },
-] as const satisfies readonly { id: string; ids: readonly ShellEntry[] }[]
-
-export type ShellGroupId = (typeof SHELL_GROUPS)[number]['id']
-
-/** Every destination of the sidebar, in its pinned order (the groups, flattened). */
-export const JOURNEY_IDS: readonly string[] = SHELL_GROUPS.flatMap((g) =>
-  g.ids.map((e: ShellEntry) => (typeof e === 'string' ? e : e.view)),
-)
+/**
+ * The sidebar's pins, in order: the first job (Now, Sessions, AI tools, Approvals). Every
+ * other page is in its area, below the pins in the full sidebar and in All areas on the
+ * rail and the phone, so a page is never offered twice.
+ */
+export const SHELL_DESTINATIONS: readonly ShellEntry[] = [
+  'home',
+  'sessions',
+  'agent-tools',
+  APPROVALS_SECTION,
+]
 
 /** The views that are THEMSELVES sidebar destinations — not a view reached only through
- * one of its sections (Approvals opens a tab of Permissions). The top bar's short trail
- * and the "All areas" highlight follow these; a section's view keeps its registry trail. */
-export const DESTINATION_VIEW_IDS: readonly string[] = SHELL_GROUPS.flatMap(
-  (g) => g.ids.flatMap((e: ShellEntry) => (typeof e === 'string' ? [e] : [])),
-)
+ * one of its sections (Approvals opens a tab of Permissions). */
+export const DESTINATION_VIEW_IDS: readonly string[] =
+  SHELL_DESTINATIONS.filter((e): e is string => typeof e === 'string')
 
 /**
  * The name a person reads for a view: a sidebar destination by the sidebar's own label
- * (Sessions, Cost, Policies), any other view by its registry label. The top bar already
- * names a destination this way; the star, Favorites and Recent use it too, so a starred
- * page reads as the sidebar names it (09b: "Observe sessions" beside "Sessions").
+ * (Sessions, Cost, Policies), any other view by its registry label. The top bar names a
+ * destination this way; the star, Favorites and Recent use it too, so a starred page reads
+ * as the sidebar names it.
  */
 export function destinationLabel(t: TFunction, viewId: string): string {
   return DESTINATION_VIEW_IDS.includes(viewId)
@@ -84,122 +63,127 @@ export function destinationLabel(t: TFunction, viewId: string): string {
     : viewLabel(t, viewId)
 }
 
-/**
- * DESTINATIONS THAT SPAN SEVERAL VIEWS (CONCEPT-IA, grouping confirmed by Root): the
- * sidebar entry stays current on every member, and a strip above each member page moves
- * between the members this principal may open. Keyed by the destination's own view id,
- * which is the first member — except the footer's Settings, which is not a registry view
- * and so is not listed among its own members. Each view keeps its own path, permission and
- * deep links; nothing is re-routed.
- */
-export const SETTINGS_DESTINATION = 'settings'
-
-export const DESTINATION_MEMBERS: Readonly<Record<string, readonly string[]>> =
-  {
-    sessions: ['sessions', 'agentops'],
-    work: [
-      'work',
-      'communicationsHandoffs',
-      'communicationsInbox',
-      'communications',
-      'communicationsNew',
-      'communicationsAdministration',
-      'automations',
-      'orchestration',
-      'eventing',
-    ],
-    inventory: [
-      'inventory',
-      'workspaceDashboard',
-      'health',
-      'observability',
-      'dashboards',
-      'alerting',
-    ],
-    finops: ['finops', 'rateLimits', 'adoption'],
-    deploy: ['deploy', 'gitPublication'],
-    // AI tools is one list of tools with API keys as its only other tab (HU on
-    // refresh 01: ten tabs). Profiles, accounts, bindings, models, platforms, sandbox
-    // and voice stay in All areas.
-    'agent-tools': ['agent-tools', 'providers'],
-    mcpServers: ['mcpServers', 'catalog', 'protocolBindings'],
-    knowledge: ['knowledge', 'agentArtifacts'],
-    identity: ['identity', 'permissions', 'tenants'],
-    claudePolicy: [
-      'claudePolicy',
-      'routinePolicies',
-      'inferenceProxy',
-      'residency',
-      'redteam',
-      'agentcoreExport',
-    ],
-    audit: [
-      'audit',
-      'compliance',
-      'postureExport',
-      'reporting',
-      'attestation',
-      'evals',
-      'security',
-      // Privileged session recording: human administrative actions as hash-chained
-      // evidence anchored to the ledger (features/recordings) — evidence, not agent
-      // sessions.
-      'recordings',
-    ],
-    [SETTINGS_DESTINATION]: [
-      'console',
-      'backups',
-      'logs',
-      'onboarding',
-      'apiPlayground',
-    ],
-  }
-
-/** Members that are another DOOR into their destination's own view, not a page of their
- * own: /agentops mounts the Sessions room with its own permission. They read as
- * the destination itself — the journey trail — rather than "Sessions / <page>". */
-export const DESTINATION_DOORS: ReadonlySet<string> = new Set(['agentops'])
-
-/** The destination (its own view id, or "settings") that a view is a member of, or null. */
-export function destinationOf(viewId: string): string | null {
-  for (const [destination, members] of Object.entries(DESTINATION_MEMBERS)) {
-    if (members.includes(viewId)) return destination
-  }
-  return null
-}
-
 /** The section destination the current address IS (Approvals: Permissions with
- * ?tab=approvals), or null. A section wins over its view's membership: the address is the
- * section's, so no other destination is marked and no member strip is drawn. */
+ * ?tab=approvals), or null. The address is the section's, so no other destination is
+ * marked and no row of pages is drawn. */
 export function sectionAt(
   viewId: string,
   search: Readonly<Record<string, unknown>>,
 ): ShellSection | null {
-  for (const g of SHELL_GROUPS)
-    for (const e of g.ids as readonly ShellEntry[])
-      if (
-        typeof e !== 'string' &&
-        e.view === viewId &&
-        Object.entries(e.search).every(([k, v]) => search[k] === v)
-      )
-        return e
+  for (const e of SHELL_DESTINATIONS)
+    if (
+      typeof e !== 'string' &&
+      e.view === viewId &&
+      Object.entries(e.search).every(([k, v]) => search[k] === v)
+    )
+      return e
   return null
 }
 
-/** True when the current address belongs to a sidebar destination other than by being
- * one: a section destination (its view with the section's search) or a member of a
- * destination that spans several views. The sidebar then marks that destination, and "All
- * areas" does not claim the page too. */
-export function coveredByDestination(
-  viewId: string,
+const placeOf = (view: FeatureView): string | null =>
+  view.navigation.kind === 'root'
+    ? null
+    : `${view.navigation.areaId}/${view.navigation.sectionId}`
+
+/**
+ * The sidebar destination (its label key) that stays current on this address, or null:
+ * the section the address is, else the view itself (or the screen a door opens), else the
+ * first pin of the same section. Only a destination this principal is offered counts, so a
+ * page whose pins it may not open marks none, and All areas names its area instead.
+ */
+export function currentDestination(
+  location: NavLocation,
   search: Readonly<Record<string, unknown>>,
-): boolean {
-  return destinationOf(viewId) !== null || sectionAt(viewId, search) !== null
+  gate: ViewGate,
+): string | null {
+  if (location.kind !== 'view' && location.kind !== 'home') return null
+  const offered = journeyDestinations(gate)
+  const has = (key: string) => offered.some((d) => d.key === key)
+  const section = sectionAt(location.view.id, search)
+  if (section && has(section.key)) return section.key
+  const view = location.view.doorTo
+    ? (viewById(location.view.doorTo) ?? location.view)
+    : location.view
+  if (has(view.id)) return view.id
+  const place = placeOf(view)
+  if (!place) return null
+  const pin = offered.find(
+    (d) => !d.search && placeOf(viewById(d.id)!) === place,
+  )
+  return pin?.key ?? null
 }
 
-/** The phone bar's links. New (a verb) sits between Sessions and AI tools, and More
- * (the area directory) closes the bar; neither is a destination. */
-export const PHONE_BAR_IDS = ['home', 'sessions', 'agent-tools'] as const
+/** True when the address belongs to the footer's Settings: the Settings utility itself or
+ * any page of its area (System & settings), which the sidebar does not repeat as pins. */
+export function inSettingsArea(location: NavLocation): boolean {
+  if (location.kind === 'settings') return true
+  return (
+    location.kind === 'view' &&
+    areaOfView(location.view)?.id === SETTINGS_UTILITY.areaId
+  )
+}
+
+/**
+ * THE TOP BAR TRAIL. On a sidebar destination it reads as the design draws it — the workspace, then
+ * the destination ("telescopes / Sessions") — because the destination IS the location and
+ * the workspace is what it operates on; a door into a destination's screen (/agentops) and a
+ * section address (Approvals) read the same way. Every other page reads its one place in the
+ * areas, resolved by features/navigation/model.ts (`Area / Page`, `Area / Parent / Detail`):
+ * the same place All areas, the palette and the row of pages above it name. Ancestors link,
+ * the page does not, and sections never appear.
+ */
+export function trailFor(
+  t: TFunction,
+  location: NavLocation,
+  search: Readonly<Record<string, unknown>>,
+  workspaceName: string | null,
+): Crumb[] {
+  const workspace = { label: workspaceName ?? t('nav:workspace.all') }
+  if (location.kind === 'view') {
+    const section = sectionAt(location.view.id, search)
+    if (section)
+      return [workspace, { label: t(`nav:shell.journeys.${section.key}`) }]
+  }
+  if (location.kind === 'view' || location.kind === 'home') {
+    const room = location.view.doorTo
+      ? viewById(location.view.doorTo)
+      : location.view
+    if (room && DESTINATION_VIEW_IDS.includes(room.id))
+      return [workspace, { label: t(`nav:shell.journeys.${room.id}`) }]
+  }
+  return breadcrumbTrail(t, location)
+}
+
+export interface PageLink {
+  id: string
+  path: string
+}
+
+/**
+ * The pages beside this one, drawn as a row above it: the listed pages of its own section,
+ * in registry order. The footer's Settings stands for its whole area, so a page there (and
+ * Settings itself) lists the area's pages, led by Settings. Empty where there is nothing to
+ * move between.
+ */
+export function pagesBeside(location: NavLocation, gate: ViewGate): PageLink[] {
+  const link = (v: FeatureView): PageLink => ({ id: v.id, path: v.path })
+  if (inSettingsArea(location)) {
+    return [
+      { id: SETTINGS_UTILITY.id, path: SETTINGS_UTILITY.path },
+      ...authorizedSections(SETTINGS_UTILITY.areaId, gate).flatMap((s) =>
+        s.views.map(link),
+      ),
+    ]
+  }
+  if (location.kind !== 'view' || location.view.navigation.kind === 'root')
+    return []
+  const { areaId, sectionId } = location.view.navigation
+  return (
+    authorizedSections(areaId, gate)
+      .find((s) => s.sectionId === sectionId)
+      ?.views.map(link) ?? []
+  )
+}
 
 export interface ShellDestination {
   /** The registry id of the view it opens. */
@@ -210,8 +194,6 @@ export interface ShellDestination {
   /** The search a section destination opens its view with. */
   search?: Readonly<Record<string, string>>
   icon: LucideIcon
-  /** Home matches only itself; every other journey also owns its children. */
-  exact: boolean
 }
 
 /** The registry views these ids name that this principal may open, in the given order.
@@ -234,32 +216,20 @@ export function shellDestinations(
         path: view.path,
         search: section?.search,
         icon: view.icon,
-        exact: view.path === '/',
       },
     ]
   })
 }
 
+/** The sidebar's destinations this principal may open, in order. */
 export function journeyDestinations(gate: ViewGate): ShellDestination[] {
-  return shellDestinations(JOURNEY_IDS, gate)
+  return shellDestinations(SHELL_DESTINATIONS, gate)
 }
 
-export interface ShellGroup {
-  id: ShellGroupId
-  destinations: ShellDestination[]
-}
-
-/** The groups this principal may open, each with its permitted destinations; a group with
- * none is not drawn. */
-export function groupedDestinations(gate: ViewGate): ShellGroup[] {
-  return SHELL_GROUPS.map((g) => ({
-    id: g.id,
-    destinations: shellDestinations(g.ids, gate),
-  })).filter((g) => g.destinations.length > 0)
-}
-
+/** The phone bar's links: the first three destinations this principal may open. New (a
+ * verb) sits after the second, and More (the area directory) closes the bar. */
 export function phoneBarDestinations(gate: ViewGate): ShellDestination[] {
-  return shellDestinations(PHONE_BAR_IDS, gate)
+  return journeyDestinations(gate).slice(0, 3)
 }
 
 /** The areas this principal may open: the union of its authorized leaves. An area has

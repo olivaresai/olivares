@@ -53,12 +53,12 @@ if [ "${1:-}" = "--selftest" ]; then
 fi
 
 lista="$(mktemp "${TMPDIR:-/tmp}/residue-list.XXXXXX" 2>/dev/null)" || {
-	echo "check-disk-residue: NO PUDE MIRAR - no puedo crear mi propio temporal." >&2
+	echo "check-disk-residue: COULD NOT CHECK - cannot create a separate temporary directory." >&2
 	exit 2
 }
 vivos="$(mktemp "${TMPDIR:-/tmp}/residue-live.XXXXXX" 2>/dev/null)" || {
 	rm -f "$lista"
-	echo "check-disk-residue: NO PUDE MIRAR - no puedo crear mi propio temporal." >&2
+	echo "check-disk-residue: COULD NOT CHECK - cannot create a separate temporary directory." >&2
 	exit 2
 }
 # UN solo trap con TODOS los ficheros y armado aqui: `trap` sustituye, no acumula. Es la regla que
@@ -125,27 +125,27 @@ while IFS= read -r d; do
 	if [ ! -e "$d" ]; then
 		if [ "$fuente" = defecto ]; then
 			ausentes=$((ausentes + 1))
-			anota "$d: no existe. Candidato por defecto, no una raiz de esta caja."
+			anota "$d: does not exist. This is a default candidate, not a root on this machine."
 		else
 			incompleto=$((incompleto + 1))
-			anota "$d: SOLICITADA y no existe. No se puede inspeccionar lo que no esta."
+			anota "$d: REQUESTED but does not exist. Cannot inspect a missing path."
 		fi
 		continue
 	fi
 	if [ ! -d "$d" ]; then
 		incompleto=$((incompleto + 1))
-		anota "$d: existe y NO es un directorio."
+		anota "$d: exists but is not a directory."
 		continue
 	fi
 	if [ ! -r "$d" ]; then
 		incompleto=$((incompleto + 1))
-		anota "$d: existe y este lector NO la puede leer."
+		anota "$d: exists but this reader cannot read it."
 		continue
 	fi
 	c="$(cd "$d" 2>/dev/null && pwd -P)" || c=""
 	if [ -z "$c" ]; then
 		incompleto=$((incompleto + 1))
-		anota "$d: no pude canonicalizarla (cd/pwd -P)."
+		anota "$d: could not resolve its canonical path (cd/pwd -P)."
 		continue
 	fi
 	canonicas="$canonicas$c"$'\n'
@@ -161,7 +161,7 @@ while IFS= read -r d; do
 	parcial="$(mktemp "${TMPDIR:-/tmp}/residue-root.XXXXXX" 2>/dev/null)" || {
 		parcial=""
 		incompleto=$((incompleto + 1))
-		anota "$d: no pude crear el temporal de su censo."
+		anota "$d: could not create the temporary inventory file."
 		continue
 	}
 	if find "$d" -maxdepth 1 -mindepth 1 -printf "$d\t%p\n" >"$parcial" 2>/dev/null; then
@@ -169,11 +169,11 @@ while IFS= read -r d; do
 			enumeradas=$((enumeradas + 1))
 		else
 			incompleto=$((incompleto + 1))
-			anota "$d: no pude incorporar completo el temporal de su censo."
+			anota "$d: could not incorporate the complete temporary inventory file."
 		fi
 	else
 		incompleto=$((incompleto + 1))
-		anota "$d: \`find\` no termino 0. Su salida parcial se DESCARTA sin analizarla."
+		anota "$d: `find` did not exit 0. Its partial output is discarded without analysis."
 	fi
 	rm -f "$parcial"
 	parcial=""
@@ -182,14 +182,14 @@ done <<<"$canonicas"
 if [ "$incompleto" -ne 0 ] || [ "$enumeradas" -eq 0 ]; then
 	{
 		if [ "$enumeradas" -eq 0 ]; then
-			echo "check-disk-residue: NO PUDE MIRAR - ninguna raiz enumerada entera."
+			echo "check-disk-residue: COULD NOT CHECK - no root fully enumerated."
 		else
-			echo "check-disk-residue: NO PUDE MIRAR - inspeccion PARCIAL:" \
-				"$enumeradas entera(s), $incompleto sin enumerar."
+			echo "check-disk-residue: COULD NOT CHECK - partial inspection:" \
+				"$enumeradas fully enumerated, $incompleto not enumerated."
 		fi
 		printf '%s' "$motivos"
-		echo "  Una raiz sana NO cubre a otra que no se pudo mirar. Un veredicto aqui"
-		echo "  seria categorico sobre un censo con agujeros, asi que sale 2."
+		echo "  A readable root does not compensate for an unreadable one. An incomplete scan"
+		echo "  cannot support a definitive verdict, so this check exits 2."
 	} >&2
 	exit 2
 fi
@@ -197,7 +197,7 @@ if [ "$ausentes" -ne 0 ]; then
 	# No es un fallo, y por eso no cambia el codigo de salida; pero desaparecer en silencio es
 	# justo el defecto que este bloque corrige, asi que se nombra.
 	{
-		echo "check-disk-residue: $ausentes candidato(s) por defecto no existe(n):"
+		echo "check-disk-residue: $ausentes default candidate(s) missing:"
 		printf '%s' "$motivos"
 	} >&2
 fi

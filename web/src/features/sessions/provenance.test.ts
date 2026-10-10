@@ -10,6 +10,7 @@ import {
   startsAgain,
   mergeSessions,
   primaryRun,
+  runAwaitedApproval,
   runMatchesObserved,
   sessionLabel,
   sessionNaming,
@@ -885,5 +886,61 @@ describe('sharedNames — one list, distinct names (HU 029)', () => {
     expect(twins.every((n) => !!n.shortId)).toBe(true)
     expect(twins[0]!.shortId).not.toBe(twins[1]!.shortId)
     expect(named.find((n) => n.name === 'Other')!.shortId).toBeNull()
+  })
+})
+
+describe('runAwaitedApproval — the approval a run waits on now (#502)', () => {
+  const run = (patch: Partial<RunDTO>) =>
+    ({ run_ref: 'r', state: 'running', ...patch }) as RunDTO
+  it.each<[string, Partial<RunDTO>, string | undefined]>([
+    [
+      'a held launch: its launch approval',
+      { state: 'waiting_approval', approval_ref: 'apr_launch' },
+      'apr_launch',
+    ],
+    [
+      'a held launch with both: the launch approval',
+      {
+        state: 'waiting_approval',
+        approval_ref: 'apr_launch',
+        pending_approval_ref: 'apr_tool',
+      },
+      'apr_launch',
+    ],
+    [
+      'a held launch with no reference: none',
+      { state: 'waiting_approval', approval_ref: '' },
+      undefined,
+    ],
+    [
+      'a running run: the tool call approval',
+      { state: 'running', pending_approval_ref: 'apr_tool' },
+      'apr_tool',
+    ],
+    [
+      'a running run with an approved launch: the tool call, never the launch',
+      {
+        state: 'running',
+        approval_ref: 'apr_launch',
+        pending_approval_ref: 'apr_tool',
+      },
+      'apr_tool',
+    ],
+    [
+      'a running run with only an approved launch: none',
+      { state: 'running', approval_ref: 'apr_launch' },
+      undefined,
+    ],
+    [
+      'a stopped run: none',
+      {
+        state: 'stopped',
+        approval_ref: 'apr_launch',
+        pending_approval_ref: 'apr_tool',
+      },
+      undefined,
+    ],
+  ])('%s', (_name, patch, want) => {
+    expect(runAwaitedApproval(run(patch))).toBe(want)
   })
 })

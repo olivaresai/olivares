@@ -7,6 +7,9 @@ description: >-
   read. What it does, and its limits.
 ---
 
+FinOps budgets and spend analysis are **[Business](https://olivares.ai/pricing)** features. Community keeps per-session cost tracking and data export. Budgets stored before 0.1 remain readable and removable, and enforce while the FinOps module is on; Community cannot create or change them. Evaluations and sandboxes remain Community features.
+
+
 Module XI is the **cost / FinOps** layer for AI: it accounts for what the model and
 provider connectors report, lets you slice spend by any attribution dimension,
 forecasts the current period, and turns a budget into real enforcement that **denies
@@ -77,8 +80,8 @@ written to the append-only ledger and audited. See [Govern and approve](/how-to/
   orchestration fire, a voice open, a model route, an evals gate run and a durable MCP
   task are denied, and the inference proxy answers **HTTP 503**. Session launch applies
   its own availability posture (`OLIVARES_SESSION_BUDGET_AVAILABILITY`): unset, the
-  session launches on the Community edition and is refused with **HTTP 503** on the
-  Enterprise edition, and the failure is logged either way. The budget-cap finding
+  session is refused with **HTTP 503** in every edition; set to `fail-open`, it launches.
+  The failure is logged either way. The budget-cap finding
   emitted on ingest still records spend that reached a cap.
 - **The router enforces only the scopes it knows pre-execution** (global / provider /
   model); finer scopes (agent, session, team, project) are enforced at the fire/open seams

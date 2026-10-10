@@ -47,7 +47,7 @@ type managedStopAuthority struct {
 //
 // callerCtx is the caller's own lifetime and is consulted ONLY to refuse early.
 // Principal resolution, every read and every question run under actx: the
-// admission window bounded by the caller's deadline and T (correction 1 §5.2).
+// admission window bounded by the caller's deadline and T.
 func (m *Module) authorizeManagedStop(
 	actx, callerCtx context.Context,
 	tenant model.TenantID,
@@ -83,7 +83,7 @@ func (m *Module) authorizeManagedStop(
 			"the entry authorization names no workspace"), nil
 	}
 	var facts managedStopTargetFacts
-	err := m.data.View(actx, tenant, func(raw store.Scope) error {
+	err := m.Data.View(actx, tenant, func(raw store.Scope) error {
 		sc, cerr := store.ConfineWorkspace(actx, raw, entryWorkspace)
 		if cerr != nil {
 			return cerr
@@ -144,7 +144,7 @@ func (m *Module) authorizeManagedStop(
 }
 
 // managedStopAuthOutcome maps an authorization refusal onto the closed
-// vocabulary, exactly as correction 1 §5.4 lists it. A step-up or scoped-grant
+// vocabulary. A step-up or scoped-grant
 // requirement is distinct from a denial because the caller's remedy differs, and
 // an absent authorizer is the unwired composition rather than a refusal.
 //
@@ -319,7 +319,7 @@ func (m *Module) lookupManagedStop(
 		rebind      bool
 		observation string
 	)
-	err := m.data.View(ctx, tenant, func(raw store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(raw store.Scope) error {
 		sc, cerr := store.ConfineWorkspace(ctx, raw, workspace)
 		if cerr != nil {
 			return cerr
@@ -342,7 +342,7 @@ func (m *Module) lookupManagedStop(
 		if lerr != nil || !found {
 			return lerr
 		}
-		// The exact-launch P1 travels with the recorded row (correction 1 §7). An
+		// The exact-launch observation travels with the recorded row. An
 		// observation that cannot be read is reported as none, never as an exit.
 		if obs, oerr := readExactLaunchObservation(ctx, raw, req.RunRef, req.ExpectedLaunch); oerr == nil {
 			observation = obs
@@ -433,7 +433,7 @@ func (m *Module) admitManagedStop(
 	// item and its lease — is reached RAW from a fact the confinement already
 	// admitted, exactly as the engine reaches the claim it qualifies. Confining
 	// them would refuse lawful rows for a reason that is not true.
-	err := m.data.Mutate(ctx, tenant, func(raw store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(raw store.Scope) error {
 		sc, cerr := store.ConfineWorkspace(ctx, raw, authority.workspace)
 		if cerr != nil {
 			return cerr
@@ -753,7 +753,7 @@ func (m *Module) managedStopPreEffect(
 		// coordination locks outright — measured: every lawful bound Stop reported
 		// work_lease_stale with "scope is read-only". assertRunWorkLease, the
 		// existing pre-effect half of fenced runtime control, has the same shape.
-		if err := m.data.Mutate(ctx, tenant, func(raw store.Scope) error {
+		if err := m.Data.Mutate(ctx, tenant, func(raw store.Scope) error {
 			return m.assertManagedStopWork(ctx, raw, tenant, req, authority)
 		}); err != nil {
 			return refuseManagedStop(ManagedStopWorkLeaseStale,
@@ -818,7 +818,7 @@ func (m *Module) settleManagedStop(
 	ctx, cancel := managedStopStageContext(actx, ports)
 	defer cancel()
 	var settled model.EvidenceOperationState
-	err := m.data.Mutate(ctx, tenant, func(raw store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(raw store.Scope) error {
 		sc, cerr := store.ConfineWorkspace(ctx, raw, workspace)
 		if cerr != nil {
 			return cerr

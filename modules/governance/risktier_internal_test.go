@@ -79,24 +79,6 @@ func TestDefaultActionRiskTier(t *testing.T) {
 	}
 }
 
-func TestResolveRiskTierPolicyWord(t *testing.T) {
-	// An explicit policy tier is authoritative in BOTH directions (the set is configurable by policy)...
-	if got := resolveRiskTier(approvalSpec{RiskTier: "high"}, true, "deploy.apply"); got != RiskTierHigh {
-		t.Errorf("explicit downgrade ignored: got %q", got)
-	}
-	if got := resolveRiskTier(approvalSpec{RiskTier: "critical"}, true, "claude.tool.use"); got != RiskTierCritical {
-		t.Errorf("explicit upgrade ignored: got %q", got)
-	}
-	// ...a matched policy that stays silent defers to the built-in default...
-	if got := resolveRiskTier(approvalSpec{}, true, "deploy.apply"); got != RiskTierCritical {
-		t.Errorf("silent policy must defer to the default: got %q", got)
-	}
-	// ...and with no match at all the default classifies.
-	if got := resolveRiskTier(approvalSpec{}, false, "voice.session.open"); got != RiskTierHigh {
-		t.Errorf("unmatched default: got %q", got)
-	}
-}
-
 func TestFloorRequiredApprovals(t *testing.T) {
 	if got := floorRequiredApprovals(1, RiskTierCritical); got != 2 {
 		t.Errorf("critical floor: got %d, want 2", got)
@@ -122,5 +104,28 @@ func TestApprovalSystemTokenCannotDecide(t *testing.T) {
 	}
 	if !strings.Contains(rec.Body.String(), "system token cannot approve") {
 		t.Fatalf("system-token denial must be explicit; body=%s", rec.Body.String())
+	}
+}
+
+func TestResolveRiskTierRaisesAndDefaults(t *testing.T) {
+	if got := resolveRiskTier(approvalSpec{RiskTier: "critical"}, true, "claude.tool.use"); got != RiskTierCritical {
+		t.Errorf("explicit upgrade ignored: got %q", got)
+	}
+	// ...a matched policy that stays silent defers to the built-in default...
+	if got := resolveRiskTier(approvalSpec{}, true, "deploy.apply"); got != RiskTierCritical {
+		t.Errorf("silent policy must defer to the default: got %q", got)
+	}
+	// ...and with no match at all the default classifies.
+	if got := resolveRiskTier(approvalSpec{}, false, "voice.session.open"); got != RiskTierHigh {
+		t.Errorf("unmatched default: got %q", got)
+	}
+}
+
+// A stored tier word that predates canonical authoring still classifies: a
+// non-canonical "Critical" must keep the two-person floor, not skip it.
+func TestResolveRiskTierCanonicalizesStoredWord(t *testing.T) {
+	tier := resolveRiskTier(approvalSpec{RiskTier: " Critical "}, true, "claude.tool.use")
+	if tier != RiskTierCritical || floorRequiredApprovals(1, tier) != 2 {
+		t.Fatalf("stored \" Critical \" resolved to %q with quorum %d, want critical at 2", tier, floorRequiredApprovals(1, tier))
 	}
 }

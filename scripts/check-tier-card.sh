@@ -50,24 +50,24 @@ fi
 # convierte en una SEGUNDA autoridad capaz de justificar que algo comprado no se entregue. La cura
 # es preguntar primero a la única autoridad: si el mapa ya no es la derivación del canon, no hay
 # HOLD que lo arregle.
-ERRTC="$(mktemp "${TMPDIR:-/tmp}/tiercard.XXXXXX")" || cannot "no puedo crear un fichero de trabajo"
+ERRTC="$(mktemp "${TMPDIR:-/tmp}/tiercard.XXXXXX")" || cannot "cannot create a working file"
 trap 'rm -f "$ERRTC" "$ERRTC.out"' EXIT
 set +e
-[ -r "$ROOT/scripts/module-catalog-go.sh" ] || cannot "falta scripts/module-catalog-go.sh: sin el envoltorio del derivador no hay con qué comparar (un 127 no es un veredicto)"
+[ -r "$ROOT/scripts/module-catalog-go.sh" ] || cannot "missing scripts/module-catalog-go.sh: the derivation wrapper is required for comparison (exit 127 is not a result)"
 bash "$ROOT/scripts/module-catalog-go.sh" check >"$ERRTC.out" 2>"$ERRTC"
 rctc=$?
 set -e
 case "$rctc" in
 0 | 1 | 2) ;;
-*) say "check-tier-card: COULD NOT LOOK — la derivación salió con un código que su contrato no define ($rctc)" >&2; exit 2 ;;
+*) say "check-tier-card: COULD NOT LOOK — derivation returned an exit code its contract does not define ($rctc)" >&2; exit 2 ;;
 esac
 if [ "$rctc" -eq 2 ]; then
-	say "check-tier-card: COULD NOT LOOK — la derivación del canon no pudo correr:" >&2
+	say "check-tier-card: COULD NOT LOOK — canonical derivation could not run:" >&2
 	cat "$ERRTC" >&2 || true
 	exit 2
 fi
 if [ "$rctc" -eq 1 ]; then
-	say "check-tier-card: FAIL — el mapa vendido no es la derivación del canon, así que ningún HOLD lo justifica:" >&2
+	say "check-tier-card: FAIL — sold map differs from the canonical derivation; no HOLD justifies that:" >&2
 	cat "$ERRTC" >&2 || true
 	exit 1
 fi

@@ -58,6 +58,9 @@ type TenantVerify struct {
 	RestoredSeq int64  `json:"restored_seq"`
 	ManifestSeq int64  `json:"manifest_seq"`
 	TipNote     string `json:"tip_note,omitempty"`
+	// restoredHash and manifestHash name the two heads when the sequence numbers
+	// agree and the hashes do not, which "restored seq 7 != manifest seq 7" hid.
+	restoredHash, manifestHash string
 }
 
 // KeyVerify is the restored audit signing key's fingerprint check.
@@ -118,7 +121,7 @@ func RestoreVerify(ctx context.Context, st store.Store, m *Manifest, auditPub ed
 		}
 		if m.TipMatch == TipExact && !tv.TipOK {
 			rep.OK = false
-			rep.Problems = append(rep.Problems, fmt.Sprintf("tenant %s tip: restored seq %d != manifest seq %d", short(mt.Tenant), tv.RestoredSeq, tv.ManifestSeq))
+			rep.Problems = append(rep.Problems, fmt.Sprintf("tenant %s tip: restored seq %d hash %s != manifest seq %d hash %s", short(mt.Tenant), tv.RestoredSeq, short(tv.restoredHash), tv.ManifestSeq, short(tv.manifestHash)))
 		}
 		// A non-empty manifest chain ENTIRELY absent from the restored store is a lost
 		// chain — always a failure, in BOTH tip modes. An empty restored chain passes
@@ -242,6 +245,7 @@ func verifyTenant(ctx context.Context, st store.Store, t model.TenantID, mt Tena
 		// The manifest recorded events for this tenant but the restored store has
 		// none: the chain was lost (not merely truncated within RPO).
 		tv.Missing = !has && mt.HeadSeq > 0
+		tv.restoredHash, tv.manifestHash = restoredHash, mt.HeadHash
 		tv.TipOK = tv.RestoredSeq == mt.HeadSeq && restoredHash == mt.HeadHash
 		if !tv.TipOK {
 			if tipMode == TipAdvisory {

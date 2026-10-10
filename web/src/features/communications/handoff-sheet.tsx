@@ -25,7 +25,7 @@ import { Mono } from './content-blocks'
 import { FailureNotice } from './failure-notice'
 import { freshly, type Fresh } from './fresh'
 import { useReturnFocus } from './return-focus'
-import type { HandoffDetail, HandoffTransition } from './types'
+import type { HandoffDetail, HandoffGitRefs, HandoffTransition } from './types'
 
 /**
  * One offer's protected context, read fresh for its exact recipient through its
@@ -54,6 +54,7 @@ export function HandoffSheet({
   onRespond,
   refreshSignal = 0,
   registerFallbackFocus,
+  onOpenWorktree,
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -69,6 +70,10 @@ export function HandoffSheet({
   refreshSignal?: number
   /** Publishes a still-visible control of this sheet for nested focus return. */
   registerFallbackFocus?: (get: () => HTMLElement | null) => void
+  /** Offered only by an owner who may start a session. Receives the commit id, or the
+   * branch when the handoff names no commit; the owner opens the launch from it. The
+   * sheet starts nothing itself. */
+  onOpenWorktree?: (from: string) => void
   /** Hands the response to the room's own operation controller, which outlives this
    * sheet. The sheet never dispatches a mutation itself. */
   onRespond: (
@@ -163,6 +168,9 @@ export function HandoffSheet({
   const detail = answer && answer.ok ? answer.value : null
   const current = detail?.offer_context === 'current'
   const respondable = detail !== null && current
+  // Where the handed-over work is in git, when the sender named it (K4.A2).
+  const git: HandoffGitRefs = detail ? (detail.content as HandoffGitRefs) : {}
+  const gitStart = git.sha || git.branch || ''
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -251,6 +259,50 @@ export function HandoffSheet({
                   <p className="whitespace-pre-wrap break-words text-body">
                     {detail.content.risk}
                   </p>
+                </div>
+              ) : null}
+              {gitStart ? (
+                <div data-slot="handoff-git" className="flex flex-col gap-1">
+                  {git.branch ? (
+                    <div>
+                      <p className="text-body font-medium">
+                        {t('handoff.detail.branch')}
+                      </p>
+                      <p className="break-all text-body">
+                        <Mono>{git.branch}</Mono>
+                      </p>
+                    </div>
+                  ) : null}
+                  {git.sha ? (
+                    <div>
+                      <p className="text-body font-medium">
+                        {t('handoff.detail.commit')}
+                      </p>
+                      <p className="break-all text-body">
+                        <Mono>{git.sha}</Mono>
+                      </p>
+                    </div>
+                  ) : null}
+                  {onOpenWorktree ? (
+                    <>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="self-start"
+                        aria-describedby="handoff-open-worktree-hint"
+                        onClick={() => onOpenWorktree(gitStart)}
+                      >
+                        {t('handoff.detail.openWorktree')}
+                      </Button>
+                      <p
+                        id="handoff-open-worktree-hint"
+                        className="text-caption text-muted-foreground"
+                      >
+                        {t('handoff.detail.openWorktreeHint')}
+                      </p>
+                    </>
+                  ) : null}
                 </div>
               ) : null}
               {detail.content.artifact_refs &&

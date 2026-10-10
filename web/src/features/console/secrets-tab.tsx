@@ -3,8 +3,16 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { KeyRound, Pencil, Plus, ShieldAlert, Trash2 } from 'lucide-react'
-import { useState, useEffect, useMemo } from 'react'
+import {
+  Folder,
+  KeyRound,
+  Lock,
+  Pencil,
+  Plus,
+  ShieldAlert,
+  Trash2,
+} from 'lucide-react'
+import { useState, useEffect, useId, useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -22,9 +30,13 @@ import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
 import { Spinner } from '@/components/ui/spinner'
 import { Textarea } from '@/components/ui/textarea'
+import { agentOpsApi } from '@/features/agentops/api'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
+import { RefChip } from '@/features/sessions/ref-chip'
 import { useAuth } from '@/lib/auth/context'
+import { ApiError } from '@/lib/api/errors'
+import { formatDateTime, formatRelativeTime } from '@/lib/format'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import {
   consoleApi,
@@ -32,8 +44,19 @@ import {
   type SecretDTO,
   type SecretInput,
 } from './api'
+import { mcpGatewayApi } from './mcp-gateway-api'
+import {
+  collectSecretUsage,
+  groupByFolder,
+  type SecretUse,
+  type SecretUsage,
+} from './secret-references'
 import { StaticTable } from '@/components/data/static-table'
 import './i18n'
+
+// The session list pages by recency only (modules/sessions runtime_api.go
+// handleListRuns), so "used by" names sessions among the most recent this many.
+const RUNS_SCANNED = 500
 
 // A secret name/handle: letters, digits and the separators `. _ - /`. The store
 // rejects anything else; we mirror the rule so the create button explains itself.
@@ -100,6 +123,8 @@ function SecretsBody({
     scope === 'tenant'
       ? !!boundary.tenant && can?.('tenant:admin')
       : isSuperadmin
+  const folderId = useId()
+  const usedById = useId()
   const [editing, setEditing] = useState<SecretDTO | null>(null)
   const [createOpen, setCreateOpen] = useState(false)
   const [del, setDel] = useState<SecretDTO | null>(null)
@@ -113,6 +138,14 @@ function SecretsBody({
             tenant: boundary.tenant ?? undefined,
           })
         : consoleApi.listSecrets(),
+    enabled: admitted,
+  })
+
+  const usage = useSecretUsage({
+    scope,
+    namespace,
+    queryKey,
+    tenant: boundary.tenant,
     enabled: admitted,
   })
 
@@ -187,66 +220,174 @@ function SecretsBody({
       ) : secrets.length === 0 ? (
         <EmptyState
           title={t('console:secrets.none')}
-          description={t('console:secrets.noneHint')}
+          description={t(`console:secrets.noneHint.${usage.roster}`)}
           icon={<KeyRound />}
         />
       ) : (
-        <div className="overflow-hidden rounded-lg border border-border">
+        <div className="overflow-x-auto rounded-lg border border-border">
           <StaticTable>
             <thead>
               <tr>
                 <th>{t('console:secrets.colName')}</th>
-                <th>{t('console:secrets.colHint')}</th>
-                <th>{t('console:secrets.colDescription')}</th>
+                <th>{t('console:secrets.colValue')}</th>
+                <th>{t('console:secrets.colChanged')}</th>
+                <th>{t('console:secrets.colReference')}</th>
+                <th>{t('console:secrets.colUsedBy')}</th>
                 <th />
               </tr>
             </thead>
-            <tbody>
-              {secrets.map((s) => (
-                <tr key={s.name} className="align-top">
-                  <td>
-                    <span className="font-mono text-caption text-foreground">
-                      {s.name}
-                    </span>
-                  </td>
-                  <td>
-                    {/* The hint is a NON-secret fingerprint, never the value. */}
-                    <Badge variant="neutral">
-                      <KeyRound
-                        className="size-3 shrink-0 text-accent-text"
-                        aria-hidden
+            {groupByFolder(secrets).map(({ folder, items }, i) => (
+              <tbody
+                key={folder}
+                aria-label={
+                  folder ? undefined : t('console:secrets.rootFolder')
+                }
+                aria-labelledby={folder ? `${folderId}-${i}` : undefined}
+              >
+                {folder && (
+                  <tr>
+                    <th
+                      id={`${folderId}-${i}`}
+                      colSpan={6}
+                      scope="rowgroup"
+                      className="bg-muted/40 text-left"
+                    >
+                      <span className="inline-flex items-center gap-1.5 font-mono text-caption text-foreground">
+                        <Folder className="size-3.5 shrink-0" aria-hidden />
+                        {folder}/
+                      </span>
+                    </th>
+                  </tr>
+                )}
+                {items.map((s) => (
+                  <tr key={s.name} className="align-top">
+                    <td className={folder ? 'pl-8' : undefined}>
+                      <span className="font-mono text-caption text-foreground">
+                        {(folder && s.name.slice(folder.length + 1)) || s.name}
+                      </span>
+                      {s.description && (
+                        <p className="text-caption text-muted-foreground">
+                          {s.description}
+                        </p>
+                      )}
+                    </td>
+                    <td>
+                      {/* Never the value: the store does not return it. The hint is
+                          a NON-secret fingerprint that changes when the value does. */}
+                      <span className="inline-flex items-center gap-1.5">
+                        <span
+                          aria-hidden
+                          className="font-mono text-muted-foreground"
+                        >
+                          ••••••••
+                        </span>
+                        <span className="sr-only">
+                          {t('console:secrets.valueMasked')}
+                        </span>
+                        <Badge variant="neutral">
+                          <KeyRound
+                            className="size-3 shrink-0 text-accent-text"
+                            aria-hidden
+                          />
+                          <span className="font-mono">{s.hint}</span>
+                        </Badge>
+                      </span>
+                    </td>
+                    <td
+                      className="whitespace-nowrap text-muted-foreground"
+                      title={
+                        s.updated_at ? formatDateTime(s.updated_at) : undefined
+                      }
+                    >
+                      {formatRelativeTime(s.updated_at)}
+                    </td>
+                    <td>
+                      <RefChip value={`store:${s.name}`} absent="—" />
+                    </td>
+                    <td>
+                      <UsedBy
+                        state={usage}
+                        uses={usage.data?.store.get(s.name)}
                       />
-                      <span className="font-mono">{s.hint}</span>
-                    </Badge>
-                  </td>
-                  <td className="text-muted-foreground">
-                    {s.description || '—'}
-                  </td>
-                  <td className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditing(s)}
-                      >
-                        <Pencil />
-                        {t('console:secrets.rotate')}
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setDel(s)}
-                      >
-                        <Trash2 />
-                        {t('console:secrets.delete')}
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
+                    </td>
+                    <td className="text-right">
+                      <div className="flex justify-end gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setEditing(s)}
+                        >
+                          <Pencil />
+                          {t('console:secrets.rotate')}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setDel(s)}
+                        >
+                          <Trash2 />
+                          {t('console:secrets.delete')}
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            ))}
           </StaticTable>
         </div>
+      )}
+
+      {!!usage.data?.external.length && (
+        <section
+          aria-labelledby="secrets-external"
+          className="flex flex-col gap-2"
+        >
+          <h3 id="secrets-external" className="text-label text-foreground">
+            {t('console:secrets.externalTitle')}
+          </h3>
+          <p className="max-w-2xl text-caption text-muted-foreground">
+            {t('console:secrets.externalCaption')}
+          </p>
+          <div className="overflow-x-auto rounded-lg border border-border">
+            <StaticTable>
+              <thead>
+                <tr>
+                  <th>{t('console:secrets.colReference')}</th>
+                  <th>{t('console:secrets.colUsedBy')}</th>
+                  <th />
+                </tr>
+              </thead>
+              <tbody>
+                {usage.data.external.map((ref) => (
+                  <tr key={ref.reference} className="align-top">
+                    <td>
+                      {/* The chip paints the locator; the scheme says which backend. */}
+                      <span className="inline-flex items-center gap-1.5">
+                        <span className="font-mono text-caption text-muted-foreground">
+                          {ref.reference.slice(
+                            0,
+                            ref.reference.indexOf(':') + 1,
+                          )}
+                        </span>
+                        <RefChip value={ref.reference} absent="—" />
+                      </span>
+                    </td>
+                    <td>
+                      <UsedBy state={usage} uses={ref.usedBy} />
+                    </td>
+                    <td className="text-right">
+                      <Badge variant="neutral">
+                        <Lock className="size-3 shrink-0" aria-hidden />
+                        {t('console:secrets.readOnly')}
+                      </Badge>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </StaticTable>
+          </div>
+        </section>
       )}
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
@@ -283,17 +424,155 @@ function SecretsBody({
         </DialogContent>
       </Dialog>
 
+      {/* The consequence depends on who holds the secret; the confirm names them
+          from the same roster as the row's "Used by". */}
       <ConfirmDialog
         open={del !== null}
         onOpenChange={(o) => !o && setDel(null)}
         title={t('console:secrets.deleteTitle')}
-        description={t('console:secrets.deleteBody')}
+        description={t(`console:secrets.deleteBody.${usage.roster}`)}
         confirmLabel={t('console:secrets.delete')}
         tone="danger"
         pending={deleteMutation.isPending}
         onConfirm={() => del && deleteMutation.mutate(del.name)}
-      />
+      >
+        {del && (
+          <div
+            role="group"
+            aria-labelledby={usedById}
+            className="flex flex-col gap-1"
+          >
+            <span id={usedById} className="text-label text-foreground">
+              {t('console:secrets.colUsedBy')}
+            </span>
+            <UsedBy state={usage} uses={usage.data?.store.get(del.name)} />
+          </div>
+        )}
+      </ConfirmDialog>
     </div>
+  )
+}
+
+/** Which roster "used by" was read from: an empty answer names it, because a holder
+ * outside it (a workspace connector, a template) is not seen. */
+type UsageRoster = 'sources' | 'mcp' | 'sessions'
+
+interface UsageState {
+  roster: UsageRoster
+  data?: SecretUsage
+  isError: boolean
+  /** The engine does not serve that roster (501). */
+  unwired: boolean
+  /** The session list was cut at RUNS_SCANNED: older sessions are not named. */
+  partial: boolean
+}
+
+/** What references each secret, read from the rosters that hold the references:
+ * the source roster (global), the MCP gateway (mcp/) or the session runs (env/). */
+function useSecretUsage({
+  scope,
+  namespace,
+  queryKey,
+  tenant,
+  enabled,
+}: {
+  scope?: 'tenant'
+  namespace: TenantSecretNamespace
+  queryKey: readonly unknown[]
+  tenant: string | null
+  enabled: boolean
+}): UsageState {
+  const roster: UsageRoster = !scope
+    ? 'sources'
+    : namespace === 'mcp/'
+      ? 'mcp'
+      : 'sessions'
+  const query = useQuery({
+    // Under the list's own key, so the tenant panel's unmount cleanup and every
+    // write's invalidation reach it too. The tenant is named again — the base
+    // already carries it in tenant mode — so the key states its own scope.
+    queryKey: [...queryKey, 'used-by', roster, tenant],
+    enabled,
+    queryFn: async ({ signal }) => {
+      if (roster === 'sources') {
+        const { sources } = await consoleApi.listSources({ signal })
+        return { usage: collectSecretUsage({ sources }), partial: false }
+      }
+      if (roster === 'mcp') {
+        const { servers } = await mcpGatewayApi.get({
+          signal,
+          tenant: tenant ?? undefined,
+        })
+        return {
+          usage: collectSecretUsage({ mcpServers: servers }),
+          partial: false,
+        }
+      }
+      const runs = await agentOpsApi.listRuns(
+        { limit: RUNS_SCANNED },
+        { signal, tenant },
+      )
+      return {
+        usage: collectSecretUsage({ runs: runs.items }),
+        partial: runs.has_more,
+      }
+    },
+  })
+  return {
+    roster,
+    data: query.data?.usage,
+    isError: query.isError,
+    unwired: query.error instanceof ApiError && query.error.status === 501,
+    partial: !!query.data?.partial,
+  }
+}
+
+// One cell names this many users; the rest are counted.
+const USES_SHOWN = 5
+
+/** The connections and sessions that reference a secret. Only an answer read from the
+ * roster says "none", and it names the roster: a failed, paused or pending read never
+ * reads as "not used". */
+function UsedBy({ state, uses }: { state: UsageState; uses?: SecretUse[] }) {
+  const { t } = useTranslation('console')
+  if (state.isError)
+    return (
+      <span className="text-caption text-warning">
+        {state.unwired
+          ? t('secrets.usedByUnwired')
+          : t('secrets.usedByUnavailable')}
+      </span>
+    )
+  if (!state.data)
+    return (
+      <span className="text-caption text-muted-foreground">
+        {t('secrets.usedByLoading')}
+      </span>
+    )
+  if (!uses?.length)
+    return (
+      <span className="text-caption text-muted-foreground">
+        {state.partial
+          ? t('secrets.usedByNoneRecent', { limit: RUNS_SCANNED })
+          : t(`secrets.usedByNone.${state.roster}`)}
+      </span>
+    )
+  return (
+    <ul className="flex flex-col gap-0.5">
+      {uses.slice(0, USES_SHOWN).map((u) => (
+        <li key={`${u.kind}:${u.id}`} className="text-caption">
+          <span className="text-muted-foreground">
+            {t(`secrets.useKind.${u.kind}`)}
+          </span>{' '}
+          <span className="text-foreground">{u.label}</span>
+        </li>
+      ))}
+      {uses.length > USES_SHOWN && (
+        <li className="text-caption text-muted-foreground">
+          {t('secrets.usedByMore', { more: uses.length - USES_SHOWN })}
+        </li>
+      )}
+    </ul>
   )
 }
 

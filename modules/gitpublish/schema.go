@@ -71,6 +71,8 @@ const (
 	reasonObservationObject  = "a refusal or evidence code, or the observed commit ids: publish.go:732, publish.go:839, reconcile.go:197"
 	reasonObservationRequest = "the host's request id, cut to 128 characters of a fixed alphabet: connectors/gitpublish/result.go:119-132, publish.go:839"
 	reasonObservationAt      = "an RFC 3339 UTC instant written as a time: records.go:319, records.go:129-134"
+	reasonProposalRun        = "the session run whose approved proposal the intent carries out, a validated run id, only checked for presence, rendered and audited: publish.go:62-68, publish.go:585-600, audit.go:43"
+	reasonProposalApproval   = "the governance approval id the proposal spent, matched against the operation alphabet and only rendered and audited: publish.go:62-68, audit.go:43, routes.go:202"
 )
 
 func none(reason string) *model.ColumnDecl { return model.None(reason) }
@@ -151,6 +153,10 @@ func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
 		nullText("acknowledge_intent", reasonAcknowledgeIntent),
 		text("claimed_at", reasonInstant), textIdx("dispatch_deadline", reasonInstant),
 		text("release_failure", reasonReleaseFailure),
+		// Appended last and nullable: the additive reconcile adds them to an
+		// existing table.
+		nullText("proposal_session_run", reasonProposalRun),
+		nullText("proposal_approval", reasonProposalApproval),
 	}
 	if err := reg.Register(model.EntityDescriptor{
 		Kind:   kindIntent,

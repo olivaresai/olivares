@@ -9,8 +9,10 @@
 // it must say it does not know instead of printing a zero.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ReactNode } from 'react'
+import { useModulesStore } from '@/stores/modules'
+import { useWorkspaceStore } from '@/stores/workspace'
 
 // El panel pinta `<Link>` y en jsdom no hay router: sin esto, `useLinkProps` revienta con
 // «Cannot read properties of null (reading 'isServer')», que no dice nada del componente.
@@ -23,15 +25,12 @@ vi.mock('@tanstack/react-router', () => ({
   useRouterState: () => '/',
 }))
 
-const workspaceState = {
-  activeWorkspace: null as string | null,
-  activeWorkspaceName: null as string | null,
-}
-vi.mock('@/stores/workspace', () => ({
-  useWorkspaceStore: () => workspaceState,
-}))
+const granted = new Set<string>()
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ activeTenant: 't1' }),
+  useAuth: () => ({
+    activeTenant: 't1',
+    can: (permission: string) => granted.has(permission),
+  }),
 }))
 
 vi.mock('@/features/console/api', async (importOriginal) => {
@@ -48,6 +47,7 @@ vi.mock('@/features/console/api', async (importOriginal) => {
 const summaryMock = vi.fn()
 const agentsMock = vi.fn()
 const groupsMock = vi.fn()
+const contentsMock = vi.fn()
 vi.mock('./api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('./api')>()
   return {
@@ -56,6 +56,7 @@ vi.mock('./api', async (importOriginal) => {
       summary: (...a: unknown[]) => summaryMock(...a),
       agents: (...a: unknown[]) => agentsMock(...a),
       groups: (...a: unknown[]) => groupsMock(...a),
+      contents: (...a: unknown[]) => contentsMock(...a),
     },
   }
 })
@@ -72,8 +73,7 @@ function show() {
 }
 
 beforeEach(() => {
-  workspaceState.activeWorkspace = null
-  workspaceState.activeWorkspaceName = null
+  useWorkspaceStore.getState().clear()
   summaryMock.mockReset().mockResolvedValue({
     id: 'w1',
     name: 'Engineering',
@@ -86,7 +86,15 @@ beforeEach(() => {
   })
   agentsMock.mockReset().mockResolvedValue({ items: [], has_more: false })
   groupsMock.mockReset().mockResolvedValue({ items: [], has_more: false })
+  granted.clear()
+  granted.add('inventory:catalog:read')
+  contentsMock.mockReset().mockResolvedValue({
+    workspace_id: 'w1',
+    kinds: [{ kind: 'core.agent', count: 7, capped: false }],
+  })
 })
+
+afterEach(() => useModulesStore.getState().setOff([]))
 
 describe('WorkspaceDashboardView', () => {
   /**
@@ -115,15 +123,37 @@ describe('WorkspaceDashboardView', () => {
     expect(
       await screen.findByRole('link', { name: 'Open inventory' }),
     ).toHaveAttribute('href', '/inventory')
+    expect(screen.getByText(/or go to the tenant-wide inventory/)).toBeVisible()
   })
 
   it('reads the three sources once a workspace is chosen', async () => {
-    workspaceState.activeWorkspace = 'w1'
+    useWorkspaceStore.getState().setActiveWorkspace('w1')
     show()
     await waitFor(() => expect(summaryMock).toHaveBeenCalledWith('w1'))
     expect(agentsMock).toHaveBeenCalledWith('w1')
     expect(groupsMock).toHaveBeenCalledWith('w1')
     expect(await screen.findByText('7')).toBeInTheDocument()
+  })
+
+  it('shows the contents read only to principals who hold the route tier', async () => {
+    useWorkspaceStore.getState().setActiveWorkspace('w1')
+    const viewer = show()
+    expect(await screen.findByText('7')).toBeInTheDocument()
+    expect(
+      screen.queryByRole('region', { name: 'Workspace contents' }),
+    ).not.toBeInTheDocument()
+    expect(contentsMock).not.toHaveBeenCalled()
+    viewer.unmount()
+
+    granted.add('tenant:admin')
+    show()
+    expect(
+      await screen.findByRole('row', { name: 'core.agent 7' }),
+    ).toBeInTheDocument()
+    expect(contentsMock).toHaveBeenCalledWith(
+      'w1',
+      expect.objectContaining({ tenant: 't1' }),
+    )
   })
 
   /**
@@ -137,7 +167,7 @@ describe('WorkspaceDashboardView', () => {
    * THE MUTATION: `value={formatInt(s?.agent_count ?? 0)}`. The tiles read 0 and this fires.
    */
   it('says it does not know, rather than printing a zero', async () => {
-    workspaceState.activeWorkspace = 'w1'
+    useWorkspaceStore.getState().setActiveWorkspace('w1')
     summaryMock.mockRejectedValue(new Error('unavailable'))
     show()
     await waitFor(() =>
@@ -147,7 +177,7 @@ describe('WorkspaceDashboardView', () => {
   })
 
   it('mounts the agents truncation badge from the loaded rows only when has_more is true', async () => {
-    workspaceState.activeWorkspace = 'w1'
+    useWorkspaceStore.getState().setActiveWorkspace('w1')
     agentsMock.mockResolvedValue({
       items: Array.from({ length: 7 }, (_, i) => ({
         id: `agent-${i}`,
@@ -160,11 +190,11 @@ describe('WorkspaceDashboardView', () => {
     show()
     expect(
       await screen.findByText(/Loaded 7 rows; there are more/i),
-    ).toBeVisible()
+    ).toHaveAttribute('title', expect.stringMatching(/Use View all/))
   })
 
   it('mounts the groups truncation badge from the loaded rows only when has_more is true', async () => {
-    workspaceState.activeWorkspace = 'w1'
+    useWorkspaceStore.getState().setActiveWorkspace('w1')
     groupsMock.mockResolvedValue({
       items: Array.from({ length: 6 }, (_, i) => ({
         id: `group-${i}`,
@@ -181,7 +211,7 @@ describe('WorkspaceDashboardView', () => {
   })
 
   it('keeps eleven complete rows when has_more is false instead of silently slicing to ten', async () => {
-    workspaceState.activeWorkspace = 'w1'
+    useWorkspaceStore.getState().setActiveWorkspace('w1')
     agentsMock.mockResolvedValue({
       items: Array.from({ length: 11 }, (_, i) => ({
         id: `agent-${i}`,
@@ -194,5 +224,71 @@ describe('WorkspaceDashboardView', () => {
     show()
     expect(await screen.findByText('Agent 10')).toBeVisible()
     expect(screen.queryByText(/there are more/i)).not.toBeInTheDocument()
+  })
+
+  /**
+   * THE CONTROL (#475): a page link to Inventory is offered only where Inventory opens. A
+   * fresh install runs without the inventory module, and /inventory then shows only the
+   * not-enabled notice, so these actions led nowhere.
+   *
+   * THE MUTATION: drop the `navigable(INVENTORY_VIEW)` gate. The three /inventory links come
+   * back and both cases fire.
+   */
+  describe.each([
+    ['the inventory module is off', () => useModulesStore.getState().setOff(['inventory'])],
+    ['the principal cannot read the inventory', () => granted.delete('inventory:catalog:read')],
+  ])('when %s', (_, close) => {
+    it('offers no inventory action on the selection page', async () => {
+      close()
+      show()
+      expect(
+        await screen.findByText(/Select a workspace in the navigation rail/i),
+      ).toBeInTheDocument()
+      expect(screen.queryByText(/inventory/i)).not.toBeInTheDocument()
+      expect(screen.queryByRole('link')).not.toBeInTheDocument()
+    })
+
+    it('offers no inventory action on the workspace overview', async () => {
+      close()
+      useWorkspaceStore.getState().setActiveWorkspace('w1')
+      agentsMock.mockResolvedValue({
+        items: Array.from({ length: 7 }, (_, i) => ({
+          id: `agent-${i}`,
+          name: `Agent ${i}`,
+          kind: 'assistant',
+          status: 'active',
+        })),
+        has_more: true,
+      })
+      const page = show()
+      expect(
+        await screen.findByText(/Loaded 7 rows; there are more/i),
+      ).toBeVisible()
+      expect(screen.queryByTitle(/View all|inventory/i)).not.toBeInTheDocument()
+      expect(
+        screen.getAllByRole('link').map((a) => a.getAttribute('href')),
+      ).toEqual(['/console', '/console'])
+      page.unmount()
+
+      agentsMock.mockResolvedValue({ items: [], has_more: false })
+      show()
+      expect(
+        await screen.findByText('No agents in this workspace yet.'),
+      ).toBeVisible()
+      expect(
+        screen.getAllByRole('link').map((a) => a.getAttribute('href')),
+      ).toEqual(['/console', '/console'])
+    })
+  })
+
+  it('offers the inventory actions on the workspace overview where Inventory opens', async () => {
+    useWorkspaceStore.getState().setActiveWorkspace('w1')
+    show()
+    expect(
+      await screen.findByRole('link', { name: 'Open inventory' }),
+    ).toHaveAttribute('href', '/inventory')
+    expect(
+      screen.getAllByRole('link').map((a) => a.getAttribute('href')),
+    ).toEqual(['/inventory', '/inventory', '/console', '/console'])
   })
 })

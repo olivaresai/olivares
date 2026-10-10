@@ -183,20 +183,6 @@ type managedStopPorts struct {
 	admissionTimeout time.Duration
 }
 
-// UseManagedStopAuthority late-binds the managed Stop's composition ports.
-//
-// Nil is a MEANINGFUL deny-closed state and not a default: without the resolver no
-// evidence can be reconstructed, without the authorizer no question can be asked,
-// and without the elector no epoch can be fenced. A module composed without them
-// refuses every managed Stop with ErrManagedStopUnwired before it reads anything.
-func (m *Module) UseManagedStopAuthority(
-	resolver ManagedStopPrincipalResolver,
-	authorizer *auth.Authorizer,
-	elector store.LeaderElector,
-) {
-	m.managedStop = &managedStopPorts{resolver: resolver, authorizer: authorizer, elector: elector}
-}
-
 // WithManagedStopAdmissionTimeout sets the managed Stop admission timeout T
 // (correction 1 §5.3). A non-positive value leaves the default in place: the
 // composition root refuses an invalid configured value before it reaches here.
@@ -215,10 +201,10 @@ const defaultManagedStopAdmissionTimeout = 10 * time.Second
 
 // managedStopReady reports the ports with T resolved, or the deny-closed reason.
 func (m *Module) managedStopReady() (*managedStopPorts, error) {
-	if m == nil || m.data == nil || m.rt == nil {
+	if m == nil || m.Data == nil || m.rt == nil {
 		return nil, ErrManagedStopUnwired
 	}
-	p := m.managedStop
+	p := m.ManagedStopAuthority
 	if p == nil || p.resolver == nil || p.authorizer == nil || p.elector == nil {
 		return nil, ErrManagedStopUnwired
 	}
@@ -548,3 +534,14 @@ func custodialClaimer(sc store.Scope) (store.CustodialEffectClaimer, error) {
 	}
 	return claimer, nil
 }
+
+// NewManagedStopAuthority keeps managed Stop's three existing ports together.
+// Missing ports remain deny-closed and are named by engine startup validation.
+func NewManagedStopAuthority(resolver ManagedStopPrincipalResolver,
+	authorizer *auth.Authorizer, elector store.LeaderElector) *ManagedStopAuthority {
+	return &managedStopPorts{resolver: resolver, authorizer: authorizer, elector: elector}
+}
+
+// ManagedStopAuthority retains Stop identity, authorization, and fencing together.
+// Build it with NewManagedStopAuthority; its ports stay private.
+type ManagedStopAuthority = managedStopPorts

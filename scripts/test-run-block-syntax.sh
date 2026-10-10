@@ -16,10 +16,10 @@ LC_ALL=C
 export LC_ALL
 RAIZ="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)" || exit 2
 SUT="$RAIZ/scripts/check-run-block-syntax.sh"
-[ -r "$SUT" ] || { echo "test-run-block-syntax: ⛔ NO HE PODIDO MIRAR: no encuentro $SUT" >&2; exit 2; }
+[ -r "$SUT" ] || { echo "test-run-block-syntax: ⛔ COULD NOT LOOK: cannot find $SUT" >&2; exit 2; }
 PASS=0; FAIL=0
 check() { if [ "$2" = "$3" ]; then PASS=$((PASS+1)); printf 'ok   %-56s rc=%s\n' "$1" "$3"
-	else FAIL=$((FAIL+1)); printf 'FAIL %-56s esperaba rc=%s, dio rc=%s\n' "$1" "$2" "$3"; fi; }
+	else FAIL=$((FAIL+1)); printf 'FAIL %-56s expected rc=%s, got rc=%s\n' "$1" "$2" "$3"; fi; }
 TMP="$(mktemp -d "${TMPDIR:-/tmp}/rbs.XXXXXX")" || exit 2
 trap 'rm -rf "$TMP"' EXIT
 corre() { OLIVARES_RUNBLOCK_WFDIR="$1" OLIVARES_RUNBLOCK_MIN="${2:-1}" bash "$SUT" >"$TMP/out" 2>&1; echo $?; }
@@ -42,9 +42,9 @@ jobs:
             echo b
 EOF
 )"
-check "(1) if/else sin \`fi\` -> 1" 1 "$(corre "$d")"
-grep -q 'roto' "$TMP/out" && { PASS=$((PASS+1)); printf 'ok   %-56s\n' "(1b) y NOMBRA el paso por su id"; } \
-	|| { FAIL=$((FAIL+1)); printf 'FAIL %-56s\n' "(1b) no nombra el paso"; }
+check "(1) if/else without \`fi\` -> 1" 1 "$(corre "$d")"
+grep -q 'roto' "$TMP/out" && { PASS=$((PASS+1)); printf 'ok   %-56s\n' "(1b) NAMES the step by its id"; } \
+	|| { FAIL=$((FAIL+1)); printf 'FAIL %-56s\n' "(1b) does not name the step"; }
 
 # 2 · NO DISPARO: un bloque valido
 d="$(wf valido <<'EOF'
@@ -58,7 +58,7 @@ jobs:
           if [ -n "$X" ]; then echo a; else echo b; fi
 EOF
 )"
-check "(2) bloque valido -> 0" 0 "$(corre "$d")"
+check "(2) valid block -> 0" 0 "$(corre "$d")"
 
 # 3 · NO DISPARO con `${{ }}` DENTRO de un heredoc — la forma que rompe a un parser ingenuo
 d="$(wf expr_heredoc <<'EOF'
@@ -75,7 +75,7 @@ jobs:
           echo "${{ vars.ALGO }}" | tr -d '\n'
 EOF
 )"
-check "(3) \${{ }} dentro de heredoc -> 0, no rompe" 0 "$(corre "$d")"
+check "(3) \${{ }} inside heredoc -> 0, does not break" 0 "$(corre "$d")"
 
 # 4 · una expresion que ocupa el comando ENTERO tampoco rompe
 d="$(wf expr_sola <<'EOF'
@@ -88,7 +88,7 @@ jobs:
       - run: ${{ vars.COMANDO }}
 EOF
 )"
-check "(4) expresion como comando entero -> 0" 0 "$(corre "$d")"
+check "(4) expression as the entire command -> 0" 0 "$(corre "$d")"
 
 # 5 · shell NO-bash: se OMITE y se declara, nunca se da por limpio en silencio
 d="$(wf pwsh <<'EOF'
@@ -104,9 +104,9 @@ jobs:
       - run: echo ok
 EOF
 )"
-check "(5) shell pwsh: se omite, el resto pasa -> 0" 0 "$(corre "$d")"
-grep -q 'omitido:.*pwsh' "$TMP/out" && { PASS=$((PASS+1)); printf 'ok   %-56s\n' "(5b) y DECLARA la omision"; } \
-	|| { FAIL=$((FAIL+1)); printf 'FAIL %-56s\n' "(5b) omite en silencio"; }
+check "(5) pwsh shell: skipped, remaining blocks pass -> 0" 0 "$(corre "$d")"
+grep -q 'skipped:.*pwsh' "$TMP/out" && { PASS=$((PASS+1)); printf 'ok   %-56s\n' "(5b) DECLARES the skip"; } \
+	|| { FAIL=$((FAIL+1)); printf 'FAIL %-56s\n' "(5b) skips silently"; }
 
 # 6 · el shell del JOB manda sobre el defecto, y el del PASO sobre el del job
 d="$(wf shell_job <<'EOF'
@@ -126,7 +126,7 @@ jobs:
           if [ 1 ]; then echo a
 EOF
 )"
-check "(6) shell del job y del paso: sólo el bash se juzga -> 1" 1 "$(corre "$d")"
+check "(6) job and step shells: only bash is assessed -> 1" 1 "$(corre "$d")"
 
 # 7 · cero bloques analizables NO es limpio
 d="$(wf vacio <<'EOF'
@@ -139,7 +139,7 @@ jobs:
       - uses: actions/checkout@v4
 EOF
 )"
-check "(7) cero bloques analizables -> 2, no 0" 2 "$(corre "$d" 1)"
+check "(7) zero analyzable blocks -> 2, not 0" 2 "$(corre "$d" 1)"
 
 # 8 · YAML ilegible -> 2, jamas limpio
 d="$(wf roto_yaml <<'EOF'
@@ -149,27 +149,27 @@ jobs:
   - - :
 EOF
 )"
-check "(8) workflow que no parsea -> 2" 2 "$(corre "$d")"
+check "(8) unparseable workflow -> 2" 2 "$(corre "$d")"
 
 # 9 · directorio inexistente -> 2
-check "(9) sin directorio de workflows -> 2" 2 "$(corre "$TMP/no-existe")"
+check "(9) missing workflow directory -> 2" 2 "$(corre "$TMP/no-existe")"
 
 # 10 · el ARBOL REAL sale limpio
-check "(10) el repositorio real -> 0" 0 "$( OLIVARES_RUNBLOCK_WFDIR="$RAIZ/.github/workflows" bash "$SUT" >/dev/null 2>&1; echo $? )"
+check "(10) real repository -> 0" 0 "$( OLIVARES_RUNBLOCK_WFDIR="$RAIZ/.github/workflows" bash "$SUT" >/dev/null 2>&1; echo $? )"
 
 # ── 11-14 · UN ARGUMENTO QUE NO SE HONRA SALE 2 ───────────────────────────────────────────────
 # El defecto que los motiva es real y es mio: el 2026-08-30 pase la ruta del arbol de `origin/main`
 # como posicional, el guion la ignoro, midio MI worktree y contesto 0. Un sujeto equivocado con un
 # veredicto convincente.
-check "(11) un posicional -> 2, aunque el arbol sea valido" 2 \
+check "(11) positional argument -> 2, even with a valid tree" 2 \
   "$( OLIVARES_RUNBLOCK_WFDIR="$RAIZ/.github/workflows" bash "$SUT" /da/igual >/dev/null 2>&1; echo $? )"
-check "(12) y tambien CON OLIVARES_ROOT explicito" 2 \
+check "(12) also WITH explicit OLIVARES_ROOT" 2 \
   "$( OLIVARES_ROOT="$RAIZ" bash "$SUT" "$RAIZ/.github/workflows" >/dev/null 2>&1; echo $? )"
 # ⛔ SIN TUBERIA: bajo `pipefail` un `bash "$SUT" x | grep -q …` devuelve el 2 del guion y no el
 # veredicto del grep, asi que el caso fallaba midiendo otra cosa. Se captura primero y se juzga
 # despues, que es la misma leccion que este carril aprendio con `$?` detras de un `| head`.
 OLIVARES_RUNBLOCK_WFDIR="$RAIZ/.github/workflows" bash "$SUT" x >"$TMP/msg" 2>&1 || true
-check "(13) el mensaje NOMBRA las DOS variables que si se honran" 0 \
+check "(13) message NAMES BOTH supported variables" 0 \
   "$( grep -q OLIVARES_ROOT "$TMP/msg" && grep -q OLIVARES_RUNBLOCK_WFDIR "$TMP/msg"; echo $? )"
 
 # MUTANTE · si alguien retira la guarda, el guion vuelve a IGNORAR el argumento y a contestar 0.
@@ -183,9 +183,9 @@ MUT="$TMP/mutante.sh"
 sed '/^if \[ "\$#" -gt 0 \]; then$/,/^fi$/d' "$SUT" > "$MUT"
 # Y antes de nada: un `sed` que no casa nada produce un «mutante» IDENTICO al original, y entonces
 # el caso compara algo consigo mismo y sale verde sin haber mutado. Se exige que difieran.
-check "(14a) el mutante REALMENTE difiere del original" 0 \
+check "(14a) mutant ACTUALLY differs from the original" 0 \
   "$( cmp -s "$SUT" "$MUT" && echo 1 || echo 0 )"
-check "(14b) MUTANTE 'ignora el posicional' es CAZADO por la DIFERENCIA" 0 \
+check "(14b) MUTANT 'ignore positional argument' is CAUGHT by the DIFFERENCE" 0 \
   "$( OLIVARES_RUNBLOCK_WFDIR="$RAIZ/.github/workflows" bash "$SUT" /da/igual >/dev/null 2>&1; real=$?
       OLIVARES_RUNBLOCK_WFDIR="$RAIZ/.github/workflows" bash "$MUT" /da/igual >/dev/null 2>&1; mut=$?
       if [ "$real" -eq 2 ] && [ "$mut" -ne 2 ]; then echo 0; else echo "real=$real mut=$mut"; fi )"

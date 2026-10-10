@@ -464,7 +464,7 @@ func TestWorkMutableNoDeleteRowsSurviveDropTenantAcrossBackends(t *testing.T) {
 				// DropTenant must not achieve retention by disabling the guard.
 				// A normal hard-delete still reaches the live no-delete trigger.
 				row := workSchemaFirstRow(t, ctx, m, tenant, kind)
-				err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+				err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 					repo, err := sc.Ext(kind)
 					if err != nil {
 						return err
@@ -483,7 +483,7 @@ func TestWorkMutableNoDeleteRowsSurviveDropTenantAcrossBackends(t *testing.T) {
 				t.Errorf("ordinary sessions.timeline rows after DropTenant = %d, want 0", got)
 			}
 
-			if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+			if err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 				workspaces, _, err := sc.Workspaces().List(ctx, model.Query{})
 				if err == nil && len(workspaces) != 0 {
 					t.Errorf("ordinary workspace rows after DropTenant = %d, want 0", len(workspaces))
@@ -526,7 +526,7 @@ func TestWorkSchemaMutableRowsRejectHardDeleteAcrossBackends(t *testing.T) {
 				kind := kind
 				t.Run(string(kind), func(t *testing.T) {
 					var id model.ID
-					if err := m.data.View(context.Background(), tenant, func(sc store.Scope) error {
+					if err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
 						repo, err := sc.Ext(kind)
 						if err != nil {
 							return err
@@ -544,7 +544,7 @@ func TestWorkSchemaMutableRowsRejectHardDeleteAcrossBackends(t *testing.T) {
 						t.Fatalf("select delete witness: %v", err)
 					}
 
-					err := m.data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+					err := m.Data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
 						repo, err := sc.Ext(kind)
 						if err != nil {
 							return err
@@ -555,7 +555,7 @@ func TestWorkSchemaMutableRowsRejectHardDeleteAcrossBackends(t *testing.T) {
 						t.Fatal("hard delete succeeded")
 					}
 
-					if err := m.data.View(context.Background(), tenant, func(sc store.Scope) error {
+					if err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
 						repo, err := sc.Ext(kind)
 						if err != nil {
 							return err
@@ -632,7 +632,7 @@ func TestWorkDecisionHeadOptimisticCASAcrossBackends(t *testing.T) {
 			secondDecision, secondHead := advance(
 				t, m, tenant, workspace, head, 2, firstDecisionID,
 			)
-			if err := m.data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+			if err := m.Data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
 				repo, err := sc.Ext(workDecisionHeadKind)
 				if err != nil {
 					return err
@@ -645,7 +645,7 @@ func TestWorkDecisionHeadOptimisticCASAcrossBackends(t *testing.T) {
 			_, staleThirdHead := advance(
 				t, m, tenant, workspace, head, 3, secondDecision.String(model.ColID),
 			)
-			err := m.data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+			err := m.Data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
 				repo, openErr := sc.Ext(workDecisionHeadKind)
 				if openErr != nil {
 					return openErr
@@ -662,7 +662,7 @@ func TestWorkDecisionHeadOptimisticCASAcrossBackends(t *testing.T) {
 			m, tenant, workspace, firstDecisionID, head := seed(t, "fresh")
 			_, secondHead := advance(t, m, tenant, workspace, head, 2, firstDecisionID)
 			var updated model.Record
-			if err := m.data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+			if err := m.Data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
 				repo, err := sc.Ext(workDecisionHeadKind)
 				if err != nil {
 					return err
@@ -934,7 +934,7 @@ func TestWorkSchemaPostgresRLSFunctionallyDenies(t *testing.T) {
 	bindStoreStanding(m, st)
 
 	var workspaceA model.ID
-	if err := m.data.View(ctx, tenantA, func(sc store.Scope) error {
+	if err := m.Data.View(ctx, tenantA, func(sc store.Scope) error {
 		workspace, err := sc.DefaultWorkspace(ctx)
 		if err == nil {
 			workspaceA = workspace.ID
@@ -1139,7 +1139,7 @@ func workSchemaWorkspaces(
 ) (model.ID, model.ID) {
 	t.Helper()
 	var defaultID model.ID
-	if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	if err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		workspace, err := sc.DefaultWorkspace(ctx)
 		defaultID = workspace.ID
 		return err
@@ -1147,7 +1147,7 @@ func workSchemaWorkspaces(
 		t.Fatalf("default workspace: %v", err)
 	}
 	var otherID model.ID
-	if err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	if err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		workspace, err := sc.Workspaces().Create(ctx, model.Workspace{
 			Name: "Other", Slug: "other", Status: model.StatusActive,
 		})
@@ -1167,7 +1167,7 @@ func workSchemaCreate(
 	rec model.Record,
 ) (model.Record, error) {
 	var created model.Record
-	err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(kind)
 		if err != nil {
 			return err
@@ -1230,7 +1230,7 @@ func workSchemaRows(
 ) []model.Record {
 	t.Helper()
 	var rows []model.Record
-	if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	if err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(kind)
 		if err != nil {
 			return err

@@ -38,6 +38,7 @@ import { ApiError } from '@/lib/api/errors'
 import { gitpublishApi, gitpublishKeys } from './api'
 import {
   actionAuthority,
+  hasChangeAPI,
   newOperationId,
   outcomeOf,
   reconcileAction,
@@ -52,10 +53,17 @@ import type {
 } from './types'
 import './i18n'
 
-type Draft = Record<string, string>
+export type Draft = Record<string, string>
 
 const EMPTY: Record<PublicationEffect, Draft> = {
-  push: { ref: '', expected_old: '', commit: '', tree: '', ack: '' },
+  push: {
+    ref: '',
+    expected_old: '',
+    commit: '',
+    tree: '',
+    session_run: '',
+    ack: '',
+  },
   pull_request: {
     head_ref: '',
     base: '',
@@ -73,17 +81,29 @@ export function PublishDialog({
   effect,
   onClose,
   onOpenIntent,
+  initial,
+  sessionRun,
+  onPullRequest,
 }: {
   target: PublicationTarget
   effect: PublicationEffect
   onClose: () => void
   onOpenIntent: (id: string) => void
+  /** Values the request starts with; the operator can still change them. */
+  initial?: Draft
+  /** The session run whose folder holds the commit, fixed by the session that opened the
+   * dialog. Without it the push form takes an optional run. */
+  sessionRun?: string
+  /** Offered once a push applied: open a draft pull request for the pushed commit. */
+  onPullRequest?: (initial: Draft) => void
 }) {
   const { t } = useTranslation('gitpublish')
   const { activeTenant, can } = useAuth()
   const [draft, setDraft] = useState<Draft>(() => ({
     ...EMPTY[effect],
     base: target.merge_bases[0] ?? '',
+    ...initial,
+    ...(sessionRun ? { session_run: sessionRun } : {}),
   }))
   const [operationId, setOperationId] = useState(newOperationId)
   // The engine's answer to this request or to a reconcile of its intent, once there is one.
@@ -127,6 +147,21 @@ export function PublishDialog({
   // Once the engine answered with an intent, or nothing came back, this dialog cannot send.
   const locked = outcome !== null && outcome.kind !== 'refused'
   const valid = isComplete(effect, draft)
+  // A push that landed on the host: its branch and commit can carry on as a pull request.
+  const pushed =
+    effect === 'push' &&
+    answer?.kind === 'settled' &&
+    ['applied', 'adopted'].includes(answer.intent.answer ?? answer.intent.state)
+      ? answer.intent.requested
+      : null
+  const pullRequest: Draft | null =
+    hasChangeAPI(target) && pushed?.ref && pushed.commit
+      ? {
+          head_ref: pushed.ref.replace(/^refs\/heads\//, ''),
+          commit: pushed.commit,
+          draft: 'true',
+        }
+      : null
 
   return (
     <Dialog open onOpenChange={(open) => (open ? undefined : onClose())}>
@@ -186,6 +221,34 @@ export function PublishDialog({
                   value={draft.tree}
                   onChange={(v) => set('tree', v)}
                 />
+                {sessionRun ? (
+                  <div className="rounded-md border border-border bg-muted/30 p-2">
+                    <p className="text-caption text-muted-foreground">
+                      {t('fields.sessionRun')}
+                    </p>
+                    <code className="break-all font-mono text-caption">
+                      {sessionRun}
+                    </code>
+                    <p className="text-caption text-muted-foreground">
+                      {t('fields.sessionRunFixedHint')}
+                    </p>
+                  </div>
+                ) : (
+                  <Field
+                    label={t('fields.sessionRun')}
+                    description={t('fields.sessionRunHint')}
+                  >
+                    <Input
+                      mono
+                      value={draft.session_run}
+                      spellCheck={false}
+                      autoComplete="off"
+                      onChange={(e) =>
+                        set('session_run', e.target.value.trim())
+                      }
+                    />
+                  </Field>
+                )}
               </>
             ) : null}
             {effect === 'pull_request' ? (
@@ -312,6 +375,19 @@ export function PublishDialog({
             )}
           />
         ) : null}
+        {onPullRequest &&
+        pullRequest &&
+        can(actionAuthority('pull_request').permission) ? (
+          <div>
+            <Button
+              size="sm"
+              variant="primary"
+              onClick={() => onPullRequest(pullRequest)}
+            >
+              {t('actions.draftPullRequest')}
+            </Button>
+          </div>
+        ) : null}
         {reconcileFailure ? (
           <OutcomePanel
             outcome={reconcileFailure}
@@ -433,6 +509,8 @@ function send(
           commit: d.commit,
           tree: d.tree,
           acknowledge_intent: d.ack,
+          // Named only when there is one: a push without a run is the request it always was.
+          ...(d.session_run ? { session_run: d.session_run } : {}),
         },
         request,
       )

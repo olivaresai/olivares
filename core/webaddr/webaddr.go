@@ -119,9 +119,9 @@ func (a Address) PotentiallyTrustworthy() bool {
 // relying-party ID for the verifier compiled into this build.
 //
 // It is NOT "is this a domain". An IP is a fine browser address and is never a
-// relying party (browsers refuse it, even though the installed library would
-// accept the string). A name a browser opens happily — my_host.example.com — is
-// not a valid domain in the URL Standard's strict sense and so is not a valid RP
+// relying party (both browsers and the installed verifier refuse it). A name a
+// browser opens happily — my_host.example.com — is not a valid domain in the URL
+// Standard's strict sense and so is not a valid RP
 // ID. And a single-label name is refused by THIS BUILD's verifier rather than by
 // the specification: see isValidRPDomain.
 func (a Address) CanBeRelyingParty() bool {

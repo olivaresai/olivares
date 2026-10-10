@@ -1,0 +1,8 @@
+{
+  "source": "registra ese controlador|se registra el driver ACP|se registran .* fijando|no se pueden lanzar|no pueden iniciarse",
+  "flags": "i",
+  "noProvider": {
+    "source": "no nombran un proveedor",
+    "flags": ""
+  }
+}

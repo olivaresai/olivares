@@ -262,12 +262,12 @@ describe('RequestOptions.dispatchGuard on the real client', () => {
       path.resolve(process.cwd(), 'src/lib/api/client.ts'),
       'utf8',
     )
-    const fn = src.slice(src.indexOf('export async function apiFetchWithMeta'))
+    const fn = src.slice(src.indexOf('export async function apiFetchRaw'))
     const refresh = fn.indexOf('await refreshOnce()')
     const bearer = fn.indexOf("headers.set('Authorization'")
     const guard = fn.indexOf('opts.dispatchGuard?.()')
     const fetchAt = fn.indexOf('res = await fetch(')
-    const replay = fn.indexOf('return apiFetchWithMeta<T>(path, opts, true)')
+    const replay = fn.indexOf('return apiFetchRaw(path, opts, true)')
     expect(refresh).toBeGreaterThan(-1)
     expect(guard).toBeGreaterThan(refresh)
     expect(guard).toBeGreaterThan(bearer)

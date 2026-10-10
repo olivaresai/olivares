@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/core/driverfacts"
 	executor "github.com/olivaresai/olivares/core/runtime/executor"
 	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/modules/sessions/cliruntime"
@@ -73,24 +74,27 @@ const (
 	// gateway (ANTHROPIC_BASE_URL) so it is PEP/budget/model-governed.
 	envSessionBaseURL = "OLIVARES_SESSION_RUNTIME_BASE_URL"
 	// envSessionClaudeBin overrides the launched executable (default "claude").
-	envSessionClaudeBin = "OLIVARES_SESSION_RUNTIME_CLAUDE_BIN"
+	envSessionClaudeBin = driverfacts.ClaudeRuntimeBinEnv
 	// envSessionCodexBin names the OFFICIAL Codex CLI this node may operate, and
 	// naming it is what REGISTERS the driver. Readiness is per driver on purpose
 	// (RATIFIED §3): there is no shared switch that turns several providers on, and
 	// an operator who has not pinned an official binary gets a profile that is
 	// honestly observable and honestly not launchable rather than a launch that
 	// resolves some `codex` off the PATH.
-	envSessionCodexBin = "OLIVARES_SESSION_RUNTIME_CODEX_BIN"
+	envSessionCodexBin = driverfacts.CodexRuntimeBinEnv
 	// envSessionGrokBin names the OFFICIAL Grok CLI this node may operate. It is a
 	// SEPARATE registration from the Codex one, deliberately: readiness is per driver
 	// (RATIFIED §3), so an operator who has pinned one official binary and not the
 	// other gets exactly one operable driver, and the Claude path is unaffected by
 	// both. There is no switch that turns several providers on at once.
-	envSessionGrokBin = "OLIVARES_SESSION_RUNTIME_GROK_BIN"
+	envSessionGrokBin = driverfacts.GrokRuntimeBinEnv
 	// envSessionOpenCodeBin names the OFFICIAL OpenCode CLI this node may operate.
 	// Readiness is per driver (RATIFIED §3): pinning this binary registers the
 	// OpenCode ACP driver and does not turn Codex, Grok or Claude on.
-	envSessionOpenCodeBin = "OLIVARES_SESSION_RUNTIME_OPENCODE_BIN"
+	envSessionOpenCodeBin = driverfacts.OpenCodeRuntimeBinEnv
+	// envSessionGeminiBin names the OFFICIAL Gemini CLI this node may operate;
+	// pinning it registers the Gemini ACP driver and turns no other driver on.
+	envSessionGeminiBin = driverfacts.GeminiRuntimeBinEnv
 )
 
 // buildSessionRuntimeOptions assembles the operate-runtime options for module II
@@ -139,6 +143,8 @@ func buildSessionRuntimeOptions(getenv func(string) string, broker *wifCredentia
 		"transport", "agent --no-leader stdio (owned child, ACP over stdio; never a leader, server or relay)")
 	pinOfficialSessionDriver(&opts, getenv, log, obs, envSessionOpenCodeBin, "opencode", sessions.NewOpenCodeDriver,
 		"transport", "acp --hostname 127.0.0.1 (owned child, ACP over stdio; never serve, web, attach or an external listener)")
+	pinOfficialSessionDriver(&opts, getenv, log, obs, envSessionGeminiBin, "gemini-cli", sessions.NewGeminiDriver,
+		"transport", "--acp (owned child, ACP over stdio; never a relaunched copy)")
 	if base := strings.TrimSpace(getenv(envSessionBaseURL)); base != "" {
 		opts = append(opts, sessions.WithInferenceBaseURL(base))
 	}
@@ -171,10 +177,10 @@ func sessionConfinementOption(dataDir string, log *slog.Logger) sessions.Option 
 		if state.Mode == confine.ModeLandlock {
 			log.Info("session runtime: session processes are confined to their folder", "confinement", state.String(), "protected", protect, "limits", confine.SessionLimits())
 		} else {
-			log.Warn("session runtime: session processes run UNCONFINED on this node", "reason", state.Reason)
+			log.Warn("session runtime: session launches are refused on this node; enable Landlock and run olivares doctor", "reason", state.Reason)
 		}
 	}
-	return sessions.WithConfinement(protect, false)
+	return sessions.WithConfinement(protect, true)
 }
 
 // sessionProtectPaths are what a confined child never reaches: the engine data
@@ -256,6 +262,66 @@ func useSessionWorkspaceRoot(m *sessions.Module, dataDir string, log *slog.Logge
 	return err
 }
 
+const (
+	// sessionWorktreeDirName is the subdirectory of the data directory that holds
+	// the git worktree of every session launched with the "new worktree" option.
+	sessionWorktreeDirName = "session-worktrees"
+	// envSessionWorktreeDir moves that directory; envSessionWorktreeBranchPrefix
+	// changes the prefix of the branch each worktree gets (default "olivares/").
+	// Bootstrap overrides, like the other OLIVARES_SESSION_* variables: the defaults
+	// work with neither set.
+	envSessionWorktreeDir          = "OLIVARES_SESSION_WORKTREE_DIR"
+	envSessionWorktreeBranchPrefix = "OLIVARES_SESSION_WORKTREE_BRANCH_PREFIX"
+)
+
+// sessionWorktreeRootFor is the directory session worktrees live in: the operator's
+// override when one is set, else a directory of the engine's own beside the session
+// workspaces. Neither known yields no root, and the option is then refused (only
+// that option), never guessed.
+func sessionWorktreeRootFor(dataDir, override string) string {
+	if override = strings.TrimSpace(override); override != "" {
+		return override
+	}
+	dataDir = strings.TrimSpace(dataDir)
+	if dataDir == "" || !filepath.IsAbs(dataDir) {
+		return ""
+	}
+	return filepath.Join(filepath.Clean(dataDir), sessionWorktreeDirName)
+}
+
+// useSessionWorktrees binds that directory and the branch prefix at boot through the
+// module's error-returning door, and reports what the node ended up able to do. A
+// refusal does not stop the engine: it refuses the worktree option and nothing else.
+func useSessionWorktrees(m *sessions.Module, dataDir string, getenv func(string) string, log *slog.Logger) error {
+	if m == nil {
+		return nil
+	}
+	root := sessionWorktreeRootFor(dataDir, getenv(envSessionWorktreeDir))
+	if root == "" {
+		if log != nil {
+			log.Warn("session runtime: no data directory is known here, so the new worktree option is refused",
+				"effect", "sessions in the workspace folder itself are unaffected",
+				"set", envSessionWorktreeDir)
+		}
+		return nil
+	}
+	if err := m.UseSessionWorktrees(root, getenv(envSessionWorktreeBranchPrefix)); err != nil {
+		if log != nil {
+			log.Error("session runtime: the session worktree directory was REFUSED, so the new worktree option is refused on this node",
+				"root", root,
+				"remedy", err.Error(),
+				"unaffected", "sessions in the workspace folder itself")
+		}
+		return err
+	}
+	if log != nil {
+		log.Info("session runtime: a session launched with a new worktree gets a git worktree and branch of its own",
+			"root", root,
+			"removed", "when the session is released, if its branch is merged and the worktree is clean, or the person confirms")
+	}
+	return nil
+}
+
 func pinOfficialSessionDriver(
 	opts *[]sessions.Option,
 	getenv func(string) string,
@@ -325,11 +391,11 @@ func installedSessionProgram(obs *hostToolObserver, driver string, lookPath func
 	if managed := verifiedManagedProgram(obs, driver); managed != "" {
 		return managed
 	}
-	name := map[string]string{"claude": "claude", "codex": "codex", "grok": "grok", "opencode": "opencode"}[driver]
-	if name == "" {
+	facts, ok := driverfacts.Lookup(driver)
+	if !ok || !facts.Session {
 		return ""
 	}
-	if p, err := lookPath(name); err == nil {
+	if p, err := lookPath(facts.Program); err == nil {
 		return p
 	}
 	return ""

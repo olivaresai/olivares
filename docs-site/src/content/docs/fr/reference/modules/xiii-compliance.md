@@ -6,12 +6,18 @@ description: >-
   registre en ajout seul. Conçu-pour-l'audit, jamais certifié : statut + preuves, jamais « conforme ».
 ---
 
+:::note[Business]
+L’export d’audit (`GET /v1/audit/export`, `olivares audit export`), les archives en répertoire et la vérification d’archives externes nécessitent Business. Community conserve le registre signé, `olivares audit verify` et `olivares dr backup` ; l’export renvoie HTTP 501 ou le code de sortie 9. Le transfert d’audit et les transferts DDIL contenant des segments d’audit nécessitent aussi Business.
+:::
+
 Le module XIII ouvre les portes de l'entreprise en **cartographiant** ce que le control plane observe et
 audite déjà sur les cadres réglementaires, et en produisant des **preuves consommables par un
 auditeur** dérivées du registre d'audit en ajout seul, à chaînage de hachage (hash-chained). C'est un
 module de la couche intelligence : il ne capture **rien de nouveau** — il agrège et transforme
 ce que le noyau et les autres modules enregistrent déjà, et il **ne revendique jamais de
 certification**.
+
+**Édition :** Business Compliance Packs propose les catalogues de référentiels, les évaluations, le calendrier réglementaire, les vues DORA/HIPAA, le scellement des preuves, les exports OSCAL et les rapports HTML/PDF à la demande. Community renvoie `501` pour ces fonctions et conserve le risque, la résidence, la gestion des enregistrements et les exports JSON/CSV des preuves enregistrées. Les mises à jour préservent les enregistrements existants.
 
 ## Ce que c'est
 

@@ -6,6 +6,8 @@ description: >-
   を、コントロールタワーが自身のビューを充実させるためにプルする。検証済みの
   ネイティブ・プッシュではなく、ニュートラル JSON の射影である。
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
 
 Posture export（`modules/posture-export`）は、エンジンの **アウトバウンドな posture
 サーフェス** である。コントロールタワーがポーリングして、エンジンのグランドトゥルースな
@@ -28,6 +30,7 @@ Posture export（`modules/posture-export`）は、エンジンの **アウトバ
   アクセス、加えて unused-grant と inventory-grant のカウント。
 - **`findings`** —— セキュリティ findings を ref と `detail_hash` のみとして射影したもの。
   `?severity=` の下限と `?category=` でフィルタ可能。
+- **`projection_readiness`** —— `inventory`、`posture_drift`、`findings` の真偽値で、対応する inventory、access-map、security の生成元が稼働しているかを報告します。鮮度や完全なカバレッジを証明するものではありません。停止中または利用できない生成元は、部分的な証跡であるという警告を `note` に追加します。保持されたデータは引き続きエクスポート可能です。CLI サマリーとダウンロードした文書にも同じ注記が含まれます。
 
 すべてのエクスポートは **最小データ** である —— ref、ハッシュ、関係のみであり、生の
 ペイロードやシークレットを含むことは決してない —— そして防御的な秘匿化パスがすべての

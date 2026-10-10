@@ -8,6 +8,12 @@ description: >-
 sidebar:
   order: 6
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
+
+:::note[Business]
+監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、`olivares audit verify`、`olivares dr backup` を引き続き利用できます。エクスポートは HTTP 501 または終了コード 9 を返します。監査転送および監査セグメントを含む DDIL 転送にも Business が必要です。
+:::
 
 **目的:** ファイルを追従するフォワーダーを使わずに、control plane の検出結果 *と*
 改竄検知可能な監査台帳をプッシュ配信で SIEM に受信させる。
@@ -18,6 +24,15 @@ sidebar:
 プッシュはライブの SIEM 取り込みに適した形です。
 
 ## 1. シンクサブスクリプションを作成する
+
+まず選択可能な台帳フォワーダーを有効にします。依存する eventing も有効になります:
+
+```bash
+olivares modules on siemforward
+```
+
+エンジンの再起動が完了するまで待ち、`olivares modules ls` を実行してください。
+サブスクリプションを作成する前に、`siemforward` と `eventing` が稼働中であることを確認します。
 
 ```bash
 curl -ks -X POST "$BASE/v1/m/eventing/subscriptions" \
@@ -73,9 +88,10 @@ curl -ks -X POST "$BASE/v1/m/eventing/subscriptions/$ID/test" \
 
 ## 2. 台帳プッシュ、正直に説明すると
 
-**`audit.recorded`** をサブスクライブすると台帳ポンプが有効になります。フォワーダーは
-各テナントの封緘済み監査台帳をテナントごとのカーソルから辿り、すべてのレコードを
-永続的な配信エンジンへ投入します ── **少なくとも1回**、順序を保ち、再開可能です。
+**`siemforward` が有効な場合**、台帳ポンプは各テナントのカーソルから封緘済み台帳を辿ります。
+**`audit.recorded`** サブスクリプションは、作成後に永続的な配信エンジンへ投入されたレコードを
+**少なくとも1回**配信し、
+再開可能です。
 各レコードはチェーン整合性フィールドをそのまま保持するため、SIEM 側のコピーはプル方式の
 エクスポートが許すことを正確に許し、それ以上ではありません。すなわち連鎖のリンク
 （n+1 の `prev_hash` が n の `hash` に等しいこと）と `hash` に対するチェックポイント
@@ -91,8 +107,10 @@ curl -ks -X POST "$BASE/v1/m/eventing/subscriptions/$ID/test" \
 
 知っておく価値のある3つの性質:
 
-- **サブスクリプションがなければ何もしない。** `audit.recorded` のサブスクライバーが
-  ない場合、ポンプは何も書き込みません ── 要求するまでこの経路はコストゼロです。
+- **サブスクリプションがなくてもカーソルは前進します。** `audit.recorded` の購読者がいない場合、
+  配信はキューに入りませんが、有効なポンプはカーソルを保存します。
+  新しいシンクはカーソルが通過済みのレコードを遡って配信しません。
+  過去のレコードにはプルエクスポートを使用してください。
 - **少なくとも1回は重複の可能性を意味します**（再配信時）。テナントごとに
   レコードのシーケンス番号で重複排除してください。
 - **ポンプは HA でリーダーゲート方式**です ── ちょうど1つのノードだけが転送します。

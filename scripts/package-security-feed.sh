@@ -148,7 +148,7 @@ echo "==> verifying packaged feed with the consumer ..."
 if verify_output="$("$OLIVARES" security check \
   --feed "$feed" \
   --pubkey "$PUBKEY" \
-  --product-version 0.0.1 2>&1)"; then
+  --product-version 0.0 2>&1)"; then
   verify_status=0
 else
   verify_status=$?
@@ -176,7 +176,7 @@ if tamper_output="$("$OLIVARES" security check \
   --feed "$tampered_feed" \
   --sig "$signature" \
   --pubkey "$PUBKEY" \
-  --product-version 0.0.1 2>&1)"; then
+  --product-version 0.0 2>&1)"; then
   tamper_status=0
 else
   tamper_status=$?

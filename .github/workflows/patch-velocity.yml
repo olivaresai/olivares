@@ -87,7 +87,7 @@ jobs:
       - name: rebuild image from source
         run: |
           docker build \
-            --build-arg VERSION="patch-velocity-$(date -u +%Y%m%d)" \
+            --build-arg VERSION="$(sh scripts/build-ldflags.sh --version)-patch-velocity-$(date -u +%Y%m%d)" \
             --build-arg COMMIT="$(git rev-parse --short HEAD)" \
             --build-arg SOURCE_DATE_EPOCH="$(git log -1 --pretty=%ct)" \
             -t olivares:rescan .
@@ -102,7 +102,7 @@ jobs:
           severity-cutoff: high
 
       - name: upload grype SARIF
-        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           sarif_file: ${{ steps.grype.outputs.sarif }}
           category: grype
@@ -153,14 +153,14 @@ jobs:
           esac
 
       - name: upload trivy SARIF
-        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        uses: github/codeql-action/upload-sarif@2892aa5e19bbd11bc0cff5427e3b750a04d9e3c2 # v4.38.2
         with:
           sarif_file: trivy.sarif
           category: trivy
 
       # --- refresh SBOM + VEX (artifacts for the human cutting the patch tag) ----
       - name: install syft + cosign tooling
-        uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+        uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
       - name: refresh SBOM + OpenVEX
         run: |
           set -euo pipefail
@@ -171,15 +171,27 @@ jobs:
           # this step's log, and the release path (release.yml) is where it BLOCKS.
           bash scripts/sbom-check-cisa.sh refreshed.image.spdx.json --cyclonedx refreshed.image.cdx.json || true
           bash scripts/gen-vex.sh --mode source --out refreshed.vex.openvex.json || true
-      - name: upload refreshed SBOM/VEX
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - name: Preserve evidence on the runner
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/ci-evidence
         with:
           name: refreshed-sbom-vex
           path: |
             refreshed.image.spdx.json
             refreshed.image.cdx.json
             refreshed.vex.openvex.json
-          retention-days: 14
+      - name: upload refreshed SBOM/VEX
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: refreshed-sbom-vex
+          path: |
+            refreshed.image.spdx.json
+            refreshed.image.cdx.json
+            refreshed.vex.openvex.json
+          retention-days: 1
 
       # --- alert: open/update a tracking issue if anything needs a patch release -
       - name: open remediation issue on findings

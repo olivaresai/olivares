@@ -19,13 +19,10 @@ import (
 // counters on the session an operator is looking at, and a row on the tenant's
 // spend ledger.
 //
-// ⛔ WHY IT EXISTS, MEASURED 2026-09-18. A real model turn answered through a governed session, the
-// driver's own result frame carried `total_cost_usd` and the full token usage on
-// the wire, and then: `agent session get -o json` returned 19 fields with no
-// token or cost field among them, and `finops spend summary` over the same window
-// answered `samples 0`. Cost samples reached FinOps only from the IN-PROCESS
-// inference client; nothing folded an official-CLI session's result frame onto
-// that bus. A FinOps product could not price the sessions it governs.
+// Why it exists: an official CLI's own result frame carries `total_cost_usd` and
+// the full token usage. Without this fold neither the session's row nor the FinOps
+// spend would show them: cost samples would reach FinOps only from the IN-PROCESS
+// inference client, and FinOps could not price the sessions it governs.
 //
 // ⛔ CUMULATIVE, NOT PER TURN, AND THAT IS READ FROM THE CLI ITSELF, NOT ASSUMED.
 // Claude Code 2.1.276 documents the result frame's own fields in its build:
@@ -76,6 +73,9 @@ type resultUsage struct {
 	// Reported is false for a frame that carries no metering at all, which is
 	// recorded as UNKNOWN and never as zero.
 	Reported bool
+	// Provider is who serves the model, as the tool named it ("openai"); "" when
+	// it names none. It is what a list price is looked up under.
+	Provider string
 }
 
 // modelUsage is one model's cumulative usage inside a result frame.
@@ -197,6 +197,9 @@ type usageAccount struct {
 type creditedDelta struct {
 	ModelRef string
 	Usage    modelUsage
+	// PricedMicroUSD is the list price of a delta its tool reported no money for
+	// (priceUnpriced); Usage.CostMicroUSD stays what the tool reported.
+	PricedMicroUSD int64
 }
 
 // credit folds one result frame into the account and returns the deltas to
@@ -206,27 +209,9 @@ func (a *usageAccount) credit(r resultUsage) []creditedDelta {
 	if a.credited == nil {
 		a.credited = map[string]modelUsage{}
 	}
-	reported := r.Models
+	reported := r.perModel()
 	if len(reported) == 0 {
-		// A CLI that reports no per-model breakdown still reports a total. It is
-		// credited under the empty model key, which the record reads as "the model is
-		// not reported" rather than inventing one.
-		flat := r.Fallback
-		if r.CostMicroUSD > 0 {
-			flat.CostMicroUSD = r.CostMicroUSD
-		}
-		if flat.empty() {
-			return nil
-		}
-		reported = map[string]modelUsage{"": flat}
-	} else if r.CostMicroUSD > 0 && modelUsageCostTotal(reported) == 0 {
-		// The breakdown carried tokens but no money, and the frame carried the money.
-		// Attribute it to the model with the most output rather than dropping it: a
-		// priced turn with no price on the ledger is the defect this file removes.
-		primary := primaryModel(reported)
-		entry := reported[primary]
-		entry.CostMicroUSD = r.CostMicroUSD
-		reported[primary] = entry
+		return nil
 	}
 
 	names := make([]string, 0, len(reported))
@@ -251,6 +236,77 @@ func (a *usageAccount) credit(r resultUsage) []creditedDelta {
 		out = append(out, creditedDelta{ModelRef: name, Usage: delta})
 	}
 	return out
+}
+
+// baseline records r as already credited and credits nothing. It is for a total
+// that predates this launch: a resumed Codex thread reports its whole earlier
+// total before this launch takes a turn, and the next total is credited as the
+// increase over it.
+func (a *usageAccount) baseline(r resultUsage) {
+	if a.credited == nil {
+		a.credited = map[string]modelUsage{}
+	}
+	for name, u := range r.perModel() {
+		// Never lower what was credited: a stale total must not make the next one
+		// look like new spending.
+		c := a.credited[name]
+		a.credited[name] = modelUsage{
+			InputTokens:         max(c.InputTokens, u.InputTokens),
+			OutputTokens:        max(c.OutputTokens, u.OutputTokens),
+			CacheReadTokens:     max(c.CacheReadTokens, u.CacheReadTokens),
+			CacheCreationTokens: max(c.CacheCreationTokens, u.CacheCreationTokens),
+			CostMicroUSD:        max(c.CostMicroUSD, u.CostMicroUSD),
+		}
+	}
+}
+
+// perModel is the report as cumulative usage per model; nil when it reports none.
+func (r resultUsage) perModel() map[string]modelUsage {
+	reported := r.Models
+	if len(reported) == 0 {
+		// A CLI that reports no per-model breakdown still reports a total. It is
+		// credited under the empty model key, which the record reads as "the model is
+		// not reported" rather than inventing one.
+		flat := r.Fallback
+		if r.CostMicroUSD > 0 {
+			flat.CostMicroUSD = r.CostMicroUSD
+		}
+		if flat.empty() {
+			return nil
+		}
+		return map[string]modelUsage{"": flat}
+	}
+	if r.CostMicroUSD > 0 && modelUsageCostTotal(reported) == 0 {
+		// The breakdown carried tokens but no money, and the frame carried the money.
+		// Attribute it to the model with the most output rather than dropping it: a
+		// priced turn with no price on the ledger is the defect this file removes.
+		primary := primaryModel(reported)
+		entry := reported[primary]
+		entry.CostMicroUSD = r.CostMicroUSD
+		reported[primary] = entry
+	}
+	return reported
+}
+
+// maxModelRef bounds a model identifier a tool names.
+const maxModelRef = 128
+
+// modelRefValue keeps a model name a tool reported only when it is an identifier:
+// letters, digits and . _ - : / @ [ ], at most maxModelRef long ("gpt-6.1-sol",
+// "claude-opus-5[1m]", "qwen2.5-coder:7b", "openai/gpt-4o"). The name reaches the
+// run row, the spend ledger and the operator's terminal, so a child does not get
+// to put escapes or prose there.
+func modelRefValue(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) > maxModelRef {
+		return ""
+	}
+	for _, r := range s {
+		if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || strings.ContainsRune("._-:/@[]", r)) {
+			return ""
+		}
+	}
+	return s
 }
 
 // creditDelta is the monotone-with-reset rule for ONE counter: the increase
@@ -314,18 +370,38 @@ func (m *Module) recordTurnUsage(ctx context.Context, lr *liveRun, line []byte, 
 	if !ok {
 		return false
 	}
+	return m.creditUsage(ctx, lr, r, at)
+}
+
+// recordDriverUsage is a provider driver's entry point (runtime_driver.go,
+// OnUsage). A report for a turn this launch took is credited like a result
+// frame; any other report is the baseline the next one is measured from.
+func (m *Module) recordDriverUsage(ctx context.Context, lr *liveRun, r resultUsage, ownTurn bool, at time.Time) {
+	if !ownTurn {
+		lr.mu.Lock()
+		lr.usage.baseline(r)
+		lr.mu.Unlock()
+		return
+	}
+	m.creditUsage(ctx, lr, r, at)
+}
+
+// creditUsage credits one cumulative report: the run's counters and the spend
+// ledger receive what it adds to the last one credited.
+func (m *Module) creditUsage(ctx context.Context, lr *liveRun, r resultUsage, at time.Time) bool {
 	lr.mu.Lock()
 	deltas := lr.usage.credit(r)
 	lr.mu.Unlock()
 	if len(deltas) == 0 {
 		return false
 	}
+	m.priceUnpriced(r.Provider, deltas)
 	var input, output, cost int64
 	primary, primaryOut := "", int64(-1)
 	for _, d := range deltas {
 		input += d.Usage.totalInputTokens()
 		output += d.Usage.OutputTokens
-		cost += d.Usage.CostMicroUSD
+		cost += d.Usage.CostMicroUSD + d.PricedMicroUSD
 		if d.ModelRef != "" && d.Usage.OutputTokens > primaryOut {
 			primary, primaryOut = d.ModelRef, d.Usage.OutputTokens
 		}
@@ -350,6 +426,29 @@ func (m *Module) recordTurnUsage(ctx context.Context, lr *liveRun, line []byte, 
 	return true
 }
 
+// priceUnpriced prices, at the declared list price, each delta its tool reported
+// tokens and no money for, under the provider and model the tool named. A delta
+// the tool priced keeps the tool's figure, and one with no list price (no model,
+// or a provider and model the table does not carry) stays unknown: never a zero
+// that would read as free.
+func (m *Module) priceUnpriced(provider string, deltas []creditedDelta) {
+	if m.rt.ListPricer == nil {
+		return
+	}
+	for i, d := range deltas {
+		if d.Usage.CostMicroUSD > 0 || d.ModelRef == "" {
+			continue
+		}
+		cost, ok := m.rt.ListPricer(provider, d.ModelRef, TurnTokens{
+			UncachedInput: d.Usage.InputTokens, CacheRead: d.Usage.CacheReadTokens,
+			CacheWrite: d.Usage.CacheCreationTokens, Output: d.Usage.OutputTokens,
+		})
+		if ok && cost > 0 {
+			deltas[i].PricedMicroUSD = cost
+		}
+	}
+}
+
 // advanceRunUsage adds this turn's delta to the run's stored counters. The
 // counters are SUMS of credited deltas, so they survive a resume that restarts
 // the provider's own cumulative count.
@@ -364,8 +463,7 @@ func (m *Module) advanceRunUsage(
 		// writing `0 + 0` turns NULL into a present zero, and a present zero says the
 		// turn was free — the claim this file's header says the plane does not make.
 		// An official CLI that meters tokens without pricing them is an ordinary
-		// shape, not a corner, and it was recording `cost_micro_usd = 0` (measured
-		// 2026-09-18). Adding nothing to an already-present total is a no-op, so the
+		// shape, not a corner, and it would record `cost_micro_usd = 0`. Adding nothing to an already-present total is a no-op, so the
 		// guard costs a priced session nothing.
 		if cost > 0 {
 			rec[colRunCostMicroUSD] = rec.Int(colRunCostMicroUSD) + cost
@@ -384,7 +482,7 @@ func (m *Module) advanceRunUsage(
 // frame: a session whose cost reaches no ledger is a real gap, and a line per
 // turn would bury it.
 func (m *Module) postSpendRows(ctx context.Context, lr *liveRun, deltas []creditedDelta, at time.Time) {
-	sink := m.rt.costSink
+	sink := m.rt.CostSink
 	if sink == nil {
 		lr.mu.Lock()
 		reported := lr.costSinkUnwiredReported
@@ -409,7 +507,7 @@ func (m *Module) postSpendRows(ctx context.Context, lr *liveRun, deltas []credit
 			OutputTokens:           d.Usage.OutputTokens,
 			CacheReadTokens:        d.Usage.CacheReadTokens,
 			CacheCreationTokens:    d.Usage.CacheCreationTokens,
-			CostMicroUSD:           d.Usage.CostMicroUSD,
+			CostMicroUSD:           d.Usage.CostMicroUSD + d.PricedMicroUSD,
 			CostFromProviderClient: d.Usage.CostMicroUSD > 0,
 			OccurredAt:             at,
 		}

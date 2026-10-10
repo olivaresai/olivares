@@ -218,8 +218,8 @@ func (s dualCommunicationSource) Revoke(_ context.Context, id model.ID, req Comm
 }
 
 func wireDualCredentialProbe(m *Module, p *dualCredentialProbe) {
-	m.UseWorkSessionCredentialSource(dualWorkSource{p})
-	m.UseCommunicationSessionCredentialSource(dualCommunicationSource{p})
+	m.WorkSessionCreds = dualWorkSource{p}
+	m.CommunicationSessionCreds = dualCommunicationSource{p}
 	m.EnableCommunicationSessionCredentials()
 }
 
@@ -383,7 +383,7 @@ func TestRuntimeDualCredentialsPersistBeforeLaunchAndInjectExactlyOnce(t *testin
 		return nil
 	}
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:dual", ActorKind: model.ActorAgent, AgentRef: "agent:dual",
 	})
@@ -423,7 +423,7 @@ func TestRuntimeNeverReportsBearerEchoesFromSendOrStop(t *testing.T) {
 	m.log = slog.New(slog.NewTextHandler(&logs, nil))
 	probe := &dualCredentialProbe{now: clk.get}
 	wireDualCredentialProbe(m, probe)
-	created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:redact", ActorKind: model.ActorAgent, AgentRef: "agent:redact",
 	})
@@ -480,10 +480,10 @@ func TestRuntimeK3MissingIssuerReturns503BeforeAnyMintOrSpawn(t *testing.T) {
 	m, st, tenant, _ := newRuntimeHarness(
 		t, WithRunner(runner), WithCredentialSource(inference), WithLaunchGate(gate),
 	)
-	m.UseWorkSessionCredentialSource(&workSessionCredentialSpy{})
-	m.UseCommunicationSessionCredentialSource(nil)
+	m.WorkSessionCreds = &workSessionCredentialSpy{}
+	m.CommunicationSessionCreds = nil
 	m.EnableCommunicationSessionCredentials()
-	_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:missing", ActorKind: model.ActorAgent, AgentRef: "agent:missing",
 	})
@@ -513,9 +513,9 @@ func TestRuntimeCommunicationSourceBindingRemainsOffUntilExplicitEnable(t *testi
 	probe := &dualCredentialProbe{now: clk.get}
 	// Product composition may bind G before E/F/WP2 exists. Binding alone must
 	// preserve the legacy work-only launch and skip the promotion ceremony.
-	m.UseWorkSessionCredentialSource(dualWorkSource{probe})
-	m.UseCommunicationSessionCredentialSource(dualCommunicationSource{probe})
-	created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	m.WorkSessionCreds = dualWorkSource{probe}
+	m.CommunicationSessionCreds = dualCommunicationSource{probe}
+	created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:staged", ActorKind: model.ActorAgent, AgentRef: "agent:staged",
 	})
@@ -582,7 +582,7 @@ func TestRuntimeRejectsCredentialTTLAboveThirtyMinutesAndCompensates(t *testing.
 				probe.commRevokeErrs = []error{tc.communicationErr}
 			}
 			wireDualCredentialProbe(m, probe)
-			_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+			_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 				Transport: TransportStreamJSON, Isolation: IsolationNative,
 				Actor: "agent:ttl", ActorKind: model.ActorAgent, AgentRef: "agent:ttl",
 			})
@@ -620,7 +620,7 @@ func TestRuntimeDualMintPersistFailureRevokesBothAndReleasesClaim(t *testing.T) 
 		commRevokeErrs: []error{errors.New("communication revoke unavailable")},
 	}
 	wireDualCredentialProbe(m, probe)
-	baseData := m.data
+	baseData := m.Data
 	probe.workMintHook = func(WorkSessionCredentialRequest) {
 		// Both issuers have committed by the time WORK returns. Fail the very
 		// next mutation: persistCreate must compensate the whole pair and give
@@ -629,7 +629,7 @@ func TestRuntimeDualMintPersistFailureRevokesBothAndReleasesClaim(t *testing.T) 
 			inner: baseData, failAt: 1, err: errors.New("run persistence unavailable"),
 		})
 	}
-	_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:persist", ActorKind: model.ActorAgent, AgentRef: "agent:persist",
 	})
@@ -669,7 +669,7 @@ func TestRuntimeInvalidLaunchInjectionAbortsResumeBeforeMintAndReleasesClaim(t *
 	)
 	probe := &dualCredentialProbe{now: clk.get}
 	wireDualCredentialProbe(m, probe)
-	created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:injection", ActorKind: model.ActorAgent, AgentRef: "agent:injection",
 	})
@@ -822,7 +822,7 @@ func TestRuntimeCommunicationCredentialUsesExplicitIdentityWorkspace(t *testing.
 	// Select the workspace through the operator-owned profile before the first
 	// Claim. Retargeting an already-claimed identity violates its fixed lineage.
 	m.UseExecutionEnvironmentRef(testEnvRef)
-	m.UseWorkAuthorizer(auth.NewAuthorizer(nil))
+	WithWorkAuthorizer(auth.NewAuthorizer(nil))(m)
 	operator, err := auth.NewSystemOperator("test:explicit-workspace", "set fixture session work workspace")
 	if err != nil {
 		t.Fatal(err)
@@ -835,7 +835,7 @@ func TestRuntimeCommunicationCredentialUsesExplicitIdentityWorkspace(t *testing.
 	if _, err := m.PatchProfile(ctx, tenant, profile.Ref, ProfilePatch{SessionWorkGrant: raw, WorkGrantActor: operator}); err != nil {
 		t.Fatal(err)
 	}
-	created, err := m.createRun(ctx, tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, ProviderProfileRef: profile.Ref,
 		Actor: "agent:workspace", ActorKind: model.ActorAgent, AgentRef: "agent:workspace",
 	})
@@ -881,7 +881,7 @@ func TestRuntimeCallbacksFromOldLaunchCannotMutateSuccessor(t *testing.T) {
 	)
 	probe := &dualCredentialProbe{now: clk.get}
 	wireDualCredentialProbe(m, probe)
-	created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:incarnation", ActorKind: model.ActorAgent, AgentRef: "agent:incarnation",
 	})
@@ -977,11 +977,11 @@ func testRuntimeDualResumeReservationIsCrossModuleAtomic(
 	ctx := context.Background()
 	gate := &resumeBarrierStopGate{}
 	runner1, runner2 := &fakeRunner{initSID: "provider-race"}, &fakeRunner{}
-	m1.rt.runner, m1.rt.creds, m1.rt.stopGate = runner1, staticCred(), gate
+	m1.rt.Runner, m1.rt.Creds, m1.rt.StopGate = runner1, staticCred(), gate
 	probe := &dualCredentialProbe{now: clk.get}
 	wireDualCredentialProbe(m1, probe)
 	filesystemWorkspace := registerTestWorkspace(t, m1, tenant, t.TempDir())
-	created, err := m1.createRun(ctx, tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m1, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:race", ActorKind: model.ActorAgent, AgentRef: "agent:race",
 		WorkspaceRef: filesystemWorkspace,
@@ -1003,7 +1003,8 @@ func testRuntimeDualResumeReservationIsCrossModuleAtomic(
 	oldFence := stoppedRecord.Int(colClaimFence)
 
 	m2 := New(WithSessionWorkspaceRoot(t.TempDir()), WithClock(clk), WithRunner(runner2), WithCredentialSource(staticCred()), WithStopGate(gate))
-	m2.UseData(m1.data)
+	m2.UseExecutionEnvironmentRef(m1.rt.environmentRef)
+	m2.UseData(m1.Data)
 	stopModuleAtCleanup(t, m2)
 	wireDualCredentialProbe(m2, probe)
 	probe.reset()
@@ -1101,7 +1102,7 @@ func testRuntimeDualResumeReservationIsCrossModuleAtomic(
 		t.Fatalf("mint tuple diverged from row: work %+v communication %+v row %v", workReq, commReq, record)
 	}
 	var defaultWorkspace model.ID
-	if err := m1.data.View(ctx, tenant, func(sc store.Scope) error {
+	if err := m1.Data.View(ctx, tenant, func(sc store.Scope) error {
 		workspace, err := sc.DefaultWorkspace(ctx)
 		if err == nil {
 			defaultWorkspace = workspace.ID
@@ -1115,7 +1116,7 @@ func testRuntimeDualResumeReservationIsCrossModuleAtomic(
 			commReq.WorkspaceID, filesystemWorkspace, defaultWorkspace)
 	}
 	resumingEvents := 0
-	if err := m1.data.View(ctx, tenant, func(sc store.Scope) error {
+	if err := m1.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runEventKind)
 		if err != nil {
 			return err
@@ -1214,7 +1215,7 @@ func prepareRecoveryReservation(
 ) (string, Lease) {
 	t.Helper()
 	ctx := context.Background()
-	created, err := m.createRun(ctx, tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:recovery", ActorKind: model.ActorAgent, AgentRef: "agent:recovery",
 	})
@@ -1251,7 +1252,7 @@ func prepareRecoveryReservation(
 	}); err != nil {
 		t.Fatalf("reserve recovery fixture: %v", err)
 	}
-	mutateRunForCredentialTest(t, m.data, tenant, created.RunRef, func(record model.Record) {
+	mutateRunForCredentialTest(t, m.Data, tenant, created.RunRef, func(record model.Record) {
 		setClaimStamp(record, lease)
 		setOrNull(record, colRunClaimSID, lease.SID)
 		setOrNull(record, colRunAgentRef, "agent:recovery")
@@ -1396,7 +1397,7 @@ func TestRecoverRuntimeCredentialsReloadsHandlesPersistedAfterPageSnapshot(t *te
 	wireDualCredentialProbe(m, probe)
 	runRef, lease := prepareRecoveryReservation(t, m, tenant, probe, 0, false)
 	var workspaceID model.ID
-	if err := m.data.View(context.Background(), tenant, func(sc store.Scope) error {
+	if err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
 		workspace, err := sc.DefaultWorkspace(context.Background())
 		if err == nil {
 			workspaceID = workspace.ID
@@ -1405,11 +1406,11 @@ func TestRecoverRuntimeCredentialsReloadsHandlesPersistedAfterPageSnapshot(t *te
 	}); err != nil {
 		t.Fatal(err)
 	}
-	mutateRunForCredentialTest(t, m.data, tenant, runRef, func(record model.Record) {
+	mutateRunForCredentialTest(t, m.Data, tenant, runRef, func(record model.Record) {
 		record[colCommunicationWorkspaceID] = nil
 	})
 
-	base := m.data
+	base := m.Data
 	hooked := &afterNthViewData{inner: base, after: 2}
 	hooked.hook = func() {
 		mutateRunForCredentialTest(t, base, tenant, runRef, func(record model.Record) {
@@ -1429,8 +1430,8 @@ func TestRecoverRuntimeCredentialsReloadsHandlesPersistedAfterPageSnapshot(t *te
 			})
 		})
 	}
-	m.UseRuntimeCredentialRecoveryData(hooked)
-	m.UseRuntimeCredentialRecoverySources(dualWorkSource{probe}, dualCommunicationSource{probe})
+	m.RecoveryData = hooked
+	m.RecoveryWorkSessionCreds, m.RecoveryCommunicationSessionCreds = dualWorkSource{probe}, dualCommunicationSource{probe}
 	if err := m.RecoverRuntimeCredentials(context.Background(), tenant); err != nil {
 		t.Fatalf("recover late durable handle: %v", err)
 	}
@@ -1463,7 +1464,7 @@ func TestRecoverRuntimeCredentialsRejectsWritesAfterPostReleaseReload(t *testing
 		{
 			name: "credential handle",
 			lateWrite: func(t *testing.T, m *Module, tenant model.TenantID, runRef string, _ Lease) {
-				mutateRunForCredentialTest(t, m.data, tenant, runRef, func(record model.Record) {
+				mutateRunForCredentialTest(t, m.Data, tenant, runRef, func(record model.Record) {
 					setCredentialHandle(record, colWorkCredentialID, colWorkCredentialExpiresAt,
 						model.NewID(), time.Now().Add(20*time.Minute))
 				})
@@ -1481,7 +1482,7 @@ func TestRecoverRuntimeCredentialsRejectsWritesAfterPostReleaseReload(t *testing
 				if err != nil {
 					t.Fatalf("acquire late Claim: %v", err)
 				}
-				mutateRunForCredentialTest(t, m.data, tenant, runRef, func(record model.Record) {
+				mutateRunForCredentialTest(t, m.Data, tenant, runRef, func(record model.Record) {
 					setClaimStamp(record, lease)
 					setOrNull(record, colRunClaimSID, lease.SID)
 				})
@@ -1502,13 +1503,11 @@ func TestRecoverRuntimeCredentialsRejectsWritesAfterPostReleaseReload(t *testing
 			wireDualCredentialProbe(m, probe)
 			runRef, lease := prepareRecoveryReservation(t, m, tenant, probe, 0, false)
 
-			base := m.data
+			base := m.Data
 			hooked := &afterNthViewData{inner: base, after: 3}
 			hooked.hook = func() { tc.lateWrite(t, m, tenant, runRef, lease) }
-			m.UseRuntimeCredentialRecoveryData(hooked)
-			m.UseRuntimeCredentialRecoverySources(
-				dualWorkSource{probe}, dualCommunicationSource{probe},
-			)
+			m.RecoveryData = hooked
+			m.RecoveryWorkSessionCreds, m.RecoveryCommunicationSessionCreds = dualWorkSource{probe}, dualCommunicationSource{probe}
 			if err := m.RecoverRuntimeCredentials(context.Background(), tenant); err == nil {
 				record, _ := m.loadRun(context.Background(), tenant, runRef)
 				t.Fatalf("late generation write unexpectedly allowed terminal recovery: fired=%v row=%v",
@@ -1562,7 +1561,7 @@ func forceRuntimeCredentialExpiry(
 	lr.workCredentialNotAfter = until
 	lr.communicationCredentialNotAfter = until
 	lr.mu.Unlock()
-	mutateRunForCredentialTest(t, m.data, tenant, runRef, func(record model.Record) {
+	mutateRunForCredentialTest(t, m.Data, tenant, runRef, func(record model.Record) {
 		record[colWorkCredentialExpiresAt] = model.NewTimestamp(until).String()
 		record[colCommunicationExpiresAt] = model.NewTimestamp(until).String()
 	})
@@ -1578,7 +1577,7 @@ func TestRuntimeDualRenewHeartbeatsClaimBeforeBothAndPersistsDeadlines(t *testin
 	)
 	probe := &dualCredentialProbe{now: clk.get}
 	wireDualCredentialProbe(m, probe)
-	created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:renew", ActorKind: model.ActorAgent, AgentRef: "agent:renew",
 	})
@@ -1653,7 +1652,7 @@ func TestRuntimeSilentProcessUsesIndependentCredentialHeartbeat(t *testing.T) {
 	)
 	probe := &dualCredentialProbe{now: clk.get}
 	wireDualCredentialProbe(m, probe)
-	created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:silent", ActorKind: model.ActorAgent, AgentRef: "agent:silent",
 	})
@@ -1690,7 +1689,7 @@ func TestRuntimeDualRenewFailureStopsThenRevokesBoth(t *testing.T) {
 	)
 	probe.now = clk.get
 	wireDualCredentialProbe(m, probe)
-	created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:renew-fail", ActorKind: model.ActorAgent, AgentRef: "agent:renew-fail",
 	})
@@ -1741,7 +1740,7 @@ func TestRuntimeDualRenewPersistenceFailureStopsThenRevokesBoth(t *testing.T) {
 	)
 	probe.now = clk.get
 	wireDualCredentialProbe(m, probe)
-	created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:persist-fail", ActorKind: model.ActorAgent, AgentRef: "agent:persist-fail",
 	})
@@ -1751,7 +1750,7 @@ func TestRuntimeDualRenewPersistenceFailureStopsThenRevokesBoth(t *testing.T) {
 	oldUntil := clk.get().Add(5 * time.Minute)
 	lr := forceRuntimeCredentialExpiry(t, m, tenant, created.RunRef, oldUntil)
 	m.UseData(&failNthMutateData{
-		inner: m.data, failAt: 2, err: errors.New("renewal persistence unavailable"),
+		inner: m.Data, failAt: 2, err: errors.New("renewal persistence unavailable"),
 	})
 	probe.reset()
 	m.renewDualRuntimeCredentials(context.Background(), lr)
@@ -1791,7 +1790,7 @@ func TestRuntimeIncompleteLivePairUsesDurableHandlesBeforeStopping(t *testing.T)
 	)
 	probe.now = clk.get
 	wireDualCredentialProbe(m, probe)
-	created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:partial", ActorKind: model.ActorAgent, AgentRef: "agent:partial",
 	})
@@ -1866,7 +1865,7 @@ func TestRuntimeDurationExpiryRevokesBothAfterUnconfirmedStop(t *testing.T) {
 	)
 	probe.now = clk.get
 	wireDualCredentialProbe(m, probe)
-	created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:expiry", ActorKind: model.ActorAgent, AgentRef: "agent:expiry",
 	})
@@ -1920,7 +1919,7 @@ func TestRuntimeLifecycleRevokesDualCredentialsAtEveryProcessBoundary(t *testing
 			)
 			probe.now = clk.get
 			wireDualCredentialProbe(m, probe)
-			created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+			created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 				Transport: TransportStreamJSON, Isolation: IsolationNative,
 				Actor: "agent:boundary", ActorKind: model.ActorAgent, AgentRef: "agent:boundary",
 			})
@@ -1987,7 +1986,7 @@ func TestRuntimeCleanupRetriesResidualDualCredentialHandlesBeforeCleaned(t *test
 	)
 	probe := &dualCredentialProbe{now: clk.get}
 	wireDualCredentialProbe(m, probe)
-	created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:cleanup", ActorKind: model.ActorAgent, AgentRef: "agent:cleanup",
 	})
@@ -1998,7 +1997,7 @@ func TestRuntimeCleanupRetriesResidualDualCredentialHandlesBeforeCleaned(t *test
 		t.Fatal(err)
 	}
 	workID, communicationID := model.NewID(), model.NewID()
-	mutateRunForCredentialTest(t, m.data, tenant, created.RunRef, func(record model.Record) {
+	mutateRunForCredentialTest(t, m.Data, tenant, created.RunRef, func(record model.Record) {
 		setCredentialHandle(record, colWorkCredentialID, colWorkCredentialExpiresAt,
 			workID, clk.get().Add(20*time.Minute))
 		setCredentialHandle(record, colCommunicationCredentialID, colCommunicationExpiresAt,
@@ -2189,7 +2188,7 @@ func TestRecoverRuntimeCredentialsPaginatesAndRejectsMalformedCursors(t *testing
 		probe := &dualCredentialProbe{now: clk.get}
 		wireDualCredentialProbe(m, probe)
 		const rows = 205
-		if err := m.data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
+		if err := m.Data.Mutate(context.Background(), tenant, func(sc store.Scope) error {
 			repo, err := sc.Ext(runKind)
 			if err != nil {
 				return err
@@ -2227,10 +2226,8 @@ func TestRecoverRuntimeCredentialsPaginatesAndRejectsMalformedCursors(t *testing
 			)
 			probe := &dualCredentialProbe{now: clk.get}
 			wireDualCredentialProbe(m, probe)
-			m.UseRuntimeCredentialRecoveryData(recoveryCursorFaultData{inner: m.data, mode: mode})
-			m.UseRuntimeCredentialRecoverySources(
-				dualWorkSource{probe}, dualCommunicationSource{probe},
-			)
+			m.RecoveryData = recoveryCursorFaultData{inner: m.Data, mode: mode}
+			m.RecoveryWorkSessionCreds, m.RecoveryCommunicationSessionCreds = dualWorkSource{probe}, dualCommunicationSource{probe}
 			err := m.RecoverRuntimeCredentials(context.Background(), tenant)
 			if err == nil || !strings.Contains(err.Error(), "continuation cursor") {
 				t.Fatalf("%s cursor recovery = %v", mode, err)
@@ -2249,7 +2246,7 @@ func TestRuntimeStandbyStopDoesNotTouchRemoteK3Generation(t *testing.T) {
 			)
 			probe := &dualCredentialProbe{now: clk.get}
 			wireDualCredentialProbe(m, probe)
-			created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+			created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 				Transport: TransportStreamJSON, Isolation: IsolationNative,
 				Actor: "agent:standby", ActorKind: model.ActorAgent, AgentRef: "agent:standby",
 			})
@@ -2260,7 +2257,7 @@ func TestRuntimeStandbyStopDoesNotTouchRemoteK3Generation(t *testing.T) {
 			if !ok {
 				t.Fatal("created run is not live")
 			}
-			base := m.data
+			base := m.Data
 			if state == statePending {
 				mutateRunForCredentialTest(t, base, tenant, created.RunRef, func(record model.Record) {
 					record[colState] = statePending
@@ -2341,22 +2338,22 @@ func TestRuntimePostLaunchStopFailureRetainsCustodyUntilRetry(t *testing.T) {
 			wireDualCredentialProbe(m, probe)
 			if tc.invalidateTransition {
 				runner.hook = func() {
-					record := onlyRuntimeCredentialTestRun(t, m.data, tenant)
-					mutateRunForCredentialTest(t, m.data, tenant,
+					record := onlyRuntimeCredentialTestRun(t, m.Data, tenant)
+					mutateRunForCredentialTest(t, m.Data, tenant,
 						record.String(colRunRef), func(current model.Record) {
 							current[colState] = stateRunning
 						})
 				}
 			}
 
-			_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+			_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 				Transport: TransportStreamJSON, Isolation: IsolationNative,
 				Actor: "agent:custody", ActorKind: model.ActorAgent, AgentRef: "agent:custody",
 			})
 			if err == nil {
 				t.Fatal("launch boundary unexpectedly succeeded")
 			}
-			record := onlyRuntimeCredentialTestRun(t, m.data, tenant)
+			record := onlyRuntimeCredentialTestRun(t, m.Data, tenant)
 			runRef := record.String(colRunRef)
 			if (record.String(colState) != statePending && record.String(colState) != stateRunning) ||
 				record.String(colRuntimeLaunchID) == "" {
@@ -2410,7 +2407,7 @@ func TestRuntimeResumeProcessReturnedWithErrorRetainsCustodyUntilRetry(t *testin
 	)
 	probe := &dualCredentialProbe{now: clk.get}
 	wireDualCredentialProbe(m, probe)
-	created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:resume-custody", ActorKind: model.ActorAgent,
 		AgentRef: "agent:resume-custody",
@@ -2429,7 +2426,7 @@ func TestRuntimeResumeProcessReturnedWithErrorRetainsCustodyUntilRetry(t *testin
 		fakeProc: &fakeProc{out: make(chan OutputFrame, 1), stopped: make(chan struct{})},
 		log:      probe,
 	}
-	m.rt.runner = &launchBoundaryRunner{
+	m.rt.Runner = &launchBoundaryRunner{
 		proc: proc, err: errors.New("runner returned an uncertain resumed process"),
 	}
 	probe.reset()
@@ -2482,7 +2479,7 @@ func TestRuntimeLaunchErrorWithoutProcessRevokesBothAndReleasesClaim(t *testing.
 	)
 	probe := &dualCredentialProbe{now: clk.get}
 	wireDualCredentialProbe(m, probe)
-	_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:launch-error", ActorKind: model.ActorAgent, AgentRef: "agent:launch-error",
 	})
@@ -2503,7 +2500,7 @@ func TestRuntimeLaunchErrorWithoutProcessRevokesBothAndReleasesClaim(t *testing.
 	if claimErr != nil || live {
 		t.Fatalf("launch-error Claim = live %v err %v", live, claimErr)
 	}
-	record := onlyRuntimeCredentialTestRun(t, m.data, tenant)
+	record := onlyRuntimeCredentialTestRun(t, m.Data, tenant)
 	if record.String(colState) != stateFailed || record.String(colRuntimeLaunchID) != "" ||
 		record.String(colWorkCredentialID) != "" ||
 		record.String(colCommunicationCredentialID) != "" {
@@ -2524,7 +2521,7 @@ func TestRecoverRuntimeCredentialsRetriesUnconfirmedLocalStop(t *testing.T) {
 	m, _, tenant, clk := newRuntimeHarness(t, WithRunner(runner), WithCredentialSource(staticCred()))
 	probe.now = clk.get
 	wireDualCredentialProbe(m, probe)
-	created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:local-recovery", ActorKind: model.ActorAgent, AgentRef: "agent:local-recovery",
 	})
@@ -2575,8 +2572,8 @@ func TestRecoverRuntimeCredentialsBypassesSuspensionOnlyThroughRecoverySources(t
 	wireDualCredentialProbe(m, normal)
 	runRef, _ := prepareRecoveryReservation(t, m, tenant, normal, 2, false)
 	recovery := &dualCredentialProbe{now: clk.get}
-	m.UseRuntimeCredentialRecoveryData(api.NewModuleData(st))
-	m.UseRuntimeCredentialRecoverySources(dualWorkSource{recovery}, dualCommunicationSource{recovery})
+	m.RecoveryData = api.NewModuleData(st)
+	m.RecoveryWorkSessionCreds, m.RecoveryCommunicationSessionCreds = dualWorkSource{recovery}, dualCommunicationSource{recovery}
 	m.UseData(api.NewModuleData(suspension.Guard(st, nil)))
 	if err := st.System(context.Background(), func(sys store.SystemScope) error {
 		_, err := sys.SetOrgStatus(context.Background(), tenant, model.StatusSuspended)

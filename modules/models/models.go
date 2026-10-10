@@ -9,6 +9,7 @@ import (
 	"log/slog"
 	"sync"
 
+	mp "github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/sdk"
@@ -57,7 +58,9 @@ type Module struct {
 	// platforms surfaces the declared deployment-surface / lifecycle reference
 	// (ANT2-01/03); nil (the default) degrades GET /platforms to
 	// available=false with a reason.
-	platforms PlatformsProvider
+	platforms         PlatformsProvider
+	availability      *availabilityCatalog
+	connectorCatalogs func(context.Context, model.TenantID) ([]ConnectorCatalog, error)
 
 	mu     sync.Mutex
 	cancel func() // bus unsubscribe
@@ -115,6 +118,20 @@ func WithPlatformsProvider(p PlatformsProvider) Option {
 	return func(m *Module) { m.platforms = p }
 }
 
+// ConnectorCatalog is reference metadata from one configured tenant source.
+// It never establishes credential-bound availability or an execution target.
+type ConnectorCatalog struct {
+	SourceRef string
+	Kind      string
+	Catalog   mp.Catalog
+	Failed    bool
+}
+
+// UseConnectorCatalogs attaches the existing source roster before Start.
+func (m *Module) UseConnectorCatalogs(read func(context.Context, model.TenantID) ([]ConnectorCatalog, error)) {
+	m.connectorCatalogs = read
+}
+
 // New returns a models module with the opt-in (allow) budget gate and the deny-closed
 // routing executor; the composition root replaces them via the With* options.
 func New(opts ...Option) *Module {
@@ -160,9 +177,10 @@ func (m *Module) Init(_ context.Context, host sdk.Host) error {
 	return nil
 }
 
-// Start has no background work for this module (enrichment is event-driven and
-// governance is request-driven); it only checks the data handle was wired.
+// Start begins availability discovery when its source and data handle are wired.
+// Enrichment remains event-driven and governance remains request-driven.
 func (m *Module) Start(context.Context) error {
+	m.startAvailability()
 	if m.data == nil && m.log != nil {
 		m.log.Warn("models: started without a data handle; enrichment will not persist")
 	}
@@ -189,6 +207,7 @@ func (m *Module) Start(context.Context) error {
 
 // Stop unsubscribes. It is idempotent.
 func (m *Module) Stop(context.Context) error {
+	m.stopAvailability()
 	m.mu.Lock()
 	cancel := m.cancel
 	m.cancel = nil

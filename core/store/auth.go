@@ -114,6 +114,11 @@ type AuthScope interface {
 	// propagated. It is the only post-mint handle mutation on AuthScope, so a caller
 	// can never rewrite a handle's ceiling, expiry or audience through it.
 	RevokeDelegationHandle(ctx context.Context, jti model.ID, revokedAt model.Timestamp) (changed bool, err error)
+	// RecordAPITokenUse sets ONLY last_used_at of the API token id. Version and
+	// updated_at stay as they are: a recorded use is not a change to the
+	// credential, so it neither voids a credential pinned to the token's version
+	// nor conflicts with an optimistic Update. An absent token is ErrNotFound.
+	RecordAPITokenUse(ctx context.Context, id model.ID, usedAt model.Timestamp) error
 	// PEPServices is the registered Policy Enforcement Point repository. Rows
 	// live in the system auth partition and carry their governed business tenant
 	// in TargetTenantID.
@@ -248,4 +253,15 @@ type DelegationHandleStore interface {
 	// Delete removes the handle (hard delete). It returns ErrNotFound if the handle
 	// is absent/other-tenant.
 	Delete(ctx context.Context, id model.ID) error
+}
+
+// OSAccountBindingStore extends the existing immutable binding custody without
+// requiring older decorators to provide the new native identity capability.
+// Missing capability refuses OS-account admission; workflow custody is unchanged.
+type OSAccountBindingStore interface {
+	CredentialBindingStore
+	// OSAccountOwner reads at most two generation-zero permanent reservations.
+	OSAccountOwner(context.Context, uint32) ([]model.CredentialBinding, error)
+	// RevokeOSAccount retires the current binding without releasing its tuple.
+	RevokeOSAccount(context.Context, model.CredentialBinding, model.Timestamp) error
 }

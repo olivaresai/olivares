@@ -25,40 +25,36 @@
 set -uo pipefail
 RAIZ="${OLIVARES_CLONE:-$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")/.." && pwd -P)}"
 cd "$RAIZ/connectors" 2>/dev/null || {
-	echo "agent-surfaces-census: ⛔ NO HE PODIDO MIRAR: no existe $RAIZ/connectors" >&2
+	echo "agent-surfaces-census: ⛔ COULD NOT LOOK: $RAIZ/connectors does not exist" >&2
 	exit 2
 }
 
 python3 - "$@" <<'PY'
 import re, glob, sys, os
 
-# ⛔ ESTA LISTA ES UN ALCANCE DELIBERADO, NO UN DESCUIDO — y por eso lleva la guarda de abajo.
-#    `connectors/` tiene ~140 directorios; aquí sólo están las superficies del PATRÓN de agentes de
-#    código. Enumerarlas todas convertiría el censo en un inventario y dejaría de contestar su
-#    pregunta. Lo que sí puede pudrirse en silencio es el criterio: esta lista se fijó cuando el
-#    TIER 1 era Claude, y la orden de del 2026-08-17 subió **Grok Build/xAI** a TIER 1.
-#    Durante un día el censo contestó sin ellos: `connectors/grok` existía —«Grok Build
-#    (governance)», TypeSource— y el censo decía CERO. Un instrumento que no ve a un proveedor de
-#    primera clase no está midiendo el patrón, está midiendo la lista.
+# This list deliberately covers coding-agent surfaces, not all ~140 connector directories.
+# The guard below keeps that scope aligned with the provider tiers. Promoted Grok
+# Build/xAI to TIER 1 on 2026-08-17, but the census reported zero for a day even though
+# `connectors/grok` already existed as “Grok Build (governance)”, TypeSource. A census
+# that misses a first-class provider measures its own stale list rather than the pattern.
 SUP = ['agentsmd','claude','claude-api','claude-apps-gateway','claude-batch','claude-compliance',
        'claude-config','claude-console','claude-managed-agents','claude-projects','claude-routines',
        'claude-wif','codex','codex-managed-config','cowork','cowork-analytics','grok','managedsettings',
        'mcp','mcpb','xai']
 
-# ── GUARDA: el censo sigue a la tabla de tiers del canon, no al revés ──────────────────────
-# Si sube un proveedor a TIER 1 y nadie extiende SUP, el censo contesta como si no existiera
-# —que es exactamente lo que pasó con Grok Build—. Esto lo convierte en un rojo explícito.
-# Falla CERRADO: si no puede leer la tabla, sale 2 («no he podido mirar»), nunca 0.
+# Guard: the census follows the canonical tier table. If a provider reaches TIER 1
+# without entering SUP, fail explicitly rather than repeat the Grok Build omission.
+# An unreadable tier table returns 2 (could not check), never 0.
 _canon = os.path.join(os.path.dirname(os.getcwd()), 'docs', 'ai-context', 'CANON-OPERATIVO.md')
 try:
     _txt = open(_canon, encoding='utf8').read()
 except OSError as e:
-    print(f'agent-surfaces-census: ⛔ NO HE PODIDO MIRAR: no se pudo leer el canon ({e})', file=sys.stderr)
+    print(f'agent-surfaces-census: ⛔ COULD NOT LOOK: could not read the canonical reference ({e})', file=sys.stderr)
     raise SystemExit(2)
 _fila = [l for l in _txt.split('\n') if l.startswith('| **1** |')]
 if len(_fila) != 1:
-    print(f'agent-surfaces-census: ⛔ NO HE PODIDO MIRAR: la fila TIER 1 del canon aparece '
-          f'{len(_fila)} veces, esperaba 1', file=sys.stderr)
+    print(f'agent-surfaces-census: ⛔ COULD NOT LOOK: the TIER 1 row in the canonical reference appears '
+          f'{len(_fila)} times; expected 1', file=sys.stderr)
     raise SystemExit(2)
 # Cada grupo en negrita es UN proveedor; basta que UNA de sus palabras case el prefijo de una
 # superficie. «Anthropic / Claude» lo cubre `claude`; «Grok Build / xAI», `grok` o `xai`.
@@ -66,12 +62,12 @@ if len(_fila) != 1:
 # aprendí en rojo: la primera versión reclamó que «el canon pone en TIER 1 a ['1']».
 _celdas = _fila[0].split('|')
 if len(_celdas) < 4:
-    print('agent-surfaces-census: ⛔ NO HE PODIDO MIRAR: la fila TIER 1 no tiene tres celdas',
+    print('agent-surfaces-census: ⛔ COULD NOT LOOK: the TIER 1 row does not have three cells',
           file=sys.stderr)
     raise SystemExit(2)
 _grupos = re.findall(r'\*\*([^*]+)\*\*', _celdas[2])
 if not _grupos:
-    print('agent-surfaces-census: ⛔ NO HE PODIDO MIRAR: la fila TIER 1 no tiene proveedores en negrita',
+    print('agent-surfaces-census: ⛔ COULD NOT LOOK: the TIER 1 row has no providers in bold',
           file=sys.stderr)
     raise SystemExit(2)
 _sin = []
@@ -80,13 +76,13 @@ for _g in _grupos:
     if not any(sup.split('-')[0] == w or sup == w for w in _palabras for sup in SUP):
         _sin.append(_g.strip())
 if _sin:
-    print(f'agent-surfaces-census: ⛔ el canon pone en TIER 1 a {_sin} y el censo no tiene ninguna '
-          f'superficie suya — extiende SUP o corrige el canon', file=sys.stderr)
+    print(f'agent-surfaces-census: ⛔ the canonical reference places {_sin} in TIER 1, but the census has no '
+          f'surface for them — extend SUP or correct the canonical reference', file=sys.stderr)
     raise SystemExit(1)
 
-faltan = [s for s in SUP if not os.path.isdir(s)]
-if faltan:
-    print(f'agent-surfaces-census: ⛔ NO HE PODIDO MIRAR: faltan {faltan}', file=sys.stderr)
+missing_inputs = [s for s in SUP if not os.path.isdir(s)]
+if missing_inputs:
+    print(f'agent-surfaces-census: ⛔ COULD NOT LOOK: missing {missing_inputs}', file=sys.stderr)
     raise SystemExit(2)
 
 filas = []
@@ -110,14 +106,14 @@ for s in SUP:
 # CONTROL POSITIVO: si NINGUNA superficie declara título, el parseo no ha medido nada — un censo de
 # diecinueve vacíos se lee como «no configuran nada» en vez de «no supe leerlo».
 if not any(t for _, _, t, _ in filas):
-    print(f'agent-surfaces-census: ⛔ NO HE PODIDO MIRAR: cero títulos leídos en {len(filas)} '
-          f'superficies', file=sys.stderr)
+    print(f'agent-surfaces-census: ⛔ COULD NOT LOOK: no titles read across {len(filas)} '
+          f'surfaces', file=sys.stderr)
     raise SystemExit(2)
 
-print(f'agent-surfaces-census: {len(filas)} superficies del patrón · '
-      f'{sum(len(k) for _, _, _, k in filas)} campos de configuración declarados')
+print(f'agent-surfaces-census: {len(filas)} surfaces in the pattern · '
+      f'{sum(len(k) for _, _, _, k in filas)} declared configuration fields')
 print()
-print(f"  {'superficie':24} {'tipo':11} {'cfg':>3}  título")
+print(f"  {'surface':24} {'type':11} {'cfg':>3}  title")
 for s, t, ti, ks in filas:
     print(f'  {s:24} {t:11} {len(ks):3}  {ti[:56]}')
 if '--fields' in sys.argv:

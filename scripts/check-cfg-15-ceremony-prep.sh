@@ -50,7 +50,7 @@ for r in "${required[@]}"; do
 done
 
 grep -q 'YA-74' "$REG" || fail "REGISTRO lost YA-74"
-grep -q 'siguen pendientes' "$REG" || fail "REGISTRO YA-74 lost «siguen pendientes»"
+grep -q 'siguen pendientes' "$REG" || fail "REGISTRO YA-74 lost its explicit pending status"
 
 python3 - "$JSON" <<'PY' || exit $?
 import json, sys

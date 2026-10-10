@@ -20,6 +20,8 @@ import { Gauge } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/lib/auth/context'
+import { COST_VIEW } from '@/features/registry'
+import { useViewAccess } from '@/features/navigation/authorization'
 import {
   AsyncSection,
   EffectiveStateLinks,
@@ -38,6 +40,7 @@ import {
 import './i18n'
 
 export function RateLimitsView() {
+  const access = useViewAccess()
   const { t } = useTranslation(['rateLimits', 'common'])
   const { activeTenant } = useAuth()
 
@@ -69,16 +72,21 @@ export function RateLimitsView() {
               that fronts the calls, and the spend those limits shape. */}
           <EffectiveStateLinks
             label={t('effectiveState.label')}
+            links={
+              access.navigable(COST_VIEW)
+                ? [
+                    {
+                      to: COST_VIEW.path,
+                      label: t(`nav:items.${COST_VIEW.id}`),
+                    },
+                  ]
+                : []
+            }
             targets={[
               {
                 to: '/inference-proxy',
                 permission: 'inferenceproxy:config:read',
                 label: t('effectiveState.proxy'),
-              },
-              {
-                to: '/finops',
-                permission: 'finops:spend:read',
-                label: t('effectiveState.finops'),
               },
             ]}
           />

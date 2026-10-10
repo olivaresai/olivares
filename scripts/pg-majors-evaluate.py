@@ -14,16 +14,35 @@
 # run counter cannot tell it from a PASS, which is the empty green this traps.
 # Tested by scripts/test-pg-majors-evaluate.sh (mutation battery); the workflow
 # runs that battery in the same job before trusting this file.
+import argparse
 import collections
 import json
 import os
+import re
 import sys
 
 MAJORS = ("15", "16", "17", "18")
 
 
 def main() -> int:
-    floors = json.load(open("ci/pg-majors-expectations.json"))["floors"]
+    parser = argparse.ArgumentParser(description="Evaluate the declared PostgreSQL qualification scope.")
+    parser.add_argument("--skip-pattern", choices=MAJORS, help="Print the native Go selector before running tests.")
+    args = parser.parse_args()
+    contract = json.load(open("ci/pg-majors-expectations.json"))
+    exclusions = contract.get("exclusions", [])
+    for exclusion in exclusions:
+        if (not re.fullmatch(r"Test[A-Za-z0-9_]+(?:/[A-Za-z0-9_ -]+)*", exclusion["test"])
+                or not exclusion["reason"] or not exclusion["majors"]
+                or any(str(m) not in MAJORS for m in exclusion["majors"])):
+            parser.error("exclusions must name exact tests, supported majors and a reason")
+    if args.skip_pattern:
+        patterns = [
+            "/".join("^" + re.escape(part) + "$" for part in exclusion["test"].split("/"))
+            for exclusion in exclusions if int(args.skip_pattern) in exclusion["majors"]
+        ]
+        print("|".join(patterns) or "^$")
+        return 0
+    floors = contract["floors"]
     exits = dict(
         line.split() for line in open("pg-majors-exits.txt").read().split("\n") if line
     )
@@ -60,7 +79,7 @@ def main() -> int:
         if exits.get(m) != "0":
             errors.append(f"pass pg{m}: go test exit {exits.get(m, 'MISSING')}")
         passc, skipc = collections.Counter(), collections.Counter()
-        skips = []
+        skips, failures = [], []
         try:
             stream = open(f"gotest-{m}.json")
         except FileNotFoundError:
@@ -79,6 +98,8 @@ def main() -> int:
             if ev.get("Test") and ev.get("Action") == "skip":
                 skipc[pkg] += 1
                 skips.append(f"{pkg}#{ev.get('Test')}")
+            if ev.get("Action") == "fail" and pkg in floors:
+                failures.append(f"{pkg}#{ev.get('Test', '(package)')}")
         for pkg, floor in floors.items():
             got = passc.get(pkg, 0)
             if got < floor:
@@ -91,6 +112,11 @@ def main() -> int:
             errors.append(
                 f"pass pg{m}: {len(matrix_skips)} SKIP in matrix packages: {matrix_skips[:5]}"
             )
+        if failures:
+            errors.append(f"pass pg{m}: {len(failures)} FAIL in matrix packages: {failures[:5]}")
+        for exclusion in exclusions:
+            if int(m) in exclusion["majors"]:
+                summary.append(f"pg{m} outside qualification scope: {exclusion['test']} — {exclusion['reason']}")
 
     out_path = os.environ.get("GITHUB_STEP_SUMMARY")
     out = open(out_path, "a") if out_path else sys.stdout
@@ -103,7 +129,7 @@ def main() -> int:
         print("\n".join("::error::" + e for e in errors))
         return 1
     print(
-        f"all four majors measured: {len(summary)} package-passes, floors held, zero skips"
+        f"all four majors measured: {len(MAJORS) * len(floors)} package-passes, floors held, zero failures or skips in the declared scope"
     )
     return 0
 

@@ -42,38 +42,28 @@
 set -uo pipefail
 export LC_ALL=C
 
-no_puedo() { printf 'check-list-truncation-witness: 2 NO HE PODIDO MIRAR — %s\n' "$*" >&2; exit 2; }
+cannot_check() { printf 'check-list-truncation-witness: 2 COULD NOT CHECK — %s\n' "$*" >&2; exit 2; }
 
-ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)" || no_puedo "no resuelvo la raiz"
+ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)" || cannot_check "cannot resolve the root"
 
-# ── enmascarar comentarios, CONSERVANDO EL NUMERO DE LINEAS ───────────────────────────────────
-# Vacia el contenido de los comentarios y deja la linea en su sitio, para que un `sed -n "${n}p"`
-# posterior siga apuntando a lo mismo. Devuelve el fichero entero por stdout.
+# Mask comments while preserving line numbers for later `sed -n "${n}p"` lookup;
+# return the whole file on stdout.
 #
-# ⛔ POR QUE HACE FALTA, y son DOS defectos opuestos medidos en (2026-08-27) por el propio
-#    carril que escribia encima de este guion:
+# measured two opposite defects on 2026-08-27. `censar` removed only one-line
+# block comments, // tails and lines starting *, // or /*. Plain continuation text in
+# multiline JSX comments leaked prose `has_more` into the census and falsely cleared
+# a feature that rendered no warning. `capa_compartida` removed nothing: quoting the
+# searched pattern in a comment counted as a call with no ceiling and triggered
+# a false finding (“(unnamed) endpoints.ts:199”). Documenting the limit triggered it.
 #
-#    · `censar` descontaba SOLO los bloques `/* … */` que caben en UNA linea, mas la cola tras
-#      `//`, mas las lineas que ya empiezan por `*`, `//` o `/*`. Un comentario JSX MULTILINEA
-#      cuyas lineas de continuacion empiezan por texto —lo normal al explicar algo— colaba
-#      `has_more` EN PROSA y ABSOLVIA a la feature aunque nadie pintara el aviso. Falso NEGATIVO,
-#      el que no se nota. La cabecera de este fichero ya predecia la version de una linea y decia
-#      que ninguna feature dependia todavia de esa diferencia: la primera que lo hizo fue la que
-#      vino a arreglarlo.
-#    · `capa_compartida` no descontaba NADA. Una frase que citara el patron que busca se contaba
-#      como una llamada: «(sin nombre) endpoints.ts:199», sin techo, gate ROJO. **Documentar el
-#      punto ciego lo disparaba** — y un control que castiga a quien documenta su limite es un
-#      control que se queda sin documentar.
-#
-# ⛔ Y SE SALTAN LAS CADENAS, que es lo que separa este enmascarador de un `sed` ingenuo: un `//`
-#    dentro de una URL (`'https://…'`) se llevaria por delante el resto de la linea. En `censar`
-#    eso solo perderia un testigo (hallazgo de mas, ruidoso); en `capa_compartida` ESCONDERIA una
-#    llamada, que es un hallazgo de MENOS. Se reconocen comillas simples, dobles y backticks.
+# Skip quoted strings, including single/double quotes and backticks. A naive //
+# mask would truncate URLs such as 'https://…': in censar it loses a witness and
+# adds noise; in capa_compartida it hides a call and misses a real finding.
 enmascarar_comentarios() {
 	LC_ALL=C awk '
 	BEGIN { bloque = 0 }
 	{
-		linea = $0; salida = ""; i = 1; n = length(linea); cita = ""
+		linea = $0; output = ""; i = 1; n = length(linea); cita = ""
 		while (i <= n) {
 			c = substr(linea, i, 1); c2 = substr(linea, i, 2)
 			if (bloque) {                      # dentro de /* … */
@@ -81,18 +71,18 @@ enmascarar_comentarios() {
 				continue
 			}
 			if (cita != "") {                  # dentro de una cadena: se copia tal cual
-				salida = salida c
-				if (c == "\\") { salida = salida substr(linea, i + 1, 1); i += 2; continue }
+				output = output c
+				if (c == "\\") { output = output substr(linea, i + 1, 1); i += 2; continue }
 				if (c == cita) { cita = "" }
 				i += 1
 				continue
 			}
-			if (c == "\"" || c == "'"'"'" || c == "`") { cita = c; salida = salida c; i += 1; continue }
+			if (c == "\"" || c == "'"'"'" || c == "`") { cita = c; output = output c; i += 1; continue }
 			if (c2 == "/*") { bloque = 1; i += 2; continue }
 			if (c2 == "//") { break }          # cola de linea
-			salida = salida c; i += 1
+			output = output c; i += 1
 		}
-		print salida
+		print output
 	}' "$1" 2>/dev/null
 }
 
@@ -121,22 +111,22 @@ alias_de_lista() {
 		"$@" --include='*.ts' --include='*.tsx' 2>/dev/null \
 		| sed -E 's/^(interface|type)[[:space:]]+([A-Z][A-Za-z0-9_]*).*/\2/' \
 		| LC_ALL=C sort -u || true)"
-	local salida="ListResponse" x
+	local output="ListResponse" x
 	while IFS= read -r x; do
 		[ -n "$x" ] || continue
 		[ "$x" = "ListResponse" ] && continue
-		salida="${salida}|${x}"
+		output="${output}|${x}"
 	done <<EOF_A
 $nombres
 EOF_A
-	printf '%s\n' "$salida"
+	printf '%s\n' "$output"
 }
 
 # ── el censo, sobre un directorio de features cualquiera ──────────────────────────────────────
 # Imprime una linea por feature SIN testigo. Devuelve 0 si no hay ninguna, 1 si las hay.
 censar() {
 	local features="$1"
-	[ -d "$features" ] || { printf 'no existe %s\n' "$features" >&2; return 2; }
+	[ -d "$features" ] || { printf 'missing %s\n' "$features" >&2; return 2; }
 	# Los envoltorios de lista se derivan DEL ARBOL QUE SE RECORRE, no de una lista fija ni de
 	# una ruta absoluta: atarlo a `web/src/lib/api` haria que este censo —y su selftest— dependa
 	# del arbol real, y entonces las celdas sinteticas dejarian de ser sinteticas.
@@ -244,7 +234,7 @@ censar() {
 # exencion sin razon es una lista de perdones, y envejece sin que nadie lo note.
 capa_compartida() {
 	local dir="$1"
-	[ -d "$dir" ] || { printf 'no existe %s\n' "$dir" >&2; return 2; }
+	[ -d "$dir" ] || { printf 'missing %s\n' "$dir" >&2; return 2; }
 	local ALIAS_LISTA
 	ALIAS_LISTA="$(alias_de_lista "$dir")"
 	local f linea nombre hallazgos=0
@@ -268,7 +258,7 @@ capa_compartida() {
 			# ACIERTA. Es la regla que este mismo fichero predica tres veces mas arriba.
 			grep -qE "http\.[a-z]+<[[:space:]]*(${ALIAS_LISTA})[<>]" <<<"$linea" || continue
 			nombre="$(sed -n "$((n > 1 ? n - 1 : 1)),${n}p" "$f" | grep -oE '^[[:space:]]*[a-zA-Z][a-zA-Z0-9_]*:' | tail -1 | tr -d ' :')"
-			[ -n "$nombre" ] || nombre="(sin nombre) $f:$n"
+			[ -n "$nombre" ] || nombre="(unnamed) $f:$n"
 			# ¿exenta con razon? La razon va en las 6 lineas de encima y tiene que nombrar un .go
 			local encima
 			encima="$(sed -n "$((n > 6 ? n - 6 : 1)),$((n - 1))p" "$f" 2>/dev/null)"
@@ -277,7 +267,7 @@ capa_compartida() {
 				case "$encima" in
 				*.go*) continue ;;
 				*)
-					printf 'EXENCION SIN RAZON: %s (%s:%s) — la exencion debe nombrar el handler .go\n' "$nombre" "$f" "$n" >&2
+					printf 'EXEMPTION WITHOUT REASON: %s (%s:%s) — the exemption must name the .go handler\n' "$nombre" "$f" "$n" >&2
 					return 2
 					;;
 				esac
@@ -300,7 +290,7 @@ capa_compartida() {
 # ── selftest ──────────────────────────────────────────────────────────────────────────────────
 if [ "${1:-}" = "--selftest" ]; then
 	fail=0
-	T="$(mktemp -d "${TMPDIR:-/tmp}/ltw.XXXXXX")" || no_puedo "mktemp fallo"
+	T="$(mktemp -d "${TMPDIR:-/tmp}/ltw.XXXXXX")" || cannot_check "mktemp failed"
 	trap 'rm -rf "$T"' EXIT
 
 	# CONTROL NEGATIVO: una feature fabricada CON lista viva y SIN testigo tiene que salir.
@@ -322,26 +312,26 @@ if [ "${1:-}" = "--selftest" ]; then
 	ok() { oks=$((oks + 1)); printf '  ok    %s\n' "$*"; }
 	bad() { fails=$((fails + 1)); fail=1; printf '  FAIL  %s\n' "$*"; }
 
-	salida="$(censar "$T/feats" || true)"
-	case $'\n'"$salida"$'\n' in
-	*$'\n'fuga$'\n'*) ok "CONTROL NEGATIVO: una feature sin testigo se caza" ;;
-	*) bad "CONTROL NEGATIVO: el guion NO ve una feature sin testigo — es ciego"; fail=1 ;;
+	output="$(censar "$T/feats" || true)"
+	case $'\n'"$output"$'\n' in
+	*$'\n'fuga$'\n'*) ok "NEGATIVE CONTROL: a feature without a witness is detected" ;;
+	*) bad "NEGATIVE CONTROL: the script misses a feature without a truncation indicator"; fail=1 ;;
 	esac
 
 	# CONTROL POSITIVO: la misma feature, anadiendo el testigo, deja de salir.
 	printf 'export function View(){ const q=useQuery(); return <div>{q.data?.has_more && <b/>}</div> }\n' > "$T/feats/fuga/view.tsx"
-	salida="$(censar "$T/feats" || true)"
-	case $'\n'"$salida"$'\n' in
-	*$'\n'fuga$'\n'*) bad "CONTROL POSITIVO: sigue cazandola con el testigo puesto — no discrimina"; fail=1 ;;
-	*) ok "CONTROL POSITIVO: con el testigo puesto, deja de ser hallazgo" ;;
+	output="$(censar "$T/feats" || true)"
+	case $'\n'"$output"$'\n' in
+	*$'\n'fuga$'\n'*) bad "POSITIVE CONTROL: still reports it with the indicator present; does not distinguish the cases"; fail=1 ;;
+	*) ok "POSITIVE CONTROL: adding the witness clears the finding" ;;
 	esac
 
 	# Una feature cuyo UNICO has_more vive en un COMENTARIO no esta cubierta.
 	printf 'export function View(){ /* aqui iria el aviso de has_more */ return <div/> }\n' > "$T/feats/fuga/view.tsx"
-	salida="$(censar "$T/feats" || true)"
-	case $'\n'"$salida"$'\n' in
-	*$'\n'fuga$'\n'*) ok "un has_more que solo vive en un COMENTARIO no cuenta como testigo" ;;
-	*) bad "un comentario que menciona has_more se contó como testigo — falso negativo"; fail=1 ;;
+	output="$(censar "$T/feats" || true)"
+	case $'\n'"$output"$'\n' in
+	*$'\n'fuga$'\n'*) ok "has_more in a COMMENT does not count as a witness" ;;
+	*) bad "a comment mentioning has_more was counted as an indicator: false negative"; fail=1 ;;
 	esac
 
 	# ⛔ UN COMENTARIO MULTILINEA TAMPOCO CUENTA, y esta celda es la que faltaba. La de arriba
@@ -350,45 +340,45 @@ if [ "${1:-}" = "--selftest" ]; then
 	# explicar algo— colaba el token EN PROSA y ABSOLVIA a la feature aunque nadie pintara el
 	# aviso. Falso NEGATIVO, el que no se nota: lo estreno en quien vino a arreglarlo.
 	printf 'export function View(){ return <div>\n{/* aqui iria el aviso de has_more\n    y esta linea sigue hablando de has_more en prosa\n    y esta cita <ListTruncationBadge tambien */}\n</div> }\n' > "$T/feats/fuga/view.tsx"
-	salida="$(censar "$T/feats" || true)"
-	case $'\n'"$salida"$'\n' in
-	*$'\n'fuga$'\n'*) ok "un has_more en un comentario MULTILINEA no cuenta como testigo" ;;
-	*) bad "un comentario multilinea colo el token en prosa — falso NEGATIVO"; fail=1 ;;
+	output="$(censar "$T/feats" || true)"
+	case $'\n'"$output"$'\n' in
+	*$'\n'fuga$'\n'*) ok "has_more in a MULTILINE COMMENT does not count as a witness" ;;
+	*) bad "a multiline comment supplied the token as prose: false negative"; fail=1 ;;
 	esac
 
 	# El COMPONENTE COMPARTIDO cuenta como testigo: es la forma que la receta prescribe.
 	printf 'import { ListTruncationBadge } from "@/features/_intel"\nexport function View(){ const q=useQuery(); return <ListTruncationBadge query={q} label="x" hint="y"/> }\n' > "$T/feats/fuga/view.tsx"
-	salida="$(censar "$T/feats" || true)"
-	case $'\n'"$salida"$'\n' in
-	*$'\n'fuga$'\n'*) bad "el aviso COMPARTIDO no se contó como testigo — el censo se ciega al converger"; fail=1 ;;
-	*) ok "el aviso COMPARTIDO cuenta como testigo, igual que un has_more en linea" ;;
+	output="$(censar "$T/feats" || true)"
+	case $'\n'"$output"$'\n' in
+	*$'\n'fuga$'\n'*) bad "the shared indicator was not counted: the scan fails when features share a component"; fail=1 ;;
+	*) ok "the SHARED warning counts as a witness, like an inline has_more" ;;
 	esac
 
 	# ⛔ IMPORT SIN RENDER SIGUE SIENDO HALLAZGO (F-02 del contraste). Esta celda es la que
 	# faltaba: la de arriba pone import Y render juntos, asi que pasaba con cualquiera de los dos.
 	printf 'import { ListTruncationBadge } from "@/features/_intel"\nexport function View(){ const q=useQuery(); return <div/> }\n' > "$T/feats/fuga/view.tsx"
-	salida="$(censar "$T/feats" || true)"
-	case $'\n'"$salida"$'\n' in
-	*$'\n'fuga$'\n'*) ok "importar el aviso SIN pintarlo sigue siendo hallazgo" ;;
-	*) bad "un import sin render se contó como testigo — falso NEGATIVO, el que no se nota" ;;
+	output="$(censar "$T/feats" || true)"
+	case $'\n'"$output"$'\n' in
+	*$'\n'fuga$'\n'*) ok "importing the warning without rendering it remains a finding" ;;
+	*) bad "an import without rendering was counted as an indicator: silent false negative" ;;
 	esac
 
 	# Y su comentario tampoco cuenta: la misma regla que para has_more.
 	printf 'export function View(){ /* aqui iria un ListTruncationBadge */ return <div/> }\n' > "$T/feats/fuga/view.tsx"
-	salida="$(censar "$T/feats" || true)"
-	case $'\n'"$salida"$'\n' in
-	*$'\n'fuga$'\n'*) ok "un ListTruncationBadge en COMENTARIO no cuenta como testigo" ;;
-	*) bad "un comentario que menciona el componente se contó como testigo"; fail=1 ;;
+	output="$(censar "$T/feats" || true)"
+	case $'\n'"$output"$'\n' in
+	*$'\n'fuga$'\n'*) ok "ListTruncationBadge in a COMMENT does not count as a witness" ;;
+	*) bad "a comment mentioning the component was counted as an indicator"; fail=1 ;;
 	esac
 
 	# Una feature que DECLARA el tipo pero no LLAMA a nada no tiene lista que recortar.
 	mkdir -p "$T/feats/soloTipo"
 	printf 'import type { ListResponse } from "@/lib/api/types"\nexport function d<T>(x: ListResponse<T>) { return x.items }\n' > "$T/feats/soloTipo/derive.ts"
 	printf 'export function V(){ return <div/> }\n' > "$T/feats/soloTipo/view.tsx"
-	salida="$(censar "$T/feats" || true)"
-	case $'\n'"$salida"$'\n' in
-	*$'\n'soloTipo$'\n'*) bad "declarar el tipo sin llamar a nada NO deberia ser hallazgo"; fail=1 ;;
-	*) ok "declarar ListResponse sin hacer ninguna llamada no es hallazgo" ;;
+	output="$(censar "$T/feats" || true)"
+	case $'\n'"$output"$'\n' in
+	*$'\n'soloTipo$'\n'*) bad "declaring a type without calling anything should not be a finding"; fail=1 ;;
+	*) ok "declaring ListResponse without making a call is not a finding" ;;
 	esac
 
 	# ⛔ AQUI HUBO UNA CELDA DEL ALIAS PARA `censar` Y SE RETIRO: PASABA POR LA RAZON
@@ -413,27 +403,27 @@ if [ "${1:-}" = "--selftest" ]; then
 	mkdir -p "$T/feats/sinlista"
 	printf 'export const y = () => http.get<Foo>("/v1/y")\n' > "$T/feats/sinlista/api.ts"
 	printf 'export function V(){ return <div/> }\n' > "$T/feats/sinlista/v.tsx"
-	salida="$(censar "$T/feats" || true)"
-	case $'\n'"$salida"$'\n' in
-	*$'\n'sinlista$'\n'*) bad "una feature sin lista viva no deberia ser hallazgo"; fail=1 ;;
-	*) ok "una feature sin lista viva no es hallazgo" ;;
+	output="$(censar "$T/feats" || true)"
+	case $'\n'"$output"$'\n' in
+	*$'\n'sinlista$'\n'*) bad "a feature without a live list should not be a finding"; fail=1 ;;
+	*) ok "a feature without a live list is not a finding" ;;
 	esac
 
 	# Un directorio que no existe es 2, no 0.
 	censar "$T/no-existe" >/dev/null 2>&1; rc=$?
 	if [ "$rc" = "2" ]; then
-		ok "un directorio ausente es 2 (NO HE PODIDO MIRAR), no 0"
+		ok "a missing directory returns 2 (COULD NOT CHECK), not 0"
 	else
-		bad "un directorio ausente devolvio $rc, esperaba 2"; fail=1
+		bad "a missing directory returned $rc; expected 2"; fail=1
 	fi
 
 	# Y sobre el arbol REAL: health declara (no sale) y knowledge no (sale).
 	REALF="$ROOT/web/src/features"
 	if [ -d "$REALF" ]; then
-		salida="$(censar "$REALF" || true)"
-		case $'\n'"$salida"$'\n' in
-		*$'\n'health$'\n'*) bad "arbol real: 'health' sale como hallazgo y SI declara el recorte"; fail=1 ;;
-		*) ok "arbol real: 'health' no es hallazgo (declara en 3 vistas)" ;;
+		output="$(censar "$REALF" || true)"
+		case $'\n'"$output"$'\n' in
+		*$'\n'health$'\n'*) bad "actual tree: 'health' is reported despite declaring truncation"; fail=1 ;;
+		*) ok "real tree: 'health' is not a finding (declared in 3 views)" ;;
 		esac
 		# ⛔ ESTA CALIBRACION ERA UN LITERAL Y CERTIFICABA LA DERIVA QUE EXISTE PARA CAZAR. Decia
 		#    «arbol real: 'knowledge' deberia ser hallazgo», y el dia que #1957 le puso el aviso a
@@ -446,20 +436,20 @@ if [ "${1:-}" = "--selftest" ]; then
 		#    verdad, no solo sobre fixtures— y no envejece cuando una feature se arregla. Y si algun
 		#    dia no queda ninguna, ese estado es LEGITIMO (la linea base se ha drenado) y se dice,
 		#    en vez de fingir un rojo.
-		reales="$(printf '%s\n' "$salida" | grep -c . || true)"
+		reales="$(printf '%s\n' "$output" | grep -c . || true)"
 		base_n="$(grep -c . "${OLIVARES_LTW_BASELINE:-docs/list-truncation-baseline.txt}" 2>/dev/null || echo 0)"
 		if [ "${reales:-0}" -gt 0 ]; then
-			ok "arbol real: el censo encuentra $reales feature(s) — no esta ciego sobre el arbol de verdad"
+			ok "real tree: the inventory finds $reales feature(s) — it can inspect the real tree"
 		elif [ "${base_n:-0}" -eq 0 ]; then
-			ok "arbol real: cero hallazgos con la linea base vacia — estado legitimo, el trabajo se acabo"
+			ok "real tree: no findings with an empty baseline — a valid completed state"
 		else
 			# Censo vacio con linea base POBLADA: o el censo se ha quedado ciego, o alguien arreglo
 			# las features y no encogio la base. Las dos merecen rojo, y ninguna es «todo bien».
-			bad "arbol real: CERO hallazgos con $base_n en la linea base — censo ciego, o base sin apretar"
+			bad "actual tree: no findings with $base_n baseline entries; the scan is blind or the baseline needs tightening"
 			fail=1
 		fi
 	else
-		bad "no encuentro $REALF — el selftest no puede calibrarse contra el arbol"; fail=1
+		bad "cannot find $REALF; the selftest cannot calibrate against the tree"; fail=1
 	fi
 
 	# DETERMINISMO. Va aqui porque este guion YA fue no determinista: un `grep -q` al final de una
@@ -471,9 +461,9 @@ if [ "${1:-}" = "--selftest" ]; then
 		b="$(censar "$REALF" || true)"
 		c="$(censar "$REALF" || true)"
 		if [ "$a" = "$b" ] && [ "$b" = "$c" ]; then
-			ok "DETERMINISMO: tres corridas sobre el arbol real dan la misma lista"
+			ok "DETERMINISM: three runs on the real tree return the same list"
 		else
-			bad "DETERMINISMO: tres corridas dan listas distintas — el gate es una moneda al aire"; fail=1
+			bad "DETERMINISM: three runs return different lists; the check is nondeterministic"; fail=1
 		fi
 	fi
 
@@ -484,22 +474,22 @@ if [ "${1:-}" = "--selftest" ]; then
 	printf 'export const a = { l: (p?: P) => http.get<ListResponse<X>>("/v1/x", { query: { ...p } }) }\n' > "$T/libapi/endpoints.ts"
 	sc="$(capa_compartida "$T/libapi" || true)"
 	case "$sc" in
-	*l*) ok "CAPA COMPARTIDA: una lista sin techo en lib/api se caza" ;;
-	*) bad "CAPA COMPARTIDA: no ve una lista sin techo — ciega justo donde las dos sondas lo eran" ;;
+	*l*) ok "SHARED LAYER: an unbounded list in lib/api is detected" ;;
+	*) bad "SHARED LAYER: misses a list without a limit, the blind spot of both probes" ;;
 	esac
 
 	printf 'export const a = { l: (p?: P) => http.get<ListResponse<X>>("/v1/x", { query: { limit: 1000, ...p } }) }\n' > "$T/libapi/endpoints.ts"
 	capa_compartida "$T/libapi" >/dev/null 2>&1
 	case $? in
-	0) ok "CAPA COMPARTIDA: con el techo puesto, deja de ser hallazgo" ;;
-	*) bad "CAPA COMPARTIDA: sigue cazandola con el techo puesto — no discrimina" ;;
+	0) ok "SHARED LAYER: adding the limit clears the finding" ;;
+	*) bad "SHARED LAYER: still reports it with a limit present; does not distinguish the cases" ;;
 	esac
 
 	printf 'export const a = { l: (p?: P) => http.get<ListResponse<X>>("/v1/x", { query: { org_limit: 5, ...p } }) }\n' > "$T/libapi/endpoints.ts"
 	capa_compartida "$T/libapi" >/dev/null 2>&1
 	case $? in
-	1) ok "CAPA COMPARTIDA: org_limit no cuela como techo" ;;
-	*) bad "CAPA COMPARTIDA: acepta org_limit como techo — falso verde" ;;
+	1) ok "SHARED LAYER: org_limit does not count as a limit" ;;
+	*) bad "SHARED LAYER: accepts org_limit as a list limit: false pass" ;;
 	esac
 
 	# ⛔ UN COMENTARIO NO ES UNA LLAMADA, y esta funcion no descontaba NADA. Una frase que
@@ -510,8 +500,8 @@ if [ "${1:-}" = "--selftest" ]; then
 	printf '// la sonda busca http.get<ListResponse< y esta frase NO es una llamada\n/*\n  http.get<ListResponse<X>>("/v1/x") dentro de un bloque, tampoco\n*/\nexport const a = { l: (p?: P) => http.get<ListResponse<X>>("/v1/x", { query: { limit: 1000, ...p } }) }\n' > "$T/libapi/endpoints.ts"
 	capa_compartida "$T/libapi" >/dev/null 2>&1
 	case $? in
-	0) ok "CAPA COMPARTIDA: un comentario que CITA el patron no cuenta como llamada" ;;
-	*) bad "CAPA COMPARTIDA: una frase en un comentario enrojece el gate — falso POSITIVO" ;;
+	0) ok "SHARED LAYER: a comment quoting the pattern does not count as a call" ;;
+	*) bad "SHARED LAYER: prose in a comment fails the check: false positive" ;;
 	esac
 
 	# Y su contrafactual, para que la celda no pase por descontar de mas: la llamada REAL que
@@ -519,30 +509,30 @@ if [ "${1:-}" = "--selftest" ]; then
 	printf '// la sonda busca http.get<ListResponse< y esta frase NO es una llamada\nexport const a = { l: (p?: P) => http.get<ListResponse<X>>("/v1/x", { query: { ...p } }) }\n' > "$T/libapi/endpoints.ts"
 	sc="$(capa_compartida "$T/libapi" || true)"
 	case "$sc" in
-	*l*) ok "CAPA COMPARTIDA: y la llamada real bajo el comentario SI se sigue viendo" ;;
-	*) bad "CAPA COMPARTIDA: descuenta de mas — se ha comido una llamada real" ;;
+	*l*) ok "SHARED LAYER: the real call below the comment is still detected" ;;
+	*) bad "SHARED LAYER: excludes too much and misses a real call" ;;
 	esac
 
 	# ⛔ UN ALIAS EN LA CAPA COMPARTIDA: el caso REAL que destapo este arreglo.
 	printf 'export interface MiLista extends ListResponse<X> { next_from?: number }\nexport const a = { l: (p?: P) => http.get<MiLista>("/v1/x", { query: { ...p } }) }\n' > "$T/libapi/endpoints.ts"
 	sc="$(capa_compartida "$T/libapi" || true)"
 	case "$sc" in
-	*l*) ok "CAPA COMPARTIDA: una llamada por ALIAS tambien se mira" ;;
-	*) bad "CAPA COMPARTIDA: una llamada por alias no existe para el control" ;;
+	*l*) ok "SHARED LAYER: a call through an ALIAS is also checked" ;;
+	*) bad "SHARED LAYER: misses a call made through an alias" ;;
 	esac
 
 	printf '// SIN TECHO A PROPOSITO: porque si.\nexport const a = { l: () => http.get<ListResponse<X>>("/v1/x") }\n' > "$T/libapi/endpoints.ts"
 	capa_compartida "$T/libapi" >/dev/null 2>&1
 	case $? in
-	2) ok "CAPA COMPARTIDA: exencion sin razon .go sale 2, no 1" ;;
-	*) bad "CAPA COMPARTIDA: una exencion sin razon no sale 2 — un perdon sin motivo pasa por bueno" ;;
+	2) ok "SHARED LAYER: an exemption without a .go rationale returns 2, not 1" ;;
+	*) bad "SHARED LAYER: an exemption without a reason does not exit 2; an unjustified exemption passes" ;;
 	esac
 
 	printf '// SIN TECHO A PROPOSITO: handleListX (core/api/handlers_core.go:1) drena, no acepta consulta.\nexport const a = { l: () => http.get<ListResponse<X>>("/v1/x") }\n' > "$T/libapi/endpoints.ts"
 	capa_compartida "$T/libapi" >/dev/null 2>&1
 	case $? in
-	0) ok "CAPA COMPARTIDA: la exencion CON razon nombrando el .go se honra" ;;
-	*) bad "CAPA COMPARTIDA: no honra una exencion bien escrita" ;;
+	0) ok "SHARED LAYER: an exemption with a rationale naming the .go file is honored" ;;
+	*) bad "SHARED LAYER: does not honor a valid exemption" ;;
 	esac
 
 	# ── EL TRINQUETE, de punta a punta ────────────────────────────────────────────────────
@@ -557,16 +547,16 @@ if [ "${1:-}" = "--selftest" ]; then
 	OLIVARES_WEB_FEATURES="$T/rat/feats" OLIVARES_WEB_LIBAPI="$T/rat/libapi" \
 		OLIVARES_LTW_BASELINE="$T/rat/base.txt" bash "$0" >/dev/null 2>&1
 	case $? in
-	0) ok "TRINQUETE: una feature YA en la linea base no enrojece" ;;
-	*) bad "TRINQUETE: enrojece con la linea base al dia — bloquearia a los cinco carriles" ;;
+	0) ok "RATCHET: a feature already in the baseline does not fail" ;;
+	*) bad "RATCHET: fails with an up-to-date baseline, blocking all contributors" ;;
 	esac
 
 	: > "$T/rat/base.txt"
 	OLIVARES_WEB_FEATURES="$T/rat/feats" OLIVARES_WEB_LIBAPI="$T/rat/libapi" \
 		OLIVARES_LTW_BASELINE="$T/rat/base.txt" bash "$0" >/dev/null 2>&1
 	case $? in
-	1) ok "TRINQUETE: una feature NUEVA (no en la base) enrojece" ;;
-	*) bad "TRINQUETE: no ve una feature nueva — el trinquete no trinca" ;;
+	1) ok "RATCHET: a NEW feature outside the baseline fails" ;;
+	*) bad "RATCHET: misses a new feature; the ratchet does not enforce the baseline" ;;
 	esac
 
 	# Y la capa compartida MANDA aunque la linea base este al dia.
@@ -575,8 +565,8 @@ if [ "${1:-}" = "--selftest" ]; then
 	OLIVARES_WEB_FEATURES="$T/rat/feats" OLIVARES_WEB_LIBAPI="$T/rat/libapi" \
 		OLIVARES_LTW_BASELINE="$T/rat/base.txt" bash "$0" >/dev/null 2>&1
 	case $? in
-	1) ok "TRINQUETE: la capa compartida enrojece aunque la linea base este verde" ;;
-	*) bad "TRINQUETE: la linea base verde TAPA una regresion de lib/api" ;;
+	1) ok "RATCHET: the shared layer fails even when the baseline passes" ;;
+	*) bad "RATCHET: a passing baseline hides a lib/api regression" ;;
 	esac
 
 	[ "$fail" = "0" ] && { echo "check-list-truncation-witness selftest: ${oks} passed, ${fails} failed"; exit 0; }
@@ -585,23 +575,23 @@ fi
 
 # ── corrida normal ────────────────────────────────────────────────────────────────────────────
 FEATURES="${OLIVARES_WEB_FEATURES:-$ROOT/web/src/features}"
-[ -d "$FEATURES" ] || no_puedo "no existe $FEATURES"
+[ -d "$FEATURES" ] || cannot_check "missing $FEATURES"
 
-salida="$(censar "$FEATURES")" ; rc=$?
-[ "$rc" = "2" ] && no_puedo "el censo no pudo recorrer $FEATURES"
+output="$(censar "$FEATURES")" ; rc=$?
+[ "$rc" = "2" ] && cannot_check "the scan could not traverse $FEATURES"
 
 # La capa compartida va DESPUES del censo pero su hallazgo pesa igual: si esta roja, el gate lo
 # esta, aunque el censo por feature salga limpio.
 LIBAPI="${OLIVARES_WEB_LIBAPI:-$ROOT/web/src/lib/api}"
 compartida="$(capa_compartida "$LIBAPI")" ; rc_c=$?
-[ "$rc_c" = "2" ] && no_puedo "no pude recorrer $LIBAPI (o hay una exencion sin razon)"
+[ "$rc_c" = "2" ] && cannot_check "could not traverse $LIBAPI (or an exemption has no reason)"
 if [ "$rc_c" = "1" ]; then
-	echo "check-list-truncation-witness: la CAPA COMPARTIDA tiene listas sin techo (el punto ciego de las dos sondas):" >&2
+	echo "check-list-truncation-witness: the shared layer has lists without limits (the blind spot of both probes):" >&2
 	printf '%s\n' "$compartida" | sed 's/^/    /' >&2
-	echo "    Pon techo, o exime con «SIN TECHO A PROPOSITO» y la razon nombrando el handler .go." >&2
+	echo "    Set a limit, or exempt with «SIN TECHO A PROPOSITO» and a reason naming the .go handler." >&2
 fi
 
-n="$(printf '%s\n' "$salida" | grep -c . || true)"
+n="$(printf '%s\n' "$output" | grep -c . || true)"
 
 # ── EL TRINQUETE ──────────────────────────────────────────────────────────────────────────────
 # ⛔ POR QUE UNA LINEA BASE Y NO UN ROJO A SECAS. Este censo nombra TRABAJO PENDIENTE: hoy son 18
@@ -623,7 +613,7 @@ if [ -f "$BASE_LTW" ]; then
 		[ -n "$f" ] || continue
 		grep -qxF -- "$f" "$BASE_LTW" 2>/dev/null || nuevas="${nuevas}${f}
 "
-	done < <(printf '%s\n' "$salida" | grep . || true)
+	done < <(printf '%s\n' "$output" | grep . || true)
 	n_nuevas="$(printf '%s' "$nuevas" | grep -c . || true)"
 	# Lo que sobra en la linea base se DICE, pero no enrojece: apretar es una decision, no un efecto.
 	sobran=0
@@ -631,66 +621,66 @@ if [ -f "$BASE_LTW" ]; then
 		[ -n "$f" ] || continue
 		# ⛔ SIN TUBERIA hacia `grep -q` (141 EN EXITO bajo pipefail) — la regla que este mismo
 		#    fichero predica mas arriba y que yo incumpli aqui.
-		case $'\n'"$salida"$'\n' in
+		case $'\n'"$output"$'\n' in
 		*$'\n'"$f"$'\n'*) ;;
 		*) sobran=$((sobran + 1)) ;;
 		esac
 	done < "$BASE_LTW"
 	if [ "${n_nuevas:-0}" -gt 0 ]; then
-		echo "check-list-truncation-witness: ⛔ ${n_nuevas} feature(s) NUEVA(S) sin testigo de recorte (no estaban en $BASE_LTW):" >&2
+		echo "check-list-truncation-witness: ⛔ ${n_nuevas} new feature(s) without a truncation indicator (not in $BASE_LTW):" >&2
 		printf '%s' "$nuevas" | sed 's/^/    /' >&2
-		echo "    Pon el aviso, o —si el motor no recorta— documenta el handler y añádela a la linea base." >&2
+		echo "    Add the indicator, or if the engine does not truncate, document the handler and add the feature to the baseline." >&2
 		exit 1
 	fi
 	if [ "$rc_c" = "0" ]; then
-		echo "check-list-truncation-witness: CLEAN — ${n} feature(s) en la linea base, 0 nuevas; capa compartida con techo.$([ "$sobran" -gt 0 ] && printf ' (%s de la linea base ya no salen: se puede apretar)' "$sobran")"
+		echo "check-list-truncation-witness: CLEAN — ${n} feature(s) in the baseline, 0 new; shared layer requests limits.$([ "$sobran" -gt 0 ] && printf ' (%s baseline entries no longer reported: the baseline can be tightened)' "$sobran")"
 		exit 0
 	fi
 fi
 
 if [ "${n:-0}" -eq 0 ] && [ "$rc_c" = "0" ]; then
-	echo "check-list-truncation-witness: CLEAN — toda feature con lista viva declara su recorte, y la capa compartida pide techo."
+	echo "check-list-truncation-witness: CLEAN — every feature with a live list declares truncation, and the shared layer requests a limit."
 	exit 0
 fi
 if [ "${n:-0}" -eq 0 ]; then exit 1; fi
 
-echo "check-list-truncation-witness: ${n} feature(s) con lista viva y NINGUNA vista que declare el recorte:" >&2
-printf '%s\n' "$salida" | sed 's/^/    /' >&2
+echo "check-list-truncation-witness: ${n} feature(s) with a live list but no view declaring truncation:" >&2
+printf '%s\n' "$output" | sed 's/^/    /' >&2
 cat >&2 <<'NOTA'
 
-  Que hace falta en cada una, en este orden (la receta rodada de las PRs *-sin-recorte):
-    1. MIDE EL MOTOR PRIMERO, y hay TRES respuestas, no dos:
-       a) drena con `listAll`      -> no hay recorte que declarar; sale del censo con su file:line
-       b) llama a `listQuery(r)`   -> LEE tu `limit`: pon techo (paso 2) y declara (paso 3)
-       c) fija `Limit: listCap`    -> IGNORA tu `limit` y aun asi publica `has_more`. Un techo
-          en la consola seria DECORATIVO; aqui solo toca el paso 3. Ejemplo medido el
+  Required steps for each feature, in order (the established recipe from the *-sin-recorte PRs):
+    1. CHECK THE ENGINE FIRST. There are THREE possible outcomes:
+       a) It drains with `listAll` -> no truncation to declare; remove it from the inventory with file:line evidence.
+       b) It calls `listQuery(r)` -> it reads your `limit`: set a limit (step 2) and declare truncation (step 3).
+       c) It sets `Limit: listCap` -> it ignores your `limit` but still publishes `has_more`. A console
+          limit would have no effect; only step 3 applies. Measured on
           2026-08-23: `handleListCostCenterMappings` (modules/finops/costcenter.go:334)
-          construye `model.Query{Limit: listCap}` con `listCap = 1000` (modules/finops/dto.go:22).
-       El caso (a) largo, por si acaso: si el handler drena con `listAll` no hay recorte:
-       sale del censo con su file:line. Un aviso que no puede aparecer no protege, solo lo afirma.
-    2. Techo explicito `{ ...params, limit: params?.limit ?? X }` — en ESE orden.
-       ⛔ AQUI DECIA `{ limit: X, ...params }`, y esa forma tambien fue la respuesta a un defecto
-       real: el contraste F-03 encontro que con `{ ...params }` a secas la llamada era TypeScript
-       valido y salia SIN `limit`, asi que el techo dependia de la disciplina del llamante en vez
-       de ser el valor por defecto. Poner la constante DELANTE arreglaba eso.
-       Lo que deja abierto es el otro borde: un `limit: undefined` explicito —TypeScript valido, y
-       sale solo de `lista({ limit: filtro.limit })` con el filtro vacio— **borra el techo**, y la
-       llamada vuelve a pedir los cien del store sin que nada lo diga. La forma de arriba cierra
-       los dos: el techo va siempre, el llamante puede BAJARLO y no puede BORRARLO sin querer.
-       Se deja escrito que hubo DOS formas y por que, en vez de sustituir en silencio: quien llegue
-       vera que ambas contestaban a defectos medidos y que solo una contesta a los dos.
-       ⚠ OJO: salir en esta lista NO significa que falte el techo. Medido el 2026-08-23 sobre
-       las 18: DIECISIETE no piden techo ninguno, pero `workspace-dashboard` YA pide
-       `limit: 50` y aun asi sale — porque recorta a 50 y no lo dice. Ese caso no necesita el
-       paso 2 sino el 3, y ademas una DECISION sobre si 50 es el numero. Mira su `api.ts`
-       antes de anadir un techo que ya esta.
-       (Y no te fies de un `grep limit`: `limit:` casa dentro de `org_limit:`, que es una cuota
-       del dominio, y los `fixtures.ts` estan llenos de ambas. A mi me dio dos falsos positivos.)
-    3. El aviso compartido, alimentado por `has_more`, con un hint que diga que NO se puede inferir.
-    4. Testigo de TRANSPORTE (mira la URL) y testigo de VISTA MONTADA (una sonda de fuente no
-       prueba alcanzabilidad).
+          builds `model.Query{Limit: listCap}` with `listCap = 1000` (modules/finops/dto.go:22).
+       In case (a), draining with `listAll` means there is no truncation:
+       remove it from the inventory with file:line evidence. A warning that cannot appear provides no protection.
+    2. Set an explicit limit: `{ ...params, limit: params?.limit ?? X }`, in that order.
+       This previously recommended `{ limit: X, ...params }`, which fixed a measured defect:
+       review finding F-03 showed that `{ ...params }` alone was valid TypeScript but could send no
+       `limit`, relying on caller discipline instead of a default. Putting the constant first
+       fixed that case.
+       It left another case open: an explicit `limit: undefined` is valid TypeScript and can come
+       from `lista({ limit: filtro.limit })` with an empty filter. It removes the limit, so the
+       request silently falls back to the store default of one hundred. The recommended form closes
+       both cases: every request has a limit; callers can lower it without accidentally removing it.
+       Both earlier forms are documented because they addressed measured defects; only the final
+       form addresses both.
+       Appearing in this list does not necessarily mean the limit is missing. Measured on 2026-08-23:
+       seventeen of eighteen features request no limit, but `workspace-dashboard` already requests
+       `limit: 50` and still appears because it truncates at 50 without saying so. That case requires
+       step 3, plus a decision about whether 50 is appropriate. Read its `api.ts`
+       before adding a limit that already exists.
+       (A `grep limit` is insufficient: `limit:` also matches `org_limit:`, a domain quota,
+       and `fixtures.ts` contains both. This produced two false positives.)
+    3. Render the shared warning from `has_more`, with a hint explaining what cannot be inferred.
+    4. Add a TRANSPORT witness (inspect the URL) and a MOUNTED VIEW witness (a source check
+       does not prove reachability).
 
-  Esta lista es un SUELO: el censo es por FEATURE, asi que una cubierta puede esconder vistas
-  sin cubrir. Y es de FUENTE: no prueba que el aviso se pinte.
+  This list establishes minimum coverage: the inventory works per FEATURE, so a covered feature
+  can still contain uncovered views. It checks SOURCE and cannot prove that the warning renders.
 NOTA
 exit 1

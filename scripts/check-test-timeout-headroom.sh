@@ -78,10 +78,10 @@ case "${1:-}" in
     # Con `--raw` el job se NOMBRA en la orden en vez de deducirse, y no se toca el prefijo. Asi el
     # censo puede correr DENTRO del propio job, que es donde sirve: `--fetch` necesita
     # `gh run view --log`, y eso exige la corrida ENTERA terminada — no puede medir la suya.
-    [ $# -ge 3 ] || { echo "uso: $0 --raw <nombre-del-job> <fichero-log>" >&2; exit 2; }
+    [ $# -ge 3 ] || { echo "usage: $0 --raw <job-name> <log-file>" >&2; exit 2; }
     JOB_FIJO="$2"
     LOG="$3"
-    [ -r "$LOG" ] || { echo "NO_HE_PODIDO_MIRAR — no puedo leer $LOG" >&2; exit 2; }
+    [ -r "$LOG" ] || { echo "NO_HE_PODIDO_MIRAR — cannot read $LOG" >&2; exit 2; }
     ;;
   --fetch)
     run="${2:-}"
@@ -89,25 +89,25 @@ case "${1:-}" in
       run=$(gh run list --workflow mainline-ci.yml --limit 1 --json databaseId -q '.[0].databaseId' 2>/dev/null || true)
     fi
     if [ -z "$run" ]; then
-      echo "NO_HE_PODIDO_MIRAR — no hay ninguna corrida de mainline-ci que leer"
+      echo "NO_HE_PODIDO_MIRAR — no mainline-ci run available to read"
       exit 2
     fi
     LOG=$(mktemp "${TMPDIR:-/tmp}/headroom-XXXXXX")
     trap 'rm -f "$LOG"' EXIT
     if ! gh run view "$run" --log > "$LOG" 2>/dev/null; then
-      echo "NO_HE_PODIDO_MIRAR — no he podido descargar el log de la corrida $run"
+      echo "NO_HE_PODIDO_MIRAR — could not download the log for run $run"
       exit 2
     fi
-    echo "corrida $run"
+    echo "run $run"
     ;;
   "")
-    echo "NO_HE_PODIDO_MIRAR — falta el fichero de log (o --fetch)"
+    echo "NO_HE_PODIDO_MIRAR — missing log file (or --fetch)"
     exit 2
     ;;
   *)
     LOG="$1"
     if [ ! -r "$LOG" ]; then
-      echo "NO_HE_PODIDO_MIRAR — no puedo leer '$LOG'"
+      echo "NO_HE_PODIDO_MIRAR — cannot read '$LOG'"
       exit 2
     fi
     ;;
@@ -143,7 +143,7 @@ salida=$(LC_ALL=C awk -v umbral="$UMBRAL" -v jobfijo="${JOB_FIJO:-}" '
     } else {
       resto = linea
     }
-    if (job == "") job = "(sin-job)"
+    if (job == "") job = "(no job)"
 
     # 0) INVOCACIONES de go test, para poder distinguir «sin tope» de «no lo veo».
     # `go test` sin -timeout NO es un tope desconocido: es el DEFECTO DOCUMENTADO de Go, 10m.
@@ -231,7 +231,7 @@ salida=$(LC_ALL=C awk -v umbral="$UMBRAL" -v jobfijo="${JOB_FIJO:-}" '
       if (pct > peor) peor = pct
       if (pct >= umbral + 0) {
         split(clave, k, "|")
-        printf "CRUZA\t%.1f\t%s\t%.1f\t%.1f\t%s\n", pct, k[2], tiempo[clave] / 60, cap_j / 60, (derivado ? estado_de[clave] " · tope = defecto de Go 10m" : estado_de[clave])
+        printf "CRUZA\t%.1f\t%s\t%.1f\t%.1f\t%s\n", pct, k[2], tiempo[clave] / 60, cap_j / 60, (derivado ? estado_de[clave] " · limit = Go default 10m" : estado_de[clave])
       }
     }
     printf "RESUMEN\t%d\t%d\t%.1f\n", total, sin_cap, peor
@@ -246,8 +246,8 @@ sin_cap=$(printf '%s' "$resumen" | cut -f3)
 peor=$(printf '%s' "$resumen" | cut -f4)
 
 if [ "${total:-0}" -eq 0 ]; then
-  echo "NO_HE_PODIDO_MIRAR — el log no trae NINGUNA duración de paquete ('ok'/'FAIL' + tiempo)."
-  echo "  Sin duraciones no hay margen que medir, y un 0 aquí se leería como holgura."
+  echo "NO_HE_PODIDO_MIRAR — log contains no package durations ('ok'/'FAIL' plus time)."
+  echo "  Without durations, there is no headroom to measure; zero cannot be read as spare capacity."
   exit 2
 fi
 
@@ -256,31 +256,31 @@ fi
 # «he fallado». Medido el 2026-08-19 al anadir estas tres.
 derivados=$(printf '%s\n' "$salida" | grep '^DERIVADO' | cut -f2 | sort || true)
 if [ -n "$derivados" ]; then
-  echo "TOPE DERIVADO del defecto documentado de Go (10m), no leído de la orden, en:"
+  echo "LIMIT DERIVED from the documented Go default (10m), not read from the command, in:"
   printf '%s\n' "$derivados" | sed 's|^|    job: |'
-  echo "  Un 'go test' sin -timeout NO tiene tope desconocido: tiene 600s. Decirlo es lo que"
-  echo "  separa un dato deducido de un dato leído — los dos valen, y no son el mismo."
+  echo "  A 'go test' without -timeout uses 600s; its limit is not unknown. This distinguishes"
+  echo "  derived values from observed values; both are valid but must be identified."
 fi
 
 if [ "${sin_cap:-0}" -gt 0 ]; then
-  echo "NO_HE_PODIDO_MIRAR — $sin_cap paquete(s) con duración impresa ANTES de cualquier orden de"
-  echo "  test visible en su job, así que no hay tramo del que deducir el tope:"
+  echo "NO_HE_PODIDO_MIRAR — $sin_cap package(s) have durations printed before any visible test"
+  echo "  command in their job, so no command segment provides a limit:"
   # `grep` sin coincidencias devuelve 1 y bajo `set -e` eso mata la asignacion ENTERA: el script
   # salia 1 sin imprimir una sola linea. El `|| true` separa «no hay ninguno» de «he fallado».
   ciegos=$(printf '%s\n' "$salida" | grep '^SINCAP' | cut -f2 | sort || true)
   if [ -n "$ciegos" ]; then printf '%s\n' "$ciegos" | sed 's|^|      job: |'; fi
-  echo "  Saltarlos dejaría un verde que no los cubre. Un gate dice lo que su DESCUBRIMIENTO alcanza."
+  echo "  Skipping them would leave the pass incomplete. A check must state what it discovered."
   exit 2
 fi
 
 cruzan=$(printf '%s\n' "$salida" | grep -c '^CRUZA' || true)
 if [ "${cruzan:-0}" -gt 0 ]; then
-  echo "ROTO — $cruzan de $total paquete(s) por encima del ${UMBRAL}% de su tope por binario:"
+  echo "FAIL — $cruzan of $total package(s) exceed ${UMBRAL}% of their per-binary limit:"
   printf '%s\n' "$salida" | grep '^CRUZA' | sort -t$'\t' -k2 -rn \
-    | awk -F'\t' '{printf "    %5.1f%%  %-58s %5.1f de %.0f min  (%s)\n", $2, $3, $4, $5, $6}'
-  echo "  El tope mata el BINARIO del paquete: el pánico nombrará el test en vuelo, no al culpable."
+    | awk -F'\t' '{printf "    %5.1f%%  %-58s %5.1f of %.0f min  (%s)\n", $2, $3, $4, $5, $6}'
+  echo "  The timeout kills the package binary; the panic names the active test, which may not be the cause."
   exit 1
 fi
 
-printf 'LIMPIO — %d paquete(s) medidos, el peor al %.1f%% de su tope (umbral %s%%).\n' \
+printf 'CLEAN — %d package(s) measured; worst at %.1f%% of its limit (threshold %s%%).\n' \
   "$total" "$peor" "$UMBRAL"

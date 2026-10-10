@@ -10,9 +10,13 @@ package main
 // and that the cross-module number the dashboard headlines (firm drift) is
 // derivable from the access-map diff exactly as the web derives it (derive.ts).
 
-import "testing"
+import (
+	"net/http"
+	"testing"
+)
 
 func TestE2E_ExecutiveDashboard_PillarSources(t *testing.T) {
+	prepareCompliancePacksTestEntitlement(t)
 	h := newHarness(t)
 
 	// Cost pillar — FinOps spend.
@@ -49,12 +53,21 @@ func TestE2E_ExecutiveDashboard_PillarSources(t *testing.T) {
 		t.Error("risk pillar: no security anomalies despite seeded anti-evasion")
 	}
 
-	// Compliance pillar — framework summary.
-	if len(items2(h.getJSON(h.adminToken, h.tenantA, "/v1/m/compliance/summary"), "frameworks")) == 0 {
-		// Some builds return the frameworks under the top-level list; fall back.
-		if len(items(h.getJSON(h.adminToken, h.tenantA, "/v1/m/compliance/frameworks"))) == 0 {
-			t.Error("compliance pillar: no frameworks")
+	// The compliance pillar is supplied by Business Compliance Packs.
+	if thisEdition.name == "community" {
+		var body map[string]any
+		if code := h.reqInto("GET", "/v1/m/compliance/summary", h.adminToken, h.tenantA, nil, &body); code != http.StatusNotImplemented {
+			t.Fatalf("Community compliance pillar = %d, want 501", code)
 		}
+	} else {
+		// Compliance pillar — framework summary.
+		if len(items2(h.getJSON(h.adminToken, h.tenantA, "/v1/m/compliance/summary"), "frameworks")) == 0 {
+			// Some builds return the frameworks under the top-level list; fall back.
+			if len(items(h.getJSON(h.adminToken, h.tenantA, "/v1/m/compliance/frameworks"))) == 0 {
+				t.Error("compliance pillar: no frameworks")
+			}
+		}
+
 	}
 
 	// Reliability pillar — the dependency/health map.

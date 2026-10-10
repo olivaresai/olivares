@@ -247,7 +247,7 @@ func (m *Module) handleProtocolBindingSpecCreate(w http.ResponseWriter, r *http.
 	}
 	var input ProtocolBindingSpecInput
 	if err := decodeProtocolBindingSpecJSON(w, r, &input); err != nil {
-		writeWorkError(w, broken(http.StatusBadRequest, "invalid_command"))
+		writeWorkError(w, errors.Join(broken(http.StatusBadRequest, "invalid_command"), err))
 		return
 	}
 	if confined, confinedOK := mc.Principal.ConfinedWorkspaceIn(mc.Tenant); confinedOK && input.WorkspaceID != confined {
@@ -328,7 +328,7 @@ func (m *Module) handleProtocolBindingSpecState(
 	}
 	body := protocolBindingReconcileBody{}
 	if err := decodeProtocolBindingSpecJSON(w, r, &body); err != nil && !errors.Is(err, errEmptyProtocolBindingSpecBody) {
-		writeWorkError(w, broken(http.StatusBadRequest, "invalid_command"))
+		writeWorkError(w, errors.Join(broken(http.StatusBadRequest, "invalid_command"), err))
 		return
 	}
 	spec, err := m.GetProtocolBindingSpec(r.Context(), mc.Tenant, id)
@@ -444,37 +444,31 @@ func decodeProtocolBindingSpecJSON(w http.ResponseWriter, r *http.Request, targe
 }
 
 func protocolBindingSpecQueryFromRequest(r *http.Request, mc api.ModuleContext) (ProtocolBindingSpecQuery, error) {
-	allowed := map[string]bool{
+	values, err := protocolBindingQueryValues(r, map[string]bool{
 		"workspace_id": true, "binding_key": true, "generation": true,
 		"protocol": true, "direction": true, "local_kind": true,
 		"peer_authority": true, "state": true, "limit": true, "cursor": true,
+	})
+	if err != nil {
+		return ProtocolBindingSpecQuery{}, err
 	}
-	for key, values := range r.URL.Query() {
-		if !allowed[key] || len(values) != 1 {
-			return ProtocolBindingSpecQuery{}, protocolBindingInvalid("invalid_spec_query")
-		}
-	}
-	values := r.URL.Query()
-	workspaceText := values.Get("workspace_id")
-	if workspaceText == "" {
-		if confined, ok := mc.Principal.ConfinedWorkspaceIn(mc.Tenant); ok {
-			workspaceText = confined.String()
-		}
-	}
-	workspace, err := model.ParseID(workspaceText)
-	if err != nil || workspace.IsZero() {
-		return ProtocolBindingSpecQuery{}, protocolBindingInvalid("invalid_spec_query")
+	workspace, err := protocolBindingQueryWorkspace(values, mc)
+	if err != nil {
+		return ProtocolBindingSpecQuery{}, err
 	}
 	generation := int64(0)
 	if raw := values.Get("generation"); raw != "" {
 		generation, err = strconv.ParseInt(raw, 10, 64)
 		if err != nil || generation < 1 {
-			return ProtocolBindingSpecQuery{}, protocolBindingInvalid("invalid_spec_query")
+			return ProtocolBindingSpecQuery{}, protocolBindingQueryRefusal("generation")
 		}
 	}
 	limit, err := queryLimit(r)
 	if err != nil {
-		return ProtocolBindingSpecQuery{}, protocolBindingInvalid("invalid_spec_query")
+		return ProtocolBindingSpecQuery{}, protocolBindingQueryRefusal("limit")
+	}
+	if !validWorkCursor(values.Get("cursor")) {
+		return ProtocolBindingSpecQuery{}, protocolBindingQueryRefusal("cursor")
 	}
 	query := ProtocolBindingSpecQuery{
 		WorkspaceID: workspace, BindingKey: values.Get("binding_key"), Generation: generation,

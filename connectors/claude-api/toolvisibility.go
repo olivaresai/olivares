@@ -12,6 +12,7 @@
 package claudeapi
 
 import (
+	"encoding/json"
 	"sort"
 	"strconv"
 	"strings"
@@ -20,6 +21,97 @@ import (
 	"github.com/olivaresai/olivares/connectors/internal/redact"
 	"github.com/olivaresai/olivares/sdk/model"
 )
+
+// ToolVisibilityFeatures describes configured advanced-tool features, not an
+// authorization decision or proof that a tool ran. It contains no tool names,
+// schemas, input, prompt or credential material.
+type ToolVisibilityFeatures struct {
+	ProgrammaticToolCalling bool
+	ToolSearchActive        bool
+}
+
+type toolVisibilityRequest struct {
+	Tools []json.RawMessage `json:"tools"`
+}
+
+type toolVisibilityConfig struct {
+	Enabled      *bool `json:"enabled"`
+	DeferLoading *bool `json:"defer_loading"`
+}
+
+func (c toolVisibilityConfig) enabledDeferred(defaults toolVisibilityConfig) bool {
+	enabled, deferred := true, false
+	for _, config := range []toolVisibilityConfig{defaults, c} {
+		if config.Enabled != nil {
+			enabled = *config.Enabled
+		}
+		if config.DeferLoading != nil {
+			deferred = *config.DeferLoading
+		}
+	}
+	return enabled && deferred
+}
+
+// ToolVisibilityFeatures inspects the immutable bytes the governed request will
+// forward. A later mutation of the caller's opaque Tools cannot alter the facts.
+func (p PreparedRequest) ToolVisibilityFeatures() ToolVisibilityFeatures {
+	var request toolVisibilityRequest
+	_ = json.Unmarshal(p.body, &request) // constructed by MarshalPrepared
+	return request.toolVisibilityFeatures()
+}
+
+// ToolVisibilityFeatures combines every entry in the frozen submission. A batch
+// has partial visibility when any entry configures the corresponding feature.
+func (p PreparedBatch) ToolVisibilityFeatures() ToolVisibilityFeatures {
+	var batch struct {
+		Requests []struct {
+			Params toolVisibilityRequest `json:"params"`
+		} `json:"requests"`
+	}
+	_ = json.Unmarshal(p.body, &batch) // constructed by MarshalPreparedBatch
+	var features ToolVisibilityFeatures
+	for _, entry := range batch.Requests {
+		f := entry.Params.toolVisibilityFeatures()
+		features.ProgrammaticToolCalling = features.ProgrammaticToolCalling || f.ProgrammaticToolCalling
+		features.ToolSearchActive = features.ToolSearchActive || f.ToolSearchActive
+	}
+	return features
+}
+
+func (r toolVisibilityRequest) toolVisibilityFeatures() ToolVisibilityFeatures {
+	var features ToolVisibilityFeatures
+	for _, raw := range r.Tools {
+		var tool struct {
+			Type           string                          `json:"type"`
+			AllowedCallers []string                        `json:"allowed_callers"`
+			DeferLoading   bool                            `json:"defer_loading"`
+			DefaultConfig  toolVisibilityConfig            `json:"default_config"`
+			Configs        map[string]toolVisibilityConfig `json:"configs"`
+		}
+		// Tools are opaque at this connector boundary. Read only these documented
+		// feature fields; other tool data never enters the returned projection.
+		_ = json.Unmarshal(raw, &tool)
+		for _, caller := range tool.AllowedCallers {
+			features.ProgrammaticToolCalling = features.ProgrammaticToolCalling || strings.HasPrefix(caller, "code_execution_")
+		}
+		features.ToolSearchActive = features.ToolSearchActive || strings.HasPrefix(tool.Type, "tool_search_tool_") || tool.DeferLoading
+		if tool.Type == "mcp_toolset" {
+			// The frozen request cannot enumerate the remote inventory. An enabled,
+			// deferred default therefore remains a conservative partial annotation.
+			features.ToolSearchActive = features.ToolSearchActive || tool.DefaultConfig.enabledDeferred(toolVisibilityConfig{})
+		}
+		if tool.Type == "mcp_toolset" || strings.HasPrefix(tool.Type, "computer_toolset_") || strings.HasPrefix(tool.Type, "browser_toolset_") {
+			defaults := toolVisibilityConfig{}
+			if tool.Type == "mcp_toolset" {
+				defaults = tool.DefaultConfig
+			}
+			for _, config := range tool.Configs {
+				features.ToolSearchActive = features.ToolSearchActive || config.enabledDeferred(defaults)
+			}
+		}
+	}
+	return features
+}
 
 const (
 	subjectToolVisibility = "anthropic.tool_visibility"

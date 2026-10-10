@@ -39,10 +39,9 @@ func TestSessionLaunchGate_AResumeUnderHeadroomIsStillAllowed(t *testing.T) {
 			"limit_micro_usd": int64(5_000_000), "action": "block",
 		})
 		g := &sessionLaunchGate{
-			fin:             fin,
-			budgetPosture:   availabilityFailClosed,
-			recordAvailable: true,
-			log:             slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
+			fin:           fin,
+			budgetPosture: availabilityFailClosed,
+			log:           slog.New(slog.NewTextHandler(&bytes.Buffer{}, nil)),
 		}
 		intent := sessions.LaunchIntent{PermissionMode: "default", RunRef: "run-resumed", AgentRef: "agent-1"}
 
@@ -106,10 +105,9 @@ func TestSessionLaunchGate_AResumeWithOtherDimsIsEvaluatedAfresh(t *testing.T) {
 				t.Run(posture.String()+"/"+leg.name, func(t *testing.T) {
 					var buf bytes.Buffer
 					g := &sessionLaunchGate{
-						fin:             fin,
-						budgetPosture:   posture,
-						recordAvailable: true,
-						log:             slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
+						fin:           fin,
+						budgetPosture: posture,
+						log:           slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})),
 					}
 					run := "run-" + posture.String() + "-" + leg.resumeAgent
 					launch := sessions.LaunchIntent{PermissionMode: "default", RunRef: run, AgentRef: "agent-1"}

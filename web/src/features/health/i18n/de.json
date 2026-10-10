@@ -272,7 +272,7 @@
     }
   },
   "statusPage": {
-    "title": "Olivares Control Plane — Status",
+    "title": "Olivares AI — Status",
     "subtitle": "Aktueller Betriebsstatus aller Komponenten.",
     "unavailable": "Statusinformationen sind derzeit nicht verfügbar.",
     "lastUpdated": "Zuletzt aktualisiert: {{time}}",
@@ -308,7 +308,11 @@
     "checked": "Update-Prüfung abgeschlossen",
     "advisories": "Behobene Sicherheitshinweise",
     "checkNow": "Jetzt prüfen",
-    "unconfigured": "Die Update-Prüfung ist nicht konfiguriert. Für Air-Gap-Bereitstellungen ist dies zu erwarten."
+    "unconfigured": "Die Update-Prüfung ist nicht konfiguriert. Es wurde kein Update geprüft; Netzwerkprüfungen bleiben deaktiviert.",
+    "unavailable": "Prüfung nicht verfügbar",
+    "instructions": "Update-Anleitung",
+    "configure": "Verwenden Sie zum Aktivieren der Prüfungen eine offizielle Version mit integriertem Verifizierungsschlüssel. Setzen Sie OLIVARES_UPDATE_ENDPOINT in der Dienstkonfiguration auf Ihren freigegebenen signierten Kanal und starten Sie Olivares neu. Lassen Sie den Wert ungesetzt, um Netzwerkprüfungen deaktiviert zu lassen.",
+    "manual": "Sichern Sie für ein manuelles Update Ihre Daten, verifizieren Sie das neue Paket oder Image und aktualisieren Sie mit Ihrer Installationsmethode. Behalten Sie dasselbe Datenverzeichnis. Ein Entwicklungsbuild ohne Verifizierungsschlüssel kann keinen signierten Kanal prüfen."
   },
   "system": {
     "title": "Systemzustand",
@@ -471,10 +475,9 @@
     "download": "Support-Paket herunterladen",
     "generate": "Erzeugen und herunterladen",
     "confirmTitle": "Support-Paket erzeugen?",
-    "confirmDescription": "Diese privilegierte AAL3-Aktion wird im Audit-Ledger erfasst.",
+    "confirmDescription": "Diese privilegierte Aktion wird im Audit-Ledger erfasst.",
     "contents": "Das Paket enthält die geschwärzte effektive Konfiguration, den Betriebsstatus und Logs. Prüfen Sie es vor der Weitergabe.",
     "downloaded": "Support-Paket heruntergeladen",
-    "needsAal3": "Für die Erzeugung eines Support-Pakets ist ein hardwaregestützter AAL3-Step-up erforderlich.",
     "failed": "Die Erzeugung des Support-Pakets ist fehlgeschlagen."
   }
 }

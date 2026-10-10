@@ -39,11 +39,11 @@ set -uo pipefail
 _env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
 # ⛔ AISLAMIENTO DE GIT ANTES DE NADA: `GIT_DIR` gana a `-C`, y una bateria que monta repos de usar y
 #    tirar SIN aislar opera sobre el repositorio vivo. El sujeto ya lo hace; su bateria tambien.
-. "$_env" || { echo "FATAL: no puedo cargar $_env" >&2; exit 2; }
+. "$_env" || { echo "FATAL: cannot load $_env" >&2; exit 2; }
 unset _env
 
 GATE="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/check-baseline-shrink.sh"
-[ -f "$GATE" ] || { echo "FATAL: no encuentro el sujeto en $GATE" >&2; exit 2; }
+[ -f "$GATE" ] || { echo "FATAL: cannot find the subject at $GATE" >&2; exit 2; }
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/shrink-bat.XXXXXX")" || exit 2
 trap 'rm -rf "$WORK"' EXIT INT TERM
 pass=0; fail=0
@@ -69,11 +69,11 @@ caso() { # caso <nombre> <rc-esperado> <subcadena> <dir>
 	local n="$1" want="$2" sub="$3" d="$4" rc=0
 	corre "$d" || rc=$?
 	if [ "$rc" -ne "$want" ]; then
-		printf 'FAIL  %s: rc=%s, esperaba %s\n' "$n" "$rc" "$want"
+		printf 'FAIL  %s: rc=%s, expected %s\n' "$n" "$rc" "$want"
 		printf '%s\n' "$OUT" | head -4 | sed 's/^/        /'; fail=$((fail + 1)); return
 	fi
 	case "$OUT" in *"$sub"*) : ;; *)
-		printf 'FAIL  %s: rc correcto (%s) pero no dijo %s\n' "$n" "$rc" "$sub"
+		printf 'FAIL  %s: correct rc (%s) but did not report %s\n' "$n" "$rc" "$sub"
 		printf '%s\n' "$OUT" | head -4 | sed 's/^/        /'; fail=$((fail + 1)); return ;;
 	esac
 	printf 'ok    %s (rc %s)\n' "$n" "$rc"; pass=$((pass + 1))
@@ -83,7 +83,7 @@ caso() { # caso <nombre> <rc-esperado> <subcadena> <dir>
 d="$(repo quita-sin-tocar scripts/sujeto-uno.sh scripts/sujeto-dos.sh)"
 printf 'scripts/sujeto-uno.sh\n' >"$d/docs/base.txt"
 git -C "$d" add -A . >/dev/null; git -C "$d" commit -qm 'encoge y nada mas' >/dev/null
-caso "quitar una entrada SIN tocar su sujeto es hallazgo" 1 "sujeto-dos.sh" "$d"
+caso "removing an entry WITHOUT changing its subject is a finding" 1 "sujeto-dos.sh" "$d"
 
 # --- 2 · QUITAR TOCANDO SU SUJETO = LIMPIO. Sobre-disparar aqui bloquea retiradas legitimas, que es
 #         el unico camino sano para bajar una deuda de trinquete.
@@ -91,7 +91,7 @@ d="$(repo quita-tocando scripts/sujeto-uno.sh scripts/sujeto-dos.sh)"
 printf 'scripts/sujeto-uno.sh\n' >"$d/docs/base.txt"
 printf 'y arreglada\n' >"$d/scripts/sujeto-dos.sh"
 git -C "$d" add -A . >/dev/null; git -C "$d" commit -qm 'encoge Y toca su sujeto' >/dev/null
-caso "quitar una entrada TOCANDO su sujeto sale limpio" 0 "" "$d"
+caso "removing an entry WHILE changing its subject is clean" 0 "" "$d"
 
 # --- 3 · CRECER NO ES ENCOGER. Un trinquete que sube no tiene nada que justificar.
 #
@@ -108,7 +108,7 @@ caso "quitar una entrada TOCANDO su sujeto sale limpio" 0 "" "$d"
 d="$(repo crece scripts/sujeto-uno.sh)"
 printf 'scripts/sujeto-uno.sh\nscripts/sujeto-dos.sh\n' >"$d/docs/base.txt"
 git -C "$d" add -A . >/dev/null; git -C "$d" commit -qm 'crece' >/dev/null
-caso "una linea base que CRECE no es un encogimiento" 0 "" "$d"
+caso "a baseline that GROWS is not a reduction" 0 "" "$d"
 
 # --- 4 · UNA ENTRADA QUITADA NO SE ESCONDE DETRAS DE COMENTARIOS ANADIDOS. La cuenta se hace sobre
 #         lineas UTILES: si se midiera el fichero CRUDO, quitar una entrada y anadir dos comentarios
@@ -118,23 +118,23 @@ caso "una linea base que CRECE no es un encogimiento" 0 "" "$d"
 d="$(repo esconder-tras-comentarios scripts/sujeto-uno.sh scripts/sujeto-dos.sh)"
 printf '# nota una\n# nota dos\n\nscripts/sujeto-uno.sh\n' >"$d/docs/base.txt"
 git -C "$d" add -A . >/dev/null; git -C "$d" commit -qm 'quita una y anade comentarios' >/dev/null
-caso "una entrada quitada no se esconde tras comentarios anadidos" 1 "sujeto-dos.sh" "$d"
+caso "added comments do not hide a removed entry" 1 "sujeto-dos.sh" "$d"
 
 # --- 5 · SIN TRONCO = NO HE PODIDO MIRAR (2), NUNCA 1 NI 0. Colapsar «no pude» en «hay fallo» o en
 #         «esta limpio» es el fallo que esta casa ha visto mas veces.
 d="$(repo sin-tronco scripts/sujeto-uno.sh)"
 OUT="$(cd "$d" && OLIVARES_BASELINE_TRUNK=no-existe OLIVARES_BASELINES=docs/base.txt bash "$GATE" 2>&1)"; rc=$?
-if [ "$rc" -eq 2 ] && case "$OUT" in *"NO HE PODIDO MIRAR"*) true ;; *) false ;; esac; then
-	printf 'ok    sin tronco contra el que comparar es 2, no 1 ni 0 (rc 2)\n'; pass=$((pass + 1))
+if [ "$rc" -eq 2 ] && case "$OUT" in *"COULD NOT CHECK"*) true ;; *) false ;; esac; then
+	printf 'ok    no comparison trunk returns 2, not 1 or 0 (rc 2)\n'; pass=$((pass + 1))
 else
-	printf 'FAIL  sin tronco: rc=%s, esperaba 2 con NO HE PODIDO MIRAR\n' "$rc"
+	printf 'FAIL  no trunk: rc=%s, expected 2 with COULD NOT LOOK\n' "$rc"
 	printf '%s\n' "$OUT" | head -3 | sed 's/^/        /'; fail=$((fail + 1))
 fi
 
 # --- 6 · FUERA DE UN ARBOL GIT = 2. Mismo motivo: la tercera respuesta tiene su clase.
 OUT="$(cd "$WORK" && OLIVARES_BASELINE_TRUNK=trunk bash "$GATE" 2>&1)"; rc=$?
-if [ "$rc" -eq 2 ]; then printf 'ok    fuera de un arbol git es 2 (rc 2)\n'; pass=$((pass + 1))
-else printf 'FAIL  fuera de un arbol git: rc=%s, esperaba 2\n' "$rc"; fail=$((fail + 1)); fi
+if [ "$rc" -eq 2 ]; then printf 'ok    outside a git tree returns 2 (rc 2)\n'; pass=$((pass + 1))
+else printf 'FAIL  outside a git tree: rc=%s, expected 2\n' "$rc"; fail=$((fail + 1)); fi
 
 # --- 7 · EL ENTORNO DE GIT VA AISLADO. `GIT_DIR` GANA a `-C` y a `cd`: si el sujeto no sanea el
 #         entorno, un `GIT_DIR` envenenado lo hace medir OTRO repositorio —el vivo— mientras cree que
@@ -151,9 +151,9 @@ _veneno="$WORK/veneno.git"; git init -q --bare "$_veneno" 2>/dev/null
 OUT="$(cd "$d" && GIT_DIR="$_veneno" GIT_WORK_TREE="$WORK" \
 	OLIVARES_BASELINE_TRUNK=trunk OLIVARES_BASELINES=docs/base.txt bash "$GATE" 2>&1)"; rc=$?
 if [ "$rc" -eq 1 ] && case "$OUT" in *sujeto-dos.sh*) true ;; *) false ;; esac; then
-	printf 'ok    un GIT_DIR envenenado NO cambia el veredicto: el entorno va saneado (rc 1)\n'; pass=$((pass + 1))
+	printf 'ok    poisoned GIT_DIR does NOT change the verdict: environment is sanitized (rc 1)\n'; pass=$((pass + 1))
 else
-	printf 'FAIL  GIT_DIR envenenado: rc=%s, esperaba 1 nombrando sujeto-dos.sh\n' "$rc"
+	printf 'FAIL  poisoned GIT_DIR: rc=%s, expected 1 naming sujeto-dos.sh\n' "$rc"
 	printf '%s\n' "$OUT" | head -3 | sed 's/^/        /'; fail=$((fail + 1))
 fi
 

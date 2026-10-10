@@ -23,7 +23,7 @@ import (
 //
 // See an internal design note (not shipped) (`self_hosted.users: unlimited`) and
 // an internal design note (not shipped) §B10.
-var ErrUserCapRequiresEnterprise = errors.New("auth: user_cap_requires_enterprise: another active user account requires the enterprise build and a commercial license")
+var ErrUserCapRequiresEnterprise = errors.New("auth: user_cap_requires_enterprise: retired, no edition caps user accounts")
 
 // CommunitySeatLimit is the active-user limit of the default (AGPL/community)
 // build. It is 0 — which in this package's vocabulary (see SeatPolicy) means

@@ -7,6 +7,9 @@ description: >-
   demostrar que no es una demo.
 ---
 
+> Los paquetes de despliegue se suministran por el canal Business; su publicación no está verificada aquí. Verifica el paquete del chart y su editor con las instrucciones del canal antes de usar el chart local. El ejemplo de manifiesto usa un archivo Business llamado `business-install.yaml`. La instalación aislada requiere Enterprise.
+
+
 Esta es la vía rápida para ver para *qué* sirve Olivares AI: un **mapa de acceso de
 lectura/escritura** de tu estate y la **desviación Permitido-frente-a-Observado** sobre
 él — la brecha entre el acceso que se *concede* a un agente y el acceso que se *observa*
@@ -53,7 +56,7 @@ task build                      # compiles ./bin/olivares with the web UI embedd
 motor, la UI web embebida y los plugins de conectores de primera parte. Las **instalaciones
 en contenedor y Kubernetes envuelven este mismo binario**: una imagen publicada más un
 fichero Compose ([autoalojamiento](/es/how-to/self-hosting/)), o un manifiesto plano que
-aplicas con `kubectl apply -f deploy/manifests/install.yaml` (sin necesidad de Helm). El
+aplicas con `kubectl apply -f ./business-install.yaml` (sin necesidad de Helm). El
 resultado estrella que ves abajo es idéntico en las tres — solo difiere la semilla de
 demostración (solo loopback, nunca en una instalación real).
 
@@ -239,7 +242,7 @@ aristas `firm` precisamente porque pre-liga sus agentes.
 :::note[La forma del endpoint]
 El resultado Permitido-frente-a-Observado se sirve en `/v1/m/accessmap/drift` (no hay
 `/diff`). Las rutas `/v1/m/accessmap/*` no están en el contrato estable del núcleo de
-70 rutas; se publican en un documento **beta** separado — la
+128 rutas; se publican en un documento **beta** separado — la
 [referencia de rutas de módulos](/reference/api-beta/). La
 [referencia de la API](/reference/api/) documenta la superficie estable del núcleo.
 :::

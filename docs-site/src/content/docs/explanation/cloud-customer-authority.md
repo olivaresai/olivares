@@ -13,8 +13,8 @@ license Worker **signs a binding** and keeps it in D1.
 
 This page describes that model. It is an explanation, not a go-live runbook.
 Cloud **payment forwarding stays off** (`CLOUD_FORWARD_ENABLED` is `"false"`).
-A catalogue that sells Cloud SKUs while the forwarder is off is still named
-CFG-12 and still refuses to pretend the tenant exists.
+Selling Cloud SKUs while the forwarder is off does not provision a tenant.
+Cloud sales must stay disabled until payment forwarding is enabled.
 
 ## What a binding is
 
@@ -81,8 +81,8 @@ Fake client so the cycle is proven without turning payment on.
   spend. Cloud tenant lifecycle is a different ledger.
 - It is not a self-hosted Connect deployment binding (proof-of-possession on a
   customer host). That is `connect-v1`.
-- It is not permission to turn Cloud payment on. CFG-12 remains the guard
-  against charging for a tenant nobody provisions through the webhook.
+- It is not permission to turn Cloud payment on. The Cloud sales guard prevents
+  charging for a tenant nobody provisions through the webhook.
 
 ## What is proven, and where
 

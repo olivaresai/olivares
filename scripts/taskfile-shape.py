@@ -5,7 +5,7 @@
 Medido el 2026-08-20 sobre `main`: CATORCE tareas habian perdido sus claves.
 El YAML seguia parseando -- por eso nadie lo veia -- pero SIETE tenian como
 valor una CADENA con la prosa y el comando pegados, y `task` ejecuta una
-tarea-cadena como una orden de shell; y NUEVE conservaban solo `desc:`, asi que
+task_name-cadena como una orden de shell; y NUEVE conservaban solo `desc:`, asi que
 correrlas no hacia nada y salian 0. Nueve gates muertos que se leian como verdes.
 
 Salida: una linea `CLASE<TAB>tarea` por hallazgo. Sin hallazgos, no imprime nada.
@@ -34,7 +34,7 @@ LIMITES DEL CAMINO DE REPUESTO, declarados porque no se pueden comprobar aqui:
     ancla o un merge key -- **no adivina: imprime NOPUEDO** y el gate vuelve a
     rehusar, que es el estado de hoy y nunca un falso verde.
   * NO he podido contrastarlo contra PyYAML en este contenedor, porque PyYAML es
-    justamente lo que falta. Se usa SOLO cuando la biblioteca no esta, o sea
+    justamente lo que missing_items. Se usa SOLO cuando la biblioteca no esta, o sea
     donde hoy no hay ninguna respuesta; con PyYAML presente el comportamiento es
     byte a byte el de antes.
 """
@@ -94,7 +94,7 @@ def por_indentacion():
 
     dentro = False
     hallazgos = []
-    tarea = None
+    task_name = None
     ejecutable = False
     tenia_hijas = False
     for l in lineas:
@@ -109,39 +109,39 @@ def por_indentacion():
         if mi:
             # Tarea con valor en la MISMA linea: su valor no es un mapa por
             # construccion, asi que es CADENA sin necesidad de mirar hijas.
-            if tarea is not None:
+            if task_name is not None:
                 if not tenia_hijas:
-                    hallazgos.append(("CADENA", tarea))
+                    hallazgos.append(("CADENA", task_name))
                 elif not ejecutable:
-                    hallazgos.append(("SINCMD", tarea))
+                    hallazgos.append(("SINCMD", task_name))
             hallazgos.append(("CADENA", mi.group(1)))
-            tarea = None
+            task_name = None
             ejecutable = False
             tenia_hijas = False
             continue
         m = CLAVE_TAREA.match(l)
         if m:
-            if tarea is not None:
+            if task_name is not None:
                 if not tenia_hijas:
-                    hallazgos.append(("CADENA", tarea))
+                    hallazgos.append(("CADENA", task_name))
                 elif not ejecutable:
-                    hallazgos.append(("SINCMD", tarea))
-            tarea = m.group(1)
+                    hallazgos.append(("SINCMD", task_name))
+            task_name = m.group(1)
             ejecutable = False
             tenia_hijas = False
             continue
-        if tarea is None:
+        if task_name is None:
             continue
         h = CLAVE_HIJA.match(l)
         if h:
             tenia_hijas = True
             if h.group(1) in EJECUTABLE:
                 ejecutable = True
-    if tarea is not None:
+    if task_name is not None:
         if not tenia_hijas:
-            hallazgos.append(("CADENA", tarea))
+            hallazgos.append(("CADENA", task_name))
         elif not ejecutable:
-            hallazgos.append(("SINCMD", tarea))
+            hallazgos.append(("SINCMD", task_name))
     return hallazgos
 
 
@@ -155,23 +155,23 @@ def por_indentacion():
 #    entero puede montarse encima. Con esto sale en la misma pasada que el resto de la forma.
 def claves_repetidas_en_tarea(lineas):
     hallazgos = []
-    tarea, vistas = None, {}
+    task_name, vistas = None, {}
     for n, l in enumerate(lineas, 1):
         m = CLAVE_TAREA.match(l)
         if m:
-            tarea, vistas = m.group(1), {}
+            task_name, vistas = m.group(1), {}
             continue
-        if tarea is None:
+        if task_name is None:
             continue
         if l.strip() and not l.startswith("    "):
-            tarea = None
+            task_name = None
             continue
         m2 = re.match(r"^    ([A-Za-z][\w-]*):", l)
         if not m2:
             continue
         k = m2.group(1)
         if k in vistas:
-            hallazgos.append(("DUPCLAVE", "%s :: %s (lineas %d y %d)" % (tarea, k, vistas[k], n)))
+            hallazgos.append(("DUPCLAVE", "%s :: %s (lines %d and %d)" % (task_name, k, vistas[k], n)))
         else:
             vistas[k] = n
     return hallazgos
@@ -181,7 +181,7 @@ res = por_yaml()
 if res is None:
     res = por_indentacion()
 if res is None:
-    print("NOPUEDO\tsin PyYAML y la forma del fichero no es la que se sabe leer sin ella")
+    print("NOPUEDO\tPyYAML is unavailable and the fallback reader does not support this file structure")
     raise SystemExit(0)
 
 def tareas_repetidas(lineas):
@@ -192,7 +192,7 @@ def tareas_repetidas(lineas):
        un Taskfile con `lint:eco-11-reserve-funded` definida en la 2762 y otra vez en la 3305.
        Lo unico que lo vio fue un parser ESTRICTO de Go (`checkpgwiring`), y por un camino que
        no tiene nada que ver: rehuso el fichero entero y dejo `lint:pg-env` con 67 fallos, que se
-       leen como un problema de Postgres. Un duplicado de tarea no es cosmetico: la union
+       leen como un problema de Postgres. Un duplicado de task_name no es cosmetico: la union
        mecanica de dos ramas lo produce y la segunda definicion GANA en silencio.
     """
     hallazgos, vistas = [], {}
@@ -202,7 +202,7 @@ def tareas_repetidas(lineas):
             continue
         k = m.group(1)
         if k in vistas:
-            hallazgos.append(("DUPTAREA", "%s (lineas %d y %d)" % (k, vistas[k], n)))
+            hallazgos.append(("DUPTAREA", "%s (lines %d and %d)" % (k, vistas[k], n)))
         else:
             vistas[k] = n
     return hallazgos

@@ -16,6 +16,8 @@ description: "既存のガバナンス対象アクションを依存関係グラ
 権限*と*人間の承認の両方が必要なので、直接アクセスできない対象へ到達する手段には
 決してなりません。
 
+**エディション:** Business Identity & Scale。Community はこれらのルートで `501` を返し、オーケストレーションの画面や実行エンジンを含みません。保存済みデータはエクスポートできます。
+
 ## グラフの構造
 
 ワークフローは**ステップ**の集合です。各ステップには、ワークフロー内で一意の短い
@@ -37,6 +39,14 @@ description: "既存のガバナンス対象アクションを依存関係グラ
 できません。
 
 ## 1. ワークフローを宣言する
+
+新規インストールでは、`orchestration` は無効です。管理者として
+**Settings > Edition & modules** で `orchestration` を有効にし、ほかの選択済み
+モジュールも有効のままにしてください。CLI を使う場合は、まず `olivares login`
+でこのエンジンに管理者としてログインし、次に `olivares modules on orchestration` を実行します。
+続行する前に、毎回のエンジン再起動が完了するのを待ってください。実行中の
+セッションは停止し、再開できます。有効にしないと、これらの API 呼び出しは
+`404 module_not_enabled` を返します。
 
 ```bash
 curl -sS -X POST "$OLIVARES/v1/m/orchestration/workflows" \

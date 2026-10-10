@@ -28,7 +28,7 @@ elige_scratch() {
 }
 W="$(elige_scratch)" || W=""
 if [ -z "$W" ]; then
-	echo "test-cli-walk: 2 NO PUDE MIRAR — ningun scratch dir sirve (probados TMPDIR=${TMPDIR:-sin fijar}, $HERE/.cli-walk-tmp, /var/tmp): sin sitio escribible y ejecutable" >&2
+	echo "test-cli-walk: 2 COULD NOT LOOK — no usable scratch directory (tried TMPDIR=${TMPDIR:-unset}, $HERE/.cli-walk-tmp, /var/tmp): no writable executable location" >&2
 	exit 2
 fi
 trap 'rm -rf "$W"' EXIT
@@ -47,7 +47,7 @@ trap 'rm -rf "$W"' EXIT
 # contra lo que el sujeto hace, no contra lo que es comodo comprobar.
 printf 'process.exit(0)\n' > "$W/.probe.mjs" 2>/dev/null
 if ! command -v node >/dev/null 2>&1 || ! node "$W/.probe.mjs" >/dev/null 2>&1; then
-	echo "test-cli-walk: 2 NO PUDE MIRAR — el sujeto es $SUT y no puedo ejecutar node en este entorno" >&2
+	echo "test-cli-walk: 2 COULD NOT LOOK — subject is $SUT and node cannot execute in this environment" >&2
 	exit 2
 fi
 rm -f "$W/.probe.mjs"
@@ -58,8 +58,8 @@ check() { # <nombre> <rc esperado> <rc obtenido> [texto que DEBE aparecer] [sali
 	# El contraste de lo cazo — la sonda pasa y aun asi la infraestructura puede caerse DESPUES,
 	# y sin esto cada caida se contaba como hallazgo del producto y el push se rechazaba por ella.
 	[ "$o" = 127 ] && infra=$((infra+1))
-	if [ "$e" != "$o" ]; then printf '  FALLO %-56s rc=%s (esperaba %s)\n' "$n" "$o" "$e"; falla=$((falla+1)); return; fi
-	if [ -n "$t" ] && ! grep -qF "$t" <<<"$s"; then printf '  FALLO %-56s no dice «%s»\n' "$n" "$t"; falla=$((falla+1)); return; fi
+	if [ "$e" != "$o" ]; then printf '  FAIL  %-56s rc=%s (expected %s)\n' "$n" "$o" "$e"; falla=$((falla+1)); return; fi
+	if [ -n "$t" ] && ! grep -qF "$t" <<<"$s"; then printf '  FAIL  %-56s does not report «%s»\n' "$n" "$t"; falla=$((falla+1)); return; fi
 	printf '  ok    %-56s rc=%s\n' "$n" "$o"; pasa=$((pasa+1))
 }
 
@@ -87,32 +87,32 @@ FAKE
 	chmod +x "$f"
 }
 
-echo "LIMPIO — un binario que cumple su propio contrato pasa"
+echo "CLEAN — a binary meeting its own contract passes"
 binario_falso "$W/ok" 0 2
 s="$(OLIVARES_CLI_BIN="$W/ok" node "$SUT" 2>&1)"; rc=$?
-check "un binario coherente sale limpio" 0 "$rc" "LIMPIO" "$s"
-check "y descubre sus mandatos del propio binario" 0 "$rc" "mandato(s) descubierto(s)" "$s"
-check "y DICE que no ha recorrido ningún motor" 0 "$rc" "SIN OLIVARES_CLI_BASE" "$s"
+check "a consistent binary is clean" 0 "$rc" "CLEAN" "$s"
+check "discovers commands from the binary itself" 0 "$rc" "command(s) discovered" "$s"
+check "SAYS that no engine was traversed" 0 "$rc" "NO OLIVARES_CLI_BASE" "$s"
 
-echo "ROJOS — el contrato incumplido se NOMBRA"
+echo "RED — contract violations are NAMED"
 binario_falso "$W/ayuda" 1 2
 s="$(OLIVARES_CLI_BIN="$W/ayuda" node "$SUT" 2>&1)"; rc=$?
-check "una ayuda sin 'Usage:' es hallazgo" 1 "$rc" "[ayuda] roto" "$s"
+check "help without 'Usage:' is a finding" 1 "$rc" "[help] roto" "$s"
 binario_falso "$W/flag" 0 1
 s="$(OLIVARES_CLI_BIN="$W/flag" node "$SUT" 2>&1)"; rc=$?
-check "bandera desconocida que NO da 2 es hallazgo" 1 "$rc" "el binario promete 2" "$s"
-check "y nombra el código que dio" 1 "$rc" "devolvió 1" "$s"
+check "unknown flag that does NOT return 2 is a finding" 1 "$rc" "the binary promises 2" "$s"
+check "names the returned exit code" 1 "$rc" "returned 1" "$s"
 
-echo "MOTOR — 404 es hallazgo; el usage error NO es cobertura"
+echo "ENGINE — 404 is a finding; usage errors are NOT coverage"
 binario_falso "$W/e404" 0 2 'case "$1" in ls) echo "GET /v1/m/x: 404 not found" ; exit 6 ;; esac'
 s="$(OLIVARES_CLI_BIN="$W/e404" OLIVARES_CLI_BASE=https://127.0.0.1:1 node "$SUT" 2>&1)"; rc=$?
-check "un 404 del motor es hallazgo" 1 "$rc" "[ruta] ls" "$s"
+check "an engine 404 is a finding" 1 "$rc" "[route] ls" "$s"
 binario_falso "$W/e401" 0 2 'case "$1" in ls) echo "401 unauthorized" ; exit 3 ;; esac'
 s="$(OLIVARES_CLI_BIN="$W/e401" OLIVARES_CLI_BASE=https://127.0.0.1:1 node "$SUT" 2>&1)"; rc=$?
-check "un 401 NO es hallazgo: la puerta funciona" 0 "$rc" "LIMPIO" "$s"
-check "y el alcance se declara" 0 "$rc" "mandato(s) de RED llegaron" "$s"
+check "a 401 is NOT a finding: the guard works" 0 "$rc" "CLEAN" "$s"
+check "scope is declared" 0 "$rc" "NETWORK command(s) reached" "$s"
 
-echo "LOCAL vs RED — un mandato que no declara --server no es un fallo del recorrido"
+echo "LOCAL vs NETWORK — a command without --server is not a traversal failure"
 #    Medido el 2026-08-19: la primera version pasaba --server a TODO mandato de lectura, y
 #    `audit ls`, `connector ls`, `keys ls` y `migrate status` respondian «unknown flag: --server».
 #    Son LOCALES. Contarlos como «les faltan argumentos» inventaba la causa: el argumento SOBRABA.
@@ -155,10 +155,10 @@ exit 0
 FAKE2
 chmod +x "$W/mixto"
 s="$(OLIVARES_CLI_BIN="$W/mixto" OLIVARES_CLI_BASE=https://127.0.0.1:1 node "$SUT" 2>&1)"; rc=$?
-check "el local NO cuenta como usage error del recorrido" 0 "$rc" "1 mandato(s) de lectura son LOCALES" "$s"
-check "y el de red SI llega" 0 "$rc" "1 de 1 mandato(s) de RED llegaron" "$s"
+check "local command is NOT counted as a traversal usage error" 0 "$rc" "1 read command(s) are LOCAL" "$s"
+check "network command DOES reach the engine" 0 "$rc" "1 of 1 NETWORK command(s) reached" "$s"
 
-echo "⛔ EL CASO QUE ESTE GUION EXISTE PARA NO REPETIR"
+echo "⛔ THE CASE THIS SCRIPT PREVENTS FROM RECURRING"
 #    Todos los mandatos de lectura salen con usage error: NO llegaron al motor. Contar eso como
 #    cobertura fue el error medido el 2026-08-19 («0 hallazgos en 33», 25 de ellos sin llegar).
 cat >"$W/vacuo" <<'FAKE3'
@@ -184,21 +184,21 @@ exit 0
 FAKE3
 chmod +x "$W/vacuo"
 s="$(OLIVARES_CLI_BIN="$W/vacuo" OLIVARES_CLI_BASE=https://127.0.0.1:1 node "$SUT" 2>&1)"; rc=$?
-check "con motor y CERO alcanzados responde 2, no 0" 2 "$rc" "es ciego" "$s"
+check "with an engine but ZERO commands reaching it, returns 2, not 0" 2 "$rc" "COULD NOT LOOK" "$s"
 
-echo "NO HE PODIDO MIRAR — nunca un verde"
+echo "COULD NOT LOOK — never a pass"
 s="$(node "$SUT" 2>&1)"; rc=$?
-check "sin OLIVARES_CLI_BIN responde 2" 2 "$rc" "falta OLIVARES_CLI_BIN" "$s"
+check "missing OLIVARES_CLI_BIN returns 2" 2 "$rc" "missing OLIVARES_CLI_BIN" "$s"
 s="$(OLIVARES_CLI_BIN="$W/no-existe" node "$SUT" 2>&1)"; rc=$?
-check "con un binario inexistente responde 2" 2 "$rc" "no existe" "$s"
+check "a nonexistent binary returns 2" 2 "$rc" "does not exist" "$s"
 printf '#!/usr/bin/env bash\nprintf "Usage:\\n  x\\n"\nexit 0\n' >"$W/sinhijos"; chmod +x "$W/sinhijos"
 s="$(OLIVARES_CLI_BIN="$W/sinhijos" node "$SUT" 2>&1)"; rc=$?
-check "cero mandatos descubiertos responde 2, no 0" 2 "$rc" "no es limpio" "$s"
+check "zero discovered commands returns 2, not 0" 2 "$rc" "does not demonstrate a clean result" "$s"
 
 echo
-echo "cli-walk self-test: $pasa pasan, $falla fallan"
+echo "cli-walk self-test: $pasa passed, $falla failed"
 if [ "$infra" -gt 0 ]; then
-	echo "test-cli-walk: 2 NO PUDE MIRAR — $infra caso(s) salieron 127 (command not found): es la caja, no el producto" >&2
+	echo "test-cli-walk: 2 COULD NOT LOOK — $infra case(s) returned 127 (command not found): host issue, not product issue" >&2
 	exit 2
 fi
 [ "$falla" -eq 0 ]

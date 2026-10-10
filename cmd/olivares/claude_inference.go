@@ -8,7 +8,6 @@ import (
 	"context"
 	"errors"
 	"log/slog"
-	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -475,21 +474,6 @@ func loadClaudeInference(getenv func(string) string, inferenceDoer modelprovider
 		log.Warn("knowledge: no usable embeddings provider configured; keeping zero-egress LocalHashEmbedder — retrieval is lexical, NOT semantic", "reason", embReason)
 	}
 	return ci
-}
-
-// osGetenv is the production env reader. It overlays the enterprise ACTIVATION
-// MANIFEST: when an add-on's OLIVARES_*_CONFIG variable is UNSET in the
-// real environment but an operator activated that add-on via a preset
-// (`olivares enterprise enable`), the manifest supplies the materialized config
-// path. A real env value ALWAYS wins (operator override / break-glass), and the
-// manifest only ever holds the specific activation keys — no other env read is
-// affected. The manifest is loaded once by boot() (initActivationManifest);
-// unloaded (every CLI path except serve) the overlay is a no-op.
-func osGetenv(k string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return activationManifestLookup(k)
 }
 
 // evalsJudgeOptions / knowledgeEmbedderOptions return the WithJudge / WithEmbedder

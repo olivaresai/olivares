@@ -16,14 +16,9 @@
 // JSON client cannot consume a non-JSON stream; PDF answers 501 when the renderer is
 // not installed and the view says so honestly.
 import { http } from '@/lib/api'
-import {
-  ensureFreshSession,
-  notifyUnauthorized,
-  type TenantRequestOptions,
-} from '@/lib/api/client'
-import { ApiError, NetworkError } from '@/lib/api/errors'
-import { useSessionStore } from '@/stores/session'
-import { useTenantStore } from '@/stores/tenant'
+import { apiFetchRaw, type TenantRequestOptions } from '@/lib/api/client'
+import { ApiError } from '@/lib/api/errors'
+export { downloadBlob } from '@/lib/api/download'
 
 const BASE = '/v1/m/reporting'
 
@@ -123,10 +118,9 @@ function ext(format: ReportFormat): string {
   return format === 'pdf' ? 'pdf' : 'html'
 }
 
-/** Generate + fetch one report as a Blob of the engine's verbatim bytes. Raw
- * same-origin fetch (the JSON `http` client cannot consume the html/pdf stream);
- * carries the SAME bearer/tenant headers the client injects and surfaces a typed
- * ApiError on 4xx/5xx (a 501 = PDF renderer not installed, handled honestly). */
+/** Generate + fetch one report as a Blob of the engine's verbatim bytes, read through
+ * the client's raw download (the html/pdf body is not JSON). A 4xx/5xx is a typed
+ * ApiError (a 501 = PDF renderer not installed, handled honestly). */
 export async function fetchReport(
   type: string,
   params: GenerateParams,
@@ -137,47 +131,14 @@ export async function fetchReport(
   if (params.framework) search.set('framework', params.framework)
   if (params.team) search.set('team', params.team)
   if (params.locale) search.set('locale', params.locale)
-
-  // La renovación va ANTES de la petición: este camino rodea `apiFetch`, así que sin esto
-  // sería el único del console que sigue muriendo por caducidad. Comparte el vuelo único.
-  // ⛔ EL INQUILINO SE LEE ANTES DE LA ESPERA. Este camino rodea `apiFetch`, así que no
-  //    hereda la fijación de `apiFetchWithMeta`: si se leyera después del refresco, un
-  //    cambio de inquilino durante la renovación mandaría la petición al inquilino nuevo.
-  const tenant = useTenantStore.getState().activeTenant
-  await ensureFreshSession()
-  const headers = new Headers({
-    Accept: params.format === 'pdf' ? 'application/pdf' : 'text/html',
-  })
-  const token = useSessionStore.getState().csrfToken
-  if (token) headers.set('X-CSRF-Token', token)
-  if (tenant) headers.set('X-Olivares-Tenant', tenant)
-
-  let res: Response
-  try {
-    res = await fetch(
-      `${BASE}/reports/${encodeURIComponent(type)}?${search.toString()}`,
-      { method: 'GET', headers, credentials: 'same-origin' },
-    )
-  } catch (cause) {
-    throw new NetworkError('The control plane is unreachable.', cause)
-  }
-  if (!res.ok) {
-    if (res.status === 401) notifyUnauthorized()
-    // The engine answers JSON errors ({error:{code,message}}); surface its message.
-    let message = res.statusText || 'Report generation failed'
-    try {
-      const body = (await res.json()) as { error?: { message?: string } }
-      if (body?.error?.message) message = body.error.message
-    } catch {
-      // Non-JSON error body — keep the status text.
-    }
-    throw new ApiError(
-      res.status,
-      'report_failed',
-      message,
-      res.headers.get('X-Request-ID') ?? undefined,
-    )
-  }
+  const res = await apiFetchRaw(
+    `${BASE}/reports/${encodeURIComponent(type)}?${search.toString()}`,
+    {
+      headers: {
+        Accept: params.format === 'pdf' ? 'application/pdf' : 'text/html',
+      },
+    },
+  )
   const contentType =
     res.headers.get('Content-Type') ?? 'application/octet-stream'
   const stamp = new Date().toISOString().slice(0, 10)
@@ -186,18 +147,6 @@ export async function fetchReport(
     contentType,
     filename: `olivares-${type}-${stamp}.${ext(params.format)}`,
   }
-}
-
-/** Trigger a browser download of a fetched blob (shared anchor pattern). */
-export function downloadBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
 }
 
 export const reportingApi = {
@@ -310,37 +259,15 @@ export const reportingKeys = {
 export async function fetchReportTemplate(
   type: string,
 ): Promise<string | null> {
-  // La renovación va ANTES de la petición: este camino rodea `apiFetch`, así que sin esto
-  // sería el único del console que sigue muriendo por caducidad. Comparte el vuelo único.
-  // ⛔ EL INQUILINO SE LEE ANTES DE LA ESPERA. Este camino rodea `apiFetch`, así que no
-  //    hereda la fijación de `apiFetchWithMeta`: si se leyera después del refresco, un
-  //    cambio de inquilino durante la renovación mandaría la petición al inquilino nuevo.
-  const tenant = useTenantStore.getState().activeTenant
-  await ensureFreshSession()
-  const headers = new Headers({ Accept: 'text/html' })
-  const token = useSessionStore.getState().csrfToken
-  if (token) headers.set('X-CSRF-Token', token)
-  if (tenant) headers.set('X-Olivares-Tenant', tenant)
-
-  let res: Response
   try {
-    res = await fetch(`${BASE}/templates/${encodeURIComponent(type)}`, {
-      method: 'GET',
-      headers,
-      credentials: 'same-origin',
-    })
-  } catch (cause) {
-    throw new NetworkError('The control plane is unreachable.', cause)
-  }
-  // Sin plantilla personalizada NO es un fallo: es el estado por defecto.
-  if (res.status === 404) return null
-  if (!res.ok) {
-    throw new ApiError(
-      res.status,
-      'template_read_failed',
-      res.statusText || 'Failed to read template',
-      res.headers.get('X-Request-ID') ?? undefined,
+    const res = await apiFetchRaw(
+      `${BASE}/templates/${encodeURIComponent(type)}`,
+      { headers: { Accept: 'text/html' } },
     )
+    return await res.text()
+  } catch (err) {
+    // No custom template is the default state, not a failure.
+    if (err instanceof ApiError && err.status === 404) return null
+    throw err
   }
-  return res.text()
 }

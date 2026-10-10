@@ -165,6 +165,52 @@ func TestMCPAddTakesTheEnginesCreatedAndListsItNotTested(t *testing.T) {
 	}
 }
 
+// TestMCPAddWarnsWhenEnvFlagsFollowTheTerminator is #572: an --env/--secret-env token
+// copied after the -- terminator is stored as a server argument, the environment (and
+// the secret) is never wired, and nothing tells the user — the engine's inline-
+// credential refusal only catches variable names that look like credentials. The CLI
+// still adds the server (the wrapped command may own such a flag) but says what it saw.
+func TestMCPAddWarnsWhenEnvFlagsFollowTheTerminator(t *testing.T) {
+	f := newFakeMCPRoster(t)
+	out, errb, err := execSessionCLI(t, nil, mcpArgs(f.URL, "add", "probe", "--no-test", "--",
+		"echo", "--secret-env", "FOO=store:mcp/probe", "--env=MODE=verbose")...)
+	if err != nil || !strings.Contains(out, "Added probe (off)") {
+		t.Fatalf("mcp add: err=%v out=%q stderr=%q", err, out, errb)
+	}
+	// Both flag names warn, whatever their value; the value itself is never
+	// echoed.
+	if !strings.Contains(errb, "WARNING: --secret-env after --") ||
+		!strings.Contains(errb, "WARNING: --env after --") {
+		t.Fatalf("missing misplaced-flag warnings; stderr=%q", errb)
+	}
+	if strings.Contains(errb, "store:mcp/probe") {
+		t.Fatalf("warning echoes the value; stderr=%q", errb)
+	}
+	s := f.servers[0]
+	if s["command"] != "echo" || strings.Join(toStrings(s["args"]), " ") != "--secret-env FOO=store:mcp/probe --env=MODE=verbose" {
+		t.Fatalf("server stored differently than given: command=%v args=%v", s["command"], s["args"])
+	}
+	// mcp add posts env_secret_refs only when the flag is heard; any presence
+	// here, whatever shape, means part of the misplaced token was wired.
+	if s["env_secret_refs"] != nil {
+		t.Fatalf("secret env refs = %v", s["env_secret_refs"])
+	}
+	// The same token in the command position is the same mistake.
+	out, errb, err = execSessionCLI(t, nil, mcpArgs(f.URL, "add", "cmdflag", "--no-test", "--",
+		"--secret-env", "FOO=store:mcp/probe")...)
+	if err != nil || !strings.Contains(out, "Added cmdflag (off)") || !strings.Contains(errb, "WARNING: --secret-env after --") {
+		t.Fatalf("command position: err=%v out=%q stderr=%q", err, out, errb)
+	}
+	// The documented order stays silent about misplaced flags, including the
+	// wrapped command's own --verbose (only --env/--secret-env are ours); the
+	// --token deprecation warning sessionCreds triggers is unrelated and stays.
+	_, errb, err = execSessionCLI(t, nil, mcpArgs(f.URL, "add", "ok", "--no-test",
+		"--secret-env", "FOO=store:mcp/probe", "--", "echo", "--verbose", "hi")...)
+	if err != nil || strings.Contains(errb, "after --") {
+		t.Fatalf("correct order: err=%v stderr=%q", err, errb)
+	}
+}
+
 // TestMCPTestAndListSayWhyALocalServerFailed is HU 019: a local server that could not
 // start was shown as "unreachable" with no reason. The engine now records a reason and
 // one redacted detail line; `mcp test` and `mcp ls` print it.

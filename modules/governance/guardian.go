@@ -978,6 +978,28 @@ func (m *Module) emitGuardianFinding(ctx context.Context, tenant model.TenantID,
 
 // --- the sweep (executes approved containments; the cmd guardian pump drives it) --
 
+// HasGuardianRules reports whether the tenant has any guardian rule (C2 item
+// 4): the sweep pump's cheap probe — one bounded read, never a pending scan.
+func (m *Module) HasGuardianRules(ctx context.Context, tenant model.TenantID) (bool, error) {
+	if m.data == nil {
+		return false, errNoData
+	}
+	has := false
+	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(guardianRuleKind)
+		if err != nil {
+			return err
+		}
+		rows, _, err := repo.List(ctx, model.Query{Limit: 1})
+		if err != nil {
+			return err
+		}
+		has = len(rows) > 0
+		return nil
+	})
+	return has, err
+}
+
 // GuardianSweepResult reports one tenant pass of the guardian sweep.
 type GuardianSweepResult struct {
 	Executed int
@@ -1054,7 +1076,13 @@ func (m *Module) GuardianSweep(ctx context.Context, tenant model.TenantID) (Guar
 				}
 				return err
 			}
-			switch effectiveStatus(appr, now) {
+			// The live tier, read in this transaction, decides whether an approved
+			// grant still meets its floor, the same rule every other consumer applies.
+			pols, err := loadApprovalPolicies(ctx, sc)
+			if err != nil {
+				return err
+			}
+			switch approvalGrantStatus(appr, now, liveRiskTier(pols, appr)) {
 			case statusPending:
 				return nil // still waiting for its human
 			case statusApproved:
@@ -1099,6 +1127,9 @@ func (m *Module) GuardianSweep(ctx context.Context, tenant model.TenantID) (Guar
 			case statusExpired:
 				rec[colGAStatus] = gaStatusExpired
 				rec[colGADetail] = "approval window lapsed before a human decided"
+				if effectiveStatus(appr, now) == statusApproved {
+					rec[colGADetail] = "approval below the live two-person floor"
+				}
 				if _, uerr := actRepo.Update(ctx, rec); uerr != nil {
 					return uerr
 				}

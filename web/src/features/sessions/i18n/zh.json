@@ -1,6 +1,28 @@
 {
+  "git": {
+    "title": "Git",
+    "branch": "分支",
+    "newBranch": "新建分支",
+    "branchName": "分支名称",
+    "createBranch": "创建分支",
+    "commitMessage": "提交说明",
+    "commit": "提交",
+    "stage": "暂存 {{path}}",
+    "unstage": "取消暂存 {{path}}",
+    "stageButton": "暂存",
+    "unstageButton": "取消暂存",
+    "refresh": "刷新 Git 状态",
+    "loading": "正在读取 Git 状态…",
+    "readOnly": "此会话的权限不允许更改 Git。",
+    "clean": "工作区干净。",
+    "detached": "分离的 HEAD",
+    "cancel": "取消",
+    "truncated": "显示前 200 个文件或分支。缩小更改范围后请刷新。",
+    "fileStatus": "索引：{{index}}；工作区：{{worktree}}",
+    "commitHint": "仅提交已暂存的更改，使用个人资料中的姓名和邮箱。",
+    "working": "正在处理…"
+  },
   "title": "会话",
-  "subtitle": "智能体实时运行情况——每个会话当前正在执行的操作、其 token、成本与节奏，通过实时流持续更新。",
   "refresh": "刷新",
   "search": "搜索会话、智能体、操作……",
   "untitled": "未命名会话",
@@ -81,7 +103,7 @@
   },
   "empty": {
     "title": "暂无会话",
-    "description": "智能体一开始工作，会话就会出现在这里：既有 Olivares 通过连接器发现的，也有你从本页启动的。"
+    "description": "你启动的会话和 Olivares 发现的会话都会显示在这里。"
   },
   "filtered": {
     "title": "没有符合这些筛选条件的会话",
@@ -91,8 +113,6 @@
     "title": "未授权访问会话",
     "description": "你的角色不包含查看实时会话的权限。"
   },
-  "operateTitle": "Claude Code",
-  "operateSubtitle": "创建、接入并治理 Claude Code 会话，无需 SSH。Olivares 仅观察到的会话也在同一个列表里，并打开同一张卡片。",
   "launch": "新建会话",
   "allSources": "全部来源",
   "tabs": {
@@ -231,26 +251,13 @@
   },
   "rail": {
     "label": "工作栏",
-    "group": {
-      "active": "进行中",
-      "attention": "等待您处理",
-      "settled": "已结束"
-    },
-    "groupEmpty": {
-      "active": "当前没有正在运行的会话。",
-      "attention": "没有等待您处理的会话。",
-      "settled": "还没有已结束的会话。"
-    },
     "pin": "固定",
     "unpin": "取消固定",
     "pinnedMark": "已固定",
     "rowMenu": "{{name}} 的操作",
-    "noObservation": "尚未收到该会话的遥测数据。",
-    "emptyTitle": "还没有会话",
-    "emptyDescription": "此部署观测或启动的每个会话都会显示在这里，并按其需要您做什么来分组。"
+    "noObservation": "尚未收到该会话的遥测数据。"
   },
   "surface": {
-    "paneSwitcher": "选择面板",
     "closeContext": "关闭上下文",
     "backTo": "返回{{pane}}",
     "pane": {
@@ -266,6 +273,20 @@
     "notReadTitle": "无法读取该会话",
     "menu": "{{name}} 的操作",
     "terminal": "在终端中"
+  },
+  "meter": {
+    "mode": "模式：{{mode}}",
+    "modeTitle": "{{tool}} 报告的模式",
+    "theTool": "该工具",
+    "usageLabel": "本会话的用量",
+    "tokens": "输入 {{input}} / 输出 {{output}} 个令牌",
+    "costTitle": "这是估算，不是发票：工具自身的数字，或工具未定价的轮次的标价",
+    "costUnknown": "未报告费用",
+    "planLabel": "本会话登录的套餐用量窗口",
+    "planNotRead": "未读取套餐窗口",
+    "resets": "{{when}}重置（{{at}}）",
+    "stale": "最后已知",
+    "readAt": "读取于 {{at}}"
   },
   "evidence": {
     "checks": {
@@ -288,7 +309,7 @@
     "noneTitle": "未选择会话",
     "noneDescription": "此处显示会话运行时所属的范围，以及查找它所需的引用标识。",
     "scopeTitle": "范围",
-    "scopeHint": "该会话适用的对象。这些是它运行时的值，不是当前所选的值。",
+    "scopeHint": "该会话适用的对象。这些是它运行时的值，不是当前所选的值。 只读文件夹保护文件内容和目录项（禁止写入、截断、创建、删除或重命名）；权限、所有权、扩展属性和时间戳仍遵循主机的正常权限。",
     "tenant": "组织",
     "workspace": "工作区",
     "environment": "环境",
@@ -320,8 +341,6 @@
     "wireHint": "所选行的原始帧。默认视图是对话。",
     "wireEmpty": "在对话中选择一行以查看其原始帧。",
     "thisNode": "本节点",
-    "noWorkspace": "无工作区",
-    "cwdWarning": "此会话没有工作区。驱动程序将其工作目录报告为 {{cwd}}。",
     "workTitle": "会话工作权限",
     "workHint": "记录于上次启动。每项操作都会检查当前授权。",
     "processState": "进程状态",
@@ -335,7 +354,17 @@
       "orchestrator": "编排代理"
     },
     "details": "详情",
-    "echoes": "也记录为"
+    "echoes": "也记录为",
+    "folder": "文件夹",
+    "temporaryFolder": "此会话的临时文件夹",
+    "panels": "面板",
+    "tabChanges": "变更",
+    "tabFiles": "文件",
+    "noFiles": "此会话没有可浏览的文件夹。",
+    "noChanges": "此会话不是由 Olivares 启动的，没有可显示的变更。",
+    "filesUnavailable": "此文件夹无法浏览。",
+    "filesNoAccess": "你的角色无权浏览此文件夹。",
+    "filesFailed": "无法读取该文件夹。"
   },
   "conversation": {
     "log": "对话",
@@ -343,10 +372,7 @@
     "empty": "尚无回合。请在下方发送一句话。",
     "ended": "会话的输入输出流已结束。",
     "lag": "丢失 {{count}} 帧 — 下方输出在缺口之后继续。",
-    "operator": "你",
-    "assistant": "助手",
     "tool": "工具",
-    "system": "系统",
     "result": "结果",
     "unknown": "无法识别的帧",
     "inspect": "在检查器中显示",
@@ -354,7 +380,6 @@
     "toolResult": "结果",
     "toolFailed": "失败",
     "tokens": "输入 {{input}} · 输出 {{output}}",
-    "cwdWarning": "此会话没有工作区。驱动程序将其工作目录报告为 {{cwd}}。",
     "protocol": "协议帧：{{count}}",
     "stop": {
       "cancelled": "已取消",
@@ -366,7 +391,12 @@
     "retrying": "正在重试（{{count}}）：{{message}}",
     "keyRefused": "提供方拒绝了该 API 密钥。请在“提供方”中替换它。",
     "output": "工具输出（{{count}}）：{{first}}",
-    "notSent": "未发送：{{reason}}"
+    "notSent": "未发送：{{reason}}",
+    "waitingApproval": "启动获批且会话开始后发送。",
+    "workingFolder": "工作文件夹：{{cwd}}",
+    "temporaryFolder": "工作文件夹：此会话的临时文件夹",
+    "workedFor": "已运行 {{duration}}",
+    "toolsFolded_other": "+{{count}} 次工具调用"
   },
   "changes": {
     "title": "{{folder}} 中的更改",
@@ -381,9 +411,44 @@
     "fileTruncated": "显示前 256 KB。",
     "truncated": "显示最新的 {{count}} 个文件。"
   },
+  "preview": {
+    "title": "预览",
+    "hint": "此会话在本地端口上提供的应用。它在你的浏览器中运行，与控制台隔离，并且不受会话的网络限制。",
+    "loading": "正在查找会话的端口…",
+    "none": "此会话未在本地端口上提供任何内容。",
+    "notRunning": "会话未在运行，因此没有提供任何内容。",
+    "error": "无法读取会话的端口。请稍后重试。",
+    "notAllowed": "打开预览需要操作此会话的权限。",
+    "port": "端口",
+    "path": "路径",
+    "open": "打开",
+    "reload": "重新加载",
+    "newTab": "在新标签页中打开",
+    "openError": "无法打开预览。端口可能已关闭。",
+    "frameTitle": "端口 {{port}} 的预览"
+  },
+  "branchChanges": {
+    "title": "分支更改",
+    "hint": "此会话的分支包含而工作区当前提交不包含的内容。仅限已提交的工作。",
+    "range": "从 {{base}} 到 {{head}}",
+    "loading": "正在读取分支…",
+    "error": "无法读取分支更改。请稍后重试。",
+    "empty": "此分支没有工作区当前提交所不具备的内容。",
+    "back": "全部分支更改",
+    "binary": "二进制文件，不显示。",
+    "truncated": "显示前 {{count}} 个已更改文件。",
+    "fileTruncated": "每一侧仅显示前 64 KB。",
+    "original": "在起点",
+    "modified": "在分支末端",
+    "status": {
+      "added": "新增",
+      "modified": "修改",
+      "deleted": "删除"
+    }
+  },
   "peers": {
     "button_other": "可发消息给另外 {{count}} 个会话",
-    "buttonNone": "不能给其他会话发消息",
+    "buttonNone": "选择要发送消息的会话",
     "template": "可发消息给此模板的会话",
     "title": "可发消息的会话",
     "hint": "此会话可以发消息或移交工作的会话。引擎会拒绝其他任何会话。",
@@ -391,5 +456,21 @@
     "none": "此工作区中没有其他活动会话。",
     "save": "保存",
     "saved": "消息权限已保存。"
+  },
+  "list": {
+    "group": {
+      "attention": "需要你处理",
+      "active": "运行中",
+      "settled": "空闲"
+    },
+    "more": "更多",
+    "back": "返回会话",
+    "showTable": "以表格显示",
+    "filter": "筛选会话…",
+    "noMatch": "没有匹配的会话。"
+  },
+  "thread": {
+    "copyReference": "复制引用",
+    "terminalHint": "在终端中操作同一个会话。"
   }
 }

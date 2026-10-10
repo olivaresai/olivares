@@ -18,13 +18,14 @@ evidence, and never sits in the agent's data-path.
 The module spans three bounded responsibilities:
 
 - **Guardrails** — a chain of deterministic, explainable detectors inspects agent
-  text on the `input`, `output` and `tool_args` surfaces for secrets/PII,
+  text on the `input`, `output`, `tool_args` and `tool_result` surfaces for secrets/PII,
   prompt-injection, jailbreak, disallowed content, output-schema violations and the
   OWASP Agentic Top 10. Detections carry framework references (OWASP LLM Top 10 2025,
   OWASP Agentic Top 10 2026, MITRE ATLAS) verbatim from primary sources, never invented.
-  An optional, pluggable classifier (a hosted guardrail-LLM) runs *behind* the
-  deterministic detectors: it can only **add** detections, never suppress one, and its
-  failure is logged and ignored.
+  Stock binaries configure no model-backed classifier; provider/account selection
+  is not connected to that port. The optional Go interface remains supported: injected classifiers can
+  add detections, never suppress deterministic findings, and their failures are
+  logged and ignored.
 - **Anomaly detection** — it correlates the Permitted-vs-Observed drift that
   [module III](/reference/modules/iii-access-map/) computes with high-severity findings,
   and joins kernel-side and cooperative-side anti-evasion signals: an agent that silences

@@ -1,0 +1,10 @@
+{
+  "dictate": "Diktieren",
+  "hint": "Diktieren. Ihre Stimme bleibt in diesem Browser.",
+  "loading": "Spracherkennung wird geladen…",
+  "listening": "Hört zu. Drücken Sie erneut oder Esc zum Beenden.",
+  "transcribing": "Wird transkribiert…",
+  "nothing": "Keine Sprache erkannt.",
+  "failed": "Diktieren fehlgeschlagen. Versuchen Sie es erneut.",
+  "blocked": "Der Browser hat das Mikrofon blockiert."
+}

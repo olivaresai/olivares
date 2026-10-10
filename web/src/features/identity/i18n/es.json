@@ -30,15 +30,14 @@
       "insecureTitle": "Esta página no es un contexto seguro.",
       "insecureBody": "Los navegadores ejecutan la API de passkeys solo en un contexto seguro, así que aquí no se puede registrar ni usar ninguna passkey. Accede a esta consola por HTTPS, o en el host local.",
       "unsupportedTitle": "Este navegador no admite passkeys.",
-      "unsupportedBody": "Este navegador no expone ninguna API WebAuthn, así que aquí no se puede registrar ni usar una passkey. Usa un navegador compatible con passkeys, o una tarjeta PIV/CAC presentada.",
+      "unsupportedBody": "Este navegador no expone ninguna API WebAuthn, así que aquí no se puede registrar ni usar una passkey. Usa un navegador compatible con passkeys.",
       "sameDevice": "En este dispositivo, la misma consola también responde en:"
     },
     "stepUpTitle": "Se requiere reautenticación reforzada",
     "stepUpBody": "{{action}} requiere {{required}}. Tu sesión es {{current}}. Usa una passkey de tu dispositivo o una llave de seguridad para continuar.",
     "authenticate": "Autenticar con passkey",
-    "authenticatePiv": "Autenticar con tarjeta PIV/CAC",
     "authenticating": "Esperando a tu autenticador…",
-    "seamWhat": "La ceremonia de acceso privilegiado (reautenticación WebAuthn)",
+    "seamWhat": "Acceso privilegiado con reautenticación WebAuthn",
     "unsupported": "Este navegador no admite WebAuthn. Para las acciones privilegiadas se necesita una plataforma que admita autenticadores resistentes al phishing.",
     "failed": "La reautenticación no se completó. La acción sigue denegada.",
     "relyingPartyUnusable": "Las passkeys no están disponibles en este despliegue: el motor no tiene una parte confiante utilizable para la dirección en la que se sirve la consola. Un operador debe configurar un dominio de parte confiante válido —un nombre de host con punto, o localhost cuando proceda—, acceder a la consola en ese origen seguro declarado y reiniciar el motor tras el cambio. Reintentar en otra dirección no lo repara por sí solo.",
@@ -60,10 +59,10 @@
       "aal3": "AAL3 (resistente al phishing)"
     },
     "unenrolled": "Tu cuenta aún no tiene ninguna passkey registrada. Registra una passkey de tu dispositivo o una llave de seguridad en la pestaña de acceso privilegiado y después autentícate.",
-    "unenrolledInline": "Tu cuenta aún no tiene ninguna passkey registrada. Registra una aquí o usa una tarjeta PIV/CAC presentada.",
+    "unenrolledInline": "Tu cuenta aún no tiene ninguna passkey registrada. Registra una aquí.",
     "enrollHint": "Registra tu primera passkey en este dispositivo o en una llave de seguridad. El registro por sí solo no autentica la sesión ni completa la acción pendiente.",
     "passkeyName": "Nombre de la passkey",
-    "enrollUnsupported": "Este navegador no puede registrar una passkey. Usa un navegador compatible o una tarjeta PIV/CAC presentada.",
+    "enrollUnsupported": "Este navegador no puede registrar una passkey. Usa un navegador compatible.",
     "registered": "Passkey registrada. Autentícate para verificar esta sesión; después revisa y completa la acción pendiente.",
     "registrationUnknown": "No se pudo confirmar el registro. La passkey puede haberse guardado. Pulsa Autenticar para comprobarlo; el registro no se reenviará automáticamente.",
     "authenticationUnknown": "No se pudo confirmar la autenticación. La sesión puede estar ya elevada. Comprueba la sesión antes de reintentarlo.",
@@ -90,7 +89,6 @@
       "pkce": "PKCE (RFC 7636)",
       "oauthSecurityBcp": "OAuth 2.0 Security BCP (RFC 9700)",
       "webauthn": "NIST SP 800-63B-4 (nivel de garantía del autenticador)",
-      "piv": "FIPS 201-3 (PIV)",
       "certManager": "cert-manager (CNCF)",
       "pqc": "NIST SP 800-57 Part 1 r6 (gestión de claves)",
       "wifReference": "Referencia WIF de Anthropic",
@@ -297,9 +295,9 @@
       "title": "Acciones del ciclo de vida",
       "reason": "Motivo",
       "critical": {
-        "twoAccountsAal3": "Esta acción CRÍTICA requiere la aprobación de dos cuentas de usuario distintas antes de poder ejecutarse. El motor exige CUENTAS distintas: no puede demostrar que dos cuentas sean dos personas diferentes. Esto depende del nivel de riesgo vigente, que una política de aprobación puede rebajar.",
-        "breakGlassPossible": "No se ejecuta nada hasta que lo aprueben dos cuentas de usuario distintas. Una concesión de emergencia break-glass activa puede autorizarlo en su lugar: ese uso queda registrado y se revisa después. Esto depende del nivel de riesgo vigente, que una política de aprobación puede rebajar.",
-        "noBreakGlass": "No se ejecuta nada hasta que lo aprueben dos cuentas de usuario distintas. Aquí break-glass no puede autorizarlo: no hay vía de emergencia que evite al segundo aprobador. Esto depende del nivel de riesgo vigente, que una política de aprobación puede rebajar."
+        "twoAccountsAal3": "Esta acción CRÍTICA requiere la aprobación de dos cuentas de usuario distintas antes de poder ejecutarse. El motor exige CUENTAS distintas: no puede demostrar que dos cuentas sean dos personas diferentes. Business permite reducir el nivel de riesgo vigente mediante políticas; Community mantiene su mínimo predeterminado.",
+        "breakGlassPossible": "No se ejecuta nada hasta que lo aprueben dos cuentas de usuario distintas. Una concesión de emergencia break-glass activa puede autorizarlo en su lugar: ese uso queda registrado y se revisa después. Business permite reducir el nivel de riesgo vigente mediante políticas; Community mantiene su mínimo predeterminado.",
+        "noBreakGlass": "No se ejecuta nada hasta que lo aprueben dos cuentas de usuario distintas. Aquí break-glass no puede autorizarlo: no hay vía de emergencia que evite al segundo aprobador. Business permite reducir el nivel de riesgo vigente mediante políticas; Community mantiene su mínimo predeterminado."
       },
       "ownership": {
         "button": "Asignar responsables",
@@ -350,7 +348,7 @@
         "button": "Finalizar",
         "title": "Finalizar la baja",
         "description": "Revoca permanentemente una NHI con baja reversible previa.",
-        "irreversible": "La finalización es irreversible. Break-glass no aplica aquí: no se pueden eludir el requisito de una segunda cuenta de usuario distinta ni AAL3.",
+        "irreversible": "La finalización es irreversible. Break-glass no aplica aquí: no se puede eludir el requisito de una segunda cuenta de usuario distinta.",
         "confirm": "Finalizar permanentemente"
       },
       "restore": {
@@ -426,7 +424,7 @@
     "noPassthrough": "El passthrough de tokens está prohibido por diseño: el panel observa e introspecciona, nunca reenvía ni reutiliza un token MCP."
   },
   "wif": {
-    "gatedNote": "El grafo de Workload Identity Federation es una vista privilegiada y auditada; requiere reautenticación por hardware.",
+    "gatedNote": "El grafo de Workload Identity Federation es una vista privilegiada y auditada.",
     "consoleOnly": "Los objetos de workload identity federation (issuers, reglas, service accounts) solo se gestionan en la Console de Anthropic. Este panel los visualiza y verifica — nunca los crea ni los edita.",
     "openConsole": "Abrir en la Console de Anthropic",
     "graphTitle": "Grafo de objetos WIF",
@@ -543,17 +541,6 @@
     "registered": "Passkey registrada.",
     "unsupported": "Este navegador no admite WebAuthn.",
     "registerFailed": "El registro no se completó.",
-    "pivTitle": "PIV / CAC (smartcard)",
-    "pivDescription": "Inicio de sesión con certificado de cliente X.509, con mapeo de certificado a rol y revocación OCSP, leído de la conexión mTLS.",
-    "pivSeamWhat": "El estado del certificado de cliente PIV/CAC",
-    "pivPresented": "Certificado de cliente",
-    "pivAbsent": "No presentado",
-    "pivSubject": "Sujeto",
-    "pivRole": "Rol mapeado",
-    "pivOcsp": "OCSP",
-    "pivNote": "La verificación de la cadena y de OCSP las realiza el backend; el panel refleja el resultado.",
-    "pivNotConfigured": "El inicio de sesión con tarjeta PIV/CAC no está configurado en este despliegue, así que aquí no se puede usar ninguna tarjeta. Un administrador debe configurarlo en el engine para que quede disponible.",
-    "pivSetupGuide": "Guía del operador: configurar el inicio de sesión PIV/CAC",
     "ocsp": {
       "good": "Correcto",
       "revoked": "Revocado",
@@ -569,9 +556,9 @@
       "namePlaceholder": "p.ej. YubiKey 5C, MacBook Touch ID",
       "defaultName": "Passkey en {{device}}",
       "defaultNameNoDevice": "Passkey",
-      "registering": "Completando ceremonia…",
+      "registering": "Registrando la llave de acceso…",
       "registered": "Passkey registrada.",
-      "registerFailed": "Registro fallido. Tu navegador puede no soportar WebAuthn o la ceremonia fue cancelada.",
+      "registerFailed": "Falló el registro de la llave de acceso. Puede que tu navegador no admita WebAuthn, o el registro se canceló.",
       "unsupported": "Este navegador no soporta WebAuthn/FIDO2.",
       "none": "No hay passkeys registradas",
       "noneHint": "Registra una passkey para habilitar login resistente a phishing vinculado a hardware (AAL3).",
@@ -587,8 +574,7 @@
       "deleteTitle": "Eliminar passkey",
       "deleteBody": "¿Eliminar la passkey \"{{name}}\"? Esta acción es permanente. Necesitarás otra passkey registrada para mantener acceso AAL3.",
       "deleted": "Passkey eliminada.",
-      "lastCredential": "No puedes eliminar tu única passkey. Registra otra primero.",
-      "stepUpRequired": "Eliminar una passkey requiere una sesión AAL3 activa. Completa una autenticación step-up primero."
+      "lastCredential": "No puedes eliminar tu única passkey. Registra otra primero."
     }
   },
   "empty": {
@@ -603,7 +589,7 @@
   },
   "totp": {
     "title": "Segundo factor TOTP",
-    "description": "Una contraseña de un solo uso basada en tiempo (RFC 6238) como factor adicional de tu cuenta local. Añade a tus passkeys y PIV; nunca los sustituye.",
+    "description": "Una contraseña de un solo uso basada en tiempo (RFC 6238) como factor adicional de tu cuenta local. Añade a tus passkeys; nunca los sustituye.",
     "state": "Factor",
     "enrolled": "Registrado",
     "notEnrolled": "Sin registrar",
@@ -623,7 +609,7 @@
     "codeLabel": "Código de tu app",
     "recoveryWarning": "Estos códigos de recuperación se muestran una sola vez. Guárdalos ahora: cada uno puede usarse una vez si pierdes el dispositivo.",
     "savedCodes": "He guardado los códigos",
-    "stepUpRequired": "Esta acción requiere una sesión AAL3 reciente. Completa antes un paso de passkey o PIV.",
+    "stepUpRequired": "Esta acción necesita la verificación adicional para acciones administrativas que exige este despliegue. Complétala primero.",
     "sealerUnavailable": "El sellador de semillas TOTP no está disponible en este despliegue; el registro queda desactivado hasta que un operador lo arregle.",
     "loadFailed": "No se pudo cargar el estado del factor.",
     "policyTitle": "Exigir TOTP a los administradores",
@@ -637,19 +623,19 @@
     "policyAal3Note": "Cambiar esta política requiere una sesión AAL3. Las cuentas sin factor se envían al registro en su próximo login; nunca quedan bloqueadas."
   },
   "stepUpPolicy": {
-    "title": "Extra check for administrative actions",
-    "description": "Off by default. Turn it on to ask for an authenticator code or a passkey before administrative changes such as users, identity providers, secrets or tool installs.",
+    "title": "Verificación adicional para acciones administrativas",
+    "description": "Desactivada por defecto. Actívala para pedir un código del autenticador o una passkey antes de cambios administrativos como usuarios, proveedores de identidad, secretos o instalación de herramientas.",
     "options": {
-      "none": "Off",
-      "totp": "Authenticator code",
+      "none": "Desactivada",
+      "totp": "Código del autenticador",
       "passkey": "Passkey"
     },
-    "saved": "Saved.",
-    "loadFailed": "This setting could not be read. Refresh the page to try again.",
-    "note": "To require a passkey, sign in with your passkey here first. To require an authenticator code, sign in with your code first. You can always turn it off. A change takes effect within a few seconds on every server.",
+    "saved": "Guardado.",
+    "loadFailed": "No se pudo leer este ajuste. Recarga la página para volver a intentarlo.",
+    "note": "Para exigir una passkey, inicia sesión aquí con tu passkey primero. Para exigir un código del autenticador, inicia sesión con tu código primero. Para desactivarla o rebajarla, supera primero la comprobación actual. Un cambio se aplica en pocos segundos en todos los servidores.",
     "refused": {
-      "passkey_not_enrolled": "Add a passkey to your account first (Identity > Passkeys), then turn this on.",
-      "totp_sign_in_required": "Set up an authenticator app and sign in with its code first, then turn this on."
+      "passkey_not_enrolled": "Añade primero una passkey a tu cuenta (Identidad y NHI > Passkeys) y luego actívala.",
+      "totp_sign_in_required": "Configura una app de autenticación e inicia sesión con su código primero; luego actívala."
     }
   }
 }

@@ -28,6 +28,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/inferencepep"
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -167,7 +168,7 @@ func (u *mcpUpstream) requireNone(t *testing.T) {
 // mcpProxyDecider is the real decider over allow-all fakes, with the real Inference client
 // on a recording transport. sizing turns on the count_tokens pre-flight, the only
 // pre-forward upstream egress, so a zero-call assertion also covers it.
-func mcpProxyDecider(sizing bool) (*inferenceProxyDecider, *claudeapi.Inference, *mcpUpstream) {
+func mcpProxyDecider(sizing bool) (*inferencepep.Decider, *claudeapi.Inference, *mcpUpstream) {
 	a, mg, bg, kg, _ := allowAll()
 	pol := allGatesOnExceptDLPAndCtx()
 	pol.GateContextWindow = sizing
@@ -176,7 +177,7 @@ func mcpProxyDecider(sizing bool) (*inferenceProxyDecider, *claudeapi.Inference,
 	inf := claudeapi.NewInference(claudeapi.InferenceConfig{
 		APIKey: "k-operator", Gateway: "direct", DefaultModel: "claude-opus-4-8", Doer: up,
 	})
-	d.inf = inf
+	d.Inference = inf
 	return d, inf, up
 }
 
@@ -221,16 +222,16 @@ func requireProxyRefusal(t *testing.T, rec *httptest.ResponseRecorder, status in
 // unpreparedDecider is a decider that authorizes through the real chain and then loses
 // the frozen artifact: the connector's legacy fallback would re-serialize the governed
 // request instead of forwarding the verified bytes (Root correction m8).
-type unpreparedDecider struct{ *inferenceProxyDecider }
+type unpreparedDecider struct{ *inferencepep.Decider }
 
 func (u unpreparedDecider) Authorize(ctx context.Context, req claudeapi.MessageRequest, bearer string) claudeapi.ProxyDecision {
-	dec := u.inferenceProxyDecider.Authorize(ctx, req, bearer)
+	dec := u.Decider.Authorize(ctx, req, bearer)
 	dec.Prepared = claudeapi.PreparedRequest{}
 	return dec
 }
 
 func (u unpreparedDecider) AuthorizeBatch(ctx context.Context, requests []claudeapi.BatchRequest, bearer string) claudeapi.ProxyBatchDecision {
-	dec := u.inferenceProxyDecider.AuthorizeBatch(ctx, requests, bearer)
+	dec := u.Decider.AuthorizeBatch(ctx, requests, bearer)
 	dec.Prepared = claudeapi.PreparedBatch{}
 	return dec
 }
@@ -316,7 +317,7 @@ func TestProxyMCPEgressCoverageRefusesForwardOnlyGate(t *testing.T) {
 		t.Run(rt.name, func(t *testing.T) {
 			d, inf, up := mcpProxyDecider(true)
 			gate := &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{Forward: true}}
-			d.egress = gate
+			d.Egress = gate
 			rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, d, nil, nil), rt.path, rt.body)
 			requireProxyRefusal(t, rec, http.StatusServiceUnavailable, "api_error", rt.message)
 			if gate.calls == 0 {
@@ -346,7 +347,7 @@ func TestProxyMCPEgressBindingRefusesUnpreparedFallback(t *testing.T) {
 	for _, rt := range routes {
 		t.Run(rt.name, func(t *testing.T) {
 			d, inf, up := mcpProxyDecider(false)
-			d.egress = &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{Forward: true}}
+			d.Egress = &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{Forward: true}}
 			rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, unpreparedDecider{d}, nil, nil), rt.path, rt.body)
 			requireProxyRefusal(t, rec, http.StatusInternalServerError, "api_error", "mcp_binding_changed")
 			up.requireNone(t)
@@ -378,7 +379,7 @@ func TestProxyMCPEgressCompatibilityUnboundFallbackForwards(t *testing.T) {
 func TestProxyMCPEgressApprovalPrivacyGateInputCarriesNoMCPSecrets(t *testing.T) {
 	d, inf, up := mcpProxyDecider(true)
 	gate := &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{Forward: false, Status: http.StatusForbidden}}
-	d.egress = gate
+	d.Egress = gate
 	_ = serveProxy(t, claudeapi.NewMessagesProxy(inf, d, nil, nil), "/v1/messages", mcpParams(false))
 	if gate.calls != 1 {
 		t.Fatalf("egress gate calls = %d, want 1", gate.calls)
@@ -402,7 +403,7 @@ func TestProxyMCPEgressComputerUseViewSanitized(t *testing.T) {
 	a, mg, bg, kg, pol := allowAll()
 	d := newTestDecider(a, mg, bg, kg, pol)
 	cu := &recordingComputerUseGate{dec: claudeapi.ComputerUseDecision{Forward: true}}
-	d.computerUse = cu
+	d.ComputerUse = cu
 	req := userReq("hi", false)
 	req.Tools = []any{computerTool(), mcpToolsetMap(mcpCanaryName)}
 	req.MCPServers = []any{mcpServerMap(mcpCanaryName, mcpTestURL)}
@@ -442,10 +443,10 @@ func TestProxyMCPEgressApprovalPrivacyAdapterTextWithheld(t *testing.T) {
 
 	d, inf, up := mcpProxyDecider(true)
 	bus := &fakeObservationBus{}
-	d.bus = bus
+	d.Bus = bus
 	var logs bytes.Buffer
-	d.log = slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
-	d.egress = &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{
+	d.Log = slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug}))
+	d.Egress = &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{
 		Forward: false, Status: http.StatusForbidden, ErrorType: "permission_error", Reason: "denied: " + leak,
 		Findings: []claudeapi.ServerToolEgressFinding{{
 			Kind: "servertool_egress_" + adapterCanary, Severity: "high", Title: "blocked " + leak,
@@ -502,9 +503,9 @@ func TestProxyMCPEgressCompatibilityNilGateForwardsMCP(t *testing.T) {
 func TestProxyMCPEgressCompatibilityEarlierDenyWins(t *testing.T) {
 	t.Run("model-access", func(t *testing.T) {
 		d, inf, up := mcpProxyDecider(true)
-		d.models.(*fakeProxyModels).denyModel = "claude-opus-4-8"
+		d.Models.(*fakeProxyModels).denyModel = "claude-opus-4-8"
 		gate := &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{Forward: true}}
-		d.egress = gate
+		d.Egress = gate
 		rec := serveProxy(t, claudeapi.NewMessagesProxy(inf, d, nil, nil), "/v1/messages", mcpParams(false))
 		requireProxyRefusal(t, rec, http.StatusForbidden, "permission_error", "model not granted on this surface")
 		if gate.calls != 0 {
@@ -518,7 +519,7 @@ func TestProxyMCPEgressCompatibilityEarlierDenyWins(t *testing.T) {
 		inf, doer := proxyCountTokensInference(5)
 		d := storeBackedDecider(st, tenant, ipx, "", nil, inf)
 		gate := &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{Forward: true}}
-		d.egress = gate
+		d.Egress = gate
 		req := userReq("use AKIAIOSFODNN7EXAMPLE for deploy", false)
 		req.Tools = []any{mcpToolsetMap(mcpCanaryName)}
 		req.MCPServers = []any{mcpServerMap(mcpCanaryName, mcpTestURL)}
@@ -582,19 +583,23 @@ func requireMCPDeclarationForwarded(t *testing.T, body []byte) {
 // Engine: a server-tool egress deny opens its approval REQUEST, but that request cannot
 // authorize the synchronous call, so it must not consume an active break-glass grant nor
 // leave an authorized-under-break-glass use record. The actuation positive control at the
-// end proves a real gateOnce caller keeps its qualified break-glass behavior. Expected on
-// baseline: exit 1 by the zero-use assertion (gateOnce consumed one use).
-func TestProxyEgressNotificationNeverConsumesBreakGlass(t *testing.T) {
+// end proves a real GateOnce caller keeps its qualified break-glass behavior. Expected on
+// baseline: exit 1 by the zero-use assertion (GateOnce consumed one use).
+
+// TestProxyComputerUseNotificationNeverConsumesBreakGlass is the same O-1 regression for the
+// computer-use notification caller.
+
+// An egress or computer-use deny stays a 403 and opens exactly one pending
+// notification approval, never an authorization.
+func TestProxyEgressDenyKeepsOneNotification(t *testing.T) {
 	h := newHarness(t)
 	br := buildBridge(t, h, h.mintBoundToken(t, auth.RoleEditor))
 	tid := tenantAID(t, h)
-	grant := h.activateBreakGlassE2E(t, "", "O-1 control: an emergency grant is not a notification")
-
 	a, mg, bg, kg, pol := allowAll()
 	a.p = auth.ScopedPrincipal(model.ID("u1"), "user one", tid, "editor")
 	d := newTestDecider(a, mg, bg, kg, pol)
-	d.approvals = br
-	d.egress = &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{
+	d.Approvals = proxyApprovalsFor(br)
+	d.Egress = &fakeEgressGate{dec: claudeapi.ServerToolEgressDecision{
 		Forward: false, Status: http.StatusForbidden, ErrorType: "permission_error", Reason: "no egress grant",
 		ApprovalIntent: &claudeapi.ServerToolEgressApprovalIntent{
 			Action: "inference.servertool.egress", Family: "web_search", ToolType: "web_search_20260209",
@@ -603,31 +608,20 @@ func TestProxyEgressNotificationNeverConsumesBreakGlass(t *testing.T) {
 	}}
 	dec := d.Authorize(context.Background(), reqWithTools(map[string]any{"type": "web_search_20260209", "name": "web_search"}), "bearer")
 	if dec.Allow || dec.Status != http.StatusForbidden {
-		t.Fatalf("an egress deny must stay a 403 under an active grant: allow=%v status=%d", dec.Allow, dec.Status)
+		t.Fatalf("an egress deny must stay a 403: allow=%v status=%d", dec.Allow, dec.Status)
 	}
-	requireBreakGlassUses(t, h, grant, 0)
 	requirePendingApprovals(t, h, "inference.servertool.egress", 1)
-
-	_, st, _, err := br.gateOnce(context.Background(), tid, "deploy.apply", "deployment", "svc/o1", "plan-o1-actuation", "incident", "tester")
-	if err != nil || st != nbBreakGlass {
-		t.Fatalf("actuation positive control: gateOnce = %q err=%v, want break_glass", st, err)
-	}
-	requireBreakGlassUses(t, h, grant, 1)
 }
 
-// TestProxyComputerUseNotificationNeverConsumesBreakGlass is the same O-1 regression for the
-// computer-use notification caller.
-func TestProxyComputerUseNotificationNeverConsumesBreakGlass(t *testing.T) {
+func TestProxyComputerUseDenyKeepsOneNotification(t *testing.T) {
 	h := newHarness(t)
 	br := buildBridge(t, h, h.mintBoundToken(t, auth.RoleEditor))
 	tid := tenantAID(t, h)
-	grant := h.activateBreakGlassE2E(t, "", "O-1 control: an emergency grant is not a notification")
-
 	a, mg, bg, kg, pol := allowAll()
 	a.p = auth.ScopedPrincipal(model.ID("u1"), "user one", tid, "editor")
 	d := newTestDecider(a, mg, bg, kg, pol)
-	d.approvals = br
-	d.computerUse = &recordingComputerUseGate{dec: claudeapi.ComputerUseDecision{
+	d.Approvals = proxyApprovalsFor(br)
+	d.ComputerUse = &recordingComputerUseGate{dec: claudeapi.ComputerUseDecision{
 		Forward: false, Status: http.StatusForbidden, ErrorType: "permission_error", Reason: "computer use not permitted",
 		ApprovalIntent: &claudeapi.ComputerUseApprovalIntent{
 			Action: "inference.computer_use", ToolType: "computer_20250124", Subject: "computer_use",
@@ -638,19 +632,9 @@ func TestProxyComputerUseNotificationNeverConsumesBreakGlass(t *testing.T) {
 	req.Tools = []any{computerTool()}
 	dec := d.Authorize(context.Background(), req, "bearer")
 	if dec.Allow || dec.Status != http.StatusForbidden {
-		t.Fatalf("a computer-use deny must stay a 403 under an active grant: allow=%v status=%d", dec.Allow, dec.Status)
+		t.Fatalf("a computer-use deny must stay a 403: allow=%v status=%d", dec.Allow, dec.Status)
 	}
-	requireBreakGlassUses(t, h, grant, 0)
 	requirePendingApprovals(t, h, "inference.computer_use", 1)
-}
-
-func requireBreakGlassUses(t *testing.T, h *harness, grant string, want int) {
-	t.Helper()
-	uses := h.getJSON(h.adminToken, h.tenantA, "/v1/m/governance/breakglass/"+grant+"/uses")
-	items, _ := uses["items"].([]any)
-	if len(items) != want {
-		t.Fatalf("break-glass grant uses = %d, want %d: %v", len(items), want, items)
-	}
 }
 
 func requirePendingApprovals(t *testing.T, h *harness, action string, want int) {

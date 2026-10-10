@@ -287,8 +287,8 @@ func (c *Client) attempt(ctx context.Context, method string, req Request) (attem
 	if len(excerpt) > maxBodyExcerpt {
 		excerpt = excerpt[:maxBodyExcerpt]
 	}
-	// Drain the remainder so the connection can be reused.
-	_, _ = io.Copy(io.Discard, resp.Body)
+	// Closing an oversized response sacrifices reuse rather than waiting for
+	// an unbounded tail from the destination.
 
 	r := attemptResult{Result: Result{
 		StatusCode:   resp.StatusCode,
@@ -411,9 +411,13 @@ func parseRetryAfter(v string) time.Duration {
 	if v == "" {
 		return 0
 	}
-	if secs, err := strconv.Atoi(v); err == nil {
+	if secs, err := strconv.ParseInt(v, 10, 64); err == nil {
 		if secs < 0 {
 			return 0
+		}
+		const maxDuration time.Duration = 1<<63 - 1
+		if secs > int64(maxDuration/time.Second) {
+			return maxDuration
 		}
 		return time.Duration(secs) * time.Second
 	}

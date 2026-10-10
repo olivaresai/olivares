@@ -29,7 +29,7 @@ const (
 func (m *Module) registerProtocolReplayGuardSchema(reg store.ExtensionRegistry) error {
 	return reg.Register(model.EntityDescriptor{
 		Kind: protocolReplayGuardKind, Table: protocolReplayGuardTable,
-		AppendOnly: true, WorkspaceLineage: hiddenWorkspaceLineage,
+		AppendOnly: true, WorkspaceLineage: hiddenWorkspaceLineage, Internal: true,
 		Fields: communicationFields(
 			model.FieldSpec{Name: colReplayProtocol, Kind: model.KindText, Principal: pdeclNoneBindingProtocol},
 			model.FieldSpec{Name: colReplayPeerAuthority, Kind: model.KindText, Principal: pdeclNonePeerAuthority},

@@ -10,9 +10,13 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"net/http"
+	"net/http/httptest"
 	"os"
+	"reflect"
 	"strconv"
 	"testing"
+	"time"
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
@@ -23,10 +27,8 @@ import (
 	"github.com/olivaresai/olivares/sdk"
 )
 
-// newOnboardHarness builds a started runtime + a real SourceStore + a real (sealed)
-// SecretStore + a resolver wired to the store, and a reconciler whose prepare seam
-// yields a fake connector per kind (so PutConnector's live apply never opens a real
-// connector). It is the console-onboarding counterpart to newReconcilerHarness.
+// newOnboardHarness uses real source and sealed-secret stores with a started runtime.
+// Its prepare seam substitutes connectors so live apply needs no external service.
 func newOnboardHarness(t *testing.T) (*sourceReconciler, *auth.SourceStore, *auth.SecretStore) {
 	t.Helper()
 	ctx := context.Background()
@@ -57,13 +59,18 @@ func newOnboardHarness(t *testing.T) (*sourceReconciler, *auth.SourceStore, *aut
 	return sr, srcStore, secretStore
 }
 
-// TestConnectorCatalogKindsBuild is the drift guard: every kind the console offers
-// MUST construct via buildInProcSource. A renamed/removed connector kind fails here
-// rather than 404ing silently in the console.
+// Every in-process kind offered by the API must construct through source routing.
 func TestConnectorCatalogKindsBuild(t *testing.T) {
-	for _, kind := range inProcConnectorKinds {
-		if _, ok := buildInProcSource(kind); !ok {
-			t.Errorf("catalog kind %q does not build via buildInProcSource (update inProcConnectorKinds or the switch)", kind)
+	infos, err := (&sourceReconciler{}).ListConnectors(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, info := range infos {
+		if info.Transport != "in_process" {
+			continue
+		}
+		if conn, ok := buildInProcSource(info.Kind); !ok || conn == nil {
+			t.Errorf("catalog kind %q does not build via source routing", info.Kind)
 		}
 	}
 }
@@ -156,6 +163,79 @@ func TestPutConnectorSealsInlineSecret(t *testing.T) {
 	if err != nil || string(got) != "hvs.SUPERSECRETVALUE" {
 		t.Fatalf("owned secret resolve = %q,%v, want the sealed value", string(got), err)
 	}
+}
+
+func TestPutConnectorRotatesOwnedSecretWithoutChangingReference(t *testing.T) {
+	requests := make(chan string, 16)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests <- r.Header.Get("X-Vault-Token")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"data":{"keys":[]}}`))
+	}))
+	defer server.Close()
+	sr, sources, _ := newOnboardHarness(t)
+	sr.prepare = sr.defaultPrepare
+	ctx := context.Background()
+	waitForCredential := func(want string) {
+		t.Helper()
+		deadline := time.NewTimer(2 * time.Second)
+		defer deadline.Stop()
+		for {
+			select {
+			case got := <-requests:
+				if got == want {
+					return
+				}
+			case <-deadline.C:
+				t.Fatal("the running connector did not use the expected credential")
+			}
+		}
+	}
+	in := api.ConnectorOnboardInput{
+		Name: "vault-rotation", Kind: "vault", Tenant: "acme", Enabled: true, PollSeconds: 3600,
+		Config: map[string]string{"base_url": server.URL}, Secrets: map[string]string{"token": "fixture-initial"},
+	}
+	res, err := sr.PutConnector(ctx, recAdmin(), in)
+	if err != nil || !res.Persisted || !res.Applied || res.Action != "added" {
+		t.Fatalf("initial apply = %+v, err=%v", res, err)
+	}
+	waitForCredential("fixture-initial")
+	before, found, err := sources.Get(ctx, auth.GlobalSourceScope, in.Name)
+	if err != nil || !found {
+		t.Fatalf("initial definition: found=%v err=%v", found, err)
+	}
+	in.Secrets["token"] = ""
+	res, err = sr.PutConnector(ctx, recAdmin(), in)
+	if err != nil || !res.Applied || res.Action != "unchanged" {
+		t.Fatalf("blank-secret edit = %+v, err=%v", res, err)
+	}
+	in.Secrets["token"] = "fixture-replacement"
+	res, err = sr.PutConnector(ctx, recAdmin(), in)
+	if err != nil || !res.Persisted || !res.Applied || res.Action != "rotated" {
+		t.Errorf("credential-only edit = %+v, err=%v", res, err)
+	}
+	waitForCredential("fixture-replacement")
+	after, found, err := sources.Get(ctx, auth.GlobalSourceScope, in.Name)
+	if err != nil || !found || before.ID != after.ID || !reflect.DeepEqual(before.Config, after.Config) {
+		t.Fatalf("credential rotation changed source identity/config: found=%v err=%v", found, err)
+	}
+	if after.Config["token"] != "store:source/vault-rotation/token" {
+		t.Fatal("the roster must retain only the owned credential reference")
+	}
+	sr.prepare = func(context.Context, model.SourceDef) (*runtime.PreparedSource, sdk.Config, string) {
+		return nil, sdk.Config{}, "temporary preparation refusal"
+	}
+	in.Secrets["token"] = "fixture-retry"
+	res, err = sr.PutConnector(ctx, recAdmin(), in)
+	if err != nil || !res.Persisted || res.Applied || !sr.rt.SourceIsRegistered(in.Name) {
+		t.Fatalf("refused rotation = %+v, err=%v", res, err)
+	}
+	sr.prepare = sr.defaultPrepare
+	report, err := sr.ReloadSources(ctx, recAdmin())
+	if err != nil || !reflect.DeepEqual(report.Rotated, []string{in.Name}) {
+		t.Fatalf("retry after refusal = %+v, err=%v", report, err)
+	}
+	waitForCredential("fixture-retry")
 }
 
 // TestPutConnectorBlankKeepsAndReferencePassthrough covers the two non-sealing
@@ -347,52 +427,53 @@ func switchCaseKinds(t *testing.T, filename, funcName string) []string {
 	return kinds
 }
 
-// buildInProcSourceCaseKinds returns the case labels of the buildInProcSource switch.
-func buildInProcSourceCaseKinds(t *testing.T) []string {
-	t.Helper()
-	return switchCaseKinds(t, "sources.go", "buildInProcSource")
-}
-
-// TestConnectorCatalogCoversSwitch is the INVERSE drift guard (E4a): every kind
-// buildInProcSource can construct MUST be offered in the console catalog
-// (inProcConnectorKinds) unless it is deliberately excluded below. Without this, a
-// newly wired connector silently never gets a console card (17 kinds had drifted
-// that way by 2026-07).
+// Canonical source kinds are offered once; aliases still construct without cards.
 func TestConnectorCatalogCoversSwitch(t *testing.T) {
-	// Deliberate exclusions, each with its reason. Aliases resolve to the SAME
-	// connector as their canonical kind, which IS in the catalog — offering both
-	// would present one connector as two.
 	excluded := map[string]string{
-		"okta":          "alias of idp (same connector, seeded provider); catalog offers the canonical idp",
-		"entra":         "alias of idp (same connector, seeded provider); catalog offers the canonical idp",
-		"pg-audit":      "alias of pgaudit; catalog offers the canonical pgaudit",
-		"s3-cloudtrail": "alias of s3cloudtrail; catalog offers the canonical s3cloudtrail",
+		"okta":          "idp",
+		"entra":         "idp",
+		"pg-audit":      "pgaudit",
+		"s3-cloudtrail": "s3cloudtrail",
+	}
+	infos, err := (&sourceReconciler{}).ListConnectors(context.Background())
+	if err != nil {
+		t.Fatal(err)
 	}
 	offered := map[string]bool{}
-	for _, k := range inProcConnectorKinds {
-		offered[k] = true
-	}
-	for _, kind := range buildInProcSourceCaseKinds(t) {
-		if offered[kind] {
+	for _, info := range infos {
+		if info.Transport != "in_process" {
 			continue
 		}
-		if _, ok := excluded[kind]; ok {
+		if offered[info.Kind] {
+			t.Errorf("catalog offers kind %q more than once", info.Kind)
+		}
+		offered[info.Kind] = true
+	}
+	for kind := range inProcSourceFactories {
+		if !offered[kind] {
+			t.Errorf("source kind %q is not offered in the catalog", kind)
+		}
+	}
+	for alias := range inProcSourceAliases {
+		if _, ok := excluded[alias]; !ok {
+			t.Errorf("source alias %q has no declared canonical catalog kind", alias)
+		}
+	}
+	for alias, canonical := range excluded {
+		conn, ok := buildInProcSource(alias)
+		target, targetOK := buildInProcSource(canonical)
+		if !ok || !targetOK || conn == nil || target == nil {
+			t.Errorf("alias %q or canonical kind %q does not construct", alias, canonical)
 			continue
 		}
-		t.Errorf("kind %q is wired in buildInProcSource but not offered in inProcConnectorKinds (add it to the catalog, or add a reasoned exclusion)", kind)
-	}
-	// The exclusion list must not rot: every excluded kind must still exist in the
-	// switch, and must not ALSO be in the catalog.
-	inSwitch := map[string]bool{}
-	for _, k := range buildInProcSourceCaseKinds(t) {
-		inSwitch[k] = true
-	}
-	for kind, why := range excluded {
-		if !inSwitch[kind] {
-			t.Errorf("excluded kind %q (%s) is no longer in buildInProcSource; drop it from the exclusion list", kind, why)
+		if !reflect.DeepEqual(conn.Descriptor(), target.Descriptor()) {
+			t.Errorf("alias %q differs from canonical kind %q", alias, canonical)
 		}
-		if offered[kind] {
-			t.Errorf("kind %q is both excluded and offered; resolve the contradiction", kind)
+		if conn == target {
+			t.Errorf("alias %q and canonical kind %q share a source instance", alias, canonical)
+		}
+		if offered[alias] || !offered[canonical] {
+			t.Errorf("alias %q must be offered only as canonical kind %q", alias, canonical)
 		}
 	}
 }

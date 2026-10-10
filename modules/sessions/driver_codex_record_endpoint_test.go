@@ -52,7 +52,7 @@ func TestCodexLaunchRefusesInheritedProviderAuthButKeepsOwnLogin(t *testing.T) {
 				if err := os.WriteFile(path, []byte(config), 0o600); err != nil {
 					t.Fatal(err)
 				}
-				m, p := &Module{}, CreateRunParams{PermissionMode: permModeBypass, ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverCodex}}
+				m, p := &Module{Dependencies: &Dependencies{}}, CreateRunParams{PermissionMode: permModeBypass, ProviderHome: &ProviderHomeSnapshot{Driver: providerDriverCodex}}
 				spec := LaunchSpec{BoundProvider: bound, Dir: cwd, Env: []EnvVar{{Name: envCodexHome, Value: home}}}
 				var refused *runErr
 				err := m.prepareCodexSandbox(t.Context(), &p, &spec)

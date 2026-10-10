@@ -39,47 +39,54 @@ export function PendingRestores() {
   const [approve, setApprove] = useState<PendingRestore | null>(null)
 
   const items = pendingQ.data?.items ?? []
-  if (items.length === 0) return null
 
   return (
-    <div className="mb-5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
-      <div className="mb-3 flex items-center gap-2">
-        <UserCheck className="size-4 text-amber-500" />
-        <h3 className="text-body font-medium">{t('pending.title')}</h3>
-      </div>
-      <ul className="flex flex-col gap-2">
-        {items.map((p) => (
-          <li
-            key={p.request_id}
-            className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2 text-body"
-          >
-            <div className="flex flex-col">
-              <span>
-                {/* Show the ACCOUNT, falling back to the credential actor for a
-                    request recorded before the server stored one. The approver is
-                    being asked "are you someone else?", and "token:<id>" does not
-                    let them answer that. */}
-                {t('pending.requestedByPrefix')}{' '}
-                <strong>{p.initiator_user || p.initiator}</strong> ·{' '}
-                {formatDateTime(p.created_at)}
-              </span>
-              <span className="font-mono text-caption text-muted-foreground">
-                {p.initiator_user ? `${p.initiator} · ` : ''}
-                {p.request_id}
-              </span>
-            </div>
-            <Button variant="primary" size="sm" onClick={() => setApprove(p)}>
-              <UserCheck className="size-4" />
-              {t('pending.approveRestore')}
-            </Button>
-          </li>
-        ))}
-      </ul>
+    <>
+      {items.length > 0 && (
+        <div className="mb-5 rounded-lg border border-amber-500/40 bg-amber-500/5 p-4">
+          <div className="mb-3 flex items-center gap-2">
+            <UserCheck className="size-4 text-amber-500" />
+            <h3 className="text-body font-medium">{t('pending.title')}</h3>
+          </div>
+          <ul className="flex flex-col gap-2">
+            {items.map((p) => (
+              <li
+                key={p.request_id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-surface px-3 py-2 text-body"
+              >
+                <div className="flex flex-col">
+                  <span>
+                    {/* Show the ACCOUNT, falling back to the credential actor for a
+                        request recorded before the server stored one. The approver is
+                        being asked "are you someone else?", and "token:<id>" does not
+                        let them answer that. */}
+                    {t('pending.requestedByPrefix')}{' '}
+                    <strong>{p.initiator_user || p.initiator}</strong> ·{' '}
+                    {formatDateTime(p.created_at)}
+                  </span>
+                  <span className="font-mono text-caption text-muted-foreground">
+                    {p.initiator_user ? `${p.initiator} · ` : ''}
+                    {p.request_id}
+                  </span>
+                </div>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setApprove(p)}
+                >
+                  <UserCheck className="size-4" />
+                  {t('pending.approveRestore')}
+                </Button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       {approve && (
         <ApproveDialog pending={approve} onClose={() => setApprove(null)} />
       )}
-    </div>
+    </>
   )
 }
 
@@ -125,7 +132,7 @@ function ApproveDialog({
           </DialogHeader>
 
           {jobId ? (
-            <JobProgress jobId={jobId} onFinished={() => {}} />
+            <JobProgress jobId={jobId} />
           ) : (
             <Field
               label={t('pending.passphrase')}

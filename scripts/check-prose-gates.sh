@@ -33,7 +33,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 rc=0
 nopude=0
-for t in lint:export lint:inbox lint:spdx lint:actions; do
+for t in lint:export lint:spdx lint:actions; do
 	out="$(timeout 900 task "$t" 2>&1)"
 	trc=$?
 	# ⛔ TRES RESPUESTAS, Y ESTE BUCLE LAS COLAPSABA. La primera version hacia
@@ -53,7 +53,7 @@ for t in lint:export lint:inbox lint:spdx lint:actions; do
 	case "$trc" in
 	0) printf '  %-22s OK\n' "$t" ;;
 	2)
-		printf '  %-22s ⚠ NO HE PODIDO MIRAR\n' "$t"
+		printf '  %-22s ⚠ COULD NOT CHECK\n' "$t"
 		printf '%s\n' "$out" | tail -6 | sed 's/^/      /'
 		nopude=1
 		;;
@@ -66,13 +66,13 @@ for t in lint:export lint:inbox lint:spdx lint:actions; do
 done
 
 if [ "$rc" -ne 0 ]; then
-	echo "check-prose-gates: ⛔ arreglalo ANTES del push; --no-verify no lo mira por ti" >&2
+	echo "check-prose-gates: ⛔ fix before pushing; --no-verify does not perform these checks" >&2
 	exit 1
 fi
 if [ "$nopude" -ne 0 ]; then
-	echo "check-prose-gates: ⚠ NO HE PODIDO MIRAR uno o mas gates — NO hay nada que arreglar," >&2
-	echo "  hay algo que no se ha medido, y eso NO es lo mismo que publicable." >&2
+	echo "check-prose-gates: ⚠ COULD NOT CHECK one or more checks; this is an unverified result," >&2
+	echo "  not a confirmed defect. Unchecked content cannot be reported as ready to publish." >&2
 	exit 2
 fi
-echo "check-prose-gates: OK — la prosa de este arbol es publicable (no cubre docs-honesty ni public-counts)"
+echo "check-prose-gates: OK — this tree's prose is ready to publish (excludes docs-honesty and public-counts)"
 exit 0

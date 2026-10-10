@@ -14,7 +14,7 @@
 //   • SECURITY.md §"Vulnerability remediation SLA" — the CVE SLA + patch-velocity cadence
 //   • .goreleaser.yaml               — checksums/SBOM/cosign signing config
 //   • .github/workflows/release.yml        — keyless cosign + SLSA provenance build
-//   • .github/workflows/release-chart.yml  — OCI Helm chart cosign-by-digest
+//   • Business artifact channel — chart package signature bundle
 //   • .github/workflows/scorecard.yml      — the four OpenSSF Scorecard checks + cron
 //   • .github/workflows/patch-velocity.yml — weekly rebuild + re-scan + SBOM/VEX refresh
 //
@@ -64,27 +64,18 @@ export const RELEASE_ARTIFACTS: ReleaseArtifact[] = [
     status: 'declared',
   },
   {
-    id: 'sbom-archive',
-    name: '*.spdx.sbom.json + *.cdx.sbom.json (per archive)',
-    produced_by: 'goreleaser (syft)',
-    signature_trust: 'signed in-toto SBOM attestation (*.sbom.sigstore.json)',
-    trust_mechanism: 'keyless',
-    status: 'declared',
-    scp: 'SCP-03',
-  },
-  {
     id: 'sbom-image',
-    name: 'image.spdx.sbom.json + image attestation',
+    name: 'olivares.spdx.sbom.json + image attestation',
     produced_by: 'syft + cosign attest',
-    signature_trust: 'SBOM of the container image, attested by digest',
+    signature_trust: 'one SBOM per release, generated from the shipped image and attested to it by digest',
     trust_mechanism: 'keyless',
     status: 'declared',
     scp: 'SCP-03',
   },
   {
     id: 'vex',
-    name: '*.vex.openvex.json + *.vex.sigstore.json',
-    produced_by: 'govulncheck -format openvex + cosign attest[-blob]',
+    name: 'olivares.vex.openvex.json + image attestation',
+    produced_by: 'govulncheck -format openvex + cosign attest',
     signature_trust: 'OpenVEX attestation driven by reachability',
     trust_mechanism: 'keyless',
     status: 'declared',
@@ -111,10 +102,10 @@ export const RELEASE_ARTIFACTS: ReleaseArtifact[] = [
   },
   {
     id: 'chart',
-    name: 'ghcr.io/olivaresai/charts/olivares (OCI)',
-    produced_by: 'helm',
-    signature_trust: 'cosign over the OCI manifest + (optional) GPG .prov',
-    trust_mechanism: 'both',
+    name: 'Business channel: signed chart package',
+    produced_by: 'Business chart package producer (publication unverified)',
+    signature_trust: 'cosign signature bundle for the packaged chart .tgz',
+    trust_mechanism: 'keyless',
     status: 'declared',
     scp: 'SCP-05',
   },
@@ -298,7 +289,7 @@ export const PATCH_VELOCITY: PatchVelocity = {
   scp: 'SCP-11',
 }
 
-/** Air-gap / offline bundle (docs/RELEASE-VERIFICATION.md §"Air-gap / offline"). */
+/** Enterprise offline bundle, built from the private assembled distribution. */
 export const AIRGAP_CONTRACT: AirgapContract = {
   composition: [
     'every image pinned by digest',
@@ -312,18 +303,21 @@ export const AIRGAP_CONTRACT: AirgapContract = {
   mirror_command:
     'scripts/airgap-mirror.sh --bundle olivares-airgap-<v>.tar.gz --registry registry.internal:5000',
   no_phone_home:
-    'The engine makes NO mandatory outbound calls at boot (it binds loopback by default, docs/08 §4), and the key-based verify path needs no Rekor or Fulcio. The one command that reaches us is `olivares upgrade`: it contacts the update channel (`olivares.ai/updates`, or `licenses.olivares.ai` with `--enterprise`) unless `--endpoint` points it at your own mirror.',
+    'The engine makes NO mandatory outbound calls at boot (docs/08 §4), and the key-based verify path needs no Rekor or Fulcio. The one command that reaches us is `olivares upgrade`: it contacts the update channel (`olivares.ai/updates`, or `licenses.olivares.ai` with `--enterprise`) unless `--endpoint` points it at your own mirror.',
   status: 'declared',
 }
 
-/** OCI Helm chart (SCP-05; release-chart.yml + RELEASE-VERIFICATION.md). */
+/** Business chart package contract (SCP-05).
+ * Publication remains unverified until the release act completes. */
 export const HELM_CHART_CONTRACT: HelmChartContract = {
-  oci_coordinate: 'oci://ghcr.io/olivaresai/charts/olivares',
-  cosign_manifest:
-    'cosign signature over the pushed OCI manifest, BY DIGEST (keyless OIDC → Fulcio/Rekor in CI)',
+  distribution:
+    'Business channel: signed chart package (publication unverified)',
+  cosign_package:
+    'cosign signature bundle for the packaged chart .tgz (keyless OIDC → Fulcio/Rekor)',
   gpg_prov:
-    'Helm-native GPG .prov — the maintainer local-signing path (deploy/helm/README.md)',
-  verify_command: 'helm install --verify oci://… (per deploy/helm/README.md)',
+    'Helm-native GPG .prov — optional local signing for the Enterprise offline bundle; separate from Business package signing',
+  verify_command:
+    'cosign verify-blob --bundle olivares-<chart-version>.tgz.sigstore.json --certificate-identity <trusted-chart-publisher-identity> --certificate-oidc-issuer https://token.actions.githubusercontent.com olivares-<chart-version>.tgz (use the trusted identity supplied by the Business artifact channel)',
   status: 'declared',
   scp: 'SCP-05',
 }

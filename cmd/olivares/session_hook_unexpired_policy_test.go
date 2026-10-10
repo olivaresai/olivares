@@ -19,6 +19,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/governance"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 // An authored quorum does not need an expiry. The actual hook and managed run
@@ -30,15 +31,14 @@ func TestSessionClaudeApprovalWithoutPolicyExpiryHasBoundedLiveWait(t *testing.T
 			tenant := model.TenantID(h.tenantA)
 			m := h.set.sessions
 			sessions.WithRunner(approvalProjectionRunner{})(m)
-			m.EnableProfiledLaunches()
 			m.UseExecutionEnvironmentRef("unexpired-policy-test")
 			credentials := newSessionHookCredentials(h.authr, h.st, m, h.set.gov)
 			var token string
-			m.UseLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
+			sessions.WithLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
 				var err error
 				token, err = credentials.mint(ctx, tenant, intent)
 				return sessions.LaunchDecision{Allowed: err == nil}, err
-			}))
+			}))(m)
 			var profile struct {
 				Ref string `json:"profile_ref"`
 			}
@@ -55,10 +55,10 @@ func TestSessionClaudeApprovalWithoutPolicyExpiryHasBoundedLiveWait(t *testing.T
 			service := h.set.gov.EngineApprovals()
 			h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 			h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-			createSessionReviewPolicy(t, h, hookActionCapability, "claude.tool")
+			createSessionReviewPolicy(t, h, hookpep.ActionCapability, "claude.tool")
 			registered := make(chan time.Time, 1)
-			d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow"}, authr: credentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: service, store: h.st, clock: time.Now, log: discardLog()}
-			d.approvalWait = func(ctx context.Context, p auth.Principal, ref string, expires time.Time) (func(), error) {
+			d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, Store: h.st, Clock: time.Now, Log: discardLog()})
+			d.ApprovalWait = func(ctx context.Context, p auth.Principal, ref string, expires time.Time) (func(), error) {
 				end, err := m.BeginApprovalWait(ctx, p, ref, expires)
 				if err == nil {
 					registered <- expires
@@ -89,7 +89,7 @@ func TestSessionClaudeApprovalWithoutPolicyExpiryHasBoundedLiveWait(t *testing.T
 			if liveUntil.IsZero() || liveUntil.After(deadline) {
 				t.Fatal("live wait is not bounded by the hook deadline")
 			}
-			items, _, err := service.List(t.Context(), tenant, hookActionCapability, "pending", "")
+			items, _, err := service.List(t.Context(), tenant, hookpep.ActionCapability, "pending", "")
 			if err != nil || len(items) != 1 {
 				t.Fatalf("pending=%d err=%v", len(items), err)
 			}

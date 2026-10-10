@@ -52,6 +52,7 @@ type incomingHandoffHTTPOffer struct {
 func bootIncomingHandoffHTTPEstate(
 	t *testing.T,
 	backing communicationHTTPTestStore,
+	preparePump ...func(*workOutboxPump),
 ) incomingHandoffHTTPEstate {
 	t.Helper()
 	eng := bootActivatedCommunicationHTTPTestEngine(t, backing)
@@ -106,7 +107,7 @@ func bootIncomingHandoffHTTPEstate(
 	if err := eng.Close(); err != nil {
 		t.Fatalf("close bootstrapped estate: %v", err)
 	}
-	eng = bootCommunicationHTTPTestEngine(t, backing)
+	eng = bootCommunicationHTTPTestEngine(t, backing, preparePump...)
 	t.Cleanup(func() { _ = eng.Close() })
 	if readiness, err := eng.sessionsMod.EvaluateCommunicationReadiness(
 		context.Background(),

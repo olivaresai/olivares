@@ -6,6 +6,12 @@ description: >-
   トランスポートごとの受信側の上限、そして「射影」がスペック完全なエンベロープでない
   2 か所について。
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
+
+:::note[Business]
+監査エクスポート（`GET /v1/audit/export`、`olivares audit export`）、ディレクトリアーカイブ、外部アーカイブの検証には Business が必要です。Community では署名付き台帳、`olivares audit verify`、`olivares dr backup` を引き続き利用できます。エクスポートは HTTP 501 または終了コード 9 を返します。監査転送および監査セグメントを含む DDIL 転送にも Business が必要です。
+:::
 
 このページは**送出コントラクト**です。コントロールプレーンから何が、どの方言で、どの
 トランスポートで出ていき、受信側がそれをどう扱うのかを定めます。ArcSight のルール、
@@ -51,14 +57,14 @@ QRadar の DSM、Sentinel の DCR、あるいは code scanning へのアップ�
 |---|---|---|
 | 台帳エクスポート（`GET /v1/audit/export?format=…`） | `cef\|leef\|syslog\|otlp\|otlp_envelope\|otlp_log_record\|ocsf` | `cef` |
 | イベンティングシンク（push サブスクリプションの `sink_format`） | `ocsf\|cef\|leef\|syslog\|otlp\|otlp_envelope\|json` | `ocsf` |
-| 通知コネクター（`filelog`、`splunkhec`、`s3archive`、`siem`） | `json\|cef\|leef\|syslog\|otlp\|otlp_envelope\|ocsf\|asim` | `json` |
+| 通知コネクター（`filelog`、`splunkhec`、`s3archive` (Business: Regulated Operations)、`siem`） | `json\|cef\|leef\|syslog\|otlp\|otlp_envelope\|ocsf\|asim` | `json` |
 | syslog コネクター | `syslog\|cef\|leef` | `syslog` |
 
 台帳エクスポートには生 JSON のパススルーがありません — その JSON 形はまさに上記の
 OTLP 形です。`json` の届き方は場所ごとに異なります。イベンティングシンクは捕捉した
 イベントエンベロープを生のまま（方言変換なしの構造化パススルーとして）投稿しますが、
 通知コネクターは最小限の通知プロジェクションだけをレンダリングします — 表示用の
-フィールドであって、元のペイロードではありません。`asim` は `s3archive` を含む
+フィールドであって、元のペイロードではありません。`asim` は `s3archive` (Business: Regulated Operations) を含む
 4 つの通知コネクターすべてが受け付けます。場所ごとのリストにない形式は拒否されます。
 作成時や設定時の打ち間違いには、その場所が受け付けるトークンを明示するエラーが返り、
 破損した保存値はエンコード時に（リストではなく破損した綴りだけを示して）拒否され

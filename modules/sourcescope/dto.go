@@ -6,7 +6,6 @@ package sourcescope
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"strconv"
 
@@ -18,26 +17,22 @@ import (
 // listCap bounds an internal List page; it matches the store's own maximum.
 const listCap = 1000
 
+// idChunk bounds how many ids one batched IN query binds — well under
+// PostgreSQL's 65,535-parameter limit and under listCap, so one List per
+// chunk always answers the whole chunk (the same bound core/auth's
+// groupsByIDs uses for grant groups).
+const idChunk = 500
+
 // listResponse is the paginated envelope every list endpoint returns: the ONE
 // engine-wide shape (items + opaque cursor + has_more), aliased rather than
 // re-declared so an empty page can never serialize as `{"items":null}` here
 // while it serializes as `{"items":[]}` next door (core/api/listresponse.go).
 type listResponse[T any] = api.ListResponse[T]
 
-// writeJSON writes v as a JSON response. Modules cannot reach the core API's
-// unexported render helper, so each module owns a tiny equivalent.
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	if v != nil {
-		_ = json.NewEncoder(w).Encode(v)
-	}
-}
+var writeJSON = api.WriteJSON
 
 // errorBody is the small error envelope module endpoints return.
-func errorBody(msg string) map[string]any {
-	return map[string]any{"error": map[string]string{"message": msg}}
-}
+var errorBody = api.ModuleErrorBody
 
 // writeStoreError maps a store error to an HTTP status. THE MAPPING ITSELF IS NOT
 // HERE: it is api.StoreErrorStatus (core/api/moduleerrors.go), which derives the
@@ -50,8 +45,8 @@ func errorBody(msg string) map[string]any {
 // tenant_suspended, tenant_not_in_service, not_leader and residency_violation —
 // were absent from all but two of the thirty-six copies, so the same refusal was
 // answered 423/503/403 by a core route and 500 "internal error" by every module
-// route. The per-arm reasoning (ADR-0024 Q2 for the audit spool/B-03 for
-// workspace confinement for the standby) now lives beside statusFor, once.
+// route. The per-arm reasoning (audit-spool policy for audit spool capacity and
+// standby workspace confinement) now lives beside statusFor, once.
 func writeStoreError(w http.ResponseWriter, err error) {
 	if err == nil {
 		writeJSON(w, http.StatusOK, nil)
@@ -84,7 +79,7 @@ func eq(col, val string) model.Filter {
 // cannot exhaust memory. It returns false (and writes a 400) on failure.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 1 << 20}); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid JSON body"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid JSON body")))
 		return false
 	}
 	return true

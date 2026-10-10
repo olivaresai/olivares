@@ -22,13 +22,14 @@
     "edition": "Edition & Module",
     "about": "Info",
     "sections": "Einstellungsbereiche",
-    "signing": "Berichtssignierung"
+    "signing": "Berichtssignierung",
+    "tracing": "Tracing"
   },
   "general": {
     "title": "Allgemein",
     "scope": "Ihre eigenen Einstellungen. Sie gelten in jedem Arbeitsbereich dieser Installation.",
     "theme": "Thema",
-    "themeHint": "Dunkel, außer Sie wählen Hell oder folgen dem System.",
+    "themeHint": "Folgt dem System, außer Sie wählen Hell oder Dunkel.",
     "density": "Dichte",
     "densityHint": "Kompakt zeigt mehr Zeilen; bequem lässt sich leichter lesen.",
     "language": "Sprache",
@@ -46,8 +47,7 @@
   },
   "unavailable": {
     "notifications": "Benachrichtigungen werden in dieser Installation noch nicht gespeichert.",
-    "sessionDefaults": "Sitzungsstandards werden in dieser Installation noch nicht gespeichert.",
-    "signIn": "Die Anmelderichtlinie wird auf diesem Bildschirm noch nicht bearbeitet."
+    "sessionDefaults": "Sitzungsstandards werden in dieser Installation noch nicht gespeichert."
   },
   "keyboard": {
     "title": "Tastatur",
@@ -55,37 +55,38 @@
   },
   "edition": {
     "title": "Edition & Module",
-    "scope": "Die Edition dieses Builds, die Module, die er ausführt, und was ein Business-Build hinzufügt.",
+    "scope": "Die Edition dieses Builds, die Module, die er ausführt, und was Business hinzufügt.",
     "label": "Edition",
     "unknown": "Von dieser Engine nicht gemeldet",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
-    "businessAdds": "Ein Business-Build fügt hinzu",
+    "businessAdds": "Business fügt hinzu",
     "adds": {
       "loginEnforcement": "Anmeldedurchsetzung: SSO erzwingen und eine Netzwerk-Zulassungsliste",
       "identityProviders": "Mehrere Identitätsanbieter, pro Organisation und nach E-Mail-Domain geroutet",
       "groupMapping": "Verzeichnisgruppen, die bei der Anmeldung Rollen zugeordnet werden",
       "regulatory": "Regulatorischer Betrieb: DORA-Register, NIS-2-Vorfallklassifizierung, OSCAL-Profile, US- und Branchenpakete sowie kontinuierliche Kontrollüberwachung",
-      "reports": "Unternehmensberichte und geplante Berichte",
+      "reports": "Business-Berichte und geplante Berichte",
       "toolPins": "Tool-Pins"
     }
   },
   "about": {
     "title": "Info",
-    "scope": "Diese Installation und der angemeldete Prinzipal.",
+    "scope": "Diese Installation und die angemeldete Person.",
     "version": "Version",
     "engine": "Speicher-Engine",
     "edition": "Edition",
-    "community": "Community Edition (kostenlos)",
+    "community": "Community-Edition — keine Lizenz erforderlich",
     "license": "Lizenzstatus",
     "licensee": "Lizenziert für",
     "none": "Keine",
     "displayName": "Anzeigename",
-    "actor": "Prinzipal",
+    "actor": "Identitäts-ID",
     "role": "Rolle in dieser Organisation",
-    "memberships": "Organisationen"
+    "memberships": "Organisationen",
+    "email": "E-Mail"
   },
   "stopConfirm": {
     "title": "Diese Sitzung beenden?",
@@ -94,11 +95,18 @@
   },
   "modules": {
     "title": "Module",
-    "description": "Schalten Sie die Teile von Olivares ein oder aus, die diese Installation ausführt. Anwenden startet die Engine einmal neu.",
+    "description": "Schalten Sie die Teile von Olivares ein oder aus, die diese Installation ausführt. Anwenden startet die Engine einmal neu, und der Neustart beendet die laufenden Sitzungen.",
     "apply_one": "{{count}} Änderung anwenden",
     "apply_other": "{{count}} Änderungen anwenden",
     "applied": "Modulauswahl gespeichert.",
     "restarting": "Engine wird neu gestartet…",
+    "restartWarning": {
+      "title": "Engine neu starten?",
+      "stop_one": "{{count}} laufende Sitzung wird beendet. Sie kann nach dem Neustart fortgesetzt werden.",
+      "stop_other": "{{count}} laufende Sitzungen werden beendet. Jede kann nach dem Neustart fortgesetzt werden.",
+      "unknown": "Alle laufenden Sitzungen werden beendet. Jede kann nach dem Neustart fortgesetzt werden.",
+      "confirm": "Neu starten und anwenden"
+    },
     "pending_one": "{{count}} Änderung wartet auf Anwenden.",
     "pending_other": "{{count}} Änderungen warten auf Anwenden.",
     "unavailable": "Diese Engine erlaubt keine Modulauswahl.",
@@ -186,6 +194,8 @@
       "sourcescope": "Welche Quellen Agenten lesen dürfen.",
       "voice": "Sprachagenten und Anrufe."
     },
+    "noChanges": "Keine Änderungen anzuwenden. Schalte zuerst ein Modul ein oder aus.",
+    "saving": "Modulauswahl wird gespeichert…",
     "applyNone": "Anwenden",
     "whenOffDefault": "Seine Daten bleiben erhalten, werden aber nicht genutzt, solange das Modul aus ist.",
     "whenOff": {
@@ -205,7 +215,13 @@
       "claude-policy": "Verwaltete Claude-Code-Einstellungen werden nicht mehr geprüft."
     },
     "turnOn": "{{name}} einschalten",
-    "activatedBy": "Aktiviert durch {{addons}}. Es bleibt an, solange dieses Add-on aktiv ist."
+    "activatedBy": "Aktiviert durch {{addons}}. Es bleibt an, solange dieses Add-on aktiv ist.",
+    "turnOnPlain": "Einschalten",
+    "alsoTurnsOn": "Wenn Sie dies einschalten, werden auch {{names}} eingeschaltet und die Engine startet neu.",
+    "openEdition": "„Edition & Module“ öffnen",
+    "askAdmin": "Bitten Sie eine Administratorin oder einen Administrator, es einzuschalten.",
+    "notSetUp": "Es ist auf dieser Installation noch nicht eingerichtet.",
+    "stillRestarting": "Neustart dauert noch an. Laden Sie die Seite neu."
   },
   "signing": {
     "title": "Berichtssignierung",
@@ -234,5 +250,37 @@
     "turnOn": "Signierung einschalten",
     "turnOff": "Signierung ausschalten",
     "offKeepsKey": "Beim Ausschalten bleibt der Schlüssel erhalten, sodass früher signierte Pakete weiter prüfbar sind."
+  },
+  "tracing": {
+    "description": "Traces und Metriken an Ihren Collector senden. Änderungen werden ohne Neustart angewendet.",
+    "enabled": "Tracing aktivieren",
+    "endpoint": "Collector-Adresse",
+    "protocol": "Protokoll",
+    "insecure": "Klartext in einem vertrauenswürdigen Netzwerk erlauben",
+    "sampleRatio": "Abtastrate (0–1)",
+    "serviceName": "Dienstname",
+    "compat": "Ältere GenAI-Attribute einschließen",
+    "overrides": "Vorrangige Umgebungsvariablen: {{names}}",
+    "active": "Tracing ist aktiviert.",
+    "inactive": "Tracing ist deaktiviert.",
+    "apply": "Anwenden",
+    "saved": "Tracing-Einstellungen gespeichert.",
+    "businessRequired": "SIEM-Versand und externer Telemetrieexport benötigen Business. Einstellungen bleiben erhalten; Community sendet die Daten nicht."
+  },
+  "signIn": {
+    "methods": "Anmeldemethoden",
+    "password": "Passwort",
+    "sso": "Single Sign-on: {{providers}}",
+    "noSso": "Auf der Anmeldeseite ist kein Single-Sign-on-Anbieter verfügbar.",
+    "manageSso": "Identitätsanbieter verwalten",
+    "session": "Sitzungsdauer",
+    "sessionHint": "Die Engine legt diese Dauer bei der Anmeldung fest und erneuert sie bei einer Sitzungsaktualisierung. Sie ist nicht konfigurierbar.",
+    "passwordAvailable": "Die lokale Anmeldung mit Passwort ist verfügbar.",
+    "passwordBlocked": "Single Sign-on ist erforderlich. Die lokale Passwortanmeldung ist gesperrt.",
+    "ssoNotEnforced": "Single Sign-on ist angefordert, aber dieser Build setzt die Richtlinie nicht durch. Prüfen Sie vor der Abmeldung die Einstellungen des Identitätsanbieters.",
+    "passwordManaged": "Der Administrator Ihrer Organisation verwaltet die Passwortanmeldung.",
+    "hours_one": "{{count}} Stunde",
+    "hours_other": "{{count}} Stunden",
+    "ssoInactive": "Single Sign-on ist angefordert, aber der Identitätsanbieter ist inaktiv. Diese Anforderung blockiert die Passwortanmeldung nicht."
   }
 }

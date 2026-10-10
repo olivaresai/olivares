@@ -17,15 +17,16 @@ ChatGPT, сама по себе не даёт доступа к enterprise API.
 сеанс, используйте [Установить CLI Codex](/how-to/install-codex-cli/). Путь
 эксплуатации —
 [Управлять сеансом провайдера](/how-to/operate-provider-sessions/)
-(`OLIVARES_SESSION_RUNTIME_CODEX_BIN` или квитанция управляемой установки, плюс
-профиль провайдера).
+(`OLIVARES_SESSION_RUNTIME_CODEX_BIN` для явного выбора; иначе новейшая проверенная управляемая
+установка, затем `codex` из `PATH` движка, плюс профиль провайдера).
 
 ## Добавление Codex
 
 ### Предварительные требования
 
-- Enterprise-тенант Olivares AI и учётная запись superadmin с повышением AAL3 для операций с
-  реестром.
+- Enterprise-тенант Olivares AI и учётная запись superadmin. Операции с реестром
+  следуют политике дополнительной административной аутентификации (`admin_step_up`,
+  по умолчанию `none`).
 - Для enterprise-ingestion — ключ API платформы или access token workspace с нужными read-scope,
   а также `workspace_id`. Вход в Codex CLI через ChatGPT не предоставляет коннектору учётные данные.
 - Административный доступ к системному уровню хоста для распространения

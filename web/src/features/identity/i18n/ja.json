@@ -30,15 +30,14 @@
       "insecureTitle": "このページは安全なコンテキストではありません。",
       "insecureBody": "ブラウザーは安全なコンテキストでのみパスキー API を実行するため、ここではパスキーを登録も使用もできません。HTTPS で、またはローカル ホスト上でこのコンソールにアクセスしてください。",
       "unsupportedTitle": "このブラウザーはパスキーに対応していません。",
-      "unsupportedBody": "このブラウザーは WebAuthn API を公開していないため、ここではパスキーを登録も使用もできません。パスキー対応のブラウザー、または提示された PIV/CAC カードを使用してください。",
+      "unsupportedBody": "このブラウザーは WebAuthn API を公開していないため、ここではパスキーを登録も使用もできません。パスキー対応のブラウザーを使用してください。",
       "sameDevice": "このデバイスでは、同じコンソールが次のアドレスでも応答します:"
     },
     "stepUpTitle": "ステップアップ認証が必要です",
     "stepUpBody": "{{action}} には {{required}} が必要です。現在のセッションは {{current}} です。デバイスのパスキーまたはセキュリティキーを使用して続行してください。",
     "authenticate": "パスキーで認証する",
-    "authenticatePiv": "PIV/CAC カードで認証",
     "authenticating": "認証器を待機しています…",
-    "seamWhat": "特権ログインの認証手続き（WebAuthn ステップアップ）",
+    "seamWhat": "WebAuthn ステップアップによる特権サインイン",
     "unsupported": "このブラウザは WebAuthn をサポートしていません。特権操作にはフィッシング耐性のある認証器をサポートするプラットフォームが必要です。",
     "failed": "ステップアップが完了しませんでした。操作は拒否されたままです。",
     "relyingPartyUnusable": "この配備ではパスキーを利用できません。コンソールが提供されているアドレスに対して、エンジンが使用できるリライング パーティーを持っていません。運用担当者が有効なリライング パーティー ドメイン（ドットを含むホスト名、または適切な場合は localhost）を設定し、宣言されたその安全なオリジンでコンソールにアクセスし、変更後にエンジンを再起動する必要があります。別のアドレスで再試行するだけでは解決しません。",
@@ -60,10 +59,10 @@
       "aal3": "AAL3（フィッシング耐性）"
     },
     "unenrolled": "このアカウントにはパスキーがまだ登録されていません。特権ログインタブでデバイスのパスキーまたはセキュリティキーを登録してから認証してください。",
-    "unenrolledInline": "このアカウントにはパスキーがまだ登録されていません。以下で登録するか、提示済みの PIV/CAC カードを使用してください。",
+    "unenrolledInline": "このアカウントにはパスキーがまだ登録されていません。以下で登録してください。",
     "enrollHint": "このデバイスまたはセキュリティキーに最初のパスキーを登録します。登録だけではセッションの認証も保留中の操作の完了も行われません。",
     "passkeyName": "パスキー名",
-    "enrollUnsupported": "このブラウザーではパスキーを登録できません。対応ブラウザーまたは提示済みの PIV/CAC カードを使用してください。",
+    "enrollUnsupported": "このブラウザーではパスキーを登録できません。対応ブラウザーを使用してください。",
     "registered": "パスキーを登録しました。認証してこのセッションを確認し、保留中の操作を見直して完了してください。",
     "registrationUnknown": "登録結果を確認できませんでした。パスキーは保存されている可能性があります。「認証」で確認してください。登録は自動で再送信されません。",
     "authenticationUnknown": "認証結果を確認できませんでした。セッションは既に昇格している可能性があります。再試行する前にセッションを確認してください。",
@@ -90,7 +89,6 @@
       "pkce": "PKCE（RFC 7636）",
       "oauthSecurityBcp": "OAuth 2.0 Security BCP（RFC 9700）",
       "webauthn": "NIST SP 800-63B-4（認証器の保証レベル）",
-      "piv": "FIPS 201-3（PIV）",
       "certManager": "cert-manager（CNCF）",
       "pqc": "NIST SP 800-57 Part 1 r6（鍵管理）",
       "wifReference": "Anthropic WIF リファレンス",
@@ -295,9 +293,9 @@
       "title": "ライフサイクル操作",
       "reason": "理由",
       "critical": {
-        "twoAccountsAal3": "この重大操作を実行するには、異なる 2 つのユーザーアカウントによる承認が必要です。エンジンが強制するのは異なる「アカウント」であり、2 つのアカウントが 2 人の別人であることは証明できません。 これは現在のリスク階層に従い、承認ポリシーによって引き下げられる場合があります。",
-        "breakGlassPossible": "異なる 2 つのユーザーアカウントが承認するまで何も実行されません。有効なブレークグラス緊急付与があれば代わりに認可できます。その使用は記録され、事後にレビューされます。 これは現在のリスク階層に従い、承認ポリシーによって引き下げられる場合があります。",
-        "noBreakGlass": "異なる 2 つのユーザーアカウントが承認するまで何も実行されません。これにブレークグラスは使えません。2 人目の承認者を迂回する緊急経路は存在しません。 これは現在のリスク階層に従い、承認ポリシーによって引き下げられる場合があります。"
+        "twoAccountsAal3": "この重大操作を実行するには、異なる 2 つのユーザーアカウントによる承認が必要です。エンジンが強制するのは異なる「アカウント」であり、2 つのアカウントが 2 人の別人であることは証明できません。 Business ではポリシーで現在のリスク階層を引き下げられます。Community は既定の最低承認要件を維持します。",
+        "breakGlassPossible": "異なる 2 つのユーザーアカウントが承認するまで何も実行されません。有効なブレークグラス緊急付与があれば代わりに認可できます。その使用は記録され、事後にレビューされます。 Business ではポリシーで現在のリスク階層を引き下げられます。Community は既定の最低承認要件を維持します。",
+        "noBreakGlass": "異なる 2 つのユーザーアカウントが承認するまで何も実行されません。これにブレークグラスは使えません。2 人目の承認者を迂回する緊急経路は存在しません。 Business ではポリシーで現在のリスク階層を引き下げられます。Community は既定の最低承認要件を維持します。"
       },
       "ownership": {
         "button": "責任者を割り当てる",
@@ -348,7 +346,7 @@
         "button": "確定",
         "title": "廃止を確定",
         "description": "復元可能な状態で削除済みの NHI を恒久的に失効させます。",
-        "irreversible": "確定は取り消せません。ここでは break-glass は適用されず、2 つ目の異なるユーザーアカウントによる承認と AAL3 の要件を回避できません。",
+        "irreversible": "確定は取り消せません。ここでは break-glass は適用されず、2 つ目の異なるユーザーアカウントによる承認の要件を回避できません。",
         "confirm": "恒久的に確定"
       },
       "restore": {
@@ -424,7 +422,7 @@
     "noPassthrough": "トークンのパススルーは設計上禁止されています。パネルは観測とイントロスペクションを行うものであり、MCP トークンを転送したり再生したりすることは決してありません。"
   },
   "wif": {
-    "gatedNote": "Workload Identity Federation グラフは特権的で監査対象のビューであり、ハードウェアステップアップが必要です。",
+    "gatedNote": "Workload Identity Federation グラフは特権的で監査対象のビューです。",
     "consoleOnly": "Workload Identity Federation のオブジェクト（issuer、ルール、サービスアカウント）は Anthropic Console でのみ管理されます。このパネルはそれらを可視化しリント検査するものであり、作成や編集は決して行いません。",
     "openConsole": "Anthropic Console で開く",
     "graphTitle": "WIF オブジェクトグラフ",
@@ -541,17 +539,6 @@
     "registered": "パスキーを登録しました。",
     "unsupported": "このブラウザは WebAuthn をサポートしていません。",
     "registerFailed": "登録が完了しませんでした。",
-    "pivTitle": "PIV / CAC（スマートカード）",
-    "pivDescription": "cert-to-role マッピングと OCSP 失効を伴う X.509 クライアント証明書ログインで、mTLS 接続から読み取られます。",
-    "pivSeamWhat": "PIV/CAC クライアント証明書の状態",
-    "pivPresented": "クライアント証明書",
-    "pivAbsent": "提示されていません",
-    "pivSubject": "サブジェクト",
-    "pivRole": "マッピングされたロール",
-    "pivOcsp": "OCSP",
-    "pivNote": "チェーンと OCSP の検証はバックエンドで実行されます。パネルはその結果を反映します。",
-    "pivNotConfigured": "このデプロイでは PIV/CAC スマートカードによるサインインが構成されていないため、ここではカードを使用できません。利用可能にするには、管理者がエンジンで構成する必要があります。",
-    "pivSetupGuide": "オペレーター向けガイド: PIV/CAC サインインの構成",
     "ocsp": {
       "good": "正常",
       "revoked": "失効済み",
@@ -567,9 +554,9 @@
       "namePlaceholder": "例: YubiKey 5C, MacBook Touch ID",
       "defaultName": "{{device}} のパスキー",
       "defaultNameNoDevice": "パスキー",
-      "registering": "セレモニーを実行中…",
+      "registering": "パスキーを登録中…",
       "registered": "パスキーを登録しました。",
-      "registerFailed": "登録に失敗しました。ブラウザが WebAuthn に対応していないか、セレモニーがキャンセルされた可能性があります。",
+      "registerFailed": "パスキーの登録に失敗しました。ブラウザが WebAuthn に対応していないか、登録がキャンセルされた可能性があります。",
       "unsupported": "このブラウザは WebAuthn/FIDO2 をサポートしていません。",
       "none": "パスキーが登録されていません",
       "noneHint": "フィッシング耐性のあるハードウェアバインドログイン（AAL3）を有効にするにはパスキーを登録してください。",
@@ -585,8 +572,7 @@
       "deleteTitle": "パスキーを削除",
       "deleteBody": "パスキー \"{{name}}\" を削除しますか？この操作は取り消せません。AAL3 アクセスを維持するには別の登録済みパスキーが必要です。",
       "deleted": "パスキーを削除しました。",
-      "lastCredential": "唯一のパスキーは削除できません。先に別のパスキーを登録してください。",
-      "stepUpRequired": "パスキーの削除にはアクティブな AAL3 セッションが必要です。先にステップアップ認証を完了してください。"
+      "lastCredential": "唯一のパスキーは削除できません。先に別のパスキーを登録してください。"
     }
   },
   "empty": {
@@ -601,7 +587,7 @@
   },
   "totp": {
     "title": "TOTP 第二要素",
-    "description": "時間ベースのワンタイムパスワード（RFC 6238）をローカルアカウントの追加要素として設定します。パスキーや PIV を置き換えるものではなく、それらに加わるものです。",
+    "description": "時間ベースのワンタイムパスワード（RFC 6238）をローカルアカウントの追加要素として設定します。パスキー を置き換えるものではなく、それらに加わるものです。",
     "state": "要素",
     "enrolled": "登録済み",
     "notEnrolled": "未登録",
@@ -621,7 +607,7 @@
     "codeLabel": "アプリのコード",
     "recoveryWarning": "これらのリカバリーコードは一度だけ表示されます。今すぐ保存してください。端末を失くした際、各コードは 1 回だけ使用できます。",
     "savedCodes": "保存しました",
-    "stepUpRequired": "この操作には新しい AAL3 セッションが必要です。先にパスキーまたは PIV のステップアップを完了してください。",
+    "stepUpRequired": "この操作には、このデプロイが求める管理操作の追加確認が必要です。先に完了してください。",
     "sealerUnavailable": "このデプロイでは TOTP シードシーラーが利用できないため、運用者が修復するまで登録は無効です。",
     "loadFailed": "要素の状態を読み込めませんでした。",
     "policyTitle": "管理者に TOTP を必須化",
@@ -635,19 +621,19 @@
     "policyAal3Note": "このポリシーの変更には AAL3 セッションが必要です。因子のないアカウントは次回ログイン時に登録へ案内され、締め出されることはありません。"
   },
   "stepUpPolicy": {
-    "title": "Extra check for administrative actions",
-    "description": "Off by default. Turn it on to ask for an authenticator code or a passkey before administrative changes such as users, identity providers, secrets or tool installs.",
+    "title": "管理操作の追加確認",
+    "description": "既定ではオフです。オンにすると、ユーザー、ID プロバイダー、シークレット、ツールのインストールなどの管理変更の前に、認証コードまたはパスキーを求めます。",
     "options": {
-      "none": "Off",
-      "totp": "Authenticator code",
-      "passkey": "Passkey"
+      "none": "オフ",
+      "totp": "認証コード",
+      "passkey": "パスキー"
     },
-    "saved": "Saved.",
-    "loadFailed": "This setting could not be read. Refresh the page to try again.",
-    "note": "To require a passkey, sign in with your passkey here first. To require an authenticator code, sign in with your code first. You can always turn it off. A change takes effect within a few seconds on every server.",
+    "saved": "保存しました。",
+    "loadFailed": "この設定を読み込めませんでした。ページを再読み込みしてもう一度お試しください。",
+    "note": "パスキーを必須にするには、まずここでパスキーでサインインしてください。認証コードを必須にするには、まずコードでサインインしてください。オフにする、または弱めるには、まず現在の確認を済ませてください。変更は数秒以内にすべてのサーバーで有効になります。",
     "refused": {
-      "passkey_not_enrolled": "Add a passkey to your account first (Identity > Passkeys), then turn this on.",
-      "totp_sign_in_required": "Set up an authenticator app and sign in with its code first, then turn this on."
+      "passkey_not_enrolled": "先にアカウントにパスキーを追加してから (アイデンティティとNHI > パスキー)、オンにしてください。",
+      "totp_sign_in_required": "先に認証アプリを設定し、そのコードでサインインしてから、オンにしてください。"
     }
   }
 }

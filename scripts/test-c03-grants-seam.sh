@@ -22,6 +22,7 @@ stage() {
   cp "$ROOT/cmd/olivares/license_holder.go" \
      "$ROOT/cmd/olivares/boot.go" \
      "$ROOT/cmd/olivares/wire_noenterprise.go" \
+     "$ROOT/cmd/olivares/edition_ports.go" \
      "$ROOT/cmd/olivares/seatcapwire.go" \
      "$TMP/tree/cmd/olivares/"
 }
@@ -43,24 +44,36 @@ if run; then bad "grants() dropped stayed CLEAN"
 else ok "mutant (drop grants) is killed"; fi
 
 stage
-sed -i 's/bindEnterpriseEntitlement(licHolder\.grants, licHolder)/bindEnterpriseEntitlement(nil, licHolder)/' \
+sed -i 's/thisEdition\.seatPolicy(licHolder, crlViewFromDataDir(b.cfg.DataDir))/thisEdition.seatPolicy(nil, crlViewFromDataDir(b.cfg.DataDir))/' \
   "$TMP/tree/cmd/olivares/boot.go"
 if run; then bad "boot unbound stayed CLEAN"
-else ok "mutant (boot does not bind grants) is killed"; fi
+else ok "mutant (boot does not bind the holder) is killed"; fi
 
-for replacement in 'otherHolder.grants, licHolder' 'licHolder.grants, nil' 'licHolder.grants, otherHolder'; do
+for replacement in 'otherHolder, crlViewFromDataDir(b.cfg.DataDir)' 'licHolder, nil' 'licHolder, crlViewFromDataDir(otherDir)'; do
   stage
-  sed -i "s/bindEnterpriseEntitlement(licHolder\\.grants, licHolder)/bindEnterpriseEntitlement($replacement)/" \
+  sed -i "s/thisEdition\\.seatPolicy(licHolder, crlViewFromDataDir(b.cfg.DataDir))/thisEdition.seatPolicy($replacement)/" \
     "$TMP/tree/cmd/olivares/boot.go"
-  if run; then bad "wrong grant/holder binding stayed CLEAN: $replacement"
-  else ok "mutant (wrong grant/holder binding) is killed: $replacement"; fi
+  if run; then bad "wrong holder/CRL binding stayed CLEAN: $replacement"
+  else ok "mutant (wrong holder/CRL binding) is killed: $replacement"; fi
 done
 
 stage
-sed -i 's/func bindEnterpriseEntitlement(_ licenseGrantsFunc, _ \*licenseHolder) {}/func bindEnterpriseEntitlement(_ licenseGrantsFunc, _ *licenseHolder) { panic("gate") }/' \
+sed -i 's/seatPolicy func(\*licenseHolder, crlViewFunc)/seatPolicy func(licenseClaimsFunc, crlViewFunc)/' \
+  "$TMP/tree/cmd/olivares/edition_ports.go"
+if run; then bad "legacy claims-only port stayed CLEAN"
+else ok "mutant (claims-only port) is killed"; fi
+
+stage
+sed -i '/seatPolicy func/a\	bindEntitlement func(licenseGrantsFunc, *licenseHolder)' \
+  "$TMP/tree/cmd/olivares/edition_ports.go"
+if run; then bad "second license port stayed CLEAN"
+else ok "mutant (second license port) is killed"; fi
+
+stage
+sed -i 's/seatPolicy: func(\*licenseHolder, crlViewFunc) auth.SeatPolicy {/seatPolicy: func(h *licenseHolder, _ crlViewFunc) auth.SeatPolicy {\n\t\t\th.grants()/' \
   "$TMP/tree/cmd/olivares/wire_noenterprise.go"
-if run; then bad "AGPL binder that gates stayed CLEAN"
-else ok "mutant (AGPL no-op became a gate) is killed"; fi
+if run; then bad "AGPL consulting the holder stayed CLEAN"
+else ok "mutant (AGPL reads the holder) is killed"; fi
 
 stage
 if ! run; then bad "no-fire: live seam should stay CLEAN ($(cat "$TMP/err"))"

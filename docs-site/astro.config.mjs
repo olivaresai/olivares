@@ -102,43 +102,20 @@ export default defineConfig({
   // means the build never reaches a CDN: no Google Fonts, no jsDelivr, nothing fetched at build
   // or at render. Parsing the package's own index.css also keeps every subset it ships with its
   // unicode-range, so the Cyrillic of the /ru locale still resolves.
-  // ⛔ `display: 'optional'` EN LAS TRES FAMILIAS, Y LA ELECCIÓN ES MEDIDA — la alternativa
-  // evidente se probó y EMPEORA las cosas. Añadido el 2026-09-01.
-  //
-  // El defecto: en producción este sitio tenía un CLS por encima del umbral, reproducible. Medido
-  // con Chromium sobre el `dist` construido, servido en local y con el régimen fijado por CDP
-  // (100 ms de latencia, 6 Mbit/s — que es lo que hace que las fuentes lleguen DESPUÉS del primer
-  // pintado, igual que detrás del CDN), 4-5 corridas por celda:
-  //
-  //   ruta                          A tal cual        B preload      C optional     D preload+optional
-  //   /start/quickstart/            0,1552  x5        0,1552 (max 0,4288)  0,0000 x5   0,0000 x5
-  //   /how-to/troubleshooting/      0,1344            —              0,0000      —
-  //   /start/what-is-olivares-ai/   0,1160            —              0,0000      —
-  //   /explanation/work-plane/      0,0988            —              0,0001      —
-  //
-  // Y LA CAUSA ESTÁ AISLADA, no inferida: bloqueando las `woff2` en la capa de red, el CLS de
-  // `/start/quickstart/` y `/reference/cli/` cae a **0,0000 en las tres corridas de cada una**.
-  // Quitada la fuente, desaparece el salto entero. Es el intercambio de fuente y nada más.
-  //
-  // ⛔ POR QUÉ NO ES `preload`, que era lo que yo iba a hacer: **no arregla el CLS** (0,1552 de
-  // mediana, y una corrida salió PEOR, 0,4288) y en combinación duplica el LCP —1140 ms frente a
-  // 524 ms—, porque las caras compiten por ancho de banda con el contenido. `optional` no regresa
-  // el LCP: 524-728 ms frente a los 504-896 ms de la línea base.
-  //
-  // POR QUÉ FUNCIONA: con `optional` el navegador da a la cara un bloqueo brevísimo y, si no ha
-  // llegado, **se queda con la de reserva para toda la vida de la página**. No hay intercambio, así
-  // que no hay reflujo. Y la reserva no desentona porque `optimizedFallbacks` ya está puesto: las
-  // métricas van ajustadas con `size-adjust` (134,28 % / 99,98 % / 170,03 % en el HTML servido).
-  //
-  // ⚠ EL COSTE, dicho en voz alta: un visitante con la caché fría y la red lenta puede ver la
-  // página entera con la tipografía de reserva. Es un intercambio deliberado —la marca cede ante
-  // un salto de contenido medido— y se puede revertir en tres líneas si se decide al revés.
-  //
-  // ⛔ Y ESTO CORRIGE UNA MEDIDA ANTERIOR DE ESTE MISMO REPOSITORIO, no un descuido:
-  // `src/components/Head.astro` afirma «CLS stays at 0 either way, because the thing that fixes it
-  // is optimizedFallbacks». Esa tabla se tomó EN LOCAL, con las fuentes llegando a ~275 ms, o sea
-  // antes del pintado — un régimen en el que el salto no puede ocurrir. `optimizedFallbacks` está
-  // puesto y no basta. Una medida tomada en el régimen equivocado no es falsa: es de otra cosa.
+  // Use display: 'optional' for all three font families (measured 2026-09-01).
+  // Chromium on the built site at 100 ms latency / 6 Mbit/s measured baseline
+  // CLS of 0.1552, 0.1344, 0.1160 and 0.0988 on quickstart, troubleshooting,
+  // what-is-olivares-ai and work-plane. Optional reduced them to 0, 0, 0 and
+  // 0.0001; blocking woff2 reduced quickstart and CLI CLS to 0 in three runs.
+  // Preload retained median CLS 0.1552 (maximum 0.4288); combining it with
+  // optional increased LCP to 1140 ms versus 524 ms. Optional alone kept LCP
+  // at 524-728 ms versus baseline 504-896 ms.
+  // Optional keeps the fallback for the page lifetime when the font arrives
+  // late, preventing swaps. optimizedFallbacks supplies size-adjust values
+  // 134.28%, 99.98% and 170.03%. Cold-cache visitors on slow networks may see
+  // only the fallback; this deliberately trades branded type for stable layout.
+  // The earlier Head.astro measurement loaded fonts around 275 ms, before
+  // paint. Its zero CLS does not show that optimizedFallbacks alone suffices.
   fonts: [
     {
       provider: fontProviders.npm({ remote: false }),
@@ -212,9 +189,7 @@ export default defineConfig({
       // The map itself lives in src/site-locales.mjs so every consumer reads the
       // SAME declaration instead of each re-deriving it (a text scan of this file
       // and a hardcoded list respectively — both provably wrong on legal configs;
-      // see that file's header). The ADR publisher WAS one of those consumers and
-      // was withdrawn on 2026-08-25: architecture decision records are internal
-      // development documentation and no longer ship on a public surface.
+      // see that file's header).
       defaultLocale: 'root',
       locales: LOCALES,
       // Override the Banner to render the machine-translation honesty notice on
@@ -456,7 +431,7 @@ export default defineConfig({
             {
               label: 'Modules catalog',
               items: [
-                { label: 'Overview — the 31 modules', slug: 'reference/modules/overview' },
+                { label: 'Overview — the 35 selectable modules', slug: 'reference/modules/overview' },
                 // Observe
                 { label: 'Inventory & discovery', slug: 'reference/modules/i-inventory' },
                 { label: 'Live operation & sessions', slug: 'reference/modules/ii-sessions' },
@@ -469,12 +444,16 @@ export default defineConfig({
                 { label: 'Claude Code adoption', slug: 'reference/modules/claudeadoption' },
                 // Govern & enforce
                 { label: 'Identity, permissions & governance', slug: 'reference/modules/vi-governance' },
+                { label: 'Identity', slug: 'reference/modules/identity' },
                 { label: 'Source & credential scoping', slug: 'reference/modules/sourcescope' },
                 { label: 'Deployment & integration', slug: 'reference/modules/vii-deploy' },
                 // Claude & agent ecosystem
+                { label: 'Claude Code managed policy', slug: 'reference/modules/claude-policy' },
+                { label: 'Claude agent confirmations', slug: 'reference/modules/claude-agents' },
                 { label: 'Model & provider management', slug: 'reference/modules/x-models' },
                 { label: 'Inline inference proxy (PEP)', slug: 'reference/modules/inferenceproxy' },
                 { label: 'Internal catalog & marketplace', slug: 'reference/modules/xiv-catalog' },
+                { label: 'Skills catalog & assignments', slug: 'reference/modules/skills' },
                 { label: 'Voice & realtime agents', slug: 'reference/modules/xvi-voice' },
                 // Security & data protection
                 { label: 'Security, guardrails & audit', slug: 'reference/modules/ix-security' },
@@ -495,9 +474,9 @@ export default defineConfig({
                 { label: 'Output integrations & notifications', slug: 'reference/modules/xv-notify' },
                 { label: 'Eventing & webhooks', slug: 'reference/modules/eventing' },
                 { label: 'Saved console views', slug: 'reference/modules/consoleviews' },
-                // Edition availability descriptor (modules/sessioncockpit; not one of the 31)
+                // Edition availability descriptor (modules/sessioncockpit; not one of the 35)
                 { label: 'Session cockpit (availability)', slug: 'reference/modules/session-cockpit' },
-                // Platform & core capabilities (not counted among the 31 modules)
+                // Platform & core capabilities (not counted among the 35 selectable modules)
                 { label: 'API & manage-as-code (platform)', slug: 'reference/modules/xix-api-manage-as-code' },
                 { label: 'Multi-tenancy & org management (platform)', slug: 'reference/modules/xx-multi-tenancy' },
                 { label: 'Executive dashboards & reporting (console)', slug: 'reference/modules/xxi-executive-dashboards' },

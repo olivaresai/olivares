@@ -26,7 +26,7 @@ func openCodeRecordedLines(t *testing.T) []string {
 	return strings.Split(strings.TrimSpace(string(raw)), "\n")
 }
 
-// TestSessionViewRendersARecordedOpenCodeTurn is HU2-01: on the no-account path
+// TestSessionViewRendersARecordedOpenCodeTurn: on the no-account path
 // (OpenCode + Ollama, and Grok Build) `session follow` printed only "· session/update"
 // and the person never saw the answer. The reply is the joined chunks, each turn ends
 // with its footer, and no protocol is shown.
@@ -122,5 +122,84 @@ func TestSessionSendShowsTheReceivedACPReplyWhenTheStreamEndsEarly(t *testing.T)
 	}
 	if out != "Hello, how are you today?\n" {
 		t.Fatalf("send shows %q, want the reply it received", out)
+	}
+}
+
+// HU-R35: under "Edit files and run commands" (dontAsk) the engine answers OpenCode's and
+// Codex's permission requests itself, yet follow said the session was "waiting for
+// approval". With such a run it says the tool asked and the decision is pending: a
+// review policy may still ask a person, so it never says no one is.
+func TestFollowDoesNotSayWaitingWhenNoOneIsAsked(t *testing.T) {
+	for _, mode := range []string{"dontAsk", "bypassPermissions"} {
+		var b strings.Builder
+		v := newSessionView(&b)
+		v.driver, v.noOneAsked = "opencode", noOneAsked(map[string]any{"permission_mode": mode})
+		v.render(`{"jsonrpc":"2.0","id":5,"method":"session/request_permission","params":{"sessionId":"ses_1","toolCall":{"toolCallId":"call_2","title":"rm -rf build"},"options":[{"optionId":"allow","name":"Allow","kind":"allow_once"}]}}`)
+		v.render(`{"jsonrpc":"2.0","id":9,"method":"item/commandExecution/requestApproval","params":{"command":"go test ./..."}}`)
+		want := "· OpenCode asks to run rm -rf build; waiting for the approval decision\n" +
+			"· Codex asks to run go test ./...; waiting for the approval decision\n"
+		if got := b.String(); got != want {
+			t.Fatalf("%s view =\n%s\nwant\n%s", mode, got, want)
+		}
+	}
+	for mode, want := range map[string]bool{"dontAsk": true, "bypassPermissions": true, "default": false, "acceptEdits": false, "plan": false, "": false} {
+		if got := noOneAsked(map[string]any{"permission_mode": mode}); got != want {
+			t.Errorf("noOneAsked(%q) = %v, want %v", mode, got, want)
+		}
+	}
+}
+
+// The engine registers a person's approval wait after its policy and
+// review queue, with no bound, so a send that reads the run during the request and finds
+// no pending approval yet must not say no one is asked.
+func TestSendNeverSaysNoOneIsAskedBeforeTheApprovalIsDecided(t *testing.T) {
+	lines := openCodeRecordedLines(t)
+	f := newFakeSessionEngine(t)
+	f.runs = []map[string]any{{"run_ref": "01a10180-0000-7000-8000-000000000001", "name": "hello", "state": "running",
+		"provider_driver": "opencode", "transport": "acp", "permission_mode": "dontAsk"}}
+	permission := `{"jsonrpc":"2.0","id":5,"method":"session/request_permission","params":{"sessionId":"ses_1","toolCall":{"toolCallId":"call_2","title":"rm -rf build"},"options":[{"optionId":"allow","name":"Allow","kind":"allow_once"}]}}`
+	f.replay, f.reply = lines[:4], append([]string{permission}, lines[4:]...)
+	out, errb, err := execSessionCLI(t, nil, append([]string{"session", "send", "hello", "Hello?"}, sessionCreds(f.URL)...)...)
+	if err != nil {
+		t.Fatalf("send: %v\n%s", err, errb)
+	}
+	if strings.Contains(out, "no one is asked") || !strings.Contains(out, "· OpenCode asks to run rm -rf build; waiting for the approval decision\n") {
+		t.Fatalf("send shows\n%s\nwant the pending decision, never \"no one is asked\"", out)
+	}
+}
+
+// A Gemini CLI run speaks ACP like OpenCode and Grok Build: its turn ends on the
+// prompt result's stopReason, a prompt answered with an error is a failed turn, and
+// its permission request names the tool, so `session send` can show the reply.
+func TestSessionViewAndSendTreatAGeminiCLIRunAsACP(t *testing.T) {
+	for _, tc := range []struct {
+		run  map[string]any
+		want bool
+	}{
+		{map[string]any{"provider_driver": "gemini-cli", "transport": "acp"}, true},
+		{map[string]any{"provider_driver": "gemini-cli", "transport": "remote-control"}, false},
+		{map[string]any{"provider_driver": "opencode", "transport": "acp"}, true},
+		{map[string]any{"provider_driver": "not-a-tool", "transport": "acp"}, false},
+	} {
+		if got := sessionShowsTurns(tc.run); got != tc.want {
+			t.Errorf("sessionShowsTurns(%v) = %v, want %v", tc.run, got, tc.want)
+		}
+	}
+
+	var b strings.Builder
+	v := newSessionView(&b)
+	v.driver = "gemini-cli"
+	if v.render(`{"jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Hi."}}}}`) {
+		t.Fatal("a message chunk ended the turn")
+	}
+	if v.render(`{"jsonrpc":"2.0","id":3,"method":"session/request_permission","params":{"sessionId":"s","toolCall":{"toolCallId":"c","title":"Writing to note.txt"},"options":[]}}`) {
+		t.Fatal("a permission request ended the turn")
+	}
+	if !v.render(`{"jsonrpc":"2.0","id":7,"error":{"code":-32603,"message":"quota exceeded"}}`) || !v.failed {
+		t.Fatal("a prompt answered with an error must end the turn as a failure")
+	}
+	want := "Hi.\n! Gemini CLI is waiting for approval to run Writing to note.txt\n✗ quota exceeded\n— turn failed\n"
+	if got := b.String(); got != want {
+		t.Fatalf("view =\n%s\nwant\n%s", got, want)
 	}
 }

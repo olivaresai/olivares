@@ -83,31 +83,12 @@ req() {
 PROD_REPO="olivaresai/olivares"
 PROD_OCI="ghcr.io/olivaresai/olivares"
 PROD_SOURCE="https://github.com/olivaresai/olivares"
-# PRERELEASE POLICY, PINNED DENY-CLOSED (independent review P2-03). This grammar rejects
-# 26.10.0-rc.N/-beta.N on purpose: the production cosign certificate identity — the
-# default regexp in this workflow's OTA verification, in scripts/verify-release.sh and
-# in the reviewed release profile (§C.2) — only matches clean MAJOR.MINOR.PATCH tag refs, so a prerelease tag
-# would build and publish artifacts whose checksums signature CANNOT verify downstream.
-# Failing here, before any permission or publication, is strictly better than failing at
-# the ceremony. Some docs (INSTALL.md's v26.7.0-beta.1 example, CHANGELOG-CADENCE's
-# prerelease flow, core/release/version.go's parser) promise a prerelease flow this gate
-# does not admit: enabling it requires WIDENING the release signing identity — a
-# security decision that belongs to the maintainer, not to this script. Until that decision, the
-# divergence is a declared residual and this line is the contract. Pinned by the
-# "a prerelease tag is rejected in production" case of scripts/test-release-preflight.sh.
-#
-# ⛔ BARE CalVer SINCE THE 2026-09-29 TAG-NAME CORRECTION (Root decision from
-# instruction): release tags are 26.10.0, not v26.10.0 — two-digit year, a real month
-# (1-12, no leading zero), and a patch that is 0 or carries no leading zero. A v-prefixed tag is refused with its own message one check
-# below, because the reflexive mistake is pasting the old shape and a generic grammar
-# error would send the operator counting digits instead of deleting one letter. The
-# consumer-facing defaults (scripts/verify-release.sh, scripts/install*.sh) accept BOTH
-# shapes for the releases history actually serves; THIS gate admits only the current one,
-# because it decides what may be RELEASED, not what may be verified.
-PROD_TAG_RE='^[0-9]{2}\.([1-9]|1[0-2])(\.[1-9][0-9]*)?$'
+# Releases are bare MAJOR.MINOR. Prefixes, patches and suffixes are refused
+# before any publication permissions or credentials reach a mutating job.
+PROD_TAG_RE='^[0-9]+\.[0-9]+$'
 
-# NO rehearsal tuple here — see the header. The internal rehearsal caller injects it.
-REH_TAG_RE='^v0\.0\.0-rehearsal\.[0-9]+$'
+# Rehearsals use the same bare version in an isolated destination. Their mode,
+# injected tuple and publication/signing guards provide containment, not a suffix.
 
 req RELEASE_MODE
 req RELEASE_GITHUB_REPO
@@ -149,7 +130,7 @@ rehearsal)
 	fi
 	want_mirror="${want_oci}/mirror"
 	want_tap="${want_repo%%/*}/homebrew-rehearsal"
-	tag_re="$REH_TAG_RE"
+	tag_re="$PROD_TAG_RE"
 	want_cosign_mode="key" want_tlog="false"
 	want_latest="false" want_dockerhub="false" want_homebrew="false" want_ota="false"
 	;;
@@ -179,8 +160,7 @@ preprod)
 	# refuse; it cannot redirect either publisher.
 	want_mirror="${want_oci}/mirror"
 	want_tap="${want_repo%%/*}/homebrew-preprod"
-	# The REAL tag grammar, not the rehearsal one: a preprod act exists to rehearse v26.8.0
-	# itself (order 36 — nothing is first tried in public), so the tag must be the real shape.
+	# A preprod act rehearses the real release grammar in its isolated destination.
 	tag_re="$PROD_TAG_RE"
 	# ⛔ FIRMA IGUAL QUE PRODUCCIÓN: keyless, con log de transparencia. Y esto ES una
 	# decisión sobre una fuga pública, así que va razonada y no por omisión.
@@ -229,7 +209,7 @@ case "$RELEASE_MODE" in
 production | preprod)
 	case "$RELEASE_TAG" in
 	v[0-9]*)
-		fail "tag '$RELEASE_TAG' carries a v prefix: release tags are bare CalVer (YY.M or YY.M.N, e.g. 26.10.0) since the 2026-09-29 tag-name correction (§C.4.3)"
+		fail "tag '$RELEASE_TAG' carries a v prefix: release tags are bare MAJOR.MINOR (e.g. 1.0) under the release version policy (§C.4.3)"
 		;;
 	esac
 	;;
@@ -371,7 +351,7 @@ else
 	fi
 fi
 
-release_version="${RELEASE_TAG#v}"
+release_version="$RELEASE_TAG"
 
 # --- §C.4.9: the non-secret resolved profile, visible BEFORE any approval ---------------
 summary() {

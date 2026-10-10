@@ -46,14 +46,20 @@ const EMPTY: readonly PersonalLink[] = Object.freeze([])
  * the engine's own bound (modules/consoleviews/favorites.go maxFavorites). */
 export const MAX_FAVORITES = 256
 
-/** A stored or received list, rebuilt against today's registry. */
+/** Keep unavailable edition identities in storage; only the current registry resolves links. */
 export function decodeFavoriteList(list: unknown): readonly PersonalLink[] {
   if (!Array.isArray(list)) return EMPTY
   const result: PersonalLink[] = []
   for (const entry of list) {
     if (!entry || typeof entry !== 'object' || typeof entry.id !== 'string')
       continue
-    const link = personalLink(entry.id)
+    const link =
+      personalLink(entry.id) ??
+      (entry.kind === 'feature' &&
+      ['finops', 'redteam', 'team-costs'].includes(entry.id) &&
+      !FEATURE_VIEWS.some((view) => view.id === entry.id)
+        ? { kind: 'feature' as const, id: entry.id }
+        : undefined)
     if (
       !link ||
       link.kind !== entry.kind ||

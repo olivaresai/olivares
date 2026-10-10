@@ -17,8 +17,9 @@ CLI officielle, enregistrer un reçu de sonde et lancer ou arrêter une session
 gouvernée, utilisez [Installer la CLI Grok](/how-to/install-grok-cli/). Le chemin
 d’exploitation est
 [Exploiter une session fournisseur](/how-to/operate-provider-sessions/)
-(`OLIVARES_SESSION_RUNTIME_GROK_BIN` ou le reçu d’une installation gérée, plus un
-profil fournisseur). La compatibilité avec un compte Grok officiel
+(`OLIVARES_SESSION_RUNTIME_GROK_BIN` pour choisir explicitement un exécutable ; sinon l’installation
+gérée vérifiée la plus récente, puis `grok` dans le `PATH` du moteur,
+plus un profil fournisseur). La compatibilité avec un compte Grok officiel
 authentifié n’y est pas affirmée.
 
 ## Ajouter Grok Build
@@ -31,7 +32,8 @@ authentifié n’y est pas affirmée.
 - L'autorisation pour le compte de service Olivares de lire `~/.grok/config.toml`,
   `/etc/grok/requirements.toml`, `~/.grok/disabled-hooks` et, si configuré, le fichier compatible
   `managed-settings.json`.
-- Un compte superadmin avec élévation AAL3 si la source est créée depuis la console.
+- Un compte superadmin si la source est créée depuis la console. Les écritures administratives
+  suivent la politique d’authentification renforcée (`admin_step_up`, `none` par défaut).
 
 Ne saisissez pas de clé xAI pour cette source. Elle n'a aucun champ secret et n'effectue aucun
 appel à l'API d'inférence.

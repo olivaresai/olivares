@@ -28,7 +28,8 @@ import (
 // EVERY REFUSAL TEST COUNTS REQUESTS. Without the counter, "the command failed"
 // is satisfied just as well by a command that is simply broken, and each refusal
 // is therefore paired with the control that proves the same path SUCCEEDS when
-// the caller has what it needs.
+// the caller has what it needs. Community orchestration instead pins the named
+// edition refusal before any request; its transport controls run when linked.
 
 // lot3Args appends the client flags every verb in this lot needs.
 func lot3Args(server string, args ...string) []string {
@@ -114,6 +115,39 @@ func lot3Field(out, key string) (string, bool) {
 	return "", false
 }
 
+// lot3TransportVerb keeps shared transport checks active in Community and
+// preserves their original orchestration caller when that implementation is linked.
+func lot3TransportVerb(community, orchestration []string) []string {
+	if editionOrchestrationAvailable {
+		return orchestration
+	}
+	return community
+}
+
+// lot3OrchestrationRefused checks the local Community boundary. Linked builds
+// continue into the transport assertions below; unavailable orchestration must
+// name its edition and never reach the fixture, regardless of its response.
+func lot3OrchestrationRefused(t *testing.T, srv *lot3Server, args ...string) bool {
+	t.Helper()
+	if editionOrchestrationAvailable || args[0] != "orchestration" {
+		return false
+	}
+	out, _, err := execRoot(t, args...)
+	if got := exitcode.From(err); got != exitcode.Edition {
+		t.Fatalf("exit = %d, want %d (edition): %v", got, exitcode.Edition, err)
+	}
+	if !strings.Contains(err.Error(), "Orchestration is a Business feature: https://olivares.ai/pricing") {
+		t.Fatalf("the refusal must name the edition boundary, got: %v", err)
+	}
+	if out != "" {
+		t.Fatalf("an edition refusal must print nothing on stdout, got: %q", out)
+	}
+	if n := srv.calls.Load(); n != 0 {
+		t.Fatalf("%d requests reached the server for unavailable orchestration", n)
+	}
+	return true
+}
+
 // lot3ReadVerbs is one read verb per family. Refusal rules must hold for ALL EIGHT,
 // not for whichever one happened to be tested.
 var lot3ReadVerbs = map[string][]string{
@@ -137,6 +171,10 @@ func TestAgentExecFamiliesRefuseWithoutACredentialBeforeOpeningAConnection(t *te
 			t.Setenv("OLIVARES_TENANT", "")
 
 			args := append(append([]string{}, verb...), "--server", srv.URL, "--tenant", "tenant-a")
+			if lot3OrchestrationRefused(t, srv, args...) {
+				lot3OrchestrationRefused(t, srv, lot3Args(srv.URL, verb...)...)
+				return
+			}
 			_, _, err := execRoot(t, args...)
 			if err == nil {
 				t.Fatal("a verb with no credential must not succeed")
@@ -196,7 +234,8 @@ func TestAgentExecMapsServerRefusalsToTheExitContract(t *testing.T) {
 }
 
 // lot3TwoPhaseVerbs are the four governed actuations of the lot. All four answer 202
-// when an approval is opened and NOTHING is actuated.
+// when linked and an approval is opened and NOTHING is actuated. Community
+// refuses the orchestration rows locally with the Edition exit code.
 var lot3TwoPhaseVerbs = map[string][]string{
 	"orchestration-fire":  {"orchestration", "schedules", "fire", "sc-1"},
 	"orchestration-run":   {"orchestration", "workflows", "run", "wf-1"},
@@ -215,7 +254,11 @@ func TestAgentExecPendingApprovalExitsDegraded(t *testing.T) {
 					"requires_approval":true,"approval_ref":"ap-9","gate_status":"pending",
 					"plan_hash":"ph-1","detail":"waiting on a human"}`)
 			})
-			out, _, err := execRoot(t, lot3Args(srv.URL, verb...)...)
+			args := lot3Args(srv.URL, verb...)
+			if lot3OrchestrationRefused(t, srv, args...) {
+				return
+			}
+			out, _, err := execRoot(t, args...)
 			if err == nil {
 				t.Fatal("a 202 actuated nothing and must not exit 0")
 			}
@@ -228,6 +271,9 @@ func TestAgentExecPendingApprovalExitsDegraded(t *testing.T) {
 			if !strings.Contains(out, "ap-9") {
 				t.Errorf("stdout must carry the approval ref a caller repeats with, got:\n%s", out)
 			}
+			if n := srv.calls.Load(); n != 1 {
+				t.Fatalf("the pending actuation made %d requests, want exactly 1", n)
+			}
 		})
 	}
 }
@@ -239,8 +285,12 @@ func TestAgentExecCompletedActuationExitsZero(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			srv := newLot3Server(t, lot3OK(`{"op":"apply","op_status":"applied","status":"applied",
 				"gate_status":"approved","dispatch_ref":"d-1","plan_hash":"ph-1"}`))
-			out, _, err := execRoot(t, lot3Args(srv.URL,
-				append(append([]string{}, verb...), "--approval-ref", "ap-9")...)...)
+			args := lot3Args(srv.URL,
+				append(append([]string{}, verb...), "--approval-ref", "ap-9")...)
+			if lot3OrchestrationRefused(t, srv, args...) {
+				return
+			}
+			out, _, err := execRoot(t, args...)
 			if err != nil {
 				t.Fatalf("a completed actuation must exit 0, got %v (code %d)", err, exitcode.From(err))
 			}
@@ -249,6 +299,9 @@ func TestAgentExecCompletedActuationExitsZero(t *testing.T) {
 			}
 			if !strings.Contains(srv.lastBody(), "ap-9") {
 				t.Errorf("the approval ref must reach the engine, body was: %s", srv.lastBody())
+			}
+			if n := srv.calls.Load(); n != 1 {
+				t.Fatalf("the completed actuation made %d requests, want exactly 1", n)
 			}
 		})
 	}
@@ -261,7 +314,9 @@ func TestAgentExecKillSwitchExitsConflict(t *testing.T) {
 		w.WriteHeader(http.StatusLocked)
 		_, _ = io.WriteString(w, `{"op":"fire","op_status":"blocked","detail":"estate stop sw-1 is active"}`)
 	})
-	_, _, err := execRoot(t, lot3Args(srv.URL, "orchestration", "schedules", "fire", "sc-1")...)
+	_, _, err := execRoot(t, lot3Args(srv.URL, lot3TransportVerb(
+		[]string{"deploy", "apply", "dep-1"},
+		[]string{"orchestration", "schedules", "fire", "sc-1"})...)...)
 	if err == nil {
 		t.Fatal("a kill-switched actuation must not exit 0")
 	}
@@ -493,8 +548,11 @@ func TestAgentExecNegativeLimitIsAUsageErrorBeforeAnyRequest(t *testing.T) {
 // the whole census. An omitted flag must not appear in the body at all.
 func TestAgentExecPatchSendsOnlyTheFlagsTheOperatorTyped(t *testing.T) {
 	srv := newLot3Server(t, lot3OK(`{"id":"sc-1","desired_status":"paused"}`))
-	if _, _, err := execRoot(t, lot3Args(srv.URL,
-		"orchestration", "schedules", "update", "sc-1", "--desired-status", "paused")...); err != nil {
+	args := lot3Args(srv.URL, "orchestration", "schedules", "update", "sc-1", "--desired-status", "paused")
+	if lot3OrchestrationRefused(t, srv, args...) {
+		return
+	}
+	if _, _, err := execRoot(t, args...); err != nil {
 		t.Fatalf("the patch must succeed, got %v", err)
 	}
 	var body map[string]any
@@ -519,8 +577,11 @@ func TestAgentExecPatchSendsOnlyTheFlagsTheOperatorTyped(t *testing.T) {
 // silently drop it.
 func TestAgentExecPatchSendsAnExplicitZero(t *testing.T) {
 	srv := newLot3Server(t, lot3OK(`{"id":"sc-1"}`))
-	if _, _, err := execRoot(t, lot3Args(srv.URL,
-		"orchestration", "schedules", "update", "sc-1", "--expected-interval-seconds", "0")...); err != nil {
+	args := lot3Args(srv.URL, "orchestration", "schedules", "update", "sc-1", "--expected-interval-seconds", "0")
+	if lot3OrchestrationRefused(t, srv, args...) {
+		return
+	}
+	if _, _, err := execRoot(t, args...); err != nil {
 		t.Fatalf("the patch must succeed, got %v", err)
 	}
 	var body map[string]any
@@ -540,7 +601,11 @@ func TestAgentExecPatchSendsAnExplicitZero(t *testing.T) {
 // no-op request the operator did not mean to make.
 func TestAgentExecEmptyPatchIsRefusedBeforeAnyRequest(t *testing.T) {
 	srv := newLot3Server(t, lot3OK(`{}`))
-	_, _, err := execRoot(t, lot3Args(srv.URL, "orchestration", "schedules", "update", "sc-1")...)
+	args := lot3Args(srv.URL, "orchestration", "schedules", "update", "sc-1")
+	if lot3OrchestrationRefused(t, srv, args...) {
+		return
+	}
+	_, _, err := execRoot(t, args...)
 	if err == nil || exitcode.From(err) != exitcode.Usage {
 		t.Fatalf("an empty patch must exit %d, got %v", exitcode.Usage, err)
 	}
@@ -574,8 +639,9 @@ func TestAgentExecListTruncationNoteGoesToStderrNotStdout(t *testing.T) {
 func TestAgentExecJSONOutputPreservesFieldsTheCLIDoesNotModel(t *testing.T) {
 	srv := newLot3Server(t, lot3OK(`{"items":[{"id":"sc-1","name":"nightly",
 		"a_field_this_cli_has_never_heard_of":"keep me"}],"has_more":false}`))
-	out, _, err := execRoot(t, lot3Args(srv.URL,
-		"orchestration", "schedules", "ls", "-o", "json")...)
+	out, _, err := execRoot(t, lot3Args(srv.URL, lot3TransportVerb(
+		[]string{"deploy", "definitions", "ls", "-o", "json"},
+		[]string{"orchestration", "schedules", "ls", "-o", "json"})...)...)
 	if err != nil {
 		t.Fatalf("the list must succeed, got %v", err)
 	}
@@ -610,7 +676,9 @@ func TestAgentExecStreamEmitsNDJSONOnStdoutAndNoiseOnStderr(t *testing.T) {
 		_, _ = io.WriteString(w, "event: relation\ndata: {\"supervisor_ref\":\"a\",\"worker_ref\":\"b\"}\n\n")
 		_, _ = io.WriteString(w, ": ping\n\n")
 	})
-	out, errOut, err := execRoot(t, lot3Args(srv.URL, "orchestration", "stream")...)
+	out, errOut, err := execRoot(t, lot3Args(srv.URL, lot3TransportVerb(
+		[]string{"voice", "sessions", "stream", "vs-1"},
+		[]string{"orchestration", "stream"})...)...)
 	if err != nil {
 		t.Fatalf("the stream must end cleanly, got %v", err)
 	}
@@ -660,7 +728,9 @@ func TestAgentExecStreamRefusalKeepsTheExitContract(t *testing.T) {
 func TestAgentExecTableValuesAreSanitizedBeforeReachingTheTerminal(t *testing.T) {
 	srv := newLot3Server(t, lot3OK(
 		"{\"items\":[{\"id\":\"sc-1\",\"name\":\"night\\u001b[31mly\"}],\"has_more\":false}"))
-	out, _, err := execRoot(t, lot3Args(srv.URL, "orchestration", "schedules", "ls")...)
+	out, _, err := execRoot(t, lot3Args(srv.URL, lot3TransportVerb(
+		[]string{"deploy", "definitions", "ls"},
+		[]string{"orchestration", "schedules", "ls"})...)...)
 	if err != nil {
 		t.Fatalf("the list must succeed, got %v", err)
 	}
@@ -776,7 +846,9 @@ func TestAgentExecJSONNeverRendersATableForAnyEnvelopeShape(t *testing.T) {
 			name: "items",
 			payload: `{"items":[{"id":"sc-1","name":"nightly",
 				"unmodelled_field":"keep me"}],"has_more":false}`,
-			args:   []string{"orchestration", "schedules", "ls"},
+			args: lot3TransportVerb(
+				[]string{"deploy", "definitions", "ls"},
+				[]string{"orchestration", "schedules", "ls"}),
 			header: "NAME",
 		},
 		{
@@ -808,6 +880,11 @@ func TestAgentExecJSONNeverRendersATableForAnyEnvelopeShape(t *testing.T) {
 			// header. Without it, "the header is absent" under -o json is satisfied
 			// just as well by a header this lot never emits for this shape.
 			text := newLot3Server(t, lot3OK(tc.payload))
+			if lot3OrchestrationRefused(t, text, lot3Args(text.URL, tc.args...)...) {
+				lot3OrchestrationRefused(t, text, lot3Args(text.URL,
+					append(append([]string{}, tc.args...), "-o", "json")...)...)
+				return
+			}
 			textOut, _, terr := execRoot(t, lot3Args(text.URL, tc.args...)...)
 			if terr != nil {
 				t.Fatalf("the text form must succeed, got %v", terr)

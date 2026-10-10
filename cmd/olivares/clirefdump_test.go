@@ -6,7 +6,7 @@
 // (C09-03).
 //
 // WHY THIS IS A TEST AND NOT A SUBCOMMAND. The tree is built by RUNNING code:
-// newRootCmd() adds command groups conditionally (enterpriseRootCommands,
+// newRootCmd() adds command groups conditionally (the rootCommands edition port,
 // hideUnavailableAddOns), so no parse of the sources can enumerate it and no
 // grep can. The data the reference needs — every flag's name, shorthand, type,
 // default, usage string and hidden/deprecated/required status — lives in pflag

@@ -116,3 +116,7 @@ typée, jamais un e-mail.
 - [Gouverner et approuver](/fr/how-to/govern-and-approve/) — utiliser les surfaces de politique et d'approbation.
 - [Vue d'ensemble de l'architecture](/fr/explanation/architecture/overview/) — le moteur et les couches sur lesquels ce module se compose.
 - [Honnêteté et limites](/fr/start/honesty-and-limits/) — la posture fermée par défaut, détective par défaut.
+
+## Éditions et approbations (0.1)
+
+Community conserve le moteur d’approbation, le minimum de deux personnes distinctes pour les actions CRITICAL, le double contrôle du kill-switch et les politiques qui imposent une revue ou augmentent le niveau de risque ou le quorum. Les politiques qui abaissent le risque et l’accès d’urgence break-glass font partie de la base Business. Les données stockées restent lisibles et exportables, mais ne peuvent ni abaisser les valeurs par défaut de Community ni autoriser un accès d’urgence.

@@ -90,6 +90,9 @@ const budgetActionAlert = "alert"
 
 // budgetSpec is the typed view of a budget Policy's Spec.
 type budgetSpec struct {
+	// workspaceRefs is the live department scope, resolved in the caller's tenant
+	// read. It is never serialized into a policy.
+	workspaceRefs []string
 	Dimension     string    `json:"dimension"`
 	Key           string    `json:"key,omitempty"`
 	LimitMicroUSD int64     `json:"limit_micro_usd"`
@@ -206,7 +209,7 @@ func (s budgetSpec) matches(attr attribution) bool {
 	case "project":
 		return attr.Project == s.Key
 	case "workspace":
-		return attr.WorkspaceRef == s.Key
+		return attr.WorkspaceRef == s.Key || contains(s.workspaceRefs, attr.WorkspaceRef)
 	case "api_key":
 		return attr.APIKeyRef == s.Key
 	case "actor":
@@ -238,6 +241,9 @@ func (s budgetSpec) matches(attr attribution) bool {
 func (s budgetSpec) sampleFilters() []model.Filter {
 	if s.Dimension == "global" {
 		return nil
+	}
+	if s.Dimension == "workspace" && len(s.workspaceRefs) > 1 {
+		return []model.Filter{{Column: colWorkspaceRef, Op: model.OpIn, Value: s.workspaceRefs}}
 	}
 	col := dimensionColumn(s.Dimension)
 	if col == "" {
@@ -377,6 +383,9 @@ func (m *Module) evaluateBudgetsLocked(ctx context.Context, sc store.Scope, attr
 		}
 		spec := parseBudgetSpec(p.Spec)
 		spec.fillDefaults()
+		if err := spec.resolveWorkspace(ctx, sc); err != nil {
+			return nil, nil, err
+		}
 		if !spec.matches(attr) {
 			continue
 		}
@@ -764,6 +773,9 @@ func isConflict(err error) bool { return errors.Is(err, store.ErrConflict) }
 func budgetStatus(ctx context.Context, sc store.Scope, p model.Policy, now time.Time) (budgetStatusDTO, error) {
 	spec := parseBudgetSpec(p.Spec)
 	spec.fillDefaults()
+	if err := spec.resolveWorkspace(ctx, sc); err != nil {
+		return budgetStatusDTO{}, err
+	}
 	pStart, hasLower := periodStart(spec.Period, now)
 	pEnd := periodEnd(spec.Period, pStart)
 	var agg aggResult
@@ -813,11 +825,6 @@ func budgetStatus(ctx context.Context, sc store.Scope, p model.Policy, now time.
 	if !established {
 		out.Truncated = true
 	}
-	if projected := sumInt64(projectSpend(agg.Cost, spec.Period, pStart, now, hasLower), spec.ReservedMicroUSD, dyn.MicroUSD); projected.OK {
-		out.ProjectedMicroUSD = projected.Value
-	} else {
-		out.Truncated = true
-	}
 	if spec.LimitMicroUSD > 0 {
 		if effective.OK {
 			out.ConsumedPct = pctOf(effective.Value, spec.LimitMicroUSD)
@@ -842,7 +849,6 @@ func budgetStatus(ctx context.Context, sc store.Scope, p model.Policy, now time.
 			// printed for it — so Over is set and no saturated figure is invented.
 			out.Over = effective.Above
 		}
-		out.ProjectedPct = pctOf(out.ProjectedMicroUSD, spec.LimitMicroUSD)
 	}
 	// A4.2: the AUTHORITATIVE section, from the same strict evaluation the alert path
 	// uses. Everything computed above stays as the legacy projection it always was;
@@ -868,26 +874,8 @@ func budgetStatus(ctx context.Context, sc store.Scope, p model.Policy, now time.
 		}
 	}
 
-	// budget exhaustion from EWA daily rate — only for bounded periods.
-	if spec.LimitMicroUSD > 0 && hasLower && !isGroupDimension(spec.Dimension) {
-		winStart := now.UTC().AddDate(0, 0, -defaultForecastWindowDays)
-		series, _, seriesErr := dailySeries(ctx, sc, winStart, now)
-		if seriesErr == nil && len(series) > 0 {
-			// Partition series to this budget's dimension if non-global.
-			if spec.Dimension != "global" && spec.Dimension != "" {
-				series, _, seriesErr = dailySeriesFiltered(ctx, sc, winStart, now, spec.sampleFilters())
-				if seriesErr != nil {
-					series = nil
-				}
-			}
-		}
-		if len(series) > 0 {
-			ewaRate, ewaVar := ewaForecast(series, defaultEWAAlpha)
-			ex := budgetExhaustion(ewaRate, ewaVar, agg.Cost, spec.LimitMicroUSD, spec.ReservedMicroUSD)
-			out.ExhaustionDaysRemaining = ex.DaysRemaining
-			out.ExhaustionConfidence = ex.Confidence
-		}
-	}
+	addBudgetForecast(ctx, sc, spec, now, pStart, hasLower, agg, dyn.MicroUSD, &out)
+
 	return out, nil
 }
 
@@ -1077,34 +1065,6 @@ func periodEnd(period string, pStart time.Time) time.Time {
 	}
 }
 
-// projectSpend projects period spend at the current run rate: spend scaled by the
-// inverse fraction of the period elapsed. "total" and degenerate windows project
-// the spend itself (no run-rate).
-func projectSpend(spend int64, period string, pStart, now time.Time, hasLower bool) int64 {
-	if !hasLower || period == "total" {
-		return spend
-	}
-	pEnd := periodEnd(period, pStart)
-	total := pEnd.Sub(pStart)
-	elapsed := now.UTC().Sub(pStart)
-	if total <= 0 || elapsed <= 0 {
-		return spend
-	}
-	if elapsed >= total {
-		return spend
-	}
-	frac := elapsed.Seconds() / total.Seconds()
-	projected := float64(spend) / frac
-	// Bound the projection so a huge spend in the first instants of a period
-	// cannot overflow int64; 1e18 µUSD (a trillion USD) is a display ceiling no
-	// real projection meaningfully exceeds.
-	const ceilingMicroUSD = 1e18
-	if projected > ceilingMicroUSD {
-		return ceilingMicroUSD
-	}
-	return int64(projected)
-}
-
 // pctOf returns part/whole as an integer percentage (0 when whole is 0).
 func pctOf(part, whole int64) int {
 	if whole <= 0 {
@@ -1247,7 +1207,13 @@ func (m *Module) CheckBudget(ctx context.Context, tenant model.TenantID, dims Sp
 			}
 			spec := parseBudgetSpec(p.Spec)
 			spec.fillDefaults()
-			if spec.Action == budgetActionAlert || !spec.matches(attr) {
+			if spec.Action == budgetActionAlert {
+				continue
+			}
+			if err := spec.resolveWorkspace(ctx, sc); err != nil {
+				return err
+			}
+			if !spec.matches(attr) {
 				continue // alert-only never denies; non-matching budgets don't apply
 			}
 			pStart, hasLower := periodStart(spec.Period, now)

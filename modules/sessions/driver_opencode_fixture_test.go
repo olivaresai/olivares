@@ -10,6 +10,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -47,6 +48,9 @@ type openCodeFixture struct {
 	SpawnChild             bool   `json:"spawn_child"`
 	GroupedModel           bool   `json:"grouped_model"`
 	OfferEffort            bool   `json:"offer_effort"`
+	RequireMCPURL          string `json:"require_mcp_url"`
+	ConnectMCP             bool   `json:"connect_mcp"`
+	NoMCPHTTP              bool   `json:"no_mcp_http"`
 	// EchoPrompt makes the peer send the prompt back as a user_message_chunk first,
 	// as an agent that echoes the person's message would.
 	EchoPrompt bool `json:"echo_prompt"`
@@ -68,6 +72,7 @@ type openCodeFixtureRecord struct {
 	ConfigIDs    []string          `json:"config_ids"`
 	ConfigValues []string          `json:"config_values"`
 	ClientCaps   json.RawMessage   `json:"client_caps"`
+	MCPMethods   []string          `json:"mcp_methods"`
 }
 
 var openCodeFixtureEnvValues = []string{
@@ -181,7 +186,7 @@ func (p *openCodeFixturePeer) handle(frame map[string]json.RawMessage) {
 	p.rec.Methods = append(p.rec.Methods, method)
 	p.rec.Envelopes = append(p.rec.Envelopes, envelope)
 	if !hasID {
-		if method == openCodeMethodSessionCancel {
+		if method == acpMethodSessionCancel {
 			p.releaseHeldPrompt("cancelled")
 		}
 		p.flush()
@@ -203,16 +208,48 @@ func (p *openCodeFixturePeer) handle(frame map[string]json.RawMessage) {
 	}
 	p.flush()
 
+	if p.cfg.RequireMCPURL != "" && (method == acpMethodSessionNew || method == acpMethodSessionResume || method == acpMethodSessionLoad) {
+		var servers []struct {
+			Type, Name, URL string
+			Headers         []struct{ Name, Value string }
+		}
+		if json.Unmarshal(params["mcpServers"], &servers) != nil || len(servers) != 1 ||
+			servers[0].Type != "http" || servers[0].Name != "olivares" || servers[0].URL != p.cfg.RequireMCPURL ||
+			len(servers[0].Headers) != 1 || servers[0].Headers[0].Name != "Authorization" ||
+			servers[0].Headers[0].Value != "Bearer "+os.Getenv("OLIVARES_HOOK_PEP_TOKEN") {
+			p.replyError(id, -32602, "the session MCP connection is missing or unauthenticated")
+			return
+		}
+		if p.cfg.ConnectMCP {
+			req, _ := http.NewRequest(http.MethodPost, servers[0].URL, strings.NewReader(`{"jsonrpc":"2.0","id":1,"method":"tools/list"}`))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", servers[0].Headers[0].Value)
+			client := &http.Client{Timeout: 5 * time.Second}
+			resp, err := client.Do(req)
+			if err != nil {
+				p.replyError(id, -32603, "session MCP tools/list could not connect")
+				return
+			}
+			_ = resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				p.replyError(id, -32603, "session MCP tools/list was refused")
+				return
+			}
+		}
+		p.rec.MCPMethods = append(p.rec.MCPMethods, method)
+		p.flush()
+	}
+
 	switch method {
-	case openCodeMethodInitialize:
+	case acpMethodInitialize:
 		if raw, ok := params["clientCapabilities"]; ok {
 			p.rec.ClientCaps = append(json.RawMessage(nil), raw...)
 		}
 		p.flush()
 		p.reply(id, p.initializeResult())
 	case "authenticate":
-		p.replyError(id, openCodeErrMethodNotSupported, "the OpenCode fixture must not be asked to authenticate")
-	case openCodeMethodSessionNew:
+		p.replyError(id, acpErrMethodNotSupported, "the OpenCode fixture must not be asked to authenticate")
+	case acpMethodSessionNew:
 		cwd := ""
 		if raw, ok := params["cwd"]; ok {
 			_ = json.Unmarshal(raw, &cwd)
@@ -221,12 +258,12 @@ func (p *openCodeFixturePeer) handle(frame map[string]json.RawMessage) {
 		p.flush()
 		p.waitFor(p.cfg.HoldNewPath)
 		if p.cfg.NewSessionAuthRequired {
-			p.replyError(id, openCodeErrAuthRequired, "provider authentication required")
+			p.replyError(id, acpErrAuthRequired, "provider authentication required")
 			return
 		}
 		p.session = p.cfg.SessionID
 		p.reply(id, map[string]any{"sessionId": p.session, "configOptions": p.configOptions("opencode/big-pickle", "")})
-	case openCodeMethodSessionResume, openCodeMethodSessionLoad:
+	case acpMethodSessionResume, acpMethodSessionLoad:
 		requested := ""
 		if raw, ok := params["sessionId"]; ok {
 			_ = json.Unmarshal(raw, &requested)
@@ -270,7 +307,7 @@ func (p *openCodeFixturePeer) handle(frame map[string]json.RawMessage) {
 			model = "anthropic/claude-sonnet-4"
 		}
 		p.reply(id, map[string]any{"configOptions": p.configOptions(model, effort)})
-	case openCodeMethodSessionPrompt:
+	case acpMethodSessionPrompt:
 		text := ""
 		if raw, ok := params["prompt"]; ok {
 			var blocks []struct {
@@ -286,10 +323,10 @@ func (p *openCodeFixturePeer) handle(frame map[string]json.RawMessage) {
 			p.sendUpdate(p.session, "user_message_chunk", text)
 		}
 		p.onPrompt(id)
-	case openCodeMethodSessionClose:
+	case acpMethodSessionClose:
 		p.reply(id, map[string]any{})
 	default:
-		p.replyError(id, openCodeErrMethodNotSupported, "the fixture peer does not implement "+method)
+		p.replyError(id, acpErrMethodNotSupported, "the fixture peer does not implement "+method)
 	}
 }
 
@@ -306,7 +343,7 @@ func (p *openCodeFixturePeer) onPrompt(id json.RawMessage) {
 	}
 	if p.cfg.PermissionOnTurn != "" {
 		p.send(map[string]any{
-			"jsonrpc": "2.0", "id": "srv-1", "method": openCodeReqRequestPermission,
+			"jsonrpc": "2.0", "id": "srv-1", "method": acpReqRequestPermission,
 			"params": map[string]any{
 				"sessionId": p.session,
 				"toolCall":  map[string]any{"toolCallId": "call-1", "kind": "edit"},
@@ -318,7 +355,7 @@ func (p *openCodeFixturePeer) onPrompt(id json.RawMessage) {
 	case "never":
 		return
 	case "auth":
-		p.replyError(id, openCodeErrAuthRequired, "provider authentication required")
+		p.replyError(id, acpErrAuthRequired, "provider authentication required")
 	case "hold":
 		p.mu.Lock()
 		p.heldPrompt = append(json.RawMessage(nil), id...)
@@ -346,7 +383,7 @@ func (p *openCodeFixturePeer) releaseHeldPrompt(reason string) {
 func (p *openCodeFixturePeer) initializeResult() map[string]any {
 	version := p.cfg.ProtocolVersion
 	if version == 0 {
-		version = openCodeProtocolVersion
+		version = acpProtocolVersion
 	}
 	sessionCaps := map[string]any{"list": map[string]any{}, "close": map[string]any{}}
 	if !p.cfg.NoResumeCapability {
@@ -357,6 +394,7 @@ func (p *openCodeFixturePeer) initializeResult() map[string]any {
 		"agentCapabilities": map[string]any{
 			"loadSession":         !p.cfg.NoLoadSession,
 			"sessionCapabilities": sessionCaps,
+			"mcpCapabilities":     map[string]any{"http": !p.cfg.NoMCPHTTP},
 		},
 		"authMethods": []any{
 			map[string]any{"id": "opencode-login", "name": "Login with opencode"},
@@ -399,14 +437,14 @@ func (p *openCodeFixturePeer) configOptions(model, effort string) []any {
 }
 
 func openCodeFixturePermissionOptions(name string) []any {
-	once := map[string]any{"optionId": "once", "name": "Allow once", "kind": openCodePermissionAllowOnce}
-	always := map[string]any{"optionId": "always", "name": "Always allow", "kind": openCodePermissionAllowAlways}
-	reject := map[string]any{"optionId": "reject", "name": "Reject", "kind": openCodePermissionRejectOnce}
+	once := map[string]any{"optionId": "once", "name": "Allow once", "kind": acpPermissionAllowOnce}
+	always := map[string]any{"optionId": "always", "name": "Always allow", "kind": acpPermissionAllowAlways}
+	reject := map[string]any{"optionId": "reject", "name": "Reject", "kind": acpPermissionRejectOnce}
 	switch name {
 	case "always-only":
 		return []any{always, reject}
 	case "duplicate":
-		return []any{once, map[string]any{"optionId": "once", "name": "Allow once again", "kind": openCodePermissionAllowOnce}}
+		return []any{once, map[string]any{"optionId": "once", "name": "Allow once again", "kind": acpPermissionAllowOnce}}
 	default:
 		return []any{once, always, reject}
 	}
@@ -414,7 +452,7 @@ func openCodeFixturePermissionOptions(name string) []any {
 
 func (p *openCodeFixturePeer) sendUpdate(session, kind, text string) {
 	p.send(map[string]any{
-		"jsonrpc": "2.0", "method": openCodeNotifySessionUpdate,
+		"jsonrpc": "2.0", "method": acpNotifySessionUpdate,
 		"params": map[string]any{
 			"sessionId": session,
 			"update": map[string]any{

@@ -22,7 +22,6 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/eventing"
-	"github.com/olivaresai/olivares/modules/finops"
 )
 
 // retirementSubject is the account a retirement case seeds rows for.
@@ -248,7 +247,18 @@ func attemptRecord(binding, targets string) model.Record {
 // row that exercises it and what the declared module's step must do with it.
 var retirementSeeders = map[string]retirementSeeder{
 	"governance.scoped_grant.subject_ref": {"governance.scoped_grant", retireDeletes, func(e *consentEstate, s retirementSubject) model.ID {
-		return model.ID(e.grantUser(e.tT, s.id, "editor"))
+		return e.seedFencedWith(e.tT, "governance.scoped_grant", model.Record{
+			"subject_kind": "user", "subject_ref": s.id.String(), "grant_role": "editor", "role_custom": false,
+			"scope_tree": "tenant", "scope_ref": "", "scope_class": "", "created_by": "upgrade-fixture",
+		}, func(ctx context.Context, sc store.Scope) error {
+			epochs := sc.(store.AuthorizationEpochStore)
+			fact, err := epochs.ReadAuthorizationEpoch(ctx)
+			if err != nil {
+				return err
+			}
+			_, err = epochs.BumpAuthorizationEpoch(ctx, fact)
+			return err
+		}, s.id)
 	}},
 	"governance.policy_revision.content": {"governance.policy_revision", retireBlocks, func(e *consentEstate, s retirementSubject) model.ID {
 		return e.seedFenced(e.tT, "governance.policy_revision", model.Record{
@@ -278,9 +288,7 @@ var retirementSeeders = map[string]retirementSeeder{
 		if err := json.Unmarshal([]byte(workCreateSteps(e.t, s.id)), &steps); err != nil {
 			e.t.Fatal(err)
 		}
-		return e.created(e.do("POST", "/v1/m/orchestration/workflows", e.admin, e.tT, map[string]any{
-			"name": "seeded-" + s.id.String(), "steps": steps,
-		}), "the workflow")
+		return e.createRetirementWorkflow(e.tT, "seeded-"+s.id.String(), steps, s.id)
 	}},
 	// A run has no product writer that names another account: its initiator is
 	// the caller. Each column is seeded alone through the guarded store seam.
@@ -305,16 +313,8 @@ var retirementSeeders = map[string]retirementSeeder{
 	"eventing.subscription.owner_actor": {"eventing.subscription", retireBlocks, func(e *consentEstate, s retirementSubject) model.ID {
 		return e.seedSubscription(e.tT, "owned-"+s.id.String(), s.id)
 	}},
-	// A user spend cap is written by the gateway's spend-limit route.
-	"core.policy.spec": {"core.policy", retireBlocks, func(e *consentEstate, s retirementSubject) model.ID {
-		r := e.putSpendCap(e.spendLimitGateway(), s.id)
-		wire, _ := r.body["id"].(string)
-		id, err := finops.ParseSpendLimitID(wire)
-		if r.code != http.StatusOK || err != nil {
-			e.t.Fatalf("set the account's spend cap = %d %s", r.code, r.raw)
-		}
-		return id
-	}},
+	// Existing account caps remain retirement blockers in every edition.
+	"core.policy.spec": spendCapRetirementSeeder(),
 	"finops.attempt.binding": {"finops.attempt", retireBlocks, func(e *consentEstate, s retirementSubject) model.ID {
 		return e.seedFenced(e.tT, "finops.attempt", attemptRecord(attemptBinding(s.id), "[]"), s.id)
 	}},
@@ -803,34 +803,6 @@ func TestAnUnknownStoredKindBlocksRetirement(t *testing.T) {
 // would build on the selection it names is refused, and the retirement treats it
 // as a row of a kind no registry knows. Each surface has a tenant of its own, so
 // neither case sees the other's row.
-func TestAStoredActivationNoWriterDerivesIsUnknown(t *testing.T) {
-	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
-		for _, surface := range []string{"cedar-managed", "cedar-ddil"} {
-			t.Run(surface, func(t *testing.T) {
-				e := e.forSubtest(t)
-				tenant := e.createOrg("activation-" + surface)
-				subject := e.retirementSubjectIn(tenant, "activation-"+surface)
-				e.restoreRow(tenant, "governance.policy_revision", model.Record{
-					"surface": surface, "revision": int64(1),
-					"content": `permit(principal == User::"` + subject.id.String() + `", action, resource);`,
-					"author":  "restore", "validated": true, "active": false,
-				})
-				e.restoreRow(tenant, "governance.policy_revision", model.Record{
-					"surface": surface + "-activation", "revision": int64(1), "content": "1",
-					"author": "restore", "validated": true, "active": true,
-				})
-				if r := e.do("POST", "/v1/m/governance/pdp/publish", e.admin, tenant, map[string]any{
-					"engine": "cedar", "source": `permit(principal in Role::"viewer", action == Action::"agent:read", resource);`,
-				}); r.code == http.StatusOK {
-					t.Errorf("a publish over the selection a stored %s activation names = 200, want it refused", surface)
-				}
-				e.scimDelete(tenant, subject.id)
-				e.runPump()
-				e.wantBlocked(t, subject.id, tenant, "unknown_kind")
-			})
-		}
-	})
-}
 
 // TestATokenOwnedSubscriptionBlocksReadmissionUntilResolved: a subscription the
 // account created through the product route with one of its tokens is owned by

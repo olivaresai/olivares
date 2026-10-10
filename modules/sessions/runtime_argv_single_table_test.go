@@ -15,9 +15,9 @@ import (
 // file is what makes that checkable.
 //
 // ⛔ THE DEFECT THIS REPLACES WAS NOT A WRONG ARGV: IT WAS A SECOND ONE. Until
-// r3 buildLaunchSpec held its own copy of the `--print` stream-json form beside
-// cliruntime's, and the two agreed. An independent review measured the
-// consequence: cliruntime.LaunchTransport — the declaration that says this form
+// r3 the launch's spec builder (childSpec today) held its own copy of the
+// `--print` stream-json form beside cliruntime's, and the two agreed. An
+// independent review measured the consequence: cliruntime.LaunchTransport — the declaration that says this form
 // must NOT get a terminal — sat beside the copy production did not launch, so
 // the declaration could be changed for a kind and nothing the engine launches
 // would change, with no test going red.
@@ -32,6 +32,7 @@ import (
 func engineClaudeParams() CreateRunParams {
 	return CreateRunParams{
 		Name:           "argv-table",
+		ProviderHome:   &ProviderHomeSnapshot{Driver: providerDriverClaude},
 		Transport:      TransportStreamJSON,
 		PermissionMode: "dontAsk",
 		Effort:         "xhigh",
@@ -56,13 +57,11 @@ func TestEngineArgvComesFromTheOneTable(t *testing.T) {
 		Name:           p.Name,
 	}
 
-	spec := m.buildLaunchSpec(p, Credential{}, WorkSessionCredential{}, CommunicationSessionCredential{},
-		"sess-77", nil, nil, nil)
+	spec := m.childSpec(p, childDecision{resumeID: "sess-77"})
 	assertSameArgv(t, "stream-json", spec.Args, cliruntime.ClaudeArgs(req))
 
 	p.Transport = TransportRemoteControl
-	spec = m.buildLaunchSpec(p, Credential{}, WorkSessionCredential{}, CommunicationSessionCredential{},
-		"sess-77", nil, nil, nil)
+	spec = m.childSpec(p, childDecision{resumeID: "sess-77"})
 	assertSameArgv(t, "remote-control", spec.Args, cliruntime.ClaudeRemoteControlArgs(req))
 
 	// The control positive: the two forms are NOT the same argv, so the equality
@@ -95,7 +94,7 @@ func TestEngineArgvOfARegisteredDriverComesFromTheOneTable(t *testing.T) {
 }
 
 // TestUnknownTransportStillLaunchesTheGovernedForm pins the deny-closed
-// direction of the default arm. buildLaunchSpec is reachable only behind
+// direction of the default arm. childSpec is reachable only behind
 // validateCreate, which normalizes an empty transport to stream-json — but a
 // fall-through that emitted the governed TERMS with no FORM flag would start the
 // vendor CLI interactively under a row that claims a bridged session, which is
@@ -105,8 +104,7 @@ func TestUnknownTransportStillLaunchesTheGovernedForm(t *testing.T) {
 	m := New()
 	p := engineClaudeParams()
 	p.Transport = Transport("not-a-transport")
-	spec := m.buildLaunchSpec(p, Credential{}, WorkSessionCredential{}, CommunicationSessionCredential{},
-		"", nil, nil, nil)
+	spec := m.childSpec(p, childDecision{})
 	if !argvHasFlag(spec.Args, "--print") || !argvHasFlag(spec.Args, "--input-format") || !argvHasFlag(spec.Args, "--replay-user-messages") {
 		t.Fatalf("an unrecognized transport produced an argv with no governed form flag: %v", spec.Args)
 	}

@@ -22,6 +22,7 @@ import (
 	"strings"
 	"text/tabwriter"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 
@@ -175,7 +176,7 @@ type workPlanArtifact struct {
 // operator credentials; all requests retain the server's purpose ceiling.
 func resolveWorkClientConfig(cfg *agentClientConfig) error {
 	if !cfg.changed("token") && cfg.token == "" {
-		cfg.token = os.Getenv("OLIVARES_WORK_TOKEN")
+		cfg.token = envconfig.Get("OLIVARES_WORK_TOKEN")
 	}
 	return cfg.resolve()
 }
@@ -911,12 +912,16 @@ func workVerdict(value any) string {
 func workHTTPError(status int, body []byte) error {
 	base := fmt.Errorf("%s", describeAPIRefusal(status, body))
 	var envelope struct {
-		Verdict string `json:"verdict"`
-		Error   struct {
+		Verdict     string `json:"verdict"`
+		EvidenceRef string `json:"evidence_ref"`
+		Error       struct {
 			Code string `json:"code"`
 		} `json:"error"`
 	}
 	_ = json.Unmarshal(body, &envelope)
+	if field := strings.TrimSpace(envelope.EvidenceRef); field != "" {
+		base = fmt.Errorf("%s; check %s", base, termSafe(field))
+	}
 	switch {
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
 		return exitcode.New(exitcode.Auth, base)

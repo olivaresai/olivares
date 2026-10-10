@@ -427,11 +427,10 @@ function VersionsSection({
           {t('common:states.loading')}
         </p>
       ) : query.error ? (
-        // ⛔ UNA LECTURA FALLIDA NO ES «NO HAY VERSIONES». Sin esta rama, un 500 caía al estado
-        //    vacío de abajo y el panel afirmaba una ausencia que nadie comprobó — y con dato
-        //    viejo en caché quedaba una lista vieja y recortada sin marca, porque el aviso se
-        //    oculta con `!error`. Es el mismo defecto que el contraste devolvió en el panel de
-        //    documentos, en la misma feature y con la misma forma.
+        // A failed read does not prove there are no versions. Without this branch, a 500 fell
+        // into the empty state and asserted an unverified absence. Stale cache data also left
+        // an old, truncated list without a badge because `!error` hides the warning. Review
+        // found the same pattern in this feature's documents panel.
         <QueryErrorState
           error={query.error}
           title={t('versions.loadError')}

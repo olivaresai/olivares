@@ -160,19 +160,44 @@ func TestSetAdminStepUpCannotLockTheCallerOut(t *testing.T) {
 	if got, _ := f.a.AdminStepUp(f.ctx); got != auth.StepUpNone {
 		t.Fatalf("a refused raise changed the policy to %q", got)
 	}
-	// Lowering always works at the current strength, even from a stricter policy.
+	// Lowering needs the current level: a session below it cannot remove it.
+	for _, from := range []string{auth.StepUpTOTP, auth.StepUpPasskey} {
+		setStepUpPolicy(t, f.ctx, f.st, from)
+		f.a.ReloadStepUp()
+		if err := f.a.SetAdminStepUp(f.ctx, admin, auth.StepUpNone); !errors.Is(err, auth.ErrStepUpRequired) {
+			t.Fatalf("turning %s off at AAL1 err = %v, want ErrStepUpRequired", from, err)
+		}
+		if got, _ := f.a.AdminStepUp(f.ctx); got != from {
+			t.Fatalf("a refused lowering changed the policy from %s to %q", from, got)
+		}
+	}
+	// A federated sign-in with MFA meets totp, so it may lower it.
+	setStepUpPolicy(t, f.ctx, f.st, auth.StepUpTOTP)
+	f.a.ReloadStepUp()
+	federated := admin
+	federated.AAL, federated.AMR = auth.AAL2, []string{"sso", "mfa"}
+	if err := f.a.SetAdminStepUp(f.ctx, federated, auth.StepUpNone); err != nil {
+		t.Fatalf("turning totp off from a federated MFA sign-in: %v", err)
+	}
 	setStepUpPolicy(t, f.ctx, f.st, auth.StepUpPasskey)
-	if err := f.a.SetAdminStepUp(f.ctx, admin, auth.StepUpNone); err != nil {
-		t.Fatalf("turning the policy off at AAL1: %v", err)
+	f.a.ReloadStepUp()
+	stepped := admin
+	stepped.AAL = auth.AAL3
+	if err := f.a.SetAdminStepUp(f.ctx, stepped, auth.StepUpNone); err != nil {
+		t.Fatalf("turning passkey off after a passkey step-up: %v", err)
 	}
 	if got, _ := f.a.AdminStepUp(f.ctx); got != auth.StepUpNone {
 		t.Fatalf("policy after turning it off = %q, want none", got)
 	}
 	var recorded bool
+	refused := 0
 	if err := f.st.AuthView(f.ctx, func(as store.AuthScope) error {
 		return as.Audit().Walk(f.ctx, 0, func(ev model.AuditEvent) error {
-			if ev.Action == "auth.stepup.policy" {
+			switch ev.Action {
+			case "auth.stepup.policy":
 				recorded = true
+			case "auth.stepup.failed":
+				refused++
 			}
 			return nil
 		})
@@ -181,5 +206,8 @@ func TestSetAdminStepUpCannotLockTheCallerOut(t *testing.T) {
 	}
 	if !recorded {
 		t.Fatal("the policy change left no auth.stepup.policy audit event")
+	}
+	if refused != 2 {
+		t.Fatalf("refused lowerings left %d auth.stepup.failed audit events, want 2", refused)
 	}
 }

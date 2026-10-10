@@ -12,11 +12,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"strings"
 	"time"
 	"unicode"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
@@ -69,7 +69,7 @@ type authWhoamiGrant struct {
 	Role   string `json:"role"`
 }
 
-// The three CLI-STATE DTOs (VER-06 lot L3). auth login/logout/use-context change
+// The three CLI-STATE DTOs. auth login/logout/use-context change
 // one thing — which client context this machine will use next — and reported it
 // only as a sentence. Every field below is a value the command already had in
 // hand; none of them is re-derived, and every string goes through safeCLIValue so
@@ -113,14 +113,10 @@ type authLogoutResult struct {
 
 // authUseContextResult is what `auth use-context -o json` reports.
 //
-// THE KEY IS `context`, NOT `current_context`, AND THAT WAS A CORRECTION. The fact
-// this command reports — which client context this machine will use next — already
-// has a spelling in this CLI: `auth status -o json` has emitted it as `context`
-// since (the lowercased CONTEXT row of its payload), and the two sibling DTOs
-// above use `context` too. `current_context` was the only place in cmd/olivares
-// naming it differently, which meant `login → use-context → status` handed a script
-// `.context`, then `.current_context`, then `.context` for one value — a parser per
-// command, inside one command family, which is the defect VER-06 exists to close.
+// The key is `context`, not `current_context`: the fact this command reports —
+// which client context this machine will use next — already has that spelling in
+// `auth status -o json` and in the two sibling DTOs above, so `login → use-context →
+// status` hands a script one name for one value.
 // The Go field keeps the config file's name (cliConfig.CurrentContext) because that
 // is what it is assigned from.
 type authUseContextResult struct {
@@ -142,7 +138,7 @@ func newAuthCmd() *cobra.Command {
   olivares auth use-context production`,
 	}
 	cmd.AddCommand(newAuthBootstrapCmd(), newAuthLoginCmd(), newAuthLogoutCmd(), newAuthStatusCmd(),
-		newAuthUseContextCmd(), newAuthTOTPPolicyCmd())
+		newAuthUseContextCmd(), newAuthTOTPPolicyCmd(), newAuthOSAccountCmd())
 	return cmd
 }
 
@@ -150,6 +146,13 @@ func newAuthCmd() *cobra.Command {
 // exempt from the setup gate (core/api/middleware.go:197) and its gate is the
 // one-time setup token in the body, verified in constant time.
 const authSetupPath = "/v1/setup"
+
+// setupTokenRefused is what `auth bootstrap` says for the engine's plain 403 on
+// authSetupPath, the console's "That setup token is not valid." with the ways
+// forward.
+const setupTokenRefused = "the setup token is not valid: it is mistyped or was replaced, or setup is already complete. " +
+	"While no administrator exists, mint a replacement on the engine's host with `olivares first-boot --new-token`; " +
+	"after setup, sign in with `olivares login`"
 
 // authLoginPath exchanges email+password for an opaque session credential.
 const authLoginPath = "/v1/auth/login"
@@ -244,6 +247,17 @@ func newAuthBootstrapCmd() *cobra.Command {
 			}
 			raw, err := client.expect(cmd, http.MethodPost, authSetupPath, body, http.StatusCreated)
 			if err != nil {
+				// The engine's plain 403 here means it did not accept the setup token:
+				// mistyped, replaced, or setup is complete and the token was used. It
+				// answers all of them alike (core/api/handlers_auth.go); the console
+				// names the token for this 403 (web/src/app/pages/setup.tsx), and so
+				// does this. The sentence is ours and carries nothing the caller sent,
+				// so it is not redacted: a short mistyped token found in it would
+				// otherwise withhold it. Any other 403 keeps its text.
+				var refusal *apiRefusal
+				if errors.As(err, &refusal) && refusal.status == http.StatusForbidden && refusal.code == "forbidden" {
+					return exitcode.New(exitcode.Auth, &apiRefusal{status: refusal.status, code: refusal.code, text: setupTokenRefused})
+				}
 				// The setup token and the password both traveled in that body.
 				return redactCoded(err, token, pw)
 			}
@@ -341,7 +355,7 @@ func newAuthLoginCmd() *cobra.Command {
 			// A person at a terminal who passed no credential is asked for one.
 			// Scripts, and anyone who set OLIVARES_TOKEN, keep the flag paths below.
 			if email == "" && password == "" && !cmd.Flags().Changed("token") &&
-				flags.tokenFile == "" && os.Getenv("OLIVARES_TOKEN") == "" {
+				flags.tokenFile == "" && envconfig.Get("OLIVARES_TOKEN") == "" {
 				e, p, asked, perr := promptCredentials(cmd)
 				if perr != nil {
 					return perr
@@ -370,7 +384,7 @@ func newAuthLoginCmd() *cobra.Command {
 				}
 			}
 			if resolved.Token == "" {
-				return errors.New("no credential: set --token, OLIVARES_TOKEN, a token in the active client context, " +
+				return errors.New("no credential: set --token-file, OLIVARES_TOKEN, a token in the active client context, " +
 					"or sign in with --email and --password-file")
 			}
 			whoami, err := fetchAuthWhoami(cmd.Context(), resolved, &flags, cmd.ErrOrStderr())
@@ -434,7 +448,7 @@ func newAuthLoginCmd() *cobra.Command {
 			// `olivares quickstart` mints a self-signed certificate and says so, so
 			// the first `auth login` an evaluator runs is very likely this one.
 			//
-			// Measured 2026-08-09 against a real quickstart engine:
+			// Against a quickstart engine:
 			//   $ olivares auth login --server https://127.0.0.1:8473 --token ... --insecure
 			//   login validated; current context set to "127.0.0.1"      <- exit 0
 			//   $ olivares status
@@ -735,12 +749,9 @@ func newAuthStatusCmd() *cobra.Command {
 			if role == "" {
 				role = "<none>"
 			}
-			// THE GLOBAL -o/--output FLAG IS Honored HERE (2026-08-05). This RunE
-			// used to write its six KEY<TAB>value lines with fmt.Fprintf and return,
-			// ignoring -o entirely: `olivares auth status -o json` emitted output
-			// byte-identical to the text form and exited 0, so a caller piping it to
-			// jq got a parse error from a command that reported success. It was the
-			// only surface in the sweep where the JSON form was not JSON.
+			// The global -o/--output flag is honored here: `auth status -o json` is
+			// JSON, so a caller piping it to jq never gets a parse error from a
+			// command that reported success.
 			//
 			// The token stays redacted in BOTH forms: the redaction happens here, on
 			// the value, not in the text formatter.
@@ -871,19 +882,31 @@ func (f *authClientFlags) resolve(cmd *cobra.Command) (cliResolvedConfig, error)
 	return f.withLocalEngine(resolved, opts), nil
 }
 
-// withLocalEngine fills an unresolved server with the engine on this host, trusted
-// through the certificate it generated unless a CA or a pin was given.
+// withLocalEngine fills an unresolved server with the engine on this host.
 func (f *authClientFlags) withLocalEngine(resolved cliResolvedConfig, opts cliResolutionOptions) cliResolvedConfig {
-	if resolved.Server != "" || opts.ServerExplicit {
-		return resolved
-	}
-	if origin, crt := localEngine(); origin != "" {
-		resolved.Server, f.localOrigin = origin, origin
-		if resolved.CACert == "" && len(resolved.PinSHA256) == 0 {
-			resolved.CACert = crt
-		}
+	resolved, origin := localEngineFallback(resolved, opts.ServerExplicit)
+	if origin != "" {
+		f.localOrigin = origin
 	}
 	return resolved
+}
+
+// localEngineFallback fills an unresolved, not explicitly named server with the
+// engine on this host, trusted through the certificate it generated unless a CA or
+// a pin was given, and returns the origin it used ("" when none).
+func localEngineFallback(resolved cliResolvedConfig, serverExplicit bool) (cliResolvedConfig, string) {
+	if resolved.Server != "" || serverExplicit {
+		return resolved, ""
+	}
+	origin, crt := localEngine()
+	if origin == "" {
+		return resolved, ""
+	}
+	resolved.Server = origin
+	if resolved.CACert == "" && len(resolved.PinSHA256) == 0 {
+		resolved.CACert = crt
+	}
+	return resolved, origin
 }
 
 func (f *authClientFlags) readTokenFile(cmd *cobra.Command) (string, error) {
@@ -1035,30 +1058,24 @@ func redactCLIToken(token string) string {
 // An empty secret is skipped, not treated as a match: a caller whose bearer came
 // from a client context rather than a flag passes "" here, and replacing every
 // empty string in the message would redact the message itself.
-// minRedactableCredential es el suelo por debajo del cual sustituir DESTRUYE el texto en vez de
-// protegerlo. Medido: con un token de dos caracteres, «no server: set --server, OLIVARES_SERVER_URL,
-// or an active client context» sale como
+// minRedactableCredential is the floor below which substituting DESTROYS the text
+// instead of protecting it. With a two-character token,
+// "no server: set --server, OLIVARES_SERVER_URL, or an active client context" becomes
 //
 //	no server: se<redacted> --server, OLIVARES_SERVER_URL, or an ac<redacted>ive clien<redacted> con<redacted>ex<redacted>
 //
-// — ilegible, y encima delata la longitud del secreto en cada aparición. El hallazgo y su prueba
-// son de otro carril (#824); aquí se portan al scrubber COMPARTIDO en vez de dejar dos helpers
-// con semánticas distintas, que es como se fabrica que dos rutas del mismo CLI protejan distinto.
+// — unreadable, and it gives away the secret's length at every occurrence. One
+// shared scrubber keeps every CLI path protecting the same way.
 //
-// EL SUELO ES 12 PORQUE ES EL SUYO, no un número que yo eligiera: lo justifica midiendo lo que el
-// plano EMITE — `core/auth/credential.go:22-41,58-74` acuña `<prefijo>_<selector>_<secreto>` con
-// 4 + 26 + 52 = 84 caracteres, así que ninguna credencial real se acerca a 12 y jamás cae por la
-// rama de retención. Un suelo inventado por mí habría podido tragarse una credencial corta de
-// verdad; éste está atado a lo que el producto emite.
+// The floor is 12 because of what the plane EMITS: core/auth/credential.go mints
+// `<prefix>_<selector>_<secret>` at 4 + 26 + 52 = 84 characters, so no real
+// credential comes near 12 and none falls into the retention branch.
 const minRedactableCredential = 12
 
-// ⛔ Y EL PELIGRO QUE otro carril FIJÓ EN #1129 SIGUE EN PIE, porque NO es este código.
-// Su aviso es contra `if len(secret) < N { continue }`: saltarse la sustitución imprimiría el
-// secreto VERBATIM, y por :184, :408, :458 y :480 llegan contraseñas aquí. Esta rama no hace
-// `continue` — RETIENE el mensaje entero. El secreto no se imprime nunca y su longitud tampoco
-// se filtra por el número de `<redacted>`. Las dos lecturas coinciden en lo que importa: por
-// debajo del suelo no se puede sustituir sin daño, y la respuesta segura es no emitir el texto,
-// jamás emitirlo sin tocar.
+// Below the floor the branch does not `continue` (skipping the substitution would
+// print the secret VERBATIM, and passwords reach this function): it WITHHOLDS the
+// whole message. The secret is never printed, and its length does not leak through
+// the number of `<redacted>` marks.
 func redactCLISecrets(msg string, secrets ...string) string {
 	for _, secret := range secrets {
 		if secret == "" {
@@ -1067,8 +1084,8 @@ func redactCLISecrets(msg string, secrets ...string) string {
 		if !strings.Contains(msg, secret) {
 			continue
 		}
-		// RETENER, no triturar: un secreto demasiado corto para sustituirlo sin destrozar el
-		// mensaje se responde diciendo POR QUÉ no se puede leer, no dejando ruido.
+		// Withhold, do not shred: a secret too short to replace without wrecking the
+		// message is answered by saying WHY it cannot be read, not by leaving noise.
 		if len(secret) < minRedactableCredential {
 			return fmt.Sprintf("message withheld: it contains the %d-character value supplied as "+
 				"the credential, which is too short to remove without destroying the text; re-run "+

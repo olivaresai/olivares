@@ -6,7 +6,7 @@
 //
 // The sidebar, the ⌘K palette, the area directories and the `g`-shortcuts do not each
 // implement visibility: they call `visibleAreas`, `authorizedSections`,
-// `authorizedEntries` and `navigable` with the gate this module builds. So the property
+// `authorizedEntries` and `listed` with the gate this module builds. So the property
 // "the three agree" is a property of THAT gate, and it is measured here, once, on the real
 // registry — rather than four times through four component harnesses, where a green result
 // would mostly be evidence that four mocks were configured the same way.
@@ -14,9 +14,11 @@
 // The route gate is measured on its own, because it answers something navigation cannot:
 // pending, concealed, and an entity deep link that outranks a refused collection.
 import { render } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { FEATURE_VIEWS, type FeatureView } from '@/features/registry'
 import type { CapabilityAccess } from '@/lib/auth/capabilities'
+import { APPROVALS_SECTION } from '@/components/layout/shell-destinations'
+import { useModulesStore } from '@/stores/modules'
 import { useWorkspaceStore } from '@/stores/workspace'
 
 const WS = '0192f2c0-aaaa-7000-8000-000000000001'
@@ -81,7 +83,7 @@ const view = (id: string): FeatureView => {
 function gate(): ViewGate {
   let captured: ViewGate | null = null
   function Probe() {
-    captured = useViewAccess().navigable
+    captured = useViewAccess().listed
     return null
   }
   render(<Probe />)
@@ -333,5 +335,91 @@ describe('the route gate', () => {
     expect(routeAccess(view('routinePolicies')).kind).toBe('permitted')
     expect(routeAccess(view('permissions')).kind).toBe('forbidden')
     expect(routeAccess(view('dashboards')).kind).toBe('permitted')
+  })
+})
+
+/** Both projections of one render: what the navigation lists, and what a page may still
+ *  link to or read (the session rail, the composer's approval link, an entity's next room). */
+function projections(): {
+  listed: ViewGate
+  navigable: ViewGate
+  isOff: ViewGate
+} {
+  let captured: {
+    listed: ViewGate
+    navigable: ViewGate
+    isOff: ViewGate
+  } | null = null
+  function Probe() {
+    captured = useViewAccess()
+    return null
+  }
+  render(<Probe />)
+  if (!captured) throw new Error('the projection did not render')
+  return captured
+}
+
+describe('navigation lists every view the person may open', () => {
+  beforeEach(() => {
+    auth.perms = new Set([
+      ...FEATURE_VIEWS.flatMap((v) => (v.permission ? [v.permission] : [])),
+      APPROVALS_SECTION.requires,
+    ])
+    caps.surface = 'reachable'
+  })
+  afterEach(() => useModulesStore.setState({ off: new Set() }))
+
+  it('lists audit and the administration pages from the first sign-in', () => {
+    const { listed } = projections()
+    for (const id of ['audit', 'console', 'deploy', 'killswitch'])
+      expect(listed(view(id)), id).toBe(true)
+    const index = buildNavSearchIndex(i18n.getFixedT(null, 'nav') as never)
+    const palette = authorizedEntries(index, listed).map((e) => e.id)
+    expect(palette).toContain('audit')
+    expect(palette).toContain('console')
+    expect(visibleAreas(listed).length).toBeGreaterThan(2)
+    expect(listed(view('permissions'))).toBe(true)
+  })
+
+  it('lists a view whose module is off, flagged as off, and keeps it out of what pages read', () => {
+    useModulesStore.setState({ off: new Set(['deploy']) })
+    const { listed, navigable, isOff } = projections()
+    expect(listed(view('deploy'))).toBe(true)
+    expect(isOff(view('deploy'))).toBe(true)
+    expect(isOff(view('audit'))).toBe(false)
+    // A page that would read the module's routes still treats it as not offered.
+    expect(navigable(view('deploy'))).toBe(false)
+  })
+
+  it('keeps a permission refusal hidden', () => {
+    auth.perms = new Set()
+    useModulesStore.setState({ off: new Set(['deploy']) })
+    const { listed } = projections()
+    expect(listed(view('audit'))).toBe(false)
+    expect(listed(view('deploy'))).toBe(false)
+  })
+})
+
+describe('the door into Sessions', () => {
+  it('is the one a principal who may read only runs is offered', () => {
+    auth.perms = new Set(['sessions:run:read'])
+    const { listed } = projections()
+    const index = buildNavSearchIndex(i18n.getFixedT(null, 'nav') as never)
+    const ids = authorizedEntries(index, listed)
+      .filter((e) => e.kind === 'view')
+      .map((e) => e.id)
+    expect(ids).toContain('agentops')
+    expect(ids).toContain('home')
+    expect(ids).not.toContain('sessions')
+  })
+
+  it('keeps every page reachable by address, listed or not', () => {
+    auth.perms = new Set(
+      FEATURE_VIEWS.flatMap((v) => (v.permission ? [v.permission] : [])),
+    )
+    caps.surface = 'reachable'
+    useModulesStore.setState({ off: new Set(['deploy']) })
+    expect(routeAccess(view('deploy')).kind).toBe('permitted')
+    useModulesStore.setState({ off: new Set() })
   })
 })

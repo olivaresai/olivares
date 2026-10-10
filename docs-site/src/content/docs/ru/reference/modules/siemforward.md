@@ -8,6 +8,8 @@ description: >-
   и доставкой не менее одного раза. Он отрисовывает и пересылает; он никогда
   не пересчитывает целостность заново.
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
 
 Пересылка в SIEM/ITSM (`modules/siemforward`) берёт доказательства,
 которые движок уже запечатал, и доставляет их в систему, которую ваш SOC уже
@@ -59,9 +61,10 @@ HEC, Microsoft Sentinel (Logs Ingestion / DCR), Datadog Logs, New Relic или
 
 ## Ограниченный контекст, сказанный прямо
 
-- Он **пересылает**, он не хранит. Тенант без подписки на приёмник — это no-op:
-  ничего не ставится в очередь, курсор всё равно продвигается, ничего не
-  теряется.
+- Он хранит курсор арендатора; eventing хранит захваченные события и доставки.
+  Без подписки на приёмник ничего не ставится в очередь, но включённый насос продвигает курсор.
+  Новый приёмник не пересылает записи, уже пройденные курсором;
+  исходный журнал остаётся доступен через pull-экспорт.
 - Пересылка выполняется из обхода курсора, **вне транзакции запечатывания
   журнала** — сетевая запись никогда не находится на пути запечатывания.
 - Это **push в вашу систему**, отличный от read-only-pull

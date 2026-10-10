@@ -75,6 +75,15 @@ const stagingMarkerCap = 4096
 // against its receipt and re-verifies its retained signed manifest under the
 // pinned key, exactly as install's no-op path does. It writes nothing.
 func (e *Engine) List(ctx context.Context, rootPath string) (*Inventory, error) {
+	return e.list(ctx, rootPath, "")
+}
+
+// list limits single-tool lookups to that driver's releases. Inventory still
+// inspects every driver; resolving Codex must not verify a Claude installation.
+func (e *Engine) list(ctx context.Context, rootPath, driver string) (*Inventory, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	inv := &Inventory{Root: rootPath, Installed: []Installed{}, Leftovers: []Leftover{}, Unexpected: []string{}}
 	if !filepath.IsAbs(rootPath) {
 		return nil, refuse(KindInvalidRequest, "root %q must be absolute", rootPath)
@@ -93,6 +102,9 @@ func (e *Engine) List(ctx context.Context, rootPath string) (*Inventory, error) 
 		return nil, fmt.Errorf("read %s: %w", rootPath, err)
 	}
 	for _, d := range drivers {
+		if driver != "" && d.Name() != driver {
+			continue
+		}
 		if d.Name() == LockFile {
 			continue
 		}
@@ -105,6 +117,9 @@ func (e *Engine) List(ctx context.Context, rootPath string) (*Inventory, error) 
 			return nil, fmt.Errorf("read %s: %w", filepath.Join(rootPath, d.Name()), err)
 		}
 		for _, r := range releases {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			rel := filepath.Join(d.Name(), r.Name())
 			abs := filepath.Join(rootPath, rel)
 			switch {
@@ -120,6 +135,9 @@ func (e *Engine) List(ctx context.Context, rootPath string) (*Inventory, error) 
 				inv.Unexpected = append(inv.Unexpected, abs)
 			}
 		}
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	sort.Slice(inv.Installed, func(i, j int) bool { return inv.Installed[i].ReleaseDir < inv.Installed[j].ReleaseDir })
 	return inv, nil
@@ -212,11 +230,8 @@ func (e *Engine) inspectReleaseV2(ctx context.Context, root *os.Root, rel, abs, 
 		}
 	}
 	entry := "bin/" + driver
-	if rec.Driver == DriverGrok {
-		entry = "bin/grok"
-	}
-	if rec.Driver == DriverCodex {
-		entry = "bin/codex"
+	if rec.VerificationKind == VerificationGitHubReleaseSHA256 {
+		entry = releaseArchiveLayout(driver).EntryPoint
 	}
 	exeRel := filepath.Join(rel, filepath.FromSlash(entry))
 	fi, err := root.Lstat(exeRel)
@@ -465,7 +480,7 @@ func (e *Engine) Detect(ctx context.Context, opts DetectOptions) ([]Candidate, e
 		out = append(out, c)
 	}
 	if opts.Root != "" {
-		inv, err := e.List(ctx, opts.Root)
+		inv, err := e.list(ctx, opts.Root, opts.Driver)
 		if err != nil {
 			return nil, err
 		}

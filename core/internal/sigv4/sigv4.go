@@ -4,7 +4,7 @@
 
 // Package sigv4 is the AWS Signature Version 4 request signer shared by the
 // core's AWS REST clients: the ledger checkpoint signer (core/audit/kmssign) and
-// the key-custody KEK wrapper (core/secure/kmswrap). It is a clean-room
+// the key-custody KEK wrapper (Business CMEK). It is a clean-room
 // reimplementation of the standard algorithm; the connectors side has its own
 // copy under Apache, but /core cannot import a connectors-internal package, so
 // the integrity-critical clients carry their own. It lives in core/internal so

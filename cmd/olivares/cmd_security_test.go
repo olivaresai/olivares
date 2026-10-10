@@ -79,11 +79,11 @@ func TestSecurityCheckWireProof(t *testing.T) {
 	// Pin the running version to a real semver for the duration of the test; the
 	// build-time default ("dev") is not a semver. Restore it afterwards.
 	prev := version
-	version = "26.7.0"
+	version = "26.700"
 	t.Cleanup(func() { version = prev })
 
 	dir := t.TempDir()
-	feedPath, pubB64 := writeSignedFeed(t, dir, "GHSA-test-affected", "26.7.2") // fix above 26.7.0
+	feedPath, pubB64 := writeSignedFeed(t, dir, "GHSA-test-affected", "26.702") // fix above 26.700
 
 	t.Run("affected", func(t *testing.T) {
 		out, err := runSecurityCheck(t, "--feed", feedPath, "--pubkey", pubB64)
@@ -93,15 +93,15 @@ func TestSecurityCheckWireProof(t *testing.T) {
 		if !strings.Contains(out, "AFFECTED") || !strings.Contains(out, "GHSA-test-affected") {
 			t.Fatalf("output did not report the advisory:\n%s", out)
 		}
-		if !strings.Contains(out, "fixed in 26.7.2") {
+		if !strings.Contains(out, "fixed in 26.702") {
 			t.Errorf("output did not name the fix version:\n%s", out)
 		}
 	})
 
 	t.Run("not_affected", func(t *testing.T) {
-		// Running 26.7.0 with a feed fixed at 26.6.0 — the running version is already past
+		// Running 26.700 with a feed fixed at 26.600 — the running version is already past
 		// the fix, so nothing affects it. The command still verifies the feed offline.
-		safeFeed, safePub := writeSignedFeed(t, t.TempDir(), "GHSA-test-safe", "26.6.0")
+		safeFeed, safePub := writeSignedFeed(t, t.TempDir(), "GHSA-test-safe", "26.600")
 		out, err := runSecurityCheck(t, "--feed", safeFeed, "--pubkey", safePub)
 		if err != nil {
 			t.Fatalf("safe version should exit clean, got err=%v\n%s", err, out)

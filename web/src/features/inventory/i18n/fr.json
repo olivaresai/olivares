@@ -56,7 +56,11 @@
     "viewAccess": "Carte des accès",
     "viewSessions": "Sessions",
     "gone": "Cette entrée ne figure plus dans le catalogue.",
-    "noProjection": "Aucun détail supplémentaire n’est disponible à l’affichage pour cette entrée. Cela ne permet pas d’établir si elle a des relations."
+    "noProjection": "Aucun détail supplémentaire n’est disponible à l’affichage pour cette entrée. Cela ne permet pas d’établir si elle a des relations.",
+    "aiDiscovery": {
+      "unregistered_at_discovery": "Non enregistré lors de la découverte. Ce point de terminaison IA était nouveau dans l’inventaire ; sa gouvernance actuelle est inconnue. La couverture se limite au journal du proxy et aux hôtes IA configurés.",
+      "unknown": "Point de terminaison IA observé. Sa gouvernance est inconnue. La couverture se limite au journal du proxy et aux hôtes IA configurés."
+    }
   },
   "freshness": {
     "title": "Fraîcheur du catalogue",

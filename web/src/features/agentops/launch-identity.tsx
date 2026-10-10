@@ -46,22 +46,25 @@ export function LaunchIdentityFields({
   value,
   onChange,
   identities,
-  requiresAgent,
   pending,
 }: {
   value: string
   onChange: (value: string) => void
   identities: ReturnType<typeof useLaunchIdentities>
-  requiresAgent: boolean
   pending: boolean
 }) {
   const { t } = useTranslation('agentops')
   const agentMode = value !== ''
   return (
     <>
+      {/* The help says what the CHOSEN identity means: the admitted-agent sentence used
+          to stay under "Current human operator". What a launch still lacks is said once,
+          beside Start. */}
       <Field
         label={t('create.identity.title')}
-        description={t('create.identity.hint')}
+        description={
+          agentMode ? t('create.identity.hint') : t('create.identity.humanHint')
+        }
       >
         <select
           className={selectClass}
@@ -73,11 +76,6 @@ export function LaunchIdentityFields({
           <option value={AGENT_SELECTION}>{t('create.identity.agent')}</option>
         </select>
       </Field>
-      {requiresAgent && !agentMode && (
-        <p role="status" className="text-caption text-warning">
-          {t('create.identity.required')}
-        </p>
-      )}
       {agentMode && (
         <>
           <Field

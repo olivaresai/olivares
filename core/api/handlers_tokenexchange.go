@@ -19,13 +19,8 @@ import (
 // can drive it. The caller must itself be authenticated (the bearer that
 // authorizes calling the endpoint); the authority to down-scope comes from
 // possession of the subject_token, which can only ever yield a lesser token.
-func (s *Server) handleTokenExchange(w http.ResponseWriter, r *http.Request) {
-	caller, ok := principalFrom(r.Context())
-	if !ok {
-		// invalid_client is the RFC 6749 §5.2 code for a failed client auth (401).
-		writeOAuthError(w, http.StatusUnauthorized, "invalid_client", "authentication required")
-		return
-	}
+func (s *Server) handleTokenExchange(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	caller := mc.Principal
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	if err := r.ParseForm(); err != nil {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "malformed form body")

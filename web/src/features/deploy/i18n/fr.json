@@ -1,6 +1,6 @@
 {
   "title": "Déploiement et intégration",
-  "subtitle": "Déploiements désiré contre réel, versions et restauration, plan → application gouvernés, et les câblages agent→ressource qui les portent.",
+  "subtitle": "Déclarez quels agents et serveurs MCP s’exécutent et où, puis planifiez, approuvez et appliquez chaque changement, ou annulez-le.",
   "tabs": {
     "definitions": "Définitions",
     "wirings": "Câblages",
@@ -111,6 +111,18 @@
     "subjectKind": "Type de sujet",
     "subjectRef": "Sujet",
     "subjectRefHint": "L’agent ou le serveur MCP que ce déploiement livre.",
+    "subjectKinds": {
+      "agent": "Agent",
+      "mcp_server": "Serveur MCP"
+    },
+    "subjectChoose": {
+      "agent": "Choisir un agent",
+      "mcp_server": "Choisir un serveur MCP"
+    },
+    "subjectNone": {
+      "agent": "Aucun agent pour l’instant.",
+      "mcp_server": "Aucun serveur MCP pour l’instant."
+    },
     "name": "Nom",
     "nameHint": "Un nom pour ce déploiement. Unique par environnement.",
     "environment": "Environnement",
@@ -322,17 +334,22 @@
   "empty": {
     "deploy": {
       "title": "Aucun déploiement déclaré",
-      "description": "Cet écran liste les définitions de déploiement — l’état désiré enregistré ici, pas une session lancée. Déclarez un déploiement pour enregistrer l’état désiré ; la réconciliation exige aussi un exécuteur d’exécution configuré par l’opérateur, sinon Planifier et Appliquer renvoient 503.",
+      "description": "Cet écran liste les définitions de déploiement : déclarez un agent ou un serveur MCP, puis Planifier et Appliquer le déploient sur sa cible.",
       "sessions": "Opérer les sessions"
     },
     "operations": {
       "title": "Aucune opération de déploiement enregistrée",
-      "description": "Planifier, Appliquer, Vérifier et Retirer n’écrivent au registre qu’après la configuration d’un exécuteur d’exécution par un opérateur ; jusque-là, chaque action renvoie 503 sans rien consigner."
+      "description": "Planifier, Appliquer, Vérifier et Retirer sont consignés ici dès qu’un exécuteur d’exécution est connecté."
     },
     "wirings": {
       "title": "Aucun câblage permis matérialisé",
       "description": "Les câblages sont déclarés dans la définition du déploiement et se matérialisent quand Appliquer réussit, ce qui exige un exécuteur d’exécution configuré par un opérateur."
     }
+  },
+  "noExecutor": {
+    "title": "Déployer nécessite un exécuteur d’exécution",
+    "description": "Un administrateur le connecte en faisant pointer OLIVARES_DEPLOY_EXECUTOR_CONFIG vers son fichier de configuration, puis en redémarrant Olivares.",
+    "guide": "Comment connecter un exécuteur"
   },
   "truncatedHint": "Il y a plus de lignes que celles affichées ; cette page les prend par id de ligne (attribué à la création), les suivantes manquent donc. Une définition, une liaison ou une opération qui n'apparaît PAS ici ne prouve pas son inexistence."
 }

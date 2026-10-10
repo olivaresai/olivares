@@ -188,34 +188,50 @@ func newProviderAccountGetCmd() *cobra.Command {
 
 func newProviderAccountEditCmd() *cobra.Command {
 	var cfg agentClientConfig
-	var displayName, accent string
+	var name, displayName, accent string
 	cmd := &cobra.Command{
-		Use:   "edit <account-ref>",
-		Short: "Edit an account's label and color without changing its identity or home",
-		Long: "Set the display label and/or accent color. An explicit empty flag clears that field.\n" +
-			"The stable name, reference, home and launch configuration do not change.\n" +
+		Use:   "edit <account-ref|name>",
+		Short: "Rename an account or edit its label and color without changing its home",
+		Long: "Set the account's --name, its display label and/or its accent color. An explicit empty\n" +
+			"label or color clears that field. The account is named by its reference or by its name.\n" +
+			"A rename changes only the name: the reference, home and launch configuration stay as they\n" +
+			"were. A name another account holds in the environment is refused with exit 5 and is never\n" +
+			"swapped for a different one; a name of the wrong shape is refused with exit 1.\n" +
 			"A lost response can be retried with the same fields; a retired account refuses edits.",
-		Example: "  olivares provider account edit ppf_01J8ABCDEF --display-name 'Research account'\n" +
+		Example: "  olivares provider account edit work --name research\n" +
+			"  olivares provider account edit ppf_01J8ABCDEF --display-name 'Research account'\n" +
 			"  olivares provider account edit ppf_01J8ABCDEF --display-name ''",
 		Args: exactRef("account-ref"),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if !cmd.Flags().Changed("display-name") && !cmd.Flags().Changed("accent") {
-				return exitcode.New(exitcode.Usage, fmt.Errorf("provide --display-name and/or --accent"))
+			if !cmd.Flags().Changed("name") && !cmd.Flags().Changed("display-name") && !cmd.Flags().Changed("accent") {
+				return exitcode.New(exitcode.Usage, fmt.Errorf("provide --name, --display-name and/or --accent"))
 			}
 			if err := cfg.resolve(); err != nil {
 				return err
 			}
+			ref := args[0]
+			if !strings.HasPrefix(ref, "ppf_") {
+				account, err := cfg.findToolAccount(cmd.Context(), ref)
+				if err != nil {
+					return err
+				}
+				ref = account.Ref
+			}
 			body := map[string]any{}
+			if cmd.Flags().Changed("name") {
+				body["name"] = name
+			}
 			if cmd.Flags().Changed("display-name") {
 				body["display_name"] = displayName
 			}
 			if cmd.Flags().Changed("accent") {
 				body["accent"] = accent
 			}
-			return providerAccountPointCall(cmd, &cfg, "PATCH", "/"+args[0], body)
+			return providerAccountPointCall(cmd, &cfg, "PATCH", "/"+ref, body)
 		},
 	}
 	cfg.addFlags(cmd)
+	cmd.Flags().StringVar(&name, "name", "", "the account's new name: lowercase letters, digits and '-', starting with a letter, at most 32 characters")
 	cmd.Flags().StringVar(&displayName, "display-name", "", "display label; an explicit empty string clears it")
 	cmd.Flags().StringVar(&accent, "accent", "", "accent: orange, green, amber, red or blue; empty clears it")
 	addDeprecatedJSONFlag(cmd)

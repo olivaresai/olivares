@@ -13,6 +13,98 @@ import (
 	"github.com/olivaresai/olivares/core/auth"
 )
 
+func TestRequestDerivedRootDotRegistrationAndStepUp(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		base    string
+		origin  string
+		headers map[string]string
+	}{
+		{name: "Host", base: "https://example.com.", origin: "https://example.com."},
+		{
+			name: "forwarded host and port", base: "http://backend.invalid",
+			origin:  "https://example.com.:8443",
+			headers: map[string]string{"X-Forwarded-Host": "example.com.:8443", "X-Forwarded-Proto": "https"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t) // No RP pin or declared public URL.
+			token := h.adminLogin()
+			soft := newSoftAuthenticator(t)
+			undottedOrigin := strings.Replace(tc.origin, "example.com.", "example.com", 1)
+
+			// The RP ID loses the root dot, but the client-data origin must not.
+			for _, origin := range []string{undottedOrigin, tc.origin} {
+				opts := h.do("POST", tc.base+"/v1/auth/webauthn/register/options", token, nil, tc.headers)
+				if opts.code != http.StatusOK {
+					t.Fatalf("register options = %d %s", opts.code, opts.raw)
+				}
+				pk := opts.body["publicKey"].(map[string]any)
+				if rp := pk["rp"].(map[string]any); rp["id"] != testRPID {
+					t.Fatalf("registration RP = %v, want ID %s", rp, testRPID)
+				}
+				r := h.do("POST", tc.base+"/v1/auth/webauthn/register", token,
+					map[string]any{"credential": soft.register(t, opts, flagUP|flagUV|flagAT, origin)}, tc.headers)
+				if origin == undottedOrigin {
+					if r.code != http.StatusForbidden || r.body["error"].(map[string]any)["code"] != "webauthn_verification_failed" {
+						t.Fatalf("registration with undotted origin = %d %s, want verification refusal", r.code, r.raw)
+					}
+				} else if r.code != http.StatusOK || r.body["ok"] != true {
+					t.Fatalf("registration with dotted origin = %d %s", r.code, r.raw)
+				}
+			}
+
+			for _, origin := range []string{undottedOrigin, tc.origin} {
+				opts := h.do("POST", tc.base+"/v1/auth/webauthn/authenticate/options", token, nil, tc.headers)
+				if opts.code != http.StatusOK {
+					t.Fatalf("step-up options = %d %s", opts.code, opts.raw)
+				}
+				if pk := opts.body["publicKey"].(map[string]any); pk["rpId"] != testRPID {
+					t.Fatalf("step-up RP ID = %v, want %s", pk["rpId"], testRPID)
+				}
+				r := h.do("POST", tc.base+"/v1/auth/webauthn/authenticate", token,
+					map[string]any{"credential": soft.assert(t, opts, flagUP|flagUV, origin, false)}, tc.headers)
+				if origin == undottedOrigin {
+					if r.code != http.StatusForbidden || r.body["error"].(map[string]any)["code"] != "webauthn_verification_failed" {
+						t.Fatalf("step-up with undotted origin = %d %s, want verification refusal", r.code, r.raw)
+					}
+					if aal, _ := whoamiAAL(t, h, token); aal != 1 {
+						t.Fatalf("refused step-up elevated the session to AAL%d", aal)
+					}
+				} else if r.code != http.StatusOK || r.body["aal"] != float64(3) {
+					t.Fatalf("step-up with dotted origin = %d %s", r.code, r.raw)
+				}
+			}
+			if aal, amr := whoamiAAL(t, h, token); aal != 3 || strings.Join(amr, " ") != "pwd webauthn" {
+				t.Fatalf("persisted step-up aal/amr = %d %v, want 3 [pwd webauthn]", aal, amr)
+			}
+		})
+	}
+}
+
+func TestRequestDerivedInvalidRelyingPartyRefusesEveryLeg(t *testing.T) {
+	h := newHarness(t)
+	token := h.adminLogin()
+	for _, host := range []string{"olivares", "10.1.2.3", "[::1]", "example.com..", "my_host.example.com", "-bad.example.com"} {
+		t.Run(host, func(t *testing.T) {
+			for _, tc := range []struct {
+				path string
+				body any
+			}{
+				{"/v1/auth/webauthn/register/options", nil},
+				{"/v1/auth/webauthn/authenticate/options", nil},
+				{"/v1/auth/webauthn/register", map[string]any{"credential": map[string]any{"id": "x"}}},
+				{"/v1/auth/webauthn/authenticate", map[string]any{"credential": map[string]any{"id": "x"}}},
+			} {
+				r := h.do("POST", tc.path, token, tc.body, map[string]string{"X-Forwarded-Host": host})
+				if r.code != http.StatusServiceUnavailable || r.body["error"].(map[string]any)["code"] != "webauthn_relying_party_unusable" {
+					t.Fatalf("%s = %d %s, want typed 503", tc.path, r.code, r.raw)
+				}
+			}
+		})
+	}
+}
+
 // A RELYING PARTY THAT CANNOT BE BUILT IS A 503 WITH A REMEDY, NOT A 500.
 //
 // Before this, all four ceremony legs wrapped the verifier's construction failure

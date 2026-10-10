@@ -11,7 +11,7 @@ description: >-
 
 模块 III 的图，包含**发起方**（agent、identity、session）与它们所触及的 **resource**，每条 edge
 都按 [mode](#mode) 分类，并标注其[signal source](#signal-source信号源)、[归因](#attribution归因置信度)
-与[覆盖层级](#coverage-tier覆盖层级)。一项关键的差异化能力——31
+与[覆盖层级](#coverage-tier覆盖层级)。一项关键的差异化能力——32
 个模块之一，而非整个产品。见
 [什么是 Olivares AI？](/zh/start/what-is-olivares-ai/)。
 
@@ -125,11 +125,7 @@ push sink 与离线验证（`olivares audit verify`）形式暴露。
 
 ### Guardian agent（守护 agent）
 
-**Gartner** 的术语，指监视或干预*其他* AI agent 的 AI。Olivares AI 交付该类别的**治理结果**——
-观测、对 permitted-vs-observed 作差、deny-closed 门控、不可变记录——但作为一个**位于数据路径之外的
-读优先 control plane**，而非一个内联站岗的 LLM。见
-[分析师词汇](/zh/explanation/positioning/analyst-vocabulary/)；与产品内的
-[guardian loop](#guardian-loop守护回路) 相对照。
+**Gartner** 的术语，指监视或干预*其他* AI agent 的 AI。Olivares AI 提供该类别的**治理结果**——观测、对 permitted-vs-observed 作差、deny-closed 门控、不可变记录——通过**带外观测和 deny-closed 的内联控制**实现，无需 LLM 站岗。受管 Claude Code hook 依赖引擎的 PEP；PEP 无法访问时会拒绝受治理工具调用。参见[分析师词汇](/zh/explanation/positioning/analyst-vocabulary/)；与产品内的 [guardian loop](#guardian-loop守护回路) 对照。
 
 ### Guardian loop（守护回路）
 
@@ -150,7 +146,7 @@ agent identity）。名册来自[身份 source](/zh/how-to/connectors/sso-scim-i
 
 ### live_ref
 
-服务器为 **一行** 实时会话分配的身份。26.10.1 按 `(观察范围, 外部 id)` 为观察
+服务器为 **一行** 实时会话分配的身份。Olivares <!-- release -->0.1<!-- /release --> 按 `(观察范围, 外部 id)` 为观察
 编制键，使两个宣布同一会话 id 的提供商主目录仍是两行。表示「这一行」的控制台
 和 API 读取使用 `live_ref`，而不是裸提供商 id。裸外部 id 路由是遗留的，只回答
 遗留行（`CHANGELOG.md` `[26.9.0]` B2）。见

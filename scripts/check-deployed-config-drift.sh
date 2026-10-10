@@ -35,7 +35,7 @@ set -uo pipefail
 _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
 # shellcheck source=/dev/null
 . "$_olivares_git_env" || {
-	echo "check-deployed-config-drift: ⛔ NO HE PODIDO MIRAR: no puedo cargar $_olivares_git_env" >&2
+	echo "check-deployed-config-drift: ⛔ COULD NOT CHECK: cannot load $_olivares_git_env" >&2
 	exit 2
 }
 unset _olivares_git_env
@@ -45,17 +45,17 @@ case "$ENTORNO" in
 sandbox) SCRIPT=olivares-license-worker-sandbox; ENVKEY=sandbox ;;
 production) SCRIPT=olivares-license-worker-production; ENVKEY=production ;;
 *)
-	echo "check-deployed-config-drift: ⛔ NO HE PODIDO MIRAR: entorno '$ENTORNO' desconocido (sandbox|production)." >&2
+	echo "check-deployed-config-drift: ⛔ COULD NOT CHECK: unknown environment '$ENTORNO' (sandbox|production)." >&2
 	exit 2
 	;;
 esac
 
 ROOT="${OLIVARES_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo .)}"
 CFG="$ROOT/commercial/license-worker/wrangler.jsonc"
-[ -f "$CFG" ] || { echo "check-deployed-config-drift: ⛔ NO HE PODIDO MIRAR: no encuentro $CFG." >&2; exit 2; }
-[ -n "${CLOUDFLARE_API_TOKEN:-}" ] || { echo "check-deployed-config-drift: ⛔ NO HE PODIDO MIRAR: sin CLOUDFLARE_API_TOKEN." >&2; exit 2; }
-command -v curl >/dev/null 2>&1 || { echo "check-deployed-config-drift: ⛔ NO HE PODIDO MIRAR: no encuentro curl." >&2; exit 2; }
-command -v python3 >/dev/null 2>&1 || { echo "check-deployed-config-drift: ⛔ NO HE PODIDO MIRAR: no encuentro python3." >&2; exit 2; }
+[ -f "$CFG" ] || { echo "check-deployed-config-drift: ⛔ COULD NOT CHECK: no encuentro $CFG." >&2; exit 2; }
+[ -n "${CLOUDFLARE_API_TOKEN:-}" ] || { echo "check-deployed-config-drift: ⛔ COULD NOT CHECK: CLOUDFLARE_API_TOKEN is not set." >&2; exit 2; }
+command -v curl >/dev/null 2>&1 || { echo "check-deployed-config-drift: ⛔ COULD NOT CHECK: no encuentro curl." >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "check-deployed-config-drift: ⛔ COULD NOT CHECK: no encuentro python3." >&2; exit 2; }
 
 API=https://api.cloudflare.com/client/v4
 CUENTA="${CLOUDFLARE_ACCOUNT_ID:-}"
@@ -68,7 +68,7 @@ r=d.get("result") if d.get("success") else None
 if isinstance(r,list) and len(r)==1: print(r[0].get("id",""))
 ' 2>/dev/null)"
 fi
-[ -n "$CUENTA" ] || { echo "check-deployed-config-drift: ⛔ NO HE PODIDO MIRAR: no he resuelto EXACTAMENTE una cuenta." >&2; exit 2; }
+[ -n "$CUENTA" ] || { echo "check-deployed-config-drift: ⛔ COULD NOT CHECK: could not resolve exactly one account." >&2; exit 2; }
 
 # ⛔ LA RESPUESTA VIAJA POR FICHERO, NO POR STDIN, y no es estilo. La primera versión hacía
 # `printf … | python3 - "$CFG" <<'PY'`: el heredoc OCUPA stdin con el propio programa, así que
@@ -76,12 +76,12 @@ fi
 # «respuesta ilegible» sobre una respuesta perfectamente legible. El script y sus datos peleándose por
 # el mismo canal es un falso «no he podido mirar», que es el veredicto más caro de fabricar: parece
 # prudencia y es un defecto.
-TMPD="$(mktemp -d "${TMPDIR:-/tmp}/drift.XXXXXX" 2>/dev/null)" || { echo "check-deployed-config-drift: ⛔ NO HE PODIDO MIRAR: sin directorio temporal." >&2; exit 2; }
+TMPD="$(mktemp -d "${TMPDIR:-/tmp}/drift.XXXXXX" 2>/dev/null)" || { echo "check-deployed-config-drift: ⛔ COULD NOT CHECK: no temporary directory." >&2; exit 2; }
 trap 'rm -rf "$TMPD"' EXIT
 printf 'Authorization: Bearer %s\n' "$CLOUDFLARE_API_TOKEN" | curl -sS --max-time 45 -H @- \
 	"$API/accounts/$CUENTA/workers/scripts/$SCRIPT/settings" >"$TMPD/settings.json" 2>/dev/null
 
-salida="$(python3 - "$CFG" "$ENVKEY" "$TMPD/settings.json" <<'PY' 2>/dev/null
+output="$(python3 - "$CFG" "$ENVKEY" "$TMPD/settings.json" <<'PY' 2>/dev/null
 import json,sys,re
 
 cfg_path, envkey, settings_path = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -109,18 +109,18 @@ while i < n:
 try:
     cfg = json.loads("".join(out))
 except Exception as e:
-    print("MIRAR|no he podido parsear wrangler.jsonc: %s" % str(e)[:70]); sys.exit(0)
+    print("MIRAR|could not parse wrangler.jsonc: %s" % str(e)[:70]); sys.exit(0)
 
 declarado = ((cfg.get("env") or {}).get(envkey) or {}).get("vars") or {}
 if not declarado:
-    print("MIRAR|el entorno '%s' no declara vars en wrangler.jsonc: sin nada que comparar, no se dictamina" % envkey); sys.exit(0)
+    print("MIRAR|environment '%s' declares no vars in wrangler.jsonc: nothing to compare, so no verdict" % envkey); sys.exit(0)
 
 try:
     d = json.load(open(settings_path, encoding="utf-8"))
 except Exception:
-    print("MIRAR|respuesta ilegible de la API de settings"); sys.exit(0)
+    print("MIRAR|unreadable settings API response"); sys.exit(0)
 if not d.get("success"):
-    print("MIRAR|la API dijo no: %s" % ([e.get("message") for e in d.get("errors",[])][:1])); sys.exit(0)
+    print("MIRAR|API rejected the request: %s" % ([e.get("message") for e in d.get("errors",[])][:1])); sys.exit(0)
 
 b = (d.get("result") or {}).get("bindings") or []
 vivo = {x.get("name"): x.get("text") for x in b if x.get("type") == "plain_text"}
@@ -128,14 +128,14 @@ vivo = {x.get("name"): x.get("text") for x in b if x.get("type") == "plain_text"
 # CONTROL POSITIVO. Cero variables leidas saldria "sin deriva" por vacuidad, que es el falso verde
 # caro: significaria que no hemos leido la configuracion, no que coincida.
 if len(vivo) < 5:
-    print("MIRAR|solo %d variable(s) legibles del worker: eso no es una configuracion, es una lectura rota" % len(vivo)); sys.exit(0)
+    print("MIRAR|only %d readable worker variable(s): the configuration could not be read completely" % len(vivo)); sys.exit(0)
 
 deriva = []
 for k, v in sorted(declarado.items()):
     if not isinstance(v, str):   # solo se comparan cadenas: un binding no-texto no vive en plain_text
         continue
     if k not in vivo:
-        deriva.append((k, v, "<AUSENTE en el despliegue>"))
+        deriva.append((k, v, "<MISSING from deployment>"))
     elif vivo[k] != v:
         deriva.append((k, v, vivo[k]))
 
@@ -143,26 +143,26 @@ print("DATOS|%d|%d|%s" % (len(declarado), len(vivo), json.dumps(deriva)))
 PY
 )"
 
-[ -n "$salida" ] || { echo "check-deployed-config-drift: ⛔ NO HE PODIDO MIRAR: el comparador no produjo veredicto." >&2; exit 2; }
+[ -n "$output" ] || { echo "check-deployed-config-drift: ⛔ COULD NOT CHECK: comparator produced no verdict." >&2; exit 2; }
 
-case "$salida" in
+case "$output" in
 MIRAR\|*)
-	echo "check-deployed-config-drift: ⛔ NO HE PODIDO MIRAR: ${salida#MIRAR|}" >&2
+	echo "check-deployed-config-drift: ⛔ COULD NOT CHECK: ${output#MIRAR|}" >&2
 	exit 2
 	;;
 esac
 
-n_dec="$(printf '%s' "$salida" | cut -d'|' -f2)"
-n_vivo="$(printf '%s' "$salida" | cut -d'|' -f3)"
-deriva_json="$(printf '%s' "$salida" | cut -d'|' -f4-)"
+n_dec="$(printf '%s' "$output" | cut -d'|' -f2)"
+n_vivo="$(printf '%s' "$output" | cut -d'|' -f3)"
+deriva_json="$(printf '%s' "$output" | cut -d'|' -f4-)"
 
 n_der="$(printf '%s' "$deriva_json" | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))' 2>/dev/null || echo "")"
-[ -n "$n_der" ] || { echo "check-deployed-config-drift: ⛔ NO HE PODIDO MIRAR: no he podido contar la deriva." >&2; exit 2; }
+[ -n "$n_der" ] || { echo "check-deployed-config-drift: ⛔ COULD NOT CHECK: could not count drift." >&2; exit 2; }
 
-echo "check-deployed-config-drift: $ENTORNO · declaradas en wrangler.jsonc=$n_dec · legibles en el despliegue=$n_vivo · DERIVA=$n_der"
+echo "check-deployed-config-drift: $ENTORNO · declared in wrangler.jsonc=$n_dec · readable in deployment=$n_vivo · DRIFT=$n_der"
 
 if [ "$n_der" -eq 0 ]; then
-	echo "check-deployed-config-drift: OK — lo desplegado coincide con lo declarado."
+	echo "check-deployed-config-drift: OK — deployed configuration matches the declaration."
 	exit 0
 fi
 
@@ -171,9 +171,9 @@ import json,sys
 for k,dec,viv in json.load(sys.stdin):
     print("  ⛔ %-26s repositorio=%-14r desplegado=%r" % (k, dec, viv))
 ' 2>/dev/null
-echo "check-deployed-config-drift: ⛔ DERIVA — lo que contesta peticiones NO es lo que dice el repositorio." >&2
-echo "  Una configuración en el repositorio no es una configuración desplegada. Sólo la segunda sirve" >&2
-echo "  tráfico, y la primera es la que se lee al decidir qué publicar: así es como un artefacto" >&2
-echo "  correcto se vuelve invisible sin que nada falle." >&2
-echo "  repair: desplegar el entorno, o corregir wrangler.jsonc si el valor vivo es el bueno." >&2
+echo "check-deployed-config-drift: ⛔ DRIFT — the configuration serving requests differs from the repository." >&2
+echo "  Only the deployed configuration serves traffic. Publishing decisions use the repository's" >&2
+echo "  configuration, so a correct artifact can become unavailable when the two differ," >&2
+echo "  without any deployment step reporting a failure." >&2
+echo "  fix: deploy the environment, or correct wrangler.jsonc if the live value is right." >&2
 exit 1

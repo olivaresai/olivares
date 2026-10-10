@@ -14,20 +14,16 @@ pass=0; fail=0
 ok() { printf 'ok   %s\n' "$1"; pass=$((pass + 1)); }
 bad() { printf 'FAIL %s\n' "$1" >&2; fail=$((fail + 1)); }
 
-# ⛔ EL ÁRBOL DE PRUEBA MONTA EL DERIVADOR, y sin eso esta batería mide otra cosa.
-#
-# Los casos de abajo comprueban que el gate caza un mapa manipulado. Desde el 2026-09-03 quien lo
-# caza no es un literal dentro del gate —27, 25— sino la comparación contra la derivación del canon,
-# así que un árbol de prueba sin `an internal design note (not shipped)` ni `commercial/commerce-lint` recibe
-# NOT APPLICABLE y el caso pasaría en verde sin haber ejercitado nada. Retirar una guarda sin
-# demostrar que su sustituta caza lo mismo es justo lo que el canon prohíbe.
-#
-# El binario se construye UNA vez y se pasa por variable: seis árboles desechables × un `go build`
-# cada uno es contención en una caja de 8 GiB compartida por seis carriles.
+# The fixture tree includes the canonical derivation, not just an altered map.
+# Since 2026-09-03 the gate compares that map with derived data, not embedded 27/25
+# counts. Omitting an internal design note (not shipped) or commercial/commerce-lint returns NOT
+# APPLICABLE and falsely passes without exercising the replacement guard.
+# Build the binary once and pass it by variable: rebuilding it in all six fixture
+# trees creates unnecessary contention on a shared 8 GiB host.
 export GOWORK=off
 MCBIN="$(mktemp -u "${TMPDIR:-/workspace/.olivares-tmptest}/mc-bin.XXXXXX")"
 ( cd "$ROOT/commercial/commerce-lint" && go build -o "$MCBIN" . ) >/dev/null 2>&1 || {
-	echo "no pude construir el derivador: la bateria mediria NOT APPLICABLE" >&2; exit 2; }
+	echo "could not build the deriver: the test would measure NOT APPLICABLE" >&2; exit 2; }
 export OLIVARES_MODULE_CATALOG_BIN="$MCBIN"
 stage_derivation() {
 	mkdir -p "$TMP/tree/design" "$TMP/tree/commercial/license-worker/src/catalog" "$TMP/tree/scripts"

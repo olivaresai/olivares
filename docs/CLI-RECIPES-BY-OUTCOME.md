@@ -4,6 +4,8 @@ SPDX-License-Identifier: AGPL-3.0-only
 -->
 # CLI recipes by OUTCOME
 
+Audit SIEM export, directory archives and external archive verification require Business. Community retains the signed ledger and `olivares audit verify`; `olivares dr backup` remains available. See [edition placement](editions.md).
+
 **Date:** 2026-08-10 · **Status:** every recipe below was RUN against a real
 `olivares serve`, and each one states what was executed and what was not.
 
@@ -46,8 +48,12 @@ what you add when a rule needs attributes a tool-name match cannot express.
 
 ```sh
 # The PDP overlay: validate and dry-run a candidate BEFORE it can deny anything.
+# request.json is the request to decide: principal{kind,id}, permission, resource{kind,id,sensitivity}.
 olivares hookpep validate --engine cedar --file policy.cedar
+echo '{"principal":{"kind":"user","id":"u1"},"permission":"models:keys:read","resource":{"kind":"credential","sensitivity":"secret"}}' > request.json
 olivares hookpep dry-run --engine cedar --file policy.cedar --request-file request.json
+
+# Business: author and activate Cedar. Community can inspect stored policies.
 olivares hookpep publish --engine cedar --file policy.cedar --note "approved change"
 ```
 
@@ -125,14 +131,50 @@ OLIVARES_BIN=./bin/olivares examples/govern-claude-code/smoke.sh
 **The outcome:** a Claude Code session runs under the control plane — with a registered
 workspace, a recorded lifecycle, and an operator who can stop it.
 
-**Two knobs that are easy to confuse, and this is the reason the recipe exists:**
-launching a session and governing its tool-calls are **separate**. A session launches
-once an inference credential source is wired; its tool-calls are PEP-governed only when
-`OLIVARES_SESSION_PEP_URL` is also set. The session's `pep_provisioned` field tells you
-which of the two you have.
+**What governs the session.** A session launches under the tool's own login or under a key
+from Providers, and the engine points the session's managed PreToolUse hook at its own
+policy endpoint, so the control plane decides its tool-calls. The session's
+`pep_provisioned` field says whether the hook was wired: `true` in the run recorded at the
+end of this section.
+
+**The path a person takes is `olivares session`.** One command registers the folder the
+session may see and starts the tool. Once the tool is signed in (`olivares tool login
+claude`) or Providers holds a key or a local model, no workspace, profile or provider
+reference has to be registered first:
 
 ```sh
-# 1. Register the credential the session launches with, and prove it works.
+olivares session start /srv/projects/acme "explain this repository"
+```
+
+Without `--tool` and `--profile` it runs the first tool that is ready, as the console's New
+session does (with `--profile` and no `--tool` the tool is Claude Code). Without `--profile`
+the engine picks how the tool runs (its own login, or a key or local model from Providers),
+and one line says which. Narrow the session when you need to:
+
+```sh
+olivares session start /srv/projects/acme --name acme-1 --tool claude --permission read-only --dlp deny --model opus
+```
+
+Watch it, feed it, stop it, remove it. `rm` runs the cleanup of a stopped session for you:
+
+```sh
+olivares session ls
+olivares session show acme-1 -o json
+olivares session send acme-1 "now run the linter"
+olivares session follow acme-1
+olivares session stop acme-1
+olivares session rm acme-1
+```
+
+### The expert path: a pinned workspace and profile
+
+`olivares agent session …` is the same engine call with every reference spelled out. It is
+out of `--help` (`olivares commands` lists it) and stays for scripts that must name the
+workspace and the profile themselves. Steps 1 and 3 are optional: skip them to launch under
+the tool's own login, once it is signed in.
+
+```sh
+# 1. Optional: register a key the session launches with, and prove it works.
 #    The key is read from stdin: a flag value lands in the shell history.
 olivares provider add --kind anthropic --name "Anthropic (prod)" < key.txt
 olivares provider test prv_123
@@ -141,13 +183,13 @@ olivares provider test prv_123
 olivares agent workspace add /srv/projects/acme --name acme --mode ro --dlp deny
 olivares agent workspace ls -o json
 
-# 3. Register the profile the session runs under, bound to that provider.
+# 3. Optional: register a profile bound to that provider.
 olivares agent profile create --driver claude \
   --config-home /home/ops/.claude --user-home /home/ops --name "Claude (ops)" \
   --auth-source managed_injection --provider prv_123
 
-# 4. Launch. --workspace takes the workspace_ref from step 2 and
-#    --provider-profile the profile_ref from step 3.
+# 4. Launch. --workspace takes the workspace_ref from step 2; --provider-profile,
+#    when you pass it, takes the profile_ref from step 3.
 olivares agent session create --name acme-1 --workspace ws-123 \
   --provider-profile ppf_123 --model opus --permission-mode plan
 
@@ -157,41 +199,45 @@ olivares agent session get run-123 -o json
 olivares agent session stop run-123
 ```
 
-⛔ **`--provider-profile` IS REQUIRED, and this recipe omitted it until 2026-09-17.**
-The engine enables profiled launches unconditionally (`cmd/olivares/boot.go`
-`EnableProfiledLaunches`), and `resolveLaunchProfileInto` answers **400 `select a
-provider profile before launching a session`** to a create with no profile. The old
-four-line form could not have worked on any shipped v26.9 server. Steps 1 and 3 are
-new in v26.10. Before it, the credential lived in a host environment variable and there was no
-CLI verb for a profile at all.
+**`--provider-profile` is optional.** Without it the engine launches under the profile it
+resolves for Claude Code, creating it on first use, exactly as `session start` does. That
+needs the caller's provider-profile write permission; a caller without it is answered
+**400 `select a provider profile before launching a session`**. A profile bound to a
+registered provider (step 1) resolves its credential from that provider, and a bound
+credential that cannot be opened **denies** the launch: it does not fall back to another
+credential, because that would run the session on an account nobody selected for it.
 
-**The ordering that no single command's help states:** `rm` refuses a stopped session
-with **HTTP 409 `session must be cleaned before delete (state=stopped)`**. The lifecycle
-is `stop` → `cleanup` → `rm`, and skipping the middle verb is the mistake to make once:
+**The ordering that no single command's help states:** on this path `rm` refuses a stopped
+session with **HTTP 409 `session must be cleaned before delete (state=stopped)`**. The
+lifecycle is `stop` → `cleanup` → `rm`, and skipping the middle verb is the mistake to make
+once (`olivares session rm` runs the cleanup itself):
 
 ```sh
 olivares agent session cleanup run-123
 olivares agent session rm run-123
 ```
 
-⛔ **THIS PARAGRAPH SAID THE REFUSAL WAS A SILENT 500. IT IS NO LONGER TRUE, and
-leaving it would send an operator hunting a bug the engine already fixed.** The 2026-08-10
-measurement was correct when it was taken. Since then `denyClosedErr` classifies the
-unwired credential source explicitly (`modules/sessions/runtime.go`): the launch answers
-**503** with the sentence *«inference credential source is not wired; stream-json launches
-are deny-closed (set OLIVARES_SESSION_RUNTIME_WIF or OLIVARES_SESSION_RUNTIME_TOKEN_FILE).
-remote-control launches do not need it»*, and a WIRED-but-unreadable token file answers 503
-with its own distinct sentence. The remedy is named in the answer.
+**A launch with nothing to run on is refused, not guessed.** When the engine picks the
+profile (`session start` without `--profile`, `agent session create` without
+`--provider-profile`), it answers **409** and says what to add: sign the tool in under AI
+tools, or add a key or a local model in Providers. A pinned profile that has no credential
+source answers **503**, and the sentence names the remedy: sign the tool in with its own
+login, or start it with an API key saved in Providers. A deployment with its own inference
+gateway sets `OLIVARES_SESSION_RUNTIME_WIF` or `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`. A token
+file that is set but unreadable answers 503 with its own sentence.
 
-⚠ **And from v26.10, which is pending, those variables will no longer be the only path.** A profile bound to a
-registered provider (step 1 above) resolves its credential from that provider, and the host
-variables apply only to profiles that name none. A bound credential that cannot be produced
-**denies** the launch — it does not fall back to the host's, because that would run the
-session on an account nobody selected for it.
-
-**Executed 2026-08-10:** `workspace add` → `session create` (201, `state=running
-transport=stream-json isolation=native`) → `ls` → `get` → `stop` (`state=stopped
-exit_code=143`) → `rm` (409) → `cleanup` → `rm` (204) → `ls` empty.
+**Executed 2026-10-07** on a build of `d5512b44` against a fresh data directory, with a
+labelled stand-in for the `claude` program and no vendor account. The path a person takes:
+`session start` with a prompt (the reply came back; `session show -o json` said
+`pep_provisioned: true`) → `ls` → `show` → `send` → `follow` (cut off after 3 s) → `stop` → `rm`, then
+the narrowed `start --name acme-1 --tool claude --permission read-only --dlp deny --model
+opus` → `stop` → `rm`. The expert path with no provider, no profile and no
+`--provider-profile`: `workspace add` → `session create` (`state=running`; the engine
+created the "Claude Code" profile itself) → `get` → `stop` → `rm` (409) → `cleanup` → `rm` →
+`ls` empty. **Not executed:** `provider add` and `provider test` (they need a real key),
+`agent profile create` with a bound provider, and a real Claude Code sign-in. Before the tool
+was signed in, both launches without a profile answered 409 `Claude Code is not signed in
+and Providers has nothing it can use` (exit 5).
 
 ---
 

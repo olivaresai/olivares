@@ -22,13 +22,14 @@
     "edition": "Edición y módulos",
     "about": "Acerca de",
     "sections": "Secciones de ajustes",
-    "signing": "Firma de informes"
+    "signing": "Firma de informes",
+    "tracing": "Trazas"
   },
   "general": {
     "title": "General",
     "scope": "Tus preferencias. Te siguen a cada espacio de trabajo de esta instalación.",
     "theme": "Tema",
-    "themeHint": "Oscuro, salvo que elijas claro o seguir el sistema.",
+    "themeHint": "Sigue el sistema, salvo que elijas claro u oscuro.",
     "density": "Densidad",
     "densityHint": "Compacto muestra más filas; cómodo se lee mejor.",
     "language": "Idioma",
@@ -46,8 +47,7 @@
   },
   "unavailable": {
     "notifications": "Las preferencias de notificación aún no se guardan en esta instalación.",
-    "sessionDefaults": "Los valores de sesión aún no se guardan en esta instalación.",
-    "signIn": "La política de inicio de sesión aún no se edita en esta pantalla."
+    "sessionDefaults": "Los valores de sesión aún no se guardan en esta instalación."
   },
   "keyboard": {
     "title": "Teclado",
@@ -55,37 +55,38 @@
   },
   "edition": {
     "title": "Edición y módulos",
-    "scope": "La edición de esta compilación, los módulos que ejecuta y lo que añade una compilación Business.",
+    "scope": "La edición de esta compilación, los módulos que ejecuta y lo que añade Business.",
     "label": "Edición",
     "unknown": "Este motor no la indica",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
-    "businessAdds": "Un build Business añade",
+    "businessAdds": "Business añade",
     "adds": {
       "loginEnforcement": "Aplicación del inicio de sesión: exigir SSO y una lista de redes permitidas",
       "identityProviders": "Varios proveedores de identidad, por organización y enrutados por dominio de correo",
       "groupMapping": "Grupos de directorio asignados a roles al iniciar sesión",
       "regulatory": "Operaciones regulatorias: registros DORA, clasificación de incidentes NIS 2, perfiles OSCAL, paquetes de EE. UU. y sectoriales, y supervisión continua de controles",
-      "reports": "Informes empresariales e informes programados",
+      "reports": "Informes Business e informes programados",
       "toolPins": "Fijación de herramientas"
     }
   },
   "about": {
     "title": "Acerca de",
-    "scope": "Esta instalación y el principal que ha iniciado sesión.",
+    "scope": "Esta instalación y la persona que ha iniciado sesión.",
     "version": "Versión",
     "engine": "Motor de almacén",
     "edition": "Edición",
-    "community": "Edición Community (gratuita)",
+    "community": "Edición Community — no necesita licencia",
     "license": "Estado de la licencia",
     "licensee": "Licencia a nombre de",
     "none": "Ninguno",
     "displayName": "Nombre para mostrar",
-    "actor": "Principal",
+    "actor": "ID de identidad",
     "role": "Rol en esta organización",
-    "memberships": "Organizaciones"
+    "memberships": "Organizaciones",
+    "email": "Correo electrónico"
   },
   "stopConfirm": {
     "title": "¿Detener esta sesión?",
@@ -94,12 +95,20 @@
   },
   "modules": {
     "title": "Módulos",
-    "description": "Activa o desactiva las partes de Olivares que ejecuta esta instalación. Aplicar reinicia el motor una vez para tomar el cambio.",
+    "description": "Activa o desactiva las partes de Olivares que ejecuta esta instalación. Aplicar reinicia el motor una vez para tomar el cambio, y el reinicio detiene las sesiones en curso.",
     "apply_one": "Aplicar {{count}} cambio",
     "apply_many": "Aplicar {{count}} cambios",
     "apply_other": "Aplicar {{count}} cambios",
     "applied": "Selección de módulos guardada.",
     "restarting": "Reiniciando el motor…",
+    "restartWarning": {
+      "title": "¿Reiniciar el motor?",
+      "stop_one": "Se detiene {{count}} sesión en curso. Puede reanudarse después del reinicio.",
+      "stop_many": "Se detienen {{count}} sesiones en curso. Cada una puede reanudarse después del reinicio.",
+      "stop_other": "Se detienen {{count}} sesiones en curso. Cada una puede reanudarse después del reinicio.",
+      "unknown": "Se detienen todas las sesiones en curso. Cada una puede reanudarse después del reinicio.",
+      "confirm": "Reiniciar y aplicar"
+    },
     "pending_one": "{{count}} cambio espera a Aplicar.",
     "pending_many": "{{count}} cambios esperan a Aplicar.",
     "pending_other": "{{count}} cambios esperan a Aplicar.",
@@ -188,6 +197,8 @@
       "sourcescope": "Qué fuentes pueden leer los agentes.",
       "voice": "Agentes de voz y llamadas."
     },
+    "noChanges": "No hay cambios que aplicar. Activa o desactiva un módulo primero.",
+    "saving": "Guardando la selección de módulos…",
     "applyNone": "Aplicar",
     "whenOffDefault": "Sus datos se conservan, pero nada los usa mientras el módulo esté apagado.",
     "whenOff": {
@@ -207,7 +218,13 @@
       "claude-policy": "Los ajustes gestionados de Claude Code dejan de comprobarse."
     },
     "turnOn": "Activar {{name}}",
-    "activatedBy": "Lo activa {{addons}}. Sigue activado mientras ese complemento esté activo."
+    "activatedBy": "Lo activa {{addons}}. Sigue activado mientras ese complemento esté activo.",
+    "turnOnPlain": "Activar",
+    "alsoTurnsOn": "Al activarlo también se activan {{names}} y el motor se reinicia.",
+    "openEdition": "Abrir Edición y módulos",
+    "askAdmin": "Pide a un administrador que lo active.",
+    "notSetUp": "Todavía no está configurado en esta instalación.",
+    "stillRestarting": "Sigue reiniciándose. Recarga la página."
   },
   "signing": {
     "title": "Firma de informes",
@@ -236,5 +253,38 @@
     "turnOn": "Activar la firma",
     "turnOff": "Desactivar la firma",
     "offKeepsKey": "Al desactivarla se conserva la clave, así que los paquetes firmados antes se pueden seguir verificando."
+  },
+  "tracing": {
+    "description": "Exporta trazas y métricas a tu colector. Los cambios se aplican sin reiniciar el motor.",
+    "enabled": "Activar trazas",
+    "endpoint": "Dirección del colector",
+    "protocol": "Protocolo",
+    "insecure": "Permitir texto sin cifrar en una red de confianza",
+    "sampleRatio": "Proporción de muestreo (0–1)",
+    "serviceName": "Nombre del servicio",
+    "compat": "Incluir atributos GenAI anteriores",
+    "overrides": "Variables de entorno que prevalecen: {{names}}",
+    "active": "Las trazas están activadas.",
+    "inactive": "Las trazas están desactivadas.",
+    "apply": "Aplicar",
+    "saved": "Configuración de trazas guardada.",
+    "businessRequired": "El envío SIEM y la exportación externa de telemetría requieren Business. Se conservan los ajustes; Community no envía los datos."
+  },
+  "signIn": {
+    "methods": "Métodos de acceso",
+    "password": "Contraseña",
+    "sso": "Inicio de sesión único: {{providers}}",
+    "noSso": "No hay ningún proveedor de inicio de sesión único disponible en la página de acceso.",
+    "manageSso": "Gestionar proveedores de identidad",
+    "session": "Duración de la sesión",
+    "sessionHint": "El motor fija esta duración al iniciar sesión y la renueva al actualizar la sesión. No es configurable.",
+    "passwordAvailable": "El acceso local con contraseña está disponible.",
+    "passwordBlocked": "Se exige inicio de sesión único. El acceso local con contraseña está bloqueado.",
+    "ssoNotEnforced": "Se ha solicitado inicio de sesión único, pero esta compilación no aplica esa política. Comprueba los ajustes del proveedor de identidad antes de cerrar sesión.",
+    "passwordManaged": "El administrador de tu organización gestiona el acceso con contraseña.",
+    "hours_one": "{{count}} hora",
+    "hours_many": "{{count}} horas",
+    "hours_other": "{{count}} horas",
+    "ssoInactive": "Se ha solicitado inicio de sesión único, pero su proveedor de identidad está inactivo. Este requisito no bloquea el acceso con contraseña."
   }
 }

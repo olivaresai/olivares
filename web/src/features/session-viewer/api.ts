@@ -9,10 +9,8 @@
 // round-trip. The active tenant header is attached automatically; tenant-scoped
 // keys cache-isolate per tenant (query.ts contract).
 //
-import { http } from '@/lib/api/client'
+import { apiFetchRaw, http } from '@/lib/api/client'
 import type { SessionDTO } from '@/features/recordings/types'
-import { useSessionStore } from '@/stores/session'
-import { useTenantStore } from '@/stores/tenant'
 import type { UnifiedResponse, VerifyResult } from './types'
 
 const BASE = '/v1/m/recording'
@@ -52,18 +50,12 @@ export const viewerApi = {
       `${BASE}/sessions/${encodeURIComponent(id)}/export`,
       { query: { format: 'json' } },
     ),
-  /** Export as plain-text summary (raw fetch — http client has no getText). */
+  /** Export as plain-text summary (the raw response: the body is text, not JSON). */
   exportSummary: async (id: string): Promise<string> => {
-    const headers = new Headers({ Accept: 'text/plain' })
-    const token = useSessionStore.getState().csrfToken
-    if (token) headers.set('X-CSRF-Token', token)
-    const tenant = useTenantStore.getState().activeTenant
-    if (tenant) headers.set('X-Olivares-Tenant', tenant)
-    const res = await fetch(
-      `${BASE}/sessions/${encodeURIComponent(id)}/export?format=summary`,
-      { method: 'GET', headers, credentials: 'same-origin' },
+    const res = await apiFetchRaw(
+      `${BASE}/sessions/${encodeURIComponent(id)}/export`,
+      { query: { format: 'summary' }, headers: { Accept: 'text/plain' } },
     )
-    if (!res.ok) throw new Error(`Export failed: ${res.status}`)
     return res.text()
   },
 }

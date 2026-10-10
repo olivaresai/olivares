@@ -12,9 +12,10 @@ Olivares AI は 2 か所で gRPC を使用し、それぞれ逆方向を向い�
   型付き stub を使いたい呼び出し元向けの、REST サーフェスの小さなミラーです。
   [API リファレンス](/reference/api/)の REST contract の方が広範です。
 - **プラグインのワイヤ contract**（`olivares.sdk.v1.*`）— すべての
-  アウトオブプロセスのコネクタとモジュールが使うバージョン付き contract です。
+  アウトオブプロセスのコネクタが使うバージョン付き contract です。
   Go 以外の言語で[コネクタを構築する](/ja/how-to/build-a-connector/)場合に実装するのは
-  こちらです。
+  こちらです。（モジュール用のサービスペアが凍結されたワイヤ上に存在しますが、
+  非推奨であり、一度も提供されていません。モジュールはインプロセスでのみ動きます。）
 
 このページは `.proto` ファイルではなく、**サーバーが gRPC に渡す登録テーブルから
 生成されています**。この違いが重要です。再生成せずに編集された `.proto` は、
@@ -80,9 +81,9 @@ Bearer token がないリクエストは拒否されず匿名のままですが�
 
 | メソッド | 完全なメソッド | 種類 | リクエスト | レスポンス | 動作 |
 |---|---|---|---|---|---|
-| `Log` | `/olivares.sdk.v1.HostService/Log` | unary | `LogRecord` | `Empty` | 構造化ログレコードをエンジン経由で 1 つ書き込み、アウトオブプロセスのモジュールがインプロセスのモジュールと同じ場所へ記録できるようにします。 |
-| `Publish` | `/olivares.sdk.v1.HostService/Publish` | unary | `Event` | `Empty` | アウトオブプロセスのモジュールに代わって、エンジンのバスへ 1 つのイベントを公開します。 |
-| `Subscribe` | `/olivares.sdk.v1.HostService/Subscribe` | server-streaming | `SubscribeRequest` | `Event` (stream) | 要求されたイベント型で絞り込み、バスイベントをモジュールへストリームします。空のフィルターはすべての型を意味します。 |
+| `Log` | `/olivares.sdk.v1.HostService/Log` | unary | `LogRecord` | `Empty` | 一度も接続されなかったアウトオブプロセスのモジュールトランスポートとともに非推奨です。HostService を提供するものはありません。本来は、構造化ログレコードをエンジン経由で 1 つ書き込み、アウトオブプロセスのモジュールがインプロセスのモジュールと同じ場所へ記録できるようにするものでした。 |
+| `Publish` | `/olivares.sdk.v1.HostService/Publish` | unary | `Event` | `Empty` | 一度も接続されなかったアウトオブプロセスのモジュールトランスポートとともに非推奨です。HostService を提供するものはありません。本来は、アウトオブプロセスのモジュールに代わってエンジンのバスへ 1 つのイベントを公開するものでした。 |
+| `Subscribe` | `/olivares.sdk.v1.HostService/Subscribe` | server-streaming | `SubscribeRequest` | `Event` (stream) | 一度も接続されなかったアウトオブプロセスのモジュールトランスポートとともに非推奨です。HostService を提供するものはありません。本来は、要求されたイベント型で絞り込んでバスイベントをモジュールへストリームするものでした。空のフィルターはすべての型を意味しました。 |
 
 ### `olivares.sdk.v1.IngestService`
 
@@ -98,10 +99,10 @@ Bearer token がないリクエストは拒否されず匿名のままですが�
 
 | メソッド | 完全なメソッド | 種類 | リクエスト | レスポンス | 動作 |
 |---|---|---|---|---|---|
-| `Describe` | `/olivares.sdk.v1.ModuleService/Describe` | unary | `Empty` | `DescribeResponse` | モジュールの descriptor（identity と受け入れる設定）を返します。 |
-| `Init` | `/olivares.sdk.v1.ModuleService/Init` | unary | `InitRequest` | `Empty` | 何かを開始する前に、モジュールへ設定を渡して準備させます。 |
-| `Start` | `/olivares.sdk.v1.ModuleService/Start` | unary | `Empty` | `Empty` | Init が成功した後、モジュールの処理を開始します。 |
-| `Stop` | `/olivares.sdk.v1.ModuleService/Stop` | unary | `Empty` | `Empty` | モジュールを停止し、保持していたものを解放させます。 |
+| `Describe` | `/olivares.sdk.v1.ModuleService/Describe` | unary | `Empty` | `DescribeResponse` | 一度も接続されなかったアウトオブプロセスのモジュールトランスポートとともに非推奨です。ModuleService を dispense するホストはありません。本来は、モジュールの descriptor（identity と受け入れる設定）を返すものでした。 |
+| `Init` | `/olivares.sdk.v1.ModuleService/Init` | unary | `InitRequest` | `Empty` | 一度も接続されなかったアウトオブプロセスのモジュールトランスポートとともに非推奨です。ModuleService を dispense するホストはありません。本来は、何かを開始する前にモジュールへ設定を渡して準備させるものでした。 |
+| `Start` | `/olivares.sdk.v1.ModuleService/Start` | unary | `Empty` | `Empty` | 一度も接続されなかったアウトオブプロセスのモジュールトランスポートとともに非推奨です。ModuleService を dispense するホストはありません。本来は、Init が成功した後でモジュールの処理を開始するものでした。 |
+| `Stop` | `/olivares.sdk.v1.ModuleService/Stop` | unary | `Empty` | `Empty` | 一度も接続されなかったアウトオブプロセスのモジュールトランスポートとともに非推奨です。ModuleService を dispense するホストはありません。本来は、モジュールを停止し、保持していたものを解放させるものでした。 |
 
 ### `olivares.sdk.v1.OutputService`
 

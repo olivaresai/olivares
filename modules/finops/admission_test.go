@@ -251,7 +251,7 @@ func TestAdmissionSpendLimitDenyIsMarked(t *testing.T) {
 func runAdmissionSpendLimitDenyIsMarked(t *testing.T, cfg store.Config) {
 	m, _, tenant, _ := openFinCfg(t, cfg)
 	ctx := context.Background()
-	if _, _, err := m.SpendLimitUpsert(ctx, tenant, userLimit("user:seat", "1", "monthly"), "user:admin"); err != nil {
+	if _, _, err := seedStoredSpendLimit(m, ctx, tenant, userLimit("user:seat", "1", "monthly"), "user:admin"); err != nil {
 		t.Fatalf("spend limit upsert: %v", err)
 	}
 	res, err := m.Reserve(ctx, tenant, AdmissionRequest{
@@ -294,5 +294,42 @@ func runAdmissionBudgetDenyIsNotMarkedSpendLimit(t *testing.T, cfg store.Config)
 	}
 	if res.SpendLimit {
 		t.Fatalf("a budget deny must not be marked as a spend limit: %+v", res)
+	}
+}
+
+// TestAdmissionActorBudgetRefuses: an enforcing budget on the actor dimension holds the
+// actor the admission names. The proxy passes its credential's actor only as ActorRef,
+// and the attribution the budgets were evaluated on had no actor, so an actor budget
+// reported "over" and never refused a call.
+func TestAdmissionActorBudgetRefuses(t *testing.T) {
+	forEachAdmissionEngine(t, runAdmissionActorBudgetRefuses)
+}
+
+func runAdmissionActorBudgetRefuses(t *testing.T, cfg store.Config) {
+	m, st, tenant, _ := openFinCfg(t, cfg)
+	createBudget(t, st, tenant, "actor-block", budgetSpec{
+		Dimension: "actor", Key: "token:proxy", Period: "monthly", LimitMicroUSD: oneUSD, Action: "block",
+	})
+	ctx := context.Background()
+	reserve := func(actor, key string) Reservation {
+		t.Helper()
+		res, err := m.Reserve(ctx, tenant, AdmissionRequest{
+			Scope: AdmissionScopeModelGateway, ActorRef: actor,
+			EstimateMicroUSD: oneUSD, IdempotencyKey: key,
+		})
+		if err != nil {
+			t.Fatalf("reserve %s: %v", key, err)
+		}
+		return res
+	}
+	if first := reserve("token:proxy", "k-a1"); !first.Allowed {
+		t.Fatalf("first reserve within the actor budget: %+v", first)
+	}
+	res := reserve("token:proxy", "k-a2")
+	if res.Allowed || res.Action != "block" || res.BudgetName != "actor-block" || res.SpendLimit {
+		t.Fatalf("an actor over its block budget must be refused by that budget: %+v", res)
+	}
+	if other := reserve("token:other", "k-a3"); !other.Allowed {
+		t.Fatalf("another actor is outside the budget: %+v", other)
 	}
 }

@@ -504,7 +504,7 @@ describe('SessionCard — control is what can be done, not what fits', () => {
       await user.click(within(dialog).getByRole('button', { name: 'Clean up' }))
 
       await waitFor(() =>
-        expect(agentOpsApi.cleanup).toHaveBeenCalledWith('run-1'),
+        expect(agentOpsApi.cleanup).toHaveBeenCalledWith('run-1', false),
       )
     },
   )
@@ -554,7 +554,7 @@ describe('SessionCard — control is what can be done, not what fits', () => {
     await waitFor(() =>
       expect(agentOpsApi.deleteRun).toHaveBeenCalledWith('run-1'),
     )
-    expect(agentOpsApi.cleanup).toHaveBeenCalledWith('run-1')
+    expect(agentOpsApi.cleanup).toHaveBeenCalledWith('run-1', false)
     expect(
       vi.mocked(agentOpsApi.cleanup).mock.invocationCallOrder[0],
     ).toBeLessThan(vi.mocked(agentOpsApi.deleteRun).mock.invocationCallOrder[0])

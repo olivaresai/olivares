@@ -167,7 +167,7 @@ func acctAuditsOf(t *testing.T, m *Module, tenant model.TenantID, action string)
 	t.Helper()
 	ctx := context.Background()
 	var out []acctAuditedMeta
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		walker, ok := sc.Audit().(store.CanonicalWalker)
 		if !ok {
 			return errors.New("this audit log does not expose the canonical metadata it stored")
@@ -254,14 +254,14 @@ func TestProviderAccount_CreateIsTwoPhaseAndLeavesNothingOnFailure(t *testing.T)
 
 			// Failure two: the store refuses the initial reservation. Nothing new
 			// may appear on disk before that admitted reservation commits.
-			failing := &acctFailingData{inner: m.data}
-			m.data = failing
+			failing := &acctFailingData{inner: m.Data}
+			m.Data = failing
 			failing.failWith(errors.New("the store refused this account row"))
 			r = a.create(acctHomeDriver, "claude-a2")
 			if r.code == http.StatusCreated {
 				t.Fatalf("create = %d %s, want a refusal while the store is failing", r.code, r.raw)
 			}
-			m.data = failing.inner
+			m.Data = failing.inner
 			if got := acctEntries(t, environmentDir); !reflect.DeepEqual(got, settled) {
 				t.Fatalf("a create whose write failed left %v in place, want only %v", got, settled)
 			}

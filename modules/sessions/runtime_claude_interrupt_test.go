@@ -54,7 +54,7 @@ func TestClaudeInterrupt_ControlRequestStopsTheTurnNotTheSession(t *testing.T) {
 	ctx := context.Background()
 	fr := &fakeRunner{initSID: "sess-interrupt"}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: actorU, ActorKind: actorKindU,
 	})
 	if err != nil {
@@ -89,7 +89,7 @@ func TestClaudeInterrupt_SaysWhatClaudeAnswered(t *testing.T) {
 	ctx := context.Background()
 	fr := &fakeRunner{initSID: "sess-interrupt-refused"}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: actorU, ActorKind: actorKindU,
 	})
 	if err != nil {
@@ -110,7 +110,7 @@ func TestClaudeInterrupt_NoAnswerIsSaidNotAssumed(t *testing.T) {
 	ctx := context.Background()
 	fr := &fakeRunner{initSID: "sess-interrupt-silent"}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: actorU, ActorKind: actorKindU,
 	})
 	if err != nil {

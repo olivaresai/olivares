@@ -7,10 +7,8 @@ package finops
 import (
 	"context"
 	"net/http"
-	"strconv"
 
 	"github.com/go-chi/chi/v5"
-
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -23,6 +21,12 @@ const (
 	permSpendRead   auth.Permission = "finops:spend:read"
 	permBudgetRead  auth.Permission = "finops:budget:read"
 	permBudgetWrite auth.Permission = "finops:budget:write"
+	// PermBudgetAdmin gates administering spend limits, the caps a budget places on a
+	// user, team or organization. It is admin-tier (granted to admin and owner by verb
+	// tier, never to editor) and is declared so a scoped grant can carry it. The apps
+	// gateway's spend-limit routes live outside the module router and ask for it through
+	// the admission seam.
+	PermBudgetAdmin auth.Permission = "finops:budget:admin"
 	// permCostWrite gates the HTTP cost-ingest route. It is a 3-segment module
 	// permission on the write verb tier, so the engine's role grants deny it to
 	// viewer and grant it to editor/admin/owner — deny-closed by default, no engine
@@ -43,7 +47,7 @@ func (m *Module) APINamespace() string { return Namespace }
 
 // Permissions declares the permissions the module's routes require.
 func (m *Module) Permissions() []auth.Permission {
-	return []auth.Permission{permSpendRead, permBudgetRead, permBudgetWrite, permCostWrite, permSeatsWrite, permOutcomeWrite}
+	return []auth.Permission{permSpendRead, permBudgetRead, permBudgetWrite, PermBudgetAdmin, permCostWrite, permSeatsWrite, permOutcomeWrite}
 }
 
 // APIRoutes mounts the module's routes.
@@ -122,217 +126,8 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 
 // --- spend analytics ---------------------------------------------------------
 
-func (m *Module) handleSpend(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	dim := r.URL.Query().Get("dimension")
-	if dim == "" {
-		dim = "model"
-	}
-	if !validDimensions[dim] {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid dimension"))
-		return
-	}
-	since, hasSince, until, hasUntil, bad := timeWindow(r)
-	if bad {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid since/until: expected RFC3339"))
-		return
-	}
-	var out spendResponse
-	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		var e error
-		out, e = spendByDimension(r.Context(), sc, dim, since, hasSince, until, hasUntil)
-		return e
-	})
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-func (m *Module) handleSummary(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	since, hasSince, until, hasUntil, bad := timeWindow(r)
-	if bad {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid since/until: expected RFC3339"))
-		return
-	}
-	var out summaryResponse
-	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		var e error
-		out, e = summarize(r.Context(), sc, since, hasSince, until, hasUntil)
-		return e
-	})
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-func (m *Module) handleTrend(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	since, hasSince, until, hasUntil, bad := timeWindow(r)
-	if bad {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid since/until: expected RFC3339"))
-		return
-	}
-	var out trendResponse
-	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		var e error
-		out, e = trendByDay(r.Context(), sc, since, hasSince, until, hasUntil)
-		return e
-	})
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-func (m *Module) handleReconciliation(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	since, hasSince, until, hasUntil, bad := timeWindow(r)
-	if bad {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid since/until: expected RFC3339"))
-		return
-	}
-	var out reconciliationResponse
-	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		var e error
-		out, e = reconcile(r.Context(), sc, since, hasSince, until, hasUntil)
-		return e
-	})
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-func (m *Module) handleUnified(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	since, hasSince, until, hasUntil, bad := timeWindow(r)
-	if bad {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid since/until: expected RFC3339"))
-		return
-	}
-	var out unifiedResponse
-	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		var e error
-		out, e = unifiedCrossSurface(r.Context(), sc, since, hasSince, until, hasUntil)
-		return e
-	})
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-func (m *Module) handleAllocation(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	since, hasSince, until, hasUntil, bad := timeWindow(r)
-	if bad {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid since/until: expected RFC3339"))
-		return
-	}
-	var out allocationResponse
-	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		var e error
-		out, e = allocate(r.Context(), sc, since, hasSince, until, hasUntil)
-		return e
-	})
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-func (m *Module) handleForecast(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	period := r.URL.Query().Get("period")
-	if period == "" {
-		period = "monthly"
-	}
-	if !validPeriods[period] {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid period"))
-		return
-	}
-	windowDays := 0
-	if wd := r.URL.Query().Get("window_days"); wd != "" {
-		if n, err := strconv.Atoi(wd); err == nil && n > 0 {
-			windowDays = n
-		}
-	}
-	dim := r.URL.Query().Get("dimension")
-	now := m.clock.Now().Time()
-	var out forecastResponse
-	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		var e error
-		out, e = forecastPeriod(r.Context(), sc, period, now, windowDays)
-		if e != nil {
-			return e
-		}
-		// per-dimension forecast when ?dimension=X is supplied.
-		if dim != "" && validDimensions[dim] {
-			wdFinal := windowDays
-			if wdFinal <= 0 {
-				wdFinal = defaultForecastWindowDays
-			}
-			out.DimensionForecasts, e = forecastByDimension(r.Context(), sc, dim, period, now, wdFinal)
-		}
-		return e
-	})
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-func (m *Module) handleRecommendations(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	now := m.clock.Now().Time()
-	var out []recommendationDTO
-	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		var e error
-		out, e = m.recommendations(r.Context(), sc, now)
-		return e
-	})
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, map[string]any{"recommendations": out})
-}
-
 // handleTeamSummary returns team-level cost aggregation with project/model
 // breakdown and a per-calendar-day trend series for a fixed period (7d/30d/90d).
-func (m *Module) handleTeamSummary(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	period := r.URL.Query().Get("period")
-	if period == "" {
-		period = "30d"
-	}
-	days := 30
-	switch period {
-	case "7d":
-		days = 7
-	case "30d":
-		days = 30
-	case "90d":
-		days = 90
-	default:
-		writeJSON(w, http.StatusBadRequest, errorBody("period must be 7d, 30d, or 90d"))
-		return
-	}
-	now := m.clock.Now().Time()
-	since := now.AddDate(0, 0, -days)
-	var out teamSummaryResponse
-	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
-		var e error
-		out, e = teamSummary(r.Context(), sc, since, now)
-		return e
-	})
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusOK, out)
-}
 
 // --- cost ingest -------------------------------------------------------------
 
@@ -372,7 +167,7 @@ func (m *Module) handleIngestCost(w http.ResponseWriter, r *http.Request, mc api
 		})
 		return err
 	}
-	if err := m.onCost(r.Context(), mc.Tenant, sample, audit); err != nil {
+	if err := m.onCost(r.Context(), mc.Tenant, sample, audit, nil); err != nil {
 		writeStoreError(w, err)
 		return
 	}
@@ -427,87 +222,6 @@ func (m *Module) handleGetBudget(w http.ResponseWriter, r *http.Request, mc api.
 		return
 	}
 	if !found {
-		writeJSON(w, http.StatusNotFound, errorBody("not found"))
-		return
-	}
-	writeJSON(w, http.StatusOK, out)
-}
-
-func (m *Module) handleCreateBudget(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	var in budgetDTO
-	if !decodeJSON(w, r, &in) {
-		return
-	}
-	if in.Name == "" {
-		writeJSON(w, http.StatusBadRequest, errorBody("name is required"))
-		return
-	}
-	if msg := in.validate(); msg != "" {
-		writeJSON(w, http.StatusBadRequest, errorBody(msg))
-		return
-	}
-	var out budgetDTO
-	err := m.mutate(r.Context(), mc.Tenant, func(sc store.Scope) error {
-		p, err := sc.Policies().Create(r.Context(), model.Policy{
-			Name: in.Name, Kind: policyKindBudget, Enabled: in.Enabled, Spec: in.toSpecMap(),
-		})
-		if err != nil {
-			return err
-		}
-		out = toBudgetDTO(p)
-		return nil
-	})
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	writeJSON(w, http.StatusCreated, out)
-}
-
-func (m *Module) handleUpdateBudget(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	id := model.ID(chi.URLParam(r, "id"))
-	if id.IsZero() {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid id"))
-		return
-	}
-	var in budgetDTO
-	if !decodeJSON(w, r, &in) {
-		return
-	}
-	if in.Name == "" {
-		writeJSON(w, http.StatusBadRequest, errorBody("name is required"))
-		return
-	}
-	if msg := in.validate(); msg != "" {
-		writeJSON(w, http.StatusBadRequest, errorBody(msg))
-		return
-	}
-	var out budgetDTO
-	notBudget := false
-	err := m.mutate(r.Context(), mc.Tenant, func(sc store.Scope) error {
-		p, err := sc.Policies().Get(r.Context(), id)
-		if err != nil {
-			return err
-		}
-		if p.Kind != policyKindBudget {
-			notBudget = true
-			return nil
-		}
-		p.Name = in.Name
-		p.Enabled = in.Enabled
-		p.Spec = in.toSpecMap()
-		p, err = sc.Policies().Update(r.Context(), p)
-		if err != nil {
-			return err
-		}
-		out = toBudgetDTO(p)
-		return nil
-	})
-	if err != nil {
-		writeStoreError(w, err)
-		return
-	}
-	if notBudget {
 		writeJSON(w, http.StatusNotFound, errorBody("not found"))
 		return
 	}

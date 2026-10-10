@@ -51,8 +51,9 @@ func registerBodyEntityTestDescriptor(reg store.ExtensionRegistry) error {
 }
 
 type bodyEntityObservation struct {
-	body     string
-	resource auth.ResourceAttrs
+	body      string
+	resource  auth.ResourceAttrs
+	selectors map[string]string
 }
 
 type bodyEntityTestModule struct {
@@ -82,6 +83,19 @@ func (m *bodyEntityTestModule) APIRoutes(reg api.RouteRegistrar) {
 		ConcealDeniedAsNotFound: true,
 	}
 	reg.HandleEntity("POST", "/body", bodyEntityPermission, bodyRef, m.handle)
+	lookupBodyRef := bodyRef
+	lookupBodyRef.LookupColumn = bodyEntityLabel
+	reg.HandleEntity("POST", "/selected-reference", bodyEntityPermission, api.EntityRef{BodyKindField: "target_kind", BodyKinds: map[string]api.EntityRef{"thing": lookupBodyRef}}, m.handle)
+	reg.HandleEntity("POST", "/selected", bodyEntityPermission, api.EntityRef{
+		BodyKindField: "target_kind", BodyKinds: map[string]api.EntityRef{"thing": bodyRef},
+	}, m.handle)
+	concealedBodyRef := bodyRef
+	concealedBodyRef.ConcealDeniedAsNotFound = true
+	concealedBodyRef.DeniedReadPermission = bodyEntityReadPermission
+	reg.HandleEntity("POST", "/selected-concealed", bodyEntityPermission, api.EntityRef{
+		BodyKindField: "target_kind", ConcealDeniedAsNotFound: true, DeniedReadRoleOnly: true,
+		BodyKinds: map[string]api.EntityRef{"thing": concealedBodyRef},
+	}, m.handle)
 	reg.HandleEntity("POST", "/path/{id}", bodyEntityPermission, pathRef, m.handle)
 	reg.HandleEntity("POST", "/unknown/{id}", bodyEntityPermission, unknownRef, m.handle)
 	readVisibleRef := pathRef
@@ -151,7 +165,7 @@ func (m *bodyEntityTestModule) handle(w http.ResponseWriter, r *http.Request, mc
 	}
 	m.mu.Lock()
 	m.observations = append(m.observations, bodyEntityObservation{
-		body: string(raw), resource: mc.Resource,
+		body: string(raw), resource: mc.Resource, selectors: mc.BodyEntityFields,
 	})
 	m.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
@@ -264,6 +278,58 @@ func TestConcealedActionDisclosesDenialOnlyToRowReaders(t *testing.T) {
 	}
 }
 
+// TestBodyKindConcealedActionDisclosesDenialOnlyToRowReaders pins the same
+// doctrine for a body-kind route: the denial-read permission a selected
+// reference declares reaches the conceal evaluation, so a caller who could
+// read the named row learns the refusal itself while foreign, forbidden and
+// absent rows keep the same concealed 404.
+func TestBodyKindConcealedActionDisclosesDenialOnlyToRowReaders(t *testing.T) {
+	f := newBodyEntityFixture(t)
+	// Refuse writes to every stored workspace. Viewer RBAC can read, but the
+	// scoped read forbid below proves visibility must use the full authorizer.
+	f.gate.configure(model.NewID(), false)
+	f.gate.mu.Lock()
+	f.gate.deniedReadID = f.idB.String()
+	f.gate.mu.Unlock()
+	body := func(id string) string {
+		return `{"target_kind":"thing","thing_id":"` + id + `"}`
+	}
+	for _, tc := range []struct {
+		name, ref, code string
+		status          int
+	}{
+		{"readable action denied", f.idA.String(), "forbidden", http.StatusForbidden},
+		{"read forbidden despite viewer role", f.idB.String(), "not_found", http.StatusNotFound},
+		{"missing with viewer role", model.NewID().String(), "not_found", http.StatusNotFound},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := len(f.module.snapshot())
+			r := f.rawRequest(http.MethodPost, "/v1/m/bodyentity/selected-concealed", f.viewer, body(tc.ref))
+			if r.code != tc.status {
+				t.Fatalf("status=%d body=%s, want %d", r.code, r.raw, tc.status)
+			}
+			errorObject, _ := r.body["error"].(map[string]any)
+			if errorObject["code"] != tc.code || len(f.module.snapshot()) != before {
+				t.Fatalf("denial must keep its envelope and never invoke the action: %s", r.raw)
+			}
+		})
+	}
+	// A caller whose own role grants the action keeps the concealed answer even
+	// on a row they can read: the refusal itself would name which row refused
+	// them. The gate's scoped forbid denies the owner's write everywhere.
+	f.gate.configure(model.NewID(), false)
+	if r := f.rawRequest(http.MethodPost, "/v1/m/bodyentity/selected-concealed", f.owner, body(f.idA.String())); r.code != http.StatusNotFound {
+		t.Fatalf("role-holding caller's scoped refusal = %d %s, want the concealed 404", r.code, r.raw)
+	}
+	// Scoped authority for the action still admits it independently of read
+	// permission: the selected reference's field chooses denial presentation,
+	// never authority.
+	f.gate.configure(f.wsB, false)
+	if r := f.rawRequest(http.MethodPost, "/v1/m/bodyentity/selected-concealed", f.viewer, body(f.idB.String())); r.code != http.StatusOK {
+		t.Fatalf("existing scoped action authority changed: %d %s", r.code, r.raw)
+	}
+}
+
 type bodyEntityFixture struct {
 	*harness
 	module *bodyEntityTestModule
@@ -273,6 +339,7 @@ type bodyEntityFixture struct {
 	wsB    model.ID
 	idA    model.ID
 	idB    model.ID
+	owner  string
 	viewer string
 }
 
@@ -379,7 +446,7 @@ func newBodyEntityFixture(t *testing.T) *bodyEntityFixture {
 	gate.resetRequests()
 	return &bodyEntityFixture{
 		harness: h, module: module, gate: gate, tenant: tenant,
-		wsA: wsA, wsB: wsB, idA: idA, idB: idB, viewer: login.body["token"].(string),
+		wsA: wsA, wsB: wsB, idA: idA, idB: idB, owner: admin, viewer: login.body["token"].(string),
 	}
 }
 
@@ -423,6 +490,43 @@ func TestBodyEntityRouteAuthorizesStoredWorkspace(t *testing.T) {
 	}
 	if got := len(f.module.snapshot()); got != 1 {
 		t.Fatalf("handler calls = %d, want only the authorized request", got)
+	}
+}
+
+func TestBodyKindEntityRouteUsesOnlyDeclaredKindsAndRestoresTheBody(t *testing.T) {
+	f := newBodyEntityFixture(t)
+	// Admit collection-level malformed input so the exact locator error is observable.
+	f.gate.configure(f.wsA, true)
+	for _, tc := range []struct {
+		name, body string
+		status     int
+	}{
+		{"own", `{"target_kind":"thing","thing_id":"` + f.idA.String() + `","workspace_id":"` + f.wsB.String() + `"}`, http.StatusOK},
+		{"foreign", `{"target_kind":"thing","thing_id":"` + f.idB.String() + `"}`, http.StatusForbidden},
+		{"unknown", `{"target_kind":"credentials","thing_id":"` + f.idA.String() + `"}`, http.StatusBadRequest},
+		{"duplicate kind", `{"target_kind":"thing","target_kind":"credentials","thing_id":"` + f.idA.String() + `"}`, http.StatusBadRequest},
+		{"duplicate id", `{"target_kind":"thing","thing_id":"` + f.idA.String() + `","thing_id":"` + f.idB.String() + `"}`, http.StatusBadRequest},
+		{"case alias kind", `{"target_kind":"thing","TARGET_KIND":"credentials","thing_id":"` + f.idA.String() + `"}`, http.StatusBadRequest},
+		{"case alias id", `{"target_kind":"thing","thing_id":"` + f.idA.String() + `","THING_ID":"` + f.idB.String() + `"}`, http.StatusBadRequest},
+		{"alias before kind", `{"TARGET_KIND":"credentials","target_kind":"thing","thing_id":"` + f.idA.String() + `"}`, http.StatusBadRequest},
+		{"alias before id", `{"target_kind":"thing","THING_ID":"` + f.idB.String() + `","thing_id":"` + f.idA.String() + `"}`, http.StatusBadRequest},
+		{"missing kind", `{"thing_id":"` + f.idA.String() + `"}`, http.StatusBadRequest},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			before := len(f.module.snapshot())
+			reply := f.rawRequest(http.MethodPost, "/v1/m/bodyentity/selected", f.viewer, tc.body)
+			if reply.code != tc.status {
+				t.Fatalf("selected entity = %d %s, want %d", reply.code, reply.raw, tc.status)
+			}
+			if tc.status == http.StatusOK {
+				observed := f.module.snapshot()
+				if len(observed) != before+1 || observed[before].body != tc.body || observed[before].resource.WorkspaceID != f.wsA || observed[before].selectors["target_kind"] != "thing" || observed[before].selectors["thing_id"] != f.idA.String() {
+					t.Fatalf("selected route did not preserve the body and stored lineage: %+v", observed)
+				}
+			} else if len(f.module.snapshot()) != before {
+				t.Fatal("refused selector reached the handler")
+			}
+		})
 	}
 }
 
@@ -602,5 +706,18 @@ func TestExistingPathEntityRouteRemainsBodyTransparent(t *testing.T) {
 	if got.body["body"] != raw || got.body["resource_id"] != f.idA.String() ||
 		got.body["resource_workspace"] != f.wsA.String() {
 		t.Fatalf("path entity response = %#v", got.body)
+	}
+}
+
+func TestBodyKindEntityRouteRetainsAdmittedLocatorBeforeReferenceResolution(t *testing.T) {
+	f := newBodyEntityFixture(t)
+	body := `{"target_kind":"thing","thing_id":"A"}`
+	reply := f.rawRequest(http.MethodPost, "/v1/m/bodyentity/selected-reference", f.viewer, body)
+	if reply.code != http.StatusOK {
+		t.Fatalf("reference entity = %d %s", reply.code, reply.raw)
+	}
+	observed := f.module.snapshot()
+	if len(observed) != 1 || observed[0].selectors["target_kind"] != "thing" || observed[0].selectors["thing_id"] != "A" || observed[0].resource.ID != f.idA.String() || observed[0].resource.Kind != string(bodyEntityKind) {
+		t.Fatalf("admission selector or stored resource changed: %+v", observed)
 	}
 }

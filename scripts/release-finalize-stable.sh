@@ -177,7 +177,7 @@ refuse() {
 }
 
 blind() {
-	_err "NO HE PODIDO MIRAR — $1"
+	_err "COULD NOT LOOK — $1"
 	shift || true
 	for line in "$@"; do _err "  $line"; done
 	_err "A check that could not run is not a check that passed. No PATCH was issued."
@@ -323,21 +323,20 @@ fi
 
 # THE SAME STRICT GRAMMAR THE §C.4 PREFLIGHT PINS. Prereleases are outside this contract by
 # policy (scripts/release-preflight.sh PROD_TAG_RE), so an accepted tag here is exactly the
-# shape the whole stable chain is written for. BARE CalVer since the 2026-09-29 tag-name
-# correction: a v prefix gets its own refusal because the reflexive mistake is pasting the
+# shape the whole stable chain is written for. Tags are bare MAJOR.MINOR: a v prefix gets its own refusal because the reflexive mistake is pasting the
 # old shape, and a generic grammar error would send the operator counting digits instead of
 # deleting one letter.
 case "$RELEASE_TAG" in
 v[0-9]*)
 	refuse "release_tag '${RELEASE_TAG}' carries a v prefix" \
-		"Release tags are bare CalVer (YY.M or YY.M.N, e.g. 26.11 or 26.11.1) since the 2026-09-29 tag-name correction."
+		"Release tags are bare MAJOR.MINOR (e.g. 1.0 or 1.1) under the release version policy."
 	;;
 esac
-[[ "$RELEASE_TAG" =~ ^[0-9]{2}\.([1-9]|1[0-2])(\.(0|[1-9][0-9]*))?$ ]] ||
-	refuse "release_tag must be bare CalVer YY.M or YY.M.N, got '${RELEASE_TAG}'"
+[[ "$RELEASE_TAG" =~ ^[0-9]+\.[0-9]+$ ]] ||
+	refuse "release_tag must be bare MAJOR.MINOR, got '${RELEASE_TAG}'"
 [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]] ||
 	refuse "release_commit must be a full lowercase 40-hex OID"
-VERSION="${RELEASE_TAG#v}"
+VERSION="$RELEASE_TAG"
 
 # --- profile ------------------------------------------------------------------------------
 # The destination is DERIVED, never supplied. The two accepted profiles are the production
@@ -401,13 +400,8 @@ OTA_PUBKEY="${OLIVARES_OTA_PUBKEY:-}"
 
 CERT_OIDC_ISSUER="${CERT_OIDC_ISSUER:-$CERT_OIDC_ISSUER_DEFAULT}"
 
-# ⛔ THE CERTIFICATE MUST NAME THIS EXACT TAG. The existing phase-2 anchor accepts ANY
-# SemVer tag in this repository's release workflow, which is the right identity for "a
-# release of ours" and the wrong one for "the release we are about to publish": a
-# checksums.txt legitimately signed for v26.7.0 satisfies it. The tag is escaped first —
-# it contains dots, and an unescaped dot matches any character exactly where the anchor
-# has to be strict (the same class as aws-images.yml:315).
 # shellcheck disable=SC2016 # the sed pattern needs literal regex metacharacters
+# The certificate identity must name this exact release tag; escape regex metacharacters.
 repo_rx="$(printf '%s' "$REPOSITORY" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
 # shellcheck disable=SC2016
 tag_rx="$(printf '%s' "$RELEASE_TAG" | sed 's/[.[\*^$()+?{}|]/\\&/g')"
@@ -547,8 +541,8 @@ false)
 esac
 
 if [ "$RECONCILE" -eq 0 ]; then
-	[[ "$RELEASE_TAG" =~ ^[0-9]{2}\.([1-9]|1[0-2])(\.[1-9][0-9]*)?$ ]] ||
-		refuse "new release tags must be YY.M or YY.M.N with N >= 1; zero-patch tags are historical only"
+	[[ "$RELEASE_TAG" =~ ^[0-9]+\.[0-9]+$ ]] ||
+		refuse "new release tags must be MAJOR.MINOR"
 fi
 
 _say "retained release id ${RELEASE_ID} (target_commitish ${TARGET_COMMITISH}, not used as identity)"
@@ -848,35 +842,28 @@ done
 _say "security channel: this release declared none and carries none"
 
 # --- 5. derive the required inventory and admit it ----------------------------------------
+# Community ships no FIPS archive: FIPS is a Business build (docs/editions.md).
 BASE_ARCHIVES=()
-FIPS_ARCHIVES=()
 for goos in "${RECIPE_GOOS[@]}"; do
 	for goarch in "${RECIPE_GOARCH[@]}"; do
 		BASE_ARCHIVES+=("olivares_${VERSION}_${goos}_${goarch}.tar.gz")
-		FIPS_ARCHIVES+=("olivares_${VERSION}_fips_${goos}_${goarch}.tar.gz")
 	done
 done
-ALL_ARCHIVES=("${BASE_ARCHIVES[@]}" "${FIPS_ARCHIVES[@]}")
+ALL_ARCHIVES=("${BASE_ARCHIVES[@]}")
 INSTALLER="olivares-install-${VERSION}.sh"
 
 # Members the signed checksums MUST list, derived from the recipe above.
-REQUIRED_CHECKSUMMED=(release-commit.txt release-build-context.json "$INSTALLER")
-for a in "${ALL_ARCHIVES[@]}"; do
-	REQUIRED_CHECKSUMMED+=("$a" "${a}.spdx.sbom.json" "${a}.cdx.sbom.json")
-done
+REQUIRED_CHECKSUMMED=(release-commit.txt release-build-context.json "$INSTALLER" "${ALL_ARCHIVES[@]}")
 
 # Members the release must carry that the checksums deliberately do NOT cover: they are
 # produced after goreleaser has written checksums.txt, by the workflow steps named beside
-# each group. They are required all the same — an unattested archive is not a candidate.
+# each group. They are required all the same — an incomplete release is not a candidate.
 REQUIRED_UNCHECKSUMMED=(
 	checksums.txt.sig checksums.txt.pem
 	stable-manifest.json stable-manifest.json.sig
 	stable-manifest.json.pipeline.sig stable-manifest.json.pipeline.pem
-	olivares.vex.openvex.json image.spdx.sbom.json
+	olivares.vex.openvex.json olivares.spdx.sbom.json
 )
-for a in "${ALL_ARCHIVES[@]}"; do
-	REQUIRED_UNCHECKSUMMED+=("${a}.sbom.sigstore.json" "${a}.vex.sigstore.json" "${a}.vex.openvex.json")
-done
 
 missing=()
 for name in "${REQUIRED_CHECKSUMMED[@]}"; do
@@ -889,7 +876,7 @@ done
 if [ "${#missing[@]}" -gt 0 ]; then
 	refuse "the candidate is not a complete release" "${missing[@]}" \
 		"The required set is DERIVED from this repository's GoReleaser recipe and release" \
-		"workflow for ${VERSION}: ${#BASE_ARCHIVES[@]} base archives, ${#FIPS_ARCHIVES[@]} FIPS archives and their" \
+		"workflow for ${VERSION}: ${#BASE_ARCHIVES[@]} archives and their" \
 		"generated sidecars. A signed manifest that describes fewer platforms than the" \
 		"release promises is exactly what this refuses."
 fi
@@ -1176,7 +1163,7 @@ printf '%s' "$prov_b64" | "$B64_BIN" -d >"$prov_payload" 2>/dev/null ||
 "$JQ_BIN" -e '.subject | type == "array" and length > 0' "$prov_payload" >/dev/null 2>&1 ||
 	refuse "the provenance statement carries no subjects"
 prov_missing=()
-for a in "${BASE_ARCHIVES[@]}" "${FIPS_ARCHIVES[@]}"; do
+for a in "${BASE_ARCHIVES[@]}"; do
 	want="$(sum_digest_of "$a")"
 	"$JQ_BIN" -e --arg d "$want" 'any(.subject[]; .digest.sha256 == $d)' "$prov_payload" >/dev/null 2>&1 ||
 		prov_missing+=("${a} is not a subject of ${PROVENANCE}")
@@ -1360,6 +1347,32 @@ _say "identity and inventory unchanged since admission"
 # --- latest publication guard: begin ----------------------------------------------------
 # This fresh read detects an observed backward move. It is not a compare-and-swap
 # against another publisher; credential custody must still exclude concurrent writes.
+# Every latest publication reads the current pointer, including the first stable release.
+RETIRED_TAGS="$ROOT/scripts/lib/retired-release-tags.txt"
+# retired_tag TAG: TAG is, byte for byte, one of the published tags before MAJOR.MINOR.
+# Whole-line string equality, so no pattern, prefix or newline in TAG can match.
+# The list is read the way check-release-version.sh reads it: a last line without a newline
+# counts, and a line that is not exactly a published three-number tag (a CR, a space, a
+# suffix) makes the list unreadable, never a smaller history.
+retired_tag() {
+	local tag found=1 count=0
+	[ -f "$RETIRED_TAGS" ] && [ -r "$RETIRED_TAGS" ] ||
+		blind "cannot read the retired release tags in scripts/lib/retired-release-tags.txt"
+	# Printable ASCII and newlines only, as the checker reads it: `read` would drop a NUL without
+	# a word, and any other byte is refused whole there too.
+	LC_ALL=C tr -d '\012\040-\176' <"$RETIRED_TAGS" | LC_ALL=C "$CMP_BIN" -s - /dev/null ||
+		blind "scripts/lib/retired-release-tags.txt holds bytes other than printable ASCII and newlines"
+	while IFS= read -r tag || [ -n "$tag" ]; do
+		case "$tag" in '' | '#'*) continue ;; esac
+		[[ "$tag" =~ ^v?[0-9]{1,9}\.[0-9]{1,9}\.[0-9]{1,9}$ ]] ||
+			blind "scripts/lib/retired-release-tags.txt has a malformed line: $(printf '%q' "$tag")"
+		count=$((count + 1))
+		if [ "$tag" = "$1" ]; then found=0; fi
+	done <"$RETIRED_TAGS" ||
+		blind "cannot read the retired release tags in scripts/lib/retired-release-tags.txt"
+	[ "$count" -gt 0 ] || blind "scripts/lib/retired-release-tags.txt lists no retired tag"
+	return "$found"
+}
 if [ "$MAKE_LATEST" = "true" ]; then
 	set +e
 	gh_api --include "repos/${REPOSITORY}/releases/latest" >"$WORK/latest-before.http" 2>"$WORK/latest-before.err"
@@ -1372,26 +1385,35 @@ if [ "$MAKE_LATEST" = "true" ]; then
 	latest_status="${BASH_REMATCH[1]}"
 	if [ "$latest_rc" -eq 0 ] && [ "$latest_status" = "200" ]; then
 		sed '1,/^[[:space:]]*$/d' "$WORK/latest-before.http" >"$WORK/latest-before.json"
-		# THE ORIGIN MAY STILL CARRY THE v PREFIX. Releases before the 2026-09-29 tag-name
-		# correction were tagged v26.9.0, and `latest` points at whatever was published last,
-		# not at today's grammar; the candidate above is already bare-only. Reading the origin
-		# with `v?` is history, not a widening of what this ceremony will publish, and
-		# ltrimstr("v") below orders both shapes on the same numbers.
+		# Subsequent releases must advance strictly within the two-number line.
 		"$JQ_BIN" -s -e 'length == 1 and (.[0] |
 			type == "object" and .draft == false and .prerelease == false and
 			(.id | type == "number" and . > 0 and . == floor) and
-			(.tag_name | type == "string" and test("\\Av?(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)(\\.(0|[1-9][0-9]*))?\\z")))' \
+			(.tag_name | type == "string" and length > 0))' \
 			"$WORK/latest-before.json" >/dev/null 2>&1 ||
 			blind "latest does not identify an ordinary published release with a usable version"
 		latest_tag="$("$JQ_BIN" -r '.tag_name' "$WORK/latest-before.json")"
-		# Length and decimal digits preserve numeric order without integer overflow or
-		# floating-point rounding. The version grammar excludes leading zeroes.
-		# shellcheck disable=SC2016 # These variables belong to jq.
-		"$JQ_BIN" -en --arg candidate "$RELEASE_TAG" --arg origin "$latest_tag" '
-			def version: ltrimstr("v") | split(".") | if length == 2 then . + ["0"] else . end | map([length, .]);
-			($candidate | version) > ($origin | version)' >/dev/null ||
-			refuse "${RELEASE_TAG} is not a strict successor of latest ${latest_tag}"
-		_say "latest ${latest_tag} precedes candidate ${RELEASE_TAG}"
+		# $(...) strips trailing newlines, so "26.800\n" would read as 26.800: judge only the
+		# value jq confirms is the whole tag_name, byte for byte.
+		"$JQ_BIN" -e --arg tag "$latest_tag" '.tag_name == $tag' "$WORK/latest-before.json" >/dev/null 2>&1 ||
+			blind "latest does not identify an ordinary published release with a usable version"
+		# 1.0 starts the MAJOR.MINOR line. Its only predecessors are the published retired
+		# tags, named exactly in one list; it neither parses nor orders them. Any other origin,
+		# for 1.0 as for every later release, must be MAJOR.MINOR or stays blind.
+		if [ "$RELEASE_TAG" = "1.0" ] && retired_tag "$latest_tag"; then
+			_say "1.0 starts the stable line; latest ${latest_tag} is a retired release"
+		else
+			[[ "$latest_tag" =~ ^[0-9]+\.[0-9]+$ ]] ||
+				blind "latest does not identify an ordinary published release with a usable version"
+			# Decimal lengths and digits preserve numeric order without overflow.
+			# Strip leading zeroes because the two-number grammar permits them.
+			# shellcheck disable=SC2016 # These variables belong to jq.
+			"$JQ_BIN" -en --arg candidate "$RELEASE_TAG" --arg origin "$latest_tag" '
+				def version: split(".") | map(sub("^0+"; "") | if . == "" then "0" else . end | [length, .]);
+				($candidate | version) > ($origin | version)' >/dev/null ||
+				refuse "${RELEASE_TAG} is not a strict successor of latest ${latest_tag}"
+			_say "latest ${latest_tag} precedes candidate ${RELEASE_TAG}"
+		fi
 	elif [ "$latest_rc" -ne 0 ] && [ "$latest_status" = "404" ]; then
 		# Absence of the pointer is not absence of releases. Read every page afresh.
 		set +e

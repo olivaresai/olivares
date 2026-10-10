@@ -19,12 +19,12 @@ export LC_ALL=C
 RAIZ="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")/.." && pwd -P)"
 WF="$RAIZ/.github/workflows/docs-site-deploy.yml"
 cannot() {
-	echo "test-docs-site-deploy-target: NO HE PODIDO MIRAR: $*" >&2
+	echo "test-docs-site-deploy-target: COULD NOT CHECK: $*" >&2
 	exit 2
 }
-[ -r "$WF" ] || cannot "falta $WF"
+[ -r "$WF" ] || cannot "missing $WF"
 
-WORK="$(mktemp -d "${TMPDIR:-/tmp}/docs-target.XXXXXX")" || cannot "sin directorio temporal"
+WORK="$(mktemp -d "${TMPDIR:-/tmp}/docs-target.XXXXXX")" || cannot "no temporary directory"
 trap 'rm -rf -- "$WORK"' EXIT
 
 # The block scalar under `run: |` of the step with `id: target` (steps at six spaces, keys at eight,
@@ -36,8 +36,8 @@ awk '
 	/^        id: target[[:space:]]*$/ { in_step = 1; hits++; next }
 	in_step && /^        run: \|[[:space:]]*$/ { grab = 1; next }
 	END { if (hits != 1) exit 3 }
-' "$WF" >"$WORK/guard.sh" || cannot "el paso 'id: target' no aparece exactamente una vez en $WF"
-[ -s "$WORK/guard.sh" ] || cannot "el paso 'id: target' no tiene bloque run"
+' "$WF" >"$WORK/guard.sh" || cannot "the 'id: target' step does not appear exactly once in $WF"
+[ -s "$WORK/guard.sh" ] || cannot "the 'id: target' step has no run block"
 
 pasados=0
 fallados=0
@@ -46,7 +46,7 @@ check() { # etiqueta esperado obtenido
 		printf '  ok   %-64s %s\n' "$1" "$3"
 		pasados=$((pasados + 1))
 	else
-		printf '  FAIL %-64s esperado=%s obtenido=%s\n' "$1" "$2" "$3"
+		printf '  FAIL %-64s expected=%s got=%s\n' "$1" "$2" "$3"
 		fallados=$((fallados + 1))
 	fi
 }

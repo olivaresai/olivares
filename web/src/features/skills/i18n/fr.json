@@ -1,0 +1,52 @@
+{
+  "title": "Catalogue de skills",
+  "subtitle": "Paquets de skills installés pour cette organisation. Ouvrez un paquet pour voir ses skills et les départements, groupes et agents auxquels il est attribué.",
+  "packs": {
+    "name": "Paquet",
+    "state": "État",
+    "revision": "Révision",
+    "updated": "Mis à jour",
+    "enabled": "Actif",
+    "retired": "Retiré",
+    "search": "Rechercher des paquets",
+    "emptyTitle": "Aucun paquet de skills installé",
+    "emptyDescription": "Installez un paquet avec olivares skills install ; il apparaît ensuite ici pour être attribué.",
+    "truncated": "Affichage des {{n}} premiers paquets",
+    "truncatedHint": "Utilisez olivares skills ls --cursor pour lister la suite."
+  },
+  "detail": {
+    "skills": "Skills de ce paquet",
+    "revisions": "Révisions",
+    "revision": "révision {{n}}",
+    "revisionLine": "Révision {{n}} depuis {{source}}"
+  },
+  "kind": {
+    "workspace": "Département",
+    "agent_group": "Groupe d'agents",
+    "agent": "Agent",
+    "template": "Modèle",
+    "session": "Session"
+  },
+  "uses": {
+    "title": "Attribué à",
+    "none": "Ce paquet n'est attribué à aucun département, groupe ou agent que vous pouvez voir.",
+    "unassign": "Retirer",
+    "unassigned": "Attribution du paquet de skills retirée",
+    "confirmTitle": "Retirer l'attribution de ce paquet de skills ?",
+    "confirmDescription": "Les nouvelles sessions de {{target}} ne reçoivent plus ces skills. Les conversations enregistrées conservent leur instantané.",
+    "truncated": "Affichage des {{n}} premières attributions",
+    "truncatedHint": "Utilisez olivares skills assignments --pack avec --cursor pour lister la suite.",
+    "unassignFrom": "Retirer l’attribution à {{target}}"
+  },
+  "assign": {
+    "title": "Attribuer",
+    "kind": "Attribuer à",
+    "target": "Cible",
+    "choose": "Choisir une cible",
+    "revision": "Révision",
+    "noTargets": "Aucune cible de ce type que vous pouvez lire.",
+    "submit": "Attribuer",
+    "done": "Paquet de skills attribué",
+    "directoryFailed": "Les cibles n’ont pas pu être chargées. Fermez puis rouvrez le paquet pour réessayer."
+  }
+}

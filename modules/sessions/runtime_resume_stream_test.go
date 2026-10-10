@@ -193,7 +193,7 @@ func TestOutputSequenceExhaustionWithdrawsAuthorityAfterUnconfirmedStop(t *testi
 	m, _, tenant, clk := newRuntimeHarness(t, WithRunner(&fixedProcessRunner{proc: proc}), WithCredentialSource(staticCred()))
 	probe.now = clk.get
 	wireDualCredentialProbe(m, probe)
-	created, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	created, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "agent:sequence-limit", ActorKind: model.ActorAgent, AgentRef: "agent:sequence-limit",
 	})

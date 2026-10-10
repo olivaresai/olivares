@@ -51,6 +51,31 @@ func (r coreEntityResolver) ResolveCoreEntity(
 	}
 	facts := api.CoreEntityFacts{ID: id, Tenant: tenant}
 	switch kind {
+	case api.CoreKindAgentGroup, api.CoreKindAgent:
+		err := r.st.View(ctx, tenant, func(sc store.Scope) error {
+			var workspace model.ID
+			var e error
+			if kind == api.CoreKindAgentGroup {
+				group, err := sc.AgentGroups().Get(ctx, id)
+				workspace, e = group.WorkspaceID, err
+			} else {
+				agent, err := sc.Agents().Get(ctx, id)
+				workspace, e = agent.WorkspaceID, err
+			}
+			if errors.Is(e, store.ErrNotFound) {
+				return nil
+			}
+			if e != nil {
+				return e
+			}
+			workspace, e = lineageWorkspace(ctx, sc, workspace)
+			if e != nil {
+				return e
+			}
+			facts.Exists, facts.WorkspaceID = true, workspace
+			return nil
+		})
+		return facts, err
 	case api.CoreKindWorkspace:
 		err := r.st.View(ctx, tenant, func(sc store.Scope) error {
 			workspace, e := sc.Workspaces().Get(ctx, id)

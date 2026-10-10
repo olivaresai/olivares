@@ -240,6 +240,12 @@ var userGroupDescriptor = model.EntityDescriptor{
 		// reconcile); NULL and "" read alike.
 		pdecl(field("provisioned_by", model.KindText, true),
 			model.None("the provisioner slug that owns the group, empty for IdP-managed: core/model/auth.go:196")),
+		// Core v27 place column, nullable and appended last: NULL is the historical
+		// tenant-wide group. Indexed so a workspace's groups are one lookup. It
+		// declares no WorkspaceLineage: the row lives in the system tenant, outside
+		// the tenant scope ConfineWorkspace filters, and no authorization reads it.
+		pdecl(indexedField("workspace_id", model.KindUUID, true),
+			model.None("the workspace of the target tenant the group is placed in: core/model/auth.go:219")),
 	},
 	// external_id IS unique per granted tenant: it is the IdP's correlation key,
 	// and the application-level probe alone is a non-atomic check-then-insert
@@ -263,14 +269,14 @@ var userGroupCodec = model.Codec[model.UserGroup]{
 		return model.Record{
 			"target_tenant_id": encTenant(g.TargetTenantID), "display_name": g.DisplayName,
 			"external_id": ext, "mapped_role": g.MappedRole, "parent_group_id": encOptID(g.ParentGroupID),
-			"provisioned_by": encOptStr(g.ProvisionedBy),
+			"provisioned_by": encOptStr(g.ProvisionedBy), "workspace_id": encOptID(g.WorkspaceID),
 		}, nil
 	},
 	Decode: func(b model.BaseFields, r model.Record) (model.UserGroup, error) {
 		return model.UserGroup{BaseFields: b, TargetTenantID: decTenant(r, "target_tenant_id"),
 			DisplayName: r.String("display_name"), ExternalID: r.String("external_id"),
 			MappedRole: r.String("mapped_role"), ParentGroupID: decID(r, "parent_group_id"),
-			ProvisionedBy: r.String("provisioned_by")}, nil
+			ProvisionedBy: r.String("provisioned_by"), WorkspaceID: decID(r, "workspace_id")}, nil
 	},
 }
 

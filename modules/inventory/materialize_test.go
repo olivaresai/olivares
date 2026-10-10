@@ -209,13 +209,11 @@ func TestIdempotentDiscovery(t *testing.T) {
 }
 
 func TestSweepStaleness(t *testing.T) {
-	// ⛔ EL RELOJ SE INYECTA, y no es una comodidad de test: desde la decisión A (the planner
-	// #122) `last_seen` es la OBSERVACIÓN — el instante en que ESTA plataforma vio la
-	// entidad — así que sale del reloj del módulo y no del que declare la fuente. Con el
-	// reloj del sistema, este banco alimentaba en `baseTime` y barría en `baseTime+31min`
-	// mientras `last_seen` valía "ahora": nada resultaba rancio y el test medía el reloj de
-	// la caja en vez del barrido. Fijándolo, el corte y la observación viven en la misma
-	// escala y la aserción vuelve a ser sobre el SUJETO.
+	// Inject the module clock: decision A (the planner #122) defines last_seen as the
+	// instant this platform observed the entity, not the source's declared time.
+	// Using the system clock while feeding at baseTime and sweeping at baseTime+31min
+	// left last_seen at the current time, so nothing became stale. A pinned clock
+	// puts observation and cutoff on the same timeline and tests the sweep itself.
 	m, st, tenant := newInv(t, WithClock(pinnedClock{at: baseTime}))
 	m.feed(t, tenant, mkEdge("session", "sess-stale", "file", "/x", sdkmodel.ModeRead, sdkmodel.SignalOTEL, "Read", baseTime))
 

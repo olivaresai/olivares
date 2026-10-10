@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, expect, it, vi } from 'vitest'
@@ -17,7 +17,10 @@ vi.mock('@tanstack/react-router', () => ({
   useRouterState: () => '/',
 }))
 vi.mock('@/lib/auth/context', () => ({
-  useAuth: () => ({ activeTenant: 'tenant-one' }),
+  useAuth: () => ({
+    activeTenant: 'tenant-one',
+    can: (permission: string) => permission === 'inventory:catalog:read',
+  }),
 }))
 const { listWorkspaces, summary } = vi.hoisted(() => ({
   listWorkspaces: vi.fn(),
@@ -80,23 +83,12 @@ beforeEach(() => {
     group_count: 0,
   })
 })
-it('opens the sole workspace by returned ID only after the empty-state action is activated', async () => {
-  const user = userEvent.setup()
+it('opens the sole active workspace overview without asking the user to select it', async () => {
   show()
-  const open = await screen.findByRole('button', { name: 'Open Default' })
-  expect(useWorkspaceStore.getState().activeWorkspace).toBeNull()
-  expect(summary).not.toHaveBeenCalled()
-  expect(screen.getByRole('link', { name: 'Open inventory' })).toHaveAttribute(
-    'href',
-    '/inventory',
-  )
-  await user.click(open)
   await waitFor(() =>
     expect(summary).toHaveBeenCalledWith('opaque-workspace-17'),
   )
-  expect(useWorkspaceStore.getState().activeWorkspace).toBe(
-    'opaque-workspace-17',
-  )
+  expect(useWorkspaceStore.getState().activeWorkspace).toBeNull()
   expect(
     await screen.findByRole('heading', { level: 1, name: 'Default' }),
   ).toBeVisible()
@@ -146,7 +138,8 @@ it.each([0, 2])(
       })),
       has_more: false,
     })
-    show()
+    const { client } = show()
+    await waitFor(() => expect(client.isFetching()).toBe(0))
     await screen.findByRole('link', { name: 'Open inventory' })
     expect(
       screen.queryByRole('button', { name: 'Open Default' }),
@@ -155,3 +148,52 @@ it.each([0, 2])(
     expect(summary).not.toHaveBeenCalled()
   },
 )
+
+it('keeps an existing workspace selection', async () => {
+  useWorkspaceStore.getState().setActiveWorkspace('selected-id', 'Engineering')
+  show()
+  await waitFor(() => expect(summary).toHaveBeenCalledWith('selected-id'))
+  expect(listWorkspaces).not.toHaveBeenCalled()
+  expect(useWorkspaceStore.getState().activeWorkspace).toBe('selected-id')
+})
+
+it('does not auto-select from an incomplete list, but Open still opens its overview', async () => {
+  const user = userEvent.setup()
+  const page = await listWorkspaces()
+  listWorkspaces.mockResolvedValue({ ...page, has_more: true })
+  show()
+  const open = await screen.findByRole('button', { name: 'Open Default' })
+  expect(useWorkspaceStore.getState().activeWorkspace).toBeNull()
+  expect(summary).not.toHaveBeenCalled()
+  await user.click(open)
+  expect(
+    await screen.findByRole('heading', { level: 1, name: 'Default' }),
+  ).toBeVisible()
+  expect(summary).toHaveBeenCalledWith('opaque-workspace-17')
+})
+
+it('does not invent a workspace when the workspace list fails', async () => {
+  listWorkspaces.mockRejectedValue(new Error('Workspace list unavailable'))
+  const { client } = show()
+  await waitFor(() => expect(listWorkspaces).toHaveBeenCalled())
+  await waitFor(() => expect(client.isFetching()).toBe(0))
+  expect(screen.getByText('No workspace selected')).toBeVisible()
+  expect(useWorkspaceStore.getState().activeWorkspace).toBeNull()
+  expect(summary).not.toHaveBeenCalled()
+})
+
+it('keeps an explicit All workspaces scope while showing the sole workspace overview', async () => {
+  useWorkspaceStore
+    .getState()
+    .setActiveWorkspace('opaque-workspace-17', 'Default')
+  show()
+  expect(
+    await screen.findByRole('heading', { level: 1, name: 'Default' }),
+  ).toBeVisible()
+  act(() => useWorkspaceStore.getState().setActiveWorkspace(null))
+  await waitFor(() => expect(listWorkspaces).toHaveBeenCalled())
+  expect(
+    await screen.findByRole('heading', { level: 1, name: 'Default' }),
+  ).toBeVisible()
+  expect(useWorkspaceStore.getState().activeWorkspace).toBeNull()
+})

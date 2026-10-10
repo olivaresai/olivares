@@ -51,7 +51,7 @@ Change Control, Reporting, Quality, Security, Analysis**.
 |---|---|---|
 | `repo_public` | Public repository `<public-owner>/<public-repository>` (curated from a private dev repo) | On the public repo (maintainer's push) |
 | `repo_track` / `repo_interim` | Git history; commits available between releases | Met |
-| `version_unique` | CalVer `vYY.M.PATCH` (`CHANGELOG.md`) | Met at first release (no tag yet — not fabricated) |
+| `version_unique` | `MAJOR.MINOR` (`CHANGELOG.md`) | Met at first release (no tag yet — not fabricated) |
 | `release_notes` | `CHANGELOG.md` (Keep a Changelog 1.1) — structure in place | Met structurally; content at first release |
 | `release_notes_vulns` | `CHANGELOG.md` *Security* section + `docs/security-advisories.md` | Met (designed) |
 

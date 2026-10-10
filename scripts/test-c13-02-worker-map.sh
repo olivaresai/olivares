@@ -21,7 +21,7 @@ bad() { printf 'FAIL %s\n' "$1" >&2; fail=$((fail + 1)); }
 export GOWORK=off
 MCBIN="$(mktemp -u "${TMPDIR:-/workspace/.olivares-tmptest}/mc-bin.XXXXXX")"
 ( cd "$ROOT/commercial/commerce-lint" && go build -o "$MCBIN" . ) >/dev/null 2>&1 || {
-	echo "no pude construir el derivador: la bateria mediria NOT APPLICABLE" >&2; exit 2; }
+	echo "could not build the deriver: the test would measure NOT APPLICABLE" >&2; exit 2; }
 export OLIVARES_MODULE_CATALOG_BIN="$MCBIN"
 
 stage() {
@@ -67,7 +67,7 @@ stage
 python3 - "$TMP/tree/commercial/license-worker/src/catalog/module-slug-package.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1], encoding="utf-8"))
-assert d["entries"][0]["package"] != "enterprise/WRONG", "control de mutacion: ya estaba mutado"
+assert d["entries"][0]["package"] != "enterprise/WRONG", "mutation control: already mutated"
 d["entries"][0]["package"] = "enterprise/WRONG"
 json.dump(d, open(sys.argv[1], "w", encoding="utf-8"), indent=2)
 PY
@@ -89,7 +89,7 @@ for path in sys.argv[1:]:
 	d = json.load(open(path, encoding="utf-8"))
 	before = len(d["entries"])
 	d["entries"] = [e for e in d["entries"] if e["slug"] != "caeptransmit"]
-	assert len(d["entries"]) == before - 1, "control de mutacion: caeptransmit no estaba"
+	assert len(d["entries"]) == before - 1, "mutation control: caeptransmit was absent"
 	json.dump(d, open(path, "w", encoding="utf-8"), indent=2)
 PY
 run

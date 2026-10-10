@@ -267,18 +267,21 @@ func TestProfiledLaunch_RefusesBeforeAnythingDurable(t *testing.T) {
 
 	// A gate that injects HOME for a profiled launch is refused deny-closed, after
 	// the claim was taken and before the row exists; the claim is given back.
-	m.UseLaunchGate(launchGateFunc(func(context.Context, model.TenantID, LaunchIntent) (LaunchDecision, error) {
+	WithLaunchGate(launchGateFunc(func(context.Context, model.TenantID, LaunchIntent) (LaunchDecision, error) {
 		return LaunchDecision{Allowed: true, InjectEnv: []EnvVar{{Name: "HOME", Value: "/elsewhere"}}}, nil
-	}))
+	}))(m)
 	if _, err := m.createRun(ctx, tenant, base(a.Ref)); statusOf(err) != http.StatusForbidden {
 		t.Fatalf("gate-injected HOME = %v (status %d), want 403", err, statusOf(err))
 	}
 	if n := countRows(t, m, tenant, runKind); n != 1 {
 		t.Fatalf("a refused gate injection left a run row")
 	}
-	// The same gate is fine for an UNPROFILED launch: legacy behaviour untouched.
-	if _, err := m.createRun(ctx, tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: model.ActorUser}); err != nil {
-		t.Fatalf("unprofiled launch under the same gate: %v", err)
+	// No internal caller may fall back to an ambient provider home.
+	if _, err := m.createRun(ctx, tenant, base("")); statusOf(err) != http.StatusBadRequest {
+		t.Fatalf("unprofiled launch under the same gate: %v, want 400", err)
+	}
+	if launchCount(fr) != 1 || mints.Load() != 1 || countRows(t, m, tenant, runKind) != 1 {
+		t.Fatal("an unprofiled launch left effects")
 	}
 }
 
@@ -374,20 +377,67 @@ func TestProfiledResume_RevalidatesTheStoredHome(t *testing.T) {
 	}
 	refuse("retired profile", http.StatusConflict)
 
-	// A legacy run (no snapshot) resumes as before and is never assigned a home.
-	legacy, err := m.createRun(ctx, tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, Actor: "user:u1", ActorKind: model.ActorUser})
+	// Stored legacy rows remain readable but cannot resume in an unproven home.
+	persistLegacyRunWithoutProfile(t, m, tenant, dto.RunRef)
+	if _, err := m.getRun(ctx, tenant, dto.RunRef); err != nil {
+		t.Fatalf("legacy read: %v", err)
+	}
+	refuse("unproven legacy home", http.StatusConflict)
+}
+
+// persistLegacyRunWithoutProfile models a historical row loaded after restart.
+// Reap any owned child before changing its profile authority, then retain the
+// historical state so legacy read/stop tests exercise an unsupervised row.
+func persistLegacyRunWithoutProfile(t *testing.T, m *Module, tenant model.TenantID, ref string) {
+	t.Helper()
+	ctx := context.Background()
+	original, err := m.loadRun(ctx, tenant, ref)
 	if err != nil {
 		t.Fatal(err)
 	}
-	waitFor(t, "legacy capture", func() bool { d, _ := m.getRun(ctx, tenant, legacy.RunRef); return d.ClaudeSessionID == "sess-r" })
-	if _, err := m.stopRun(ctx, tenant, legacy.RunRef, "user:u1", "user"); err != nil {
+	if original.String(colState) == stateRunning {
+		live, supervised := m.rt.getLive(tenant, ref)
+		stopped, err := m.stopRun(ctx, tenant, ref, "user:u1", model.ActorUser)
+		if err != nil || stopped.State != stateStopped {
+			t.Fatalf("settle the fixture child: state=%s err=%v", stopped.State, err)
+		}
+		if supervised {
+			select {
+			case <-live.finalizedCh:
+			case <-time.After(handoffTimeout):
+				t.Fatal("fixture child did not finalize before historical row setup")
+			}
+		}
+		m.rt.dropLive(tenant, ref)
+	}
+	cleared := model.Record{}
+	setProfileSnapshot(cleared, nil)
+	if err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(runKind)
+		if err != nil {
+			return err
+		}
+		rec, err := findRunRec(ctx, repo, ref)
+		if err != nil {
+			return err
+		}
+		setProfileSnapshot(rec, nil)
+		for _, col := range []string{colState, colStoppedAt, colExitCode, colReason} {
+			rec[col] = original[col]
+		}
+		_, err = repo.Update(ctx, rec)
+		return err
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := m.resumeRun(ctx, tenant, legacy.RunRef, "user:u1", "user", ""); err != nil {
-		t.Fatalf("legacy resume: %v", err)
+	rec, err := m.loadRun(ctx, tenant, ref)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if _, ok := envValue(fr.lastSpec(), "CLAUDE_CONFIG_DIR"); ok {
-		t.Fatal("a legacy run was assigned a config home on resume")
+	for col := range cleared {
+		if rec.String(col) != "" {
+			t.Fatalf("legacy fixture still has %s", col)
+		}
 	}
 }
 
@@ -433,13 +483,13 @@ func TestProfiledCapture_StaleFrameConflictAndStoreFailure(t *testing.T) {
 	}
 
 	// Store failure during capture: memory stays uncaptured; a retry converges.
-	real := m.data
-	m.data = failingData{ModuleData: real, fail: 1}
+	real := m.Data
+	m.Data = failingData{ModuleData: real, fail: 1}
 	m.captureProfiledSessionID(ctx, ra, "sess-a", m.now())
 	if captured(ra) {
 		t.Fatal("marked captured while the store failed")
 	}
-	m.data = real
+	m.Data = real
 	m.captureProfiledSessionID(ctx, ra, "sess-a", m.now())
 	if !captured(ra) || countRows(t, m, tenant, providerAliasKind) != 1 {
 		t.Fatalf("retry did not converge: captured=%v rows=%d", captured(ra), countRows(t, m, tenant, providerAliasKind))
@@ -516,8 +566,7 @@ func TestProfiledLaunch_K4DigestCompatibilityAndConflict(t *testing.T) {
 		WithWorkIdentityResolver(allowWorkIdentity{}), WithWorkContentGuard(allowWorkContent{}),
 	)
 	itemID, _, agentRef := readyWorkLaunchItem(t, m, st, tenant)
-	spec := workLaunchSpec(itemID, agentRef)
-	spec.Runtime.ProviderProfileRef = a.Ref
+	spec := workLaunchSpec(t, m, tenant, itemID, agentRef, a.Ref)
 	first, err := m.LaunchForWork(context.Background(), tenant, spec)
 	if err != nil {
 		t.Fatalf("profiled LaunchForWork: %v", err)
@@ -611,11 +660,15 @@ func TestProfiledLaunch_RealChildFixtureReceivesHomes(t *testing.T) {
 	}
 }
 
-// The productive endpoint refuses provider_profile_ref until profiled launches are
-// enabled by composition; once enabled it launches and reports the references.
-func TestProfiledLaunch_HTTPEndpointGate(t *testing.T) {
+// A standalone module accepts a profiled launch without a readiness switch.
+func TestProfiledLaunch_HTTPEndpointWithoutEnable(t *testing.T) {
 	fr := &fakeRunner{initSID: "sess-http"}
-	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(fr), WithCredentialSource(staticCred()))
+	var mints atomic.Int32
+	counting := CredentialSourceFunc(func(ctx context.Context, req CredentialRequest) (Credential, error) {
+		mints.Add(1)
+		return staticCred().Mint(ctx, req)
+	})
+	m := New(WithSessionWorkspaceRoot(t.TempDir()), WithRunner(fr), WithCredentialSource(counting))
 	m.UseExecutionEnvironmentRef(testEnvRef)
 	h := newHarness(t, m)
 	admin := h.adminLogin()
@@ -627,26 +680,41 @@ func TestProfiledLaunch_HTTPEndpointGate(t *testing.T) {
 	}
 	ref := r.body["profile_ref"].(string)
 	launch := map[string]any{"transport": "stream-json", "permission_mode": "default", "isolation": "native", "provider_profile_ref": ref}
-	if r := h.doJSON("POST", "/v1/m/sessions/runs", admin, launch, tenantHdr(tenant)); r.code != http.StatusUnprocessableEntity {
-		t.Fatalf("profiled launch while disabled = %d %s", r.code, r.raw)
-	}
-	if launchCount(fr) != 0 {
-		t.Fatal("a refused profiled launch spawned")
-	}
 	// A client cannot post a home or a snapshot: unknown keys are rejected.
 	if r := h.doJSON("POST", "/v1/m/sessions/runs", admin, map[string]any{"transport": "stream-json", "provider_home": map[string]any{"config_home": "/x"}}, tenantHdr(tenant)); r.code != http.StatusBadRequest {
 		t.Fatalf("smuggled snapshot = %d %s", r.code, r.raw)
 	}
-	m.EnableProfiledLaunches()
 	r = h.doJSON("POST", "/v1/m/sessions/runs", admin, launch, tenantHdr(tenant))
 	if r.code != http.StatusCreated || r.body["provider_profile_ref"] != ref || r.body["provider_driver"] != "claude" {
 		t.Fatalf("profiled launch = %d %s", r.code, r.raw)
 	}
+	if launchCount(fr) != 1 || mints.Load() != 1 {
+		t.Fatalf("profiled launch spawned %d processes and minted %d credentials", launchCount(fr), mints.Load())
+	}
 	if _, leaked := r.body["provider_config_home"]; leaked || strings.Contains(r.raw, configA) {
 		t.Fatalf("run response leaks a home: %s", r.raw)
+	}
+	unknown := map[string]any{"provider_profile_ref": "ppf_" + model.NewID().String()}
+	if got := h.doJSON("POST", "/v1/m/sessions/runs", admin, unknown, tenantHdr(tenant)); got.code != http.StatusNotFound {
+		t.Fatalf("unknown profile = %d %s, want 404", got.code, got.raw)
+	}
+	for _, kind := range []model.Kind{runKind, claimKind} {
+		if n := countRows(t, m, tenant, kind); n != 1 {
+			t.Fatalf("unknown profile left %d %s rows", n, kind)
+		}
+	}
+	if launchCount(fr) != 1 || mints.Load() != 1 {
+		t.Fatal("unknown profile spawned a process or minted a credential")
 	}
 	m.rt.environmentRef = ""
 	if r := h.doJSON("POST", "/v1/m/sessions/runs", admin, launch, tenantHdr(tenant)); r.code != http.StatusServiceUnavailable {
 		t.Fatalf("profiled launch without environment = %d %s", r.code, r.raw)
+	}
+	if !m.ProfiledLaunchesEnabled() {
+		t.Fatal("profiled launches must always report enabled")
+	}
+	m.EnableProfiledLaunches() // compatibility call is harmless after a launch
+	if !m.ProfiledLaunchesEnabled() {
+		t.Fatal("compatibility call changed profiled launch behavior")
 	}
 }

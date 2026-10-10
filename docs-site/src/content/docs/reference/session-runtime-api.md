@@ -18,7 +18,7 @@ J01–J08 as tests.
 
 | Edition | What it does | What it does not do |
 |---|---|---|
-| **Community (this page)** | Owned local child: launch, stdin/stdout/stderr, attach with cursor, resume of the exact conversation, reconnect of a live stream, stop with observed exit status. Session rows and evidence stay in module II. | Multi-pane Identity & Scale engine, mTLS agent listener, commercial input sessions, xterm UI chunk |
+| **Community (this page)** | Owned local child: launch, stdin/stdout/stderr, attach with cursor, resume of the exact conversation, reconnect of a live stream, stop with observed exit status. Session rows and evidence stay in module II. | Multi-pane Identity & Scale engine, mTLS agent listener, cockpit pane input, xterm UI chunk |
 | **Identity & Scale overlay** | Commercial session-cockpit engine (listener, panes, recording ledger). Routes live under `/v1/m/session-cockpit/` when the module is present. | It does not replace `/v1/m/sessions/runs` |
 
 A Community build answers the overlay namespace by **absence** (404). It does
@@ -54,6 +54,59 @@ Base: `/v1/m/sessions`. Authenticate. Send `X-Olivares-Tenant`.
 | `POST` | `/runs/{ref}/stop` | SIGTERM then SIGKILL of the process group. Observed exit status on the row |
 | `POST` | `/runs/{ref}/resume` | New process generation. Exact stored conversation. No silent new-conversation fallback |
 | `POST` | `/runs/{ref}/interrupt` | Cancel the active turn. The process stays |
+| `GET` | `/runs/{ref}/diff` | A worktree session's branch against where it began: `branch`, `base`, `head` and the changed `files` (`path`, `status`). 404 without a worktree |
+| `GET` | `/runs/{ref}/diff/file?path=` | One path's text at `base` and at `head` (`original`, `modified`, at most the smaller of the workspace's `max_read_bytes` and 64 KiB each) |
+
+### Worktree option
+
+`POST /runs` accepts an optional boolean `worktree`. When it is true and
+`workspace_ref` names a registered workspace that is a git repository's top
+folder, the session works in a new git worktree and branch of that repository
+(`workspace_path` is the worktree and the run reports `worktree_branch`).
+Absent, null or false keeps today's behavior. The engine answers 422 for a
+workspace that is not a git work tree, is not the repository's top folder, has
+no commit, is read-only or has read-only folders, whose git configuration names a
+filter or includes a file, for a non-native isolation, and for a launch with no
+workspace; and 503 when the node has no worktree directory.
+`POST /runs/{ref}/resume` returns to the same worktree.
+
+`POST /runs/{ref}/cleanup` accepts an optional body `{"discard_worktree": true}`;
+with no body it is the call it always was, and the server still takes any body:
+only an explicit `true` confirms. A session with a worktree is released when its
+branch is merged into the workspace's current branch, the worktree is on that
+branch and it has no uncommitted files; otherwise the call is refused with 409
+(unmerged work, a detached HEAD, a worktree the node cannot reach) and the run
+stays stopped, so it can be repeated with `discard_worktree` to remove the
+worktree and branch anyway, or, for a worktree the node cannot reach, to release
+the session and leave the worktree where it is. The ledger's `cleaned` event says
+what happened to the worktree, with the branch tip.
+
+### Starting a worktree at a commit or branch
+
+With `worktree`, `POST /runs` also accepts an optional `worktree_from`: a full commit
+id (40 or 64 lowercase hex digits) or a local branch of the workspace's repository.
+The new worktree and its own new branch start there instead of at the workspace's
+current commit; the named branch and the workspace checkout do not move. This is how
+a receiver opens the work a handoff names, whose content may carry an optional
+`branch` and `sha`. Git resolves the value to a full commit id and only that id is
+used. The engine answers 422, before anything is created, for a commit the repository
+does not hold, a branch it does not have, a revision expression, a range, an option,
+and a `worktree_from` without `worktree`. Absent, a launch starts at the workspace's
+current commit as before.
+
+`GET /runs/{ref}/diff` lists the paths the session's worktree branch changed since it
+left the workspace's current commit (`base` is their merge base, `head` the branch
+tip, both full commit ids; at most 200 paths, `truncated` says when more exist), and
+`GET /runs/{ref}/diff/file?path=` returns one path's text at `base` and at `head`,
+empty where the file does not exist there. It reads git's committed objects with
+plumbing commands, so uncommitted edits are not in it, and it needs the same
+permission as reading the run. It keeps the workspace's own file rules: a path outside
+the allowed subpaths is not listed and answers 404, a workspace whose DLP posture
+denies answers 403 (and the read is audited like a workspace file read), and a file over
+16 MiB answers 413. A session without a worktree, and a run of another tenant, answer
+404; a branch that is gone, or shares no history with the workspace, answers 409.
+`worktree_from` also answers 422 for a commit id that no branch, tag or remote branch of
+the repository holds.
 
 Reconnect after a dropped attach is `GET …/attach?from={last+1}` on the **same**
 live process. After process loss, attach tells you the session is not live.

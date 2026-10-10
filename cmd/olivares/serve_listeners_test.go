@@ -309,7 +309,8 @@ func TestServeListenerEmptyHTTPAddressCompatibility(t *testing.T) {
 			t.Errorf("httpBindAddr(%q, insecure=%v, reuse=%v) = %q, want %q", tc.addr, tc.insecure, tc.reuse, got, tc.want)
 		}
 	}
-	// The spec address reaches the bind verbatim; no generic normalization happens there.
+	// Resolution pins the same default ports before binding: HTTPS is 443,
+	// while the empty gRPC address remains an ephemeral bind.
 	var seen []string
 	bind := func(ctx context.Context, addr string, reuse bool) (net.Listener, error) {
 		seen = append(seen, addr)
@@ -323,8 +324,8 @@ func TestServeListenerEmptyHTTPAddressCompatibility(t *testing.T) {
 	if err := owned.closeAll(); err != nil {
 		t.Errorf("closeAll: %v", err)
 	}
-	if len(seen) != 2 || seen[0] != ":https" || seen[1] != "" {
-		t.Errorf("bind saw %q, want [\":https\" \"\"]", seen)
+	if len(seen) != 2 || seen[0] != ":443" || seen[1] != ":0" {
+		t.Errorf("bind saw %q, want [\":443\" \":0\"]", seen)
 	}
 }
 
@@ -339,8 +340,10 @@ func TestServeListenerReusePortSharingAndPlainOccupant(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = sharer.Close() }()
+	// Sharing with an older process remains supported. Two surfaces in this
+	// process sharing an address are rejected by the registry collision tests.
 	owned, err := acquireServeListeners(context.Background(), bindServeListener,
-		[]serveListenerSpec{{addr: sharer.Addr().String(), http: true}, {addr: sharer.Addr().String()}}, true, log)
+		[]serveListenerSpec{{addr: sharer.Addr().String(), http: true}}, true, log)
 	if err != nil {
 		t.Fatalf("reuse-port acquisition refused an address shared by another SO_REUSEPORT holder: %v", err)
 	}

@@ -23,6 +23,21 @@ type streamJSONFrame struct {
 	// SessionID is present on the init message (and echoed on others); it is the
 	// UUID `claude --resume <id>` reattaches to.
 	SessionID string `json:"session_id"`
+	// Error and ErrorStatus are an api_retry's cause ("authentication_failed") and
+	// the provider's HTTP status: metadata about the call, never its content.
+	Error       string `json:"error"`
+	ErrorStatus int    `json:"error_status"`
+	// PermissionMode is the tool's own mode, on the init frame and on the
+	// system/status frame Claude Code sends when the mode changes: a word about the
+	// session, not its content.
+	PermissionMode string `json:"permissionMode"`
+}
+
+// refusedCredential reports an api_retry for a credential the provider refused:
+// retrying cannot change the answer.
+func (f streamJSONFrame) refusedCredential() bool {
+	return f.Type == "system" && f.Subtype == "api_retry" &&
+		(f.Error == "authentication_failed" || f.ErrorStatus == 401 || f.ErrorStatus == 403)
 }
 
 // parseStreamJSON decodes the minimal envelope of one NDJSON output line. ok is
@@ -49,3 +64,11 @@ func (f streamJSONFrame) isInit() bool {
 // price are numbers about a turn, not the prompt, the completion or a tool
 // argument. Nothing else in the result frame is read.
 func (f streamJSONFrame) isResult() bool { return f.Type == "result" }
+
+// toolMode is the mode the tool reports on this frame, "" when it reports none.
+func (f streamJSONFrame) toolMode() string {
+	if f.Type != "system" || (f.Subtype != "init" && f.Subtype != "status") {
+		return ""
+	}
+	return toolModeValue(f.PermissionMode)
+}

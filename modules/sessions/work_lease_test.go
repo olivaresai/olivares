@@ -104,7 +104,7 @@ func TestWorkLeaseExpiredTakeoverPublishesEndBeforeAcquire(t *testing.T) {
 		t.Fatalf("ordinary acquire published %d ended events", got)
 	}
 	sink := &recordingWorkSink{}
-	f.m.UseWorkEventSink(sink)
+	WithWorkEventSink(sink)(f.m)
 	if err := f.m.DrainWorkOutbox(context.Background(), f.tenant, 100); err != nil {
 		t.Fatalf("publish ordinary backlog: %v", err)
 	}
@@ -251,7 +251,7 @@ func TestWorkLeaseExpiredTakeoverNudgeAndRestartKeepAggregateOrder(t *testing.T)
 	)
 	oldLease := getWorkLease(t, f)
 	sink := &recordingWorkSink{}
-	f.m.UseWorkEventSink(sink)
+	WithWorkEventSink(sink)(f.m)
 	if err := f.m.DrainWorkOutbox(context.Background(), f.tenant, 100); err != nil {
 		t.Fatalf("publish fixture backlog: %v", err)
 	}
@@ -307,7 +307,7 @@ func TestWorkOutboxBlockedSuccessorDoesNotStopIndependentAggregate(t *testing.T)
 	)
 	oldLease := getWorkLease(t, f)
 	sink := &recordingWorkSink{}
-	f.m.UseWorkEventSink(sink)
+	WithWorkEventSink(sink)(f.m)
 	if err := f.m.DrainWorkOutbox(context.Background(), f.tenant, 100); err != nil {
 		t.Fatalf("publish fixture backlog: %v", err)
 	}
@@ -350,7 +350,7 @@ func TestWorkOutboxAdminReplayUnwedgesOrderedSuccessorWithSameEventID(t *testing
 	)
 	oldLease := getWorkLease(t, f)
 	sink := &recordingWorkSink{}
-	f.m.UseWorkEventSink(sink)
+	WithWorkEventSink(sink)(f.m)
 	if err := f.m.DrainWorkOutbox(context.Background(), f.tenant, 100); err != nil {
 		t.Fatalf("publish fixture backlog: %v", err)
 	}
@@ -1218,7 +1218,7 @@ func getWorkSnapshot(t *testing.T, f workLeaseDomainFixture) WorkSnapshot {
 // the fixture, materialize the terminal state.
 func expireWorkLeaseWindow(t *testing.T, f workLeaseDomainFixture) {
 	t.Helper()
-	if err := f.m.data.Mutate(context.Background(), f.tenant, func(sc store.Scope) error {
+	if err := f.m.Data.Mutate(context.Background(), f.tenant, func(sc store.Scope) error {
 		lease, found, err := findWorkLease(context.Background(), sc, f.ready.ResultID)
 		if err != nil {
 			return err
@@ -2154,7 +2154,7 @@ func TestWorkLeaseDomainRenewAcceptsIdenticalTransactionClockAcrossBackends(t *t
 			holder.SessionID = sid
 
 			var fixed model.Timestamp
-			if err := m.data.View(context.Background(), tenant, func(sc store.Scope) error {
+			if err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
 				clock, ok := sc.(store.TransactionClock)
 				if !ok {
 					return fmt.Errorf("fixture scope has no TransactionClock")

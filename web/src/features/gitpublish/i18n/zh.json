@@ -12,6 +12,7 @@
     "close": "关闭",
     "push": "推送",
     "pull_request": "创建拉取请求",
+    "draftPullRequest": "创建草稿拉取请求",
     "merge": "合并",
     "reconcile": "核对",
     "abandon": "放弃"
@@ -70,7 +71,7 @@
   },
   "authority": {
     "requires": "需要 {{permission}}",
-    "requiresAal3": "需要 {{permission}}，并提升至 AAL3"
+    "requiresStepUp": "需要 {{permission}}，并完成管理操作的额外验证"
   },
   "publish": {
     "push": {
@@ -89,6 +90,12 @@
       "submit": "请求合并"
     }
   },
+  "session": {
+    "title": "发布",
+    "hint": "通过此会话所在工作区的发布目标推送其提交。引擎从会话文件夹获取该提交。",
+    "publish": "发布",
+    "publishTo": "发布到 {{prefix}}"
+  },
   "fields": {
     "ref": "分支引用",
     "refHint": "推送前缀下的完整引用，例如 refs/heads/{{prefix}}change。",
@@ -97,6 +104,9 @@
     "commit": "提交",
     "tree": "树",
     "treeHint": "该提交的树 ID。如果受管仓库中的树与之不同，引擎将拒绝推送。",
+    "sessionRun": "会话运行",
+    "sessionRunHint": "可选。其文件夹包含该提交的会话运行。引擎会先从中将提交获取到受管仓库。",
+    "sessionRunFixedHint": "此推送来自的会话。引擎会先从其文件夹将提交获取到受管仓库。",
     "headRef": "Head 分支",
     "headRefHint": "{{prefix}} 下的分支。",
     "base": "基础分支",
@@ -108,7 +118,7 @@
     "expectedHeadHint": "仅当拉取请求的 head 为此提交时才会执行合并。",
     "method": "合并方式",
     "acknowledgeIntent": "承认已放弃的意图",
-    "acknowledgeIntentHint": "可选。持有此作用域的已放弃意图的 ID。指定它需要具备 AAL3 下的目标管理权限。",
+    "acknowledgeIntentHint": "可选。持有此作用域的已放弃意图的 ID。指定它需要具备目标管理权限。",
     "operationId": "操作 ID",
     "operationIdHint": "使用此 ID 再次发送同一请求会返回已记录的意图，不会进行第二次派发。"
   },
@@ -175,11 +185,15 @@
     "protected_branch_refused": "该分支在主机上受保护，拒绝向其发布。",
     "push_prefix_overlaps_base": "该推送前缀会使推送落到合并基础分支上。",
     "ref_not_allowed": "该分支不在此目标的推送前缀之下。",
+    "repository_config_refused": "受管仓库的配置不是引擎所管理的配置。未推送任何内容。",
     "repository_outside_binding": "该仓库不属于凭据绑定所允许的所有者。",
     "runtime_credential_refused": "会话的运行时凭据无法用于发布。请使用您自己的凭据操作。",
     "scoped_grant_required": "此操作需要针对此目标的作用域授权。",
+    "separation_of_duty": "您启动的会话创建了此更改。请让另一人审查并合并。",
+    "session_source_refused": "该会话运行不在此目标的工作区中，或其文件夹不是引擎可从中获取的仓库。",
+    "session_source_unavailable": "未能及时读取会话文件夹。未推送任何内容。",
     "stale_lease": "该分支已不再处于预期的当前提交。",
-    "step_up_required": "此操作需要提升至 AAL3。请在出现提示时完成提升。",
+    "step_up_required": "此操作需要完成此部署要求的管理操作额外验证。请在出现提示时完成。",
     "subject_mismatch": "此操作 ID 属于另一主体发出的请求。",
     "target_changed": "请求被受理后目标发生了变化。未派发任何内容。",
     "target_in_use": "仍有处于派发中、不确定或已放弃状态的意图持有此目标。",

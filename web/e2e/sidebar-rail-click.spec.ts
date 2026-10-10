@@ -2,10 +2,12 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 //
-// EU-17 (Business 06): at 1280x900 "All areas" was painted over the session rail and took
-// the click, so a session could not be opened from the sidebar. With twelve operated
-// sessions every visible rail row must receive its own click, All areas must sit below the
-// rail, and at 390 px (no sidebar) a session opens from the Sessions list. Light and dark.
+// EU-17 (Business 06): at 1280x900 "All areas" was painted over the sidebar's session rail
+// and took the click, so a session could not be opened from the sidebar. Since console 1.0
+// (#1123) the sidebar lists no sessions: its Sessions destination carries the live count
+// (every running session, not the first eight) and opens the Sessions page, whose own list
+// is the one sidebar there. With twelve operated sessions the twelfth must open with its own
+// click at 1280 px and at 390 px. Light and dark.
 import { expect, test, type Page } from '@playwright/test'
 
 const EMAIL = process.env.E2E_EMAIL ?? 'demo@olivares.local'
@@ -45,48 +47,27 @@ async function signIn(page: Page) {
   })
 }
 
-/** Rows whose centre is answered by something other than the row itself. */
-function stolenRows(page: Page) {
-  return page.evaluate(() => {
-    const rail = document.querySelector('[data-slot="session-rail"]')
-    const box = rail?.getBoundingClientRect()
-    if (!box) return ['no rail']
-    return [...rail!.querySelectorAll<HTMLElement>('[data-rail-row]')]
-      .filter((r) => {
-        const b = r.getBoundingClientRect()
-        return b.bottom > box.top && b.top < box.bottom
-      })
-      .filter((r) => {
-        const b = r.getBoundingClientRect()
-        const y = Math.min(b.top + b.height / 2, box.bottom - 2)
-        const hit = document.elementFromPoint(b.left + b.width / 2, y)
-        return !hit || !r.contains(hit)
-      })
-      .map((r) => r.getAttribute('aria-label') ?? '?')
-  })
-}
-
 for (const scheme of ['light', 'dark'] as const) {
-  test(`the sidebar rail takes its own clicks at 1280x900 (${scheme})`, async ({
+  test(`the sidebar counts every session and leads to them at 1280x900 (${scheme})`, async ({
     page,
   }) => {
     await page.setViewportSize({ width: 1280, height: 900 })
     await page.emulateMedia({ colorScheme: scheme })
     await signIn(page)
     await page.goto('/')
-    const rail = page.locator('[data-slot="session-rail"]')
-    // The rail lists at most eight per group; the twelve still fill it past its height.
-    await expect(rail.locator('[data-rail-row]')).toHaveCount(8)
-    expect(await stolenRows(page)).toEqual([])
-    const areas = page.getByRole('button', { name: /All areas/ })
-    const railBox = await rail.boundingBox()
-    const areasBox = await areas.boundingBox()
-    expect(areasBox!.y).toBeGreaterThanOrEqual(
-      railBox!.y + railBox!.height - 0.5,
-    )
-    const last = rail.locator('[data-rail-row]').last()
-    await last.scrollIntoViewIfNeeded()
-    await last.click()
+    const sidebar = page.locator('aside[aria-label="Primary"]')
+    await expect(sidebar.locator('[data-slot="session-rail"]')).toHaveCount(0)
+    const sessions = sidebar.locator('[data-journey="sessions"]')
+    await expect(sessions).toContainText('12')
+    await sessions.click()
+    await expect(page).toHaveURL(/\/sessions/)
+    await expect(sidebar).toHaveAttribute('data-sidebar-mode', 'rail')
+    const row = page
+      .getByText('Session number 12')
+      .filter({ visible: true })
+      .first()
+    await row.scrollIntoViewIfNeeded()
+    await row.click()
     await expect(page).toHaveURL(/session=/)
   })
 

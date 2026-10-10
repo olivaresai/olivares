@@ -1,6 +1,6 @@
 ---
 title: "Explication"
-description: "Vue d'ensemble orientée compréhension d'Olivares AI : comment il intègre, gère et sécurise l'IA d'entreprise en une seule ground truth : Claude Code au niveau le plus profond, Codex et Grok Build à ses côtés — son architecture modulaire répartie sur 31 modules, l'access map read-first et le modèle open-core."
+description: "Vue d'ensemble orientée compréhension d'Olivares AI : comment il intègre, gère et sécurise l'IA d'entreprise en une seule ground truth : Claude Code au niveau le plus profond, Codex et Grok Build à ses côtés — son architecture modulaire répartie sur 32 modules, l'access map read-first et le modèle open-core."
 ---
 
 Cette section est orientée compréhension. Elle explique *pourquoi* Olivares AI est
@@ -29,7 +29,7 @@ l'API. L'architecture est une plateforme, pas un outil unique : un **moteur cœu
 fournit les sous-systèmes partagés — l'ingestion et un bus d'événements en-process,
 le SDK de connecteurs, le runtime de modules, un modèle de données multi-tenant,
 l'API REST/gRPC, l'authentification et l'autorisation, et l'audit ledger
-append-only — et chaque capacité est l'un des **31 modules** qui se rattachent à ces
+append-only — et chaque capacité est l'un des **32 modules** qui se rattachent à ces
 sous-systèmes sans ré-architecturer le cœur. Les **connecteurs** alimentent le
 moteur depuis l'extérieur via un SDK stable ; un connecteur n'importe jamais depuis
 le cœur, ce qui garde la frontière de licence propre.
@@ -37,7 +37,7 @@ le cœur, ce qui garde la frontière de licence propre.
 Le store par défaut est SQLite (pur-Go) pour l'usage mono-nœud et air-gapped,
 passant à Postgres avec row-level security pour le multi-tenant et le passage à
 l'échelle. Le bus d'événements est en-process par défaut ; NATS est un binding
-distribué optionnel, pas une exigence. La plateforme livre aujourd'hui **31 modules**,
+distribué optionnel, pas une exigence. La plateforme livre aujourd'hui **32 modules**,
 chacun à sa propre maturité honnête — la plupart opérationnels et câblés de bout en
 bout, certains partiels ou opt-in — répartis sur neuf domaines de capacité ; le
 registre de modèles propriétaires et le fine-tuning sont une **capacité planifiée**,
@@ -92,19 +92,14 @@ mTLS, adossé à Postgres), ou entièrement air-gapped avec zéro egress et une 
 hors ligne ; une option managée est un travail à venir.
 
 Les licences sont open-core. Le cœur du moteur, les modules et l'interface web sont
-AGPL-3.0-only ; le SDK et les connecteurs sont Apache-2.0 ; un tier enterprise est
-commercial. Ce découpage est ce qui permet aux tiers de construire des connecteurs
+AGPL-3.0-only ; le SDK et les connecteurs sont Apache-2.0 ; les éditions Business et Enterprise sont
+commerciales. Ce découpage est ce qui permet aux tiers de construire des connecteurs
 sans que la frontière copyleft n'atteigne leur code.
 
 → Lisez [Open core et licences](/fr/explanation/open-core-and-licensing/) pour la carte
 des licences par répertoire et ce que cela signifie en pratique.
 
 ## Décisions d'architecture
-
-Le raisonnement derrière les choix porteurs — bearer tokens opaques au lieu de JWT,
-le PDP d'autorisation pluggable derrière une jointure unique, SQLite-vers-Postgres,
-l'audit ledger hash-chained et signé — est consigné sous forme d'Architecture
-Decision Records.
 
 ## Réglementation, positionnement & adéquation
 

@@ -59,6 +59,7 @@
 // protected in transit, OR the operator has explicitly declared that it may not
 // be. Loopback is classified apart and always admitted: that is what keeps
 // development modes and local agent ingest working without ceremony.
+// Unix streams are local too; callers retain their filesystem access controls.
 //
 // The escape hatch is deliberate and deliberately loud. Some real deployments do
 // terminate TLS in front of the process (an ingress, a service mesh, a sidecar),
@@ -121,8 +122,8 @@ type Policy struct {
 	OptIn string
 }
 
-// Check reports whether addr may be bound under p. It is the whole decision;
-// Listen, ListenPacket and ListenMulticastUDP are Check plus the syscall.
+// Check reports whether an IP address may be bound under p. It is the whole
+// off-host exposure decision used by the IP listener constructors.
 //
 // Callers that cannot use this package's constructors — because they hand an
 // address to something else that binds it — call this first, and must do so
@@ -225,13 +226,17 @@ func asciiEqualFold(s, t string) bool {
 	return true
 }
 
-// Listen admits addr under p and only then opens a TCP listener. On refusal it
-// returns a nil listener and never touches the network.
+// Listen admits addr under p and only then opens an IP or Unix stream listener.
+// Unix streams cannot bind off-host; their filesystem permissions belong to the
+// caller. On refusal it returns a nil listener and never touches the network.
 func Listen(ctx context.Context, network, addr string, p Policy) (net.Listener, error) {
+	var lc net.ListenConfig
+	if network == "unix" {
+		return lc.Listen(ctx, network, addr)
+	}
 	if err := Check(addr, p); err != nil {
 		return nil, err
 	}
-	var lc net.ListenConfig
 	ln, err := lc.Listen(ctx, network, addr)
 	if err != nil {
 		return nil, err

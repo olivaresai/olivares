@@ -37,4 +37,4 @@
 0	docs/trust/one-pager.md
 0	docs/trust/questionnaire-answer-bank.md
 0	docs/trust/vendor-viability.md
-0	email/copy/en.json
+0	email/locales/en.json

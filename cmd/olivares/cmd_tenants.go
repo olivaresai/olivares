@@ -314,8 +314,10 @@ func tenantsRemoveCmd(client bootstrapClient) *cobra.Command {
 				orgsPath+"/"+bootstrapPathID(args[0]), nil, http.StatusNoContent); err != nil {
 				return err
 			}
-			_, err := fmt.Fprintf(cmd.OutOrStdout(), "deleted tenant %s\n", safeCLIValue(args[0], ""))
-			return err
+			return renderOut(cmd, func(out io.Writer) error {
+				_, err := fmt.Fprintf(out, "deleted tenant %s\n", safeCLIValue(args[0], ""))
+				return err
+			}, map[string]any{"id": args[0], "deleted": true})
 		},
 	}
 	addYesFlag(cmd, &yes)

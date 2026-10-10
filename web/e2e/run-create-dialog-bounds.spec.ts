@@ -458,32 +458,9 @@ async function signIn(page: Page) {
   await page.waitForURL((url) => !url.pathname.startsWith('/login'))
 }
 
-/** Fresh mount per case: Cancel does not reset the form; only a create does. */
-async function openDialog(page: Page) {
-  await page.goto('/agentops')
-  const trigger = page
-    .locator(
-      'xpath=//button[not(ancestor::*[@data-testid="work-surface"])][normalize-space(.)="New session"]',
-    )
-    .first()
-  await expect(trigger).toBeVisible()
-  await trigger.click()
-  const dialog = page.getByRole('dialog')
-  await expect(dialog).toBeVisible()
-  return { dialog, trigger }
-}
-
-/**
- * Selects by exact unique painted label, then waits for the real readiness
- * RESPONSE and the RENDERED panel with its checks — a selected label alone is
- * not the profile-dependent body this form's height depends on.
- */
-async function selectProfileAndAwaitReadiness(page: Page, dialog: Locator) {
-  const combo = dialog.getByRole('combobox', { name: /profile/i }).first()
-  await combo.click()
-  const option = page.getByRole('option', { name: PROFILE_LABEL, exact: true })
-  await expect(option).toHaveCount(1)
-  const observed = page
+/** The browser's readiness read for the fixture profile under the default tuple. */
+function readinessResponse(page: Page) {
+  return page
     .waitForResponse(
       (r) => {
         const url = new URL(r.url())
@@ -502,12 +479,84 @@ async function selectProfileAndAwaitReadiness(page: Page, dialog: Locator) {
       (value) => ({ value }),
       (error) => ({ error }),
     )
-  // Consume the result even if clicking fails.
+}
+
+/** Fresh mount per case: Cancel does not reset the form; only a create does. The
+ * header opens the New session form; this launch dialog is its Advanced launch
+ * options (inside More options when a tool is ready). `preselected` is the readiness
+ * read the dialog makes on its own when it opens on the only profile
+ * armed before the dialog mounts so it cannot be missed. */
+async function openDialog(page: Page) {
+  await page.goto('/agentops')
+  // The page's own button: on a phone the header one is hidden and the visible one is
+  // the empty list's (the phone bar's opens the global New session form instead).
+  const trigger = page
+    .getByRole('main')
+    .getByRole('button', { name: 'New session', exact: true })
+    .filter({ visible: true })
+    .first()
+  await expect(trigger).toBeVisible()
+  await trigger.click()
+  const quick = page.getByRole('dialog')
+  await expect(quick).toBeVisible()
+  const advanced = quick.getByRole('button', {
+    name: 'Advanced launch options',
+  })
+  const more = quick.getByRole('button', { name: 'More options' })
+  // The form reads what each tool can run on first; wait for its answer.
+  await expect(advanced.or(more).first()).toBeVisible()
+  if (!(await advanced.isVisible())) await more.click()
+  const preselected = readinessResponse(page)
+  await advanced.click()
+  const dialog = page.getByRole('dialog')
+  await expect(dialog).toHaveCount(1)
+  await expect(
+    dialog.getByRole('button', { name: 'Advanced options' }),
+  ).toBeVisible()
+  return { dialog, trigger, preselected }
+}
+
+/** Every launch choice but the profile and the first message is under Advanced
+ * options, and so is the profile's readiness panel. */
+async function openAdvanced(dialog: Locator) {
+  const toggle = dialog.getByRole('button', { name: 'Advanced options' })
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true')
+    await toggle.click()
+  await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+}
+
+const submitOf = (dialog: Locator) =>
+  dialog.getByRole('button', { name: 'Start', exact: true })
+
+/**
+ * Selects by exact unique painted label, then waits for the real readiness
+ * RESPONSE and the RENDERED panel with its checks — a selected label alone is
+ * not the profile-dependent body this form's height depends on.
+ */
+async function selectProfileAndAwaitReadiness(
+  page: Page,
+  dialog: Locator,
+  preselected: ReturnType<typeof readinessResponse>,
+) {
+  const combo = dialog.getByRole('combobox', { name: /profile/i }).first()
+  // The only profile is already the choice and its read already left: use that one.
+  const chosen = (await combo.textContent())?.trim() === PROFILE_LABEL
+  let observed = preselected
   let clickError: unknown
-  try {
-    await option.click()
-  } catch (error) {
-    clickError = error
+  if (!chosen) {
+    await combo.click()
+    const option = page.getByRole('option', {
+      name: PROFILE_LABEL,
+      exact: true,
+    })
+    await expect(option).toHaveCount(1)
+    observed = readinessResponse(page)
+    // Consume the result even if clicking fails.
+    try {
+      await option.click()
+    } catch (error) {
+      clickError = error
+    }
   }
   const result = await observed
   if ('error' in result)
@@ -538,6 +587,7 @@ async function selectProfileAndAwaitReadiness(page: Page, dialog: Locator) {
     Array.isArray(body.checks) && body.checks.length > 0,
     'readiness checks',
   ).toBe(true)
+  await openAdvanced(dialog)
   const panel = dialog.locator('[data-testid="launch-readiness"]')
   await expect(panel, 'readiness panel has a visible layout').toBeVisible()
   const rows = panel.locator('[data-check]')
@@ -558,7 +608,7 @@ async function selectProfileAndAwaitReadiness(page: Page, dialog: Locator) {
       body.checks.map(({ check, state, code }) => ({ check, state, code })),
     )
   await expect(
-    dialog.getByRole('button', { name: /request launch/i }),
+    submitOf(dialog),
     `submit must reflect permitting readiness ${body.configuration_state}`,
   ).toBeEnabled()
   return body.configuration_state
@@ -568,8 +618,11 @@ async function selectProfileAndAwaitReadiness(page: Page, dialog: Locator) {
 async function measure(dialog: Locator) {
   const box = await dialog.boundingBox()
   const region = await dialog.evaluate((el) => {
-    const owners = Array.from(el.querySelectorAll('*')).filter((n) =>
-      /(auto|scroll)/.test(getComputedStyle(n).overflowY),
+    // A textarea (the first message) scrolls its own text, not the form.
+    const owners = Array.from(el.querySelectorAll('*')).filter(
+      (n) =>
+        n.tagName !== 'TEXTAREA' &&
+        /(auto|scroll)/.test(getComputedStyle(n).overflowY),
     )
     const active = owners.filter((n) => n.scrollHeight > n.clientHeight + 1)
     const se = document.scrollingElement ?? document.documentElement
@@ -631,10 +684,17 @@ test('New session is pointer-reachable and admits exactly one settled launch', a
   await test.step('missing profile keeps the control disabled and admits nothing', async () => {
     await page.setViewportSize({ width: 1280, height: 720 })
     const { dialog } = await openDialog(page)
-    await dialog.locator('input').first().fill(RUN_NAME)
-    const submit = dialog.getByRole('button', { name: /request launch/i })
+    await openAdvanced(dialog)
+    await dialog.getByLabel('Name', { exact: true }).fill(RUN_NAME)
+    // The only profile is preselected, so the missing piece here
+    // is the admitted agent: agent mode with none chosen. Start names it.
+    await dialog
+      .getByLabel('Launch identity')
+      .selectOption({ label: 'Admitted agent (on behalf of sponsor)' })
+    const submit = submitOf(dialog)
     const handle = await submit.elementHandle()
     await expect(submit).toBeDisabled()
+    await expect(submit).toHaveAccessibleDescription(/\S/)
     const stillDisabled = await page.evaluate(
       (el) => !!el && el.isConnected && (el as HTMLButtonElement).disabled,
       handle,
@@ -663,11 +723,16 @@ test('New session is pointer-reachable and admits exactly one settled launch', a
   for (const vp of VIEWPORTS) {
     await test.step(vp.name, async () => {
       await page.setViewportSize({ width: vp.width, height: vp.height })
-      const { dialog, trigger } = await openDialog(page)
-      await dialog.locator('input').first().fill(`${RUN_NAME}-probe`)
-      const readiness = await selectProfileAndAwaitReadiness(page, dialog)
+      const { dialog, trigger, preselected } = await openDialog(page)
+      await openAdvanced(dialog)
+      await dialog.getByLabel('Name', { exact: true }).fill(`${RUN_NAME}-probe`)
+      const readiness = await selectProfileAndAwaitReadiness(
+        page,
+        dialog,
+        preselected,
+      )
 
-      const submit = dialog.getByRole('button', { name: /request launch/i })
+      const submit = submitOf(dialog)
       const enabled = await submit.isEnabled()
       const { box, region } = await measure(dialog)
       const cancel = await hitsSelf(
@@ -712,6 +777,7 @@ test('New session is pointer-reachable and admits exactly one settled launch', a
         const owner = await dialog.evaluateHandle((el) =>
           Array.from(el.querySelectorAll('*')).find(
             (n) =>
+              n.tagName !== 'TEXTAREA' &&
               /(auto|scroll)/.test(getComputedStyle(n).overflowY) &&
               n.scrollHeight > n.clientHeight + 1,
           ),
@@ -735,6 +801,7 @@ test('New session is pointer-reachable and admits exactly one settled launch', a
         const sameOwner = await dialog.evaluate((el, previous) => {
           const active = Array.from(el.querySelectorAll('*')).filter(
             (n) =>
+              n.tagName !== 'TEXTAREA' &&
               /(auto|scroll)/.test(getComputedStyle(n).overflowY) &&
               n.scrollHeight > n.clientHeight + 1,
           )
@@ -869,10 +936,11 @@ test('New session is pointer-reachable and admits exactly one settled launch', a
 
   await test.step('one pointer create is admitted and persisted', async () => {
     await page.setViewportSize({ width: 1280, height: 720 })
-    const { dialog } = await openDialog(page)
-    await dialog.locator('input').first().fill(RUN_NAME)
-    await selectProfileAndAwaitReadiness(page, dialog)
-    const submit = dialog.getByRole('button', { name: /request launch/i })
+    const { dialog, preselected } = await openDialog(page)
+    await openAdvanced(dialog)
+    await dialog.getByLabel('Name', { exact: true }).fill(RUN_NAME)
+    await selectProfileAndAwaitReadiness(page, dialog, preselected)
+    const submit = submitOf(dialog)
     expect((await hitsSelf(page, submit)).isSelf).toBe(true)
     await launch.create(submit)
   })

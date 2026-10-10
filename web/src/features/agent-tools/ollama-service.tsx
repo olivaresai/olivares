@@ -7,11 +7,13 @@
 // Providers), and download a model by name with Ollama's own progress.
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Loader2 } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Field } from '@/components/ui/field'
 import { Input } from '@/components/ui/input'
+import { firstHourKeys } from '@/features/first-hour/api'
+import { providerKeys } from '@/features/providers/api'
 import { ApiError } from '@/lib/api/errors'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { useTenantStore } from '@/stores/tenant'
@@ -26,6 +28,10 @@ function message(err: unknown): string {
     : String(err)
 }
 
+/** A small model measured working with OpenCode and Codex on this Ollama (real use, 26.10.1):
+ * the one a first download is offered. */
+const RECOMMENDED_MODEL = 'qwen2.5:0.5b'
+
 export function OllamaService() {
   const { t } = useTranslation('agentTools')
   const qc = useQueryClient()
@@ -37,10 +43,30 @@ export function OllamaService() {
     refetchInterval: (query) =>
       query.state.data?.state === 'starting' ? 1000 : false,
   })
+  const readinessChanged = useCallback(
+    () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: firstHourKeys.all(tenant) }),
+        qc.invalidateQueries({ queryKey: providerKeys.all(tenant) }),
+      ]),
+    [qc, tenant],
+  )
   // Exact: the download progress lives under this key, and a finished download
   // refreshes the status; without `exact` it would refetch itself without end.
   const refresh = () =>
-    qc.invalidateQueries({ queryKey: STATUS_KEY, exact: true })
+    Promise.all([
+      qc.invalidateQueries({ queryKey: STATUS_KEY, exact: true }),
+      readinessChanged(),
+    ])
+  // The engine registers this server in Providers once it is up, after the start request
+  // returned: reaching running is when the readiness reads must ask again.
+  const serverState = status.data?.state
+  const lastState = useRef(serverState)
+  useEffect(() => {
+    if (serverState === 'running' && lastState.current !== serverState)
+      void readinessChanged()
+    lastState.current = serverState
+  }, [serverState, readinessChanged])
   const start = usePrivilegedMutation<void, OllamaStatus>({
     mutationFn: (_, authority) => agentToolsApi.ollamaStart(tenant, authority),
     stepUpAction: 'console',
@@ -51,7 +77,8 @@ export function OllamaService() {
     mutationFn: () => agentToolsApi.ollamaStop(),
     onSettled: () => void refresh(),
   })
-  const [name, setName] = useState('')
+  // HU2-07: the field starts on a small model a first session can use, not empty.
+  const [name, setName] = useState(RECOMMENDED_MODEL)
   const [pullID, setPullID] = useState<string | null>(null)
   const pull = usePrivilegedMutation<string, OllamaPull>({
     mutationFn: (model, authority) =>
@@ -151,12 +178,23 @@ export function OllamaService() {
             </ul>
           )}
           <form onSubmit={onPull} className="flex flex-wrap items-end gap-2">
-            <Field label={t('ollama.model')} htmlFor="ollama-model">
+            <Field
+              label={t('ollama.model')}
+              htmlFor="ollama-model"
+              className="min-w-0 flex-1 basis-64"
+              description={
+                <>
+                  {t('ollama.modelHint')}{' '}
+                  <code className="break-all">
+                    hf.co/bartowski/SmolLM2-135M-Instruct-GGUF:Q4_K_M
+                  </code>
+                </>
+              }
+            >
               <Input
                 id="ollama-model"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="qwen2.5:0.5b"
                 spellCheck={false}
                 mono
               />

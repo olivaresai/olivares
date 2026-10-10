@@ -51,7 +51,7 @@ func newReleaseCmd() *cobra.Command {
 			"checksums.txt.\n\n" +
 			"Hidden because it is release-engineering tooling, not an operator surface: the\n" +
 			"signing half runs on the ceremony host, never on a serving node.",
-		Example: "  olivares release manifest --version 26.10.1 --dir ./dist\n" +
+		Example: "  olivares release manifest --version " + version + " --dir ./dist\n" +
 			"  olivares release verify-manifest --manifest stable-manifest.json\n" +
 			"  olivares release verify-channel-advance --candidate stable-manifest.json\n" +
 			"  olivares release sign-manifest --manifest stable-manifest.json --sign-key @prod-ota.key",
@@ -80,6 +80,7 @@ type manifestGenOptions struct {
 	revokeSerials   []string
 	revokeHolders   []string
 	licenseKeyEpoch string
+	edition         string
 }
 
 // defaultExpiresIn is the freshness window every generated manifest carries unless
@@ -102,7 +103,7 @@ func newReleaseManifestCmd() *cobra.Command {
 			"and size, and writes a signed TUF-lite manifest for `olivares upgrade`. With --sign-key\n" +
 			"it also writes <out>.sig (Ed25519 over the exact manifest bytes); without it the manifest\n" +
 			"is left for the offline signing ceremony.",
-		Example: `  olivares release manifest --version 26.10.1 --dir ./dist \
+		Example: `  olivares release manifest --version ` + version + ` --dir ./dist \
     --channel stable --out ./dist/manifest.json --sign-key @release-private.key`,
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,
@@ -110,7 +111,7 @@ func newReleaseManifestCmd() *cobra.Command {
 	}
 	f := cmd.Flags()
 	f.StringVar(&o.channel, "channel", release.ChannelStable, "channel: stable | security (lts is accepted by the validator, but no lts line is produced)")
-	f.StringVar(&o.version, "version", "", "release version (semver), e.g. 26.10.1 (required)")
+	f.StringVar(&o.version, "version", "", "release version (MAJOR.MINOR, required)")
 	f.StringVar(&o.dir, "dir", ".", "directory holding the release archives")
 	f.StringVar(&o.minVersion, "min-version", "", "minimum current version allowed to jump directly to this release")
 	f.StringArrayVar(&o.advisories, "advisory", nil, "advisory/CVE id fixed by this release (repeatable)")
@@ -125,6 +126,7 @@ func newReleaseManifestCmd() *cobra.Command {
 	f.StringVar(&o.signKey, "sign-key", "", "base64 (or @file) Ed25519 PRIVATE key to sign the manifest")
 	f.StringArrayVar(&o.revokeSerials, "revoke-serial", nil, "license serial to revoke via this channel's CRL (repeatable)")
 	f.StringArrayVar(&o.revokeHolders, "revoke-holder", nil, "holder_id whose EVERY license is revoked via this channel's CRL (repeatable)")
+	f.StringVar(&o.edition, "edition", "", "edition stated by the signer; Enterprise may install a signed community bundle without a license; Community supports only --bundle --check. Leave unset on the public channel manifest for older binaries")
 	f.StringVar(&o.licenseKeyEpoch, "license-key-epoch", "", "key-compromise fence (RFC3339, the PAST compromise time): licenses issued before it are invalid; set only during an O03 rotation")
 	return cmd
 }
@@ -137,13 +139,17 @@ func runReleaseManifest(cmd *cobra.Command, o *manifestGenOptions) error {
 	if !release.ValidChannel(o.channel) {
 		return fmt.Errorf("unknown --channel %q (want %s)", o.channel, strings.Join(release.Channels, " | "))
 	}
+	if release.IsUnstamped(o.version) {
+		return fmt.Errorf("--version must be MAJOR.MINOR")
+	}
 	if _, err := release.ParseVersion(o.version); err != nil {
 		return fmt.Errorf("--version: %w", err)
 	}
-	// Git tags carry the conventional leading "v" while GoReleaser's .Version and
-	// archive names do not. Canonicalise once so a tag `v26.6.0` always produces
-	// manifest.version `26.6.0` and scans `olivares_26.6.0_...` (commerce contract).
-	version := strings.TrimPrefix(strings.TrimSpace(o.version), "v")
+	version := o.version
+
+	if cmd.Flags().Changed("edition") && o.edition == "" {
+		return fmt.Errorf("--edition is empty: name the edition (community) or leave the flag out")
+	}
 
 	arts, err := scanArtifacts(o.dir, version)
 	if err != nil {
@@ -157,12 +163,13 @@ func runReleaseManifest(cmd *cobra.Command, o *manifestGenOptions) error {
 		SchemaVersion: release.ManifestSchemaVersion,
 		Channel:       o.channel,
 		Version:       version,
-		MinVersion:    strings.TrimSpace(o.minVersion),
+		MinVersion:    o.minVersion,
 		ReleasedAt:    time.Now().UTC(),
 		Security:      o.security || o.channel == release.ChannelSecurity,
 		Advisories:    o.advisories,
 		Notes:         o.notes,
 		Artifacts:     arts,
+		Edition:       o.edition,
 	}
 	if o.rollout >= 0 {
 		if o.rollout > 100 {
@@ -549,7 +556,7 @@ func newReleaseVerifyManifestCmd() *cobra.Command {
 			"Run it BEFORE the off-box ceremony (no --sig) and REFUSE to sign on any failure.",
 		Example: "  # custodian, before signing (checksums.txt already cosign-verified)\n" +
 			"  olivares release verify-manifest --manifest stable-manifest.json \\\n" +
-			"    --checksums checksums.txt --dir . --expect-channel stable --expect-version 26.10.1",
+			"    --checksums checksums.txt --dir . --expect-channel stable --expect-version " + version,
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,
 		RunE:         func(cmd *cobra.Command, _ []string) error { return runReleaseVerifyManifest(cmd, o) },
@@ -561,7 +568,7 @@ func newReleaseVerifyManifestCmd() *cobra.Command {
 	f.StringVar(&o.checksums, "checksums", "", "the release's checksums.txt, ALREADY verified with cosign (required)")
 	f.StringVar(&o.dir, "dir", "", "directory holding the published archives; every manifest artifact must be present and re-hash to its digest")
 	f.StringVar(&o.channel, "expect-channel", "", "fail unless the manifest declares this channel")
-	f.StringVar(&o.version, "expect-version", "", "fail unless the manifest declares this version (a leading v is ignored)")
+	f.StringVar(&o.version, "expect-version", "", "fail unless the manifest declares this exact release version (bare MAJOR.MINOR)")
 	// A freshness bound is now REQUIRED by default. It used to be opt-in, so a
 	// custodian who simply forgot the flag got `expires: none (anti-freeze DISABLED)`
 	// followed by a reassuring `OK:` — the exact shape of a check that fails open.
@@ -628,8 +635,16 @@ func runReleaseVerifyManifest(cmd *cobra.Command, o *manifestVerifyOptions) erro
 	if want := strings.TrimSpace(o.channel); want != "" && m.Channel != want {
 		return fmt.Errorf("REFUSING: manifest channel is %q, expected %q", m.Channel, want)
 	}
-	if want := strings.TrimPrefix(strings.TrimSpace(o.version), "v"); want != "" && m.Version != want {
-		return fmt.Errorf("REFUSING: manifest version is %q, expected %q", m.Version, want)
+	if o.version != "" || cmd.Flags().Changed("expect-version") {
+		if release.IsUnstamped(o.version) {
+			return fmt.Errorf("REFUSING: --expect-version must be MAJOR.MINOR")
+		}
+		if _, err := release.ParseVersion(o.version); err != nil {
+			return fmt.Errorf("REFUSING: --expect-version: %w", err)
+		}
+		if m.Version != o.version {
+			return fmt.Errorf("REFUSING: manifest version is %q, expected %q", m.Version, o.version)
+		}
 	}
 
 	// 3) POLICY. The digest cross-check below binds the manifest to the artifacts CI

@@ -18,12 +18,13 @@
 // router closes that, and it also brings in the five routes FEATURE_VIEWS never had:
 // /login, /setup, /accept-invite, /status-page and /settings.
 //
-// What it can see that the older guards cannot. registry.a11y-coverage.test.ts and
-// registry.nav-labels.test.ts are both RELATIVE — registry against AUTH_ROUTES, registry
-// against the seven nav.json — and a commit deleting a view from all of them leaves every
+// What it can see that the older guards cannot. registry.nav-labels.test.ts is RELATIVE —
+// registry against the seven nav.json — and a commit deleting a view from both leaves the
 // comparison true. route-census.json is the fixed point: it records what was published,
-// so the comparison survives the deletion of everything it compares against. Measured by
-// mutation: a coordinated delete compiles clean (tsc rc=0), leaves both older guards
+// so the comparison survives the deletion of everything it compares against. The AT gate
+// inventory (e2e-visual/routes.ts) is derived from the census, so this file and
+// registry.a11y-coverage.test.ts together keep every mounted route axe-scanned. Measured by
+// mutation: a coordinated delete compiles clean (tsc rc=0), leaves the older guard
 // green, and reddens only this file.
 import { createRouter } from '@tanstack/react-router'
 import { describe, expect, it } from 'vitest'
@@ -40,18 +41,25 @@ import { ANONYMOUS_EXTENSION_ROUTES, EXTENSION_ROUTES } from './extensions'
  */
 function mountedPaths(): string[] {
   const router = createRouter({ routeTree })
-  return Object.keys(router.routesById)
-    .filter((id) => id !== '__root__' && id !== '/app')
-    .map((id) =>
-      id === '/app/' ? '/' : id.startsWith('/app/') ? id.slice(4) : id,
-    )
-    .sort()
+  return (
+    Object.entries(router.routesById)
+      // Redirect-only routes are alias sources; keep actual pages in the live set.
+      .filter(
+        ([, route]) => !(route.options.beforeLoad && !route.options.component),
+      )
+      .map(([id]) => id)
+      .filter((id) => id !== '__root__' && id !== '/app')
+      .map((id) =>
+        id === '/app/' ? '/' : id.startsWith('/app/') ? id.slice(4) : id,
+      )
+      .sort()
+  )
 }
 
 const live = mountedPaths()
 const report = auditRouteCensus({
   census: [
-    ...census.paths,
+    ...census.paths.filter((path) => !census.business_paths.includes(path)),
     ...EXTENSION_ROUTES.map(({ path }) => path),
     ...ANONYMOUS_EXTENSION_ROUTES.map(({ path }) => path),
   ],
@@ -60,6 +68,32 @@ const report = auditRouteCensus({
 })
 
 describe('route conservation', () => {
+  it('records the approved Business placement without deleting published history', () => {
+    expect(census.business_paths).toEqual(['/automations', '/orchestration'])
+    expect(census.business_paths.every((path) => census.paths.includes(path))).toBe(true)
+    for (const path of census.business_paths) {
+      expect(live.includes(path)).toBe(EXTENSION_ROUTES.some((route) => route.path === path))
+    }
+  })
+  it('mounts every declared alias as a redirect that preserves location state', () => {
+    const router = createRouter({ routeTree })
+    for (const alias of ROUTE_ALIASES) {
+      const route =
+        router.routesById[`/app${alias.from}` as keyof typeof router.routesById]
+      expect(route, alias.from).toBeDefined()
+      expect(route.options.component, alias.from).toBeUndefined()
+      expect(route.options.beforeLoad, alias.from).toBeTypeOf('function')
+      try {
+        ;(route.options.beforeLoad as () => void)()
+        throw new Error(`Alias ${alias.from} did not redirect`)
+      } catch (redirect) {
+        expect(redirect).toMatchObject({
+          options: { to: alias.to, search: true, hash: true, replace: true },
+        })
+      }
+    }
+  })
+
   it('mounts a non-trivial number of routes, so the comparison is never vacuous', () => {
     // Both sides empty would satisfy every assertion below. If the router failed to build
     // or the JSON came back without `paths`, that must read as broken, not as clean.

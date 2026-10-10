@@ -127,8 +127,8 @@ func newUpgradeCmd() *cobra.Command {
 			"  olivares upgrade                     # community: upgrade to the latest stable release\n" +
 			"  olivares upgrade --channel security  # take only security releases\n" +
 			"  olivares upgrade --check             # show the plan (current -> available, CVEs) — no swap\n" +
-			"  olivares upgrade --bundle f.tar.gz   # air-gap: local bundle, no network (install needs a license)\n" +
-			"  olivares upgrade --enterprise        # licensed enterprise superset (needs a live license)\n" +
+			"  olivares upgrade --bundle f.tar.gz --check   # verify offline; installation requires Enterprise\n" +
+			"  olivares upgrade --enterprise        # licensed Business edition (needs a live license)\n" +
 			"  olivares upgrade --install-timer     # print an opt-in systemd auto-check timer\n\n" +
 			"A build with no embedded OTA key requires --pubkey (air-gapped / self-signed mirror).\n" +
 			"NOTE: a Go binary is not hot-patched; zero downtime is a drain + handover, see\n" +
@@ -136,15 +136,15 @@ func newUpgradeCmd() *cobra.Command {
 		Example: `  # Preview the latest stable upgrade without swapping
   olivares upgrade --check
 
-  # Install a verified local air-gap bundle (the installed license is checked offline first)
-  olivares upgrade --bundle ./olivares-release.tar.gz --yes`,
+  # Verify a local bundle without installing it (offline installation requires Enterprise)
+  olivares upgrade --bundle ./olivares-release.tar.gz --check`,
 		SilenceUsage: true,
 		Args:         cobra.NoArgs,
 		RunE:         func(cmd *cobra.Command, _ []string) error { return runUpgrade(cmd, o) },
 	}
 	f := cmd.Flags()
-	f.BoolVar(&o.enterprise, "enterprise", false, "upgrade the licensed enterprise edition (gated download; needs a live license)")
-	f.StringVar(&o.token, "token", "", "enterprise download token from your license/fulfillment email")
+	f.BoolVar(&o.enterprise, "enterprise", false, "upgrade the licensed Business edition (gated download; needs a live license)")
+	f.StringVar(&o.token, "token", "", "Business download token from your license/fulfillment email")
 	f.StringVar(&o.endpoint, "endpoint", "", "update channel source: a GitHub repository (https://github.com/<owner>/<repo>), one of its releases (…/releases/tag/<tag>), or a static mirror base (<base>/<channel>/manifest.json). Default: the public repository's releases; the license worker with --enterprise")
 	// `lts` is still a value release.ValidChannel accepts, so hiding it would document a
 	// narrower validator than the one that runs. What it must NOT do is read as an offer:
@@ -153,12 +153,12 @@ func newUpgradeCmd() *cobra.Command {
 	f.StringVar(&o.channel, "channel", release.ChannelStable, "release channel: stable | security (lts is accepted by the validator, but no lts line is published)")
 	f.StringVar(&o.pubkey, "pubkey", "", "base64 or @file Ed25519 OTA key to verify against (default: the key embedded in this build)")
 	f.StringVar(&o.dataDir, "data-dir", "", "data directory (license + install-id) (default $OLIVARES_DATA_DIR, an existing ./olivares-data, else $XDG_DATA_HOME/olivares or ~/.local/share/olivares)")
-	f.StringVar(&o.license, "license", "", "explicit license file path (enterprise; highest precedence)")
+	f.StringVar(&o.license, "license", "", "explicit license file path (Business; highest precedence)")
 	f.StringVar(&o.goos, "os", runtime.GOOS, "target OS to download for")
 	f.StringVar(&o.goarch, "arch", runtime.GOARCH, "target architecture to download for")
 	f.StringVar(&o.target, "target", "", "binary path to replace (default: the running executable)")
 	f.StringVar(&o.currentVersion, "current-version", "", "declare the version installed at --target when it cannot be probed (cross-arch staging, a noexec mount, or a build from source); keeps anti-rollback and min_version armed instead of guessing")
-	f.StringVar(&o.bundle, "bundle", "", "install from a local air-gap bundle directory or .tar.gz (no network at all; installing needs a live installed license, verified offline; --check does not)")
+	f.StringVar(&o.bundle, "bundle", "", "verify a local bundle with --check; offline installation requires Enterprise")
 	f.StringVar(&o.downloadProtocol, "download-protocol", downloadProtocolReleaseV1, "gated download protocol for --enterprise: release-v1 (default; resolves one consistent {version,set,manifest,signature} tuple) or legacy (the existing per-request /download route, for a custom or older gateway). A 404 from the new route is a compatibility diagnostic, not an automatic downgrade")
 	f.BoolVar(&o.check, "check", false, "show the upgrade plan (current -> available, channel, CVEs) without swapping")
 	f.BoolVarP(&o.assumeYes, "yes", "y", false, "do not prompt for confirmation before swapping")
@@ -313,10 +313,13 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 		case !o.enterprise:
 			return exitcode.New(exitcode.Usage, errors.New("--connect applies to --enterprise: the public channel needs no credential"))
 		case o.bundle != "":
-			return exitcode.New(exitcode.Usage, errors.New("--connect contacts the licensing service; --bundle stays offline and is gated on the installed license"))
+			return exitcode.New(exitcode.Usage, errors.New("--connect contacts the licensing service; --bundle stays offline and checks only the installed license"))
 		case strings.TrimSpace(o.token) != "":
 			return exitcode.New(exitcode.Usage, errors.New("--connect obtains the download token by proof of possession; do not pass --token"))
 		}
+	}
+	if err := requireBundleInstallEdition(o); err != nil {
+		return err
 	}
 
 	// --install-timer is a local, network-free generator: emit the opt-in units and stop.
@@ -416,6 +419,9 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 	m, err := release.VerifyManifest(mb, sig, pub)
 	if err != nil {
 		return fmt.Errorf("REFUSING to upgrade: %w", err)
+	}
+	if err := requireBundleLicense(o, m); err != nil {
+		return err
 	}
 	want := strings.TrimSpace(o.channel)
 	if want == "" {
@@ -568,57 +574,12 @@ func runUpgrade(cmd *cobra.Command, o *upgradeOptions) error {
 }
 
 // buildUpdateSource selects the transport and (for --bundle) returns a cleanup for
-// any temp extraction. TWO of the three routes enforce the license gate up front, here,
-// before a single byte is read: --enterprise, and --bundle when it is about to INSTALL.
-// Only the public community channel is ungated.
-//
-// --bundle IS ONE OF THEM, AND THAT HALF WAS MISSING (C02-20). This comment used to read
-// "the enterprise path enforces the license gate up front", which was true of the worker
-// route and silent about the other way to obtain the same bytes: the bundle branch
-// RETURNED its source before requireValidLicense ran at all, so whoever held a tarball
-// installed from it with no credential, no token and no network — and --help advertised
-// exactly that ("100% offline"). The gate was not weak on that route; it was not on it.
-// A comment that is true of one of two branches reads as true of the function, and this
-// one sat directly above the branch it did not describe.
-//
-// WHY EVERY BUNDLE AND NOT ONLY AN ENTERPRISE ONE: nothing authenticated inside a bundle
-// says which edition its artifact is. The signed manifest has no edition/set field
-// (core/release/manifest.go, Manifest), and the artifact's SHAPE is a heuristic, not a
-// signed claim — so this route cannot tell a community bundle from an enterprise one.
-// Not being able to look does not authorize running less, so it fails CLOSED for every
-// bundle. When Manifest carries the set, the gate can narrow to what the bundle declares;
-// it cannot narrow on a guess. What that costs today — an operator with no license has no
-// offline route for a community INSTALL — is stated in the flag's own help and in
-// docs/UPGRADE-AND-ROLLBACK.md §10 rather than left for one to discover at the air gap.
-//
-// WHAT IS REQUIRED IS THE LICENSE AT REST, NOT AN ENTITLEMENT LOOKUP: requireValidLicense
-// resolves the installed license file and verifies it OFFLINE against this build's
-// embedded license key. No registry, no worker, no network — asking the registry here
-// would contradict the air gap this route exists to serve, and then "air-gapped" and
-// "gated" could not both be true of the same command.
-//
-// --check IS NOT GATED, AND THAT IS A DECISION, NOT AN OVERSIGHT. What this closes is an
-// unlicensed INSTALL; --check installs nothing (runUpgrade returns at its `if o.check`
-// arm, before checkWritable, the target lock, the artifact read and atomicSwap), and it
-// hands the holder of a leaked tarball nothing they do not already have — they hold the
-// bytes. Gating it would cost three real things and buy none: the release ceremony's
-// updater smoke test runs `--bundle … --check` on the SHIPPED community binary
-// (.github/workflows/release.yml), the key-domain battery mainline-ci runs drives this
-// route three times with --check and one of those is a POSITIVE control
-// (scripts/test-key-domain-separation.sh), and docs/UPGRADE-AND-ROLLBACK.md §10 teaches
-// operators to check a bundle before installing it. A gate that made --check fail would
-// teach them to skip straight to --yes, which is a worse habit than the one it protects.
-// The invariant it leans on — --check never installs — is not left to trust: the witness
-// asserts the binary is untouched after an ungated `--bundle --check`.
+// any temp extraction. --enterprise enforces the license gate up front, here, before a
+// single byte is read. The public community channel is ungated, and --bundle is gated in
+// runUpgrade by requireBundleLicense, after the manifest verifies: only the signed manifest
+// says which edition a bundle carries.
 func buildUpdateSource(o *upgradeOptions, pub ed25519.PublicKey) (updateSource, func(), error) {
 	if o.bundle != "" {
-		// Refuse BEFORE openBundle: an unauthorized caller must not get this process to
-		// extract an untrusted tarball into a temp dir on its way to being refused.
-		if !o.check {
-			if _, err := requireValidLicense(o.license, o.dataDir); err != nil {
-				return nil, nil, fmt.Errorf("REFUSING to install from --bundle: installing from a local bundle is gated on a live license, checked OFFLINE against this build's embedded license key (no network, no registry). `--bundle --check` is not gated and verifies this bundle without installing it: %w", err)
-			}
-		}
 		dir, cleanup, err := openBundle(o.bundle)
 		if err != nil {
 			return nil, nil, err
@@ -938,7 +899,13 @@ func concludeVerifiedPlan(cmd *cobra.Command, o *upgradeOptions, m release.Manif
 	if o.check {
 		res.Action = upgradeActionChecked
 		return false, renderOut(cmd, func(w io.Writer) error {
-			_, werr := fmt.Fprintln(w, "\n--check OK: manifest verifies and an upgrade is available. Re-run without --check to install.")
+			guidance := "Re-run without --check to install."
+			install := *o
+			install.check = false
+			if requireBundleInstallEdition(&install) != nil {
+				guidance = "Offline bundle installation requires Enterprise."
+			}
+			_, werr := fmt.Fprintf(w, "\n--check OK: manifest verifies and an upgrade is available. %s\n", guidance)
 			return werr
 		}, *res)
 	}
@@ -1116,7 +1083,7 @@ func requireValidLicense(explicitPath, dataDir string) (license.Verified, error)
 	}
 	if src.Blob == "" {
 		return license.Verified{}, fmt.Errorf("no license installed: run `olivares license install <file>` first " +
-			"(the enterprise download and --bundle are both gated on a live license)")
+			"(the Business download needs a live license)")
 	}
 	// The same license trust keyring boot, reload and install use (license_trust.go).
 	kr, terr := licenseKeyringForDataDir(dir)

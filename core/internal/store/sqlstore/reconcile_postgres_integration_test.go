@@ -59,6 +59,7 @@ func TestPostgresReconcileCoreDataReopensUnderForceRLS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer tx.Rollback() //nolint:errcheck // no-op after commit
 	if _, err := tx.ExecContext(ctx,
 		"SELECT set_config('app.tenant_id', $1, true)", model.SystemTenantID.String()); err != nil {
 		t.Fatal(err)
@@ -67,6 +68,7 @@ func TestPostgresReconcileCoreDataReopensUnderForceRLS(t *testing.T) {
 		"UPDATE federation_configs SET alias = NULL WHERE id = $1", config.ID.String()); err != nil {
 		t.Fatal(err)
 	}
+	untrackFederationDataMigration(t, ctx, tx)
 	if err := tx.Commit(); err != nil {
 		t.Fatal(err)
 	}
@@ -92,6 +94,11 @@ func TestPostgresReconcileCoreDataReopensUnderForceRLS(t *testing.T) {
 		t.Fatalf("reopen with legacy federation row: %v", err)
 	}
 	defer reopened.Close() //nolint:errcheck
+	// Decode maps NULL to default, so inspect storage before trusting the view.
+	dia, _ := dialect.New(store.EnginePostgres)
+	if alias := rawFederationAlias(t, ctx, reopened.(*sqlStore).db, dia, model.SystemTenantID, config.ID.String()); alias != model.DefaultFederationAlias {
+		t.Errorf("stored alias = %q, want default", alias)
+	}
 	if err := reopened.AuthView(ctx, func(as store.AuthScope) error {
 		got, getErr := as.FederationConfigs().Get(ctx, config.ID)
 		if getErr != nil {
@@ -217,4 +224,23 @@ func rawFederationAlias(
 		t.Fatal(err)
 	}
 	return alias.String
+}
+
+// untrackFederationDataMigration stages the pending v22 backfill alongside a
+// fixture's legacy rows. Remove the later tracking suffix too: keeping v23+
+// would create a hole in the contiguous core history required by boot. The
+// schema and data stay intact for the idempotent adoption migrations.
+func untrackFederationDataMigration(t *testing.T, ctx context.Context, tx *sql.Tx) {
+	t.Helper()
+	result, err := tx.ExecContext(ctx,
+		"DELETE FROM schema_migrations_core WHERE version = 22 AND name = 'federation_alias_data' AND reverted_at IS NULL")
+	if err != nil {
+		t.Fatalf("stage pending federation data migration: %v", err)
+	}
+	if n, err := result.RowsAffected(); err != nil || n != 1 {
+		t.Fatalf("removed %d federation migration records (err=%v), want 1", n, err)
+	}
+	if _, err := tx.ExecContext(ctx, "DELETE FROM schema_migrations_core WHERE version > 22"); err != nil {
+		t.Fatalf("restore the pre-v22 core tracking prefix: %v", err)
+	}
 }

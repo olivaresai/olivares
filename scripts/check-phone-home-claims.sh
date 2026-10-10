@@ -3,65 +3,49 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# check-phone-home-claims.sh — a repository gate, el trinquete sobre la promesa absoluta de «zero phone-home».
+# check-phone-home-claims.sh — a repository gate, ratchet for absolute zero-phone-home promises.
 #
-# ⛔ QUÉ VIGILA Y QUÉ NO, porque la diferencia es toda la fila. El modelo de derechos está DECIDIDO
-# y firmado: la suscripción es acceso a REPOSITORIOS y **el phone-home está APROBADO** para emisión
-# de licencias y updates. Con eso firmado, una página viva que promete «zero phone-home» afirma lo
-# contrario de lo que el producto hace.
+# The signed rights model makes subscriptions repository access and approves license
+# issuance/update calls. A live page promising zero phone-home contradicts that behavior.
+# The earlier blanket statement that offline licensing was rejected reversed the
+# meaning (sol max F8): on 2026-08-15 fully offline distribution was rejected as
+# insufficient. Offline Ed25519 validation remains the contract in LICENSING.md:170-172.
 #
-# ⛔ AQUÍ DECÍA «el licenciamiento offline se RECHAZÓ» A SECAS, y esa frase aislada tiene la
-# polaridad al revés — la señaló el contraste `sol max` (F8). Lo que se rechazó el 2026-08-15 fue el
-# modelo de DISTRIBUCIÓN totalmente offline por insuficiente; la **validación** de licencia offline
-# con Ed25519 es justo lo que `LICENSING.md:170-172` firma y sigue siendo cierta. Confundirlas hace
-# que quien lea esta cabecera crea que hay que retirar también la promesa de validación offline.
+# Replacement wording was signed on 2026-08-20 and applied on 2026-08-28,
+# so no copy decision remains pending. LICENSING.md:166-176 states: “Verifying a
+# licence never calls anyone. Downloading what you paid for does.” Community keeps
+# offline Ed25519 validation, no kill switch, and no AGPL kernel licensing call.
+# Commercial subscriptions authorize downloading modules, updates and patches,
+# with no mandatory telemetry or default control-plane egress.
 #
-# ⛔ AQUÍ DECÍA «retirar las que ya existen NO es mío: la redacción la decide». **Eso caducó el
-# 2026-08-20 y se ejecutó el 2026-08-28.** La redacción de sustitución existe, está firmada
-# y no hay nada que preguntar: `LICENSING.md:166-176` — *«Verifying a licence never calls anyone.
-# Downloading what you paid for does.»* Community conserva Ed25519 offline, sin kill switch y sin
-# llamada de licencia del kernel AGPL; la línea comercial dice que la suscripción es la credencial
-# con la que se descargan módulos, updates y parches, y que no hay telemetría obligatoria ni egress
-# al plano de control por defecto.
-#
-# Esto es un TRINQUETE, no una prohibición: el suelo es lo que hay hoy, y lo único que impide es que
-# la cifra SUBA. Cuando una página se reescribe, la línea base BAJA y el trinquete lo aplaude — un
-# suelo que sólo puede bajar es lo contrario de congelar el texto.
-#
-# ⛔ EL ARCHIVO CONGELADO NO CUENTA. `docs-site/src/content/docs/2026-06/` es una instantánea
-# histórica declarada: contarla haría que la línea base incluyera texto que NADIE va a reescribir, y
-# el número dejaría de significar «promesas vivas».
-#
-# Salida: 0 no sube · 1 hay una promesa NUEVA (la nombra) · 2 NO HE PODIDO MIRAR. Nunca un verde.
+# This is a ratchet: only count increases fail. Rewriting a page lowers the baseline;
+# the text is not frozen. Exclude the declared historical snapshot
+# docs-site/src/content/docs/2026-06/, which is not live copy to rewrite.
+# Exit: 0 no increase · 1 new promise, named · 2 could not check.
 set -uo pipefail
 LC_ALL=C
 export LC_ALL
 
 RAIZ="${OLIVARES_CLONE:-$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")/.." && pwd -P)}"
 cd "$RAIZ" 2>/dev/null || {
-	echo "check-phone-home-claims: ⛔ NO HE PODIDO MIRAR: no existe $RAIZ" >&2
+	echo "check-phone-home-claims: ⛔ COULD NOT CHECK: missing $RAIZ" >&2
 	exit 2
 }
 BASE="${OLIVARES_PHONEHOME_BASELINE:-docs/phone-home-claims-baseline.txt}"
 
-# ⛔ LAS SUPERFICIES SON LA MITAD DEL GATE, Y ESTA LISTA DEJABA FUERA LA QUE VE EL CLIENTE.
-# Hasta el 2026-08-28 decía `docs-site/src/content/docs docs/trust web/src` — la documentación y la
-# consola. **El correo de licencia y el portal de cliente NO estaban**, y ahí vivía la promesa que
-# recibió por correo el 2026-08-28 a las 16:53:29Z: `email/copy/en.json` («never phones home,
-# and validates fully offline») y `commercial/license-worker/src/portal/pages/{licenses,trust}.ts`.
-# El trinquete no es que no la contara: **es que no la miraba**, así que llevaba desde el 08-15
-# diciendo OK sobre la superficie más cara que tenemos. Se añaden las dos, y los tres ficheros de
-# raíz que un comprador lee antes de instalar.
-#
-# Se derivan por BÚSQUEDA dentro de cada superficie, no por lista de ficheros: una lista de rutas
-# caduca en cuanto alguien añade una página.
-# ⛔ Y `docs/trust` A SECAS TAMPOCO BASTABA — hallazgo del contraste `sol max` del 2026-08-28 (F7):
-# este mismo lote reescribió `docs/05-ARCHITECTURE.md:104` y `docs/RELEASE-VERIFICATION.md:103`, y
-# NINGUNO estaba vigilado. Vigilar `docs` entero cuesta **cuatro** filas de línea base (medido:
-# `POLAR-COMMERCIAL-SETUP.md`, `07-LICENSE-AND-OPEN-CORE.md`, `contracts-site.md`,
-# `ai-context/PROJECT-CONTEXT.md`, una mención acotada cada uno). `docs/trust` se quita de la lista
-# porque `grep -r` lo contaría DOS veces al estar dentro de `docs`.
-SUPERFICIES="${OLIVARES_PHONEHOME_DIRS:-docs-site/src/content/docs docs web/src email/copy commercial/license-worker/src}"
+# The scanned surfaces must include what customers read. Until 2026-08-28 the list
+# covered docs-site/src/content/docs, docs/trust and web/src, but omitted license mail
+# and the customer portal. The exact promise received at 16:53:29Z that day lived in
+# email/locales/en.json (“never phones home, and validates fully offline”) and
+# commercial/license-worker/src/portal/pages/{licenses,trust}.ts. Add both surfaces
+# and the three root files buyers read before installation.
+# Search within each surface; a fixed page list ages when a page is added.
+# sol max F7 also found that docs/trust missed docs/05-ARCHITECTURE.md:104 and
+# docs/RELEASE-VERIFICATION.md:103. Scanning all docs added four bounded baseline
+# mentions: POLAR-COMMERCIAL-SETUP.md, 07-LICENSE-AND-OPEN-CORE.md,
+# contracts-site.md and ai-context/PROJECT-CONTEXT.md. Remove the separate
+# docs/trust entry so recursive grep does not count it twice.
+SUPERFICIES="${OLIVARES_PHONEHOME_DIRS:-docs-site/src/content/docs docs web/src email/locales commercial/license-worker/src}"
 # Ficheros sueltos de la raíz: no son directorios, así que van por su propia lista.
 # ⛔ SUPPORTERS.md ENTRA EL 2026-08-29 PORQUE ESE MISMO DIA NACE EL FICHERO, no por simetria.
 #    Es una pagina PUBLICA de raiz —viaja en el export, TOP_ALLOW— y llego a decir «nothing phones
@@ -108,9 +92,9 @@ while IFS= read -r d; do
 	if [ -d "$d" ]; then
 		SUPERFICIES_VIVAS="$SUPERFICIES_VIVAS $d"
 	elif [ "$ES_EXPORT" -eq 1 ]; then
-		echo "check-phone-home-claims: NO APLICA — $d no forma parte del arbol publico (PUBLIC-EXPORT.md); no se barre." >&2
+		echo "check-phone-home-claims: NOT APPLICABLE — $d is not part of the public tree (PUBLIC-EXPORT.md); not scanned." >&2
 	else
-		echo "check-phone-home-claims: ⛔ NO HE PODIDO MIRAR: no existe la superficie $d" >&2
+		echo "check-phone-home-claims: ⛔ COULD NOT CHECK: missing surface $d" >&2
 		exit 2
 	fi
 done <<EOF
@@ -118,7 +102,7 @@ $(printf '%s\n' $SUPERFICIES)
 EOF
 SUPERFICIES="${SUPERFICIES_VIVAS# }"
 [ -n "$SUPERFICIES" ] || {
-	echo "check-phone-home-claims: ⛔ NO HE PODIDO MIRAR: no queda NINGUNA superficie que barrer." >&2
+	echo "check-phone-home-claims: ⛔ COULD NOT CHECK: no surfaces remain to scan." >&2
 	exit 2
 }
 
@@ -128,9 +112,9 @@ while IFS= read -r f; do
 	if [ -f "$f" ]; then
 		FICHEROS_VIVOS="$FICHEROS_VIVOS $f"
 	elif [ "$ES_EXPORT" -eq 1 ]; then
-		echo "check-phone-home-claims: NO APLICA — el fichero vigilado $f no viaja en el arbol publico." >&2
+		echo "check-phone-home-claims: NOT APPLICABLE — monitored file $f is not included in the public tree." >&2
 	else
-		echo "check-phone-home-claims: ⛔ NO HE PODIDO MIRAR: no existe el fichero vigilado $f" >&2
+		echo "check-phone-home-claims: ⛔ COULD NOT CHECK: missing monitored file $f" >&2
 		exit 2
 	fi
 done <<EOF
@@ -166,20 +150,17 @@ FICHEROS="${FICHEROS_VIVOS# }"
 # con `:` (grep -rc siempre emite `ruta:cuenta`).
 EXCLUIR='docs-site/src/content/docs/2026-06/|/email/templates\.generated\.ts:|^docs/contracts/'
 EXCLUIR="$EXCLUIR"'|\.(test|spec)\.(ts|tsx|js|mjs):|_test\.go:|(^|/)tests?/'
-#   · `docs/contracts/`                      el export lo bloquea **al por mayor**
-#     (the export curation script, línea 212, con sólo TRES contratos exceptuados en `:234-238`), y sus
-#     ficheros llevan el número de sesión en el NOMBRE por convención (`docs/contracts/SNNN-*`).
-#     Vigilarlo metía el contrato del sitio de documentacion en la línea base, que SÍ se publica ⇒
-#     `lint:export` cortó el push con `LEAK[raw] …-site.md` en dos líneas. Medido el
-#     2026-08-28: 26 minutos de carril rápido tirados. No es una superficie viva —no se publica—,
-#     así que dejarlo fuera no pierde cobertura de nada que un cliente lea.
-#     ⚠ `docs/07-LICENSE-AND-OPEN-CORE.md` y `docs/POLAR-COMMERCIAL-SETUP.md` TAMBIÉN son privados
-#     y SÍ se quedan vigilados a propósito: son donde miran las sesiones, sus nombres no llevan
-#     token, y el encargo de C09-09 los nombra explícitamente.
-#   · la propia LÍNEA BASE                   vive bajo `docs/`, que pasó a vigilarse hoy, y su
-#     cabecera CITA las cuatro menciones acotadas para explicarlas. El gate se contaba a sí mismo:
-#     `docs/phone-home-claims-baseline.txt: 0 → 4` en la primera pasada tras documentarla. Es la
-#     misma clase que el fichero de test — un registro sobre el sujeto no es el sujeto.
+# · docs/contracts/: export curation excludes the directory (line 212, except
+#     three contracts at :234-238). Its SNNN-* names carry session numbers. Scanning
+#     it put-site.md into the published baseline, and lint:export stopped
+#     the push with LEAK[raw] on two lines (2026-08-28, 26 fast-path minutes lost).
+#     Excluding unpublished contracts loses no customer-facing coverage.
+#     docs/07-LICENSE-AND-OPEN-CORE.md and docs/POLAR-COMMERCIAL-SETUP.md remain
+#     scanned deliberately despite being private: sessions read them, their names
+#     carry no session token, and C09-09 explicitly includes them.
+#   · The baseline itself lives under docs and quotes the four bounded mentions.
+#     The first pass counted its own explanation as 0 → 4; a record about the
+#     subject is not the subject, just as a test fixture is not live copy.
 EXCLUIR="$EXCLUIR"'|'"$(printf '%s' "$BASE" | sed 's/[.[\*^$]/\\&/g')"':'
 
 # La FORMA de la promesa absoluta, no la palabra suelta: «phone-home» aparece legítimamente en
@@ -236,18 +217,17 @@ PATRON="$PATRON"'|零外呼|不会回拨'
 # `Никаких обращений «домой»` (encabezado) y `ничто не …`. Se conserva sólo ésa.
 PATRON="$PATRON"'|(Н|н)икаких[[:space:]]+обращений.{0,6}(Д|д)омой'
 PATRON="$PATRON"'|(Н|н)ет[[:space:]]+обращений.{0,6}(Д|д)омой'
-# Y `ничто не обращается` A SECAS TAMPOCO VALE: casa con *«Внутри изоляции ничто не обращается
-# наружу»* —«dentro de la brecha nada llama al exterior»—, que es la frase CIERTA con la que
-# sustituyó la promesa. La forma absoluta lleva DESTINO: «домой» o `Olivares`. Tercera poda
-# del mismo día y la tercera la encontró un gate corriendo, no una lectura.
+# A bare Russian “nothing calls” phrase also matches the true isolation statement
+# that nothing inside the boundary calls outside, used by as replacement copy.
+# Require a destination meaning home or Olivares to match an absolute promise.
+# This third refinement that day was found by running the gate.
 PATRON="$PATRON"'|(Н|н)ичто[[:space:]]+не[[:space:]]+(обращается|звонит).{0,40}(домой|Olivares)'
 PATRON="$PATRON"'|обратных[[:space:]]+вызовов[^.]{0,60}нет'
-# ⛔ «phones BACK» — la forma que ni el censo ni el patrón anterior veían, y estaba en las SIETE.
-# Encontrada el 2026-08-28 sólo porque las traducciones la dicen con otro verbo: el censo de
-# buscaba `phones? home` y `explanation/security/security-model.md` decía *«nothing phones BACK to
-# Olivares AI»*. La inglesa no casaba con nada; las de `es`/`fr` sí, con `nada llama de vuelta` y
-# `rien ne rappelle`. **Fue el idioma el que delató al inglés**, que es justo el argumento de por
-# qué este patrón dejó de ser monolingüe.
+# “phones BACK” escaped the earlier pattern in all seven locales. On 2026-08-28,
+# translations exposed the variant: Searched phones? home, while
+# explanation/security/security-model.md said “nothing phones BACK to Olivares AI”.
+# The English missed; Spanish and French matched their different verbs. That finding
+# established why this pattern needs multilingual coverage.
 PATRON="$PATRON"'|(nothing|never)[[:space:]]+phones?[[:space:]]+back'
 PATRON="$PATRON"'|nichts[[:space:]]+funkt[[:space:]]+.{0,24}zurück'
 # ⛔⛔ LAS SIETE FORMAS QUE ESTE MISMO LOTE RETIRÓ Y QUE EL PATRÓN NO VEÍA. Hallazgo ALTO del
@@ -308,8 +288,8 @@ while IFS= read -r _linea; do
 	# productor + pipefail), o sea el canario fallaría justo al funcionar. Lo cazó
 	# `lint:sigpipe-booleans` sobre esta misma línea.
 	grep -qEi "$PATRON" <<< "$_linea" || {
-		echo "check-phone-home-claims: ⛔ NO HE PODIDO MIRAR: el patrón NO reconoce una promesa" >&2
-		echo "                         conocida: «$_linea»" >&2
+		echo "check-phone-home-claims: ⛔ COULD NOT CHECK: the pattern does not recognize a known claim" >&2
+		echo "                         known claim: «$_linea»" >&2
 		_canario_fallos=$((_canario_fallos + 1))
 	}
 done <<'CANARIO'
@@ -333,8 +313,8 @@ Elle ne contacte jamais de serveur externe.
 绝不联网回传信息
 CANARIO
 if [ "$_canario_fallos" -gt 0 ]; then
-	echo "check-phone-home-claims: ⛔ $_canario_fallos promesa(s) conocida(s) sin reconocer — el patrón" >&2
-	echo "                         caducó o se rompió al editarlo. No juzgo el árbol con él." >&2
+	echo "check-phone-home-claims: ⛔ $_canario_fallos known claim(s) not recognized; the pattern" >&2
+	echo "                         is stale or was broken by an edit. It cannot verify this tree." >&2
 	exit 2
 fi
 
@@ -347,22 +327,22 @@ fi
 # promesas de una página de «zero phone-home» a «zero phoning home» dejaba las tres en la página y
 # el gate imprimía «0 fichero(s) … ✔ 4 retirada(s) … OK», rc 0.
 if [ "${N:-0}" -eq 0 ] && [ -r "$BASE" ] && [ -s "$BASE" ]; then
-	echo "check-phone-home-claims: ⛔ NO HE PODIDO MIRAR: cero coincidencias y una línea base con" >&2
-	echo "                         $(grep -c . "$BASE") ruta(s). Eso no es que las promesas se hayan" >&2
-	echo "                         retirado: es que el patrón dejó de casar. Un conjunto vacío" >&2
-	echo "                         frente a una base poblada no se aprueba." >&2
+	echo "check-phone-home-claims: ⛔ COULD NOT CHECK: no matches, but the baseline contains" >&2
+	echo "                         $(grep -c . "$BASE") path(s). This does not prove claims were" >&2
+	echo "                         removed; the pattern stopped matching. An empty scan" >&2
+	echo "                         against a populated baseline cannot pass." >&2
 	exit 2
 fi
 if [ "${N:-0}" -eq 0 ] && [ ! -r "$BASE" ]; then
-	echo "check-phone-home-claims: ⛔ NO HE PODIDO MIRAR: cero coincidencias y sin línea base." >&2
-	echo "                         O el patrón caducó, o las superficies se movieron. Un conjunto" >&2
-	echo "                         vacío sin control no se aprueba." >&2
+	echo "check-phone-home-claims: ⛔ COULD NOT CHECK: no matches and no baseline." >&2
+	echo "                         The pattern may be stale or the surfaces may have moved." >&2
+	echo "                         An empty scan without a control cannot pass." >&2
 	exit 2
 fi
 
 if [ ! -r "$BASE" ]; then
-	echo "check-phone-home-claims: ⛔ NO HE PODIDO MIRAR: no leo la línea base $BASE" >&2
-	echo "                         Una línea base ausente no es «cero promesas»; es no haber mirado." >&2
+	echo "check-phone-home-claims: ⛔ COULD NOT CHECK: cannot read baseline $BASE" >&2
+	echo "                         A missing baseline does not prove there are no claims; nothing was checked." >&2
 	exit 2
 fi
 
@@ -394,28 +374,28 @@ CMP="$(printf '%s\n' "$ACTUALES" | awk -F'\t' '
 SUBEN="$(printf '%s\n' "$CMP" | grep -c '^SUBE	' || true)"
 BAJAN="$(printf '%s\n' "$CMP" | grep -c '^BAJA	' || true)"
 
-echo "check-phone-home-claims: $N ruta(s) vigilada(s) · línea base $(grep -cE '^[0-9]+[[:space:]]' "$BASE") · suben $SUBEN · bajan $BAJAN"
+echo "check-phone-home-claims: $N monitored path(s) · baseline $(grep -cE '^[0-9]+[[:space:]]' "$BASE") · increased $SUBEN · decreased $BAJAN"
 
 if [ "${SUBEN:-0}" -gt 0 ]; then
-	echo "check-phone-home-claims: ⛔ FORMA NUEVA que casa una promesa ABSOLUTA de phone-home — y el" >&2
-	echo "                         modelo firmado la APRUEBA, así que afirmarla dice lo contrario de" >&2
-	echo "                         lo que el producto hace:" >&2
+	echo "check-phone-home-claims: ⛔ NEW PATTERN matching an absolute phone-home claim, while the" >&2
+	echo "                         signed model permits that network activity; the claim contradicts" >&2
+	echo "                         the behavior of the product:" >&2
 	printf '%s\n' "$CMP" | grep '^SUBE	' |
 		awk -F'\t' '{ printf "                           %s: %d → %d\n", $4, $2, $3 }' >&2
-	echo "                         La redacción que la sustituye está firmada y escrita:" >&2
-	echo "                         LICENSING.md:166-176 — verificar una licencia no llama a nadie;" >&2
-	echo "                         descargar lo que has pagado sí. No hay nada que preguntar." >&2
-	echo "                         ⚠ Si la frase es ACOTADA y CIERTA (sujeto = la verificación, el" >&2
-	echo "                         arranque o el motor), el patrón no lee sujetos: súbela a la línea" >&2
-	echo "                         base con su razón, no la reescribas para esquivar un ERE." >&2
+	echo "                         The replacement wording is signed and documented:" >&2
+	echo "                         LICENSING.md:166-176 — license verification makes no network calls;" >&2
+	echo "                         downloading purchased artifacts does. The decision is already recorded." >&2
+	echo "                         ⚠ If the claim is scoped and true (about verification," >&2
+	echo "                         startup, or the engine), the pattern does not understand its subject:" >&2
+	echo "                         add it to the baseline with a reason, rather than evade the regex." >&2
 	exit 1
 fi
 if [ "${BAJAN:-0}" -gt 0 ]; then
-	echo "check-phone-home-claims: ✔ $BAJAN ruta(s) con menos promesas que la línea base:"
+	echo "check-phone-home-claims: ✔ $BAJAN path(s) have fewer claims than the baseline:"
 	printf '%s\n' "$CMP" | grep '^BAJA	' |
 		awk -F'\t' '{ printf "                           %s: %d → %d\n", $4, $2, $3 }'
-	echo "check-phone-home-claims: bájala en el mismo commit. Contenido exacto de $BASE:"
+	echo "check-phone-home-claims: reduce the baseline in this commit. Exact contents of $BASE:"
 	printf '%s\n' "$ACTUALES" | sed 's/^/                           /'
 fi
-echo "check-phone-home-claims: OK — la cifra no sube."
+echo "check-phone-home-claims: OK — the count has not increased."
 exit 0

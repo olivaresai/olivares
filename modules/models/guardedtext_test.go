@@ -60,11 +60,13 @@ func (g *countingBudgetGate) Check(_ context.Context, _ model.TenantID, dims mod
 // chatHarness builds one routing policy with a valid execution-profile pin, seeded so the
 // decision resolves to the profile's exact target.
 type chatHarness struct {
-	h       *harness
-	admin   string
-	tenant  model.TenantID
-	policy  string
-	profile models.ExecutionProfile
+	module   *models.Module
+	resolver *fakeExecutionProfileResolver
+	h        *harness
+	admin    string
+	tenant   model.TenantID
+	policy   string
+	profile  models.ExecutionProfile
 }
 
 func newChatHarness(t *testing.T, opts ...models.Option) *chatHarness {
@@ -81,10 +83,10 @@ func newChatHarness(t *testing.T, opts ...models.Option) *chatHarness {
 	if created.code != http.StatusCreated {
 		t.Fatalf("create profiled policy = %d %s", created.code, created.raw)
 	}
-	return &chatHarness{h: h, admin: admin, tenant: tenant, policy: created.body["id"].(string), profile: p}
+	return &chatHarness{module: m, resolver: resolver, h: h, admin: admin, tenant: tenant, policy: created.body["id"].(string), profile: p}
 }
 
-func (c *chatHarness) execute(body map[string]any) resp {
+func (c *chatHarness) execute(body any) resp {
 	return c.h.do("POST", "/v1/m/models/routing-policies/"+c.policy+"/execute", c.admin, body, tenantHdr(c.tenant))
 }
 

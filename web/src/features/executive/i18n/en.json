@@ -20,7 +20,7 @@
     "tenant": "Organization",
     "allOrgs": "All organizations",
     "range": "Cost range",
-    "footer": "Olivares AI control plane — aggregated KPIs only; no payloads or secrets."
+    "footer": "Olivares AI — aggregated KPIs only; no payloads or secrets."
   },
   "empty": {
     "title": "No executive KPIs available",
@@ -95,7 +95,8 @@
     "driftUnused": "Unused grants",
     "coverageNote": "Some access is observed with partial coverage (approximate or opaque capture); the drift figures are a lower bound.",
     "noFindings": "No open findings.",
-    "noRuns": "No red-team runs yet."
+    "noRuns": "No red-team runs yet.",
+    "sharedDescription": "Open security findings and access drift."
   },
   "compliance": {
     "title": "Compliance",

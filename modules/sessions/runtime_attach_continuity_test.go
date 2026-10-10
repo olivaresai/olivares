@@ -118,6 +118,9 @@ func launchHTTPRun(t *testing.T, h *harness, admin string, tenant model.TenantID
 	}
 	wsRef, _ := wr.body["workspace_ref"].(string)
 	body["workspace_ref"] = wsRef
+	if body["provider_profile_ref"] == nil {
+		body["provider_profile_ref"] = ensureRuntimeTestProfileRef(t, h.m, tenant)
+	}
 	if body["isolation"] == nil {
 		body["isolation"] = "native"
 	}

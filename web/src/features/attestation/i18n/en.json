@@ -161,15 +161,15 @@
     }
   },
   "airgap": {
-    "title": "Air-gap bundle & OCI Helm chart",
-    "description": "An offline-verifiable bundle and a dual-signed OCI Helm chart. Nothing in this path calls out.",
-    "bundleTitle": "Air-gap bundle",
-    "bundleIntro": "The key-based path needs no Rekor or Fulcio. Maintainers build a self-contained bundle online once; the disconnected site verifies and mirrors it.",
+    "title": "Offline bundle & Business Helm package",
+    "description": "Private deployment contracts: an offline bundle and a signed Business chart package. Publication remains unverified.",
+    "bundleTitle": "Offline bundle",
+    "bundleIntro": "The key-based path needs no Rekor or Fulcio. Maintainers build a self-contained bundle from the private assembled distribution online once; the disconnected site verifies and mirrors it.",
     "buildCommand": "Build (online once)",
     "mirrorCommand": "Mirror (no internet)",
-    "chartTitle": "OCI Helm chart",
-    "ociCoordinate": "OCI coordinate",
-    "cosignManifest": "cosign (manifest)",
+    "chartTitle": "Business Helm package",
+    "distribution": "Distribution",
+    "cosignPackage": "cosign (package)",
     "gpgProv": "GPG .prov",
     "verifyCommand": "Verify command"
   },

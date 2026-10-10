@@ -5,11 +5,11 @@
 // Package federation is the OPEN-CORE single-IdP SSO login provider: it
 // implements the core auth.Federation seam with real OIDC
 // (github.com/coreos/go-oidc — Authorization Code + S256 PKCE + nonce + azp) and
-// SAML 2.0 (github.com/crewjam/saml — signature + InResponseTo + audience +
+// SAML 2.0 (github.com/russellhaering/gosaml2 — signature + InResponseTo + audience +
 // bearer-assertion anti-replay). It is AGPL-3.0-only and links into the DEFAULT
 // binary, so an engineer who self-hosts gets SSO from one IdP without
 // -tags enterprise (it is wired build-independently in
-// cmd/olivares/federationwire.go), and the base build DOES link go-oidc/crewjam.
+// cmd/olivares/federationwire.go), and the base build DOES link go-oidc/gosaml2.
 //
 // What is NOT here — the reserved enterprise line (LICENSING.md): per-tenant
 // MULTI-IdP resolution, SSO-enforcement/posture and managed SCIM live behind the

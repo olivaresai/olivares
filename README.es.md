@@ -9,12 +9,14 @@
 [Qué hace](#qué-hace) · [Instalación](#instalación) · [Consola](#un-vistazo-a-la-consola) · [Ediciones](#ediciones-y-precios) · [Documentación](#documentación) · [Comunidad](#comunidad) · [olivares.ai](https://olivares.ai)
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
-[![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md)
-[![Release: 26.10](https://img.shields.io/badge/release-26.10-28282B)](https://github.com/olivaresai/olivares/releases/tag/26.10.1)
+[![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
+[![Next release: 0.1](https://img.shields.io/badge/release-0.1-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.1)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
 </div>
+
+La próxima release es <!-- release -->`0.1`<!-- /release -->; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->. Kubernetes OCI: `publication-unverified`.
 
 Tus desarrolladores trabajan con Claude Code y Codex. Los agentes llaman a servidores MCP, modelos y API internas, y las tareas programadas se ejecutan por su cuenta. Cada componente tiene sus propios registros y permisos, así que no es fácil responder a preguntas sencillas: ¿qué agente cambió este archivo?, ¿quién lo aprobó?, ¿cuánto nos costó la IA este mes?
 
@@ -32,96 +34,68 @@ Olivares AI reúne las respuestas en un solo lugar. Se conecta a los agentes y h
 - **Controlar el gasto en IA.** Los presupuestos por equipo, agente o modelo avisan, frenan o detienen el gasto antes de que llegue la factura.
 - **Dar a los agentes acceso seguro al conocimiento de tu empresa.** Conecta SharePoint, Confluence, Google Drive, Notion, Salesforce, Snowflake, S3 y PostgreSQL. Cada agente ve solo lo que la persona que lo usa tiene permiso para ver.
 - **Continuar el trabajo entre sesiones.** Las tareas, los responsables y las decisiones se conservan cuando termina una sesión. Inicia, únete y detén sesiones de Claude Code, Codex y Grok desde el navegador, sin SSH.
-- **Aportar pruebas cuando te las pidan.** Cada decisión se guarda en un registro firmado que hace detectable cualquier modificación posterior. Tu equipo de seguridad y tus auditores obtienen sus informes de ese registro, con evidencias vinculadas a 26 catálogos de marcos.
+- **Aportar pruebas cuando te las pidan.** Cada decisión se guarda en un registro firmado que hace detectable cualquier modificación posterior. Business Compliance Packs vincula las evidencias a 26 catálogos de marcos y genera informes para tu equipo de seguridad y tus auditores. Community conserva las evidencias almacenadas y sus exportaciones JSON/CSV.
 
-Funciona con las herramientas que ya tienes: Claude Code, Codex, Grok, Cursor, gemini-cli, opencode, OpenHands y modelos locales mediante Ollama. **31 módulos** y **159 integraciones**, todos en la edición gratuita: [todos los módulos](docs-site/src/content/docs/reference/modules/overview.md) · [todos los conectores](connectors/README.md).
+Funciona con las herramientas que ya tienes: Claude Code, Codex, Grok, Cursor, gemini-cli, opencode, OpenHands y modelos locales mediante Ollama. **32 módulos** y **136 integraciones**: [todos los módulos](docs-site/src/content/docs/reference/modules/overview.md) · [todos los conectores](connectors/README.md).
+
+Community conserva la observabilidad local, los ajustes guardados y la exportación de copias de seguridad. El envío SIEM/ITSM, la telemetría externa y la exportación de postura se incluyen en la edición base de Business.
 
 ## Instalación
 
-Elige un método y copia su bloque. Al terminar, `olivares quickstart` muestra la dirección de la consola y un token de un solo uso para crear el primer administrador. Todas las versiones están firmadas, y cada método verifica lo que descarga antes de instalarlo ([verificar una descarga por tu cuenta](INSTALL.md#verifying-a-release)).
+**Docker Compose.** The container qualification job exercises this installation path.
+Set the release image explicitly so a cached `:latest` image cannot select an
+older release.
 
-**Linux y macOS, un comando.** Detecta tu sistema, verifica la versión, instala solo el binario y nunca usa `sudo`.
-
+<!-- release -->
 ```sh
-curl -fsSL https://olivares.ai/olivares/install.sh | sh
-olivares quickstart
+set -e
+cd /path/to/your/project   # the host folder your sessions will work on
+export OLIVARES_PROJECT_DIR="$PWD"
+git clone --depth 1 https://github.com/olivaresai/olivares.git "$HOME/olivares"
+export OLIVARES_IMAGE=docker.io/olivaresai/olivares:0.1
+# On Linux hosts whose AppArmor policy mediates user namespace creation:
+if [ -r /sys/kernel/security/apparmor/features/namespaces/mask ] &&
+   grep -qw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
+  sudo install -m 0644 "$HOME/olivares/deploy/apparmor/olivares-sessions.conf" /etc/apparmor.d/olivares-sessions
+  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
+  export OLIVARES_APPARMOR_PROFILE=olivares-sessions
+fi
+docker compose -f "$HOME/olivares/deploy/compose/docker-compose.yml" up --wait --wait-timeout 120
+docker compose -f "$HOME/olivares/deploy/compose/docker-compose.yml" exec olivares \
+  olivares first-boot --data-dir /var/lib/olivares --new-token
 ```
+<!-- /release -->
 
-**Docker.** Multi-arquitectura. Las imágenes de contenedor se basan en Debian 13 slim (con Node.js 24 para las herramientas de agente) y se ejecutan como usuario no root. Escucha en todas las interfaces del host; añade `127.0.0.1:` antes de cada `-p` para limitarlo al equipo local.
+Open the console address printed by `first-boot --new-token` and use the replacement
+one-time setup token it prints to create the first administrator. This invalidates
+the previous setup token and is available only before the first administrator exists.
+The stack uses SQLite and a persistent data volume.
+The AppArmor step needs an AppArmor 4 parser and runs on the Docker daemon host.
+See [session confinement on AppArmor hosts](deploy/compose/README.md#session-confinement-on-apparmor-hosts).
+It publishes ports on every host interface by default; set `OLIVARES_BIND=127.0.0.1`
+to restrict access to this host.
 
-```sh
-docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
-  -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares \
-  serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
-```
+Sessions in the container work on one host folder, mounted at `/project`: the absolute
+path in `OLIVARES_PROJECT_DIR`, set before `up`. Without it, `/project` is an empty Docker
+volume, never the directory you run Compose from. A session there can change everything in
+that folder: never set the variable to your home directory. In the console, choose **Change folder**
+on the New session form and enter `/project`. On a Linux host the container user
+(UID 65532) needs write access; see
+[work on a host project folder](deploy/compose/README.md#work-on-a-host-project-folder).
 
-**Docker Compose.** SQLite en un solo nodo, con Postgres y copias de seguridad opcionales.
+Gate coverage is not a passing release result: see the `qualify-compose-ready` job in
+[container qualification](.github/workflows/compose-ready.yml). The release must also
+pass its first-hour journey before it is qualified.
 
-```sh
-git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
-docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
-```
+Other installation methods are **not qualified** by the first-hour gate. Their commands
+and limits are in [INSTALL.md](INSTALL.md#installation-qualification), including the
+shell installer, standalone Docker, Kubernetes, native packages, Homebrew, source builds
+and offline installs. [Verify release artifacts](INSTALL.md#verifying-a-release) before
+running them; see [upgrading and uninstalling](INSTALL.md#upgrading--uninstalling) for an
+existing installation.
 
-**Kubernetes.** El chart de Helm de este repositorio (el chart aún no tiene una versión publicada en OCI: `publication-unverified`).
-
-```sh
-git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
-helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
-```
-
-Sin Helm:
-
-```sh
-git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
-kubectl create namespace olivares-system && kubectl apply -n olivares-system -f deploy/manifests/install.yaml
-```
-
-**Debian y Ubuntu.** El paquete añade un usuario `olivares` sin inicio de sesión y un servicio reforzado; tú lo inicias.
-
-```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.deb
-sudo dpkg -i olivares_26.10.1_linux_amd64.deb && sudo systemctl enable --now olivares
-```
-
-**RHEL, Fedora y SUSE.**
-
-```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.rpm
-sudo rpm -i olivares_26.10.1_linux_amd64.rpm && sudo systemctl enable --now olivares
-```
-
-**Alpine.**
-
-```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk && sudo rc-service olivares start
-```
-
-En servidores ARM, usa `arm64` en lugar de `amd64`. Todos los archivos de la versión: [página de la versión](https://github.com/olivaresai/olivares/releases/tag/26.10.1).
-
-**Homebrew.** macOS y Linux.
-
-```sh
-brew install olivaresai/tap/olivares && olivares quickstart
-```
-
-**Desde el código fuente.** Go 1.26+, [Task](https://taskfile.dev) y pnpm.
-
-```sh
-git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
-task build && ./bin/olivares quickstart
-```
-
-**Redes sin conexión:** reúne la imagen firmada, el chart y el material de verificación; después, [instala en un entorno aislado](docs-site/src/content/docs/how-to/air-gap-install.md). **Windows** aún no tiene un binario nativo: usa la imagen de Docker o WSL2. Actualizaciones y vuelta a una versión anterior: [guía](docs-site/src/content/docs/how-to/upgrade-and-rollback.md). Todas las opciones en detalle: [`INSTALL.md`](INSTALL.md).
-
-**Pruébalo primero con datos de demostración**, solo en tu equipo (la contraseña de la demo es pública):
-
-```sh
-olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.0.0.1:8902 --data-dir "$(mktemp -d)"
-```
-
-Después, abre http://127.0.0.1:8901.
+- Helm, el operador de Kubernetes y el proveedor de Terraform se distribuyen con Business. [Editions](https://olivares.ai/pricing).
+Install the chart from source; see [Kubernetes installation](INSTALL.md#kubernetes).
 
 ## Un vistazo a la consola
 
@@ -141,11 +115,11 @@ Community es el producto completo, gratuito y de código abierto. Business añad
 |---|---|---|---|
 | **Precio** | Gratis, AGPL-3.0 | 129 USD/mes o 1.290 USD/año | Contrato anual |
 | **Qué incluye** | El producto completo: usuarios ilimitados y los cuatro puntos de aplicación deny-closed | Todo lo de Community, más Regulated Operations, AI Runtime Security, Compliance Packs e Identity & Scale, la licencia comercial, actualizaciones firmadas y soporte por correo | Todo lo de Business, más empresas, despliegues y proveedores de identidad, réplicas sin conexión y condiciones de soporte acordadas contigo |
-| **Alcance** | Un proveedor de identidad activo | Una empresa, dos despliegues de producción con un entorno de staging cada uno, cinco proveedores de identidad | Según el contrato |
+| **Alcance** | Un proveedor de identidad activo | Una empresa, una instancia activa a la vez | Según el contrato |
 
-**Regulated Operations** conserva los registros durante el plazo que exige la ley, con retención legal y archivos que nadie puede modificar. **AI Runtime Security** filtra lo que los agentes envían, reciben y ejecutan. **Compliance Packs** genera evidencias listas para ISO 42001, DORA y NIS 2. **Identity & Scale** conecta varios proveedores de identidad a la vez y permite crecer con despliegues más grandes.
+**Regulated Operations** añade plazos mínimos de conservación regulatorios, la conciliación de retenciones legales en los archivos y archivos WORM en Azure y GCS. **AI Runtime Security** añade una inspección más profunda de lo que los agentes envían, reciben y ejecutan. **Compliance Packs** prepara borradores del registro de información de DORA y del paquete ISO/IEC 42001 para tu auditor. **Identity & Scale** conecta varios proveedores de identidad a la vez y permite crecer con despliegues más grandes.
 
-[olivares.ai/pricing](https://olivares.ai/pricing) · [Qué es abierto y qué es comercial](LICENSING.md)
+[olivares.ai/pricing](https://olivares.ai/pricing) · [Qué incluye cada edición](docs/editions.md) · [Qué es abierto y qué es comercial](LICENSING.md)
 
 ## Arquitectura
 

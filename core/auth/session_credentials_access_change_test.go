@@ -12,6 +12,7 @@ import (
 	"github.com/olivaresai/olivares/core/store"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestSessionCredentialAccessChangeNotifiesOnceOutsideIssuerLock(t *testing.T) {
@@ -39,7 +40,17 @@ func TestSessionCredentialAccessChangeNotifiesOnceOutsideIssuerLock(t *testing.T
 	scope := auth.SessionScope{TenantID: tenant, WorkspaceID: workspace, FolderRef: "folder", SessionRef: "session", RunRef: "run", Fence: 1, Holder: user.ID.String()}
 	var calls atomic.Int32
 	var issuer *auth.SessionCredentials
-	issuer = auth.NewSessionCredentials(a, func(context.Context, auth.SessionScope) error { return nil }, func(ctx context.Context, got auth.SessionScope, label string) error {
+	var changeBetweenReads bool
+	var betweenReadsGroup auth.SCIMGroup
+	issuer = auth.NewSessionCredentials(a, func(ctx context.Context, _ auth.SessionScope) error {
+		if changeBetweenReads {
+			changeBetweenReads = false
+			var err error
+			betweenReadsGroup, err = a.SCIMCreateGroup(ctx, admin, tenant, auth.SCIMGroupInput{DisplayName: "Between reads", Members: []model.ID{user.ID}})
+			return err
+		}
+		return nil
+	}, func(ctx context.Context, got auth.SessionScope, label string) error {
 		if got.RunRef != scope.RunRef || got.Fence != scope.Fence || label != "Alex" {
 			t.Error("notification lost its captured scope or user")
 		}
@@ -87,5 +98,37 @@ func TestSessionCredentialAccessChangeNotifiesOnceOutsideIssuerLock(t *testing.T
 	}
 	if calls.Load() != 2 {
 		t.Fatalf("second generation callbacks=%d", calls.Load())
+	}
+	// The issuer's first refresh sees no groups. Its validator then publishes a
+	// real directory change before the complete source snapshot is reconstructed.
+	launcher, err = a.Authenticate(ctx, login)
+	if err != nil {
+		t.Fatal(err)
+	}
+	scope.Fence++
+	successor, err = issuer.Mint(ctx, launcher, scope)
+	if err != nil {
+		t.Fatal(err)
+	}
+	configure, err := issuer.AuthenticateLauncher(ctx, successor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	changeBetweenReads = true
+	bounded, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	if _, _, _, err := a.ResolveSessionLauncherScope(bounded, configure, tenant); !errors.Is(err, auth.ErrSessionAccessChanged) {
+		t.Fatalf("between-read group change=%v", err)
+	}
+	if err := a.SCIMDeleteGroup(ctx, admin, tenant, betweenReadsGroup.Group.ID); err != nil {
+		t.Fatal(err)
+	}
+	for range 2 {
+		if _, err := issuer.AuthenticateLauncher(ctx, successor); err == nil {
+			t.Fatal("source reconstruction observed a group change but the old child revived")
+		}
+	}
+	if calls.Load() != 3 {
+		t.Fatalf("between-read generation callbacks=%d, want exactly one additional notification", calls.Load())
 	}
 }

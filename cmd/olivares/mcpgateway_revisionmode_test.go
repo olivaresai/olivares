@@ -16,6 +16,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/modules/knowledge"
 )
@@ -93,7 +94,7 @@ func gatewayDocWithRevisionFields(jwks []byte, revisionFields, extraFields strin
 
 // loadGatewayMCPConfig writes the document to disk and reads it back through the
 // production loader, returning the decoded MCP block.
-func loadGatewayMCPConfig(t *testing.T, doc string) *mcpGatewayConfig {
+func loadGatewayMCPConfig(t *testing.T, doc string) *mcpgateway.MCPConfig {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "agent-gateway.json")
 	if err := os.WriteFile(path, []byte(doc), 0o600); err != nil {
@@ -156,17 +157,17 @@ func TestMCPGatewayRevisionModeResolutionTable(t *testing.T) {
 		wantErr  []string
 	}{
 		// The default did not move: neither field, and the gateway is legacy.
-		{name: "neither field", fields: "", wantMode: mcpGatewayRevisionModeLegacy},
-		{name: "boolean explicit false", fields: `"next_revision_headers":false`, wantMode: mcpGatewayRevisionModeLegacy},
-		{name: "boolean true is dual not rc-strict", fields: `"next_revision_headers":true`, wantMode: mcpGatewayRevisionModeDual},
+		{name: "neither field", fields: "", wantMode: mcpgateway.RevisionModeLegacy},
+		{name: "boolean explicit false", fields: `"next_revision_headers":false`, wantMode: mcpgateway.RevisionModeLegacy},
+		{name: "boolean true is dual not rc-strict", fields: `"next_revision_headers":true`, wantMode: mcpgateway.RevisionModeDual},
 		// An explicit mode with no boolean at all.
-		{name: "explicit legacy", fields: `"revision_mode":"legacy"`, wantMode: mcpGatewayRevisionModeLegacy},
-		{name: "explicit dual", fields: `"revision_mode":"dual"`, wantMode: mcpGatewayRevisionModeDual},
-		{name: "explicit rc-strict", fields: `"revision_mode":"rc-strict"`, wantMode: mcpGatewayRevisionModeRCStrict},
+		{name: "explicit legacy", fields: `"revision_mode":"legacy"`, wantMode: mcpgateway.RevisionModeLegacy},
+		{name: "explicit dual", fields: `"revision_mode":"dual"`, wantMode: mcpgateway.RevisionModeDual},
+		{name: "explicit rc-strict", fields: `"revision_mode":"rc-strict"`, wantMode: mcpgateway.RevisionModeRCStrict},
 		// An explicit mode with a boolean that AGREES with its header posture.
-		{name: "legacy with false", fields: `"revision_mode":"legacy","next_revision_headers":false`, wantMode: mcpGatewayRevisionModeLegacy},
-		{name: "dual with true", fields: `"revision_mode":"dual","next_revision_headers":true`, wantMode: mcpGatewayRevisionModeDual},
-		{name: "rc-strict with true", fields: `"revision_mode":"rc-strict","next_revision_headers":true`, wantMode: mcpGatewayRevisionModeRCStrict},
+		{name: "legacy with false", fields: `"revision_mode":"legacy","next_revision_headers":false`, wantMode: mcpgateway.RevisionModeLegacy},
+		{name: "dual with true", fields: `"revision_mode":"dual","next_revision_headers":true`, wantMode: mcpgateway.RevisionModeDual},
+		{name: "rc-strict with true", fields: `"revision_mode":"rc-strict","next_revision_headers":true`, wantMode: mcpgateway.RevisionModeRCStrict},
 		// An explicit mode with a boolean that CONTRADICTS it: refused, naming both.
 		{name: "legacy with true", fields: `"revision_mode":"legacy","next_revision_headers":true`,
 			wantErr: []string{"revision_mode", "next_revision_headers", "contradict"}},
@@ -187,9 +188,9 @@ func TestMCPGatewayRevisionModeResolutionTable(t *testing.T) {
 		// field's absence always did, because changing it would move behaviour
 		// for an existing field.
 		{name: "null boolean is not a supplied posture", fields: `"next_revision_headers":null`,
-			wantMode: mcpGatewayRevisionModeLegacy},
+			wantMode: mcpgateway.RevisionModeLegacy},
 		{name: "null boolean does not contradict a mode", fields: `"revision_mode":"dual","next_revision_headers":null`,
-			wantMode: mcpGatewayRevisionModeDual},
+			wantMode: mcpgateway.RevisionModeDual},
 	}
 
 	for _, tc := range cases {
@@ -235,22 +236,22 @@ func TestMCPGatewayRevisionModeCausalDispatch(t *testing.T) {
 		legacyHTTP int
 	}{
 		{
-			name: "neither field stays legacy", fields: "", wantMode: mcpGatewayRevisionModeLegacy,
+			name: "neither field stays legacy", fields: "", wantMode: mcpgateway.RevisionModeLegacy,
 			finalCode: rpcMethodNotFound, finalHTTP: http.StatusNotFound,
 			legacyCode: rpcMethodNotFound, legacyHTTP: http.StatusNotFound,
 		},
 		{
-			name: "boolean true is dual", fields: `"next_revision_headers":true`, wantMode: mcpGatewayRevisionModeDual,
+			name: "boolean true is dual", fields: `"next_revision_headers":true`, wantMode: mcpgateway.RevisionModeDual,
 			finalCode: rpcEvidenceUnavailableCode, finalHTTP: http.StatusServiceUnavailable,
 			legacyCode: rpcMethodNotFound, legacyHTTP: http.StatusNotFound,
 		},
 		{
-			name: "explicit dual matches the boolean", fields: `"revision_mode":"dual"`, wantMode: mcpGatewayRevisionModeDual,
+			name: "explicit dual matches the boolean", fields: `"revision_mode":"dual"`, wantMode: mcpgateway.RevisionModeDual,
 			finalCode: rpcEvidenceUnavailableCode, finalHTTP: http.StatusServiceUnavailable,
 			legacyCode: rpcMethodNotFound, legacyHTTP: http.StatusNotFound,
 		},
 		{
-			name: "explicit rc-strict reaches the Resource Server", fields: `"revision_mode":"rc-strict"`, wantMode: mcpGatewayRevisionModeRCStrict,
+			name: "explicit rc-strict reaches the Resource Server", fields: `"revision_mode":"rc-strict"`, wantMode: mcpgateway.RevisionModeRCStrict,
 			finalCode: rpcEvidenceUnavailableCode, finalHTTP: http.StatusServiceUnavailable,
 			legacyCode: rpcUnsupportedProtocolCode, legacyHTTP: http.StatusBadRequest,
 		},
@@ -331,7 +332,7 @@ func TestMCPGatewayRetrievalCompositionReportsNoSubscriptionUpstream(t *testing.
 
 	record := mcpGatewayReadBack(t, sink.String())
 	want := map[string]string{
-		"revision_mode":         mcpGatewayRevisionModeDual,
+		"revision_mode":         mcpgateway.RevisionModeDual,
 		"revision_mode_source":  "revision_mode",
 		"upstream":              "in-process:governed-retrieval",
 		"subscription_upstream": "absent",
@@ -466,7 +467,9 @@ func mcpGatewayReadBack(t *testing.T, out string) map[string]any {
 // OLIVARES_AGENT_GATEWAY_CONFIG — and then the production composition builder.
 // The refusals below are refusals of the MCP COMPOSITION, not of JSON parsing:
 // every case reaches buildMCPResourceServer, which is only possible because the
-// document itself still decodes.
+// document itself still decodes. The decoded presence and value of the same twenty
+// documents are pinned where the decode lives: internal/mcpgateway,
+// TestRevisionControlsDecodePresence.
 func TestMCPGatewayRevisionControlsPresenceMatchesValue(t *testing.T) {
 	_, jwks := mintReviewToken(t, mcpReviewResource, "tools:read")
 
@@ -475,11 +478,6 @@ func TestMCPGatewayRevisionControlsPresenceMatchesValue(t *testing.T) {
 		// fields is the verbatim JSON text of the two controls, so a case can
 		// write a member name with any capitalization, and write it twice.
 		fields string
-		// The decoded state: what the operator document left in the config.
-		wantModeField   string
-		wantModePresent bool
-		wantBool        bool
-		wantBoolPresent bool
 		// wantMode is the mode the built Resource Server must resolve; wantErr
 		// names the substrings a refusal must carry instead.
 		wantMode string
@@ -490,35 +488,26 @@ func TestMCPGatewayRevisionControlsPresenceMatchesValue(t *testing.T) {
 			name: "R1 noncanonical mode null is an explicit non-value",
 			// Decoded to "" with presence false, this used to resolve LEGACY: an
 			// explicitly nulled mode read exactly like an omitted one.
-			fields:          `"REVISION_MODE":null`,
-			wantModePresent: true,
-			wantErr:         []string{"present but empty", "legacy, dual, rc-strict"},
+			fields:  `"REVISION_MODE":null`,
+			wantErr: []string{"present but empty", "legacy, dual, rc-strict"},
 		},
 		{
-			name:            "R1 noncanonical mode empty is an explicit non-value",
-			fields:          `"REVISION_MODE":""`,
-			wantModePresent: true,
-			wantErr:         []string{"present but empty", "legacy, dual, rc-strict"},
+			name:    "R1 noncanonical mode empty is an explicit non-value",
+			fields:  `"REVISION_MODE":""`,
+			wantErr: []string{"present but empty", "legacy, dual, rc-strict"},
 		},
 		{
 			name: "R1 noncanonical false contradicts rc-strict",
 			// The bool decoded to false while its presence stayed invisible, so
 			// the contradiction rule had nothing to compare and rc-strict was
 			// composed with the header gate explicitly turned off.
-			fields:          `"revision_mode":"rc-strict","NEXT_REVISION_HEADERS":false`,
-			wantModeField:   mcpGatewayRevisionModeRCStrict,
-			wantModePresent: true,
-			wantBoolPresent: true,
-			wantErr:         []string{"revision_mode", "next_revision_headers", "contradict"},
+			fields:  `"revision_mode":"rc-strict","NEXT_REVISION_HEADERS":false`,
+			wantErr: []string{"revision_mode", "next_revision_headers", "contradict"},
 		},
 		{
-			name:            "R1 noncanonical true contradicts legacy",
-			fields:          `"revision_mode":"legacy","NEXT_REVISION_HEADERS":true`,
-			wantModeField:   mcpGatewayRevisionModeLegacy,
-			wantModePresent: true,
-			wantBool:        true,
-			wantBoolPresent: true,
-			wantErr:         []string{"revision_mode", "next_revision_headers", "contradict"},
+			name:    "R1 noncanonical true contradicts legacy",
+			fields:  `"revision_mode":"legacy","NEXT_REVISION_HEADERS":true`,
+			wantErr: []string{"revision_mode", "next_revision_headers", "contradict"},
 		},
 		{
 			name: "R1 mode supplied twice with a null",
@@ -528,11 +517,9 @@ func TestMCPGatewayRevisionControlsPresenceMatchesValue(t *testing.T) {
 			wantErr: []string{"revision_mode", "supplied 2 times", "ambiguous"},
 		},
 		{
-			name:            "R1 boolean supplied twice with a null",
-			fields:          `"revision_mode":"legacy","next_revision_headers":true,"next_revision_headers":null`,
-			wantModeField:   mcpGatewayRevisionModeLegacy,
-			wantModePresent: true,
-			wantErr:         []string{"next_revision_headers", "supplied 2 times", "ambiguous"},
+			name:    "R1 boolean supplied twice with a null",
+			fields:  `"revision_mode":"legacy","next_revision_headers":true,"next_revision_headers":null`,
+			wantErr: []string{"next_revision_headers", "supplied 2 times", "ambiguous"},
 		},
 
 		// ---- Duplicates that differ only in capitalization are the same control.
@@ -567,24 +554,19 @@ func TestMCPGatewayRevisionControlsPresenceMatchesValue(t *testing.T) {
 		// and value now agree with the capitalization-insensitive decode.
 		{
 			name: "single alias mode", fields: `"REVISION_MODE":"dual"`,
-			wantModeField: mcpGatewayRevisionModeDual, wantModePresent: true,
-			wantMode: mcpGatewayRevisionModeDual,
+			wantMode: mcpgateway.RevisionModeDual,
 		},
 		{
 			name: "single alias boolean true", fields: `"NEXT_REVISION_HEADERS":true`,
-			wantBool: true, wantBoolPresent: true,
-			wantMode: mcpGatewayRevisionModeDual,
+			wantMode: mcpgateway.RevisionModeDual,
 		},
 		{
 			name: "single alias boolean false", fields: `"Next_Revision_Headers":false`,
-			wantBoolPresent: true,
-			wantMode:        mcpGatewayRevisionModeLegacy,
+			wantMode: mcpgateway.RevisionModeLegacy,
 		},
 		{
 			name: "single alias pair agreeing", fields: `"Revision_Mode":"rc-strict","NEXT_REVISION_HEADERS":true`,
-			wantModeField: mcpGatewayRevisionModeRCStrict, wantModePresent: true,
-			wantBool: true, wantBoolPresent: true,
-			wantMode: mcpGatewayRevisionModeRCStrict,
+			wantMode: mcpgateway.RevisionModeRCStrict,
 		},
 		{
 			name: "single alias boolean null stays compatible with absent",
@@ -592,44 +574,32 @@ func TestMCPGatewayRevisionControlsPresenceMatchesValue(t *testing.T) {
 			// capitalization: it is an existing field whose null resolves legacy
 			// today.
 			fields:   `"NEXT_REVISION_HEADERS":null`,
-			wantMode: mcpGatewayRevisionModeLegacy,
+			wantMode: mcpgateway.RevisionModeLegacy,
 		},
 
 		// ---- The canonical rows the correction may not move.
-		{name: "neither control", fields: "", wantMode: mcpGatewayRevisionModeLegacy},
+		{name: "neither control", fields: "", wantMode: mcpgateway.RevisionModeLegacy},
 		{
 			name: "canonical boolean true is dual", fields: `"next_revision_headers":true`,
-			wantBool: true, wantBoolPresent: true,
-			wantMode: mcpGatewayRevisionModeDual,
+			wantMode: mcpgateway.RevisionModeDual,
 		},
 		{
 			name: "canonical explicit mode without a boolean", fields: `"revision_mode":"dual"`,
-			wantModeField: mcpGatewayRevisionModeDual, wantModePresent: true,
-			wantMode: mcpGatewayRevisionModeDual,
+			wantMode: mcpgateway.RevisionModeDual,
 		},
 		{
 			name: "canonical rc-strict with an agreeing true", fields: `"revision_mode":"rc-strict","next_revision_headers":true`,
-			wantModeField: mcpGatewayRevisionModeRCStrict, wantModePresent: true,
-			wantBool: true, wantBoolPresent: true,
-			wantMode: mcpGatewayRevisionModeRCStrict,
+			wantMode: mcpgateway.RevisionModeRCStrict,
 		},
 		{
 			name: "canonical single boolean null", fields: `"next_revision_headers":null`,
-			wantMode: mcpGatewayRevisionModeLegacy,
+			wantMode: mcpgateway.RevisionModeLegacy,
 		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := loadGatewayMCPConfig(t, gatewayDocWithRevisionFields(jwks, tc.fields, ""))
-			if cfg.RevisionMode != tc.wantModeField || cfg.revisionModePresent != tc.wantModePresent {
-				t.Errorf("decoded revision_mode = (%q, present %t), want (%q, present %t)",
-					cfg.RevisionMode, cfg.revisionModePresent, tc.wantModeField, tc.wantModePresent)
-			}
-			if cfg.NextRevisionHeaders != tc.wantBool || cfg.nextRevisionHeadersPresent != tc.wantBoolPresent {
-				t.Errorf("decoded next_revision_headers = (%t, present %t), want (%t, present %t)",
-					cfg.NextRevisionHeaders, cfg.nextRevisionHeadersPresent, tc.wantBool, tc.wantBoolPresent)
-			}
 			rs, _, err := buildMCPResourceServer(&engine{log: discardLogger()}, cfg, discardLogger())
 			if len(tc.wantErr) > 0 {
 				if err == nil || rs != nil {
@@ -726,16 +696,16 @@ func TestMCPGatewayAmbiguousRevisionControlsRefuseBeforeComposition(t *testing.T
 func TestMCPGatewayRevisionModeGoConstructionUnchanged(t *testing.T) {
 	cases := []struct {
 		name     string
-		cfg      mcpGatewayConfig
+		cfg      mcpgateway.MCPConfig
 		wantMode string
 		wantErr  string
 	}{
-		{name: "zero literal states no mode", cfg: mcpGatewayConfig{}},
-		{name: "literal mode alone", cfg: mcpGatewayConfig{RevisionMode: mcpGatewayRevisionModeDual}, wantMode: mcpGatewayRevisionModeDual},
+		{name: "zero literal states no mode", cfg: mcpgateway.MCPConfig{}},
+		{name: "literal mode alone", cfg: mcpgateway.MCPConfig{RevisionMode: mcpgateway.RevisionModeDual}, wantMode: mcpgateway.RevisionModeDual},
 		{
 			name:     "literal mode with an agreeing boolean",
-			cfg:      mcpGatewayConfig{RevisionMode: mcpGatewayRevisionModeRCStrict, NextRevisionHeaders: true},
-			wantMode: mcpGatewayRevisionModeRCStrict,
+			cfg:      mcpgateway.MCPConfig{RevisionMode: mcpgateway.RevisionModeRCStrict, NextRevisionHeaders: true},
+			wantMode: mcpgateway.RevisionModeRCStrict,
 		},
 		{
 			// A literal's boolean carries no PRESENCE, so it contradicts nothing
@@ -744,15 +714,15 @@ func TestMCPGatewayRevisionModeGoConstructionUnchanged(t *testing.T) {
 			// from a value. A JSON document writing the same pair is refused
 			// (see the table above); a Go composition is not a document.
 			name:     "literal boolean does not contradict a literal mode",
-			cfg:      mcpGatewayConfig{RevisionMode: mcpGatewayRevisionModeLegacy, NextRevisionHeaders: true},
-			wantMode: mcpGatewayRevisionModeLegacy,
+			cfg:      mcpgateway.MCPConfig{RevisionMode: mcpgateway.RevisionModeLegacy, NextRevisionHeaders: true},
+			wantMode: mcpgateway.RevisionModeLegacy,
 		},
-		{name: "literal boolean alone leaves the connector's resolution", cfg: mcpGatewayConfig{NextRevisionHeaders: true}},
+		{name: "literal boolean alone leaves the connector's resolution", cfg: mcpgateway.MCPConfig{NextRevisionHeaders: true}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			cfg := tc.cfg
-			mode, err := resolveMCPGatewayRevisionMode(&cfg)
+			mode, err := mcpgateway.ResolveRevisionMode(&cfg)
 			if tc.wantErr != "" {
 				if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
 					t.Fatalf("resolution = (%q, %v), want a refusal naming %q", mode, err, tc.wantErr)

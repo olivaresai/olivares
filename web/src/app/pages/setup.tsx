@@ -90,15 +90,24 @@ export function SetupPage() {
       </AuthShell>
     )
   }
-  // Setup is a one-time door: once an admin exists, it is closed.
-  if (serverInfo.data && !serverInfo.data.setup_required)
+  // Setup is a one-time door: once an admin exists, it is closed. Not for the person
+  // who just submitted it: their own navigation decides, even while the next page is
+  // still loading and the refreshed server info already says setup is done.
+  if (
+    serverInfo.data &&
+    !serverInfo.data.setup_required &&
+    !mutation.isPending &&
+    !mutation.isSuccess
+  )
     return <Navigate to="/login" />
 
   const submitError =
     mutation.error instanceof ApiError
       ? mutation.error.code === 'weak_password'
         ? t('setup.weakPassword')
-        : mutation.error.isForbidden
+        : // The engine's plain refusal of the token (handleSetup); a 403 with its
+          // own code, such as residency_violation, says what it is instead.
+          mutation.error.code === 'forbidden'
           ? t('setup.invalidToken')
           : t(`errors:codes.${mutation.error.code}`, {
               defaultValue: t('errors:generic'),

@@ -64,12 +64,12 @@ PID=""
 #    recarga, en silencio y deny-closed, que es exactamente el fallo que este guion existe para
 #    cerrar. Un control que avisa y sigue no es un control: es un comentario con `echo`.
 EXEC_TMP="$(olivares_exec_tmpdir)" || {
-  echo "$(basename "$0"): ⛔ NO ARRANCO: ningun directorio temporal EJECUTA." >&2
-  echo "   El motor extrae sus plugins de conector a \$TMPDIR y los LANZA" >&2
-  echo "   (cmd/olivares/boot.go), y aqui ninguno de los candidatos permite execve —" >&2
-  echo "   tipicamente porque /tmp esta montado noexec. Arrancar igual dejaria el plano de" >&2
-  echo "   conectores muerto SIN decirlo." >&2
-  echo "   Remedio: exporta OLIVARES_EXEC_TMPDIR a un directorio que ejecute." >&2
+  echo "$(basename "$0"): ⛔ CANNOT START: no temporary directory allows EXECUTION." >&2
+  echo "   The engine extracts its connector plugins to \$TMPDIR and LAUNCHES them" >&2
+  echo "   (cmd/olivares/boot.go), but none of the candidate directories here allows execve —" >&2
+  echo "   typically because /tmp is mounted noexec. Starting anyway would silently leave the" >&2
+  echo "   connector plane unavailable." >&2
+  echo "   Remedy: export OLIVARES_EXEC_TMPDIR pointing to a directory that permits execution." >&2
   exit 2
 }
 

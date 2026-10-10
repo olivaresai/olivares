@@ -4,9 +4,10 @@
 //
 // the launch dialog is where a session gets a provider PROFILE. What leaves the
 // browser is the profile reference and nothing else: the homes are resolved and
-// validated by the engine, which is why a client cannot post itself a home. No
-// profile is ever pre-selected — "the only profile" is a coincidence, not a choice —
-// and a profile this node cannot launch is offered as what it is: not launchable.
+// validated by the engine, which is why a client cannot post itself a home. The only
+// active profile is preselected (defaults follow what exists); with
+// several none is, and the launch waits for a choice. A profile this node cannot
+// launch is offered as what it is: not launchable.
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -33,6 +34,10 @@ vi.mock('@/features/workspace-templates/api', () => ({
     list: (t: string | null, p?: unknown) => ['tpl', t, 'list', p ?? null],
     detail: (t: string | null, id: string) => ['tpl', t, 'detail', id],
   },
+}))
+vi.mock('@tanstack/react-router', async (orig) => ({
+  ...(await orig<typeof import('@tanstack/react-router')>()),
+  useNavigate: () => vi.fn(),
 }))
 vi.mock('@/components/ui/toaster', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
@@ -78,7 +83,14 @@ const postedBody = () =>
     unknown
   >
 
+/** Every choice but the profile and the first message, and the
+ * profile's requirements in full, are under Advanced options. */
+async function openAdvanced(user = userEvent.setup()) {
+  const toggle = await screen.findByRole('button', { name: 'Advanced options' })
+  if (toggle.getAttribute('aria-expanded') !== 'true') await user.click(toggle)
+}
 async function waitReadyToRequest() {
+  await openAdvanced()
   expect(
     await screen.findByText('Local requirements checked'),
   ).toBeInTheDocument()
@@ -111,9 +123,9 @@ beforeEach(() => {
 describe('RunCreateDialog — provider profiles', () => {
   it.each([
     {
-      label: 'Workspace',
+      label: 'Folder',
       choice: /Workspace A/,
-      none: 'None (runner default working dir)',
+      none: 'Temporary folder for this session',
     },
     { label: 'Template', choice: /Security Audit/, none: 'No template' },
   ])(
@@ -169,7 +181,7 @@ describe('RunCreateDialog — provider profiles', () => {
         await screen.findByRole('option', { name: 'Select a profile' }),
       ).toHaveAttribute('data-disabled')
       await user.keyboard('{Escape}')
-      await user.click(screen.getByRole('button', { name: /request launch/i }))
+      await user.click(screen.getByRole('button', { name: 'Start' }))
       await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
       const body = postedBody()
       expect(body.workspace_ref).toBe('')
@@ -177,6 +189,35 @@ describe('RunCreateDialog — provider profiles', () => {
       expect(body.provider_profile_ref).toBe(homeA.profile_ref)
     },
   )
+
+  it('launches in the explicitly selected folder', async () => {
+    vi.mocked(agentOpsApi.listWorkspaces).mockResolvedValue({
+      items: [
+        {
+          workspace_ref: 'folder-a',
+          name: 'Project folder',
+          state: 'active',
+          root_path: '/project',
+          mount_mode: 'ro',
+          max_read_bytes: 1024,
+          dlp_mode: 'off',
+        },
+      ],
+      has_more: false,
+    })
+    const user = userEvent.setup()
+    wrap()
+    await user.click(await screen.findByLabelText('Provider profile'))
+    await user.click(await screen.findByRole('option', { name: /Home A/ }))
+    await waitReadyToRequest()
+    await user.click(screen.getByLabelText('Folder'))
+    await user.click(
+      await screen.findByRole('option', { name: /Project folder/ }),
+    )
+    await user.click(screen.getByRole('button', { name: 'Start' }))
+    await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
+    expect(postedBody().workspace_ref).toBe('folder-a')
+  })
 
   it('requires a profile before launching, even when profiles are available', async () => {
     wrap()
@@ -186,12 +227,8 @@ describe('RunCreateDialog — provider profiles', () => {
         expect.anything(),
       ),
     )
-    await userEvent.click(
-      screen.getByRole('button', { name: /request launch/i }),
-    )
-    expect(
-      screen.getByRole('button', { name: /request launch/i }),
-    ).toBeDisabled()
+    await userEvent.click(screen.getByRole('button', { name: 'Start' }))
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
     expect(agentOpsApi.createRun).not.toHaveBeenCalled()
   })
 
@@ -229,7 +266,7 @@ describe('RunCreateDialog — provider profiles', () => {
     await user.click(await screen.findByLabelText('Provider profile'))
     await user.click(await screen.findByRole('option', { name: /Home A/ }))
     await waitReadyToRequest()
-    await user.click(screen.getByRole('button', { name: /request launch/i }))
+    await user.click(screen.getByRole('button', { name: 'Start' }))
     await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalled())
     const body = postedBody()
     expect(body.provider_profile_ref).toBe('ppf_a')
@@ -247,14 +284,15 @@ describe('RunCreateDialog — provider profiles', () => {
     expect(codex).toHaveTextContent('not enabled in this environment')
     expect(codex).not.toHaveAttribute('data-disabled')
     await user.click(codex)
-    expect(
-      await screen.findByText(
-        /A launch request is not offered: this selection is known to be inviable/,
+    // Start says it beside the button, in plain words.
+    await waitFor(() =>
+      expect(
+        screen.getByRole('button', { name: 'Start' }),
+      ).toHaveAccessibleDescription(
+        'This profile cannot start a session here. Its requirements under Advanced options say why.',
       ),
-    ).toBeInTheDocument()
-    expect(
-      screen.getByRole('button', { name: /request launch/i }),
-    ).toBeDisabled()
+    )
+    expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
     expect(agentOpsApi.createRun).not.toHaveBeenCalled()
   })
 
@@ -282,9 +320,7 @@ describe('RunCreateDialog — provider profiles', () => {
           /CLAUDE_CONFIG_DIR, CODEX_HOME and GROK_HOME belong to the profile/i,
         ),
       ).toBeInTheDocument()
-      expect(
-        screen.getByRole('button', { name: /request launch/i }),
-      ).toBeDisabled()
+      expect(screen.getByRole('button', { name: 'Start' })).toBeDisabled()
     },
   )
 
@@ -327,7 +363,7 @@ describe('RunCreateDialog — provider profiles', () => {
       SERVER_PERMITTED.join(', '),
     )
     expect(screen.queryByText(/belong to the profile/i)).toBeNull()
-    const submit = screen.getByRole('button', { name: /request launch/i })
+    const submit = screen.getByRole('button', { name: 'Start' })
     expect(submit).toBeEnabled()
     await user.click(submit)
     await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalled())
@@ -349,9 +385,7 @@ describe('RunCreateDialog — provider profiles', () => {
       'PATH, CODEX_MODEL',
     )
     expect(screen.queryByText(/belong to the profile/i)).toBeNull()
-    expect(
-      screen.getByRole('button', { name: /request launch/i }),
-    ).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Start' })).toBeEnabled()
     // And the message the operator does see must not promise that everything else is
     // accepted, because this is exactly the name for which that promise is false.
     await user.clear(screen.getByPlaceholderText('PATH, HOME, TERM'))
@@ -360,4 +394,20 @@ describe('RunCreateDialog — provider profiles', () => {
     expect(warning).toHaveTextContent(/subject to the server/i)
     expect(warning).not.toHaveTextContent(/other variables are fine/i)
   })
+})
+
+it('preserves an entered model in the existing native launch payload', async () => {
+  const user = userEvent.setup()
+  wrap()
+  await user.click(await screen.findByLabelText('Provider profile'))
+  await user.click(await screen.findByRole('option', { name: /Home A/ }))
+  await waitReadyToRequest()
+  await user.type(
+    screen.getByRole('combobox', { name: 'Model' }),
+    'custom-model',
+  )
+  await user.click(screen.getByRole('button', { name: 'Start' }))
+  await waitFor(() => expect(agentOpsApi.createRun).toHaveBeenCalledOnce())
+  expect(postedBody().model).toBe('custom-model')
+  expect(postedBody().provider_profile_ref).toBe('ppf_a')
 })

@@ -32,15 +32,21 @@ evidencia a nivel de código.
 
 ## Principios rectores
 
-- **Read-first = riesgo asimétrico bajo.** El motor observa a través de logs,
-  OpenTelemetry y eBPF. **No** se sitúa en la ruta de datos del agente, de modo que un
-  fallo del colector no puede romper el tráfico de producción.
+- **Observación fuera de banda.** El access map observa logs, OpenTelemetry y
+  eBPF. Un fallo del colector de observación crea un hueco de visibilidad sin
+  condicionar el tráfico del agente.
+- **Enforcement inline deny-closed.** Los hooks de llamadas a herramientas de
+  Claude Code gestionado llaman al PEP del motor, montado por defecto. Una caída
+  o un reinicio del motor que lo haga inaccesible deniega toda llamada gobernada
+  a herramientas. El proxy de inferencia inline y los gates MCP tools/call y de
+  delegación A2A se aplican al tráfico encaminado por ellos; las llamadas al
+  modelo de las sesiones no usan el proxy de inferencia por defecto.
 - **Datos mínimos.** El grafo almacena **relaciones** — origen → recurso,
   lectura/escritura, fuente, confianza, timestamp — **nunca** payloads, cuerpos SQL,
   secretos o PII. *Lo que no se almacena no puede filtrarse.*
 - **Autoalojado = sin proveedor en la ruta de datos.** No hay telemetría obligatoria ni
-  egreso del plano de control de forma predeterminada, y Olivares AI nunca está en la ruta de
-  datos. Al proveedor solo se le llega cuando le pides algo — `olivares upgrade`, o una descarga
+  egreso del plano de control de forma predeterminada, y el proveedor queda fuera de
+  las rutas de observación y enforcement. Al proveedor solo se le llega cuando le pides algo — `olivares upgrade`, o una descarga
   por suscripción de módulos comerciales y sus actualizaciones — nunca como efecto de ejecutar. Y `olivares upgrade --endpoint` apunta incluso eso a tu propio mirror.
   Solo cruza el perímetro del cliente lo que este configura para que lo cruce: llamadas a
   sus API de modelos, las salidas SIEM/webhook que conecta y un proveedor externo de

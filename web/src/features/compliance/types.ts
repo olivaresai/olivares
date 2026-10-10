@@ -317,6 +317,12 @@ export interface EvidenceExportResult {
 
 /** Why a tier was assigned — the operator-readable signals behind the heuristic. */
 export interface RiskSignals {
+  /** Native schedule intent, independent of observed access/findings. Absent in historical rows. */
+  declared_autonomy?: {
+    state: 'declared' | 'none_declared' | 'partial' | 'unknown' | 'unavailable'
+    scheduled: boolean
+    autonomous: boolean
+  }
   rw_edges: number
   total_edges: number
   distinct_resources: number

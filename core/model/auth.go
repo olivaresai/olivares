@@ -207,6 +207,16 @@ type UserGroup struct {
 	// stops a chain that dangles or crosses tenants (deny-closed). Empty for a
 	// group created before the column existed (additive, nullable).
 	ParentGroupID ID
+	// WorkspaceID OPTIONALLY places this group in one workspace of TargetTenantID,
+	// so the workspace's contents list it (the organization tree, C4.3). Zero is
+	// the historical tenant-wide group, listed in no workspace. It is organization
+	// only: membership, MappedRole, ParentGroupID and every authorization decision
+	// ignore it. Like the hierarchy it is NEVER settable through any SCIM inbound
+	// path (create/replace/patch all preserve it) — only the operator endpoint
+	// writes it. There is no DB foreign key (the workspace lives in the business
+	// tenant, the group in the system tenant); the operator path validates the
+	// workspace exists in TargetTenantID. Nullable and appended last (core v27).
+	WorkspaceID ID
 }
 
 // UserGroupMember binds a User to a UserGroup. It lives in the system tenant
@@ -390,7 +400,9 @@ type APIToken struct {
 	ExpiresAt *Timestamp
 	// Revoked marks a revoked token.
 	Revoked bool
-	// LastUsedAt is the last time the token authenticated (nil if never).
+	// LastUsedAt is the last time the token authenticated, to within a minute
+	// (nil if never); authentication records it with
+	// store.AuthScope.RecordAPITokenUse.
 	LastUsedAt *Timestamp
 	// Purpose marks a purpose-restricted credential. Empty is an ordinary API
 	// token; any non-empty value must be refused by ordinary authentication so

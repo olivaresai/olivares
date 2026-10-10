@@ -11,33 +11,14 @@ import {
   ShieldCheck,
   Trash2,
 } from 'lucide-react'
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Combobox, type ComboboxOption } from '@/components/ui/combobox'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Field } from '@/components/ui/field'
-import { Input } from '@/components/ui/input'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
 import { Spinner } from '@/components/ui/spinner'
-import { Textarea } from '@/components/ui/textarea'
 import { AAL, RequireAssurance } from '@/features/identity/assurance'
 import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
@@ -51,15 +32,12 @@ import {
   type ScopedGrantDTO,
 } from './api'
 import { AccessReviewSection } from './roles-access-review-section'
+import { InheritanceFiltersSection } from './roles-filters-section'
 import { GroupHierarchySection } from './roles-groups-section'
 import { ModelGovernanceSection } from './roles-model-section'
-import {
-  classOptionsFor,
-  FormError,
-  PermissionMatrix,
-  scopeLabel,
-} from './roles-shared'
+import { scopeLabel } from './roles-shared'
 import { StaticTable } from '@/components/data/static-table'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
 
 /**
  * RolesTab is the FASE X Roles & delegation panel — the console UI over the
@@ -134,6 +112,11 @@ export function RolesTab() {
 
   return (
     <div className="flex flex-col gap-8 pt-4">
+      {!PANEL_EXTENSIONS.authorizationForms && (
+        <p className="text-body text-muted-foreground">
+          {t('common:edition.editingRequiresBusiness')}
+        </p>
+      )}
       <DelegationAuthorityCard query={authority} />
 
       <GrantsSection
@@ -146,6 +129,13 @@ export function RolesTab() {
         isError={grants.isError}
         error={grants.error}
         refetch={() => void grants.refetch()}
+        canAdmin={canAdmin}
+      />
+
+      <InheritanceFiltersSection
+        catalog={cat}
+        workspaces={wsItems}
+        agentGroups={agItems}
         canAdmin={canAdmin}
       />
 
@@ -280,6 +270,7 @@ function GrantsSection({
   refetch: () => void
   canAdmin: boolean
 }) {
+  const GrantForm = PANEL_EXTENSIONS.authorizationForms?.GrantForm
   const { t } = useTranslation(['console', 'common'])
   const { activeTenant } = useAuth()
   const [createOpen, setCreateOpen] = useState(false)
@@ -306,7 +297,7 @@ function GrantsSection({
             {t('console:roles.grants.caption')}
           </p>
         </div>
-        {canAdmin && (
+        {canAdmin && GrantForm && (
           <Button onClick={() => setCreateOpen(true)}>
             <Plus />
             {t('console:roles.grants.create')}
@@ -322,7 +313,7 @@ function GrantsSection({
       ) : grants.length === 0 ? (
         <EmptyState
           action={
-            canAdmin ? (
+            canAdmin && GrantForm ? (
               <Button onClick={() => setCreateOpen(true)}>
                 <Plus />
                 {t('console:roles.grants.create')}
@@ -395,7 +386,7 @@ function GrantsSection({
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-h-[85vh] max-w-lg overflow-y-auto">
-          {createOpen && (
+          {createOpen && GrantForm && (
             <RequireAssurance minAal={AAL.HARDWARE} action="console">
               <GrantForm
                 catalog={catalog}
@@ -423,333 +414,6 @@ function GrantsSection({
   )
 }
 
-function GrantForm({
-  catalog,
-  roles,
-  workspaces,
-  agentGroups,
-  onClose,
-}: {
-  catalog?: RBACCatalogDTO
-  roles: CustomRoleDTO[]
-  workspaces: { slug: string; name: string }[]
-  agentGroups: { slug: string; name: string }[]
-  onClose: () => void
-}) {
-  const { t } = useTranslation(['console', 'common'])
-  const { activeTenant } = useAuth()
-  const [subjectKind, setSubjectKind] = useState<'user' | 'role' | 'group'>(
-    'user',
-  )
-  const [subjectRef, setSubjectRef] = useState('')
-  const [subjectRole, setSubjectRole] = useState('viewer')
-  // The role selector encodes both built-in and custom roles ("b:<name>" / "c:<name>").
-  const [roleSel, setRoleSel] = useState<string | null>(null)
-  const [scopeTree, setScopeTree] = useState<
-    'tenant' | 'workspace' | 'agent_group'
-  >('tenant')
-  const [scopeRef, setScopeRef] = useState<string | null>(null)
-  const [scopeClass, setScopeClass] = useState('any')
-  const [note, setNote] = useState('')
-
-  const groupsQuery = useQuery({
-    queryKey: consoleKeys.groups(activeTenant),
-    queryFn: () => consoleApi.listGroups(),
-    enabled: subjectKind === 'group',
-  })
-
-  const roleOptions: ComboboxOption[] = useMemo(() => {
-    const builtin = (catalog?.builtin_roles ?? []).map((r) => ({
-      value: `b:${r}`,
-      label: `${r} · ${t('console:roles.grantForm.groupBuiltin')}`,
-      keywords: [r],
-    }))
-    const custom = roles.map((c) => ({
-      value: `c:${c.name}`,
-      label: `${c.display_name || c.name} · ${t('console:roles.grantForm.groupCustom')}`,
-      keywords: [c.name],
-    }))
-    return [...builtin, ...custom]
-  }, [catalog, roles, t])
-
-  const mutation = usePrivilegedMutation<void, ScopedGrantDTO>({
-    mutationFn: () => {
-      const isCustom = roleSel?.startsWith('c:') ?? false
-      const role = roleSel ? roleSel.slice(2) : ''
-      const body: ScopedGrantDTO = {
-        subject_kind: subjectKind,
-        subject_ref: subjectKind === 'role' ? subjectRole : subjectRef.trim(),
-        role,
-        role_custom: isCustom,
-        scope_tree: scopeTree,
-        scope_ref: scopeTree === 'tenant' ? undefined : (scopeRef ?? undefined),
-        scope_class: scopeClass === 'any' ? undefined : scopeClass,
-        note: note.trim() || undefined,
-      }
-      return consoleApi.createGrant(body)
-    },
-    invalidateKeys: () => [
-      consoleKeys.grants(activeTenant),
-      consoleKeys.delegationAuthority(activeTenant),
-    ],
-    successMessage: t('console:roles.grants.created'),
-    onDone: onClose,
-  })
-
-  const subjectValid = subjectKind === 'role' || subjectRef.trim() !== ''
-  const scopeValid = scopeTree === 'tenant' || !!scopeRef
-  const valid = subjectValid && !!roleSel && scopeValid
-
-  // The class options a scope tree admits — see classOptionsFor for the rule and why a
-  // module kind is not offerable outside a tenant scope.
-  const classOptions = classOptionsFor(scopeTree, catalog)
-
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle>{t('console:roles.grantForm.title')}</DialogTitle>
-        <DialogDescription>
-          {t('console:roles.grants.caption')}
-        </DialogDescription>
-      </DialogHeader>
-
-      <div className="flex flex-col gap-4">
-        <Field
-          label={t('console:roles.grantForm.subjectKind')}
-          htmlFor="g-subkind"
-        >
-          <Select
-            value={subjectKind}
-            onValueChange={(v) =>
-              setSubjectKind(v as 'user' | 'role' | 'group')
-            }
-          >
-            <SelectTrigger id="g-subkind">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="user">
-                {t('console:roles.grantForm.subjectUser')}
-              </SelectItem>
-              <SelectItem value="role">
-                {t('console:roles.grantForm.subjectRole')}
-              </SelectItem>
-              <SelectItem value="group">
-                {t('console:roles.grantForm.subjectGroup')}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </Field>
-
-        {subjectKind === 'user' && (
-          <Field
-            label={t('console:roles.grantForm.userId')}
-            htmlFor="g-userid"
-            description={t('console:roles.grantForm.userIdHint')}
-            required
-          >
-            <Input
-              id="g-userid"
-              value={subjectRef}
-              onChange={(e) => setSubjectRef(e.target.value)}
-              mono
-            />
-          </Field>
-        )}
-        {subjectKind === 'role' && (
-          <Field
-            label={t('console:roles.grantForm.builtinRole')}
-            htmlFor="g-subrole"
-          >
-            <Select value={subjectRole} onValueChange={setSubjectRole}>
-              <SelectTrigger
-                id="g-subrole"
-                aria-label={t('console:roles.grantForm.builtinRole')}
-              >
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {(catalog?.builtin_roles ?? []).map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {r}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </Field>
-        )}
-        {subjectKind === 'group' && (
-          <Field
-            label={t('console:granular.groupSubjects.colName')}
-            htmlFor="g-groupid"
-            required
-          >
-            <Combobox
-              id="g-groupid"
-              options={(groupsQuery.data?.groups ?? []).map((g) => ({
-                value: g.id,
-                label: g.display_name || g.id,
-                keywords: [g.display_name, g.external_id].filter(
-                  Boolean,
-                ) as string[],
-              }))}
-              value={subjectRef || null}
-              onChange={(v) => setSubjectRef(v ?? '')}
-              placeholder={t('console:granular.groupSubjects.selectGroup')}
-            />
-          </Field>
-        )}
-
-        <Field
-          label={t('console:roles.grantForm.role')}
-          htmlFor="g-role"
-          description={t('console:roles.grantForm.roleHint')}
-          required
-        >
-          <Combobox
-            id="g-role"
-            options={roleOptions}
-            value={roleSel}
-            onChange={setRoleSel}
-            placeholder={t('console:roles.grantForm.scopeRefPlaceholder')}
-          />
-        </Field>
-
-        <Field
-          label={t('console:roles.grantForm.scopeTree')}
-          htmlFor="g-scopetree"
-        >
-          <Select
-            value={scopeTree}
-            onValueChange={(v) => {
-              setScopeTree(v as 'tenant' | 'workspace' | 'agent_group')
-              setScopeRef(null)
-              setScopeClass('any')
-            }}
-          >
-            <SelectTrigger
-              id="g-scopetree"
-              aria-label={t('console:roles.grantForm.scopeTree')}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="tenant">
-                {t('console:roles.grantForm.scopeTenant')}
-              </SelectItem>
-              <SelectItem value="workspace">
-                {t('console:roles.grantForm.scopeWorkspace')}
-              </SelectItem>
-              <SelectItem value="agent_group">
-                {t('console:roles.grantForm.scopeAgentGroup')}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-        </Field>
-
-        {scopeTree === 'workspace' && (
-          <Field
-            label={t('console:roles.grantForm.scopeRefWorkspace')}
-            htmlFor="g-ws"
-            required
-          >
-            <Combobox
-              id="g-ws"
-              options={workspaces.map((w) => ({
-                value: w.slug,
-                label: w.name,
-                keywords: [w.slug],
-              }))}
-              value={scopeRef}
-              onChange={setScopeRef}
-              placeholder={t('console:roles.grantForm.scopeRefPlaceholder')}
-            />
-          </Field>
-        )}
-        {scopeTree === 'agent_group' && (
-          <Field
-            label={t('console:roles.grantForm.scopeRefGroup')}
-            htmlFor="g-ag"
-            required
-          >
-            <Combobox
-              id="g-ag"
-              options={agentGroups.map((a) => ({
-                value: a.slug,
-                label: a.name,
-                keywords: [a.slug],
-              }))}
-              value={scopeRef}
-              onChange={setScopeRef}
-              placeholder={t('console:roles.grantForm.scopeRefPlaceholder')}
-            />
-          </Field>
-        )}
-
-        <Field
-          label={t('console:roles.grantForm.scopeClass')}
-          htmlFor="g-class"
-          description={t('console:roles.grantForm.scopeClassHint')}
-        >
-          <Select value={scopeClass} onValueChange={setScopeClass}>
-            <SelectTrigger
-              id="g-class"
-              aria-label={t('console:roles.grantForm.scopeClass')}
-            >
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="any">
-                {t('console:roles.grantForm.scopeClassAny')}
-              </SelectItem>
-              {classOptions.map((k) => (
-                <SelectItem key={k} value={k}>
-                  {k}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-
-        <Field
-          label={t('console:roles.grantForm.note')}
-          htmlFor="g-note"
-          description={t('console:roles.grantForm.noteHint')}
-        >
-          <Textarea
-            id="g-note"
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={2}
-          />
-        </Field>
-
-        <FormError error={mutation.error} />
-      </div>
-
-      <DialogFooter>
-        <Button
-          variant="secondary"
-          onClick={onClose}
-          disabled={mutation.isPending}
-        >
-          {t('common:actions.cancel')}
-        </Button>
-        <Button
-          variant="primary"
-          onClick={() => mutation.mutate()}
-          disabled={!valid || mutation.isPending}
-        >
-          {mutation.isPending && <Spinner size="sm" aria-hidden />}
-          {t('console:roles.grantForm.submit')}
-        </Button>
-      </DialogFooter>
-    </>
-  )
-}
-
-// --- custom roles ------------------------------------------------------------
-
 function RolesSection({
   catalog,
   roles,
@@ -770,6 +434,7 @@ function RolesSection({
   refetch: () => void
   canAdmin: boolean
 }) {
+  const RoleForm = PANEL_EXTENSIONS.authorizationForms?.RoleForm
   const { t } = useTranslation(['console', 'common'])
   const { activeTenant } = useAuth()
   const [editing, setEditing] = useState<CustomRoleDTO | null>(null)
@@ -799,7 +464,7 @@ function RolesSection({
             {t('console:roles.defs.caption')}
           </p>
         </div>
-        {canAdmin && (
+        {canAdmin && RoleForm && (
           <Button onClick={() => setCreateOpen(true)}>
             <Plus />
             {t('console:roles.defs.create')}
@@ -815,7 +480,7 @@ function RolesSection({
       ) : roles.length === 0 ? (
         <EmptyState
           action={
-            canAdmin ? (
+            canAdmin && RoleForm ? (
               <Button onClick={() => setCreateOpen(true)}>
                 <Plus />
                 {t('console:roles.defs.create')}
@@ -859,14 +524,16 @@ function RolesSection({
                   <td className="text-right">
                     {canAdmin && (
                       <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditing(r)}
-                        >
-                          <Pencil />
-                          {t('console:roles.defs.edit')}
-                        </Button>
+                        {RoleForm && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditing(r)}
+                          >
+                            <Pencil />
+                            {t('console:roles.defs.edit')}
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -887,7 +554,7 @@ function RolesSection({
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
-          {createOpen && (
+          {createOpen && RoleForm && (
             <RequireAssurance minAal={AAL.HARDWARE} action="console">
               <RoleForm
                 catalog={catalog}
@@ -904,7 +571,7 @@ function RolesSection({
         onOpenChange={(o) => !o && setEditing(null)}
       >
         <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
-          {editing && (
+          {editing && RoleForm && (
             <RequireAssurance minAal={AAL.HARDWARE} action="console">
               <RoleForm
                 catalog={catalog}
@@ -931,212 +598,6 @@ function RolesSection({
   )
 }
 
-function RoleForm({
-  catalog,
-  groups,
-  existing,
-  onClose,
-}: {
-  catalog?: RBACCatalogDTO
-  groups: PermGroupDTO[]
-  existing?: CustomRoleDTO
-  onClose: () => void
-}) {
-  const { t } = useTranslation(['console', 'common'])
-  const { activeTenant } = useAuth()
-  const isEdit = !!existing
-  const [name, setName] = useState(existing?.name ?? '')
-  const [displayName, setDisplayName] = useState(existing?.display_name ?? '')
-  const [description, setDescription] = useState(existing?.description ?? '')
-  const [perms, setPerms] = useState<string[]>(existing?.permissions ?? [])
-  const [selGroups, setSelGroups] = useState<string[]>(existing?.groups ?? [])
-  // Structured subtraction: a live BASE minus an explicit exclusion set.
-  const [baseRole, setBaseRole] = useState<string>(existing?.base_role ?? '')
-  const [excludes, setExcludes] = useState<string[]>(existing?.excludes ?? [])
-
-  const mutation = usePrivilegedMutation<void, CustomRoleDTO>({
-    mutationFn: () => {
-      const body: CustomRoleDTO = {
-        name: name.trim(),
-        display_name: displayName.trim() || undefined,
-        description: description.trim() || undefined,
-        base_role: baseRole || undefined,
-        permissions: perms,
-        groups: selGroups.length ? selGroups : undefined,
-        excludes: excludes.length ? excludes : undefined,
-      }
-      return isEdit
-        ? consoleApi.updateRole(existing.name, body)
-        : consoleApi.createRole(body)
-    },
-    invalidateKeys: () => [
-      consoleKeys.roles(activeTenant),
-      consoleKeys.delegationAuthority(activeTenant),
-    ],
-    successMessage: isEdit
-      ? t('console:roles.defs.updated')
-      : t('console:roles.defs.created'),
-    onDone: onClose,
-  })
-
-  const nameValid = isEdit || /^[A-Za-z0-9._-]{1,64}$/.test(name.trim())
-  const valid =
-    nameValid && (perms.length > 0 || selGroups.length > 0 || baseRole !== '')
-
-  const toggleGroup = (g: string) => {
-    setSelGroups((prev) =>
-      prev.includes(g) ? prev.filter((x) => x !== g) : [...prev, g],
-    )
-  }
-
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle>
-          {isEdit
-            ? t('console:roles.roleForm.editTitle')
-            : t('console:roles.roleForm.createTitle')}
-        </DialogTitle>
-        <DialogDescription>{t('console:roles.defs.caption')}</DialogDescription>
-      </DialogHeader>
-
-      <div className="flex flex-col gap-4">
-        <Field
-          label={t('console:roles.roleForm.name')}
-          htmlFor="r-name"
-          description={t('console:roles.roleForm.nameHint')}
-          required
-        >
-          <Input
-            id="r-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            mono
-            disabled={isEdit}
-          />
-        </Field>
-        <Field
-          label={t('console:roles.roleForm.displayName')}
-          htmlFor="r-display"
-        >
-          <Input
-            id="r-display"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-          />
-        </Field>
-        <Field label={t('console:roles.roleForm.description')} htmlFor="r-desc">
-          <Textarea
-            id="r-desc"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-          />
-        </Field>
-        <Field
-          label={t('console:roles.roleForm.baseRole')}
-          htmlFor="r-base"
-          description={t('console:roles.roleForm.baseRoleHint')}
-        >
-          <Select
-            value={baseRole || 'none'}
-            onValueChange={(v) => setBaseRole(v === 'none' ? '' : v)}
-          >
-            <SelectTrigger id="r-base">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">
-                {t('console:roles.roleForm.baseRoleNone')}
-              </SelectItem>
-              {(catalog?.builtin_roles ?? []).map((r) => (
-                <SelectItem key={r} value={r}>
-                  {r}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </Field>
-        <Field
-          label={t('console:roles.roleForm.permissions')}
-          description={t('console:roles.roleForm.permissionsHint')}
-        >
-          <PermissionMatrix
-            catalog={catalog}
-            value={perms}
-            onChange={setPerms}
-          />
-        </Field>
-        <Field
-          label={t('console:roles.roleForm.excludes')}
-          description={t('console:roles.roleForm.excludesHint')}
-        >
-          <PermissionMatrix
-            catalog={catalog}
-            value={excludes}
-            onChange={setExcludes}
-            excluding
-          />
-        </Field>
-        <Field
-          label={t('console:roles.roleForm.groups')}
-          description={t('console:roles.roleForm.groupsHint')}
-        >
-          {groups.length === 0 ? (
-            <p className="text-body text-muted-foreground">
-              {t('console:roles.roleForm.noGroups')}
-            </p>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {groups.map((g) => (
-                <label
-                  key={g.name}
-                  className="flex items-center gap-2 text-body"
-                >
-                  <Checkbox
-                    checked={selGroups.includes(g.name)}
-                    onCheckedChange={() => toggleGroup(g.name)}
-                    aria-label={g.name}
-                  />
-                  <span className="font-mono text-caption text-foreground">
-                    {g.name}
-                  </span>
-                  {g.display_name && (
-                    <span className="text-muted-foreground">
-                      {g.display_name}
-                    </span>
-                  )}
-                </label>
-              ))}
-            </div>
-          )}
-        </Field>
-        <FormError error={mutation.error} />
-      </div>
-
-      <DialogFooter>
-        <Button
-          variant="secondary"
-          onClick={onClose}
-          disabled={mutation.isPending}
-        >
-          {t('common:actions.cancel')}
-        </Button>
-        <Button
-          variant="primary"
-          onClick={() => mutation.mutate()}
-          disabled={!valid || mutation.isPending}
-        >
-          {mutation.isPending && <Spinner size="sm" aria-hidden />}
-          {t('console:roles.roleForm.submit')}
-        </Button>
-      </DialogFooter>
-    </>
-  )
-}
-
-// --- permission-groups -------------------------------------------------------
-
 function GroupsSection({
   catalog,
   groups,
@@ -1155,6 +616,7 @@ function GroupsSection({
   refetch: () => void
   canAdmin: boolean
 }) {
+  const GroupForm = PANEL_EXTENSIONS.authorizationForms?.GroupForm
   const { t } = useTranslation(['console', 'common'])
   const { activeTenant } = useAuth()
   const [editing, setEditing] = useState<PermGroupDTO | null>(null)
@@ -1182,7 +644,7 @@ function GroupsSection({
             {t('console:roles.groups.caption')}
           </p>
         </div>
-        {canAdmin && (
+        {canAdmin && GroupForm && (
           <Button onClick={() => setCreateOpen(true)}>
             <Plus />
             {t('console:roles.groups.create')}
@@ -1198,7 +660,7 @@ function GroupsSection({
       ) : groups.length === 0 ? (
         <EmptyState
           action={
-            canAdmin ? (
+            canAdmin && GroupForm ? (
               <Button onClick={() => setCreateOpen(true)}>
                 <Plus />
                 {t('console:roles.groups.create')}
@@ -1238,14 +700,16 @@ function GroupsSection({
                   <td className="text-right">
                     {canAdmin && (
                       <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditing(g)}
-                        >
-                          <Pencil />
-                          {t('console:roles.groups.edit')}
-                        </Button>
+                        {GroupForm && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditing(g)}
+                          >
+                            <Pencil />
+                            {t('console:roles.groups.edit')}
+                          </Button>
+                        )}
                         <Button
                           variant="ghost"
                           size="sm"
@@ -1266,7 +730,7 @@ function GroupsSection({
 
       <Dialog open={createOpen} onOpenChange={setCreateOpen}>
         <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
-          {createOpen && (
+          {createOpen && GroupForm && (
             <RequireAssurance minAal={AAL.HARDWARE} action="console">
               <GroupForm
                 catalog={catalog}
@@ -1282,7 +746,7 @@ function GroupsSection({
         onOpenChange={(o) => !o && setEditing(null)}
       >
         <DialogContent className="max-h-[85vh] max-w-2xl overflow-y-auto">
-          {editing && (
+          {editing && GroupForm && (
             <RequireAssurance minAal={AAL.HARDWARE} action="console">
               <GroupForm
                 catalog={catalog}
@@ -1305,126 +769,5 @@ function GroupsSection({
         onConfirm={() => del && deleteMutation.mutate(del.name)}
       />
     </section>
-  )
-}
-
-function GroupForm({
-  catalog,
-  existing,
-  onClose,
-}: {
-  catalog?: RBACCatalogDTO
-  existing?: PermGroupDTO
-  onClose: () => void
-}) {
-  const { t } = useTranslation(['console', 'common'])
-  const { activeTenant } = useAuth()
-  const isEdit = !!existing
-  const [name, setName] = useState(existing?.name ?? '')
-  const [displayName, setDisplayName] = useState(existing?.display_name ?? '')
-  const [description, setDescription] = useState(existing?.description ?? '')
-  const [perms, setPerms] = useState<string[]>(existing?.permissions ?? [])
-
-  const mutation = usePrivilegedMutation<void, PermGroupDTO>({
-    mutationFn: () => {
-      const body: PermGroupDTO = {
-        name: name.trim(),
-        display_name: displayName.trim() || undefined,
-        description: description.trim() || undefined,
-        permissions: perms,
-      }
-      return isEdit
-        ? consoleApi.updatePermGroup(existing.name, body)
-        : consoleApi.createPermGroup(body)
-    },
-    invalidateKeys: () => [
-      consoleKeys.permGroups(activeTenant),
-      consoleKeys.delegationAuthority(activeTenant),
-    ],
-    successMessage: isEdit
-      ? t('console:roles.groups.updated')
-      : t('console:roles.groups.created'),
-    onDone: onClose,
-  })
-
-  const nameValid = isEdit || /^[A-Za-z0-9._-]{1,64}$/.test(name.trim())
-  const valid = nameValid && perms.length > 0
-
-  return (
-    <>
-      <DialogHeader>
-        <DialogTitle>
-          {isEdit
-            ? t('console:roles.groupForm.editTitle')
-            : t('console:roles.groupForm.createTitle')}
-        </DialogTitle>
-        <DialogDescription>
-          {t('console:roles.groups.caption')}
-        </DialogDescription>
-      </DialogHeader>
-
-      <div className="flex flex-col gap-4">
-        <Field
-          label={t('console:roles.groupForm.name')}
-          htmlFor="pg-name"
-          required
-        >
-          <Input
-            id="pg-name"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-            mono
-            disabled={isEdit}
-          />
-        </Field>
-        <Field
-          label={t('console:roles.groupForm.displayName')}
-          htmlFor="pg-display"
-        >
-          <Input
-            id="pg-display"
-            value={displayName}
-            onChange={(e) => setDisplayName(e.target.value)}
-          />
-        </Field>
-        <Field
-          label={t('console:roles.groupForm.description')}
-          htmlFor="pg-desc"
-        >
-          <Textarea
-            id="pg-desc"
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-            rows={2}
-          />
-        </Field>
-        <Field label={t('console:roles.groupForm.permissions')}>
-          <PermissionMatrix
-            catalog={catalog}
-            value={perms}
-            onChange={setPerms}
-          />
-        </Field>
-        <FormError error={mutation.error} />
-      </div>
-
-      <DialogFooter>
-        <Button
-          variant="secondary"
-          onClick={onClose}
-          disabled={mutation.isPending}
-        >
-          {t('common:actions.cancel')}
-        </Button>
-        <Button
-          variant="primary"
-          onClick={() => mutation.mutate()}
-          disabled={!valid || mutation.isPending}
-        >
-          {mutation.isPending && <Spinner size="sm" aria-hidden />}
-          {t('console:roles.groupForm.submit')}
-        </Button>
-      </DialogFooter>
-    </>
   )
 }

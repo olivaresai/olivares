@@ -39,7 +39,7 @@ DERIVED_HUB="$(git -C "$ROOT" log --follow --diff-filter=A --format=%P -- \
   || cannot "derived baseline is not exactly one commit identity"
 
 if [ -e "$CTR19" ]; then
-  fail "ALC-01-S2 contract 2026-08-19 landed — this HOLD lote does not apply #956"
+  fail "ALC-01-S2 contract 2026-08-19 landed — this HOLD batch does not apply #956"
 fi
 if [ -e "$ORIG" ]; then
   fail "original check-alc-ver-programs.sh landed — LOOK 2 CHECK stays out of lint:addon-sets"
@@ -114,7 +114,7 @@ if re.search(
     prep,
     flags=re.I,
 ):
-    fail("prepare doc visibly claims an application this lote does not have")
+    fail("prepare doc visibly claims an application this batch does not have")
 for k in (
     "scim_program_present",
     "fiabilidad_program_present",

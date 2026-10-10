@@ -573,7 +573,7 @@ func (m *Module) recordDecision(ctx context.Context, sc store.Scope, d decisionR
 	setIf(rec, colDecPolicyRef, d.policyRef)
 	setIf(rec, colPlanHash, d.planHash)
 	setIf(rec, colApprovalRef, d.approvalRef)
-	setIf(rec, colDispatchRef, d.dispatchRef)
+	setIf(rec, colDispatchRef, ledgerDispatchRef(d.dispatchRef))
 	if d.detail != "" {
 		rec[colDetailHash] = hashHex(d.detail)
 	}
@@ -582,6 +582,18 @@ func (m *Module) recordDecision(ctx context.Context, sc store.Scope, d decisionR
 	}
 	_, err = repo.Create(ctx, rec)
 	return err
+}
+
+// ledgerDispatchRef keeps connection credentials out of retained evidence and
+// read projections of older rows. Plain provider handles keep their value.
+func ledgerDispatchRef(ref string) string {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal([]byte(ref), &fields) == nil {
+		if _, credential := fields["credential"]; credential {
+			return "sha256:" + hashHex(ref)
+		}
+	}
+	return ref
 }
 
 // recordBlocked records a denied open to the append-only ledger in its own

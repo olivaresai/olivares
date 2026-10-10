@@ -74,6 +74,9 @@ export interface RunDTO {
    * ran in the ENGINE's own working directory and nothing on any surface said so.
    */
   workspace_path?: string
+  /** The branch of the session's own git worktree, when it was launched with the
+   * "new worktree" option; absent for a session that works in its folder directly. */
+  worktree_branch?: string
   /** The workspace template this run was last launched under, if any.*/
   template_id?: string
   /** The vault secrets this session receives as environment variables, by name. */
@@ -153,6 +156,20 @@ export interface RunDTO {
   /** The readiness the PROVIDER itself reported, separate from process,
    * conversation and turn state. A home path is not proof of an account. */
   provider_auth_state?: 'unknown' | 'required' | 'ready' | (string & {})
+  /** The AI tools instance (GET /agenttools/providers) whose login this run uses,
+   * when it runs on the organization's own login of its tool ("claude/olivares"). */
+  provider_instance?: string
+  /** The session's mode as the TOOL last reported it (Claude Code's permission mode;
+   * Codex's approval policy and sandbox), beside the `permission_mode` the launch
+   * asked for. Absent until the tool says. */
+  tool_mode?: string
+  /** What this session's turns metered, summed over its launches. ABSENT means the
+   * tool reported nothing, which is unknown, never zero; a cost is the tool's own
+   * figure or the list price of a turn it did not price: an estimate. */
+  input_tokens?: number
+  output_tokens?: number
+  cost_micro_usd?: number
+  usage_model_ref?: string
   /** The opaque id of the plane's MANAGED live row for this run, present once the
    * bridge proved the run owns its provider id. A profiled run is joined to its
    * session by THIS, never by the bare `claude_session_id` two homes may share. */
@@ -165,6 +182,9 @@ export interface RunDTO {
  * homes are on the admin-only configuration read. */
 export type ProviderAccentName = 'orange' | 'green' | 'amber' | 'red' | 'blue'
 export interface ProviderAccountMetadataPatch {
+  /** The account's name (lowercase letters, digits and dashes). Absent keeps it. An engine
+   * that does not know the field refuses (400 or 422) or ignores it. */
+  name?: string
   display_name?: string
   accent?: ProviderAccentName | ''
 }
@@ -194,10 +214,13 @@ export interface ProviderProfileDTO {
    * are distinct authorizations with no fallback; absent authorizes neither. */
   auth_source?: 'provider_account_home' | 'managed_injection' | (string & {})
   /** The registered PROVIDER this profile's managed launches resolve their
-   * credential from. Absent means none is named, and the host's own credential
-   * variables decide — exactly the behaviour every profile had before v26.10. It is a
-   * reference: no key, no hint, no endpoint travels with it. */
+   * credential from. Absent binds no registered provider; auth_source still governs
+   * launch authentication. It is a reference: no key, no hint, no endpoint travels
+   * with it. */
   provider_record_ref?: string
+  /** The name of a profile that is an account (`claude`, `claude-b`). Absent on the default
+   * login, which has no name, and on an engine that does not give names yet. */
+  account_name?: string
   session_work_grant?: SessionWorkGrantDTO | null
   created_at?: string
   updated_at?: string
@@ -262,6 +285,9 @@ export interface ResolveProviderSource {
   provider_ref: string
   kind: string
   display_name?: string
+  default_model?: string
+  /** The models the key's last connection test listed: what a session may pick. */
+  models?: string[]
 }
 
 /** GET /provider-profiles/resolve: what a new session of a tool would run on —
@@ -271,6 +297,23 @@ export interface ResolveProviderSource {
 export interface ProfilePreviewDTO {
   reason: 'own_login' | 'api_key'
   provider?: ResolveProviderSource
+  /** The tool cannot start on this key without a model, its own default included. Absent on
+   * an engine that does not say. */
+  model_required?: boolean
+}
+
+/** GET /provider-profiles/readiness: whether a new session can start on each tool the
+ * engine drives. A tool that cannot carries a stable `code` and the one sentence that
+ * says why (`message`); a key the provider refused at its last test is `key_refused`,
+ * with the key in `provider`. */
+export interface ToolReadinessDTO {
+  driver: string
+  ready: boolean
+  reason?: 'own_login' | 'api_key'
+  provider?: ResolveProviderSource
+  model_required?: boolean
+  code?: string
+  message?: string
 }
 
 /** POST /provider-profiles/resolve: the same answer, as the profile the session
@@ -395,10 +438,18 @@ export interface CreateRunRequest {
   transport: Transport
   permission_mode: PermissionMode | string
   effort: string
-  model: string
+  model?: string
   workspace_ref: string
   isolation: Isolation
   env_allow: string[]
+  /** Opt in to a git worktree and branch of the session's own, made from the
+   * workspace's repository. Sent only when chosen: absent keeps the session in the
+   * workspace folder itself. */
+  worktree?: boolean
+  /** With `worktree`: start the worktree at this commit id or local branch of the
+   * workspace's repository instead of its current commit (the work a handoff names).
+   * Sent only when a handoff's start was chosen. */
+  worktree_from?: string
   /** The workspace template whose terms GOVERN this launch. The server resolves
    * it, merges its terms over the fields above BEFORE the governance gates, and writes
    * the result into the child's argv — so the restriction holds for a caller that never
@@ -432,6 +483,9 @@ export interface WorkspaceDTO {
   max_read_bytes: number
   dlp_mode: 'label' | 'deny' | 'off' | string
   state: 'active' | 'disabled' | string
+  /** Host folders a session in this workspace may read and never change. The engine canonicalizes
+   * and checks them; an engine from before HU2-21 omits the field. */
+  read_only_folders?: string[]
   created_at?: string
   updated_at?: string
 }
@@ -446,6 +500,10 @@ export interface CreateWorkspaceRequest {
   max_read_bytes: number
   dlp_mode: 'label' | 'deny' | 'off'
 }
+
+/** The engine's folder default for an empty dlp_mode (modules/sessions/workspace.go). Every
+ * console path that registers a folder starts from it, so the same folder gets the same approvals. */
+export const DEFAULT_DLP_MODE: CreateWorkspaceRequest['dlp_mode'] = 'off'
 
 /** One DLP sensitivity label on a read (the class/rule/severity — NEVER the matched value). */
 export interface SensitivityHit {
@@ -546,4 +604,44 @@ export interface RunChangedFileDTO {
   text: string
   binary: boolean
   truncated: boolean
+}
+
+export type WorktreeDiffStatus = 'added' | 'modified' | 'deleted'
+
+/** GET /v1/m/sessions/runs/{ref}/diff: the paths the session's worktree branch changed
+ * since it left the workspace's current commit (committed work only). `base` and `head`
+ * are full commit ids. */
+export interface RunWorktreeDiffDTO {
+  branch: string
+  base: string
+  head: string
+  files: { path: string; status: WorktreeDiffStatus }[]
+  truncated: boolean
+}
+
+/** GET /v1/m/sessions/runs/{ref}/diff/file?path=: one path at the base and at the
+ * branch tip; `original` or `modified` is empty where the file does not exist. */
+export interface RunWorktreeDiffFileDTO {
+  path: string
+  status: WorktreeDiffStatus
+  original: string
+  modified: string
+  binary: boolean
+  truncated: boolean
+}
+export interface RunGitStatusDTO {
+  branch: string
+  branches: string[]
+  files: { path: string; index: string; worktree: string }[]
+  truncated: boolean
+  writable: boolean
+}
+
+export type RunGitAction = 'stage' | 'unstage' | 'commit' | 'branch'
+export interface RunGitRequest {
+  paths?: string[]
+  message?: string
+  name?: string
+  create?: boolean
+  work_lease_fence?: number
 }

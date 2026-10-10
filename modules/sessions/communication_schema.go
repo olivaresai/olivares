@@ -779,7 +779,7 @@ func (m *Module) registerCommunicationSchema(reg store.ExtensionRegistry) error 
 		},
 		{
 			Kind: communicationGuardKind, Table: communicationGuardTable, RetainOnTenantDrop: true,
-			WorkspaceLineage: hiddenWorkspaceLineage,
+			WorkspaceLineage: hiddenWorkspaceLineage, Internal: true,
 			Fields: communicationFields(
 				model.FieldSpec{Name: colCommGuardKind, Kind: model.KindText, Principal: model.None("a communication guard kind, a closed set: communication_state.go:173-175, communication_state.go:2209")},
 				model.FieldSpec{Name: colCommNextSeq, Kind: model.KindInt},
@@ -1410,6 +1410,8 @@ var (
 			model.Leaf("summary", pdeclNoneContentProse),
 			model.Leaf("next_action", pdeclNoneContentProse),
 			model.Leaf("risk", pdeclNoneContentProse),
+			model.Leaf("branch", model.None("a git branch name the sender wrote, checked only for shape and never resolved to an account: communication_state.go:1079")),
+			model.Leaf("sha", model.None("a full git object id the sender wrote, checked only for shape and never resolved to an account: communication_state.go:1080")),
 			pdeclContentReference,
 		),
 	}

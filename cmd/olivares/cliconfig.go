@@ -15,6 +15,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/olivaresai/olivares/core/envconfig"
 )
 
 const cliConfigOverrideEnv = "OLIVARES_CLI_CONFIG"
@@ -62,7 +64,7 @@ type cliResolutionOptions struct {
 	// context. A command against an unauthenticated endpoint (status → public
 	// GET /status) must set it: otherwise the active context's bearer token
 	// rides along to whatever --server the operator pointed at — a credential
-	// leak to an arbitrary, possibly untrusted host (adversarial review).
+	// leak to an arbitrary, possibly untrusted host.
 	SkipCredentials bool
 }
 
@@ -80,7 +82,7 @@ type cliResolvedConfig struct {
 // configuration. os.UserConfigDir honors XDG_CONFIG_HOME on Unix. Tests and
 // hermetic automation may override the final path with OLIVARES_CLI_CONFIG.
 func cliConfigPath() (string, error) {
-	if override := strings.TrimSpace(os.Getenv(cliConfigOverrideEnv)); override != "" {
+	if override := strings.TrimSpace(envconfig.Get(cliConfigOverrideEnv)); override != "" {
 		return filepath.Clean(override), nil
 	}
 	base, err := os.UserConfigDir()
@@ -159,8 +161,8 @@ func readCLIConfig(path string) (cliConfig, error) {
 // file had been loosened.
 func writeCLIConfig(path string, cfg cliConfig) error {
 	// An empty path reaches here when loadCLIConfig degraded (no $HOME and no
-	// $XDG_CONFIG_HOME) and the caller then tried to save. Measured without
-	// this guard: filepath.Dir("") is ".", so MkdirAll and CreateTemp succeed
+	// $XDG_CONFIG_HOME) and the caller then tried to save. Without this guard
+	// filepath.Dir("") is ".", so MkdirAll and CreateTemp succeed
 	// and a temp file CARRYING THE BEARER TOKEN is created in the operator's
 	// working directory; os.Rename to "" then fails, the deferred cleanup
 	// removes it, and `olivares auth login` reports
@@ -289,11 +291,11 @@ func resolveCLIConfig(opts cliResolutionOptions) (cliResolvedConfig, error) {
 	resolved := cliResolvedConfig{
 		ContextName: cfg.CurrentContext,
 		ConfigPath:  path,
-		Server:      resolveCLIValue(opts.Server, opts.ServerExplicit, os.Getenv("OLIVARES_SERVER_URL"), active.Server),
+		Server:      resolveCLIValue(opts.Server, opts.ServerExplicit, envconfig.Get("OLIVARES_SERVER_URL"), active.Server),
 	}
 	if !opts.SkipCredentials {
-		resolved.Token = resolveCLIValue(opts.Token, opts.TokenExplicit, os.Getenv("OLIVARES_TOKEN"), active.Token)
-		resolved.Tenant = resolveCLIValue(opts.Tenant, opts.TenantExplicit, os.Getenv("OLIVARES_TENANT"), active.Tenant)
+		resolved.Token = resolveCLIValue(opts.Token, opts.TokenExplicit, envconfig.Get("OLIVARES_TOKEN"), active.Token)
+		resolved.Tenant = resolveCLIValue(opts.Tenant, opts.TenantExplicit, envconfig.Get("OLIVARES_TENANT"), active.Tenant)
 	}
 	if opts.CACertExplicit {
 		resolved.CACert = opts.CACert

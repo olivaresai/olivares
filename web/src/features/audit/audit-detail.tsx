@@ -21,8 +21,12 @@ import {
 } from '@/components/ui/sheet'
 import { HashChip } from '@/features/_intel'
 import { RelTimeLabel } from '@/features/shared'
+import { useMemberNames } from '@/features/shared'
+import { eventLabel } from './event-label'
+import { readableAction } from '@/components/layout/bell-events'
 import type { AuditEventDTO } from '@/lib/api/types'
 import { formatDateTime } from '@/lib/format'
+import { useAuth } from '@/lib/auth/context'
 
 export function AuditEventSheet({
   event,
@@ -34,6 +38,8 @@ export function AuditEventSheet({
   onOpenChange: (open: boolean) => void
 }) {
   const { t } = useTranslation('audit')
+  const members = useMemberNames()
+  const { can } = useAuth()
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -41,17 +47,21 @@ export function AuditEventSheet({
         <SheetHeader>
           <SheetTitle className="flex items-center gap-2">
             <ScrollText className="size-4 text-accent-text" aria-hidden />
-            <span className="font-mono text-heading">
-              {event
-                ? t('detail.seqTitle', { seq: event.seq })
-                : t('detail.title')}
+            <span className="text-heading">
+              {event ? eventLabel(event.action, t) : t('detail.title')}
             </span>
           </SheetTitle>
           {event && (
             <SheetDescription className="flex flex-wrap items-center gap-1.5">
-              <Badge variant="outline" className="font-mono">
-                {event.action}
-              </Badge>
+              <span>
+                {(event.actor_kind === 'user' && can('user:read')
+                  ? members.nameOf(event.actor)
+                  : null) ??
+                  t(`actorKind.${event.actor_kind}`, {
+                    defaultValue: readableAction(event.actor_kind || 'system'),
+                  })}
+              </span>
+              <RelTimeLabel ts={event.occurred_at} />
               {event.sig ? (
                 <Badge variant="success" className="gap-1">
                   <FileCheck2 className="size-3" aria-hidden />
@@ -64,69 +74,82 @@ export function AuditEventSheet({
 
         {event && (
           <>
-            <KvList>
-              <KvRow label={t('detail.seq')} mono>
-                {event.seq}
-              </KvRow>
-              <KvRow label={t('detail.occurred')}>
-                <span
-                  className="inline-flex items-center gap-2"
-                  title={formatDateTime(event.occurred_at)}
-                >
-                  <RelTimeLabel ts={event.occurred_at} />
-                </span>
-              </KvRow>
-              <KvRow label={t('detail.action')} mono>
-                {event.action}
-              </KvRow>
-              <KvRow label={t('detail.actor')} mono align="start">
-                <span className="inline-flex flex-wrap items-center gap-1.5">
-                  {event.actor || t('detail.actorSystem')}
-                  <Badge variant="neutral">
-                    {t(`actorKind.${event.actor_kind}`, {
-                      defaultValue: event.actor_kind || '—',
-                    })}
-                  </Badge>
-                </span>
-              </KvRow>
-              <KvRow label={t('detail.target')} mono align="start">
-                {event.target_id || event.target_kind ? (
-                  <span className="break-all">
-                    {event.target_kind ? `${event.target_kind}:` : ''}
-                    {event.target_id || '—'}
-                  </span>
-                ) : (
-                  <span className="text-muted-foreground">—</span>
-                )}
-              </KvRow>
-              <KvRow label={t('detail.id')} mono align="start">
-                <span className="break-all text-caption">{event.id}</span>
-              </KvRow>
-            </KvList>
-
-            {/* Chain links — the tamper-evidence fingerprints. No payload behind a
-                hash; copying yields the full value (docs/SECURITY-HARDENING.md). */}
-            <section className="mt-4 flex flex-col gap-2">
-              <h3 className="text-body font-semibold text-foreground">
-                {t('detail.chainTitle')}
-              </h3>
-              <KvList>
-                <KvRow label={t('detail.prevHash')}>
-                  <HashChip hash={event.prev_hash} label={t('detail.prev')} />
-                </KvRow>
-                <KvRow label={t('detail.hash')}>
-                  <HashChip hash={event.hash} label={t('detail.this')} />
-                </KvRow>
-                {event.sig && (
-                  <KvRow label={t('detail.sig')}>
-                    <HashChip hash={event.sig} label={t('detail.checkpoint')} />
+            <details className="min-w-0">
+              <summary className="cursor-pointer text-caption text-muted-foreground">
+                {t('detail.details')}
+              </summary>
+              <div className="mt-3">
+                <KvList>
+                  <KvRow label={t('detail.seq')} mono>
+                    {event.seq}
                   </KvRow>
-                )}
-              </KvList>
-              <p className="text-caption text-muted-foreground">
-                {t('detail.chainHint')}
-              </p>
-            </section>
+                  <KvRow label={t('detail.occurred')}>
+                    <span
+                      className="inline-flex items-center gap-2"
+                      title={formatDateTime(event.occurred_at)}
+                    >
+                      <RelTimeLabel ts={event.occurred_at} />
+                    </span>
+                  </KvRow>
+                  <KvRow label={t('detail.action')} mono>
+                    {event.action}
+                  </KvRow>
+                  <KvRow label={t('detail.actor')} mono align="start">
+                    <span className="inline-flex flex-wrap items-center gap-1.5">
+                      {event.actor || t('detail.actorSystem')}
+                      <Badge variant="neutral">
+                        {t(`actorKind.${event.actor_kind}`, {
+                          defaultValue: event.actor_kind || '—',
+                        })}
+                      </Badge>
+                    </span>
+                  </KvRow>
+                  <KvRow label={t('detail.target')} mono align="start">
+                    {event.target_id || event.target_kind ? (
+                      <span className="break-all">
+                        {event.target_kind ? `${event.target_kind}:` : ''}
+                        {event.target_id || '—'}
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground">—</span>
+                    )}
+                  </KvRow>
+                  <KvRow label={t('detail.id')} mono align="start">
+                    <span className="break-all text-caption">{event.id}</span>
+                  </KvRow>
+                </KvList>
+
+                {/* Chain links — the tamper-evidence fingerprints. No payload behind a
+                hash; copying yields the full value (docs/SECURITY-HARDENING.md). */}
+                <section className="mt-4 flex flex-col gap-2">
+                  <h3 className="text-body font-semibold text-foreground">
+                    {t('detail.chainTitle')}
+                  </h3>
+                  <KvList>
+                    <KvRow label={t('detail.prevHash')}>
+                      <HashChip
+                        hash={event.prev_hash}
+                        label={t('detail.prev')}
+                      />
+                    </KvRow>
+                    <KvRow label={t('detail.hash')}>
+                      <HashChip hash={event.hash} label={t('detail.this')} />
+                    </KvRow>
+                    {event.sig && (
+                      <KvRow label={t('detail.sig')}>
+                        <HashChip
+                          hash={event.sig}
+                          label={t('detail.checkpoint')}
+                        />
+                      </KvRow>
+                    )}
+                  </KvList>
+                  <p className="text-caption text-muted-foreground">
+                    {t('detail.chainHint')}
+                  </p>
+                </section>
+              </div>
+            </details>
           </>
         )}
       </SheetContent>

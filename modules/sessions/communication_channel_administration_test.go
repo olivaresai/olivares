@@ -410,7 +410,7 @@ func seedUnrelatedActiveChannelGrants(
 	count int,
 ) int {
 	t.Helper()
-	if err := fx.m.data.Mutate(context.Background(), fx.tenant, func(sc store.Scope) error {
+	if err := fx.m.Data.Mutate(context.Background(), fx.tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(channelGrantKind)
 		if err != nil {
 			return err

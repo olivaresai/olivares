@@ -1,4 +1,10 @@
 {
+  "edition": {
+    "viewPolicy": "Ver política",
+    "editingRequiresBusiness": "Editar políticas, roles y permisos personalizados requiere Business.",
+    "disablePolicy": "Desactivar política",
+    "disablePolicyDescription": "La política creada deja de aplicarse. Su historial y las demás políticas aplicadas se conservan."
+  },
   "errors": {
     "generic": "Algo salió mal"
   },
@@ -214,8 +220,8 @@
       "sessionResumed": "{{actor}} reanudó una sesión",
       "sessionResumed_you": "Reanudaste una sesión",
       "sessionFailed": "Una sesión no pudo empezar",
-      "approvalRequested": "La sesión de {{actor}} pide aprobación",
-      "approvalRequested_you": "Tu sesión pide aprobación",
+      "approvalRequested": "{{actor}} ha solicitado aprobación",
+      "approvalRequested_you": "Has solicitado aprobación",
       "killswitchEngaged": "{{actor}} activó el interruptor de emergencia",
       "killswitchEngaged_you": "Activaste el interruptor de emergencia",
       "killswitchReleased": "{{actor}} desactivó el interruptor de emergencia",
@@ -228,14 +234,37 @@
       "workspaceCreated": "{{actor}} creó un espacio de trabajo",
       "workspaceCreated_you": "Creaste un espacio de trabajo",
       "workspaceUpdated": "{{actor}} actualizó un espacio de trabajo",
-      "workspaceUpdated_you": "Actualizaste un espacio de trabajo"
+      "workspaceUpdated_you": "Actualizaste un espacio de trabajo",
+      "signedIn": "{{actor}} ha iniciado sesión",
+      "workCreated": "{{actor}} ha creado un elemento de trabajo",
+      "workReady": "{{actor}} ha marcado un elemento de trabajo como listo",
+      "workCompleted": "{{actor}} ha completado un elemento de trabajo",
+      "workBlocked": "{{actor}} ha bloqueado un elemento de trabajo",
+      "workCanceled": "{{actor}} ha cancelado un elemento de trabajo",
+      "approvalDecided": "{{actor}} ha registrado una decisión de aprobación",
+      "approvalCanceled": "{{actor}} ha cancelado una solicitud de aprobación",
+      "policyCreated": "{{actor}} ha creado una política",
+      "policyUpdated": "{{actor}} ha actualizado una política",
+      "policyDeleted": "{{actor}} ha eliminado una política",
+      "signedIn_you": "Has iniciado sesión",
+      "workCreated_you": "Has creado un elemento de trabajo",
+      "workReady_you": "Has marcado un elemento de trabajo como listo",
+      "workCompleted_you": "Has completado un elemento de trabajo",
+      "workBlocked_you": "Has bloqueado un elemento de trabajo",
+      "workCanceled_you": "Has cancelado un elemento de trabajo",
+      "approvalDecided_you": "Has registrado una decisión de aprobación",
+      "approvalCanceled_you": "Has cancelado una solicitud de aprobación",
+      "policyCreated_you": "Has creado una política",
+      "policyUpdated_you": "Has actualizado una política",
+      "policyDeleted_you": "Has eliminado una política"
     },
     "actors": {
       "you": "Tú",
       "member": "Un miembro",
       "token": "Un token de API",
       "system": "Olivares"
-    }
+    },
+    "includeInternal": "Incluir registros internos"
   },
   "passphrase": {
     "tooShort": "La frase de acceso debe tener al menos {{min}} caracteres",

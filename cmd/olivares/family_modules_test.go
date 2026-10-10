@@ -26,10 +26,10 @@ import (
 // modules for the test, as the commercial build does from its catalog.
 func withAddonModules(t *testing.T, byAddon map[string][]string) {
 	t.Helper()
-	prev := activationModulesOf
-	activationModulesOf = func(addon string) []string { return byAddon[addon] }
+	prev := thisEdition.activationModules
+	thisEdition.activationModules = func(addon string) []string { return byAddon[addon] }
 	t.Cleanup(func() {
-		activationModulesOf = prev
+		thisEdition.activationModules = prev
 		setActivationOverlayForTest(nil)
 	})
 }
@@ -147,6 +147,7 @@ func TestFamilyRestartChild(t *testing.T) {
 		t.Fatalf("start %s = %v, want serve without a second restart", phase, err)
 	}
 	t.Cleanup(func() { _ = eng.Close() })
+	prepareCompliancePacksTestEntitlement(t)
 	var tenant string
 	if phase != "before-enable" {
 		raw, err := os.ReadFile(tenantFile)
@@ -172,8 +173,12 @@ func TestFamilyRestartChild(t *testing.T) {
 			t.Fatal(err)
 		}
 	case "after-enable":
-		if code, _, raw := reports(); code != http.StatusOK {
-			t.Fatalf("reporting after enable and restart = %d %s, want 200", code, raw)
+		want := http.StatusOK
+		if thisEdition.name == "community" {
+			want = http.StatusNotImplemented
+		}
+		if code, _, raw := reports(); code != want {
+			t.Fatalf("reporting after enable and restart = %d %s, want %d", code, raw, want)
 		}
 		code, mods, raw := doDemoViewJSON(t, h, http.MethodGet, "/v1/console/modules", admin, tenant, nil)
 		if code != http.StatusOK {
@@ -208,7 +213,9 @@ func TestDisablingAFamilyKeepsItsModulesThatHoldData(t *testing.T) {
 	}{
 		{"no data", usedReturns(), nil},
 		{"reporting holds data", usedReturns("reporting", "finops"), []string{"reporting"}},
-		{"usage unreadable", func(context.Context) ([]string, error) { return nil, errors.New("census unavailable") }, []string{"compliance", "reporting"}},
+		{"accessmap holds data", usedReturns("accessmap", "finops"), []string{"accessmap"}},
+		// Reporting runs compliance, which in turn runs accessmap: retain all three when usage is unknown.
+		{"usage unreadable", func(context.Context) ([]string, error) { return nil, errors.New("census unavailable") }, []string{"accessmap", "compliance", "reporting"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			p := settingsOnBareStore(t)

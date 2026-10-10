@@ -32,7 +32,7 @@ ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 . "$ROOT/scripts/lib/exec-workdir.sh" || {
 	# Sin la lib el guion esta CIEGO, y eso es 2 — no el error crudo del shell. La bateria
 	# lo comprueba copiando este fichero solo a un arbol vacio.
-	echo "check-ci-ports: NO HE PODIDO MIRAR: falta scripts/lib/exec-workdir.sh" >&2
+	echo "check-ci-ports: COULD NOT CHECK: missing scripts/lib/exec-workdir.sh" >&2
 	exit 2
 }
 export CI_PORTS_ROOT="${CI_PORTS_ROOT:-$ROOT}"
@@ -47,8 +47,8 @@ export CI_PORTS_ROOT="${CI_PORTS_ROOT:-$ROOT}"
 # del llamante, porque la raíz se resuelve desde `$0`— y aquí queda reproducido en los dos
 # sentidos: sin guarda rc=1 con el error del shell; con ella, rc=2 nombrando lo que falta.
 if ! cd "$ROOT/cmd/olivares" 2>/dev/null; then
-	echo "ci-ports: NO HE PODIDO MIRAR: falta $ROOT/cmd/olivares, así que no puedo construir la" >&2
-	echo "ci-ports: herramienta que juzga. Esto no es un árbol limpio: es un árbol que no he leído." >&2
+	echo "ci-ports: COULD NOT CHECK: missing $ROOT/cmd/olivares, so cannot build the" >&2
+	echo "ci-ports: checker. The tree could not be read and cannot be reported as clean." >&2
 	exit 2
 fi
 # ⛔ `go run` COLAPSA EL CÓDIGO DE SALIDA DE LA HERRAMIENTA, y con él la TERCERA RESPUESTA.
@@ -62,14 +62,14 @@ fi
 # contenedor está montado noexec (medido: execve da 126 allí y 7 en `$HOME`, `$HOME/.cache` y el
 # propio repo). Si no se puede compilar o ejecutar, el veredicto es 2 — no un verde.
 BINDIR="$(olivares_pick_exec_workdir gatebin)" || {
-	echo "check-ci-ports: NO HE PODIDO MIRAR: no puedo crear el directorio del binario" >&2
+	echo "check-ci-ports: COULD NOT CHECK: cannot create the binary directory" >&2
 	exit 2
 }
 cleanup() { rm -rf "$BINDIR"; }
 trap cleanup EXIT HUP INT TERM
 
 if ! go build -o "$BINDIR/checkciports" ./tools/checkciports; then
-	echo "check-ci-ports: NO HE PODIDO MIRAR: la herramienta no compila" >&2
+	echo "check-ci-ports: COULD NOT CHECK: the checker does not compile" >&2
 	exit 2
 fi
 "$BINDIR/checkciports"

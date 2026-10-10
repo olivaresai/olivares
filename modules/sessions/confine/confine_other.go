@@ -7,7 +7,7 @@
 package confine
 
 import (
-	"errors"
+	coreconfine "github.com/olivaresai/olivares/core/runtime/confine"
 	"runtime"
 )
 
@@ -16,8 +16,8 @@ func probe() State {
 		" a session runs as the engine user and can read what that user can"}
 }
 
-func restrictAndExec(Policy, []string) error {
-	return errors.New(probe().Reason)
+func sessionPolicy(p Policy, _ string) coreconfine.Policy {
+	return coreconfine.Policy{ReadWrite: p.ReadWrite, ReadOnly: p.ReadOnly, Protect: p.Protect, Sealed: p.Sealed}
 }
 
 // defaultWritable is empty: this build grants nothing by default.

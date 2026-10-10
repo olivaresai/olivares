@@ -5,10 +5,9 @@ package a2a
 
 import (
 	"context"
+	"github.com/olivaresai/olivares/sdk"
 	"net/http"
 	"time"
-
-	"github.com/olivaresai/olivares/sdk"
 )
 
 // Source is the A2A observation SourceConnector. It is a batch source: each Gather

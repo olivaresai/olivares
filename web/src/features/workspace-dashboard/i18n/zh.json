@@ -1,11 +1,13 @@
 {
   "truncation": {
     "label": "已加载 {{n}} 行；还有更多",
-    "hint": "此工作区预览有上限。请使用“查看全部”检查更广的清单。"
+    "hint": "此工作区预览有上限。请使用“查看全部”检查更广的清单。",
+    "hintCapped": "此工作区预览有上限。"
   },
   "title": "工作区概览",
   "selectTitle": "未选择工作区",
   "selectPrompt": "在导航栏中选择一个工作区以打开此概览，或前往租户范围的清单。",
+  "selectPromptWorkspaceOnly": "在导航栏中选择一个工作区以打开此概览。",
   "viewInventory": "打开清单",
   "agents": "代理",
   "sessions": "会话",
@@ -24,5 +26,12 @@
   "viewAll": "查看全部",
   "defaultBadge": "默认",
   "created": "创建时间",
-  "lastUpdated": "最近更新"
+  "lastUpdated": "最近更新",
+  "contents": {
+    "title": "工作区内容",
+    "count": "数量",
+    "loading": "正在读取工作区内容…",
+    "empty": "此工作区尚无任何内容。",
+    "unavailable": "工作区内容不可用。"
+  }
 }

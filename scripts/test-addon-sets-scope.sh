@@ -52,33 +52,28 @@ PUBLIC_ENTRIES="$(entries_of lint:addon-sets:public)" || cannot "lint:addon-sets
 PRIVATE_COUNT="$(entries_of lint:addon-sets:legs | wc -l)" || cannot "lint:addon-sets:legs is not in Taskfile.yml"
 PRIVATE_COUNT="$(printf '%s' "${PRIVATE_COUNT}" | tr -d ' ')"
 
-# ⛔ THE EIGHT ARE NAMED HERE, and that is deliberate. Root separated them from the 15 entries
-# that already answer for themselves; if a future edit drops one, the leg would go green in the
-# export having checked less, and nothing else in the tree would notice. This list is the
-# expectation, so dropping one is a red and adding one is a red that says "update the battery".
+# Pin the public command sequence so edition routing cannot silently drop checks.
 EXPECTED_PUBLIC="$(cat <<'EOF'
 bash scripts/check-c03-grants-seam.sh
 bash scripts/check-json-decoders.sh
 OLIVARES_CONFIG_DOC_FLOOR=${OLIVARES_CONFIG_DOC_FLOOR:-53} bash scripts/check-config-coverage.sh
 OLIVARES_CLI_DOC_FLOOR=${OLIVARES_CLI_DOC_FLOOR:-321} bash scripts/check-cli-coverage.sh
 bash scripts/check-caep-inbound.sh
-bash scripts/check-aws-estate.sh
 bash scripts/check-c03-02-sign-features.sh
-bash scripts/check-aws-estate.sh
 EOF
 )"
 if [ "${PUBLIC_ENTRIES}" = "${EXPECTED_PUBLIC}" ]; then
-	say_ok "CASE 0: the eight applicable entries are intact, in order" "8 entries"
+	say_ok "CASE 0: the six applicable entries are intact, in order" "6 entries"
 else
-	say_fail "CASE 0: the eight applicable entries are intact, in order" "the 8 named here" "a different list"
+	say_fail "CASE 0: the six applicable entries are intact, in order" "the 6 named here" "a different list"
 	diff <(printf '%s\n' "${EXPECTED_PUBLIC}") <(printf '%s\n' "${PUBLIC_ENTRIES}") >&2 || true
 fi
 
-# The private sequence must not shrink: routing must never become a filter on the full source tree.
-if [ "${PRIVATE_COUNT}" = "221" ]; then
-	say_ok "CASE 0b: the private sequence is still 221 entries" "221"
+# Edition routing preserves the complete sequence after removal of hosted-service checks.
+if [ "${PRIVATE_COUNT}" = "164" ]; then
+	say_ok "CASE 0b: the private sequence is still 164 entries" "164"
 else
-	say_fail "CASE 0b: the private sequence is still 221 entries" "221" "${PRIVATE_COUNT}"
+	say_fail "CASE 0b: the private sequence is still 164 entries" "164" "${PRIVATE_COUNT}"
 fi
 
 # Every applicable entry must ALSO be in the private sequence: the public task is a
@@ -106,7 +101,7 @@ EOF
 if [ -z "${_missing}" ]; then
 	say_ok "CASE 0c: every applicable entry is also in the private sequence" "subsequence"
 else
-	say_fail "CASE 0c: every applicable entry is also in the private sequence" "all 8 present" "missing: ${_missing}"
+	say_fail "CASE 0c: every applicable entry is also in the private sequence" "all 6 present" "missing: ${_missing}"
 fi
 
 # ── layer 2 and 3: real trees, the real dispatcher, real source ──────────────────────────────
@@ -116,6 +111,7 @@ GRANTS_SOURCES=(
 	cmd/olivares/license_holder.go
 	cmd/olivares/boot.go
 	cmd/olivares/wire_noenterprise.go
+	cmd/olivares/edition_ports.go
 	cmd/olivares/seatcapwire.go
 )
 FIXTURE_SCRIPTS=(
@@ -135,7 +131,7 @@ MARKER_SENTENCE="$(bash scripts/hub-leg.sh --marker-signature)" || cannot "hub-l
 
 # A fixture is a REAL tree with the real dispatcher, the real classifier, the real grants gate
 # and the real four Go files it greps. The private branch writes a witness instead of running
-# 221 scripts: what this layer measures is WHICH branch ran, and a witness says that exactly.
+# 164 scripts: what this layer measures is WHICH branch ran, and a witness says that exactly.
 build_fixture() {
 	local dir="$1" marker_mode="$2" sentinel="$3"
 	rm -rf "${dir}"
@@ -192,9 +188,9 @@ run_case() {
 	esac
 	if [ -n "${mutate}" ]; then
 		# A REAL defect in REAL public source: the binding the grants seam exists to require.
-		command sed -i 's/bindEnterpriseEntitlement(licHolder\.grants, licHolder)/bindEnterpriseEntitlement(nil, licHolder)/' \
+		command sed -i 's/thisEdition\.seatPolicy(licHolder, crlViewFromDataDir(b.cfg.DataDir))/thisEdition.seatPolicy(nil, crlViewFromDataDir(b.cfg.DataDir))/' \
 			"${dir}/cmd/olivares/boot.go" || cannot "could not mutate boot.go in '${name}'"
-		command grep -q 'bindEnterpriseEntitlement(nil, licHolder)' "${dir}/cmd/olivares/boot.go" \
+		command grep -q 'thisEdition.seatPolicy(nil, crlViewFromDataDir(b.cfg.DataDir))' "${dir}/cmd/olivares/boot.go" \
 			|| cannot "the mutation did not apply in '${name}'; the seam's source moved"
 	fi
 	LAST_DIR="${dir}"; LAST_RC=0

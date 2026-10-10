@@ -13,6 +13,13 @@ sidebar:
 
 ## 1. 拉取漂移
 
+全新安装默认关闭 `accessmap`。请以管理员身份在
+**Settings > Edition & modules** 中启用 `accessmap`，并保留其他已选模块。
+使用 CLI 时，先通过 `olivares login` 以管理员身份登录此引擎，
+然后运行 `olivares modules on accessmap`。每次都要等待引擎重启完成后再继续；
+运行中的会话会停止，可以恢复。否则，这些 API 调用会返回
+`404 module_not_enabled`。
+
 ```bash
 curl -ks "$BASE/v1/m/accessmap/drift" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool

@@ -25,7 +25,7 @@ BOOK="${OLIVARES_ECO08_BOOK:-sessions/campaign-prompts/OPS-CEREMONIA-TESTIGOS-20
 
 grep -q 'NOT EXECUTED' "$DOC" || fail "$DOC lost NOT EXECUTED"
 if grep -qiE 'ceremony executed|apply verified|six GET succeeded' "$DOC"; then
-	fail "$DOC claims a reading this lote does not have"
+	fail "$DOC claims a reading this batch does not have"
 fi
 grep -q 'UNVERIFIED' "$CANON" || fail "canon lost UNVERIFIED for the scheduled apply"
 grep -q '2026-08-31' "$BOOK" || fail "runbook lost the witness date"

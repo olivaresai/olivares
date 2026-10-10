@@ -70,7 +70,7 @@ RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 DIR="${1:-$RAIZ/.github/workflows}"
 
 if [ ! -d "$DIR" ]; then
-	printf 'check-ci-sibling-legs: ⛔ NO HE PODIDO MIRAR: no existe el directorio %s\n' "$DIR" >&2
+	printf 'check-ci-sibling-legs: ⛔ COULD NOT CHECK: missing directory %s\n' "$DIR" >&2
 	exit 2
 fi
 
@@ -81,7 +81,7 @@ ilegibles=0
 for wf in "$DIR"/*.yml "$DIR"/*.yaml; do
 	[ -e "$wf" ] || continue
 	if [ ! -r "$wf" ]; then
-		printf 'check-ci-sibling-legs: ⛔ NO HE PODIDO MIRAR: no puedo leer %s\n' "$wf" >&2
+		printf 'check-ci-sibling-legs: ⛔ COULD NOT CHECK: cannot read %s\n' "$wf" >&2
 		ilegibles=$((ilegibles + 1))
 		continue
 	fi
@@ -124,8 +124,8 @@ for wf in "$DIR"/*.yml "$DIR"/*.yaml; do
 		while IFS=$'\t' read -r f j n; do
 			[ -n "$f" ] || continue
 			hallazgos=$((hallazgos + 1))
-			printf 'check-ci-sibling-legs: ⛔ %s · job %s · «%s» es una pata hermana SIN `!cancelled()`:\n' "$f" "$j" "$n"
-			printf '    un rojo en la pata anterior la salta en silencio, y el job ya está rojo por arriba.\n'
+			printf 'check-ci-sibling-legs: ⛔ %s · job %s · «%s» is a sibling step without `!cancelled()`:\n' "$f" "$j" "$n"
+			printf '    A failure in an earlier step silently skips this one, leaving only the earlier job failure.\n'
 		done <<-EOF
 			$salida
 		EOF
@@ -133,14 +133,14 @@ for wf in "$DIR"/*.yml "$DIR"/*.yaml; do
 done
 
 if [ "$ilegibles" -gt 0 ]; then
-	printf 'check-ci-sibling-legs: ⛔ NO HE PODIDO MIRAR: %s fichero(s) ilegibles de %s\n' "$ilegibles" "$((mirados + ilegibles))" >&2
+	printf 'check-ci-sibling-legs: ⛔ COULD NOT CHECK: %s unreadable file(s) out of %s\n' "$ilegibles" "$((mirados + ilegibles))" >&2
 	exit 2
 fi
 
 if [ "$hallazgos" -gt 0 ]; then
-	printf 'check-ci-sibling-legs: %s pata(s) hermana(s) sin guarda en %s workflow(s).\n' "$hallazgos" "$mirados" >&2
+	printf 'check-ci-sibling-legs: %s sibling step(s) without guards in %s workflow(s).\n' "$hallazgos" "$mirados" >&2
 	exit 1
 fi
 
-printf 'check-ci-sibling-legs: limpio — %s workflow(s) mirados, ninguna pata hermana sin guarda.\n' "$mirados"
+printf 'check-ci-sibling-legs: CLEAN — %s workflow(s) checked, no sibling steps without guards.\n' "$mirados"
 exit 0

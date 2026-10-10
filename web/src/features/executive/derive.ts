@@ -14,13 +14,7 @@
 // `approximate`/`opaque` access coverage is surfaced as a limit; compliance keeps its
 // disclaimer and never reads as "compliant". Pure + input-tolerant so the view can gate
 // each pillar by RBAC and pass only what the role may read.
-import type {
-  ForecastResponse,
-  SpendBucket,
-  SummaryResponse,
-  TrendResponse,
-} from '@/features/finops/types'
-import type { GovernedModel } from '@/features/models/types'
+
 import type { Finding } from '@/features/security/types'
 import type { Run, RunStatus } from '@/features/redteam/types'
 import type { DiffResponse } from '@/features/access-map/types'
@@ -41,24 +35,6 @@ import { listaRecortada } from '@/features/_intel/notices'
 
 // --- cost (FinOps + Models X) --------------------------------------------
 
-export interface CostKpi {
-  totalMicroUsd: number
-  inputTokens: number
-  outputTokens: number
-  samples: number
-  /** Per-day cost series for a sparkline / area (ascending). */
-  trend: { key: string; cost: number }[]
-  /** Period-over-period change (recent half vs prior half of the trend), or null
-   *  when there is not enough history to be honest about a delta. */
-  deltaPct: number | null
-  projectedMicroUsd: number | null
-  /** The run-rate projection exceeds spend-to-date (heads toward more this period). */
-  projectedOver: boolean
-  activeModels: number | null
-  /** Any contributing aggregate hit the scan ceiling — the figure is a floor. */
-  truncated: boolean
-}
-
 /** Split a trend in two equal halves and compare the sums. A run-rate-free,
  *  honest period delta; null unless both halves carry spend.
  *
@@ -68,56 +44,6 @@ export interface CostKpi {
  *  days). When the count is odd the OLDEST day is dropped rather than shared,
  *  which keeps the window ending at today — the end a reader cares about. For an
  *  even count this is the previous behaviour exactly. */
-export function trendDeltaPct(
-  days: { cost_micro_usd: number }[],
-): number | null {
-  if (days.length < 4) return null
-  const half = Math.floor(days.length / 2)
-  const paired = days.slice(days.length - half * 2)
-  const prior = paired.slice(0, half).reduce((s, d) => s + d.cost_micro_usd, 0)
-  const recent = paired.slice(half).reduce((s, d) => s + d.cost_micro_usd, 0)
-  if (prior <= 0) return null
-  return ((recent - prior) / prior) * 100
-}
-
-export function deriveCost(
-  summary?: SummaryResponse,
-  trend?: TrendResponse,
-  forecast?: ForecastResponse,
-  models?: ListResponse<GovernedModel>,
-): CostKpi | null {
-  if (!summary) return null
-  // Home and FinOps must project the SAME way: both read
-  // `trend_projected_micro_usd` (the trailing-window run-rate). Reading
-  // `projected_micro_usd` here — the legacy naive elapsed-fraction projection —
-  // put two different numbers for the same spend on two screens ($5,151 vs
-  // $5,039 in P's repro), AND made this card's own caption false: it says "at
-  // current run-rate" while the naive field is not the run-rate method.
-  const projectedMicroUsd = forecast?.trend_projected_micro_usd ?? null
-  return {
-    totalMicroUsd: summary.total_micro_usd,
-    inputTokens: summary.input_tokens,
-    outputTokens: summary.output_tokens,
-    samples: summary.samples,
-    trend: (trend?.days ?? []).map((d) => ({
-      key: d.key,
-      cost: d.cost_micro_usd,
-    })),
-    deltaPct: trend ? trendDeltaPct(trend.days) : null,
-    projectedMicroUsd,
-    // The badge compares the SAME field the card displays. Leaving this on the
-    // naive projection would have shown a trend number under a naive
-    // over-budget warning — a partial fix is worse than none here.
-    projectedOver:
-      forecast !== undefined &&
-      forecast.trend_projected_micro_usd > forecast.spend_micro_usd,
-    activeModels: models
-      ? models.items.filter((m) => m.status === 'active').length
-      : null,
-    truncated:
-      !!summary.truncated || !!trend?.truncated || !!forecast?.truncated,
-  }
-}
 
 // --- usage (Inventory + Sessions II) -------------------------------------
 
@@ -262,26 +188,13 @@ function emptySeverity(): Record<Severity, number> {
 }
 
 /** The most recent run by finish time (ties broken by array order). */
-export function latestRun(runs: Run[]): Run | null {
-  let best: Run | null = null
-  for (const r of runs) {
-    if (!best) {
-      best = r
-      continue
-    }
-    const a = Date.parse(r.finished_at ?? '')
-    const b = Date.parse(best.finished_at ?? '')
-    if (!Number.isNaN(a) && (Number.isNaN(b) || a > b)) best = r
-  }
-  return best
-}
 
 export function deriveRisk(
   findings?: ListResponse<Finding>,
-  runs?: ListResponse<Run>,
+  _runs?: ListResponse<Run>,
   drift?: DiffResponse,
 ): RiskKpi | null {
-  if (!findings && !runs && !drift) return null
+  if (!findings && !drift) return null
 
   const bySeverity = emptySeverity()
   let openFindings = 0
@@ -292,9 +205,6 @@ export function deriveRisk(
     const key = (f.severity ?? '').toLowerCase()
     if (key in bySeverity) bySeverity[key as Severity]++
   }
-
-  const run = runs ? latestRun(runs.items) : null
-  const completed = run?.status === 'completed'
 
   const unexpected = drift?.unexpected_accesses ?? []
   const unexpectedPending = unexpected.filter(
@@ -316,9 +226,9 @@ export function deriveRisk(
     openFindings,
     criticalHigh: bySeverity.critical + bySeverity.high,
     robustness: {
-      score: completed ? run!.score : null,
-      status: run?.status ?? null,
-      degraded: run != null && run.status !== 'completed',
+      score: null,
+      status: null,
+      degraded: false,
     },
     drift: {
       unexpectedFirm: (drift?.unexpected_count ?? 0) - unexpectedPending,
@@ -450,8 +360,3 @@ export function deriveHealth(
 // --- shared: ranked spend buckets (org/team/project summaries) ----------------
 
 /** Top-N spend buckets, descending, for a per-dimension leadership breakdown. */
-export function topBuckets(buckets: SpendBucket[], n = 6): SpendBucket[] {
-  return [...buckets]
-    .sort((a, b) => b.cost_micro_usd - a.cost_micro_usd)
-    .slice(0, n)
-}

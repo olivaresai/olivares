@@ -27,8 +27,8 @@ import (
 // The loop is pure cadence + tenant enumeration (a System operation the modules cannot
 // perform); ALL orchestration semantics — which segments, how the object lock is set
 // and verified — live in the closed reconciler behind the longHorizonHold seam. The
-// default build supplies a nil reconciler (wire_noenterprise.go), so newLongHorizonHold
-// returns nil and the loop is never registered: byte-identical open behavior, no rug-pull.
+// default build has no longHorizonHold edition port, so no reconciler exists and the
+// loop is never registered: byte-identical open behavior, no rug-pull.
 //
 // Apply-only by design: the reconciler ADDS object-lock legal holds when a covering hold
 // is active (over-preservation is always the safe direction); it never AUTO-LIFTS — lifting
@@ -48,7 +48,7 @@ const (
 
 // longHorizonHold is the narrow seam the loop drives. The closed
 // enterprise/wormretention orchestrator satisfies it under -tags enterprise; the default
-// build supplies nil (newLongHorizonHold in wire_noenterprise.go).
+// build has no longHorizonHold edition port.
 type longHorizonHold interface {
 	// ReconcileTenant ensures the tenant's archived WORM segments carry an object-lock
 	// legal hold whenever the tenant has an active engine legal hold (apply-only,

@@ -12,7 +12,9 @@ on:
       release_version:
         description: Published community release to qualify (without v)
         required: true
-        default: '26.8.0'
+        # release
+        default: '0.1'
+        # /release
         type: string
 
 permissions:
@@ -60,16 +62,12 @@ jobs:
           RELEASE_VERSION: ${{ inputs.release_version }}
         run: |
           set -euo pipefail
-          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || {
-            echo "::error::release_version must be YY.M or YY.M.N"
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+$ ]] || {
+            echo "::error::release_version must be MAJOR.MINOR"
             exit 2
           }
           release_repo=olivaresai/olivares
-          # BARE CalVer since the 2026-09-29 tag-name correction: the release tag IS the
-          # version, and the signing identity names that exact tag. v-prefixed releases
-          # (v26.8.0, v26.9.0) predate the correction and stay qualifiable by passing their
-          # tag verbatim once this dispatch grows a tag input; the default path serves the
-          # current grammar.
+          # The release version is its bare tag and signing identity.
           tag="${RELEASE_VERSION}"
           dist="${RUNNER_TEMP}/package-release"
           mkdir -p "$dist"
@@ -151,8 +149,19 @@ jobs:
           --assets "${{ steps.release.outputs.dist }}"
           --version "${{ inputs.release_version }}"
 
+      - name: Preserve evidence on the runner
+        if: always()
+        continue-on-error: true
+        uses: ./.github/actions/ci-evidence
+        with:
+          name: TEST-ONLY-package-repositories-${{ inputs.release_version }}
+          path: |
+            ${{ runner.temp }}/package-repository-stable
+            ${{ runner.temp }}/package-repository-security
       - name: upload TEST-ONLY repository evidence (never publish)
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         timeout-minutes: 10
         with:
           name: TEST-ONLY-package-repositories-${{ inputs.release_version }}

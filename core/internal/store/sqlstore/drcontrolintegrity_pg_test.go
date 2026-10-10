@@ -64,7 +64,11 @@ func drExec(t *testing.T, db *sql.DB, stmt string, args ...any) {
 // legacy live-membership/admin premises with actual PG15 syntax.
 func drGrantFixtureMembership(t *testing.T, db *sql.DB, granted, member, options string) {
 	t.Helper()
-	if drMeasuredMajor(t, db) < 16 {
+	drExec(t, db, "GRANT "+quoteIdent(granted)+" TO "+quoteIdent(member)+drFixtureMembershipOptions(drMeasuredMajor(t, db), options))
+}
+
+func drFixtureMembershipOptions(major int, options string) string {
+	if major < 16 {
 		if strings.Contains(options, "ADMIN TRUE") {
 			options = " WITH ADMIN OPTION"
 		} else {
@@ -73,7 +77,7 @@ func drGrantFixtureMembership(t *testing.T, db *sql.DB, granted, member, options
 	} else if options != "" {
 		options = " WITH " + options
 	}
-	drExec(t, db, "GRANT "+quoteIdent(granted)+" TO "+quoteIdent(member)+options)
+	return options
 }
 
 // ── R63 C3: mutating the CLUSTER-GLOBAL application role, and giving it back ──

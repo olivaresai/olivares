@@ -86,7 +86,7 @@ export function BudgetsTile() {
   return (
     <EstateTile
       compact
-      to="/finops"
+      to="/stored-budgets"
       icon={<Wallet />}
       label={t('tiles.budgets.label')}
       state={state}

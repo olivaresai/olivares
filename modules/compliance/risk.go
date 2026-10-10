@@ -19,9 +19,10 @@ import (
 )
 
 // This file classifies agent risk (EU AI Act tiers cross-mapped to NIST AI RMF). The
-// suggested tier is computed from OBSERVED signals only — the agent's R/RW access
+// suggested tier uses the agent's OBSERVED R/RW access
 // edges (module III) and its security findings (module IX/XVIII), plus an optional
-// autonomy signal (module IV) via the AutonomySource seam. The classification is
+// declared autonomy intent (module IV) via the AutonomySource seam. Intent is
+// retained separately and never proves observed execution. The classification is
 // GOVERNED: it is a SUGGESTION until a human reviews it, and the unacceptable tier
 // (EU AI Act Art. 5, a legal determination) is NEVER asserted by the heuristic — only
 // a reviewer may set it. Every classification and review is audited (docs/SECURITY-HARDENING.md).
@@ -53,19 +54,28 @@ type RiskDTO struct {
 	Disclaimer    string         `json:"disclaimer"`
 }
 
-// riskSignals are the observed signals that drove a suggested tier.
+// riskSignals retain observed evidence and optional declared intent for a suggestion.
 type riskSignals struct {
-	RWEdges    int64 `json:"rw_edges"`
-	TotalEdges int64 `json:"total_edges"`
-	Resources  int64 `json:"distinct_resources"`
-	High       int64 `json:"high_severity_findings"`
-	Scheduled  bool  `json:"scheduled"`
-	Autonomous bool  `json:"autonomous"`
+	RWEdges          int64            `json:"rw_edges"`
+	TotalEdges       int64            `json:"total_edges"`
+	Resources        int64            `json:"distinct_resources"`
+	High             int64            `json:"high_severity_findings"`
+	Scheduled        bool             `json:"scheduled"`
+	Autonomous       bool             `json:"autonomous"`
+	DeclaredAutonomy declaredAutonomy `json:"declared_autonomy"`
 	// Truncated is set when the finding scan could not be completed within the bounded
 	// page budget (sweep). A truncated scan may have MISSED a high/critical
 	// finding, so suggestTier must never suggest a tier below TierHigh when it is set
 	// (fail-safe: never silently under-classify an AI system's risk).
 	Truncated bool `json:"truncated,omitempty"`
+}
+
+// declaredAutonomy is intentionally separate from observed edges/findings. Old
+// assessments without it remain historical unknowns rather than inferred passes.
+type declaredAutonomy struct {
+	State      string `json:"state"`
+	Scheduled  bool   `json:"scheduled"`
+	Autonomous bool   `json:"autonomous"`
 }
 
 type classifyRequest struct {
@@ -101,13 +111,34 @@ func (m *Module) handleClassifyRisk(w http.ResponseWriter, r *http.Request, mc a
 	// UUID subject_ref. A non-UUID ref leaves signals empty (an honest minimal default).
 	agentID := parseAgentID(req.AgentID, subjectRef)
 
+	// Read the optional module port before opening the write transaction. Its
+	// tenant-scoped read must not nest a second store transaction inside Mutate.
+	var autonomy AutonomySignal
+	var autonomyErr error
+	if subjectKind == "agent" && m.autonomy != nil {
+		autonomy, autonomyErr = m.autonomy.Autonomy(r.Context(), mc.Tenant, subjectRef)
+	}
+
 	var dto RiskDTO
 	err := mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		sig, err := m.observeRiskSignals(r.Context(), sc, mc.Tenant, agentID, subjectRef)
 		if err != nil {
 			return err
 		}
+		// Preserve the existing heuristic's boolean inputs. The additive declaration
+		// evidence never turns a missing/error/historical signal into observed safety.
+		sig.DeclaredAutonomy.State = "unknown"
+		if autonomyErr != nil {
+			sig.DeclaredAutonomy.State = "unavailable"
+		} else {
+			sig.Scheduled, sig.Autonomous = autonomy.Scheduled, autonomy.Autonomous
+			switch autonomy.State {
+			case "declared", "none_declared", "partial":
+				sig.DeclaredAutonomy = declaredAutonomy{State: autonomy.State, Scheduled: autonomy.Scheduled, Autonomous: autonomy.Autonomous}
+			}
+		}
 		tier, rationale := suggestTier(sig)
+		rationale += "; autonomy declaration evidence=" + sig.DeclaredAutonomy.State + "; declared intent is not observed behavior"
 		nist := nistFunctionsForTier(tier)
 		now := m.clock.Now()
 
@@ -299,11 +330,6 @@ func (m *Module) observeRiskSignals(ctx context.Context, sc store.Scope, tenant 
 			}
 			q.Cursor = page.Cursor
 		}
-	}
-	// Optional autonomy signal — the default source returns the zero signal, so it can
-	// only ever LOWER the suggested tier, never raise it on a fabricated input.
-	if as, err := m.autonomy.Autonomy(ctx, tenant, subjectRef); err == nil {
-		sig.Scheduled, sig.Autonomous = as.Scheduled, as.Autonomous
 	}
 	return sig, nil
 }

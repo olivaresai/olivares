@@ -85,10 +85,17 @@
     "attach": "接入",
     "detach": "断开"
   },
+  "discardWorktree": {
+    "label": "同时丢弃 worktree 和分支 {{branch}}",
+    "hint": "分支已合并且 worktree 干净时会自动删除。勾选以丢弃未合并或未提交的工作。"
+  },
   "create": {
     "title": "新建会话",
     "titleTool": "新建 {{tool}} 会话",
-    "description": "Olivares 启动并治理该进程——等同于 CLI 启动的可视化形式，策略在线生效。",
+    "description": "先说要做什么。其他启动选项都在“高级选项”中。",
+    "prompt": "第一条消息（可选）",
+    "promptPlaceholder": "它应该先做什么？",
+    "advanced": "高级选项",
     "name": "名称",
     "namePlaceholder": "显示标签（可选）",
     "transport": "传输",
@@ -97,32 +104,34 @@
     "effortDefault": "模型默认",
     "model": "模型",
     "modelPlaceholder": "opus  ·  claude-opus-4-8  （可选）",
-    "workspace": "工作区",
-    "workspaceNone": "无（运行器默认工作目录）",
+    "workspace": "文件夹",
+    "workspaceNone": "此会话的临时文件夹",
+    "worktree": "在新的 git worktree 中工作",
+    "worktreeHint": "在独立的 worktree 中新建分支，使同一仓库的会话不共享文件。该文件夹必须是仓库的顶层文件夹。",
+    "worktreeFrom": "起点",
     "isolation": "隔离",
     "isolationNativeOnly": "本次发布仅接线了原生模式；容器/沙箱将被拒绝。",
     "envAllow": "转发宿主环境变量（名称）",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "允许透传的宿主环境变量名称白名单（从不发送其值）。",
-    "submit": "请求启动",
-    "submitting": "正在请求…",
+    "submit": "启动",
+    "submitting": "正在启动…",
     "criticalWarning": "这是一次特权启动（它移除了逐工具确认提示）。需要双人审批且会被录制——在获批前可能保持待处理状态。",
     "classifiedWarning": "对已分级工作区进行读/写挂载属于特权启动（需审批 + 录制）。",
     "success": "会话已启动",
     "template": "模板",
     "templateNone": "不使用模板",
-    "templateHint": "引擎会在启动校验之前将模板条款合并到上述字段，并写入会话自身的进程——因此即使调用方不打开此控制台，该限制依然生效。",
+    "templateHint": "模板的规则会替换这里对应的选项，并在整个会话中生效。",
     "templateUnenforceable": "此模板声明了本次启动无法强制执行的条款，因此拒绝启动，而不是在缺少这些条款的情况下启动：",
     "templateOverrides_other": "模板覆盖了你的 {{count}} 项设置：",
     "profile": "提供商配置档案",
     "profileNone": "选择配置档案",
-    "profileHint": "请选择此会话的提供方配置档案。必须选择档案。本地要求在模板预览之后按当前选择读取。",
     "profileNotOperable": "在此环境未启用",
-    "profilesNotRead": "无法读取提供商配置档案；仍可在没有配置档案的情况下启动。",
     "profileEnvConflict": "HOME、CLAUDE_CONFIG_DIR、CODEX_HOME 和 GROK_HOME 属于配置档案：此处会拒绝转发其中任一变量的启动。其他名称仍需通过服务端自身的校验。",
     "identity": {
       "title": "启动身份",
       "hint": "选择代表人类赞助者的已准入代理。仅有人类访问权限不会授予代理权限。",
+      "humanHint": "会话以你自己的访问权限运行。",
       "human": "当前人类操作员",
       "agent": "已准入代理（代表赞助者）",
       "required": "编排配置需要独立验证的代理身份。",
@@ -133,6 +142,19 @@
       "loading": "正在加载代理身份…",
       "loadFailed": "身份列表不可用。",
       "loadMore": "加载更多身份"
+    },
+    "blocked": {
+      "profilesForbidden": "你的角色无法读取提供商配置档案（sessions:profile:read），因此无法在此启动会话。",
+      "profilesFailed": "无法读取提供商配置档案。",
+      "profilesLoading": "正在读取提供商配置档案…",
+      "noProfile": "还没有提供商配置档案。请先添加一个提供方。",
+      "openProviders": "打开提供方",
+      "chooseProfile": "请选择一个提供商配置档案。",
+      "worktreeFolder": "请为 worktree 选择一个仓库文件夹。",
+      "chooseAgent": "请选择此会话所用的已准入代理，或以你自己的身份运行。",
+      "envConflict": "“转发宿主环境变量”中包含属于该配置档案的变量：请在“高级选项”中删除它。",
+      "templateRefused": "该模板要求本次启动无法执行的条款：请在“高级选项”中选择其他模板。",
+      "readinessFailed": "无法读取该配置档案的要求。"
     }
   },
   "detail": {
@@ -158,6 +180,7 @@
     "workspace": "工作区",
     "workspaceDirectory": "工作目录",
     "workspaceDirectoryOwn": "本会话自己的目录",
+    "worktreeBranch": "Worktree 分支",
     "created": "创建时间",
     "started": "启动时间",
     "lastActivity": "最近活动",
@@ -195,7 +218,13 @@
     "interruptFailed": "无法中断当前轮次。",
     "interruptFenceUnavailable": "请先刷新运行以获取当前任务代次，再执行中断。",
     "interruptUnknown": "中断结果未知。再次尝试前，请先检查会话。",
-    "interruptWorkConflict": "会话当前的任务状态不允许此次中断。请刷新运行以检查其状态。"
+    "interruptWorkConflict": "会话当前的任务状态不允许此次中断。请刷新运行以检查其状态。",
+    "blocked": {
+      "notLive": "请启动或恢复会话以发送。",
+      "approval": "启动正在等待审批；审批通过后即可发送。",
+      "sending": "正在发送……请等待会话接受。",
+      "empty": "请输入要发送的内容。"
+    }
   },
   "gov": {
     "title": "治理态势",
@@ -294,7 +323,20 @@
     "deleteBody": "这仅移除注册记录——绝不触碰宿主上的文件。指向它的会话将无法启动。",
     "deleteConfirm": "注销",
     "deleted": "工作区已注销",
-    "open": "浏览文件"
+    "open": "浏览文件",
+    "readOnly": {
+      "title": "只读文件夹",
+      "description": "只读文件夹保护文件内容和目录条目（不能写入、截断、创建、删除或重命名）；权限、所有者、扩展属性和时间戳遵循主机的常规权限。",
+      "empty": "没有只读文件夹。",
+      "folder": "此服务器上的文件夹",
+      "folderPlaceholder": "/srv/reference",
+      "add": "添加",
+      "remove": "移除",
+      "removeLabel": "移除 {{folder}}",
+      "discard": "放弃更改",
+      "save": "保存文件夹",
+      "saved": "只读文件夹已保存。"
+    }
   },
   "browser": {
     "title": "文件",
@@ -751,9 +793,9 @@
     "requesting": "正在请求…",
     "requestHintReady": "请求启动仍会走完授权、签发与进程启动。这不能证明提供方已登录。",
     "requestHintUnknown": "检查未完成。仍可请求启动；服务器会重新校验全部项目。这不是 ready。",
-    "requestBlocked": "不提供启动请求：已知此选择无法执行。",
-    "noWrite": "你可以查看这些要求，但请求启动需要 sessions:run:write。",
-    "waitingPreview": "正在等待模板预览，然后才读取有效传输的要求。",
+    "requestBlocked": "此配置档案无法在此启动会话。原因见“高级选项”中的要求。",
+    "noWrite": "启动会话需要 sessions:run:write 权限。",
+    "waitingPreview": "正在读取模板，然后检查配置档案…",
     "providerAuth": "此处不观察提供方登录。有效的家目录或可执行文件不是已认证账户。",
     "launchAuth": "启动授权在提交时决定，并且需要 sessions:run:write。",
     "remoteControl": "仅生命周期：对话输入输出留在提供方，没有桥接的回合控制台。",
@@ -858,6 +900,7 @@
       "codex_app_server": "Codex app-server",
       "grok_acp": "Grok ACP",
       "opencode_acp": "OpenCode ACP",
+      "gemini_acp": "Gemini CLI ACP",
       "unknown": "未知协议"
     }
   },

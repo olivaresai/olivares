@@ -240,15 +240,15 @@ func (m *Module) standardsTable(genaiGateSeen int64, genaiRecordLast time.Time) 
 		otelGenAI,
 		{
 			ID: "ocsf", Label: "OCSF (ai_operation profile)", Direction: "out",
-			Maturity: "ga", Version: siemwire.OCSFVersion, Status: "available",
+			Maturity: "ga", Version: siemwire.OCSFVersion, Status: operationsExportStatus(),
 		},
 		{
 			ID: "asim_agentevent", Label: "Microsoft Sentinel ASIM AgentEvent", Direction: "out",
-			Maturity: "pre_1_0", Version: asimVersion, Status: "available",
+			Maturity: "pre_1_0", Version: asimVersion, Status: operationsExportStatus(),
 		},
 		{
 			ID: "siem_unified", Label: "SIEM unified (CEF / LEEF / syslog / OTLP)", Direction: "out",
-			Maturity: "stable", Version: noVersion, Status: "available",
+			Maturity: "stable", Version: noVersion, Status: operationsExportStatus(),
 		},
 		{
 			ID: "ledger_push", Label: "Ledger push transport", Direction: "out",

@@ -337,6 +337,17 @@ type KeyInfo struct {
 // custody fields where the creation time or KEK is genuinely unknown.
 func (k KeyInfo) MarshalJSON() ([]byte, error) {
 	switch {
+	case k.Purpose == "memory-portability":
+		// This signing key is optional. An unavailable key reports absence and
+		// omits custody rather than claiming an empty, invalid custody mode.
+		return json.Marshal(struct {
+			Purpose     string `json:"purpose"`
+			Algorithm   string `json:"algorithm"`
+			Present     bool   `json:"present"`
+			CustodyMode string `json:"custody_mode,omitempty"`
+			PublicKey   string `json:"public_key,omitempty"`
+			Fingerprint string `json:"fingerprint,omitempty"`
+		}{k.Purpose, k.Algorithm, k.Present, k.CustodyMode, k.PublicKey, k.Fingerprint})
 	case k.Source != "" || k.Purpose == "eventing" || k.Purpose == "sso" || k.Purpose == "secret-store":
 		return json.Marshal(struct {
 			Purpose string `json:"purpose"`

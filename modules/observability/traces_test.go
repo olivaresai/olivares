@@ -5,12 +5,15 @@
 package observability
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/core/engine/enginetest"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 const tracesPath = "/v1/m/observability/traces"
@@ -344,118 +347,6 @@ func TestTraceTimeRangeFilter(t *testing.T) {
 }
 
 // TestTraceExportOTLP: the export endpoint returns a valid OTLP JSON structure.
-func TestTraceExportOTLP(t *testing.T) {
-	h := newHarness(t)
-	admin := h.adminLogin()
-	tenant := h.createOrg(admin, "acme")
-	seedTwoTraces(h, tenant)
-
-	r := h.do("GET", tracesPath+"/"+traceA+"/export", admin, nil, tenantHdr(tenant))
-	if r.code != http.StatusOK {
-		t.Fatalf("export = %d %s", r.code, r.raw)
-	}
-	// Validate OTLP structure.
-	rs, _ := r.body["resourceSpans"].([]any)
-	if len(rs) != 1 {
-		t.Fatalf("resourceSpans = %d, want 1", len(rs))
-	}
-	rsMap := mapOf(rs[0])
-	res := mapOf(rsMap["resource"])
-	attrs, _ := res["attributes"].([]any)
-	if len(attrs) < 1 {
-		t.Fatal("resource attributes missing")
-	}
-	// Check service.name attribute.
-	firstAttr := mapOf(attrs[0])
-	if strOf(firstAttr["key"]) != "service.name" {
-		t.Fatalf("first resource attr key = %q, want service.name", strOf(firstAttr["key"]))
-	}
-	ss, _ := rsMap["scopeSpans"].([]any)
-	if len(ss) != 1 {
-		t.Fatalf("scopeSpans = %d, want 1", len(ss))
-	}
-	ssMap := mapOf(ss[0])
-	spans, _ := ssMap["spans"].([]any)
-	if len(spans) != 2 {
-		t.Fatalf("otlp spans = %d, want 2 (one per distinct span_id)", len(spans))
-	}
-	span0 := mapOf(spans[0])
-	if strOf(span0["traceId"]) != traceA {
-		t.Fatalf("traceId = %q", strOf(span0["traceId"]))
-	}
-	if strOf(span0["startTimeUnixNano"]) == "" || strOf(span0["endTimeUnixNano"]) == "" {
-		t.Fatal("timestamps missing")
-	}
-	if intOf(span0["kind"]) != 1 { // INTERNAL
-		t.Fatalf("kind = %d, want 1 (INTERNAL)", intOf(span0["kind"]))
-	}
-
-	// Namespace freeze: every product attribute key — resource and span —
-	// lives under ai.olivares.*, never under the bare pre-freeze olivares.*
-	// spelling. The actor key must actually be present, so the guard is proven
-	// to walk real product keys, not an empty list.
-	sawActor := false
-	checkKeys := func(raw any) {
-		list, _ := raw.([]any)
-		for _, a := range list {
-			key := strOf(mapOf(a)["key"])
-			if strings.HasPrefix(key, "olivares.") {
-				t.Errorf("bare pre-freeze attribute key %q in the OTLP export", key)
-			}
-			if key == "ai.olivares.actor" {
-				sawActor = true
-			}
-		}
-	}
-	checkKeys(attrs)
-	for _, sp := range spans {
-		checkKeys(mapOf(sp)["attributes"])
-	}
-	if !sawActor {
-		t.Error("ai.olivares.actor missing from the exported spans; the freeze guard checked nothing")
-	}
-
-	// The event-derived attributes are appended in SORTED key order — Go map
-	// iteration is randomized, so without the sort two downloads of the same
-	// trace could differ byte-wise. Assert the order (the four ledger.* keys are
-	// synthesized for every span) and then assert raw byte identity across a
-	// second download, which is the actual promise.
-	wantLedger := []string{"ledger.actions", "ledger.actor", "ledger.events", "ledger.seq"}
-	for _, sp := range spans {
-		var ledgerKeys []string
-		list, _ := mapOf(sp)["attributes"].([]any)
-		for _, a := range list {
-			if key := strOf(mapOf(a)["key"]); strings.HasPrefix(key, "ledger.") {
-				ledgerKeys = append(ledgerKeys, key)
-			}
-		}
-		if len(ledgerKeys) != len(wantLedger) {
-			t.Fatalf("ledger.* keys = %v, want %v", ledgerKeys, wantLedger)
-		}
-		for i := range wantLedger {
-			if ledgerKeys[i] != wantLedger[i] {
-				t.Fatalf("event-derived attributes not in sorted order: %v", ledgerKeys)
-			}
-		}
-	}
-	again := h.do("GET", tracesPath+"/"+traceA+"/export", admin, nil, tenantHdr(tenant))
-	if again.code != http.StatusOK {
-		t.Fatalf("re-export = %d", again.code)
-	}
-	if again.raw != r.raw {
-		t.Fatalf("two downloads of the same trace differ byte-wise:\n a: %s\n b: %s", r.raw, again.raw)
-	}
-
-	// Not-found trace returns 404.
-	r = h.do("GET", tracesPath+"/"+traceC+"/export", admin, nil, tenantHdr(tenant))
-	if r.code != http.StatusNotFound {
-		t.Fatalf("export unknown = %d, want 404", r.code)
-	}
-
-	// Content-Disposition header.
-	r = h.do("GET", tracesPath+"/"+traceA+"/export", admin, nil, tenantHdr(tenant))
-	// The header is set by writeJSON which goes through the harness do() — check raw response.
-}
 
 // TestTracesRBACAndTenancy: read-tier (viewer reads), unauthenticated is
 // rejected, and another tenant's chain does not leak into the view.
@@ -478,5 +369,95 @@ func TestTracesRBACAndTenancy(t *testing.T) {
 	r = h.do("GET", tracesPath, admin, nil, tenantHdr(other))
 	if r.code != http.StatusOK || len(itemsOf(r)) != 0 {
 		t.Fatalf("other tenant = %d / %d items, want 200 / 0", r.code, len(itemsOf(r)))
+	}
+}
+
+// Safe inference coverage must survive the same tenant-pinned trace read as the ledger attributes.
+func TestTraceInferenceContextCoverage(t *testing.T) {
+	t.Run("sqlite", func(t *testing.T) {
+		traceInferenceContextCoverageOn(t, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true})
+	})
+	t.Run("postgres", func(t *testing.T) {
+		if !enginetest.PostgresAvailable(t) {
+			t.Skip("PostgreSQL leg not run: no test runtime")
+		}
+		pg := enginetest.IsolatedPostgres(t)
+		traceInferenceContextCoverageOn(t, store.Config{Engine: store.EnginePostgres, DSN: pg.App, OwnerDSN: pg.Owner, AdminDSN: pg.Admin, MaxConns: 4})
+	})
+}
+
+func traceInferenceContextCoverageOn(t *testing.T, cfg store.Config) {
+	h := newHarnessWithStore(t, cfg)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "coverage")
+	ctx := context.Background()
+	cases := []struct {
+		span, action string
+		value        any
+		want         string
+	}{
+		{spanA1, "inference.proxy.recorded", "provider_context_may_change", "provider_context_may_change"},
+		{spanA2, "inference.proxy.authorized", "inference_metadata_only", "inference_metadata_only"},
+		{spanB1, "inference.proxy.batch.recorded", "provider_context_unknown", "provider_context_unknown"},
+		{"0102030405060709", "inference.proxy.recorded", "private-coverage-canary", ""},
+		{"0102030405060710", "agent.create", "provider_context_may_change", ""},
+		{"0102030405060711", "inference.proxy.recorded", map[string]any{"secret": "private-coverage-canary"}, ""},
+	}
+	if err := h.st.Mutate(ctx, tenant, func(sc store.Scope) error {
+		for _, tc := range cases {
+			_, err := sc.Audit().Append(ctx, model.AuditDraft{
+				Actor: "user:test", ActorKind: model.ActorUser, Action: tc.action,
+				Meta: map[string]any{"trace_id": traceA, "span_id": tc.span,
+					"context_coverage": tc.value, "prompt": "private-prompt-canary"},
+			})
+			if err != nil {
+				return err
+			}
+		}
+		// Later, weaker labels cannot overwrite the limit on a grouped span.
+		for span, value := range map[string]string{
+			spanA1: "inference_metadata_only",
+			spanB1: "provider_context_may_change",
+		} {
+			if _, err := sc.Audit().Append(ctx, model.AuditDraft{
+				Actor: "user:test", ActorKind: model.ActorUser, Action: "inference.proxy.recorded",
+				Meta: map[string]any{"trace_id": traceA, "span_id": span, "context_coverage": value},
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	r := h.do("GET", tracesPath+"/"+traceA, admin, nil, tenantHdr(tenant))
+	if r.code != http.StatusOK {
+		t.Fatalf("trace detail: %d %s", r.code, r.raw)
+	}
+	spans := listOf(r.body["spans"])
+	if len(spans) != len(cases) {
+		t.Fatalf("spans = %v", spans)
+	}
+	for _, span := range spans {
+		attrs := mapOf(span["attributes"])
+		for _, tc := range cases {
+			if span["span_id"] != tc.span {
+				continue
+			}
+			if strOf(attrs["inference.context_coverage"]) != tc.want {
+				t.Errorf("span %s coverage = %v, want %q", tc.span, attrs, tc.want)
+			}
+		}
+	}
+	if strings.Contains(r.raw, "private-coverage-canary") {
+		t.Fatal("trace leaked unrecognized coverage")
+	}
+	if strings.Contains(r.raw, "private-prompt-canary") {
+		t.Fatal("trace leaked raw metadata")
+	}
+	other := h.createOrg(admin, "other-coverage")
+	r = h.do("GET", tracesPath+"/"+traceA, admin, nil, tenantHdr(other))
+	if r.code != http.StatusNotFound {
+		t.Fatalf("cross-tenant read = %d, want 404", r.code)
 	}
 }

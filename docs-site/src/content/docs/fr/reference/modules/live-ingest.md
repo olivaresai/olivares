@@ -1,14 +1,14 @@
 ---
 title: "Live-ingest — le producteur observe en cours de processus"
 description: >-
-  L'un des 31 modules : le producteur « live-tap » qui publie les événements
+  L'un des 32 modules : le producteur « live-tap » qui publie les événements
   détectifs qu'un connecteur hors processus ne peut émettre. Fermé par défaut et à
   données minimales : il ne déplace aucun contenu brut, et chaque moitié observe
   qu'il possède est honnêtement vide plutôt que simulée. Partiel — il est à activer
   explicitement et conditionné par variable d'environnement.
 ---
 
-Live-ingest (`modules/liveingest`) est l'un des 31 modules câblés — un **producteur en cours de
+Live-ingest (`modules/liveingest`) est l'un des 32 modules câblés — un **producteur en cours de
 processus** plutôt qu'un emplacement de capacité. Il ne fait pas partie de la carte
 numérotée historique I–XXIII. Il existe pour une seule raison
 architecturale : un `SourceConnector` hors processus ne peut diffuser que la somme
@@ -88,7 +88,7 @@ fabrique aucune télémétrie tant qu'un backend ne l'alimente pas.
 - [Module II — opération en direct et sessions](/fr/reference/modules/ii-sessions/) — dérive ses
   propres `goal` / `agent_ref` / `summary` directement à partir des signaux qu'il consomme déjà,
   plutôt que via un événement live-ingest.
-- [Catalogue des modules](/fr/reference/modules/overview/) — les 31 modules et la
+- [Catalogue des modules](/fr/reference/modules/overview/) — les 32 modules et la
   répartition honnête Gouverner/Observer-vs-Actionner que soutient ce producteur en cours de
   processus.
 - [Vue d'ensemble de l'architecture](/fr/explanation/architecture/overview/) — où se situent les modules en

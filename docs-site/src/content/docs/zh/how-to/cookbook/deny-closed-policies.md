@@ -8,6 +8,8 @@ sidebar:
   order: 1
 ---
 
+**版本：** 创建或编辑自定义 Cedar 策略（包括 permit 和 forbid）需要 Business。Community 继续执行已存储的策略、自定义角色和限定范围的授权，并允许查看和撤销。`DELETE /v1/m/governance/pdp/active?engine=cedar` 仅停用自行编写的 Cedar 策略，保留历史记录、托管授权和已采用的策略。内置角色、原生拒绝规则和紧急停止仍属于 Community。本示例的外部 PDP 只能限制访问；自行编写的 Cedar permit 可以在其范围内授予访问权限。
+
 **目标：** 在默认拒绝（deny-by-default）的 RBAC 之上叠加基于属性的限制——
 例如，"无论角色如何规定，任何人都不能触碰标记为 `secret` 的资源。"
 
@@ -56,7 +58,7 @@ default allow := true
 
 allow := false if {
   input.resource.sensitivity == "secret"
-  input.action == "read"
+  endswith(input.permission, ":read")
 }
 ```
 
@@ -68,15 +70,17 @@ allow := false if {
 治理模块暴露了一套策略生命周期，使得有问题的策略绝不会盲目上线：
 
 ```bash
+# policy.cedar is the Cedar policy above; jq 1.6 or newer builds the JSON bodies.
 # Compile-check the source:
 curl -ks -X POST "$BASE/v1/m/governance/pdp/validate" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
-  -d @policy.json
+  -d "$(jq -n --rawfile source policy.cedar '{engine:"cedar",$source}')"
 
 # Pre-flight a decision WITHOUT audit side effects:
 curl -ks -X POST "$BASE/v1/m/governance/pdp/dry-run" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" \
-  -d '{"principal":"…","action":"…","resource":{"kind":"credential","sensitivity":"secret"}}'
+  -d "$(jq -n --rawfile source policy.cedar --argjson request '{"principal":{"kind":"user","id":"u1"},"permission":"models:keys:read","resource":{"kind":"credential","sensitivity":"secret"}}' \
+        '{engine:"cedar",$source,$request}')"
 
 # Then publish (policy-admin permission):
 curl -ks -X POST "$BASE/v1/m/governance/pdp/publish" …

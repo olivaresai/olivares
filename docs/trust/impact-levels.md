@@ -67,8 +67,8 @@ IL4+ expects FIPS-validated cryptography operating in FIPS mode; Olivares pins C
 
 ## STIG posture — what exists and what does not
 
-- `Dockerfile.stig` builds a hardened image variant; `oscap/` carries the OpenSCAP scan pipeline
-  (`oscap/scan.sh`, `oscap/tailoring.xml`) so the hardening is **evaluated, not asserted**.
+- `Dockerfile.stig` builds a hardened image variant; Business OpenSCAP source carries the OpenSCAP scan pipeline
+  (Business OpenSCAP scanner, Business OpenSCAP tailoring) so the hardening is **evaluated, not asserted**.
 - **No product-specific STIG exists** for Olivares (DISA writes STIGs; vendors don't
   self-issue). What we provide: container/GPOS-baseline hardening plus the OpenSCAP evidence
   trail an ISSM can review. Calling this "STIG-compliant" without that nuance would overclaim;

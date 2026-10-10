@@ -127,7 +127,7 @@ async function expectPainted(locator: Locator, what: string) {
  * Bind a screen assertion to what the ENGINE actually answered.
  *
  * Without this the harness proves only that the console renders a state — a mutant that
- * deleted the request and set the seam flag locally would satisfy every NIS 2 assertion
+ * deleted the request and set the seam flag locally would satisfy every screen assertion
  * below, which is precisely the hole the contrast found. Awaiting the response also removes
  * the "assert an empty list before the list has loaded" race for free.
  */
@@ -275,8 +275,7 @@ async function expectHonestEmpty(
 
 // The name says FIVE and says READ, deliberately. An earlier title claimed the four tabs
 // "gate their writes", and the the model contrast was right that the file does not
-// establish it: only NIS 2 submits a write, retention opens its dialog without confirming,
-// and tool pins and deliveries are reads. What every surface here DOES establish is that it
+// establish it: retention opens its dialog without confirming, and deliveries are reads. What every surface here DOES establish is that it
 // is reachable by click, that what it shows came from the engine, and that the engine's
 // refusals are drawn honestly.
 test('live tab surfaces, Settings, and five parent compositions reach engine effects', async ({
@@ -303,87 +302,6 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
     await expect(
       page.getByRole('link', { name: 'Now', exact: true }),
     ).toBeVisible()
-  })
-
-  // --- 1 · NIS 2 (a tab of /compliance, from #689) ----------------------------
-  //
-  // The write here is the clearest COMMERCIAL boundary in the four: the engine answers
-  // 501 for classify because the add-on is not linked, and the dialog is built to say
-  // so in place rather than to raise the red toast (nis2-view.tsx:392-439). Measured on
-  // a live community build: {"error":{"message":"NIS 2 significant-incident
-  // classification requires the Olivares enterprise add-on (nis2incident); not linked
-  // in this build"}} with HTTP 501.
-  await test.step('NIS 2: reached by click, honest empty, and a 501 drawn as a boundary', async () => {
-    await page.goto('/compliance')
-    const listed = expectResponse(page, '/v1/m/compliance/nis2/incidents', 200)
-    const panel = await openTab(page, /NIS 2 incidents/i)
-
-    // Paints its own surface, not the posture tab it replaced.
-    await expectPainted(
-      panel.getByText('NIS 2 significant incidents', { exact: true }),
-      'NIS 2 section title',
-    )
-    // The engine hardcodes provisional=true, and the console renders the honesty rule
-    // where the operator acts rather than leaving it to be discovered.
-    await expectPainted(
-      panel.getByText(/DECISION SUPPORT, not a legal classification/i),
-      'the provisional-verdict caveat',
-    )
-
-    await expectHonestEmpty(panel, /No classified incidents/i, await listed)
-
-    // THE BOUNDARY. Fill the real form and submit it against the live engine, and bind the
-    // screen to the ENGINE'S OWN 501 — a console that hard-coded this notice and stopped
-    // calling the engine would satisfy every assertion below without this line.
-    await panel.getByRole('button', { name: /classify incident/i }).click()
-    const dialog = page.getByRole('dialog')
-    await expect(dialog).toBeVisible()
-    await dialog.getByLabel(/incident reference/i).fill('INC-2026-0042')
-    await dialog
-      .getByLabel(/impact document/i)
-      .fill('{"users_affected":10,"awareness_time":"2026-08-11T00:00:00Z"}')
-    const refused = expectResponse(
-      page,
-      '/v1/m/compliance/nis2/incidents/classify',
-      501,
-      'POST',
-    )
-    await dialog.getByRole('button', { name: /^classify$/i }).click()
-    const seamBody = (await refused).body().then((b) => b.toString())
-    expect(await seamBody, 'the engine names the add-on it is missing').toMatch(
-      /enterprise add-on/i,
-    )
-
-    // The add-on seam, explained IN PLACE: the badge, the sentence, and the dialog still
-    // open with the operator's document intact. If a future build routed this through the
-    // shared privileged hook, the generic failure toast would appear and this goes red.
-    await expectPainted(
-      dialog.getByText('Add-on', { exact: true }),
-      'the add-on badge',
-    )
-    await expectPainted(
-      dialog.getByText(
-        /enterprise NIS 2 add-on, which is not linked in this build/i,
-      ),
-      'the seam explanation',
-    )
-    await expectPainted(
-      dialog.getByText(/Reading, exporting and deleting/i),
-      'what the boundary does NOT take away',
-    )
-    // Page-scoped, not panel-scoped, because a toast renders in a portal outside the panel:
-    // scoping these two to the panel would make them vacuous.
-    await expect(page.getByText(GENERIC_FAILURE)).toHaveCount(0)
-    // Not authorized would be the WRONG news here: nobody can grant a permission that
-    // makes an unlinked add-on appear.
-    await expect(page.getByText(/not authorized|forbidden/i)).toHaveCount(0)
-    // The document survives the refusal — the round trip is not thrown away.
-    await expect(dialog.getByLabel(/incident reference/i)).toHaveValue(
-      'INC-2026-0042',
-    )
-
-    await dialog.getByRole('button', { name: /cancel/i }).click()
-    await expect(dialog).toBeHidden()
   })
 
   // --- 2 · Retention (a tab of /compliance, from #693) ------------------------
@@ -455,45 +373,6 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
     await expect(sweep).toBeHidden()
   })
 
-  // --- 3 · Tool pins (inside /capabilities, from #690) ------------------------
-  //
-  // The second commercial boundary, and the one drawn on a READ rather than a write:
-  // GET /v1/m/capabilities/toolpins answers 501 on a community build, and the tab
-  // renders that as a calm capability notice instead of an error state
-  // (tool-pins.tsx:265-273). Measured live: {"error":{"message":"tool pinning is an
-  // enterprise add-on (no verifier wired)"}}.
-  await test.step('Tool pins: a 501 on the LIST renders as a capability notice, not a failure', async () => {
-    await page.goto('/capabilities')
-    // Same causality bind as NIS 2, on a READ this time: without it, a build that dropped
-    // the request and always showed the notice would pass.
-    const refusedRead = expectResponse(page, '/v1/m/capabilities/toolpins', 501)
-    const panel = await openTab(page, /Tool pins/i)
-    expect(
-      (await (await refusedRead).body()).toString(),
-      'the engine names the add-on it is missing',
-    ).toMatch(/enterprise add-on/i)
-
-    await expectPainted(
-      panel.getByText(/Tool pins are an enterprise capability/i),
-      'the enterprise-capability notice',
-    )
-    await expectPainted(
-      panel.getByText(/no enterprise verifier wired yet/i),
-      'why the capability is unavailable',
-    )
-
-    // The three wrong answers this notice exists instead of: a red error, a permission
-    // refusal, and a bare empty table that would read as "you have no pins".
-    await expect(panel.getByRole('alert')).toHaveCount(0)
-    await expect(panel.getByText(GENERIC_FAILURE)).toHaveCount(0)
-    await expect(
-      panel.getByText(/not authorized|do not have permission/i),
-    ).toHaveCount(0)
-    await expect(panel.getByText('No tool pins', { exact: true })).toHaveCount(
-      0,
-    )
-  })
-
   // --- 4 · Dead letters (a tab of /eventing, from #692) -----------------------
   //
   // The brief placed this in /alerting; measurement put it here (see the header note).
@@ -538,6 +417,7 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
   })
 
   // --- 6 · Automations: real parent → workflow create → editor ----------------
+  if ((await (await page.request.get('/v1/server-info')).json()).edition !== 'community') {
   await test.step('Automations: the parent creates a workflow and opens its editor', async () => {
     const workflowName = 'Live composition workflow'
     await page.goto('/automations')
@@ -615,6 +495,7 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
       'automations Effect: the successful create did not open the real editor',
     )
   })
+  }
 
   // --- 7 · Backups: real parent → accepted job → JobProgress ------------------
   await test.step('Backups: the parent starts an accepted job and renders JobProgress', async () => {
@@ -742,6 +623,28 @@ test('live tab surfaces, Settings, and five parent compositions reach engine eff
 
   // --- 9 · Red-team: owned inventory → register → consent → run ---------------
   await test.step('Red-team: an owned agent completes register, authorize, and launch', async () => {
+    const edition = await authenticatedFetch<Record<string, unknown>>(
+      page,
+      '/v1/m/redteam/catalog',
+    )
+    if (edition.status === 501) {
+      const refused = await authenticatedFetch(page, '/v1/m/redteam/runs', {
+        method: 'POST',
+        body: { target_ref: 'unavailable', suite: 'injection' },
+      })
+      expect(refused.status, 'Community must refuse red-team execution').toBe(
+        501,
+      )
+      await page.goto('/red-team')
+      await expect(page).toHaveURL(/\/areas\/security-identity$/)
+      await expect(
+        page.getByRole('button', { name: /register agent/i }),
+      ).toHaveCount(0)
+      return
+    }
+    expect(edition.status, 'Business must expose the red-team catalog').toBe(
+      200,
+    )
     const agentName = 'Live red-team inventory agent'
     const targetName = 'Live red-team consent target'
     const agentSeed = await authenticatedFetch<{ id: string }>(

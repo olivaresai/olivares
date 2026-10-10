@@ -78,6 +78,11 @@ type harness struct {
 // so the store opens with no extension registrar.
 func newHarness(t *testing.T, opts ...Option) *harness {
 	t.Helper()
+	return newHarnessWithStore(t, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true}, opts...)
+}
+
+func newHarnessWithStore(t *testing.T, cfg store.Config, opts ...Option) *harness {
+	t.Helper()
 	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
 	clk := newClock(time.Date(2026, 6, 12, 12, 0, 0, 0, time.UTC))
@@ -87,7 +92,8 @@ func newHarness(t *testing.T, opts ...Option) *harness {
 	mod := New(opts...)
 	h.mod = mod
 
-	st, err := engine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true, Clock: clk}, nil)
+	cfg.Clock = clk
+	st, err := engine.Open(ctx, cfg, nil)
 	if err != nil {
 		t.Fatal(err)
 	}

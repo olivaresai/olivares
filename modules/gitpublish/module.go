@@ -39,6 +39,14 @@ import (
 // Namespace is the module's API and store namespace.
 const Namespace = "gitpublish"
 
+// Post-dispatch work can settle, then observe an uncertain outcome, then release
+// the capability. Keep the HTTP budget tied to these same finite phase limits.
+const (
+	settleTimeout  = 30 * time.Second
+	releaseTimeout = 15 * time.Second
+	replyTimeout   = 15 * time.Second
+)
+
 // The module permissions, granted by verb tier.
 const (
 	permTargetRead  auth.Permission = "gitpublish:target:read"
@@ -64,7 +72,10 @@ type Options struct {
 	Custody   Custody
 	Git       Git
 	Authority Authority
-	Now       func() time.Time
+	// Sessions resolves a push's session run to its folder. Nil refuses a
+	// push that names a run; a push that names none never reads it.
+	Sessions SessionFolders
+	Now      func() time.Time
 	// AdmissionTimeout bounds A1 through A4 (default 30s).
 	AdmissionTimeout time.Duration
 	// DispatchTimeout bounds the single host write (default 2m).
@@ -140,6 +151,9 @@ func (m *Module) UseCustody(c Custody) { m.opts.Custody = c }
 
 // UseGit late-binds the closed git executor.
 func (m *Module) UseGit(g Git) { m.opts.Git = g }
+
+// UseSessions late-binds the session folder reader.
+func (m *Module) UseSessions(s SessionFolders) { m.opts.Sessions = s }
 
 var _ Git = (*gp.Executor)(nil)
 

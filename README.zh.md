@@ -9,12 +9,14 @@
 [它做什么](#它做什么) · [安装](#安装) · [控制台](#控制台一览) · [版本](#版本与定价) · [文档](#文档) · [社区](#社区) · [olivares.ai](https://olivares.ai)
 
 [![License: AGPL-3.0-only](https://img.shields.io/badge/license-AGPL--3.0--only-blue)](LICENSING.md)
-[![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md)
-[![Release: 26.10](https://img.shields.io/badge/release-26.10-28282B)](https://github.com/olivaresai/olivares/releases/tag/26.10.1)
+[![SDK & connectors: Apache-2.0](https://img.shields.io/badge/SDK%20%26%20connectors-Apache--2.0-blue)](LICENSING.md) <!-- release -->
+[![Next release: 0.1](https://img.shields.io/badge/release-0.1-28282B)](https://github.com/olivaresai/olivares/releases/tag/0.1)<!-- /release -->
 [![Status: beta](https://img.shields.io/badge/status-beta-F08000)](CHANGELOG.md)
 [![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa)](CODE_OF_CONDUCT.md)
 
 </div>
+
+下一个版本是 <!-- release -->`0.1`<!-- /release -->，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->。 Kubernetes OCI: `publication-unverified`.
 
 开发者用 Claude Code 和 Codex 工作。agent 调用 MCP 服务器、模型和内部 API，定时任务自行运行。每个组件都有自己的日志和权限，所以连简单的问题也难以快速回答：哪个 agent 改了这个文件，谁批准的，这个月 AI 花了多少钱？
 
@@ -32,96 +34,68 @@ Olivares AI 把答案汇集在一处。它连接你已经在用的 agent 和工�
 - **控制 AI 支出。** 按团队、agent 或模型设置预算，在账单到来之前发出警告、减缓或停止支出。
 - **安全地让 agent 使用公司知识。** 连接 SharePoint、Confluence、Google Drive、Notion、Salesforce、Snowflake、S3 和 PostgreSQL。每个 agent 只能看到使用它的人有权看到的内容。
 - **跨会话继续工作。** 会话结束后，任务、负责人和决策仍然保留。无需 SSH，就能从浏览器启动、加入和停止 Claude Code、Codex 和 Grok 会话。
-- **需要时提供证据。** 每项决策都写入签名日志，事后的任何篡改都可被检测到。安全团队和审计人员从这些记录生成报告，证据对应 26 个框架目录。
+- **需要时提供证据。** 每项决策都写入签名日志，事后的任何篡改都可被检测到。Business Compliance Packs 将证据对应到 26 个框架目录，并为安全团队和审计人员生成报告。Community 保留已存证据的读取和 JSON/CSV 导出功能。
 
-支持你已有的工具：Claude Code、Codex、Grok、Cursor、gemini-cli、opencode、OpenHands，以及通过 Ollama 运行的本地模型。**31 个模块**和 **159 项集成**全部包含在免费版本中：[所有模块](docs-site/src/content/docs/reference/modules/overview.md) · [所有连接器](connectors/README.md)。
+支持你已有的工具：Claude Code、Codex、Grok、Cursor、gemini-cli、opencode、OpenHands，以及通过 Ollama 运行的本地模型。**32 个模块**和 **136 项集成**：[所有模块](docs-site/src/content/docs/reference/modules/overview.md) · [所有连接器](connectors/README.md)。
+
+Community 保留本地可观测性、已保存的设置和备份导出。SIEM/ITSM 推送、外部遥测传输和安全态势导出包含在 Business 基础版中。
 
 ## 安装
 
-选择一种方法，复制对应的代码块。完成后，`olivares quickstart` 会输出控制台地址和用于创建首位管理员的一次性令牌。每个发布版本都有签名，每种方法都会在安装前验证下载内容（[自行验证下载](INSTALL.md#verifying-a-release)）。
+**Docker Compose.** The container qualification job exercises this installation path.
+Set the release image explicitly so a cached `:latest` image cannot select an
+older release.
 
-**Linux 和 macOS，一条命令。** 检测系统、验证发布版本，仅安装二进制文件，从不使用 `sudo`。
-
+<!-- release -->
 ```sh
-curl -fsSL https://olivares.ai/olivares/install.sh | sh
-olivares quickstart
+set -e
+cd /path/to/your/project   # the host folder your sessions will work on
+export OLIVARES_PROJECT_DIR="$PWD"
+git clone --depth 1 https://github.com/olivaresai/olivares.git "$HOME/olivares"
+export OLIVARES_IMAGE=docker.io/olivaresai/olivares:0.1
+# On Linux hosts whose AppArmor policy mediates user namespace creation:
+if [ -r /sys/kernel/security/apparmor/features/namespaces/mask ] &&
+   grep -qw userns_create /sys/kernel/security/apparmor/features/namespaces/mask; then
+  sudo install -m 0644 "$HOME/olivares/deploy/apparmor/olivares-sessions.conf" /etc/apparmor.d/olivares-sessions
+  sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions
+  export OLIVARES_APPARMOR_PROFILE=olivares-sessions
+fi
+docker compose -f "$HOME/olivares/deploy/compose/docker-compose.yml" up --wait --wait-timeout 120
+docker compose -f "$HOME/olivares/deploy/compose/docker-compose.yml" exec olivares \
+  olivares first-boot --data-dir /var/lib/olivares --new-token
 ```
+<!-- /release -->
 
-**Docker。** 多架构。容器镜像基于 Debian 13 slim（含供代理工具使用的 Node.js 24），并以非 root 用户运行。它监听主机的所有网络接口；在每个 `-p` 前加上 `127.0.0.1:`，即可限制为本机访问。
+Open the console address printed by `first-boot --new-token` and use the replacement
+one-time setup token it prints to create the first administrator. This invalidates
+the previous setup token and is available only before the first administrator exists.
+The stack uses SQLite and a persistent data volume.
+The AppArmor step needs an AppArmor 4 parser and runs on the Docker daemon host.
+See [session confinement on AppArmor hosts](deploy/compose/README.md#session-confinement-on-apparmor-hosts).
+It publishes ports on every host interface by default; set `OLIVARES_BIND=127.0.0.1`
+to restrict access to this host.
 
-```sh
-docker run -d --name olivares -p 8443:8443 -p 8444:8444 \
-  -v olivares-data:/var/lib/olivares \
-  docker.io/olivaresai/olivares \
-  serve --listen :8443 --grpc-listen :8444 --data-dir /var/lib/olivares
-```
+Sessions in the container work on one host folder, mounted at `/project`: the absolute
+path in `OLIVARES_PROJECT_DIR`, set before `up`. Without it, `/project` is an empty Docker
+volume, never the directory you run Compose from. A session there can change everything in
+that folder: never set the variable to your home directory. In the console, choose **Change folder**
+on the New session form and enter `/project`. On a Linux host the container user
+(UID 65532) needs write access; see
+[work on a host project folder](deploy/compose/README.md#work-on-a-host-project-folder).
 
-**Docker Compose。** 单节点 SQLite，可选 Postgres 和备份。
+Gate coverage is not a passing release result: see the `qualify-compose-ready` job in
+[container qualification](.github/workflows/compose-ready.yml). The release must also
+pass its first-hour journey before it is qualified.
 
-```sh
-git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
-docker compose -f deploy/compose/docker-compose.yml up --wait --wait-timeout 120
-```
+Other installation methods are **not qualified** by the first-hour gate. Their commands
+and limits are in [INSTALL.md](INSTALL.md#installation-qualification), including the
+shell installer, standalone Docker, Kubernetes, native packages, Homebrew, source builds
+and offline installs. [Verify release artifacts](INSTALL.md#verifying-a-release) before
+running them; see [upgrading and uninstalling](INSTALL.md#upgrading--uninstalling) for an
+existing installation.
 
-**Kubernetes。** 使用本仓库中的 Helm chart（chart 尚无 OCI 发布版本：`publication-unverified`）。
-
-```sh
-git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
-helm install olivares deploy/helm/olivares -n olivares-system --create-namespace
-```
-
-不使用 Helm：
-
-```sh
-git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
-kubectl create namespace olivares-system && kubectl apply -n olivares-system -f deploy/manifests/install.yaml
-```
-
-**Debian 和 Ubuntu。** 软件包添加一个无法登录的 `olivares` 用户和一个经过安全加固的服务；服务由你启动。
-
-```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.deb
-sudo dpkg -i olivares_26.10.1_linux_amd64.deb && sudo systemctl enable --now olivares
-```
-
-**RHEL、Fedora 和 SUSE。**
-
-```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.rpm
-sudo rpm -i olivares_26.10.1_linux_amd64.rpm && sudo systemctl enable --now olivares
-```
-
-**Alpine。**
-
-```sh
-curl -fsSLO https://github.com/olivaresai/olivares/releases/download/26.10.1/olivares_26.10.1_linux_amd64.apk
-sudo apk add --allow-untrusted olivares_26.10.1_linux_amd64.apk && sudo rc-service olivares start
-```
-
-ARM 服务器请用 `arm64` 替换 `amd64`。全部发布文件见[发布页面](https://github.com/olivaresai/olivares/releases/tag/26.10.1)。
-
-**Homebrew。** macOS 和 Linux。
-
-```sh
-brew install olivaresai/tap/olivares && olivares quickstart
-```
-
-**从源码构建。** Go 1.26+、[Task](https://taskfile.dev) 和 pnpm。
-
-```sh
-git clone --depth 1 https://github.com/olivaresai/olivares.git && cd olivares
-task build && ./bin/olivares quickstart
-```
-
-**离线网络：** 打包签名镜像、chart 和验证材料，然后[在隔离环境中安装](docs-site/src/content/docs/how-to/air-gap-install.md)。**Windows** 尚无原生构建，请使用 Docker 镜像或 WSL2。升级和回滚见[操作指南](docs-site/src/content/docs/how-to/upgrade-and-rollback.md)。所有选项详见 [`INSTALL.md`](INSTALL.md)。
-
-**先用演示数据试用**，仅在自己的机器上运行（演示密码是公开的）：
-
-```sh
-olivares serve --seed-demo --insecure --listen 127.0.0.1:8901 --grpc-listen 127.0.0.1:8902 --data-dir "$(mktemp -d)"
-```
-
-然后打开 http://127.0.0.1:8901。
+- Helm Chart、Kubernetes Operator 和 Terraform Provider 由 Business 发行版提供。 [Editions](https://olivares.ai/pricing).
+Install the chart from source; see [Kubernetes installation](INSTALL.md#kubernetes).
 
 ## 控制台一览
 
@@ -141,11 +115,11 @@ Community 是完整产品，免费且开源。Business 增加企业在生产环�
 |---|---|---|---|
 | **价格** | 免费，AGPL-3.0 | 每月 129 美元或每年 1,290 美元 | 年度合同 |
 | **包含内容** | 完整产品：不限用户数量，包含全部四个 deny-closed 执行点 | Community 的全部内容，加上 Regulated Operations、AI Runtime Security、Compliance Packs、Identity & Scale、商业许可证、签名更新和邮件支持 | Business 的全部内容，加上更多公司、部署和身份提供商、离线镜像，以及与你约定的支持条款 |
-| **使用范围** | 一个活跃身份提供商 | 一家公司，两个生产部署，每个各配一个 staging 环境，五个身份提供商 | 按合同约定 |
+| **使用范围** | 一个活跃身份提供商 | 一家公司，同一时间一个活跃实例 | 按合同约定 |
 
-**Regulated Operations** 按法律要求的期限保留记录，支持法律保全和不可更改的归档。**AI Runtime Security** 过滤 agent 发送、接收和执行的内容。**Compliance Packs** 为 ISO 42001、DORA 和 NIS 2 提供可直接使用的证据。**Identity & Scale** 同时连接多个身份提供商，并支持更大规模的部署。
+**Regulated Operations** 增加法规要求的最短保留期限、归档上的法律保全核对，以及 Azure 和 GCS 上的 WORM 归档。**AI Runtime Security** 对 agent 发送、接收和执行的内容进行更深入的检查。**Compliance Packs** 为你的审计人员起草 DORA 信息登记册和 ISO/IEC 42001 材料包。**Identity & Scale** 同时连接多个身份提供商，并支持更大规模的部署。
 
-[olivares.ai/pricing](https://olivares.ai/pricing) · [开源与商业范围](LICENSING.md)
+[olivares.ai/pricing](https://olivares.ai/pricing) · [各版本包含的内容](docs/editions.md) · [开源与商业范围](LICENSING.md)
 
 ## 架构
 

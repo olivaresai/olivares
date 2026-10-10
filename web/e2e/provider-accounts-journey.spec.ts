@@ -5,8 +5,9 @@
 // THE PROVIDER-ACCOUNT JOURNEY against a REAL engine serving the embedded console, booted
 // virgin for this spec by scripts/web-e2e.sh. Every authority decision and every effect
 // is the engine's own. The administrator seeds through existing interfaces: first-boot
-// setup, sign-in, POST /v1/m/sessions/provider-profiles, POST /v1/users and
-// POST /v1/memberships. A second principal holding the editor role then adopts profiles
+// setup with automatic sign-in, POST /v1/m/sessions/provider-profiles and POST /v1/users
+// with an atomic first membership. POST /v1/memberships later revokes the editor role.
+// A second principal holding the editor role then adopts profiles
 // through the console and creates a managed account. Each effect is read back from the engine as the administrator.
 // To withdraw the account read, the administrator authors a tenant ABAC deny policy on
 // sessions:account:read (POST /v1/m/governance/policies). The engine then refuses that read
@@ -38,7 +39,7 @@
 //
 // No secret is captured. The setup token and both passwords are typed before any capture,
 // and traces stay off because a trace records request headers, including the disposable
-// bearer. The receipt holds references, names and counts only.
+// session cookie and CSRF token. The receipt holds references, names and counts only.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import {
@@ -48,6 +49,9 @@ import {
   type Page,
   type Route,
 } from '@playwright/test'
+import { JOURNEYS, stepHref } from '../src/features/navigation/journeys'
+
+const [, , ACCOUNTS] = JOURNEYS.providerKeys
 
 // A failure's automatic page snapshot can record typed form values (the setup token, passwords).
 process.env.PLAYWRIGHT_NO_COPY_PROMPT = '1'
@@ -76,8 +80,8 @@ interface WhoamiShape {
   grants: Array<{ tenant: string; permissions?: string[] }>
 }
 
-/** A request with the bearer and tenant the given page already holds. The credential never
- *  leaves the page: it is read from its own storage inside the page. */
+/** The browser sends its HttpOnly cookie. Recover CSRF metadata through the same
+ * endpoint the console uses after reload; no credential leaves the page. */
 async function authed<T>(
   page: Page,
   path: string,
@@ -92,15 +96,22 @@ async function authed<T>(
             state?: Record<string, unknown>
           }
         ).state ?? {}
-      const token = String(state('olivares.session').token ?? '')
       const tenant = String(state('olivares.tenant').activeTenant ?? '')
-      if (!token) throw new Error('no session in this page')
+      const session = await fetch('/v1/auth/browser-session', {
+        credentials: 'same-origin',
+      })
+      if (session.status !== 200)
+        throw new Error(`browser session read failed (${session.status})`)
+      const metadata = (await session.json()) as { csrf_token?: unknown }
+      if (typeof metadata.csrf_token !== 'string' || !metadata.csrf_token)
+        throw new Error('browser session has no CSRF token')
       const headers = new Headers({ Accept: 'application/json' })
-      headers.set('Authorization', `Bearer ${token}`)
+      headers.set('X-CSRF-Token', metadata.csrf_token)
       if (tenant) headers.set('X-Olivares-Tenant', tenant)
       if (body !== undefined) headers.set('Content-Type', 'application/json')
       const res = await fetch(path, {
         method,
+        credentials: 'same-origin',
         headers,
         body: body === undefined ? undefined : JSON.stringify(body),
       })
@@ -117,14 +128,11 @@ function content(page: Page) {
   return page.getByRole('main')
 }
 
-/** The Overview row of the main navigation rail. "Overview" is also the breadcrumb's current
- *  page (a disabled link in the banner) and, once visited, an entry of the rail's Recent list;
- *  the row is the one rail link that carries the rail's row marker. */
-function overviewRow(page: Page) {
+/** The Now link in the journey navigation, outside breadcrumbs and recent pages. */
+function nowLink(page: Page) {
   return page
-    .getByRole('navigation', { name: 'Main navigation', exact: true })
+    .getByRole('navigation', { name: 'Journeys', exact: true })
     .getByRole('link', { name: 'Now', exact: true })
-    .and(page.locator('[data-nav-row]'))
 }
 
 async function signIn(page: Page, email: string, password: string) {
@@ -132,7 +140,7 @@ async function signIn(page: Page, email: string, password: string) {
   await page.locator('#email').fill(email)
   await page.locator('#password').fill(password)
   await page.getByRole('button', { name: /^sign in$/i }).click()
-  await expect(overviewRow(page)).toBeVisible()
+  await expect(nowLink(page)).toBeVisible()
 }
 
 /** The engine's own account list, read by the administrator. */
@@ -147,10 +155,10 @@ async function engineAccounts(admin: Page) {
 
 async function openAdoptDialog(member: Page) {
   await content(member)
-    .getByRole('button', { name: 'Adopt a profile', exact: true })
+    .getByRole('button', { name: 'Name a profile as an account', exact: true })
     .click()
   const dialog = member.getByRole('dialog', {
-    name: 'Adopt a provider profile',
+    name: 'Name a profile as an account',
     exact: true,
   })
   await expect(dialog).toBeVisible()
@@ -178,7 +186,9 @@ async function adoptByReference(member: Page, ref: string, name: string) {
   await dialog
     .getByRole('textbox', { name: 'Account name (optional)', exact: true })
     .fill(name)
-  await dialog.getByRole('button', { name: 'Adopt', exact: true }).click()
+  await dialog
+    .getByRole('button', { name: 'Name as account', exact: true })
+    .click()
   return dialog
 }
 
@@ -234,14 +244,19 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
     target.screenshot({ path: test.info().outputPath(`${name}.png`) })
 
   try {
-    await test.step('first boot: create the administrator and sign in', async () => {
+    await test.step('first boot: automatic administrator sign-in', async () => {
       await page.goto('/setup')
       await page.locator('#token').fill(setupToken)
       await page.locator('#setup-email').fill(ADMIN_EMAIL)
       await page.locator('#setup-password').fill(ADMIN_PASSWORD)
       await page.getByRole('button', { name: /create administrator/i }).click()
-      await page.waitForURL('**/login')
-      await signIn(page, ADMIN_EMAIL, ADMIN_PASSWORD)
+      await expect(page).toHaveURL(/\/onboarding$/)
+      await expect(
+        content(page).getByRole('heading', {
+          name: 'Get started',
+          exact: true,
+        }),
+      ).toBeVisible()
       tenant = await page.evaluate(() =>
         String(
           (
@@ -252,6 +267,41 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
         ),
       )
       expect(tenant, 'the administrator has an active tenant').not.toBe('')
+    })
+
+    await test.step('authenticate with the browser cookie and refuse a write without CSRF', async () => {
+      expect(
+        await page.evaluate(() => localStorage.getItem('olivares.session')),
+        'the browser holds no legacy bearer in storage',
+      ).toBeNull()
+      const whoami = await authed<WhoamiShape>(page, '/v1/auth/whoami')
+      expect(whoami.status, 'the cookie authenticates the administrator').toBe(
+        200,
+      )
+      expect(whoami.body.grants.some((g) => g.tenant === tenant)).toBe(true)
+      const withoutCSRF = await page.evaluate(async (tenant) => {
+        const response = await fetch('/v1/m/sessions/provider-profiles', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Olivares-Tenant': tenant,
+          },
+          body: '{}',
+        })
+        return response.status
+      }, tenant)
+      expect(withoutCSRF, 'a cookie alone cannot authorize a write').toBe(403)
+      const withCSRF = await authed(
+        page,
+        '/v1/m/sessions/provider-profiles',
+        'POST',
+        {},
+      )
+      expect(
+        withCSRF.status,
+        'the same empty body with CSRF reaches request validation',
+      ).toBe(400)
     })
 
     await test.step('seed four provider profiles over empty homes (seam S1)', async () => {
@@ -279,19 +329,27 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
     })
 
     await test.step('seed a member who holds the editor role', async () => {
-      const user = await authed<{ id: string }>(page, '/v1/users', 'POST', {
+      const user = await authed<{
+        id: string
+        membership: { user_id: string; tenant: string; role: string }
+      }>(page, '/v1/users', 'POST', {
         email: MEMBER_EMAIL,
         display_name: 'Accounts member',
         password: MEMBER_PASSWORD,
-      })
-      expect(user.status, 'the member account is created').toBe(201)
-      memberId = user.body.id
-      const granted = await authed(page, '/v1/memberships', 'POST', {
-        user_id: memberId,
         tenant,
         role: 'editor',
       })
-      expect([200, 201], 'the editor role is granted').toContain(granted.status)
+      expect(user.status, 'the member account is created').toBe(201)
+      memberId = user.body.id
+      // The real creation API grants a new account its first membership atomically.
+      // A separate grant to an existing non-member requires the holder's consent.
+      expect(user.body.membership, 'the editor membership is created').toEqual(
+        expect.objectContaining({
+          user_id: memberId,
+          tenant,
+          role: 'editor',
+        }),
+      )
     })
 
     memberContext = await browser.newContext()
@@ -305,7 +363,7 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
 
     await test.step('the member opens the accounts page', async () => {
       await signIn(member, MEMBER_EMAIL, MEMBER_PASSWORD)
-      await member.goto('/provider-accounts')
+      await member.goto(stepHref(ACCOUNTS))
       await expect(
         content(member).getByRole('heading', {
           name: 'Provider accounts',
@@ -329,13 +387,18 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       await dialog
         .getByRole('textbox', { name: 'Account name (optional)', exact: true })
         .fill('journey-a')
-      await dialog.getByRole('button', { name: 'Adopt', exact: true }).click()
-      // The account's detail sheet: a dialog titled with the account name.
+      await dialog
+        .getByRole('button', { name: 'Name as account', exact: true })
+        .click()
+      // The sheet uses the profile's display label; Name keeps the canonical account name.
+      const detail = member.getByRole('dialog', {
+        name: 'Journey profile A',
+        exact: true,
+      })
       await expect(
-        member
-          .getByRole('dialog', { name: /journey-a/ })
-          .getByRole('heading', { name: /journey-a/ }),
+        detail.getByRole('heading', { name: 'Journey profile A', exact: true }),
       ).toBeVisible()
+      await expect(detail.getByText('journey-a', { exact: true })).toBeVisible()
       await capture(member, '1-adopted-detail')
       await member.keyboard.press('Escape')
       expect(await engineAccounts(page)).toEqual(
@@ -356,7 +419,7 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       await adoptByReference(member, refs[1], 'journey-b')
       await expect(
         content(member).getByText(
-          `The outcome of adopting ${refs[1]} is not known here.`,
+          `Whether ${refs[1]} became an account is not known here.`,
           { exact: true },
         ),
       ).toBeVisible()
@@ -384,7 +447,7 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       // nothing re-sent the adoption.
       await member.reload()
       await expect(
-        content(member).getByRole('button', { name: /journey-b/ }),
+        content(member).getByRole('button', { name: /Journey profile B/ }),
       ).toBeVisible()
       expect(adoptPosts.filter((ref) => ref === refs[1])).toHaveLength(1)
       const named = (await engineAccounts(page)).filter(
@@ -415,9 +478,12 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
         .toBe(1)
       expect(committed[ref], 'the engine committed the adoption').toEqual([200])
       await expect(
-        dialog.getByText(`Adopting ${ref}. Waiting for the server's answer.`, {
-          exact: true,
-        }),
+        dialog.getByText(
+          `Naming ${ref} as an account. Waiting for the server's answer.`,
+          {
+            exact: true,
+          },
+        ),
       ).toBeVisible()
 
       // The administrator withdraws the account read with a tenant deny policy.
@@ -468,7 +534,7 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       release()
       await expect(
         content(member).getByText(
-          `The outcome of adopting ${ref} is not known here.`,
+          `Whether ${ref} became an account is not known here.`,
           { exact: true },
         ),
       ).toBeVisible()
@@ -483,7 +549,9 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
         }),
       ).toBeVisible()
       await expect(
-        content(member).getByText('Not authorized', { exact: true }),
+        content(member).getByText('You do not have access to this.', {
+          exact: true,
+        }),
       ).toBeVisible()
       await member.unroute(ADOPT, holdThenDrop)
       await capture(member, '3-read-refused-intent-held')
@@ -507,7 +575,7 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       // The same boundary kept the adoption through the refusal, and a GET settles it.
       await expect(
         content(member).getByText(
-          `The outcome of adopting ${ref} is not known here.`,
+          `Whether ${ref} became an account is not known here.`,
           { exact: true },
         ),
         'the adoption is still held after the read is restored',
@@ -524,7 +592,7 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       await capture(member, '4-read-restored-reconciled')
       await member.reload()
       await expect(
-        content(member).getByRole('button', { name: /journey-d/ }),
+        content(member).getByRole('button', { name: /Journey profile D/ }),
       ).toBeVisible()
       expect(adoptPosts.filter((p) => p === ref)).toHaveLength(1)
       const named = (await engineAccounts(page)).filter(
@@ -621,7 +689,7 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       expect(committed[refs[2]]).toEqual([200])
       await expect(
         dialog.getByText(
-          `Adopting ${refs[2]}. Waiting for the server's answer.`,
+          `Naming ${refs[2]} as an account. Waiting for the server's answer.`,
           { exact: true },
         ),
       ).toBeVisible()
@@ -646,13 +714,13 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
       await expect(dialog).toBeHidden()
       await expect(
         content(member).getByText(
-          `Adopting ${refs[2]}. The server has not answered yet.`,
+          `Naming ${refs[2]} as an account. The server has not answered yet.`,
           { exact: true },
         ),
       ).toBeVisible()
       await expect(
         content(member).getByRole('button', {
-          name: 'Adopt a profile',
+          name: 'Name a profile as an account',
           exact: true,
         }),
       ).toHaveCount(0)
@@ -660,7 +728,7 @@ test('provider accounts: adopt, reconcile lost answers by reading, keep an adopt
 
       release()
       await expect(
-        content(member).getByText(`${refs[2]} was adopted as journey-c.`, {
+        content(member).getByText(`${refs[2]} is now the account journey-c.`, {
           exact: true,
         }),
       ).toBeVisible()

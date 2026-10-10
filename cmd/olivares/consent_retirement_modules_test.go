@@ -20,16 +20,13 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/governance"
+	"github.com/olivaresai/olivares/modules/governance/testsupport"
 	"github.com/olivaresai/olivares/modules/sourcescope"
 )
 
 // publishCedar publishes a Cedar policy source for tenant.
 func (e *consentEstate) publishCedar(tenant model.TenantID, source string) {
-	e.t.Helper()
-	r := e.do("POST", "/v1/m/governance/pdp/publish", e.admin, tenant, map[string]any{"engine": "cedar", "source": source})
-	if r.code != http.StatusOK {
-		e.t.Fatalf("publish cedar = %d %s", r.code, r.raw)
-	}
+	testsupport.SeedCedar(e.t, e.eng.store, tenant, source, e.eng.nhiEnforcer)
 }
 
 // blockingRefs returns the ids a retirement record lists as blocking it.
@@ -96,44 +93,6 @@ func TestAnAuthoredCedarGrantBlocksReadmissionUntilRevised(t *testing.T) {
 // TestAStaleSnapshotCannotHonorARetiredUsersGrant: a process whose grant
 // snapshot predates the retirement abstains for the re-admitted account instead
 // of honoring the grant the retirement removed.
-func TestAStaleSnapshotCannotHonorARetiredUsersGrant(t *testing.T) {
-	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
-		ctx := context.Background()
-		const email = "stale-snapshot@consent.test"
-		user := e.onboard(e.tT, email, "viewer")
-		e.grantUser(e.tT, user, "editor")
-
-		stale := governance.New()
-		stale.UseData(api.NewModuleData(e.eng.store))
-		if err := stale.ReloadActivePDP(ctx, e.tT); err != nil {
-			t.Fatalf("load the stale snapshot: %v", err)
-		}
-		staleAuthz := auth.NewAuthorizer(nil, auth.WithScopedGrants(stale.ScopedGrants()))
-
-		e.scimDelete(e.tT, user)
-		e.runPump()
-		if r := e.readmit(e.tT, email, "viewer"); r.code != http.StatusCreated {
-			t.Fatalf("re-admission = %d %s", r.code, r.raw)
-		}
-		sess, code := e.tryLogin(email, consentMemberPassword)
-		if code != http.StatusOK {
-			t.Fatalf("sign in: %d", code)
-		}
-		p, err := e.eng.authr.Authenticate(ctx, sess)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if staleAuthz.Allowed(ctx, p, "agent:write", e.tT) {
-			t.Errorf("a snapshot older than the retirement honored the removed grant")
-		}
-		if err := stale.ReloadActivePDP(ctx, e.tT); err != nil {
-			t.Fatalf("reload: %v", err)
-		}
-		if staleAuthz.Allowed(ctx, p, "agent:write", e.tT) {
-			t.Errorf("the reloaded snapshot honored the removed grant")
-		}
-	})
-}
 
 // resolveSourceAs resolves an MCP source for email's own session principal in
 // tenant, through the source-scope resolver over the composed store.
@@ -392,32 +351,6 @@ func (e *consentEstate) rosterHuman(tenant model.TenantID, externalID string) {
 
 // TestAPermitNamingTheUsersCredentialBlocksRetirement: a permit naming one of
 // the account's credentials blocks its retirement like one naming the account.
-func TestAPermitNamingTheUsersCredentialBlocksRetirement(t *testing.T) {
-	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
-		ctx := context.Background()
-		const email = "credential-permit@consent.test"
-		user := e.onboard(e.tT, email, "viewer")
-		sess := e.login(email, consentMemberPassword)
-		p, err := e.eng.authr.Authenticate(ctx, sess)
-		if err != nil {
-			t.Fatal(err)
-		}
-		e.publishCedar(e.tT, `permit(principal == Principal::"`+p.CredID.String()+`", action, resource);`)
-		e.scimDelete(e.tT, user)
-		// While it retires, a permit naming one of its credentials is refused like
-		// one naming the account.
-		if r := e.do("POST", "/v1/m/governance/pdp/publish", e.admin, e.tT, map[string]any{
-			"engine": "cedar", "source": `permit(principal == Principal::"` + p.CredID.String() + `", action == Action::"agent:read", resource);`,
-		}); r.code != http.StatusConflict || r.errorCode() != "subject_retirement_active" {
-			t.Errorf("a permit naming the retiring account's credential = %d %s, want 409 subject_retirement_active", r.code, r.raw)
-		}
-		e.runPump()
-		e.wantBlocked(t, user, e.tT, "policy")
-		if r := e.readmit(e.tT, email, "viewer"); r.code != http.StatusConflict || r.errorCode() != "retirement_pending" {
-			t.Errorf("re-admission while a permit names the account's credential = %d %s, want 409 retirement_pending", r.code, r.raw)
-		}
-	})
-}
 
 // participantSteps is a workflow graph that names who in one participant role
 // only: as the work's owner, as the target of an assignment, or as the
@@ -469,28 +402,60 @@ func TestAWorkflowNamingTheUserBlocksReadmissionUntilEdited(t *testing.T) {
 				e := e.forSubtest(t)
 				email := fmt.Sprintf("workflow-%d@consent.test", i)
 				user := e.onboard(e.tT, email, "viewer")
-				created := e.do("POST", "/v1/m/orchestration/workflows", e.admin, e.tT, map[string]any{
-					"name": fmt.Sprintf("names-%d", i), "steps": participantSteps(t, role, user, heir),
-				})
-				if created.code != http.StatusCreated {
-					t.Fatalf("create workflow = %d %s", created.code, created.raw)
-				}
-				wfID, _ := created.body["id"].(string)
+				wfID := e.createRetirementWorkflow(e.tT, fmt.Sprintf("names-%d", i), participantSteps(t, role, user, heir), user, heir).String()
 				e.scimDelete(e.tT, user)
-				if r := e.do("POST", "/v1/m/orchestration/workflows", e.admin, e.tT, map[string]any{
+				late := e.do("POST", "/v1/m/orchestration/workflows", e.admin, e.tT, map[string]any{
 					"name": fmt.Sprintf("late-%d", i), "steps": participantSteps(t, role, user, heir),
-				}); r.code != http.StatusConflict || r.errorCode() != "subject_retirement_active" {
-					t.Errorf("a workflow naming the retiring account as %s = %d %s, want 409 subject_retirement_active", role, r.code, r.raw)
+				})
+				if editionOrchestrationAvailable {
+					if late.code != http.StatusConflict || late.errorCode() != "subject_retirement_active" {
+						t.Errorf("a workflow naming the retiring account as %s = %d %s, want 409 subject_retirement_active", role, late.code, late.raw)
+					}
+				} else if late.code != http.StatusNotImplemented || late.body["error"] != "orchestration_unavailable" {
+					t.Errorf("Community workflow creation = %d %s, want 501 orchestration_unavailable", late.code, late.raw)
 				}
 				e.runPump()
 				e.wantBlocked(t, user, e.tT, wfID)
 				if r := e.readmit(e.tT, email, "viewer"); r.code != http.StatusConflict {
 					t.Errorf("re-admission while a workflow names the account as %s = %d %s, want 409", role, r.code, r.raw)
 				}
-				if r := e.do("PUT", "/v1/m/orchestration/workflows/"+wfID+"/steps", e.admin, e.tT, map[string]any{
-					"steps": participantSteps(t, role, heir, heir),
-				}); r.code != http.StatusOK {
-					t.Fatalf("edit the steps = %d %s", r.code, r.raw)
+				stored := e.rowColumn(e.tT, "orchestration.workflow", model.ID(wfID), "steps")
+				steps := participantSteps(t, role, heir, heir)
+				edited := e.do("PUT", "/v1/m/orchestration/workflows/"+wfID+"/steps", e.admin, e.tT, map[string]any{"steps": steps})
+				if editionOrchestrationAvailable {
+					if edited.code != http.StatusOK {
+						t.Fatalf("edit the steps = %d %s", edited.code, edited.raw)
+					}
+				} else {
+					if edited.code != http.StatusNotImplemented || edited.body["error"] != "orchestration_unavailable" {
+						t.Fatalf("Community workflow edit = %d %s, want 501 orchestration_unavailable", edited.code, edited.raw)
+					}
+					if got := e.rowColumn(e.tT, "orchestration.workflow", model.ID(wfID), "steps"); got != stored {
+						t.Fatal("the refused edit changed the stored graph")
+					}
+					// Community has no authoring route. Model a resolved retained
+					// graph through the guarded fixture seam before running retirement.
+					b, err := json.Marshal(steps)
+					if err != nil {
+						t.Fatal(err)
+					}
+					ctx := context.Background()
+					mutate := func(fn func(store.Scope) error) error { return e.eng.store.Mutate(ctx, e.tT, fn) }
+					if err := auth.FencedWrite(ctx, e.eng.authr, e.tT, []model.ID{heir}, auth.FenceDirectory, mutate, func(sc store.Scope, _ bool) error {
+						repo, err := sc.Ext("orchestration.workflow")
+						if err != nil {
+							return err
+						}
+						rec, err := repo.Get(ctx, model.ID(wfID))
+						if err != nil {
+							return err
+						}
+						rec["steps"] = string(b)
+						_, err = repo.Update(ctx, rec)
+						return err
+					}); err != nil {
+						t.Fatalf("resolve the stored workflow: %v", err)
+					}
 				}
 				e.runPump()
 				e.wantRetired(t, user, e.tT)

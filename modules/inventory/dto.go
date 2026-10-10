@@ -5,9 +5,6 @@
 package inventory
 
 import (
-	"encoding/json"
-	"net/http"
-
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/model"
 )
@@ -143,12 +140,4 @@ type observationRegistrationDTO struct {
 	EnvironmentRef string `json:"environment_ref,omitempty"`
 }
 
-// writeJSON writes v as a JSON response. Modules cannot reach the core API's
-// unexported render helper, so each module owns a tiny equivalent.
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	if v != nil {
-		_ = json.NewEncoder(w).Encode(v)
-	}
-}
+var writeJSON = api.WriteJSON

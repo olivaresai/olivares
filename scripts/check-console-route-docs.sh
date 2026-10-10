@@ -2,45 +2,36 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
 #
-# check-console-route-docs.sh — a repository gate, la mitad de CONSOLA. ¿Cuántas rutas de la consola
-# aparecen en la documentación pública?
+# check-console-route-docs.sh — a repository gate, console coverage: count public documentation mentions.
 #
-# ⛔ LO QUE ESTE GATE MIDE, DICHO SIN ADORNO: que la RUTA aparece literalmente en alguna página
-# inglesa de `docs-site`. Eso NO es «documentada» — una ruta puede salir en una tabla y no tener
-# ni una línea que explique la pantalla. Contar cadenas dice qué se MENCIONA, no qué se explica, y
-# este fichero no va a fingir lo contrario. Sirve para lo que sirve: una ruta que NADIE nombra no
-# puede estar documentada, así que el conjunto que este gate marca es un límite superior honesto.
+# Measure literal route mentions in English docs-site pages, not explanations of each
+# screen. A table mention alone does not document a route; an unnamed route cannot be
+# documented, so the reported set is an upper bound on actual documentation coverage.
 #
-# ⛔ Y UNA SEGUNDA COSA QUE ESTE GATE **NO** DICE, para que su numero no se lea de mas: mide el
-# `docs-site/` DE ESTE REPO, que a dia de hoy **no esta publicado en ningun dominio** — CFG-16,
-# medido el 2026-08-18: `docs.olivares.ai` no resuelve. Hay una SEGUNDA superficie viva en el
-# repo web (`olivares.ai/docs/reference/...`, 65 URLs en su sitemap) que este gate no mira, y
-# ese reparto esta pendiente de una decision de producto. Asi que «38 de 58 aparecen en la
-# documentacion» significa **en la fuente de este repo**, NO «un usuario puede encontrarlas».
-# Cuando la decision se tome, este gate apunta a la superficie que gane — no antes, porque
-# elegirla aqui seria decidirla por la puerta de atras.
+# The scope is this repository's docs-site source, not user reachability. CFG-16 measured
+# 2026-08-18 that docs.olivares.ai did not resolve; the separate live web repository
+# had 65 `olivares.ai/docs/reference/...` URLs in its sitemap. The product decision
+# about that split was pending: “38 of 58” meant source coverage here. Retarget this
+# gate after that decision rather than make the product decision inside the checker.
 #
-# ⛔ Y NO ENUMERA: el denominador sale de `web/src/features/route-census.json`, que ya es el censo
-# derivado que usan otros gates. Un gate con su propia lista envejece en silencio.
-#
-# Suelo (`OLIVARES_ROUTE_DOC_FLOOR`, por defecto el nivel de hoy): la cobertura puede subir y
-# NUNCA bajar. No se sube el suelo para acomodar una ruta nueva sin mención: eso es exactamente
-# lo que el ratchet existe para impedir.
+# Derive the denominator from `web/src/features/route-census.json`, shared by other
+# gates. `OLIVARES_ROUTE_DOC_FLOOR` defaults to the measured level: coverage may rise
+# but must not fall. Do not adjust the floor to excuse a new unmentioned route.
 set -euo pipefail
 ROOT="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)"
 cd "$ROOT"
 
-CENSO="web/src/features/route-census.json"
+CENSUS="web/src/features/route-census.json"
 DOCS="docs-site/src/content/docs"
 SUELO="${OLIVARES_ROUTE_DOC_FLOOR:-38}"
 
-[ -f "$CENSO" ] || { echo "check-console-route-docs: NO HE PODIDO MIRAR: falta $CENSO" >&2; exit 2; }
-[ -d "$DOCS" ]  || { echo "check-console-route-docs: NO HE PODIDO MIRAR: falta $DOCS" >&2; exit 2; }
+[ -f "$CENSUS" ] || { echo "check-console-route-docs: COULD NOT CHECK: missing $CENSUS" >&2; exit 2; }
+[ -d "$DOCS" ]  || { echo "check-console-route-docs: COULD NOT CHECK: missing $DOCS" >&2; exit 2; }
 
-SALIDA="$(python3 - "$CENSO" "$DOCS" <<'PY'
+OUTPUT="$(python3 - "$CENSUS" "$DOCS" <<'PY'
 import json, os, re, sys
-censo, docs = sys.argv[1], sys.argv[2]
-d = json.load(open(censo, encoding="utf-8"))
+census, docs = sys.argv[1], sys.argv[2]
+d = json.load(open(census, encoding="utf-8"))
 rutas = [p if isinstance(p, str) else p.get("path", "") for p in d.get("paths", [])]
 rutas = [r for r in rutas if r]
 # Las traducciones NO cuentan: una ruta mencionada solo en la version japonesa no esta
@@ -60,27 +51,27 @@ print(len(rutas)); print(len(paginas)); print(len(con))
 print("\n".join(sin))
 PY
 )"
-N_RUTAS="$(printf '%s\n' "$SALIDA" | sed -n 1p)"
-N_PAGS="$(printf '%s\n' "$SALIDA" | sed -n 2p)"
-N_CON="$(printf '%s\n' "$SALIDA" | sed -n 3p)"
-SIN="$(printf '%s\n' "$SALIDA" | tail -n +4)"
+N_RUTAS="$(printf '%s\n' "$OUTPUT" | sed -n 1p)"
+N_PAGS="$(printf '%s\n' "$OUTPUT" | sed -n 2p)"
+N_CON="$(printf '%s\n' "$OUTPUT" | sed -n 3p)"
+SIN="$(printf '%s\n' "$OUTPUT" | tail -n +4)"
 
 # CONTROL POSITIVO: un censo vacío o unas páginas vacías no aprueban nada.
 if [ "${N_RUTAS:-0}" -lt 5 ] || [ "${N_PAGS:-0}" -lt 5 ]; then
-	echo "check-console-route-docs: NO HE PODIDO MIRAR: censo=${N_RUTAS:-0} rutas, ${N_PAGS:-0} página(s)." >&2
-	echo "                          Un denominador vacío haría que cualquier numerador pareciera un pleno." >&2
+	echo "check-console-route-docs: COULD NOT CHECK: scan=${N_RUTAS:-0} routes, ${N_PAGS:-0} page(s)." >&2
+	echo "                          An empty denominator would make any numerator look like full coverage." >&2
 	exit 2
 fi
 
-echo "check-console-route-docs: ${N_CON} de ${N_RUTAS} ruta(s) de consola aparecen en las ${N_PAGS} páginas inglesas (suelo ${SUELO})"
+echo "check-console-route-docs: ${N_CON} of ${N_RUTAS} console route(s) appear in ${N_PAGS} English pages (minimum ${SUELO})"
 if [ "$N_CON" -lt "$SUELO" ]; then
-	echo "check-console-route-docs: ⛔ LA COBERTURA BAJA: ${N_CON} < ${SUELO}. Las rutas sin mención:" >&2
+	echo "check-console-route-docs: ⛔ coverage decreased: ${N_CON} < ${SUELO}. Routes without a mention:" >&2
 	printf '%s\n' "$SIN" | sed 's/^/    /' >&2
-	echo "                          El suelo NO se baja para acomodar una ruta nueva sin documentar." >&2
+	echo "                          Do not lower the minimum to accommodate a new undocumented route." >&2
 	exit 1
 fi
 if [ -n "$SIN" ]; then
-	echo "check-console-route-docs: sin mención todavía ($((N_RUTAS - N_CON))), nombradas para que nadie las descubra tarde:"
+	echo "check-console-route-docs: still unmentioned ($((N_RUTAS - N_CON))), listed for visibility:"
 	printf '%s\n' "$SIN" | sed 's/^/    /'
 fi
 echo "check-console-route-docs: OK"

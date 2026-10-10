@@ -33,11 +33,11 @@ grep -F -q 'HOLD. NOT APPLIED.' "$DOC" \
 grep -F -q 'Refresh serial' "$DOC" \
   || fail "prepare doc lost refresh-serial HOLD"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|refresh serial landed' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 if [ -e "$REF" ]; then
-  fail "license/refresh.ts landed — this HOLD lote does not apply C03-18"
+  fail "license/refresh.ts landed — this HOLD batch does not apply C03-18"
 fi
 
 python3 - "$JSON" <<'PY' || exit $?

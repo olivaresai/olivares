@@ -73,7 +73,7 @@ grep -q 'HOLD' "$HOLD" || fail "$HOLD lost HOLD"
 grep -q 'NO ABIERTO' "$HOLD" || fail "$HOLD lost NO ABIERTO"
 grep -q 'NO IMPLEMENTADO' "$HOLD" || fail "$HOLD lost NO IMPLEMENTADO"
 if grep -qiE 'abrimos cloud-scale|sales_lane opened|implemented the seven' "$HOLD"; then
-	fail "$HOLD claims an opening this lote does not have"
+	fail "$HOLD claims an opening this batch does not have"
 fi
 
 say "check-eco-13-scale-gates: CLEAN — seven SCALE-* HOLDs; cloud-scale-monthly closed; none implemented."

@@ -4,12 +4,20 @@
 //
 // The setup wizard is three steps — install a tool, sign it in, start a session —
 // and nothing in it is blocked behind a step-up or demands optional work.
+import { FEATURE_EXTENSIONS } from '@/features/extensions'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import {
+  cleanup,
+  render,
+  screen,
+  waitFor,
+  within,
+} from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import type { ReactNode } from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+const business = FEATURE_EXTENSIONS.some((view) => view.id === 'finops')
 const auth = vi.hoisted(() => ({ admin: true }))
 vi.mock('@/lib/auth/context', () => ({
   useAuth: () => ({ can: () => auth.admin, isSuperadmin: auth.admin }),
@@ -18,20 +26,41 @@ const navigate = vi.hoisted(() => vi.fn())
 vi.mock('@tanstack/react-router', () => ({
   useNavigate: () => navigate,
   useRouterState: () => '',
+  // The policy page's Tabs strip consults useRouter; there is no RouterProvider here.
+  useRouter: () => undefined,
   Link: ({ to, children }: { to: string; children: ReactNode }) => (
     <a href={to}>{children}</a>
   ),
+}))
+// The policy page's panels are stubbed: what is under test is which tab the wizard's link
+// opens and whether that tab is gated, not what an authoring panel renders.
+vi.mock('@/features/recordings/recording-notice', () => ({
+  RecordingNotice: () => null,
+}))
+vi.mock('@/features/claude-policy/policy-authoring-panel', () => ({
+  PolicyAuthoringPanel: ({ surface }: { surface: string }) => (
+    <div>PolicyAuthoringPanel {surface} mounted</div>
+  ),
+}))
+vi.mock('@/features/claude-policy/cedar-opa-view', () => ({
+  CedarOpaView: () => <div>CedarOpaView mounted</div>,
+}))
+vi.mock('@/features/claude-policy/managed-agents-hitl', () => ({
+  ManagedAgentsHitl: () => <div>ManagedAgentsHitl mounted</div>,
 }))
 const status = vi.hoisted(() => ({
   claude: { driver: 'claude', installed: false, signed_in: false },
   codex: { driver: 'codex', installed: false, signed_in: false },
 }))
-const launch = vi.hoisted(() => ({ startSession: vi.fn() }))
+const launch = vi.hoisted(() => ({ launchSession: vi.fn() }))
+vi.mock('@/features/agentops/session-launch', async (orig) => ({
+  ...((await orig()) as Record<string, unknown>),
+  launchSession: launch.launchSession,
+}))
 vi.mock('@/features/first-hour/api', async (orig) => {
   const real = (await orig()) as Record<string, unknown>
   return {
     ...real,
-    startSession: launch.startSession,
     signInApi: {
       status: (d: 'claude' | 'codex') => Promise.resolve(status[d]),
       start: vi.fn(),
@@ -43,12 +72,26 @@ vi.mock('@/features/first-hour/api', async (orig) => {
 })
 
 import { agentOpsApi } from '@/features/agentops/api'
-import { providersApi } from '@/features/providers/api'
-import { ApiError } from '@/lib/api/errors'
+import type { ResolveProviderSource } from '@/features/agentops/types'
+import { signInApi, type SessionTool } from '@/features/first-hour/api'
+import { readinessOf } from '@/features/first-hour/readiness.fixture'
 import { NewSessionDialog } from '@/features/first-hour/first-hour'
+import ClaudePolicyView from '@/features/claude-policy/claude-policy-view'
+import { useModulesStore } from '@/stores/modules'
 import { OnboardingView } from './onboarding-view'
 
 const DISMISS_KEY = 'olivares.onboarding.dismissed'
+
+/** The engine's answer: the tool runs on this key (refused at its last test, or not). */
+function runsOnKey(
+  driver: SessionTool,
+  provider: ResolveProviderSource,
+  refused = false,
+) {
+  vi.spyOn(agentOpsApi, 'toolsReadiness').mockResolvedValue(
+    readinessOf({ [driver]: { provider, refused } }),
+  )
+}
 
 function wrap(ui: ReactNode) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -57,16 +100,21 @@ function wrap(ui: ReactNode) {
 
 beforeEach(() => {
   localStorage.clear()
+  useModulesStore.getState().setOff([])
   auth.admin = true
   status.claude = { driver: 'claude', installed: false, signed_in: false }
   status.codex = { driver: 'codex', installed: false, signed_in: false }
-  // What a tool runs on is the engine's answer (GET provider-profiles/resolve):
-  // its own login once the stub says so, otherwise the engine's refusal.
-  vi.spyOn(agentOpsApi, 'previewProfile').mockImplementation(async (driver) => {
-    const s = status[driver as 'claude' | 'codex']
-    if (s?.installed && s.signed_in) return { reason: 'own_login' }
-    throw new ApiError(409, 'conflict', `${driver} has nothing to run on yet.`)
-  })
+  // What a tool runs on is the engine's answer (GET provider-profiles/readiness): its
+  // own login once the stub says so; every other tool has nothing to run on yet.
+  vi.spyOn(agentOpsApi, 'toolsReadiness').mockImplementation(async () =>
+    readinessOf(
+      Object.fromEntries(
+        Object.values(status)
+          .filter((s) => s.installed && s.signed_in)
+          .map((s) => [s.driver, 'own_login' as const]),
+      ),
+    ),
+  )
 })
 
 describe('the setup wizard', () => {
@@ -84,6 +132,101 @@ describe('the setup wizard', () => {
     expect(screen.queryByText(/step-up|AAL3|passkey/i)).not.toBeInTheDocument()
   })
 
+  // The 26.10.0 wizard showed seven steps, three of them behind a passkey, for a
+  // workspace that already existed, a second administrator, a source and a
+  // managed-settings policy. None of that is needed for the first session.
+  it('asks only for what the first session needs; the rest are optional links', async () => {
+    const { container } = wrap(<OnboardingView />)
+    expect(await screen.findByText('0 of 3 done')).toBeInTheDocument()
+    expect(
+      screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent),
+    ).toEqual([
+      'Install an agent tool',
+      'Sign it in',
+      'Start a session',
+      'Next, when you need them',
+    ])
+    expect(container.textContent).not.toMatch(
+      /first workspace|invite an administrator|first source|policy enforcement|managed-settings|provider profile|privileged read|audit ledger|step-up|\bAAL\d|passkey|security key|\bpending\b|of \d+ verified/i,
+    )
+    for (const [name, href] of [
+      ['Invite people', '/console?tab=people'],
+      ['Connect an identity provider', '/console?tab=sso'],
+      ['Set policies', '/claude-policy?tab=managed-settings'],
+      ['Add MCP servers', '/console?tab=mcpGateway'],
+      [
+        business ? 'Set budgets' : 'Budgets',
+        business ? '/finops' : '/stored-budgets',
+      ],
+    ])
+      expect(screen.getByRole('link', { name })).toHaveAttribute('href', href)
+  })
+
+  // A fresh install runs without Cost (finops), whose page then shows only "Cost is not
+  // enabled on this installation": the wizard does not offer a page with nothing on it.
+  it('does not offer a next step whose module is off', () => {
+    useModulesStore.getState().setOff(['finops', 'claude-policy'])
+    wrap(<OnboardingView />)
+    const next = screen.getByRole('region', {
+      name: 'Next, when you need them',
+    })
+    expect(
+      within(next)
+        .getAllByRole('link')
+        .map((a) => a.textContent),
+    ).toEqual([
+      'Invite people',
+      'Connect an identity provider',
+      'Add MCP servers',
+    ])
+  })
+
+  // A fresh install runs without Security, and the policy page's default tab (Drift &
+  // posture) reads Security's findings, so a bare /claude-policy showed only "Security is
+  // not enabled on this installation" and a button that restarts the engine (#473).
+  it('opens Set policies on a tab that works while Security is off', () => {
+    useModulesStore.getState().setOff(['security'])
+    wrap(<OnboardingView />)
+    const href = screen
+      .getByRole('link', { name: 'Set policies' })
+      .getAttribute('href')
+    cleanup()
+
+    const was = window.location.href
+    window.history.replaceState({}, '', href)
+    try {
+      const { container } = wrap(<ClaudePolicyView />)
+      expect(
+        container.querySelector('[data-slot="module-not-enabled"]'),
+      ).toBeNull()
+      expect(screen.getByText(/PolicyAuthoringPanel .* mounted/)).toBeVisible()
+    } finally {
+      window.history.replaceState({}, '', was)
+    }
+  })
+
+  // A key or a local model needs no Claude Code or Codex install first. Each link opens
+  // the same Providers form as a tool's "Use an API key instead", which brings the
+  // person back here once the new provider passes its test.
+  it('offers an API key or a local model before any tool is installed', async () => {
+    wrap(<OnboardingView />)
+    const install = screen.getByRole('region', {
+      name: 'Install an agent tool',
+    })
+    expect(
+      await within(install).findByRole('link', { name: 'Add an API key' }),
+    ).toHaveAttribute(
+      'href',
+      expect.stringMatching(/^\/providers\?add=anthropic&returnTo=/),
+    )
+    expect(
+      within(install).getByRole('link', { name: 'Add a local model' }),
+    ).toHaveAttribute(
+      'href',
+      expect.stringMatching(/^\/providers\?add=ollama&returnTo=/),
+    )
+  })
+
   it('offers the tool its own sign-in once it is installed', async () => {
     status.claude = { driver: 'claude', installed: true, signed_in: false }
     wrap(<OnboardingView />)
@@ -93,44 +236,24 @@ describe('the setup wizard', () => {
     // HU2-18: the key form opens on the provider this tool runs on.
     expect(screen.getByText('Use an API key instead')).toHaveAttribute(
       'href',
-      '/providers?add=anthropic',
+      expect.stringMatching(/^\/providers\?add=anthropic&returnTo=/),
+    )
+    // A local model stays offered until a tool can start a session.
+    expect(
+      await screen.findByRole('link', { name: 'Add a local model' }),
+    ).toHaveAttribute(
+      'href',
+      expect.stringMatching(/^\/providers\?add=ollama&/),
     )
   })
 
   it('names the key the engine will use when the tool is not signed in (HU 030)', async () => {
     status.claude = { driver: 'claude', installed: true, signed_in: false }
-    vi.spyOn(agentOpsApi, 'previewProfile').mockImplementation(
-      async (driver) => {
-        if (driver === 'claude')
-          return {
-            reason: 'api_key',
-            provider: {
-              provider_ref: 'prv_a',
-              kind: 'anthropic',
-              display_name: 'Team key',
-            },
-          }
-        throw new ApiError(
-          409,
-          'conflict',
-          `${driver} has nothing to run on yet.`,
-        )
-      },
-    )
-    // Changed, stated (SR4C on b569f2e8): a key is ready once its last test is read and
-    // was not refused, so the key's record is read here too.
-    vi.spyOn(providersApi, 'list').mockResolvedValue({
-      items: [
-        {
-          provider_ref: 'prv_a',
-          kind: 'anthropic',
-          display_name: 'Team key',
-          state: 'active',
-          probe_state: 'ok',
-        },
-      ],
-      has_more: false,
-    } as never)
+    runsOnKey('claude', {
+      provider_ref: 'prv_a',
+      kind: 'anthropic',
+      display_name: 'Team key',
+    })
     wrap(<OnboardingView />)
     expect(
       await screen.findByText('Uses your API key: Team key'),
@@ -143,36 +266,11 @@ describe('the setup wizard', () => {
   // EU on RC10: a keyless local Ollama endpoint read "Uses your API key: EU local Ollama".
   it('names a local model server as one, not as an API key', async () => {
     status.codex = { driver: 'codex', installed: true, signed_in: false }
-    vi.spyOn(agentOpsApi, 'previewProfile').mockImplementation(
-      async (driver) => {
-        if (driver === 'codex')
-          return {
-            reason: 'api_key',
-            provider: {
-              provider_ref: 'prv_local',
-              kind: 'ollama',
-              display_name: 'EU local Ollama',
-            },
-          }
-        throw new ApiError(
-          409,
-          'conflict',
-          `${driver} has nothing to run on yet.`,
-        )
-      },
-    )
-    vi.spyOn(providersApi, 'list').mockResolvedValue({
-      items: [
-        {
-          provider_ref: 'prv_local',
-          kind: 'ollama',
-          display_name: 'EU local Ollama',
-          state: 'active',
-          probe_state: 'ok',
-        },
-      ],
-      has_more: false,
-    } as never)
+    runsOnKey('codex', {
+      provider_ref: 'prv_local',
+      kind: 'ollama',
+      display_name: 'EU local Ollama',
+    })
     wrap(<OnboardingView />)
     expect(
       await screen.findByText('Uses the local model server: EU local Ollama'),
@@ -180,102 +278,19 @@ describe('the setup wizard', () => {
     expect(screen.queryByText(/Uses your API key/)).toBeNull()
   })
 
-  // SR4C on b569f2e8: the readiness read stopped at the first page of 100, so a refused
-  // key on page 2 read as ready. The engine pages with cursor and has_more.
-  it('reads every provider page before it says a key is ready', async () => {
-    status.claude = { driver: 'claude', installed: true, signed_in: false }
-    vi.spyOn(agentOpsApi, 'previewProfile').mockImplementation(
-      async (driver) => {
-        if (driver === 'claude')
-          return {
-            reason: 'api_key',
-            provider: {
-              provider_ref: 'prv_a',
-              kind: 'anthropic',
-              display_name: 'Team key',
-            },
-          }
-        throw new ApiError(
-          409,
-          'conflict',
-          `${driver} has nothing to run on yet.`,
-        )
-      },
-    )
-    const list = vi
-      .spyOn(providersApi, 'list')
-      .mockImplementation(async (params) =>
-        params?.cursor === 'c2'
-          ? ({
-              items: [
-                {
-                  provider_ref: 'prv_a',
-                  kind: 'anthropic',
-                  display_name: 'Team key',
-                  state: 'active',
-                  probe_state: 'refused',
-                },
-              ],
-              has_more: false,
-            } as never)
-          : ({
-              items: [
-                {
-                  provider_ref: 'prv_other',
-                  kind: 'openai',
-                  display_name: 'Other',
-                  state: 'active',
-                  probe_state: 'ok',
-                },
-              ],
-              has_more: true,
-              cursor: 'c2',
-            } as never),
-      )
-    wrap(<OnboardingView />)
-    expect(
-      await screen.findByText(
-        'The API key Team key was refused. Replace it under API keys.',
-      ),
-    ).toBeInTheDocument()
-    expect(list.mock.calls.some(([p]) => p?.cursor === 'c2')).toBe(true)
-    expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
-  })
-
   // HU2-17: after the key test said "Refused", the wizard counted step 2 as done and the
   // row said "Uses your API key".
   it('says the key was refused, and does not count it as signed in', async () => {
     status.claude = { driver: 'claude', installed: true, signed_in: false }
-    vi.spyOn(agentOpsApi, 'previewProfile').mockImplementation(
-      async (driver) => {
-        if (driver === 'claude')
-          return {
-            reason: 'api_key',
-            provider: {
-              provider_ref: 'prv_a',
-              kind: 'anthropic',
-              display_name: 'Team key',
-            },
-          }
-        throw new ApiError(
-          409,
-          'conflict',
-          `${driver} has nothing to run on yet.`,
-        )
+    runsOnKey(
+      'claude',
+      {
+        provider_ref: 'prv_a',
+        kind: 'anthropic',
+        display_name: 'Team key',
       },
+      true,
     )
-    vi.spyOn(providersApi, 'list').mockResolvedValue({
-      items: [
-        {
-          provider_ref: 'prv_a',
-          kind: 'anthropic',
-          display_name: 'Team key',
-          state: 'active',
-          probe_state: 'refused',
-        },
-      ],
-      has_more: false,
-    } as never)
     wrap(<OnboardingView />)
     expect(
       await screen.findByText(
@@ -288,6 +303,97 @@ describe('the setup wizard', () => {
   })
 
   // Root 19:15Z (HU2 003): a session that failed counted as "Start a session" done.
+  it('waits while it reads what the tools run on, instead of saying none is ready', async () => {
+    status.codex = { driver: 'codex', installed: true, signed_in: false }
+    vi.spyOn(agentOpsApi, 'toolsReadiness').mockImplementation(
+      () => new Promise(() => {}),
+    )
+    wrap(<OnboardingView />)
+    expect(
+      await screen.findAllByRole('status', { name: /^Loading/ }),
+    ).not.toHaveLength(0)
+    expect(screen.queryByText(/of 3 done/)).toBeNull()
+    expect(screen.queryByText('Install and sign in a tool first.')).toBeNull()
+    expect(screen.queryByRole('link', { name: 'Add a local model' })).toBeNull()
+  })
+
+  it('counts a tool that can start a session as installed, whichever it is', async () => {
+    // Claude Code and Codex are not installed; OpenCode runs on the local Ollama.
+    runsOnKey('opencode', {
+      provider_ref: 'prv_ollama',
+      kind: 'ollama',
+    })
+    wrap(<OnboardingView />)
+    expect(await screen.findByText('2 of 3 done')).toBeInTheDocument()
+    expect(screen.queryByText('Install a tool first.')).toBeNull()
+    // Something can start a session: no other way to run one is offered.
+    expect(screen.queryByRole('link', { name: 'Add a local model' })).toBeNull()
+  })
+
+  it.each([
+    ['opencode', 'ok'],
+    ['grok', 'ok'],
+    ['opencode', 'refused'],
+    ['grok', 'refused'],
+  ] as const)(
+    'shows installed %s while its provider is checked, then reports %s readiness',
+    async (driver, probeState) => {
+      const toolStatus = vi
+        .spyOn(signInApi, 'status')
+        .mockImplementation(async (tool) => ({
+          driver: tool,
+          installed: tool === driver,
+          signed_in: false,
+        }))
+      let finishCheck!: () => void
+      const checking = new Promise<void>((resolve) => {
+        finishCheck = resolve
+      })
+      vi.spyOn(agentOpsApi, 'toolsReadiness').mockImplementation(async () => {
+        await checking
+        return readinessOf({
+          [driver]: {
+            provider: {
+              provider_ref: 'prv_local',
+              kind: 'ollama',
+              display_name: 'Local model',
+            },
+            refused: probeState === 'refused',
+          },
+        })
+      })
+      wrap(<OnboardingView />)
+      const install = screen.getByRole('region', {
+        name: 'Install an agent tool',
+      })
+      const card = await within(install).findByTestId(`tool-${driver}`)
+      expect(await within(card).findByText('Installed')).toBeInTheDocument()
+      expect(screen.queryByText('Install a tool first.')).toBeNull()
+      expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
+      finishCheck()
+      const ready = probeState === 'ok'
+      expect(
+        await screen.findByText(`${ready ? 2 : 1} of 3 done`),
+      ).toBeInTheDocument()
+      const signIn = screen.getByRole('region', { name: 'Sign it in' })
+      expect(within(signIn).getByTestId(`tool-${driver}`)).toBeInTheDocument()
+      if (ready) {
+        expect(
+          within(signIn).getByText('Uses the local model server: Local model'),
+        ).toBeInTheDocument()
+        expect(
+          screen.getByRole('button', { name: 'Start' }),
+        ).toBeInTheDocument()
+      } else {
+        expect(
+          within(signIn).getByText(/Local model was refused/),
+        ).toBeInTheDocument()
+        expect(screen.queryByRole('button', { name: 'Start' })).toBeNull()
+      }
+      toolStatus.mockRestore()
+    },
+  )
+
   it('does not count a failed session as started', async () => {
     status.codex = { driver: 'codex', installed: true, signed_in: true }
     vi.spyOn(agentOpsApi, 'listRuns').mockResolvedValue({
@@ -304,10 +410,18 @@ describe('the setup wizard', () => {
     expect(
       await screen.findByRole('button', { name: 'Start' }),
     ).toBeInTheDocument()
-    expect(screen.getByLabelText('Folder')).toBeInTheDocument()
+    // The folder is filled in, not typed (a fresh install: a new folder of its own).
+    expect(
+      await screen.findByText('A new folder for this session'),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: 'Folder' })).toBeNull()
+    expect(
+      screen.getByRole('button', { name: 'Change folder' }),
+    ).toBeInTheDocument()
     expect(
       screen.getByLabelText('First message (optional)'),
     ).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Add an API key' })).toBeNull()
   })
 
   it('lists the optional areas as links, not pending steps', () => {
@@ -342,11 +456,11 @@ describe('the setup wizard', () => {
 // dialog asked GET resolve for Codex about 1,700 times and never showed its form.
 // A refused tool is asked again when the form mounts its query, and that refetch
 // put the dialog back to loading, which unmounted the form: one request per round
-// trip. It now waits only for each tool's first answer.
+// trip. It waits only for the first answer, now one read for every tool.
 describe('the New session dialog', () => {
-  it('shows the form with one tool ready and asks again for the refused one at most once', async () => {
+  it('shows the form with one tool ready and asks again at most once', async () => {
     status.claude = { driver: 'claude', installed: true, signed_in: true }
-    const preview = vi.mocked(agentOpsApi.previewProfile)
+    const preview = vi.mocked(agentOpsApi.toolsReadiness)
     const before = preview.mock.calls.length
     wrap(<NewSessionDialog open onOpenChange={() => {}} />)
     expect(
@@ -356,9 +470,8 @@ describe('the New session dialog', () => {
     const asked = preview.mock.calls.length - before
     await new Promise((r) => setTimeout(r, 300))
     expect(preview.mock.calls.length - before).toBe(asked)
-    // At most two per tool, for the four tools the engine drives (HU 043; it was two
-    // tools, so four).
-    expect(asked).toBeLessThanOrEqual(8)
+    // One read answers every tool the engine drives: at most the first and one refetch.
+    expect(asked).toBeLessThanOrEqual(2)
     expect(screen.getByRole('button', { name: 'Start' })).toBeInTheDocument()
   })
 })
@@ -385,7 +498,7 @@ describe('the New session dialog: tool and preset', () => {
     await user.click(screen.getByRole('radio', { name: 'Grok Build' }))
     expect(screen.getAllByText(/nothing to run on yet/)).toHaveLength(1)
     expect(
-      screen.getByText('grok has nothing to run on yet.'),
+      screen.getByText('Grok Build has nothing to run on yet.'),
     ).toBeInTheDocument()
     expect(
       screen.getByRole('button', { name: 'Open AI tools' }),
@@ -413,23 +526,26 @@ describe('the New session dialog: tool and preset', () => {
 
   it('a ready Grok Build is picked and starts with the chosen preset', async () => {
     const user = userEvent.setup()
-    vi.mocked(agentOpsApi.previewProfile).mockImplementation(async (driver) => {
-      if (driver === 'claude' || driver === 'grok')
-        return { reason: 'own_login' }
-      throw new ApiError(
-        409,
-        'conflict',
-        `${driver} has nothing to run on yet.`,
-      )
-    })
-    launch.startSession.mockResolvedValue({ run_ref: 'run_g' })
+    vi.mocked(agentOpsApi.toolsReadiness).mockResolvedValue(
+      readinessOf({ claude: 'own_login', grok: 'own_login' }),
+    )
+    launch.launchSession.mockResolvedValue({ run_ref: 'run_g' })
     wrap(<NewSessionDialog open onOpenChange={() => {}} />)
     await user.click(await screen.findByRole('radio', { name: 'Grok Build' }))
     await user.click(screen.getByRole('button', { name: 'More options' }))
     await user.click(screen.getByRole('radio', { name: 'Read only' }))
     await user.click(screen.getByRole('button', { name: 'Start' }))
-    expect(launch.startSession).toHaveBeenCalledWith(
-      expect.objectContaining({ driver: 'grok', permission: 'readOnly' }),
+    expect(launch.launchSession).toHaveBeenCalledWith(
+      expect.objectContaining({
+        quick: expect.objectContaining({
+          driver: 'grok',
+          permission: 'readOnly',
+        }),
+      }),
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        dispatchGuard: expect.any(Function),
+      }),
     )
     // SC 59 item 2: the new session opens on its conversation, also on a phone.
     await waitFor(() =>
@@ -442,15 +558,13 @@ describe('the New session dialog: tool and preset', () => {
 })
 
 // WEB and ID on 09b: a refused tool (409, nothing to run on yet) was asked again at
-// every mount, each answer a console error. It is the known state of a fresh
-// install now: asked once while the answer is fresh, through remounts.
+// every mount, each answer a console error. A tool with nothing to run on is data in
+// the one readiness answer now: a remount asks that one read again, never once per tool.
 describe('a tool with nothing to run on yet', () => {
-  it('is asked once while its answer is fresh, through remounts', async () => {
+  it('is part of one read per mount, through remounts', async () => {
     status.claude = { driver: 'claude', installed: true, signed_in: true }
-    // Installed with nothing to run on: a tool that is not installed is not asked
-    // at all on a fresh install (HU 049).
     status.codex = { driver: 'codex', installed: true, signed_in: false }
-    const preview = vi.mocked(agentOpsApi.previewProfile)
+    const readiness = vi.mocked(agentOpsApi.toolsReadiness)
     const qc = new QueryClient({
       defaultOptions: { queries: { retry: false } },
     })
@@ -460,9 +574,7 @@ describe('a tool with nothing to run on yet', () => {
           <NewSessionDialog open onOpenChange={() => {}} />
         </QueryClientProvider>,
       )
-    const codexAsks = () =>
-      preview.mock.calls.filter(([d]) => d === 'codex').length
-    const before = codexAsks()
+    const before = readiness.mock.calls.length
     const first = mount()
     expect(
       await screen.findByRole('button', { name: 'Start' }),
@@ -472,6 +584,6 @@ describe('a tool with nothing to run on yet', () => {
     expect(
       await screen.findByRole('button', { name: 'Start' }),
     ).toBeInTheDocument()
-    expect(codexAsks() - before).toBe(1)
+    expect(readiness.mock.calls.length - before).toBeLessThanOrEqual(2)
   })
 })

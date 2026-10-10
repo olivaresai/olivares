@@ -37,11 +37,11 @@ type harness struct {
 	setupTok string
 }
 
-func newHarness(t *testing.T, signing bool) *harness {
+func newHarness(t *testing.T, signing bool, opts ...catalog.Option) *harness {
 	t.Helper()
 	auth.SetTestHashParams(auth.TestArgonMemKiB, auth.TestArgonTime, auth.TestArgonThreads)
 	ctx := context.Background()
-	cat := catalog.New()
+	cat := catalog.New(opts...)
 	st, err := engine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:", Debug: true}, cat.RegisterSchema)
 	if err != nil {
 		t.Fatal(err)

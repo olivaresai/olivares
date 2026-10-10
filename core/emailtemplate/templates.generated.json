@@ -1,5 +1,5 @@
 {
-  "$description": "GENERATED FILE — DO NOT EDIT.  Source of truth: web/tokens/*.tokens.json + email/copy/*.json + email/templates.mjs. Regenerate with `node email/build.mjs`; `task lint:email-brand` fails the push when what is committed is not what those sources produce.",
+  "$description": "GENERATED FILE — DO NOT EDIT.  Source of truth: web/tokens/*.tokens.json + email/locales/*.json + email/templates.mjs. Regenerate with `node email/build.mjs`; `task lint:email-brand` fails the push when what is committed is not what those sources produce.",
   "locales": [
     "en",
     "es",

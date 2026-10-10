@@ -10,12 +10,14 @@ import (
 	"strings"
 
 	"github.com/olivaresai/olivares/modules/sessions/confine"
+	"github.com/olivaresai/olivares/sdk/gitlayout"
 )
 
 // WithConfinement confines every child this module starts (the agent tool,
 // and stdio MCP servers that ask for ConfinementPolicy) so it can write only its
-// session folder, its account homes and a private temporary directory, and can
-// never reach a protected path (the engine data directory, its configuration).
+// session folder, its linked-worktree Git metadata, its account homes and a private
+// temporary directory, and can never reach a protected path (the engine data
+// directory, its configuration).
 // required refuses a launch on a host that cannot confine instead of running it
 // unconfined.
 func WithConfinement(protect []string, required bool) Option {
@@ -52,7 +54,8 @@ func (m *Module) ConfinementPolicy(readWrite, readOnly []string) *confine.Policy
 }
 
 // sessionConfinement is the policy of an agent launch: its working directory
-// and the profile's homes (where the tool keeps its login and settings).
+// its linked-worktree Git metadata and the profile's homes (where the tool keeps
+// its login and settings).
 //
 // A profile whose user home is the engine user's own home directory (the
 // tool's standard login location) gets only its configuration home: granting
@@ -60,7 +63,8 @@ func (m *Module) ConfinementPolicy(readWrite, readOnly []string) *confine.Policy
 //
 // A read-only session (preset read_only) may read its working directory and not
 // change it: the folder is read-only for the whole process tree, whatever the
-// tool's own settings say or a newer tool version does. Its homes and temporary
+// tool's own settings say or a newer tool version does, subject to the kernel
+// limitation the run reports on Landlock ABI 1/2. Its homes and temporary
 // directory stay writable, so the tool still keeps its state, EXCEPT a home that
 // overlaps the folder (above it, the same directory or inside it): Landlock
 // grants add up, so a writable home there would reopen the folder.
@@ -84,7 +88,31 @@ func (m *Module) sessionConfinement(dir string, home *ProviderHomeSnapshot, pres
 		}
 	}
 	p := m.ConfinementPolicy(rw, ro)
-	if p != nil && readOnly {
+	if p == nil {
+		return nil
+	}
+	// A linked worktree needs its own index/HEAD and the repository's shared
+	// objects, refs and logs; a normal clone's metadata is already in its folder.
+	var linked []string
+	if layout, ok := gitlayout.Read(dir); ok && layout.Linked() {
+		linked = []string{layout.GitDir, layout.CommonDir}
+	}
+	// Inferred grants must not reopen a named directory beneath Protect.
+gitDirs:
+	for _, path := range linked {
+		for _, protected := range p.Protect {
+			protected = resolvedPath(protected)
+			if path == protected || strings.HasPrefix(path, strings.TrimSuffix(protected, string(filepath.Separator))+string(filepath.Separator)) {
+				continue gitDirs
+			}
+		}
+		if readOnly {
+			p.ReadOnly = append(p.ReadOnly, path)
+		} else {
+			p.ReadWrite = append(p.ReadWrite, path)
+		}
+	}
+	if readOnly {
 		// Sealed: any other writable grant that would reopen the folder (the
 		// runner's temporary directory, a device directory) refuses the launch.
 		p.Sealed = []string{dir}
@@ -134,5 +162,17 @@ func (m *Module) confinementDetail(proc Process, runRef string) string {
 	if state.Mode == confine.ModeNone {
 		m.warnf("sessions: this session runs UNCONFINED and can read what the engine user can", "run_ref", runRef, "reason", state.Reason)
 	}
+	if state.Mode == confine.ModeLandlock && state.Reason != "" {
+		m.warnf("sessions: filesystem confinement has a kernel limit", "run_ref", runRef, "reason", state.Reason)
+	}
 	return "confinement: " + state.String()
+}
+
+// reportedConfinement carries the same process capability into the audit chain.
+func reportedConfinement(proc Process) *confine.State {
+	state, ok := confinementOf(proc)
+	if !ok {
+		return nil
+	}
+	return &state
 }

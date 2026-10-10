@@ -128,6 +128,65 @@ func TestSecurityResponseErrorCarriesFingerprintsNotKeyMaterial(t *testing.T) {
 	}
 }
 
+// ⛔ THE LANGUAGE OF THE EXPLANATION IS PART OF THE CONTRACT (#588). The refusal above is
+// pinned by its first line and its fingerprints; this pins the paragraph AFTER it. An
+// operator who hits a signing-key mismatch during the release ceremony is exactly the
+// person who needs the three causes, and the audit found the paragraph in Spanish behind
+// an English first line — readable to the writer, opaque to everyone else. The density
+// check is the class detector (stringliteralsenglish_test.go); this is its runtime
+// witness: what the operator actually gets must read as English.
+func TestSecurityResponseMismatchExplainsItselfInEnglish(t *testing.T) {
+	dir := t.TempDir()
+	pub, priv, _ := ed25519.GenerateKey(rand.Reader)
+	otherPub, _, _ := ed25519.GenerateKey(rand.Reader)
+
+	for _, tc := range []struct {
+		name string
+		args []string
+	}{
+		{"advisories", []string{"advisories", "--in", secRespDraft(t, dir), "--out", filepath.Join(dir, "feed.json"),
+			"--sign-key", base64.StdEncoding.EncodeToString(priv),
+			"--expect-pubkey", base64.StdEncoding.EncodeToString(otherPub)}},
+		{"rulepack-sign", []string{"rulepack", "sign", "--in", secRespPackDraft(t, dir), "--out", filepath.Join(dir, "pack.json"),
+			"--sign-key", base64.StdEncoding.EncodeToString(priv),
+			"--expect-pubkey", base64.StdEncoding.EncodeToString(otherPub)}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out, err := runSecResp(tc.args...)
+			if err == nil {
+				t.Fatalf("signed against a foreign anchor; output: %s", out)
+			}
+			for _, name := range []string{"original-fingerprints", "spanish-looking-fingerprints"} {
+				t.Run(name, func(t *testing.T) {
+					msg := err.Error()
+					if name == "spanish-looking-fingerprints" {
+						// These valid hex fingerprints contribute three "de" tokens.
+						// Only the explanation's language should affect the verdict.
+						msg = strings.NewReplacer(
+							secRespFprint(pub), "1de2de34",
+							secRespFprint(otherPub), "5de67890",
+						).Replace(msg)
+					}
+					// Fingerprints and Cobra's duplicate output are not diagnostic prose.
+					_, explanation, found := strings.Cut(msg, "\n\n")
+					if !found {
+						t.Fatalf("the mismatch explanation paragraph is missing; message: %s", msg)
+					}
+					// The explanation must be present at all — deleting it also passes a
+					// language-only check — and it must read as English, not only "not dense
+					// enough Spanish": both halves are the contract.
+					if !strings.Contains(explanation, "Check which of the three") {
+						t.Fatalf("the mismatch explanation is missing or reworded away; message: %s", msg)
+					}
+					if d := spanishDensity(explanation); d >= spanishDensityThreshold {
+						t.Fatalf("the mismatch explanation reads as Spanish (density %d); message: %s", d, msg)
+					}
+				})
+			}
+		})
+	}
+}
+
 // Las TRES codificaciones del seed que el cargador acepta tienen que seguir funcionando con el
 // ancla puesta: si el ancla solo entendiera una, un formato valido se leeria como «clave
 // equivocada», que es el mas caro de diagnosticar de los tres errores posibles.

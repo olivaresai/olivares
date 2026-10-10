@@ -52,6 +52,9 @@ const (
 // audit event attributed to the real principal in the same transaction (keys.go),
 // exactly as the core entity handlers do (handlers_core.go appendAudit).
 func (m *Module) RegisterSchema(reg store.ExtensionRegistry) error {
+	if err := registerAvailabilitySchema(reg); err != nil {
+		return err
+	}
 	if err := reg.Register(model.EntityDescriptor{
 		Kind:  keyRefKind,
 		Table: keyRefTable,

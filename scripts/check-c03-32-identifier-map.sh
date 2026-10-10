@@ -28,7 +28,7 @@ SETS="${OLIVARES_C0332_SETS:-commercial/license-worker/src/download/sets.ts}"
 grep -q 'Grants not populated' "$DOC" || fail "$DOC lost grants-not-populated"
 grep -q 'Map written' "$DOC" || fail "$DOC lost map written"
 if grep -qiE 'grants populated|fifth add-on accepted|FIRMA A claimed' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 
 python3 - "$JSON" "$WF" "$CLI" "$SETS" <<'PY' || fail "identifier map disagrees with the live sources"

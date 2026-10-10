@@ -193,10 +193,7 @@ type azConfig struct {
 // setup-exempt (advertised in RootEnginePaths) so a PEP can discover the endpoints
 // before presenting a credential. URLs are absolute, derived from the request honoring
 // a trusted reverse proxy's X-Forwarded-* headers (schemeHost).
-func (s *Server) handleAuthzenConfig(w http.ResponseWriter, r *http.Request) {
-	if !s.allowSurface(w, r, azKindConfig) {
-		return
-	}
+func (s *Server) handleAuthzenConfig(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	base := schemeHost(r)
 	cfg := azConfig{
 		PolicyDecisionPoint:       base,
@@ -224,17 +221,11 @@ func (s *Server) handleAuthzenConfig(w http.ResponseWriter, r *http.Request) {
 // from the store, and returns the verbatim Authorizer decision. Default assurance is
 // AAL1 (a PDP must not assume a step-up the PEP did not assert; the PEP raises it via
 // context.aal) — the conservative direction for enforcement.
-func (s *Server) handleAuthzenEvaluation(w http.ResponseWriter, r *http.Request) {
-	if !s.allowSurface(w, r, azKindEval) {
-		return
-	}
-	_, tenant, ok := s.authzTenant(w, r, auth.PermAuthzRead)
-	if !ok {
-		return
-	}
+func (s *Server) handleAuthzenEvaluation(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	tenant := mc.Tenant
 	var in azEvalRequest
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	// AuthZEN requires subject, action and resource. A MALFORMED request (missing a
@@ -266,17 +257,11 @@ func (s *Server) handleAuthzenEvaluation(w http.ResponseWriter, r *http.Request)
 // deny_on_first_deny or permit_on_first_permit (short-circuit returns a shorter
 // array, per spec). Results are in request order. A resolved-but-incomplete item, or
 // one whose subject cannot be resolved, defaults CLOSED with a context reason.
-func (s *Server) handleAuthzenEvaluations(w http.ResponseWriter, r *http.Request) {
-	if !s.allowSurface(w, r, azKindEval) {
-		return
-	}
-	_, tenant, ok := s.authzTenant(w, r, auth.PermAuthzRead)
-	if !ok {
-		return
-	}
+func (s *Server) handleAuthzenEvaluations(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	tenant := mc.Tenant
 	var in azEvalsRequest
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	if len(in.Evaluations) == 0 {
@@ -337,17 +322,11 @@ func (s *Server) handleAuthzenEvaluations(w http.ResponseWriter, r *http.Request
 // (default 100, max 1000), so a page returns the ACCESSIBLE subset (≤ limit, possibly
 // fewer or zero) and page.next_token continues — a consumer pages until next_token is
 // empty. This is stated in the response context.
-func (s *Server) handleAuthzenSearchSubject(w http.ResponseWriter, r *http.Request) {
-	if !s.allowSurface(w, r, azKindSearch) {
-		return
-	}
-	_, tenant, ok := s.authzTenant(w, r, auth.PermAuthzRead)
-	if !ok {
-		return
-	}
+func (s *Server) handleAuthzenSearchSubject(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	tenant := mc.Tenant
 	var in azSearchRequest
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	if in.Resource == nil || strings.TrimSpace(in.Resource.Type) == "" {
@@ -433,17 +412,11 @@ func (s *Server) handleAuthzenSearchSubject(w http.ResponseWriter, r *http.Reque
 // page.limit candidates is scanned per request, returning the accessible subset;
 // page.next_token carries the store cursor and is empty when the candidate set is
 // exhausted.
-func (s *Server) handleAuthzenSearchResource(w http.ResponseWriter, r *http.Request) {
-	if !s.allowSurface(w, r, azKindSearch) {
-		return
-	}
-	_, tenant, ok := s.authzTenant(w, r, auth.PermAuthzRead)
-	if !ok {
-		return
-	}
+func (s *Server) handleAuthzenSearchResource(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	tenant := mc.Tenant
 	var in azSearchRequest
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	if in.Subject == nil || strings.TrimSpace(in.Subject.Type) == "" || strings.TrimSpace(in.Subject.ID) == "" {
@@ -519,17 +492,11 @@ func (s *Server) handleAuthzenSearchResource(w http.ResponseWriter, r *http.Requ
 // resource: the read/write/admin verb tiers for the resource kind, filtered to those
 // the Authorizer allows. The action set is tiny, so this is a single page (next_token
 // is always empty). subject (type+id) and resource (type, id recommended) required.
-func (s *Server) handleAuthzenSearchAction(w http.ResponseWriter, r *http.Request) {
-	if !s.allowSurface(w, r, azKindSearch) {
-		return
-	}
-	_, tenant, ok := s.authzTenant(w, r, auth.PermAuthzRead)
-	if !ok {
-		return
-	}
+func (s *Server) handleAuthzenSearchAction(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	tenant := mc.Tenant
 	var in azSearchRequest
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	if in.Subject == nil || strings.TrimSpace(in.Subject.Type) == "" || strings.TrimSpace(in.Subject.ID) == "" {

@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { ScrollText } from 'lucide-react'
-import { useState, type ReactNode } from 'react'
+import { useId, useState, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from './button'
 import {
@@ -70,6 +70,8 @@ export function ConfirmDialog({
 }: ConfirmDialogProps) {
   const { t } = useTranslation('common')
   const [typed, setTyped] = useState('')
+  const phraseLabelId = useId()
+  const pendingId = useId()
 
   // Reset the typed phrase whenever the dialog toggles, so a prior attempt can't
   // pre-satisfy the guard on the next, different action. Done in render (the
@@ -82,6 +84,14 @@ export function ConfirmDialog({
 
   const phraseSatisfied = !confirmPhrase || typed.trim() === confirmPhrase
   const confirmDisabled = callerDisabled || pending || !phraseSatisfied
+  // A disabled confirm points at the visible text that says why: the running
+  // action, or the phrase still to type. A caller-disabled confirm names its reason in
+  // the caller's own form.
+  const confirmReasonId = pending
+    ? pendingId
+    : !phraseSatisfied
+      ? phraseLabelId
+      : undefined
 
   return (
     <Dialog
@@ -102,7 +112,7 @@ export function ConfirmDialog({
 
         {confirmPhrase != null && (
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="confirm-phrase">
+            <Label id={phraseLabelId} htmlFor="confirm-phrase">
               {t('privileged.typeToConfirm', { phrase: confirmPhrase })}
             </Label>
             <Input
@@ -127,11 +137,16 @@ export function ConfirmDialog({
 
         {/* Announce the in-progress window: the Spinner is aria-hidden and the
             result is only toasted afterwards, so without this the mutation runs
-            silently for a SR user after they confirm (4.1.3). */}
+            silently for a SR user after they confirm (4.1.3). It is visible
+            too: it is the reason both buttons are disabled meanwhile. */}
         {pending && (
-          <span role="status" className="sr-only">
+          <p
+            id={pendingId}
+            role="status"
+            className="text-caption text-muted-foreground"
+          >
             {t('privileged.working')}
-          </span>
+          </p>
         )}
 
         <DialogFooter>
@@ -139,6 +154,7 @@ export function ConfirmDialog({
             variant="secondary"
             onClick={() => onOpenChange(false)}
             disabled={pending}
+            aria-describedby={pending ? pendingId : undefined}
           >
             {cancelLabel ?? t('actions.cancel')}
           </Button>
@@ -146,6 +162,7 @@ export function ConfirmDialog({
             variant={tone === 'danger' ? 'destructive-solid' : 'primary'}
             onClick={onConfirm}
             disabled={confirmDisabled}
+            aria-describedby={confirmReasonId}
           >
             {pending && <Spinner size="sm" aria-hidden />}
             {confirmLabel ?? t('privileged.confirm')}

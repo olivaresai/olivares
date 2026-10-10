@@ -21,17 +21,37 @@
 //    `pep_provisioned` and `record_io` are stored on the run. A blank badge tells the
 //    truth where "enforced" by default would not (features/sessions/types.ts).
 import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Segmented } from '@/components/ui/segmented'
 import { Compass } from 'lucide-react'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
 import { useAuthBoundary } from '@/features/agentops/auth-boundary'
+import type { RunDTO, WorkspaceDTO } from '@/features/agentops/types'
+import { WorkspaceBrowser } from '@/features/agentops/workspace-browser'
+import { consoleApi } from '@/features/console/api'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
+import {
+  RESERVED_SESSION_PANEL_IDS,
+  useOfferedPanels,
+  type SessionPanelSession,
+} from '@/features/panels'
+import { SessionPublish } from '@/features/gitpublish/session-publish'
 import { useAuth } from '@/lib/auth/context'
 import { useTenantLabel } from '@/components/layout/tenant-label'
 import type { ConversationItem } from './conversation-frames'
-import { primaryRun } from './provenance'
+import { primaryRun, type UnifiedSession } from './provenance'
+import type { EvidenceBlock } from './session-address'
+import { hasThread } from './has-thread'
+import { SessionOverview } from './session-overview'
 import { RefChip } from './ref-chip'
+import { SessionBranchChanges } from './session-branch-changes'
 import { SessionChanges } from './session-changes'
+import { SessionGit } from './session-git'
+import { SessionPreview } from './session-preview'
 import type { SessionResolution } from './use-session-resolution'
 import './i18n'
 import '@/features/agentops/i18n'
@@ -54,9 +74,24 @@ function Row({
 export function SessionContextPane({
   resolution,
   inspected,
+  evidence,
+  onExpandEvidence,
+  peerSessions,
+  frameCwd,
+  panel,
+  onPanel,
 }: {
   resolution: SessionResolution
   inspected?: ConversationItem | null
+  /** The overview's evidence block that is open (`?evidence=`). */
+  evidence?: EvidenceBlock
+  onExpandEvidence?: (block: EvidenceBlock) => void
+  /** The sessions on the surface, from which "Can message" offers this one's peers. */
+  peerSessions?: readonly UnifiedSession[]
+  frameCwd?: string | null
+  /** The side pane's tab in front (`?panel=`); Context when absent or not one of the tabs. */
+  panel?: string
+  onPanel?: (panel: string) => void
 }) {
   const { t } = useTranslation(['sessions', 'agentops'])
   const { activeTenant, can } = useAuth()
@@ -67,14 +102,33 @@ export function SessionContextPane({
   const canReadWorkspaces = can('sessions:workspace:read')
   const canReadProfiles = can('sessions:profile:read')
   const workspacesQuery = useQuery({
-    queryKey: agentOpsKeys.workspaces(activeTenant),
-    queryFn: () => agentOpsApi.listWorkspaces({ limit: 200 }),
+    queryKey: [
+      ...agentOpsKeys.boundaryScope(activeTenant, boundary.epoch),
+      'workspace',
+      run?.workspace_ref,
+    ],
+    queryFn: ({ signal }) =>
+      agentOpsApi.getWorkspace(run!.workspace_ref!, {
+        tenant: activeTenant!,
+        signal,
+      }),
     enabled: canReadWorkspaces && !!activeTenant && !!run?.workspace_ref,
   })
-  const workspaceName =
-    workspacesQuery.data?.items.find(
-      (w) => w.workspace_ref === run?.workspace_ref,
-    )?.name ?? null
+  const workspace = canReadWorkspaces ? workspacesQuery.data : undefined
+  const folderName = workspace?.name ?? null
+  const workspaceId = run?.authz_workspace_id
+  const canReadWorkspace = can('tenant:read')
+  const workspaceQuery = useQuery({
+    // Reuse the boundary's cancellation and retirement, including while this pane is closed.
+    queryKey: [
+      ...agentOpsKeys.boundaryScope(activeTenant, boundary.epoch),
+      'authorization-workspace',
+      workspaceId,
+    ],
+    queryFn: ({ signal }) =>
+      consoleApi.getWorkspaceByID(workspaceId!, { signal }),
+    enabled: canReadWorkspace && !!activeTenant && !!workspaceId,
+  })
   const profileRef = live?.provider_profile_ref || run?.provider_profile_ref
   const profilesQuery = useQuery({
     queryKey: agentOpsKeys.profiles(activeTenant, boundary.epoch, {
@@ -94,6 +148,37 @@ export function SessionContextPane({
     run?.provider_driver ||
     null
 
+  // THE TABS: the console's own four, then what a build registers.
+  // A registrant that took one of the pane's own ids is ignored, so a build can add tabs
+  // and never replace Context, Changes, Files or Preview.
+  const registered = useOfferedPanels(
+    (PANEL_EXTENSIONS.sessionPanels ?? []).filter(
+      (p) => !(RESERVED_SESSION_PANEL_IDS as readonly string[]).includes(p.id),
+    ),
+  )
+  const [localTab, setLocalTab] = useState('context')
+  const options = [
+    { value: 'context', label: t('surface.pane.context') },
+    { value: 'changes', label: t('context.tabChanges') },
+    { value: 'files', label: t('context.tabFiles') },
+    // The app the session serves on a local port. Only a launched session has one.
+    ...(run ? [{ value: 'preview', label: t('preview.title') }] : []),
+    ...registered.map((p) => ({
+      value: p.id,
+      label: t(p.labelKey),
+      icon: <p.icon />,
+    })),
+  ]
+  const asked = onPanel ? (panel ?? 'context') : (panel ?? localTab)
+  const tab = options.some((o) => o.value === asked) ? asked : 'context'
+  const extension = registered.find((p) => p.id === tab)
+  const panelSession: SessionPanelSession = {
+    ref: run?.run_ref ?? live?.live_ref ?? session.sessionRef ?? '',
+    workspaceRef: run?.workspace_ref,
+    tool: run?.provider_driver || live?.provider,
+    state: run?.state ?? live?.cc_state,
+  }
+
   if (!target)
     return (
       <EmptyState
@@ -106,11 +191,20 @@ export function SessionContextPane({
   const none = t('context.none')
   const notDeclared = t('context.notDeclared')
 
-  return (
-    <div className="flex flex-col gap-4" data-testid="session-context">
-      {/* What the session changed comes first: it is what a person reviews beside the
-          conversation. The scope it ran under stays one click away. */}
-      {run ? <SessionChanges run={run} /> : null}
+  const contextBody = (
+    <>
+      {/* What the thread's header no longer says: who manages the session, its mode, the
+          folder, what it did and its evidence. A session with no conversation of its own
+          paints this block as the thread's body instead (`session-narrative.tsx`). */}
+      {hasThread(resolution) && evidence && onExpandEvidence ? (
+        <SessionOverview
+          resolution={resolution}
+          evidence={evidence}
+          onExpandEvidence={onExpandEvidence}
+          peerSessions={peerSessions}
+          frameCwd={frameCwd}
+        />
+      ) : null}
       <details data-testid="context-details">
         <summary className="cursor-pointer text-caption font-medium text-foreground">
           {t('context.details')}
@@ -129,10 +223,38 @@ export function SessionContextPane({
               </span>
             </Row>
             <Row label={t('context.workspace')}>
-              <span className="text-caption text-foreground">
-                {workspaceName || t('context.noWorkspace')}
-              </span>
+              {canReadWorkspace && workspaceQuery.isSuccess ? (
+                <span className="text-caption text-foreground">
+                  {workspaceQuery.data.name}
+                </span>
+              ) : (
+                <RefChip value={workspaceId} absent={notDeclared} />
+              )}
             </Row>
+            <Row label={t('context.folder')}>
+              {run?.workspace_ref ? (
+                folderName ? (
+                  <span className="text-caption text-foreground">
+                    {folderName}
+                  </span>
+                ) : (
+                  <RefChip value={run.workspace_ref} absent={notDeclared} />
+                )
+              ) : (
+                <span className="text-caption text-muted-foreground">
+                  {run?.workspace_path
+                    ? t('context.temporaryFolder')
+                    : notDeclared}
+                </span>
+              )}
+            </Row>
+            {run?.worktree_branch && (
+              <Row label={t('agentops:info.worktreeBranch')}>
+                <span className="text-caption text-foreground">
+                  {run.worktree_branch}
+                </span>
+              </Row>
+            )}
             <Row label={t('context.environment')}>
               <span className="text-caption text-foreground">
                 {live?.environment_ref || run?.provider_environment_ref
@@ -241,6 +363,9 @@ export function SessionContextPane({
               <RefChip value={org.tenant || activeTenant} absent={none} />
             </Row>
             <Row label={t('context.workspace')}>
+              <RefChip value={workspaceId} absent={notDeclared} />
+            </Row>
+            <Row label={t('context.folder')}>
               <RefChip value={run?.workspace_ref} absent={none} />
             </Row>
             <Row label={t('context.environment')}>
@@ -349,6 +474,181 @@ export function SessionContextPane({
           </p>
         )}
       </section>
+    </>
+  )
+  const changesBody = (
+    <>
+      {run ? null : (
+        <p className="text-caption text-muted-foreground">
+          {t('context.noChanges')}
+        </p>
+      )}
+      {/* What the session changed comes first: it is what a person reviews beside the
+          conversation. The scope it ran under stays one click away. */}
+      {run ? <SessionGit run={run} /> : null}
+      {run ? <SessionChanges run={run} /> : null}
+      {/* Then what a person does with them: publish the session's commit, when its
+          workspace has a publication target. */}
+      {/* Keyed by run: another session is another decision, never this one's open dialog. */}
+      {run ? <SessionPublish key={run.run_ref} run={run} /> : null}
+      {/* A session in its own worktree also shows what its branch holds against where
+          it began: the work a handoff named, and what the session added to it. */}
+      {run?.worktree_branch ? <SessionBranchChanges run={run} /> : null}
+    </>
+  )
+  const filesBody = (
+    <SessionFiles
+      key={`${boundary.key}:${run?.run_ref ?? ''}`}
+      run={run}
+      workspace={workspace}
+      canRead={canReadWorkspaces}
+      loading={
+        workspacesQuery.isPending && workspacesQuery.fetchStatus !== 'idle'
+      }
+      failed={workspacesQuery.isError}
+      onRetry={() => void workspacesQuery.refetch()}
+    />
+  )
+
+  return (
+    <div className="flex flex-col gap-4" data-testid="session-context">
+      {/* THE SIDE PANE HAS TABS: Context (what the header no longer says, the scope and
+          the references), Changes (what the session changed, and publishing it) and Files
+          (the folder it works in), Preview (the app it serves on a local port), then whatever
+          a build registers (a terminal). A build with none shows exactly these. */}
+      <div className="-mx-1 overflow-x-auto px-1 pb-0.5">
+        <Segmented
+          size="sm"
+          aria-label={t('context.panels')}
+          options={options}
+          value={tab}
+          onValueChange={(value) => {
+            setLocalTab(value)
+            onPanel?.(value)
+          }}
+        />
+      </div>
+      {extension ? (
+        <extension.Component key={extension.id} session={panelSession} />
+      ) : null}
+      {!extension && tab === 'changes' ? changesBody : null}
+      {!extension && tab === 'files' ? filesBody : null}
+      {/* Keyed by run: another session's preview is another URL. */}
+      {!extension && tab === 'preview' && run ? (
+        <SessionPreview key={run.run_ref} run={run} />
+      ) : null}
+      {!extension && tab === 'context' ? contextBody : null}
     </div>
   )
+}
+
+/**
+ * The folder the session works in, in the workspace browser the Workspaces view opens.
+ * Four answers, never merged: nothing to browse, no right to browse it, the read is on its
+ * way, and the read failed (with a way to ask again).
+ */
+function SessionFiles({
+  run,
+  workspace,
+  canRead,
+  loading,
+  failed,
+  onRetry,
+}: {
+  run: RunDTO | undefined
+  workspace: WorkspaceDTO | undefined
+  canRead: boolean
+  loading: boolean
+  failed: boolean
+  onRetry: () => void
+}) {
+  const { t } = useTranslation(['sessions', 'common'])
+  const { activeTenant } = useAuth()
+  const boundary = useAuthBoundary()
+  const path = run?.workspace_path
+  const differentRoot = !!path && !!workspace && path !== workspace.root_path
+  // A file endpoint is jailed by its registered reference. A worktree's original
+  // reference still names the checkout, so resolve the worktree's own registration.
+  // Never change the DTO's root_path and silently send writes to the old reference.
+  const actualQuery = useQuery({
+    queryKey: [
+      ...agentOpsKeys.boundaryScope(activeTenant, boundary.epoch),
+      'workspace-files-root',
+      path,
+    ],
+    queryFn: ({ signal }) =>
+      agentOpsApi.listWorkspaces(
+        { root_path: path!, state: 'active', limit: 1 },
+        { tenant: activeTenant!, signal },
+      ),
+    enabled: canRead && !!activeTenant && differentRoot,
+  })
+  const actual = differentRoot
+    ? actualQuery.data?.items.find(
+        (w) => w.root_path === path && w.state === 'active',
+      )
+    : run?.worktree_branch && !path
+      ? undefined
+      : workspace
+  loading ||= differentRoot && actualQuery.isPending
+  failed ||= differentRoot && actualQuery.isError
+  const retry = () => {
+    onRetry()
+    if (differentRoot) void actualQuery.refetch()
+  }
+  if (!run?.workspace_ref)
+    return (
+      <p
+        className="text-caption text-muted-foreground"
+        data-testid="context-no-files"
+      >
+        {t('sessions:context.noFiles')}
+      </p>
+    )
+  if (!canRead)
+    return (
+      <p
+        className="text-caption text-muted-foreground"
+        data-testid="context-files-forbidden"
+      >
+        {t('sessions:context.filesNoAccess')}
+      </p>
+    )
+  if (loading)
+    return (
+      <div
+        aria-busy="true"
+        data-testid="context-files-loading"
+        className="flex flex-col gap-2"
+      >
+        <Skeleton className="h-5 w-2/3" />
+        <Skeleton className="h-5 w-full" />
+        <Skeleton className="h-5 w-1/2" />
+      </div>
+    )
+  if (failed)
+    return (
+      <div
+        role="alert"
+        data-testid="context-files-failed"
+        className="flex items-center gap-2 text-caption text-warning"
+      >
+        <span className="min-w-0 flex-1">
+          {t('sessions:context.filesFailed')}
+        </span>
+        <Button variant="secondary" size="sm" onClick={retry}>
+          {t('common:actions.retry')}
+        </Button>
+      </div>
+    )
+  if (!actual)
+    return (
+      <p
+        className="text-caption text-muted-foreground"
+        data-testid="context-files-forbidden"
+      >
+        {t('sessions:context.filesUnavailable')}
+      </p>
+    )
+  return <WorkspaceBrowser workspace={actual} />
 }

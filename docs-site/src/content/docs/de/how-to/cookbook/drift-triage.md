@@ -15,6 +15,14 @@ bis der Diff still ist.
 
 ## 1. Den Drift abrufen
 
+Bei einer frischen Installation ist `accessmap` deaktiviert. Aktivieren Sie
+`accessmap` als Administrator unter **Settings > Edition & modules** und lassen
+Sie die anderen ausgewählten Module an. Für die CLI melden Sie sich zuerst
+mit `olivares login` als Administrator bei dieser Engine an und führen dann
+`olivares modules on accessmap` aus. Warten Sie vor dem Fortfahren auf jeden Neustart der Engine;
+laufende Sessions werden gestoppt und können fortgesetzt werden. Andernfalls
+geben diese API-Aufrufe `404 module_not_enabled` zurück.
+
 ```bash
 curl -ks "$BASE/v1/m/accessmap/drift" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT" | python3 -m json.tool

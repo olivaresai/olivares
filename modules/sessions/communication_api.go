@@ -58,6 +58,9 @@ var (
 	communicationCursorDeliveryEntity = api.EntityRef{
 		Kind: messageDeliveryKind, BodyIDField: "delivery_id", WorkspaceColumn: colWorkWorkspaceID,
 	}
+	communicationDecisionRequestEntity = api.EntityRef{
+		Kind: decisionRequestKind, IDParam: "id", WorkspaceColumn: colWorkWorkspaceID,
+	}
 	communicationHandoffEntity = api.EntityRef{
 		Kind: handoffKind, IDParam: "id", WorkspaceColumn: colWorkWorkspaceID,
 	}
@@ -100,6 +103,8 @@ func (m *Module) communicationRoutes(reg api.RouteRegistrar) {
 		communicationSendChannelEntity, m.handleCommunicationHandoffOffer)
 	reg.HandleEntity("POST", "/handoffs/{id}/responses", permHandoffResponseWrite,
 		communicationHandoffEntity, m.handleCommunicationHandoffResponse)
+	reg.HandleEntity("POST", "/decision-requests/{id}/responses", permDecisionRequestWrite,
+		communicationDecisionRequestEntity, m.handleCommunicationDecisionRequestResponse)
 }
 
 // communicationAdministrationRoutes mounts the two K3 administrative reads so that
@@ -361,7 +366,7 @@ func (m *Module) handleCommunicationChannelCreate(w http.ResponseWriter, r *http
 		ChannelCreateCommand
 	}
 	if err := decodeCommunicationJSON(w, r, &request); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid channel command"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid channel command")))
 		return
 	}
 	cmd := request.ChannelCreateCommand
@@ -601,7 +606,7 @@ func (m *Module) handleCommunicationChannelGrantAdministration(w http.ResponseWr
 func (m *Module) handleCommunicationChannelUpdate(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	var cmd ChannelUpdateCommand
 	if err := decodeCommunicationJSON(w, r, &cmd); err != nil || cmd.ChannelID != model.ID(mc.Resource.ID) {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid channel update"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid channel update")))
 		return
 	}
 	cmd.IfMatch = r.Header.Get("If-Match")
@@ -642,8 +647,12 @@ func (m *Module) handleCommunicationChannelGet(w http.ResponseWriter, r *http.Re
 func (m *Module) handleCommunicationChannelGrant(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	id, err := model.ParseID(chi.URLParam(r, "id"))
 	var input ChannelGrantInput
-	if err != nil || decodeCommunicationJSON(w, r, &input) != nil {
+	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errorBody("invalid channel grant"))
+		return
+	}
+	if err := decodeCommunicationJSON(w, r, &input); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid channel grant")))
 		return
 	}
 	cmd := ChannelGrantCommand{ChannelID: id, Grant: input, IfMatch: r.Header.Get("If-Match")}
@@ -696,7 +705,7 @@ func (m *Module) handleChannelAdminCommand(
 func (m *Module) handleCommunicationMessageSend(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	var cmd DirectNoticePublishCommand
 	if err := decodeCommunicationJSON(w, r, &cmd); err != nil || cmd.ChannelID.String() != mc.Resource.ID {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid message command"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid message command")))
 		return
 	}
 	cmd.IdempotencyKey = r.Header.Get("Idempotency-Key")
@@ -930,7 +939,7 @@ func (m *Module) handleCommunicationDeliveryAck(w http.ResponseWriter, r *http.R
 func (m *Module) handleCommunicationHandoffOffer(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	var cmd WorkItemHandoffOfferCommand
 	if err := decodeCommunicationJSON(w, r, &cmd); err != nil || cmd.ChannelID.String() != mc.Resource.ID {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid Handoff offer"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid Handoff offer")))
 		return
 	}
 	cmd.IfMatch = r.Header.Get("If-Match")
@@ -970,7 +979,7 @@ func (m *Module) handleCommunicationHandoffResponse(w http.ResponseWriter, r *ht
 	}
 	var cmd HandoffResponseCommand
 	if err := decodeCommunicationJSON(w, r, &cmd); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid Handoff response"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid Handoff response")))
 		return
 	}
 	cmd.IfMatch = r.Header.Get("If-Match")
@@ -989,6 +998,42 @@ func (m *Module) handleCommunicationHandoffResponse(w http.ResponseWriter, r *ht
 	defer cancel()
 	ctx = withRequestStanding(ctx, mc.Standing)
 	result, err := m.RespondHandoff(ctx, scope, ref, handoffID, cmd)
+	if err != nil {
+		writeCommunicationError(w, err)
+		return
+	}
+	w.Header().Set("ETag", result.ETag)
+	writeJSON(w, http.StatusOK, result)
+}
+
+// handleCommunicationDecisionRequestResponse resolves or dismisses a decision request with current authority.
+func (m *Module) handleCommunicationDecisionRequestResponse(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
+	requestID, err := model.ParseID(chi.URLParam(r, "id"))
+	if err != nil || requestID.String() != mc.Resource.ID {
+		writeJSON(w, http.StatusNotFound, errorBody("not found"))
+		return
+	}
+	var cmd DecisionRequestResponseCommand
+	if err := decodeCommunicationJSON(w, r, &cmd); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid decision request response")))
+		return
+	}
+	cmd.IfMatch = r.Header.Get("If-Match")
+	cmd.IdempotencyKey = r.Header.Get("Idempotency-Key")
+	scope, err := communicationEntityScopeFromContext(mc)
+	if err != nil {
+		writeCommunicationError(w, err)
+		return
+	}
+	ref, err := communicationRequestPrincipal(mc)
+	if err != nil {
+		writeCommunicationError(w, err)
+		return
+	}
+	ctx, cancel := communicationHTTPContext(r)
+	defer cancel()
+	ctx = withRequestStanding(ctx, mc.Standing)
+	result, err := m.RespondDecisionRequest(ctx, scope, ref, requestID, cmd)
 	if err != nil {
 		writeCommunicationError(w, err)
 		return
@@ -1049,7 +1094,7 @@ func (m *Module) handleCommunicationCursorPut(w http.ResponseWriter, r *http.Req
 	}
 	if err := decodeCommunicationJSON(w, r, &body); err != nil ||
 		body.DeliveryID.IsZero() || body.DeliveryID.String() != mc.Resource.ID {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid cursor command"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid cursor command")))
 		return
 	}
 	cmd := DirectNoticeCursorAdvanceCommand{

@@ -51,12 +51,10 @@ formalised when there is a real need for it.
 - **Non-trivial or directional changes** should start as an issue for
   discussion *before* a pull request, so the approach can be agreed early (see
   [`CONTRIBUTING.md`](CONTRIBUTING.md)).
-- **Architectural decisions** are recorded as Architecture Decision Records
-  (MADR) under [`docs/adr/`](docs/adr/). The ADR log is the durable record of
-  *why* a decision was made; new directional decisions should land as an ADR.
+- **Architectural decisions** and their rationale are discussed and recorded in
+  the issue or pull request.
 - **Disagreements** are resolved by discussion first; where consensus is not
-  reached, the maintainer decides and records the rationale (in the PR or an
-  ADR).
+  reached, the maintainer decides and records the rationale in the issue or PR.
 
 ## Contribution requirements
 
@@ -92,7 +90,7 @@ The license frontier is enforced in CI and is reflected in
 
 | Subtree | License | Notes |
 |---|---|---|
-| `core/`, `modules/`, `web/`, `cmd/`, `operator/`, `terraform-provider-olivares/`, `docs-site/` | `AGPL-3.0-only` | The product, the first-party binaries/operator/Terraform provider, and the docs site. Community contributions welcome under the CLA/DCO. |
+| `core/`, `modules/`, `web/`, `cmd/`, Business operator source, Business Terraform provider source, `docs-site/` | `AGPL-3.0-only` | The product, the first-party binaries/operator/Terraform provider, and the docs site. Community contributions welcome under the CLA/DCO. |
 | `sdk/`, `connectors/` | `Apache-2.0` | The permissive ecosystem boundary — the breadth moat. A connector must never import from `core/`. |
 | `enterprise/` (separate private repository — not in this repo) | `LicenseRef-Olivares-Commercial` | Additive commercial features, maintained by Olivares.AI. Not a destination for community contributions. |
 

@@ -39,11 +39,11 @@ FUENTE="$RAIZ/web/src"
 BASE="$RAIZ/web/badge-vacio-filas.baseline"
 
 if [ ! -d "$FUENTE" ]; then
-	echo "check-badge-vacio-filas: NO PUDE MIRAR: no existe $FUENTE" >&2
+	echo "check-badge-vacio-filas: COULD NOT CHECK: missing $FUENTE" >&2
 	exit 2
 fi
 if [ ! -f "$BASE" ]; then
-	echo "check-badge-vacio-filas: NO PUDE MIRAR: falta la baseline $BASE" >&2
+	echo "check-badge-vacio-filas: COULD NOT CHECK: missing baseline $BASE" >&2
 	exit 2
 fi
 
@@ -80,15 +80,15 @@ if command -v git >/dev/null 2>&1 && git -C "$RAIZ" rev-parse --git-dir >/dev/nu
 	if [ -n "$_base_ref" ]; then
 		_rel="${BASE#"$RAIZ"/}"
 		ANTERIOR="$(git -C "$RAIZ" show "$_base_ref:$_rel" 2>/dev/null || true)"
-		[ -n "$ANTERIOR" ] || MONOTONO="sin-baseline-en-la-base"
+		[ -n "$ANTERIOR" ] || MONOTONO="no-baseline-at-base"
 	else
-		MONOTONO="sin-merge-base"
+		MONOTONO="no-merge-base"
 	fi
 elif [ -n "${BADGE_ANTERIOR:-}" ] && [ -f "$BADGE_ANTERIOR" ]; then
 	ANTERIOR="$(cat "$BADGE_ANTERIOR")"
 	MONOTONO="si"
 else
-	MONOTONO="sin-git"
+	MONOTONO="no-git"
 fi
 
 ANTERIOR="$ANTERIOR" python3 - "$FUENTE" "$BASE" "$MONOTONO" <<'PY'
@@ -128,8 +128,8 @@ for linea in base.read_text().splitlines():
     ruta, _, n = linea.rpartition('\t')
     esperado[ruta] = int(n)
 
-print(f"check-badge-vacio-filas: {montajes} montajes · {con_filas} con `filas` · "
-      f"{montajes - con_filas} sin · {sum(actual.values())} en riesgo (baseline {sum(esperado.values())})")
+print(f"check-badge-vacio-filas: {montajes} uses · {con_filas} with `filas` · "
+      f"{montajes - con_filas} without · {sum(actual.values())} at risk (baseline {sum(esperado.values())})")
 
 subidas, nuevos, bajadas = [], [], []
 for ruta, n in sorted(actual.items()):
@@ -145,14 +145,14 @@ idos = [(r, e) for r, e in sorted(esperado.items()) if r not in actual]
 rc = 0
 for ruta, n in nuevos:
     rc = 1
-    print(f"  ⛔ NUEVO: {ruta} monta {n} aviso(s) sin `filas` junto a un <EmptyState>")
+    print(f"  ⛔ NEW: {ruta} renders {n} badge(s) without `filas` alongside an <EmptyState>")
     for l in detalle[ruta]:
         print(f"       {ruta}:{l}")
-    print("     Remedio: pasa `filas={…length ?? 0}` al <ListTruncationBadge>, o mueve el aviso")
-    print("     dentro de la rama no vacía. Con `{items: [], has_more: true}` se superponen.")
+    print("     Fix: pass `filas={…length ?? 0}` to <ListTruncationBadge>, or move the badge")
+    print("     into the branch for nonempty results. With `{items: [], has_more: true}`, they overlap.")
 for ruta, e, n in subidas:
     rc = 1
-    print(f"  ⛔ SUBE: {ruta} pasa de {e} a {n}")
+    print(f"  ⛔ INCREASE: {ruta} goes from {e} to {n}")
     for l in detalle[ruta]:
         print(f"       {ruta}:{l}")
 
@@ -160,10 +160,10 @@ for ruta, e, n in subidas:
 #    numero se queda congelado mientras el arbol mejora. El remedio es una linea.
 for ruta, e, n in bajadas:
     rc = 1
-    print(f"  ⛔ BAJA y la baseline no se actualizo: {ruta} {e} → {n}. Ponlo en {base.name}.")
+    print(f"  ⛔ DECREASE without a baseline update: {ruta} {e} → {n}. Update {base.name}.")
 for ruta, e in idos:
     rc = 1
-    print(f"  ⛔ RESUELTO y la baseline no se actualizo: {ruta} ({e}). Quita su linea de {base.name}.")
+    print(f"  ⛔ RESOLVED without a baseline update: {ruta} ({e}). Remove its entry from {base.name}.")
 
 # ⛔ UN RENOMBRADO NO ES UN EMPEORAMIENTO, Y EL MENSAJE NO PUEDE DECIR QUE SI LO ES. Mover un
 #    fichero produce un NUEVO y un RESUELTO por una edicion que no cambio una sola linea de JSX, y
@@ -180,11 +180,11 @@ for ruta, e in idos:
 #     vio: cubria la direccion facil.
 if nuevos and idos and sum(actual.values()) == sum(esperado.values()):
     print()
-    print("  ⚠ EL TOTAL NO HA CAMBIADO ({}). Eso es compatible con un RENOMBRADO o un reparto de"
+    print("  ⚠ THE TOTAL IS UNCHANGED ({}). This may be a rename or a redistribution across"
           .format(sum(actual.values())))
-    print("    ficheros — y TAMBIEN con «uno arreglado + uno nuevo», que si es un empeoramiento.")
-    print("    NO puedo distinguirlos desde aqui: mira las dos listas antes de tocar la baseline.")
-    print("    Si de verdad es una mudanza, la edicion es:")
+    print("    files — or a resolved case plus a new one, which is a regression.")
+    print("    This check cannot distinguish them: inspect both lists before updating the baseline.")
+    print("    If this is a move, make these edits:")
     for ruta, e in idos:
         print(f"      - {ruta}\t{e}")
     for ruta, n in nuevos:
@@ -207,22 +207,22 @@ if monotono == 'si':
     if subidas_reales:
         rc = 1
         print()
-        print("  ⛔ SUBE EL RIESGO RESPECTO A LA BASE, y la baseline del arbol NO lo autoriza:")
+        print("  ⛔ RISK INCREASED FROM THE BASE; the current baseline does not authorize the increase:")
         for r, a, n in subidas_reales:
             print(f"       {r}: {a} → {n}")
             for l in detalle.get(r, []):
                 print(f"         {r}:{l}")
-        print("     Subir la baseline en el mismo commit NO vale: se compara con la del merge-base")
-        print("     con origin/main. Pasa `filas` o mueve el aviso dentro de la rama no vacia.")
+        print("     Raising the baseline in the same commit does not count: comparison uses the merge-base")
+        print("     with origin/main. Pass `filas` or move the badge into the branch for nonempty results.")
     if sum(actual.values()) > sum(antes.values()):
         rc = 1
-        print(f"  ⛔ El TOTAL sube respecto a la base: {sum(antes.values())} → {sum(actual.values())}")
+        print(f"  ⛔ TOTAL increased from the base: {sum(antes.values())} → {sum(actual.values())}")
 else:
-    print(f"  ⚠ PARCIAL: no he podido comparar con la baseline de la base ({monotono}).")
-    print("    Lo comprobado es que el arbol casa con SU baseline; que esa baseline no haya subido")
-    print("    NO esta verificado aqui. Con `.git` disponible, si lo esta.")
+    print(f"  ⚠ PARTIAL: could not compare with the baseline at the base ({monotono}).")
+    print("    The tree matches its current baseline; this check could not verify that the baseline")
+    print("    has not increased. That check requires `.git`.")
 
 if rc == 0:
-    print("  OK — el conjunto de riesgo casa con la baseline exactamente.")
+    print("  OK — the at-risk set matches the baseline exactly.")
 sys.exit(rc)
 PY

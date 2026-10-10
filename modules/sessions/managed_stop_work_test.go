@@ -40,6 +40,7 @@ func newManagedStopWorkFixture(t *testing.T, cfg store.Config) (*managedStopFixt
 		WithWorkIdentityResolver(allowWorkIdentity{}), WithWorkContentGuard(allowWorkContent{}),
 		WithProductVersion("test"), WithStopWaitDelay(time.Second),
 	)
+	ensureRuntimeTestProfileRef(t, f.m, f.tenant) // homes outlive nested work cases
 	return f, runner
 }
 
@@ -49,7 +50,7 @@ func (f *managedStopFixture) boundRun(t *testing.T) (ManagedRunRef, model.ID, mo
 	t.Helper()
 	ctx := context.Background()
 	itemID, workspace, agentRef := f.readyBoundWorkItem(t)
-	managed, err := f.m.LaunchForWork(ctx, f.tenant, workLaunchSpec(itemID, agentRef))
+	managed, err := f.m.LaunchForWork(ctx, f.tenant, workLaunchSpec(t, f.m, f.tenant, itemID, agentRef))
 	if err != nil {
 		t.Fatalf("LaunchForWork: %v", err)
 	}
@@ -309,7 +310,7 @@ func TestManagedStopBoundRunRefusals(t *testing.T) {
 // tenant default.
 func (f *managedStopFixture) plainRun(t *testing.T, agentRef string) (runDTO, *liveRun) {
 	t.Helper()
-	dto, err := f.m.createRun(context.Background(), f.tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, f.m, context.Background(), f.tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: agentRef, ActorKind: model.ActorAgent, AgentRef: agentRef,
 	})
@@ -615,7 +616,7 @@ func TestManagedStopBoundRunRefusesWithoutLeaseAuthority(t *testing.T) {
 			f, runner := newManagedStopWorkFixture(t, be.config(t))
 			// The run's work-session credential is minted by the REAL authenticator,
 			// so the token case below presents a bearer the product actually issued.
-			f.m.UseWorkSessionCredentialSource(newAuthWorkCredentialSource(f.authr))
+			f.m.WorkSessionCreds = newAuthWorkCredentialSource(f.authr)
 
 			t.Run("editor_without_lease_admin", func(t *testing.T) {
 				managed, _, workspace, lease := f.boundRun(t)

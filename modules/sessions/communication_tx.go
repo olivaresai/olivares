@@ -311,7 +311,7 @@ func (d tenantCommunicationData) Mutate(
 }
 
 func (m *Module) communicationData(tenant model.TenantID) communicationData {
-	return tenantCommunicationData{data: m.data, tenant: tenant}
+	return tenantCommunicationData{data: m.Data, tenant: tenant}
 }
 
 // viewCommunication is the only WP2 entry point for an observational store
@@ -536,6 +536,28 @@ func (m *Module) mutateCommunicationTransaction(
 // callback. newCommunicationTx takes the initial database-time observation and
 // retains only the narrow capability needed to resample after all blocking
 // locks. Callers use now rather than consulting a process clock.
+// workOutboxNudge is the outbox pump's wake-up (C2 item 5): a launch-time
+// registration by the composition root (boot), nil everywhere else — including
+// every module test, which never sets it. communicationTx.create calls it after
+// a successful work-outbox insert so a fresh event drains promptly instead of
+// waiting out the safety cadence. A nudge after a rolled-back transaction is
+// harmless: the drain finds nothing and idles.
+var workOutboxNudge atomic.Value // func()
+
+// SetWorkOutboxNudge registers the nudge the outbox pump waits on. One
+// composition root registers it once at boot; it is not a per-module setting.
+func SetWorkOutboxNudge(fn func()) {
+	workOutboxNudge.Store(fn)
+}
+
+// WorkOutboxNudgeRegistered reports whether a nudge is currently registered.
+// The boot-failure regression (cmd/olivares) reads it to prove a failed boot
+// withdrew the callback its pump registered.
+func WorkOutboxNudgeRegistered() bool {
+	fn, _ := workOutboxNudge.Load().(func())
+	return fn != nil
+}
+
 type communicationTx struct {
 	now model.Timestamp
 
@@ -1359,7 +1381,13 @@ func (tx *communicationTx) create(
 	if err != nil {
 		return nil, err
 	}
-	return repo.CreateAtTransactionTime(ctx, record)
+	created, err := repo.CreateAtTransactionTime(ctx, record)
+	if err == nil && kind == workOutboxKind {
+		if fn, ok := workOutboxNudge.Load().(func()); ok && fn != nil {
+			fn()
+		}
+	}
+	return created, err
 }
 
 func (tx *communicationTx) createWithID(

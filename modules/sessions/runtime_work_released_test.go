@@ -162,7 +162,7 @@ func TestRuntimeWorkReacquireBetweenSnapshotAndAdmissionRefusesOrdinaryControl(t
 				t.Fatal(err)
 			}
 			var acquireErr error
-			race := &afterNthViewData{inner: fx.m.data, after: 1, hook: func() {
+			race := &afterNthViewData{inner: fx.m.Data, after: 1, hook: func() {
 				_, acquireErr = fx.m.Apply(t.Context(), fx.tenant, fx.principal, WorkCommand{
 					Command: "lease.acquire", WorkItemID: fx.itemID, ExpectedVersion: unblocked.Version,
 					HolderSID: fx.claim.SID, HolderRunRef: fx.runRef,

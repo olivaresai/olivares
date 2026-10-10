@@ -4,12 +4,11 @@
 package a2a
 
 import (
+	"github.com/olivaresai/olivares/connectors/internal/redact"
+	"github.com/olivaresai/olivares/sdk/model"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/olivaresai/olivares/connectors/internal/redact"
-	"github.com/olivaresai/olivares/sdk/model"
 )
 
 // observe.go is the bridge from the ACTUATE side (a governed delegation) back to

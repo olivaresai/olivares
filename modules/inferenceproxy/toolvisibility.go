@@ -30,7 +30,9 @@ const (
 )
 
 // RequestToolVisibility resolves the tool-visibility classification for a request
-// based on whether advanced-tool-use features are active.
+// based on whether advanced-tool-use features are configured in the frozen
+// request. It annotates visibility only: every authorization and content gate
+// still applies, and full does not attest unrelated inspection coverage.
 func RequestToolVisibility(programmaticToolCalling, toolSearchActive bool) ToolVisibility {
 	if programmaticToolCalling || toolSearchActive {
 		return ToolVisibilityPartial

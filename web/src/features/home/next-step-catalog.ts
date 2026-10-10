@@ -24,10 +24,12 @@ import { FEATURE_VIEWS } from '@/features/registry'
  *    rule applied to an OFFER rather than to a command.
  */
 export const NEXT_STEPS = [
+  // The provider key, the first hour's concept beside the tool's own login; provider
+  // profiles, accounts and bindings come later (dev #336).
   {
     id: 'provider',
-    viewId: 'providerProfiles',
-    permission: 'sessions:profile:write',
+    viewId: 'providers',
+    permission: 'sessions:provider:write',
   },
   { id: 'agent', viewId: 'deploy', permission: 'deploy:deployment:write' },
   { id: 'session', viewId: 'agentops', permission: 'sessions:run:write' },

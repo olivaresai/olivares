@@ -25,6 +25,7 @@ import (
 	"github.com/olivaresai/olivares/core/secure"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/governance"
+	"github.com/olivaresai/olivares/modules/governance/testsupport"
 	"github.com/olivaresai/olivares/modules/sourcescope"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
@@ -302,12 +303,8 @@ func (h *harness) addAgentToGroup(tenant model.TenantID, agentID model.ID, group
 
 // publishGrant activates a tenant's authored Cedar grant policy via the real authoring
 // surface (the admin holds governance:policy:admin in the tenant).
-func (h *harness) publishGrant(admin string, tenant model.TenantID, src string) {
-	h.t.Helper()
-	r := h.do("POST", "/v1/m/governance/pdp/publish", admin, map[string]any{"engine": "cedar", "source": src}, tenantHdr(tenant))
-	if r.code != http.StatusOK {
-		h.t.Fatalf("publish grant = %d %s", r.code, r.raw)
-	}
+func (h *harness) publishGrant(_ string, tenant model.TenantID, src string) {
+	testsupport.SeedCedar(h.t, h.st, tenant, src, h.gov)
 }
 
 // createBinding POSTs a source→scope binding through the module's write API.

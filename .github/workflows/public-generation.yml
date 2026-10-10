@@ -60,7 +60,7 @@ jobs:
             --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" \
             '{repository:$repository,checkout_sha:$sha,tree:$tree,ref:$ref,run_id:$run,run_attempt:$attempt}' \
             > "$receipt/identity.json"
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         timeout-minutes: 5
         with:
           node-version-file: .node-version
@@ -170,12 +170,20 @@ jobs:
           if not ok:
               raise SystemExit('Generation incomplete or outputs outside the declared boundary; inspect result.json')
           PY
-      - name: upload generation evidence
+      - name: Preserve evidence on the runner
         if: always() && env.GENERATION_RECEIPT != ''
-        timeout-minutes: 5
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        continue-on-error: true
+        uses: ./.github/actions/ci-evidence
         with:
           name: official-generation-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.GENERATION_RECEIPT }}/
-          retention-days: 7
+      - name: upload generation evidence
+        if: always() && env.GENERATION_RECEIPT != ''
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: official-generation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.GENERATION_RECEIPT }}/
+          retention-days: 1
           if-no-files-found: error

@@ -12,12 +12,13 @@ import (
 	"github.com/olivaresai/olivares/connectors/claude"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 // TestHookPEP_F01_DeclaredTenantRequiresMembership is the RED repro for F-01: the governed
 // Claude Code hooks PEP resolves the request tenant from the client-supplied hint
 // (X-Olivares-Hook-Tenant → in.Identity.Tenant) and, on the hint path, only confirms a
-// governed policy EXISTS for that tenant (claudehookpep.go:432-451 resolveTenant). It never
+// governed policy EXISTS for that tenant (hookpep.Decider.resolveTenant). It never
 // checks that the authenticated principal is a MEMBER of the declared tenant — unlike the
 // sibling resolvers in the inference proxy (inferenceproxy.go:705) and apps gateway
 // (appsgateway.go:573), which both gate the tenant by `p.Superadmin || p.IsMember(tid)`.
@@ -49,21 +50,21 @@ func TestHookPEP_F01_DeclaredTenantRequiresMembership(t *testing.T) {
 	// tool. No PDP overlay (eval == nil): the default AGPL build, so tenant resolution is the
 	// ONLY authorization boundary. requireFirm is left false so the firm gate is not what
 	// stops (or fails to stop) the call — this isolates the membership hole in resolveTenant.
-	dec := &claudeHookDecider{
-		tenants: map[model.TenantID]resolvedTenant{
-			tidA: {tenant: tidA, policy: hookPolicyDoc{
+	dec := newClaudeHookDecider(&hookpep.Decider{
+		Tenants: map[model.TenantID]hookpep.ResolvedTenant{
+			tidA: hookTenant(t, tidA, false, hookpep.PolicyDoc{
 				Default: "deny",
-				Rules:   []hookPolicyRule{{Tool: "*", Decision: "deny"}},
-			}},
-			tidB: {tenant: tidB, policy: hookPolicyDoc{
+				Rules:   []hookpep.PolicyRule{{Tool: "*", Decision: "deny"}},
+			}),
+			tidB: hookTenant(t, tidB, false, hookpep.PolicyDoc{
 				Default: "allow",
-				Rules:   []hookPolicyRule{{Tool: "*", Decision: "allow"}},
-			}},
+				Rules:   []hookpep.PolicyRule{{Tool: "*", Decision: "allow"}},
+			}),
 		},
-		authr: auth.NewAuthenticator(h.st, nil),
-		clock: time.Now,
-		log:   discardLog(),
-	}
+		Authr: auth.NewAuthenticator(h.st, nil),
+		Clock: time.Now,
+		Log:   discardLog(),
+	})
 
 	in := claude.HookDecisionInput{
 		Event:        "PreToolUse",

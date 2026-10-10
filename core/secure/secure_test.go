@@ -41,6 +41,52 @@ func TestSetupTokenLifecycle(t *testing.T) {
 	}
 }
 
+// Check must not read "could not look" as "no token" (#513), while Exists keeps its
+// fail-closed answer for the engine: false for anything that is not a readable
+// regular file.
+func TestSetupTokenCheckSeparatesAbsentFromUnknown(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "setup.token")
+	st := NewSetupToken(path)
+
+	if active, err := st.Check(); active || err != nil {
+		t.Fatalf("missing file: Check = (%v, %v), want (false, nil)", active, err)
+	}
+
+	if err := os.WriteFile(path, []byte("hash\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if active, err := st.Check(); !active || err != nil {
+		t.Fatalf("regular file: Check = (%v, %v), want (true, nil)", active, err)
+	}
+	if !st.Exists() {
+		t.Fatal("regular file: Exists = false")
+	}
+
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Mkdir(path, 0o700); err != nil {
+		t.Fatal(err)
+	}
+	if active, err := st.Check(); active || err != nil {
+		t.Fatalf("directory: Check = (%v, %v), want (false, nil), as before", active, err)
+	}
+
+	if err := os.Remove(path); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink("setup.token", path); err != nil {
+		t.Fatal(err)
+	}
+	if active, err := st.Check(); active || err == nil {
+		t.Fatalf("symlink loop: Check = (%v, %v), want (false, error)", active, err)
+	}
+	if st.Exists() {
+		t.Fatal("symlink loop: Exists = true, want false (fail closed)")
+	}
+}
+
 func TestReadSecretFailsClosedOnLoosePerms(t *testing.T) {
 	dir := t.TempDir()
 	p := filepath.Join(dir, "key")

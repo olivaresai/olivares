@@ -191,9 +191,50 @@ func lineageControlDDL(dia dialect.Dialect) []lineageSQLObject {
 	}
 }
 
+// lineageGuardObjects is the immutable edition-1 generator used by the v1 plan.
 func lineageGuardObjects(dia dialect.Dialect) []lineageSQLObject {
 	var out []lineageSQLObject
 	for _, relation := range lineageRelations {
+		if dia.Name() == store.EnginePostgres {
+			out = append(out, postgresLineageObjects(relation)...)
+			continue
+		}
+		for _, op := range []string{"INSERT", "UPDATE", "DELETE"} {
+			name := relation.table + "_lineage_" + strings.ToLower(op)
+			row := "NEW"
+			if op == "DELETE" {
+				row = "OLD"
+			}
+			relevant := "1"
+			immutable := ""
+			if op == "UPDATE" {
+				var tests []string
+				for _, col := range relation.columns {
+					tests = append(tests, "OLD."+col+" IS NOT NEW."+col)
+				}
+				relevant = "(" + strings.Join(tests, " OR ") + ")"
+				immutable = "SELECT RAISE(ABORT, 'lineage identity is immutable') WHERE OLD.id IS NOT NEW.id OR OLD.tenant_id IS NOT NEW.tenant_id;\n"
+			}
+			epoch := relation.descriptor().Table
+			untouched := "NOT EXISTS (SELECT 1 FROM main." + lineageTouchedTable + " WHERE tenant_id = " + row + ".tenant_id AND writer_id = (SELECT writer_id FROM main.core_lineage_writer WHERE tenant_id = " + row + ".tenant_id) AND relation_name = '" + relation.table + "')"
+			body := "BEGIN\n" + immutable +
+				"SELECT RAISE(ABORT, 'lineage writer protocol required') WHERE (SELECT COUNT(*) FROM main." + lineageWriterTable + " WHERE tenant_id = " + row + ".tenant_id) <> 1;\n" +
+				"SELECT RAISE(ABORT, 'lineage epoch unavailable') WHERE " + relevant + " AND " + untouched + " AND NOT EXISTS (SELECT 1 FROM main." + epoch + " WHERE tenant_id = " + row + ".tenant_id AND id = tenant_id AND typeof(version) = 'integer' AND version >= 1 AND version < 9223372036854775807);\n" +
+				"UPDATE " + epoch + " SET version = version + 1, updated_at = strftime('%Y-%m-%dT%H:%M:%f000000Z', 'now') WHERE tenant_id = " + row + ".tenant_id AND " + relevant + " AND " + untouched + ";\n" +
+				"INSERT INTO " + lineageTouchedTable + "(writer_id, tenant_id, relation_name) SELECT (SELECT writer_id FROM main.core_lineage_writer WHERE tenant_id = " + row + ".tenant_id), " + row + ".tenant_id, '" + relation.table + "' WHERE " + relevant + " AND " + untouched + ";\nEND"
+			statement := "CREATE TRIGGER main." + name + " BEFORE " + op + " ON " + relation.table + "\n" + body
+			out = append(out, lineageSQLObject{name: name, table: relation.table, statement: statement, body: body})
+		}
+	}
+	if dia.Name() == store.EnginePostgres {
+		out = append(out, postgresLineageRoutines()...)
+	}
+	return out
+}
+
+func lineageGuardObjectsFor(dia dialect.Dialect, relations []lineageRelation) []lineageSQLObject {
+	var out []lineageSQLObject
+	for _, relation := range relations {
 		if dia.Name() == store.EnginePostgres {
 			out = append(out, postgresLineageObjects(relation)...)
 			continue

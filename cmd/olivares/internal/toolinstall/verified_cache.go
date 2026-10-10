@@ -43,17 +43,19 @@ import (
 // as before. Off Linux the identity is not read and nothing is cached.
 type VerifiedCache struct {
 	mu sync.Mutex
-	m  map[string]verifiedRelease // release directory → what was verified
+	m  map[string]*verifiedRelease // release directory → what was verified
 }
 
 type verifiedRelease struct {
-	key string
-	in  Installed
+	driver string
+	admit  chan struct{}
+	key    string
+	in     Installed
 }
 
 // NewVerifiedCache returns an empty cache; the composition makes one per process.
 func NewVerifiedCache() *VerifiedCache {
-	return &VerifiedCache{m: map[string]verifiedRelease{}}
+	return &VerifiedCache{m: map[string]*verifiedRelease{}}
 }
 
 // Forget drops every entry of driver.
@@ -64,26 +66,21 @@ func (c *VerifiedCache) Forget(driver string) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	for dir, v := range c.m {
-		if v.in.Driver == driver {
+		if v.driver == driver {
 			delete(c.m, dir)
 		}
 	}
 }
 
-func (c *VerifiedCache) lookup(dir, key string) (Installed, bool) {
+func (c *VerifiedCache) entry(dir, driver string) *verifiedRelease {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	v, ok := c.m[dir]
-	if !ok || v.key != key {
-		return Installed{}, false
+	v := c.m[dir]
+	if v == nil {
+		v = &verifiedRelease{driver: driver, admit: make(chan struct{}, 1)}
+		c.m[dir] = v
 	}
-	return v.in, true
-}
-
-func (c *VerifiedCache) store(dir, key string, in Installed) {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.m[dir] = verifiedRelease{key: key, in: in}
+	return v
 }
 
 // ForgetVerified drops the cached verification of driver's releases (a sign-in
@@ -97,17 +94,26 @@ func (e *Engine) inspectReleaseCached(ctx context.Context, root *os.Root, rel, a
 	if e.verified == nil {
 		return e.inspectRelease(ctx, root, rel, abs, driver)
 	}
+	// Share the first full check as well as later hits. Forget removes this
+	// entry, so an in-flight check cannot restore an invalidated verdict.
+	v := e.verified.entry(abs, driver)
+	select {
+	case v.admit <- struct{}{}:
+		defer func() { <-v.admit }()
+	case <-ctx.Done():
+		return Installed{Driver: driver, ReleaseDir: abs, State: StateUnverified, Reason: ctx.Err().Error()}
+	}
 	posture := e.verificationPosture(driver)
 	key, ok := releaseIdentity(root, rel, posture)
 	if ok {
-		if in, hit := e.verified.lookup(abs, key); hit {
-			return in
+		if v.key == key {
+			return v.in
 		}
 	}
 	in := e.inspectRelease(ctx, root, rel, abs, driver)
 	if ok && in.State == StateInstalled {
 		if after, still := releaseIdentity(root, rel, posture); still && after == key {
-			e.verified.store(abs, key, in)
+			v.key, v.in = key, in
 		}
 	}
 	return in

@@ -38,6 +38,9 @@ type PrincipalRef struct {
 	// proves current inside its own view, at the directory epoch the resolved
 	// authority carries (verifyCredentialBindingProof).
 	binding credentialBindingProof
+	// installation is requested only by the engine-owned OS binding resolver.
+	// It is not issued by authentication, ordinary bindings, or request input.
+	installation bool
 }
 
 // Principal is the authenticated identity of a request. It carries everything
@@ -62,6 +65,8 @@ type Principal struct {
 	Superadmin bool
 	// DisplayName is a non-sensitive label for UI/logs.
 	DisplayName string
+	// Email identifies the signed-in user; token principals do not carry it.
+	Email string
 	// AAL is the EFFECTIVE authenticator assurance level of the credential
 	// (NIST SP 800-63B-4 vocabulary, target standard — no conformance
 	// claim): 1 = single factor, 3 = a phishing-resistant hardware ceremony
@@ -164,6 +169,8 @@ type Principal struct {
 	// durable session/token row. Synthetic, lookup, PEP, local and delegation
 	// principals therefore have no reusable credential reference.
 	credentialRef PrincipalRef
+	// sessionOrigin is installed only by the in-process session issuer.
+	sessionOrigin *sessionPrincipalOrigin
 	// evidence carries private, tenant-bound provenance installed only by
 	// ResolvePrincipalScope. AuthorizeEvidence consumes it to attest a candidate
 	// positive core decision, but product routes and readiness remain OFF until
@@ -376,6 +383,12 @@ func (p Principal) IsCommunicationSessionCredential() bool {
 // historically treat tenant membership alone as authority must reject it before
 // consulting IsMember/Tenants; otherwise they would bypass that ceiling.
 func (p Principal) IsPurposeRestricted() bool { return p.restricted != nil }
+
+// IsSessionCredential reports an issuer-resolved session principal. Public run
+// identity fields alone do not establish credential provenance.
+func (p Principal) IsSessionCredential() bool {
+	return !p.IsPurposeRestricted() && p.sessionOrigin != nil
+}
 
 // PurposePermissionsIn returns a defensive, sorted copy of the hard permission
 // ceiling for tenant and whether this is a purpose-restricted principal. It is

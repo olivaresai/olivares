@@ -1205,12 +1205,14 @@ test('deploy plans GitOps live and governs desired-state authoring end to end', 
     name: 'Declare deployment',
   })
   await createDialog.getByRole('combobox', { name: 'Subject kind' }).click()
-  await page.getByRole('option', { name: 'mcp_server', exact: true }).click()
+  await page.getByRole('option', { name: 'MCP server', exact: true }).click()
   await createDialog.getByRole('combobox', { name: 'Subject kind' }).click()
-  await page.getByRole('option', { name: 'agent', exact: true }).click()
+  await page.getByRole('option', { name: 'Agent', exact: true }).click()
+  // The Subject is chosen from the estate's agents, not typed.
   await createDialog
-    .getByRole('textbox', { name: 'Subject' })
-    .fill('l6-ui-agent')
+    .getByRole('combobox', { name: 'Subject', exact: true })
+    .click()
+  await page.getByRole('option').first().click()
   await createDialog.getByRole('textbox', { name: 'Name' }).fill(definitionName)
   await createDialog.getByRole('textbox', { name: 'Environment' }).fill('l6-ui')
   await createDialog
@@ -1460,6 +1462,7 @@ test('deploy plans GitOps live and governs desired-state authoring end to end', 
 test('orchestration governs topology, schedules, revisions, and a two-person fire live', async ({
   page,
 }) => {
+  test.skip((await (await page.request.get('/v1/server-info')).json()).edition === 'community', 'Orchestration is Business Identity & Scale; Community refusal is qualified separately.')
   const token = await loginDemo(page)
   const secondAdminToken = await loginAPI(
     page,

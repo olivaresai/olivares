@@ -95,6 +95,7 @@ interface FormState {
     max_session_duration_minutes: string
     allowed_tools: string // comma-separated
     record_io: boolean
+    require_truncate_protection: boolean
   }
   /** Sessions of this template may message each other (peers_rule same-template). */
   peers_same_template: boolean
@@ -125,6 +126,7 @@ function emptyFormState(): FormState {
       max_session_duration_minutes: '',
       allowed_tools: '',
       record_io: false,
+      require_truncate_protection: false,
     },
     peers_same_template: false,
   }
@@ -161,6 +163,7 @@ function dtoToFormState(dto: TemplateDTO): FormState {
           : '',
       allowed_tools: (p.allowed_tools ?? []).join(', '),
       record_io: p.record_io ?? false,
+      require_truncate_protection: p.require_truncate_protection ?? false,
     },
     peers_same_template: dto.body.peers_rule === 'same-template',
   }
@@ -222,6 +225,8 @@ function formStateToBody(f: FormState): TemplateBody {
     .filter(Boolean)
   if (allowedTools.length) policies.allowed_tools = allowedTools
   if (f.policies.record_io) policies.record_io = true
+  if (f.policies.require_truncate_protection)
+    policies.require_truncate_protection = true
 
   return {
     ...(Object.keys(hooks).length ? { hooks } : {}),
@@ -619,6 +624,34 @@ export function TemplateEditor({
               <Label htmlFor="record-io" className="cursor-pointer text-body">
                 {t('editor.policies.recordIo')}
               </Label>
+            </div>
+            <div className="flex items-start gap-2">
+              <Checkbox
+                id="require-truncate-protection"
+                checked={form.policies.require_truncate_protection}
+                onCheckedChange={(checked) =>
+                  set('policies', {
+                    ...form.policies,
+                    require_truncate_protection: checked === true,
+                  })
+                }
+                disabled={isPending}
+                aria-describedby="truncate-protection-hint"
+              />
+              <div>
+                <Label
+                  htmlFor="require-truncate-protection"
+                  className="cursor-pointer text-body"
+                >
+                  {t('editor.policies.requireTruncateProtection')}
+                </Label>
+                <p
+                  id="truncate-protection-hint"
+                  className="text-caption text-text-2"
+                >
+                  {t('editor.policies.truncateProtectionHint')}
+                </p>
+              </div>
             </div>
             <div className="flex items-center gap-2">
               <Checkbox

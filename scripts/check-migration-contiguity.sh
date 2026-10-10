@@ -33,7 +33,7 @@
 set -u -o pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-cd "${ROOT}" || { echo "check-migration-contiguity: NO HE PODIDO MIRAR: no cd a ${ROOT}" >&2; exit 2; }
+cd "${ROOT}" || { echo "check-migration-contiguity: COULD NOT CHECK: cannot enter ${ROOT}" >&2; exit 2; }
 
 # GitHub Actions pide un veredicto sobre el SHA que disparó el job, no sobre el HEAD mutable del
 # checkout reutilizado. `HEAD` sigue siendo el sujeto local cuando no hay GITHUB_SHA; en ese modo
@@ -49,7 +49,7 @@ if git rev-parse --git-dir >/dev/null 2>&1; then
 	REPO_AVAILABLE=1
 	if [ -n "${GITHUB_SHA:-}" ]; then
 		TREE_SHA="$(git rev-parse --verify "${TREE_REF}^{commit}" 2>/dev/null)" || {
-			echo "check-migration-contiguity: NO HE PODIDO MIRAR: no resuelvo ${TREE_REF} a un commit" >&2
+			echo "check-migration-contiguity: COULD NOT CHECK: cannot resolve ${TREE_REF} to a commit" >&2
 			exit 2
 		}
 	fi
@@ -88,10 +88,10 @@ ${DIRS_POR_DEFECTO}
 EOF
 	if [ "${_alguno}" -eq 0 ] \
 	   && [ "$(bash "${ROOT}/scripts/hub-leg.sh" --classify --root "${ROOT}" 2>/dev/null)" = "public" ]; then
-		echo "check-migration-contiguity: SCOPED — export publico; cloud/control-plane se cura fuera"
-		echo "  del arbol publicado, asi que ${MIGRATION_DIRS} no tiene sujeto aqui y nunca lo tendra."
-		echo "  En el hub esta pata sigue midiendo la contiguidad. Esto NO es un verde de haber"
-		echo "  mirado: es una pata que no aplica a este arbol."
+		echo "check-migration-contiguity: SCOPED — public export; cloud/control-plane is excluded"
+		echo "  from the published tree, so ${MIGRATION_DIRS} has no files to check here."
+		echo "  This check still verifies contiguity in the development repository. It is"
+		echo "  inapplicable to this tree; this result does not claim an inspection passed."
 		exit 0
 	fi
 fi
@@ -120,43 +120,43 @@ while IFS= read -r dir; do
 	# cambia de fuente sin decirlo hace que su verde signifique dos cosas distintas.
 	if [ "${REPO_AVAILABLE}" -eq 1 ] && [ -n "${GITHUB_SHA:-}" ]; then
 		git cat-file -e "${TREE_SHA}:${dir}" 2>/dev/null || {
-			echo "check-migration-contiguity: NO HE PODIDO MIRAR: no existe ${dir} en ${TREE_SHA}" >&2
+			echo "check-migration-contiguity: COULD NOT CHECK: ${dir} is missing in ${TREE_SHA}" >&2
 			exit 2
 		}
-		modo="árbol solicitado ${TREE_SHA:0:12} (git ls-tree)"
+		modo="requested tree ${TREE_SHA:0:12} (git ls-tree)"
 		# A failed read can emit a partial listing. Check its status before parsing
 		# migration versions, and leave Git diagnostics on stderr for the caller.
 		ls_tree_status=0
 		ls_tree_output="$(git ls-tree --name-only "${TREE_SHA}:${dir}")" || ls_tree_status=$?
 		if [ "${ls_tree_status}" -ne 0 ]; then
-			echo "check-migration-contiguity: NO HE PODIDO MIRAR: git ls-tree ${TREE_SHA:0:12}:${dir} salió con ${ls_tree_status}." >&2
+			echo "check-migration-contiguity: COULD NOT CHECK: git ls-tree ${TREE_SHA:0:12}:${dir} exited ${ls_tree_status}." >&2
 			exit 2
 		fi
 		versions="$(printf '%s\n' "${ls_tree_output}" \
 			| command grep -E '^[0-9]+_.*\.up\.sql$' || true)"
 	elif [ "${REPO_AVAILABLE}" -eq 1 ]; then
 		[ -d "${dir}" ] || {
-			echo "check-migration-contiguity: NO HE PODIDO MIRAR: no existe ${dir}" >&2
+			echo "check-migration-contiguity: COULD NOT CHECK: missing ${dir}" >&2
 			exit 2
 		}
-		modo="árbol versionado (git ls-files)"
+		modo="tracked tree (git ls-files)"
 		versions="$(git ls-files -- "${dir}/" 2>/dev/null | command sed 's|.*/||' \
 			| command grep -E '^[0-9]+_.*\.up\.sql$' || true)"
 	else
 		[ -d "${dir}" ] || {
-			echo "check-migration-contiguity: NO HE PODIDO MIRAR: no existe ${dir}" >&2
+			echo "check-migration-contiguity: COULD NOT CHECK: missing ${dir}" >&2
 			exit 2
 		}
-		modo="directorio en disco (sin repositorio)"
+		modo="directory on disk (no repository)"
 		versions="$(command ls -1 "${dir}" 2>/dev/null | command grep -E '^[0-9]+_.*\.up\.sql$' || true)"
 	fi
 	if [ -z "${versions}" ]; then
-		echo "check-migration-contiguity: NO HE PODIDO MIRAR: ${dir} no tiene ninguna .up.sql" >&2
+		echo "check-migration-contiguity: COULD NOT CHECK: ${dir} contains no .up.sql files" >&2
 		exit 2
 	fi
 	nums="$(printf '%s\n' "${versions}" | sed -E 's/^([0-9]+)_.*/\1/' | sed -E 's/^0+([0-9])/\1/' | sort -n -u)"
 	looked=$((looked + 1))
-	echo "check-migration-contiguity: ${dir} leído del ${modo}"
+	echo "check-migration-contiguity: ${dir} read from ${modo}"
 	first="$(printf '%s\n' "${nums}" | head -1)"
 	last="$(printf '%s\n' "${nums}" | tail -1)"
 	# Duplicates are NOT this gate's business: the migrator refuses them loudly on
@@ -171,24 +171,24 @@ while IFS= read -r dir; do
 	done
 	if [ -n "${missing}" ]; then
 		{
-			echo "check-migration-contiguity: ${dir} tiene HUECOS:${missing}"
-			echo "                 Rango presente: $(printf '%03d' "${first}")..$(printf '%03d' "${last}")."
-			echo "                 golang-migrate lleva UNA version escalar y Up() aplica solo Next(actual),"
-			echo "                 asi que una base que llegue a $(printf '%03d' "${last}") NO aplicara nunca las que faltan."
-			echo "                 Renumera tu migracion a max(existentes)+1 EN EL ARBOL AL QUE MERGEAS."
-			echo "                 Si el numero ya esta tomado por otra rama, la colision es RUIDOSA y la"
-			echo "                 resuelve el integrador al mergear; un hueco es SILENCIOSO y no lo ve nadie."
+			echo "check-migration-contiguity: ${dir} has gaps:${missing}"
+			echo "                 Present range: $(printf '%03d' "${first}")..$(printf '%03d' "${last}")."
+			echo "                 golang-migrate stores one scalar version, and Up() applies only Next(current),"
+			echo "                 so a database reaching $(printf '%03d' "${last}") will never apply the missing migrations."
+			echo "                 Renumber the migration to max(existing)+1 in the tree you are merging into."
+			echo "                 A number taken by another branch causes a visible collision that can be"
+			echo "                 resolved during the merge; a gap silently leaves migrations unapplied."
 		} >&2
 		rc=1
 	else
-		echo "check-migration-contiguity: ${dir} CONTIGUO - $(printf '%03d' "${first}")..$(printf '%03d' "${last}"), $(printf '%s\n' "${nums}" | wc -l | tr -d ' ') versiones."
+		echo "check-migration-contiguity: ${dir} CONTIGUOUS - $(printf '%03d' "${first}")..$(printf '%03d' "${last}"), $(printf '%s\n' "${nums}" | wc -l | tr -d ' ') versions."
 	fi
 done <<EOF
 ${MIGRATION_DIRS}
 EOF
 
 if [ "${looked}" -eq 0 ]; then
-	echo "check-migration-contiguity: NO HE PODIDO MIRAR: ningun directorio revisado" >&2
+	echo "check-migration-contiguity: COULD NOT CHECK: no directories checked" >&2
 	exit 2
 fi
 exit "${rc}"

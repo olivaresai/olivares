@@ -38,7 +38,7 @@ func newDBCmd() *cobra.Command {
 			"the database idempotently from a superuser DSN.",
 	}
 	addTextJSONFormatFlag(root)
-	root.AddCommand(dbCheckCmd(), dbInitCmd(), dbActivateDirectoryWriterCmd())
+	root.AddCommand(dbCheckCmd(), dbInitCmd(), dbActivateDirectoryWriterCmd(), postgresServiceFileCmd())
 	return root
 }
 
@@ -63,6 +63,9 @@ func dbCheckCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := checkCMEKInstall(""); err != nil {
+				return err
+			}
 			eng := store.EngineSQLite
 			if engine == string(store.EnginePostgres) {
 				eng = store.EnginePostgres
@@ -91,6 +94,11 @@ func dbCheckCmd() *cobra.Command {
 				resolved, err := resolveDSNRef(cmd.Context(), c.label, c.value, osGetenv)
 				if err != nil {
 					return exitcode.Or(exitcode.Usage, err)
+				}
+				if eng == store.EngineSQLite {
+					if err := checkCMEKSQLiteStore(resolved); err != nil {
+						return err
+					}
 				}
 				posture, err := coreengine.ProbeRole(cmd.Context(), store.Config{Engine: eng, DSN: resolved})
 				if err != nil {
@@ -379,8 +387,11 @@ func dbInitCmd() *cobra.Command {
 			"--print-sql to preview the exact statements (passwords redacted) without connecting.\n\n" +
 			"With --data-dir it prepares quickstart's PostgreSQL for that installation instead: it\n" +
 			"generates missing role names and passwords, splits the owner unless --owner-role is\n" +
-			"passed empty, saves private DSN files under --data-dir/postgres, and quickstart reuses\n" +
-			"them without the maintenance credential. There, local connections default to\n" +
+			"passed empty, also provisions (when the superuser DSN can create it) the read-only\n" +
+			"cross-tenant admin role the console backup needs (pg_dump cannot read every tenant\n" +
+			"without it), saves private DSN files under\n" +
+			"--data-dir/postgres, and quickstart reuses them without the maintenance credential.\n" +
+			"There, local connections default to\n" +
 			"sslmode=prefer and remote ones to verify-full.",
 		Example: `  # Preview the SQL without connecting
   olivares db init --print-sql --app-password-file /run/secrets/app-pw
@@ -392,6 +403,9 @@ func dbInitCmd() *cobra.Command {
 		Args:         cobra.NoArgs,
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := checkCMEKInstall(dataDir); err != nil {
+				return err
+			}
 			appPw, err := readSecretValue(cmd, appPassword, appPasswordFile)
 			if err != nil {
 				return fmt.Errorf("--app-password: %w", err)
@@ -512,7 +526,7 @@ func dbInitCmd() *cobra.Command {
 	cmd.Flags().StringVar(&ownerRole, "owner-role", "", "SEPARATE owner role that owns the schema and runs DDL (enables the least-privilege split). Empty = the app role owns the schema; with --data-dir a separate owner is generated unless this is passed empty. Use on a FRESH database; adopting the split on an existing single-role db needs a manual REASSIGN OWNED first (see deploy/postgres/README.md)")
 	cmd.Flags().StringVar(&ownerPassword, "owner-password", "", "owner role password (prefer --owner-password-file)")
 	cmd.Flags().StringVar(&ownerPwFile, "owner-password-file", "", "read the owner role password from a file, or - for stdin")
-	cmd.Flags().StringVar(&adminRole, "admin-role", "", "cross-tenant admin role for --admin-dsn (NOSUPERUSER BYPASSRLS). Empty = not provisioned")
+	cmd.Flags().StringVar(&adminRole, "admin-role", "", "cross-tenant admin role for --admin-dsn (NOSUPERUSER BYPASSRLS). Empty = not provisioned; with --data-dir on a new installation a name is generated when the superuser DSN can create it")
 	cmd.Flags().StringVar(&adminPassword, "admin-password", "", "admin role password (prefer --admin-password-file)")
 	cmd.Flags().StringVar(&adminPwFile, "admin-password-file", "", "read the admin role password from a file, or - for stdin")
 	cmd.Flags().BoolVar(&printSQL, "print-sql", false, "print the provisioning SQL (passwords redacted) and exit, without connecting")

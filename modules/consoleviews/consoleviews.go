@@ -158,6 +158,16 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	// The caller's own favorites (favorites.go): read permission, own row only.
 	reg.Handle("GET", "/favorites", permViewRead, m.handleFavoritesGet)
 	reg.Handle("PUT", "/favorites", permViewRead, m.handleFavoritesPut)
+	// The caller's own interface state (ui_state.go): read permission, own row only.
+	reg.Handle("GET", "/ui-state", permViewRead, m.handleUIStateGet)
+	reg.Handle("PUT", "/ui-state", permViewRead, m.handleUIStatePut)
+}
+
+// privateFeature reports the reserved feature slugs whose rows are a user's own interface
+// data, never a saved view: they are not listed as views, do not count toward the caps, and
+// cannot be used to save one.
+func privateFeature(id string) bool {
+	return id == favoritesFeature || id == uiStateFeature
 }
 
 // savedViewDTO is a saved view as the console consumes it. Params round-trips
@@ -208,8 +218,8 @@ func (in *savedViewInput) validate() string {
 	switch {
 	case !featureIDPattern.MatchString(in.FeatureID):
 		return "feature_id must be a lowercase slug (max 64 chars)"
-	case in.FeatureID == favoritesFeature:
-		return "feature_id \"favorites\" is reserved for the favorites list"
+	case privateFeature(in.FeatureID):
+		return "feature_id \"" + in.FeatureID + "\" is reserved for the user's own console data"
 	case in.Name == "" || len(in.Name) > maxNameLen:
 		return "name is required (max 120 chars)"
 	case len(in.Description) > maxDescLen:
@@ -256,8 +266,8 @@ func (m *Module) handleList(w http.ResponseWriter, r *http.Request, mc api.Modul
 		seen := make(map[string]bool, len(own)+len(shared))
 		for _, rec := range append(own, shared...) {
 			id := rec.String(model.ColID)
-			if seen[id] || rec.String(colFeature) == favoritesFeature {
-				continue // an own shared view matches both queries; favorites are not a view
+			if seen[id] || privateFeature(rec.String(colFeature)) {
+				continue // an own shared view matches both queries; private rows are not views
 			}
 			seen[id] = true
 			out.Items = append(out.Items, toDTO(rec, caller))
@@ -332,8 +342,8 @@ func (m *Module) handleCreate(w http.ResponseWriter, r *http.Request, mc api.Mod
 		}
 		mine, views := 0, 0
 		for _, rec := range all {
-			if rec.String(colFeature) == favoritesFeature {
-				continue // favorites rows are not views and do not count toward the caps
+			if privateFeature(rec.String(colFeature)) {
+				continue // private rows are not views and do not count toward the caps
 			}
 			views++
 			if rec.String(colOwner) == caller {
@@ -543,25 +553,16 @@ func eqBool(col string, val bool) model.Filter {
 // body cannot exhaust memory. It returns false (and writes a 400) on failure.
 func decodeJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	if err := api.DecodeRequestBody(w, r, v, api.RequestBodySpec{MaxBytes: 1 << 20}); err != nil {
-		writeJSON(w, http.StatusBadRequest, errorBody("invalid request body"))
+		writeJSON(w, http.StatusBadRequest, errorBody(api.RequestBodyErrorMessage(err, "invalid request body")))
 		return false
 	}
 	return true
 }
 
 // errorBody is the small error envelope module endpoints return.
-func errorBody(msg string) map[string]any {
-	return map[string]any{"error": map[string]string{"message": msg}}
-}
+var errorBody = api.ModuleErrorBody
 
-// writeJSON writes v as a JSON response.
-func writeJSON(w http.ResponseWriter, status int, v any) {
-	w.Header().Set("Content-Type", "application/json; charset=utf-8")
-	w.WriteHeader(status)
-	if v != nil {
-		_ = json.NewEncoder(w).Encode(v)
-	}
-}
+var writeJSON = api.WriteJSON
 
 // writeStoreError maps a store error to an HTTP status. THE MAPPING ITSELF IS NOT
 // HERE: it is api.StoreErrorStatus (core/api/moduleerrors.go), which derives the
@@ -574,8 +575,8 @@ func writeJSON(w http.ResponseWriter, status int, v any) {
 // tenant_suspended, tenant_not_in_service, not_leader and residency_violation —
 // were absent from all but two of the thirty-six copies, so the same refusal was
 // answered 423/503/403 by a core route and 500 "internal error" by every module
-// route. The per-arm reasoning (ADR-0024 Q2 for the audit spool/B-03 for
-// workspace confinement for the standby) now lives beside statusFor, once.
+// route. The per-arm reasoning (audit-spool policy for audit spool capacity and
+// standby workspace confinement) now lives beside statusFor, once.
 func writeStoreError(w http.ResponseWriter, err error) {
 	if err == nil {
 		writeJSON(w, http.StatusOK, nil)

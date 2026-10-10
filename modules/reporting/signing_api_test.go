@@ -90,41 +90,60 @@ func TestReportingSigningUsesSystemRoutesAndRejectsInvalidUpdates(t *testing.T) 
 	}
 }
 
-func TestReportingSigningBodyLimitAndTrailingRefusals(t *testing.T) {
-	body := `{"enabled":true}`
+func TestReportingSigningPreservesRequestBodyRefusals(t *testing.T) {
+	const enabled = `{"enabled":true}`
+	atLimit := enabled + strings.Repeat(" ", 1024-len(enabled))
 	for _, tc := range []struct {
-		name, body, message string
-		status              int
+		name    string
+		body    string
+		status  int
+		message string
 	}{
-		{"exact limit", body + strings.Repeat(" ", 1024-len(body)), "", http.StatusOK},
-		{"over limit", body + strings.Repeat(" ", 1025-len(body)), "Send one signing setting.", http.StatusBadRequest},
-		{"second document", body + `{}`, "Send one signing setting.", http.StatusBadRequest},
-		{"malformed tail", body + `]`, "Send one signing setting.", http.StatusBadRequest},
-		{"missing choice precedes tail", `{}]`, "Choose whether report signing is enabled.", http.StatusBadRequest},
-		{"unknown field", `{"enabled":true,"other":false}`, "Choose whether report signing is enabled.", http.StatusBadRequest},
+		{"empty", "", http.StatusBadRequest, "Choose whether report signing is enabled."},
+		{"missing enabled", `{}`, http.StatusBadRequest, "Choose whether report signing is enabled."},
+		{"null enabled", `{"enabled":null}`, http.StatusBadRequest, "Choose whether report signing is enabled."},
+		{"wrong type", `{"enabled":"private-value"}`, http.StatusBadRequest, `Choose whether report signing is enabled.: invalid value for field "enabled"`},
+		{"unknown field", `{"enabled":true,"extra":true}`, http.StatusBadRequest, `Choose whether report signing is enabled.: unknown field "extra"`},
+		{"malformed first document", `{"enabled":true`, http.StatusBadRequest, "Choose whether report signing is enabled."},
+		{"oversized first document", strings.Repeat(" ", 1024) + enabled, http.StatusBadRequest, "Choose whether report signing is enabled."},
+		{"missing enabled before second document", `{} {}`, http.StatusBadRequest, "Choose whether report signing is enabled."},
+		{"null enabled before malformed tail", `{"enabled":null} }`, http.StatusBadRequest, "Choose whether report signing is enabled."},
+		{"second document", enabled + ` {}`, http.StatusBadRequest, "Send one signing setting."},
+		{"second scalar", enabled + ` false`, http.StatusBadRequest, "Send one signing setting."},
+		{"malformed tail", enabled + ` }`, http.StatusBadRequest, "Send one signing setting."},
+		{"oversized trailing whitespace", atLimit + " ", http.StatusBadRequest, "Send one signing setting."},
+		{"exact byte limit", atLimit, http.StatusOK, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			source := &managedSigningSource{}
 			m := New(WithEnterpriseReports(source))
+			reg := &signingRoutes{}
+			m.APIRoutes(reg)
 			rec := httptest.NewRecorder()
-			m.handleSetSigning(rec, httptest.NewRequest(http.MethodPut, "/signing", strings.NewReader(tc.body)), api.ModuleContext{})
+			reg.system["PUT /signing"](rec, httptest.NewRequest(http.MethodPut, "/signing", strings.NewReader(tc.body)), api.ModuleContext{})
 			if rec.Code != tc.status {
-				t.Fatalf("status=%d body=%s", rec.Code, rec.Body.String())
+				t.Fatalf("status=%d, want %d: %s", rec.Code, tc.status, rec.Body.String())
 			}
 			if tc.status == http.StatusOK {
 				if source.writes != 1 || !source.status.Enabled {
-					t.Fatal("valid signing choice was not applied")
+					t.Fatal("valid input did not enable signing exactly once")
 				}
 				return
 			}
+			if source.writes != 0 {
+				t.Fatal("refused input reached the signing manager")
+			}
 			var response struct {
-				Error struct{ Message string } `json:"error"`
+				Error struct {
+					Message string `json:"message"`
+					Code    string `json:"code"`
+				} `json:"error"`
 			}
 			if err := json.Unmarshal(rec.Body.Bytes(), &response); err != nil {
 				t.Fatal(err)
 			}
-			if source.writes != 0 || response.Error.Message != tc.message {
-				t.Fatalf("refusal changed or wrote signing state: writes=%d body=%s", source.writes, rec.Body.String())
+			if response.Error.Message != tc.message || response.Error.Code != http.StatusText(tc.status) {
+				t.Fatalf("refusal=%+v, want %q / %q", response.Error, http.StatusText(tc.status), tc.message)
 			}
 		})
 	}

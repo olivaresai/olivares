@@ -19,6 +19,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 // The Codex governed decider is tested against a REAL signed ledger on an in-memory
@@ -210,7 +211,7 @@ func TestLedgerActionIsCodexNotClaude(t *testing.T) {
 	if n := ledgerCount(t, f.store, f.tenant, "hook.tool."); n != 0 {
 		t.Errorf("a Codex decision must NOT be recorded under Claude's hook.tool.* action, found %d", n)
 	}
-	if codexHookCapability == hookActionCapability {
+	if codexHookCapability == hookpep.ActionCapability {
 		t.Error("the Codex capability must differ from Claude's, or the two engines' decisions are indistinguishable")
 	}
 }
@@ -236,31 +237,30 @@ func TestIdentityFailureDeniesClosed(t *testing.T) {
 // TestAllowWithoutReceiptIsDowngraded is the precedent's rule, kept. With no store wired
 // there is no receipt, so an ALLOW must come back as a DENY rather than as an unprovable
 // permission.
-// codexFailingAuthenticator no resuelve NADA: es el caso de producción en que el portador
-// existe pero el autenticador no puede validarlo.
+// codexFailingAuthenticator resolves nothing: it models a bearer that exists but
+// cannot be validated by the authenticator.
 type codexFailingAuthenticator struct{}
 
 func (codexFailingAuthenticator) Authenticate(context.Context, string) (auth.Principal, error) {
 	return auth.Principal{}, errors.New("authenticator down")
 }
 
-// TestNonFirmIdentityAlwaysDenies fija el control deny-closed del que depende TODO lo demás de
-// este PEP: una identidad que no es firme se deniega SIEMPRE, sin perilla que lo module.
+// TestNonFirmIdentityAlwaysDenies locks in the deny-closed control on which this PEP
+// depends: a non-firm identity is always denied, without a configuration switch.
 //
-// ⛔ ESTA PRUEBA NACIÓ DE UNA MUTACIÓN QUE SOBREVIVIÓ (2026-08-19). Al retirar la `requireFirm`
-// vestigial medí si alguien fijaba la denegación de `codexhookpep.go` (`if tier != tierFirm`), y
-// desactivarla dejaba la batería ENTERA en verde. El control existía y no lo probaba nadie: la
-// celda de identidad que había tumbaba el resolvedor de SESIÓN, así que denegaba por otra rama.
+// This test came from a surviving mutation on 2026-08-19. When the vestigial
+// `requireFirm` field was removed, disabling `if tier != hookpep.TierFirm` left the
+// entire suite green. The existing identity test failed the session resolver and
+// therefore exercised a different denial path.
 //
-// ⚠ Y LO QUE ESTA PRUEBA NO PUEDE SEPARAR, dicho para que nadie lo lea al revés: mutar SÓLO
-// `if tier != tierFirm` la deja VERDE, porque la comprobación de pertenencia que viene detrás
-// deniega igual — `principalOf` devuelve un principal VACÍO siempre que el tier no es firme, así
-// que «no firme» implica «no miembro» y ningún input alcanzable separa las dos guardas. Mutando
-// LAS DOS, esta prueba sí cae (medido). O sea: son defensa en profundidad, no una sola puerta,
-// y por eso retirar la perilla no deja nada al descubierto.
+// Mutating only `if tier != hookpep.TierFirm` still leaves this test green: the
+// subsequent membership check also denies. `principalOf` returns an empty principal
+// whenever the tier is not firm, so no reachable input separates these two guards.
+// Mutating both guards was measured to fail this test. They provide defense in depth;
+// removing the unused switch leaves both guards intact.
 //
-// Si esta prueba se pone roja, no la relajes: es el hecho de autorización que el canon §1-bis
-// prohíbe poder apagar desde configuración.
+// Do not weaken this test if it fails: the canon's section 1-bis prohibits disabling
+// this authorization fact through configuration.
 func TestNonFirmIdentityAlwaysDenies(t *testing.T) {
 	t.Run("portador vacío", func(t *testing.T) {
 		f := newCodexFixture(t)

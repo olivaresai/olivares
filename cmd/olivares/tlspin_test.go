@@ -278,6 +278,15 @@ func TestBadPinIsAUsageError(t *testing.T) {
 // every refusal cliTransport makes about the CALLER'S ARGUMENTS is exit 2, not the
 // generic 1. Found while fixing the pin, and the same defect.
 func TestTransportArgumentErrorsAreUsageErrors(t *testing.T) {
+	dir := t.TempDir()
+	badCA := filepath.Join(dir, "not-pem.crt")
+	if err := os.WriteFile(badCA, []byte("not a PEM certificate"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	largeCA := filepath.Join(dir, "oversized.crt")
+	if err := os.WriteFile(largeCA, make([]byte, maxCLICABundleSize+1), 0o600); err != nil {
+		t.Fatal(err)
+	}
 	cases := map[string]cliTransportOptions{
 		"no server": {Resolved: cliResolvedConfig{}},
 		"unparseable server URL": {
@@ -288,6 +297,18 @@ func TestTransportArgumentErrorsAreUsageErrors(t *testing.T) {
 		},
 		"malformed pin": {
 			Resolved: cliResolvedConfig{Server: "https://example.test", PinSHA256: []string{"nope"}},
+		},
+		"missing CA": {
+			Resolved: cliResolvedConfig{Server: "https://example.test", CACert: filepath.Join(dir, "missing.crt")},
+		},
+		"non-PEM CA": {
+			Resolved: cliResolvedConfig{Server: "https://example.test", CACert: badCA},
+		},
+		"unreadable CA directory": {
+			Resolved: cliResolvedConfig{Server: "https://example.test", CACert: dir},
+		},
+		"oversized CA": {
+			Resolved: cliResolvedConfig{Server: "https://example.test", CACert: largeCA},
 		},
 	}
 	for name, opts := range cases {

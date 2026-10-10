@@ -50,6 +50,7 @@ import {
 } from '@/features/identity/assurance'
 import { ListTruncationBadge } from '@/features/_intel'
 import { useAuth } from '@/lib/auth/context'
+import { useUrlState } from '@/lib/hooks/use-url-state'
 import { ApiError } from '@/lib/api/errors'
 import {
   useFailedActionReporter,
@@ -799,7 +800,9 @@ function DeviceSection() {
   const canApprove = can('inferenceproxy:config:admin')
   const stepUpNeeded = canApprove && !stepUpSatisfied
   const canAct = canApprove && stepUpSatisfied
-  const [code, setCode] = useState('')
+  const [params, patch] = useUrlState(['user_code'])
+  const code = params.user_code ?? ''
+  const setCode = (user_code: string) => patch({ user_code })
 
   const decide = useMutation({
     mutationFn: (deny: boolean) =>
@@ -840,7 +843,7 @@ function DeviceSection() {
   if (!canApprove) return null
 
   return (
-    <Card>
+    <Card id="device">
       <CardHeader>
         <CardTitle>{t('device.title')}</CardTitle>
       </CardHeader>

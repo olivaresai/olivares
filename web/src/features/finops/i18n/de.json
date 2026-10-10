@@ -113,7 +113,8 @@
       "deleted": "Budget gelöscht"
     },
     "truncated": "{{n}} Budgets geladen; es gibt weitere",
-    "truncatedHint": "Es gibt mehr Budgets als angezeigt; diese Seite lädt Zeilen nach ID. Fehlt hier eine Obergrenze, belegt das nicht, dass die Ausgaben ungedeckelt sind — sie kann schlicht jenseits dieser Seite liegen."
+    "truncatedHint": "Es gibt mehr Budgets als angezeigt; diese Seite lädt Zeilen nach ID. Fehlt hier eine Obergrenze, belegt das nicht, dass die Ausgaben ungedeckelt sind — sie kann schlicht jenseits dieser Seite liegen.",
+    "storedEmptyHint": "In Business erstellte Budgets können hier weiterhin gelesen und gelöscht werden."
   },
   "cache": {
     "title": "Prompt-Cache-Effizienz",

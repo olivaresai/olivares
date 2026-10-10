@@ -1319,7 +1319,7 @@ grep -Fq 'invalid OLIVARES_RUNTIME_TOKEN_FILE' "$fx/err" || fail 'the unusable s
 if [[ -e "$(dropin)" ]]; then fail 'a refused selection still rendered the drop-in'; fi
 
 knobs=(OLIVARES_VERSION OLIVARES_BINDIR OLIVARES_OS OLIVARES_ARCH OLIVARES_CERT_IDENTITY OLIVARES_CERT_OIDC_ISSUER OLIVARES_GITHUB_URL OLIVARES_GITHUB_API_URL)
-values=('v26.9.0' '/opt/olivares/bin' 'linux' 'arm64' '^https://fixture\.invalid/release$' 'https://issuer.fixture.invalid' 'https://release.fixture.invalid' 'https://api.fixture.invalid')
+values=('1.0' '/opt/olivares/bin' 'linux' 'arm64' '^https://fixture\.invalid/release$' 'https://issuer.fixture.invalid' 'https://release.fixture.invalid' 'https://api.fixture.invalid')
 assignments=()
 for i in "${!knobs[@]}"; do assignments+=("${knobs[$i]}=${values[$i]}"); done
 fixture forwarding

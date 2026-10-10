@@ -17,6 +17,11 @@ penetration-testing program, the buyer-facing reference architecture, questionna
 answer banks, EU-procurement crosswalks, machine-readable evidence, and the
 accessibility/i18n posture.
 
+Framework catalogs, assessments, regulatory views, OSCAL export and on-demand HTML/PDF
+reports belong to Business Compliance Packs. Community reads stored evidence and exports
+it as JSON/CSV. Dated source citations in this package describe their recorded snapshots;
+the catalog implementation now lives in the private edition. See [edition placement](../editions.md).
+
 ## The honesty rule (read this first)
 
 Every claim in this package follows the product's design-to-audit posture
@@ -24,7 +29,7 @@ Every claim in this package follows the product's design-to-audit posture
 and we do not claim attestations we do not hold.** The same rule is enforced *inside*
 the product: the compliance module's framework catalog carries per-framework
 disclaimers ("not a certification"), and a control whose evidence is architectural
-is reported `by_design` — never `satisfied` (`modules/compliance/frameworks.go`).
+is reported `by_design` — never `satisfied` (Business framework catalog).
 
 ## Current attestation status (no surprises)
 
@@ -74,7 +79,7 @@ Two facts make this honest rather than evasive:
 | Security-questionnaire answer bank (SIG-2026-aligned, AI-CAIQ-ready) | [questionnaire-answer-bank.md](./questionnaire-answer-bank.md) |
 | Third-party pen-test program: cadence, scope, remediation | [penetration-testing.md](./penetration-testing.md) |
 | Reference architecture (topologies, trust zones, HA/DR, sizing, integrations) | [reference-architecture.md](./reference-architecture.md) |
-| Support & response-target model (best-effort, non-binding) | [`SUPPORT.md`](../../SUPPORT.md) §Commercial support tiers |
+| Support & response-target model (best-effort, non-binding) | [`SUPPORT.md`](../../SUPPORT.md) §Support by edition and response targets |
 | Accessibility conformance report (VPAT 2.5Rev INT) | `docs/accessibility/VPAT-olivares-admin.md` |
 | i18n posture & roadmap (7-locale console, docs-site in EN + 6 locales) | [i18n-roadmap.md](./i18n-roadmap.md) |
 | EU AI Act Annex IV technical-documentation template | [eu-ai-act-annex-iv.md](./eu-ai-act-annex-iv.md) |
@@ -92,9 +97,14 @@ Two facts make this honest rather than evasive:
 | Operational adopter checklist (install to verified evidence) | [adopter-checklist.md](./adopter-checklist.md) |
 | Buyer evaluation guide (10-day POV with pass/fail criteria) | [evaluation-guide.md](./evaluation-guide.md) |
 | Evaluation report template (criteria, evidence, findings and verdict) | [evaluation-report-template.md](./evaluation-report-template.md) |
-| Feature matrix — open core (AGPL) vs commercial add-ons | [feature-matrix.md](./feature-matrix.md) |
-| Why the commercial add-ons? (value proposition + 3 promises) | [why-enterprise.md](./why-enterprise.md) |
+| Feature matrix — Community (AGPL) vs Business and Enterprise | [feature-matrix.md](./feature-matrix.md) |
+| Editions — what Community, Business (base line and four capability families) and Enterprise include | [editions.md](../editions.md) |
 | Commercial one-pager (for enterprise@ responses) | [one-pager.md](./one-pager.md) |
+
+Business includes business-hours email support, best effort with no response target.
+Enterprise support terms are agreed in the contract, with non-binding first-response
+targets unless the contract says otherwise. See [SUPPORT.md](../../SUPPORT.md),
+[editions.md](../editions.md) and the [current offer](https://olivares.ai/pricing).
 
 ## What this package does NOT do
 
@@ -104,10 +114,9 @@ Two facts make this honest rather than evasive:
   assessment is cheap: every mapping row points at a verifiable artifact
   (an API endpoint, a signed release asset, a repo file).
 - Formal certification engagements (SOC 2 examination, ISO 27001/42001
-  certification audits), the first third-party pen-test contract, and commercial
-  support activation carry **real recurring cost**, and each artifact marks the
-  decision point explicitly instead of implying it is done. Two states, kept apart
-  because a reader deserves to know which one they are looking at:
+  certification audits) and the first third-party pen-test contract carry **real
+  recurring cost**, and each artifact marks the decision point explicitly instead
+  of implying it is done. Two states, kept apart because a reader deserves to know which one they are looking at:
   - **Decided and recorded (2026-07-18):** no external pen-test and no SOC 2
     examination for now — internal, automated adversarial campaigns run before the
     public release instead — and every certification is **demand-gated**, i.e.

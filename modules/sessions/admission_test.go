@@ -63,7 +63,7 @@ func TestLaunchIntent_CreateCarriesTheAcquiredClaim(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()),
 		WithLaunchGate(gate))
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -121,7 +121,7 @@ func TestLaunchIntent_ResumeCarriesTheTakenOverFence(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()),
 		WithLaunchGate(gate))
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -181,7 +181,7 @@ func TestAdmission_ResumeRefusedWhileAnotherHolderIsLive(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()),
 		WithLaunchGate(gate))
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})
@@ -332,7 +332,7 @@ func TestAdmission_RefusedLaunchGivesTheClaimBack(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(&fakeRunner{}), WithCredentialSource(staticCred()),
 		WithLaunchGate(gate))
 
-	if _, err := m.createRun(ctx, tenant, CreateRunParams{
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	}); err == nil {
@@ -360,7 +360,7 @@ func TestAdmission_StoppedEstateWritesNothing(t *testing.T) {
 			return StopDecision{Stopped: true, StopRef: "stop-1", Scope: "estate"}, nil
 		})))
 
-	if _, err := m.createRun(ctx, tenant, CreateRunParams{
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	}); err == nil {
@@ -421,7 +421,7 @@ func (r *resumeAtTerminal) Mutate(ctx context.Context, tenant model.TenantID, fn
 // maybeFire resumes, once, as soon as a run row has reached a terminal state. It does
 // write its own fields (fired, and the captured result) — under the mutex, from the
 // bridge goroutine. What the row-based condition buys is that the TEST goroutine never
-// has to reassign m.data after the launch, which is the assignment that would race.
+// has to reassign m.Data after the launch, which is the assignment that would race.
 func (r *resumeAtTerminal) maybeFire(ctx context.Context) {
 	r.mu.Lock()
 	if r.fired {
@@ -507,12 +507,12 @@ func TestFinalize_TheClaimIsGivenBackBeforeTheRunBecomesResumable(t *testing.T) 
 	fr := &fakeRunner{initSID: "sess-finalize-order"}
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()))
 
-	// Installed BEFORE anything launches: m.data is never reassigned while the bridge
+	// Installed BEFORE anything launches: m.Data is never reassigned while the bridge
 	// goroutine is alive.
-	hook := &resumeAtTerminal{inner: m.data, m: m, tenant: tenant, actor: "user:u1", resumeCh: make(chan struct{})}
-	m.data = hook
+	hook := &resumeAtTerminal{inner: m.Data, m: m, tenant: tenant, actor: "user:u1", resumeCh: make(chan struct{})}
+	m.Data = hook
 
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})

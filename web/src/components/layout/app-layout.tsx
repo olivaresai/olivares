@@ -12,7 +12,9 @@ import {
   useRouterState,
 } from '@tanstack/react-router'
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { PageActionsProvider } from '@/components/ui/page-actions'
+import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { Spinner } from '@/components/ui/spinner'
 import { useAuth } from '@/lib/auth/context'
 import { isSignInPath } from '@/lib/auth/return-path'
@@ -25,9 +27,15 @@ import { BrandMark } from './brand'
 import { CommandMenu } from './command-menu'
 import { DestinationSections } from './destination-sections'
 import { GlobalShortcuts } from './shortcuts'
-import { RouteFrame } from './page-frames'
+import { RouteFrame, frameFor } from './page-frames'
 import { PhoneBar } from './phone-bar'
 import { SidePanelProvider } from './side-panel'
+import {
+  foldOrOverlay,
+  sidebarModeFor,
+  useNavOverlay,
+  SidebarSync,
+} from './sidebar-mode'
 import { AreasSheet } from './sidebar'
 import { TenantGate } from './tenant-gate'
 import { Topbar } from './topbar'
@@ -53,7 +61,7 @@ function Splash() {
  *
  * THE SHELL CONTRACT (redesign §3.2):
  *
- *   sidebar 272 px │ top bar 52 px: breadcrumb · page state · page actions · panels
+ *   sidebar 240 px full | 56 px rail │ top bar 52 px: breadcrumb · page state · page actions · panels
  *                  ├──────────────────────────────────────────────────────────────
  *                  │ work — the whole remaining sheet [+ the side panel a page declares]
  *
@@ -128,6 +136,7 @@ function useSignedOutRoute(status: string) {
 }
 
 export function AppLayout() {
+  const { t } = useTranslation('common')
   const { status } = useAuth()
   // Which engine modules run here (server-info modules_not_enabled, ARCH C1): read once
   // for the navigation gate, the route gate and the Home tiles.
@@ -138,14 +147,33 @@ export function AppLayout() {
   // Where a signed-out browser goes, and the page it returns to (read in the guard's
   // effect, once).
   const signInRoute = useSignedOutRoute(status)
-  const sidebarHidden = usePreferencesStore((s) => s.sidebarCollapsed)
+  // ONE SIDEBAR AT A TIME (console 1.0): the person's stored width on a document page; the
+  // rail on a work page, whose own list is the sidebar there. Unfolding it on a work page
+  // opens the navigation over the page and leaves the stored choice alone.
+  const folded = usePreferencesStore((s) => s.sidebarCollapsed)
+  const frame = frameFor(pathname)
+  const sidebarMode = sidebarModeFor(frame, folded)
+  // The navigation over a work page belongs to the page it was opened on: leaving that page
+  // (a link in it, or any other way) closes it.
+  const navOpen =
+    useNavOverlay((s) => s.openOn) === pathname && frame === 'work'
+  const closeNav = () => useNavOverlay.getState().setOpenOn(null)
+  const committedHref = useRouterState({
+    select: (s) => s.resolvedLocation?.href ?? s.location.href,
+  })
+  useEffect(() => {
+    useNavOverlay.getState().setOpenOn(null)
+  }, [committedHref])
   const [areasOpen, setAreasOpen] = useState(false)
   const areasReturnRef = useRef<HTMLElement | null>(null)
   const openAreas = () => {
-    areasReturnRef.current =
-      document.activeElement instanceof HTMLElement
+    const overlay = useNavOverlay.getState()
+    areasReturnRef.current = overlay.openOn
+      ? overlay.returnFocusTo
+      : document.activeElement instanceof HTMLElement
         ? document.activeElement
         : null
+    closeNav()
     setAreasOpen(true)
   }
 
@@ -153,14 +181,54 @@ export function AppLayout() {
 
   return (
     <PersonalNavigationProvider engineFavorites={engineFavorites}>
+      <SidebarSync />
       <SidePanelProvider>
         <AppFrame
-          sidebarHidden={sidebarHidden}
-          sidebar={<AppSidebar areasOpen={areasOpen} onOpenAreas={openAreas} />}
+          sidebar={
+            <AppSidebar
+              mode={sidebarMode}
+              onToggle={() => foldOrOverlay(pathname)}
+              areasOpen={areasOpen}
+              onOpenAreas={openAreas}
+            />
+          }
           topbar={<Topbar />}
           phoneBar={<PhoneBar onMore={openAreas} />}
           overlays={
             <>
+              <Sheet
+                open={navOpen}
+                onOpenChange={(open) => {
+                  if (!open) closeNav()
+                }}
+              >
+                <SheetContent
+                  side="left"
+                  hideClose
+                  onCloseAutoFocus={(event) => {
+                    const opener = useNavOverlay.getState().returnFocusTo
+                    if (opener?.isConnected) {
+                      event.preventDefault()
+                      opener.focus()
+                    }
+                  }}
+                  data-slot="nav-overlay"
+                  aria-describedby={undefined}
+                  className="w-auto max-w-none gap-0 bg-frame p-0 min-[761px]:inset-y-2 min-[761px]:left-2 min-[761px]:h-auto min-[761px]:rounded-panel min-[761px]:border min-[761px]:border-line"
+                >
+                  <SheetTitle className="sr-only">
+                    {t('a11y.primarySidebar')}
+                  </SheetTitle>
+                  <AppSidebar
+                    mode="full"
+                    overlay
+                    onToggle={closeNav}
+                    onNavigate={closeNav}
+                    areasOpen={areasOpen}
+                    onOpenAreas={openAreas}
+                  />
+                </SheetContent>
+              </Sheet>
               <AreasSheet
                 open={areasOpen}
                 onOpenChange={setAreasOpen}

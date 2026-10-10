@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-// HU2-11: the console's polling wrote one INFO line per read into olivares.log. A
+// The console's polling wrote one INFO line per read into olivares.log. A
 // read that succeeded is DEBUG; a write, a refusal and an error stay INFO.
 func TestAccessLogKeepsReadsOutOfTheInfoLog(t *testing.T) {
 	for _, tc := range []struct {

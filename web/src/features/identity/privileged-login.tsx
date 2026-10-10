@@ -1,18 +1,10 @@
 // SPDX-FileCopyrightText: 2026 Olivares.AI
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
-//
-// privileged, phishing-resistant login for the panel operator:
-// WebAuthn/FIDO2 passkey registration (AAL3, NIST SP 800-63B-4) + PIV/CAC X.509
-// client-cert status (FIPS 201-3, cert-to-role + OCSP). The browser runs the
-// ceremony; the backend (first-party auth seam) issues the challenge and
-// VERIFIES. All of this is a DECLARED seam today (no backend) → the panel
-// orchestrates + fails closed, shows the honest pending seam, and makes NO
-// NIST/FIPS conformance claim the backend does not guarantee. The
-// session AAL drives the gate on the WIF/identity views.
+// Community passkey management and generic additional-login panel slots.
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Fingerprint, IdCard, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Fingerprint, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useCallback, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { SectionCard } from '@/features/_intel'
@@ -33,18 +25,12 @@ import { Spinner } from '@/components/ui/spinner'
 import { toast } from '@/components/ui/toaster'
 import { RelTimeLabel } from '@/features/shared'
 import { useAuth } from '@/lib/auth/context'
-import { useSessionStore } from '@/stores/session'
 import {
   useFailedActionReporter,
   usePrivilegedMutation,
 } from '@/lib/hooks/use-privileged-mutation'
 import { ApiError } from '@/lib/api/errors'
-import {
-  identityApi,
-  identityKeys,
-  isContractPending,
-  isPivNotConfigured,
-} from './api'
+import { identityApi, identityKeys, isContractPending } from './api'
 import type { WebAuthnCredentialItem } from './types'
 import {
   AAL,
@@ -53,11 +39,7 @@ import {
   useAssurance,
   useStepUpSatisfied,
 } from './assurance'
-import {
-  AuthorityLink,
-  ContractPendingNotice,
-  DeclaredSection,
-} from './components'
+import { ContractPendingNotice } from './components'
 import { AuthorityReferences } from './references'
 import {
   canEnrollPasskey,
@@ -66,22 +48,26 @@ import {
 } from './enroll-passkey'
 import { useStepUpOwner } from '@/stores/step-up'
 import { useResumeGuard } from '@/lib/hooks/use-resume-guard'
-import { isPivKnownUnconfigured, pivStatusQueryKey } from './piv-configuration'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
+import { useOfferedPanels } from '@/features/panels'
 import { StaticTable } from '@/components/data/static-table'
 import { defaultPasskeyName } from './passkey-name'
 
 export function PrivilegedLoginTab() {
+  const cards = useOfferedPanels(PANEL_EXTENSIONS.identityLoginCards ?? [])
   return (
     <div className="flex flex-col gap-6">
       <AssuranceStatusSection />
       <PasskeysManagementSection />
-      <PivStatusSection />
-      <AuthorityReferences area="login" keys={['webauthn', 'piv']} />
+      {cards.map(({ id, Component }) => (
+        <Component key={id} />
+      ))}
+      <AuthorityReferences area="login" keys={['webauthn']} />
     </div>
   )
 }
 
-function AssuranceStatusSection() {
+export function AssuranceStatusSection() {
   const { t } = useTranslation('identity')
   const { aal, amr } = useAssurance()
   // What this deployment asks for before administrative actions (off by default), and
@@ -135,7 +121,7 @@ function AssuranceStatusSection() {
   )
 }
 
-function PasskeysManagementSection() {
+export function PasskeysManagementSection() {
   const { t } = useTranslation(['identity', 'common'])
   const { activeTenant } = useAuth()
   const qc = useQueryClient()
@@ -504,125 +490,5 @@ function RenamePasskeyForm({
         </Button>
       </DialogFooter>
     </>
-  )
-}
-
-/**
- * THE OPERATOR'S SETUP GUIDE, not the engine's variable name.
- *
- * The unconfigured callout used to read "an operator enables it by setting
- * OLIVARES_PIV_CONFIG (agency CA, cert-to-role map) on the engine" — an engine
- * internal printed as the primary, and only, thing to do about a card that does
- * not work. A console user who reads it cannot act on it, and an administrator
- * who can does not learn it here first. The configuration surface belongs in the
- * documentation, which already carries it; the callout says who has to act and
- * points at where it is written.
- *
- * The page is the configuration reference, which documents the smart-card
- * configuration surface, at the same documentation base the topbar help icon
- * uses. It exists in this repository's docs tree as
- * docs-site/src/content/docs/reference/configuration.md — this constant is not a
- * new destination invented for the copy.
- */
-const PIV_SETUP_GUIDE = 'https://docs.olivares.ai/reference/configuration/'
-
-function PivStatusSection() {
-  const { t } = useTranslation(['identity', 'common'])
-  const { activeTenant, principal } = useAuth()
-  const credentialGeneration = useSessionStore((s) => s.credentialGeneration)
-  const knownUnconfigured = isPivKnownUnconfigured(principal)
-  const q = useQuery({
-    queryKey: pivStatusQueryKey(activeTenant, principal, credentialGeneration),
-    queryFn: () => identityApi.pivStatus(),
-    retry: false,
-    enabled: !knownUnconfigured,
-  })
-  // The explicit "PIV not configured on this deployment" state (the
-  // backend route is live; 501 piv_not_configured means the smart-card
-  // configuration is unset) — a real, known state, not the backend-pending
-  // seam. Same pattern as the federation view's ErrSSONotConfigured. A
-  // known-false whoami field is the same card and must not paint cached
-  // presented status.
-  //
-  // THE PREDICATE IS UNCHANGED AND MUST STAY THAT WAY: only a known-false
-  // whoami field or a typed 501 reaches this card. A transport failure, a 401
-  // or any other error still falls through to DeclaredSection below, which
-  // reports it as the failed read it is. Telling an operator that PIV is "not
-  // configured" because a request did not arrive would be a worse answer than
-  // the one this correction replaces.
-  if (knownUnconfigured || (q.isError && isPivNotConfigured(q.error))) {
-    return (
-      <SectionCard
-        title={t('login.pivTitle')}
-        description={t('login.pivDescription')}
-      >
-        <p role="status" className="text-body text-muted-foreground">
-          {t('login.pivNotConfigured')}
-        </p>
-        <p className="mt-2 text-body">
-          <AuthorityLink
-            href={PIV_SETUP_GUIDE}
-            className="font-sans text-body break-normal"
-          >
-            {t('login.pivSetupGuide')}
-          </AuthorityLink>
-        </p>
-        <p className="mt-2 flex items-center gap-1.5 text-caption text-muted-foreground">
-          <IdCard className="size-3.5 shrink-0" aria-hidden />
-          {t('login.pivNote')}
-        </p>
-      </SectionCard>
-    )
-  }
-  return (
-    <SectionCard
-      title={t('login.pivTitle')}
-      description={t('login.pivDescription')}
-    >
-      <DeclaredSection
-        query={q}
-        what={t('login.pivSeamWhat')}
-        skeletonHeight={100}
-      >
-        {(piv) => (
-          <KvList>
-            <KvRow label={t('login.pivPresented')}>
-              <Badge variant={piv.presented ? 'success' : 'neutral'}>
-                {piv.presented
-                  ? t('common:status.active')
-                  : t('login.pivAbsent')}
-              </Badge>
-            </KvRow>
-            {piv.subject ? (
-              <KvRow label={t('login.pivSubject')} mono align="start">
-                {piv.subject}
-              </KvRow>
-            ) : null}
-            {piv.mapped_role ? (
-              <KvRow label={t('login.pivRole')}>
-                <Badge variant="accent">{piv.mapped_role}</Badge>
-              </KvRow>
-            ) : null}
-            <KvRow label={t('login.pivOcsp')}>
-              <Badge
-                variant={
-                  piv.ocsp === 'good'
-                    ? 'success'
-                    : piv.ocsp === 'revoked'
-                      ? 'danger'
-                      : 'neutral'
-                }
-              >
-                {t(`login.ocsp.${piv.ocsp ?? 'unknown'}`)}
-              </Badge>
-            </KvRow>
-          </KvList>
-        )}
-      </DeclaredSection>
-      <p className="mt-2 flex items-center gap-1.5 text-caption text-muted-foreground">
-        <IdCard className="size-3.5 shrink-0" aria-hidden />
-        {t('login.pivNote')}
-      </p>
-    </SectionCard>
   )
 }

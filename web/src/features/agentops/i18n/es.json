@@ -85,10 +85,17 @@
     "attach": "Adjuntar",
     "detach": "Desadjuntar"
   },
+  "discardWorktree": {
+    "label": "Descartar también el worktree y la rama {{branch}}",
+    "hint": "Se elimina cuando la rama está fusionada y el worktree está limpio. Marca la casilla para descartar trabajo sin fusionar o sin confirmar."
+  },
   "create": {
     "title": "Nueva sesión",
     "titleTool": "Nueva sesión de {{tool}}",
-    "description": "Olivares lanza y gobierna el proceso — el equivalente visual al arranque por CLI, con política en línea.",
+    "description": "Di qué hacer primero. Las demás opciones de lanzamiento están en Opciones avanzadas.",
+    "prompt": "Primer mensaje (opcional)",
+    "promptPlaceholder": "¿Qué debe hacer primero?",
+    "advanced": "Opciones avanzadas",
     "name": "Nombre",
     "namePlaceholder": "Una etiqueta de display (opcional)",
     "transport": "Transporte",
@@ -97,34 +104,36 @@
     "effortDefault": "Por defecto del modelo",
     "model": "Modelo",
     "modelPlaceholder": "opus  ·  claude-opus-4-8  (opcional)",
-    "workspace": "Workspace",
-    "workspaceNone": "Ninguno (working dir por defecto del runner)",
+    "workspace": "Carpeta",
+    "workspaceNone": "Carpeta temporal de esta sesión",
+    "worktree": "Trabajar en un nuevo git worktree",
+    "worktreeHint": "Crea una rama nueva en un worktree propio, para que las sesiones del mismo repositorio no compartan archivos. La carpeta debe ser la carpeta raíz del repositorio.",
+    "worktreeFrom": "Empieza en",
     "isolation": "Aislamiento",
     "isolationNativeOnly": "Solo nativo está cableado en esta entrega; contenedor/sandbox se rechazan.",
     "envAllow": "Reenviar env del host (nombres)",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "Allowlist de NOMBRES de variables de entorno a reenviar (nunca se envían valores).",
-    "submit": "Solicitar lanzamiento",
-    "submitting": "Solicitando…",
+    "submit": "Iniciar",
+    "submitting": "Iniciando…",
     "criticalWarning": "Es un arranque privilegiado (quita el prompt por herramienta). Requiere aprobación de dos personas y se graba — puede quedar pendiente hasta su aprobación.",
     "classifiedWarning": "Un montaje read-write de un workspace clasificado es un arranque privilegiado (aprobación + grabación).",
     "success": "Sesión lanzada",
     "template": "Plantilla",
     "templateNone": "Sin plantilla",
-    "templateHint": "El motor fusiona los términos de la plantilla sobre los campos anteriores antes de las puertas de lanzamiento y los escribe en el propio proceso de la sesión, de modo que la restricción se mantiene aunque quien llame no abra esta consola.",
+    "templateHint": "Las reglas de una plantilla sustituyen las opciones equivalentes de aquí y rigen durante toda la sesión.",
     "templateUnenforceable": "Esta plantilla declara términos que este lanzamiento no puede aplicar, así que se rechaza en lugar de arrancar sin ellos:",
     "templateOverrides_one": "La plantilla sobrescribe {{count}} de tus elecciones:",
     "templateOverrides_many": "La plantilla sobrescribe {{count}} de tus elecciones:",
     "templateOverrides_other": "La plantilla sobrescribe {{count}} de tus elecciones:",
     "profile": "Perfil de proveedor",
     "profileNone": "Selecciona un perfil",
-    "profileHint": "Selecciona el perfil de proveedor para esta sesión. Es obligatorio. Los requisitos locales se comprueban para la selección actual después de la vista previa de la plantilla.",
     "profileNotOperable": "no habilitado en este entorno",
-    "profilesNotRead": "No se pudieron leer los perfiles de proveedor; el lanzamiento puede seguir sin perfil.",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME y GROK_HOME pertenecen al perfil: aquí se rechaza un lanzamiento que reenvíe cualquiera de ellas. Los demás nombres siguen sujetos a la validación del servidor.",
     "identity": {
       "title": "Identidad de lanzamiento",
       "hint": "Elige un agente admitido para actuar en nombre de su sponsor humano. El acceso humano por sí solo no otorga autoridad de agente.",
+      "humanHint": "La sesión se ejecuta con tu propio acceso.",
       "human": "Operador humano actual",
       "agent": "Agente admitido (en nombre del sponsor)",
       "required": "Un perfil de orquestación requiere una identidad de agente autenticada de forma independiente.",
@@ -135,6 +144,19 @@
       "loading": "Cargando identidades de agente…",
       "loadFailed": "Lista de identidades no disponible.",
       "loadMore": "Cargar más identidades"
+    },
+    "blocked": {
+      "profilesForbidden": "Tu rol no puede leer los perfiles de proveedor (sessions:profile:read), así que aquí no puede iniciarse ninguna sesión.",
+      "profilesFailed": "No se pudieron leer los perfiles de proveedor.",
+      "profilesLoading": "Leyendo perfiles de proveedor…",
+      "noProfile": "Todavía no hay ningún perfil de proveedor. Añade primero un proveedor.",
+      "openProviders": "Abrir Proveedores",
+      "chooseProfile": "Elige un perfil de proveedor.",
+      "worktreeFolder": "Elige una carpeta de repositorio para el worktree.",
+      "chooseAgent": "Elige el agente admitido con el que se ejecuta esta sesión, o ejecútala como tú.",
+      "envConflict": "Reenviar env del host nombra una variable que pertenece al perfil: quítala en Opciones avanzadas.",
+      "templateRefused": "La plantilla pide condiciones que este lanzamiento no puede aplicar: elige otra en Opciones avanzadas.",
+      "readinessFailed": "No se pudieron leer los requisitos del perfil."
     }
   },
   "detail": {
@@ -160,6 +182,7 @@
     "workspace": "Workspace",
     "workspaceDirectory": "Directorio de trabajo",
     "workspaceDirectoryOwn": "su propio directorio para esta sesión",
+    "worktreeBranch": "Rama del worktree",
     "created": "Creada",
     "started": "Arrancada",
     "lastActivity": "Última actividad",
@@ -197,7 +220,13 @@
     "interruptFailed": "No se pudo interrumpir el turno.",
     "interruptFenceUnavailable": "Actualiza la ejecución para obtener su generación de trabajo vigente antes de interrumpirla.",
     "interruptUnknown": "Se desconoce el resultado de la interrupción. Comprueba la sesión antes de volver a intentarlo.",
-    "interruptWorkConflict": "El estado de trabajo actual de la sesión no permite esta interrupción. Actualiza la ejecución para comprobar su estado."
+    "interruptWorkConflict": "El estado de trabajo actual de la sesión no permite esta interrupción. Actualiza la ejecución para comprobar su estado.",
+    "blocked": {
+      "notLive": "Inicia o reanuda la sesión para enviar.",
+      "approval": "El inicio espera una aprobación; podrás enviar cuando se apruebe.",
+      "sending": "Enviando… Espera a que la sesión lo acepte.",
+      "empty": "Escribe algo para enviar."
+    }
   },
   "gov": {
     "title": "Postura de gobierno",
@@ -296,7 +325,20 @@
     "deleteBody": "Esto elimina solo el registro — nunca toca ficheros del host. Las sesiones que lo apunten no podrán arrancar.",
     "deleteConfirm": "Desregistrar",
     "deleted": "Workspace desregistrado",
-    "open": "Explorar ficheros"
+    "open": "Explorar ficheros",
+    "readOnly": {
+      "title": "Carpetas de solo lectura",
+      "description": "Las carpetas de solo lectura protegen el contenido de los archivos y las entradas de directorio (sin escribir, truncar, crear, eliminar ni renombrar); los permisos, el propietario, los atributos extendidos y las marcas de tiempo siguen los permisos normales del host.",
+      "empty": "No hay carpetas de solo lectura.",
+      "folder": "Carpeta en este servidor",
+      "folderPlaceholder": "/srv/reference",
+      "add": "Añadir",
+      "remove": "Quitar",
+      "removeLabel": "Quitar {{folder}}",
+      "discard": "Descartar cambios",
+      "save": "Guardar carpetas",
+      "saved": "Carpetas de solo lectura guardadas."
+    }
   },
   "browser": {
     "title": "Ficheros",
@@ -753,9 +795,9 @@
     "requesting": "Solicitando…",
     "requestHintReady": "Solicitar un lanzamiento sigue recorriendo autorización, mint y arranque. Esto no demuestra que el proveedor esté autenticado.",
     "requestHintUnknown": "La comprobación está incompleta. Aun así puedes solicitar el lanzamiento; el servidor volverá a validar todo. Esto no es un veredicto de listo.",
-    "requestBlocked": "No se ofrece solicitar el lanzamiento: esta selección es inviable de forma conocida.",
-    "noWrite": "Puedes ver estos requisitos, pero solicitar un lanzamiento necesita sessions:run:write.",
-    "waitingPreview": "Esperando la vista previa de la plantilla antes de leer los requisitos del transporte efectivo.",
+    "requestBlocked": "Este perfil no puede iniciar una sesión aquí. Sus requisitos, en Opciones avanzadas, dicen por qué.",
+    "noWrite": "Iniciar una sesión requiere el permiso sessions:run:write.",
+    "waitingPreview": "Leyendo la plantilla antes de comprobar el perfil…",
     "providerAuth": "El inicio de sesión del proveedor no se observa aquí. Un home o un binario válidos no son una cuenta autenticada.",
     "launchAuth": "La autorización de lanzamiento se decide al enviar y necesita sessions:run:write.",
     "remoteControl": "Solo ciclo de vida: la conversación permanece en el proveedor; no hay consola de turnos bridged.",
@@ -860,6 +902,7 @@
       "codex_app_server": "Codex app-server",
       "grok_acp": "Grok ACP",
       "opencode_acp": "OpenCode ACP",
+      "gemini_acp": "Gemini CLI ACP",
       "unknown": "Protocolo desconocido"
     }
   },

@@ -86,7 +86,7 @@ type LiveSample struct {
 // (count + max severity), so a caller scoring behavioral signals sees the
 // canonical detective record, not just liveness.
 func (m *Module) SampleLive(ctx context.Context, tenant model.TenantID, q LiveSampleQuery) ([]LiveSample, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return nil, errNoData
 	}
 	limit := q.Limit
@@ -117,7 +117,7 @@ func (m *Module) SampleLive(ctx context.Context, tenant model.TenantID, q LiveSa
 		filters = append(filters, model.Filter{Column: colLastEventAt, Op: model.OpGte, Value: cutoff})
 	}
 	var out []LiveSample
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(liveKind)
 		if err != nil {
 			return err
@@ -245,7 +245,7 @@ type CredentialTimeline struct {
 // Returns an empty result when no run matches — never an error for an unknown
 // credential.
 func (m *Module) TimelineByCredential(ctx context.Context, tenant model.TenantID, cred string, max int, cursor string) (sessionRef string, timeline []CredentialTimeline, nextCursor string, hasMore bool, err error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return "", nil, "", false, errNoData
 	}
 	if cred == "" {
@@ -255,7 +255,7 @@ func (m *Module) TimelineByCredential(ctx context.Context, tenant model.TenantID
 		max = defaultReplayMax
 	}
 
-	err = m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err = m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		// Step 1: find the run with this credential_id.
 		runRepo, rerr := sc.Ext(runKind)
 		if rerr != nil {
@@ -369,7 +369,7 @@ func (m *Module) ReplayTimeline(ctx context.Context, tenant model.TenantID, sess
 // ReplayTimelineByLiveRef reconstructs the action sequence of exactly ONE live
 // row by its opaque reference (B2), whichever channel it was observed through.
 func (m *Module) ReplayTimelineByLiveRef(ctx context.Context, tenant model.TenantID, liveRef string, max int) ([]ReplayEvent, bool, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return nil, false, errNoData
 	}
 	id, ok := parseLiveRef(liveRef)
@@ -377,7 +377,7 @@ func (m *Module) ReplayTimelineByLiveRef(ctx context.Context, tenant model.Tenan
 		return nil, false, nil
 	}
 	var filters []model.Filter
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		rec, err := findLiveByID(ctx, sc, id)
 		if errors.Is(err, store.ErrNotFound) {
 			return nil
@@ -395,7 +395,7 @@ func (m *Module) ReplayTimelineByLiveRef(ctx context.Context, tenant model.Tenan
 }
 
 func (m *Module) replayTimeline(ctx context.Context, tenant model.TenantID, filters []model.Filter, max int) ([]ReplayEvent, bool, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return nil, false, errNoData
 	}
 	if max <= 0 {
@@ -403,7 +403,7 @@ func (m *Module) replayTimeline(ctx context.Context, tenant model.TenantID, filt
 	}
 	var out []ReplayEvent
 	truncated := false
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(timelineKind)
 		if err != nil {
 			return err

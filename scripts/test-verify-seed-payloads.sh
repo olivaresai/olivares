@@ -36,10 +36,10 @@ GUION="$RAIZ/scripts/verify-seed-payloads.py"
 TRABAJO="$(mktemp -d)"
 trap 'rm -rf "$TRABAJO"' EXIT
 
-# ⛔ PREFLIGHT · sin `python3` esta bateria no mide nada, y una bateria que no puede correr tiene
-# que decirlo con rc 2, no fallar caso a caso como si el guion estuviera roto (the reviewer/44).
+# Preflight (the reviewer/44): without python3 the suite cannot measure anything.
+# Report rc 2 instead of failing every case as if the script were defective.
 if ! command -v python3 >/dev/null 2>&1; then
-	printf 'test-verify-seed-payloads: NO HE PODIDO MIRAR: no hay python3 en el PATH\n' >&2
+	printf 'test-verify-seed-payloads: COULD NOT CHECK: python3 is not on PATH\n' >&2
 	exit 2
 fi
 
@@ -49,22 +49,21 @@ fail=0
 paso() { printf 'ok   %s\n' "$1"; ok=$((ok + 1)); }
 malo() { printf 'FAIL %s\n' "$1"; fail=$((fail + 1)); }
 
-# rc_de <fichero-guion> <args...> — imprime el codigo de salida, nunca la salida del guion.
-# ⛔ EL DIAGNOSTICO NO SE TIRA (the reviewer/44, A-08). La version anterior mandaba toda la salida a
-#    /dev/null y devolvia solo el codigo, asi que un caso podia exigir «rc 2» y darse por bueno con
-#    un rc 2 de OTRA causa — el motor caido, un typo en la URL, argparse rechazando una bandera.
-#    Es mi propia ficha «un mutante acredita la pata que NOMBRA» aplicada a mi banco. Ahora la
-#    salida se guarda y `casa_mensaje` exige que el veredicto DIGA lo que el caso afirma.
-SALIDA="$TRABAJO/salida.txt"
+# rc_de <script> <args...> — print the exit code, not the script output.
+# Retain diagnostics (the reviewer/44, A-08). Discarding them let any rc 2 satisfy a case,
+# including unrelated engine failure, URL typos or argparse rejection. A mutant
+# must prove its named branch: save output and require casa_mensaje to match the
+# case's claimed cause.
+OUTPUT="$TRABAJO/output.txt"
 rc_de() {
 	local g="$1"
 	shift
-	python3 "$g" "$@" >"$SALIDA" 2>&1
+	python3 "$g" "$@" >"$OUTPUT" 2>&1
 	printf '%s' "$?"
 }
 
 # casa_mensaje <patron> — cierto si la ULTIMA salida capturada lo contiene.
-casa_mensaje() { command grep -qE "$1" "$SALIDA"; }
+casa_mensaje() { command grep -qE "$1" "$OUTPUT"; }
 
 # ── veredicto_mutante / juicio_valido ─────────────────────────────────────────────────────────
 # ⛔ ESTE ARNES INFORMABA «SOBREVIVIO» SOBRE UN rc 2, y lo cazo un lector despues de que la propia
@@ -85,7 +84,7 @@ veredicto_mutante() { # $1 fichero mutante · $2 patron del mensaje · resto: ar
 	local m="$1" patron="$2"
 	shift 2
 	if [ ! -s "$m" ]; then
-		printf 'NOPUDE:el mutante no se construyo (fichero ausente o vacio): sin artefacto no hay juicio'
+		printf 'NOPUDE:mutant was not built (missing or empty file); no artifact means no verdict'
 		return
 	fi
 	local r
@@ -95,12 +94,12 @@ veredicto_mutante() { # $1 fichero mutante · $2 patron del mensaje · resto: ar
 		if casa_mensaje "$patron"; then
 			printf 'MUERTO'
 		else
-			printf 'NOPUDE:rc 1 pero por OTRO mensaje que el de su caso: murio en una pata anterior'
+			printf 'NOPUDE:rc 1 with a different diagnostic; the mutant failed in an earlier leg'
 		fi
 		;;
-	2) printf 'NOPUDE:rc 2 es NO HE PODIDO MIRAR, no supervivencia' ;;
+	2) printf 'NOPUDE:rc 2 means COULD NOT CHECK, not survival' ;;
 	0) printf 'VIVO' ;;
-	*) printf 'NOPUDE:rc %s inesperado' "$r" ;;
+	*) printf 'NOPUDE:unexpected rc %s' "$r" ;;
 	esac
 }
 
@@ -113,7 +112,7 @@ juicio_valido() {
 	if [ ! -s "$1" ]; then
 		return 1
 	fi
-	if command grep -qiE 'Traceback|NO HE PODIDO MIRAR' "$1"; then
+	if command grep -qiE 'Traceback|COULD NOT LOOK' "$1"; then
 		return 1
 	fi
 	return 0
@@ -137,9 +136,9 @@ falso() { # $1 = nombre · $2 = rc · $3 = mensaje
 		printf 'sys.exit(%s)\n' "$2"
 	} >"$TRABAJO/$1.py"
 	python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read())' "$TRABAJO/$1.py" ||
-		malo "NO HE PODIDO MIRAR: el sujeto falso $1 no es python valido; el auto-testigo del arnes no vale"
+		malo "COULD NOT CHECK: fake subject $1 is invalid Python; the harness self-check is invalid"
 }
-falso f_muere 1 'corto de mas: localizador legitimo aqui'
+falso f_muere 1 'blocked unexpectedly: valid locator aqui'
 falso f_otro 1 'reventé por una razon COMPLETAMENTE distinta'
 falso f_nopude 2 'NO HE PODIDO MIRAR: me falta el fichero'
 falso f_vivo 0 'todo bien, no corte nada'
@@ -159,11 +158,11 @@ falso f_vivo 0 'todo bien, no corte nada'
 #    prefijo -> razon -> COLA. Ahora `MUERTO` y `VIVO` van SOLOS, sin dos puntos ni nada detras.
 esperado() { # $1 = fichero · $2 = veredicto exacto · $3 = trozo de razon (vacio si no aplica) · $4 = etiqueta
 	local v
-	v="$(veredicto_mutante "$1" 'corto de mas: localizador legitimo')"
+	v="$(veredicto_mutante "$1" 'blocked unexpectedly: valid locator')"
 	if [ -z "$3" ]; then
 		# MUERTO / VIVO: el veredicto va SOLO. Comparacion literal, sin trocear.
 		if [ "$v" != "$2" ]; then
-			malo "el arnes clasifico mal $4: dijo '$v' y esperaba EXACTAMENTE '$2', sin cola"
+			malo "the harness misclassified $4: returned '$v', expected exactly '$2' with no suffix"
 			return 1
 		fi
 		return 0
@@ -172,46 +171,46 @@ esperado() { # $1 = fichero · $2 = veredicto exacto · $3 = trozo de razon (vac
 	case "$v" in
 	"$2":*) : ;;
 	*)
-		malo "el arnes clasifico mal $4: dijo '$v' y esperaba '$2:' con su razon"
+		malo "the harness misclassified $4: returned '$v', expected '$2:' with its reason"
 		return 1
 		;;
 	esac
 	if ! command grep -qF "$3" <<<"$v"; then
-		malo "el arnes acerto el veredicto de $4 pero NO su razon: dijo '$v' y esperaba que dijera '$3'"
+		malo "the harness returned the right verdict for $4 but the wrong reason: got '$v', expected '$3'"
 		return 1
 	fi
 	return 0
 }
 
 fallos_arnes=0
-esperado "$TRABAJO/f_muere.py" MUERTO '' 'un mutante que muere por SU mensaje' || fallos_arnes=1
-esperado "$TRABAJO/f_otro.py" NOPUDE 'por OTRO mensaje' 'un mutante que sale 1 por OTRO mensaje' || fallos_arnes=1
-esperado "$TRABAJO/f_nopude.py" NOPUDE 'rc 2 es NO HE PODIDO MIRAR' 'un mutante que sale rc 2' || fallos_arnes=1
-esperado "$TRABAJO/f_vivo.py" VIVO '' 'un mutante que de verdad sobrevive' || fallos_arnes=1
-esperado "$TRABAJO/no-existe-jamas.py" NOPUDE 'no se construyo' 'un mutante que NO se construyo' || fallos_arnes=1
+esperado "$TRABAJO/f_muere.py" MUERTO '' 'mutant killed by its own diagnostic' || fallos_arnes=1
+esperado "$TRABAJO/f_otro.py" NOPUDE 'a different diagnostic' 'mutant exits 1 with a different diagnostic' || fallos_arnes=1
+esperado "$TRABAJO/f_nopude.py" NOPUDE 'rc 2 means COULD NOT CHECK' 'mutant exits 2' || fallos_arnes=1
+esperado "$TRABAJO/f_vivo.py" VIVO '' 'mutant that survives' || fallos_arnes=1
+esperado "$TRABAJO/no-existe-jamas.py" NOPUDE 'was not built' 'mutant was not built' || fallos_arnes=1
 if [ "$fallos_arnes" = "0" ]; then
-	paso "el arnes separa los CUATRO estados: muerto, vivo, no-pude-mirar (rc 2 y sin construir) y muerto-por-OTRO-mensaje"
+	paso "the harness separates all FOUR states: killed, survived, could not check, and failed for a different diagnostic"
 fi
 
 : >"$TRABAJO/vacio.txt"
 printf 'Traceback (most recent call last):\n  File "x"\n' >"$TRABAJO/revienta.txt"
-printf 'FALTA-CORTAR algo\n' >"$TRABAJO/bueno.txt"
+printf 'MISSING-BLOCK algo\n' >"$TRABAJO/bueno.txt"
 if juicio_valido "$TRABAJO/vacio.txt"; then
-	malo "juicio_valido da por bueno un fichero VACIO: un mutante sin salida se leeria como supervivencia"
+	malo "juicio_valido accepts an EMPTY file: a mutant with no output could be classified as surviving"
 elif juicio_valido "$TRABAJO/revienta.txt"; then
-	malo "juicio_valido da por bueno un Traceback: una corrida reventada se leeria como supervivencia"
+	malo "juicio_valido accepts a traceback: a crashed run could be classified as surviving"
 elif ! juicio_valido "$TRABAJO/bueno.txt"; then
-	malo "juicio_valido rechaza un veredicto legible: el arnes no dejaria pasar ningun caso"
+	malo "juicio_valido rejects a readable verdict: the harness would accept no cases"
 else
-	paso "juicio_valido distingue «no produjo veredicto» (vacio o reventado) de «no corto», que es lo que confundia"
+	paso "juicio_valido distinguishes missing or crashed verdicts from an unblocked case"
 fi
 
 # ── 1 · la guarda de secretos, sana: corta lo que debe y deja pasar lo que debe ───────────────
 r="$(rc_de "$GUION" x x x --autocomprobar)"
 if [ "$r" = "0" ]; then
-	paso "la autocomprobacion de la guarda de secretos pasa (rc 0)"
+	paso "the secret guard self-check passes (rc 0)"
 else
-	malo "la autocomprobacion deberia salir 0 y salio $r"
+	malo "the self-check should exit 0; got $r"
 fi
 
 # ── 2 · MUTANTE: la guarda deja de reconocer formas de credencial ─────────────────────────────
@@ -221,14 +220,14 @@ python3 - "$GUION" "$m1" <<'PY'
 import sys
 src = open(sys.argv[1]).read()
 mut = src.replace("FORMAS_DE_CREDENCIAL = [", "FORMAS_DE_CREDENCIAL = [] and [")
-assert mut != src, "el mutante 1 NO se aplico: la bateria estaria midiendo el guion sano"
+assert mut != src, "mutant 1 was not applied: the test would exercise the healthy script"
 open(sys.argv[2], "w").write(mut)
 PY
-v="$(veredicto_mutante "$m1" 'FAIL  no corto: aws-access-key' x x x --autocomprobar)"
+v="$(veredicto_mutante "$m1" 'FAIL  did not block: aws-access-key' x x x --autocomprobar)"
 case "$v" in
-MUERTO) paso "el mutante que ciega la guarda MUERE nombrando el fixture que dejo pasar" ;;
-VIVO) malo "el mutante que ciega la guarda SOBREVIVIO (rc 0): el caso 1 no cubre nada" ;;
-*) malo "NO HE PODIDO MIRAR, no supervivencia — el mutante que ciega la guarda sin veredicto: ${v#NOPUDE:}" ;;
+MUERTO) paso "the mutant that disables the guard is KILLED and names the fixture it allowed through" ;;
+VIVO) malo "the mutant that disables the guard SURVIVED (rc 0): case 1 provides no coverage" ;;
+*) malo "COULD NOT CHECK: no verdict for the guard-disabling mutant: ${v#NOPUDE:}" ;;
 esac
 
 # ── 3 · MUTANTE: la guarda corta de mas (rechaza los localizadores legitimos) ─────────────────
@@ -247,14 +246,14 @@ src = open(sys.argv[1]).read()
 viejo = "    return any(r in norm for r in RAICES_DE_SECRETO)"
 nuevo = "    return True  # MUTANTE: corta de mas, tambien los localizadores legitimos"
 mut = src.replace(viejo, nuevo)
-assert mut != src, "el mutante 2 NO se aplico"
+assert mut != src, "mutant 2 was not applied"
 open(sys.argv[2], "w").write(mut)
 PY
-v="$(veredicto_mutante "$m2" 'corto de mas: localizador legitimo' x x x --autocomprobar)"
+v="$(veredicto_mutante "$m2" 'blocked unexpectedly: valid locator' x x x --autocomprobar)"
 case "$v" in
-MUERTO) paso "el mutante que corta de mas MUERE nombrando el localizador legitimo que rechazo" ;;
-VIVO) malo "el mutante que corta de mas SOBREVIVIO (rc 0): un rechaza-todo pasaria la bateria" ;;
-*) malo "NO HE PODIDO MIRAR, no supervivencia — el mutante que corta de mas sin veredicto: ${v#NOPUDE:}" ;;
+MUERTO) paso "the overly broad guard mutant is KILLED and names the valid locator it rejected" ;;
+VIVO) malo "the overly broad guard mutant SURVIVED (rc 0): rejecting everything would pass the tests" ;;
+*) malo "COULD NOT CHECK: no verdict for the overly broad guard mutant: ${v#NOPUDE:}" ;;
 esac
 
 # ── 3-bis · MUTANTE: la guarda de ambito deja pasar una parada de `estate` ────────────────────
@@ -268,14 +267,14 @@ src = open(sys.argv[1]).read()
 viejo = '    if cuerpo.get("scope_kind") != "agent":'
 nuevo = '    if False:'
 mut = src.replace(viejo, nuevo)
-assert mut != src, "el mutante 2b NO se aplico"
+assert mut != src, "mutant 2b was not applied"
 open(sys.argv[2], "w").write(mut)
 PY2
-v="$(veredicto_mutante "$m2b" 'guarda de ambito NO corto' x x x --autocomprobar)"
+v="$(veredicto_mutante "$m2b" 'scope guard did NOT block' x x x --autocomprobar)"
 case "$v" in
-MUERTO) paso 'el mutante que abre la guarda de ambito MUERE nombrando el ambito que dejo pasar' ;;
-VIVO) malo "el mutante de la guarda de ambito SOBREVIVIO (rc 0): una parada de estate saldria" ;;
-*) malo "NO HE PODIDO MIRAR, no supervivencia — el mutante de la guarda de ambito sin veredicto: ${v#NOPUDE:}" ;;
+MUERTO) paso 'the mutant that disables the scope guard is KILLED and names the scope it allowed through' ;;
+VIVO) malo "the scope guard mutant SURVIVED (rc 0): an estate shutdown would be sent" ;;
+*) malo "COULD NOT CHECK: no verdict for the scope guard mutant: ${v#NOPUDE:}" ;;
 esac
 
 # ── 2-bis · MUTANTE: se retira UNA forma y su fixture tiene que quedarse sin acreditar ────────
@@ -289,14 +288,14 @@ python3 - "$GUION" "$m1b" <<'PY'
 import sys, re
 src = open(sys.argv[1]).read()
 mut = re.sub(r'\n *\("openai-like-key", re\.compile\([^\n]*\),', '', src, count=1)
-assert mut != src, "el mutante 1b NO se aplico"
+assert mut != src, "mutant 1b was not applied"
 open(sys.argv[2], "w").write(mut)
 PY
-v="$(veredicto_mutante "$m1b" 'no corto: openai' x x x --autocomprobar)"
+v="$(veredicto_mutante "$m1b" 'did not block: openai' x x x --autocomprobar)"
 case "$v" in
-MUERTO) paso "retirar UNA forma MUERE nombrando el fixture que la acreditaba" ;;
-VIVO) malo "el mutante que retira una forma SOBREVIVIO (rc 0): los fixtures no acreditan nada" ;;
-*) malo "NO HE PODIDO MIRAR, no supervivencia — el mutante que retira una forma sin veredicto: ${v#NOPUDE:}" ;;
+MUERTO) paso "removing one format is KILLED and names the fixture that verifies it" ;;
+VIVO) malo "the format-removal mutant SURVIVED (rc 0): the fixtures verify nothing" ;;
+*) malo "COULD NOT CHECK: no verdict for the format-removal mutant: ${v#NOPUDE:}" ;;
 esac
 
 # ── 3-ter · MUTANTE: la forma de 40 hex vuelve a disparar SIN contexto ────────────────────────
@@ -311,14 +310,14 @@ src = open(sys.argv[1]).read()
 viejo = "        k = _clave_normalizada(clave) if clave else \"\""
 nuevo = "        k = \"apikey\"  # MUTANTE: el contexto se da por bueno siempre"
 mut = src.replace(viejo, nuevo)
-assert mut != src, "el mutante 7 NO se aplico"
+assert mut != src, "mutant 7 was not applied"
 open(sys.argv[2], "w").write(mut)
 PY
-v="$(veredicto_mutante "$m7" 'corto de mas: sha de git' x x x --autocomprobar)"
+v="$(veredicto_mutante "$m7" 'blocked unexpectedly: git SHA' x x x --autocomprobar)"
 case "$v" in
-MUERTO) paso "el mutante sin CONTEXTO MUERE nombrando el SHA de git que corto de mas" ;;
-VIVO) malo "el mutante sin contexto SOBREVIVIO (rc 0): la guarda cortaria SHAs de git legitimos" ;;
-*) malo "NO HE PODIDO MIRAR, no supervivencia — el mutante sin contexto sin veredicto: ${v#NOPUDE:}" ;;
+MUERTO) paso "the mutant without CONTEXT is KILLED and names the Git SHA it incorrectly blocked" ;;
+VIVO) malo "the context-free mutant SURVIVED (rc 0): the guard would block valid Git SHAs" ;;
+*) malo "COULD NOT CHECK: no verdict for the context-free mutant: ${v#NOPUDE:}" ;;
 esac
 
 # ── 3-quater · AUSENCIA · dos testigos HERMETICOS, uno por cada inversion ─────────────────────
@@ -344,25 +343,25 @@ fallos = []
 ok, malas = m.revalidar({"server_ref": "mcp.github",
                          "secret_refs": [{"name": "T", "ref_kind": "env", "ref": "T"}]}, mio)
 if ok or not any("transport" in x for x in malas):
-    fallos.append(f"clave ausente de primer nivel no se señalo: ok={ok} malas={malas}")
+    fallos.append(f"missing top-level key was not identified: ok={ok} errors={malas}")
 # (b) ausencia ANIDADA: falta `ref` dentro de secret_refs[0]
 ok, malas = m.revalidar({"server_ref": "mcp.github", "transport": "stdio",
                          "secret_refs": [{"name": "T", "ref_kind": "env"}]}, mio)
 if ok or not any("secret_refs[0].ref" in x for x in malas):
-    fallos.append(f"clave ausente ANIDADA no se señalo: ok={ok} malas={malas}")
+    fallos.append(f"missing NESTED key was not identified: ok={ok} errors={malas}")
 # (c) no-disparo: la fila completa revalida limpia
 ok, malas = m.revalidar(dict(mio), mio)
 if not ok:
-    fallos.append(f"una fila IDENTICA se marco discrepante: {malas}")
+    fallos.append(f"an IDENTICAL row was marked as different: {malas}")
 if fallos:
     print(fallos)
     sys.exit(1)
 sys.exit(0)
 PY
 then
-	paso "ausencia de primer nivel Y anidada se señalan nombrando su ruta; la fila completa pasa"
+	paso "missing top-level and nested fields are identified by path; the complete row passes"
 else
-	malo "la rama fail-closed no señala una clave ausente: la revalidacion vuelve a ser fail-open"
+	malo "the fail-closed branch does not identify a missing key: revalidation is fail-open again"
 fi
 
 # ── 3-quinquies · los DOS MUTANTES DE AUSENCIA, muertos por SU MENSAJE ────────────────────────
@@ -392,8 +391,8 @@ filas = {
     "anidada": {"server_ref": "x", "transport": "stdio",
                 "secret_refs": [{"name": "T", "ref_kind": "env"}]},
 }
-espera = {"superior": "transport: la fila persistida NO trae esta clave",
-          "anidada": "secret_refs[0].ref: la fila persistida NO trae esta clave"}
+espera = {"superior": "transport: persisted row is MISSING this key",
+          "anidada": "secret_refs[0].ref: persisted row is MISSING this key"}
 try:
     ok, malas = m.revalidar(filas[sys.argv[2]], mio)
 except Exception as e:
@@ -412,9 +411,9 @@ PY
 for dim in superior anidada; do
 	e="$(estado_ausencia "$GUION" "$dim")"
 	if [ "$e" = "senyalado" ]; then
-		paso "el guion sano SEÑALA la ausencia $dim con su mensaje exacto"
+		paso "the healthy script identifies missing field $dim with its exact diagnostic"
 	else
-		malo "el guion sano deberia señalar la ausencia $dim y dio: $e"
+		malo "the healthy script should identify missing field $dim; got $e"
 	fi
 done
 
@@ -423,10 +422,10 @@ mA="$TRABAJO/mA.py"
 python3 - "$GUION" "$mA" <<'PY'
 import sys
 src = open(sys.argv[1]).read()
-viejo = ('                    malas.append(f"{ruta}.{k}: la fila persistida NO trae esta clave")\n'
+viejo = ('                    malas.append(f"{ruta}.{k}: persisted row is MISSING this key")\n'
          '                    continue\n')
 mut = src.replace(viejo, '                    continue\n', 1)
-assert mut != src, "el mutante A NO se aplico"
+assert mut != src, "mutant A was not applied"
 open(sys.argv[2], "w").write(mut)
 PY
 eA="$(estado_ausencia "$mA" "anidada")"
@@ -434,12 +433,12 @@ eA_sup="$(estado_ausencia "$mA" "superior")"
 case "$eA" in
 	silencio)
 		if [ "$eA_sup" = "senyalado" ]; then
-			paso "MUTANTE A muere en la dimension ANIDADA (silencio) y NO toca la superior"
+			paso "MUTANT A fails the NESTED dimension and leaves the top-level dimension intact"
 		else
-			malo "MUTANTE A cambio tambien la dimension superior ($eA_sup): no separa dimensiones"
+			malo "MUTANT A also changed the top-level dimension ($eA_sup): the dimensions are not separated"
 		fi ;;
-	EXCEPCION:*) malo "MUTANTE A REVENTO ($eA): un mutante que se rompe no acredita nada" ;;
-	*) malo "MUTANTE A sobrevivio o dio otra cosa: $eA" ;;
+	EXCEPCION:*) malo "MUTANT A CRASHED ($eA): a broken mutant verifies nothing" ;;
+	*) malo "MUTANT A survived or returned a different result: $eA" ;;
 esac
 
 # MUTANTE B · la ausencia de PRIMER NIVEL vuelve a ser fail-open
@@ -448,10 +447,10 @@ python3 - "$GUION" "$mB" <<'PY'
 import sys
 src = open(sys.argv[1]).read()
 viejo = ('        if k not in fila:\n'
-         '            malas.append(f"{k}: la fila persistida NO trae esta clave")\n'
+         '            malas.append(f"{k}: persisted row is MISSING this key")\n'
          '            continue\n')
 mut = src.replace(viejo, '        if k not in fila:\n            continue\n', 1)
-assert mut != src, "el mutante B NO se aplico"
+assert mut != src, "mutant B was not applied"
 open(sys.argv[2], "w").write(mut)
 PY
 eB="$(estado_ausencia "$mB" "superior")"
@@ -459,12 +458,12 @@ eB_ani="$(estado_ausencia "$mB" "anidada")"
 case "$eB" in
 	silencio)
 		if [ "$eB_ani" = "senyalado" ]; then
-			paso "MUTANTE B muere en la dimension SUPERIOR (silencio) y NO toca la anidada"
+			paso "MUTANT B fails the TOP-LEVEL dimension and leaves the nested dimension intact"
 		else
-			malo "MUTANTE B cambio tambien la dimension anidada ($eB_ani): no separa dimensiones"
+			malo "MUTANT B also changed the nested dimension ($eB_ani): the dimensions are not separated"
 		fi ;;
-	EXCEPCION:*) malo "MUTANTE B REVENTO ($eB): un mutante que se rompe no acredita nada" ;;
-	*) malo "MUTANTE B sobrevivio o dio otra cosa: $eB" ;;
+	EXCEPCION:*) malo "MUTANT B CRASHED ($eB): a broken mutant verifies nothing" ;;
+	*) malo "MUTANT B survived or returned a different result: $eB" ;;
 esac
 
 # ── 4 · el rc de «no he podido mirar»: un puerto donde no hay nadie ───────────────────────────
@@ -486,9 +485,9 @@ PY
 )"
 r="$(rc_de "$GUION" "http://127.0.0.1:$muerto" tok ten)"
 if [ "$r" = "2" ]; then
-	paso "motor inalcanzable => rc 2 (no he podido mirar), no 0 ni 1"
+	paso "an unreachable engine exits 2 (COULD NOT CHECK), rather than 0 or 1"
 else
-	malo "motor inalcanzable deberia salir 2 y salio $r"
+	malo "an unreachable engine should exit 2; got $r"
 fi
 
 # ── 5 · MUTANTE: la ceguera se confunde con limpieza ──────────────────────────────────────────
@@ -498,17 +497,17 @@ m3="$TRABAJO/m3.py"
 python3 - "$GUION" "$m3" <<'PY'
 import sys
 src = open(sys.argv[1]).read()
-viejo = "RC_LIMPIO, RC_RECHAZADO, RC_NO_PUDE_MIRAR = 0, 1, 2"
-nuevo = "RC_LIMPIO, RC_RECHAZADO, RC_NO_PUDE_MIRAR = 0, 1, 0"
+viejo = "RC_LIMPIO, RC_RECHAZADO, RC_UNAVAILABLE = 0, 1, 2"
+nuevo = "RC_LIMPIO, RC_RECHAZADO, RC_UNAVAILABLE = 0, 1, 0"
 mut = src.replace(viejo, nuevo)
-assert mut != src, "el mutante 3 NO se aplico"
+assert mut != src, "mutant 3 was not applied"
 open(sys.argv[2], "w").write(mut)
 PY
 r="$(rc_de "$m3" "http://127.0.0.1:$muerto" tok ten)"
 if [ "$r" = "0" ]; then
-	paso "el mutante que aplasta 'no pude mirar' a 'limpio' es DETECTABLE por el caso 4"
+	paso "case 4 detects the mutant that reports an unmeasured result as clean"
 else
-	malo "el mutante 3 no produjo el 0 que el caso 4 caza (dio $r): el caso 4 no lo distingue"
+	malo "mutant 3 did not produce the 0 that case 4 detects (got $r): case 4 does not distinguish it"
 fi
 
 # ── 6 · el guion declara sus no-viables, y eso no es prosa: es la lista que evita mandar a
@@ -520,9 +519,9 @@ m = re.search(r"^NO_VIABLES = \[(.*?)^\]", src, re.S | re.M)
 sys.exit(0 if m and "eventing" in m.group(1) else 1)
 PY
 then
-	paso "el guion sigue declarando eventing como NO viable por API"
+	paso "the script still declares eventing unavailable through the API"
 else
-	malo "eventing ya no figura en NO_VIABLES: o se curo el motor, o se perdio el hallazgo"
+	malo "eventing is absent from NO_VIABLES: the engine was repaired or the finding was lost"
 fi
 
 # ── 7 · OPCIONAL, con motor: la cadena de claude-policy tiene que MORIR sin `revision` ────────
@@ -538,15 +537,15 @@ src = open(sys.argv[1]).read()
 viejo = '        cuerpo_checkin = {"scope": scope, "revision": revision,'
 nuevo = '        cuerpo_checkin = {"scope": scope,'
 mut = src.replace(viejo, nuevo)
-assert mut != src, "el mutante 4 NO se aplico"
+assert mut != src, "mutant 4 was not applied"
 open(sys.argv[2], "w").write(mut)
 PY
 	sano="$(rc_de "$GUION" "$OLIVARES_VERIFY_ENGINE" "$OLIVARES_VERIFY_TOKEN" "$OLIVARES_VERIFY_TENANT")"
 	muerto="$(rc_de "$m4" "$OLIVARES_VERIFY_ENGINE" "$OLIVARES_VERIFY_TOKEN" "$OLIVARES_VERIFY_TENANT")"
-	if [ "$sano" = "0" ] && [ "$muerto" = "1" ] && casa_mensaje 'NO llevaba .revision.: la atestacion del sha ni se evaluo'; then
-		paso "contra motor vivo: la cadena pasa (0) y su mutante sin revision MUERE nombrando la ausencia de deriva"
+	if [ "$sano" = "0" ] && [ "$muerto" = "1" ] && casa_mensaje 'omitted .revision.: SHA attestation was never evaluated'; then
+		paso "against a live engine: the chain passes (0), and its mutant without review is KILLED for missing drift"
 	else
-		malo "contra motor vivo esperaba sano=0/mutante=1 y salio sano=$sano/mutante=$muerto"
+		malo "against a live engine, expected healthy=0/mutant=1; got healthy=$sano/mutant=$muerto"
 	fi
 	# ── 8 · el marcador de `agents` es PORTANTE, y aqui se ve ────────────────────────────
 	# ⛔ ESTE CASO EXISTE PORQUE CASI ME COBRO UN CONTROL AJENO. En las otras superficies el
@@ -559,7 +558,7 @@ PY
 		printf 'Authorization: Bearer %s\n' "$OLIVARES_VERIFY_TOKEN" | curl -sf -H @- \
 			-H "X-Olivares-Tenant: $OLIVARES_VERIFY_TENANT" \
 			"$OLIVARES_VERIFY_ENGINE/v1/agents" 2>/dev/null |
-			python3 -c 'import sys,json;print(len(json.load(sys.stdin).get("items") or []))' 2>/dev/null || printf 'NO_PUDE_MIRAR'
+			python3 -c 'import sys,json;print(len(json.load(sys.stdin).get("items") or []))' 2>/dev/null || printf 'COULD_NOT_CHECK'
 	}
 	m5="$TRABAJO/m5.py"
 	python3 - "$GUION" "$m5" <<'PY'
@@ -567,7 +566,7 @@ import sys
 src = open(sys.argv[1]).read()
 mut = src.replace("        if isinstance(f, dict) and f.get(campo) == valor:",
                   "        if False:  # MUTANTE: el marcador no ve ninguna fila")
-assert mut != src, "el mutante 5 NO se aplico"
+assert mut != src, "mutant 5 was not applied"
 open(sys.argv[2], "w").write(mut)
 PY
 	antes="$(cuenta_agentes)"
@@ -575,12 +574,12 @@ PY
 	con_marcador="$(cuenta_agentes)"
 	rc_de "$m5" "$OLIVARES_VERIFY_ENGINE" "$OLIVARES_VERIFY_TOKEN" "$OLIVARES_VERIFY_TENANT" >/dev/null
 	sin_marcador="$(cuenta_agentes)"
-	if [ "$antes" = "NO_PUDE_MIRAR" ] || [ "$con_marcador" = "NO_PUDE_MIRAR" ] || [ "$sin_marcador" = "NO_PUDE_MIRAR" ]; then
-		malo "no pude contar agentes (antes=$antes con=$con_marcador sin=$sin_marcador): sin conteo no hay veredicto"
+	if [ "$antes" = "COULD_NOT_CHECK" ] || [ "$con_marcador" = "COULD_NOT_CHECK" ] || [ "$sin_marcador" = "COULD_NOT_CHECK" ]; then
+		malo "could not count agents (before=$antes with=$con_marcador without=$sin_marcador): no count means no verdict"
 	elif [ "$antes" = "$con_marcador" ] && [ "$sin_marcador" -gt "$con_marcador" ]; then
-		paso "el marcador de agents es PORTANTE: con el $antes->$con_marcador, sin el ->$sin_marcador"
+		paso "the agents marker is REQUIRED: with it $antes->$con_marcador; without it ->$sin_marcador"
 	else
-		malo "el marcador de agents no se comporto como portante (antes=$antes con=$con_marcador sin=$sin_marcador)"
+		malo "the agents marker did not act as required (before=$antes with=$con_marcador without=$sin_marcador)"
 	fi
 	# ── 10 · A-06 · la revalidacion tiene que ver DENTRO de los anidados ──────────────────────
 	# ⛔ La version anterior solo comparaba escalares de primer nivel, asi que un `secret_refs` con
@@ -594,17 +593,17 @@ src = open(sys.argv[1]).read()
 viejo = '"ref": "GITHUB_TOKEN",'
 nuevo = '"ref": "OTRO_LOCALIZADOR",'
 mut = src.replace(viejo, nuevo, 1)
-assert mut != src, "el mutante 8 NO se aplico"
+assert mut != src, "mutant 8 was not applied"
 open(sys.argv[2], "w").write(mut)
 PY
 	rc_de "$GUION" "$OLIVARES_VERIFY_ENGINE" "$OLIVARES_VERIFY_TOKEN" "$OLIVARES_VERIFY_TENANT" >/dev/null
 	r="$(rc_de "$m8" "$OLIVARES_VERIFY_ENGINE" "$OLIVARES_VERIFY_TOKEN" "$OLIVARES_VERIFY_TENANT")"
 	if [ "$r" = "2" ] && casa_mensaje 'secret_refs\[0\]\.ref'; then
-		paso "un campo ANIDADO distinto => rc 2 Y LO DICE nombrando secret_refs[0].ref"
+		paso "a changed NESTED field exits 2 and names secret_refs[0].ref"
 	elif [ "$r" = "2" ]; then
-		malo "salio 2 pero sin nombrar secret_refs[0].ref: no acredita que mire DENTRO"
+		malo "exited 2 without naming secret_refs[0].ref: nested inspection is unverified"
 	else
-		malo "un campo anidado distinto deberia salir 2 y salio $r: revalidacion ciega a anidados"
+		malo "a changed nested field should exit 2; got $r: nested fields escape revalidation"
 	fi
 
 	# ── 9 · A-02 · una fila con MI marcador y OTRO cuerpo tiene que salir rc 2 ────────────────
@@ -620,18 +619,18 @@ src = open(sys.argv[1]).read()
 viejo = '"name": "sec-high-to-siem", "destination": "siem", "min_severity": "high"'
 nuevo = '"name": "sec-high-to-siem", "destination": "siem", "min_severity": "low"'
 mut = src.replace(viejo, nuevo)
-assert mut != src, "el mutante 6 NO se aplico"
+assert mut != src, "mutant 6 was not applied"
 open(sys.argv[2], "w").write(mut)
 PY
 	# se siembra primero con el guion SANO, para que la fila exista con el cuerpo bueno
 	rc_de "$GUION" "$OLIVARES_VERIFY_ENGINE" "$OLIVARES_VERIFY_TOKEN" "$OLIVARES_VERIFY_TENANT" >/dev/null
 	r="$(rc_de "$m6" "$OLIVARES_VERIFY_ENGINE" "$OLIVARES_VERIFY_TOKEN" "$OLIVARES_VERIFY_TENANT")"
-	if [ "$r" = "2" ] && casa_mensaje 'MARCADOR IGUAL, CUERPO DISTINTO.*min_severity'; then
-		paso "marcador igual y cuerpo distinto => rc 2 Y LO DICE nombrando min_severity"
+	if [ "$r" = "2" ] && casa_mensaje 'SAME MARKER, DIFFERENT BODY.*min_severity'; then
+		paso "matching marker with a different body exits 2 and names min_severity"
 	elif [ "$r" = "2" ]; then
-		malo "salio 2 pero por otra causa: el veredicto no nombra la discrepancia de min_severity"
+		malo "exited 2 for a different reason: the verdict does not identify the min_severity mismatch"
 	else
-		malo "marcador igual y cuerpo distinto deberia salir 2 y salio $r"
+		malo "matching marker with a different body should exit 2; got $r"
 	fi
 	# ── 11 · A-06b · la CADENA de protocol-binding tambien revalida el cuerpo ─────────────────
 	# ⛔ Antes devolvia «ya sembrada» comparando SOLO `binding_key`, asi que una spec con mi clave y
@@ -644,24 +643,24 @@ src = open(sys.argv[1]).read()
 viejo = '"peer_authority": "https://partner.acme.example",'
 nuevo = '"peer_authority": "https://otro.acme.example",'
 mut = src.replace(viejo, nuevo, 1)
-assert mut != src, "el mutante 9 NO se aplico"
+assert mut != src, "mutant 9 was not applied"
 open(sys.argv[2], "w").write(mut)
 PY
 	rc_de "$GUION" "$OLIVARES_VERIFY_ENGINE" "$OLIVARES_VERIFY_TOKEN" "$OLIVARES_VERIFY_TENANT" >/dev/null
 	r="$(rc_de "$m9" "$OLIVARES_VERIFY_ENGINE" "$OLIVARES_VERIFY_TOKEN" "$OLIVARES_VERIFY_TENANT")"
 	if [ "$r" = "2" ] && casa_mensaje 'peer_authority'; then
-		paso "spec con mi binding_key y otro cuerpo => rc 2 Y LO DICE nombrando peer_authority"
+		paso "a spec with my binding_key and a different body exits 2 and names peer_authority"
 	elif [ "$r" = "2" ]; then
-		malo "salio 2 sin nombrar peer_authority: la cadena no acredita que revalide el cuerpo"
+		malo "exited 2 without naming peer_authority: body revalidation is unverified"
 	else
-		malo "spec con otro cuerpo deberia salir 2 y salio $r"
+		malo "a spec with a different body should exit 2; got $r"
 	fi
 
 else
-	printf 'SALTADO  los casos 7 a 11 (contra motor vivo) NO se han corrido:\n'
-	printf '         exporta OLIVARES_VERIFY_ENGINE / _TOKEN / _TENANT para ejercerlos.\n'
-	printf '         Esto NO es un ok: la cadena de claude-policy, el marcador portante de\n'
-	printf '         agents y la revalidacion del ledger quedan SIN CONTROL en este pase.\n'
+	printf 'SKIPPED  cases 7 through 11 (live engine) did not run:\n'
+	printf '         set OLIVARES_VERIFY_ENGINE / _TOKEN / _TENANT to exercise them.\n'
+	printf '         This is unmeasured: the claude-policy chain, required agents marker,\n'
+	printf '         and ledger revalidation remain UNCHECKED in this run.\n'
 fi
 
 muta_fichero() { # $1 fuente · $2 destino · $3 viejo · $4 nuevo → rc 0 si quedo construido
@@ -673,11 +672,11 @@ import sys
 fuente, destino, viejo, nuevo = sys.argv[1:5]
 src = open(fuente, encoding="utf8").read()
 if viejo not in src:
-    sys.stderr.write("    ⛔ el ancla no esta en %s: %r\n" % (fuente, viejo[:70]))
+    sys.stderr.write("    ⛔ anchor is absent from %s: %r\n" % (fuente, viejo[:70]))
     sys.exit(1)
 mut = src.replace(viejo, nuevo, 1)
 if mut == src:
-    sys.stderr.write("    ⛔ el reemplazo no cambio nada\n"); sys.exit(1)
+    sys.stderr.write("    ⛔ replacement made no change\n"); sys.exit(1)
 compile(mut, destino, "exec")
 open(destino, "w", encoding="utf8").write(mut)
 PYMF
@@ -720,16 +719,16 @@ for etq, cuerpo, debe in CASOS:
         corto = True
     except Exception as e:
         print("%s\tREVIENTA(%s)" % (etq, type(e).__name__)); continue
-    print("%s\t%s" % (etq, "ok" if corto == debe else ("FALTA-CORTAR" if debe else "CORTA-DE-MAS")))
+    print("%s\t%s" % (etq, "ok" if corto == debe else ("MISSING-BLOCK" if debe else "EXCESS-BLOCK")))
 PYE
 }
 juzga_guarda "$GUION" >"$TRABAJO/guarda.txt" 2>&1 || true
 if [ ! -s "$TRABAJO/guarda.txt" ]; then
-	malo "NO HE PODIDO MIRAR: el juicio de la guarda salio vacio"
+	malo "COULD NOT CHECK: the guard check returned no output"
 elif command grep -q . <(command awk -F'\t' '$2 != "ok"' "$TRABAJO/guarda.txt"); then
-	malo "la guarda de secretos no cubre las seis formas: $(command awk -F'\t' '$2 != "ok" {printf "%s=%s ", $1, $2}' "$TRABAJO/guarda.txt")"
+	malo "the secret guard does not cover all six formats: $(command awk -F'\t' '$2 != "ok" {printf "%s=%s ", $1, $2}' "$TRABAJO/guarda.txt")"
 else
-	paso "la guarda corta las CUATRO formas con secreto —tambien envuelto en lista y en objeto— y deja pasar las dos legitimas"
+	paso "the guard blocks all FOUR secret formats, including wrapped lists and objects, and accepts both valid formats"
 fi
 
 # Su mutante: sin el estado que persiste, envolver el valor vuelve a desactivarla.
@@ -738,14 +737,14 @@ if muta_fichero "$GUION" "$TRABAJO/mGuarda.py" \
 	'        if False:  # MUTANTE: el contexto de secreto deja de persistir en el descenso'; then
 	juzga_guarda "$TRABAJO/mGuarda.py" >"$TRABAJO/guarda-mut.txt" 2>&1 || true
 	if ! juicio_valido "$TRABAJO/guarda-mut.txt"; then
-		malo "NO HE PODIDO MIRAR, no supervivencia — el mutante del contexto persistente no dejo veredicto legible en $TRABAJO/guarda-mut.txt"
-	elif command grep -q 'FALTA-CORTAR' "$TRABAJO/guarda-mut.txt"; then
-		paso "sin el estado que persiste, el valor envuelto vuelve a colarse: el caso E acredita esa mitad"
+		malo "COULD NOT CHECK: the persistent-context mutant produced no readable verdict in $TRABAJO/guarda-mut.txt"
+	elif command grep -q 'MISSING-BLOCK' "$TRABAJO/guarda-mut.txt"; then
+		paso "without persistent state, the wrapped value escapes again: case E verifies that protection"
 	else
-		malo "el mutante del contexto persistente SOBREVIVIO: el caso E no acredita nada"
+		malo "the persistent-context mutant SURVIVED: case E verifies nothing"
 	fi
 else
-	malo "NO se pudo construir el mutante del contexto persistente: sin artefacto no hay juicio"
+	malo "could not build the persistent-context mutant: no artifact means no verdict"
 fi
 
 # ── F · UN 403 NO ES «EL ESTATE ESTA VACIO» ───────────────────────────────────────────────────
@@ -773,16 +772,16 @@ class Doble:
 
 
 CASOS = [
-    ("403", Doble(403, '{"error":"forbidden"}'), "no he podido leerlo"),
-    ("no-json", Doble(200, "<html>oops</html>"), "no es JSON"),
-    ("sin-items", Doble(200, '{"otro":1}'), "sin la clave"),
-    ("vacio-real", Doble(200, '{"items":[]}'), "ni un agente"),
+    ("403", Doble(403, '{"error":"forbidden"}'), "could not be read"),
+    ("no-json", Doble(200, "<html>oops</html>"), "non-JSON body"),
+    ("sin-items", Doble(200, '{"otro":1}'), "without the `items` key"),
+    ("vacio-real", Doble(200, '{"items":[]}'), "no named agents"),
 ]
 for etq, motor, esperado in CASOS:
     try:
         v.resolver_refs(motor)
         print("%s\tNO-CORTA" % etq)
-    except v.NoPudeMirar as e:
+    except v.CouldNotCheck as e:
         print("%s\t%s" % (etq, "ok" if esperado in str(e) else "MENSAJE-EQUIVOCADO"))
     except Exception as e:
         print("%s\tREVIENTA(%s)" % (etq, type(e).__name__))
@@ -790,11 +789,11 @@ PYF
 }
 juzga_refs "$GUION" >"$TRABAJO/refs.txt" 2>&1 || true
 if [ ! -s "$TRABAJO/refs.txt" ]; then
-	malo "NO HE PODIDO MIRAR: el juicio de resolver_refs salio vacio"
+	malo "COULD NOT CHECK: the resolver_refs check returned no output"
 elif command grep -q . <(command awk -F'\t' '$2 != "ok"' "$TRABAJO/refs.txt"); then
-	malo "resolver_refs no separa las cuatro situaciones: $(command awk -F'\t' '$2 != "ok" {printf "%s=%s ", $1, $2}' "$TRABAJO/refs.txt")"
+	malo "resolver_refs does not separate all four conditions: $(command awk -F'\t' '$2 != "ok" {printf "%s=%s ", $1, $2}' "$TRABAJO/refs.txt")"
 else
-	paso "resolver_refs separa 403, cuerpo no-JSON, forma cambiada y vacio de verdad, cada uno con su mensaje"
+	paso "resolver_refs separates 403, non-JSON bodies, changed response shape, and empty results, each with its own diagnostic"
 fi
 
 # Su mutante: sin mirar el status, el 403 se lee como estate vacio.
@@ -803,14 +802,14 @@ if muta_fichero "$GUION" "$TRABAJO/mRefs.py" \
 	'        if False:  # MUTANTE: el status deja de mirarse'; then
 	juzga_refs "$TRABAJO/mRefs.py" >"$TRABAJO/refs-mut.txt" 2>&1 || true
 	if ! juicio_valido "$TRABAJO/refs-mut.txt"; then
-		malo "NO HE PODIDO MIRAR, no supervivencia — el mutante del status no dejo veredicto legible en $TRABAJO/refs-mut.txt"
+		malo "COULD NOT CHECK: the status mutant produced no readable verdict in $TRABAJO/refs-mut.txt"
 	elif command grep -qE '^403\s+(MENSAJE-EQUIVOCADO|REVIENTA)' "$TRABAJO/refs-mut.txt"; then
-		paso "sin mirar el status, el 403 deja de nombrarse como tal: el caso F acredita esa lectura"
+		paso "ignoring status stops identifying the 403: case F verifies that inspection"
 	else
-		malo "el mutante del status SOBREVIVIO: el caso F no acredita nada ($(cat "$TRABAJO/refs-mut.txt" | tr '\n' ' '))"
+		malo "the status mutant SURVIVED: case F verifies nothing ($(cat "$TRABAJO/refs-mut.txt" | tr '\n' ' '))"
 	fi
 else
-	malo "NO se pudo construir el mutante del status: sin artefacto no hay juicio"
+	malo "could not build the status mutant: no artifact means no verdict"
 fi
 
 # ── G · «NO ESTA EN ESTA PAGINA» NO ES «NO ESTA SEMBRADO» ─────────────────────────────────────
@@ -847,7 +846,7 @@ for etq, body, esperado in PRUEBAS:
     try:
         r = v.fila_sembrada(Doble(body), CASO, {})
         got = "encontrada" if r else "ausente"
-    except v.NoPudeMirar:
+    except v.CouldNotCheck:
         got = "rc2"
     except Exception as e:
         got = "REVIENTA(%s)" % type(e).__name__
@@ -856,11 +855,11 @@ PYG
 }
 juzga_paginacion "$GUION" >"$TRABAJO/pag.txt" 2>&1 || true
 if [ ! -s "$TRABAJO/pag.txt" ]; then
-	malo "NO HE PODIDO MIRAR: el juicio de paginacion salio vacio"
+	malo "COULD NOT CHECK: the pagination check returned no output"
 elif command grep -q . <(command awk -F'\t' '$2 != "ok"' "$TRABAJO/pag.txt"); then
-	malo "fila_sembrada no separa las tres direcciones: $(command awk -F'\t' '$2 != "ok" {printf "%s=%s ", $1, $2}' "$TRABAJO/pag.txt")"
+	malo "fila_sembrada does not separate all three outcomes: $(command awk -F'\t' '$2 != "ok" {printf "%s=%s ", $1, $2}' "$TRABAJO/pag.txt")"
 else
-	paso "fila_sembrada separa presente, ausente-de-verdad y no-puedo-saberlo: has_more deja de leerse como ausencia"
+	paso "fila_sembrada distinguishes present, absent, and unknown results: has_more no longer implies absence"
 fi
 
 # Su mutante: sin mirar `has_more`, «otra pagina» vuelve a leerse como «no sembrado».
@@ -869,14 +868,14 @@ if muta_fichero "$GUION" "$TRABAJO/mPag.py" \
 	'    if False:  # MUTANTE: has_more deja de mirarse'; then
 	juzga_paginacion "$TRABAJO/mPag.py" >"$TRABAJO/pag-mut.txt" 2>&1 || true
 	if ! juicio_valido "$TRABAJO/pag-mut.txt"; then
-		malo "NO HE PODIDO MIRAR, no supervivencia — el mutante de has_more no dejo veredicto legible en $TRABAJO/pag-mut.txt"
+		malo "COULD NOT CHECK: the has_more mutant produced no readable verdict in $TRABAJO/pag-mut.txt"
 	elif command grep -q 'no-puedo-saberlo	dio-ausente' "$TRABAJO/pag-mut.txt"; then
-		paso "sin mirar has_more, «hay mas paginas» se lee como ausente: el caso G acredita esa lectura"
+		paso "ignoring has_more treats more pages as absence: case G verifies that inspection"
 	else
-		malo "el mutante de has_more SOBREVIVIO: el caso G no acredita nada ($(tr '\n' ' ' <"$TRABAJO/pag-mut.txt"))"
+		malo "the has_more mutant SURVIVED: case G verifies nothing ($(tr '\n' ' ' <"$TRABAJO/pag-mut.txt"))"
 	fi
 else
-	malo "NO se pudo construir el mutante de has_more: sin artefacto no hay juicio"
+	malo "could not build the has_more mutant: no artifact means no verdict"
 fi
 
 # ── H · UN DIAGNOSTICO NO ELIGE LA CAUSA QUE NO HA MEDIDO ─────────────────────────────────────
@@ -893,34 +892,34 @@ spec = importlib.util.spec_from_file_location("v", os.environ["SUJETO"])
 v = importlib.util.module_from_spec(spec); sys.modules["v"] = v; spec.loader.exec_module(v)
 d = v._diagnostico("400: invalid JSON body")
 print("lista-alternativas\t%s" % ("ok" if ("(2)" in d and "(4)" in d) else "NO"))
-print("no-elige-una\t%s" % ("ok" if "no se distingue" in d or "NO se distingue" in d else "NO"))
-print("cifra-medida\t%s" % ("ok" if "22 de los 86" in d else "NO"))
-print("otro-mensaje-vacio\t%s" % ("ok" if v._diagnostico("otra cosa") == "" else "NO"))
+print("no-elige-una\t%s" % ("ok" if "cannot be determined here" in d else "NO"))
+print("measured-count\t%s" % ("ok" if "22 of the 86" in d else "NO"))
+print("other-empty-message\t%s" % ("ok" if v._diagnostico("other input") == "" else "NO"))
 PYI
 }
 juzga_diagnostico "$GUION" >"$TRABAJO/diag.txt" 2>&1 || true
 if [ ! -s "$TRABAJO/diag.txt" ]; then
-	malo "NO HE PODIDO MIRAR: el juicio del diagnostico salio vacio"
+	malo "COULD NOT CHECK: the diagnostic check returned no output"
 elif command grep -q . <(command awk -F'\t' '$2 != "ok"' "$TRABAJO/diag.txt"); then
-	malo "el diagnostico no cumple: $(command awk -F'\t' '$2 != "ok" {printf "%s ", $1}' "$TRABAJO/diag.txt")"
+	malo "the diagnostic fails its requirements: $(command awk -F'\t' '$2 != "ok" {printf "%s ", $1}' "$TRABAJO/diag.txt")"
 else
-	paso "el diagnostico lista las candidatas, dice que no se distinguen desde aqui y trae su cifra medida"
+	paso "the diagnostic lists candidate causes, states that they cannot be distinguished here, and includes its measured count"
 fi
 
 # Su mutante: si vuelve a devolver UNA causa a secas, el caso muere.
 if muta_fichero "$GUION" "$TRABAJO/mDiag.py" \
-	'        return ("400 generico. El motor no dice cual de estas es y desde aqui NO se distingue; van "' \
-	'        return ("el handler rechaza campos DESCONOCIDOS y no dice cual"  # MUTANTE  ("'; then
+	'        return ("Generic 400. The engine does not identify the cause, and it cannot be determined here. Candidates are "' \
+	'        return ("the handler rejects UNKNOWN fields without identifying which one"  # MUTANTE  ("'; then
 	juzga_diagnostico "$TRABAJO/mDiag.py" >"$TRABAJO/diag-mut.txt" 2>&1 || true
 	if ! juicio_valido "$TRABAJO/diag-mut.txt"; then
-		malo "NO HE PODIDO MIRAR, no supervivencia — el mutante de la causa unica no dejo veredicto legible en $TRABAJO/diag-mut.txt"
+		malo "COULD NOT CHECK: the single-cause mutant produced no readable verdict in $TRABAJO/diag-mut.txt"
 	elif command grep -q . <(command awk -F'\t' '$2 != "ok"' "$TRABAJO/diag-mut.txt"); then
-		paso "volviendo a una sola causa, el caso H lo caza"
+		paso "case H detects a return to a single cause"
 	else
-		malo "el mutante de la causa unica SOBREVIVIO: el caso H no acredita nada"
+		malo "the single-cause mutant SURVIVED: case H verifies nothing"
 	fi
 else
-	malo "NO se pudo construir el mutante del diagnostico: sin artefacto no hay juicio"
+	malo "could not build the diagnostic mutant: no artifact means no verdict"
 fi
 
 # ── I · LO QUE UNA GUARDA LOCAL CORTA NO SE ANOTA COMO «EJERCIDO» ─────────────────────────────
@@ -929,19 +928,19 @@ fi
 #    Certificar una llamada que no se hizo, la misma clase que la cadena de consentimiento.
 #    `cortado` es terminal —el corte fue deliberado y correcto— pero se cuenta APARTE.
 sin_ejercido=""
-for pat in 'guarda de secretos' 'guarda de ambito'; do
-	if command grep -q "anota(ident, \"ejercido\", f\"cortado por la $pat" "$GUION"; then
+for pat in 'secret guard' 'scope guard'; do
+	if command grep -q "anota(ident, \"ejercido\", f\"blocked by the $pat" "$GUION"; then
 		sin_ejercido="$sin_ejercido $pat"
 	fi
 done
 if [ -n "$sin_ejercido" ]; then
-	malo "sigue anotandose «ejercido» lo que corta una guarda local:$sin_ejercido"
+	malo "a local guard still records blocked payloads as 'ejercido':$sin_ejercido"
 elif ! command grep -q 'cortados = sum(1 for e in estado.values() if e == "cortado")' "$GUION"; then
-	malo "las guardas ya no anotan «ejercido» pero NADIE cuenta los «cortado»: desaparecen del resumen"
-elif ! command grep -q 'cortados} cortados' "$GUION"; then
-	malo "los «cortado» se cuentan y NO se imprimen: un estado que no sale en el LEDGER no informa"
+	malo "guards no longer record 'ejercido', but 'cortado' states are not counted and vanish from the summary"
+elif ! command grep -q 'cortados} blocked' "$GUION"; then
+	malo "'cortado' states are counted but not printed: a state missing from the LEDGER does not inform the user"
 else
-	paso "lo que corta una guarda local se anota «cortado», se cuenta aparte y sale en el LEDGER"
+	paso "a local guard records 'cortado', counts it separately, and includes it in the LEDGER"
 fi
 
 # ── J · LA CLAVE DE SECRETO SE RECONOCE POR RAIZ, NO POR IGUALDAD EXACTA ──────────────────────
@@ -965,16 +964,16 @@ DEBEN_PASAR = ["secret_refs", "name", "note", "scope", "external_id"]
 for k in DEBEN_CORTAR:
     print("%s\t%s" % (k, "ok" if v.es_clave_de_secreto(k) else "PASA"))
 for k in DEBEN_PASAR:
-    print("%s\t%s" % (k, "CORTA-DE-MAS" if v.es_clave_de_secreto(k) else "ok"))
+    print("%s\t%s" % (k, "EXCESS-BLOCK" if v.es_clave_de_secreto(k) else "ok"))
 PYJ
 }
 juzga_claves "$GUION" >"$TRABAJO/claves.txt" 2>&1 || true
 if [ ! -s "$TRABAJO/claves.txt" ]; then
-	malo "NO HE PODIDO MIRAR: el juicio de claves salio vacio"
+	malo "COULD NOT CHECK: the key check returned no output"
 elif command grep -q . <(command awk -F'\t' '$2 != "ok"' "$TRABAJO/claves.txt"); then
-	malo "la guarda no reconoce por raiz: $(command awk -F'\t' '$2 != "ok" {printf "%s=%s ", $1, $2}' "$TRABAJO/claves.txt")"
+	malo "the guard does not recognize secret roots: $(command awk -F'\t' '$2 != "ok" {printf "%s=%s ", $1, $2}' "$TRABAJO/claves.txt")"
 else
-	paso "la clave de secreto se reconoce por RAIZ en las diez formas realistas, y secret_refs sigue pasando"
+	paso "secret keys are recognized by ROOT across all ten realistic formats, and secret_refs is still accepted"
 fi
 
 # Su mutante: volviendo a la igualdad exacta, las siete formas de operador se cuelan.
@@ -984,12 +983,12 @@ if muta_fichero "$GUION" "$TRABAJO/mClaves.py" \
 	juzga_claves "$TRABAJO/mClaves.py" >"$TRABAJO/claves-mut.txt" 2>&1 || true
 	n=$(command awk -F'\t' '$2 == "PASA"' "$TRABAJO/claves-mut.txt" | wc -l)
 	if [ "$n" -ge 5 ]; then
-		paso "con igualdad exacta se cuelan $n de las diez formas: el caso J acredita la raiz"
+		paso "exact equality lets $n of the ten formats escape: case J verifies root matching"
 	else
-		malo "el mutante de la igualdad exacta solo dejo pasar $n: el caso J no acredita la raiz"
+		malo "the exact-equality mutant let only $n formats escape: case J does not verify root matching"
 	fi
 else
-	malo "NO se pudo construir el mutante de la igualdad exacta: sin artefacto no hay juicio"
+	malo "could not build the exact-equality mutant: no artifact means no verdict"
 fi
 
 # ── C · EL CONSENTIMIENTO SE EJERCE, NO SE HEREDA DE LA PRIMERA FILA ──────────────────────────
@@ -1047,17 +1046,17 @@ srv.shutdown()
 print("rc=%s posts=%s msg=%s" % (rc, POSTS, msg[:90]))
 PYC
 if ! command grep -q 'class Motor' "$GUION"; then
-	malo "NO HE PODIDO MIRAR: no encuentro la clase Motor en el guion; el doble no puede construirse"
+	malo "COULD NOT CHECK: the script has no Motor class; the test double cannot be built"
 else
-	salida="$(python3 "$TRABAJO/doble-consent.py" "$GUION" 2>&1)"
-	if command grep -q 'SINMOTOR' <<<"$salida"; then
-		malo "NO HE PODIDO MIRAR: el doble no pudo instanciar el Motor del guion"
-	elif command grep -q "posts=\['/v1/m/redteam/targets/mio-sin-autorizar/authorize'\]" <<<"$salida"; then
-		paso "el consentimiento se ejerce contra la fila SIN autorizar, no se hereda de la primera: sale un POST y va a la correcta"
-	elif command grep -q 'posts=\[\]' <<<"$salida"; then
-		malo "la cadena devolvio sin mandar NINGUN POST y la primera fila era ajena: certifica lo que no hizo ($salida)"
+	output="$(python3 "$TRABAJO/doble-consent.py" "$GUION" 2>&1)"
+	if command grep -q 'SINMOTOR' <<<"$output"; then
+		malo "COULD NOT CHECK: the test double could not instantiate the script Motor"
+	elif command grep -q "posts=\['/v1/m/redteam/targets/mio-sin-autorizar/authorize'\]" <<<"$output"; then
+		paso "consent is exercised on the unauthorized row: a POST is sent to the correct row"
+	elif command grep -q 'posts=\[\]' <<<"$output"; then
+		malo "the chain returned without sending a POST, and the first row belonged elsewhere: it certifies an unperformed action ($output)"
 	else
-		malo "el POST fue a una ruta inesperada: $salida"
+		malo "the POST reached an unexpected route: $output"
 	fi
 fi
 
@@ -1068,7 +1067,7 @@ import ast, sys
 src = open(sys.argv[1], encoding="utf8").read()
 viejo = "    sin_autorizar = [f for f in filas if not f.get(\"authorized\")]"
 if viejo not in src:
-    sys.stderr.write("    el guion ya no elige por `sin_autorizar`: el mutante no se puede construir\n")
+    sys.stderr.write("    the script no longer selects by `sin_autorizar`; the mutant cannot be built\n")
     sys.exit(1)
 i = src.index(viejo)
 j = src.index("    objetivo = sin_autorizar[0]", i) + len("    objetivo = sin_autorizar[0]")
@@ -1081,12 +1080,12 @@ PYM
 if [ -s "$TRABAJO/mConsent.py" ] && ! cmp -s "$GUION" "$TRABAJO/mConsent.py"; then
 	salm="$(python3 "$TRABAJO/doble-consent.py" "$TRABAJO/mConsent.py" 2>&1)"
 	if command grep -q 'posts=\[\]' <<<"$salm"; then
-		paso "volviendo a filas[0] la cadena certifica SIN mandar POST: el caso C acredita esa eleccion"
+		paso "returning to filas[0] certifies the chain without a POST: case C verifies row selection"
 	else
-		malo "el mutante de filas[0] SOBREVIVIO: el caso C no acredita como se elige la fila ($salm)"
+		malo "the filas[0] mutant SURVIVED: case C does not verify row selection ($salm)"
 	fi
 else
-	malo "NO se pudo construir el mutante de filas[0]: sin artefacto no hay juicio"
+	malo "could not build the filas[0] mutant: no artifact means no verdict"
 fi
 
 # ── D · LA URL BASE NO SALE LITERAL POR NINGUNA DE LAS DOS SALIDAS ────────────────────────────
@@ -1107,9 +1106,9 @@ fuga_url() { # $1 = guion sujeto; rc 0 = TAPADO
 	return 0
 }
 if fuga_url "$GUION"; then
-	paso "una credencial arbitraria en la URL base no sale por stdout ni por stderr"
+	paso "an arbitrary credential in the base URL appears in neither stdout nor stderr"
 else
-	malo "la URL base con credencial sale literal: la frontera de salida no cubre este guion"
+	malo "the base URL exposes its credential verbatim: the output boundary does not cover this script"
 fi
 
 # Su mutante: si la primera linea del informe vuelve a `print` crudo, fuga.
@@ -1124,14 +1123,14 @@ import ast, sys
 src = open(sys.argv[1], encoding="utf8").read()
 # La linea PORTANTE de este camino es el `raise`, no el `print`: el mensaje ya llega redactado, y
 # mutar la impresion no fuga nada. Se muta donde la credencial entra en el texto.
-viejo = '            raise NoPudeMirar(redacta(f"{metodo} {ruta}: {type(e).__name__}: {e}")) from e'
+viejo = '            raise CouldNotCheck(redacta(f"{metodo} {ruta}: {type(e).__name__}: {e}")) from e'
 if viejo not in src:
-    sys.stderr.write("    no encuentro el raise redactado de NoPudeMirar\n"); sys.exit(1)
+    sys.stderr.write("    cannot find the redacted CouldNotCheck raise\n"); sys.exit(1)
 mut = src.replace(viejo,
-                  '            raise NoPudeMirar(f"{metodo} {ruta}: {type(e).__name__}: {e}") from e',
+                  '            raise CouldNotCheck(f"{metodo} {ruta}: {type(e).__name__}: {e}") from e',
                   1)
-mut = mut.replace('        print(redacta(f"verify-seed-payloads: NO HE PODIDO MIRAR: {e}"), file=sys.stderr)',
-                  '        print(f"verify-seed-payloads: NO HE PODIDO MIRAR: {e}", file=sys.stderr)', 1)
+mut = mut.replace('        print(redacta(f"verify-seed-payloads: COULD NOT LOOK: {e}"), file=sys.stderr)',
+                  '        print(f"verify-seed-payloads: COULD NOT LOOK: {e}", file=sys.stderr)', 1)
 mut = mut.replace('    instala_excepthook(redacta, "verify-seed-payloads")',
                   '    pass  # MUTANTE: sin frontera para excepciones', 1)
 ast.parse(mut)
@@ -1139,14 +1138,14 @@ open(sys.argv[2], "w", encoding="utf8").write(mut)
 PYD
 if [ -s "$TRABAJO/mRed.py" ] && ! cmp -s "$GUION" "$TRABAJO/mRed.py"; then
 	if ! fuga_url "$TRABAJO/mRed.py"; then
-		paso "sin la frontera en la linea del informe, la credencial FUGA: el caso D acredita la redaccion"
+		paso "removing the boundary at the report line LEAKS the credential: case D verifies redaction"
 	else
-		malo "el mutante que quita la frontera no fuga: el caso D no acredita nada"
+		malo "the boundary-removal mutant does not leak: case D verifies nothing"
 	fi
 else
-	malo "NO se pudo construir el mutante de la frontera: sin artefacto no hay juicio"
+	malo "could not build the boundary mutant: no artifact means no verdict"
 fi
 
-printf '\ntest-verify-seed-payloads: %d pasan, %d fallan\n' "$ok" "$fail"
+printf '\ntest-verify-seed-payloads: %d passed, %d failed\n' "$ok" "$fail"
 [ "$fail" -eq 0 ] || exit 1
 exit 0

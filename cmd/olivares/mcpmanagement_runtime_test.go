@@ -10,28 +10,34 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/go-chi/chi/v5"
-	"github.com/olivaresai/olivares/core/auth"
-	"github.com/olivaresai/olivares/core/model"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
+	"github.com/olivaresai/olivares/core/auth"
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/sessions"
 )
 
 func mcpManagementFixture(t *testing.T) (*mcpManagement, *mcpLedgerFixture, auth.Principal) {
 	t.Helper()
 	f := newMCPLedgerFixture(t)
-	sealer, err := newSecretSealer(t.TempDir(), func(string) string { return "" })
+	dataDir := t.TempDir()
+	sealer, err := newSecretSealer(dataDir, func(string) string { return "" })
 	if err != nil {
 		t.Fatal(err)
 	}
 	secrets := auth.NewSecretStore(f.store, sealer)
-	m, err := newMCPManagement(f.store, secrets, agentGatewayConfig{}, false)
+	m, err := newMCPManagement(f.store, secrets, mcpgateway.Config{}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
-	m.eng = &engine{store: f.store, log: discardLogger()}
+	m.eng = &engine{store: f.store, dataDir: dataDir, log: discardLogger(),
+		sessionsMod: sessions.New(sessionConfinementOption(dataDir, nil))}
 	actor := auth.Principal{Kind: auth.KindUser, UserID: model.NewID(), CredID: model.NewID(), Superadmin: true}
 	return m, f, actor
 }
@@ -81,7 +87,7 @@ func TestMCPManagementCredentialTenantAndNamespaceDenials(t *testing.T) {
 
 func TestMCPManagementFileOwnershipAndSanitizedRead(t *testing.T) {
 	m, f, p := mcpManagementFixture(t)
-	file, err := newMCPManagement(f.store, m.secrets, agentGatewayConfig{SessionTools: true, MCP: &mcpGatewayConfig{Tenant: f.tenant.String(), Resource: "https://plane.test/mcp", UpstreamURL: "https://up.test/mcp?token=fixture-private", UpstreamAuth: "Bearer fixture-private"}}, true)
+	file, err := newMCPManagement(f.store, m.secrets, mcpgateway.Config{SessionTools: true, MCP: &mcpgateway.MCPConfig{Tenant: f.tenant.String(), Resource: "https://plane.test/mcp", UpstreamURL: "https://up.test/mcp?token=fixture-private", UpstreamAuth: "Bearer fixture-private"}}, true)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -2,6 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { useCallback, useEffect, useState } from 'react'
+import { useQueries } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Check, KeyRound, RefreshCcw, ShieldAlert } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
@@ -20,8 +21,10 @@ import {
   applyWork,
   classifyApplyFailure,
   foldFields,
+  getWorkItem,
   isUnknownVerdict,
   planWork,
+  workKeys,
   requiredFieldsFor,
   workErrorCode,
   workErrorReason,
@@ -30,7 +33,7 @@ import {
   type ApplyOutcome,
   type WorkIntent,
 } from './api'
-import type { Plan } from './types'
+import type { Plan, WorkDependency } from './types'
 import { ChecksList, UnavailableNotice, VerdictBadge } from './verdict'
 
 /**
@@ -71,6 +74,8 @@ export interface ApplyFlowProps {
   intent: WorkIntent | null
   title: string
   description?: string
+  itemTitle?: string
+  dependencies?: WorkDependency[]
   /** Called after a successful (or replayed) apply, so the caller can refetch. */
   onApplied?: (outcome: ApplyOutcome) => void
   /** Called when the operator asks to re-read after a version conflict. */
@@ -123,6 +128,8 @@ export function ApplyFlow({
   intent,
   title,
   description,
+  itemTitle,
+  dependencies,
   onApplied,
   onReread,
   acceptanceState,
@@ -288,7 +295,19 @@ export function ApplyFlow({
           ) : null}
 
           {plan ? (
-            <PlanPanel plan={plan} intentKey={intent?.key ?? ''} />
+            <PlanPanel
+              plan={plan}
+              intentKey={intent?.key ?? ''}
+              dependencyReason={
+                plan.code === 'dependency_incomplete' && intent ? (
+                  <DependencyReason
+                    title={itemTitle}
+                    dependencies={dependencies ?? []}
+                    tenant={intent.tenant}
+                  />
+                ) : undefined
+              }
+            />
           ) : null}
 
           {phase === 'applied' && outcome ? (
@@ -300,6 +319,15 @@ export function ApplyFlow({
               failure={failure}
               code={failureCode}
               reason={failureReason}
+              dependencyReason={
+                failureCode === 'dependency_incomplete' && intent ? (
+                  <DependencyReason
+                    title={itemTitle}
+                    dependencies={dependencies ?? []}
+                    tenant={intent.tenant}
+                  />
+                ) : undefined
+              }
               onReread={() => {
                 onReread?.()
                 onOpenChange(false)
@@ -361,7 +389,15 @@ export function ApplyFlow({
 }
 
 /** The plan: what would happen, the canonical hash, and the key that will carry it. */
-function PlanPanel({ plan, intentKey }: { plan: Plan; intentKey: string }) {
+function PlanPanel({
+  plan,
+  intentKey,
+  dependencyReason,
+}: {
+  plan: Plan
+  intentKey: string
+  dependencyReason?: React.ReactNode
+}) {
   const { t } = useTranslation('work')
 
   // The plan itself can come back NO_HE_PODIDO_MIRAR on a 200 (work_api.go:199-205).
@@ -382,79 +418,129 @@ function PlanPanel({ plan, intentKey }: { plan: Plan; intentKey: string }) {
         <VerdictBadge verdict={plan.verdict} />
       </div>
 
-      <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-body">
-        <dt className="text-muted-foreground">{t('apply.command')}</dt>
-        <dd className="font-mono text-caption">{plan.command}</dd>
-        <dt className="text-muted-foreground">{t('apply.permission')}</dt>
-        <dd className="font-mono text-caption">{plan.permission}</dd>
-        <dt className="text-muted-foreground">{t('apply.eventType')}</dt>
-        <dd className="font-mono text-caption">{plan.event_type}</dd>
-      </dl>
+      {dependencyReason}
 
-      <div>
-        <p className="mb-1 text-body text-muted-foreground">
-          {t('apply.rowEffects')}
-        </p>
-        {plan.row_effects?.length ? (
-          <ul className="flex flex-col gap-1">
-            {plan.row_effects.map((e) => (
-              <li key={e} className="font-mono text-caption">
-                {e}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          /* A LIMPIO plan with no row effects genuinely means "this writes nothing".
+      <details className="min-w-0">
+        <summary className="cursor-pointer text-caption text-muted-foreground">
+          {t('apply.details')}
+        </summary>
+        <div className="mt-3 flex min-w-0 flex-col gap-3">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-body">
+            <dt className="text-muted-foreground">{t('apply.command')}</dt>
+            <dd className="font-mono text-caption">{plan.command}</dd>
+            <dt className="text-muted-foreground">{t('apply.permission')}</dt>
+            <dd className="font-mono text-caption">{plan.permission}</dd>
+            <dt className="text-muted-foreground">{t('apply.eventType')}</dt>
+            <dd className="font-mono text-caption">{plan.event_type}</dd>
+          </dl>
+
+          <div>
+            <p className="mb-1 text-body text-muted-foreground">
+              {t('apply.rowEffects')}
+            </p>
+            {plan.row_effects?.length ? (
+              <ul className="flex flex-col gap-1">
+                {plan.row_effects.map((e) => (
+                  <li key={e} className="font-mono text-caption">
+                    {e}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              /* A LIMPIO plan with no row effects genuinely means "this writes nothing".
              That is a real answer and is worth stating, not left as blank space. */
-          <p className="text-caption text-muted-foreground">
-            {t('apply.noRowEffects')}
-          </p>
-        )}
-      </div>
+              <p className="text-caption text-muted-foreground">
+                {t('apply.noRowEffects')}
+              </p>
+            )}
+          </div>
 
-      {plan.external_calls?.length ? (
-        <div>
-          <p className="mb-1 text-body text-muted-foreground">
-            {t('apply.externalCalls')}
-          </p>
-          <ul className="flex flex-col gap-1">
-            {plan.external_calls.map((c) => (
-              <li key={c} className="font-mono text-caption">
-                {c}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
+          {plan.external_calls?.length ? (
+            <div>
+              <p className="mb-1 text-body text-muted-foreground">
+                {t('apply.externalCalls')}
+              </p>
+              <ul className="flex flex-col gap-1">
+                {plan.external_calls.map((c) => (
+                  <li key={c} className="font-mono text-caption">
+                    {c}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
 
-      <ChecksList checks={plan.checks ?? []} />
+          <ChecksList checks={plan.checks ?? []} />
 
-      {plan.plan_hash ? (
-        <div className="flex items-center gap-2 border-t border-border pt-3">
-          <span className="text-caption text-muted-foreground">
-            {t('apply.planHash')}
-          </span>
-          <code className="font-mono text-caption break-all">
-            {plan.plan_hash}
-          </code>
-        </div>
-      ) : null}
+          {plan.plan_hash ? (
+            <div className="flex items-center gap-2 border-t border-border pt-3">
+              <span className="text-caption text-muted-foreground">
+                {t('apply.planHash')}
+              </span>
+              <code className="font-mono text-caption break-all">
+                {plan.plan_hash}
+              </code>
+            </div>
+          ) : null}
 
-      {/* THE KEY, BEFORE TRANSMISSION. Same contract as the CLI's printed line: an
+          {/* THE KEY, BEFORE TRANSMISSION. Same contract as the CLI's printed line: an
           operator who holds it can settle an ambiguous timeout without guessing. */}
-      <div className="flex items-start gap-2 rounded-md bg-muted p-3">
-        <KeyRound
-          aria-hidden
-          className="mt-0.5 size-4 shrink-0 text-muted-foreground"
-        />
-        <div className="min-w-0">
-          <p className="text-caption font-medium">{t('apply.keyTitle')}</p>
-          <code className="font-mono text-caption break-all">{intentKey}</code>
-          <p className="mt-1 text-caption text-muted-foreground">
-            {t('apply.keyHelp')}
-          </p>
+          <div className="flex items-start gap-2 rounded-md bg-muted p-3">
+            <KeyRound
+              aria-hidden
+              className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+            />
+            <div className="min-w-0">
+              <p className="text-caption font-medium">{t('apply.keyTitle')}</p>
+              <code className="font-mono text-caption break-all">
+                {intentKey}
+              </code>
+              <p className="mt-1 text-caption text-muted-foreground">
+                {t('apply.keyHelp')}
+              </p>
+            </div>
+          </div>
         </div>
-      </div>
+      </details>
+    </div>
+  )
+}
+
+function DependencyReason({
+  title,
+  dependencies,
+  tenant,
+}: {
+  title?: string
+  dependencies: WorkDependency[]
+  tenant: WorkIntent['tenant']
+}) {
+  const { t } = useTranslation('work')
+  const predecessors = useQueries({
+    queries: dependencies.map((dep) => ({
+      queryKey: workKeys.item(tenant, dep.depends_on_id),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        getWorkItem(dep.depends_on_id, { tenant }, signal),
+      staleTime: 0,
+    })),
+  })
+  const waiting = predecessors.flatMap((q) =>
+    !q.isFetching &&
+    !q.isError &&
+    q.data?.snapshot.item.status !== 'completed' &&
+    q.data?.snapshot.item.title
+      ? [q.data.snapshot.item.title]
+      : [],
+  )
+  return (
+    <div className="flex flex-col gap-1">
+      {waiting.length ? (
+        waiting.map((name, i) => (
+          <p key={i}>{t('apply.waitsFor', { title, dependency: name })}</p>
+        ))
+      ) : (
+        <p>{t('apply.dependencyWaiting')}</p>
+      )}
     </div>
   )
 }
@@ -527,12 +613,14 @@ function FailurePanel({
   failure,
   code,
   reason,
+  dependencyReason,
   onReread,
   onRetrySameKey,
 }: {
   failure: ApplyFailure
   code: string | null
   reason: string | null
+  dependencyReason?: React.ReactNode
   onReread: () => void
   onRetrySameKey: () => void
 }) {
@@ -575,19 +663,33 @@ function FailurePanel({
         <ShieldAlert aria-hidden className="size-4 shrink-0" />
         {t(`apply.failure.${failure}`)}
       </div>
-      <p className="text-danger">{body}</p>
-      {/* El motivo TAL CUAL lo dio el motor. Sin él, una transición imposible se lee como un
-          «conflicto» sin decir cuál — y el usuario no sabe si reintentar o cambiar de acción. */}
-      {reason ? (
-        <p className="text-danger" data-testid="engine-reason">
-          {reason}
+      {dependencyReason ?? (
+        <p className="text-danger">
+          {(failure === 'conflict-domain' || failure === 'other') &&
+          reason &&
+          reason !== code
+            ? reason
+            : body}
         </p>
-      ) : null}
-      {code ? (
-        <p className="font-mono text-caption text-danger">
-          {t('unavailable.code', { code })}
-        </p>
-      ) : null}
+      )}
+      <details className="min-w-0">
+        <summary className="cursor-pointer text-caption">
+          {t('apply.details')}
+        </summary>
+        <div className="mt-2 flex flex-col gap-2">
+          {/* Preserve the engine's exact reason as evidence beside its code. */}
+          {reason ? (
+            <p className="text-danger" data-testid="engine-reason">
+              {reason}
+            </p>
+          ) : null}
+          {code ? (
+            <p className="font-mono text-caption text-danger">
+              {t('unavailable.code', { code })}
+            </p>
+          ) : null}
+        </div>
+      </details>
       {/* A version conflict offers RE-READ and deliberately offers no retry: the
           console must not re-send with the fresh ETag, which would overwrite the other
           writer's change with the face of a success. */}

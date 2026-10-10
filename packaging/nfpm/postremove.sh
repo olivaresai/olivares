@@ -258,7 +258,7 @@ case "$format:$action" in
     if [ -d "$package_state_dir" ] && [ ! -L "$package_state_dir" ] &&
       [ "$(stat -c %u "$package_state_dir" 2>/dev/null)" = "$(id -u)" ]; then
       for olv_name in scripts-contract install-state install-state.tmp install-manifest.json.new \
-        .mv-probe-a .mv-probe-b; do
+        .mv-probe-a .mv-probe-b upgrade-snapshot; do
         rm -f "$package_state_dir/$olv_name" 2>/dev/null || true
       done
       rmdir "$package_state_dir" 2>/dev/null || true

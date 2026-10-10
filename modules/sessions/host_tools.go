@@ -112,16 +112,16 @@ type SessionHostTools struct {
 func WithHostToolObserver(o HostToolObserver) Option {
 	return func(m *Module) {
 		if nilHostToolObserver(o) {
-			m.rt.hostTools = nil
+			m.rt.HostTools = nil
 			return
 		}
-		m.rt.hostTools = o
+		m.rt.HostTools = o
 	}
 }
 
 // HostToolObservationAvailable reports whether an adapter is wired. It exists
 // for the composition root's own battery.
-func (m *Module) HostToolObservationAvailable() bool { return !nilHostToolObserver(m.rt.hostTools) }
+func (m *Module) HostToolObservationAvailable() bool { return !nilHostToolObserver(m.rt.HostTools) }
 
 // nilHostToolObserver also catches a typed nil pointer, which would otherwise
 // pass the interface nil check and panic on the first request.
@@ -154,7 +154,7 @@ var errHostToolsCanceled = &runErr{
 // transaction, read the profile again, and refuse a straddled observation with
 // the same typed 409.
 func (m *Module) EvaluateHostTools(ctx context.Context, tenant model.TenantID, ref string) (SessionHostTools, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return SessionHostTools{}, errHostToolsUnavailable
 	}
 	before, err := m.GetProfile(ctx, tenant, ref)
@@ -193,7 +193,7 @@ func (m *Module) observeHostTools(ctx context.Context, prof ProviderProfile) (ou
 		out.State = HostToolsNotChecked
 		return out
 	}
-	obs := m.rt.hostTools
+	obs := m.rt.HostTools
 	if nilHostToolObserver(obs) {
 		return out
 	}

@@ -5,8 +5,8 @@
 #
 # nFPM ships this file as the Debian postinst, the RPM %post and the APK
 # .post-install and .post-upgrade. Creates a hardened, no-login system user and
-# the data directory. It does NOT enable the service, and on DEB/RPM it does not
-# start or restart it. Package type comes from the packaged stamp (or, for
+# the data directory. It does NOT enable the service. DEB/RPM upgrades request a
+# pre-migration snapshot and restart an active, unmasked service. Package type comes from the packaged stamp (or, for
 # packages that predate the stamp, from which unit this package installed) —
 # never from whether systemctl happens to be on PATH — and a closed table of the
 # arguments each package manager passes:
@@ -359,10 +359,23 @@ if [ "$dir_uid" != "$olivares_uid" ]; then
   echo "error: data dir is not owned by olivares (dir=$dir_uid want=$olivares_uid)" >&2
   exit 1
 fi
+# APK ships only the example; deb and rpm ship the file itself (0640 root:root).
 if [ ! -e /etc/olivares/olivares.env ] && [ -f /usr/share/olivares/olivares.env.example ]; then
   cp /usr/share/olivares/olivares.env.example /etc/olivares/olivares.env
-  chmod 0640 /etc/olivares/olivares.env
-  chown "root:$olivares_gid" /etc/olivares/olivares.env
+fi
+# The env file carries the listen, TLS and DSN flags: root:olivares, closed to other
+# users, as install-service.sh sets it and doctor requires. The package manager keeps an
+# operator-edited file on upgrade with its old mode (0644 in the 26.x packages): its content
+# stays, a mode doctor refuses becomes 0640 (doctor accepts 0400, 0440, 0600 and 0640),
+# then the group is set. A link at the name is left alone.
+if [ -f /etc/olivares/olivares.env ] && [ ! -L /etc/olivares/olivares.env ]; then
+  case "$(stat -c %a /etc/olivares/olivares.env)" in
+    400|440|600|640) ;;
+    *) chmod 0640 /etc/olivares/olivares.env ||
+         refuse env-file-mode-failed "cannot set /etc/olivares/olivares.env to 0640" ;;
+  esac
+  chown "root:$olivares_gid" /etc/olivares/olivares.env ||
+    refuse env-file-owner-failed "cannot give /etc/olivares/olivares.env to root:olivares"
 fi
 
 if [ "$OLIVARES_PKG_INIT" = openrc ]; then
@@ -445,7 +458,7 @@ pending=/run/olivares.pkg-pending
 package_phase=/usr/libexec/olivares/olivares-product-package-phase
 # The first release whose prerm honors the upgrade contract; "~" sorts before
 # any of its pre-releases.
-first_contract_version='26.10.0~'
+first_contract_version='1.0~'
 unit_enabled=
 unit_active=
 if [ "$OLIVARES_PKG_INIT" = systemd ] && command -v systemctl >/dev/null 2>&1; then
@@ -485,6 +498,26 @@ write_pending() {
     "condition=$1" "reason=$2" "prior=$3" "instruction=$4" || true
 }
 
+# The installed binary consumes this request with its resolved store configuration,
+# before opening/migrating the store. Keep it outside the service-owned data tree;
+# the completed snapshot lives under that installation's backups/pre-upgrade.
+if [ "$OLIVARES_PKG_INIT" = systemd ] && [ "$action" = install ]; then
+  rm -f "$package_state_dir/upgrade-snapshot"
+fi
+if [ "$OLIVARES_PKG_INIT" = systemd ] && [ "$action" = upgrade ]; then
+  snapshot_request=$(mktemp "$package_state_dir/upgrade-snapshot.XXXXXXXX") ||
+    refuse snapshot-request-failed "cannot stage a pre-migration snapshot request"
+  if ! { printf '%s\n' "${snapshot_request##*/}" >"$snapshot_request" &&
+    chmod 0644 "$snapshot_request" &&
+    sync "$snapshot_request" &&
+    mv -T "$snapshot_request" "$package_state_dir/upgrade-snapshot" &&
+    sync "$package_state_dir" && sync "${package_state_dir%/*}"; }; then
+    rm -f "$snapshot_request"
+    refuse snapshot-request-failed "cannot publish the pre-migration snapshot request"
+  fi
+fi
+
+olivares_started=no # yes once this script itself started or restarted the service
 if [ -x "$package_phase" ]; then
   # The appliance: the package-phase bridge recorded the prior state before any
   # prerm and its finish phase is the only owner of the product start. This
@@ -509,6 +542,7 @@ else
   if [ "$OLIVARES_PKG_INIT" = openrc ] && [ -f "$upgrade_stamp" ]; then
     if command -v rc-service >/dev/null 2>&1; then
       rc-service olivares start
+      olivares_started=yes
     fi
     rm -f "$upgrade_stamp"
   fi
@@ -579,17 +613,51 @@ EOF
     fi
   fi
   if [ "$action" = upgrade ] && [ "$unit_active" = active ]; then
-    echo "Olivares AI: the running service keeps the previous version until restarted: sudo systemctl restart olivares"
+    case "$unit_enabled" in
+      masked|masked-runtime|unknown) ;;
+      *)
+        # A pre-contract RPM %preun would stop the service after this %post.
+        # Preserve its existing recovery notice instead of claiming a restart.
+        if [ "$format" != rpm ] || [ "$replaced_honors_contract" = yes ]; then
+          systemctl try-restart olivares ||
+            refuse restart-failed "snapshot requested; inspect journalctl -u olivares and repair the cause, then retry the package configuration and run: systemctl start olivares"
+          olivares_started=yes
+          echo "Olivares AI: restart requested; boot must snapshot the store before migrations. Check readiness and journalctl -u olivares."
+        fi ;;
+    esac
   fi
 fi
 receipt "$format" "$action" ok
 
 if [ -x "$package_phase" ]; then
   : # The appliance notice above is the whole message.
+elif [ "${action#abort-}" != "$action" ]; then
+  : # An aborted transaction unwinds an earlier one; the notices above are the whole message.
+elif [ "$action" = upgrade ]; then
+  # An upgrade keeps the configuration and the enablement, so the install steps do not
+  # apply. Say only what was measured: a service this script started needs nothing, and a
+  # recovery notice written above owns the instruction.
+  olivares_from=
+  [ "$olv_old" = unknown ] || olivares_from=" from $olv_old"
+  echo "Olivares AI upgraded$olivares_from."
+  if [ "$olivares_started" = no ] && [ ! -e "$pending" ]; then
+    if [ "$OLIVARES_PKG_INIT" = openrc ]; then
+      echo "  olivares was not started by this upgrade; start it with: sudo rc-service olivares start"
+    else
+      case "$unit_enabled/$unit_active" in
+        masked*/*) echo "  olivares is masked and was not started; unmask it, then start it: sudo systemctl unmask olivares && sudo systemctl start olivares" ;;
+        */inactive|*/failed)
+          echo "  olivares is not running and stays stopped; start it with: sudo systemctl start olivares (the pre-migration snapshot is taken at that start)."
+          echo "  If setup was never completed, the first start prints the one-time setup token: see INSTALL.md." ;;
+        */active) echo "  olivares is still running the previous version; restart it: sudo systemctl restart olivares" ;;
+        *) echo "  The state of olivares could not be read (${unit_active:-unreadable}); check it with: systemctl status olivares" ;;
+      esac
+    fi
+  fi
 elif [ "$OLIVARES_PKG_INIT" = openrc ]; then
   cat <<'EOF'
 Olivares AI installed.
-  1. Review /etc/olivares/olivares.env (listeners default to loopback-only).
+  1. Review /etc/olivares/olivares.env: listeners use all interfaces (:8443/:8444); restrict to loopback with OLIVARES_EXTRA_ARGS="--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444".
   2. Start it:   sudo rc-service olivares start
      Optional enable (not done by the package): sudo rc-update add olivares default
   3. First-boot setup token is in /var/log/olivares.log
@@ -602,7 +670,7 @@ EOF
 else
   cat <<'EOF'
 Olivares AI installed.
-  1. Review /etc/olivares/olivares.env (listeners default to loopback-only).
+  1. Review /etc/olivares/olivares.env: listeners use all interfaces (:8443/:8444); restrict to loopback with OLIVARES_EXTRA_ARGS="--listen=127.0.0.1:8443 --grpc-listen=127.0.0.1:8444".
   2. Start it:   sudo systemctl enable --now olivares
   3. First-boot setup token is printed to the journal:  journalctl -u olivares | sed -n '/FIRST-BOOT SETUP/,/========================/p'
 Docs: https://github.com/olivaresai/olivares  ·  verify a release: scripts/verify-release.sh

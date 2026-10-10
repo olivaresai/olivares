@@ -15,6 +15,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/olivaresai/olivares/modules/governance"
 )
 
 func TestHookPEPUsesSavedClientContext(t *testing.T) {
@@ -107,100 +109,6 @@ func TestHookPEPValidatePrintsServerVerdictAndMapsExit(t *testing.T) {
 	}
 }
 
-func TestHookPEPDryRunDenyAndRollbackAreThinHTTPClients(t *testing.T) {
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Authorization") != "Bearer policy-token" {
-			t.Errorf("missing bearer header")
-		}
-		switch r.URL.Path {
-		case "/v1/m/governance/pdp/dry-run":
-			var body map[string]json.RawMessage
-			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-				t.Errorf("decode dry-run: %v", err)
-			}
-			if string(body["request"]) != `{"principal":{"kind":"token"},"permission":"agent:write","resource":{"kind":"agent"}}` {
-				t.Errorf("request was not forwarded: %s", body["request"])
-			}
-			_, _ = w.Write([]byte(`{"allow":false,"engine":"cedar","reason":"forbid matched"}`))
-		case "/v1/m/governance/pdp/rollback":
-			var body struct {
-				Engine   string `json:"engine"`
-				Revision int64  `json:"revision"`
-			}
-			_ = json.NewDecoder(r.Body).Decode(&body)
-			if body.Engine != "cedar" || body.Revision != 3 {
-				t.Errorf("rollback body = %+v", body)
-			}
-			_, _ = w.Write([]byte(`{"engine":"cedar","from_revision":4,"to_revision":3,"active":true}`))
-		default:
-			http.NotFound(w, r)
-		}
-	}))
-	defer server.Close()
-	t.Setenv("OLIVARES_HOOK_PEP_URL", server.URL)
-	t.Setenv("OLIVARES_HOOK_PEP_TOKEN", "policy-token")
-
-	request := `{"principal":{"kind":"token"},"permission":"agent:write","resource":{"kind":"agent"}}`
-	err, output := runHookPEPCLI(t, "dry-run", "--source", "forbid policy", "--request", request)
-	if !errors.Is(err, errHookPEPDenied) || !strings.Contains(output, "decision: deny") {
-		t.Fatalf("deny mapping = err %v, output %q", err, output)
-	}
-
-	err, output = runHookPEPCLI(t, "rollback", "--revision", "3")
-	if err != nil || !strings.Contains(output, "from=4 to=3 active=true") {
-		t.Fatalf("rollback = err %v, output %q", err, output)
-	}
-}
-
-func TestHookPEPPublishForwardsSourceAndRendersTextAndJSON(t *testing.T) {
-	const response = `{"engine":"cedar","revision":8,"active":true,"note":"activated now"}`
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/v1/m/governance/pdp/publish" {
-			t.Errorf("request = %s %s", r.Method, r.URL.Path)
-			http.NotFound(w, r)
-			return
-		}
-		if r.URL.RawQuery != "" {
-			t.Errorf("query = %q, want empty", r.URL.RawQuery)
-		}
-		if got := r.Header.Get("Authorization"); got != "Bearer policy-token" {
-			t.Errorf("Authorization = %q", got)
-		}
-		if got := r.Header.Get("Content-Type"); got != "application/json" {
-			t.Errorf("Content-Type = %q", got)
-		}
-		var body struct {
-			Engine string `json:"engine"`
-			Source string `json:"source"`
-			Note   string `json:"note"`
-		}
-		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Errorf("decode publish request: %v", err)
-		}
-		if body.Engine != "cedar" || body.Source != "permit policy" || body.Note != "approved" {
-			t.Errorf("publish body = %+v", body)
-		}
-		_, _ = w.Write([]byte(response))
-	}))
-	defer server.Close()
-	t.Setenv("OLIVARES_HOOK_PEP_URL", server.URL)
-	t.Setenv("OLIVARES_HOOK_PEP_TOKEN", "policy-token")
-
-	err, output := runHookPEPCLI(t, "publish", "--source", "permit policy", "--note", "approved")
-	if err != nil {
-		t.Fatalf("publish text returned error: %v (output %q)", err, output)
-	}
-	if want := "publish: engine=cedar revision=8 active=true\nactivated now\n"; output != want {
-		t.Fatalf("publish text output = %q, want %q", output, want)
-	}
-
-	err, output = runHookPEPCLI(t, "publish", "--source", "permit policy", "--note", "approved", "--format", "json")
-	if err != nil {
-		t.Fatalf("publish json returned error: %v (output %q)", err, output)
-	}
-	assertSameJSON(t, response, output)
-}
-
 func TestHookPEPVersionsUsesGETAndRendersTextAndJSON(t *testing.T) {
 	const response = `{"items":[{"revision":3,"surface":"cedar","validated":true,"active":true},{"revision":2,"surface":"opa","validated":false}],"total":2}`
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -288,6 +196,73 @@ func TestHookPEPTestsUsesGETQueryAndRendersTextAndJSON(t *testing.T) {
 		t.Fatalf("tests json returned error: %v (output %q)", err, output)
 	}
 	assertSameJSON(t, unavailableResult, output)
+}
+
+// TestHookPEPRequestShapeIsShownWhereOperatorsLook pins the one request body
+// (governance.PDPExampleRequestJSON, itself posted to the live handler by the
+// governance tests) into every place an operator learns the shape: the dry-run and
+// explain help, the CLI recipes and each copy of the deny-closed cookbook. Before
+// this the help said only "example-request JSON" and the cookbook showed a body the
+// engine rejects, so a new user had to read Go source to get a first decision.
+func TestHookPEPRequestShapeIsShownWhereOperatorsLook(t *testing.T) {
+	root := newHookPEPCmd()
+	for _, name := range []string{"dry-run", "explain"} {
+		sub, _, err := root.Find([]string{name})
+		if err != nil || sub.Name() != name {
+			t.Fatalf("hookpep %s not found: %v", name, err)
+		}
+		if !strings.Contains(sub.Example, governance.PDPExampleRequestJSON) {
+			t.Errorf("hookpep %s help example does not show the request body %s:\n%s", name, governance.PDPExampleRequestJSON, sub.Example)
+		}
+		for _, flag := range []string{"request", "request-file"} {
+			f := sub.Flags().Lookup(flag)
+			if f == nil {
+				t.Fatalf("hookpep %s has no --%s flag", name, flag)
+			}
+			if !strings.Contains(f.Usage, "principal") || !strings.Contains(f.Usage, "permission") || !strings.Contains(f.Usage, "resource") {
+				t.Errorf("hookpep %s --%s usage %q does not name principal, permission and resource", name, flag, f.Usage)
+			}
+		}
+	}
+
+	readDoc := func(doc string) string {
+		raw, err := os.ReadFile(filepath.Clean(doc))
+		if err != nil {
+			t.Fatalf("read %s: %v", doc, err)
+		}
+		return string(raw)
+	}
+	if !strings.Contains(readDoc(recipesDoc), governance.PDPExampleRequestJSON) {
+		t.Errorf("%s does not show the dry-run request body %s", recipesDoc, governance.PDPExampleRequestJSON)
+	}
+
+	// Every cookbook copy: the same curl bodies, built with the engine/source/request
+	// envelope the routes decode, and the Rego reading the OPA input's real field
+	// (opaInput has `permission`, not `action`).
+	cookbooks, err := filepath.Glob("../../docs-site/src/content/docs/*/how-to/cookbook/deny-closed-policies.md")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cookbooks) < 7 {
+		t.Fatalf("found %d cookbook locale copies, want at least 7; the glob is not seeing the docs tree", len(cookbooks))
+	}
+	cookbooks = append(cookbooks, "../../docs-site/src/content/docs/how-to/cookbook/deny-closed-policies.md")
+	for _, doc := range cookbooks {
+		text := readDoc(doc)
+		for _, want := range []string{
+			"--argjson request '" + governance.PDPExampleRequestJSON + "'",
+			`{engine:"cedar",$source,$request}`,
+			`{engine:"cedar",$source}`,
+			`endswith(input.permission, ":read")`,
+		} {
+			if !strings.Contains(text, want) {
+				t.Errorf("%s does not contain %s", doc, want)
+			}
+		}
+		if strings.Contains(text, "input.action") {
+			t.Errorf("%s reads input.action, which the OPA input does not have", doc)
+		}
+	}
 }
 
 func runHookPEPCLI(t *testing.T, args ...string) (error, string) {

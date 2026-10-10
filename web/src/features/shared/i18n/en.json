@@ -46,5 +46,14 @@
     "untitledSession": "Untitled session",
     "unknownUser": "Unknown user",
     "unknownWorkspace": "Unknown workspace"
+  },
+  "headDiff": {
+    "file": "File",
+    "changes": "Changes since HEAD",
+    "committed": "HEAD (committed)",
+    "current": "Current",
+    "same": "No differences from HEAD.",
+    "view": "View",
+    "unavailable": "Could not compare with HEAD."
   }
 }

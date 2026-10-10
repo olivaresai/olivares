@@ -100,10 +100,49 @@
     "this": "actuel",
     "sig": "Signature de l'événement",
     "checkpoint": "sig.",
-    "chainHint": "Le hachage de chaque événement est chaîné au précédent. Il n’y a aucune charge utile derrière une empreinte — le hachage est la preuve (données minimales par conception)."
+    "chainHint": "Le hachage de chaque événement est chaîné au précédent. Il n’y a aucune charge utile derrière une empreinte — le hachage est la preuve (données minimales par conception).",
+    "details": "Détails",
+    "actorMember": "Un membre"
   },
   "empty": {
     "title": "Aucune preuve pour l’instant",
     "description": "Le registre est vide pour cette portée. Les opérations gouvernées ajoutent des événements inviolables au fur et à mesure."
+  },
+  "actions": {
+    "governance_approval_create": "Approbation demandée",
+    "governance_approval_decision": "Décision d’approbation enregistrée",
+    "governance_approval_cancel": "Approbation annulée",
+    "sessions_run_launched": "Session démarrée",
+    "sessions_run_stopping": "Arrêt de session demandé",
+    "sessions_work_item_create": "Élément de travail créé",
+    "sessions_work_item_ready": "Élément de travail marqué comme prêt",
+    "sessions_work_item_complete": "Élément de travail terminé",
+    "authorization_decision_record": "Décision d’autorisation enregistrée",
+    "policy_artifact_record": "Preuve de politique enregistrée",
+    "governance_policy_create": "Politique créée",
+    "governance_policy_update": "Politique mise à jour",
+    "governance_policy_delete": "Politique supprimée",
+    "auth_login": "Connexion",
+    "auth_logout": "Déconnexion",
+    "auth_login_failed": "Échec de connexion",
+    "auth_webauthn_register": "Clé d’accès ajoutée",
+    "auth_webauthn_unregister": "Clé d’accès supprimée",
+    "user_set_password": "Mot de passe modifié",
+    "user_create": "Personne ajoutée",
+    "membership_grant": "Rôle attribué",
+    "membership_update": "Rôle modifié",
+    "membership_offboard": "Personne retirée",
+    "token_issue": "Jeton d’API créé",
+    "token_revoke": "Jeton d’API révoqué",
+    "secret_delete": "Secret supprimé"
+  },
+  "targets": {
+    "core_policy": "Politique"
+  },
+  "internal": {
+    "hidden": "Enregistrements internes masqués : {{count}}",
+    "show": "Afficher les enregistrements internes",
+    "hide": "Masquer les enregistrements internes",
+    "allHidden": "Tout ce qui a été chargé jusqu’ici est un enregistrement interne."
   }
 }

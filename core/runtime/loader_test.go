@@ -5,10 +5,13 @@
 package runtime_test
 
 import (
+	"bytes"
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -18,17 +21,72 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 
 	"github.com/olivaresai/olivares/core/runtime"
+	"github.com/olivaresai/olivares/core/runtime/confine"
 	"github.com/olivaresai/olivares/sdk"
+	sdkplugin "github.com/olivaresai/olivares/sdk/plugin"
 )
+
+// The runtime's command is the real shared helper, served by this test binary.
+func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == confine.HelperArg {
+		os.Exit(confine.RunHelper(os.Args[2:]))
+	}
+	if os.Getenv(sdkplugin.Handshake.MagicCookieKey) == sdkplugin.Handshake.MagicCookieValue {
+		plugins := goplugin.PluginSet{sdkplugin.OutputPluginName: &sdkplugin.OutputPlugin{Impl: &ownedOutput{}}}
+		switch filepath.Base(os.Args[0]) { // the restart tests copy this binary under a fixture's name
+		case streamOutputBinary:
+			plugins = goplugin.PluginSet{sdkplugin.OutputPluginName: &sdkplugin.OutputPlugin{Impl: &streamOutput{}}}
+		case streamSourceBinary:
+			plugins = goplugin.PluginSet{sdkplugin.SourcePluginName: &sdkplugin.SourcePlugin{Impl: &streamSource{}}}
+		}
+		goplugin.Serve(&goplugin.ServeConfig{HandshakeConfig: sdkplugin.Handshake, Plugins: plugins, GRPCServer: goplugin.DefaultGRPCServer})
+		os.Exit(0)
+	}
+	// Root CI drops plugin credentials before re-exec. Serve the helper from
+	// an owned traversable copy, rather than Go's private build directory.
+	if os.Geteuid() == 0 && confine.Probe().Mode == confine.ModeLandlock && os.Getenv("OLIVARES_OWNED_LOADER_TEST") != "1" {
+		dir, err := os.MkdirTemp("/tmp", "olivares-loader-test-")
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		self, err := os.Executable()
+		if err == nil {
+			var image []byte
+			image, err = os.ReadFile(self)
+			if err == nil {
+				err = os.Chmod(dir, 0o755)
+			}
+			if err == nil {
+				err = os.WriteFile(filepath.Join(dir, "engine"), image, 0o755)
+			}
+		}
+		code := 1
+		if err == nil {
+			cmd := exec.Command(filepath.Join(dir, "engine"), os.Args[1:]...)
+			cmd.Env = append(os.Environ(), "OLIVARES_OWNED_LOADER_TEST=1")
+			cmd.Stdin, cmd.Stdout, cmd.Stderr = os.Stdin, os.Stdout, os.Stderr
+			err = cmd.Run()
+			if err == nil {
+				code = 0
+			} else if ee, ok := err.(*exec.ExitError); ok {
+				code = ee.ExitCode()
+			}
+		}
+		_ = os.RemoveAll(dir)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+		}
+		os.Exit(code)
+	}
+	os.Exit(m.Run())
+}
 
 // These tests pin the S142 LoadSourcePluginVerified contract WITHOUT a real
 // plugin binary (the heavyweight out-of-process path is plugin_e2e_test.go):
 // a tiny executable shell script is enough, because everything under test —
 // the malformed-pin refusal and go-plugin's SecureConfig checksum gate — fires
 // BEFORE the gRPC handshake. Hermetic: no network, no go toolchain.
-
-// writeFakePlugin writes an executable script that records its execution by
-// creating sentinel, so a test can assert whether the "plugin" ever ran.
 
 // execCapableDir devuelve un directorio donde un binario REALMENTE se puede ejecutar, o salta
 // diciendo por que. No es lo mismo que un directorio donde se puede escribir.
@@ -85,29 +143,10 @@ func execCapableDir(t *testing.T) string {
 			porque = append(porque, fmt.Sprintf("%s: no puedo crear dentro (%v)", base, err))
 			continue
 		}
-		// os.MkdirTemp crea 0700, y el hijo enjaulado tiene que ATRAVESAR este directorio. Sin
-		// esto, la comprobacion de ancestros de abajo rechaza el directorio que acaba de crear
-		// —lo mide antes de que nadie lo abra— y todos los candidatos salen descartados.
-		//
-		// ⛔ 0733, NO 0711, y la diferencia la pago yo: con 0711 el hijo ATRAVIESA pero no puede
-		// CREAR, y estos tests detectan la ejecucion por un fichero centinela que el propio
-		// plugin escribe. Bajo root —los runners de CI corren como uid 0 y esta caja no—
-		// `plugjail` baja a un uid dedicado, asi que el `touch` del centinela moria con
-		// «Permission denied» y el test declaraba «the binary never executed» **con el binario
-		// ya ejecutado y su salida en el log**. Medido el 2026-08-19 en la corrida 32254169591:
-		// «plugin started … plugin process exited» y, en medio, el touch denegado.
-		// El bit de escritura para OTROS es exactamente lo que el centinela necesita; se sigue
-		// negando el LISTADO, que es lo que 0711 protegia.
-		//
-		// ⛔ Y QUE NADIE «ALINEE» ESTO CON PRODUCCION, que es 0711 y esta BIEN. La diferencia es
-		// deliberada y el motivo esta medido: `cmd/olivares/firstparty/embed.go` concede el
-		// minimo que hace posible el exec, y un plugin de verdad NO escribe en su directorio de
-		// extraccion — `core/runtime/plugjail/plugjail_linux.go` no fija `Dir`, ni `Chdir`, ni
-		// `TMPDIR`, asi que el hijo hereda el cwd del padre y go-plugin crea su socket en
-		// `os.TempDir()`. Quien necesita escribir aqui es el CENTINELA de estos tests, que es un
-		// artefacto del arnes. Igualar los dos modos reintroduce el rojo de la corrida 32254169591
-		// (si se baja este a 0711) o ensancha produccion sin motivo (si se sube aquel a 0733).
-		_ = os.Chmod(dir, 0o733)
+		// A dedicated UID must traverse every parent. The plugin directory is
+		// read-only under Landlock; execution is observed on inherited stdout,
+		// not by writing a sentinel into that directory.
+		_ = os.Chmod(dir, 0o711)
 		probe := filepath.Join(dir, "p")
 		if err := os.WriteFile(probe, []byte("#!/bin/sh\nexit 7\n"), 0o755); err != nil {
 			porque = append(porque, fmt.Sprintf("%s: no puedo escribir (%v)", base, err))
@@ -141,11 +180,19 @@ func execCapableDir(t *testing.T) string {
 	return ""
 }
 
+// writeFakePlugin reports execution on stdout using shell builtins only.
+// It also checks original $0, sibling reads and the owned writable TMPDIR. A
+// handshake refusal retains that first output line, so execution is observable
+// without granting write access to the executable's directory.
 func writeFakePlugin(t *testing.T, dir string) (bin, sentinel string) {
 	t.Helper()
-	sentinel = filepath.Join(dir, "executed")
 	bin = filepath.Join(dir, "fake-source")
-	script := fmt.Sprintf("#!/bin/sh\ntouch %q\nexit 0\n", sentinel)
+	sentinel = "plugin-executed:" + bin
+	resource := filepath.Join(dir, "sibling")
+	if err := os.WriteFile(resource, []byte("sibling-ok\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	script := fmt.Sprintf("#!/bin/sh\n[ \"$0\" = %q ] || exit 8\nIFS= read -r sibling < %q || exit 9\n[ \"$sibling\" = sibling-ok ] || exit 10\nif [ -n \"$TMPDIR\" ]; then if [ -n \"$TMPDIR\" ]; then printf scratch > \"$TMPDIR/executed\" || exit 11; fi; fi\nprintf '%%s\\n' %q\nexit 0\n", bin, resource, sentinel)
 	if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +259,7 @@ func TestLoadSourcePluginVerifiedChecksumMismatch(t *testing.T) {
 	if !errors.Is(err, goplugin.ErrChecksumsDoNotMatch) {
 		t.Errorf("error must be the go-plugin checksum refusal, got %v", err)
 	}
-	if _, statErr := os.Stat(sentinel); statErr == nil {
+	if strings.Contains(err.Error(), sentinel) {
 		t.Error("the plugin RAN despite a checksum mismatch (the exec-time pin is broken)")
 	}
 }
@@ -229,7 +276,7 @@ func TestLoadContentSourcePluginVerifiedChecksumMismatch(t *testing.T) {
 	if !errors.Is(err, goplugin.ErrChecksumsDoNotMatch) {
 		t.Errorf("error must be the go-plugin checksum refusal, got %v", err)
 	}
-	if _, statErr := os.Stat(sentinel); statErr == nil {
+	if strings.Contains(err.Error(), sentinel) {
 		t.Error("the plugin RAN despite a checksum mismatch (the exec-time pin is broken)")
 	}
 }
@@ -278,14 +325,14 @@ func TestDispenseOutputPluginVerifiedChecksumMismatch(t *testing.T) {
 	if !errors.Is(err, goplugin.ErrChecksumsDoNotMatch) {
 		t.Errorf("error must be the go-plugin checksum refusal, got %v", err)
 	}
-	if _, statErr := os.Stat(sentinel); statErr == nil {
+	if strings.Contains(err.Error(), sentinel) {
 		t.Error("the plugin RAN despite a checksum mismatch (the exec-time pin is broken)")
 	}
 }
 
 // TestLoadSourcePluginVerifiedCorrectDigestReachesExec: with the CORRECT digest
-// the checksum gate passes and the binary actually executes (the sentinel
-// appears); the load still fails afterwards — the script is not a real
+// the checksum gate passes and the binary actually executes (the execution marker
+// appears in the handshake refusal); the load still fails afterwards — the script is not a real
 // go-plugin server, so the handshake dies — but with a NON-checksum error.
 // Together with the mismatch test this proves the pin, and only the pin, gates
 // exec.
@@ -305,10 +352,8 @@ func TestLoadSourcePluginVerifiedCorrectDigestReachesExec(t *testing.T) {
 	if errors.Is(err, goplugin.ErrChecksumsDoNotMatch) {
 		t.Errorf("correct digest must pass the checksum gate, got %v", err)
 	}
-	if _, statErr := os.Stat(sentinel); statErr != nil {
-		t.Errorf("no sentinel at %s: the binary did not execute, OR it executed and could not "+
-			"write there (a jailed uid needs w+x on the directory). The pin must gate, not block. "+
-			"stat: %v", sentinel, statErr)
+	if !strings.Contains(err.Error(), sentinel) {
+		t.Errorf("matching digest did not reach original-path script with sibling read and scratch write: %v", err)
 	}
 }
 
@@ -328,9 +373,116 @@ func TestLoadContentSourcePluginVerifiedCorrectDigestReachesExec(t *testing.T) {
 	if errors.Is(err, goplugin.ErrChecksumsDoNotMatch) {
 		t.Errorf("correct digest must pass the checksum gate, got %v", err)
 	}
-	if _, statErr := os.Stat(sentinel); statErr != nil {
-		t.Errorf("no sentinel at %s: the binary did not execute, OR it executed and could not "+
-			"write there (a jailed uid needs w+x on the directory). The pin must gate, not block. "+
-			"stat: %v", sentinel, statErr)
+	if !strings.Contains(err.Error(), sentinel) {
+		t.Errorf("matching digest did not reach original-path script with sibling read and scratch write: %v", err)
 	}
+}
+
+func TestVerifiedPluginRetainsOriginalAdmissionAndPath(t *testing.T) {
+	t.Run("checksum-before-format-inspection", func(t *testing.T) {
+		bin := filepath.Join(execCapableDir(t), "invalid-elf")
+		if err := os.WriteFile(bin, []byte("\x7fELFnot-an-ELF-header"), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		rt := runtime.New(runtime.Options{Logger: quiet()})
+		err := rt.LoadSourcePluginVerified(bin, sdk.Config{}, "tenant-x", strings.Repeat("0", 64))
+		if !errors.Is(err, goplugin.ErrChecksumsDoNotMatch) {
+			t.Fatalf("wrong digest lost original checksum refusal: %v", err)
+		}
+	})
+	for _, mode := range []string{"relative-path", "resolved-PATH"} {
+		t.Run(mode, func(t *testing.T) {
+			dir := execCapableDir(t)
+			bin, sentinel := writeFakePlugin(t, dir)
+			program := filepath.Base(bin)
+			expectedZero := program
+			if mode == "relative-path" {
+				cwd, err := os.Getwd()
+				if err != nil {
+					t.Fatal(err)
+				}
+				program, err = filepath.Rel(cwd, bin)
+				if err != nil {
+					t.Fatal(err)
+				}
+				expectedZero = program
+			} else {
+				t.Setenv("PATH", dir+string(os.PathListSeparator)+os.Getenv("PATH"))
+				// exec.Command resolves Path on PATH; the kernel gives a shebang
+				// interpreter that resolved script path as $0.
+				expectedZero = bin
+			}
+			script := fmt.Sprintf("#!/bin/sh\n[ \"$0\" = %q ] || exit 8\nprintf '%%s\\n' %q\n", expectedZero, sentinel)
+			if err := os.WriteFile(bin, []byte(script), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			sum := sha256.Sum256([]byte(script))
+			rt := runtime.New(runtime.Options{Logger: quiet()})
+			err := rt.LoadSourcePluginVerified(program, sdk.Config{}, "tenant-x", hex.EncodeToString(sum[:]))
+			if err == nil || errors.Is(err, goplugin.ErrChecksumsDoNotMatch) || !strings.Contains(err.Error(), sentinel) {
+				t.Fatalf("original path/argv/checksum behavior changed: %v", err)
+			}
+		})
+	}
+}
+
+type ownedOutput struct{}
+
+func (*ownedOutput) Descriptor() sdk.Descriptor             { return sdk.Descriptor{Name: "owned-output"} }
+func (*ownedOutput) Open(context.Context, sdk.Config) error { return nil }
+func (*ownedOutput) Close(context.Context) error            { return nil }
+func (*ownedOutput) Notify(_ context.Context, n sdk.Notification) error {
+	// Observe an actual RPC method running inside the confined SDK child.
+	if _, err := os.ReadFile(n.Fields["denied_file"]); !os.IsPermission(err) {
+		return fmt.Errorf("ungranted file read: %v", err)
+	}
+	return os.WriteFile(filepath.Join(os.TempDir(), "notified"), []byte(n.Title), 0o600)
+}
+
+func TestVerifiedOwnedSDKPluginStillHandshakes(t *testing.T) {
+	if confine.Probe().Mode != confine.ModeLandlock {
+		t.Skip(confine.Probe().Reason)
+	}
+	self, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	image, err := os.ReadFile(self)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(execCapableDir(t), "owned-output")
+	if err := os.WriteFile(bin, image, 0o711); err != nil {
+		t.Fatal(err)
+	}
+	sum := sha256.Sum256(image)
+	secret := filepath.Join(t.TempDir(), "synthetic-ungranted")
+	if err := os.WriteFile(secret, []byte("fixture"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var logs bytes.Buffer
+	rt := runtime.New(runtime.Options{Logger: slog.New(slog.NewTextHandler(&logs, nil))})
+	conn, client, err := rt.DispenseOutputPluginVerified(bin, hex.EncodeToString(sum[:]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() {
+		_ = conn.Close(t.Context())
+		client.Kill()
+		rt.RunPluginCleanup(client)
+		rt.RunPluginCleanup(client)
+	}()
+	if conn.Descriptor().Name != "owned-output" {
+		t.Fatalf("wrong descriptor: %+v", conn.Descriptor())
+	}
+	if err := conn.Open(t.Context(), sdk.Config{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := conn.Notify(t.Context(), sdk.Notification{Title: "owned RPC proof", Fields: map[string]string{"denied_file": secret}}); err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(logs.String(), "landlock=true") || !strings.Contains(logs.String(), "no_new_privs=true") {
+		t.Fatalf("successful handshake did not record native controls: %s", logs.String())
+	}
+	t.Logf("owned SDK output binary_sha256=%x; admitted checksum/AutoMTLS/Describe/Open/Notify/denied-file/scratch-write PASS", sum)
 }

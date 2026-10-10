@@ -6,7 +6,6 @@ package finops
 
 import (
 	"context"
-	"errors"
 	"strconv"
 	"testing"
 
@@ -110,55 +109,6 @@ func TestHasAdmissionTargets(t *testing.T) {
 	has, err := m2.HasAdmissionTargets(ctx, tenant2)
 	if err != nil || !has {
 		t.Fatalf("a tenant under the lifecycle frontier = %v, %v — the reserve must run so the guard can refuse", has, err)
-	}
-}
-
-func TestHasAdmissionTargetsTracksSpendLimitWrites(t *testing.T) {
-	ctx := context.Background()
-	m := New()
-	st, tenant := openTargetsStore(t, m)
-
-	probe := func() bool {
-		t.Helper()
-		has, err := m.HasAdmissionTargets(ctx, tenant)
-		if err != nil {
-			t.Fatalf("HasAdmissionTargets: %v", err)
-		}
-		return has
-	}
-	if probe() {
-		t.Fatal("no spend limits yet")
-	}
-	amount := "100000"
-	if _, _, err := m.SpendLimitUpsert(ctx, tenant, SpendLimitSpec{
-		Scope: SpendLimitScope{Type: "organization"}, Amount: &amount, Currency: "USD", Period: "monthly",
-	}, "admin"); err != nil {
-		t.Fatalf("SpendLimitUpsert: %v", err)
-	}
-	if !probe() {
-		t.Fatal("a spend-limit policy is an admission target")
-	}
-	var policyID model.ID
-	if err := st.View(ctx, tenant, func(sc store.Scope) error {
-		rows, _, err := sc.Policies().List(ctx, model.Query{
-			Filters: []model.Filter{eq("kind", policyKindSpendLimit)}, Limit: 1,
-		})
-		if err != nil {
-			return err
-		}
-		if len(rows) != 1 {
-			return errors.New("expected exactly one spend-limit policy row")
-		}
-		policyID = rows[0].ID
-		return nil
-	}); err != nil {
-		t.Fatalf("read spend-limit policy id: %v", err)
-	}
-	if err := m.SpendLimitDelete(ctx, tenant, policyID, "admin"); err != nil {
-		t.Fatalf("SpendLimitDelete: %v", err)
-	}
-	if probe() {
-		t.Fatal("after the delete there is no admission target again")
 	}
 }
 

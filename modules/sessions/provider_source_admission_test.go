@@ -113,7 +113,7 @@ func TestProfileAuthority_AliasRollbackAndCurrentClaimBothEngines(t *testing.T) 
 			}
 			// The binder INSERTS a new alias before discovering that the run already
 			// captured another ID. The outer transaction must roll that insert back.
-			err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+			err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 				return m.bindManagedProviderAliasWithin(ctx, sc, managedAliasInput{profileID: p.Ref, provider: "claude", externalID: "review-must-rollback", sid: lr.claim.SID, runRef: lr.runRef, launchID: lr.launchID, claimFence: lr.claim.Fence})
 			})
 			if err == nil || !isRunConflict(err) {

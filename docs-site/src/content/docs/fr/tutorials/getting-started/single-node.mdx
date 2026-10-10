@@ -21,20 +21,10 @@ C'est le même moteur que le [quickstart](/fr/start/quickstart/) démontre en ci
 minutes ; la différence est la posture. Si vous voulez d'abord le coup d'œil instantané,
 faites le quickstart, puis revenez ici pour la vraie installation.
 
-Chaque commande de cette page a été exécutée, telle qu'écrite, contre le binaire actuel
-(la bannière de premier démarrage, le chemin de récupération du jeton, le câblage pgAudit et le
-graphe ci-dessous sont exercés par `scripts/quickstart-smoke.sh` et ont été revérifiés
-pour ce guide).
-
 ## Prérequis
 
 - Un hôte Linux avec systemd et `curl`.
-- **Go 1.26+** pour compiler le binaire (le store est du SQLite pur-Go, donc pas de
-  chaîne d'outils C). La version publiée **26.10.1** livre des archives signées et des paquets
-  natifs : le témoin des surfaces d’installation les enregistre comme **published**
-  (`docs/releases/26.10.1-install-surfaces.json`). Ce tutoriel compile depuis un checkout ;
-  l’installateur vérifié sur `main` (`scripts/install.sh`) installe plutôt la version publiée.
-  [Vérifier une version](/fr/how-to/verify-a-release/) est la chaîne pour ces artefacts.
+- **Go 1.26+**. Build this tutorial from source; Olivares {/* release */}`0.1`{/* /release */} is the next release, not yet published.
 
 ## 1. Compiler et installer le binaire
 
@@ -251,6 +241,14 @@ sur une map vide — voir [dépannage](/fr/how-to/troubleshooting/) pour les
 avertissements exacts et ce que chacun signifie.
 
 ## 6. Atteindre le graphe
+
+Sur une nouvelle installation, `accessmap` est désactivé. En tant
+qu’administrateur, activez `accessmap` dans **Settings > Edition & modules**,
+en conservant les autres modules sélectionnés. Pour la CLI, connectez-vous
+d’abord à ce moteur en tant qu’administrateur avec `olivares login`, puis
+exécutez `olivares modules on accessmap`. Attendez chaque redémarrage du moteur avant de continuer ;
+les sessions en cours s’arrêtent et peuvent être reprises. Sinon, ces appels
+API renvoient `404 module_not_enabled`.
 
 ```bash
 curl -ksf "https://127.0.0.1:8443/v1/m/accessmap/graph?limit=200" \

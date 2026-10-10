@@ -2,24 +2,20 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md
 //
-// el veredicto de «contenido sin analizar» NO se puede derivar de una página.
+// the unscanned-content verdict cannot be inferred from one page.
 //
-// ⛔ LA ASIMETRÍA ES EL CONTRATO, y por eso son TRES casos y no dos. `reglas` es UNA página:
-//    `handleListDLPRules` (`modules/knowledge/dlp.go:168`) responde por `listQuery(r)` y el
-//    almacén genérico sirve su página por omisión (`sqlstore/generic.go:28`) publicando
-//    `has_more`.
+// The asymmetric contract needs three cases. The rules list is one page:
+// `handleListDLPRules` (`modules/knowledge/dlp.go:168`) uses `listQuery(r)`, and the generic
+// store returns its default page (`sqlstore/generic.go:28`) with `has_more`.
+//   - Finding the permissive rule proves unscanned content is allowed; truncation cannot
+//     invalidate positive evidence.
+//   - Not finding it proves nothing when rows are missing; it may be beyond the page.
 //
-//      · encontrar la regla permisiva PRUEBA que lo no analizado se permite — un recorte no
-//        invalida una prueba positiva;
-//      · NO encontrarla no prueba NADA si faltan filas — puede estar más allá de la página.
+// Claiming DENIED in the second case asserts an unverified safe posture. The `sol max`
+// review of found this reversed polarity in five governed-data pages.
 //
-//    Decir «DENEGADO» en ese segundo caso es afirmar la postura SEGURA sin haberla verificado,
-//    en la dirección peligrosa. Es la misma polaridad invertida que el contraste `sol max` de
-//    Encontró en cinco páginas de datos gobernados.
-//
-// ⚠ POR QUÉ MONTANDO LA VISTA. Una sonda de fuente ve el ternario y lo da por bueno; sólo
-//   montar prueba que el texto SALE. Es el paso 4 de la receta de
-//   `scripts/check-list-truncation-witness.sh`.
+// Render the view: a source probe can approve the ternary, but rendering proves the text
+// appears. This is step 4 of `scripts/check-list-truncation-witness.sh`.
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'

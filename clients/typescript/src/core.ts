@@ -276,16 +276,57 @@ export class ClientCore {
     }
 
     const doFetch = this.opts.fetch ?? fetch;
-    const resp = await doFetch(url, {
-      method,
-      headers,
-      body:
-        body === undefined
-          ? undefined
-          : rawRequestContentType !== undefined
-            ? (body as Uint8Array as unknown as BodyInit)
-            : JSON.stringify(body),
-    });
+    const runtime = globalThis as typeof globalThis & {
+      process?: { versions?: { node?: string } };
+      Deno?: unknown;
+      Bun?: unknown;
+    };
+    // Browsers hide even same-origin manual redirects. Use their native policy
+    // without probing (which would repeat a write), then check the final origin.
+    const manual = typeof runtime.process?.versions?.node === "string"
+      || runtime.Deno !== undefined || runtime.Bun !== undefined;
+    const origin = new URL(this.endpoint).origin;
+    let requestMethod = method;
+    let requestBody = body === undefined ? undefined
+      : rawRequestContentType !== undefined
+        ? new Uint8Array(body as Uint8Array) as unknown as BodyInit
+        : JSON.stringify(body);
+    let resp: Response;
+    for (let redirects = 0; ; redirects++) {
+      resp = await doFetch(url, {
+        method: requestMethod, headers, body: requestBody,
+        redirect: manual ? "manual" : "follow",
+      });
+      if (resp.type === "opaqueredirect") {
+        throw new TypeError("olivares: this runtime hides the address of the redirect; set the client's base URL to the server's final address");
+      }
+      if (resp.redirected && new URL(resp.url).origin !== origin) {
+        // Release the response without letting cancellation mask the diagnosis.
+        await resp.body?.cancel().catch(() => {});
+        throw new Error(`olivares: the server redirected to ${new URL(resp.url).origin}; set the client's base URL to it`);
+      }
+      const location = resp.headers.get("Location");
+      if (!manual || ![301, 302, 303, 307, 308].includes(resp.status) || location === null) break;
+      await resp.body?.cancel().catch(() => {});
+      const next = new URL(location, url);
+      if (next.origin !== origin || next.username || next.password) {
+        throw new Error(`olivares: the server redirected to ${next.origin}; set the client's base URL to it`);
+      }
+      if (redirects === 20) throw new TypeError("olivares: too many redirects");
+      // Fetch's method/body rules: POST becomes GET on 301/302; 303 changes
+      // every method except GET/HEAD. 307/308 keep the body only on this origin.
+      if (((resp.status === 301 || resp.status === 302) && requestMethod === "POST")
+        || (resp.status === 303 && requestMethod !== "GET" && requestMethod !== "HEAD")) {
+        requestMethod = "GET";
+        requestBody = undefined;
+        for (const name of Object.keys(headers)) {
+          if (["content-encoding", "content-language", "content-location", "content-type", "content-length"].includes(name.toLowerCase())) {
+            delete headers[name];
+          }
+        }
+      }
+      url = next.href;
+    }
     this.noticeDeprecation(method, route, path, resp.headers);
 
     const raw = await resp.text();

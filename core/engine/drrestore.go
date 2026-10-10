@@ -11,9 +11,19 @@ import (
 	"fmt"
 
 	"github.com/olivaresai/olivares/core/dr/opgate"
+	"github.com/olivaresai/olivares/core/internal/store/dialect"
 	"github.com/olivaresai/olivares/core/internal/store/sqlstore"
 	"github.com/olivaresai/olivares/core/store"
 )
+
+// DRCoordinationObject is one exact operational identity outside a DR payload.
+type DRCoordinationObject = dialect.DRCoordinationObject
+
+// DRCoordinationObjects exposes the store's closed exclusion inventory to backup
+// producers and payload classifiers. Each call returns a separate slice.
+func DRCoordinationObjects() []DRCoordinationObject {
+	return dialect.DRCoordinationObjects()
+}
 
 // The restore-coordination sentinels, re-exported so a composition root can
 // classify a refusal without reaching into an internal package.

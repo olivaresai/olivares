@@ -352,7 +352,8 @@ func ValidateEmail(email string) error {
 }
 
 // SetPassword sets a user's password (admin reset or self-service), re-hashing
-// with the current parameters.
+// with the current parameters. The hash, all account-session revocations and
+// audit commit together; callers and derived managed bearers must reauthenticate.
 func (a *Authenticator) SetPassword(ctx context.Context, actor Principal, userID model.ID, password string) error {
 	if len(password) < MinPasswordLen {
 		return ErrWeakPassword
@@ -362,7 +363,14 @@ func (a *Authenticator) SetPassword(ctx context.Context, actor Principal, userID
 		return err
 	}
 	return a.st.AuthMutate(ctx, func(as store.AuthScope) error {
+		if err := prepareUserAuthorityWrite(ctx, as, userID); err != nil {
+			return err
+		}
 		u, err := as.Users().Get(ctx, userID)
+		if err != nil {
+			return err
+		}
+		sessions, err := drainList(ctx, as.Sessions().List, byEq("user_id", userID.String(), 0))
 		if err != nil {
 			return err
 		}
@@ -370,7 +378,31 @@ func (a *Authenticator) SetPassword(ctx context.Context, actor Principal, userID
 		if _, err := as.Users().Update(ctx, u); err != nil {
 			return err
 		}
-		return auditAct(ctx, as, actor, "user.set_password", "core.user", userID)
+		for _, session := range sessions {
+			if session.Revoked {
+				continue
+			}
+			session.Revoked = true
+			if _, err := as.Sessions().Update(ctx, session); err != nil {
+				return err
+			}
+		}
+		subject, err := actor.AttributableActor()
+		if err != nil {
+			return err
+		}
+		event, err := as.Audit().Append(ctx, model.AuditDraft{
+			Actor: subject, ActorKind: actor.ActorKind(),
+			Action: "user.set_password", TargetKind: "core.user", TargetID: userID,
+			Meta: actor.AuditMeta(),
+		})
+		if err != nil {
+			return err
+		}
+		if event.Seq <= 0 {
+			return store.ErrDirectoryUnavailable
+		}
+		return nil
 	})
 }
 

@@ -27,7 +27,6 @@ import type {
   FileListResponse,
   FileReadResponse,
   PatchProfileRequest,
-  ProfilePreviewDTO,
   ProviderAccountDTO,
   ProviderAccountMetadataPatch,
   ProviderBindingDTO,
@@ -36,8 +35,14 @@ import type {
   ResolvedProfileDTO,
   RunChangedFileDTO,
   RunChangesDTO,
+  RunGitStatusDTO,
+  RunGitAction,
+  RunGitRequest,
+  RunWorktreeDiffDTO,
+  RunWorktreeDiffFileDTO,
   RunDTO,
   RunEventDTO,
+  ToolReadinessDTO,
   WorkspaceDTO,
   WriteResponse,
 } from './types'
@@ -50,9 +55,10 @@ import type {
  * (`/runs/{ref}/attach`) is consumed via the dedicated cursor-aware `useRunAttach` hook
  * (attach.ts), NOT a path here.
  *
- * Pagination note (contract): the `/runs` cursor is IGNORED — a most-recent sort means
- * raising `limit` widens the page. Workspaces and file listings ARE keyset-paginated
- * (cursor + has_more).
+ * Runs and workspaces are newest-first by default: cursor is ignored and limit widens the
+ * page. Runs also accept `pagination: 'cursor'` for a complete ID-ordered traversal.
+ * Workspace root_path/state filters apply before the limit. File listings
+ * are keyset-paginated (cursor + has_more).
  *
  * The two run filters are NOT the same kind of filter, and the difference is visible
  * from here (modules/sessions/runtime_api.go:80):
@@ -77,6 +83,8 @@ const ref = (r: string) => encodeURIComponent(r)
 export const PROFILE_PAGE = 100
 
 export interface RunListParams {
+  /** Complete traversal in stable ID order; absent keeps the recency page. */
+  pagination?: 'cursor'
   state?: string
   /**: the LEGACY observed session a run drives — an EXACT store lookup, not a
    * page narrowing, and answered with legacy (unprofiled) runs only: a profiled run
@@ -119,6 +127,8 @@ export interface EventListParams {
 export interface WorkspaceListParams {
   limit?: number
   cursor?: string
+  root_path?: string
+  state?: string
 }
 
 export interface FileListParams {
@@ -148,8 +158,12 @@ export const agentOpsApi = {
       tenant: scope?.tenant,
       signal: scope?.signal,
     }),
-  getRun: (r: string) => http.get<RunDTO>(`${RUNS}/${ref(r)}`),
-  createRun: (body: CreateRunRequest) => http.post<RunDTO>(RUNS, body),
+  getRun: (r: string, options?: RequestOptions) =>
+    http.get<RunDTO>(`${RUNS}/${ref(r)}`, options),
+  createRun: (
+    body: CreateRunRequest,
+    opts?: Pick<RequestOptions, 'tenant' | 'signal' | 'dispatchGuard'>,
+  ) => http.post<RunDTO>(RUNS, body, opts),
   runEvents: (r: string, params?: EventListParams) =>
     http.get<ListResponse<RunEventDTO>>(`${RUNS}/${ref(r)}/events`, {
       query: { ...params },
@@ -167,12 +181,18 @@ export const agentOpsApi = {
    * `olivares agent session input --line … --work-lease-fence N` does: one sibling
    * key, omitted entirely when there is none.
    */
-  input: (r: string, line: string, workLeaseFence?: number) =>
+  input: (
+    r: string,
+    line: string,
+    workLeaseFence?: number,
+    options?: RequestOptions,
+  ) =>
     http.post<{ accepted: boolean }>(
       `${RUNS}/${ref(r)}/input`,
       workLeaseFence === undefined
         ? { line }
         : { line, work_lease_fence: workLeaseFence },
+      options,
     ),
   /**
    * Send one TURN to a session driven by an owned provider protocol (202 accepted).
@@ -182,12 +202,18 @@ export const agentOpsApi = {
    * Work-bound runs present their fence here too — the fenced plane is the ONLY one a
    * stamped run answers on, and it is reached with the same sibling key the CLI sends.
    */
-  inputText: (r: string, text: string, workLeaseFence?: number) =>
+  inputText: (
+    r: string,
+    text: string,
+    workLeaseFence?: number,
+    options?: RequestOptions,
+  ) =>
     http.post<{ accepted: boolean }>(
       `${RUNS}/${ref(r)}/input`,
       workLeaseFence === undefined
         ? { text }
         : { text, work_lease_fence: workLeaseFence },
+      options,
     ),
   /** Cancel the active turn while retaining the owned process and conversation.
    * Work-bound runs must present the fence observed on that exact run. */
@@ -198,14 +224,84 @@ export const agentOpsApi = {
         ? undefined
         : { work_lease_fence: workLeaseFence },
     ),
+  /** Local Git status; every action runs inside the session OS boundary. */
+  gitStatus: (r: string, opts?: { signal?: AbortSignal }) =>
+    http.get<RunGitStatusDTO>(`${RUNS}/${ref(r)}/git`, opts),
+  gitAction: (
+    r: string,
+    action: RunGitAction,
+    body: RunGitRequest,
+    options?: TenantRequestOptions &
+      Pick<RequestOptions, 'signal' | 'dispatchGuard' | 'sessionEffects'>,
+  ) => {
+    switch (action) {
+      case 'stage':
+        return http.post<{ ok: boolean }>(
+          `${RUNS}/${ref(r)}/git/stage`,
+          body,
+          options,
+        )
+      case 'unstage':
+        return http.post<{ ok: boolean }>(
+          `${RUNS}/${ref(r)}/git/unstage`,
+          body,
+          options,
+        )
+      case 'commit':
+        return http.post<{ ok: boolean }>(
+          `${RUNS}/${ref(r)}/git/commit`,
+          body,
+          options,
+        )
+      case 'branch':
+        return http.post<{ ok: boolean }>(
+          `${RUNS}/${ref(r)}/git/branch`,
+          body,
+          options,
+        )
+    }
+  },
+  /** The loopback ports the session's own processes listen on (none when not live). */
+  previewPorts: (r: string, opts?: { signal?: AbortSignal }) =>
+    http.get<{ ports: number[] }>(`${RUNS}/${ref(r)}/preview`, {
+      signal: opts?.signal,
+    }),
+  /** Opens a browser preview of one of those ports: a same-origin URL whose token is
+   * its only credential, valid within the hour and while the session runs. */
+  openPreview: (r: string, port: number) =>
+    http.post<{ url: string; port: number; expires_at: string }>(
+      `${RUNS}/${ref(r)}/preview`,
+      { port },
+    ),
   /** The files the session changed in its folder since it started (read-only). */
   changes: (r: string, opts?: { signal?: AbortSignal }) =>
     http.get<RunChangesDTO>(`${RUNS}/${ref(r)}/changes`, {
       signal: opts?.signal,
     }),
-  /** One changed file's current text (at most 256 KiB). */
-  changedFile: (r: string, path: string, opts?: { signal?: AbortSignal }) =>
+  /** One changed file's current text (at most 256 KiB), or with `rev: 'HEAD'` the text
+   * git HEAD holds for it (404: no readable repository, or the file is not in HEAD). */
+  changedFile: (
+    r: string,
+    path: string,
+    opts?: { signal?: AbortSignal; rev?: 'HEAD' },
+  ) =>
     http.get<RunChangedFileDTO>(`${RUNS}/${ref(r)}/changes/file`, {
+      query: { path, rev: opts?.rev },
+      signal: opts?.signal,
+    }),
+  /** What the session's worktree branch changed since it left the workspace's current
+   * commit (committed work only, read-only). 404 for a session without a worktree. */
+  worktreeDiff: (r: string, opts?: { signal?: AbortSignal }) =>
+    http.get<RunWorktreeDiffDTO>(`${RUNS}/${ref(r)}/diff`, {
+      signal: opts?.signal,
+    }),
+  /** One path of that branch at the base and at the branch tip (at most 64 KiB each). */
+  worktreeDiffFile: (
+    r: string,
+    path: string,
+    opts?: { signal?: AbortSignal },
+  ) =>
+    http.get<RunWorktreeDiffFileDTO>(`${RUNS}/${ref(r)}/diff/file`, {
       query: { path },
       signal: opts?.signal,
     }),
@@ -225,7 +321,13 @@ export const agentOpsApi = {
         : { work_lease_fence: workLeaseFence },
     ),
   resume: (r: string) => http.post<RunDTO>(`${RUNS}/${ref(r)}/resume`),
-  cleanup: (r: string) => http.post<RunDTO>(`${RUNS}/${ref(r)}/cleanup`),
+  // discardWorktree is the person's confirmation to remove the session's worktree and
+  // branch although its work is not merged; without it no body is sent.
+  cleanup: (r: string, discardWorktree = false) =>
+    http.post<RunDTO>(
+      `${RUNS}/${ref(r)}/cleanup`,
+      discardWorktree ? { discard_worktree: true } : undefined,
+    ),
   deleteRun: (r: string) =>
     http.delete<{ deleted: boolean }>(`${RUNS}/${ref(r)}`),
 
@@ -250,14 +352,16 @@ export const agentOpsApi = {
     http.post<ProviderProfileDTO>(PROFILES, body),
   /** Which profile a new session of a tool uses is the engine's one rule (its own
    * login when signed in, otherwise a key or local model from Providers): the
-   * preview reads the answer, the resolve acts on it. Clients never choose. */
-  previewProfile: (driver: string, opts?: { signal?: AbortSignal }) =>
-    http.get<ProfilePreviewDTO>(`${PROFILES}/resolve`, {
-      query: { driver },
+   * readiness reads its answer for every tool, the resolve acts on it. Clients never
+   * choose. */
+  toolsReadiness: (opts?: { signal?: AbortSignal }) =>
+    http.get<{ tools: ToolReadinessDTO[] }>(`${PROFILES}/readiness`, {
       signal: opts?.signal,
     }),
-  resolveProfile: (driver: string) =>
-    http.post<ResolvedProfileDTO>(`${PROFILES}/resolve`, { driver }),
+  resolveProfile: (
+    driver: string,
+    opts?: Pick<RequestOptions, 'tenant' | 'signal' | 'dispatchGuard'>,
+  ) => http.post<ResolvedProfileDTO>(`${PROFILES}/resolve`, { driver }, opts),
   patchProfile: (
     r: string,
     body: PatchProfileRequest,
@@ -381,14 +485,28 @@ export const agentOpsApi = {
     ),
 
   // --- Workspaces (governed file plane) ----------------------------------------
-  listWorkspaces: (params?: WorkspaceListParams) =>
-    http.get<ListResponse<WorkspaceDTO>>(WORKSPACES, { query: { ...params } }),
-  getWorkspace: (r: string) =>
-    http.get<WorkspaceDTO>(`${WORKSPACES}/${ref(r)}`),
-  createWorkspace: (body: CreateWorkspaceRequest) =>
-    http.post<WorkspaceDTO>(WORKSPACES, body),
+  listWorkspaces: (params?: WorkspaceListParams, scope?: AgentOpsReadScope) =>
+    http.get<ListResponse<WorkspaceDTO>>(WORKSPACES, {
+      query: { ...params },
+      tenant: scope?.tenant,
+      signal: scope?.signal,
+    }),
+  getWorkspace: (r: string, scope?: AgentOpsReadScope) =>
+    http.get<WorkspaceDTO>(`${WORKSPACES}/${ref(r)}`, {
+      tenant: scope?.tenant,
+      signal: scope?.signal,
+    }),
+  createWorkspace: (
+    body: CreateWorkspaceRequest,
+    opts?: Pick<RequestOptions, 'tenant' | 'signal' | 'dispatchGuard'>,
+  ) => http.post<WorkspaceDTO>(WORKSPACES, body, opts),
   deleteWorkspace: (r: string) =>
     http.delete<{ deleted: boolean }>(`${WORKSPACES}/${ref(r)}`),
+  /** Replaces the whole list; [] removes every folder. The answer is the workspace as saved. */
+  setWorkspaceReadOnlyFolders: (r: string, folders: string[]) =>
+    http.patch<WorkspaceDTO>(`${WORKSPACES}/${ref(r)}`, {
+      read_only_folders: folders,
+    }),
 
   // --- Files (jailed, DLP-labelled) --------------------------------------------
   listFiles: (r: string, params?: FileListParams) =>
@@ -399,9 +517,11 @@ export const agentOpsApi = {
     http.get<FileEntry>(`${WORKSPACES}/${ref(r)}/files/stat`, {
       query: { path },
     }),
-  readFile: (r: string, path: string) =>
+  /** A file's content, or with `rev: 'HEAD'` the content git HEAD holds for it (404: no
+   * readable repository, or the file is not in HEAD). */
+  readFile: (r: string, path: string, rev?: 'HEAD') =>
     http.get<FileReadResponse>(`${WORKSPACES}/${ref(r)}/files/raw`, {
-      query: { path },
+      query: { path, rev },
     }),
   /** Write file content as RAW bytes (the API reads the body verbatim, never JSON). */
   writeFile: (r: string, path: string, content: string) =>
@@ -419,9 +539,11 @@ export const agentOpsApi = {
       to,
     }),
   deleteFile: (r: string, path: string, recursive = false) =>
-    http.delete<{ deleted: boolean }>(`${WORKSPACES}/${ref(r)}/files`, {
-      query: { path, recursive: recursive ? 'true' : undefined },
-    }),
+    http.delete<{ deleted: boolean }>(
+      `${WORKSPACES}/${ref(r)}/files`,
+      undefined,
+      { query: { path, recursive: recursive ? 'true' : undefined } },
+    ),
 }
 
 /** The SSE attach path for a run (consumed by useRunAttach with a `from` cursor). */
@@ -455,6 +577,15 @@ export const agentOpsKeys = {
     ['agentops', tenant, 'run', r] as const,
   runChanges: (tenant: string | null, r: string) =>
     ['agentops', tenant, 'run', r, 'changes'] as const,
+  runPreviewPorts: (tenant: string | null, r: string) =>
+    ['agentops', tenant, 'run', r, 'preview'] as const,
+  runWorktreeDiff: (tenant: string | null, r: string) =>
+    ['agentops', tenant, 'run', r, 'diff'] as const,
+  runWorktreeDiffFile: (
+    tenant: string | null,
+    r: string,
+    path: string | null,
+  ) => ['agentops', tenant, 'run', r, 'diff', 'file', path] as const,
   /**
    * THE PROVIDER-PROFILE PLANE IS PARTITIONED BY AUTHORITY BOUNDARY, not only by
    * tenant. `epoch` is the OPAQUE number useAuthBoundary derives for one
@@ -576,4 +707,8 @@ export const agentOpsKeys = {
     ['agentops', tenant, 'workspace', r, 'files', path] as const,
   file: (tenant: string | null, r: string, path: string) =>
     ['agentops', tenant, 'workspace', r, 'file', path] as const,
+  /** What git HEAD holds for a file. A sibling of `file`, not a child: saving the file
+   * invalidates `file`, and HEAD's text does not change when it is saved. */
+  fileHead: (tenant: string | null, r: string, path: string) =>
+    ['agentops', tenant, 'workspace', r, 'file-head', path] as const,
 }

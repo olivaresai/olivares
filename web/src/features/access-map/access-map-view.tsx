@@ -4,7 +4,7 @@
 import { QueryErrorState } from '@/components/layout/query-error-state'
 import { Panel } from '@xyflow/react'
 import { useQuery } from '@tanstack/react-query'
-import { Eye, Network, RefreshCw, ShieldCheck } from 'lucide-react'
+import { Eye, Network, RefreshCw } from 'lucide-react'
 import { useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
@@ -301,19 +301,14 @@ export function AccessMapView() {
       <PageHeader
         icon={Network}
         title={t('title')}
-        /* ⛔ THE TITLE LINE IS ONE LINE, AND THIS DESCRIPTION WAS TWO. `PageHeader`
-           renders the description as a single truncated line beside the heading; a
-           node with two block children stacks inside it regardless, and the title
-           block measured 45 px against the 40 px budget on this route and on the
-           only other one that did the same. The subtitle is the description; the
-           audited note is a notice, which is the slot the header already has for
-           exactly this kind of honesty marker. */
         description={t('subtitle')}
         notices={
-          <CaveatNotice tone="info">
-            <ShieldCheck className="size-3.5 shrink-0 text-confidence-attributed" />
-            {t('auditedNote')}
-          </CaveatNotice>
+          <RecordingNotice
+            namespace="accessmap"
+            fallback={
+              <CaveatNotice tone="info">{t('auditedNote')}</CaveatNotice>
+            }
+          />
         }
         actions={
           <Button
@@ -337,8 +332,6 @@ export function AccessMapView() {
           </Button>
         }
       />
-
-      <RecordingNotice namespace="accessmap" />
 
       {/* Stat strip */}
       {!isLoading && !error && (

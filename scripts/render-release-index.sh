@@ -12,12 +12,12 @@ export LC_ALL
 ROOT="$(unset CDPATH; cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 SCHEMA="$ROOT/docs/contracts/release-index.schema.json"
 
-fail() { printf 'render-release-index: HALLAZGO — %s\n' "$*" >&2; exit 1; }
-blind() { printf 'render-release-index: NO HE PODIDO MIRAR — %s\n' "$*" >&2; exit 2; }
+fail() { printf 'render-release-index: FINDING — %s\n' "$*" >&2; exit 1; }
+blind() { printf 'render-release-index: COULD NOT LOOK — %s\n' "$*" >&2; exit 2; }
 usage() {
 	cat >&2 <<'USAGE'
 usage: render-release-index.sh --checksums FILE --artifact-dir DIR --commit-file FILE
-  --repository OWNER/REPO --version X.Y.Z --channel stable|security|lts
+  --repository OWNER/REPO --version MAJOR.MINOR --channel stable|security|lts
   --state candidate|published --image REPOSITORY@sha256:DIGEST [--image ...]
   --surface NAME=STATUS [--surface ...] --out FILE
 
@@ -76,7 +76,7 @@ jq -e '."$id" == "https://olivares.ai/schemas/release-index-v1.json"' "$SCHEMA" 
 [ -n "$OUT" ] || blind "--out is required"
 [ -d "$(dirname -- "$OUT")" ] || blind "output directory does not exist: $(dirname -- "$OUT")"
 [[ "$REPOSITORY" =~ ^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$ ]] || blind "repository must be OWNER/REPO"
-[[ "$VERSION" =~ ^[0-9]+\.[0-9]+(\.[0-9]+)?$ ]] || blind "version must be YY.M or YY.M.N"
+[[ "$VERSION" =~ ^[0-9]+\.[0-9]+$ ]] || blind "version must be MAJOR.MINOR"
 case "$CHANNEL" in stable | security | lts) ;; *) blind "unsupported channel: ${CHANNEL:-<empty>}" ;; esac
 case "$STATE" in candidate | published) ;; *) blind "unsupported index state: ${STATE:-<empty>}" ;; esac
 [ "${#images[@]}" -gt 0 ] || blind "at least one immutable image reference is required"
@@ -137,7 +137,7 @@ while IFS= read -r row || [ -n "$row" ]; do
 	size="$(wc -c <"$path" | tr -d ' ')" || blind "could not size artifact: $name"
 	case "$size" in '' | *[!0-9]*) blind "artifact size is not numeric: $name" ;; esac
 	[ "$size" -gt 0 ] || fail "checksummed artifact is empty: $name"
-	url="https://github.com/$REPOSITORY/releases/download/v$VERSION/$name"
+	url="https://github.com/$REPOSITORY/releases/download/$VERSION/$name"
 	jq -nc --arg kind "$kind" --arg name "$name" --arg sha256 "$digest" \
 		--argjson size "$size" --arg url "$url" \
 		'{kind:$kind,name:$name,sha256:$sha256,size:$size,url:$url}' >>"$W/artifacts.ndjson" ||
@@ -198,7 +198,7 @@ if ! jq -S -n \
 	--arg schema 'olivares.ai/release-index/v1' \
 	--arg state "$STATE" \
 	--arg version "$VERSION" \
-	--arg tag "$(if [[ "${VERSION%%.*}" -lt 26 ]] || { [[ "${VERSION%%.*}" -eq 26 ]] && [[ "${VERSION#*.}" =~ ^[1-9](\.|$) ]]; }; then printf 'v%s' "$VERSION"; else printf '%s' "$VERSION"; fi)" \
+	--arg tag "$VERSION" \
 	--arg commit "$commit" \
 	--arg channel "$CHANNEL" \
 	--arg repository "$REPOSITORY" \

@@ -30,6 +30,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgconn"
 	_ "github.com/jackc/pgx/v5/stdlib"
+
 	olivaresclient "github.com/olivaresai/olivares/clients/go"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/engine/enginetest"
@@ -120,7 +121,7 @@ func (s communicationHTTPTestStore) bootConfig() bootConfig {
 	return cfg
 }
 
-func bootCommunicationHTTPTestEngine(t *testing.T, estate communicationHTTPTestStore) *engine {
+func bootCommunicationHTTPTestEngine(t *testing.T, estate communicationHTTPTestStore, preparePump ...func(*workOutboxPump)) *engine {
 	t.Helper()
 	prepareCompositionTestBoot(t)
 	if estate.dataDir == "" {
@@ -130,7 +131,14 @@ func bootCommunicationHTTPTestEngine(t *testing.T, estate communicationHTTPTestS
 		(estate.dsnFile == "" || estate.ownerDSNFile == "" || estate.adminDSNFile == "") {
 		t.Fatal("postgres HTTP estate is missing owned application/owner/admin DSN files")
 	}
-	eng, err := boot(context.Background(), estate.bootConfig())
+	cfg := estate.bootConfig()
+	cfg.workOutboxPumpPrepared = func(p *workOutboxPump) {
+		trackCommunicationHTTPTestPump(t, p)
+		for _, prepare := range preparePump {
+			prepare(p)
+		}
+	}
+	eng, err := boot(context.Background(), cfg)
 	if err != nil {
 		t.Fatalf("boot communication HTTP estate: %v", err)
 	}
@@ -521,9 +529,9 @@ func bootActivatedCommunicationHTTPTestEngine(t *testing.T, estate communication
 		}
 	}
 	t.Setenv(envKeyWrap, "")
-	// Keep committed K3 rows pending until the test explicitly invokes the real
-	// composed pump after restart. This makes the recovery assertion
-	// deterministic instead of racing the production 15-second cadence.
+	// Keep a positive periodic interval for the communication readiness
+	// witness. NoIngest prevents scheduled ticks; the recovery journey also
+	// withdraws insert nudges before committing its pending rows.
 	t.Setenv(workOutboxPumpIntervalEnv, "1h")
 	t.Setenv(envCommunicationActivation, "on")
 	t.Setenv(envCommunicationContentKeyringFile, contentPath)
@@ -822,6 +830,7 @@ func communicationHTTPTestEffects(
 	tenant model.TenantID,
 ) communicationHTTPTestEffectCounts {
 	t.Helper()
+	communicationHTTPTestSettleOutbox(t, eng)
 	var out communicationHTTPTestEffectCounts
 	digest := sha256.New()
 	if err := eng.store.View(context.Background(), tenant, func(sc store.Scope) error {
@@ -933,12 +942,10 @@ func exerciseCommunicationHTTPUnknownEvidence(
 
 	before := communicationHTTPTestEffects(t, eng, tenant)
 	realDirectory := sessions.DirectorySnapshotResolver(eng.communicationComposition.resolver)
-	eng.sessionsMod.UseCommunicationDirectorySnapshotResolver(
-		communicationHTTPUnknownDirectoryResolver{DirectorySnapshotResolver: realDirectory},
-	)
+	eng.sessionsMod.CommunicationDirectoryResolver = communicationHTTPUnknownDirectoryResolver{DirectorySnapshotResolver: realDirectory}
 	directoryUnknown := communicationHTTPTestRequest(t, eng, http.MethodGet,
 		"/v1/m/sessions/deliveries/"+deliveryID.String(), target.token, tenant, nil, nil)
-	eng.sessionsMod.UseCommunicationDirectorySnapshotResolver(realDirectory)
+	eng.sessionsMod.CommunicationDirectoryResolver = realDirectory
 	if directoryUnknown.status != http.StatusServiceUnavailable ||
 		strings.Contains(string(directoryUnknown.raw), secret) {
 		t.Fatalf("UNKNOWN current directory send = %d: %s",
@@ -949,14 +956,12 @@ func exerciseCommunicationHTTPUnknownEvidence(
 
 	before = communicationHTTPTestEffects(t, eng, tenant)
 	realClosure := sessions.ChannelGrantSubjectClosureResolver(eng.communicationComposition.closure)
-	eng.sessionsMod.UseCommunicationChannelGrantSubjectClosureResolver(
-		communicationHTTPUnknownGrantClosureResolver{
-			ChannelGrantSubjectClosureResolver: realClosure,
-		},
-	)
+	eng.sessionsMod.CommunicationGrantClosure = communicationHTTPUnknownGrantClosureResolver{
+		ChannelGrantSubjectClosureResolver: realClosure,
+	}
 	aclUnknown := communicationHTTPTestRequest(t, eng, http.MethodGet,
 		communicationHTTPTestInboxPath(workspace, 10, ""), target.token, tenant, nil, nil)
-	eng.sessionsMod.UseCommunicationChannelGrantSubjectClosureResolver(realClosure)
+	eng.sessionsMod.CommunicationGrantClosure = realClosure
 	if aclUnknown.status != http.StatusServiceUnavailable ||
 		strings.Contains(string(aclUnknown.raw), secret) {
 		t.Fatalf("UNKNOWN current Channel ACL inbox = %d: %s",
@@ -3038,6 +3043,11 @@ func exerciseCommunicationHTTPSessionHandoff(
 	recovery communicationHTTPCommittedRecovery,
 ) {
 	t.Helper()
+	// Withdraw insert nudges and join earlier drains before committing the
+	// work this journey must recover after restart. The periodic scheduler
+	// never starts in this NoIngest estate.
+	sessions.SetWorkOutboxNudge(nil)
+	communicationHTTPTestSettleOutbox(t, *eng)
 	work, leased := createCommunicationHTTPSessionOwnedWork(
 		t, *eng, owner, tenant, sessionA, "Session HTTP handoff",
 	)
@@ -3107,6 +3117,7 @@ func exerciseCommunicationHTTPSessionHandoff(
 		accepted.OwnerEpoch != 2 || accepted.ResultingLeaseFence < 2 {
 		t.Fatalf("session Handoff accept = %+v", accepted)
 	}
+	communicationHTTPTestSettleOutbox(t, *eng)
 	pendingBeforeRestart := communicationHTTPTestOutboxStates(t, *eng, tenant)
 	if pendingBeforeRestart["pending"] == 0 {
 		t.Fatalf("restart fixture has no committed pending K3 outbox work: %+v", pendingBeforeRestart)

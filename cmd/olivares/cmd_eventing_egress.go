@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/core/model"
@@ -203,7 +204,7 @@ func readEgressRolloutStatus(ctx context.Context, st store.Store) (egressRollout
 		Witness:              state.WitnessKind + " " + state.WitnessDetail,
 		DecidedBy:            state.DecidedBy,
 		DecidedReason:        state.DecidedReason,
-		PolicyFile:           strings.TrimSpace(os.Getenv(envEventingEgressPolicy)),
+		PolicyFile:           strings.TrimSpace(envconfig.Get(envEventingEgressPolicy)),
 	}
 	if !state.ClassifiedAt.IsZero() {
 		out.ClassifiedAt = state.ClassifiedAt.UTC().Format("2006-01-02T15:04:05Z07:00")
@@ -233,7 +234,7 @@ func readEgressRolloutStatus(ctx context.Context, st store.Store) (egressRollout
 		out.CoverageComplete = true
 		return out, nil
 	}
-	pol, perr := loadEventingEgressPolicy(os.Getenv)
+	pol, perr := loadEventingEgressPolicy(envconfig.Get)
 	if perr != nil {
 		return egressRolloutStatus{}, perr
 	}
@@ -352,7 +353,7 @@ func printEgressRolloutStatus(cmd *cobra.Command, st egressRolloutStatus) {
 // OS user is not an identity the control plane authenticated, and the recorded string
 // says so rather than dressing it up as one.
 func cliEgressActor() string {
-	if v := strings.TrimSpace(os.Getenv("OLIVARES_ACTOR")); v != "" {
+	if v := strings.TrimSpace(envconfig.Get("OLIVARES_ACTOR")); v != "" {
 		return v
 	}
 	if u := strings.TrimSpace(os.Getenv("USER")); u != "" {

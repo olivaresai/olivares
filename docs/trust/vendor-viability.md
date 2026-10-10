@@ -13,7 +13,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 
 ## 1. The AGPL survival guarantee (structural, not contractual)
 
-The core product — core, all 31 modules, web console — is **AGPL-3.0-only with
+The core product — core, modules, web console — is **AGPL-3.0-only with
 nothing feature-capped from within to upsell** (`LICENSING.md`): the full
 governance loop runs in the public binary with no license check. The commercial
 offering adds a *small, additive `enterprise/` line* (built only with

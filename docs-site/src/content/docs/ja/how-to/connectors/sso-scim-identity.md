@@ -26,12 +26,12 @@ sidebar:
   含むすべてのフロー値をサーバー側に保持する——CSRF state、OIDC nonce、
   PKCE verifier（プロバイダーに送られるのは S256 *challenge* のみ）。
   Authorization Code + **PKCE は常時オン**だ。
-- **単一 IdP による OIDC/SAML ログインは Community と Enterprise の両方で利用できる。**
+- **単一 IdP による OIDC/SAML ログインはすべてのエディションで利用できる（Community を含む）。**
   コンソールの管理対象 SSO 設定で構成する。管理対象の設定がない場合、エンジンは
   起動時の環境変数（`OLIVARES_SSO_PROTOCOL`、`OLIVARES_OIDC_*` または
   `OLIVARES_SAML_*`）を使用する。プロバイダーが未設定なら、`NoFederation` が
   `501 sso_not_configured` を返す。これは設定がないことを示し、プロトコルが
-  Enterprise 専用であることを意味しない。
+  商用エディション専用であることを意味しない。
 - IdP が持つべきリダイレクト/ACS URI は**厳密**だ
   （コンソールオリジン上の `…/v1/auth/federation/callback` ——RFC 9700 の
   厳密一致、プレフィックスの小細工は不可）。
@@ -57,7 +57,7 @@ IdP のリダイレクト URI を厳密に期待される値と照合し、接�
 - **認証:** SCIM 連携に対するテナント束縛の**管理者/オーナー API トークン**
   ——API の他の部分と同じ不透明トークンモデルであり、別個の SCIM シークレット
   型はない。エンドポイントは常に存在する（フィーチャーゲートされない）。
-- **Users** は Community と Enterprise の両方で ID をプロビジョニングおよび解除する。
+- **Users** はすべてのエディション（Community を含む）で ID をプロビジョニングおよび解除する。
   変更の反映には SCIM リクエストの配信と正常な処理が必要となる。人事イベントだけで
   失効の完了を判断せず、応答と対象のアクセス権を確認する。SCIM は OS のアカウントを
   削除しない。

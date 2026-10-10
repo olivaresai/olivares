@@ -31,7 +31,7 @@ _pats="$(python3 -c 'import json,sys;d=json.load(open(sys.argv[1],encoding="utf-
   || cannot "$JSON lost doc_must_not_claim"
 [ -n "$_pats" ] || cannot "$JSON has an empty doc_must_not_claim"
 if grep -qiE "$_pats" "$DOC"; then
-  fail "$DOC claims a live lock this lote does not have"
+  fail "$DOC claims a live lock this batch does not have"
 fi
 grep -q 'NO HE PODIDO MIRAR el live' "$CRIT" || fail "$CRIT lost the live cannot-look"
 

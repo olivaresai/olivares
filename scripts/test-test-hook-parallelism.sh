@@ -25,7 +25,7 @@ RAIZ="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/.." && pwd)"
 # `|| true`, o sea que habría dejado a los cinco carriles sin empujar.
 # shellcheck source=/dev/null
 . "${RAIZ}/scripts/lib/git-env.sh" || {
-	echo "test-test-hook-parallelism: NO HE PODIDO MIRAR — no puedo sourcear scripts/lib/git-env.sh" >&2
+	echo "test-test-hook-parallelism: COULD NOT CHECK — cannot source scripts/lib/git-env.sh" >&2
 	exit 2
 }
 
@@ -42,15 +42,15 @@ trap 'chmod -R u+rwX "$TRABAJO" 2>/dev/null; rm -rf "$TRABAJO"' EXIT
 # tuberia es una herestring.
 comprobar() { # <desc> <rc-esperado> <raiz> [patron]
 	local desc="$1" esperado="$2" raiz="$3" patron="${4:-}"
-	local salida rc
-	salida="$(bash "$GATE" "$raiz" 2>&1)"
+	local output rc
+	output="$(bash "$GATE" "$raiz" 2>&1)"
 	rc=$?
 	if [ "$rc" != "$esperado" ]; then
-		printf '  FALLA  %-56s rc=%s (esperaba %s)\n' "$desc" "$rc" "$esperado"
+		printf '  FAIL   %-56s rc=%s (expected %s)\n' "$desc" "$rc" "$esperado"
 		falla=$((falla + 1)); return
 	fi
-	if [ -n "$patron" ] && ! grep -q -- "$patron" <<<"$salida"; then
-		printf '  FALLA  %-56s rc=%s pero no dice «%s»\n' "$desc" "$rc" "$patron"
+	if [ -n "$patron" ] && ! grep -q -- "$patron" <<<"$output"; then
+		printf '  FAIL   %-56s rc=%s but does not say «%s»\n' "$desc" "$rc" "$patron"
 		falla=$((falla + 1)); return
 	fi
 	printf '  ok     %-56s rc=%s\n' "$desc" "$rc"
@@ -62,7 +62,7 @@ siembra() { # <dir> <fichero>  <- contenido por stdin
 }
 
 # ── 1 · el árbol real ────────────────────────────────────────────────────────────────────────
-comprobar "el arbol real esta limpio" 0 "$RAIZ" "limpio"
+comprobar "the real tree is clean" 0 "$RAIZ" "CLEAN"
 
 # ── 2 · EL CASO QUE MANDA: mutante REALISTA sobre los ficheros REALES ────────────────────────
 # Se sacan de git en vez de copiarlos a mano: una copia a mano envejece y acabaría probando otro
@@ -77,18 +77,18 @@ if git -C "$RAIZ" show "HEAD:$PROD" > /dev/null 2>&1 && git -C "$RAIZ" show "HEA
 	git -C "$RAIZ" show "HEAD:$PROD" > "$REAL/${PROD##*/}"
 	git -C "$RAIZ" show "HEAD:$TEST" > "$REAL/${TEST##*/}"
 	# control NEGATIVO primero: la copia sin mutar tiene que salir limpia, o el caso 2 mide la copia
-	comprobar "la copia REAL sin mutar sale limpia" 0 "$TRABAJO/real" "limpio"
+	comprobar "the unmodified REAL copy is clean" 0 "$TRABAJO/real" "CLEAN"
 	if grep -q "^func ${FUNC}(" "$REAL/${TEST##*/}"; then
 		awk -v f="$FUNC" '{ print; if ($0 ~ ("^func " f "\\(")) print "\tt.Parallel()" }' \
 			"$REAL/${TEST##*/}" > "$REAL/.mut" && mv "$REAL/.mut" "$REAL/${TEST##*/}"
-		comprobar "MUTANTE REALISTA: t.Parallel en el test real muere" 1 "$TRABAJO/real" "$VAR"
-		comprobar "  y NOMBRA el test que lo introduce" 1 "$TRABAJO/real" "$FUNC"
+		comprobar "REALISTIC MUTANT: t.Parallel in the real test is killed" 1 "$TRABAJO/real" "$VAR"
+		comprobar "  and NAMES the test that introduces it" 1 "$TRABAJO/real" "$FUNC"
 	else
-		printf '  FALLA  %-56s el test real %s ya no existe\n' "mutante realista" "$FUNC"
+		printf '  FAIL   %-56s the real test %s no longer exists\n' "realistic mutant" "$FUNC"
 		falla=$((falla + 1))
 	fi
 else
-	printf '  ok     %-56s (sin git o sin esos ficheros aqui)\n' "mutante realista — saltado"
+	printf '  ok     %-56s (without git or those files here)\n' "realistic mutant — skipped"
 	pasa=$((pasa + 1))
 fi
 
@@ -109,7 +109,7 @@ func TestSerialInstallsTheHook(t *testing.T) {
 	_ = beforeInsertTestHook
 }
 GO
-comprobar "CONTROL INVERSO A: asigna la global pero es SERIAL -> limpio" 0 "$TRABAJO/serial" "limpio"
+comprobar "INVERSE CONTROL A: assigns the global but is SERIAL -> clean" 0 "$TRABAJO/serial" "CLEAN"
 
 # ── 4 · CONTROL INVERSO B: es PARALELO pero no asigna ninguna global ─────────────────────────
 D="$TRABAJO/paralelo/pkg"
@@ -130,7 +130,7 @@ func TestParallelTouchesNothing(t *testing.T) {
 	_ = local
 }
 GO
-comprobar "CONTROL INVERSO B: paralelo que no asigna nada -> limpio" 0 "$TRABAJO/paralelo" "limpio"
+comprobar "INVERSE CONTROL B: parallel test that assigns nothing -> clean" 0 "$TRABAJO/paralelo" "CLEAN"
 
 # ── 5 · el identificador BLANCO: la clase entera de falsos positivos ─────────────────────────
 # Sin esta exclusion el censo del arbol daba 41 hallazgos y los 41 eran `_`.
@@ -156,7 +156,7 @@ func TestParallelAssignsBlank(t *testing.T) {
 	_ = 1
 }
 GO
-comprobar "el identificador blanco _ NO es un hallazgo" 0 "$TRABAJO/blanco" "limpio"
+comprobar "the blank identifier _ is NOT a finding" 0 "$TRABAJO/blanco" "CLEAN"
 
 # ── 6 · sombra LOCAL: mismo nombre, declarado con := en la funcion ───────────────────────────
 D="$TRABAJO/sombra/pkg"
@@ -177,7 +177,7 @@ func TestParallelShadowsTheName(t *testing.T) {
 	_ = commitTestHook
 }
 GO
-comprobar "una LOCAL con el mismo nombre no es la global" 0 "$TRABAJO/sombra" "limpio"
+comprobar "a LOCAL with the same name is not the global" 0 "$TRABAJO/sombra" "CLEAN"
 
 # ── 7 · el mutante que prueba que 5 y 6 no son verdes por vacuidad ───────────────────────────
 D="$TRABAJO/mutante/pkg"
@@ -196,12 +196,12 @@ func TestParallelAssignsTheGlobal(t *testing.T) {
 	commitTestHook = func() error { return nil }
 }
 GO
-comprobar "MUTANTE sintetico: paralelo + global -> muere y la nombra" 1 "$TRABAJO/mutante" "commitTestHook"
+comprobar "synthetic MUTANT: parallel + global -> killed and names it" 1 "$TRABAJO/mutante" "commitTestHook"
 
 # ── 8 · las tres respuestas ──────────────────────────────────────────────────────────────────
-comprobar "una raiz que no existe es 2, no 0" 2 "$TRABAJO/no-existe" "NO HE PODIDO MIRAR"
+comprobar "a nonexistent root returns 2, not 0" 2 "$TRABAJO/no-existe" "COULD NOT LOOK"
 
-D="$TRABAJO/ilegible/pkg"
+D="$TRABAJO/unreadable/pkg"
 siembra "$D" "prod.go" <<'GO'
 package pkg
 
@@ -216,16 +216,16 @@ func TestX(t *testing.T) { t.Parallel() }
 GO
 chmod 000 "$D/prod.go"
 if [ -r "$D/prod.go" ]; then
-	printf '  ok     %-56s (corriendo como root)\n' "un fichero ilegible es 2 — saltado"
+	printf '  ok     %-56s (running as root)\n' "an unreadable file returns 2 — skipped"
 	pasa=$((pasa + 1))
 else
-	comprobar "un fichero ilegible es 2, nunca limpio" 2 "$TRABAJO/ilegible" "NO HE PODIDO MIRAR"
+	comprobar "an unreadable file returns 2, never clean" 2 "$TRABAJO/unreadable" "COULD NOT LOOK"
 fi
 chmod 644 "$D/prod.go"
 
 # ── 9 · un arbol SIN Go pasa, y lo dice ──────────────────────────────────────────────────────
 mkdir -p "$TRABAJO/vacio"
-comprobar "un arbol sin ficheros Go pasa y lo dice" 0 "$TRABAJO/vacio" "no tiene ficheros Go"
+comprobar "a tree without Go files passes and reports it" 0 "$TRABAJO/vacio" "has no Go test files"
 
 # ── 10 · LOS TRES DEL BRIEF, que salieron de contestarme a mano las preguntas que le
 #         habria pedido a un contraste con el motor caido. Los tres encontraron algo.
@@ -252,13 +252,13 @@ func TestParallelAssignsAll(t *testing.T) {
 	hookC = func() error { return nil }
 }
 GO
-salida="$(bash "$GATE" "$TRABAJO/multinombre" 2>&1)"
-if [ "$(printf '%s' "$salida" | grep -c 'asigna la var')" = "3" ]; then
-	printf '  ok     %-56s 3 de 3\n' "declaracion multi-nombre: caza TODOS los nombres"
+output="$(bash "$GATE" "$TRABAJO/multinombre" 2>&1)"
+if [ "$(printf '%s' "$output" | grep -c 'assigns package variable')" = "3" ]; then
+	printf '  ok     %-56s 3 of 3\n' "multi-name declaration: detects ALL names"
 	pasa=$((pasa + 1))
 else
-	printf '  FALLA  %-56s solo %s\n' "declaracion multi-nombre: caza TODOS los nombres" \
-		"$(printf '%s' "$salida" | grep -c 'asigna la var')"
+	printf '  FAIL   %-56s only %s\n' "multi-name declaration: detects ALL names" \
+		"$(printf '%s' "$output" | grep -c 'assigns package variable')"
 	falla=$((falla + 1))
 fi
 
@@ -281,7 +281,7 @@ func TestSerialBodyParallelSubtest(t *testing.T) {
 	})
 }
 GO
-comprobar "asignacion DENTRO de un subtest paralelo: HALLAZGO" 1 "$TRABAJO/dentro-subtest" "commitTestHook"
+comprobar "assignment INSIDE a parallel subtest: FINDING" 1 "$TRABAJO/dentro-subtest" "commitTestHook"
 
 # 10c · el simetrico: asignacion SERIAL con un subtest paralelo AJENO -> limpio.
 #       Marcarlo seria sobre-acusar sobre `t.Run` + `t.Parallel`, que es idiomatico.
@@ -304,7 +304,7 @@ func TestAssignsSeriallyButHasAParallelSubtest(t *testing.T) {
 	})
 }
 GO
-comprobar "subtest paralelo AJENO a la asignacion: limpio" 0 "$TRABAJO/subtest-ajeno" "limpio"
+comprobar "parallel subtest UNRELATED to the assignment: clean" 0 "$TRABAJO/subtest-ajeno" "CLEAN"
 
 # --- 7 · REGRESION MEDIDA: el `t.Parallel()` que vive en un COMENTARIO --------------------
 # Caso REAL, no inventado: guardledgerconcurrency_pg_test.go lleva un comentario que ADVIERTE
@@ -330,13 +330,13 @@ func TestSerialPeroHablaDeParalelismo(t *testing.T) {
 	_ = beforeInsertTestHook
 }
 GO
-comprobar "t.Parallel() en un COMENTARIO no vuelve paralelo al test" 0 "$TRABAJO/comentario" "limpio"
+comprobar "t.Parallel() in a COMMENT does not make the test parallel" 0 "$TRABAJO/comentario" "CLEAN"
 
 # y el mismo fichero con un t.Parallel() DE VERDAD tiene que morir, o el caso de arriba
 # solo prueba que el gate se ha quedado ciego
 sed 's|^\tbeforeInsertTestHook|\tt.Parallel()\n\tbeforeInsertTestHook|' \
 	"$D/prod_test.go" > "$D/.m" && mv "$D/.m" "$D/prod_test.go"
-comprobar "  control inverso: con t.Parallel() REAL, muere" 1 "$TRABAJO/comentario" "beforeInsertTestHook"
+comprobar "  inverse control: with REAL t.Parallel(), it is killed" 1 "$TRABAJO/comentario" "beforeInsertTestHook"
 
 # --- 8 · la misma trampa en un LITERAL de cadena ------------------------------------------
 D="$TRABAJO/cadena/pkg"
@@ -357,7 +357,7 @@ func TestSerialConLiteral(t *testing.T) {
 	_ = msg
 }
 GO
-comprobar "t.Parallel() dentro de un LITERAL tampoco cuenta" 0 "$TRABAJO/cadena" "limpio"
+comprobar "t.Parallel() inside a LITERAL is not counted either" 0 "$TRABAJO/cadena" "CLEAN"
 
 # --- 9 · ROTO POR REVISION CRUZADA: comentario de BLOQUE y raw string MULTILINEA ----------
 # Los encontro otro carril atacando el arreglo del caso 7. Son FALSOS POSITIVOS, o sea el modo
@@ -396,7 +396,7 @@ func TestSerialConRawStringMultilinea(t *testing.T) {
 	_ = plantilla
 }
 GO
-comprobar "t.Parallel() en comentario de BLOQUE no vuelve paralelo al test" 0 "$TRABAJO/lexico" "limpio"
+comprobar "t.Parallel() in a BLOCK comment does not make the test parallel" 0 "$TRABAJO/lexico" "CLEAN"
 
 # control inverso, o los dos de arriba solo prueban que el gate se quedo ciego
 siembra "$D" "c_test.go" <<'GO'
@@ -410,7 +410,7 @@ func TestDeVerdadParalelo(t *testing.T) {
 	_ = beforeInsertTestHook
 }
 GO
-comprobar "  control inverso: con los tres, SOLO muere el paralelo de verdad" 1 "$TRABAJO/lexico" "TestDeVerdadParalelo"
+comprobar "  inverse control: with all three, ONLY the truly parallel test is killed" 1 "$TRABAJO/lexico" "TestDeVerdadParalelo"
 
 # --- 10 · RETIRADO: no podia fallar ------------------------------------------------------
 # Escribi un caso «un raw abierto NO ciega el fichero siguiente» y al mutar el reset por

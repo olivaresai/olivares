@@ -68,7 +68,7 @@ export function BackupTriggerDialog({
         </DialogHeader>
 
         {jobId ? (
-          <JobProgress jobId={jobId} onFinished={() => {}} />
+          <JobProgress jobId={jobId} />
         ) : (
           <div className="flex flex-col gap-4">
             <Field label={t('trigger.notes')} htmlFor="backup-notes">

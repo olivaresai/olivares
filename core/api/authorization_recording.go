@@ -28,8 +28,7 @@ func (s *Server) recordAuthorizationDecisions(next http.Handler) http.Handler {
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ctx, flush := s.beginAuthorizationRecording(r.Context())
-		// Store callbacks, including row authorization, have all returned before
-		// the flush. Do not dispatch detached work that could outlive this request.
+		// Flush after store callbacks return; no detached recording work.
 		defer flush()
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})

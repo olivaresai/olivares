@@ -26,9 +26,9 @@ import (
 
 const (
 	securityDrillAdvisoryID      = "OLIVARES-DRILL-0001"
-	securityDrillIntroduced      = "26.5.0"
-	securityDrillFixed           = "26.7.1"
-	securityDrillBelowIntroduced = "26.4.9"
+	securityDrillIntroduced      = "1.1"
+	securityDrillFixed           = "1.2"
+	securityDrillBelowIntroduced = "1.0"
 	securityDrillKeyContext      = "olivares.ai/secadvisory drill fixture key v1 — TEST ONLY, never trust outside a drill"
 	securityDrillWrongKeyContext = "olivares.ai/secadvisory drill fixture wrong key v1 — TEST ONLY, never trust outside a drill"
 )

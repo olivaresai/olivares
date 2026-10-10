@@ -54,6 +54,48 @@ func TestClassifyVerb(t *testing.T) {
 	}
 }
 
+func TestClassifyVerbDoesNotRetainQueryText(t *testing.T) {
+	const unicodeReadQuery = "SELECTé"  // language-data: SQL keyword boundary rejection input
+	const unicodeWriteQuery = "UPDATEé" // language-data: SQL keyword boundary rejection input
+	cases := []struct {
+		name, sql string
+		mode      model.AccessMode
+		verb      string
+	}{
+		{"compact-comment", "SELECT/**/'synthetic-private-row'", model.ModeRead, "SELECT"},
+		{"compact-write", "UPDATE/**/notes SET payload='synthetic-private-row'", model.ModeWrite, "UPDATE"},
+		{"adjacent-literal", "SELECT'synthetic-private-row'", model.ModeRead, "SELECT"},
+		{"dash-comment", "SELECT-- synthetic-private-row\n1", model.ModeRead, "SELECT"},
+		{"hash-comment", "SELECT#synthetic-private-row\n1", model.ModeRead, "SELECT"},
+		{"form-feed", "SELECT\f'synthetic-private-row'", model.ModeRead, "SELECT"},
+		{"vertical-tab", "SELECT\v'synthetic-private-row'", model.ModeRead, "SELECT"},
+		{"leading-comment", "/*synthetic-private-row*/SELECT 1", model.ModeUnknown, "QUERY"},
+		{"executable-comment", "/*!80000 SELECT 'synthetic-private-row' */", model.ModeUnknown, "QUERY"},
+		{"unknown-verb", "MYSTERY/**/'synthetic-private-row'", model.ModeUnknown, "QUERY"},
+		{"literal-only", "'syntheticprivaterow'", model.ModeUnknown, "QUERY"},
+		{"keyword-prefix", "SELECTOR/**/'synthetic-private-row'", model.ModeUnknown, "QUERY"},
+		{"keyword-dollar-read", "SELECT$x", model.ModeUnknown, "QUERY"},
+		{"keyword-dollar-write", "UPDATE$x", model.ModeUnknown, "QUERY"},
+		{"keyword-unicode-read", unicodeReadQuery, model.ModeUnknown, "QUERY"},
+		{"keyword-unicode-write", unicodeWriteQuery, model.ModeUnknown, "QUERY"},
+		{"keyword-digit", "SELECT1/**/'synthetic-private-row'", model.ModeUnknown, "QUERY"},
+		{"keyword-underscore", "UPDATE_x/**/'synthetic-private-row'", model.ModeUnknown, "QUERY"},
+		{"unicode-fold-read", "ſELECT/**/'synthetic-private-row'", model.ModeUnknown, "QUERY"},
+		{"unicode-fold-write", "ıNSERT/**/'synthetic-private-row'", model.ModeUnknown, "QUERY"},
+		{"keyword-dollar-comment", "SELECT$/**/'synthetic-private-row'", model.ModeUnknown, "QUERY"},
+		{"compact-call", "CALL/**/my_proc('synthetic-private-row')", model.ModeUnknown, "CALL"},
+		{"ordinary-with", "WITH t AS (SELECT 1) SELECT * FROM t", model.ModeUnknown, "WITH"},
+		{"ordinary-set", "SET @value = 'synthetic-private-row'", model.ModeUnknown, "SET"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if mode, verb := classifyVerb(tc.sql); mode != tc.mode || verb != tc.verb {
+				t.Errorf("classifyVerb(%q) = (%q,%q), want (%q,%q)", tc.sql, mode, verb, tc.mode, tc.verb)
+			}
+		})
+	}
+}
+
 func TestParseAuditLineCommaInQuery(t *testing.T) {
 	line := `20260603 10:23:48,dbserver1,app_rw,10.0.0.5,42,1004,QUERY,salesdb,'SELECT id, name FROM customers WHERE id = 7',0`
 	ev, ok := parseAuditLine(line)

@@ -94,11 +94,11 @@
 //
 // Sessions carry retention_class ("privileged-session-recording") and the
 // tenant config carries retention_days (default 180, the documented commercial
-// PAM default). This module implements NO purge and NO legal hold:
-// retention/legal-hold engine owns deletion; frames/sessions are its inputs,
-// ledger anchors survive any purge (the chain stays verifiable). Operator PII
-// stays out of frames (actor ids only), so erasure has nothing to shred
-// here.
+// PAM default). Compliance registers the same class for retain policies and
+// legal holds. Purge is unavailable because frames are append-only evidence;
+// retention_days remains advisory and retention_enforced remains false. The
+// session and frame principal declarations identify retained account references
+// as evidence; a retention schedule does not erase them.
 //
 // # Schema pin
 //

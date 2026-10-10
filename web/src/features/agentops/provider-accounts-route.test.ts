@@ -19,7 +19,6 @@ describe('the provider-account door', () => {
     expect(view).toBeDefined()
     expect(view?.id).toBe('providerAccounts')
     expect(view?.permission).toBe('sessions:account:read')
-    expect(view?.hub).toBe('operate')
     expect(view?.navigation).toEqual({
       kind: 'feature',
       areaId: 'ai',

@@ -5,6 +5,7 @@
 package models
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -82,6 +83,7 @@ func (m *Module) Permissions() []auth.Permission {
 func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 	// Catalog & capability surface (declared reference + governed estate).
 	reg.Handle("GET", "/catalog", permCatalogRead, m.handleCatalog)
+	reg.Handle("GET", "/availability", permCatalogRead, m.handleAvailability)
 	reg.Handle("GET", "/features", permCatalogRead, m.handleFeatures)
 	reg.Handle("GET", "/data-governance", permCatalogRead, m.handleDataGovernance)
 	reg.Handle("GET", "/tool-types", permCatalogRead, m.handleToolTypes)
@@ -208,14 +210,16 @@ var allCapabilities = []mp.Capability{
 // and list pricing per model family. It is static governance reference data,
 // distinct from the governed live estate (GET /models).
 type catalogResponse struct {
-	Models       []catalogModelDTO `json:"models"`
-	Capabilities []string          `json:"capabilities"`
-	PricingAsOf  string            `json:"pricing_as_of"`
-	PricingNote  string            `json:"pricing_note"`
+	Models                []catalogModelDTO     `json:"models"`
+	Capabilities          []string              `json:"capabilities"`
+	PricingAsOf           string                `json:"pricing_as_of"`
+	PricingNote           string                `json:"pricing_note"`
+	ConnectorCatalogs     []connectorCatalogDTO `json:"connector_catalogs,omitempty"`
+	ConnectorCatalogError string                `json:"connector_catalog_error,omitempty"`
 }
 
 // handleCatalog returns the declared reference catalog.
-func (m *Module) handleCatalog(w http.ResponseWriter, r *http.Request, _ api.ModuleContext) {
+func (m *Module) handleCatalog(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	out := catalogResponse{
 		Capabilities: capStrings(allCapabilities),
 		PricingAsOf:  referencePricingAsOf,
@@ -234,7 +238,66 @@ func (m *Module) handleCatalog(w http.ResponseWriter, r *http.Request, _ api.Mod
 		seen[ref.Family] = true
 		out.Models = append(out.Models, toCatalogModelDTO(ref))
 	}
+	out.ConnectorCatalogs, out.ConnectorCatalogError = m.readConnectorCatalogs(r.Context(), mc.Tenant)
 	writeJSON(w, http.StatusOK, out)
+}
+
+// Connector metadata stays source-scoped: a service name is not a registered
+// provider credential, and a declared model is not proof of availability.
+type connectorCatalogDTO struct {
+	SourceRef   string              `json:"source_ref"`
+	Kind        string              `json:"kind"`
+	ProviderRef string              `json:"provider_ref,omitempty"`
+	State       string              `json:"state"`
+	CapturedAt  string              `json:"captured_at,omitempty"`
+	Models      []connectorModelDTO `json:"models"`
+}
+
+type connectorModelDTO struct {
+	catalogModelDTO
+	CapabilitySource string `json:"capability_source"`
+}
+
+func (m *Module) readConnectorCatalogs(ctx context.Context, tenant model.TenantID) ([]connectorCatalogDTO, string) {
+	out := []connectorCatalogDTO{}
+	if m.connectorCatalogs == nil {
+		return out, ""
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	catalogs, err := m.connectorCatalogs(ctx, tenant)
+	if err != nil {
+		return out, "Connector catalogs are unavailable."
+	}
+	for _, entry := range catalogs {
+		row := connectorCatalogDTO{SourceRef: entry.SourceRef, Kind: entry.Kind, State: "reference", Models: []connectorModelDTO{}}
+		if entry.Failed {
+			row.State = "unavailable"
+		} else {
+			row.ProviderRef = entry.Catalog.Provider.Ref
+			if !entry.Catalog.CapturedAt.IsZero() {
+				row.CapturedAt = entry.Catalog.CapturedAt.UTC().Format(time.RFC3339)
+			}
+			seen := map[[2]string]bool{}
+			for _, md := range entry.Catalog.Models {
+				key := [2]string{md.ProviderRef, md.Ref}
+				if seen[key] {
+					continue
+				}
+				seen[key] = true
+				source := md.CapabilitySource
+				if source == "" {
+					source = "declared"
+				}
+				row.Models = append(row.Models, connectorModelDTO{catalogModelDTO: catalogModelDTO{
+					Family: md.Ref, ProviderRef: md.ProviderRef, Capabilities: capStrings(md.Capabilities),
+					ContextWindow: md.ContextWindow, MaxOutputTokens: md.MaxOutputTokens, Pricing: toPricingDTO(md.Pricing),
+				}, CapabilitySource: source})
+			}
+		}
+		out = append(out, row)
+	}
+	return out, ""
 }
 
 // toolTypesResponse is the declared dated tool-type catalog (CLA-08): exact
@@ -262,7 +325,7 @@ type featureRow struct {
 
 // handleFeatures returns the capability matrix: per API feature, which declared
 // families declare it, and the matrix is not a gateway invocation guarantee.
-func (m *Module) handleFeatures(w http.ResponseWriter, r *http.Request, _ api.ModuleContext) {
+func (m *Module) handleFeatures(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	rows := make([]featureRow, 0, len(allCapabilities))
 	for _, c := range allCapabilities {
 		row := featureRow{Capability: string(c), Families: []string{}}
@@ -278,7 +341,8 @@ func (m *Module) handleFeatures(w http.ResponseWriter, r *http.Request, _ api.Mo
 		}
 		rows = append(rows, row)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"capabilities": rows})
+	catalogs, catalogError := m.readConnectorCatalogs(r.Context(), mc.Tenant)
+	writeJSON(w, http.StatusOK, map[string]any{"capabilities": rows, "connector_catalogs": catalogs, "connector_catalog_error": catalogError})
 }
 
 // handleDataGovernance returns the Claude context-management / memory-tool +
@@ -605,6 +669,8 @@ func (m *Module) handleResolveRouting(w http.ResponseWriter, r *http.Request, mc
 		spec           routingSpec
 		suspendedTiers []string
 		notRouting     bool
+		profile        ExecutionProfile
+		profileErr     *executionProfileHTTPError
 	)
 	err := mc.Data.View(r.Context(), func(sc store.Scope) error {
 		p, err := sc.Policies().Get(r.Context(), id)
@@ -616,6 +682,14 @@ func (m *Module) handleResolveRouting(w http.ResponseWriter, r *http.Request, mc
 			return nil
 		}
 		spec = parseRoutingSpec(p.Spec)
+		profile, profileErr = m.resolveExecutionProfile(r.Context(), mc.Tenant, spec)
+		if profileErr != nil {
+			return nil
+		}
+		if profile.AdapterID == ExecutionAdapterDeepSeekText {
+			suspendedTiers, err = suspendedEntitlementTiers(r.Context(), sc)
+			return err
+		}
 		cat, err := buildCatalog(r.Context(), sc)
 		if err != nil {
 			return err
@@ -643,6 +717,17 @@ func (m *Module) handleResolveRouting(w http.ResponseWriter, r *http.Request, mc
 		writeJSON(w, http.StatusNotFound, errorBody("not found"))
 		return
 	}
+	if profileErr != nil {
+		writeExecutionProfileError(w, profileErr)
+		return
+	}
+	if profile.AdapterID == ExecutionAdapterDeepSeekText {
+		out, err = m.resolveAvailableProfile(r.Context(), mc.Tenant, spec, profile)
+		if err != nil {
+			writeStoreError(w, err)
+			return
+		}
+	}
 	if out.Resolved && out.Primary != nil {
 		// Model-governance gate (lifecycle/ZDR/access-tier), DENY-CLOSED. Runs
 		// BEFORE the budget gate so the (possibly promoted) surviving primary is what
@@ -669,7 +754,7 @@ func (m *Module) handleResolveRouting(w http.ResponseWriter, r *http.Request, mc
 		// OPEN (unlike the governance gate — finops.CheckBudget's documented contract).
 		// /resolve is a preview with no acting session, so no session_ref to scope an
 		// identity budget on (provider/model-scoped budgets still apply).
-		if status, denied := m.budgetDeniesRoute(r, mc, &out, ""); denied {
+		if status, denied := m.budgetDeniesRoute(r.Context(), mc, &out, ""); denied {
 			writeJSON(w, status, out)
 			return
 		}
@@ -686,13 +771,13 @@ func (m *Module) handleResolveRouting(w http.ResponseWriter, r *http.Request, mc
 // returns an error leaves it intact. The minimal dims (provider+model refs) come from the
 // resolved primary; global/provider/model enforcing budgets are what the router can cap
 // pre-execution (docs/SECURITY-HARDENING.md).
-func (m *Module) budgetDeniesRoute(r *http.Request, mc api.ModuleContext, dec *decisionDTO, sessionRef string) (int, bool) {
-	verdict, err := m.budgetGate.Check(r.Context(), mc.Tenant, BudgetDims{
+func (m *Module) budgetDeniesRoute(ctx context.Context, mc api.ModuleContext, dec *decisionDTO, sessionRef string) (int, bool) {
+	verdict, err := m.budgetGate.Check(ctx, mc.Tenant, BudgetDims{
 		ProviderRef: dec.Primary.ProviderRef, ModelRef: dec.Primary.ModelRef, SessionRef: sessionRef,
 	})
 	if err != nil {
 		if m.log != nil {
-			m.log.Error("models: budget gate error; failing open (routing resolve proceeds)", "err", err)
+			m.log.Error("models: budget gate error; failing open (routing resolve proceeds)")
 		}
 		return 0, false
 	}

@@ -13,7 +13,7 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 GUION="$ROOT/scripts/check-spdx.sh"
-[ -r "$GUION" ] || { echo "NO HE PODIDO MIRAR: falta $GUION"; exit 2; }
+[ -r "$GUION" ] || { echo "COULD NOT LOOK: missing $GUION"; exit 2; }
 
 pass=0; fail=0
 ok() { printf 'ok    %-58s %s\n' "$1" "${2:-}"; pass=$((pass+1)); }
@@ -24,13 +24,13 @@ no() { printf 'FAIL  %-58s %s\n' "$1" "${2:-}"; fail=$((fail+1)); }
 FN="$(awk '/^classify\(\)/{f=1} f{print} f&&/^}$/{exit}' "$GUION")"
 case "$FN" in
 	*"classify()"*"esac"*) ;;
-	*) echo "NO HE PODIDO MIRAR: no pude extraer classify() de $GUION" >&2; exit 2 ;;
+	*) echo "COULD NOT LOOK: could not extract classify() from $GUION" >&2; exit 2 ;;
 esac
 eval "$FN"
 
 esperado() { # <ruta> <bucket esperado>
 	r="$(classify "$1" 2>/dev/null)"
-	[ "$r" = "$2" ] && ok "$1 -> $2" || no "$1: esperaba «$2» y dio «${r:-<vacío>}»"
+	[ "$r" = "$2" ] && ok "$1 -> $2" || no "$1: expected «$2» and got «${r:-<empty>}»"
 }
 # lo que este claim añade
 esperado 'scripts/lib/sigpipe-m2.awk' source
@@ -45,21 +45,21 @@ esperado 'docs/x.csv'                 data
 # forma destapa la forma»: el fichero nuevo no rompió nada, hizo visible una pregunta sin contestar.
 FN_SIN="$(printf '%s\n' "$FN" | sed 's/|\*\.awk)/)/')"
 case "$FN_SIN" in
-	*'*.awk)'*) no "la mutación no se aplicó — un mutante que no se construye reporta verde" ;;
+	*'*.awk)'*) no "mutation was not applied — an unbuilt mutant reports a pass" ;;
 	*)
 		( eval "$FN_SIN"; r="$(classify 'scripts/lib/sigpipe-m2.awk' 2>/dev/null)"
 		  [ "$r" != "source" ] && exit 0 || exit 1 ) &&
-			ok "sin clasificar, el MISMO .awk deja de ser fuente (por eso el gate da 2)" ||
-			no "la clasificación no sostiene peso: sin ella seguía saliendo source" ;;
+			ok "without classification, the SAME .awk is no longer source (so the gate returns 2)" ||
+			no "classification has no effect: without it, the result is still source" ;;
 esac
 
 # integración, una sola vez porque cuesta ~75 s: el gate REAL sobre el árbol de verdad
 if [ "${OLIVARES_SPDX_AWK_SKIP_E2E:-0}" = "1" ]; then
-	ok "e2e omitido a peticion (OLIVARES_SPDX_AWK_SKIP_E2E=1)"
+	ok "e2e skipped by request (OLIVARES_SPDX_AWK_SKIP_E2E=1)"
 else
 	out="$(sh "$GUION" 2>&1)"; rc=$?
 	case "$rc$out" in
-		0*"SPDX check OK"*) ok "gate real sobre el árbol: rc 0" ;;
+		0*"SPDX check OK"*) ok "real gate on the tree: rc 0" ;;
 		*) no "gate real: rc=$rc — $(printf '%s' "$out" | tail -1)" ;;
 	esac
 fi

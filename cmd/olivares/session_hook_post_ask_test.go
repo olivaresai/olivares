@@ -16,6 +16,7 @@ import (
 	"github.com/olivaresai/olivares/connectors/claude"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 func TestSessionClaudeTenantAskDoesNotReviewExecutedToolsOrLifecycle(t *testing.T) {
@@ -34,12 +35,12 @@ func TestSessionClaudeTenantAskDoesNotReviewExecutedToolsOrLifecycle(t *testing.
 	service := h.set.gov.EngineApprovals()
 	h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 	h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-	d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow", Rules: []hookPolicyRule{
+	d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow", Rules: []hookpep.PolicyRule{
 		{Tool: "Bash", Decision: "ask", Reason: "review commands before execution"},
 		{Event: "UserPromptSubmit", Decision: "ask"},
 		{Event: "TaskCompleted", Decision: "ask"},
 		{Event: "SessionStart", Decision: "ask"},
-	}}, authr: credentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: service, store: h.st, clock: time.Now, log: discardLog()}
+	}}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, Store: h.st, Clock: time.Now, Log: discardLog()})
 	// This is the tenant's hook rule, not an authored governance ReviewPolicy.
 	assertPresetHook(t, d, service, tenant, human, token, intent.ClaimSID, "PreToolUse", "Bash", "ask")
 	for _, event := range []string{"PostToolUse", "UserPromptSubmit", "TaskCompleted", "SessionStart"} {
@@ -47,7 +48,7 @@ func TestSessionClaudeTenantAskDoesNotReviewExecutedToolsOrLifecycle(t *testing.
 			assertPresetHook(t, d, service, tenant, human, token, intent.ClaimSID, event, "Bash", "allow")
 		})
 	}
-	approved, _, err := service.List(t.Context(), tenant, hookActionCapability, "approved", "")
+	approved, _, err := service.List(t.Context(), tenant, hookpep.ActionCapability, "approved", "")
 	if err != nil || len(approved) != 1 {
 		t.Fatalf("approved calls=%d, want=1, err=%v", len(approved), err)
 	}
@@ -69,7 +70,7 @@ func TestSessionClaudePostAskRetainsOutputBlockAndAudit(t *testing.T) {
 	service := h.set.gov.EngineApprovals()
 	h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 	h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-	d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow", Rules: []hookPolicyRule{{Event: "PostToolUse", Tool: "Bash", Decision: "ask", Block: true, Reason: "output inspection blocked further processing"}}}, authr: credentials, eval: h.set.gov.Evaluator(), approvals: service, store: h.st, clock: time.Now, log: discardLog()}
+	d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow", Rules: []hookpep.PolicyRule{{Event: "PostToolUse", Tool: "Bash", Decision: "ask", Block: true, Reason: "output inspection blocked further processing"}}}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Approvals: service, Store: h.st, Clock: time.Now, Log: discardLog()})
 	raw, _ := json.Marshal(map[string]any{"hook_event_name": "PostToolUse", "tool_name": "Bash", "tool_input": map[string]any{"command": "printf output-proof"}})
 	ctx, cancel := context.WithTimeout(t.Context(), time.Second)
 	defer cancel()
@@ -84,7 +85,7 @@ func TestSessionClaudePostAskRetainsOutputBlockAndAudit(t *testing.T) {
 	if rec.Code != http.StatusOK || json.Unmarshal(rec.Body.Bytes(), &reply) != nil || reply.Decision != "block" {
 		t.Fatalf("output block was lost: %d %s", rec.Code, rec.Body.String())
 	}
-	items, _, err := service.List(t.Context(), tenant, hookActionCapability, "pending", "")
+	items, _, err := service.List(t.Context(), tenant, hookpep.ActionCapability, "pending", "")
 	if err != nil || len(items) != 0 {
 		t.Fatalf("post-output approval requests=%d, want=0, err=%v", len(items), err)
 	}

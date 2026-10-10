@@ -40,7 +40,7 @@ func (f fetcher) confine(policy RedirectPolicyV2, allowed []string) fetcher {
 		}
 		return nil
 	}
-	return fetcher{client: &clone}
+	return fetcher{client: &clone, pause: f.pause}
 }
 
 func (f fetcher) bounded(ctx context.Context, u string, max int64, w io.Writer) (FetchedObjectObserved, error) {
@@ -115,6 +115,9 @@ func statusOrTransport(status int, u string, kind string) error {
 		}
 		return refuse(KindUnsupportedSource, "%s answered HTTP %d", u, status)
 	default:
+		if gatewayError(status) {
+			return refuse(KindTransport, "GET %s: HTTP %d; the server is having trouble, so try again in a few minutes", u, status)
+		}
 		return refuse(KindTransport, "GET %s: HTTP %d", u, status)
 	}
 }

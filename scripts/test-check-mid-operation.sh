@@ -22,7 +22,7 @@ check() {
 	if [ "$esperado" = "$obtenido" ] && { [ -z "$extra" ] || [ "$extra" = "ok" ]; }; then
 		printf '  ok    %-58s rc=%s\n' "$nombre" "$obtenido"; pasa=$((pasa + 1))
 	else
-		printf '  FALLO %-58s rc=%s (esperaba %s) %s\n' "$nombre" "$obtenido" "$esperado" "$extra"; falla=$((falla + 1))
+		printf '  FAIL  %-58s rc=%s (expected %s) %s\n' "$nombre" "$obtenido" "$esperado" "$extra"; falla=$((falla + 1))
 	fi
 }
 
@@ -43,63 +43,63 @@ repo_con_conflicto() {
 	git -C "$d" commit -q -am "main"
 }
 
-echo "LIMPIO — un árbol sin operaciones a medias pasa"
+echo "CLEAN — a tree with no incomplete operations passes"
 R="$W/limpio"; mkdir -p "$R" && git -C "$R" init -q -b main
 printf 'x\n' >"$R/f.txt"; git -C "$R" add f.txt; git -C "$R" commit -q -m "uno"
 out="$(cd "$R" && bash "$SUT" 2>&1)"; rc=$?
-check "un repo recién commiteado no tiene nada a medias" 0 "$rc"
-case "$out" in *"OK — ninguna"*) e=ok ;; *) e="no lo DICE: $out" ;; esac
-check "y lo dice, en vez de callarse" 0 0 "$e"
+check "a freshly committed repository has no incomplete operations" 0 "$rc"
+case "$out" in *"OK — no incomplete"*) e=ok ;; *) e="does not SAY so: $out" ;; esac
+check "and explicitly reports it" 0 0 "$e"
 
-echo "REBASE A MEDIAS — el caso que costó un push parcial a main"
+echo "INCOMPLETE REBASE — the case that caused a partial push to main"
 R="$W/rebase"; repo_con_conflicto "$R"
 git -C "$R" checkout -q otra
 git -C "$R" rebase main >/dev/null 2>&1 || true
 out="$(cd "$R" && bash "$SUT" 2>&1)"; rc=$?
-check "un rebase detenido en conflicto es ROJO" 1 "$rc"
-case "$out" in *"REBASE A MEDIAS"*) e=ok ;; *) e="no nombra el rebase: $out" ;; esac
-check "y NOMBRA la operación, no sólo el total" 1 1 "$e"
-case "$out" in *"CONFLICTO SIN RESOLVER"*) e=ok ;; *) e="no lista los ficheros" ;; esac
-check "y lista los ficheros en conflicto" 1 1 "$e"
+check "a rebase stopped by a conflict is RED" 1 "$rc"
+case "$out" in *"INCOMPLETE REBASE"*) e=ok ;; *) e="does not name the rebase: $out" ;; esac
+check "and NAMES the operation, not just the total" 1 1 "$e"
+case "$out" in *"UNRESOLVED CONFLICTS"*) e=ok ;; *) e="does not list the files" ;; esac
+check "and lists the conflicting files" 1 1 "$e"
 # Y el filo exacto: los gates de CONTENIDO pasan sobre ese mismo árbol.
-if [ -f "$R/f.txt" ] && grep -q '<<<<<<<' "$R/f.txt"; then e=ok; else e="el fixture no dejó marcadores"; fi
-check "el árbol parcial existe y tiene marcadores (fixture real)" 1 1 "$e"
+if [ -f "$R/f.txt" ] && grep -q '<<<<<<<' "$R/f.txt"; then e=ok; else e="the fixture did not leave markers"; fi
+check "the partial tree exists and has markers (real fixture)" 1 1 "$e"
 git -C "$R" rebase --abort >/dev/null 2>&1 || true
 out="$(cd "$R" && bash "$SUT" 2>&1)"; rc=$?
-check "tras --abort vuelve a estar limpio" 0 "$rc"
+check "after --abort it is clean again" 0 "$rc"
 
-echo "MERGE A MEDIAS — MERGE_HEAD sin commitear"
+echo "INCOMPLETE MERGE — uncommitted MERGE_HEAD"
 R="$W/merge"; repo_con_conflicto "$R"
 git -C "$R" merge otra >/dev/null 2>&1 || true
 out="$(cd "$R" && bash "$SUT" 2>&1)"; rc=$?
-check "un merge con conflicto sin resolver es ROJO" 1 "$rc"
-case "$out" in *MERGE_HEAD*) e=ok ;; *) e="no nombra MERGE_HEAD: $out" ;; esac
-check "y nombra MERGE_HEAD" 1 1 "$e"
+check "a merge with an unresolved conflict is RED" 1 "$rc"
+case "$out" in *MERGE_HEAD*) e=ok ;; *) e="does not name MERGE_HEAD: $out" ;; esac
+check "and names MERGE_HEAD" 1 1 "$e"
 
-echo "CHERRY-PICK A MEDIAS"
+echo "INCOMPLETE CHERRY-PICK"
 R="$W/pick"; repo_con_conflicto "$R"
 git -C "$R" cherry-pick otra >/dev/null 2>&1 || true
 out="$(cd "$R" && bash "$SUT" 2>&1)"; rc=$?
-check "un cherry-pick con conflicto es ROJO" 1 "$rc"
-case "$out" in *CHERRY_PICK_HEAD*) e=ok ;; *) e="no nombra CHERRY_PICK_HEAD" ;; esac
-check "y nombra CHERRY_PICK_HEAD" 1 1 "$e"
+check "a cherry-pick with a conflict is RED" 1 "$rc"
+case "$out" in *CHERRY_PICK_HEAD*) e=ok ;; *) e="does not name CHERRY_PICK_HEAD" ;; esac
+check "and names CHERRY_PICK_HEAD" 1 1 "$e"
 
-echo "WORKTREE ENLAZADO — el estado NO vive en el .git del clon principal"
+echo "LINKED WORKTREE — state is NOT in the main clone .git"
 R="$W/wt-base"; repo_con_conflicto "$R"
 git -C "$R" worktree add -q "$W/wt-linked" otra >/dev/null 2>&1
 git -C "$W/wt-linked" rebase main >/dev/null 2>&1 || true
 out="$(cd "$W/wt-linked" && bash "$SUT" 2>&1)"; rc=$?
-check "un rebase a medias EN UN WORKTREE ENLAZADO se ve" 1 "$rc"
+check "an incomplete rebase IN A LINKED WORKTREE is detected" 1 "$rc"
 out="$(cd "$R" && bash "$SUT" 2>&1)"; rc=$?
-check "y el clon principal, que está limpio, NO se contamina" 0 "$rc"
+check "and the clean main clone is NOT affected" 0 "$rc"
 
-echo "NO HE PODIDO MIRAR — nunca un verde"
+echo "COULD NOT LOOK — never a pass"
 out="$(cd "$W" && bash "$SUT" 2>&1)"; rc=$?
-check "fuera de un repositorio git responde 2, no 0" 2 "$rc"
+check "outside a git repository returns 2, not 0" 2 "$rc"
 FAKE="$W/bin"; mkdir -p "$FAKE"
 out="$(cd "$R" && PATH="$FAKE" "$BASH_BIN" "$SUT" 2>&1)"; rc=$?
-check "sin git en el PATH responde 2, no 0" 2 "$rc"
+check "without git in PATH returns 2, not 0" 2 "$rc"
 
 echo
-echo "check-mid-operation self-test: $pasa pasan, $falla fallan"
+echo "check-mid-operation self-test: $pasa passed, $falla failed"
 [ "$falla" -eq 0 ]

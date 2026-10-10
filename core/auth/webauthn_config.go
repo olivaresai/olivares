@@ -34,12 +34,9 @@ import (
 // ValidateWebAuthnRP checks an explicitly configured relying party and returns it
 // in the canonical form a browser compares against.
 //
-// TWO PREDICATES, because one is not enough and the asymmetry is measured. The
-// verifier in this build (go-webauthn v0.17.4, protocol.ValidateRPID) ACCEPTS any
-// value net.ParseIP parses, and browsers refuse an IP relying party outright; it
-// also refuses any single-label name except exactly "localhost", which is a limit
-// of this library rather than of the specification. So the ID is asked both what
-// the URL Standard thinks of it and what this build's verifier thinks of it.
+// The ID must be a valid domain and be accepted by the installed verifier.
+// IPs are refused explicitly; single-label names other than localhost are
+// refused by the verifier. One DNS root dot is removed before verifier use.
 //
 // Origins are canonicalized the same way a browser reports them — the default
 // port dropped, the host lowercased and IDN-encoded — because the library
@@ -77,11 +74,12 @@ func ValidateWebAuthnRP(rp WebAuthnRP) (WebAuthnRP, error) {
 		return WebAuthnRP{}, errors.New("the relying-party ID is not a host name (it must be a bare domain: no scheme, no port, no path)")
 	}
 	if kind != webaddr.KindDomain {
-		return WebAuthnRP{}, errors.New("the relying-party ID is an IP address. A browser refuses a passkey ceremony whose relying party is an address, even though the verifier in this build accepts the string; reach the console by a name instead")
+		return WebAuthnRP{}, errors.New("the relying-party ID is an IP address. A browser refuses a passkey ceremony whose relying party is an address; reach the console by a name instead")
 	}
 	if !webaddr.IsRelyingPartyDomain(canonicalID) {
 		return WebAuthnRP{}, errors.New("the relying-party ID is not a domain the verifier in this build accepts: it must be a valid domain — which rules out an underscore, a leading or trailing hyphen and an empty label — and, unless it is exactly \"localhost\", it must contain a dot")
 	}
+	canonicalID = strings.TrimSuffix(canonicalID, ".")
 	if len(rp.Origins) == 0 {
 		return WebAuthnRP{}, errors.New("no relying-party origins were given; a ceremony is verified against the exact origins the console is served on")
 	}
@@ -128,5 +126,5 @@ func WebAuthnRPFromAddress(a webaddr.Address) (WebAuthnRP, bool) {
 	if a.IsZero() || !a.CanBeRelyingParty() {
 		return WebAuthnRP{}, false
 	}
-	return WebAuthnRP{ID: a.Host, DisplayName: defaultWebAuthnDisplayName, Origins: []string{a.Origin}}, true
+	return WebAuthnRP{ID: strings.TrimSuffix(a.Host, "."), DisplayName: defaultWebAuthnDisplayName, Origins: []string{a.Origin}}, true
 }

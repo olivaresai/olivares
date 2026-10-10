@@ -2,29 +2,29 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repo root.
 //
-// ⛔ ESTO ES DEFENSA EN PROFUNDIDAD, Y LO DIGO PRIMERO PORQUE EN ESTA CAMPAÑA YA PRESENTÉ DOS
-// VECES COMO «CAMINO VIVO» ALGO QUE NO LO ERA (y las dos refutadas por el contraste).
+// This is defense in depth. Two earlier claims of live failures (and) were
+// rejected by review because those paths were not live.
 //
-// ⛔ ESCRIBÍ AQUÍ QUE LOS EMISORES ERAN DOS CONJUNTOS. SON CUATRO — el contraste lo refutó y la
-// cifra importa, porque de ella depende qué es defensivo y qué no:
-//   · las 21 llamadas a `requireAAL3` de `core/api`, todas convergiendo en
-//     `middleware.go:298-300` — cerradas en la rama de #784;
-//   · `modules/governance`, dos ESCRITURAS (`breakglass.go:187`, `approvals.go:579`), correctas
-//     desde siempre porque sus diálogos van por `usePrivilegedMutation`;
-//   · `modules/deploy`, que tiene su PROPIO `requireStepUp` (`helpers.go:73-76`) alcanzado desde
-//     `handleApply` y `handleRetire` (`lifecycle.go:216`, `:443`) — la consola ya lo trataba, y
-//     lo dice en `deploy/definition-detail.tsx:237-243`; mi censo era lo que estaba mal;
-//   · `core/auth`, que devuelve `ErrStepUpRequired` FUERA de `requireAAL3` en el ciclo de
-//     credenciales (`webauthn.go:234`, `:307`, `:473`) — ahí sí había un defecto vivo, y esta
-//     rama lo arregla en `identity/privileged-login.tsx`.
+// The emitter inventory has four families, not the two originally claimed here:
+//   - 21 `requireAAL3` calls in `core/api`, converging at `middleware.go:298-300`, handled
+//     in #784's branch;
+//   - two writes in `modules/governance` (`breakglass.go:187`, `approvals.go:579`), already
+//     handled through `usePrivilegedMutation`;
+//   - `modules/deploy`'s own `requireStepUp` (`helpers.go:73-76`), reached by `handleApply`
+//     and `handleRetire` (`lifecycle.go:216,443`), already handled by the console and
+//   documented
+//     in `deploy/definition-detail.tsx:237-243`;
+//   - `core/auth` returning `ErrStepUpRequired` outside `requireAAL3` during credential
+//     operations (`webauthn.go:234,307,473`), a live defect fixed in
+//   `identity/privileged-login.tsx`.
 //
-// Las seis hojas de detalle de aquí cuelgan de rutas de MÓDULO que **hoy no emiten ese código**.
-// Se arreglan porque el defecto es de FORMA —`isForbidden` es SÓLO el status 403
-// (`lib/api/errors.ts:59-61`) y la ceremonia se reconoce por el CÓDIGO (`:71-79`)— y sobrevive al
-// día en que el gate llegue a una de ellas. No porque alguien lo esté sufriendo ahora.
+// These five detail sheets use module routes that do not currently emit that code.
+// The pattern needs protection because `isForbidden` checks only HTTP 403
+// (`lib/api/errors.ts:59-61`), while step-up is recognized by code (`:71-79`). This protects
+// future gates rather than claiming an operator is currently affected.
 //
-// La guarda es TEXTUAL y por eso enumera sus techos abajo. Quién responde bien cuando el error
-// llega de verdad lo fijan las celdas de comportamiento de `knowledge`, `governance` y `console`.
+// This textual guard has the limits listed below. Behavioral tests in `knowledge`,
+// `governance`, and `console` verify handling when the error actually arrives.
 import { readFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -62,7 +62,6 @@ const sinComentarios = (src: string): string[] => {
 
 const SUJETOS = [
   'capabilities/server-detail.tsx',
-  'capabilities/tool-pins.tsx',
   'catalog/entry-detail.tsx',
   'catalog/instance-detail.tsx',
   'deploy/definition-detail.tsx',
@@ -78,17 +77,16 @@ const primera = (lineas: string[], aguja: string) => {
 }
 
 /**
- * ⛔ TECHOS DECLARADOS, los mismos que en las clases anteriores y por los mismos motivos:
- *  1. No ve una SEGUNDA decisión en el mismo fichero (compara el primer par). Ninguno de estos
- *     seis tiene dos hoy — se comprueba abajo, para que deje de ser cierto en voz alta si un día
- *     alguien añade la segunda.
- *  2. Una condición en UNA SOLA LÍNEA pasa en los dos sentidos: las posiciones empatan.
- *  3. No despoja literales de cadena.
- *  4. Sólo conoce estos dos nombres: una decisión escrita como `status === 403` es invisible —
- *     y esa forma EXISTE en el árbol (la tenía `routine-policies-view`), así que la celda de
- *     abajo la prohíbe explícitamente en estos seis.
+ * Declared limits, shared with the earlier test groups:
+ * 1. Only the first decision pair in a file is compared. Each of these five files currently
+ *    has one pair; the assertion below fails if a second is added.
+ * 2. A condition on one line passes in either order because its positions tie.
+ * 3. String literals are not stripped.
+ * 4. Only these two names are recognized. `status === 403` is invisible and existed in
+ *    `routine-policies-view`; the assertion below explicitly forbids that form in these five
+ *   files.
  */
-describe('las seis hojas de detalle ofrecen la ceremonia antes que la acusación', () => {
+describe('five detail sheets offer step-up before reporting a role denial', () => {
   it('cada una conoce la ceremonia, y ANTES que el rol', () => {
     for (const rel of SUJETOS) {
       const l = leer(rel)
@@ -125,10 +123,10 @@ describe('las seis hojas de detalle ofrecen la ceremonia antes que la acusación
     expect(culpables).toEqual([])
   })
 
-  it('y el barrido MIRÓ seis ficheros con UNA decisión cada uno', () => {
-    // ⛔ Anti-vacuidad por DECISIONES, no por ficheros: si una de las seis se partiera en dos
-    //    decisiones, el techo nº1 dejaría de cubrir la segunda y quiero enterarme aquí.
-    expect(SUJETOS.length).toBe(6)
+  it('checks five files with one decision each', () => {
+    // Count decisions, not only files: if a file gained a second decision, limit 1 would
+    // stop covering it. This assertion makes that gap visible.
+    expect(SUJETOS.length).toBe(5)
     for (const rel of SUJETOS) {
       const usos = leer(rel).filter((l) => l.includes('isForbidden')).length
       expect(usos, `${rel} tiene ${usos} decisiones de rol, no 1`).toBe(1)

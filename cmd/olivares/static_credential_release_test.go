@@ -8,11 +8,13 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
-	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
+	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 )
 
 func TestReleaseStaticCredentialCannotReachToolsListClient(t *testing.T) {
@@ -48,7 +50,7 @@ func TestReleaseStaticCredentialCannotReachToolsListClient(t *testing.T) {
 	t.Cleanup(func() { http.DefaultTransport = original })
 	// No native account, administrator role, or OAuth scope is assigned to this caller.
 	token, jwks := mintReviewToken(t, mcpReviewResource, "")
-	cfg := &mcpGatewayConfig{Resource: mcpReviewResource, AuthorizationServers: []string{"https://auth.review.example"}, Issuer: "https://auth.review.example", IssuerJWKS: jwks, Tenant: f.tenant.String(), UpstreamURL: upstream.URL, UpstreamAuth: "Bearer fixture-cut-secret", Tools: []mcpc.ToolPolicy{{Name: "search", RequiredScope: "tools:read"}}}
+	cfg := &mcpgateway.MCPConfig{Resource: mcpReviewResource, AuthorizationServers: []string{"https://auth.review.example"}, Issuer: "https://auth.review.example", IssuerJWKS: jwks, Tenant: f.tenant.String(), UpstreamURL: upstream.URL, UpstreamAuth: "Bearer fixture-cut-secret", Tools: []mcpc.ToolPolicy{{Name: "search", RequiredScope: "tools:read"}}}
 	rs, _, err := buildMCPResourceServer(&engine{store: f.store, log: discardLogger()}, cfg, discardLogger())
 	if err != nil {
 		t.Fatal(err)
@@ -94,7 +96,7 @@ func TestReleaseStaticCredentialCannotReachToolsListClient(t *testing.T) {
 		if strings.Contains(string(raw), "fixture-cut-secret") {
 			t.Fatal("audit released upstream credential")
 		}
-		if ev.Action == "mcp.tool.deny" && ev.TargetID.String() == "tools/list" && ev.Actor == "agent:review" && bytes.Equal(ev.PayloadHash, mcpDecisionHash(f.tenant.String(), "agent:review", "tools/list", "", "deny", "", "", "MCP07", "bearer")) {
+		if ev.Action == "mcp.tool.deny" && ev.TargetID.String() == "tools/list" && ev.Actor == "agent:review" && bytes.Equal(ev.PayloadHash, mcpgateway.DecisionHash(f.tenant.String(), "agent:review", "tools/list", "", "deny", "", "", "MCP07", "bearer")) {
 			found = true
 		}
 	}

@@ -259,7 +259,7 @@ func incomingHandoffPlanOffer(
 		}
 	}
 	var written model.ID
-	if err := fixture.m.data.Mutate(ctx, fixture.tenant, func(sc store.Scope) error {
+	if err := fixture.m.Data.Mutate(ctx, fixture.tenant, func(sc store.Scope) error {
 		scope = sc
 		written = writeIncomingHandoffPlanGraph(
 			t, create, update, fixture.tenant, channel, to, workspace, state, at, deadline,
@@ -461,7 +461,7 @@ func confinedIncomingHandoffPlanRows(
 	t.Helper()
 	ctx := context.Background()
 	var ids []string
-	if err := fixture.m.data.View(ctx, fixture.tenant, func(raw store.Scope) error {
+	if err := fixture.m.Data.View(ctx, fixture.tenant, func(raw store.Scope) error {
 		confined, err := store.ConfineWorkspace(ctx, raw, fixture.workspace)
 		if err != nil {
 			return err

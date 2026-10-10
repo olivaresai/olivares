@@ -35,6 +35,12 @@ func TestWriteCommunicationErrorMapsTypedPlanChangeOnlyToPreconditionFailed(t *t
 			wantVerdict: VerdictBroken,
 		},
 		{
+			name:       "handoff offered by a sender that is not the owner",
+			err:        fmt.Errorf("offer: %w", errHandoffSenderNotOwner),
+			wantStatus: http.StatusForbidden, wantCode: "not_owner",
+			wantVerdict: VerdictBroken,
+		},
+		{
 			name:       "unknown evidence remains retryable",
 			err:        fmt.Errorf("publish: %w", ErrCommunicationEvidenceUnknown),
 			wantStatus: http.StatusServiceUnavailable, wantCode: "evidence_unavailable",
@@ -83,5 +89,34 @@ func TestWriteCommunicationErrorKeepsIdempotencyConflictAtConflict(t *testing.T)
 	}
 	if strings.Contains(recorder.Body.String(), "plan_changed") {
 		t.Fatalf("idempotency conflict was mislabeled as plan_changed: %s", recorder.Body.String())
+	}
+}
+
+// The owner refusal and the stale offer leave one if-statement apart, and only
+// the first is permanent: the owner refusal is 403 not_owner and says the rule,
+// every other stale-offer cause stays the 409 store conflict.
+func TestWriteCommunicationErrorSplitsHandoffOwnerRefusalFromStaleOffer(t *testing.T) {
+	t.Parallel()
+
+	stale := httptest.NewRecorder()
+	writeCommunicationError(stale, fmt.Errorf("offer: %w", errHandoffStaleOffer))
+	if stale.Code != http.StatusConflict || !strings.Contains(stale.Body.String(), `"code":"conflict"`) {
+		t.Fatalf("stale offer = %d %s, want 409 conflict", stale.Code, stale.Body.String())
+	}
+
+	refused := httptest.NewRecorder()
+	writeCommunicationError(refused, fmt.Errorf("offer: %w", errHandoffSenderNotOwner))
+	var body struct {
+		Error struct {
+			Code    string `json:"code"`
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(refused.Body.Bytes(), &body); err != nil {
+		t.Fatalf("decode owner refusal: %v", err)
+	}
+	const rule = "Only the current owner of this work item can offer it for handoff."
+	if refused.Code != http.StatusForbidden || body.Error.Code != "not_owner" || body.Error.Message != rule {
+		t.Fatalf("owner refusal = %d %+v, want 403 not_owner %q", refused.Code, body, rule)
 	}
 }

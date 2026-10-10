@@ -29,6 +29,112 @@ func TestPGMajorsEnvironment(t *testing.T) {
 	}
 }
 
+func TestPGMajorsReporterDoesNotHideCLIFailure(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", ".github", "workflows", "pg-majors.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	jobs := mappingValue(doc.Content[0], "jobs")
+	var script string
+	for i := 1; i < len(jobs.Content); i += 2 {
+		steps := mappingValue(jobs.Content[i], "steps")
+		if steps == nil {
+			continue
+		}
+		for _, step := range steps.Content {
+			name := mappingValue(step, "name")
+			if name != nil && strings.HasPrefix(name.Value, "failure telemetry") {
+				script = mappingValue(step, "run").Value
+			}
+		}
+	}
+	if script == "" {
+		t.Fatal("failure reporter missing")
+	}
+	if !strings.Contains(script, "--label github_actions") {
+		t.Error("reporter must use github_actions, present in both repository label inventories")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "gh"), []byte("#!/bin/sh\nprintf '%s\\n' 'fixture gh rejected the request' >&2\nexit 23\n"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("bash", "-euo", "pipefail", "-c", script)
+	cmd.Env = []string{"PATH=" + dir + ":" + os.Getenv("PATH"), "RUN_URL=https://example.invalid/run", "GH_REPO=example/fixture"}
+	output, err := cmd.CombinedOutput()
+	if err == nil || cmd.ProcessState.ExitCode() != 23 || !strings.Contains(string(output), "fixture gh rejected the request") {
+		t.Fatalf("CLI failure or diagnostic was hidden: %v, output=%q", err, output)
+	}
+}
+
+func TestPGMajorsWritePermissionBelongsOnlyToReporter(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "..", ".github", "workflows", "pg-majors.yml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc yaml.Node
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	root := doc.Content[0]
+	if err := testJobPermissionError(root); err != nil {
+		t.Fatal(err)
+	}
+	// A per-job override must not restore the privilege removed at workflow level.
+	mutated := strings.Replace(string(raw), "  pg-majors:\n", "  pg-majors:\n    permissions:\n      issues: write\n", 1)
+	var mutant yaml.Node
+	if err := yaml.Unmarshal([]byte(mutated), &mutant); err != nil {
+		t.Fatal(err)
+	}
+	if err := testJobPermissionError(mutant.Content[0]); err == nil {
+		t.Error("test-job issue-write override was admitted")
+	}
+	report := mappingValue(mappingValue(root, "jobs"), "report-failure")
+	if report == nil {
+		t.Fatal("isolated failure reporter missing")
+	}
+	if issues := mappingValue(mappingValue(report, "permissions"), "issues"); issues == nil || issues.Value != "write" {
+		t.Fatal("reporter lacks issue permission")
+	}
+	if needs := mappingValue(report, "needs"); needs == nil || needs.Value != "pg-majors" {
+		t.Fatal("reporter is not attached to the matrix outcome")
+	}
+	condition := mappingValue(report, "if")
+	if condition == nil || !strings.Contains(condition.Value, "always()") || !strings.Contains(condition.Value, "needs.pg-majors.result == 'failure'") {
+		t.Fatal("failed matrix can skip its reporter")
+	}
+}
+
+func testJobPermissionError(root *yaml.Node) error {
+	writes := func(permissions *yaml.Node) bool {
+		if permissions == nil {
+			return false
+		}
+		if permissions.Kind == yaml.ScalarNode {
+			return permissions.Value == "write-all"
+		}
+		for i := 1; i < len(permissions.Content); i += 2 {
+			if permissions.Content[i].Value == "write" {
+				return true
+			}
+		}
+		return false
+	}
+	if writes(mappingValue(root, "permissions")) {
+		return fmt.Errorf("workflow grants write access to test jobs")
+	}
+	jobs := mappingValue(root, "jobs")
+	for i := 0; i < len(jobs.Content); i += 2 {
+		if jobs.Content[i].Value != "report-failure" && writes(mappingValue(jobs.Content[i+1], "permissions")) {
+			return fmt.Errorf("test job %s grants write access", jobs.Content[i].Value)
+		}
+	}
+	return nil
+}
+
 func TestPGMajorsEnvironmentRejectsRegressions(t *testing.T) {
 	script := workflowScript(t)
 	for _, tc := range []struct {
@@ -46,6 +152,11 @@ func TestPGMajorsEnvironmentRejectsRegressions(t *testing.T) {
 			name: "missing_superuser_dsn",
 			old:  "OLIVARES_TEST_POSTGRES_SUPERUSER_DSN=\"postgres://postgres:postgres@127.0.0.1:${port}/postgres?sslmode=disable\" \\\n",
 			want: "invocation 1 variable OLIVARES_TEST_POSTGRES_SUPERUSER_DSN",
+		},
+		{
+			name: "missing_other_cluster_dsn",
+			old:  "OLIVARES_TEST_POSTGRES_OTHER_DSN=\"postgres://postgres:postgres@127.0.0.1:${other_port}/postgres?sslmode=disable\" \\\n",
+			want: "invocation 1 variable OLIVARES_TEST_POSTGRES_OTHER_DSN",
 		},
 		{
 			name:        "last_exit_only",
@@ -207,7 +318,7 @@ func validateMappings(node *yaml.Node) error {
 }
 
 func mappingValue(node *yaml.Node, key string) *yaml.Node {
-	if node.Kind == yaml.MappingNode {
+	if node != nil && node.Kind == yaml.MappingNode {
 		for i := 0; i < len(node.Content); i += 2 {
 			if node.Content[i].Value == key {
 				return node.Content[i+1]
@@ -228,7 +339,7 @@ func executePasses(t *testing.T, script string) passResult {
 	t.Helper()
 	dir := t.TempDir()
 	bin := filepath.Join(dir, "bin")
-	for _, path := range []string{bin, filepath.Join(dir, "ci"), filepath.Join(dir, "calls")} {
+	for _, path := range []string{bin, filepath.Join(dir, "ci"), filepath.Join(dir, "calls"), filepath.Join(dir, "scripts")} {
 		if err := os.Mkdir(path, 0o700); err != nil {
 			t.Fatal(err)
 		}
@@ -237,7 +348,7 @@ func executePasses(t *testing.T, script string) passResult {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"env", "grep", "sed", "tee", "cat"} {
+	for _, name := range []string{"env", "grep", "sed", "tee", "cat", "python3"} {
 		path, err := exec.LookPath(name)
 		if err != nil {
 			t.Fatal(err)
@@ -253,6 +364,12 @@ func executePasses(t *testing.T, script string) passResult {
 		}
 	}
 	write("ci/pg-majors-packages.txt", "# Synthetic packages; no real Go execution.\nfixture/first\nfixture/second\n", 0o600)
+	write("ci/pg-majors-expectations.json", `{"floors":{"fixture/first":1,"fixture/second":1}}`, 0o600)
+	evaluator, err := os.ReadFile(filepath.Join("..", "..", "..", "..", "scripts", "pg-majors-evaluate.py"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	write("scripts/pg-majors-evaluate.py", string(evaluator), 0o600)
 	write("passes.sh", script, 0o600)
 	write("bin/go", "#!"+bash+"\n"+goSubstitute, 0o700)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -310,8 +427,9 @@ func checkPasses(result passResult) error {
 		"17=postgres://postgres:postgres@127.0.0.1:41717/postgres?sslmode=disable," +
 		"18=postgres://postgres:postgres@127.0.0.1:41818/postgres?sslmode=disable"
 	names := []string{"OLIVARES_TEST_POSTGRES_DSN", "OLIVARES_TEST_POSTGRES_ADMIN_DSN", "OLIVARES_TEST_POSTGRES_SUPERUSER_DSN",
-		"OLIVARES_TEST_VECTOR_DSN", "OLIVARES_TEST_POSTGRES_REQUIRED", "OLIVARES_TEST_PG_EXPECT_MAJOR", "OLIVARES_TEST_POSTGRES_MAJOR_DSNS"}
-	args := []string{"test", "-json", "-count=1", "-timeout", "45m",
+		"OLIVARES_TEST_VECTOR_DSN", "OLIVARES_TEST_POSTGRES_REQUIRED", "OLIVARES_TEST_PG_EXPECT_MAJOR", "OLIVARES_TEST_POSTGRES_MAJOR_DSNS",
+		"OLIVARES_TEST_POSTGRES_OTHER_DSN", "OLIVARES_TEST_POSTGRES_OTHER_EXPECT_MAJOR"}
+	args := []string{"test", "-json", "-skip", "^$", "-count=1", "-timeout", "45m",
 		"github.com/olivaresai/olivares/fixture/first", "github.com/olivaresai/olivares/fixture/second"}
 	for i, fields := range result.invocations {
 		if len(fields) < len(names) {
@@ -322,6 +440,8 @@ func checkPasses(result passResult) error {
 		app := "postgres://olivares_app:apppw@127.0.0.1:" + port + "/olivares?sslmode=disable"
 		want := []string{app, "postgres://olivares_admin:adminpw@127.0.0.1:" + port + "/olivares?sslmode=disable",
 			"postgres://postgres:postgres@127.0.0.1:" + port + "/postgres?sslmode=disable", app, "1", fmt.Sprint(major), majorMap}
+		other := 15 + (i+1)%4
+		want = append(want, fmt.Sprintf("postgres://postgres:postgres@127.0.0.1:4%d%d/postgres?sslmode=disable", other, other), fmt.Sprint(other))
 		for j, name := range names {
 			if fields[j] != want[j] {
 				return fmt.Errorf("invocation %d variable %s differs from the synthetic input", i+1, name)
@@ -355,6 +475,8 @@ printf '%s\n' "$count" > "$PG_M1_CALLS/count"
   printf '%s\0' "${OLIVARES_TEST_POSTGRES_REQUIRED-<absent>}"
   printf '%s\0' "${OLIVARES_TEST_PG_EXPECT_MAJOR-<absent>}"
   printf '%s\0' "${OLIVARES_TEST_POSTGRES_MAJOR_DSNS-<absent>}"
+  printf '%s\0' "${OLIVARES_TEST_POSTGRES_OTHER_DSN-<absent>}"
+  printf '%s\0' "${OLIVARES_TEST_POSTGRES_OTHER_EXPECT_MAJOR-<absent>}"
   printf '%s\0' "$@"
 } > "$PG_M1_CALLS/call-$count"
 case "$count" in

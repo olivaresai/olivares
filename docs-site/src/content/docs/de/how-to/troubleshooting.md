@@ -108,12 +108,11 @@ ausdrücklich:
 ingest: no observation sources configured (OLIVARES_SOURCES_CONFIG.sources is empty); no connector will ingest — the estate runs on no live traffic
 ```
 
-Eine fehlende, unlesbare oder ungültige Quellendatei **warnt und fährt fort** (der Start
-stürzt deswegen nie ab) — eine gesund aussehende Engine mit leerer Karte bedeutet also
-meist, dass die Konfiguration nie geladen wurde. Korrigieren Sie Datei/Pfad und starten
-Sie neu; Erfolg sieht aus wie `ingest: wired source … kind=…` pro Quelle. Eine Quelle, die
-sich nicht konstruieren lässt, loggt `ingest: failed to register in-process source; not wired`
-mit dem Grund — sie wird gemeldet, niemals stillschweigend verworfen.
+### Die Engine startet mit einer Quellenkonfiguration nicht
+
+Wenn `OLIVARES_SOURCES_CONFIG` eine fehlende, unlesbare oder ungültige JSON-Datei bezeichnet, beendet sich `olivares serve` mit Exit-Code `1`. Suchen Sie nach dem Startfehler `load sources operator config: OLIVARES_SOURCES_CONFIG` mit `refusing to start instead of silently omitting operator configuration`. Prüfen Sie den Pfad aus Sicht des Dienstes oder Containers, stellen Sie sicher, dass dessen Benutzer die Datei lesen kann, validieren Sie das JSON und starten Sie neu. Dieser Dateifehler verhindert den Start; die Engine läuft dadurch nicht mit einer leeren Karte weiter.
+
+Nach erfolgreichem Start erscheint `ingest: wired source … kind=…` pro Quelle. Eine Quelle, die sich nicht konstruieren lässt, loggt `ingest: failed to register in-process source; not wired` mit dem Grund.
 
 ### pgAudit ist verdrahtet, aber es kommen keine Kanten an
 

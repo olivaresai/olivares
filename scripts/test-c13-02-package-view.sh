@@ -40,7 +40,7 @@ stage() {
 export GOWORK=off
 MCBIN="$(mktemp -u "${TMPDIR:-/workspace/.olivares-tmptest}/pv-bin.XXXXXX")"
 ( cd "$ROOT/commercial/commerce-lint" && go build -o "$MCBIN" . ) >/dev/null 2>&1 || {
-	echo "test-c13-02-package-view: NO PUDE MIRAR — el derivador no construye" >&2; exit 2; }
+	echo "test-c13-02-package-view: CANNOT INSPECT — the deriver does not build" >&2; exit 2; }
 export OLIVARES_MODULE_CATALOG_BIN="$MCBIN"
 
 run() {

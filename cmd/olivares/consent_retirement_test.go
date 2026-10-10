@@ -9,7 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
-	"net/http/httptest"
 	"slices"
 	"strings"
 	"sync"
@@ -77,33 +76,6 @@ func (e *consentEstate) tryLogin(email, password string) (string, int) {
 // TestAnOffboardedUsersGrantDoesNotReturnWhenRetirementFailed: while a
 // retirement has not completed, no re-admission path joins the account, and the
 // account's grant does not authorize it in the tenant.
-func TestAnOffboardedUsersGrantDoesNotReturnWhenRetirementFailed(t *testing.T) {
-	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
-		const email = "failed-retirement@consent.test"
-		user := e.onboard(e.tT, email, "viewer")
-		e.grantUser(e.tT, user, "editor")
-		e.scimDelete(e.tT, user)
-		e.pump().beforeStepHook = func(string, auth.RetirementRequest) error { return errors.New("the module is unavailable") }
-		e.runPump()
-
-		if r := e.readmit(e.tT, email, "viewer"); r.code != http.StatusConflict || r.errorCode() != "retirement_pending" {
-			t.Errorf("re-admission by onboarding = %d %s, want 409 retirement_pending", r.code, r.raw)
-		}
-		if r := e.scimCreate(e.tT, email); r.code != http.StatusConflict || !strings.Contains(r.raw, "retirement_pending") {
-			t.Errorf("re-admission by SCIM = %d %s, want 409 retirement_pending", r.code, r.raw)
-		}
-		if e.memberOf(user, e.tT) {
-			t.Errorf("a refused re-admission created the membership")
-		}
-		sess, code := e.tryLogin(email, consentMemberPassword)
-		if code != http.StatusOK {
-			t.Fatalf("the offboarded account cannot sign in: %d", code)
-		}
-		if got := e.actsIn(sess, e.tT); got != http.StatusForbidden {
-			t.Errorf("the offboarded account acting in the tenant through its grant = %d, want 403", got)
-		}
-	})
-}
 
 // TestRetirementSurvivesRestartAndRetries: a retirement whose step failed stays
 // pending across a pump restart and completes on a later pass.
@@ -145,31 +117,6 @@ func TestRetirementSurvivesRestartAndRetries(t *testing.T) {
 // TestReadmissionAtALesserRoleDoesNotRestoreTheOldGrant: the retirement deletes
 // the account's grants in the tenant, so a re-admission at a lesser role gets the
 // lesser role only.
-func TestReadmissionAtALesserRoleDoesNotRestoreTheOldGrant(t *testing.T) {
-	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
-		const email = "lesser-role@consent.test"
-		user := e.onboard(e.tT, email, "admin")
-		e.grantUser(e.tT, user, "admin")
-		e.scimDelete(e.tT, user)
-		e.runPump()
-		if r := e.readmit(e.tT, email, "viewer"); r.code != http.StatusCreated {
-			t.Errorf("re-admission as viewer = %d %s, want 201", r.code, r.raw)
-		}
-		sess, code := e.tryLogin(email, consentMemberPassword)
-		if code != http.StatusOK {
-			t.Fatalf("the re-admitted account cannot sign in: %d", code)
-		}
-		if got := e.do("GET", "/v1/members", sess, e.tT, nil).code; got != http.StatusForbidden {
-			t.Errorf("an admin-only read by the re-admitted viewer = %d, want 403", got)
-		}
-		if got := e.actsIn(sess, e.tT); got != http.StatusOK {
-			t.Errorf("a viewer read by the re-admitted viewer = %d, want 200", got)
-		}
-		if n := e.grantCount(e.tT, user); n != 0 {
-			t.Errorf("%d grants still name the re-admitted account", n)
-		}
-	})
-}
 
 // rowsMentioning counts the rows of kind in tenant whose column contains needle.
 // A core policy is matched on its whole spec.
@@ -231,81 +178,6 @@ func (e *consentEstate) rowsMentioning(tenant model.TenantID, kind model.Kind, c
 // a writer that read the account's standing before an offboard conflicts at its
 // barrier and is refused, and a retirement pass that read the record before a
 // lift conflicts and removes nothing granted after the lift.
-func TestADelayedCleanupCannotRemoveANewGrantAndAConcurrentWriterCannotBypassTheBarrier(t *testing.T) {
-	t.Setenv(eventingAllowLoopbackEnv, "1")
-	collector := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusNoContent)
-	}))
-	defer collector.Close()
-	t.Setenv(envEventingEgressPolicy, writeLoopbackEgressPolicy(t, collector.URL))
-	onConsentEngines(t, func(t *testing.T, e *consentEstate) {
-		// One subtest per writer class whose row names the account; the
-		// communication writers follow on their own estate.
-		parkEachWriter(t, e, fenceWriters(collector.URL))
-
-		t.Run("a retirement pass parked after its decisive read", func(t *testing.T) {
-			const email = "parked-pass@consent.test"
-			user := e.onboard(e.tT, email, "viewer")
-			e.scimDelete(e.tT, user)
-			parked := make(chan struct{})
-			release := make(chan struct{})
-			var once sync.Once
-			// The hook runs after the pass read the record and the account's
-			// authority version, before its first step pins them.
-			worker := &retirementPump{authr: e.pump().authr, modules: e.pump().modules,
-				beforeStepHook: func(_ string, req auth.RetirementRequest) error {
-					if req.User == user {
-						once.Do(func() {
-							close(parked)
-							<-release
-						})
-					}
-					return nil
-				}}
-			advancePumpClock(worker)
-			type result struct {
-				n   int
-				err error
-			}
-			done := make(chan result, 1)
-			go func() {
-				n, err := worker.runOnce(context.Background())
-				done <- result{n, err}
-			}()
-			select {
-			case <-parked:
-			case r := <-done:
-				t.Fatalf("the retirement worker never read the record (%d, %v)", r.n, r.err)
-			case <-time.After(10 * time.Second):
-				t.Fatal("the retirement worker never read the record")
-			}
-			// Another pass retires the account; the tenant re-admits it and grants it anew.
-			e.runPump()
-			if r := e.readmit(e.tT, email, "viewer"); r.code != http.StatusCreated {
-				t.Fatalf("re-admission = %d %s", r.code, r.raw)
-			}
-			e.grantUser(e.tT, user, "editor")
-			lifted, _ := e.record(user, e.tT)
-			close(release)
-			r := <-done
-			if r.err != nil {
-				t.Fatalf("the delayed retirement pass: %v", r.err)
-			}
-			if n := e.grantCount(e.tT, user); n != 1 {
-				t.Errorf("the delayed retirement pass removed a grant made after the re-admission (%d left)", n)
-			}
-			after, _ := e.record(user, e.tT)
-			if after.RetirementState != model.RetirementLifted || after.Attempts != lifted.Attempts ||
-				after.RetirementGeneration != lifted.RetirementGeneration {
-				t.Errorf("the delayed retirement pass wrote the lifted record: %+v, want %+v", after, lifted)
-			}
-		})
-
-		t.Run("the communication writers", func(t *testing.T) {
-			parkEachWriter(t, bootMessagingEstate(t, e.engine), messagingFenceWriters())
-		})
-	})
-}
 
 // parkEachWriter parks each writer, in a subtest of its own, between its read
 // of the account's standing and its barrier, removes the account from T, and

@@ -31,7 +31,7 @@ func TestIdentity_ConfinedReadOnlyLineage(t *testing.T) {
 			ctx := context.Background()
 
 			var defaultWS, alpha, bravo model.ID
-			if err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+			if err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 				def, err := sc.DefaultWorkspace(ctx)
 				if err != nil {
 					return err
@@ -76,7 +76,7 @@ func TestIdentity_ConfinedReadOnlyLineage(t *testing.T) {
 			// Producer 2: the protocol synthetic identity, on the unconfined scope
 			// its reservation transaction uses.
 			sidBravo := newSID()
-			if err := m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+			if err := m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 				now, err := transactionNow(ctx, sc)
 				if err != nil {
 					return err
@@ -90,7 +90,7 @@ func TestIdentity_ConfinedReadOnlyLineage(t *testing.T) {
 			rows := map[string]model.Record{}
 			readRaw := func() map[string]model.Record {
 				out := map[string]model.Record{}
-				if err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+				if err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 					repo, err := sc.Ext(identityKind)
 					if err != nil {
 						return err
@@ -126,7 +126,7 @@ func TestIdentity_ConfinedReadOnlyLineage(t *testing.T) {
 			// NULL lineage belongs to the default workspace only.
 			own := map[model.ID]string{defaultWS: sidDefault, alpha: sidAlpha, bravo: sidBravo}
 			for ws, ownSID := range own {
-				if err := m.data.View(ctx, tenant, func(raw store.Scope) error {
+				if err := m.Data.View(ctx, tenant, func(raw store.Scope) error {
 					confined, err := store.ConfineWorkspace(ctx, raw, ws)
 					if err != nil {
 						return err
@@ -166,7 +166,7 @@ func TestIdentity_ConfinedReadOnlyLineage(t *testing.T) {
 
 			// A confined Mutate gets no writer: the cross-workspace rewrite, its own
 			// row, fresh inserts, a delete and the synthetic producer all refuse.
-			if err := m.data.Mutate(ctx, tenant, func(raw store.Scope) error {
+			if err := m.Data.Mutate(ctx, tenant, func(raw store.Scope) error {
 				confined, err := store.ConfineWorkspace(ctx, raw, alpha)
 				if err != nil {
 					return err

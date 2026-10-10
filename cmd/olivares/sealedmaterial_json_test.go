@@ -19,12 +19,11 @@ import (
 	"sort"
 	"strings"
 	"testing"
-
-	"github.com/olivaresai/olivares/core/secure"
 )
 
-// The nine SEALED-MATERIAL leaves of VER-06 lot L2 — keys wrap/rotate/rewrap/seal,
-// secrets put/rotate/rm, ddil keygen, license keygen — pinned in BOTH directions,
+// The Community sealed-material leaves — secrets put/rotate/rm, ddil keygen,
+// license keygen — pinned in BOTH directions. The Business key ceremonies retain
+// the same coverage in the private overlay,
 // because they share one risk and it is not a cosmetic one: their text already
 // prints fingerprints, public keys and hints, and `ddil keygen` prints the PRIVATE
 // key. Serializing a field into a structured object is the cheapest way to publish
@@ -46,21 +45,6 @@ import (
 //
 // That is why `ddil keygen --out` reports private_key_file and `ddil keygen`
 // reports private_key: not an inconsistency, the rule applied twice.
-
-// runKeysJSON drives one `keys …` invocation through the REAL root, which is what
-// makes -o reachable at all: newKeysCmd() alone has no --output flag, so a test
-// built on the group would exercise the text path under both spellings and prove
-// nothing (selectedOutput falls back to "text" when the flag is absent).
-func runKeysJSON(t *testing.T, args ...string) (string, string, error) {
-	t.Helper()
-	root := newRootCmd()
-	var out, errOut bytes.Buffer
-	root.SetOut(&out)
-	root.SetErr(&errOut)
-	root.SetArgs(append([]string{"keys"}, args...))
-	err := root.Execute()
-	return out.String(), errOut.String(), err
-}
 
 func runSecretsRoot(t *testing.T, args ...string) (string, string, error) {
 	t.Helper()
@@ -293,218 +277,6 @@ func TestTheGuardsOfThisFileCanActuallyFail(t *testing.T) {
 		if _, bad := jsonObjectFault(rendered); bad == "" {
 			t.Fatalf("jsonObjectFault accepted %s: %q", name, rendered)
 		}
-	}
-}
-
-// TestKeysCeremonyTextIsUnchangedAndJSONMatchesIt walks wrap → rotate → rewrap →
-// seal, asserting each one's whole stdout byte for byte in text mode and the same
-// facts as a parsed object in JSON mode. The expectations are built from the
-// envelope that landed on disk, so the test pins the FORMAT rather than the fake
-// KEK's fixture values.
-func TestKeysCeremonyTextIsUnchangedAndJSONMatchesIt(t *testing.T) {
-	startFakeKEKServer(t)
-	dir := t.TempDir()
-	envPath := filepath.Join(dir, "audit-signing.key.sealed")
-
-	// ---- keys wrap --mint ------------------------------------------------
-	textOut, _, err := runKeysJSON(t, "wrap", "--mint", "--purpose", "audit", "--out", envPath)
-	if err != nil {
-		t.Fatalf("keys wrap --mint: %v\n%s", err, textOut)
-	}
-	e1, err := secure.ReadSealedFile(envPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	pub1 := base64.StdEncoding.EncodeToString(e1.PublicKey)
-	wantWrap := fmt.Sprintf("sealed %s envelope written to %s\n  kek:        %s %s\n  public key: %s\n",
-		secure.PurposeAuditSigningKey, envPath, e1.Provider, e1.KeyID, pub1)
-	if textOut != wantWrap {
-		t.Fatalf("keys wrap text changed:\n got %q\nwant %q", textOut, wantWrap)
-	}
-
-	envJSON := filepath.Join(dir, "audit-signing.json.sealed")
-	jsonOut, _, err := runKeysJSON(t, "wrap", "--mint", "--purpose", "audit", "--out", envJSON, "-o", "json")
-	if err != nil {
-		t.Fatalf("keys wrap --mint -o json: %v\n%s", err, jsonOut)
-	}
-	ej, err := secure.ReadSealedFile(envJSON)
-	if err != nil {
-		t.Fatal(err)
-	}
-	obj := mustDecodeJSONObject(t, "keys wrap", jsonOut)
-	assertKeySet(t, "keys wrap", obj, "purpose", "out", "provider", "kek", "public_key")
-	if obj["purpose"] != secure.PurposeAuditSigningKey || obj["out"] != envJSON ||
-		obj["provider"] != ej.Provider || obj["kek"] != ej.KeyID ||
-		obj["public_key"] != base64.StdEncoding.EncodeToString(ej.PublicKey) {
-		t.Fatalf("keys wrap JSON does not match the envelope it wrote: %#v", obj)
-	}
-
-	// ---- keys rotate -----------------------------------------------------
-	textOut, _, err = runKeysJSON(t, "rotate", "--in", envPath, "--yes")
-	if err != nil {
-		t.Fatalf("keys rotate: %v\n%s", err, textOut)
-	}
-	e2, err := secure.ReadSealedFile(envPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantRotate := fmt.Sprintf("rotated: new envelope written to %s\n  new public key: %s\n  prior generations kept: %d\n",
-		envPath, base64.StdEncoding.EncodeToString(e2.PublicKey), len(e2.PriorPublicKeys))
-	if textOut != wantRotate {
-		t.Fatalf("keys rotate text changed:\n got %q\nwant %q", textOut, wantRotate)
-	}
-	if len(e2.PriorPublicKeys) != 1 {
-		t.Fatalf("rotation history = %d, want 1 — the count this leaf reports must be real", len(e2.PriorPublicKeys))
-	}
-
-	jsonOut, _, err = runKeysJSON(t, "rotate", "--in", envPath, "--yes", "-o", "json")
-	if err != nil {
-		t.Fatalf("keys rotate -o json: %v\n%s", err, jsonOut)
-	}
-	e3, err := secure.ReadSealedFile(envPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	obj = mustDecodeJSONObject(t, "keys rotate", jsonOut)
-	assertKeySet(t, "keys rotate", obj, "out", "new_public_key", "prior_generations_kept")
-	if obj["out"] != envPath || obj["new_public_key"] != base64.StdEncoding.EncodeToString(e3.PublicKey) {
-		t.Fatalf("keys rotate JSON does not match the envelope it wrote: %#v", obj)
-	}
-	if got, want := obj["prior_generations_kept"], float64(len(e3.PriorPublicKeys)); got != want {
-		t.Fatalf("keys rotate JSON prior_generations_kept = %#v, want %v", got, want)
-	}
-	// The text prints the COUNT of prior generations, never the keys themselves, so
-	// the JSON does not carry the list either. assertKeySet already refuses an extra
-	// field; this states WHY the list is the field that must not appear.
-	if _, leaked := obj["prior_public_keys"]; leaked {
-		t.Fatal("keys rotate JSON grew a prior_public_keys list the text form never printed")
-	}
-
-	// ---- keys rewrap -----------------------------------------------------
-	textOut, _, err = runKeysJSON(t, "rewrap", "--in", envPath, "--yes")
-	if err != nil {
-		t.Fatalf("keys rewrap: %v\n%s", err, textOut)
-	}
-	e4, err := secure.ReadSealedFile(envPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantRewrap := fmt.Sprintf("rewrapped %s under %s %s -> %s\n", envPath, e4.Provider, e4.KeyID, envPath)
-	if textOut != wantRewrap {
-		t.Fatalf("keys rewrap text changed:\n got %q\nwant %q", textOut, wantRewrap)
-	}
-
-	jsonOut, _, err = runKeysJSON(t, "rewrap", "--in", envPath, "--yes", "-o", "json")
-	if err != nil {
-		t.Fatalf("keys rewrap -o json: %v\n%s", err, jsonOut)
-	}
-	e5, err := secure.ReadSealedFile(envPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	obj = mustDecodeJSONObject(t, "keys rewrap", jsonOut)
-	assertKeySet(t, "keys rewrap", obj, "in", "provider", "kek", "out")
-	if obj["in"] != envPath || obj["out"] != envPath || obj["provider"] != e5.Provider || obj["kek"] != e5.KeyID {
-		t.Fatalf("keys rewrap JSON does not match the envelope it wrote: %#v", obj)
-	}
-
-	// ---- keys seal -------------------------------------------------------
-	cfgPath := filepath.Join(dir, "notify.json")
-	if werr := os.WriteFile(cfgPath, []byte(`{"webhook":"https://h/x","secret":"s3cr3t-config"}`), 0o600); werr != nil {
-		t.Fatal(werr)
-	}
-	sealedText := filepath.Join(dir, "notify.text.sealed")
-	textOut, _, err = runKeysJSON(t, "seal", "--in", cfgPath, "--out", sealedText)
-	if err != nil {
-		t.Fatalf("keys seal: %v\n%s", err, textOut)
-	}
-	wantSeal := fmt.Sprintf("sealed %s -> %s (point the OLIVARES_*_CONFIG env at the sealed file; "+
-		"the engine opens it transparently at boot)\n", cfgPath, sealedText)
-	if textOut != wantSeal {
-		t.Fatalf("keys seal text changed:\n got %q\nwant %q", textOut, wantSeal)
-	}
-
-	sealedJSON := filepath.Join(dir, "notify.json.sealed")
-	jsonOut, _, err = runKeysJSON(t, "seal", "--in", cfgPath, "--out", sealedJSON, "-o", "json")
-	if err != nil {
-		t.Fatalf("keys seal -o json: %v\n%s", err, jsonOut)
-	}
-	obj = mustDecodeJSONObject(t, "keys seal", jsonOut)
-	assertKeySet(t, "keys seal", obj, "in", "out")
-	if obj["in"] != cfgPath || obj["out"] != sealedJSON {
-		t.Fatalf("keys seal JSON does not report the paths it sealed: %#v", obj)
-	}
-	// keys seal reads a config whose PLAINTEXT contains a secret. The report names
-	// the two paths and nothing else — the config's contents never enter it.
-	assertNoSecretMaterial(t, "keys seal", jsonOut, map[string]string{
-		"the plaintext config secret": "s3cr3t-config",
-	})
-}
-
-// TestKeysWrapFromReportsThePlaintextSourceAndNeverItsKey covers the ONE path in
-// this lot where a private signing key is in scope at the moment the report is
-// built: `keys wrap --from` decodes an operator's plaintext key file to seal it, so
-// the material is a local variable away from being serialized. The text names the
-// source PATH in its NOTE and never the key; the JSON does the same.
-func TestKeysWrapFromReportsThePlaintextSourceAndNeverItsKey(t *testing.T) {
-	startFakeKEKServer(t)
-	plainDir := t.TempDir()
-	plainPath := filepath.Join(plainDir, "audit-signing.key")
-	if _, _, err := secure.LoadOrCreateSigningKey(plainPath); err != nil {
-		t.Fatal(err)
-	}
-	plainKeyFile, err := os.ReadFile(plainPath)
-	if err != nil {
-		t.Fatal(err)
-	}
-	privMaterial := strings.TrimSpace(string(plainKeyFile))
-
-	migratedText := filepath.Join(plainDir, "migrated.text.sealed")
-	textOut, _, err := runKeysJSON(t, "wrap", "--from", plainPath, "--out", migratedText)
-	if err != nil {
-		t.Fatalf("keys wrap --from: %v\n%s", err, textOut)
-	}
-	me, err := secure.ReadSealedFile(migratedText)
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantText := fmt.Sprintf("sealed %s envelope written to %s\n  kek:        %s %s\n  public key: %s\n"+
-		"NOTE: the plaintext key file %s still exists — verify the envelope boots, then shred it; "+
-		"the sealed envelope is now the only at-rest copy you need.\n",
-		secure.PurposeAuditSigningKey, migratedText, me.Provider, me.KeyID,
-		base64.StdEncoding.EncodeToString(me.PublicKey), plainPath)
-	if textOut != wantText {
-		t.Fatalf("keys wrap --from text changed:\n got %q\nwant %q", textOut, wantText)
-	}
-	assertNoSecretMaterial(t, "keys wrap --from text", textOut, map[string]string{
-		"the plaintext signing key": privMaterial,
-	})
-
-	migratedJSON := filepath.Join(plainDir, "migrated.json.sealed")
-	jsonOut, _, err := runKeysJSON(t, "wrap", "--from", plainPath, "--out", migratedJSON, "-o", "json")
-	if err != nil {
-		t.Fatalf("keys wrap --from -o json: %v\n%s", err, jsonOut)
-	}
-	// The leak check runs FIRST on the json form, as it does on ddil keygen and
-	// license keygen, and it was measured into this order rather than assumed. With
-	// assertKeySet ahead of it, a mutant that filed the decoded signing key under an
-	// UNDECLARED field died reporting `UNDECLARED field "note"` — the shape guard,
-	// not the leak guard. Same bytes, same kill, wrong finding: whoever later widens
-	// the declared key set would silently move a published private key from "caught"
-	// to "not looked at".
-	//
-	// The TEXT half above keeps the opposite order on purpose. There the contract IS
-	// byte-identity with the pre-change binary, so the byte comparison is the primary
-	// assertion and the leak check is the belt behind it. The json form has no
-	// byte-identity contract — it is new — so its two guards are peers, and the leak
-	// is the finding that matters.
-	assertNoSecretMaterial(t, "keys wrap --from -o json", jsonOut, map[string]string{
-		"the plaintext signing key": privMaterial,
-	})
-	obj := mustDecodeJSONObject(t, "keys wrap --from", jsonOut)
-	assertKeySet(t, "keys wrap --from", obj, "purpose", "out", "provider", "kek", "public_key", "migrated_from")
-	if obj["migrated_from"] != plainPath {
-		t.Fatalf("keys wrap --from JSON does not name the source: %#v", obj)
 	}
 }
 

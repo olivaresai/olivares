@@ -45,9 +45,10 @@ usage, a stub `CostHook` (Reserve / Commit / Release), and HTTP errors mapped to
 the product codes (`bad_request`, `unauthenticated`, `rate_limited`,
 `unavailable`, `budget_denied`, `canceled`).
 
-The live PEP and `models.Executor` are **not** switched onto this seam in this
-slice. They still use protocol-specific clients. That wiring is the next
-bounded task.
+The standalone gateway `Driver`/`CostHook` Go APIs in
+`connectors/modelprovider/gateway`, with their OpenAI-compatible, Anthropic and Ollama
+constructors, keep working unchanged. Olivares itself does not use them. The inference
+gateway, the capability helpers and the shared transport types are not affected.
 
 ## Matrix
 

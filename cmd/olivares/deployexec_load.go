@@ -209,7 +209,7 @@ func (cfg deployExecutorConfig) refusedPassthrough() []refusedPassthroughEntry {
 // the error could still not wire a backend out of input that was refused — invalid
 // configuration is never presented as effective.
 func loadDeployExecutorConfig(_ *slog.Logger) (deployExecutorConfig, error) {
-	path := os.Getenv("OLIVARES_DEPLOY_EXECUTOR_CONFIG")
+	path := osGetenv("OLIVARES_DEPLOY_EXECUTOR_CONFIG")
 	if path == "" {
 		return deployExecutorConfig{}, nil
 	}

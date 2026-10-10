@@ -30,10 +30,7 @@ func (s *Server) sourceRosterSvc(w http.ResponseWriter, r *http.Request) (Source
 	return s.sourceRoster, true
 }
 
-func (s *Server) handleListSources(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleListSources(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	svc, ok := s.sourceRosterSvc(w, r)
 	if !ok {
 		return
@@ -52,11 +49,8 @@ func (s *Server) handleListSources(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"sources": entries})
 }
 
-func (s *Server) handlePutSource(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handlePutSource(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -66,7 +60,7 @@ func (s *Server) handlePutSource(w http.ResponseWriter, r *http.Request) {
 	}
 	var in SourceRosterInput
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	res, err := svc.PutSource(r.Context(), p, in)
@@ -77,11 +71,8 @@ func (s *Server) handlePutSource(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
-func (s *Server) handleDeleteSource(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handleDeleteSource(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}
@@ -93,7 +84,7 @@ func (s *Server) handleDeleteSource(w http.ResponseWriter, r *http.Request) {
 		Name string `json:"name"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	res, err := svc.DeleteSource(r.Context(), p, in.Name)
@@ -104,11 +95,8 @@ func (s *Server) handleDeleteSource(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, res)
 }
 
-func (s *Server) handleReloadRuntime(w http.ResponseWriter, r *http.Request) {
-	p, ok := s.authzSystem(w, r, "system:admin")
-	if !ok {
-		return
-	}
+func (s *Server) handleReloadRuntime(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
 	if !s.requireStepUp(w, r, p) {
 		return
 	}

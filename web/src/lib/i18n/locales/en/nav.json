@@ -1,12 +1,5 @@
 {
   "search": "Search…",
-  "hubs": {
-    "operate": "Operate",
-    "automate": "Automate",
-    "connect": "Connect",
-    "govern": "Govern",
-    "prove": "Prove"
-  },
   "nouns": {
     "sessions": "Sessions",
     "agents": "Agents",
@@ -30,13 +23,15 @@
     "empty": "No view matches “{{query}}”"
   },
   "items": {
+    "estate": "Estate",
     "home": "Now",
     "onboarding": "Setup wizard",
     "inventory": "Inventory",
-    "sessions": "Observe sessions",
+    "sessions": "Sessions",
     "accessMap": "Access map",
     "health": "Health & SLA",
     "capabilities": "MCP & skills",
+    "skills": "Skills catalog",
     "protocolBindings": "Protocol bindings",
     "communications": "Communications",
     "communicationsInbox": "Communications inbox",
@@ -55,20 +50,17 @@
     "catalog": "Catalog",
     "killswitch": "Kill switch",
     "work": "Work",
-    "agentops": "Operate sessions",
+    "agentops": "Sessions",
     "agentArtifacts": "Agent Artifacts",
     "models": "Models",
     "modelOps": "Model Operations",
-    "finops": "Cost & FinOps",
     "adoption": "Claude Code Adoption",
     "evals": "Evals",
     "security": "Security",
     "recordings": "Recordings",
     "compliance": "Compliance",
-    "orchestration": "Orchestration",
     "voice": "Voice",
     "sandbox": "Sandbox",
-    "redteam": "Red-teaming",
     "dashboards": "Dashboards",
     "observability": "Observability",
     "platforms": "Platforms",
@@ -81,23 +73,20 @@
     "workspace-templates": "Workspace templates",
     "eventing": "Webhooks & events",
     "session-viewer": "Session viewer",
-    "team-costs": "Team costs",
     "backups": "Backups",
     "logs": "Logs",
     "residency": "Data residency",
     "tenants": "Tenants",
     "inferenceProxy": "Inference proxy",
     "alerting": "Alerting",
-    "reporting": "Reports",
-    "postureExport": "Posture export",
-    "automations": "Automations",
     "agentcoreExport": "AgentCore export",
     "providers": "API keys",
     "providerProfiles": "Provider profiles",
     "providerBindings": "Source bindings",
     "providerAccounts": "Provider accounts",
-    "agent-tools": "Agent tools",
-    "mcpServers": "MCP servers"
+    "agent-tools": "AI tools",
+    "mcpServers": "MCP servers",
+    "storedBudgets": "Budgets"
   },
   "workspace": {
     "open": "Open {{workspace}}",
@@ -110,13 +99,15 @@
     "truncated": "The list is incomplete — more workspaces exist than are loaded"
   },
   "descriptions": {
+    "estate": "Inspect configured resources and their relationships, including work item dependencies.",
     "home": "Estate overview and health at a glance",
     "onboarding": "Step-by-step deployment configuration",
     "inventory": "Discover and catalog the agents, MCP servers and models that connectors observed.",
-    "sessions": "Observe live and discovered sessions with their timelines; shares its screen with Operate sessions",
+    "sessions": "Start sessions and follow what each one does, including the ones Olivares finds",
     "accessMap": "What each agent reads and writes (R/RW)",
     "health": "Agent and MCP uptime and SLAs",
     "capabilities": "Govern MCP servers, skills and tools",
+    "skills": "Browse skill packs and assign them to departments, agent groups and agents",
     "protocolBindings": "Compose and reconcile governed A2A and MCP bindings",
     "communications": "Channels, direct notices and the personal inbox of the selected workspace",
     "communicationsInbox": "Your exact mailbox: deliveries addressed to you, opened fresh and acknowledged explicitly",
@@ -133,7 +124,7 @@
     "catalog": "Curated, approved agents and capabilities",
     "killswitch": "Emergency stop, dual-control recovery and guardian containment",
     "work": "Shared work: items, dependencies, acceptance and decisions",
-    "agentops": "Create, attach to and govern Claude Code sessions — no SSH; shares its screen with Observe sessions",
+    "agentops": "Start sessions and follow what each one does, including the ones Olivares finds",
     "agentArtifacts": "Skills, MCP extensions and instruction files — registry, posture and supply-chain BOM",
     "models": "Models, routing and provider keys",
     "agent-tools": "Detect, install and update the agent tools on this host and follow each install; deployment administrators only",
@@ -145,7 +136,6 @@
     "security": "Guardrails, forensics and anomalies",
     "recordings": "Privileged session recording and replay",
     "compliance": "Frameworks, controls and evidence",
-    "orchestration": "Agent-to-agent coordination and schedules",
     "voice": "Voice and realtime sessions",
     "sandbox": "Isolated agent testing and replay",
     "redteam": "Adversarial testing of your agents",
@@ -164,7 +154,6 @@
     "alerting": "Route findings to destinations and inspect deliveries",
     "reporting": "Generate and download governance reports",
     "postureExport": "Export ground-truth posture for a control tower",
-    "automations": "All three automation rails and their trigger catalog",
     "providers": "Register the API keys and endpoints sessions launch with; test, rotate and revoke them",
     "providerProfiles": "Register and administer the provider homes sessions launch under, and read their configuration on demand",
     "providerBindings": "Dedicate configured sources, at the revision this node applied, to provider profiles",
@@ -176,7 +165,8 @@
     "team-costs": "Cost attribution by team: sessions, tokens and spend, with a daily trend and a per-project and per-model breakdown",
     "backups": "Encrypted disaster-recovery snapshots of the control plane: create, schedule, download and restore",
     "logs": "The live engine log stream, with level and module filters, search and pause",
-    "sourceDiff": "Compare a base and a head revision of a connected Git repository, file by file"
+    "sourceDiff": "Compare a base and a head revision of a connected Git repository, file by file",
+    "storedBudgets": "Consumption against each stored limit. Reserved capacity counts toward the limit."
   },
   "commandActions": {
     "eventing": {
@@ -196,8 +186,8 @@
     }
   },
   "aliases": {
-    "sessions": "Sessions",
-    "agentops": "Claude Code · agentops · Claude Code operate portal",
+    "sessions": "Sessions · Observe sessions · Operate sessions · Claude Code · agentops",
+    "agentops": "Operate sessions · Claude Code · agentops · Claude Code operate portal",
     "console": "Control console · Tenant administration"
   },
   "areas": {
@@ -224,16 +214,14 @@
       "question": "What knowledge, capabilities and artifacts do I connect or reuse?",
       "sections": {
         "capabilities": "Capabilities",
-        "knowledge": "Knowledge",
-        "artifacts": "Artifacts"
+        "knowledge": "Knowledge and artifacts"
       }
     },
     "work-communications": {
       "label": "Work & communications",
       "question": "What work do I coordinate, and how does it communicate?",
       "sections": {
-        "work": "Work",
-        "communications": "Communications"
+        "work": "Work and communications"
       }
     },
     "automation": {
@@ -249,9 +237,8 @@
       "question": "Who has access, under which rules, and how do I protect the environment?",
       "sections": {
         "access": "Identity and access",
-        "policy": "Policies",
-        "defense": "Protection and response",
-        "boundaries": "Governance boundaries"
+        "policy": "Policies and governance boundaries",
+        "defense": "Protection and response"
       }
     },
     "deployment": {
@@ -267,8 +254,7 @@
       "sections": {
         "operations": "Status and activity",
         "cost-adoption": "Costs and adoption",
-        "audit-recordings": "Audit and recordings",
-        "evaluation-evidence": "Evaluation and evidence"
+        "audit-recordings": "Audit, evaluation and evidence"
       }
     },
     "system": {
@@ -292,7 +278,8 @@
     "empty": "No entries in this area are available to you",
     "emptyHint": "Entries appear here when your role in the current organization grants access to a module of this area.",
     "backHome": "Go to Now",
-    "area": "Area"
+    "area": "Area",
+    "off": "Off"
   },
   "personal": {
     "favorites": "Favorites",
@@ -343,42 +330,23 @@
     "send": "Send",
     "turnPlaceholder": "Send a sentence…",
     "turnAria": "Session turn",
-    "attachedRunning": "Running",
     "attachedWaiting": "Waiting for you",
-    "attachedSettled": "Settled",
     "advanced": "Advanced",
     "advancedHint": "Send one NDJSON line to stdin. The sentence field is the default.",
     "wirePlaceholder": "Send an NDJSON line to stdin…",
     "wireAria": "Session input line",
     "turnFailed": "The session could not accept this turn.",
-    "sendBackgroundHint": "Ctrl+Enter sends and keeps the draft ready for the next sentence."
+    "sendBackgroundHint": "Ctrl+Enter sends and keeps the draft ready for the next sentence.",
+    "messagePlaceholder": "Message {{title}}…"
   },
   "shell": {
     "journeysLabel": "Journeys",
     "journeys": {
       "home": "Now",
       "sessions": "Sessions",
-      "workspaceDashboard": "Workspaces",
-      "providers": "AI tools",
-      "deploy": "Deploy",
-      "work": "Work",
       "approvals": "Approvals",
-      "inventory": "Inventory",
-      "finops": "Cost",
-      "accessMap": "Access map",
-      "mcpServers": "MCP servers",
-      "knowledge": "Knowledge",
-      "identity": "Identity & access",
-      "claudePolicy": "Policies",
-      "audit": "Audit",
-      "killswitch": "Kill switch",
+      "storedBudgets": "Budgets",
       "agent-tools": "AI tools"
-    },
-    "groups": {
-      "work": "Work",
-      "manage": "Manage",
-      "integrate": "Integrate",
-      "secure": "Secure"
     },
     "phoneBarLabel": "Main",
     "newSession": "New session",
@@ -398,9 +366,7 @@
         "earlier": "Earlier"
       },
       "empty": {
-        "needsYou": "Nothing waits for you.",
-        "working": "Nothing is running.",
-        "earlier": "No earlier sessions."
+        "needsYou": "Nothing waits for you."
       },
       "state": {
         "need": "Needs you",

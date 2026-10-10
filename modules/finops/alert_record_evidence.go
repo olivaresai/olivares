@@ -142,8 +142,11 @@ type alertEvidenceContext struct {
 	ScopeResolved bool   `json:"scope_resolved"`
 	ScopeColumn   string `json:"scope_column,omitempty"`
 	ScopeValue    string `json:"scope_value,omitempty"`
-	EvaluatedAt   string `json:"evaluated_at"`
-	SampleAt      string `json:"sample_occurred_at"`
+	// ScopeValues is present only for a department subtree. ScopeValue keeps the
+	// authored anchor; this sorted set records the exact workspace predicate read.
+	ScopeValues []string `json:"scope_values,omitempty"`
+	EvaluatedAt string   `json:"evaluated_at"`
+	SampleAt    string   `json:"sample_occurred_at"`
 	// ReadConsistency states exactly what the enumeration can and cannot promise. It
 	// is not a claim of a transactional snapshot.
 	ReadConsistency string `json:"read_consistency"`
@@ -233,6 +236,9 @@ func buildAlertEvidence(alertID model.ID, tenant model.TenantID, eval budgetEval
 		env.Context.ScopeColumn = eval.Window.Filters[0].Column
 		if v, ok := eval.Window.Filters[0].Value.(string); ok {
 			env.Context.ScopeValue = v
+		} else if refs, ok := eval.Window.Filters[0].Value.([]string); ok {
+			env.Context.ScopeValue = eval.Spec.Key
+			env.Context.ScopeValues = append([]string(nil), refs...)
 		}
 	}
 
@@ -843,6 +849,16 @@ func evidenceContextMatchesPolicy(env alertEvidenceEnvelope) (string, bool) {
 		}
 	}
 	// The subject, expressed exactly as the evaluator expresses it.
+	if len(env.Context.ScopeValues) != 0 {
+		if env.Policy.Dimension != "workspace" || env.Context.ScopeColumn != colWorkspaceRef ||
+			env.Context.ScopeValue != env.Policy.Key || !validWorkspaceRefs(env.Context.ScopeValues) ||
+			!contains(env.Context.ScopeValues, env.Policy.Key) {
+			return evidenceCauseInconsistent, false
+		}
+		// This is the captured directory read, not today's tree: a later move
+		// must not change the subject or digest of historical financial evidence.
+		return "", true
+	}
 	filters, resolved, _ := strictCostScope(budgetSpec{Dimension: env.Policy.Dimension, Key: env.Policy.Key})
 	if !resolved {
 		// The captured policy's own dimension cannot be expressed as a predicate, so a

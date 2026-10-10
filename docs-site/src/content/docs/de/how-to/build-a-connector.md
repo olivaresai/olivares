@@ -222,8 +222,8 @@ Connectors dokumentiert die Zertifizierung; er ist kein Trust Root.
 - Externe Verdrahtung deckt **Observation-Quellen** und **Content-Sources** ab; ein Output-Connector
   wird identisch gebaut und ausgeliefert, aber die Notify-Komposition lädt noch keine
   externen Output-Plugins.
-- Out-of-process-**Module** sind nicht verfügbar (das Proto ist eingefroren, der
-  Host-Glue bewusst nicht verdrahtet).
+- Out-of-process-**Module** sind nicht verfügbar, und der Transport ist deprecated
+  (der Wire bleibt eingefroren; der Host-Glue wurde nie verdrahtet).
 - Der Observation-Summentyp ist **versiegelt**: Sie emittieren Edges,
   Cost-Samples und Findings — mit offenen String-Vokabularen — können aber keine
   neuen Observation-Arten definieren.

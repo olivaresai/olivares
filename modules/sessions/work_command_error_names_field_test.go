@@ -42,16 +42,16 @@ func TestEveryRejectedCommandNamesTheFieldThatFailed(t *testing.T) {
 	}{
 		{"item.block sin código dice blocked_code, no code",
 			WorkCommand{Command: "item.block", WorkItemID: model.NewID(), Reason: "porque sí"},
-			"blocked_code (o code)"},
+			"blocked_code (or code)"},
 		{"item.fail sin código dice terminal_code, no blocked_code",
 			WorkCommand{Command: "item.fail", WorkItemID: model.NewID(), Reason: "porque sí"},
-			"terminal_code (o code)"},
+			"terminal_code (or code)"},
 		{"item.block sin item nombra el item",
 			WorkCommand{Command: "item.block", Code: "x", Reason: "y"},
 			"work_item_id"},
 		{"un comando que no existe lo dice, en vez de callar",
 			WorkCommand{Command: "item.teleport"},
-			"command (comando no reconocido)"},
+			"command (unrecognized command)"},
 		{"item.create sin título nombra el título",
 			WorkCommand{Command: "item.create", WorkspaceID: model.NewID(), WorkKind: "task"},
 			"title"},
@@ -62,7 +62,7 @@ func TestEveryRejectedCommandNamesTheFieldThatFailed(t *testing.T) {
 		{"un criterio sin clave nombra la BANDERA, no la rodaja interna",
 			WorkCommand{Command: "acceptance.add", WorkItemID: model.NewID(),
 				Acceptance: []AcceptanceInput{{Statement: "algo"}}},
-			"criterion_key (bandera --criterion-key, o acceptance[].key)"},
+			"criterion_key (flag --criterion-key, or acceptance[].key)"},
 	} {
 		row := row
 		t.Run(row.name, func(t *testing.T) {
@@ -164,27 +164,24 @@ func TestNoCommandIsRejectedWithoutNamingAField(t *testing.T) {
 	}
 }
 
-// TestTheFieldSurvivesTheApplyPathToo cubre el hueco que mi propio testigo NO veía y que destapó
-// un contraste externo.
+// TestTheFieldSurvivesTheApplyPathToo covers the gap an external review found
+// in the original test. validate and plan use assessmentFromError, which puts the
+// field in evidence_ref. apply used writeWorkError, which kept status, code and
+// verdict but discarded we.field: the same command named blocked_code (or code)
+// during validation and omitted it during apply.
 //
-// ⛔ EL ARREGLO CUBRÍA MEDIO CAMINO DE TRES FASES. `validate` y `plan` salen por
-// `assessmentFromError`, que sí pone el campo en `evidence_ref`. `apply` sale por
-// `writeWorkError`, que leía `status`, `code` y `verdict` y **tiraba `we.field`**. Resultado: el
-// mismo comando que en `validate` te decía «blocked_code (o code)» te contestaba MUDO en `apply`.
-//
-// Y la razón de que no lo viera es la de siempre: **mi testigo ejercitaba el camino que yo tenía
-// en la cabeza.** El e2e que corrí contra el motor vivo fue un `validate`, porque ése era el caso
-// que motivó el arreglo. Un test que recorre la mitad del contrato declara limpia la otra.
+// The original live-engine check exercised only validate, the motivating case.
+// Testing half of the three-phase contract did not establish the other half.
 func TestTheFieldSurvivesTheApplyPathToo(t *testing.T) {
 	t.Parallel()
 	rec := httptest.NewRecorder()
-	writeWorkError(rec, brokenField(400, "invalid_command", "blocked_code (o code)"))
+	writeWorkError(rec, brokenField(400, "invalid_command", "blocked_code (or code)"))
 
 	var cuerpo map[string]any
 	if err := json.Unmarshal(rec.Body.Bytes(), &cuerpo); err != nil {
 		t.Fatalf("la respuesta de apply no es JSON legible: %v — %s", err, rec.Body.String())
 	}
-	if got := cuerpo["evidence_ref"]; got != "blocked_code (o code)" {
+	if got := cuerpo["evidence_ref"]; got != "blocked_code (or code)" {
 		t.Fatalf("apply respondió evidence_ref=%v, quería el campo culpable. Sin esto, la mitad "+
 			"del plano de tres fases sigue obligando al llamante a adivinar", got)
 	}

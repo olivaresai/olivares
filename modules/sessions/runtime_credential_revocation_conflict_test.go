@@ -34,7 +34,7 @@ func TestRuntimeWorkSessionCredentialRevokeAbsorbsOneVersionConflict(t *testing.
 
 	m := New()
 	spy := &workSessionCredentialSpy{revokeErrs: []error{store.ErrConflict}}
-	m.UseWorkSessionCredentialSource(spy)
+	m.WorkSessionCreds = spy
 	lr := &liveRun{
 		tenant: "tenant-revoke-conflict", runRef: "run-revoke-conflict", agentRef: "agent:driver",
 		claim:            Lease{SID: "sid-revoke-conflict", Holder: "agent:driver", Fence: 3},
@@ -71,7 +71,7 @@ func TestRuntimeWorkSessionCredentialRevokeReportsPersistentConflict(t *testing.
 
 	m := New()
 	spy := &workSessionCredentialSpy{revokeErrs: []error{store.ErrConflict, store.ErrConflict, nil}}
-	m.UseWorkSessionCredentialSource(spy)
+	m.WorkSessionCreds = spy
 	lr := &liveRun{
 		tenant: "tenant-revoke-stuck", runRef: "run-revoke-stuck", agentRef: "agent:driver",
 		claim:            Lease{SID: "sid-revoke-stuck", Holder: "agent:driver", Fence: 4},
@@ -118,8 +118,8 @@ func TestRuntimeCredentialSetRevocationAbsorbsOneVersionConflict(t *testing.T) {
 			m := New()
 			probe := &dualCredentialProbe{}
 			half.arm(probe)
-			m.UseWorkSessionCredentialSource(dualWorkSource{probe})
-			m.UseCommunicationSessionCredentialSource(dualCommunicationSource{probe})
+			m.WorkSessionCreds = dualWorkSource{probe}
+			m.CommunicationSessionCreds = dualCommunicationSource{probe}
 			m.EnableCommunicationSessionCredentials()
 			lr := &liveRun{
 				tenant: "tenant-set-conflict", runRef: "run-set-conflict", agentRef: "agent:driver",

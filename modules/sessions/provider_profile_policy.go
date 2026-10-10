@@ -40,8 +40,8 @@ import (
 
 // colPPSessionTools and colPPSessionPermissionMode are the declaration. Both are
 // NULLABLE and the difference between NULL and a value is the whole contract:
-// NULL means the operator declared nothing (deny-closed), `[]` means they
-// declared NO tools on purpose, and a list means exactly that list.
+// For session_tools, NULL means the tool's default surface, `[]` means no
+// built-in tools, and a non-empty list means exactly that list.
 const (
 	colPPSessionTools          = "session_tools"
 	colPPSessionPermissionMode = "session_permission_mode"
@@ -146,8 +146,8 @@ func encodeSessionTools(tools []string) (string, error) {
 }
 
 // decodeSessionPolicy reads the declaration off a profile row. A stored value
-// that cannot be parsed is treated as UNDECLARED, which is the deny-closed
-// reading: a policy nobody can read is not a policy that permits something.
+// that cannot be parsed is treated as undeclared, so effectiveTools selects the
+// tool's default surface. An explicit empty JSON array disables built-in tools.
 func decodeSessionPolicy(rec model.Record) sessionPolicy {
 	out := sessionPolicy{PermissionMode: strings.TrimSpace(rec.String(colPPSessionPermissionMode))}
 	raw := strings.TrimSpace(rec.String(colPPSessionTools))

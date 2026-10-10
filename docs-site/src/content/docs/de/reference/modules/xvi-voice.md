@@ -70,20 +70,119 @@ Detail nach Commit emittiert.
 
 ## Actuate-Status
 
-Ein Governed-Open versendet **live**: Sobald ein Voice-Dispatcher vom Betreiber
-bereitgestellt ist, prägt ein genehmigtes Öffnen ein **serverseitiges, ephemeres
-Credential** und gibt nur dieses Credential plus Verbindungskoordinaten zurück —
-Modell, Stimme, Tools und Turn-Detection werden **aus der Policy** festgelegt, nie vom
-Client, und der Master-Key des Providers verlässt nie den Server. Ohne diese
-Bereitstellung ist die Dispatch-Naht **deny-closed**: Ein genehmigtes Öffnen wird
-ehrlich als „deklariert, nicht geöffnet" festgehalten, statt vorgetäuscht zu werden.
+Ein geregeltes Öffnen dispatcht **live**: Sobald der Betreiber einen Voice-
+Dispatcher bereitstellt, prägt ein genehmigtes Öffnen ein **serverseitiges ephemeres
+Credential** und gibt es mit Verbindungskoordinaten zurück. Die Sitzungskonfiguration
+des Betreibers liefert Stimme und Turn-Detection; ein konfiguriertes Modell ersetzt
+das angefragte Modell. Ohne konfiguriertes Modell nutzt der Dispatcher das angefragte,
+von der Mandanten-Policy erlaubte Modell. Der Master-Key des Providers verlässt nie
+den Server. Ohne Bereitstellung ist die Dispatch-Naht **deny-closed**: Ein
+genehmigtes Öffnen wird ehrlich als „deklariert, nicht geöffnet“ aufgezeichnet.
+
+## Ein geregeltes Öffnen konfigurieren und testen
+
+Aktivieren Sie das bestehende Modul mit `olivares modules on voice`. Die Engine
+speichert die Auswahl und startet einmal neu, falls sich die laufenden Module
+ändern; `olivares modules ls` zeigt, ob es läuft. Voice benötigt gemäß Modulspezifikation
+FinOps und Governance. Ausschalten behält Policies, Sitzungsmetadaten und Entscheidungs-Ledger.
+
+Der Dispatcher wird auf dem Engine-Host über `OLIVARES_VOICE_DISPATCH_CONFIG`
+bereitgestellt, den absoluten Pfad einer betreibereigenen JSON-Datei. Nur das
+Engine-Konto darf sie lesen. Provider-Master-Keys gehören in diese Datei, niemals
+in CLI-Argumente, Policy-Zeilen oder ein Client-Verbindungsbundle. Für einen
+OpenAI-Adapter sieht sie so aus:
+
+```json
+{
+  "providers": [
+    {"ref": "openai", "kind": "openai", "api_key": "<server-held provider key>"}
+  ],
+  "policies": [
+    {
+      "agent_ref": "contact-agent",
+      "provider_ref": "openai",
+      "model": "<your permitted realtime model>",
+      "voice": "marin",
+      "max_duration_seconds": 60
+    }
+  ]
+}
+```
+
+Setzen Sie die Umgebungsvariable für den Engine-Dienst und starten Sie ihn neu.
+Eine angegebene unlesbare oder ungültige JSON-Datei verhindert den Start. Ohne
+Dispatcher-Konfiguration bleibt das Verhalten „deklariert, nicht geöffnet“.
+Die Betreiberdatei wählt Provider-Adapter und Sitzungseinstellungen; die Voice-Policy
+des Mandanten autorisiert separat Agent, Modell und Provider der Anfrage. Verwenden
+Sie in beiden dieselben Modell- und Provider-Referenzen.
+
+Nach der Anmeldung mit `olivares login` deklarieren Sie diese Policy und fordern
+eine Genehmigung an:
+
+```sh
+olivares voice policies set --agent-ref contact-agent \
+  --allowed-model-ref '<your permitted realtime model>' --allowed-provider-ref openai \
+  --max-session-minutes 1 --max-latency-ms 300
+olivares voice sessions open --session-ref contact-1 --agent-ref contact-agent \
+  --model-ref '<your permitted realtime model>' --provider-ref openai -o json
+```
+
+Die erste Anfrage liefert `op_status: requested`, eine `approval_ref` und CLI-Exit
+7. Sie öffnet keine Medienverbindung und prägt kein Provider-Credential. Die
+erforderlichen unabhängigen Genehmigenden bestätigen die Referenz auf der Governance-
+Genehmigungsseite oder mit `olivares governance approvals approve <approval-ref>`.
+Bei neuen Anfragen über die standardmäßige lokale Genehmigungsbrücke kann der
+Antragsteller seine eigene Anfrage nicht genehmigen, auch nicht mit einem anderen
+Credential desselben Kontos. Wiederholen Sie denselben Open mit
+`--approval-ref <approval-ref>`. Policy-Verweigerung oder noch ausstehende Genehmigung
+liefert 403 und CLI-Exit 3; Adapterfehler liefern 502. Budget- und Estate-Stop-Prüfungen
+gelten weiterhin.
+
+Eine erfolgreiche konfigurierte Anfrage liefert `op_status: dispatched`.
+`dispatch_ref` ist ein JSON-String mit kurzlebigem `credential`, `connect`-Koordinaten,
+`transport`, Modell und Ablaufzeit. Behandeln Sie diese Antwort als Credential:
+nicht in Berichte oder Logs kopieren. Bei OpenAI tauscht der Client ein SDP-Angebot
+an der zurückgegebenen `connect`-URL mit dem kurzlebigen Credential aus und besitzt
+dann die WebRTC-Medienverbindung. Das Prägen eines Credentials allein beweist keine
+verbundene Medienverbindung. Das Entscheidungs-Ledger behält einen SHA-256-Fingerprint
+eines Credential-haltigen Bundles, nicht das Verbindungs-Credential. Auch ältere
+gespeicherte Bundles werden beim Lesen fingerprinted; bestehende Append-only-Zeilen
+werden nicht umgeschrieben. Einfache Provider-Handles behalten ihren Wert.
+
+Prüfen Sie die gespeicherten Metadaten und Entscheidungen:
+
+```sh
+olivares voice sessions get contact-1 -o json
+olivares voice sessions decisions contact-1 -o json
+olivares voice policies ls -o json
+```
+
+Verwenden Sie über Engine-Neustarts hinweg dasselbe Datenverzeichnis. Die Policy
+und Append-only-Entscheidungen bleiben nach Neustart sowie Aus- und Einschalten von
+Voice verfügbar; Provider-Credentials müssen separat bereitgestellt bleiben. Die
+JSON-Befehle oben verwenden dieselben mandantenbezogenen `/v1/m/voice`-Routen wie die API.
 
 :::caution[Ehrliche Grenzen]
-- **Die Beobachtung ist in diesem Build inaktiv.** Es wird noch kein Voice-Konnektor
-  oder keine Sonde ausgeliefert, daher bleibt die Observe-Hälfte **ehrlich leer**, bis
-  eine In-Process-Sonde Telemetrie veröffentlicht. Das Modul warnt beim Start, wenn
-  nichts es einspeist. Ein Out-of-Process-Plugin **kann** es nicht einspeisen (das
-  gRPC-Control-Plane-Proto trägt keinen Event-RPC) — die Sonde muss In-Process sein.
+- **Genehmigungsattribution hat einen Geltungsbereich.** Die standardmäßige lokale
+  Brücke behält bei neuen, von Menschen gestarteten Opens den authentifizierten
+  Antragsteller. Bestehende Genehmigungen behalten ihre gespeicherte Attribution.
+  Eine explizit konfigurierte Service-Token-Brücke schreibt Anfragen ihrem Service-
+  Credential zu und bietet nicht dieselbe Trennung der initiierenden Person.
+- **Beobachtung benötigt einen konfigurierten Produzenten.** Die optionale OpenAI-
+  Realtime-SIP-Anrufebene verwendet `OLIVARES_VOICE_CALL_CONFIG` für Webhook-Prüfung,
+  Mandanten- und Projektattribution zusammen mit den Dispatcher-Provider-Credentials.
+  Ohne diese Konfiguration oder einen In-Process-Telemetrieproduzenten bleibt die
+  Observe-Hälfte leer. Ein WebRTC-Credential füllt weder Turn-Zahlen noch Latenz.
+  Out-of-Process-Plugins können das Modul-Event nicht über die gRPC-Control-Plane
+  veröffentlichen, die keinen Event-RPC bereitstellt.
+- **Der Client besitzt die Medienverbindung der Sitzung.** Das Modul implementiert
+  weder einen WebRTC-Client noch schließt es dessen Audioverbindung. Der optionale
+  SIP-Controller ist ein separater Pfad. Ein lokaler Protokolltest mit synthetischem
+  Audio qualifiziert weder Vendor-Sprache, Abrechnung, SIP-Beobachtung noch Medienabbau.
+- **Die Konsole hat einen eigenen Umfang.** Die Voice-Ansicht bearbeitet Policies
+  und zeigt Sitzungen, Entscheidungen und Metadatenströme. Dispatcher-Bereitstellung
+  und Client-Medienverbindung sind davon getrennt; eine API- oder CLI-Journey
+  qualifiziert keine Browseraktion.
 - **Kein Inhalt, niemals.** Dies ist eine harte Eigenschaft der Leitung, keine
   Einstellung: Das Schema hat keine Inhaltsspalte und der Parser verwirft unbekannte
   Schlüssel. Latenz wird als ehrlicher Durchschnitt/Maximum aus realen Samples gezeigt —

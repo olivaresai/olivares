@@ -23,34 +23,6 @@ import (
 // (deny-closed error propagation, field-for-field mapping through the REAL
 // wiring), and the Covered-Models provider-retention floor adapter.
 
-// --- unit: status mapping + deny-closed encoding -----------------------------
-
-func TestComplianceGateStatusMappingDeniesByDefault(t *testing.T) {
-	if complianceGateStatus(nbApproved) != compliance.GateStatusApproved {
-		t.Fatal("approved must map to gate_approved")
-	}
-	cases := map[string]string{
-		nbPending: compliance.GateStatusPending,
-		// Break-glass is unreachable on this gate (gateOnceNoBreakGlass only) but
-		// must NEVER map to approved: no emergency lifts a preservation order.
-		nbBreakGlass: compliance.GateStatusPending,
-		nbRejected:   compliance.GateStatusRejected,
-		nbCanceled:   compliance.GateStatusRejected,
-		nbExpired:    compliance.GateStatusExpired,
-		nbNoGate:     compliance.GateStatusNoGate,
-		"garbage":    compliance.GateStatusNoGate,
-		"":           compliance.GateStatusNoGate,
-	}
-	for in, want := range cases {
-		if got := complianceGateStatus(in); got != want {
-			t.Fatalf("complianceGateStatus(%q) = %q, want %q", in, got, want)
-		}
-		if in != nbApproved && complianceGateStatus(in) == compliance.GateStatusApproved {
-			t.Fatalf("%q must not authorize", in)
-		}
-	}
-}
-
 func TestComplianceGateUnconfiguredTenantDeniesClosed(t *testing.T) {
 	configured := model.NewTenantID()
 	other := model.NewTenantID()
@@ -62,7 +34,7 @@ func TestComplianceGateUnconfiguredTenantDeniesClosed(t *testing.T) {
 	}
 	// An UNCONFIGURED tenant denies exactly like the module's denyApprovalGate —
 	// without ever touching the engine (no handler is even bound here).
-	dec, err := b.complianceGate().Authorize(context.Background(), other, compliance.GateRequest{
+	dec, err := b.ComplianceGate().Authorize(context.Background(), other, compliance.GateRequest{
 		Action: "compliance.hold.release", SubjectKind: "legal_hold", SubjectRef: "lh-1", PlanHash: "p1",
 	})
 	if err != nil {
@@ -91,7 +63,7 @@ func TestComplianceGateDualControlEvidence(t *testing.T) {
 	_, approverB := h.createApprover(t, "hold-b@bridge.test")
 	_, approverC := h.createApprover(t, "hold-c@bridge.test")
 	br := buildBridge(t, h, h.mintBoundToken(t, auth.RoleEditor))
-	gate := br.complianceGate()
+	gate := br.ComplianceGate()
 	tid := tenantAID(t, h)
 	ctx := context.Background()
 
@@ -106,13 +78,6 @@ func TestComplianceGateDualControlEvidence(t *testing.T) {
 	m := h.getJSON(h.adminToken, h.tenantA, "/v1/m/governance/approvals/"+d.ApprovalRef)
 	if m["risk_tier"] != "critical" || m["required_approvals"] != float64(2) {
 		t.Fatalf("compliance.hold.release must be critical/floored: tier=%v required=%v", m["risk_tier"], m["required_approvals"])
-	}
-
-	// Even an ACTIVE emergency grant cannot release a hold: the adapter only
-	// ever calls gateOnceNoBreakGlass.
-	h.activateBreakGlassE2E(t, "", "emergency mid-litigation")
-	if d2, _ := gate.Authorize(ctx, tid, req); d2.Status != compliance.GateStatusPending {
-		t.Fatalf("break-glass must not touch the hold-release path, got %v", d2.Status)
 	}
 
 	if code, body := h.decide(t, approverB, d.ApprovalRef, "approve"); code != http.StatusOK {

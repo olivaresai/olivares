@@ -20,13 +20,9 @@ benennen sie getrennt.
 
 | Wort | Was es ist |
 |---|---|
-| **Anbieter** | Zugangsdaten: ein API-Schlüssel, ein optionaler Endpunkt und die Art, zu der er gehört (`anthropic`, `openai`, `xai`, `openai_compatible`). |
+| **Anbieter** | Ein API-Schlüssel oder ein lokaler Modellendpunkt, eine optionale `base_url` und die Art (`anthropic`, `openai`, `xai`, `gemini`, `openai_compatible`, `ollama`). |
 | **Anbieterprofil** | Eine Identität auf dieser Maschine: welche offizielle CLI läuft, und unter welchem Konfigurations- und Benutzer-Home. |
 | **Sitzung** | Ein gestarteter Kindprozess, unter einem Profil, mit den Zugangsdaten eines Anbieters. |
-
-Ein Anbieter allein startet nichts. Ein Profil ohne Anbieter startet nur, wenn die
-Variablen des Hosts zufällig gesetzt sind. Was eine Sitzung starten lässt, ist die
-Bindung zwischen beiden.
 
 ## 1. Anbieter hinzufügen
 
@@ -38,9 +34,7 @@ Bindung zwischen beiden.
    wiedererkennen, und fügen Sie den Schlüssel ein. Lassen Sie den Endpunkt leer,
    sofern Sie nicht auf Ihr eigenes Gateway zeigen; ein `openai_compatible`-Anbieter
    verlangt einen, weil es keinen offiziellen Endpunkt gibt, den man annehmen könnte.
-4. Bestätigen Sie. Der Schreibvorgang braucht eine AAL3-Sitzung, wie jede andere
-   Zugangsdaten in diesem Produkt; die Konsole zeigt die Zeremonie statt einer
-   Ablehnung.
+4. Bestätigen Sie.
 
 Die Engine versiegelt den Schlüssel im Ruhezustand und gibt einen Hinweis aus vier
 Zeichen zurück. **Der Schlüssel wird nie wieder zurückgegeben**, auch nicht direkt
@@ -82,10 +76,10 @@ Tatsache.
 
 ## 3. Profil registrieren und Anbieter binden
 
-Die Home-Verzeichnisse des Profils müssen auf der Maschine, die die Steuerungsebene
-ausführt, bereits existieren. Der Server validiert sie dort und legt ein fehlendes nie
-an: ein leeres Ersatz-Home gäbe einer Sitzung eine Anbieteridentität, die niemand
-konfiguriert hat.
+Explizit angegebene Home-Verzeichnisse müssen auf der Maschine, die die
+Steuerungsebene ausführt, bereits existieren. Der Server validiert sie dort und
+legt fehlende explizit angegebene Homes nicht an: ein leeres Ersatz-Home gäbe
+einer Sitzung eine Anbieteridentität, die niemand konfiguriert hat.
 
 ```sh
 olivares agent profile create \
@@ -105,18 +99,18 @@ beiden Werte sind keine Rückfallkette:
 - `managed_injection` — Zugangsdaten, die die Engine liefert. Mit einem gebundenen
   Anbieter sind es dessen.
 
-Es gibt eine Abkürzung aus einem Verb, die Erkennung, Registrierung und Bindung
-zusammen erledigt und die Home-Verzeichnisse auf die dieses Treibers unter Ihrem
-`$HOME` vorbelegt:
+Die Abkürzung verbindet Erkennung, Registrierung und Anbieterbindung. Wenn weder
+`--config-home` noch `--user-home` angegeben wird, verwaltet die Engine die
+Home-Verzeichnisse. Ohne `--provider` wählt sie das Profil, das eine neue Sitzung
+des Treibers verwenden würde; mit `--provider` erstellt sie ein Profil mit eigenen
+Home-Verzeichnissen:
 
 ```sh
 olivares agent deploy claude --provider prv_01J8ABCDEF
 ```
 
-Sie meldet vier Zustände, und das sind nicht dieselben Probleme: **nicht
-installiert** (und sie nennt den Installationsbefehl, statt ihn auszuführen),
-**installiert**, **Profil bereit**, **startbar**. Sie führt nie eine
-Anbieter-Anmeldung aus und legt nie ein fehlendes Home an.
+Installieren Sie das Werkzeug unter **KI-Werkzeuge**, bevor Sie diese Abkürzung
+verwenden. Sie meldet Sie nicht bei Ihrem Anbieterkonto an.
 
 Zum späteren Binden (oder Neubinden):
 
@@ -129,12 +123,16 @@ OpenAI-Schlüssel auf einem Claude-Profil ist eine Ablehnung, die beide benennt 
 Binden und noch einmal beim Start — und keine Sitzung, die mitten im Handshake
 scheitert.
 
-| Anbieterart | Treiber, die sie lesen |
-|---|---|
-| `anthropic` | `claude`, `opencode` |
-| `openai` | `codex`, `opencode` |
-| `xai` | `grok`, `opencode` |
-| `openai_compatible` | alle, mit ihrem Endpunkt |
+| Anbieterart | Treiber, die sie lesen | Mit eigener `base_url` |
+|---|---|---|
+| `anthropic` | `claude`, `opencode` | `claude` |
+| `openai` | `codex`, `opencode` | `codex` |
+| `xai` | `grok`, `opencode` | `grok` |
+| `gemini` | `gemini-cli` |  |
+| `openai_compatible` | `codex` | `codex` |
+| `ollama` | `codex`, `opencode` | `codex`, `opencode` |
+
+Für `anthropic`, `openai` und `xai` akzeptiert OpenCode nur den eigenen Endpunkt des Anbieters: Lassen Sie `base_url` leer. Verwenden Sie `codex` für einen `openai_compatible`-Anbieter und `codex` oder `opencode` für `ollama`.
 
 ## 4. Die erste Sitzung starten
 
@@ -147,8 +145,13 @@ olivares agent session create \
 olivares agent session attach run-123
 ```
 
-`--provider-profile` ist **erforderlich**: der Server wählt weder Profil noch Home noch
-Umgebung implizit aus.
+`--provider-profile` wählt ein Profil ausdrücklich aus. Wenn profilbasierte Starts
+aktiviert sind, ermittelt die Engine beim Weglassen ein Profil für das
+Standardwerkzeug Claude Code: Sie verwendet ein passendes vorhandenes Profil oder
+erstellt eines für die eigene Anmeldung des Werkzeugs, andernfalls für einen
+kompatiblen Anbieterdatensatz. Dafür ist `sessions:profile:write` erforderlich; ohne
+diese Berechtigung wählen Sie ein Profil ausdrücklich aus. Ablehnungen bei der
+Profilermittlung und beim Start gelten weiterhin.
 
 In der Konsole ist derselbe Weg **Einstieg → Agenten und erste Sitzung** oder
 **Sitzungen → Neue Sitzung**.
@@ -185,13 +188,12 @@ tun Sie in dessen eigener Konsole.
 
 ## Die Umgebungsvariablen, und wo sie weiterhin gelten
 
-`OLIVARES_SESSION_RUNTIME_WIF` und `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` sind
-unverändert und werden weiter unterstützt. Sie sind die hostweiten Zugangsdaten und
-gelten für jedes Profil, das **keinen** Anbieter benennt.
-
-Ein Profil, das einen benennt, verwendet diesen. Die genauere Auswahl gewinnt, und von
-ihr gibt es keinen Rückfall: gebundene Zugangsdaten, die nicht erzeugt werden können,
-verweigern den Start, statt still die der Installation zu verwenden.
+Für Claude-Profile mit `managed_injection`, die keinen Anbieter nennen, liefert
+`OLIVARES_SESSION_RUNTIME_WIF` oder `OLIVARES_SESSION_RUNTIME_TOKEN_FILE` die
+Inferenz-Zugangsdaten des Hosts. Ein Profil mit einem gebundenen Anbieter nutzt
+dessen Zugangsdaten; bei einem Fehler wird der Start ohne Fallback verweigert.
+Ein Profil mit `provider_account_home` nutzt die autorisierte Anmeldung des Tools
+und benötigt keine der beiden Variablen.
 
 ## Verwandt
 

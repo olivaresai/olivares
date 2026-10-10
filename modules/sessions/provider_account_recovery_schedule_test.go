@@ -22,7 +22,7 @@ import (
 func accountRecoveryOperation(t *testing.T, m *Module, tenant model.TenantID, key string) model.Record {
 	t.Helper()
 	var result model.Record
-	err := m.data.View(context.Background(), tenant, func(sc store.Scope) error {
+	err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(accountHomeOperationKind)
 		if err != nil {
 			return err
@@ -296,14 +296,14 @@ func TestProviderAccount_UnknownCommitKeepsHome(t *testing.T) {
 			m, st := openProfileModule(t, be, nil)
 			tenant := ensureTenant(t, st, "unknown")
 			root := acctHomeRoot(t, m)
-			wrapped := &accountCommitUnknownData{inner: m.data}
-			m.data = wrapped
+			wrapped := &accountCommitUnknownData{inner: m.Data}
+			m.Data = wrapped
 			a := newAcctAPI(m, st, tenant)
 			body := map[string]any{"driver": "claude", "idempotency_key": "unknown-key"}
 			if r := a.call("POST", "/provider-accounts", body); r.code != 503 {
 				t.Fatalf("uncertain commit=%d %s", r.code, r.raw)
 			}
-			m.data = wrapped.inner
+			m.Data = wrapped.inner
 			op := accountRecoveryOperation(t, m, tenant, "unknown-key")
 			r := a.call("POST", "/provider-accounts", body)
 			if r.code != 201 || r.body["account_ref"] != op.String(colHORef) {

@@ -26,7 +26,7 @@ set -u -o pipefail
 MAN="${1:-}"
 VIEJO="${2:-}"
 if [ -z "$MAN" ] || [ ! -f "$MAN" ]; then
-	echo "uso: bash scripts/r8-curar-superficies.sh <manifest.json> [manifest-anterior.json]" >&2
+	echo "usage: bash scripts/r8-curar-superficies.sh <manifest.json> [previous-manifest.json]" >&2
 	exit 2
 fi
 
@@ -71,11 +71,11 @@ def clasifica(x):
         return "CON DATOS", ""
     if tv >= 1:
         # Cabeceras de columna presentes y ni una fila: no hay que interpretar nada.
-        return "HUECO DE SEMBRADO", "backend (sembrado por ruta)"
+        return "HUECO DE SEMBRADO", "backend (seeded per route)"
     if txt >= UMBRAL_TEXTO:
         # Sin tablas y con contenido: es un formulario o un panel. No es un hueco.
         return "SIN TABLA", ""
-    return "SIN TABLA NI TEXTO", "MIRA EL PNG: esta clase acierta 1 de 6"
+    return "SIN TABLA NI TEXTO", "CHECK THE PNG: this class is correct in 1 of 6 cases"
 
 # ⛔ UN UMBRAL INVISIBLE ES PEOR QUE NO TENERLO. Salio en la primera corrida contra datos reales:
 #    `work-decisions` dio `texto_main = 395` con el umbral en 400 — CINCO caracteres separaban
@@ -91,25 +91,25 @@ filas_out = []
 for x in sorted(t, key=lambda y: y.get("id", "")):
     v, duenyo = clasifica(x)
     if al_filo(x):
-        duenyo = (duenyo + " ").strip() + " ⚠ AL FILO del umbral"
+        duenyo = (duenyo + " ").strip() + " ⚠ AL FILO of the threshold"
     filas_out.append((x.get("id", "?"), v, x.get("filas", 0), x.get("tablas_vacias", 0), x.get("texto_main", 0), duenyo))
 
-print(f"superficies (tema claro): {len(filas_out)}")
+print(f"surfaces (light theme): {len(filas_out)}")
 print()
-print(f"  {'superficie':30} {'veredicto':18} {'filas':>5} {'tab.vac':>7} {'texto':>6}  dueño")
+print(f"  {'surface':30} {'verdict':18} {'rows':>5} {'empty.t':>7} {'text':>6}  owner")
 for i, v, f, tv, txt, d in filas_out:
-    print(f"  {i:30} {v:18} {f:5} {tv:7} {txt:6}  {d}")
+    print(f"  {i:30} {dict([('CON DATOS', 'HAS DATA'), ('HUECO DE SEMBRADO', 'SEEDING GAP'), ('SIN TABLA', 'NO TABLE'), ('SIN TABLA NI TEXTO', 'NO TABLE OR TEXT')]).get(v, v):18} {f:5} {tv:7} {txt:6}  {d.replace('AL FILO', 'BORDERLINE')}")
 
 print()
 for v in ("CON DATOS", "HUECO DE SEMBRADO", "SIN TABLA", "SIN TABLA NI TEXTO"):
     n = sum(1 for r in filas_out if r[1] == v)
-    print(f"  {v:18} {n}")
+    print(f"  {dict([('CON DATOS', 'HAS DATA'), ('HUECO DE SEMBRADO', 'SEEDING GAP'), ('SIN TABLA', 'NO TABLE'), ('SIN TABLA NI TEXTO', 'NO TABLE OR TEXT')]).get(v, v):18} {n}")
 
 n_filo = sum(1 for r in filas_out if "AL FILO" in r[5])
 if n_filo:
     print()
-    print(f"  ⚠ {n_filo} veredicto(s) AL FILO (texto a menos de {MARGEN} del umbral {UMBRAL_TEXTO}):")
-    print("    no se sostienen solos — miradlos antes de escalarlos como hueco.")
+    print(f"  ⚠ {n_filo} verdict(s) BORDERLINE (text within {MARGEN} of the threshold {UMBRAL_TEXTO}):")
+    print("    these need review before being escalated as gaps.")
 
 # ── PANELES VACIOS ───────────────────────────────────────────────────────────────────────────
 # ⛔ `empty_panels` NO ES UNA LISTA DE HUECOS: son tres clases con duenos distintos, y hasta ahora
@@ -139,12 +139,12 @@ if _ep:
         else:
             _clases["panel sin tabla"].append(e.get("id"))
     print()
-    print(f"paneles vacios: {len(_ep)} superficie(s), en TRES clases con duenos distintos")
+    print(f"empty panels: {len(_ep)} surface(s), in THREE classes with different owners")
     for k, v in _clases.items():
-        print(f"  {k:22} {len(v):3}  {', '.join(sorted(v)) if v else '—'}")
+        print(f"  {dict([('hueco de sembrado', 'seeding gap'), ('panel sin tabla', 'panel without a table'), ('superficie CON datos', 'surface WITH data')]).get(k, k):22} {len(v):3}  {', '.join(sorted(v)) if v else '—'}")
     if _clases["superficie CON datos"]:
-        print("  ⚠ las de la ultima clase NO son pantallas vacias: traen filas y aun asi les falta")
-        print("    un panel, asi que no salen en ninguna busqueda de vacias.")
+        print("  ⚠ the final class does NOT contain empty screens: they have rows but are still missing")
+        print("    a panel, so searches for empty screens miss them.")
 
 # ── RANCIDEZ ─────────────────────────────────────────────────────────────────────────────────
 # ⛔ SE COMPARA POR `sha256` DE LA IMAGEN, no por fecha. Una captura re-tomada sobre un arbol que
@@ -158,14 +158,14 @@ if viejo:
     nuevas = sorted(k for k in act if k not in ant)
     idas = sorted(k for k in ant if k not in act)
     print()
-    print(f"rancidez contra {viejo}")
-    print(f"  cambiadas {len(cambiadas)} · iguales {len(iguales)} · nuevas {len(nuevas)} · desaparecidas {len(idas)}")
-    for etiq, conj in (("nuevas", nuevas), ("desaparecidas", idas)):
+    print(f"staleness compared with {viejo}")
+    print(f"  changed {len(cambiadas)} · unchanged {len(iguales)} · new {len(nuevas)} · removed {len(idas)}")
+    for etiq, conj in (("new", nuevas), ("removed", idas)):
         for k in conj[:12]:
             print(f"    {etiq:14} {k[0]} ({k[1]})")
 else:
     print()
-    print("  (sin manifiesto anterior: no se mide rancidez — no es que no haya, es que no se miro)")
+    print("  (no previous manifest: staleness is unmeasured, not absent)")
 
 # ⛔ MEDIDO SOBRE LAS 134 TOMAS DE LA CORRIDA DEL 2026-08-30 (67 superficies, tema claro), que es
 #    el unico universo real que ha visto este guion — hasta ahora sus cifras salian de fixtures:
@@ -200,12 +200,12 @@ _hallazgos = sum(
 )
 if _hallazgos:
     print()
-    print(f"  ⇒ {_hallazgos} superficie(s) piden adjudicacion (huecos de sembrado + sin tabla ni texto).")
-    print("    ⚠ «sin tabla ni texto» NO significa vacia: este guion solo cuenta filas de TABLA, y")
-    print("      una lista de tarjetas o de definiciones no las tiene. Medido el 2026-08-30 sobre")
-    print("      las seis que marco: CINCO estaban bien. Mira el PNG antes de escalar ninguna.")
+    print(f"  ⇒ {_hallazgos} surface(s) require assessment (seeding gaps + no table or text).")
+    print("    ⚠ no table or text does NOT mean empty: this script only counts TABLE rows,")
+    print("      which card and definition lists do not have. Measured on 2026-08-30 across")
+    print("      six flagged surfaces: FIVE were correct. Check the PNG before escalating any.")
     sys.exit(1)
 print()
-print("  ⇒ ninguna superficie pide adjudicacion.")
+print("  ⇒ no surface requires assessment.")
 sys.exit(0)
 PY

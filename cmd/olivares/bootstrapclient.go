@@ -122,6 +122,9 @@ func (c bootstrapClient) do(cmd *cobra.Command, method, path string, body any, a
 		if merr != nil {
 			return nil, 0, resolved.Token, merr
 		}
+		if c.carriesSecret {
+			defer clear(encoded)
+		}
 		requestBody = bytes.NewReader(encoded)
 	}
 	req, err := http.NewRequestWithContext(cmd.Context(), method, resolved.Server+path, requestBody)

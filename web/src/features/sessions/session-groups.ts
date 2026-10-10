@@ -22,28 +22,20 @@
 //    asking to be logged in are both work FOR A PERSON; a session that went quiet
 //    within tolerance is not. Collapsing the two would make the group the operator is
 //    supposed to trust the one they learn to ignore.
-import type { RunDTO } from '@/features/agentops/types'
-import { isLiveRun, type UnifiedSession } from './provenance'
+import { isLiveRun, runWantsAPerson, type UnifiedSession } from './provenance'
 import { pinnedAddress } from './session-pins'
 
-/** The three sections of the rail, in the order they are rendered. */
-export const WORK_GROUPS = ['active', 'attention', 'settled'] as const
+/**
+ * The three sections of the list, in the order they are rendered: what asks for the
+ * person (Needs you), what is working, what is idle.
+ */
+export const WORK_GROUPS = ['attention', 'active', 'settled'] as const
 export type WorkGroupId = (typeof WORK_GROUPS)[number]
 
 /** One rendered section: its id and the rows in it, already ordered. */
 export interface WorkGroup {
   id: WorkGroupId
   sessions: UnifiedSession[]
-}
-
-/** A run is asking for a person: its provider says it needs a login, or a tool call of
- * it waits on an approval (HU-R12). A failed run waits for nothing: it is settled, with
- * its Failed state on the row, as the sidebar files it under Earlier (Root 19:15Z). */
-function runWantsAPerson(run: RunDTO): boolean {
-  return (
-    run.provider_auth_state === 'required' ||
-    (!!run.pending_approval_ref && isLiveRun(run))
-  )
 }
 
 /**

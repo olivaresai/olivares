@@ -73,8 +73,8 @@ func TestAJoinedInterruptIsRefusedBeforeAMovingFence(t *testing.T) {
 			makeProtocolInterruptRecipientWriter(t, fixture)
 			binding := protocolInterruptBindingForTest(t, fixture, BindingProtocolA2A)
 			calls := installJoinedPortChecks(fixture.m, fixture.tenant)
-			moving := &movingStanding{next: fixture.m.standing, moves: tc.moves}
-			fixture.m.standing = moving
+			moving := &movingStanding{next: fixture.m.Standing, moves: tc.moves}
+			fixture.m.Standing = moving
 			replayID := "moved-fence-" + strings.ReplaceAll(tc.name, " ", "-")
 			_, elapsed, err := applyJoinedInterrupt(fixture,
 				joinedInterruptClaim(fixture, binding, replayID),

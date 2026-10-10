@@ -31,10 +31,12 @@
 //    bare states inside the doc comment EXPLAINING the rule, on its own first run. The
 //    files this scans are the ones whose headers quote `text-xl` and `text-2xl` while
 //    describing why they no longer use them. `stripComments` is pinned by its own case.
+import { EXTENSION_ROUTES } from '@/features/extensions'
 import { readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { TYPE_SCALE_STEPS } from '@/lib/utils'
+import { FEATURE_EXTENSIONS } from '@/features/extensions'
 
 const SRC = resolve(__dirname, '..')
 
@@ -64,7 +66,6 @@ const AT_THE_STANDARD = [
   'features/alerting',
   'features/attestation',
   'features/audit',
-  'features/automations',
   'features/backups',
   'features/capabilities',
   'features/catalog',
@@ -83,7 +84,6 @@ const AT_THE_STANDARD = [
   'features/model-ops',
   'features/models',
   'features/observability',
-  'features/orchestration',
   'features/platforms',
   'features/rate-limits',
   'features/recordings',
@@ -92,7 +92,9 @@ const AT_THE_STANDARD = [
   'features/residency',
   'features/sandbox',
   'features/security',
-  'features/team-costs',
+  ...(FEATURE_EXTENSIONS.some((view) => view.id === 'team-costs')
+    ? ['features/team-costs']
+    : []),
   'features/voice',
   // THE DETAIL, FORM, DIALOG and DASHBOARD families, and the shared surfaces under them.
   // `features/onboarding` is the ONE directory still open: all 16 of its remaining raw
@@ -106,7 +108,9 @@ const AT_THE_STANDARD = [
   'features/access-map',
   'features/api-playground',
   'features/logs',
-  'features/posture-export',
+  ...(EXTENSION_ROUTES.some((route) => route.id === 'postureExport')
+    ? ['features/posture-export']
+    : []),
   'features/session-viewer',
   'features/tenants',
   'features/work',

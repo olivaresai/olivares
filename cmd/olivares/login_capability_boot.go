@@ -24,9 +24,9 @@ import (
 // precedence reversed, an explicit falsey value on a linked build would classify Wired and
 // the recovery path after a downgrade would disappear.
 //
-// Capability is never probed by calling newLoginPolicy: the private identity-scale factory
+// Capability is never probed by calling the loginPolicy port: the private identity-scale factory
 // returns nil for a nil federation service by design, so a nil result cannot separate "no
-// component" from "no posture to read". loginEnforcementComponentLinked() answers it, and
+// component" from "no posture to read". thisEdition.loginEnforcementLinked answers it, and
 // every build resolves exactly one implementation beside its own factory.
 //
 // Licence validity is not capability. enterprise/ssoenforce reads no licence claim, so a
@@ -81,7 +81,7 @@ type loginCapabilityBoot struct {
 // this artifact's compiled capability. auth.ClassifyLoginComponent is the single
 // classifier; this function supplies its two inputs and holds no second algorithm.
 func newLoginCapabilityBoot(getenv func(string) string, artifactVersion string) loginCapabilityBoot {
-	linked := loginEnforcementComponentLinked()
+	linked := thisEdition.loginEnforcementLinked
 	return loginCapabilityBoot{
 		state:           auth.ClassifyLoginComponent(linked, loginEnforcementDisabled(getenv(envLoginEnforcement))),
 		linked:          linked,
@@ -191,7 +191,7 @@ func (b loginCapabilityBoot) recordAtPromotion(ctx context.Context, st store.Sto
 }
 
 // installAndAssert installs the declared state on both auth services and checks it against
-// the policy actually wired, after newLoginPolicy and before the API is constructed.
+// the policy actually wired, after the loginPolicy port and before the API is constructed.
 func (b loginCapabilityBoot) installAndAssert(authn *auth.Authenticator, fed *auth.FederationService) error {
 	return auth.InstallLoginComponentState(b.state, authn, fed)
 }

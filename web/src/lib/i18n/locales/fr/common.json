@@ -1,4 +1,10 @@
 {
+  "edition": {
+    "viewPolicy": "Voir la politique",
+    "editingRequiresBusiness": "La modification des politiques, rôles et autorisations personnalisés nécessite Business.",
+    "disablePolicy": "Désactiver la politique",
+    "disablePolicyDescription": "La politique rédigée cesse de s’appliquer. Son historique et les autres politiques appliquées sont conservés."
+  },
   "errors": {
     "generic": "Une erreur s'est produite"
   },
@@ -214,8 +220,8 @@
       "sessionResumed": "{{actor}} a repris une session",
       "sessionResumed_you": "Vous avez repris une session",
       "sessionFailed": "Une session n’a pas pu démarrer",
-      "approvalRequested": "La session de {{actor}} demande une approbation",
-      "approvalRequested_you": "Votre session demande une approbation",
+      "approvalRequested": "{{actor}} a demandé une approbation",
+      "approvalRequested_you": "Vous avez demandé une approbation",
       "killswitchEngaged": "Arrêt d’urgence activé par {{actor}}",
       "killswitchEngaged_you": "Vous avez activé l’arrêt d’urgence",
       "killswitchReleased": "Arrêt d’urgence levé par {{actor}}",
@@ -228,14 +234,37 @@
       "workspaceCreated": "{{actor}} a créé un espace de travail",
       "workspaceCreated_you": "Vous avez créé un espace de travail",
       "workspaceUpdated": "{{actor}} a modifié un espace de travail",
-      "workspaceUpdated_you": "Vous avez modifié un espace de travail"
+      "workspaceUpdated_you": "Vous avez modifié un espace de travail",
+      "signedIn": "{{actor}} s’est connecté",
+      "workCreated": "{{actor}} a créé un élément de travail",
+      "workReady": "{{actor}} a marqué un élément de travail comme prêt",
+      "workCompleted": "{{actor}} a terminé un élément de travail",
+      "workBlocked": "{{actor}} a bloqué un élément de travail",
+      "workCanceled": "{{actor}} a annulé un élément de travail",
+      "approvalDecided": "{{actor}} a enregistré une décision d’approbation",
+      "approvalCanceled": "{{actor}} a annulé une demande d’approbation",
+      "policyCreated": "{{actor}} a créé une politique",
+      "policyUpdated": "{{actor}} a mis à jour une politique",
+      "policyDeleted": "{{actor}} a supprimé une politique",
+      "signedIn_you": "Vous vous êtes connecté",
+      "workCreated_you": "Vous avez créé un élément de travail",
+      "workReady_you": "Vous avez marqué un élément de travail comme prêt",
+      "workCompleted_you": "Vous avez terminé un élément de travail",
+      "workBlocked_you": "Vous avez bloqué un élément de travail",
+      "workCanceled_you": "Vous avez annulé un élément de travail",
+      "approvalDecided_you": "Vous avez enregistré une décision d’approbation",
+      "approvalCanceled_you": "Vous avez annulé une demande d’approbation",
+      "policyCreated_you": "Vous avez créé une politique",
+      "policyUpdated_you": "Vous avez mis à jour une politique",
+      "policyDeleted_you": "Vous avez supprimé une politique"
     },
     "actors": {
       "you": "Vous",
       "member": "Un membre",
       "token": "Un jeton d’API",
       "system": "Olivares"
-    }
+    },
+    "includeInternal": "Inclure les enregistrements internes"
   },
   "passphrase": {
     "tooShort": "La phrase secrète doit comporter au moins {{min}} caractères",

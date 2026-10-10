@@ -433,3 +433,35 @@ func restoredTip(t *testing.T, e *estate, tenant model.TenantID) int64 {
 	}
 	return seq
 }
+
+// TestTipMismatchWithEqualSeqNamesBothHashes: the failure that read "restored seq
+// 7 != manifest seq 7" must say which heads differ.
+func TestTipMismatchWithEqualSeqNamesBothHashes(t *testing.T) {
+	ctx := context.Background()
+	src := newEstate(t)
+	tn := src.newTenant(t)
+	src.appendN(t, tn, 3)
+	src.checkpointAll(t)
+	b := makeBundle(t, src)
+
+	dir, m, kek := extractBundle(t, b)
+	cipher, _ := dr.OpenCipher([]byte(testPass), kek)
+	encBlob, _ := os.ReadFile(filepath.Join(dir, m.Keys[0].File))
+	keyBytes, err := cipher.Open(encBlob)
+	if err != nil {
+		t.Fatalf("decrypt: %v", err)
+	}
+	rest := openRestored(t, filepath.Join(dir, m.Store.File), decodeKeyFile(t, keyBytes))
+
+	const forged = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef"
+	for i := range m.Tenants {
+		m.Tenants[i].HeadHash = forged
+	}
+	rep, err := dr.RestoreVerify(ctx, rest.st, m, rest.pub(), rest.cpVerifier(t))
+	if err != nil {
+		t.Fatalf("restore verify: %v", err)
+	}
+	if rep.OK || !anyContains(rep.Problems, "hash deadbeef") {
+		t.Fatalf("tip mismatch must name the manifest hash, got OK=%v %v", rep.OK, rep.Problems)
+	}
+}

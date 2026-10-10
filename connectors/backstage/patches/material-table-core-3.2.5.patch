@@ -1,0 +1,9 @@
+diff --git a/dist/utils/data-manager.js b/dist/utils/data-manager.js
+--- a/dist/utils/data-manager.js
++++ b/dist/utils/data-manager.js
+@@ -20 +20 @@
+-var _uuid = _interopRequireDefault(require("uuid"));
++var _uuid = require("uuid");
+@@ -334 +334 @@
+-          uuid: row.uuid || _uuid["default"].v4()
++          uuid: row.uuid || _uuid.v4()

@@ -22,7 +22,7 @@ func TestFullPreset_OnlyARunAdministrator(t *testing.T) {
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(staticCred()),
 		WithLaunchGate(gate))
 
-	_, err := m.createRun(ctx, tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, PermissionMode: "bypassPermissions",
 		Actor: actorU, ActorKind: actorKindU,
 	})
@@ -36,7 +36,7 @@ func TestFullPreset_OnlyARunAdministrator(t *testing.T) {
 		t.Fatal("a refused full launch reached the gate or the runner")
 	}
 
-	if _, err := m.createRun(ctx, tenant, CreateRunParams{
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, PermissionMode: "bypassPermissions",
 		Actor: actorU, ActorKind: actorKindU, MayRunUnrestricted: true,
 	}); err != nil {
@@ -47,7 +47,7 @@ func TestFullPreset_OnlyARunAdministrator(t *testing.T) {
 	}
 
 	// Every other level is unaffected.
-	if _, err := m.createRun(ctx, tenant, CreateRunParams{
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative, PermissionMode: "acceptEdits",
 		Actor: actorU, ActorKind: actorKindU,
 	}); err != nil {

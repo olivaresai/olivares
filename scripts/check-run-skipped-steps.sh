@@ -102,7 +102,7 @@ repo_slug() {
 	[ -n "$REPO" ] && { printf '%s' "$REPO"; return 0; }
 	REPO="${OLIVARES_RUN_REPO:-${GITHUB_REPOSITORY:-}}"
 	[ -n "$REPO" ] || REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>/dev/null) || REPO=""
-	[ -n "$REPO" ] || { echo "check-run-skipped-steps: 2 NO PUDE MIRAR: no se que repositorio consultar (fija OLIVARES_RUN_REPO)" >&2; exit 2; }
+	[ -n "$REPO" ] || { echo "check-run-skipped-steps: 2 COULD NOT CHECK: cannot determine the repository (set OLIVARES_RUN_REPO)" >&2; exit 2; }
 	printf '%s' "$REPO"
 }
 JSON="${OLIVARES_RUN_JOBS_JSON:-}"
@@ -111,33 +111,33 @@ REGLAS="${OLIVARES_SKIPS_ESTRUCTURALES:-$AQUI/lib/skips-estructurales.txt}"
 RUN="${1:-}"
 
 cannot() {
-	printf 'check-run-skipped-steps: NO HE PODIDO MIRAR: %s\n' "$1" >&2
+	printf 'check-run-skipped-steps: COULD NOT CHECK: %s\n' "$1" >&2
 	exit 2
 }
 
-[ -r "$REGLAS" ] || cannot "no puedo leer el predicado de saltos estructurales en $REGLAS"
+[ -r "$REGLAS" ] || cannot "cannot read the structural-skip predicate in $REGLAS"
 
 if [ -z "$JSON" ] || [ -z "$RUNJSON" ]; then
 	[ -z "$JSON" ] && [ -z "$RUNJSON" ] ||
-		cannot "alimenta OLIVARES_RUN_JOBS_JSON y OLIVARES_RUN_JSON juntos, o ninguno"
-	[ -n "$RUN" ] || cannot "falta el <run-id> (y no hay OLIVARES_RUN_JOBS_JSON/OLIVARES_RUN_JSON)"
-	case "$RUN" in *[!0-9]* | '') cannot "el run-id '$RUN' no es un numero" ;; esac
-	command -v gh >/dev/null 2>&1 || cannot "gh no esta en el PATH; alimenta los dos JSON por fichero"
-	tmpj="$(mktemp "${TMPDIR:-/tmp}/runjobs.XXXXXX")" || cannot "mktemp fallo"
-	tmpr="$(mktemp "${TMPDIR:-/tmp}/run.XXXXXX")" || cannot "mktemp fallo"
+		cannot "set OLIVARES_RUN_JOBS_JSON and OLIVARES_RUN_JSON together, or neither"
+	[ -n "$RUN" ] || cannot "missing <run-id> (neither OLIVARES_RUN_JOBS_JSON nor OLIVARES_RUN_JSON is set)"
+	case "$RUN" in *[!0-9]* | '') cannot "run-id '$RUN' is not a number" ;; esac
+	command -v gh >/dev/null 2>&1 || cannot "gh is not in PATH; supply both JSON inputs as files"
+	tmpj="$(mktemp "${TMPDIR:-/tmp}/runjobs.XXXXXX")" || cannot "mktemp failed"
+	tmpr="$(mktemp "${TMPDIR:-/tmp}/run.XXXXXX")" || cannot "mktemp failed"
 	trap 'rm -f "$tmpj" "$tmpr"' EXIT
 	gh api "repos/$(repo_slug)/actions/runs/$RUN/jobs?per_page=100" >"$tmpj" 2>/dev/null ||
-		cannot "la API no contesto los jobs del run $RUN en $(repo_slug)"
+		cannot "the API did not return jobs for run $RUN in $(repo_slug)"
 	# A-02: el objeto del RUN, que es el unico que sabe si nacieron todos sus jobs.
 	gh api "repos/$(repo_slug)/actions/runs/$RUN" >"$tmpr" 2>/dev/null ||
-		cannot "la API no contesto el run $RUN en $(repo_slug)"
+		cannot "the API did not return run $RUN in $(repo_slug)"
 	JSON="$tmpj"
 	RUNJSON="$tmpr"
 fi
-[ -r "$JSON" ] || cannot "no puedo leer $JSON"
-[ -r "$RUNJSON" ] || cannot "no puedo leer $RUNJSON"
+[ -r "$JSON" ] || cannot "cannot read $JSON"
+[ -r "$RUNJSON" ] || cannot "cannot read $RUNJSON"
 
-command -v python3 >/dev/null 2>&1 || cannot "sin python3 no puedo leer el JSON"
+command -v python3 >/dev/null 2>&1 || cannot "python3 is not installed; cannot read the JSON"
 
 python3 - "$JSON" "$RUNJSON" "$REGLAS" <<'PY'
 import json, sys
@@ -145,8 +145,8 @@ import json, sys
 RUTA_JOBS, RUTA_RUN, RUTA_REGLAS = sys.argv[1], sys.argv[2], sys.argv[3]
 
 
-def no_puedo(msg):
-    sys.stderr.write(f"check-run-skipped-steps: NO HE PODIDO MIRAR: {msg}\n")
+def cannot_check(msg):
+    sys.stderr.write(f"check-run-skipped-steps: COULD NOT CHECK: {msg}\n")
     raise SystemExit(2)
 
 
@@ -155,12 +155,11 @@ def carga(ruta, que):
         with open(ruta, encoding="utf-8") as fh:
             return json.load(fh)
     except Exception as exc:                                # JSON roto, fichero vacio, lo que sea
-        no_puedo(f"{que} ilegible ({exc})")
+        cannot_check(f"{que} is unreadable ({exc})")
 
 
-# ── El predicado compartido con. Un fichero ilegible NO se degrada a «sin reglas»: sin
-#    reglas todo salto seria sustantivo y la sonda se volveria ruido, o —peor— alguien la
-#    "arreglaria" ignorandolas. Se responde 2.
+# Shared predicate with. An unreadable rules file returns 2, not “no rules”:
+# otherwise every skip becomes substantive noise, inviting callers to ignore the check.
 exactos = set()
 try:
     with open(RUTA_REGLAS, encoding="utf-8") as fh:
@@ -170,27 +169,27 @@ try:
                 continue
             if linea.startswith("prefijo:"):
                 # Se rechaza CON SU MOTIVO, para que quien lo reintroduzca sepa contra que discute.
-                no_puedo(
-                    f"{RUTA_REGLAS}:{n}: las reglas por prefijo se retiraron a proposito — los "
-                    f"pasos que fabrica el runner se eximen por EMPAREJAMIENTO ('Post Run X' solo "
-                    f"si existe 'Run X' en el mismo job), que cubre lo mismo sin absolver por "
-                    f"parecido. Usa 'exacto:' o arregla el emparejamiento.")
+                cannot_check(
+                    f"{RUTA_REGLAS}:{n}: prefix rules were deliberately removed; runner-generated "
+                    f"steps are exempted by pairing ('Post Run X' only "
+                    f"when 'Run X' exists in the same job). This avoids exempting unrelated "
+                    f"steps with similar names. Use 'exacto:' or fix the pairing.")
             if not linea.startswith("exacto:"):
-                no_puedo(f"{RUTA_REGLAS}:{n}: linea que no es 'exacto:': {linea!r}")
+                cannot_check(f"{RUTA_REGLAS}:{n}: line is not an 'exacto:' rule: {linea!r}")
             val = linea[len("exacto:"):]
             if len(val) < 2 or val[0] != '"' or val[-1] != '"':
-                no_puedo(
-                    f"{RUTA_REGLAS}:{n}: el valor de 'exacto:' debe ir entre comillas "
-                    f"(los espacios de los extremos son significativos), y trae: {val!r}")
+                cannot_check(
+                    f"{RUTA_REGLAS}:{n}: 'exacto:' value must be quoted "
+                    f"(leading and trailing spaces matter), got: {val!r}")
             val = val[1:-1]
             if not val:
-                no_puedo(f"{RUTA_REGLAS}:{n}: regla vacia")
+                cannot_check(f"{RUTA_REGLAS}:{n}: empty rule")
             exactos.add(val)
 except OSError as exc:
-    no_puedo(f"no puedo leer el predicado ({exc})")
+    cannot_check(f"cannot read the predicate ({exc})")
 
 if not exactos:
-    no_puedo(f"{RUTA_REGLAS} no declara ninguna regla")
+    cannot_check(f"{RUTA_REGLAS} declares no rules")
 
 
 def clasifica(nombre, nombres_del_job):
@@ -214,7 +213,7 @@ def clasifica(nombre, nombres_del_job):
     # —medido sobre 33291332689: 3 de 3 emparejados asi— de modo que exigir el prefijo `Post Run `
     # y el hermano `Run …` no pierde ni uno de los reales y cierra el hueco.
     if nombre.startswith("Post Run ") and nombre[len("Post "):] in nombres_del_job:
-        return "emparejado con su paso 'Run' (generado por el runner)"
+        return "paired with its 'Run' step (runner-generated)"
     return None
 
 
@@ -223,56 +222,56 @@ def clasifica(nombre, nombres_del_job):
 # indistinguible de un run terminado. MEDIDO sobre 33291332689: 14 jobs al consultarlo y 15 al
 # cerrar — `race-hot` nace de los dos `-race`. El conjunto de jobs NO es estable mientras el run
 # esta abierto, asi que preguntarle a los jobs si el run acabo es preguntarle al testigo equivocado.
-run = carga(RUTA_RUN, "el objeto del run")
+run = carga(RUTA_RUN, "the run object")
 if not isinstance(run, dict):
-    no_puedo("el objeto del run no es un objeto")
+    cannot_check("run input is not an object")
 if "status" not in run:
-    no_puedo("el objeto del run no trae 'status'")
+    cannot_check("run object has no 'status'")
 if run.get("status") != "completed":
-    no_puedo(
-        f"el run {run.get('id', '?')} no ha terminado (status={run.get('status')!r}); "
-        f"sus jobs pueden no haber nacido todavia")
+    cannot_check(
+        f"run {run.get('id', '?')} has not finished (status={run.get('status')!r}); "
+        f"its jobs may not have been created yet")
 if run.get("conclusion") is None:
-    no_puedo(f"el run {run.get('id', '?')} figura 'completed' pero sin conclusion")
+    cannot_check(f"run {run.get('id', '?')} is 'completed' but has no conclusion")
 
-datos = carga(RUTA_JOBS, "el JSON de jobs")
+datos = carga(RUTA_JOBS, "the jobs JSON")
 if not isinstance(datos, dict) or "jobs" not in datos or not isinstance(datos["jobs"], list):
-    no_puedo("el JSON no trae una lista 'jobs'")
+    cannot_check("JSON has no 'jobs' list")
 
 jobs = datos["jobs"]
 # Un run sin jobs no es un run limpio: es un run que no existe, o cuyos jobs no arrancaron. Decirlo
 # 0 seria justo el defecto que este guion persigue — dar por medido lo que no se ha mirado.
 if not jobs:
-    no_puedo("el run no trae jobs")
+    cannot_check("run has no jobs")
 
 # ══ A-03 ══ FORMA antes de juzgar. Un JSON valido puede estar incompleto, y la v1 lo daba por
 # bueno: convertia `steps` ausente en `[]` y no leia la conclusion del job. Un cero sobre lo que no
 # se ha mirado es peor que un 2.
 total = datos.get("total_count")
 if not isinstance(total, int):
-    no_puedo("el JSON no trae un 'total_count' entero: no se si faltan jobs")
+    cannot_check("JSON has no integer 'total_count'; cannot determine whether jobs are missing")
 if total != len(jobs):
-    no_puedo(
-        f"la API declara {total} job(s) y he recibido {len(jobs)}: hay paginacion sin recorrer "
-        f"y no puedo concluir sobre los que faltan")
+    cannot_check(
+        f"the API declares {total} job(s), but only {len(jobs)} were received: pagination is incomplete "
+        f"and cannot verify the missing jobs")
 
 for j in jobs:
     nombre = str(j.get("name", "?"))
     if j.get("status") != "completed":
-        no_puedo(f"el job '{nombre}' no esta cerrado (status={j.get('status')!r})")
+        cannot_check(f"job '{nombre}' has not finished (status={j.get('status')!r})")
     if j.get("conclusion") is None:
-        no_puedo(f"el job '{nombre}' figura cerrado y sin conclusion")
+        cannot_check(f"job '{nombre}' is finished but has no conclusion")
     if "steps" not in j or not isinstance(j["steps"], list):
-        no_puedo(f"el job '{nombre}' no trae una lista 'steps': el JSON esta incompleto")
+        cannot_check(f"job '{nombre}' has no 'steps' list; the JSON is incomplete")
     if not j["steps"]:
-        no_puedo(f"el job '{nombre}' no trae ningun paso")
+        cannot_check(f"job '{nombre}' has no steps")
     for p in j["steps"]:
         if not isinstance(p, dict) or "name" not in p or "conclusion" not in p:
-            no_puedo(f"paso ilegible en '{nombre}': {p!r}")
+            cannot_check(f"unreadable step in '{nombre}': {p!r}")
         if p.get("conclusion") is None:
-            no_puedo(
-                f"el paso {p.get('number', '?')} '{p.get('name', '?')}' de '{nombre}' no tiene "
-                f"conclusion pese a que el job figura cerrado")
+            cannot_check(
+                f"step {p.get('number', '?')} '{p.get('name', '?')}' in '{nombre}' has no "
+                f"conclusion, although the job is marked finished")
 
 # ══ A-01 ══ Clasificar TODOS los saltos, no solo los que van detras de un fallo.
 incompletos, descartados_total = [], {}
@@ -293,11 +292,11 @@ for j in jobs:
         # El PRIMER fallo, por numero de paso: es el que causa los saltos. El ultimo suele ser la
         # consecuencia, y leerlo a el es como se pierde una noche.
         p0 = min(fallos, key=lambda p: p.get("number", 0))
-        primero = f"paso {p0.get('number', '?')} {p0.get('name', '?')}"
+        primero = f"step {p0.get('number', '?')} {p0.get('name', '?')}"
     linea = (f"{nombre} · failure:{len(fallos)} · skipped:{len(saltados)} "
-             f"(sustantivos:{len(sustantivos)} · estructurales:{len(descartados)})")
+             f"(substantive:{len(sustantivos)} · structural:{len(descartados)})")
     if primero:
-        linea += f" · primer failure: {primero}"
+        linea += f" · first failure: {primero}"
     print(linea)
     if sustantivos:
         incompletos.append((nombre, len(fallos), sustantivos, primero))
@@ -306,26 +305,26 @@ print()
 if descartados_total:
     # La heuristica se AUDITA en la salida. Un predicado por nombre escondido en el codigo es el
     # que deriva; uno que dice a quien descarto y por que regla, se corrige al leerlo.
-    print("Saltos descartados por el predicado declarado "
-          "(scripts/lib/skips-estructurales.txt) — su presencia es normal:")
+    print("Skips excluded by the declared predicate "
+          "(scripts/lib/skips-estructurales.txt) — their presence is normal:")
     for regla, n in sorted(descartados_total.items(), key=lambda kv: -kv[1]):
         print(f"  {n} × {regla}")
     print()
 
 if incompletos:
-    print("HALLAZGO — veredicto INCOMPLETO: hay pasos que NO se midieron y no son estructurales.")
-    print("Un `skipped` no es un «no hacia falta»: es un «no se midio».")
+    print("FINDING — INCOMPLETE result: some steps were not measured and are not structural skips.")
+    print("A `skipped` step is unmeasured; it does not prove the step was unnecessary.")
     for nombre, nf, sustantivos, primero in incompletos:
         detalle = ", ".join(
             f"{p.get('number', '?')} {p.get('name', '?')}" for p, _ in sustantivos[:5])
-        mas = "" if len(sustantivos) <= 5 else f" (+{len(sustantivos) - 5} mas)"
-        cola = f" — tras {nf} fallo(s), {primero}" if nf else " — SIN fallo delante"
-        print(f"  {nombre}: {len(sustantivos)} sin medir{cola}")
+        mas = "" if len(sustantivos) <= 5 else f" (+{len(sustantivos) - 5} more)"
+        cola = f" — after {nf} failure(s), {primero}" if nf else " — no preceding failure"
+        print(f"  {nombre}: {len(sustantivos)} unmeasured{cola}")
         print(f"      {detalle}{mas}")
-    print("Corre la pata siguiente a donde murio antes de nombrar candidato.")
+    print("Run the step following the failure before designating a candidate.")
     raise SystemExit(1)
 
-print(f"CLEAN — {len(jobs)} job(s) del run {run.get('id', '?')} "
-      f"({run.get('conclusion')}); ningun paso quedo sin medir por causa no estructural.")
+print(f"CLEAN — {len(jobs)} job(s) in run {run.get('id', '?')} "
+      f"({run.get('conclusion')}); no step remained unmeasured for a nonstructural reason.")
 raise SystemExit(0)
 PY

@@ -4,13 +4,13 @@
 //
 // The dual-control re-enable (POST /killswitch/{id}/reenable). NEVER unilateral:
 // the first POST opens the approval (security.killswitch.reenable — CRITICAL,
-// two distinct humans, anti-self-approval, AAL3 per decision) and answers 202 with
-// the pending envelope; the two decisions happen in the approvals view
-// (/permissions); re-POSTing reports progress and the call that finds the approval
-// satisfied flips the stop (200). This dialog drives that loop: request → show the
-// approval id + progress + the link where the humans decide → check again → done
-// ("post-review due"). 409s (dual_control_required, prior unreviewed incident)
-// surface with the engine's message — they are the design, not failures.
+// two distinct humans, anti-self-approval, the deployment's administrative step-up per
+// decision) and answers 202 with the pending envelope; the two decisions happen in the
+// approvals view (/permissions); re-POSTing reports progress and the call that finds the
+// approval satisfied flips the stop (200). This dialog drives that loop: request → show
+// the approval id + progress + the link where the humans decide → check again → done
+// ("post-review due"). 409s (dual_control_required, prior unreviewed incident) surface
+// with the engine's message — they are the design, not failures.
 import { Link } from '@tanstack/react-router'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
@@ -69,7 +69,7 @@ function ReenableBody({
 }) {
   const { t } = useTranslation(['killswitch', 'common', 'errors'])
   const report = useFailedActionReporter()
-  const { activeTenant } = useAuth()
+  const { activeTenant, principal } = useAuth()
   const queryClient = useQueryClient()
 
   const [reason, setReason] = useState('')
@@ -142,7 +142,13 @@ function ReenableBody({
     <>
       <DialogHeader>
         <DialogTitle>{t('reenable.title')}</DialogTitle>
-        <DialogDescription>{t('reenable.body')}</DialogDescription>
+        <DialogDescription>
+          {t('reenable.body', {
+            stepUp: t(
+              `reenable.stepUp.${principal?.admin_step_up ?? 'unknown'}`,
+            ),
+          })}
+        </DialogDescription>
       </DialogHeader>
 
       {pending ? (

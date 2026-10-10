@@ -16,6 +16,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/core/dr"
@@ -45,7 +46,7 @@ func newDRCmd() *cobra.Command {
 			"the per-tenant chain tips; restore re-verifies the chain end to end.",
 	}
 	root.AddCommand(drBackupCmd(), drRestoreCmd(), drVerifyCmd(), drInspectCmd(),
-		drPushCmd(), drPullCmd(), drListCmd(), drDrillCmd())
+		drPushCmd(), drPullCmd(), drListCmd(), drDrillCmd(), drRestoreStatusCmd())
 	return root
 }
 
@@ -80,8 +81,8 @@ type kekFlags struct {
 }
 
 func addKEKFlags(cmd *cobra.Command, f *kekFlags) {
-	cmd.Flags().StringVar(&f.passphraseFile, "passphrase-file", os.Getenv("OLIVARES_DR_PASSPHRASE_FILE"), "file holding the backup passphrase (Argon2id-derived KEK); or $OLIVARES_DR_PASSPHRASE_FILE")
-	cmd.Flags().StringVar(&f.keyFile, "kek-key-file", os.Getenv("OLIVARES_DR_KEK_FILE"), "file holding a raw/base64 32-byte key-encryption key (the KMS-unwrapped path); or $OLIVARES_DR_KEK_FILE")
+	cmd.Flags().StringVar(&f.passphraseFile, "passphrase-file", envconfig.Get("OLIVARES_DR_PASSPHRASE_FILE"), "file holding the backup passphrase (Argon2id-derived KEK); or $OLIVARES_DR_PASSPHRASE_FILE")
+	cmd.Flags().StringVar(&f.keyFile, "kek-key-file", envconfig.Get("OLIVARES_DR_KEK_FILE"), "file holding a raw/base64 32-byte key-encryption key (the KMS-unwrapped path); or $OLIVARES_DR_KEK_FILE")
 }
 
 // backupCipher builds a fresh KeyCipher for a backup (new salt for a passphrase).
@@ -180,11 +181,14 @@ func (f *drFlags) resolveDSNRefs(ctx context.Context) error {
 		}
 		*r.dst = resolved
 	}
+	if f.engineKind == "sqlite" {
+		return checkCMEKSQLiteStore(f.dsn)
+	}
 	return nil
 }
 
-// drBoot wires a full engine (store + signer + registered modules) on a data dir,
-// the same composition root the serve/audit commands use.
+// drBoot opens an engine (store + signer, modules registered for their schema but
+// not started) on a data dir, the same composition root the serve/audit commands use.
 func drBoot(ctx context.Context, f drFlags) (*engine, error) {
 	return boot(ctx, bootConfig{
 		DataDir: f.dataDir, Engine: f.engineKind, DSN: f.dsn, AdminDSN: f.adminDSN,
@@ -195,6 +199,13 @@ func drBoot(ctx context.Context, f drFlags) (*engine, error) {
 		Version:  version, Logger: slog.Default(),
 		// DR has already selected the dump/restore format before this boot.
 		storeEngineExplicit: true,
+		// A DR boot opens the store to read or verify it. It never starts the
+		// runtime: ApplyModuleProfile is not enough, because a snapshot copy or a
+		// restore target has no node profile and then runs every module, including
+		// the unselected models module whose availability writer appends an event
+		// to the tenant chain after the manifest tip was read (or before the verify
+		// read), so the bundle never verified.
+		NoIngest: true,
 	})
 }
 
@@ -270,8 +281,8 @@ type drBackupResult struct {
 	Tenants int    `json:"tenants"`
 	Keys    int    `json:"keys"`
 	// ExternalKeyCustody is true when the data dir held NO signing key because the
-	// customer custodies it (BYOK/CMEK) and the bundle therefore escrows no key
-	// material — the condition the text form reports as a "note:" line. A restore
+	// customer custodies it (BYOK/CMEK) and the bundle therefore escrows no signing
+	// key — the condition the text form reports as a "note:" line. A restore
 	// from such a bundle needs the key provisioned from the customer's Secret/KMS
 	// envelope FIRST, so a fleet-wide check for bundles that cannot be verified
 	// stand-alone is exactly the query this field answers.
@@ -327,28 +338,41 @@ func drBackupCmd() *cobra.Command {
 				return err
 			}
 
-			// Seal every signing key in the data dir (audit + catalog).
-			sealed, keyRefs, err := sealSigningKeys(dataDir, cipher)
+			// Seal the installation custody in the data dir.
+			sealed, keyRefs, probes, err := sealSigningKeys(dataDir, cipher)
 			if err != nil {
 				return err
 			}
-			if len(keyRefs) == 0 {
+			if missing := unprobedSealers(probes); len(missing) > 0 {
+				fmt.Fprintf(human, "note: no valid sealer key in effect for %s, so the bundle cannot vouch for it and a restore will name it: run dr backup with the OLIVARES_*_KEY variables serve uses\n",
+					strings.Join(missing, ", "))
+			}
+			// A signing key is a ref with a public fingerprint. The communication
+			// keyrings and the sealer keys have none and are carried whatever the
+			// signing-key custody, so they do not count here.
+			signingKeys := 0
+			for _, kr := range keyRefs {
+				if kr.PubSHA256 != "" {
+					signingKeys++
+				}
+			}
+			if signingKeys == 0 {
 				// Under EXTERNAL custody (BYOK shared Secret/env; CMEK sealed
 				// envelope) the data dir holds no key BY DESIGN and the bundle
 				// must NOT escrow it — the customer custodies the key, and the
 				// manifest signer still resolves it from the environment. Without
 				// external custody, zero keys means the data dir is wrong: fail.
 				if !externalKeyCustodyConfigured() {
-					return fmt.Errorf("no *-signing.key found in %s: nothing to put the ledger's custody on (run the engine once to mint keys, point --data-dir at the live data dir, or configure the external-custody env if the key is BYOK/CMEK-custodied)", dataDir)
+					return fmt.Errorf("no installation signing keys found in %s: run the engine once to create keys, point --data-dir at the live data dir, or configure external custody for BYOK/CMEK keys", dataDir)
 				}
-				fmt.Fprintln(human, "note: signing keys are externally custodied (BYOK/CMEK) — the bundle escrows NO key material; at restore time provision the key from your Secret/KMS envelope before verifying")
+				fmt.Fprintln(human, "note: signing keys are externally custodied (BYOK/CMEK) — the bundle escrows NO signing key; at restore time provision the key from your Secret/KMS envelope before verifying")
 			}
 			// The SAME predicate the note above is printed under, so the document and
-			// the note cannot disagree about whether this bundle escrows key material.
-			// Zero key refs is enough here: the branch above already REFUSED the run
-			// when there were none and no external custody was configured, so reaching
-			// this line with zero refs means the custody is external.
-			externalKeyCustody := len(keyRefs) == 0
+			// the note cannot disagree about whether this bundle escrows a signing key.
+			// Zero signing keys is enough here: the branch above already REFUSED the
+			// run when there were none and no external custody was configured, so
+			// reaching this line with none means the custody is external.
+			externalKeyCustody := signingKeys == 0
 
 			work, err := os.MkdirTemp("", "olivares-dr-backup-")
 			if err != nil {
@@ -374,6 +398,7 @@ func drBackupCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			m.SealerProbes = probes
 
 			// Refuse to certify a backup over a chain that is NOT already green — a
 			// corrupt ledger must never be captured as if it were a good restore point.
@@ -530,10 +555,11 @@ func backupSQLite(ctx context.Context, sf drFlags, work string, keyRefs []dr.Key
 	if err := dr.SnapshotSQLite(ctx, srcDB, snap); err != nil {
 		return nil, "", err
 	}
-	sum, size, err := dr.FileSHA256(snap)
+	payload, err := classifyDRPayload(ctx, "sqlite", dr.MethodVacuumInto, snap, "")
 	if err != nil {
 		return nil, "", err
 	}
+	sum, size := payload.sum, payload.size
 
 	// Build the manifest by booting a COPY of the snapshot with COPIES of the
 	// signing keys (so the engine's signer matches the source key). The copy is
@@ -567,6 +593,9 @@ func backupSQLite(ctx context.Context, sf drFlags, work string, keyRefs []dr.Key
 	if err != nil {
 		return nil, "", err
 	}
+	if err := payload.unchanged(); err != nil {
+		return nil, "", err
+	}
 	return m, snap, nil
 }
 
@@ -597,12 +626,13 @@ func backupPostgres(ctx context.Context, sf drFlags, work string, keyRefs []dr.K
 		}
 		snapMeta = dr.StoreSnapshot{Method: dr.MethodPITR, File: opt.pitrRef}
 	case opt.snapshotFile != "":
-		sum, size, err := dr.FileSHA256(opt.snapshotFile)
-		if err != nil {
-			return nil, "", fmt.Errorf("read --snapshot-file: %w", err)
+		// Classify the private copy that will be hashed and bundled, rather than
+		// an operator path that another process may replace during this backup.
+		snapshotPath = filepath.Join(work, "dump.pgcustom")
+		if err := dr.CopyFile(opt.snapshotFile, snapshotPath); err != nil {
+			return nil, "", fmt.Errorf("stage --snapshot-file: %w", err)
 		}
-		snapMeta = dr.StoreSnapshot{Method: dr.MethodPgDump, File: "store/dump.pgcustom", SizeBytes: size, SHA256: sum}
-		snapshotPath = opt.snapshotFile
+		snapMeta = dr.StoreSnapshot{Method: dr.MethodPgDump, File: "store/dump.pgcustom"}
 	default:
 		// The direct dump runs on the ADMIN (BYPASSRLS) DSN, never the application
 		// DSN: pg_dump keeps row_security=off by default and ABORTS as a role that
@@ -618,12 +648,15 @@ func backupPostgres(ctx context.Context, sf drFlags, work string, keyRefs []dr.K
 		if err := pgDumpRunner(ctx, opt.pgDumpPath, sf.adminDSN, snap); err != nil {
 			return nil, "", err
 		}
-		sum, size, err := dr.FileSHA256(snap)
-		if err != nil {
-			return nil, "", err
-		}
-		snapMeta = dr.StoreSnapshot{Method: dr.MethodPgDump, File: "store/dump.pgcustom", SizeBytes: size, SHA256: sum}
+		snapMeta = dr.StoreSnapshot{Method: dr.MethodPgDump, File: "store/dump.pgcustom"}
 		snapshotPath = snap
+	}
+	payload, err := classifyDRPayload(ctx, "postgres", snapMeta.Method, snapshotPath, drRestoreClientForDump(opt.pgDumpPath))
+	if err != nil {
+		return nil, "", err
+	}
+	if payload != nil {
+		snapMeta.SHA256, snapMeta.SizeBytes = payload.sum, payload.size
 	}
 
 	// The same preflight the restore path runs, and it is placed HERE rather than
@@ -654,13 +687,28 @@ func backupPostgres(ctx context.Context, sf drFlags, work string, keyRefs []dr.K
 	if err != nil {
 		return nil, "", err
 	}
+	// The chain tips are read through a read-only snapshot of their own, not through
+	// the engine booted above: beside a serving node that engine is a standby, and
+	// its Custody door refuses standbys (#496). TipAdvisory already names the window:
+	// the manifest is built from the live store.
+	ledger, err := coreengine.OpenAuditReader(ctx, store.Config{
+		Engine: store.EnginePostgres, DSN: sf.dsn, OwnerDSN: sf.ownerDSN, MaxConns: 2,
+	})
+	if err != nil {
+		return nil, "", fmt.Errorf("open the ledger reader: %w", err)
+	}
+	defer func() { _ = ledger.Close() }()
 	m, err := dr.BuildManifest(ctx, eng.store, eng.signer.PublicKey(), cpv, dr.BuildOptions{
 		EngineKind: string(store.EnginePostgres), Version: version,
 		Store:    snapMeta,
 		Keys:     keyRefs,
 		TipMatch: dr.TipAdvisory, Now: now, Notes: notes,
+		Ledger: ledger,
 	})
 	if err != nil {
+		return nil, "", err
+	}
+	if err := payload.unchanged(); err != nil {
 		return nil, "", err
 	}
 	return m, snapshotPath, nil
@@ -672,7 +720,7 @@ func drRestoreCmd() *cobra.Command {
 	var decl restoreDeclaration
 	var in string
 	var force, inPlace, allowLegacyUnsigned bool
-	var pgRestorePath string
+	var pgRestorePath, superuserDSN string
 	cmd := &cobra.Command{
 		Use:   "restore",
 		Short: "Restore a DR bundle and verify ledger continuity (non-zero exit if not safe)",
@@ -756,6 +804,39 @@ func drRestoreCmd() *cobra.Command {
 			if err := dr.VerifyBundleIntegrity(work, m, kek, cipher, allowLegacyUnsigned); err != nil {
 				return err
 			}
+			// Authentication is necessary, but it does not make operational
+			// coordination restorable data. Even the legacy exception passes this
+			// classifier before preservation, custody installation or import.
+			payload, err := classifyDRPayload(cmd.Context(), m.EngineKind, m.Store.Method, filepath.Join(work, m.Store.File), pgRestorePath)
+			if err != nil {
+				return err
+			}
+			if payload != nil && (payload.sum != m.Store.SHA256 || payload.size != m.Store.SizeBytes) {
+				return fmt.Errorf("store payload changed after bundle authentication")
+			}
+			if err := payload.unchanged(); err != nil {
+				return err
+			}
+
+			var inventoryDSN string
+			if superuserDSN != "" && !strings.HasPrefix(superuserDSN, "file:") && !strings.HasPrefix(superuserDSN, "env:") {
+				return fmt.Errorf("--superuser-dsn requires a file: or env: reference; keep the credential out of command arguments")
+			}
+			if superuserDSN != "" && (sf.engineKind != "postgres" || m.Store.Method != dr.MethodPgDump) {
+				return fmt.Errorf("--superuser-dsn is only supported for logical PostgreSQL restore")
+			}
+			if payload != nil && payload.inventory {
+				if superuserDSN == "" {
+					return fmt.Errorf("this backup contains the isolated directory inventory; restore requires --superuser-dsn file:/env: reference to a DBA connection on the target database")
+				}
+				inventoryDSN, err = resolveDSNRef(cmd.Context(), "--superuser-dsn", superuserDSN, osGetenv)
+				if err != nil {
+					return err
+				}
+				if err := coreengine.CheckPostgresInventoryRestoreAuthority(cmd.Context(), store.Config{Engine: store.EnginePostgres, DSN: sf.dsn, OwnerDSN: sf.ownerDSN}, inventoryDSN); err != nil {
+					return fmt.Errorf("check inventory restore authority: %w", err)
+				}
+			}
 
 			// --in-place: replace a LIVE data dir SAFELY. Stage the restore, verify the
 			// staged ledger BEFORE touching production, auto-preserve the current
@@ -770,7 +851,7 @@ func drRestoreCmd() *cobra.Command {
 				}
 				ts := time.Now().UTC().Format("20060102-150405")
 				return restoreInPlaceSQLite(cmd.Context(), cmd, work, sf.dataDir, m, cipher, ts,
-					declaredRestore{required: replaces, decl: decl, bundle: in, verdict: why})
+					declaredRestore{required: replaces, decl: decl, bundle: in, verdict: why}, payload)
 			}
 
 			// 0) Everything below this point is destructive and IRREVERSIBLE, and the
@@ -786,6 +867,9 @@ func drRestoreCmd() *cobra.Command {
 			// those guards test for, and a safety copy must not disable a refusal.
 			// With --force the operator has already said "overwrite", so the only
 			// question left is whether the old bytes survive it.
+			// Asked before anything below writes the data dir: for an older bundle it
+			// is what tells the source's own sealer keys from another installation's.
+			same := dr.SameInstallation(sf.dataDir, m)
 			var preserved map[string]string
 			if replaces && force {
 				ts := time.Now().UTC().Format("20060102-150405")
@@ -822,6 +906,9 @@ func drRestoreCmd() *cobra.Command {
 
 			// 1) Restore the signing keys under custody (fail-closed on overwrite).
 			if err := restoreKeys(work, sf.dataDir, m, cipher, force); err != nil {
+				return undoIfTheStoreWasNeverTouched(err)
+			}
+			if err := payload.unchanged(); err != nil {
 				return undoIfTheStoreWasNeverTouched(err)
 			}
 			// 2) Restore the store snapshot. A PITR companion bundle carries no store
@@ -894,6 +981,12 @@ func drRestoreCmd() *cobra.Command {
 					}); err != nil {
 						return fmt.Errorf("close restored User authority privileges: %w", err)
 					}
+					if inventoryDSN != "" {
+						if err := coreengine.RestorePostgresDirectoryInventory(cmd.Context(), store.Config{Engine: store.EnginePostgres, DSN: sf.dsn, OwnerDSN: sf.ownerDSN}, inventoryDSN); err != nil {
+							return fmt.Errorf("restore directory inventory authority: %w", err)
+						}
+					}
+
 				}
 			default:
 				return fmt.Errorf("unknown --engine %q", sf.engineKind)
@@ -936,7 +1029,7 @@ func drRestoreCmd() *cobra.Command {
 					return err
 				}
 			}
-			drNote(cmd, "restore verified: ledger continuity and key custody intact")
+			drNote(cmd, restoreCustodyNote("restore verified", m, sf.dataDir, same))
 			return nil
 		},
 	}
@@ -948,6 +1041,7 @@ func drRestoreCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&inPlace, "in-place", false, "replace a LIVE data dir safely: stage + verify BEFORE promoting, auto-preserving the current store/keys as *.pre-restore-<ts> (sqlite only)")
 	cmd.Flags().BoolVar(&allowLegacyUnsigned, "allow-legacy-unsigned", false, "accept a separately authenticated pre-v26.9 bundle without the keyed manifest signature (migration exception)")
 	cmd.Flags().StringVar(&pgRestorePath, "pg-restore", "pg_restore", "pg_restore executable (Postgres engine only)")
+	cmd.Flags().StringVar(&superuserDSN, "superuser-dsn", "", "Postgres logical restore only: explicit DBA connection to the target database, used solely to restore isolated directory inventory authority; accepts a file:/env: reference")
 	_ = cmd.MarkFlagRequired("in")
 	return cmd
 }
@@ -965,6 +1059,9 @@ func drVerifyCmd() *cobra.Command {
 		Example: "  olivares dr verify --in /srv/backups/olivares-2026-07-14.drbundle --passphrase-file /run/secrets/dr-passphrase",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := checkCMEKInstall(""); err != nil {
+				return err
+			}
 			if in == "" {
 				return fmt.Errorf("--in is required")
 			}
@@ -1006,11 +1103,21 @@ func drVerifyCmd() *cobra.Command {
 				drNote(cmd, "bundle integrity OK (digest + keys decrypt). Full chain verification for a Postgres bundle requires restoring to a scratch Postgres (see docs/DR-RUNBOOK.md).")
 				return printManifest(cmd, m)
 			}
+			payload, err := classifyDRPayload(cmd.Context(), m.EngineKind, m.Store.Method, filepath.Join(work, m.Store.File), "")
+			if err != nil {
+				return err
+			}
+			if payload.sum != m.Store.SHA256 || payload.size != m.Store.SizeBytes {
+				return fmt.Errorf("store payload changed after bundle authentication")
+			}
 			vdir, err := os.MkdirTemp(work, "scratch-")
 			if err != nil {
 				return err
 			}
 			if err := restoreKeys(work, vdir, m, cipher, true); err != nil {
+				return err
+			}
+			if err := payload.unchanged(); err != nil {
 				return err
 			}
 			if err := dr.CopyFile(filepath.Join(work, m.Store.File), filepath.Join(vdir, "olivares.db")); err != nil {
@@ -1103,21 +1210,104 @@ func validatePITRRef(ref string) error {
 // and the one location that is never an acceptable fallback is the working
 // directory the operator happened to be standing in (see defaultDataDir).
 func resolveDataDir(d string) (string, error) {
+	if err := checkCMEKInstall(d); err != nil {
+		return "", err
+	}
 	if d != "" {
 		return d, nil
 	}
 	return defaultDataDir()
 }
 
-// signingKeyFiles returns the *-signing.key files in dir (audit + catalog). It
-// deliberately excludes TLS material and the setup token — only the ledger's
-// signing keys belong in the DR custody set (minimal data, docs/SECURITY-HARDENING.md).
+// signingKeyFiles returns installation custody carried by the encrypted bundle.
+// TLS material and setup tokens stay outside this set.
 func signingKeyFiles(dir string) ([]string, error) {
 	matches, err := filepath.Glob(filepath.Join(dir, "*-signing.key"))
 	if err != nil {
 		return nil, err
 	}
+	communicationKeys := 0
+	for _, name := range []string{memoryPortabilityKeyFile, localCommunicationContentKeyFile, localCommunicationCursorKeyFile} {
+		path := filepath.Join(dir, name)
+		if _, err := os.Lstat(path); err == nil {
+			matches = append(matches, path)
+			if name != memoryPortabilityKeyFile {
+				communicationKeys++
+			}
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
+	if communicationKeys == 1 {
+		return nil, fmt.Errorf("local communication custody is incomplete: restore both content and cursor keyrings before backup")
+	}
 	return matches, nil
+}
+
+// sealerKeyFiles are the AEAD keys the engine mints in the data dir on first boot,
+// each with the variable that supplies it instead. What one sealed (provider keys
+// and runtime secrets, TOTP seeds, SSO secrets, eventing secrets) opens under no
+// other key, so the bundle carries every one the data dir holds.
+var sealerKeyFiles = dr.SealerKeyFiles
+
+// custodyKeyFiles is everything the encrypted bundle carries from dir: the
+// signing keys and the sealer keys present. A sealer key its variable supplies is
+// left out, as the engine ignores the file then: a stale file in the bundle would
+// make a restore without the variable claim a custody it does not have.
+func custodyKeyFiles(dir string) ([]string, error) {
+	files, err := signingKeyFiles(dir)
+	if err != nil {
+		return nil, err
+	}
+	for _, k := range sealerKeyFiles {
+		if strings.TrimSpace(osGetenv(k.Env)) != "" {
+			continue
+		}
+		path := filepath.Join(dir, k.Name)
+		if _, err := os.Lstat(path); err == nil {
+			files = append(files, path)
+		} else if !os.IsNotExist(err) {
+			return nil, err
+		}
+	}
+	return files, nil
+}
+
+// sealerProbes probes each sealer key in effect in dir, so a restore can check
+// the key it runs with against the source's without the bundle carrying it. A
+// sealer with no valid key in effect gets an empty probe, which vouches for
+// nothing: serve mints or reads every sealer key at boot, so no key here means
+// dr backup ran without serve's variable, not that nothing was sealed. Every
+// sealer keeps its entry, so such a bundle is never taken for an older one.
+func sealerProbes(dir string) []dr.SealerProbe {
+	var probes []dr.SealerProbe
+	for _, k := range sealerKeyFiles {
+		p := dr.SealerProbe{Name: k.Name}
+		if key, _, err := dr.SealerKeyInEffect(dir, k.Name, k.Env, osGetenv); err == nil && key != nil {
+			p.Probe = dr.SealerKeyProbe(key, k.Name)
+			wipeCommunicationContentBytes(key)
+		}
+		probes = append(probes, p)
+	}
+	return probes
+}
+
+// unprobedSealers names each sealer key with an empty probe, as "<file> (<VARIABLE>)".
+func unprobedSealers(probes []dr.SealerProbe) []string {
+	var names []string
+	for _, k := range sealerKeyFiles {
+		for _, p := range probes {
+			if p.Name == k.Name && p.Probe == "" {
+				names = append(names, k.Name+" ("+k.Env+")")
+			}
+		}
+	}
+	return names
+}
+
+// restoreCustodyNote uses the same custody report as the console restore.
+func restoreCustodyNote(verdict string, m *dr.Manifest, dataDir string, same bool) string {
+	return dr.RestoreCustodyNote(verdict, m, dataDir, same, osGetenv)
 }
 
 func roleForKey(name string) string {
@@ -1131,32 +1321,57 @@ func roleForKey(name string) string {
 	}
 }
 
-func sealSigningKeys(dir string, cipher *dr.KeyCipher) (map[string][]byte, []dr.KeyRef, error) {
-	files, err := signingKeyFiles(dir)
+// sealSigningKeys seals the installation custody in dir (custodyKeyFiles) under
+// the bundle cipher, and returns the sealer probes the manifest records.
+func sealSigningKeys(dir string, cipher *dr.KeyCipher) (map[string][]byte, []dr.KeyRef, []dr.SealerProbe, error) {
+	files, err := custodyKeyFiles(dir)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	sealed := map[string][]byte{}
 	var refs []dr.KeyRef
 	for _, path := range files {
-		b, err := os.ReadFile(path)
-		if err != nil {
-			return nil, nil, err
-		}
-		fp, err := dr.PubFingerprintFromSigningKey(b)
-		if err != nil {
-			return nil, nil, fmt.Errorf("%s: %w", path, err)
-		}
-		blob, err := cipher.Seal(b)
-		if err != nil {
-			return nil, nil, err
-		}
 		name := filepath.Base(path)
+		var b []byte
+		var fp string
+		switch name {
+		case localCommunicationContentKeyFile, localCommunicationCursorKeyFile:
+			b, err = readCommunicationContentKeyring(path)
+			if err == nil {
+				if name == localCommunicationContentKeyFile {
+					_, err = newCommunicationContentSealer(b)
+				} else {
+					_, _, err = decodeCommunicationCursorKeyring(b, time.Now())
+				}
+			}
+		case secretStoreKeyFile, totpSeedKeyFile, federationSecretKeyFile, eventingSecretKeyFile:
+			b, err = os.ReadFile(path)
+			if err == nil {
+				var k []byte
+				k, err = decodeAEADKeyFile(path, b)
+				wipeCommunicationContentBytes(k)
+			}
+		default:
+			b, err = os.ReadFile(path)
+			if err == nil {
+				fp, err = dr.PubFingerprintFromSigningKey(b)
+			}
+		}
+		if err != nil {
+			wipeCommunicationContentBytes(b)
+			return nil, nil, nil, fmt.Errorf("%s: %w", path, err)
+		}
+
+		blob, err := cipher.Seal(b)
+		wipeCommunicationContentBytes(b)
+		if err != nil {
+			return nil, nil, nil, err
+		}
 		bundlePath := "keys/" + name + ".enc"
 		sealed[bundlePath] = blob
 		refs = append(refs, dr.KeyRef{File: bundlePath, Name: name, Role: roleForKey(name), PubSHA256: fp})
 	}
-	return sealed, refs, nil
+	return sealed, refs, sealerProbes(dir), nil
 }
 
 func copySigningKeys(srcDir, dstDir string) error {
@@ -1180,10 +1395,11 @@ func copySigningKeys(srcDir, dstDir string) error {
 // staged verification fails, the live data dir is left completely untouched; if a
 // promotion rename fails, the preserved files are rolled back. This is the
 // production restore path for an operator who cannot take the dir empty first.
-func restoreInPlaceSQLite(ctx context.Context, cmd *cobra.Command, work, dataDir string, m *dr.Manifest, cipher *dr.KeyCipher, ts string, dr601 declaredRestore) error {
+func restoreInPlaceSQLite(ctx context.Context, cmd *cobra.Command, work, dataDir string, m *dr.Manifest, cipher *dr.KeyCipher, ts string, dr601 declaredRestore, payload *drPayloadProof) error {
 	if err := os.MkdirAll(dataDir, 0o700); err != nil {
 		return err
 	}
+	same := dr.SameInstallation(dataDir, m)
 	// Stage on the SAME filesystem as dataDir so the promotion renames are atomic.
 	staging, err := os.MkdirTemp(dataDir, ".dr-staging-")
 	if err != nil {
@@ -1192,6 +1408,9 @@ func restoreInPlaceSQLite(ctx context.Context, cmd *cobra.Command, work, dataDir
 	defer func() { _ = os.RemoveAll(staging) }()
 
 	if err := restoreKeys(work, staging, m, cipher, true); err != nil {
+		return err
+	}
+	if err := payload.unchanged(); err != nil {
 		return err
 	}
 	if err := dr.CopyFile(filepath.Join(work, m.Store.File), filepath.Join(staging, "olivares.db")); err != nil {
@@ -1248,7 +1467,7 @@ func restoreInPlaceSQLite(ctx context.Context, cmd *cobra.Command, work, dataDir
 		rollbackPreserved(dataDir, moved)
 		return fmt.Errorf("promote staged restore (rolled back to the pre-restore state): %w", err)
 	}
-	fmt.Fprintf(cmd.OutOrStdout(), "restore verified and promoted in place: ledger continuity and key custody intact\n")
+	fmt.Fprintln(cmd.OutOrStdout(), restoreCustodyNote("restore verified and promoted in place", m, dataDir, same))
 	fmt.Fprintf(cmd.OutOrStdout(), "previous state preserved as *.pre-restore-%s in %s (remove once satisfied)\n", ts, dataDir)
 	return nil
 }
@@ -1441,7 +1660,17 @@ func runPgDump(ctx context.Context, bin, dsn, out string) error {
 		return err
 	}
 	defer cleanup()
-	cmd := exec.CommandContext(ctx, bin, "--format=custom", "--no-owner", "--no-privileges", "--file", out, "--dbname", "service=olivares") // #nosec G204 -- bin is the operator-configured pg_dump path; all other args are fixed flags
+	args := []string{"--format=custom", "--no-owner", "--no-privileges"}
+	for _, object := range coreengine.DRCoordinationObjects() {
+		if object.Kind == "TABLE" {
+			// pg_dump accepts identifier patterns. Quoted schema/name components
+			// match this relation literally rather than matching customer prefixes.
+			quote := func(s string) string { return `"` + strings.ReplaceAll(s, `"`, `""`) + `"` }
+			args = append(args, "--exclude-table="+quote(object.Schema)+"."+quote(object.Name))
+		}
+	}
+	args = append(args, "--file", out, "--dbname", "service=olivares")
+	cmd := exec.CommandContext(ctx, bin, args...) // #nosec G204 -- configured tool; exclusion identities come from the compiled inventory
 	cmd.Env = append(os.Environ(), "PGSERVICEFILE="+serviceFile)
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {

@@ -1,7 +1,7 @@
 ---
 title: Modulkatalog
 description: >-
-  Die 31 Module von Olivares AI — organisiert nach den neun Capability-Bereichen,
+  Die 35 auswählbaren Module von Olivares AI — organisiert nach den neun Capability-Bereichen,
   mit der ehrlichen Reife jedes Moduls. Olivares AI integriert, verwaltet und
   sichert KI im Unternehmen, eine Ground Truth: Claude Code auf der tiefsten Stufe, Codex und Grok Build daneben; dies ist
   die Referenz pro Modul.
@@ -9,7 +9,7 @@ description: >-
 
 Olivares AI integriert, verwaltet und sichert KI im Unternehmen, eine Ground Truth:
 Claude Code auf der tiefsten Stufe, Codex und Grok Build daneben. Es ist eine **modulare Plattform** — eine Engine,
-eine Konsole und **31 Module**, verdrahtet in einem einzigen Binary — die
+eine Konsole und **35 auswählbare Module** im Katalog — die
 beobachtet, wo Agenten laufen, regelt, was sie tun dürfen, und (auf einer
 wachsenden Teilmenge) auf Ihrer realen Infrastruktur agiert. Jedes Modul (a)
 konsumiert normalisierte Events/Daten aus dem Core, (b) deklariert seine
@@ -17,7 +17,8 @@ Entitäten im gemeinsamen Datenmodell und (c) stellt seine eigenen
 API-Endpunkte und UI-Ansichten bereit — ohne den Core oder andere Module zu
 berühren.
 
-Die 31 Module sind nach den **neun Capability-Bereichen** unten organisiert.
+Diese 35 auswählbaren Module werden von **32 Modul-Packages** implementiert;
+das Governance-Package stellt vier getrennt auswählbare Module bereit. Sie sind nach den **neun Capability-Bereichen** unten organisiert.
 Lesen Sie den Status jedes Moduls als **zwei Hälften**: *Govern/Observe*
 (katalogisieren, beobachten, gaten, berichten) ist heute gebaut und verdrahtet;
 *Actuate* (das Agieren auf realer Infrastruktur — deployen, dispatchen, senden,
@@ -34,11 +35,11 @@ ein Großteil des Produkts ist pre-1.0 / im Designstadium, wo vermerkt (siehe
 
 Die **access map** (`iii-access-map`) — der Read-/Read-Write-Graph dessen, was
 jeder Agent berühren kann und tatsächlich berührt, mit Least-Privilege-Drift =
-`Permitted ≠ Observed` — ist **eine der nützlichsten Capabilities unter den 31**,
+`Permitted ≠ Observed` — ist **eine der nützlichsten Capabilities unter den 35**,
 nicht das gesamte Produkt. Die Breite ist der Punkt: neun Bereiche, eine Engine,
 eine Konsole.
 
-## Die 31 Module, nach Capability-Bereich
+## Die 35 auswählbaren Module, nach Capability-Bereich
 
 Jede Zeile verlinkt auf ihre Modulseite (`/reference/modules/<slug>/`). Die
 Spalte **Actuate** ist der ehrliche Zustand der agierenden Hälfte; `—` bedeutet,
@@ -64,18 +65,24 @@ hat.
 | Modul | Actuate | Zweck |
 |---|---|---|
 | [Identität, Berechtigungen & Governance](/de/reference/modules/vi-governance/) | — | Wer und was was tun darf, granular: Cedar RBAC + Deny-Overlay + scoped Grants, Roster-Abgleich, scoped Admin-/Custom-Rollen, Break-Glass, Kill-Switch. |
+| [Identität (`identity`)](/reference/modules/identity/) | — | Schreibgeschützte Workload-Identity-Federation, SSO-, External-Key- und Residency-Posture. |
 | [Source- & Credential-Scoping](/de/reference/modules/sourcescope/) | — | Quellen an einen Workspace/eine Agent-Gruppe binden; deny-closed scoped Resolver + scoped Credentials zum Auflösungszeitpunkt. |
 | [Deployment & Integration](/de/reference/modules/vii-deploy/) | on-demand (503) | Deployments auf reale Infrastruktur planen und regeln; der Executor ist on-demand — live `apply`/`retire` liefern `503`, bis bereitgestellt. |
 | [Gesteuerte Git-Veröffentlichung](/de/reference/modules/gitpublish/) | on-demand | Commits übertragen, Pull Requests öffnen und zusammenführen: mit genehmigten Git-Host-Bindungen, aktueller Berechtigung und aufgezeichneten Ergebnissen. |
 
-> **Identität & Zugriff** lebt innerhalb der [Governance](/de/reference/modules/vi-governance/) —
-> es gibt kein separates Modul. NHI-Lifecycle, Agent-Identity-Federation,
-> AAL3-Step-up und SSO/SCIM sind Governance-Capabilities.
+> **Identität** ist ein separat auswählbares Modul für die schreibgeschützte
+> Identitäts-Posture-Konsole. Es teilt das Governance-Package und benötigt
+> [Governance](/de/reference/modules/vi-governance/), das Autorisierungsmodell und
+> Identitätslebenszyklus verwaltet. Ein gemeinsames Package bedeutet keinen
+> gemeinsamen Modulschalter.
 
 ### Claude- & Agenten-Ökosystem
 
 | Modul | Actuate | Zweck |
 |---|---|---|
+| [Claude-Code-Managed-Policy (`claude-policy`)](/reference/modules/claude-policy/) | — | Versionierte Managed-Policy validieren, in Vorschau prüfen und veröffentlichen; Verteilung und beobachteten Drift prüfen. |
+| [Claude-Agentenbestätigungen (`claude-agents`)](/reference/modules/claude-agents/) | — | Managed-Agent-Thread-Events lesen und ausstehende Tool-Bestätigungen genehmigen oder ablehnen. |
+| [Skills-Katalog & Zuweisungen](/de/reference/modules/skills/) | — | Immuanter Skills-Katalog und gepinnte Zuweisungen: anhand ihres Digests validierte Packs unter `/v1/m/skills/packs` installiert, pro Ziel gepinnt, nie an Ort und Stelle editiert. |
 | [Modell- & Provider-Verwaltung](/de/reference/modules/x-models/) | on-demand (503) | Über den gesamten Modell-/Provider-Stack regeln: Model-Access, Kontextfenster pro Oberfläche, Model-Group-Gate; die Modell-*Ausführung* ist on-demand — `503`, bis ein Inferenz-Credential bereitgestellt ist. |
 | [Inline-Inferenz-Proxy](/de/reference/modules/inferenceproxy/) | PARTIAL | Inferenz-Egress-Konfiguration pro Tenant + DLP für den Inline-`/v1/messages`-PEP-Proxy; die Modulkonfiguration ist live, der Listener ist opt-in, loopback-default, fail-CLOSED. |
 | [Interner Katalog & Marketplace](/de/reference/modules/xiv-catalog/) | — | Kuratierter Marketplace genehmigter/signierter Agenten, MCP-Server und Skills. |
@@ -136,16 +143,16 @@ schreibgeschützte Projektion); `—` = das Modul regelt/beobachtet von Natur au
 und hat keine Actuation-Oberfläche. Dieser Split ist der ehrliche Vertrag: das
 Produkt **beobachtet und regelt heute breit und agiert auf einer wachsenden,
 überwiegend bereitstellungs-gegateten Teilmenge** — siehe
-[Ehrlichkeit & Grenzen](/de/start/honesty-and-limits/). Der Katalog ist aus dem
-Composition-Root abgeleitet (`cmd/olivares/wire.go`): alle 31 Module werden dort
-konstruiert und via `rt.AddModule` registriert (verifiziert am 2026-09-27).
+[Ehrlichkeit & Grenzen](/de/start/honesty-and-limits/). Der auswählbare Katalog stammt aus
+`core/modulespec/modules.json`, derselben Quelle wie `olivares modules ls` und
+die Liste **Edition & Module** der Konsole. `npm run test:modules` prüft jeden
+auswählbaren Namensraum auf eine verlinkte Referenzseite und verifiziert die Anzahl.
 
-## Editions-Verfügbarkeitsnaht (nicht zu den 31 Modulen gezählt)
+## Editions-Verfügbarkeitsnaht (nicht zu den 35 auswählbaren Modulen gezählt)
 
-Der Katalog oben sind die **31 Module**, die der Composition-Root als
-Produktmodule konstruiert. Zusätzlich registriert Community einen
-Verfügbarkeitsdeskriptor unter dem API-Namensraum `session-cockpit`. Er ist
-keines dieser 31.
+Der Katalog oben umfasst die **35 auswählbaren Module** der gemeinsamen
+Modulspezifikation. Zusätzlich registriert Community einen Verfügbarkeitsdeskriptor
+unter dem API-Namensraum `session-cockpit`. Er ist keines dieser 35.
 
 - [Session-Cockpit (Verfügbarkeit)](/de/reference/modules/session-cockpit/) —
   keine Handler in Community; `/v1/m/session-cockpit` liefert **404 durch
@@ -154,11 +161,11 @@ keines dieser 31.
   [Live-Betrieb und Sessions](/de/reference/modules/ii-sessions/) und
   [Claude Code mit Olivares ausführen](/de/how-to/run-claude-code-with-olivares/).
 
-## Plattform- & Core-Capabilities (nicht zu den 31 Modulen gezählt)
+## Plattform- & Core-Capabilities (nicht zu den 35 auswählbaren Modulen gezählt)
 
 Dies sind reale, ausgelieferte Capabilities, aber es sind
-**Engine-/Core-/Web-Capabilities**, keine Module aus dem `modules/`-Set — daher
-werden sie nicht zu den 31 gezählt:
+**Engine-/Core-/Web-Capabilities**, keine separat auswählbaren Module — daher
+werden sie nicht zu den 35 gezählt:
 
 - [Eigene API + Manage-as-Code](/de/reference/modules/xix-api-manage-as-code/) —
   **Engine-/Core-Capability.** Die eigene versionierte REST-/gRPC-API der Engine
@@ -170,7 +177,7 @@ werden sie nicht zu den 31 gezählt:
 - [Executive-Dashboards](/de/reference/modules/xxi-executive-dashboards/) —
   **Web-Capability.** Leadership-Konsolenansichten neben der technischen UI.
   (Das Backend für die Berichtserzeugung ist das Modul
-  [Reporting](/de/reference/modules/reporting/), das zu den 31 gezählt wird.)
+  [Reporting](/de/reference/modules/reporting/), das zu den 35 gezählt wird.)
 - [Modellbetrieb (eigene Modelle)](/de/reference/modules/xxiii-model-operations/) —
   **Capability des Models-Moduls** (über die Zeile von Modul X gezählt, keine
   eigene Zeile): die governte Registry eigener Modelle, Admission signierter
@@ -181,7 +188,7 @@ werden sie nicht zu den 31 gezählt:
 ([xxiii-fine-tuning](/de/reference/modules/xxiii-fine-tuning/)) — die Plattform
 governt und erfasst diese Arbeit heute (siehe Modellbetrieb oben), führt aber
 selbst kein Training aus und bedient keine Inferenz; die ausführende Hälfte ist
-dokumentierte **geplante** Arbeit, **nicht ausgeliefert** und keines der 31.
+dokumentierte **geplante** Arbeit, **nicht ausgeliefert** und keines der 35.
 
 ## Wie Module in der API und im Bus erscheinen
 
@@ -196,15 +203,15 @@ dokumentierte **geplante** Arbeit, **nicht ausgeliefert** und keines der 31.
 
 ## Schichten
 
-Die 31 Module bauen auf Schichten über der Engine auf, neben den oben genannten
+Die 35 auswählbaren Module bauen auf Schichten über der Engine auf, neben den oben genannten
 Engine-/Core- und Web-Capabilities:
 
 - **Engine (Schicht 0)** — die Capabilities Eigene-API/Manage-as-Code und
-  Mandantenfähigkeit (Core, nicht zu den 31 gezählt).
+  Mandantenfähigkeit (Core, nicht zu den 35 gezählt).
 - **Core (Schicht 1)** — inventory, sessions, access-map, models, health,
   observability.
-- **Management (Schicht 2)** — capabilities, governance, sourcescope, deploy, gitpublish,
-  knowledge.
+- **Management (Schicht 2)** — capabilities, governance, identity, claude-policy, claude-agents,
+  skills, sourcescope, deploy, gitpublish, knowledge.
 - **Intelligence (Schicht 3)** — orchestration, security, recording, inference
   proxy, finops, evals, compliance, reporting, siemforward, posture-export, catalog, notify,
   eventing, voice, sandbox, redteam, live-ingest, consoleviews.

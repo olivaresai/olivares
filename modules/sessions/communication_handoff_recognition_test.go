@@ -120,7 +120,7 @@ func newHandoffRecognitionFixture(t *testing.T, spec handoffServiceFixtureSpec) 
 	f.source.evidence.Facts = []store.AuthorizationFactRef{authorization, {Kind: model.DirectoryEpochKind, ID: model.ID(f.tenant), Version: f.epoch}}
 	directory := &handoffRecognitionDirectory{directNoticeReadDirectoryResolver{now: f.now, epoch: f.epoch}}
 	closure := &handoffRecognitionClosure{directNoticeReadClosureResolver{now: f.now, epoch: f.epoch}}
-	f.m.communicationDirectoryResolver, f.m.communicationGrantClosure = directory, closure
+	f.m.CommunicationDirectoryResolver, f.m.CommunicationGrantClosure = directory, closure
 	grant := channelGrantFromRecognitionFixture(t, f, sid)
 	record, err := channelGrantToRecord(grant)
 	if err != nil {
@@ -507,7 +507,7 @@ func TestHandoffSessionRecognitionRealClaimContention(t *testing.T) {
 					backend := engine.newBackend(t, "session-recognition")
 					f := newHandoffRecognitionFixture(t, handoffServiceFixtureSpec{backend: &backend, vacantLease: !active, noClockGuard: !active})
 					offer := vacantTransferOffer(t, f.handoffServiceFixture, "recognition")
-					f.m.data = &handoffRecognitionData{inner: f.m.data}
+					f.m.Data = &handoffRecognitionData{inner: f.m.Data}
 					ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 					defer cancel()
 					command := HandoffResponseCommand{Transition: HandoffAccept, IfMatch: offer.ETag, IdempotencyKey: model.NewID().String()}
@@ -753,7 +753,7 @@ func handoffRecognitionAccepted(t *testing.T) (handoffRecognitionFixture, Handof
 	if err != nil {
 		t.Fatal(err)
 	}
-	f.m.data = &handoffRecognitionData{inner: f.m.data}
+	f.m.Data = &handoffRecognitionData{inner: f.m.Data}
 	return f, offer, command, won
 }
 
@@ -901,7 +901,7 @@ func TestHandoffRecognitionReceiptRefusalsAndPlainControls(t *testing.T) {
 func TestHandoffRecognitionAbsentReceiptCannotAcceptOfferedHandoff(t *testing.T) {
 	f := newHandoffRecognitionFixture(t, handoffServiceFixtureSpec{vacantLease: true, noClockGuard: true})
 	offer := vacantTransferOffer(t, f.handoffServiceFixture, "still offered")
-	f.m.data = &handoffRecognitionData{inner: f.m.data}
+	f.m.Data = &handoffRecognitionData{inner: f.m.Data}
 	command := HandoffResponseCommand{Transition: HandoffAccept, IfMatch: offer.ETag, IdempotencyKey: model.NewID().String()}
 	handoffRecognitionChallenge(t, f, offer, command, nil, nil, ErrCommunicationEvidenceUnknown, 2, 0)
 	row := handoffStoredRecord(t, f.handoffServiceFixture, handoffKind, offer.HandoffID)
@@ -1385,7 +1385,7 @@ func TestHandoffRecognitionDoesNotRetryInvalidActiveLeaseEvidence(t *testing.T) 
 					return now
 				}
 			}
-			f.m.data = &handoffRecognitionData{inner: f.m.data}
+			f.m.Data = &handoffRecognitionData{inner: f.m.Data}
 			ctx, cancel := context.WithTimeout(context.Background(), time.Hour)
 			defer cancel()
 			command := HandoffResponseCommand{Transition: HandoffAccept, IfMatch: offer.ETag, IdempotencyKey: model.NewID().String()}
@@ -1433,7 +1433,7 @@ func TestHandoffRecognitionJoinedResponsePreservesProtocolRollbackPostgres(t *te
 	f := newHandoffRecognitionFixture(t, handoffServiceFixtureSpec{backend: backend, vacantLease: true, noClockGuard: true})
 	offer := vacantTransferOffer(t, f.handoffServiceFixture, "joined response rollback")
 	command := HandoffResponseCommand{Transition: HandoffAccept, IfMatch: offer.ETag, IdempotencyKey: model.NewID().String()}
-	f.m.data = &handoffRecognitionData{inner: f.m.data}
+	f.m.Data = &handoffRecognitionData{inner: f.m.Data}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	before, claim := handoffRecognitionRows(t, f), handoffRecognitionClaim(t, f)

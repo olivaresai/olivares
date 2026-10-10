@@ -1,4 +1,10 @@
 {
+  "edition": {
+    "viewPolicy": "View policy",
+    "editingRequiresBusiness": "Editing custom policies, roles and grants requires Business.",
+    "disablePolicy": "Disable policy",
+    "disablePolicyDescription": "The authored policy stops applying. Its history and other enforced policies are preserved."
+  },
   "errors": {
     "generic": "Something went wrong"
   },
@@ -214,8 +220,8 @@
       "sessionResumed": "{{actor}} resumed a session",
       "sessionResumed_you": "You resumed a session",
       "sessionFailed": "A session failed to start",
-      "approvalRequested": "{{actor}}'s session asks for approval",
-      "approvalRequested_you": "Your session asks for approval",
+      "approvalRequested": "{{actor}} requested approval",
+      "approvalRequested_you": "You requested approval",
       "killswitchEngaged": "Kill switch engaged by {{actor}}",
       "killswitchEngaged_you": "You engaged the kill switch",
       "killswitchReleased": "Kill switch released by {{actor}}",
@@ -228,14 +234,37 @@
       "workspaceCreated": "{{actor}} created a workspace",
       "workspaceCreated_you": "You created a workspace",
       "workspaceUpdated": "{{actor}} updated a workspace",
-      "workspaceUpdated_you": "You updated a workspace"
+      "workspaceUpdated_you": "You updated a workspace",
+      "signedIn": "{{actor}} signed in",
+      "workCreated": "{{actor}} created a work item",
+      "workReady": "{{actor}} marked a work item ready",
+      "workCompleted": "{{actor}} completed a work item",
+      "workBlocked": "{{actor}} blocked a work item",
+      "workCanceled": "{{actor}} canceled a work item",
+      "approvalDecided": "{{actor}} recorded an approval decision",
+      "approvalCanceled": "{{actor}} canceled an approval request",
+      "policyCreated": "{{actor}} created a policy",
+      "policyUpdated": "{{actor}} updated a policy",
+      "policyDeleted": "{{actor}} deleted a policy",
+      "signedIn_you": "You signed in",
+      "workCreated_you": "You created a work item",
+      "workReady_you": "You marked a work item ready",
+      "workCompleted_you": "You completed a work item",
+      "workBlocked_you": "You blocked a work item",
+      "workCanceled_you": "You canceled a work item",
+      "approvalDecided_you": "You recorded an approval decision",
+      "approvalCanceled_you": "You canceled an approval request",
+      "policyCreated_you": "You created a policy",
+      "policyUpdated_you": "You updated a policy",
+      "policyDeleted_you": "You deleted a policy"
     },
     "actors": {
       "you": "You",
       "member": "A member",
       "token": "An API token",
       "system": "Olivares"
-    }
+    },
+    "includeInternal": "Include internal records"
   },
   "passphrase": {
     "tooShort": "Passphrase must be at least {{min}} characters",

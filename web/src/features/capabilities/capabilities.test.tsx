@@ -3,12 +3,13 @@
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { ApiError } from '@/lib/api/errors'
 import { useStepUpStore } from '@/stores/step-up'
-import type { ConfigDTO, ServerDetailDTO, ToolPinDTO } from './types'
+import type { TabExtension } from '@/features/panels'
+import type { ConfigDTO, ServerDetailDTO } from './types'
 
 // --- mocks -------------------------------------------------------------------
 
@@ -23,19 +24,25 @@ const authState = vi.hoisted(() => ({
   activeTenant: 't1' as string | null,
   can: (_p: string): boolean => true,
 }))
-const edition = vi.hoisted(() => ({ community: false }))
-vi.mock('@/lib/hooks/use-edition', () => ({
-  useCommunityBuild: () => edition.community,
-  useEdition: () => (edition.community ? 'community' : undefined),
-}))
+const panels = vi.hoisted(() => ({ capabilitiesTabs: [] as TabExtension[] }))
+vi.mock('@/features/extensions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/extensions')>()
+  return {
+    ...actual,
+    PANEL_EXTENSIONS: {
+      ...actual.PANEL_EXTENSIONS,
+      get capabilitiesTabs() {
+        return panels.capabilitiesTabs
+      },
+    },
+  }
+})
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 
 const api = vi.hoisted(() => ({
   listServers: vi.fn(),
   getServer: vi.fn(),
   listTools: vi.fn(),
-  listToolPins: vi.fn(),
-  sendToolPinIntent: vi.fn(),
   listSkills: vi.fn(),
   wiring: vi.fn(),
   listConfigs: vi.fn(),
@@ -102,30 +109,6 @@ const detailFixture: ServerDetailDTO = {
   consumers: [],
 }
 
-const toolPinFixture: ToolPinDTO = {
-  tool: 'github.search',
-  fingerprint: 'sha256:pinned-fingerprint-1234567890',
-  pinned_at: '2026-07-20T09:00:00Z',
-  updated_at: '2026-07-20T10:00:00Z',
-  pin_count: 3,
-  version: 7,
-  drift_fingerprint: 'sha256:drifted-fingerprint-0987654321',
-  drift_at: '2026-07-20T10:00:00Z',
-}
-
-/** A v4 UUID, so an assertion about "there is a key" cannot pass for `undefined`. */
-const UUID_RE =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
-
-/** The 202 the engine returns (toolpins.go:224-228). */
-const acceptedResult = {
-  tool: toolPinFixture.tool,
-  operation_id: 'op-1',
-  apply_state: 'applied',
-  version: 8,
-  evidence_ref: 'ref-1',
-}
-
 beforeEach(() => {
   authState.can = () => true
   for (const fn of Object.values(api)) fn.mockReset()
@@ -133,7 +116,6 @@ beforeEach(() => {
   toast.error.mockReset()
   toast.warning.mockReset()
   api.listServers.mockResolvedValue({ items: [], has_more: false })
-  api.listToolPins.mockResolvedValue({ items: [] })
 })
 afterEach(() => vi.clearAllMocks())
 
@@ -158,6 +140,36 @@ describe('CapabilitiesView — servers catalog', () => {
     expect(await screen.findByText('github')).toBeInTheDocument()
     expect(screen.getByText(/Managed · rev 2/)).toBeInTheDocument()
     expect(screen.getByText('Connected')).toBeInTheDocument()
+  })
+})
+
+describe('Saved MCP definitions are observation metadata', () => {
+  const notice =
+    'Saved definitions are observation metadata. Saving, enabling or deleting one does not change the MCP gateway or a running server.'
+
+  it('explains the runtime effect on the saved-config list', async () => {
+    const user = userEvent.setup()
+    api.listConfigs.mockResolvedValue({
+      items: [configFixture],
+      has_more: false,
+    })
+    wrap(<CapabilitiesView />)
+    await user.click(screen.getByRole('tab', { name: /managed configs/i }))
+    expect(await screen.findByText(notice)).toBeInTheDocument()
+  })
+
+  it.each([null, configFixture])(
+    'explains the runtime effect before saving %j',
+    (config) => {
+      wrap(<ConfigEditorDialog open onOpenChange={() => {}} config={config} />)
+      expect(screen.getByText(notice)).toBeInTheDocument()
+    },
+  )
+
+  it('explains the runtime effect beside a server definition', async () => {
+    api.getServer.mockResolvedValue(detailFixture)
+    wrap(<ServerDetailSheet serverId="s1" open onOpenChange={() => {}} />)
+    expect(await screen.findByText(notice)).toBeInTheDocument()
   })
 })
 
@@ -206,282 +218,68 @@ describe('CapabilitiesView — el 403 de ceremonia en la pestaña de wiring', ()
   })
 })
 
-describe('CapabilitiesView — tool pins', () => {
-  it('offers no Tool pins tab on a Community build', () => {
-    edition.community = true
-    try {
-      wrap(<CapabilitiesView />)
-      expect(screen.queryByRole('tab', { name: /tool pins/i })).toBeNull()
-      expect(screen.getByRole('tab', { name: /skills/i })).toBeInTheDocument()
-      expect(api.listToolPins).not.toHaveBeenCalled()
-    } finally {
-      edition.community = false
-    }
+describe('CapabilitiesView — extension tabs', () => {
+  afterEach(() => {
+    panels.capabilitiesTabs = []
   })
 
-  it('renders current pins and highlights a pending fingerprint drift', async () => {
-    api.listToolPins.mockResolvedValue({ items: [toolPinFixture] })
-    const user = userEvent.setup()
+  it('offers only its own tabs in the default console', () => {
     wrap(<CapabilitiesView />)
-
-    await user.click(screen.getByRole('tab', { name: /tool pins/i }))
-
-    expect(await screen.findByText('Pending drifts')).toBeInTheDocument()
-    expect(screen.getAllByText('github.search').length).toBeGreaterThan(0)
-    expect(
-      screen.getAllByTitle(toolPinFixture.fingerprint).length,
-    ).toBeGreaterThan(0)
-    expect(
-      screen.getByTitle(toolPinFixture.drift_fingerprint!),
-    ).toBeInTheDocument()
-    expect(screen.getByText('3')).toBeInTheDocument()
+    expect(screen.getAllByRole('tab').map((tab) => tab.textContent)).toEqual([
+      'Servers',
+      'Tools',
+      'Skills',
+      'Wiring',
+      'Managed configs',
+    ])
   })
 
-  it('approves the current drift through confirmation and invalidates the tenant query', async () => {
-    api.listToolPins.mockResolvedValue({ items: [toolPinFixture] })
-    api.sendToolPinIntent.mockResolvedValue(acceptedResult)
-    const user = userEvent.setup()
-    const { qc } = wrap(<CapabilitiesView />)
-    const invalidate = vi.spyOn(qc, 'invalidateQueries')
-
-    await user.click(screen.getByRole('tab', { name: /tool pins/i }))
-    await user.click(
-      await screen.findByRole('button', {
-        name: /approve drift for github\.search/i,
-      }),
-    )
-
-    const dialog = await screen.findByRole('dialog')
-    expect(
-      within(dialog).getByText(/changes the tool authorization baseline/i),
-    ).toBeInTheDocument()
-    await user.click(
-      within(dialog).getByRole('button', { name: /^approve drift$/i }),
-    )
-
-    // The FULL intent, not just `{tool, from_drift}`. That shorter assertion is what
-    // this file used to make, and it passed for a payload the engine answers 400 to
-    // (toolpins_evidence_test.go:166-193): a mocked mutationFn cannot refuse anything,
-    // so the only protection is naming every field the contract requires.
-    await waitFor(() => expect(api.sendToolPinIntent).toHaveBeenCalledTimes(1))
-    // `.mock.calls[0][0]`, not toHaveBeenCalledWith: react-query hands mutationFn a
-    // second (context) argument, so a whole-arguments matcher fails for the wrong reason.
-    expect(api.sendToolPinIntent.mock.calls[0][0]).toEqual({
-      key: expect.stringMatching(UUID_RE),
-      kind: 'approve',
-      body: {
-        tool: 'github.search',
-        from_drift: true,
-        expected_version: toolPinFixture.version,
-        expected_drift_fingerprint: toolPinFixture.drift_fingerprint,
+  it('mounts an extension tab after Tools and paints its panel on click', async () => {
+    panels.capabilitiesTabs = [
+      {
+        id: 'fixture-tab',
+        label: () => 'Fixture tab',
+        Component: () => <p>fixture panel</p>,
       },
-    })
-    await waitFor(() =>
-      expect(invalidate).toHaveBeenCalledWith({
-        queryKey: ['capabilities', 't1', 'toolpins'],
-      }),
-    )
-  })
-
-  it('shows the divergence instead of a red error when the state moved (409)', async () => {
-    // The tool really moved between the read and the write: the refetch must return the
-    // NEW state, or "show the divergence" would be asserting against two identical
-    // halves and would pass for a panel that just echoes what the operator submitted.
-    api.listToolPins.mockResolvedValueOnce({ items: [toolPinFixture] })
-    api.listToolPins.mockResolvedValue({
-      items: [
-        {
-          ...toolPinFixture,
-          version: 9,
-          drift_fingerprint: 'sha256:drifted-again-5555555555',
-        },
-      ],
-    })
-    api.sendToolPinIntent.mockRejectedValue(
-      new ApiError(
-        409,
-        'pin_version_conflict',
-        'pin state changed since your read',
-      ),
-    )
+    ]
     const user = userEvent.setup()
     wrap(<CapabilitiesView />)
 
-    await user.click(screen.getByRole('tab', { name: /tool pins/i }))
-    await user.click(
-      await screen.findByRole('button', {
-        name: /approve drift for github\.search/i,
-      }),
-    )
-    await user.click(
-      within(await screen.findByRole('dialog')).getByRole('button', {
-        name: /^approve drift$/i,
-      }),
-    )
+    const tabs = screen.getAllByRole('tab').map((tab) => tab.textContent)
+    expect(tabs.indexOf('Fixture tab')).toBe(tabs.indexOf('Tools') + 1)
+    await user.click(screen.getByRole('tab', { name: 'Fixture tab' }))
+    expect(await screen.findByText('fixture panel')).toBeInTheDocument()
+  })
 
-    // Re-read and SHOW the divergence — never a silent resend with the fresh value.
-    const alert = await screen.findByRole('alert')
-    // BOTH sides, and they must differ: what the operator reviewed, and what is there now.
-    await waitFor(() =>
-      expect(within(alert).getByText(/base version 9/i)).toBeInTheDocument(),
-    )
-    expect(within(alert).getByText(/base version 7/i)).toBeInTheDocument()
-    // The pre-conflict cache also said version 7. If "current" were rendered from it, the
-    // panel would have shown 7 on BOTH sides — reviewed and current — which is the stale
-    // half of the same lie the reviewed side was fixed for. Only 9 may be labelled current.
+  it('does not offer an extension tab without its permission', () => {
+    authState.can = (permission) => permission !== 'fixture:read'
+    panels.capabilitiesTabs = [
+      {
+        id: 'fixture-tab',
+        label: () => 'Fixture tab',
+        permission: 'fixture:read',
+        Component: () => <p>fixture panel</p>,
+      },
+    ]
+    wrap(<CapabilitiesView />)
     expect(
-      within(alert).queryByText(/current \(base version 7\)/i),
+      screen.queryByRole('tab', { name: 'Fixture tab' }),
     ).not.toBeInTheDocument()
-    expect(
-      within(alert).getByTitle('sha256:drifted-again-5555555555'),
-    ).toBeInTheDocument()
-    expect(toast.error).not.toHaveBeenCalled()
-    expect(api.sendToolPinIntent).toHaveBeenCalledTimes(1)
-    // The stale review must be gone: re-confirming it would apply a decision taken
-    // against a fingerprint that is no longer what the tool serves.
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
-  })
-
-  it('requires a danger confirmation before unpinning', async () => {
-    api.listToolPins.mockResolvedValue({ items: [toolPinFixture] })
-    api.sendToolPinIntent.mockResolvedValue(acceptedResult)
-    const user = userEvent.setup()
-    wrap(<CapabilitiesView />)
-
-    await user.click(screen.getByRole('tab', { name: /tool pins/i }))
-    await user.click(
-      await screen.findByRole('button', {
-        name: /unpin github\.search/i,
-      }),
-    )
-    expect(api.sendToolPinIntent).not.toHaveBeenCalled()
-
-    const dialog = await screen.findByRole('dialog')
-    const confirm = within(dialog).getByRole('button', { name: /^unpin$/i })
-    expect(confirm).toHaveClass('bg-danger-solid')
-    await user.click(confirm)
-
-    await waitFor(() => expect(api.sendToolPinIntent).toHaveBeenCalledTimes(1))
-    expect(api.sendToolPinIntent.mock.calls[0][0]).toEqual({
-      key: expect.stringMatching(UUID_RE),
-      kind: 'unpin',
-      body: { tool: 'github.search', expected_version: toolPinFixture.version },
-    })
-  })
-
-  it('keeps a rebound idempotency key LOUD instead of calling it a divergence', async () => {
-    // Same status as the test above, different code. A key reused for a DIFFERENT effect
-    // is a replay or a client bug — presenting it as "somebody else moved the state",
-    // refetching and hiding the message would reassure the operator about the one 409
-    // that deserves attention.
-    api.listToolPins.mockResolvedValue({ items: [toolPinFixture] })
-    api.sendToolPinIntent.mockRejectedValue(
-      new ApiError(
-        409,
-        'idempotency_key_reused',
-        'idempotency key reused for a different change',
-      ),
-    )
-    const user = userEvent.setup()
-    wrap(<CapabilitiesView />)
-
-    await user.click(screen.getByRole('tab', { name: /tool pins/i }))
-    await user.click(
-      await screen.findByRole('button', {
-        name: /approve drift for github\.search/i,
-      }),
-    )
-    await user.click(
-      within(await screen.findByRole('dialog')).getByRole('button', {
-        name: /^approve drift$/i,
-      }),
-    )
-
-    await waitFor(() => expect(toast.error).toHaveBeenCalled())
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
-  })
-
-  it('renders a calm enterprise state when the verifier is not wired (501)', async () => {
-    api.listToolPins.mockRejectedValue(
-      new ApiError(501, 'not_implemented', 'no verifier wired'),
-    )
-    const user = userEvent.setup()
-    wrap(<CapabilitiesView />)
-
-    await user.click(screen.getByRole('tab', { name: /tool pins/i }))
-
-    expect(
-      await screen.findByText(/enterprise capability/i),
-    ).toBeInTheDocument()
-    expect(screen.queryByText(/server error/i)).not.toBeInTheDocument()
-  })
-
-  it('hides approve and unpin actions without config write permission', async () => {
-    authState.can = (permission) => permission !== 'capabilities:config:write'
-    api.listToolPins.mockResolvedValue({ items: [toolPinFixture] })
-    const user = userEvent.setup()
-    wrap(<CapabilitiesView />)
-
-    await user.click(screen.getByRole('tab', { name: /tool pins/i }))
-    expect(await screen.findByText('Pending drifts')).toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: /approve drift for/i }),
-    ).not.toBeInTheDocument()
-    expect(
-      screen.queryByRole('button', { name: /unpin github\.search/i }),
-    ).not.toBeInTheDocument()
-  })
-
-  it('hides the tool pins tab entirely without config read permission', () => {
-    // The route only needs catalog:read; the pin set is config-read tier
-    // (mirrors the Managed configs tab) — the tab must not render at all.
-    authState.can = (permission) =>
-      permission !== 'capabilities:config:read' &&
-      permission !== 'capabilities:config:write'
-    wrap(<CapabilitiesView />)
-    expect(
-      screen.queryByRole('tab', { name: /tool pins/i }),
-    ).not.toBeInTheDocument()
-  })
-
-  it('surfaces a forbidden action as a calm warning toast', async () => {
-    api.listToolPins.mockResolvedValue({ items: [toolPinFixture] })
-    api.sendToolPinIntent.mockRejectedValue(
-      new ApiError(403, 'forbidden', 'permission changed'),
-    )
-    const user = userEvent.setup()
-    wrap(<CapabilitiesView />)
-
-    await user.click(screen.getByRole('tab', { name: /tool pins/i }))
-    await user.click(
-      await screen.findByRole('button', {
-        name: /approve drift for github\.search/i,
-      }),
-    )
-    await user.click(
-      within(await screen.findByRole('dialog')).getByRole('button', {
-        name: /^approve drift$/i,
-      }),
-    )
-
-    await waitFor(() => expect(toast.warning).toHaveBeenCalled())
-    expect(toast.error).not.toHaveBeenCalled()
   })
 })
 
 describe('ConfigEditorDialog — secrets are references, never values', () => {
   it('offers NO secret-value input, shows the audit notice, gates on a server ref', async () => {
+    const user = userEvent.setup()
     wrap(<ConfigEditorDialog open onOpenChange={() => {}} />)
     expect(screen.getByText(/tamper-evident audit ledger/i)).toBeInTheDocument()
 
     const create = screen.getByRole('button', { name: /create config/i })
     expect(create).toBeDisabled()
-    await userEvent.type(screen.getByLabelText(/server reference/i), 'github')
+    await user.type(screen.getByLabelText(/server reference/i), 'github')
     expect(create).toBeEnabled()
 
-    await userEvent.click(
-      screen.getByRole('button', { name: /add reference/i }),
-    )
+    await user.click(screen.getByRole('button', { name: /add reference/i }))
     // The secret-ref editor collects name / locator / hint — never a raw value.
     expect(screen.queryByLabelText(/secret value/i)).toBeNull()
     expect(screen.getByLabelText(/^name$/i)).toBeInTheDocument()
@@ -489,10 +287,11 @@ describe('ConfigEditorDialog — secrets are references, never values', () => {
   })
 
   it('warns when the endpoint looks like an embedded credential and blocks save', async () => {
+    const user = userEvent.setup()
     wrap(<ConfigEditorDialog open onOpenChange={() => {}} serverRef="github" />)
     const create = screen.getByRole('button', { name: /create config/i })
     expect(create).toBeEnabled()
-    await userEvent.type(
+    await user.type(
       screen.getByLabelText(/^endpoint$/i),
       'https://user:secretpw@host/mcp',
     )
@@ -503,6 +302,7 @@ describe('ConfigEditorDialog — secrets are references, never values', () => {
   })
 
   it('creates a config (submit → api.createConfig → success toast → close)', async () => {
+    const user = userEvent.setup()
     api.createConfig.mockResolvedValue({ ...configFixture, revision: 1 })
     const onOpenChange = vi.fn()
     wrap(
@@ -512,9 +312,7 @@ describe('ConfigEditorDialog — secrets are references, never values', () => {
         serverRef="github"
       />,
     )
-    await userEvent.click(
-      screen.getByRole('button', { name: /create config/i }),
-    )
+    await user.click(screen.getByRole('button', { name: /create config/i }))
     await waitFor(() => expect(api.createConfig).toHaveBeenCalledTimes(1))
     expect(api.createConfig.mock.calls[0][0]).toMatchObject({
       server_ref: 'github',
@@ -533,7 +331,7 @@ describe('ServerDetailSheet — untrusted annotations, RBAC, delete flow', () =>
     expect(screen.getByText('Destructive')).toBeInTheDocument()
     // The untrusted disclaimer must be present (annotation is a claim, not truth).
     expect(
-      screen.getAllByText(/not verified|self-reported/i).length,
+      screen.getAllByText(/unverified statements/i).length,
     ).toBeGreaterThan(0)
   })
 
@@ -556,17 +354,18 @@ describe('ServerDetailSheet — untrusted annotations, RBAC, delete flow', () =>
   })
 
   it('deletes a config through a confirm dialog (privileged-action flow)', async () => {
+    const user = userEvent.setup()
     api.getServer.mockResolvedValue(detailFixture)
     api.deleteConfig.mockResolvedValue(undefined)
     wrap(<ServerDetailSheet serverId="s1" open onOpenChange={() => {}} />)
-    await userEvent.click(
+    await user.click(
       await screen.findByRole('button', { name: /delete config/i }),
     )
     // The confirm dialog gates the destructive action.
     const confirm = await screen.findByRole('button', {
       name: /delete permanently/i,
     })
-    await userEvent.click(confirm)
+    await user.click(confirm)
     await waitFor(() => expect(api.deleteConfig).toHaveBeenCalledWith('c1'))
     await waitFor(() => expect(toast.success).toHaveBeenCalled())
   })

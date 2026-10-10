@@ -85,10 +85,17 @@
     "attach": "Attach",
     "detach": "Detach"
   },
+  "discardWorktree": {
+    "label": "Also discard the worktree and branch {{branch}}",
+    "hint": "Removed when the branch is merged and the worktree is clean. Tick to discard unmerged or uncommitted work."
+  },
   "create": {
     "title": "New session",
     "titleTool": "New {{tool}} session",
-    "description": "Olivares launches and governs the process — the visual equivalent of the CLI launch, with policy in line.",
+    "description": "Say what to do first. Every other launch choice is under Advanced options.",
+    "prompt": "First message (optional)",
+    "promptPlaceholder": "What should it do first?",
+    "advanced": "Advanced options",
     "name": "Name",
     "namePlaceholder": "A display label (optional)",
     "transport": "Transport",
@@ -97,33 +104,35 @@
     "effortDefault": "Model default",
     "model": "Model",
     "modelPlaceholder": "opus  ·  claude-opus-4-8  (optional)",
-    "workspace": "Workspace",
-    "workspaceNone": "None (runner default working dir)",
+    "workspace": "Folder",
+    "workspaceNone": "Temporary folder for this session",
+    "worktree": "Work in a new git worktree",
+    "worktreeHint": "Starts a new branch in a worktree of its own, so sessions on one repository don't share files. The folder must be the repository's top folder.",
+    "worktreeFrom": "Starts at",
     "isolation": "Isolation",
     "isolationNativeOnly": "Only native is wired this release; container/sandbox are refused.",
     "envAllow": "Forward host env (names)",
     "envAllowPlaceholder": "PATH, HOME, TERM",
     "envAllowHint": "Allowlist of host env var NAMES to pass through (values are never sent).",
-    "submit": "Request launch",
-    "submitting": "Requesting…",
+    "submit": "Start",
+    "submitting": "Starting…",
     "criticalWarning": "This is a privileged launch (it removes the per-tool prompt). It requires a two-person approval and is recorded — it may stay pending until approved.",
     "classifiedWarning": "A read-write mount of a classified workspace is a privileged launch (approval + recording).",
     "success": "Session launched",
     "template": "Template",
     "templateNone": "No template",
-    "templateHint": "The engine merges the template's terms over the fields above before the launch gates, and writes them into the session's own process — so the restriction holds for a caller that never opens this console.",
+    "templateHint": "A template's rules replace the matching choices here and hold for the whole session.",
     "templateUnenforceable": "This template declares terms this launch cannot enforce, so the launch is refused rather than started without them:",
     "templateOverrides_one": "The template overrides {{count}} of your choices:",
     "templateOverrides_other": "The template overrides {{count}} of your choices:",
     "profile": "Provider profile",
     "profileNone": "Select a profile",
-    "profileHint": "Select the provider profile for this session. A profile is required. Local requirements are checked for the current selection after the template preview.",
     "profileNotOperable": "not enabled in this environment",
-    "profilesNotRead": "Provider profiles could not be read; the launch can still go ahead without one.",
     "profileEnvConflict": "HOME, CLAUDE_CONFIG_DIR, CODEX_HOME and GROK_HOME belong to the profile: a launch that forwards any of them is refused here. Other names are still subject to the server's own validation.",
     "identity": {
       "title": "Launch identity",
       "hint": "Choose an admitted agent to act on behalf of its human sponsor. Human access alone grants no agent authority.",
+      "humanHint": "The session runs with your own access.",
       "human": "Current human operator",
       "agent": "Admitted agent (on behalf of sponsor)",
       "required": "An orchestration profile requires an independently authenticated agent identity.",
@@ -134,6 +143,19 @@
       "loading": "Loading agent identities…",
       "loadFailed": "Agent identity list unavailable.",
       "loadMore": "Load more identities"
+    },
+    "blocked": {
+      "profilesForbidden": "Your role cannot read provider profiles (sessions:profile:read), so no session can start here.",
+      "profilesFailed": "Provider profiles could not be read.",
+      "profilesLoading": "Reading provider profiles…",
+      "noProfile": "No provider profile yet. Add a provider first.",
+      "openProviders": "Open Providers",
+      "chooseProfile": "Choose a provider profile.",
+      "worktreeFolder": "Choose a repository folder for the worktree.",
+      "chooseAgent": "Choose the admitted agent this session runs as, or run it as yourself.",
+      "envConflict": "Forward host env names a variable that belongs to the profile: remove it under Advanced options.",
+      "templateRefused": "The template asks for terms this launch cannot enforce: choose another under Advanced options.",
+      "readinessFailed": "The profile's requirements could not be read."
     }
   },
   "detail": {
@@ -159,6 +181,7 @@
     "workspace": "Workspace",
     "workspaceDirectory": "Working directory",
     "workspaceDirectoryOwn": "its own directory for this session",
+    "worktreeBranch": "Worktree branch",
     "created": "Created",
     "started": "Started",
     "lastActivity": "Last activity",
@@ -196,7 +219,13 @@
     "interruptFailed": "Could not interrupt the turn.",
     "interruptFenceUnavailable": "Refresh the run to obtain its current work generation before interrupting.",
     "interruptUnknown": "The interruption outcome is unknown. Check the session before trying again.",
-    "interruptWorkConflict": "The session cannot accept this interruption in its current work state. Refresh the run to check its status."
+    "interruptWorkConflict": "The session cannot accept this interruption in its current work state. Refresh the run to check its status.",
+    "blocked": {
+      "notLive": "Start or resume the session to send.",
+      "approval": "The launch waits for an approval; Send works once it is approved.",
+      "sending": "Sending… Wait for the session to accept it.",
+      "empty": "Type something to send."
+    }
   },
   "gov": {
     "title": "Governance posture",
@@ -295,7 +324,20 @@
     "deleteBody": "This removes the registration only — it never touches files on the host. Sessions pointing at it will fail to launch.",
     "deleteConfirm": "Deregister",
     "deleted": "Workspace deregistered",
-    "open": "Browse files"
+    "open": "Browse files",
+    "readOnly": {
+      "title": "Read-only folders",
+      "description": "Read-only folders protect file content and directory entries (no write, truncate, create, remove or rename); permissions, ownership, extended attributes and timestamps follow the host's normal permissions.",
+      "empty": "No read-only folders.",
+      "folder": "Folder on this server",
+      "folderPlaceholder": "/srv/reference",
+      "add": "Add",
+      "remove": "Remove",
+      "removeLabel": "Remove {{folder}}",
+      "discard": "Discard changes",
+      "save": "Save folders",
+      "saved": "Read-only folders saved."
+    }
   },
   "browser": {
     "title": "Files",
@@ -752,9 +794,9 @@
     "requesting": "Requesting…",
     "requestHintReady": "Requesting a launch still runs every authorization, mint and process check. This is not proof the provider is signed in.",
     "requestHintUnknown": "Inspection is incomplete. You may still request a launch; the server will re-validate everything. This is not a ready verdict.",
-    "requestBlocked": "A launch request is not offered: this selection is known to be inviable.",
-    "noWrite": "You can see these requirements, but requesting a launch needs sessions:run:write.",
-    "waitingPreview": "Waiting for the template preview before reading requirements for the effective transport.",
+    "requestBlocked": "This profile cannot start a session here. Its requirements under Advanced options say why.",
+    "noWrite": "Starting a session needs the sessions:run:write permission.",
+    "waitingPreview": "Reading the template before checking the profile…",
     "providerAuth": "Provider sign-in is not observed here. A valid home or binary is not an authenticated account.",
     "launchAuth": "Launch authorization is decided when you submit, and needs sessions:run:write.",
     "remoteControl": "Lifecycle only — conversation I/O stays with the provider; there is no bridged turn console.",
@@ -859,6 +901,7 @@
       "codex_app_server": "Codex app-server",
       "grok_acp": "Grok ACP",
       "opencode_acp": "OpenCode ACP",
+      "gemini_acp": "Gemini CLI ACP",
       "unknown": "Unknown protocol"
     }
   },

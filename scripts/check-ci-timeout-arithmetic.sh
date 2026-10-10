@@ -47,26 +47,26 @@ MARGEN="${OLIVARES_CI_TIMEOUT_MARGIN:-0}"
 # cosas son «no he podido mirar» y salen 2, que es lo que el contrato de este guion promete.
 case "$MARGEN" in
   ''|*[!0-9]*)
-    echo "check-ci-timeout-arithmetic: 2 NO PUDE MIRAR — OLIVARES_CI_TIMEOUT_MARGIN=$MARGEN no es un entero no negativo. Un margen negativo RELAJA la invariante hasta certificar un arbol defectuoso, y uno ilegible no es un hallazgo: es una configuracion que no se puede leer." >&2
+    echo "check-ci-timeout-arithmetic: 2 COULD NOT CHECK — OLIVARES_CI_TIMEOUT_MARGIN=$MARGEN must be a nonnegative integer. A negative margin weakens the invariant and can approve an invalid tree; an unreadable value is invalid configuration, not a finding." >&2
     exit 2 ;;
 esac
 AYUDANTE="$RAIZ/scripts/ci-timeouts.py"
 
-[ -d "$DIR" ] || { echo "check-ci-timeout-arithmetic: 2 NO PUDE MIRAR — sin $DIR" >&2; exit 2; }
-[ -f "$AYUDANTE" ] || { echo "check-ci-timeout-arithmetic: 2 NO PUDE MIRAR — sin $AYUDANTE" >&2; exit 2; }
-command -v python3 >/dev/null 2>&1 || { echo "check-ci-timeout-arithmetic: 2 NO PUDE MIRAR — sin python3" >&2; exit 2; }
+[ -d "$DIR" ] || { echo "check-ci-timeout-arithmetic: 2 COULD NOT CHECK — missing $DIR" >&2; exit 2; }
+[ -f "$AYUDANTE" ] || { echo "check-ci-timeout-arithmetic: 2 COULD NOT CHECK — missing $AYUDANTE" >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "check-ci-timeout-arithmetic: 2 COULD NOT CHECK — python3 is not installed" >&2; exit 2; }
 
 # El ayudante nunca sale distinto de 0: dice lo que sabe, o dice NOPUEDO en una linea. Distinguir
 # «no imprimio nada» de «fallo» importa, porque son 2 y 2 por razones distintas y el mensaje cambia.
 FILAS="$(python3 "$AYUDANTE" "$DIR" 2>&1)" || {
-  echo "check-ci-timeout-arithmetic: 2 NO PUDE MIRAR — el ayudante murio: $FILAS" >&2; exit 2; }
+  echo "check-ci-timeout-arithmetic: 2 COULD NOT CHECK — helper failed: $FILAS" >&2; exit 2; }
 
 case "$FILAS" in
   NOPUEDO*)
-    echo "check-ci-timeout-arithmetic: 2 NO PUDE MIRAR — ${FILAS#NOPUEDO	}" >&2; exit 2 ;;
+    echo "check-ci-timeout-arithmetic: 2 COULD NOT CHECK — ${FILAS#NOPUEDO	}" >&2; exit 2 ;;
 esac
 
-[ -n "$FILAS" ] || { echo "check-ci-timeout-arithmetic: 2 NO PUDE MIRAR — el ayudante no devolvio ningun job" >&2; exit 2; }
+[ -n "$FILAS" ] || { echo "check-ci-timeout-arithmetic: 2 COULD NOT CHECK — helper returned no jobs" >&2; exit 2; }
 
 MARGEN="$MARGEN" FILAS="$FILAS" python3 - <<'PY'
 import os, sys
@@ -78,7 +78,7 @@ for linea in os.environ["FILAS"].split("\n"):
         continue
     campos = linea.split("\t")
     if campos[0] != "JOB" or len(campos) != 7:
-        print("check-ci-timeout-arithmetic: 2 NO PUDE MIRAR — fila ilegible del ayudante: %r"
+        print("check-ci-timeout-arithmetic: 2 COULD NOT CHECK — unreadable helper row: %r"
               % linea[:120], file=sys.stderr)
         raise SystemExit(2)
     fich, nombre = campos[1], campos[2]
@@ -86,7 +86,7 @@ for linea in os.environ["FILAS"].split("\n"):
         techo, suma, pasos, conguarda = (int(campos[3]), int(campos[4]),
                                          int(campos[5]), int(campos[6]))
     except ValueError:
-        print("check-ci-timeout-arithmetic: 2 NO PUDE MIRAR — fila con campos no numericos: %r"
+        print("check-ci-timeout-arithmetic: 2 COULD NOT CHECK — row has nonnumeric fields: %r"
               % linea[:120], file=sys.stderr)
         raise SystemExit(2)
     # Un job sin NINGUNA guarda de paso no entra en esta invariante: no hay suma que comparar.
@@ -101,19 +101,19 @@ for linea in os.environ["FILAS"].split("\n"):
         hallazgos.append((fich, nombre, techo, suma, pasos - conguarda))
 
 if hallazgos:
-    print("check-ci-timeout-arithmetic: ⛔ %d job(s) con el techo POR DEBAJO de la suma de sus pasos." % len(hallazgos))
-    print("  Esto NO predice que el job vaya a tardar: dice QUE GUARDA disparara si tarda, y esa")
-    print("  distincion es el defecto. Los pasos corren en SERIE, asi que su suma es el peor caso;")
-    print("  con el techo por debajo, el que muerde primero es SIEMPRE el del job — y el del job es")
-    print("  el unico que no sabe reportar, porque cancela los pasos que quedan y el reportero de")
-    print("  fallos no llega a publicar. El rojo sale MUDO, y GitHub lo etiqueta `cancelled`, que es")
-    print("  la palabra de la supersesion.")
-    print("  ⇒ Un job puede llevar años sin acercarse a su techo y seguir siendo un hallazgo: lo que")
-    print("  esta roto no es su velocidad, es su modo de fallo el dia que falle.")
+    print("check-ci-timeout-arithmetic: ⛔ %d job(s) have a timeout below the sum of their step timeouts." % len(hallazgos))
+    print("  This does not predict how long a job will run; it determines which timeout fires first")
+    print("  if it runs slowly. Steps run sequentially, so their sum is the worst case.")
+    print("  With a lower job limit, the job timeout always fires first. It cancels the remaining")
+    print("  steps, including the failure reporter, so the reporter cannot publish a diagnostic.")
+    print("  The failed run has no explanation, and GitHub labels it `cancelled`, the same status")
+    print("  used for a run superseded by a newer one.")
+    print("  ⇒ A job may never approach its limit and still have this defect: the problem is its")
+    print("  failure behavior when a timeout eventually occurs.")
     for fich, nombre, techo, suma, sin in hallazgos:
-        print("    %-22s %-18s techo %-4d suma de pasos %-4d  (+%d paso(s) sin guarda)"
+        print("    %-22s %-18s job limit %-4d sum of steps %-4d  (+%d step(s) without timeouts)"
               % (fich, nombre, techo, suma, sin))
-    print("  Reparacion: sube el techo del job por encima de la suma, o baja los de sus pasos.")
+    print("  Fix: raise the job limit above the sum, or lower the step limits.")
     raise SystemExit(1)
 
 # ⛔ El recuento va en el veredicto, y con SUS DOS NUMEROS. Un «CLEAN» que no dice sobre cuantos
@@ -122,12 +122,12 @@ if hallazgos:
 # la corta el shell antes de llegar; lo que queda es la distincion entre «no habia sujetos» y «la
 # lectura se rompio», y esos dos casos se escriben distinto en vez de confundirse en un 0 mudo.
 if jobs_vistos == 0:
-    print("check-ci-timeout-arithmetic: CLEAN — 0 de %d job(s) con techo tienen guardas de paso, "
-          "asi que esta invariante no tiene sujeto aqui. NO es un veredicto sobre esos %d jobs: "
-          "que un job no tenga ninguna guarda de paso es un hueco con nombre propio, y lo mira "
-          "otra invariante." % (jobs_totales, jobs_totales))
+    print("check-ci-timeout-arithmetic: CLEAN — 0 of %d job(s) with timeouts have step timeouts, "
+          "so this invariant does not apply here. This is not a verdict on those %d jobs: "
+          "missing step timeouts are checked by a separate "
+          "invariant." % (jobs_totales, jobs_totales))
     raise SystemExit(0)
 
-print("check-ci-timeout-arithmetic: CLEAN — %d de %d job(s) con techo tienen guardas de paso, "
-      "todos por debajo de su techo." % (jobs_vistos, jobs_totales))
+print("check-ci-timeout-arithmetic: CLEAN — %d of %d job(s) with timeouts have step timeouts, "
+      "all below their job limits." % (jobs_vistos, jobs_totales))
 PY

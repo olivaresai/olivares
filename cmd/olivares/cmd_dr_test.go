@@ -83,7 +83,7 @@ func TestDRBackupVerifyRestoreCLI(t *testing.T) {
 	// Se sella el SENUELO, no se ablanda la guarda: su contrato es explicito y relajarlo la
 	// dejaria sin sentido. Mismo patron que cmd_security_unstamped_test.go:229-231.
 	prevVersion := version
-	version = "26.9.0"
+	version = "1.900"
 	t.Cleanup(func() { version = prevVersion })
 	src := t.TempDir()
 	seedDataDir(t, src)
@@ -126,12 +126,23 @@ func TestDRBackupVerifyRestoreCLI(t *testing.T) {
 	if !strings.Contains(out, "restore verified") {
 		t.Fatalf("restore output unexpected:\n%s", out)
 	}
-	// The restored data dir must hold BOTH signing keys (audit + catalog) and the
+	// The restored data dir must hold audit, catalog and memory portability keys and the
 	// store — the multiple-key custody path, exercised end-to-end.
-	for _, f := range []string{"audit-signing.key", "catalog-signing.key", "olivares.db"} {
+	for _, f := range []string{"audit-signing.key", "catalog-signing.key", memoryPortabilityKeyFile, "olivares.db"} {
 		if _, err := os.Stat(filepath.Join(dst, f)); err != nil {
 			t.Fatalf("restored data dir missing %s: %v", f, err)
 		}
+	}
+	originalPortability, err := loadMemoryPortabilityKey(src, withoutMinting())
+	if err != nil {
+		t.Fatal(err)
+	}
+	restoredPortability, err := loadMemoryPortabilityKey(dst, withEnrolledCustody())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if originalPortability.custodyInfo("memory-portability").Fingerprint != restoredPortability.custodyInfo("memory-portability").Fingerprint {
+		t.Fatal("restore replaced the dedicated portability key")
 	}
 }
 

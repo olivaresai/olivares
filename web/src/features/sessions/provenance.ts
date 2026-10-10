@@ -110,6 +110,26 @@ export function isLiveRun(run: RunDTO): boolean {
   return LIVE_RUN_STATES.includes(run.state)
 }
 
+/** A run is asking for a person: its provider needs a login, its launch waits for an
+ * approval, or a tool call of a live run waits on one (HU-R12). The one rule for every
+ * list that says a session needs you: the sidebar and Sessions read it alike. */
+export function runWantsAPerson(run: RunDTO): boolean {
+  return (
+    run.provider_auth_state === 'required' ||
+    run.state === 'waiting_approval' ||
+    !!runAwaitedApproval(run)
+  )
+}
+
+/** The approval this run waits on now, or undefined: its launch approval while the
+ * launch is held, or the one a tool call of the live run waits on (HU-R12). A run
+ * keeps `approval_ref` after its launch is approved, so only a held launch reads it;
+ * the engine names `pending_approval_ref` only while the run is running. */
+export function runAwaitedApproval(run: RunDTO): string | undefined {
+  if (run.state === 'waiting_approval') return run.approval_ref || undefined
+  return isLiveRun(run) ? run.pending_approval_ref || undefined : undefined
+}
+
 /**
  * A stopped or failed run can always be continued. `stream-json` resumes with
  * `claude --resume <claude_session_id>`; a run that never captured an id never got

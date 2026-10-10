@@ -100,10 +100,49 @@
     "this": "本",
     "sig": "事件签名",
     "checkpoint": "签名",
-    "chainHint": "每个事件的哈希都与前一个相连。指纹背后没有任何载荷——哈希本身即是证据（按设计的最小化数据）。"
+    "chainHint": "每个事件的哈希都与前一个相连。指纹背后没有任何载荷——哈希本身即是证据（按设计的最小化数据）。",
+    "details": "详情",
+    "actorMember": "成员"
   },
   "empty": {
     "title": "暂无证据",
     "description": "此范围下账本为空。受治理的操作会在发生时追加防篡改事件。"
+  },
+  "actions": {
+    "governance_approval_create": "已请求审批",
+    "governance_approval_decision": "已记录审批决定",
+    "governance_approval_cancel": "已取消审批",
+    "sessions_run_launched": "已启动会话",
+    "sessions_run_stopping": "已请求停止会话",
+    "sessions_work_item_create": "已创建工作项",
+    "sessions_work_item_ready": "工作项已标记为就绪",
+    "sessions_work_item_complete": "工作项已完成",
+    "authorization_decision_record": "已记录授权决定",
+    "policy_artifact_record": "已记录策略证据",
+    "governance_policy_create": "已创建策略",
+    "governance_policy_update": "已更新策略",
+    "governance_policy_delete": "已删除策略",
+    "auth_login": "已登录",
+    "auth_logout": "已退出登录",
+    "auth_login_failed": "登录失败",
+    "auth_webauthn_register": "已添加通行密钥",
+    "auth_webauthn_unregister": "已移除通行密钥",
+    "user_set_password": "已更改密码",
+    "user_create": "已添加成员",
+    "membership_grant": "已分配角色",
+    "membership_update": "已更改角色",
+    "membership_offboard": "已移除成员",
+    "token_issue": "已创建 API 令牌",
+    "token_revoke": "已吊销 API 令牌",
+    "secret_delete": "已删除密钥"
+  },
+  "targets": {
+    "core_policy": "策略"
+  },
+  "internal": {
+    "hidden": "已隐藏的内部记录：{{count}}",
+    "show": "显示内部记录",
+    "hide": "隐藏内部记录",
+    "allHidden": "目前已加载的全部是内部记录。"
   }
 }

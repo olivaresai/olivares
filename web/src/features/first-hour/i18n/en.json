@@ -2,7 +2,9 @@
   "tools": {
     "claude": "Claude Code",
     "codex": "Codex",
-    "grok": "Grok Build"
+    "grok": "Grok Build",
+    "opencode": "OpenCode",
+    "gemini-cli": "Gemini CLI"
   },
   "status": {
     "installed": "Installed",
@@ -13,7 +15,7 @@
     "usesKey": "Uses your API key: {{name}}",
     "usesLocal": "Uses the local model server: {{name}}",
     "keyRefused": "The API key {{name}} was refused. Replace it under API keys.",
-    "keyUnchecked": "The API key {{name}} could not be checked. Test it under API keys."
+    "noSignIn": "This tool has no official sign-in to run here. Use the terminal command under Other ways."
   },
   "actions": {
     "install": "Install",
@@ -23,7 +25,9 @@
     "signInClaude": "Sign in with Claude",
     "signInChatGPT": "Sign in with ChatGPT",
     "useApiKey": "Use an API key instead",
-    "signInGrok": "Sign in with your xAI account"
+    "signInGrok": "Sign in with your xAI account",
+    "signInGoogle": "Sign in with Google",
+    "signIn": "Sign in"
   },
   "signIn": {
     "openLink": "Open the sign-in page",
@@ -32,7 +36,11 @@
     "continue": "Continue",
     "enterCode": "On the sign-in page, enter this code:",
     "waiting": "Waiting for you to finish on the sign-in page…",
-    "expires": "The code works for 15 minutes. Cancel stops the sign-in on this server."
+    "expires": "The code works for 15 minutes. Cancel stops the sign-in on this server.",
+    "copy": "Copy",
+    "copied": "Copied",
+    "starting": "Starting the sign-in…",
+    "lostTouch": "Lost touch with the server. The sign-in may still be running."
   },
   "errors": {
     "status": "The tool's status could not be read.",
@@ -44,7 +52,10 @@
   "steps": {
     "install": {
       "title": "Install an agent tool",
-      "body": "Olivares runs the official Claude Code or Codex on this server. One is enough."
+      "body": "Olivares runs the official Claude Code or Codex on this server. One is enough.",
+      "orUse": "Or use an API key or a local model instead:",
+      "addKey": "Add an API key",
+      "addLocal": "Add a local model"
     },
     "signIn": {
       "title": "Sign it in",
@@ -53,7 +64,7 @@
     },
     "start": {
       "title": "Start a session",
-      "body": "Pick a folder and, if you like, say what to do first."
+      "body": "Pick a tool and, if you like, say what to do first."
     },
     "progress": "{{done}} of 3 done"
   },
@@ -62,6 +73,9 @@
     "notReady": "{{tool}} cannot start yet.",
     "folder": "Folder",
     "folderHint": "A folder on this server. Leave it empty to start in a new folder.",
+    "folderNew": "A new folder for this session",
+    "folderChange": "Change folder",
+    "readingFolder": "Reading the last session's folder…",
     "prompt": "First message (optional)",
     "promptPlaceholder": "What should it do first?",
     "more": "More options",
@@ -70,7 +84,7 @@
     "starting": "Starting…",
     "needTool": "Install and sign in a tool first.",
     "dialogTitle": "New session",
-    "dialogDescription": "Choose a folder and say what to do.",
+    "dialogDescription": "Choose a tool and say what to do.",
     "advanced": "Advanced launch options",
     "secrets": "Secrets as environment variables",
     "secretsHint": "The session reads each chosen vault secret from the variable you name. The value is never shown, logged or written to the folder.",
@@ -78,7 +92,23 @@
     "secretUse": "Give this session {{name}}",
     "secretVariable": "Variable for {{name}}",
     "secretsManage": "Manage session secrets",
-    "openTools": "Open AI tools"
+    "openTools": "Open AI tools",
+    "model": "Model",
+    "providerDefault": "Default ({{model}})",
+    "nativeDefault": "{{tool}} default",
+    "modelChoice": "Models that passed this key's last connection test.",
+    "chooseModel": "Choose a model: this key has no default model.",
+    "noTestedModel": "No model of this key has passed its connection test yet: test the key in Providers.",
+    "openProviders": "Open Providers",
+    "profile": "Profile",
+    "profileNotSignedIn": "Not signed in",
+    "profileNeedsKey": "Needs a key"
+  },
+  "lists": {
+    "runsTruncated": "Recent sessions: {{count}} loaded; there are more.",
+    "runsHint": "Older sessions are outside this list.",
+    "foldersTruncated": "Registered folders: {{count}} loaded; there are more.",
+    "foldersHint": "Some registered folders are outside this list."
   },
   "permission": {
     "editsOnly": "Edit files only",

@@ -89,5 +89,6 @@ olivares dr restore \
   --in="$IN" \
   --passphrase-file="$OLIVARES_DR_PASSPHRASE_FILE"
 
-echo "restore verified: ledger continuity and key custody intact."
+# `olivares dr restore` printed the custody result above; it names any sealer key
+# the bundle did not restore, so this script does not repeat a claim of its own.
 echo "Start the engine and confirm with: GET /v1/audit/verify  (or  olivares audit verify --tenant <id>)."

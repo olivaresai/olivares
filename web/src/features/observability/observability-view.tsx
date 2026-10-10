@@ -9,9 +9,9 @@
 // Always-200 reads use <AsyncSection>; the trace detail may legitimately 404 for an
 // unknown/ledger-evicted id, which renders as a retryable error state. The view
 // PRESENTS, it never recomputes (ARCHITECTURE.md) and never fabricates.
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query'
-import { Activity, Download, Search } from 'lucide-react'
+import { Activity, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Button } from '@/components/ui/button'
@@ -38,6 +38,7 @@ import {
 } from './components'
 import type { TraceListItem, TraceSpan } from './types'
 import './i18n'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
 
 /** The two tabs, as the URL may name them. Anything else falls back. */
 const OUTER_TABS = ['ingestion', 'traces'] as const
@@ -280,19 +281,7 @@ function TracesTab({ tenant }: { tenant: string | null }) {
     enabled: selected !== null,
   })
 
-  const handleExport = useCallback(async () => {
-    if (!selected) return
-    const data = await observabilityApi.exportTrace(selected)
-    const blob = new Blob([JSON.stringify(data, null, 2)], {
-      type: 'application/json',
-    })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement('a')
-    a.href = url
-    a.download = `trace-${selected.slice(0, 16)}.json`
-    a.click()
-    URL.revokeObjectURL(url)
-  }, [selected])
+  const TraceExportAction = PANEL_EXTENSIONS.traceExportAction
 
   return (
     <>
@@ -416,15 +405,8 @@ function TracesTab({ tenant }: { tenant: string | null }) {
       <SectionCard
         title={t('traces.waterfallTitle')}
         actions={
-          canDrill && selected ? (
-            <button
-              onClick={handleExport}
-              className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-caption font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-              title={t('traces.exportTitle')}
-            >
-              <Download className="h-3.5 w-3.5" />
-              {t('traces.exportBtn')}
-            </button>
+          canDrill && selected && TraceExportAction ? (
+            <TraceExportAction traceId={selected} />
           ) : undefined
         }
       >
@@ -437,6 +419,7 @@ function TracesTab({ tenant }: { tenant: string | null }) {
           <AsyncSection query={detailQ} skeletonHeight={220}>
             {(trace) => (
               <div className="flex flex-col gap-3">
+                <InferenceCoverageNotice spans={trace.spans} />
                 <TraceWaterfall trace={trace} onSelectSpan={setSelectedSpan} />
                 {selectedSpan && (
                   <SpanDetailPanel
@@ -451,5 +434,26 @@ function TracesTab({ tenant }: { tenant: string | null }) {
         <DisclaimerNote className="mt-3" text={t('traces.level1Note')} />
       </SectionCard>
     </>
+  )
+}
+
+// Older traces and unrecognized values carry no inferred coverage claim.
+function InferenceCoverageNotice({ spans }: { spans: TraceSpan[] }) {
+  const { t } = useTranslation('observability')
+  const limits = spans.map(
+    (span) => span.attributes?.['inference.context_coverage'],
+  )
+  const coverage = [
+    'provider_context_unknown',
+    'provider_context_may_change',
+    'inference_metadata_only',
+  ].find((value) => limits.includes(value))
+  if (!coverage) return null
+  return (
+    <CaveatNotice
+      tone={coverage === 'inference_metadata_only' ? 'info' : 'warning'}
+    >
+      {t(`inferenceCoverage.${coverage}`)}
+    </CaveatNotice>
   )
 }

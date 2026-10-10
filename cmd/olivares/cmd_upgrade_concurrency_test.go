@@ -197,9 +197,9 @@ func TestCopyFilePreserveStagesUniquelyAndPreservesMode(t *testing.T) {
 // two surviving backups. Restore the seconds-only name in atomicSwap and this fails with
 // one backup where two are expected.
 func TestAtomicSwapKeepsBothBackupsWithinOneSecond(t *testing.T) {
-	v1 := buildStub(t, "26.7.0")
-	v2 := buildStub(t, "26.8.0")
-	v3 := buildStub(t, "26.9.0")
+	v1 := buildStub(t, "26.700")
+	v2 := buildStub(t, "26.800")
+	v3 := buildStub(t, "26.900")
 	target := writeTarget(t, v1)
 
 	b1, _, err := atomicSwap(target, v2)
@@ -218,10 +218,10 @@ func TestAtomicSwapKeepsBothBackupsWithinOneSecond(t *testing.T) {
 		t.Fatalf("two swaps must leave two backups; got %d: %v", len(all), all)
 	}
 	// And each backup must be the binary it replaced — the point of keeping them.
-	if got := runsVersionMode(t, b1); !strings.Contains(got, "26.7.0") {
+	if got := runsVersionMode(t, b1); !strings.Contains(got, "26.700") {
 		t.Errorf("the first backup should hold the binary the first swap replaced; it reports %q", got)
 	}
-	if got := runsVersionMode(t, b2); !strings.Contains(got, "26.8.0") {
+	if got := runsVersionMode(t, b2); !strings.Contains(got, "26.800") {
 		t.Errorf("the second backup should hold the binary the second swap replaced; it reports %q", got)
 	}
 }
@@ -231,9 +231,9 @@ func TestAtomicSwapKeepsBothBackupsWithinOneSecond(t *testing.T) {
 // if runUpgrade never called it. Here the lock is held from outside and the REAL command
 // is run.
 func TestUpgradeRefusesWhileAnotherAgentHoldsTheLock(t *testing.T) {
-	oldBin := buildStub(t, "26.7.0")
-	newBin := buildStub(t, "26.8.0")
-	f := newUpdFixture(t, "26.8.0", "", newBin)
+	oldBin := buildStub(t, "26.700")
+	newBin := buildStub(t, "26.800")
+	f := newUpdFixture(t, "26.800", "", newBin)
 	target := writeTarget(t, oldBin)
 
 	rel, err := lockUpgradeTarget(target)
@@ -251,7 +251,7 @@ func TestUpgradeRefusesWhileAnotherAgentHoldsTheLock(t *testing.T) {
 		t.Errorf("a busy target must exit Conflict (%d) so an unattended caller can tell it apart from a real failure; got %d (%v)", exitcode.Conflict, got, err)
 	}
 	// Nothing was installed and nothing was backed up.
-	if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+	if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 		t.Errorf("the target must be untouched; it reports %q\noutput:\n%s", got, out)
 	}
 	if b, _ := filepath.Glob(target + ".bak-*"); len(b) != 0 {
@@ -342,27 +342,40 @@ func TestRefuseIfTargetMovedBothDirections(t *testing.T) {
 // from under it while the download is in flight. It proves the check is WIRED, not merely
 // present, which is the difference the house rule is about.
 func TestUpgradeRefusesWhenTheTargetIsReplacedMidDownload(t *testing.T) {
-	oldBin := buildStub(t, "26.7.0")
-	newBin := buildStub(t, "26.8.0")
-	intruder := buildStub(t, "26.6.0")
+	oldBin := buildStub(t, "26.700")
+	newBin := buildStub(t, "26.800")
+	intruder := buildStub(t, "26.600")
 
-	f := newUpdFixture(t, "26.8.0", "", newBin)
+	f := newUpdFixture(t, "26.800", "", newBin)
 	target := writeTarget(t, oldBin)
 
 	// The interposition: something else replaces the binary between the reading the
 	// guards were decided against and the swap. Exactly once, so the test asserts one
 	// event rather than a storm.
+	// Replace an inode as an installer would. Overwriting the just-executed target
+	// can fail with ETXTBSY, which leaves the guard's premise unchanged.
+	replacement := target + ".replacement"
+	if err := os.WriteFile(replacement, intruder, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	replaced := make(chan error, 1)
 	var once sync.Once
 	f.onArtifact = func() {
 		once.Do(func() {
-			if err := os.WriteFile(target, intruder, 0o755); err != nil {
-				t.Errorf("interposition write: %v", err)
-			}
+			replaced <- os.Rename(replacement, target)
 		})
 	}
 
 	out, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,
 		"--target", target, "--yes", "--data-dir", t.TempDir())
+	select {
+	case injectErr := <-replaced:
+		if injectErr != nil {
+			t.Fatalf("interposition did not replace the target: %v", injectErr)
+		}
+	default:
+		t.Fatal("artifact fetch did not exercise the replacement hook")
+	}
 	if err == nil {
 		t.Fatal("the upgrade swapped a binary that had been replaced while it downloaded; every ordering guard it printed was about the old file")
 	}
@@ -371,7 +384,7 @@ func TestUpgradeRefusesWhenTheTargetIsReplacedMidDownload(t *testing.T) {
 	}
 	// AND IT MUST NOT HAVE SWAPPED. A refusal that still installed is worse than no
 	// refusal, because the message says the opposite of what happened.
-	if got := runsVersion(t, target); !strings.Contains(got, "26.6.0") {
+	if got := runsVersion(t, target); !strings.Contains(got, "26.600") {
 		t.Errorf("the intruder's binary must still be in place, untouched by the refusal; target reports %q", got)
 	}
 	// No backup was taken either: the swap never started.
@@ -384,10 +397,10 @@ func TestUpgradeRefusesWhenTheTargetIsReplacedMidDownload(t *testing.T) {
 // end-to-end case: the same command, the same fixture, no interposition. Without it, a
 // pre-swap check that refused every upgrade would pass the test above.
 func TestUpgradeStillInstallsWhenNothingTouchesTheTarget(t *testing.T) {
-	oldBin := buildStub(t, "26.7.0")
-	newBin := buildStub(t, "26.8.0")
+	oldBin := buildStub(t, "26.700")
+	newBin := buildStub(t, "26.800")
 
-	f := newUpdFixture(t, "26.8.0", "", newBin)
+	f := newUpdFixture(t, "26.800", "", newBin)
 	target := writeTarget(t, oldBin)
 
 	out, err := runUpgradeCmd(t, "--endpoint", f.server.URL, "--pubkey", f.pubB64,
@@ -395,7 +408,7 @@ func TestUpgradeStillInstallsWhenNothingTouchesTheTarget(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an undisturbed upgrade must still install: %v\noutput:\n%s", err, out)
 	}
-	if got := runsVersion(t, target); !strings.Contains(got, "26.8.0") {
+	if got := runsVersion(t, target); !strings.Contains(got, "26.800") {
 		t.Fatalf("the new binary should be installed; target reports %q", got)
 	}
 	// Exactly one backup, and it must be the previous binary — the property the unique
@@ -404,7 +417,7 @@ func TestUpgradeStillInstallsWhenNothingTouchesTheTarget(t *testing.T) {
 	if len(b) != 1 {
 		t.Fatalf("expected exactly one backup, got %v", b)
 	}
-	if got := runsVersion(t, b[0]); !strings.Contains(got, "26.7.0") {
+	if got := runsVersion(t, b[0]); !strings.Contains(got, "26.700") {
 		t.Errorf("the backup must be the binary that was replaced; it reports %q", got)
 	}
 	// The lock was released, so a subsequent run is not locked out by our own leftover.

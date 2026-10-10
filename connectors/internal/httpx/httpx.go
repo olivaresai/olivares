@@ -312,7 +312,12 @@ func displayPath(path string) string {
 // when the server gave no usable hint (no blind waits).
 func retryAfter(resp *http.Response, now time.Time) (time.Duration, bool) {
 	if v := strings.TrimSpace(resp.Header.Get("Retry-After")); v != "" {
-		if secs, err := strconv.Atoi(v); err == nil && secs >= 0 {
+		if secs, err := strconv.ParseInt(v, 10, 64); err == nil && secs >= 0 {
+			// Above the wait policy, only the refusal matters. Bound before
+			// multiplying so an oversized delay cannot wrap into a short wait.
+			if secs > int64(maxRetryAfter/time.Second) {
+				return maxRetryAfter + time.Second, true
+			}
 			return time.Duration(secs) * time.Second, true
 		}
 		if at, err := http.ParseTime(v); err == nil {

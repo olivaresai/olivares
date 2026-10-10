@@ -1,7 +1,6 @@
 # Root .gitignore for the Olivares AI monorepo.
 #
 # Deliberately NARROW. Notable things that ARE tracked and must NOT be ignored:
-#   - core/internal/webui/dist/**        (the embedded web bundle, go:embed)
 #   - **/testdata/*.log                  (audit-connector fixtures — never add `*.log`)
 
 # Local dependency trees, installed by `task setup`. The root package.json is
@@ -191,6 +190,7 @@ id_ed25519.*
 id_ecdsa
 id_ecdsa.*
 .netrc
+/deploy/compose/dr-pass
 .npmrc
 # Tracked and legitimate: a CA CERTIFICATE (no private key) used by the mcpb connector's
 # trust-chain fixtures. Verified with `git ls-files '*.pem'` — it is the only one.
@@ -219,22 +219,7 @@ id_ecdsa.*
 /scripts/guide-docs/guide-docs
 /.overlay-fetch-seal
 
-# ⛔ RESIDUO DE `tofu init`, Y NO ES HIGIENE: ENVENENA UN GATE 485 LINTS DESPUÉS.
-#
-# Medido el 2026-08-29. Corrí `tofu init` dentro de `deploy/aws` para poder producir un plan
-# en frío, y dejó `.terraform.lock.hcl` en el árbol. `lint:spdx` lo encontró **sin trackear
-# y sin ignorar**, no supo clasificar la extensión `.hcl` y —correctamente— contestó
-# **«CANNOT LOOK», rc=2**: no es una violación de licencia y NO es un aprobado, es que el
-# gate no sabe si eso es fuente. Tumbó el push en el lint 485 de 648.
-#
-# El fallo no fue del gate: fue mío por correr una herramienta dentro del árbol de trabajo.
-# Estas reglas hacen que el descuido no vuelva a costar una corrida.
-#
-# ⚠ DECISIÓN PENDIENTE, dicha aquí para que no se pierda: un `.terraform.lock.hcl`
-# COMMITEADO es buena práctica —fija las versiones de proveedor y hace el apply
-# reproducible—, y hoy este repositorio no tiene ninguno. Ignorarlo es lo correcto para un
-# artefacto accidental como el que provocó esto, pero NO cierra esa pregunta: adoptarlo a
-# propósito exigiría además darle una regla a `.hcl` en `classify()` de `check-spdx.sh`.
+# Ignore local Terraform working files.
 .terraform/
 .terraform.lock.hcl
 *.tfstate
@@ -247,3 +232,11 @@ anchoridt.*
 # su directorio retenido. Aqui se ignoran porque el directorio por defecto vive en el arbol de
 # trabajo y una observacion no es fuente versionada.
 /.overlay-observations/
+
+# The console is built from source in CI and before release builds.
+/core/internal/webui/dist/*
+!/core/internal/webui/dist/PLACEHOLDER
+/core/internal/webui/bundle-source.stamp
+
+# Generated edition notices for release packaging.
+/.license-notices/

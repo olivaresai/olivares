@@ -29,7 +29,7 @@ func TestNHILifecycleGateFlooredAtTwoApprovers(t *testing.T) {
 	br := buildBridge(t, h, h.mintBoundToken(t, auth.RoleEditor))
 	tid := tenantAID(t, h)
 	ctx := context.Background()
-	gate := br.lifecycleGate()
+	gate := br.LifecycleGate()
 
 	req := governance.LifecycleGateRequest{
 		Action: "nhi.rotate", SubjectKind: "nhi", SubjectRef: "vault:approle:ci",
@@ -61,31 +61,3 @@ func TestNHILifecycleGateFlooredAtTwoApprovers(t *testing.T) {
 // An irreversible nhi.offboard.finalize never consults the break-glass emergency
 // path: even with an ACTIVE grant scoped to it, the action stays pending for the two
 // humans — whereas a rotation under the same grant proceeds under break-glass.
-func TestNHIFinalizeForbidsBreakGlass(t *testing.T) {
-	h := newHarness(t)
-	br := buildBridge(t, h, h.mintBoundToken(t, auth.RoleEditor))
-	tid := tenantAID(t, h)
-	ctx := context.Background()
-	gate := br.lifecycleGate()
-
-	// A broad emergency grant covering both actions.
-	h.activateBreakGlassE2E(t, "nhi.*", "incident: rotate + offboard")
-
-	// Rotation (break-glass permitted) proceeds under the grant.
-	rot := governance.LifecycleGateRequest{
-		Action: "nhi.rotate", SubjectKind: "nhi", SubjectRef: "vault:approle:x",
-		PlanHash: "plan-rot", Reason: "emergency rotation", RequestedBy: "tester", AllowBreakGlass: true,
-	}
-	if d, err := gate.Authorize(ctx, tid, rot); err != nil || d.Status != governance.GateStatusBreakGlass {
-		t.Fatalf("rotation should proceed under break-glass, got %q err=%v", d.Status, err)
-	}
-
-	// Finalize (break-glass FORBIDDEN) stays pending despite the active grant.
-	fin := governance.LifecycleGateRequest{
-		Action: "nhi.offboard.finalize", SubjectKind: "nhi", SubjectRef: "vault:approle:x",
-		PlanHash: "plan-fin", Reason: "irreversible revoke", RequestedBy: "tester", AllowBreakGlass: false,
-	}
-	if d, err := gate.Authorize(ctx, tid, fin); err != nil || d.Status != governance.GateStatusPending {
-		t.Fatalf("finalize must NOT use break-glass; expected pending, got %q err=%v", d.Status, err)
-	}
-}

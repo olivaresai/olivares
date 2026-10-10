@@ -7,14 +7,13 @@ package sessions
 import (
 	"time"
 
-	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 )
 
 // Option configures the OPERATE runtime at module construction. The composition
-// root (cmd/olivares) wires the concrete native/container runner and the WIF
-// credential source wires the governance gates. A nil argument is ignored
-// so a partial wiring keeps the deny-closed/no-op default for that seam.
+// root (cmd/olivares) wires the concrete native/container runner, the WIF
+// credential source and the governance gates. A nil argument is ignored so a
+// partial wiring keeps the deny-closed/no-op default for that seam.
 
 // Option mutates the module's runtime configuration.
 type Option func(*Module)
@@ -24,7 +23,7 @@ type Option func(*Module)
 func WithRunner(r Runner) Option {
 	return func(m *Module) {
 		if r != nil {
-			m.rt.runner = r
+			m.rt.Runner = r
 		}
 	}
 }
@@ -34,7 +33,7 @@ func WithRunner(r Runner) Option {
 func WithCredentialSource(c CredentialSource) Option {
 	return func(m *Module) {
 		if c != nil {
-			m.rt.creds = c
+			m.rt.Creds = c
 		}
 	}
 }
@@ -44,7 +43,7 @@ func WithCredentialSource(c CredentialSource) Option {
 func WithLaunchGate(g LaunchGate) Option {
 	return func(m *Module) {
 		if g != nil {
-			m.rt.launchGate = g
+			m.rt.LaunchGate = g
 		}
 	}
 }
@@ -54,7 +53,7 @@ func WithLaunchGate(g LaunchGate) Option {
 func WithStopGate(g StopGate) Option {
 	return func(m *Module) {
 		if g != nil {
-			m.rt.stopGate = g
+			m.rt.StopGate = g
 		}
 	}
 }
@@ -64,7 +63,7 @@ func WithStopGate(g StopGate) Option {
 func WithRecorder(rec Recorder) Option {
 	return func(m *Module) {
 		if rec != nil {
-			m.rt.recorder = rec
+			m.rt.Recorder = rec
 		}
 	}
 }
@@ -76,7 +75,7 @@ func WithRecorder(rec Recorder) Option {
 func WithClassifier(c Classifier) Option {
 	return func(m *Module) {
 		if c != nil {
-			m.rt.classifier = c
+			m.rt.Classifier = c
 		}
 	}
 }
@@ -86,10 +85,10 @@ func WithClassifier(c Classifier) Option {
 // The composition root derives it from the engine's data directory.
 //
 // Unwired, such a launch is REFUSED rather than started in the engine's own
-// working directory — which is what it did until this option existed, measured on
-// the golden path: the child's init frame reported the engine's cwd byte for byte.
-// A run that names a registered workspace is unaffected and keeps using it.
-// ⛔ THE VALUE IS VALIDATED HERE, NOT WHERE IT IS USED. A release removes a
+// working directory. A run that names a registered workspace is unaffected and
+// keeps using it.
+//
+// The value is validated here, not where it is used. A release removes a
 // direct child of this directory recursively, so a root of "/" would make every
 // top-level directory of the host a candidate. An Option cannot return an error,
 // so a refused value leaves the node UNWIRED — every unworkspaced launch is then
@@ -127,16 +126,19 @@ func (m *Module) UseSessionWorkspaceRoot(dir string) error {
 func WithSessionCostSink(sink SessionCostSink) Option {
 	return func(m *Module) {
 		if sink != nil {
-			m.rt.costSink = sink
+			m.rt.CostSink = sink
 		}
 	}
 }
 
-// UseSessionCostSink late-binds the same port: the composition root builds this
-// module BEFORE the observation publisher whose Host exists only at Init.
-func (m *Module) UseSessionCostSink(sink SessionCostSink) {
-	if sink != nil {
-		m.rt.costSink = sink
+// WithListPricer wires the declared list prices a turn is priced at when its tool
+// reported tokens and no money (runtime_usage.go). Unwired, such a turn's cost
+// stays unknown.
+func WithListPricer(p ListPricer) Option {
+	return func(m *Module) {
+		if p != nil {
+			m.rt.ListPricer = p
+		}
 	}
 }
 
@@ -167,7 +169,7 @@ func WithClaudeHookPEP(dataDir, olivaresBinary string) Option {
 // missing with the action that installs it.
 func WithProgramResolver(resolve func(driver string) string) Option {
 	return func(m *Module) {
-		m.rt.programResolver = resolve
+		m.rt.ProgramResolver = resolve
 	}
 }
 
@@ -203,6 +205,10 @@ func WithDriverProgram(driver, program string) Option {
 // WithProviderCredentialSource wires the GOVERNED managed-injection adapter of one
 // driver. There is no default and no shared adapter: a managed launch of a driver
 // with no adapter is refused by name, never served by another provider's issuer.
+//
+// Deprecated: no engine composition wires a managed-injection adapter; a managed launch
+// takes its credential from a provider record. It still works and is kept until a later
+// release removes it.
 func WithProviderCredentialSource(driver string, src ProviderCredentialSource) Option {
 	return func(m *Module) {
 		key, err := normalizeDriverKey(driver)
@@ -219,7 +225,7 @@ func WithProviderCredentialSource(driver string, src ProviderCredentialSource) O
 func WithProviderApprovalGate(g ProviderApprovalGate) Option {
 	return func(m *Module) {
 		if g != nil {
-			m.rt.approvalGate = g
+			m.rt.ApprovalGate = g
 		}
 	}
 }
@@ -249,17 +255,11 @@ func WithDriverTimeouts(call, approval time.Duration) Option {
 	}
 }
 
-// UseProviderDriver late-binds a provider driver after construction, for the same
-// reason the governance gates are late-bound: the composition root builds the
-// module before it can resolve the operator's per-driver configuration.
-func (m *Module) UseProviderDriver(d ProviderDriver) error {
-	if d == nil {
-		return nil
-	}
-	return m.rt.registerDriver(d)
-}
-
 // UseProviderCredentialSource late-binds one driver's governed managed adapter.
+//
+// Deprecated: no engine composition wires a managed-injection adapter; a managed launch
+// takes its credential from a provider record. It still works and is kept until a later
+// release removes it.
 func (m *Module) UseProviderCredentialSource(driver string, src ProviderCredentialSource) error {
 	key, err := normalizeDriverKey(driver)
 	if err != nil {
@@ -289,7 +289,7 @@ func (m *Module) OperableProviderDrivers() []string {
 }
 
 // WithInferenceBaseURL sets ANTHROPIC_BASE_URL on launched sessions so their
-// inference routes through Olivares' own gateway (PEP/budget/model-gov).
+// inference routes through Olivares' own gateway (PEP/budget/model governance).
 func WithInferenceBaseURL(url string) Option {
 	return func(m *Module) { m.rt.baseURL = url }
 }
@@ -352,7 +352,7 @@ func WithClock(c model.Clock) Option {
 func WithWorkIdentityResolver(r WorkIdentityResolver) Option {
 	return func(m *Module) {
 		if r != nil {
-			m.workIdentity = r
+			m.WorkIdentity = r
 		}
 	}
 }
@@ -362,7 +362,7 @@ func WithWorkIdentityResolver(r WorkIdentityResolver) Option {
 func WithWorkContentGuard(g WorkContentGuard) Option {
 	return func(m *Module) {
 		if g != nil {
-			m.workContent = g
+			m.WorkContent = g
 		}
 	}
 }
@@ -372,7 +372,7 @@ func WithWorkContentGuard(g WorkContentGuard) Option {
 func WithWorkEventSink(s WorkEventSink) Option {
 	return func(m *Module) {
 		if s != nil {
-			m.workEventSink = s
+			m.WorkEventSink = s
 		}
 	}
 }
@@ -383,135 +383,22 @@ func WithWorkEventSink(s WorkEventSink) Option {
 func WithWorkAuthorizer(a WorkAuthorizer) Option {
 	return func(m *Module) {
 		if a != nil {
-			m.workAuthz = a
+			m.WorkAuthorizer = a
 		}
 	}
 }
 
-// UseWorkSessionCredentialSource late-binds the core/auth-backed issuer after
-// the store and Authenticator exist. Production calls it before Module.Start.
-// A nil source preserves the historical runtime, which cannot act as a kernel
-// holder; once wired, an issuance failure denies the launch.
-func (m *Module) UseWorkSessionCredentialSource(source WorkSessionCredentialSource) {
-	if source != nil {
-		m.rt.workSessionCreds = source
-	}
-}
-
-// UseCommunicationSessionCredentialSource late-binds the dedicated K3 issuer.
-// Binding is deliberately separate from activation: G can land before the E/F
-// store and WP2 route surface, while the product remains OFF and emits no inert
-// bearer. The rollout owner calls EnableCommunicationSessionCredentials only
-// when the complete K3 posture is effective.
-func (m *Module) UseCommunicationSessionCredentialSource(source CommunicationSessionCredentialSource) {
-	m.rt.communicationSessionCreds = source
-}
-
 // EnableCommunicationSessionCredentials activates the indivisible dual runtime
 // posture. Once enabled, a missing issuer is a 503; it never falls back to work
-// only. Standalone tests and the eventual K3 rollout gate call this explicitly.
+// only. Standalone tests and the eventual communication rollout gate call this explicitly.
 func (m *Module) EnableCommunicationSessionCredentials() {
-	m.rt.communicationCredentialsEnabled = true
+	m.rt.CommunicationCredentialsEnabled = true
 }
 
 // CommunicationSessionCredentialsEnabled reports the boot-time rollout state
-// so composition can avoid a cross-tenant recovery ceremony while K3 is OFF.
+// so composition can avoid a cross-tenant recovery ceremony while communication is OFF.
 func (m *Module) CommunicationSessionCredentialsEnabled() bool {
-	return m.rt.communicationCredentialsEnabled
-}
-
-// UseCommunicationContentSealer late-binds the dedicated K3 payload sealer.
-// Nil or a typed nil deliberately removes the witness and leaves communication
-// OFF.
-func (m *Module) UseCommunicationContentSealer(sealer CommunicationContentSealer) {
-	if !communicationPortBound(sealer) {
-		m.communicationSealer = nil
-		return
-	}
-	m.communicationSealer = sealer
-}
-
-// UseCommunicationRequestAuthority late-binds the exact credential resolver
-// and the deployment's composed authorizer as one indivisible pair. This
-// preparatory seam does not make the legacy service authorizers ready and does
-// not activate K3. Composition must call it before Module.Start; concurrent
-// runtime rebind is outside this seam's contract.
-func (m *Module) UseCommunicationRequestAuthority(
-	resolver *auth.Authenticator,
-	source *auth.Authorizer,
-) {
-	m.useCommunicationRequestAuthoritySources(resolver, source)
-}
-
-// UseCommunicationDirectorySnapshotResolver late-binds the authoritative,
-// tri-state core-directory resolver used by publication and protected reads.
-func (m *Module) UseCommunicationDirectorySnapshotResolver(resolver DirectorySnapshotResolver) {
-	m.communicationDirectoryResolver = resolver
-}
-
-// UseCommunicationPublicationAudienceAttestor late-binds the resolver that
-// combines the core directory snapshot with current K3 subscriptions/routes.
-func (m *Module) UseCommunicationPublicationAudienceAttestor(attestor PublicationAudienceAttestor) {
-	m.communicationAudienceAttestor = attestor
-}
-
-// UseCommunicationChannelGrantSubjectClosureResolver late-binds the server-side
-// direct/group/session subject closure. A request body never supplies it.
-func (m *Module) UseCommunicationChannelGrantSubjectClosureResolver(
-	resolver ChannelGrantSubjectClosureResolver,
-) {
-	m.communicationGrantClosure = resolver
-}
-
-// UseCommunicationCoreEntityReadAuthorizer late-binds the core half of C5.
-func (m *Module) UseCommunicationCoreEntityReadAuthorizer(authorizer CoreEntityReadAuthorizer) {
-	m.communicationReadAuthorizer = authorizer
-}
-
-// UseCommunicationCoreEntityOperationAuthorizer late-binds action-specific
-// core authority for Ack/seen/send/handoff response and other K3 writes.
-func (m *Module) UseCommunicationCoreEntityOperationAuthorizer(
-	authorizer CoreEntityOperationAuthorizer,
-) {
-	m.communicationOperationAuthorizer = authorizer
-}
-
-// UseCommunicationGuardReconciliationData late-binds the narrow tenant/workspace
-// bootstrap handle used by the composition root during leadership promotion.
-// The handle retains closures only and exposes exactly guard/channel/delivery
-// repositories inside one workspace transaction; it cannot surface store.Scope.
-func (m *Module) UseCommunicationGuardReconciliationData(
-	data *CommunicationGuardReconciliationData,
-) {
-	if data == nil {
-		m.communicationGuardData = nil
-		return
-	}
-	m.communicationGuardData = data
-}
-
-// UseCommunicationStoreReadinessWitness late-binds the composition-root proof
-// that the complete K3 store phase is ready. The module does not inspect a
-// Store or infer readiness from one available repository.
-func (m *Module) UseCommunicationStoreReadinessWitness(witness CommunicationStoreReadinessWitness) {
-	m.communicationStoreReadiness = witness
-}
-
-// UseCommunicationPumpReadinessWitness late-binds WP-3's pump proof. WP-2
-// production intentionally leaves it nil, keeping the effective K3 gate OFF.
-func (m *Module) UseCommunicationPumpReadinessWitness(witness CommunicationPumpReadinessWitness) {
-	m.communicationPumpReadiness = witness
-}
-
-// UseRuntimeCredentialRecoverySources binds revocation-only adapters backed by
-// the residency-guarded store before service suspension. Recover is their sole
-// caller; normal mint/renew/revoke continues through the ordinary adapters.
-func (m *Module) UseRuntimeCredentialRecoverySources(
-	work WorkSessionCredentialSource,
-	communication CommunicationSessionCredentialSource,
-) {
-	m.rt.recoveryWorkSessionCreds = work
-	m.rt.recoveryCommunicationSessionCreds = communication
+	return m.rt.CommunicationCredentialsEnabled
 }
 
 // ---------------------------------------------------------------------------
@@ -524,73 +411,15 @@ func (m *Module) UseRuntimeCredentialRecoverySources(
 // Start (single-threaded boot), so they need no lock.
 // ---------------------------------------------------------------------------
 
-// UseLaunchGate late-binds the PEP/budget/HITL launch gate.
-func (m *Module) UseLaunchGate(g LaunchGate) {
-	if g != nil {
-		m.rt.launchGate = g
-	}
-}
+// EnableProfiledLaunches is retained for compatibility and has no effect.
+//
+// Deprecated: Profiled launches are always enabled.
+func (m *Module) EnableProfiledLaunches() {}
 
-// UseStopGate late-binds the kill-switch pre-flight. DENY-CLOSED BY CONTRACT.
-func (m *Module) UseStopGate(g StopGate) {
-	if g != nil {
-		m.rt.stopGate = g
-	}
-}
-
-// UseRecorder late-binds the governed I/O recorder.
-func (m *Module) UseRecorder(r Recorder) {
-	if r != nil {
-		m.rt.recorder = r
-	}
-}
-
-// UseKillSwitchSweep late-binds the active-termination sweep interval; 0 keeps
-// it disabled.
-func (m *Module) UseKillSwitchSweep(interval time.Duration) {
-	if interval > 0 {
-		m.rt.stopSweepInterval = interval
-	}
-}
-
-// UseWorkIdentityResolver late-binds identity after the backing store exists.
-func (m *Module) UseWorkIdentityResolver(r WorkIdentityResolver) {
-	if r != nil {
-		m.workIdentity = r
-	}
-}
-
-// UseWorkContentGuard late-binds the content scanner during single-threaded boot.
-func (m *Module) UseWorkContentGuard(g WorkContentGuard) {
-	if g != nil {
-		m.workContent = g
-	}
-}
-
-// UseWorkEventSink late-binds Eventing before module Start.
-func (m *Module) UseWorkEventSink(s WorkEventSink) {
-	if s != nil {
-		m.workEventSink = s
-	}
-}
-
-// UseWorkAuthorizer late-binds the composed RBAC+policy authorizer at boot.
-func (m *Module) UseWorkAuthorizer(a WorkAuthorizer) {
-	if a != nil {
-		m.workAuthz = a
-	}
-}
-
-// EnableProfiledLaunches opens the productive create endpoint to
-// provider_profile_ref (B2). It is a boot-time decision of the composition root,
-// taken only when every session reader — list, detail, timeline, SSE, exports —
-// understands profile-scoped rows. Once enabled, new launches require a profile
-// and legacy runs without a proven home cannot continue. Before that the endpoint refuses the option
-// while the internal service (and its tests) can already launch profiled.
-func (m *Module) EnableProfiledLaunches() { m.rt.profiledLaunchesEnabled = true }
-
-// ProfiledLaunchesEnabled reports the switch above.
-func (m *Module) ProfiledLaunchesEnabled() bool { return m.rt.profiledLaunchesEnabled }
+// ProfiledLaunchesEnabled reports that profiled launches are always enabled.
+//
+// Deprecated: Profiled launches are always enabled.
+func (m *Module) ProfiledLaunchesEnabled() bool { return true }
 
 // WithProviderSecretVault wires the port that seals provider-record credentials
 // outside this module's partition (v26.10). Unwired, registering a provider is
@@ -599,7 +428,7 @@ func (m *Module) ProfiledLaunchesEnabled() bool { return m.rt.profiledLaunchesEn
 func WithProviderSecretVault(v ProviderSecretVault) Option {
 	return func(m *Module) {
 		if v != nil {
-			m.rt.providerVault = v
+			m.rt.ProviderVault = v
 		}
 	}
 }
@@ -609,31 +438,15 @@ func WithProviderSecretVault(v ProviderSecretVault) Option {
 func WithProviderProbe(p ProviderProbe) Option {
 	return func(m *Module) {
 		if p != nil {
-			m.rt.providerProbe = p
+			m.rt.ProviderProbe = p
 		}
-	}
-}
-
-// UseProviderSecretVault late-binds the sealing port, for the same reason the
-// governance gates are late-bound: the composition root builds this module BEFORE
-// it builds the store the vault is implemented over.
-func (m *Module) UseProviderSecretVault(v ProviderSecretVault) {
-	if v != nil {
-		m.rt.providerVault = v
-	}
-}
-
-// UseProviderProbe late-binds the connection test.
-func (m *Module) UseProviderProbe(p ProviderProbe) {
-	if p != nil {
-		m.rt.providerProbe = p
 	}
 }
 
 // ProviderVaultWired reports whether a sealing port is available, so a console or
 // a CLI can present an honest "provider registration is disabled on this
 // deployment" posture instead of discovering it one refused request at a time.
-func (m *Module) ProviderVaultWired() bool { return m.rt.providerVault != nil }
+func (m *Module) ProviderVaultWired() bool { return m.rt.ProviderVault != nil }
 
 // ProviderProbeWired reports whether the connection test is available.
-func (m *Module) ProviderProbeWired() bool { return m.rt.providerProbe != nil }
+func (m *Module) ProviderProbeWired() bool { return m.rt.ProviderProbe != nil }

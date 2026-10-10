@@ -93,7 +93,7 @@
       "data-dir": "directorio de datos"
     },
     "communityNote": "Edición Community: aplicar una licencia verificada muestra sus datos aquí; no cambia esta compilación.",
-    "expiredBanner": "Esta licencia comercial ha caducado: los módulos enterprise quedan inactivos y el deployment se comporta como la edición community. Tus datos y tus cuentas de usuario están intactos — ninguna cuenta se ha limitado, desactivado ni borrado. Instala una licencia renovada para restaurar los módulos.",
+    "expiredBanner": "Esta licencia comercial ha caducado: los módulos Business quedan inactivos y el deployment se comporta como la edición community. Tus datos y tus cuentas de usuario están intactos — ninguna cuenta se ha limitado, desactivado ni borrado. Instala una licencia renovada para restaurar los módulos.",
     "managedExternally": "La licencia se gestiona fuera de banda (origen: {{source}}). Edita ese origen para cambiarla — instalar desde la consola está desactivado para evitar un fichero ensombrecido.",
     "installTitle": "Instalar o actualizar la licencia",
     "installHint": "Pega el blob de licencia firmado o sube el fichero de licencia. Se verifica con la clave de este build antes de guardarlo y luego se aplica en caliente.",
@@ -192,6 +192,7 @@
     "mode": "Cómo accede",
     "modePassword": "Fijar una contraseña inicial",
     "modeInvite": "Enviar una invitación por email",
+    "inviteUnavailable": "Este servidor no puede enviar invitaciones por email (consulta OLIVARES_INVITE_MAIL_DESTINATION en la referencia de configuración): define una contraseña inicial.",
     "password": "Contraseña inicial",
     "passwordHint": "Mínimo 8 caracteres. El usuario podrá cambiarla después.",
     "submit": "Dar de alta",
@@ -206,9 +207,9 @@
   },
   "sso": {
     "title": "Inicio de sesión único",
-    "caption": "Conecta tu proveedor de identidad (OIDC o SAML). Los secretos se cifran en reposo y no se vuelven a mostrar. Configurar SSO es una acción de ámbito global, solo para superadmin y protegida por step-up.",
+    "caption": "Conecta tu proveedor de identidad (OIDC o SAML). Los secretos se cifran en reposo y no se vuelven a mostrar. Configurar SSO es una acción de ámbito global y solo para superadmin.",
     "superadminOnly": "SSO es un ajuste de todo el deployment; solo un superadmin puede verlo o cambiarlo.",
-    "builderUnavailable": "Este build puede guardar la configuración de SSO pero no activarla. Recompila con el tag enterprise para habilitar el login OIDC/SAML.",
+    "builderUnavailable": "Este build puede guardar la configuración de SSO pero no activarla: este motor no tiene ningún proveedor OIDC/SAML disponible.",
     "statusConfigured": "Configurado",
     "statusNotConfigured": "Sin configurar",
     "statusEnabled": "Activado",
@@ -243,64 +244,11 @@
     "deleteTitle": "Quitar la configuración de SSO",
     "deleteBody": "El login por SSO dejará de funcionar y se volverá a las credenciales locales. Los secretos guardados se borran.",
     "deleted": "Configuración de SSO eliminada.",
-    "enforcement": {
-      "title": "Aplicación del inicio de sesión",
-      "caption": "Controles opcionales, cerrados por defecto, sobre cómo inician sesión los usuarios. Se configuran aquí; los aplica el build business.",
-      "requireSso": "Exigir SSO (desactivar el login con contraseña)",
-      "requireSsoHint": "Bloquea el login con contraseña mientras haya un proveedor de identidad activo, de modo que un IdP ausente o desactivado nunca pueda dejar a todos fuera. El build business lo aplica; un interruptor del operador es el mecanismo de emergencia.",
-      "networkAllowlist": "Lista de IP permitidas (CIDR)",
-      "networkAllowlistHint": "Un CIDR por línea (por ejemplo 10.0.0.0/8 o 2001:db8::/32). Cuando se define, solo se aceptan inicios de sesión desde estos rangos; en blanco significa sin restricción de IP. Protege la superficie de login (contraseña y finalización de SSO) usando la IP real de la conexión, no una cabecera reenviada: no es un cortafuegos de red.",
-      "enforcedEnterprise": "Aplicado por este build",
-      "enforcedUnavailable": "Guardado, no aplicado por este build",
-      "enforcedOutOfScope": "No se aplica a este proveedor",
-      "notConfigured": "Sin aplicación configurada",
-      "requireSsoOn": "Login con contraseña desactivado (SSO obligatorio)",
-      "requireSsoOff": "Login con contraseña permitido",
-      "noNetworkRestriction": "Sin restricción de IP",
-      "unavailableBanner": "Este build guarda la postura de aplicación pero no la aplica. Recompila con el tag enterprise para aplicar la exigencia de SSO y la lista de IP permitidas: nunca aplica el control de forma silenciosa ni lo simula.",
-      "outOfScopeBanner": "Esta compilación aplica la política de inicio de sesión, pero solo sobre el proveedor de identidad principal de todo el despliegue. La postura guardada aquí no es la que lee, así que no se aplica. Configúrala en el principal del despliegue para que surta efecto.",
-      "noIdpWarning": "Exigir SSO solo surte efecto cuando hay un proveedor de identidad activado arriba (anti-bloqueo)."
-    },
-    "groupsClaim": "Claim de grupos",
-    "groupsClaimHint": "Opcional. El claim del ID-token/UserInfo que lleva los grupos del usuario (p. ej. «groups»). La edición business los mapea a roles en el login.",
-    "groupsAttr": "Atributo de grupos",
-    "groupsAttrHint": "Opcional. El atributo SAML multivalor que lleva los grupos del usuario (p. ej. «memberOf»). La edición business los mapea a roles en el login.",
     "groups": {
-      "title": "Mapeo de grupos y aprovisionamiento",
-      "caption": "Cómo los grupos de directorio del IdP se convierten en roles, y si SCIM es la única autoridad de las cuentas. Se configura aquí; lo mapea la edición business.",
       "provisioningTitle": "Aprovisionamiento",
       "provisioningCaption": "Si SCIM es la única autoridad de las cuentas.",
       "scimAuthoritative": "SCIM es autoritativo",
-      "scimAuthoritativeHint": "Si está activo, un login SSO nunca crea una cuenta ni cambia la pertenencia a grupos: SCIM gobierna el directorio. Si está inactivo, el primer login aprovisiona al usuario y añade (nunca quita) los grupos que asevera el IdP.",
-      "unavailableBanner": "Esta edición extrae los grupos de la assertion pero no los mapea a roles. La edición business convierte los grupos aseverados en permisos en el login."
-    },
-    "scope": {
-      "label": "Ámbito",
-      "global": "Global (todo el despliegue)",
-      "globalHint": "El IdP predeterminado que usa cada tenant que no tiene uno propio.",
-      "tenantHint": "El IdP propio de este tenant. Solo surte efecto en el inicio de sesión con la edición business (capacidad multi-IdP); activar un segundo IdP la requiere."
-    },
-    "idp": {
-      "label": "Proveedor de identidad",
-      "default": "Principal (por defecto)",
-      "add": "+ Añadir un proveedor de identidad…",
-      "hint": "Una organización puede usar varios proveedores activos; cada uno adicional debe reclamar sus propios dominios de correo. El ámbito de todo el despliegue usa solo su proveedor principal.",
-      "addTitle": "Añadir un proveedor de identidad",
-      "addBody": "Asigna al nuevo IdP un alias corto. Identifica este IdP dentro del ámbito y es su clave de enrutado en el inicio de sesión.",
-      "aliasLabel": "Alias",
-      "aliasHint": "Letras minúsculas, dígitos y guiones (p. ej. «okta», «azure-ad»). De 1 a 31 caracteres.",
-      "addConfirm": "Continuar",
-      "on": "activo al iniciar sesión",
-      "off": "desactivado",
-      "activeNow": "Activo al iniciar sesión: {{names}}.",
-      "noneActive": "Ningún proveedor de identidad está activo al iniciar sesión: se entra con contraseña."
-    },
-    "domains": {
-      "title": "Enrutado por dominio (home-realm)",
-      "caption": "Enruta un inicio de sesión a este IdP por el dominio de correo del usuario.",
-      "label": "Dominios de correo reclamados",
-      "hint": "Un dominio por línea (p. ej. corp.com). Cada dominio es único globalmente entre IdP; un inicio de sesión email-first para ese dominio se enruta aquí.",
-      "unavailableBanner": "Los dominios se guardan pero este build no enruta por ellos; el enrutado home-realm requiere la edición business."
+      "scimAuthoritativeHint": "Si está activo, un login SSO nunca crea una cuenta ni cambia la pertenencia a grupos: SCIM gobierna el directorio. Si está inactivo, el primer login aprovisiona al usuario y añade (nunca quita) los grupos que asevera el IdP."
     },
     "displayName": "Nombre en el botón de inicio de sesión",
     "displayNameHint": "Se verá «Iniciar sesión con <nombre>». Déjalo vacío para mostrar «Inicio de sesión único». 80 caracteres como máximo.",
@@ -333,12 +281,14 @@
     "sealerUnavailable": "Esta compilación puede listar secretos pero no tiene un sellador conectado, así que no pueden guardarse valores. Configura un backend de sellado para habilitar el almacén.",
     "create": "Nuevo secreto",
     "colName": "Nombre",
-    "colHint": "Huella",
-    "colDescription": "Descripción",
     "rotate": "Rotar",
     "delete": "Eliminar",
     "none": "Aún no hay secretos.",
-    "noneHint": "Añade un secreto para referenciarlo desde la configuración de un conector como store:<name>.",
+    "noneHint": {
+      "sources": "Añade un secreto para referenciarlo desde la configuración de un conector como store:<name>.",
+      "mcp": "Añade un secreto para referenciarlo desde un servidor MCP como store:<name>.",
+      "sessions": "Añade un secreto para dárselo a una sesión como variable de entorno."
+    },
     "createTitle": "Nuevo secreto",
     "editTitle": "Rotar secreto",
     "name": "Nombre",
@@ -352,12 +302,40 @@
     "rotated": "Secreto guardado.",
     "deleted": "Secreto eliminado.",
     "deleteTitle": "Eliminar secreto",
-    "deleteBody": "El secreto se elimina del almacén. Cualquier configuración de conector que referencie store:<name> no podrá resolverse hasta que lo vuelvas a crear.",
-    "sessionCaption": "Secretos que una sesión puede recibir como variables de entorno. Los nombres empiezan por env/. Un valor nunca se vuelve a mostrar."
+    "deleteBody": {
+      "sources": "El secreto se elimina del almacén. Cualquier configuración de conector que referencie store:<name> no podrá resolverse hasta que lo vuelvas a crear.",
+      "mcp": "El secreto se elimina del almacén. Cualquier servidor MCP que referencie store:<name> no podrá resolverlo hasta que lo vuelvas a crear.",
+      "sessions": "El secreto se elimina del almacén. Una sesión que lo recibe sigue en ejecución, pero no podrá reanudarse, y una plantilla que lo nombre no podrá lanzarse, hasta que lo vuelvas a crear."
+    },
+    "sessionCaption": "Secretos que una sesión puede recibir como variables de entorno. Los nombres empiezan por env/. Un valor nunca se vuelve a mostrar.",
+    "colValue": "Valor",
+    "colChanged": "Último cambio",
+    "colReference": "Referencia",
+    "colUsedBy": "Usado por",
+    "rootFolder": "Nivel superior",
+    "valueMasked": "Valor oculto; la huella cambia cuando cambia el valor",
+    "usedByLoading": "Comprobando…",
+    "usedByUnavailable": "No se pudo comprobar",
+    "usedByNone": {
+      "sources": "Ningún conector del inventario de fuentes",
+      "mcp": "Ningún servidor MCP",
+      "sessions": "Ninguna sesión"
+    },
+    "useKind": {
+      "source": "Conector",
+      "mcp": "Servidor MCP",
+      "session": "Sesión"
+    },
+    "externalTitle": "Referencias externas",
+    "externalCaption": "Los conectores hacen referencia a estos secretos en otro backend. Se guardan y se rotan allí; esta lista solo muestra dónde se usan.",
+    "readOnly": "Solo lectura",
+    "usedByNoneRecent": "Ninguna sesión entre las {{limit}} más recientes",
+    "usedByUnwired": "No disponible en esta compilación",
+    "usedByMore": "y {{more}} más"
   },
   "connectors": {
     "title": "Conectores",
-    "caption": "Añade y configura los conectores desde los que el motor ingiere, con sus credenciales selladas en reposo. Un cambio se aplica al motor en marcha sin reiniciar. Es un ajuste de todo el despliegue, solo para superadministrador y protegido por step-up.",
+    "caption": "Añade y configura los conectores desde los que el motor ingiere, con sus credenciales selladas en reposo. Un cambio se aplica al motor en marcha sin reiniciar. Es un ajuste de todo el despliegue y solo para superadministrador.",
     "superadminOnly": "Los conectores son un ajuste de todo el despliegue; solo un superadministrador puede verlos o cambiarlos.",
     "unavailable": "Esta compilación no incluye el alta de conectores; los conectores se configuran desde el fichero de arranque.",
     "sourcesUnavailable": "Esta compilación no sirve el inventario de fuentes; los conectores en ejecución no pueden listarse aquí.",
@@ -477,7 +455,7 @@
       "restartBody": "Estos dominios de configuración se leen una sola vez en el arranque y esta recarga NO los aplica. Se requiere un reinicio para que surtan efecto:"
     },
     "catalog": {
-      "caption": "Todos los conectores que esta compilación puede activar, leídos del motor: {{count}} en total. La consulta es de sólo lectura; dar de alta uno sigue exigiendo verificación reforzada.",
+      "caption": "Todos los conectores que esta compilación puede activar, leídos del motor: {{count}} en total. La consulta es de sólo lectura.",
       "noMatch": "Ningún conector coincide con «{{query}}».",
       "noMatchHint": "El catálogo lista todos los conectores que esta versión puede instalar. Borra la búsqueda para verlos todos.",
       "search": "Filtrar por nombre o tipo",
@@ -621,7 +599,8 @@
       "workspaceScope": "Workspace: {{ref}}",
       "groupScope": "Grupo de agentes: {{ref}}",
       "classLabel": "limitado a {{class}}",
-      "loadError": "No se pudo cargar tu autoridad de delegación. Inténtalo de nuevo."
+      "loadError": "No se pudo cargar tu autoridad de delegación. Inténtalo de nuevo.",
+      "folderScope": "Carpeta: {{ref}}"
     },
     "grants": {
       "title": "Grants acotados",
@@ -664,6 +643,26 @@
       "note": "Nota",
       "noteHint": "Contexto opcional que se registra con el grant.",
       "submit": "Crear grant"
+    },
+    "filters": {
+      "title": "Filtros de herencia",
+      "caption": "En un espacio de trabajo, grupo de agentes o carpeta, detén los derechos que llegan a un tipo de recurso desde encima del nodo. Las concesiones en el nodo o por debajo siguen aplicando; las reglas de prohibición siguen decidiendo en todas partes.",
+      "create": "Nuevo filtro",
+      "none": "Aún no hay filtros de herencia.",
+      "noneHint": "Cada nodo hereda los derechos concedidos por encima de él.",
+      "node": "Nodo",
+      "class": "Tipo de recurso",
+      "classHint": "Los derechos de encima del nodo dejan de aplicar a este tipo ahí. Un grupo de agentes solo filtra agentes.",
+      "createdBy": "Establecido por",
+      "actions": "Acciones",
+      "folder": "Carpeta",
+      "remove": "Quitar",
+      "removeTitle": "Quitar filtro",
+      "removeBody": "Los derechos de encima de este nodo vuelven a aplicarle de inmediato. Solo un administrador del nodo puede quitarlo.",
+      "removed": "Filtro quitado.",
+      "created": "Filtro establecido.",
+      "formTitle": "Nuevo filtro de herencia",
+      "submit": "Establecer filtro"
     },
     "defs": {
       "title": "Roles a medida",
@@ -885,7 +884,23 @@
       "exportNotSealed": "No sellado",
       "exportPopulation": "Población",
       "exportEntries": "Entradas de acceso",
-      "exportIntegrity": "Integridad"
+      "exportIntegrity": "Integridad",
+      "why": {
+        "tab": "Por qué",
+        "hint": "Qué derechos de trustee, de los ocho, tiene un sujeto en un agente, sesión o recurso, y la ruta de contenedores en la que está el nodo. Cada derecho es la respuesta del propio motor de autorización; este panel solo la muestra.",
+        "run": "Explicar",
+        "path": "Ruta",
+        "inWorkspace": "(en el workspace {{workspace}})",
+        "right": "Derecho",
+        "state": "Estado",
+        "states": {
+          "held": "Concedido",
+          "not_held": "No concedido",
+          "unknown": "Desconocido",
+          "not_applicable": "No aplica"
+        },
+        "unknownHint": "Desconocido significa que el motor no pudo decidir ese derecho; la causa está en el log del motor. No es una denegación."
+      }
     }
   },
   "activation": {
@@ -1089,17 +1104,7 @@
     }
   },
   "entitlement": {
-    "title": "Modules",
-    "description": "Revise la edición, la cobertura de la licencia y el estado de activación de cada módulo.",
-    "helpSummary": "Cómo entender el estado de los módulos",
-    "threeQuestions": "Cada columna usa su propia información actual. «No se sabe» significa que no hay información suficiente para determinar ese estado. Use el estado y «Reintentar» para actualizar la información no disponible.",
-    "noVerifiedLicense": "La cobertura de módulos es desconocida hasta que haya una licencia verificada.",
-    "colAddon": "Módulo",
-    "colBinary": "En esta edición",
-    "colEntitled": "Cobertura de la licencia",
-    "colActivated": "Activación",
     "unknown": "no se sabe",
-    "entitled": "con derecho",
     "state": {
       "active": "encendido",
       "pending": "pendiente de reinicio",
@@ -1110,15 +1115,6 @@
       "needsReview": "necesita revisión",
       "needsInput": "necesita datos"
     },
-    "binaryUnknownWhy": "Esta edición ({{edition}}) pertenece al binario en ejecución. Cuando el motor publica si un módulo está en esta compilación, la columna lo muestra; si no, queda «no se sabe». No se deduce del empaquetado.",
-    "catalogueSourceHelp": "La información de módulos disponible depende de la compilación instalada. Instalar una licencia actualiza los datos de la licencia; la disponibilidad de módulos se informa por separado.",
-    "noAddons": "Esta instalación devolvió un catálogo de módulos vacío.",
-    "loading": "Cargando el catálogo de módulos…",
-    "unavailable": "La información de módulos no está disponible en esta compilación.",
-    "unavailableAction": "Reintente para solicitar de nuevo la información de módulos.",
-    "failed": "No se ha podido cargar el catálogo de módulos. La cobertura de módulos es actualmente desconocida.",
-    "failedAction": "Reintente para solicitar de nuevo la información de módulos.",
-    "staleNotCurrent": "La información de módulos cargada anteriormente ya no es actual.",
     "knownFacts": "Edición: {{edition}} · Estado de la licencia: {{status}}.",
     "knownFactsUnavailable": "No se proporcionaron la edición ni el estado de la licencia.",
     "licenseRefreshFailed": "No se ha podido actualizar el estado de la licencia. La cobertura actual de módulos es desconocida.",
@@ -1128,10 +1124,7 @@
     "licenseRefreshFailedAction": "Reintente para actualizar el estado de la licencia.",
     "licenseRetry": "Reintentar estado de la licencia",
     "technicalSummary": "Detalle técnico",
-    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}",
-    "inBuild": "en esta edición",
-    "notInBuild": "no está en esta edición",
-    "notCovered": "no cubierto por la licencia"
+    "technicalDetail": "{{method}} {{endpoint}} · HTTP {{status}}{{codePart}}{{requestPart}}"
   },
   "mcpGateway": {
     "title": "MCP gateway",
@@ -1231,7 +1224,8 @@
       "legacy_forwarder": "Reenvío heredado del archivo",
       "session_runner_engine_user_session_folder": "Ejecutor de sesiones, como usuario del motor, en la carpeta de la sesión",
       "reported_by_session_runner": "Según lo informa el ejecutor de sesiones",
-      "not_supplied_for_local_commands": "No se aplica a comandos locales"
+      "not_supplied_for_local_commands": "No se aplica a comandos locales",
+      "listed_egress_hosts_for_local_commands": "Solo los hosts indicados, para un comando local que los indique"
     },
     "nameHint": "Se muestra en la lista de servidores. Si lo dejas vacío, se usa el nombre de host del servidor.",
     "advanced": "Avanzado",
@@ -1290,6 +1284,41 @@
       "confirm": "Activar"
     },
     "sessionOn": "Activado: desactívalo para pararlo.",
-    "sessionOff": "Desactivado: las sesiones no pueden enviarse mensajes ni usar el trabajo asignado."
+    "sessionOff": "Desactivado: las sesiones no pueden enviarse mensajes ni usar el trabajo asignado.",
+    "startersTitle": "Servidores iniciales",
+    "startersHint": "Servidores seleccionados, cada uno con su aislamiento y sus límites de red. Añadir rellena el formulario; el servidor se guarda apagado y no ejecuta nada hasta que lo pruebes y lo actives.",
+    "starterAdd": "Añadir {{name}}",
+    "starterLicence": "Licencia: {{licence}}",
+    "starterSource": "Código fuente",
+    "egressHosts": "Hosts permitidos",
+    "egressHostsHint": "El comando solo llega a estos hosts HTTPS, uno por línea: host o host:puerto. Déjalo vacío para mantener la red de la sesión.",
+    "egressHostsInvalid": "Escribe cada host como host o host:puerto, en minúsculas y sin https://, como máximo 16.",
+    "starters": {
+      "filesystem": {
+        "summary": "Lee y escribe archivos en la carpeta de la sesión.",
+        "profile": "Se ejecuta en este servidor con npx. Solo escribe en la carpeta de la sesión y solo llega a registry.npmjs.org, para descargar su paquete fijado.",
+        "setup": "Necesita Node.js (npx) en este servidor. Guárdalo, pruébalo y actívalo."
+      },
+      "git": {
+        "summary": "Lee el historial y hace commits en los repositorios de la sesión.",
+        "profile": "Se ejecuta en este servidor con uvx. Solo escribe en la carpeta de la sesión y solo llega a pypi.org y files.pythonhosted.org, para descargar su paquete fijado.",
+        "setup": "Necesita uv (uvx) en este servidor. Guárdalo, pruébalo y actívalo."
+      },
+      "github": {
+        "summary": "Issues, pull requests y código en GitHub, con el servidor del propio GitHub.",
+        "profile": "Un servidor remoto: el motor solo se conecta a api.githubcopilot.com, a direcciones comprobadas y sin redirecciones. Las sesiones nunca ven tu token.",
+        "setup": "Antes de probarlo, añade el secreto mcp/github en Gestionar credenciales con el valor Bearer seguido de un token de acceso personal de GitHub, y elígelo como Inicio de sesión."
+      },
+      "gitlab": {
+        "summary": "Issues, merge requests y pipelines en GitLab, con el servidor integrado de GitLab.",
+        "profile": "Un servidor remoto: el motor solo se conecta a gitlab.com, a direcciones comprobadas y sin redirecciones. Para tu propio GitLab, cambia la dirección.",
+        "setup": "Antes de probarlo, añade el secreto mcp/gitlab en Gestionar credenciales con el valor Bearer seguido de un token OAuth de GitLab con el ámbito mcp, y elígelo como Inicio de sesión."
+      },
+      "playwright": {
+        "summary": "Abre y usa páginas web en un navegador sin interfaz.",
+        "profile": "Se ejecuta en este servidor con npx, con un perfil de navegador nuevo. Solo escribe en la carpeta de la sesión y solo llega a registry.npmjs.org.",
+        "setup": "Necesita Node.js y Google Chrome en este servidor. La navegación con este perfil de red aún no está validada: puede que el navegador no confíe en el proxy HTTPS del perfil."
+      }
+    }
   }
 }

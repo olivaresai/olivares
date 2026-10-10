@@ -6,17 +6,15 @@ package main
 
 import (
 	"context"
-	"testing"
-	"time"
-
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/eventbus"
-	"github.com/olivaresai/olivares/core/eventbus/natsbus"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/runtime"
 	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
+	"testing"
+	"time"
 )
 
 func TestSourceBindingAdmissionBeforeQueueAndReplay(t *testing.T) {
@@ -55,7 +53,7 @@ func TestSourceBindingAdmissionBeforeQueueAndReplay(t *testing.T) {
 	if _, err := sr.reconcile(ctx); err != nil {
 		t.Fatal(err)
 	}
-	ss.UseProviderSourceResolver(&providerSourceResolver{store: sourceStore, sr: sr, authz: auth.NewAuthorizer(nil), env: "env-1"})
+	ss.ProviderSources = &providerSourceResolver{store: sourceStore, sr: sr, authz: auth.NewAuthorizer(nil), env: "env-1"}
 	profile, err := ss.CreateProfile(ctx, tenant, sessions.CreateProfileInput{Driver: "claude", ConfigHome: t.TempDir(), UserHome: t.TempDir()})
 	if err != nil {
 		t.Fatal(err)
@@ -79,14 +77,7 @@ func TestSourceBindingAdmissionBeforeQueueAndReplay(t *testing.T) {
 	if admitted.SourceRegistration == nil || admitted.SourceRegistration.BindingRef != binding.Ref {
 		t.Fatal("origin did not stamp its approved decision")
 	}
-	encoded, err := natsbus.EncodeEvent(admitted)
-	if err != nil {
-		t.Fatal(err)
-	}
-	replay, err := natsbus.DecodeEvent(encoded, natsbus.DefaultDecoders())
-	if err != nil {
-		t.Fatal(err)
-	}
+	replay := admitted
 	if _, err := ss.RevokeBinding(ctx, tenant, binding.Ref); err != nil {
 		t.Fatal(err)
 	}

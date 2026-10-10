@@ -65,10 +65,10 @@ var l4gSHA = regexp.MustCompile(`sha256 [0-9a-f]{12}`)
 func TestL4UpgradeInstalledTextPaneIsPinned(t *testing.T) {
 	run := func(t *testing.T, enterprise bool) (string, string, string, error) {
 		t.Helper()
-		target := writeTarget(t, l4Script("26.0.0"))
+		target := writeTarget(t, l4Script("26.0"))
 		dataDir := t.TempDir()
 		installDevLicense(t, dataDir)
-		b := l4Bundle(t, "26.8.0", nil, l4Script("26.8.0"))
+		b := l4Bundle(t, "26.800", nil, l4Script("26.800"))
 		args := []string{"upgrade", "--bundle", b.dir, "--pubkey", b.pubB64, "--target", target,
 			"--data-dir", dataDir, "--os", "linux", "--arch", "amd64", "--yes"}
 		if enterprise {
@@ -77,7 +77,7 @@ func TestL4UpgradeInstalledTextPaneIsPinned(t *testing.T) {
 		out, errOut, err := runLeafCLI(t, args...)
 		// The premise, asserted rather than assumed: the swap really happened, or the
 		// desenlace whose text is pinned below was never reached.
-		if got := runsVersion(t, target); !strings.Contains(got, "26.8.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "26.800") {
 			t.Fatalf("the target was not swapped: %s still reports %q", target, got)
 		}
 		// Order matters: the backup path CONTAINS the target path, so the target is
@@ -91,11 +91,11 @@ func TestL4UpgradeInstalledTextPaneIsPinned(t *testing.T) {
 	const head = "OTA key: --pubkey (fingerprint <FP>)\n" +
 		"source: air-gap bundle <BUNDLE>\n" +
 		"channel:   stable\n" +
-		"current:   26.0.0\n" +
-		"available: 26.8.0 (released <DATE>)\n" +
+		"current:   26.0\n" +
+		"available: 26.800 (released <DATE>)\n" +
 		"status:    upgrade available\n" +
-		"downloading 26.8.0 linux/amd64 ...\n"
-	const tail = "\ninstalled: <TARGET> is now olivares 26.8.0 (commit t, built t, L4 witness)\n" +
+		"downloading 26.800 linux/amd64 ...\n"
+	const tail = "\ninstalled: <TARGET> is now olivares 26.800 (commit t, built t, L4 witness)\n" +
 		"rollback: the previous binary is backed up at <TARGET>.bak-<EPOCH>-<RAND> (restore it to revert)\n" +
 		"next: restart the service to run the new binary — for zero downtime use a drain +\n" +
 		"      handover (single node) or a rolling restart (HA); see docs/UPGRADE-AND-ROLLBACK.md.\n"
@@ -143,17 +143,17 @@ func TestL4SecurityCheckQuietDoesNotSilenceTheFeedArm(t *testing.T) {
 	// catalog is incomplete: no findings, no verdict, exit 8.
 	feed, pub := l4SignedFeed(t, l4Advisory("26.5.0.1"))
 	args := []string{"security", "check", "--feed", feed, "--pubkey", pub,
-		"--product-version", "26.6.0", "--quiet"}
+		"--product-version", "26.600", "--quiet"}
 
 	out, _, err := runLeafCLI(t, args...)
 	wantRC(t, "security check (quiet+unevaluable, text)", err, 8)
 	wantText(t, "security check (quiet+unevaluable)", l4Norm(out),
-		"olivares 26.6.0: CANNOT DETERMINE whether any advisory affects this version.\n"+
+		"olivares 26.600: CANNOT DETERMINE whether any advisory affects this version.\n"+
 			"  cause:   1 of the 1 advisory(ies) in this feed could not be evaluated, so\n"+
 			"           \"not affected\" would be a claim about advisories this build never\n"+
 			"           read:\n"+
 			"             - OLIVARES-L4-0001: \"introduced\":\"26.5.0.1\" is not a version this build can order: "+
-			"release: version \"26.5.0.1\" is not MAJOR.MINOR or MAJOR.MINOR.PATCH\n"+
+			"release: version \"26.5.0.1\" must be MAJOR.MINOR\n"+
 			"  way out: this is a FEED problem, not a key problem — the signature verified.\n"+
 			"           Take it to the advisory publisher, or upgrade to a build that\n"+
 			"           understands these ranges.\n")
@@ -177,9 +177,9 @@ func TestL4SecurityCheckQuietDoesNotSilenceTheFeedArm(t *testing.T) {
 	// The contrafactual, so the assertions above cannot be satisfied by a --quiet
 	// that does nothing at all: on the UNAFFECTED desenlace of the same command,
 	// --quiet still silences BOTH panes.
-	clean, cleanPub := l4SignedFeed(t, l4Advisory("26.5.0"))
+	clean, cleanPub := l4SignedFeed(t, l4Advisory("26.500"))
 	silent, _, serr := runLeafCLI(t, "security", "check", "--feed", clean, "--pubkey", cleanPub,
-		"--product-version", "26.7.1", "--quiet")
+		"--product-version", "26.701", "--quiet")
 	wantRC(t, "security check (quiet+clean, text)", serr, 0)
 	wantText(t, "security check (quiet+clean)", silent, "")
 }
@@ -245,7 +245,7 @@ func TestL4UpgradeForcedRollbackAuditFailureReachesBothPanes(t *testing.T) {
 
 	run := func(t *testing.T, breakAudit bool) (string, string, error) {
 		t.Helper()
-		target := writeTarget(t, l4Script("26.9.0"))
+		target := writeTarget(t, l4Script("26.900"))
 		dataDir := t.TempDir()
 		installDevLicense(t, dataDir)
 		if breakAudit {
@@ -255,13 +255,13 @@ func TestL4UpgradeForcedRollbackAuditFailureReachesBothPanes(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		b := l4Bundle(t, "25.1.0", nil, l4Script("25.1.0"))
+		b := l4Bundle(t, "25.100", nil, l4Script("25.100"))
 		out, errOut, err := runLeafCLI(t, "-o", "json", "upgrade", "--bundle", b.dir,
 			"--pubkey", b.pubB64, "--target", target, "--data-dir", dataDir,
 			"--os", "linux", "--arch", "amd64", "--yes", "--force-rollback")
 		// The premise, asserted rather than assumed: the DOWNGRADE really happened, or
 		// the audit branch under test was never reached.
-		if got := runsVersion(t, target); !strings.Contains(got, "25.1.0") {
+		if got := runsVersion(t, target); !strings.Contains(got, "25.100") {
 			t.Fatalf("the target was not rolled back: %s still reports %q", target, got)
 		}
 		return out, errOut, err
@@ -294,7 +294,7 @@ func TestL4UpgradeForcedRollbackAuditFailureReachesBothPanes(t *testing.T) {
 	t.Run("a writable audit sink leaves the list empty", func(t *testing.T) {
 		out, errOut, err := run(t, false)
 		wantRC(t, "upgrade (forced rollback, audit written)", err, 0)
-		if !strings.Contains(errOut, "AUDIT: forced rollback 26.9.0 -> 25.1.0 recorded.") {
+		if !strings.Contains(errOut, "AUDIT: forced rollback 26.900 -> 25.100 recorded.") {
 			t.Fatalf("the audit record line is missing; stderr was:\n%s", errOut)
 		}
 		if strings.Contains(errOut, warning) {

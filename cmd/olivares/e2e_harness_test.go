@@ -103,7 +103,7 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 
 	rt := runtime.New(runtime.Options{Logger: log})
 	editionCfg := EditionConfig{DataDir: dir}
-	set, err := buildModules(signer, nil, nil, nil, nil, sourcesConfig{}, editionCfg, dir, log)
+	set, err := buildModules(nil, signer, nil, nil, nil, nil, nil, sourcesConfig{}, editionCfg, dir, log)
 	if err != nil {
 		t.Fatalf("build modules: %v", err)
 	}
@@ -149,22 +149,25 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 	if err != nil {
 		t.Fatalf("federation sealer: %v", err)
 	}
-	fedSvc := auth.NewFederationService(st, fedSealer, newFederationBuilder(), newFederation(osGetenv, log), newFederationMultiIDP())
+	fedSvc := auth.NewFederationService(st, fedSealer, newFederationBuilder(), newFederation(osGetenv, log), thisEdition.federationMultiIDP.get())
 	secretSealer, err := newSecretSealer(dir, osGetenv)
 	if err != nil {
 		t.Fatalf("secret sealer: %v", err)
 	}
 	secretStore := auth.NewSecretStore(st, secretSealer)
 	secretResolver := newSecretResolver(secretStore, osGetenv, log)
-	editionResources, err := editionBindModuleDependencies(ctx, editionCfg, set.all, EditionDependencies{
-		Store: st, Sessions: set.sessions, RuntimeLaunches: set.sessions,
-		Rows: api.NewReadRowAuthorizationPort(authz, authr), Mutations: authz,
-		Principals: authr, Governance: set.gov, Secrets: secretResolver,
-		Authenticator: authr, FederationService: fedSvc, SecretStore: secretStore,
-		ProductSettings: newProductSettings(st, dir),
-	}, log)
-	if err != nil {
-		t.Fatalf("bind edition module dependencies: %v", err)
+	var editionResources []io.Closer
+	if thisEdition.bindModuleDependencies != nil {
+		editionResources, err = thisEdition.bindModuleDependencies(ctx, editionCfg, set.all, EditionDependencies{
+			Store: st, Sessions: set.sessions, RuntimeLaunches: set.sessions, modules: &set,
+			Rows: api.NewReadRowAuthorizationPort(authz, authr), Mutations: authz,
+			Principals: authr, Governance: set.gov, Secrets: secretResolver,
+			Authenticator: authr, FederationService: fedSvc, SecretStore: secretStore,
+			ProductSettings: newProductSettings(st, dir),
+		}, log)
+		if err != nil {
+			t.Fatalf("bind edition module dependencies: %v", err)
+		}
 	}
 	t.Cleanup(func() {
 		stopCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -232,6 +235,8 @@ func newHarnessWithRecorder(t *testing.T, wrap func(api.SessionRecorder) api.Ses
 	if err != nil {
 		t.Fatalf("api.New: %v", err)
 	}
+
+	set.catalogDeploy.handler = apiSrv.Handler()
 
 	h := &harness{t: t, h: apiSrv.Handler(), rt: rt, st: st, authr: authr, now: now, set: set}
 

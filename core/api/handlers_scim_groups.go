@@ -79,7 +79,7 @@ func (s *Server) writeSCIMGroupError(w http.ResponseWriter, r *http.Request, err
 	case errors.Is(err, auth.ErrRoleCeiling):
 		writeSCIMError(w, scim.NewError(http.StatusForbidden, "", "adding members to a role-mapped group requires a credential at or above the mapped role"))
 	case errors.Is(err, store.ErrAuditSpoolFull):
-		// ADR-0024 Q2 block mode: evidence capacity is exhausted; deny-closed and
+		// audit-spool policy block mode: evidence capacity is exhausted; deny-closed and
 		// retryable once the operator restores it. Same mapping as core/api.
 		writeSCIMError(w, scim.NewError(http.StatusServiceUnavailable, "", "audit spool full"))
 	default:
@@ -87,12 +87,8 @@ func (s *Server) writeSCIMGroupError(w http.ResponseWriter, r *http.Request, err
 	}
 }
 
-func (s *Server) scimListGroups(w http.ResponseWriter, r *http.Request) {
-	_, tenant, aerr := s.scimAuthz(r, "user:read")
-	if aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimListGroups(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	tenant := mc.Tenant
 	page := scim.ParsePage(r.URL.Query().Get("startIndex"), r.URL.Query().Get("count"), r.URL.Query().Has("count"))
 	filterStr := strings.TrimSpace(r.URL.Query().Get("filter"))
 
@@ -125,15 +121,12 @@ func (s *Server) scimListGroups(w http.ResponseWriter, r *http.Request) {
 	writeSCIM(w, http.StatusOK, scim.ListResponse(len(matched), page, resources))
 }
 
-func (s *Server) scimCreateGroup(w http.ResponseWriter, r *http.Request) {
-	p, tenant, aerr := s.scimAuthz(r, "user:write")
-	if aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimCreateGroup(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	var body scim.GroupBodyType
 	if err := decodeSCIMBody(w, r, &body); err != nil {
-		writeSCIMError(w, scim.NewError(http.StatusBadRequest, scim.TypeInvalidSyntax, "invalid SCIM body"))
+		writeSCIMError(w, scim.NewError(http.StatusBadRequest, scim.TypeInvalidSyntax, RequestBodyErrorMessage(err, "invalid SCIM body")))
 		return
 	}
 	in, err := scim.DecodeGroup(body)
@@ -151,12 +144,8 @@ func (s *Server) scimCreateGroup(w http.ResponseWriter, r *http.Request) {
 	writeSCIM(w, http.StatusCreated, scim.EncodeGroup(g.Group, g.Members, groupsURL, scimUsersURL(r)))
 }
 
-func (s *Server) scimGetGroup(w http.ResponseWriter, r *http.Request) {
-	_, tenant, aerr := s.scimAuthz(r, "user:read")
-	if aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimGetGroup(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	tenant := mc.Tenant
 	g, err := s.authr.SCIMGetGroup(r.Context(), tenant, model.ID(chi.URLParam(r, "id")))
 	if err != nil {
 		s.writeSCIMGroupError(w, r, err)
@@ -165,16 +154,13 @@ func (s *Server) scimGetGroup(w http.ResponseWriter, r *http.Request) {
 	writeSCIM(w, http.StatusOK, scim.EncodeGroup(g.Group, g.Members, scimGroupsURL(r), scimUsersURL(r)))
 }
 
-func (s *Server) scimReplaceGroup(w http.ResponseWriter, r *http.Request) {
-	p, tenant, aerr := s.scimAuthz(r, "user:write")
-	if aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimReplaceGroup(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	id := model.ID(chi.URLParam(r, "id"))
 	var body scim.GroupBodyType
 	if err := decodeSCIMBody(w, r, &body); err != nil {
-		writeSCIMError(w, scim.NewError(http.StatusBadRequest, scim.TypeInvalidSyntax, "invalid SCIM body"))
+		writeSCIMError(w, scim.NewError(http.StatusBadRequest, scim.TypeInvalidSyntax, RequestBodyErrorMessage(err, "invalid SCIM body")))
 		return
 	}
 	// Okta sends a group RENAME as a PUT carrying the FULL members array: the
@@ -193,16 +179,13 @@ func (s *Server) scimReplaceGroup(w http.ResponseWriter, r *http.Request) {
 	writeSCIM(w, http.StatusOK, scim.EncodeGroup(g.Group, g.Members, scimGroupsURL(r), scimUsersURL(r)))
 }
 
-func (s *Server) scimPatchGroup(w http.ResponseWriter, r *http.Request) {
-	p, tenant, aerr := s.scimAuthz(r, "user:write")
-	if aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimPatchGroup(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	id := model.ID(chi.URLParam(r, "id"))
 	var body scim.PatchBody
 	if err := decodeSCIMBody(w, r, &body); err != nil {
-		writeSCIMError(w, scim.NewError(http.StatusBadRequest, scim.TypeInvalidSyntax, "invalid PatchOp body"))
+		writeSCIMError(w, scim.NewError(http.StatusBadRequest, scim.TypeInvalidSyntax, RequestBodyErrorMessage(err, "invalid PatchOp body")))
 		return
 	}
 	// The read-fold-write spans two transactions, so the replace carries the
@@ -247,12 +230,9 @@ func (s *Server) scimPatchGroup(w http.ResponseWriter, r *http.Request) {
 	writeSCIM(w, http.StatusOK, scim.EncodeGroup(g.Group, g.Members, scimGroupsURL(r), scimUsersURL(r)))
 }
 
-func (s *Server) scimDeleteGroup(w http.ResponseWriter, r *http.Request) {
-	p, tenant, aerr := s.scimAuthz(r, "user:write")
-	if aerr != nil {
-		writeSCIMError(w, *aerr)
-		return
-	}
+func (s *Server) scimDeleteGroup(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	if err := s.authr.SCIMDeleteGroup(r.Context(), p, tenant, model.ID(chi.URLParam(r, "id"))); err != nil {
 		s.writeSCIMGroupError(w, r, err)
 		return
@@ -273,18 +253,22 @@ func (s *Server) scimDeleteGroup(w http.ResponseWriter, r *http.Request) {
 // roles and member counts — the operator's view of what the IdP pushed and what
 // each group confers (the effective-role provenance an admin needs when a
 // member's direct role and acting role differ).
-func (s *Server) handleListGroups(w http.ResponseWriter, r *http.Request) {
-	_, tenant, ok := s.authzTenant(w, r, "membership:read")
-	if !ok {
-		return
-	}
+func (s *Server) handleListGroups(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	tenant := mc.Tenant
 	groups, err := s.authr.SCIMListGroups(r.Context(), tenant)
 	if err != nil {
 		s.writeError(w, r, err)
 		return
 	}
+	// A workspace-confined caller reads the place of its own workspace only: the
+	// id of another workspace is not its to learn.
+	confinedWS, confined := mc.Principal.ConfinedWorkspaceIn(tenant)
 	items := make([]map[string]any, 0, len(groups))
 	for _, g := range groups {
+		place := g.Group.WorkspaceID.String()
+		if confined && g.Group.WorkspaceID != confinedWS {
+			place = ""
+		}
 		items = append(items, map[string]any{
 			"id":              g.Group.ID.String(),
 			"display_name":    g.Group.DisplayName,
@@ -292,6 +276,7 @@ func (s *Server) handleListGroups(w http.ResponseWriter, r *http.Request) {
 			"provisioned_by":  g.Group.ProvisionedBy,
 			"mapped_role":     g.Group.MappedRole,
 			"parent_group_id": g.Group.ParentGroupID.String(),
+			"workspace_id":    place,
 			"members":         len(g.Members),
 		})
 	}
@@ -301,16 +286,14 @@ func (s *Server) handleListGroups(w http.ResponseWriter, r *http.Request) {
 // handleSetGroupRole sets (or clears, with role "") the role a group's members
 // are elevated to in the group's tenant. Ceiling-checked in core/auth against
 // the group's STORED tenant, audited as scim.group.role.map.
-func (s *Server) handleSetGroupRole(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.authzTenant(w, r, "membership:write")
-	if !ok {
-		return
-	}
+func (s *Server) handleSetGroupRole(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	var in struct {
 		Role string `json:"role"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	g, err := s.authr.ConfigureGroupRole(r.Context(), p, tenant, model.ID(chi.URLParam(r, "id")), in.Role)
@@ -334,16 +317,14 @@ func (s *Server) handleSetGroupRole(w http.ResponseWriter, r *http.Request) {
 // OWNER (or superadmin) authority in the group's tenant (ConfigureGroupParent),
 // is refused if it would create a cycle (ErrGroupCycle → 409), and is audited as
 // scim.group.nest. Like the role mapping, this is operator-only — never SCIM.
-func (s *Server) handleSetGroupParent(w http.ResponseWriter, r *http.Request) {
-	p, tenant, ok := s.authzTenant(w, r, "membership:write")
-	if !ok {
-		return
-	}
+func (s *Server) handleSetGroupParent(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	p := mc.Principal
+	tenant := mc.Tenant
 	var in struct {
 		ParentID string `json:"parent_id"`
 	}
 	if err := decodeJSON(w, r, &in); err != nil {
-		s.badRequest(w, r, "invalid JSON body")
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
 		return
 	}
 	g, err := s.authr.ConfigureGroupParent(r.Context(), p, tenant, model.ID(chi.URLParam(r, "id")), model.ID(in.ParentID))
@@ -353,5 +334,36 @@ func (s *Server) handleSetGroupParent(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"id": g.ID.String(), "display_name": g.DisplayName, "parent_group_id": g.ParentGroupID.String(),
+	})
+}
+
+// handleSetGroupWorkspace places (or, with workspace_id "", takes out) a user
+// group in a workspace of its tenant, so the workspace's contents list it. It is
+// the Business department surface (DepartmentService): the Community build
+// answers 501 departments_unavailable, and a place already stored stays listed.
+// Like the role mapping, this is operator-only — never SCIM.
+func (s *Server) handleSetGroupWorkspace(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
+	if s.departments == nil {
+		s.writeError(w, r, ErrDepartmentsUnavailable)
+		return
+	}
+	var in struct {
+		WorkspaceID *string `json:"workspace_id"`
+	}
+	if err := decodeJSON(w, r, &in); err != nil {
+		s.badRequest(w, r, RequestBodyErrorMessage(err, "invalid JSON body"))
+		return
+	}
+	if in.WorkspaceID == nil {
+		s.badRequest(w, r, "workspace_id is required; use an empty string to clear the group placement")
+		return
+	}
+	g, err := s.departments.SetGroupWorkspace(r.Context(), mc.Principal, mc.Tenant, model.ID(chi.URLParam(r, "id")), model.ID(*in.WorkspaceID))
+	if err != nil {
+		s.writeError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"id": g.ID.String(), "display_name": g.DisplayName, "workspace_id": g.WorkspaceID.String(),
 	})
 }

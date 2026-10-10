@@ -1,0 +1,22 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+name: Preserve CI evidence
+description: Keep evidence on the self-hosted runner before attempting an artifact upload.
+inputs:
+  name:
+    description: Artifact name (separates matrix assignments and evidence sets).
+    required: true
+  path:
+    description: The same newline-separated paths or globs passed to upload-artifact.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Copy evidence and report its persistent location
+      if: always() && runner.environment == 'self-hosted'
+      shell: bash
+      env:
+        EVIDENCE_NAME: ${{ inputs.name }}
+        EVIDENCE_PATHS: ${{ inputs.path }}
+        EVIDENCE_ACTION_PATH: ${{ github.action_path }}
+      run: python3 "$EVIDENCE_ACTION_PATH/preserve.py"

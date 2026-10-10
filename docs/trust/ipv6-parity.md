@@ -49,7 +49,7 @@ not omissions.
 | Category | Verdict (2026-07-09) | Evidence |
 |---|---|---|
 | Listeners | All `net.Listen`/`ListenPacket` use dual-stack-capable `"tcp"`/`"udp"`; **zero** `"tcp4"`/`"udp4"` anywhere | `cmd/olivares/cmd_serve.go` (serveHTTP/serveGRPC), `core/serverhandover/handover.go:34` (SO_REUSEPORT, family-agnostic), listener connectors (claude, envoy, ssf, cowork, aaa) |
-| Container/K8s binds | Fixed by this audit: defaults are `:8443`/`:8444` (Go dual-stack) — `0.0.0.0:P` binds **IPv4 only** in Go and made v6-only pods unreachable | `deploy/helm/olivares/values.yaml`, `deploy/manifests/install.yaml`, `deploy/compose/*.yml`, `operator/internal/controller` (the reconciler), `cmd/olivares/cmd_setup.go`, `INSTALL.md` |
+| Container/K8s binds | Fixed by this audit: defaults are `:8443`/`:8444` (Go dual-stack) — `0.0.0.0:P` binds **IPv4 only** in Go and made v6-only pods unreachable | Business chart values, `./business-install.yaml`, `deploy/compose/*.yml`, Business operator controller (the reconciler), `cmd/olivares/cmd_setup.go`, `INSTALL.md` |
 | host:port parsing | `net.SplitHostPort`/`JoinHostPort` everywhere; the four manual-split asymmetries found were fixed in the same pass | fixed: `modules/security/anomaly.go` (bare-v6 egress misclassification), `connectors/a2a/pushrecv.go` (`[::1]` dev exemption), `connectors/mqtt/config.go` + `connectors/kmip/kmip.go` (default-port heuristics); house pattern: `connectors/syslog/syslog.go` |
 | URL building | `net.JoinHostPort` (brackets v6); the one string-concat found was fixed | fixed: `connectors/secretref/k8s.go` (IPv6 `KUBERNETES_SERVICE_HOST`); already correct: `connectors/runtime/k8s.go`, `connectors/email`, `connectors/internal/wsclient` |
 | Egress gate (isolated runs) | v6-clean: bracket-aware authority parsing, semantic (not textual) IP-rule matching incl. v4-mapped, pinned dial via `JoinHostPort`; CIDR rules accept v6 prefixes | `core/runtime/sandboxrt/proxy.go` (splitHostPort, ipAllowed, pinned dial) |
@@ -64,7 +64,7 @@ not omissions.
 
 - Per-fix regression tests with compressed, bracketed, zoned (`fe80::1%eth0`) and v4-mapped
   (`::ffff:192.0.2.1`) forms in `modules/security`, `connectors/{a2a,mqtt,kmip,secretref}`,
-  plus operator/setup default-bind assertions.
+  plus Business operator source default-bind assertions.
 - A real-socket E2E suite (`cmd/olivares/e2e_ipv6_test.go`): the nuclear install flow
   (setup → login → org → authenticated read) served over **`https://[::1]`** with certificate
   verification on (no InsecureSkipVerify), a gRPC call over `[::1]`, and a dual-stack `:0` bind
@@ -72,10 +72,11 @@ not omissions.
 
 ## Operational notes for dual-stack / IPv6-only deployments
 
-- **Binds.** The engine still binds loopback (`127.0.0.1`) by default on bare hosts —
-  secure-by-default exposure, unchanged. In containers/K8s the shipped defaults are dual-stack
-  (`:8443`/`:8444`). For a v6 loopback-only posture use `[::1]:8443`; compose host mappings accept
-  `[::1]:8443:8443`; the systemd unit's `--listen` accepts the same forms.
+- **Binds.** The engine binds every interface by default on bare hosts, as in containers/K8s:
+  the dual-stack wildcard `:8443`/`:8444`. To keep it on the host use
+  `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444`. For a v6 loopback-only posture use
+  `[::1]:8443`; compose host mappings accept `[::1]:8443:8443`; the systemd unit's `--listen`
+  accepts the same forms.
 - **Egress allowlists are family-explicit by design.** The isolated-run egress gate resolves a
   destination once and requires **every** resolved IP to be allowlisted (anti-rebind,
   fail-closed). A dual-stack destination therefore needs BOTH its IPv4 and IPv6 ranges (or an

@@ -46,7 +46,7 @@ run_case finding 1 bash "$RUN" finding-subject -- "$work/finding"
 case "$case_out" in *"ADVISORY"*) echo "test-run-network-observation: finding was mislabeled advisory" >&2; fails=$((fails + 1)) ;; esac
 
 run_case blind 0 env GITHUB_ACTIONS=true bash "$RUN" blind-subject -- "$work/blind"
-case "$case_out" in *"ADVISORY"*"s medidos"*"::warning"*) ;; *) echo "test-run-network-observation: blind path lacks measured advisory: $case_out" >&2; fails=$((fails + 1)) ;; esac
+case "$case_out" in *"ADVISORY"*"s measured"*"::warning"*) ;; *) echo "test-run-network-observation: blind path lacks measured advisory: $case_out" >&2; fails=$((fails + 1)) ;; esac
 
 # A-4 (PUBEXPORT): an unverified observation must be readable in the job summary,
 # never silent. rc=2 stays advisory/green; the summary file is the notice.
@@ -66,7 +66,7 @@ fi
 run_case unexpected 7 bash "$RUN" broken-subject -- "$work/broken"
 
 run_case census-finding 0 bash "$RUN" --all-advisory census-subject -- "$work/finding"
-case "$case_out" in *"ADVISORY"*"rc=1"*"s medidos"*) ;; *) echo "test-run-network-observation: all-advisory census was not measured: $case_out" >&2; fails=$((fails + 1)) ;; esac
+case "$case_out" in *"ADVISORY"*"rc=1"*"s measured"*) ;; *) echo "test-run-network-observation: all-advisory census was not measured: $case_out" >&2; fails=$((fails + 1)) ;; esac
 
 # MUTANT: remove the only rc=2 arm. The blind probe must stop being advisory/green.
 sed '/^2)$/,/^[[:space:]]*;;$/d' "$RUN" >"$work/mutant"

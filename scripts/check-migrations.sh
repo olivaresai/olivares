@@ -152,6 +152,8 @@ self_test() {
 
 self_test
 
+python3 scripts/check-migration-hashes.py
+
 echo "==> scanning SQL migrations for expand-contract online-safety"
 # Migration files follow NNNN_<phase>_name.sql. Scan the whole tree (engines embed
 # their .sql under module dirs); exclude vendored / generated trees. commercial/ is the

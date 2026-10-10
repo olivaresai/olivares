@@ -13,8 +13,10 @@
     "astro": "astro",
     "spec:openapi": "node scripts/lint-openapi.mjs",
     "spec:asyncapi": "node scripts/lint-asyncapi.mjs",
+    "test:enforcement-docs": "node scripts/check-enforcement-docs.mjs",
     "test:drift": "node scripts/check-spec-drift.mjs",
-    "test:modules": "node scripts/check-module-coverage.mjs",
+    "test:modules": "node --test scripts/check-module-coverage.test.mjs && node scripts/check-module-coverage.mjs",
+    "test:session-runtime": "node scripts/check-session-runtime-docs.mjs",
     "test:links": "node scripts/check-links.mjs",
     "test:robots": "node scripts/check-robots.mjs",
     "test:font-display": "node scripts/apply-font-display.mjs",
@@ -23,10 +25,11 @@
     "test:policy": "node scripts/check-response-policy.mjs",
     "test:policy:selftest": "node scripts/check-response-policy.mjs --self-test",
     "test:robots:selftest": "node scripts/check-robots.mjs --self-test",
-    "test": "npm run brand:check && npm run spec:openapi && npm run spec:asyncapi && npm run build && npm run test:drift && npm run test:modules && npm run test:links && npm run test:robots:selftest && npm run test:robots && npm run test:font-display && npm run test:structured-data && npm run test:astro7-compat && npm run test:policy:selftest && npm run test:policy",
+    "test": "npm run test:enforcement-docs && npm run test:compose-postgres-passwords && npm run test:session-runtime && npm run brand:check && npm run spec:openapi && npm run spec:asyncapi && npm run build && npm run test:drift && npm run test:modules && npm run test:links && npm run test:robots:selftest && npm run test:robots && npm run test:font-display && npm run test:structured-data && npm run test:astro7-compat && npm run test:policy:selftest && npm run test:policy",
     "brand": "node scripts/gen-brand-css.mjs",
     "brand:check": "node scripts/gen-brand-css.mjs --selftest && node scripts/gen-brand-css.mjs --check",
-    "check:wrangler": "node ../scripts/check-wrangler-pin.mjs"
+    "check:wrangler": "node ../scripts/check-wrangler-pin.mjs",
+    "test:compose-postgres-passwords": "node scripts/check-compose-postgres-passwords.mjs"
   },
   "dependencies": {
     "@astrojs/markdown-satteri": "^0.4.1",

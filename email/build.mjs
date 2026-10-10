@@ -5,7 +5,7 @@
 // build.mjs — emit the finished email bundles for both runtimes.
 //
 //   web/tokens/*.tokens.json  ─┐
-//   email/copy/<locale>.json  ─┼─> layout.mjs + templates.mjs ─┬─> commercial/license-worker/
+//   email/locales/<locale>.json  ─┼─> layout.mjs + templates.mjs ─┬─> commercial/license-worker/
 //   email/templates.mjs       ─┘                               │     src/email/templates.generated.ts
 //                                                              ├─> core/emailtemplate/
 //                                                              │     templates.generated.json
@@ -62,11 +62,11 @@ function escapeCopy(node) {
 
 function loadCopy(locale) {
   const raw = JSON.parse(
-    readFileSync(join(HERE, 'copy', `${locale}.json`), 'utf8'),
+    readFileSync(join(HERE, 'locales', `${locale}.json`), 'utf8'),
   )
   if (raw.$locale !== locale)
     throw new Error(
-      `email/build: copy/${locale}.json declares $locale ${JSON.stringify(raw.$locale)}`,
+      `email/build: locales/${locale}.json declares $locale ${JSON.stringify(raw.$locale)}`,
     )
   return raw
 }
@@ -90,7 +90,7 @@ function assertKeyParity(all) {
     const extra = got.filter((k) => !ref.includes(k))
     if (missing.length || extra.length)
       throw new Error(
-        `email/build: copy/${locale}.json key parity broken` +
+        `email/build: locales/${locale}.json key parity broken` +
           (missing.length ? `\n  missing: ${missing.join(', ')}` : '') +
           (extra.length ? `\n  unexpected: ${extra.join(', ')}` : ''),
       )
@@ -256,7 +256,7 @@ function emitWorker(bundle, ids) {
     '// SPDX-License-Identifier: LicenseRef-Olivares-Commercial',
     '',
     '/**',
-    ...GEN_BANNER('web/tokens/*.tokens.json + email/copy/*.json + email/templates.mjs')
+    ...GEN_BANNER('web/tokens/*.tokens.json + email/locales/*.json + email/templates.mjs')
       .split('\n')
       .map((l) => ` * ${l}`.trimEnd()),
     ' *',
@@ -348,7 +348,7 @@ function emitCore(bundle, ids) {
   return `${JSON.stringify(
     {
       $description: GEN_BANNER(
-        'web/tokens/*.tokens.json + email/copy/*.json + email/templates.mjs',
+        'web/tokens/*.tokens.json + email/locales/*.json + email/templates.mjs',
       ).replace(/\n/g, ' '),
       locales: LOCALES,
       placeholders,
@@ -543,7 +543,7 @@ for (const [path, content] of files) {
 if (check) {
   if (stale) {
     console.error(
-      `email/build: ${stale} artefact(s) no longer match web/tokens + email/copy.`,
+      `email/build: ${stale} artefact(s) no longer match web/tokens + email/locales.`,
     )
     process.exit(1)
   }

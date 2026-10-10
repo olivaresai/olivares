@@ -21,7 +21,7 @@ check() {
 		printf 'ok   %-72s %s\n' "$n" "$g"
 	else
 		FAIL=$((FAIL + 1))
-		printf 'FAIL %s esperaba [%s], dio [%s]\n' "$n" "$e" "$g"
+		printf 'FAIL %s expected [%s], got [%s]\n' "$n" "$e" "$g"
 	fi
 }
 
@@ -128,13 +128,15 @@ check "(5) session-only main push is eligible" 0 \
 check "(5b) session-only says yes" yes "$(cat "$TMP/e")"
 check "(6) code-only main push is eligible" yes \
 	"$(python3 "$HELPER" eligible "$REAL" main core/internal/store/sqlstore/store.go)"
-check "(7) all three remaining journal prefixes are eligible" yes \
+check "(7) the former journal paths are eligible" yes \
 	"$(python3 "$HELPER" eligible "$REAL" main design/audits/x.md docs/ai-context/example.md ESTADO-PROYECTO.md)"
-check "(8) classifier: remaining audits prefix is journal" journal \
+# The classifier exempts no path any more: the journal exemptions held only while the pre-push
+# hook ran their readers on every push.
+check "(8) classifier: design/audits is code" code \
 	"$(python3 "$HELPER" classify "$REAL" design/audits/x.md)"
-check "(9) classifier: docs/ai-context is journal" journal \
+check "(9) classifier: docs/ai-context is code" code \
 	"$(python3 "$HELPER" classify "$REAL" docs/ai-context/example.md)"
-check "(10) classifier: ESTADO-PROYECTO.md is journal" journal \
+check "(10) classifier: ESTADO-PROYECTO.md is code" code \
 	"$(python3 "$HELPER" classify "$REAL" ESTADO-PROYECTO.md)"
 check "(11) classifier: sessions are code" code \
 	"$(python3 "$HELPER" classify "$REAL" sessions/foo.md)"
@@ -527,7 +529,7 @@ NEG_ELIG_RC=0
 NEG_ELIG_OUT=$(python3 "$HELPER" eligible "$TMP/neg-paths-ignore.yml" main sessions/foo.md 2>"$TMP/neg-elig.err") || NEG_ELIG_RC=$?
 check "(40b) eligible does not treat bang-pattern as a miss" 2 "$NEG_ELIG_RC"
 check "(40c) eligible names unknown, not yes/no" 0 \
-	"$(grep -q 'NO HE PODIDO MIRAR' "$TMP/neg-elig.err" && ! grep -qE '^(yes|no)$' <<<"$NEG_ELIG_OUT"; echo $?)"
+	"$(grep -q 'COULD NOT CHECK' "$TMP/neg-elig.err" && ! grep -qE '^(yes|no)$' <<<"$NEG_ELIG_OUT"; echo $?)"
 python3 - "$TMP/ok.yml" "$TMP/neg-paths.yml" <<'PY'
 import sys
 src, dst = sys.argv[1], sys.argv[2]

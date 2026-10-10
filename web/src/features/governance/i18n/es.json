@@ -17,7 +17,7 @@
     "activationStateUnknown": "La activación no está disponible hasta que la consola pueda verificar el grant actual y el estado de las revisiones.",
     "activationBlockedUnreviewed": "Todavía queda un grant anterior sin revisar. Ciérralo si está activo y haz que otra cuenta de usuario complete su revisión posterior antes de abrir otra ventana de emergencia.",
     "activationHumanRequired": "Un token de sistema no puede activar el acceso de emergencia. Inicia sesión como administrador humano con una identidad estable.",
-    "activationHardwareRequired": "Activar break-glass exige una sesión verificada por hardware (AAL3). Completa la elevación WebAuthn o PIV en Identidad → Inicio privilegiado y vuelve aquí.",
+    "activationHardwareRequired": "Activar break-glass exige una sesión verificada por hardware (AAL3). Completa la elevación WebAuthn en Identidad → Inicio privilegiado y vuelve aquí.",
     "currentTitle": "Acceso de emergencia ahora",
     "currentCaption": "Quién puede saltarse el control dual en este momento, para qué acciones y hasta cuándo.",
     "noActive": "No hay acceso de emergencia activo",
@@ -225,7 +225,8 @@
     "decisionApprove": "Aprobada",
     "decisionReject": "Rechazada",
     "reenableNeedsAdmins": "Dos cuentas de administrador distintas deben aprobarlo. Créalas en Identidad y NHI, o con `olivares users create`.",
-    "openIdentity": "Abrir Identidad y NHI"
+    "openIdentity": "Abrir Identidad y NHI",
+    "cannotDecideOwn": "No puedes aprobar tu propia solicitud. Otro administrador debe decidir."
   },
   "policies": {
     "title": "Políticas",
@@ -392,8 +393,7 @@
     "denied": "Computer-use denegado por política",
     "sensitiveInput": "El texto tecleado por computer-use contiene contenido sensible (clases DLP detectadas)",
     "responseBlocked": "Respuesta retenida: el texto tecleado por computer-use contiene contenido sensible",
-    "honesty": "La aplicación es verified-deployed solo en el proxy. Un ANTHROPIC_BASE_URL personalizado lo elude. Las herramientas computer-use son del lado del cliente: el modelo propone, el cliente ejecuta.",
-    "enterpriseRequired": "El análisis profundo de capturas de pantalla (OCR + DLP) y la grabación de línea temporal requieren el módulo comercial."
+    "honesty": "La aplicación es verified-deployed solo en el proxy. Un ANTHROPIC_BASE_URL personalizado lo elude. Las herramientas computer-use son del lado del cliente: el modelo propone, el cliente ejecuta."
   },
   "projects": {
     "title": "Gobernanza de Proyectos Claude",
@@ -714,6 +714,7 @@
     "folder": "Carpeta",
     "askedBy": "Lo pide",
     "askedBySession": "La propia sesión",
+    "askedByForSession": "{{name}} para una nueva sesión",
     "tool": "Herramienta",
     "willRun": "Qué se ejecutará",
     "noReview": "Esta solicitud no incluye qué se ejecutará.",
@@ -723,6 +724,10 @@
     "details": "Detalles",
     "id": "Id de la solicitud",
     "untitled": "Sesión sin título",
-    "openToDecide": "Ábrela para aprobar o rechazar"
+    "openToDecide": "Ábrela para aprobar o rechazar",
+    "you": "Tú",
+    "member": "Un miembro",
+    "apiToken": "Un token de API",
+    "requestSummary": "Solicitud"
   }
 }

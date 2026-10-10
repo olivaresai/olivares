@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -26,7 +27,7 @@ func (m *Module) RecordSessionObservation(ctx context.Context, principal auth.Pr
 	if tenant.IsZero() || tenant.IsSystem() || !principal.IsMember(tenant) || principal.SessionIdentity == "" || principal.SessionRunRef == "" || principal.SessionFence < 1 {
 		return auth.ErrUnauthenticated
 	}
-	if m.publishObservation == nil || m.data == nil {
+	if m.publishObservation == nil || m.Data == nil {
 		return errors.New("sessions: observation publication is unavailable")
 	}
 	lr, ok := m.rt.getLive(tenant, principal.SessionRunRef)
@@ -117,6 +118,12 @@ func (m *Module) RecordSessionObservation(ctx context.Context, principal auth.Pr
 					kind = tlMCP
 				}
 			case sdkmodel.CostSample:
+				v.Labels = maps.Clone(v.Labels)
+				if v.Labels == nil {
+					v.Labels = make(map[string]string)
+				}
+				v.Labels[event.SessionCoreIDLabel] = run.String(colRunCoreSessionID)
+				e.Payload = v
 				applyLiveCost(live, v, at)
 				kind, source, title = tlCost, "cost", fmt.Sprintf("%d in / %d out tokens", v.InputTokens, v.OutputTokens)
 			case sdkmodel.FindingReport:

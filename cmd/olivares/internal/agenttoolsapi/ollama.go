@@ -200,7 +200,7 @@ func (m *Module) handleOllamaStart(w http.ResponseWriter, r *http.Request, mc ap
 			TenantID string `json:"tenant_id"`
 		}
 		if err := api.DecodeRequestBody(w, r, &in, api.RequestBodySpec{MaxBytes: 4096, Optional: true}); err != nil {
-			fail(w, 400, "bad_request", "Provide a valid request with only the supported fields.")
+			fail(w, 400, "bad_request", api.RequestBodyErrorMessage(err, "Provide a valid request with only the supported fields."))
 			return
 		}
 		var tenant model.TenantID
@@ -238,7 +238,7 @@ func (m *Module) handleOllamaStop(w http.ResponseWriter, r *http.Request, mc api
 }
 
 // RestartOllama starts the service again at engine start when a person started it and
-// did not stop it (HU2-14): after a restart it stayed "Not running" until someone
+// did not stop it: after a restart it stayed "Not running" until someone
 // pressed Start, and the tools it serves failed meanwhile. The engine starts it as
 // itself, for the tenant the person named; a failure is shown on the row.
 func (m *Module) RestartOllama() {
@@ -418,7 +418,7 @@ func (m *Module) startOllama(program string, actor auth.Principal, tenant model.
 		return errors.New("Ollama could not be prepared on this node")
 	}
 	// OLLAMA_NO_CLOUD is Ollama's own switch for its cloud features (cloud models, web
-	// search, the ollama.com connection): HU2 saw the product-started Ollama reach
+	// search, the ollama.com connection): real use saw the product-started Ollama reach
 	// ollama.com on start. The model a person asks to download still comes from the
 	// registry.
 	cmd.Env = []string{
@@ -489,31 +489,32 @@ func (m *Module) startOllama(program string, actor auth.Principal, tenant model.
 			m.mu.Unlock()
 			return
 		}
-		m.ollama.state = ollamaRunning
 		m.ollama.owner, m.ollama.ownerTenant = actor, tenant
 		register := m.ollama.cfg.Register
 		m.mu.Unlock()
-		if register == nil {
-			return
-		}
-		if tenant.IsZero() {
-			m.mu.Lock()
-			if m.ollama.done == done {
-				m.ollama.message = "Running. To use it, add " + m.ollamaEndpoint() + " in Providers."
+		// Running is published once the endpoint is registered, so a client that
+		// rereads Providers when it sees running finds it there.
+		message := ""
+		switch {
+		case register == nil:
+		case tenant.IsZero():
+			message = "Running. To use it, add " + m.ollamaEndpoint() + " in Providers."
+		default:
+			rctx, rcancel := context.WithTimeout(m.ctx, 30*time.Second)
+			err := register(rctx, actor, tenant, m.ollamaEndpoint())
+			rcancel()
+			if err != nil {
+				message = "Running. Its endpoint could not be added to Providers; add " + m.ollamaEndpoint() + " there."
 			}
-			m.mu.Unlock()
-			return
 		}
-		rctx, rcancel := context.WithTimeout(m.ctx, 30*time.Second)
-		defer rcancel()
-		if err := register(rctx, actor, tenant, m.ollamaEndpoint()); err != nil {
-			m.mu.Lock()
-			if m.ollama.done == done {
-				m.ollama.message = "Running. Its endpoint could not be added to Providers; add " +
-					m.ollamaEndpoint() + " there."
+		m.mu.Lock()
+		if m.ollama.done == done && m.ollama.state == ollamaStarting {
+			m.ollama.state = ollamaRunning
+			if message != "" {
+				m.ollama.message = message
 			}
-			m.mu.Unlock()
 		}
+		m.mu.Unlock()
 	}()
 	return nil
 }
@@ -627,8 +628,9 @@ func (m *Module) runOllamaPull(id model.ID, name string) {
 		}
 		m.mu.Unlock()
 		if line.Status == "success" {
-			finish("succeeded", "")
+			// Succeeded once the tenant's record lists the new model.
 			m.registerOllamaAgain()
+			finish("succeeded", "")
 			return
 		}
 	}

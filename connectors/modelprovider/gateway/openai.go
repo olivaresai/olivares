@@ -7,10 +7,17 @@ import "encoding/json"
 
 // OpenAIDriver speaks OpenAI-compatible POST /v1/chat/completions (HTTP JSON
 // and SSE). LiteLLM and Bifrost OpenAI surfaces use this driver.
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 type OpenAIDriver struct{ *httpDriver }
 
 var _ Driver = (*OpenAIDriver)(nil)
 
+// NewOpenAICompat creates an OpenAI-compatible driver.
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 func NewOpenAICompat(cfg Config) (*OpenAIDriver, error) {
 	d, err := newHTTPDriver(cfg, DriverOpenAICompat, ProtocolOpenAICompat, "/v1/chat/completions", copyHeaders(cfg.Headers))
 	if err != nil {

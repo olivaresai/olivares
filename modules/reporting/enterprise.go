@@ -22,9 +22,9 @@ import (
 // enterprise.go is the OPEN half of the enterprise reporting surface: the
 // seams the commercial add-on implements (the enterprise report engine and the
 // three providers already declared in types.go) plus the HTTP routes that
-// serve them. Every route answers 501 when its seam is nil — the community
-// build keeps the five built-in on-demand reports byte-identically and never
-// pretends an enterprise capability exists (no rug-pull, no theater).
+// serve them. Every route answers 501 when its seam is nil. On-demand reports
+// belong to Business Compliance Packs; Community retains stored report artifacts.
+// Scheduling and artifact delivery continue to use the existing scheduler seam.
 
 // EnterpriseReportSource is the commercial report engine seam: live
 // compliance posture, executive risk summary and the optionally signed audit evidence
@@ -111,7 +111,7 @@ func (m *Module) registerEnterpriseRoutes(reg api.RouteRegistrar) {
 }
 
 func writeNotWired(w http.ResponseWriter, what string) {
-	writeError(w, http.StatusNotImplemented, what+" is an enterprise capability and is not wired in this build")
+	writeError(w, http.StatusNotImplemented, what+" is a Business capability and is not wired in this build")
 }
 
 // ---- enterprise report engine routes -------------------------------------------
@@ -136,7 +136,7 @@ func (m *Module) handleEnterpriseBundle(w http.ResponseWriter, r *http.Request, 
 
 func (m *Module) serveEnterpriseReport(w http.ResponseWriter, r *http.Request, _ api.ModuleContext, what string, build func(context.Context) (any, error)) {
 	if m.enterprise == nil {
-		writeNotWired(w, "the enterprise "+what)
+		writeNotWired(w, "the "+what)
 		return
 	}
 	out, err := build(r.Context())
@@ -149,7 +149,7 @@ func (m *Module) serveEnterpriseReport(w http.ResponseWriter, r *http.Request, _
 		m.reportErr(w, err, "enterprise report failed: "+what, "failed to build the "+what)
 		return
 	}
-	writeJSON(w, http.StatusOK, out)
+	writeResponse(w, http.StatusOK, out)
 }
 
 // ---- schedules -------------------------------------------------------------
@@ -164,7 +164,7 @@ func (m *Module) handleListSchedules(w http.ResponseWriter, r *http.Request, mc 
 		writeError(w, http.StatusInternalServerError, "failed to list schedules")
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": api.JSONArray[ScheduleConfig](items)})
+	writeResponse(w, http.StatusOK, map[string]any{"items": api.JSONArray[ScheduleConfig](items)})
 }
 
 func (m *Module) handleCreateSchedule(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -174,7 +174,7 @@ func (m *Module) handleCreateSchedule(w http.ResponseWriter, r *http.Request, mc
 	}
 	var cfg ScheduleConfig
 	if err := api.DecodeRequestBody(w, r, &cfg, api.RequestBodySpec{MaxBytes: 1 << 16, AllowUnknownFields: true}); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid schedule JSON")
+		writeError(w, http.StatusBadRequest, api.RequestBodyErrorMessage(err, "invalid schedule JSON"))
 		return
 	}
 	if !validReportType(cfg.ReportType) {
@@ -193,7 +193,7 @@ func (m *Module) handleCreateSchedule(w http.ResponseWriter, r *http.Request, mc
 		return
 	}
 	items, _ := m.scheduler.ListSchedules(r.Context(), mc.Tenant)
-	writeJSON(w, http.StatusCreated, map[string]any{"items": api.JSONArray[ScheduleConfig](items)})
+	writeResponse(w, http.StatusCreated, map[string]any{"items": api.JSONArray[ScheduleConfig](items)})
 }
 
 func (m *Module) handleDeleteSchedule(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -205,7 +205,7 @@ func (m *Module) handleDeleteSchedule(w http.ResponseWriter, r *http.Request, mc
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"deleted": true})
+	writeResponse(w, http.StatusOK, map[string]any{"deleted": true})
 }
 
 func (m *Module) handleListScheduleRuns(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -224,7 +224,7 @@ func (m *Module) handleListScheduleRuns(w http.ResponseWriter, r *http.Request, 
 		run.Output = nil
 		metas = append(metas, run)
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"items": api.JSONArray[ScheduleRun](metas)})
+	writeResponse(w, http.StatusOK, map[string]any{"items": api.JSONArray[ScheduleRun](metas)})
 }
 
 func (m *Module) handleGetScheduleRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -243,7 +243,7 @@ func (m *Module) handleGetScheduleRun(w http.ResponseWriter, r *http.Request, mc
 			continue
 		}
 		if len(run.Output) == 0 {
-			writeJSON(w, http.StatusOK, run)
+			writeResponse(w, http.StatusOK, run)
 			return
 		}
 		writeReport(w, run.Output, Format(run.Format))
@@ -264,7 +264,7 @@ func (m *Module) handleGetBranding(w http.ResponseWriter, r *http.Request, mc ap
 		writeError(w, http.StatusInternalServerError, "failed to load branding")
 		return
 	}
-	writeJSON(w, http.StatusOK, cfg)
+	writeResponse(w, http.StatusOK, cfg)
 }
 
 func (m *Module) handleSetBranding(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -274,14 +274,17 @@ func (m *Module) handleSetBranding(w http.ResponseWriter, r *http.Request, mc ap
 	}
 	var cfg BrandingConfig
 	if err := api.DecodeRequestBody(w, r, &cfg, api.RequestBodySpec{MaxBytes: 1 << 16, AllowUnknownFields: true}); err != nil {
-		writeError(w, http.StatusBadRequest, "invalid branding JSON")
+		writeError(w, http.StatusBadRequest, api.RequestBodyErrorMessage(err, "invalid branding JSON"))
 		return
 	}
 	if err := m.branding.SetBranding(r.Context(), mc.Tenant, cfg); err != nil {
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, cfg)
+	if m.cache != nil {
+		m.cache.invalidateTenant(string(mc.Tenant))
+	}
+	writeResponse(w, http.StatusOK, cfg)
 }
 
 // ---- custom templates ---------------------------------------------------------
@@ -337,7 +340,10 @@ func (m *Module) handleSetTemplate(w http.ResponseWriter, r *http.Request, mc ap
 		writeError(w, http.StatusBadRequest, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"stored": true, "report_type": rt})
+	if m.cache != nil {
+		m.cache.invalidateTenant(string(mc.Tenant))
+	}
+	writeResponse(w, http.StatusOK, map[string]any{"stored": true, "report_type": rt})
 }
 
 func (m *Module) handleDeleteTemplate(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
@@ -350,7 +356,10 @@ func (m *Module) handleDeleteTemplate(w http.ResponseWriter, r *http.Request, mc
 		writeError(w, http.StatusNotFound, err.Error())
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"deleted": true})
+	if m.cache != nil {
+		m.cache.invalidateTenant(string(mc.Tenant))
+	}
+	writeResponse(w, http.StatusOK, map[string]any{"deleted": true})
 }
 
 // ---- schedule execution (driven by the composition-root pump) ------------------------
@@ -467,41 +476,6 @@ func (m *Module) executeSchedule(ctx context.Context, mc api.ModuleContext, cfg 
 	}
 }
 
-func (m *Module) renderScheduled(ctx context.Context, mc api.ModuleContext, cfg ScheduleConfig, now time.Time) ([]byte, error) {
-	params := ReportParams{
-		Type:      cfg.ReportType,
-		Format:    cfg.Format,
-		From:      now.AddDate(0, -1, 0),
-		To:        now,
-		Framework: cfg.Framework,
-		Team:      cfg.Team,
-		Locale:    cfg.Locale,
-	}
-	if params.Locale == "" {
-		params.Locale = "en"
-	}
-	data, err := m.gatherData(ctx, mc, params)
-	if err != nil {
-		return nil, err
-	}
-	branding := BrandingConfig{}
-	if m.branding != nil {
-		if b, err := m.branding.GetBranding(ctx, mc.Tenant); err == nil {
-			branding = b
-		}
-	}
-	html, err := m.renderWithCustomTemplate(ctx, mc.Tenant, params.Type, data, params.Locale, branding)
-	if err != nil {
-		return nil, err
-	}
-	if cfg.Format == FormatPDF {
-		return RenderPDF(ctx, html)
-	}
-	return html, nil
-}
-
-// lastRunAt returns the most recent recorded run instant for a schedule id
-// (zero time = never ran).
 func (m *Module) lastRunAt(ctx context.Context, tenant model.TenantID, scheduleID string) (time.Time, error) {
 	runs, err := m.scheduler.ListRuns(ctx, tenant, scheduleID)
 	if err != nil {
@@ -514,21 +488,4 @@ func (m *Module) lastRunAt(ctx context.Context, tenant model.TenantID, scheduleI
 		}
 	}
 	return last, nil
-}
-
-// renderWithCustomTemplate renders through the tenant's custom template when
-// one is stored, falling back to the built-in template set.
-func (m *Module) renderWithCustomTemplate(ctx context.Context, tenant model.TenantID, rt ReportType, data any, locale string, branding BrandingConfig) ([]byte, error) {
-	if m.customTmpl != nil {
-		if tmpl, ok, err := m.customTmpl.GetTemplate(ctx, tenant, rt); err == nil && ok {
-			html, rerr := m.engine.RenderCustomHTML(rt, tmpl, data, locale, branding)
-			if rerr == nil {
-				return html, nil
-			}
-			// A stored template that fails to render is a loud fallback, never
-			// a broken report: the built-in template still serves the data.
-			m.log.Error("custom template render failed; falling back to the built-in template", "type", rt, "err", rerr)
-		}
-	}
-	return m.engine.RenderHTML(rt, data, locale, branding)
 }

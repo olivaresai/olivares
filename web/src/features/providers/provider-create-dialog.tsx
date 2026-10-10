@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 import { firstHourKeys } from '@/features/first-hour/api'
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import {
@@ -27,13 +27,20 @@ import { useAuth } from '@/lib/auth/context'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { providerKeys, providersApi } from './api'
 import { useProviderBoundary } from './auth-boundary'
-import { PROVIDER_KINDS } from './kinds'
+import { LOCAL_HTTP_KINDS, PROVIDER_KINDS } from './kinds'
 import type {
   CreateProviderRequest,
   ProviderKind,
   ProviderRecordDTO,
 } from './types'
 import './i18n'
+
+/** The address a local Ollama listens on: the form fills it in whenever the provider is
+ * ollama, whether the form opens on it (the setup wizard's "Add a local model") or the
+ * operator picks it. */
+const OLLAMA_BASE_URL = 'http://127.0.0.1:11434'
+const defaultBaseURL = (kind: ProviderKind | '') =>
+  kind === 'ollama' ? OLLAMA_BASE_URL : ''
 
 /**
  * ProviderCreateDialog — THREE typed fields and one optional, and that is the whole
@@ -71,15 +78,18 @@ export function ProviderCreateDialog({
 
   const [kind, setKind] = useState<ProviderKind | ''>(initialKind)
   const [displayName, setDisplayName] = useState('')
-  const [baseURL, setBaseURL] = useState('')
+  const [baseURL, setBaseURL] = useState(() => defaultBaseURL(initialKind))
   const [apiKey, setApiKey] = useState('')
+  const [defaultModel, setDefaultModel] = useState('')
   const [advanced, setAdvanced] = useState(false)
+  const missingFieldsId = useId()
 
   const reset = () => {
     setKind(initialKind)
     setDisplayName('')
-    setBaseURL('')
+    setBaseURL(defaultBaseURL(initialKind))
     setApiKey('')
+    setDefaultModel('')
     setAdvanced(false)
   }
 
@@ -91,13 +101,13 @@ export function ProviderCreateDialog({
         display_name: displayName.trim() || t(`kinds.${kind}`),
         ...(kind === 'ollama' ? {} : { api_key: apiKey }),
         ...(baseURL.trim() ? { base_url: baseURL.trim() } : {}),
+        ...(defaultModel.trim() ? { default_model: defaultModel.trim() } : {}),
       }
       return providersApi.create(body)
     },
     invalidateKeys: () => [
       providerKeys.list(activeTenant, boundary.epoch),
-      // What a tool runs on may change with the keys (FH: first-hour keeps a
-      // "nothing to run on yet" answer for a minute).
+      // What a tool can start on may change with the keys (the first-hour readiness).
       firstHourKeys.all(activeTenant),
     ],
     successMessage: t('create.success'),
@@ -112,10 +122,12 @@ export function ProviderCreateDialog({
   // openai_compatible has no official endpoint to assume, so the engine requires
   // one. The form says so before the request rather than after the refusal.
   const endpointRequired = kind === 'openai_compatible' || kind === 'ollama'
-  const ready =
-    kind !== '' &&
-    (kind === 'ollama' || apiKey.trim() !== '') &&
-    (!endpointRequired || baseURL.trim() !== '')
+  const missingFields = [
+    ...(kind === '' ? [t('create.kind')] : []),
+    ...(endpointRequired && !baseURL.trim() ? [t('create.baseURL')] : []),
+    ...(kind !== 'ollama' && !apiKey.trim() ? [t('create.apiKey')] : []),
+  ]
+  const ready = missingFields.length === 0
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault()
@@ -131,24 +143,20 @@ export function ProviderCreateDialog({
         <DialogHeader>
           <DialogTitle>{t('create.title')}</DialogTitle>
           <DialogDescription>
-            {kind === 'ollama'
-              ? t('kindHints.ollama')
-              : t('create.description')}
+            {kind ? t(`kindHints.${kind}`) : t('create.description')}
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={onSubmit} className="flex flex-col gap-3">
-          <Field
-            label={t('create.kind')}
-            description={kind ? t(`kindHints.${kind}`) : undefined}
-          >
+          <Field label={t('create.kind')} required>
             <Select
               value={kind}
               onValueChange={(v) => {
                 setKind(v as ProviderKind)
+                setDefaultModel('')
                 if (v === 'ollama') {
-                  setBaseURL('http://127.0.0.1:11434')
+                  setBaseURL(OLLAMA_BASE_URL)
                   setApiKey('')
-                } else if (kind === 'ollama') {
+                } else if (kind === 'ollama' || v === 'gemini') {
                   setBaseURL('')
                 }
               }}
@@ -180,13 +188,20 @@ export function ProviderCreateDialog({
               autoComplete="off"
             />
           </Field>
-          {endpointRequired || advanced ? (
+          {kind !== 'gemini' && (endpointRequired || advanced) ? (
             <Field
               label={t('create.baseURL')}
+              required={endpointRequired}
               description={
                 kind === 'ollama'
-                  ? t('kindHints.ollama')
-                  : t('create.baseURLHint')
+                  ? undefined
+                  : t(
+                      endpointRequired
+                        ? 'create.requiredEndpointHint'
+                        : LOCAL_HTTP_KINDS.includes(kind)
+                          ? 'create.baseURLLocalHint'
+                          : 'create.baseURLHint',
+                    )
               }
             >
               <Input
@@ -197,7 +212,7 @@ export function ProviderCreateDialog({
                 mono
               />
             </Field>
-          ) : kind !== '' ? (
+          ) : kind !== '' && kind !== 'gemini' ? (
             <Button
               type="button"
               variant="link"
@@ -210,6 +225,7 @@ export function ProviderCreateDialog({
           {kind !== 'ollama' && (
             <Field
               label={t('create.apiKey')}
+              required
               description={t('create.apiKeyHint')}
             >
               <Input
@@ -225,6 +241,29 @@ export function ProviderCreateDialog({
               />
             </Field>
           )}
+          {(advanced || endpointRequired) && (
+            <Field
+              label={t('defaultModel.title')}
+              description={t('defaultModel.createHint')}
+            >
+              <Input
+                value={defaultModel}
+                onChange={(e) => setDefaultModel(e.target.value)}
+                maxLength={64}
+                autoComplete="off"
+                mono
+              />
+            </Field>
+          )}
+          {!ready && (
+            <p
+              id={missingFieldsId}
+              role="status"
+              className="text-caption text-muted-foreground"
+            >
+              {t('create.missingFields', { fields: missingFields.join(', ') })}
+            </p>
+          )}
           <DialogFooter>
             <Button
               type="button"
@@ -238,6 +277,7 @@ export function ProviderCreateDialog({
               type="submit"
               variant="primary"
               disabled={!ready || create.isPending}
+              aria-describedby={!ready ? missingFieldsId : undefined}
             >
               {create.isPending && <Spinner className="size-3.5" />}
               {create.isPending ? t('create.registering') : t('create.submit')}

@@ -1,0 +1,3 @@
+[
+  {"agentId": "aaaaaaa2-0000-4000-8000-000000000002", "agentName": "Linus", "provider": "openai", "biller": "openai", "billingType": "metered_api", "model": "gpt-5", "costCents": 40, "inputTokens": 30000, "cachedInputTokens": 0, "outputTokens": 1000}
+]

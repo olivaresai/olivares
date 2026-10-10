@@ -5,6 +5,8 @@ SPDX-License-Identifier: Apache-2.0
 
 # Backstage interop
 
+> **Deprecated.** Olivares does not use these packages. They keep working in this release series; their removal will be announced in the release notes beforehand. They are not qualified for production installation.
+
 `@olivaresai/backstage-plugin-catalog-backend-module-olivares` makes the Olivares
 AI control plane a first-class citizen of a customer's Backstage developer portal.
 It contains two source artifacts:

@@ -32,7 +32,7 @@ set -uo pipefail
 _olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
 # shellcheck source=/dev/null
 . "$_olivares_git_env" || {
-	echo "test-docker-context-sufficiency: FATAL: no puedo cargar $_olivares_git_env (aislamiento git-env)" >&2
+	echo "test-docker-context-sufficiency: FATAL: cannot load $_olivares_git_env (git-env isolation)" >&2
 	exit 2
 }
 unset _olivares_git_env
@@ -43,20 +43,20 @@ pass=0; fail=0
 
 caso() { # caso <nombre> <rc-esperado> <cuerpo-que-escribe-los-ficheros>
 	nombre="$1"; esperado="$2"; cuerpo="$3"
-	d="$(mktemp -d)" || { echo "no puedo crear temp"; exit 2; }
+	d="$(mktemp -d)" || { echo "cannot create a temporary directory"; exit 2; }
 	( cd "$d" && git init -q . && eval "$cuerpo" && git add -A 2>/dev/null
 	  bash "$SUBJ" >"$d/out.txt" 2>&1 ) ; rc=$?
 	if [ "$rc" = "$esperado" ]; then
 		pass=$((pass+1)); printf '  ok   %-46s rc=%s\n' "$nombre" "$rc"
 	else
-		fail=$((fail+1)); printf '  FAIL %-46s rc=%s (esperado %s)\n' "$nombre" "$rc" "$esperado"
+		fail=$((fail+1)); printf '  FAIL %-46s rc=%s (expected %s)\n' "$nombre" "$rc" "$esperado"
 		sed 's/^/         /' "$d/out.txt" | head -6
 	fi
 	rm -rf "$d"
 }
 
 # --- 1 · EL CASO REAL: source-build wired to a dockers entry. DEBE cazarlo. ---------------
-caso "source-build sin ARG (el fallo de v26.8.0)" 1 '
+caso "source-build without ARG (the v26.8.0 failure)" 1 '
 cat > .goreleaser.yaml <<Y
 builds:
   - id: olivares-fips
@@ -80,7 +80,7 @@ D
 touch LICENSE'
 
 # --- 2 · el mismo fichero en modo dual: el ARG poda las stages de fuente. LIMPIO. ---------
-caso "modo dual con build-arg prebuilt" 0 '
+caso "dual mode with prebuilt build-arg" 0 '
 cat > .goreleaser.yaml <<Y
 builds:
   - id: olivares-fips
@@ -111,7 +111,7 @@ touch LICENSE'
 
 # --- 3 · MUTANTE: el mismo fichero dual SIN el build-arg -> vuelve el defecto. ------------
 # Es la mitad que prueba que el verde del caso 2 lo produce el ARG y no la forma del fichero.
-caso "dual pero SIN el build-arg (el verde debe irse)" 1 '
+caso "dual mode WITHOUT build-arg (must stop passing)" 1 '
 cat > .goreleaser.yaml <<Y
 builds:
   - id: olivares-fips
@@ -139,7 +139,7 @@ D
 touch LICENSE'
 
 # --- 4 · MUTANTE: build-arg que no nombra ninguna stage. ----------------------------------
-caso "build-arg apunta a una stage inexistente" 1 '
+caso "build-arg points to a nonexistent stage" 1 '
 cat > .goreleaser.yaml <<Y
 builds:
   - id: olivares-fips
@@ -164,7 +164,7 @@ D
 touch LICENSE'
 
 # --- 5 · NO-CAZAR: todo lo que se copia esta en extra_files. Debe quedar LIMPIO. ----------
-caso "todo cubierto por extra_files (no debe saltar)" 0 '
+caso "everything covered by extra_files (must not trigger)" 0 '
 cat > .goreleaser.yaml <<Y
 builds:
   - id: olivares
@@ -184,7 +184,7 @@ D
 touch LICENSE NOTICE; mkdir -p LICENSES'
 
 # --- 6 · NO-CAZAR: un directorio de extra_files cubre lo que hay debajo. ------------------
-caso "extra_files como directorio cubre sus hijos" 0 '
+caso "extra_files directory covers its children" 0 '
 cat > .goreleaser.yaml <<Y
 builds:
   - id: olivares
@@ -204,7 +204,7 @@ mkdir -p LICENSES; touch LICENSES/AGPL-3.0-only.txt'
 
 # --- 7 · NO PUDE MIRAR: la entrada apunta a un Dockerfile que no existe. rc 2, no 1. ------
 # «No poder mirar» nunca se gasta como aprobado NI como hallazgo.
-caso "dockerfile inexistente -> 2, no 1" 2 '
+caso "nonexistent Dockerfile -> 2, not 1" 2 '
 cat > .goreleaser.yaml <<Y
 builds:
   - id: olivares
@@ -218,13 +218,45 @@ Y
 touch LICENSE'
 
 # --- 8 · NO PUDE MIRAR: config sin entradas dockers. -------------------------------------
-caso "config sin dockers -> 2" 2 '
+caso "config without dockers -> 2" 2 '
 cat > .goreleaser.yaml <<Y
 builds:
   - id: olivares
     binary: olivares
 Y
 true'
+
+# --- 9-11 · SCRIPTED CONTEXTS: CI callers that assemble their own context. --------------
+# The real defect (2026-10-05): Dockerfile.release gained a COPY that only GoReleaser's
+# extra_files provided, and the qualification scripts' hand-built contexts lacked it.
+HELPER="$(dirname "$SUBJ")/assemble-runtime-context.sh"
+RUNTIME='
+mkdir -p scripts LICENSES packaging/container/data-dir
+cp "$HELPER" scripts/
+touch LICENSE NOTICE LICENSING.md DISCLAIMER.md packaging/container/uv-LICENSE-MIT.txt
+cat > .goreleaser.yaml <<Y
+builds:
+  - id: olivares
+    binary: olivares
+dockers:
+  - id: base
+    ids: [olivares]
+    dockerfile: Dockerfile.release
+    extra_files: [LICENSE, NOTICE, extra.txt, .license-notices/NOTICE-community]
+Y
+'
+caso "caller assembles its context by hand" 1 "$RUNTIME"'
+printf "FROM scratch\nCOPY olivares /bin/\nCOPY LICENSE /doc/\n" > Dockerfile.release
+printf "cp Dockerfile.release \"\$ctx/Dockerfile\"\ncp LICENSE \"\$ctx/\"\n" > scripts/qualify.sh'
+
+caso "helper lacks a COPY that GoReleaser provides" 1 "$RUNTIME"'
+printf "FROM scratch\nCOPY olivares /bin/\nCOPY extra.txt /doc/\n" > Dockerfile.release
+touch extra.txt
+printf "cp Dockerfile.release \"\$ctx/Dockerfile\"\nbash scripts/assemble-runtime-context.sh \"\$ctx\" NOTICE\n" > scripts/qualify.sh'
+
+caso "helper covers every reached COPY (must not trigger)" 0 "$RUNTIME"'
+printf "FROM scratch\nCOPY olivares /bin/\nCOPY LICENSE NOTICE /doc/\nCOPY .license-notices/NOTICE-community /doc/NOTICE\n" > Dockerfile.release
+printf "cp Dockerfile.release \"\$ctx/Dockerfile\"\nbash scripts/assemble-runtime-context.sh \"\$ctx\" NOTICE\n" > scripts/qualify.sh'
 
 echo "test-docker-context-sufficiency: $pass passed, $fail failed"
 [ "$fail" -eq 0 ] || exit 1

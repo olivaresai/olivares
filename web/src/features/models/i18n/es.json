@@ -271,5 +271,19 @@
     "truncatedHint": "Hay más reglas de acceso de las que se ven; esta página coge filas por id. Las marcas de estas filas reflejan SÓLO las reglas cargadas: pueden faltar allows que introduzcan confinamiento o añadan destinos permitidos, y pueden faltar forbids que resten acceso — así que esta página puede leerse más ancha O más estrecha que la realidad, y un sujeto sin ninguna regla cargada no aparece siquiera. No deduzcas de aquí el acceso efectivo: el motor recorre todas las páginas antes de decidir, y resuelve un principal por usuario, rol y grupo a la vez, que una fila no puede enseñar.",
     "groupsTruncated": "Cargados {{n}} grupos; hay más",
     "groupsTruncatedHint": "Hay más grupos de modelos de los que se ven; esta página coge filas por id. Que un grupo no salga aquí no demuestra que no exista — una regla puede seguir apuntándole."
+  },
+  "availability": {
+    "label": "Modelo",
+    "placeholder": "Usa el modelo predeterminado de la herramienta o introduce uno",
+    "default": "Usar el modelo predeterminado de la herramienta",
+    "discovering": "Se están descubriendo los modelos.",
+    "stale": "La lista de modelos está desactualizada",
+    "failed": "No se pudieron actualizar los modelos. Comprueba la conexión del proveedor o inicia sesión de nuevo.",
+    "unsupported": "El descubrimiento automático de modelos no está disponible para esta herramienta. Usa su modelo predeterminado.",
+    "empty": "Este proveedor no indicó ningún modelo.",
+    "provider": "Proveedor: {{provider}}",
+    "observed": "Última observación: {{time}}",
+    "checked": "Última comprobación: {{time}}",
+    "connection": "Abrir ajustes del proveedor"
   }
 }

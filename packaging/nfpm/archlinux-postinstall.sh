@@ -91,6 +91,20 @@ if [ "$dir_uid" != "$olivares_uid" ]; then
   echo "error: data dir is not owned by olivares (dir=$dir_uid want=$olivares_uid)" >&2
   exit 1
 fi
+# The env file carries the listen, TLS and DSN flags: root:olivares, closed to other
+# users, as install-service.sh sets it and doctor requires. The package manager keeps an
+# operator-edited file on upgrade with its old mode (0644 in the 26.x packages): its content
+# stays, a mode doctor refuses becomes 0640 (doctor accepts 0400, 0440, 0600 and 0640),
+# then the group is set. A link at the name is left alone.
+if [ -f /etc/olivares/olivares.env ] && [ ! -L /etc/olivares/olivares.env ]; then
+  case "$(stat -c %a /etc/olivares/olivares.env)" in
+    400|440|600|640) ;;
+    *) chmod 0640 /etc/olivares/olivares.env ||
+         refuse env-file-mode-failed "cannot set /etc/olivares/olivares.env to 0640" ;;
+  esac
+  chown "root:$olivares_gid" /etc/olivares/olivares.env ||
+    refuse env-file-owner-failed "cannot give /etc/olivares/olivares.env to root:olivares"
+fi
 
 # The same v2 manifest the deb/rpm packages write. pacman owns and removes the
 # package paths, so none is marked managed. It keeps its final name (the uninstall
@@ -109,7 +123,7 @@ rm -f "$olivares_stage"
   "config": "/etc/olivares/olivares.env",
   "files": [
     {"path": "/usr/bin/olivares", "role": "binary", "mode": "0755", "managed": false},
-    {"path": "/etc/olivares/olivares.env", "role": "config", "mode": "0644", "managed": false},
+    {"path": "/etc/olivares/olivares.env", "role": "config", "mode": "0640", "managed": false},
     {"path": "/usr/lib/systemd/system/olivares.service", "role": "unit", "mode": "0644", "managed": false}
   ],
   "account": {"user": "olivares", "group": "olivares", "user_created": $user_created, "group_created": $group_created},

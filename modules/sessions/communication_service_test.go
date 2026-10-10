@@ -480,14 +480,14 @@ func installFinalTransactionTimeOnExistingClockSeam(
 	if m == nil {
 		t.Fatal("controlled transaction-time seam requires a module")
 	}
-	base := m.data
+	base := m.Data
 	clock := &directNoticeFinalExpiryData{
 		inner: base,
 		final: model.NewTimestamp(final),
 	}
 	clock.calls.Store(2)
-	m.data = clock
-	return clock, func() { m.data = base }
+	m.Data = clock
+	return clock, func() { m.Data = base }
 }
 
 func (d *directNoticeDataTrace) View(
@@ -777,10 +777,10 @@ func (f *directNoticeFixture) bindHistoricalOperationClock(t *testing.T, histori
 		f.source.evidence.ObservedAt = historical
 		f.source.evidence.FreshUntil = historical.Add(5 * time.Minute)
 	}
-	if resolver, ok := f.m.communicationDirectoryResolver.(*directNoticeReadDirectoryResolver); ok {
+	if resolver, ok := f.m.CommunicationDirectoryResolver.(*directNoticeReadDirectoryResolver); ok {
 		resolver.now = historical
 	}
-	switch closure := f.m.communicationGrantClosure.(type) {
+	switch closure := f.m.CommunicationGrantClosure.(type) {
 	case *directNoticeReadClosureResolver:
 		closure.now = historical
 	case *directNoticeGrantClosureResolver:
@@ -1013,7 +1013,7 @@ func newDirectNoticeFixtureForBackendWithClock(
 		}
 	}
 	if routeGuardAhead > 0 {
-		if err := fixture.m.data.Mutate(ctx, fixture.tenant, func(raw store.Scope) error {
+		if err := fixture.m.Data.Mutate(ctx, fixture.tenant, func(raw store.Scope) error {
 			confined, err := store.ConfineWorkspace(ctx, raw, fixture.workspace)
 			if err != nil {
 				return err
@@ -1092,9 +1092,9 @@ func newDirectNoticeFixtureForBackendWithClock(
 	authorizer := &directNoticeOperationAuthorizer{now: now, facts: []store.AuthorizationFactRef{{
 		Kind: model.DirectoryEpochKind, ID: model.ID(fixture.tenant), Version: epoch,
 	}}}
-	fixture.m.communicationAudienceAttestor = attestor
-	fixture.m.communicationGrantClosure = closure
-	fixture.m.communicationOperationAuthorizer = authorizer
+	fixture.m.CommunicationAudienceAttestor = attestor
+	fixture.m.CommunicationGrantClosure = closure
+	fixture.m.CommunicationOperationAuthorizer = authorizer
 	var authoritySource *communicationAuthoritySourceRecorder
 	if exactAuthority {
 		authoritySource = &communicationAuthoritySourceRecorder{evidence: auth.AuthorizationEvidence{
@@ -1160,7 +1160,7 @@ func communicationMutateFenced(
 	fn func(store.Scope) error,
 ) error {
 	return auth.FencedWrite(ctx, auth.NewAuthenticator(st, nil), tenant, users, auth.FenceDirectory,
-		func(write func(store.Scope) error) error { return m.data.Mutate(ctx, tenant, write) },
+		func(write func(store.Scope) error) error { return m.Data.Mutate(ctx, tenant, write) },
 		func(sc store.Scope, _ bool) error { return fn(sc) })
 }
 
@@ -1597,8 +1597,8 @@ func TestPublishDirectNoticeExactReplayConfirmsWhilePublicRemainsOff(t *testing.
 	beforeAudit := directNoticeAuditHead(t, fixture)
 
 	fixture.attestor.fail.Store(true)
-	fixture.m.communicationGrantClosure = nil
-	fixture.m.communicationOperationAuthorizer = nil
+	fixture.m.CommunicationGrantClosure = nil
+	fixture.m.CommunicationOperationAuthorizer = nil
 	exactCtx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	replay, err := fixture.m.publishDirectNoticeWithAuthority(
@@ -1626,8 +1626,8 @@ func TestPublishDirectNoticeExactReplayConfirmsWhilePublicRemainsOff(t *testing.
 		len(communicationRowsForTest(t, fixture, communicationCommandKind)) != 1 {
 		t.Fatal("exact replay created duplicate domain rows")
 	}
-	counting := &countingCommunicationModuleData{inner: fixture.m.data}
-	fixture.m.data = counting
+	counting := &countingCommunicationModuleData{inner: fixture.m.Data}
+	fixture.m.Data = counting
 	if _, err := fixture.m.PublishDirectNotice(
 		exactCtx, fixture.scope, fixture.ref, cmd,
 	); !errors.Is(err, ErrCommunicationEvidenceUnknown) {
@@ -1685,9 +1685,9 @@ func TestPublishDirectNoticeExactReplayBindsBeforeViewAndFinalizes(t *testing.T)
 	fixture.source.trace = &serviceTrace
 	fixture.m.useCommunicationRequestAuthoritySources(resolver, fixture.source)
 	authorityTrace := &directNoticeAuthorityTrace{}
-	fixture.m.data = &directNoticeDataTrace{
+	fixture.m.Data = &directNoticeDataTrace{
 		inner: &directNoticeAuthorityTraceData{
-			inner: fixture.m.data, trace: authorityTrace,
+			inner: fixture.m.Data, trace: authorityTrace,
 		},
 		steps: &serviceTrace,
 	}
@@ -1720,7 +1720,7 @@ func TestPublishDirectNoticeExactAuthorityPersistsWithoutLegacyAuthorizer(t *tes
 	legacy := fixture.authorizer
 	legacy.fail.Store(true)
 	trace := &directNoticeAuthorityTrace{}
-	fixture.m.data = &directNoticeAuthorityTraceData{inner: fixture.m.data, trace: trace}
+	fixture.m.Data = &directNoticeAuthorityTraceData{inner: fixture.m.Data, trace: trace}
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
 	cmd := fixture.command(model.NewID(), "exact authority body")
@@ -1835,8 +1835,8 @@ func TestPublishDirectNoticeExactBindingFailuresDoNotOpenCommunicationData(t *te
 			}
 			resolver := &communicationAuthorityResolverRecorder{resolved: fixture.authUser}
 			fixture.m.useCommunicationRequestAuthoritySources(resolver, fixture.source)
-			counting := &countingCommunicationModuleData{inner: fixture.m.data}
-			fixture.m.data = counting
+			counting := &countingCommunicationModuleData{inner: fixture.m.Data}
+			fixture.m.Data = counting
 			beforeClosure := fixture.closure.calls.Load()
 			beforeAttestor := fixture.attestor.calls.Load()
 			ctx := context.Background()
@@ -1881,8 +1881,8 @@ func TestCommunicationRequestAuthorityRejectsForgedInspectionBeforePreflight(t *
 	if err != nil {
 		t.Fatalf("new forged-inspection question: %v", err)
 	}
-	counting := &countingCommunicationModuleData{inner: fixture.m.data}
-	fixture.m.data = counting
+	counting := &countingCommunicationModuleData{inner: fixture.m.Data}
+	fixture.m.Data = counting
 	for _, test := range []struct {
 		name       string
 		inspection communicationRequestAuthorityInspection
@@ -1997,8 +1997,8 @@ func TestPublishDirectNoticeExactNonUserRequiresCurrentDirectoryAndClaim(t *test
 		if !ok {
 			t.Fatal("communication-session credential has no ref")
 		}
-		counting := &countingCommunicationModuleData{inner: fixture.m.data}
-		fixture.m.data = counting
+		counting := &countingCommunicationModuleData{inner: fixture.m.Data}
+		fixture.m.Data = counting
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 		_, err = fixture.m.publishDirectNoticeWithAuthority(
@@ -2034,8 +2034,8 @@ func TestPublishDirectNoticeExactNonUserRequiresCurrentDirectoryAndClaim(t *test
 		}
 		resolver := &communicationAuthorityResolverRecorder{resolved: principal}
 		fixture.m.useCommunicationRequestAuthoritySources(resolver, fixture.source)
-		counting := &countingCommunicationModuleData{inner: fixture.m.data}
-		fixture.m.data = counting
+		counting := &countingCommunicationModuleData{inner: fixture.m.Data}
+		fixture.m.Data = counting
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 		defer cancel()
 		_, err = fixture.m.publishDirectNoticeWithAuthority(
@@ -2543,8 +2543,8 @@ func TestDirectNoticePreflightTakesDeepOwnershipOfCallerAndPortValues(t *testing
 
 	attestor := &directNoticeAliasingAudienceAttestor{inner: fixture.attestor}
 	closure := &directNoticeAliasingGrantClosureResolver{inner: fixture.closure}
-	fixture.m.communicationAudienceAttestor = attestor
-	fixture.m.communicationGrantClosure = closure
+	fixture.m.CommunicationAudienceAttestor = attestor
+	fixture.m.CommunicationGrantClosure = closure
 	preflight, err := fixture.m.preflightDirectNoticePublish(
 		context.Background(), fixture.scope, principal, normalized, actor, idem, request,
 	)
@@ -2615,7 +2615,7 @@ func TestPublishDirectNoticeReplayRejectsEpochChangeBeforeBoundConfirmation(t *t
 		t.Fatalf("seed exact replay: %v", err)
 	}
 
-	base := fixture.m.data
+	base := fixture.m.Data
 	afterView := &directNoticeAfterViewData{
 		inner: base,
 		after: func(ctx context.Context) error {
@@ -2634,7 +2634,7 @@ func TestPublishDirectNoticeReplayRejectsEpochChangeBeforeBoundConfirmation(t *t
 		},
 	}
 	trace := &directNoticeAuthorityTrace{}
-	fixture.m.data = &directNoticeAuthorityTraceData{inner: afterView, trace: trace}
+	fixture.m.Data = &directNoticeAuthorityTraceData{inner: afterView, trace: trace}
 	replay, err := fixture.m.publishDirectNoticeWithAuthority(
 		ctx, fixture.scope, fixture.ref, cmd,
 	)
@@ -2673,7 +2673,7 @@ func TestPublishDirectNoticeReplayRejectsRevokedSessionBeforeBoundConfirmation(t
 		t.Fatalf("encode seed receipt: %v", err)
 	}
 
-	base := fixture.m.data
+	base := fixture.m.Data
 	afterView := &directNoticeAfterViewData{
 		inner: base,
 		after: func(ctx context.Context) error {
@@ -2681,7 +2681,7 @@ func TestPublishDirectNoticeReplayRejectsRevokedSessionBeforeBoundConfirmation(t
 		},
 	}
 	trace := &directNoticeAuthorityTrace{}
-	fixture.m.data = &directNoticeAuthorityTraceData{inner: afterView, trace: trace}
+	fixture.m.Data = &directNoticeAuthorityTraceData{inner: afterView, trace: trace}
 	replay, err := fixture.m.publishDirectNoticeWithAuthority(
 		ctx, fixture.scope, fixture.ref, cmd,
 	)
@@ -2693,7 +2693,7 @@ func TestPublishDirectNoticeReplayRejectsRevokedSessionBeforeBoundConfirmation(t
 		t.Fatalf("session-revoked confirmation trace = steps %v facts %v, want authority-only",
 			trace.steps, trace.authorityFacts)
 	}
-	fixture.m.data = base
+	fixture.m.Data = base
 	afterReceiptRows := communicationRowsForTest(t, fixture, communicationCommandKind)
 	if len(afterReceiptRows) != 1 {
 		t.Fatalf("session-revoked receipt count = %d, want one", len(afterReceiptRows))
@@ -2744,10 +2744,10 @@ func TestPublishDirectNoticeExactFinalAuthorityExpiryRollsBack(t *testing.T) {
 				beforeCounts[kind] = len(communicationRowsForTest(t, fixture, kind))
 			}
 			expiry := &directNoticeFinalExpiryData{
-				inner: fixture.m.data,
+				inner: fixture.m.Data,
 				final: model.NewTimestamp(fixture.source.evidence.FreshUntil),
 			}
-			fixture.m.data = expiry
+			fixture.m.Data = expiry
 			result, err := fixture.m.publishDirectNoticeWithAuthority(
 				ctx, fixture.scope, fixture.ref, cmd,
 			)
@@ -2821,8 +2821,8 @@ func TestPublishDirectNoticeReplaysThroughPreconfinedModuleData(t *testing.T) {
 	t.Parallel()
 
 	fixture := newDirectNoticeFixture(t)
-	fixture.m.data = directNoticeWorkspaceMarkedData{
-		inner: fixture.m.data, workspace: fixture.scope.WorkspaceID,
+	fixture.m.Data = directNoticeWorkspaceMarkedData{
+		inner: fixture.m.Data, workspace: fixture.scope.WorkspaceID,
 	}
 	principal := CommunicationPrincipal{UserID: fixture.sender}
 	command := fixture.command(model.NewID(), "preconfined-replay")
@@ -2835,9 +2835,9 @@ func TestPublishDirectNoticeReplaysThroughPreconfinedModuleData(t *testing.T) {
 	beforeAudit := directNoticeAuditHead(t, fixture)
 	beforeGuard := directNoticeDeliveryGuard(t, fixture)
 
-	fixture.m.communicationAudienceAttestor = nil
-	fixture.m.communicationGrantClosure = nil
-	fixture.m.communicationOperationAuthorizer = nil
+	fixture.m.CommunicationAudienceAttestor = nil
+	fixture.m.CommunicationGrantClosure = nil
+	fixture.m.CommunicationOperationAuthorizer = nil
 	replayed, err := fixture.m.publishDirectNotice(
 		context.Background(), fixture.scope, principal, command,
 	)

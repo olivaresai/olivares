@@ -162,7 +162,7 @@ func TestInsecureBindGuardIsWiredIntoTheBootPath(t *testing.T) {
 // insecureBindGuard reads --listen and --grpc-listen. It has no input for the
 // auxiliary listeners — HITL, voice webhook, agent gateway, Claude-hook PEP,
 // Codex PEP, Grok PEP, inference proxy — whose addresses come from operator config
-// files, not flags (e.g. agentGatewayConfig.Listen, mcpgateway.go). They are served
+// files, not flags (e.g. mcpgateway.Config.Listen, internal/mcpgateway/config.go). They are served
 // with the same global opts.insecure switch, so loopback primaries let the guard
 // return nil while `"listen":"0.0.0.0:8446"` in a gateway config served plain
 // HTTP off-host.

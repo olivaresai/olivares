@@ -43,3 +43,42 @@ func TestDoctorSaysWhereModelCallsGo(t *testing.T) {
 		}
 	}
 }
+
+// TestDoctorStatesSessionLaunchGatePosture: one row, never a failure, from the same
+// setting the launch gate logs at boot. Unset refuses in every build; an explicit
+// fail-open is a warning that names the control and the variable.
+func TestDoctorStatesSessionLaunchGatePosture(t *testing.T) {
+	o, deps := doctorFixture(t)
+	for _, tc := range []struct {
+		name, budget, context, status, detail string
+		remediation                           []string
+	}{
+		{name: "unset", status: "pass", detail: "With this environment, a session whose budget or context policy cannot be read does not start"},
+		{name: "explicit fail-closed", budget: "fail-closed", context: "fail-closed", status: "pass",
+			detail: "With this environment, a session whose budget or context policy cannot be read does not start"},
+		{name: "budget fail-open", budget: "fail-open", status: "warn",
+			detail: "With this environment, a session starts even when its budget cannot be read", remediation: []string{envSessionBudgetAvailability}},
+		{name: "both fail-open", budget: "fail-open", context: "FAIL-OPEN", status: "warn",
+			detail:      "With this environment, a session starts even when its budget or context policy cannot be read",
+			remediation: []string{envSessionBudgetAvailability, envSessionContextAvailability}},
+	} {
+		env := map[string]string{envSessionBudgetAvailability: tc.budget, envSessionContextAvailability: tc.context}
+		deps.getenv = func(k string) string { return env[k] }
+		report, code, err := runDoctor(context.Background(), o, deps)
+		if err != nil {
+			t.Fatal(err)
+		}
+		row := doctorCheckByName(report, "session-launch-gate")
+		if row.Status != tc.status || row.Required || row.Detail != tc.detail {
+			t.Fatalf("%s: row = %+v, want %s, optional, %q", tc.name, row, tc.status, tc.detail)
+		}
+		for _, v := range tc.remediation {
+			if !strings.Contains(row.Remediation, v) {
+				t.Fatalf("%s: remediation %q does not name %s", tc.name, row.Remediation, v)
+			}
+		}
+		if code != exitcode.OK {
+			t.Fatalf("%s: doctor exit = %d; the row must never fail the install", tc.name, code)
+		}
+	}
+}

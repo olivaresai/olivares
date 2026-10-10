@@ -30,7 +30,7 @@ func newLicenseCmd() *cobra.Command {
 	root := &cobra.Command{
 		Use:   "license",
 		Short: "See, install and remove the license (Business)",
-		Long:  licenseLongFor(enterpriseAddOnsLinked),
+		Long:  licenseLongFor(thisEdition.addOnsLinked),
 		Example: "  olivares license status --data-dir /var/lib/olivares\n" +
 			"  olivares license install ./customer.license --data-dir /var/lib/olivares\n" +
 			"  olivares license uninstall --data-dir /var/lib/olivares --yes\n" +
@@ -72,9 +72,9 @@ func licenseInstallCmd() *cobra.Command {
 		Long: "install verifies a signed license against this deployment's license trust (the key embedded in this\n" +
 			"build plus <data-dir>/" + licenseTrustFileName + ", see `license trust`) and persists it to\n" +
 			"<data-dir>/" + licenseFileName + " (mode 0600) — the canonical at-rest license the engine reads by\n" +
-			"default. Pass a file path, or - to read the blob from stdin. It gates NO feature (docs/07 §9): in\n" +
-			"the community build it stores the attestation ready for an in-place swap to the enterprise binary;\n" +
-			"in the enterprise build it entitles the commercial add-ons. It never caps user accounts: self-\n" +
+			"default. Pass a file path, or - to read the blob from stdin. It gates NO feature (LICENSING.md): in\n" +
+			"the community build it stores the attestation ready for an in-place swap to the Business edition;\n" +
+			"in the Business edition it entitles the commercial add-ons. It never caps user accounts: self-\n" +
 			"hosted users are unlimited in every tier. Apply to a RUNNING engine with no\n" +
 			"restart via `kill -HUP <pid>`, POST /v1/console/runtime/reload, or the console.\n\n" +
 			"Installing over an existing license REPLACES it, atomically, and says which one it replaced.\n" +
@@ -428,7 +428,7 @@ func readLicenseArg(cmd *cobra.Command, arg string) ([]byte, error) {
 // crlUnavailableNote is the honest CRL limit (LICENSING.md): the CRL rides the
 // signed channel manifest, so it only reaches deployments that pull updates or
 // import offline bundles — there is no phone-home, and status stays display-only.
-const crlUnavailableNote = "unavailable — no channel manifest supplied; the CRL rides the OTA manifest and only reaches deployments that pull updates or import offline bundles (docs/07)"
+const crlUnavailableNote = "unavailable — no channel manifest supplied; the CRL rides the OTA manifest and only reaches deployments that pull updates or import offline bundles"
 
 // loadRevocation loads the license CRL from a channel manifest for the license
 // commands. Fail-closed on purpose: a manifest is only accepted as a CRL source
@@ -746,7 +746,7 @@ func licenseKeygenCmd() *cobra.Command {
 			"    \"-X github.com/olivaresai/olivares/core/license.releasePublicKeyB64=<public_key>\"\n" +
 			"or set OLIVARES_LICENSE_PUBKEY. Set OLIVARES_OTA_PUBKEY for the independently\n" +
 			"generated OTA public key. License private custody is the scoped Worker; OTA private\n" +
-			"custody is off-box/HSM. Full ceremony: docs/POLAR-COMMERCIAL-SETUP.md §2.",
+			"custody is off-box/HSM.",
 		Example: "  olivares license keygen --out-private license-private.key --out-public license-public.key",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
@@ -854,7 +854,7 @@ func licenseSignCmd() *cobra.Command {
 		Short: "Sign a license (requires --key in a release build; uses the dev key only in dev/test builds)",
 		Long: "sign creates an offline Ed25519-signed license blob from the supplied organization, plan,\n" +
 			"support, holder, seat, feature tags and expiry claims. Production release builds require an explicit private key.\n" +
-			"--features attests informational tags onto Claims.Features (never a gate; docs/07 §9).\n" +
+			"--features attests informational tags onto Claims.Features (never a gate; LICENSING.md).\n" +
 			"--max-users is attested for display only (B10): self-hosted users are unlimited in every tier,\n" +
 			"so leave it at 0 unless you are reproducing a historical blob.",
 		Example: "  olivares license sign --licensee 'Acme Ltd' --plan business --expires 2027-07-14T00:00:00Z --key \"$LICENSE_PRIVATE_KEY\"",
@@ -900,7 +900,7 @@ func licenseSignCmd() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&licensee, "licensee", "", "the organization the exception is granted to")
 	cmd.Flags().StringVar(&plan, "plan", "commercial", "plan label")
-	cmd.Flags().StringVar(&supportTier, "support-tier", "", "attested support relationship label for display only, e.g. standard|enterprise (empty = none; never gates — SUPPORT.md)")
+	cmd.Flags().StringVar(&supportTier, "support-tier", "", "attested support relationship label for display only, e.g. business|enterprise (empty = none; never gates — SUPPORT.md)")
 	cmd.Flags().StringVar(&holder, "holder", "", "opaque holder id")
 	cmd.Flags().StringVar(&expires, "expires", "", "expiry (RFC3339). Empty signs a blob with NO expiry, which the wire format still accepts but commercial entitlements are term-only — every real license gets a date")
 	cmd.Flags().StringVar(&keyB64, "key", "", "base64 Ed25519 private key (default: dev key)")
@@ -912,12 +912,16 @@ func licenseSignCmd() *cobra.Command {
 // fusedCanonAddonIDs are the four self-hosted business add-ons as
 // named by PRICING-CANON.md (`self_hosted.business.addons.<id>`).
 // Measured on main (catalog-v8). C03-03: do not invent a fifth.
+// PACK-COMPOSITION-BEGIN
+// Generated from commercial/pack-composition.json; commerce-lint -pack-composition=write.
 var fusedCanonAddonIDs = []string{
 	"regulated",
 	"ai-runtime-security",
 	"compliance-packs",
 	"identity-scale",
 }
+
+// PACK-COMPOSITION-END
 
 func isFusedCanonAddonID(id string) bool {
 	for _, a := range fusedCanonAddonIDs {
@@ -962,7 +966,7 @@ func licenseVerifyCmd() *cobra.Command {
 			"against the OTA anchor, because an unsigned CRL is exactly the spoof the OTA key domain exists\n" +
 			"to stop. Without --manifest the CRL is honestly reported as unavailable — it only reaches\n" +
 			"deployments that pull updates or import offline bundles. Everything here is display-only:\n" +
-			"license status never gates the open binary (docs/07 §9).",
+			"license status never gates the open binary (LICENSING.md).",
 		Example:      "  olivares license verify \"$LICENSE_BLOB\" --pubkey \"$LICENSE_PUBLIC_KEY\" --manifest ./stable-manifest.json",
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,

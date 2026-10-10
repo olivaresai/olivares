@@ -13,6 +13,7 @@ import (
 	"iter"
 	"log/slog"
 	"net/http"
+	"net/netip"
 	"net/url"
 	"strconv"
 	"strings"
@@ -365,8 +366,36 @@ func (c *Client) once(ctx context.Context, method, route, path string, body any,
 		}
 	}
 
-	resp, err := c.hc.Do(req)
+	// Keep the caller's transport, jar and redirect hook without changing their
+	// shared http.Client. net/http still handles same-origin methods and bodies.
+	hc := *c.hc
+	checkRedirect := hc.CheckRedirect
+	origin := redirectOrigin(req.URL)
+	hc.CheckRedirect = func(next *http.Request, via []*http.Request) error {
+		if target := redirectOrigin(next.URL); target != origin {
+			return &redirectOriginError{target}
+		}
+		if checkRedirect != nil {
+			if err := checkRedirect(next, via); err != nil {
+				return err
+			}
+			// A caller hook may replace the URL as well as its headers.
+			if target := redirectOrigin(next.URL); target != origin {
+				return &redirectOriginError{target}
+			}
+		} else if len(via) >= 10 {
+			return errors.New("stopped after 10 redirects")
+		}
+		return nil
+	}
+	resp, err := hc.Do(req)
 	if err != nil {
+		// net/http wraps hook errors in a url.Error with the full Location. Only
+		// the destination origin belongs in this diagnostic, never URL secrets.
+		var redirectErr *redirectOriginError
+		if errors.As(err, &redirectErr) {
+			return nil, 0, redirectErr
+		}
 		return nil, 0, err
 	}
 	defer func() { _ = resp.Body.Close() }()
@@ -380,6 +409,36 @@ func (c *Client) once(ctx context.Context, method, route, path string, body any,
 		return raw, 0, nil
 	}
 	return nil, retryAfterOf(resp), apiError(resp, raw)
+}
+
+type redirectOriginError struct{ origin string }
+
+func (e *redirectOriginError) Error() string {
+	return "olivares: the server redirected to " + e.origin + "; set the client's base URL to it"
+}
+
+// Origin excludes credentials/path/query and treats a default port as implicit.
+func redirectOrigin(u *url.URL) string {
+	scheme, host := strings.ToLower(u.Scheme), u.Hostname()
+	if address, err := netip.ParseAddr(host); err == nil {
+		host = address.String()
+	} else {
+		host = strings.ToLower(host)
+	}
+	port := u.Port()
+	if n, err := strconv.Atoi(port); err == nil {
+		port = strconv.Itoa(n)
+	}
+	if (scheme == "http" && port == "80") || (scheme == "https" && port == "443") {
+		port = ""
+	}
+	if strings.Contains(host, ":") {
+		host = "[" + host + "]"
+	}
+	if port != "" {
+		host += ":" + port
+	}
+	return scheme + "://" + host
 }
 
 // cmpOr returns a if non-empty, else b.

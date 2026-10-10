@@ -4,19 +4,13 @@
 
 package compliance
 
-import (
-	"errors"
-
-	"github.com/olivaresai/olivares/core/license"
-)
-
 // This file is the OPEN-CORE half of OSCAL reinforcement: the seam that lets a
 // commercial add-on emit a FedRAMP-adjacent OSCAL plan-of-action-and-milestones (POA&M)
-// alongside the evidence export's three open models (component-definition +
+// alongside the Business evidence export's three models (component-definition +
 // assessment-results + control-mapping, oscal.go). The VALUE — the named-regulation POA&M
 // model (the FedRAMP package) — lives in enterprise/oscalingest, wired ONLY under -tags
-// enterprise. The open OSCAL plumbing stays open and BYTE-IDENTICAL: without a wired builder
-// the export emits its three models with no POA&M (no rug-pull).
+// enterprise. Without a wired builder Business export emits its three models with
+// no POA&M. Community keeps stored JSON/CSV export and answers 501 for OSCAL.
 //
 // Honesty (docs/SECURITY-HARDENING.md): a POA&M lists the OPEN findings (the not-satisfied controls of the
 // sealed package) as planned remediation items — it NEVER asserts a control is satisfied
@@ -24,7 +18,7 @@ import (
 // remediation-tracking aid, not a conformance claim.
 
 // POAMBuilder renders an OSCAL plan-of-action-and-milestones from a sealed evidence package's
-// control results. The default is nil — the evidence OSCAL export then emits its three models
+// control results. The default is nil — Business OSCAL export then emits its three models
 // unchanged. The real implementation is enterprise/oscalingest, wired only under -tags
 // enterprise.
 type POAMBuilder interface {
@@ -32,7 +26,7 @@ type POAMBuilder interface {
 	// the package's NOT-satisfied controls. It returns (nil, nil) when there is nothing to
 	// plan (every control satisfied) so the export simply omits the model. An entitlement or
 	// rendering error is disclosed as a fixed omission reason, without the error's contents;
-	// it never fails the open evidence export.
+	// it never fails the stored evidence export.
 	BuildPOAM(in POAMInput) (map[string]any, error)
 }
 
@@ -56,7 +50,7 @@ type POAMInput struct {
 	// Profile is the optional registered OSCAL profile/SSP scoping back-reference; nil
 	// when the export is include-all.
 	Profile *ProfileRef
-	// Source is the canonical framework-catalog href (the open module's single source of truth,
+	// Source is the canonical framework-catalog href (the private exporter's single source of truth,
 	// oscalSourcePrefix + framework) the POA&M's import-ssp/source anchors to — flowed through
 	// the seam so the closed builder never re-spells the prefix (drift-proof, like OscalVersion).
 	Source string
@@ -72,69 +66,4 @@ type POAMItem struct {
 	Satisfied bool
 	Title     string
 	Summary   string
-}
-
-// poamInputFrom builds a POAMInput from a sealed package DTO + its (already profile-scoped)
-// control results + the optional profile reference. It applies oscalStatusState so Satisfied
-// is consistent with the assessment-results export.
-func poamInputFrom(dto evidencePackageDTO, results []controlResultDTO, fwName string, ref *ProfileRef) POAMInput {
-	items := make([]POAMItem, 0, len(results))
-	for _, c := range results {
-		items = append(items, POAMItem{
-			ControlID: c.ControlID,
-			Status:    c.Status,
-			Satisfied: oscalStatusState(c.Status) == "satisfied",
-			Title:     c.Title,
-			Summary:   c.Summary,
-		})
-	}
-	return POAMInput{
-		PackageID:     dto.ID,
-		Framework:     dto.Framework,
-		FrameworkName: fwName,
-		GeneratedAt:   dto.GeneratedAt,
-		OscalVersion:  oscalVersion,
-		ManifestHash:  dto.ManifestHash,
-		LedgerSeq:     dto.LedgerSeq,
-		LedgerHash:    dto.LedgerHash,
-		IntegrityOK:   dto.IntegrityOK,
-		Items:         items,
-		Profile:       ref,
-		Source:        oscalSourcePrefix + dto.Framework,
-	}
-}
-
-type poamAttachmentOutcome struct {
-	attached       bool
-	omissionReason string
-}
-
-// attachPOAM preserves the open models and sealed manifest. A builder error adds a safe
-// omission notice to the export disclaimer and returns its fixed reason for the audit.
-// An absent builder or nil model leaves the export unchanged.
-func (m *Module) attachPOAM(doc map[string]any, dto evidencePackageDTO, results []controlResultDTO, fwName string, ref *ProfileRef) poamAttachmentOutcome {
-	if m.poamBuilder == nil {
-		return poamAttachmentOutcome{}
-	}
-	poam, err := m.poamBuilder.BuildPOAM(poamInputFrom(dto, results, fwName, ref))
-	if err != nil {
-		reason := "render_failed"
-		notice := " POA&M section omitted: rendering failed (render_failed)."
-		if errors.Is(err, license.ErrAddonRequiresLicense) {
-			reason = "addon_requires_license"
-			notice = " POA&M section omitted: the required add-on license is unavailable (addon_requires_license)."
-		}
-		disclaimer, _ := doc["disclaimer"].(string)
-		doc["disclaimer"] = disclaimer + notice
-		if m.log != nil {
-			m.log.Warn("compliance: OSCAL POA&M omitted",
-				"package_id", dto.ID, "framework", dto.Framework, "reason", reason)
-		}
-		return poamAttachmentOutcome{omissionReason: reason}
-	}
-	if poam == nil {
-		return poamAttachmentOutcome{}
-	}
-	doc["plan-of-action-and-milestones"] = poam
-	return poamAttachmentOutcome{attached: true}
 }

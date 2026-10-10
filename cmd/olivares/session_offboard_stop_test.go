@@ -111,7 +111,6 @@ func runSessionOwnerOffboard(t *testing.T, cause string, interval, wait time.Dur
 	}
 	sessions.WithRunner(approvalProjectionRunner{})(m)
 	sessions.WithKillSwitchSweep(interval)(m)
-	m.EnableProfiledLaunches()
 	m.UseExecutionEnvironmentRef("offboard-test")
 	var gate *ownerCadenceStopGate
 	if cause == "kill_cadence" || cause == "kill_slow" {
@@ -145,13 +144,13 @@ func runSessionOwnerOffboard(t *testing.T, cause string, interval, wait time.Dur
 	}
 	credentials := newSessionHookCredentials(issuerAuth, h.st, m, h.set.gov)
 	var expiredBearer string
-	m.UseLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
+	sessions.WithLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
 		token, err := credentials.mint(ctx, tenant, intent)
 		if cause == "expired_binding" && expiredBearer == "" {
 			expiredBearer = token
 		}
 		return sessions.LaunchDecision{Allowed: err == nil}, err
-	}))
+	}))(m)
 	var profile struct {
 		Ref string `json:"profile_ref"`
 	}
@@ -170,13 +169,15 @@ func runSessionOwnerOffboard(t *testing.T, cause string, interval, wait time.Dur
 		return run.Ref
 	}
 	owned := []string{launch(ownerToken), launch(ownerToken)}
-	other := launch(otherToken)
+	var other string
 	if issuerClock != nil {
 		issuerClock.advance.Store(int64(25 * time.Hour))
-		launch(otherToken) // An unrelated Mint runs the expired-entry cleanup.
-		if _, _, err := credentials.Resolve(t.Context(), expiredBearer); !errors.Is(err, auth.ErrUnauthenticated) {
-			t.Fatalf("expired session bearer retained authority: %v", err)
+		other = launch(otherToken) // A current unrelated Mint runs expired-entry cleanup.
+		if _, _, err := credentials.CheckOwnerAccess(t.Context(), model.TenantID(h.tenantA), owned[0]); !errors.Is(err, auth.ErrSessionCredentialExpired) {
+			t.Fatalf("expired generation lost typed deadline: %v", err)
 		}
+	} else {
+		other = launch(otherToken)
 	}
 
 	var selected chan string
@@ -186,7 +187,7 @@ func runSessionOwnerOffboard(t *testing.T, cause string, interval, wait time.Dur
 		recovered = make(chan struct{}, 1)
 		var first atomic.Bool
 		var failedRef string // only the one serialized owner-sweep pass accesses it
-		m.UseSessionAccessCheck(func(ctx context.Context, tenant model.TenantID, ref string) (auth.SessionScope, string, error) {
+		m.SessionAccessCheck = func(ctx context.Context, tenant model.TenantID, ref string) (auth.SessionScope, string, error) {
 			if first.CompareAndSwap(false, true) {
 				failedRef = ref
 				selected <- ref
@@ -204,33 +205,33 @@ func runSessionOwnerOffboard(t *testing.T, cause string, interval, wait time.Dur
 				}
 			}
 			return scope, user, err
-		})
+		}
 	}
 	if gate != nil {
 		gate.armed.Store(true)
 	}
 	if cause == "kill_slow" {
-		m.UseSessionAccessCheck(func(ctx context.Context, tenant model.TenantID, ref string) (auth.SessionScope, string, error) {
+		m.SessionAccessCheck = func(ctx context.Context, tenant model.TenantID, ref string) (auth.SessionScope, string, error) {
 			select {
 			case <-time.After(4 * time.Second):
 			case <-ctx.Done():
 				return auth.SessionScope{}, "", ctx.Err()
 			}
 			return credentials.CheckOwnerAccess(ctx, tenant, ref)
-		})
+		}
 	}
 	if cause == "ended_deadline" {
 		var first atomic.Bool
-		m.UseSessionAccessCheck(func(ctx context.Context, tenant model.TenantID, ref string) (auth.SessionScope, string, error) {
+		m.SessionAccessCheck = func(ctx context.Context, tenant model.TenantID, ref string) (auth.SessionScope, string, error) {
 			scope, user, err := credentials.CheckOwnerAccess(ctx, tenant, ref)
 			if errors.Is(err, auth.ErrSessionAccessEnded) && first.CompareAndSwap(false, true) {
 				<-ctx.Done()
 			}
 			return scope, user, err
-		})
+		}
 	}
 	if cause == "ended_fallback" {
-		m.UseSessionAccessCheck(func(ctx context.Context, tenant model.TenantID, ref string) (auth.SessionScope, string, error) {
+		m.SessionAccessCheck = func(ctx context.Context, tenant model.TenantID, ref string) (auth.SessionScope, string, error) {
 			scope, user, err := credentials.CheckOwnerAccess(ctx, tenant, ref)
 			if errors.Is(err, auth.ErrSessionAccessEnded) {
 				// The native issuer proves the withdrawal, while a deliberately
@@ -238,10 +239,12 @@ func runSessionOwnerOffboard(t *testing.T, cause string, interval, wait time.Dur
 				scope.WorkspaceID = model.NewID()
 			}
 			return scope, user, err
-		})
+		}
 	}
-	if err := m.Start(t.Context()); err != nil {
-		t.Fatal(err)
+	if cause != "expired_binding" {
+		if err := m.Start(t.Context()); err != nil {
+			t.Fatal(err)
+		}
 	}
 	if cause == "foreign_successor" {
 		assertAccessEndedScopeAndSuccessor(t, h, credentials, m, ownerToken, owned[0], owned[1], other)
@@ -358,6 +361,13 @@ func runSessionOwnerOffboard(t *testing.T, cause string, interval, wait time.Dur
 		t.Fatal("unknown offboard cause")
 	}
 	// No hook, approval or session-credential resolution drives this lifecycle check.
+	if cause == "expired_binding" {
+		// Apply proven withdrawal before starting the monitor, so the retained
+		// owner cause takes precedence over the already reached bearer deadline.
+		if err := m.Start(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+	}
 	committed := time.Now()
 	deadline := time.Now().Add(wait)
 	for _, ref := range owned {
@@ -411,6 +421,11 @@ func runSessionOwnerOffboard(t *testing.T, cause string, interval, wait time.Dur
 	h.reqInto(http.MethodGet, "/v1/m/sessions/runs/"+other, h.adminToken, h.tenantA, nil, &otherView)
 	if otherView["process_state"] != "running" {
 		t.Fatalf("other owner's process=%v", otherView["process_state"])
+	}
+	if cause == "expired_binding" {
+		if _, _, err := credentials.Resolve(t.Context(), expiredBearer); !errors.Is(err, auth.ErrUnauthenticated) {
+			t.Fatalf("expired session bearer retained authority: %v", err)
+		}
 	}
 	if current, err := h.authr.Authenticate(t.Context(), ownerToken); err == nil {
 		// An account-scope login may still identify the user in another tenant. It

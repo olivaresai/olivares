@@ -305,7 +305,7 @@ func roleDSNKeepUser(t *testing.T, super, dbName string) string {
 func stampVersion(t *testing.T) {
 	t.Helper()
 	prev := version
-	version = "26.9.0"
+	version = "26.900"
 	t.Cleanup(func() { version = prev })
 }
 
@@ -560,16 +560,17 @@ func TestDRBackupPostgresInTheSplitNamesTheOwnerFlag(t *testing.T) {
 	// deploy/postgres/backup/pg-dump.sh and the Helm CronJob both produce the dump
 	// in a separate step (a postgres-client container; the engine image is
 	// distroless and has no pg_dump) and hand it to `dr backup` exactly like this.
-	// It is also what keeps this cell measuring the AUTHORITY refusal instead of
-	// whichever pg_dump happens to be installed.
+	// Archive classification runs before authority preflight, so use a real dump
+	// and the fixture's matched clients to reach the missing-owner refusal.
 	snap := filepath.Join(t.TempDir(), "dump.pgcustom")
-	if err := os.WriteFile(snap, []byte("fixture dump bytes"), 0o600); err != nil {
-		t.Fatal(err)
+	if err := runPgDump(t.Context(), src.bin("pg_dump"), src.adminDSN, snap); err != nil {
+		t.Fatalf("create the supplied snapshot: %v", err)
 	}
+	bundle := filepath.Join(t.TempDir(), "b.drbundle")
 	_, err := runDR("backup", "--data-dir", dataDir, "--engine", "postgres",
 		"--dsn", src.appDSN, "--admin-dsn", src.adminDSN,
-		"--snapshot-file", snap,
-		"--out", filepath.Join(t.TempDir(), "b.drbundle"), "--passphrase-file", pf)
+		"--snapshot-file", snap, "--pg-dump", src.bin("pg_dump"),
+		"--out", bundle, "--passphrase-file", pf)
 	if err == nil {
 		t.Fatal("a backup in the owner/app split without --owner-dsn was accepted")
 	}
@@ -580,6 +581,9 @@ func TestDRBackupPostgresInTheSplitNamesTheOwnerFlag(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "olv_k3p_epoch") {
 		t.Fatalf("the operator still gets the raw contract-probe error: %v", err)
+	}
+	if _, err := os.Stat(bundle); !os.IsNotExist(err) {
+		t.Fatalf("the refused backup published a bundle: %v", err)
 	}
 }
 

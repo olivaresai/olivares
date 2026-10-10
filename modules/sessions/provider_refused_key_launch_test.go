@@ -11,7 +11,7 @@ import (
 	"testing"
 )
 
-// HU2-27: Codex launched on an OpenAI key that the provider test had refused never
+// Codex launched on an OpenAI key that the provider test had refused never
 // started its first turn (80 s and more, the process alive). The launch is refused
 // with the console's readiness words; a key the test could not reach, or never ran
 // on, still launches, and a key that passes again launches again.

@@ -73,7 +73,7 @@ function renderRail(over: Partial<Parameters<typeof WorkRail>[0]> = {}) {
 const rows = () => screen.getAllByRole('option')
 
 describe('WorkRail — what a row says', () => {
-  it('paints a long name whole in a 256 px rail, with its reference on the hover', () => {
+  it('keeps a long name on one line, whole on the hover, with its reference', () => {
     const name = 'dependency-audit-across-the-whole-estate'
     const long = mergeSessions(
       [],
@@ -94,7 +94,7 @@ describe('WorkRail — what a row says', () => {
       ],
     )[0]
     render(
-      <div data-testid="rail-frame" style={{ width: 256 }}>
+      <div data-testid="rail-frame" style={{ width: 300 }}>
         <WorkRail
           sessions={[long]}
           selected={null}
@@ -104,34 +104,74 @@ describe('WorkRail — what a row says', () => {
         />
       </div>,
     )
-    const frame = screen.getByTestId('rail-frame')
-    expect(frame).toHaveStyle({ width: '256px' })
-    const rowEl = within(frame).getByTestId('rail-row')
+    const rowEl = within(screen.getByTestId('rail-frame')).getByTestId(
+      'rail-row',
+    )
     const nameEl = within(rowEl).getByTestId('rail-row-name')
     expect(nameEl).toHaveTextContent(name)
-    // Name AND reference on the one hover: a truncated name stays readable and the
-    // identifier the row no longer paints stays reachable from it.
+    // Name AND reference on the one hover: a cut name stays readable and the
+    // identifier the row does not paint stays reachable from it.
     expect(nameEl.getAttribute('title')).toContain(name)
     expect(nameEl.getAttribute('title')).toContain('run-long')
-    // The name has a line of its own and wraps; the state and the time are whole
-    // (work-rail.reflow.test.tsx pins the arrangement).
+    // A row is 52 px: the title is one line and is cut with an ellipsis.
     expect(nameEl.className.split(/\s+/)).toEqual(
-      expect.arrayContaining(['basis-full', 'min-w-0']),
+      expect.arrayContaining(['truncate', 'min-w-0']),
     )
-    expect(nameEl.className.split(/\s+/)).not.toContain('truncate')
-    expect(within(rowEl).getByText('Running')).toBeInTheDocument()
+    expect(rowEl.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['h-14', 'min-[761px]:h-[52px]']),
+    )
+    // The state is a dot with the state's word as its name; the time is whole.
+    expect(within(rowEl).getByRole('img', { name: 'Running' })).toBeTruthy()
     const age = rowEl.querySelector('time')
     expect(age).not.toBeNull()
-    expect(age!.className.split(/\s+/)).toContain('shrink-0')
+    expect(age!.className.split(/\s+/)).toEqual(
+      expect.arrayContaining(['shrink-0', 'tabular-nums']),
+    )
+  })
+
+  it('says the tool and the folder NAME on the second line, never the path', () => {
+    const launched = mergeSessions(
+      [],
+      [
+        {
+          run_ref: 'run-f',
+          name: 'fix-tests',
+          transport: 'stream-json',
+          permission_mode: 'default',
+          isolation: 'native',
+          state: 'running',
+          last_event_seq: 0,
+          pep_provisioned: true,
+          record_io: false,
+          critical: false,
+          provider_driver: 'claude',
+          workspace_path: '/srv/work/repo',
+        },
+      ],
+    )[0]
+    renderRail({ sessions: [launched] })
+    const meta = within(rows()[0]).getByTestId('rail-row-meta')
+    expect(meta).toHaveTextContent('Claude Code · repo')
+    expect(meta.textContent).not.toContain('/srv/work')
+    // The whole path is on the folder's own hover.
+    expect(within(meta).getByTestId('rail-row-folder')).toHaveAttribute(
+      'title',
+      '/srv/work/repo',
+    )
+    // A folder NAME is a word and is set in the sans face; only a path is machine text.
+    expect(
+      within(meta).getByTestId('rail-row-folder').className.split(/\s+/),
+    ).not.toContain('font-mono')
   })
 
   it('names the session and its state on the line, and carries the rest on the row', () => {
     renderRail()
-    const first = rows()[0]
+    // Needs you first: the working session is the second row.
+    const first = rows()[1]
     // ⛔ ONE LINE. The row used to paint the name, then the state with an
     //    elapsed time, then the observed clause — three lines, 92 px measured in a real
     //    browser, in a 256 px rail. What an operator picks a row BY stays painted:
-    expect(within(first).getByText('Active')).toBeInTheDocument()
+    expect(within(first).getByRole('img', { name: 'Active' })).toBeTruthy()
     // …and the NAME is what the session is doing, never its reference. `sess-a` was
     // the second rung of the old label, so a rail of discovered sessions read as six
     // machine ids. The reference is on the name's own `title`.
@@ -248,14 +288,38 @@ describe('WorkRail — what a row says', () => {
     expect(onTogglePin).toHaveBeenCalledWith('run:run-l')
   })
 
-  it('groups by what the session needs, and keeps an empty group', () => {
+  it('groups by what the session needs, as "label count", and draws no empty group', () => {
     renderRail({ sessions: [working] })
-    // The three headings are always there. An empty one states its own sentence
-    // rather than vanishing and moving the rows under the operator's cursor.
-    expect(screen.getByText('Waiting for you')).toBeInTheDocument()
-    expect(screen.getByText('Settled')).toBeInTheDocument()
-    expect(screen.getByText(/Nothing is waiting for you/)).toBeInTheDocument()
-    expect(screen.getByText(/No session has settled yet/)).toBeInTheDocument()
+    expect(screen.getByText('Working')).toBeInTheDocument()
+    expect(screen.queryByText('Needs you')).toBeNull()
+    expect(screen.queryByText('Idle')).toBeNull()
+    // No sentence stands in for a group that has no rows.
+    expect(screen.queryByText(/Nothing is waiting for you/)).toBeNull()
+    expect(screen.queryByText(/No session has settled yet/)).toBeNull()
+    expect(screen.getByRole('group', { name: /^Working\s*1$/ })).toBeTruthy()
+  })
+
+  it('lists Needs you first, then Working, then Idle', () => {
+    renderRail()
+    const names = screen
+      .getAllByRole('group')
+      .map((g) => g.getAttribute('aria-labelledby'))
+      .map((id) => document.getElementById(id as string)?.textContent)
+    expect(names).toEqual(['Needs you 1', 'Working 1', 'Idle 1'])
+    expect(rows().map((r) => r.getAttribute('data-address'))).toEqual([
+      'live:lr-b',
+      'live:lr-a',
+      'live:lr-c',
+    ])
+  })
+
+  it('marks the open row with the neutral fill, not the accent', () => {
+    renderRail({ selected: 'live:lr-a' })
+    const open = rows().find((r) => r.getAttribute('aria-selected') === 'true')!
+    const cls = open.className.split(/\s+/)
+    expect(cls).toContain('bg-active')
+    expect(open.className).not.toMatch(/accent/)
+    expect(cls).not.toContain('border-l-2')
   })
 })
 
@@ -287,7 +351,7 @@ describe('WorkRail — arrows move, Enter opens', () => {
     await user.tab()
     await user.keyboard('{ArrowDown}{Enter}')
     expect(onOpen).toHaveBeenCalledTimes(1)
-    expect(onOpen.mock.calls[0][0].sessionRef).toBe('sess-b')
+    expect(onOpen.mock.calls[0][0].sessionRef).toBe('sess-a')
   })
 
   it('does not wrap at either end', async () => {
@@ -316,8 +380,8 @@ describe('WorkRail — arrows move, Enter opens', () => {
     renderRail({ selected: 'live:lr-a' })
     await user.tab()
     await user.keyboard('{ArrowDown}')
-    expect(rows()[0]).toHaveAttribute('aria-selected', 'true')
-    expect(rows()[1]).toHaveAttribute('aria-selected', 'false')
+    expect(rows()[1]).toHaveAttribute('aria-selected', 'true')
+    expect(rows()[2]).toHaveAttribute('aria-selected', 'false')
   })
 })
 
@@ -327,7 +391,7 @@ describe('WorkRail — no gesture without a keyboard path', () => {
     const { onTogglePin } = renderRail()
     await user.tab()
     await user.keyboard('p')
-    expect(onTogglePin).toHaveBeenCalledWith('live:lr-a')
+    expect(onTogglePin).toHaveBeenCalledWith('live:lr-b')
   })
 
   it('pins the row the keyboard is ON, not the one that is open', async () => {
@@ -335,7 +399,7 @@ describe('WorkRail — no gesture without a keyboard path', () => {
     const { onTogglePin } = renderRail({ selected: 'live:lr-a' })
     await user.tab()
     await user.keyboard('{ArrowDown}p')
-    expect(onTogglePin).toHaveBeenCalledWith('live:lr-b')
+    expect(onTogglePin).toHaveBeenCalledWith('live:lr-c')
   })
 
   it('does nothing on `p` when there is nowhere to store a preference', async () => {

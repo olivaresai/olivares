@@ -137,7 +137,7 @@ func TestTokensListRendersATableAndPreservesRawJSON(t *testing.T) {
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"items": []map[string]any{{
 				"id": "tok-1", "name": "ci", "bound_tenant_id": "tenant-a", "role": "admin",
-				"revoked": false, "created_at": "2026-08-16T10:00:00Z",
+				"revoked": false, "last_used_at": "2026-08-16T10:05:00Z", "created_at": "2026-08-16T10:00:00Z",
 			}},
 			"has_more": true, "cursor": "next-page", "request_id": "req-kept",
 		})
@@ -147,7 +147,8 @@ func TestTokensListRendersATableAndPreservesRawJSON(t *testing.T) {
 	if err != nil {
 		t.Fatalf("tokens ls: %v", err)
 	}
-	for _, want := range []string{"ID", "NAME", "TENANT", "ROLE", "tok-1", "ci", "tenant-a", "admin"} {
+	for _, want := range []string{"ID", "NAME", "TENANT", "ROLE", "LAST USED", "tok-1", "ci", "tenant-a", "admin",
+		"2026-08-16T10:05:00Z"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("table missing %q:\n%s", want, out)
 		}
@@ -531,6 +532,87 @@ func TestStepUpRefusalNamesTheCeremonyInsteadOfABare403(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("the step-up refusal does not mention %q: %v", want, err)
 		}
+	}
+}
+
+// TestAuthBootstrapNamesTheSetupTokenWhenTheEngineRefusesIt: POST /v1/setup
+// answers its plain 403 for a mistyped token and for one already used (setup is
+// complete), deliberately alike (core/api/handlers_auth.go). The console says
+// "That setup token is not valid." for it (web/src/app/pages/setup.tsx); the CLI
+// said only "forbidden (HTTP 403)". The sentence must name the token and both
+// ways forward, and keep exit 3 and the status and code for -o json. It carries
+// nothing the caller sent, so a short mistyped token that occurs in it must not
+// withhold it. Any other 403 (another engine code, a proxy page) keeps its text.
+func TestAuthBootstrapNamesTheSetupTokenWhenTheEngineRefusesIt(t *testing.T) {
+	// The engine's body, captured from a fresh 26.10.1 engine for a wrong token
+	// and for a used one alike.
+	const engineForbidden = `{"error":{"code":"forbidden","message":"forbidden"}}`
+	cases := []struct {
+		name, token, body, want string
+		wantSetup               bool
+	}{
+		{"engine refusal", "wrongtoken", engineForbidden, "setup token is not valid", true},
+		{"engine refusal of a short token found in the sentence", "setup", engineForbidden, "setup token is not valid", true},
+		{"another engine refusal", "wrongtoken",
+			`{"error":{"code":"network_not_allowed","message":"Setup is not allowed from this network."}}`,
+			"Setup is not allowed from this network.", false},
+		// A body that is not JSON is withheld when the request carried secrets
+		// (redactCLIResponse); the lead and the status stay.
+		{"proxy refusal", "wrongtoken", `<html><body>403 Forbidden by proxy</body></html>`,
+			"the engine refused this request (HTTP 403)", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			prepareBootstrapCLITest(t)
+			srv := newCountingServer(t, func(w http.ResponseWriter, _ *http.Request) {
+				w.WriteHeader(http.StatusForbidden)
+				_, _ = io.WriteString(w, tc.body)
+			})
+			pwFile := filepath.Join(t.TempDir(), "pw")
+			if err := os.WriteFile(pwFile, []byte("first-admin-password"), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			_, _, err := execRootStdin(t, tc.token, "auth", "bootstrap", "--server", srv.URL,
+				"--setup-token-file", "-", "--email", "other@example.com", "--password-file", pwFile)
+			if err == nil {
+				t.Fatal("a refused setup token must fail the command")
+			}
+			if got := exitcode.From(err); got != exitcode.Auth {
+				t.Fatalf("exit code = %d, want %d", got, exitcode.Auth)
+			}
+			msg := err.Error()
+			if !strings.Contains(msg, tc.want) {
+				t.Fatalf("the refusal does not say %q: %v", tc.want, err)
+			}
+			if named := strings.Contains(msg, "setup token is not valid"); named != tc.wantSetup {
+				t.Fatalf("names the setup token = %v, want %v: %v", named, tc.wantSetup, err)
+			}
+			if !tc.wantSetup {
+				return
+			}
+			for _, want := range []string{"olivares first-boot --new-token", "olivares login"} {
+				if !strings.Contains(msg, want) {
+					t.Fatalf("the refusal does not name the way forward %q: %v", want, err)
+				}
+			}
+			var out bytes.Buffer
+			if werr := printCLIErrorAs(&out, err, true); werr != nil {
+				t.Fatal(werr)
+			}
+			var got struct {
+				Error struct {
+					Message string `json:"message"`
+					Status  int    `json:"status"`
+					Code    string `json:"code"`
+				} `json:"error"`
+			}
+			if jerr := json.Unmarshal(out.Bytes(), &got); jerr != nil {
+				t.Fatalf("json = %q (%v)", out.String(), jerr)
+			}
+			if got.Error.Message != msg || got.Error.Status != http.StatusForbidden || got.Error.Code != "forbidden" {
+				t.Fatalf("json error = %+v", got.Error)
+			}
+		})
 	}
 }
 

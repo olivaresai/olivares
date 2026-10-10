@@ -1,4 +1,10 @@
 {
+  "edition": {
+    "viewPolicy": "Richtlinie anzeigen",
+    "editingRequiresBusiness": "Das Bearbeiten eigener Richtlinien, Rollen und Berechtigungen erfordert Business.",
+    "disablePolicy": "Richtlinie deaktivieren",
+    "disablePolicyDescription": "Die verfasste Richtlinie wird nicht mehr angewendet. Ihr Verlauf und andere durchgesetzte Richtlinien bleiben erhalten."
+  },
   "errors": {
     "generic": "Etwas ist schiefgelaufen"
   },
@@ -214,8 +220,8 @@
       "sessionResumed": "{{actor}} hat eine Sitzung fortgesetzt",
       "sessionResumed_you": "Du hast eine Sitzung fortgesetzt",
       "sessionFailed": "Eine Sitzung konnte nicht starten",
-      "approvalRequested": "Die Sitzung von {{actor}} bittet um Freigabe",
-      "approvalRequested_you": "Deine Sitzung bittet um Freigabe",
+      "approvalRequested": "{{actor}} hat eine Genehmigung angefordert",
+      "approvalRequested_you": "Sie haben eine Genehmigung angefordert",
       "killswitchEngaged": "Not-Aus von {{actor}} ausgelöst",
       "killswitchEngaged_you": "Du hast den Not-Aus ausgelöst",
       "killswitchReleased": "Not-Aus von {{actor}} aufgehoben",
@@ -228,14 +234,37 @@
       "workspaceCreated": "{{actor}} hat einen Arbeitsbereich erstellt",
       "workspaceCreated_you": "Du hast einen Arbeitsbereich erstellt",
       "workspaceUpdated": "{{actor}} hat einen Arbeitsbereich geändert",
-      "workspaceUpdated_you": "Du hast einen Arbeitsbereich geändert"
+      "workspaceUpdated_you": "Du hast einen Arbeitsbereich geändert",
+      "signedIn": "{{actor}} hat sich angemeldet",
+      "workCreated": "{{actor}} hat ein Arbeitselement erstellt",
+      "workReady": "{{actor}} hat ein Arbeitselement als bereit markiert",
+      "workCompleted": "{{actor}} hat ein Arbeitselement abgeschlossen",
+      "workBlocked": "{{actor}} hat ein Arbeitselement blockiert",
+      "workCanceled": "{{actor}} hat ein Arbeitselement abgebrochen",
+      "approvalDecided": "{{actor}} hat eine Genehmigungsentscheidung protokolliert",
+      "approvalCanceled": "{{actor}} hat eine Genehmigungsanfrage zurückgezogen",
+      "policyCreated": "{{actor}} hat eine Richtlinie erstellt",
+      "policyUpdated": "{{actor}} hat eine Richtlinie aktualisiert",
+      "policyDeleted": "{{actor}} hat eine Richtlinie gelöscht",
+      "signedIn_you": "Sie haben sich angemeldet",
+      "workCreated_you": "Sie haben ein Arbeitselement erstellt",
+      "workReady_you": "Sie haben ein Arbeitselement als bereit markiert",
+      "workCompleted_you": "Sie haben ein Arbeitselement abgeschlossen",
+      "workBlocked_you": "Sie haben ein Arbeitselement blockiert",
+      "workCanceled_you": "Sie haben ein Arbeitselement abgebrochen",
+      "approvalDecided_you": "Sie haben eine Genehmigungsentscheidung protokolliert",
+      "approvalCanceled_you": "Sie haben eine Genehmigungsanfrage zurückgezogen",
+      "policyCreated_you": "Sie haben eine Richtlinie erstellt",
+      "policyUpdated_you": "Sie haben eine Richtlinie aktualisiert",
+      "policyDeleted_you": "Sie haben eine Richtlinie gelöscht"
     },
     "actors": {
       "you": "Du",
       "member": "Ein Mitglied",
       "token": "Ein API-Token",
       "system": "Olivares"
-    }
+    },
+    "includeInternal": "Interne Datensätze einschließen"
   },
   "passphrase": {
     "tooShort": "Die Passphrase muss mindestens {{min}} Zeichen lang sein",

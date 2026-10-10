@@ -6,6 +6,12 @@ description: >-
   eine Regel abzielt, die Empfängerlimits je Transport und die zwei Stellen, an
   denen eine Projektion kein vollständiger Envelope ist.
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
+
+:::note[Business]
+Audit-Export (`GET /v1/audit/export`, `olivares audit export`), Verzeichnisarchive und die Prüfung externer Archive erfordern Business. Community behält das signierte Ledger, `olivares audit verify` und `olivares dr backup`; Export liefert HTTP 501 oder Exit-Code 9. Audit-Weiterleitung und DDIL-Transfers mit Audit-Segmenten erfordern ebenfalls Business.
+:::
 
 Diese Seite ist der **Egress-Vertrag**: was die Control Plane verlässt, in
 welchem Dialekt, über welchen Transport, und was ein Empfänger damit macht.
@@ -56,7 +62,7 @@ auseinanderlaufen können:
 |---|---|---|
 | Ledger-Export (`GET /v1/audit/export?format=…`) | `cef\|leef\|syslog\|otlp\|otlp_envelope\|otlp_log_record\|ocsf` | `cef` |
 | Eventing-Sink (`sink_format` einer Push-Subscription) | `ocsf\|cef\|leef\|syslog\|otlp\|otlp_envelope\|json` | `ocsf` |
-| Notification-Connectors (`filelog`, `splunkhec`, `s3archive`, `siem`) | `json\|cef\|leef\|syslog\|otlp\|otlp_envelope\|ocsf\|asim` | `json` |
+| Notification-Connectors (`filelog`, `splunkhec`, `s3archive` (Business: Regulated Operations), `siem`) | `json\|cef\|leef\|syslog\|otlp\|otlp_envelope\|ocsf\|asim` | `json` |
 | Syslog-Connector | `syslog\|cef\|leef` | `syslog` |
 
 Der Ledger-Export hat keinen Roh-JSON-Passthrough — seine JSON-Formen sind die
@@ -65,7 +71,7 @@ Eventing-Sink postet den rohen erfassten Event-Envelope (der strukturierte
 Passthrough, ohne Dialekt-Transformation), während die Notification-Connectors
 nur eine minimale Notification-Projektion rendern — die anzeigbaren Felder,
 nicht die ursprüngliche Payload. Alle vier Notification-Connectors akzeptieren
-`asim`, `s3archive` eingeschlossen. Ein Format außerhalb der Liste seiner
+`asim`, `s3archive` (Business: Regulated Operations) eingeschlossen. Ein Format außerhalb der Liste seiner
 Oberfläche wird abgelehnt: ein Tippfehler beim Authoring oder in der
 Konfiguration erhält einen Fehler, der die akzeptierten Tokens der Oberfläche
 nennt; ein korrumpierter gespeicherter Wert wird erst beim Encodieren

@@ -17,7 +17,7 @@ import (
 func (m *Module) withdrawProviderCredential(ctx context.Context, actor auth.Principal, tenant model.TenantID, ref, locator string) {
 	cleanup, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 	defer cancel()
-	if err := m.rt.providerVault.Revoke(cleanup, actor, tenant, locator); err != nil && m.log != nil {
+	if err := m.rt.ProviderVault.Revoke(cleanup, actor, tenant, locator); err != nil && m.log != nil {
 		m.log.Warn("sessions: could not withdraw an unpublished provider credential", "provider_ref", ref)
 	}
 }

@@ -88,7 +88,6 @@ let serverAal: number
 let whoamiResult: () => Response | Promise<Response>
 let qc: QueryClient
 let calls: string[]
-let pivPresented: boolean
 let overrides: Map<string, (init?: RequestInit) => Response | Promise<Response>>
 const get = vi.fn()
 const create = vi.fn()
@@ -129,7 +128,6 @@ beforeEach(() => {
   enrolled = false
   serverAal = 1
   calls = []
-  pivPresented = false
   overrides = new Map()
   captured.panels = []
   qc = new QueryClient({
@@ -168,8 +166,6 @@ beforeEach(() => {
       const override = overrides.get(call)
       if (override) return override(init)
       if (url === '/v1/auth/whoami') return whoamiResult()
-      if (url === '/v1/auth/piv/status')
-        return json({ presented: pivPresented })
       if (url.endsWith('/authenticate/options'))
         return enrolled ? json(options) : error(400, 'no_webauthn_credential')
       if (url.endsWith('/register/options')) return json(options)
@@ -177,7 +173,7 @@ beforeEach(() => {
         enrolled = true
         return json({ ok: true })
       }
-      if (url.endsWith('/authenticate') || url.endsWith('/piv/elevate')) {
+      if (url.endsWith('/authenticate')) {
         serverAal = 3
         return json({ ok: true, aal: 3 })
       }
@@ -289,7 +285,6 @@ const phases = [
   'auth options',
   'get',
   'authenticate',
-  'piv',
   'whoami',
   'register options',
   'create',
@@ -305,13 +300,11 @@ function hold(phase: Phase) {
       ? 'POST /v1/auth/webauthn/authenticate/options'
       : phase === 'authenticate'
         ? 'POST /v1/auth/webauthn/authenticate'
-        : phase === 'piv'
-          ? 'POST /v1/auth/piv/elevate'
-          : phase === 'whoami'
-            ? 'GET /v1/auth/whoami'
-            : phase === 'register options'
-              ? 'POST /v1/auth/webauthn/register/options'
-              : 'POST /v1/auth/webauthn/register'
+        : phase === 'whoami'
+          ? 'GET /v1/auth/whoami'
+          : phase === 'register options'
+            ? 'POST /v1/auth/webauthn/register/options'
+            : 'POST /v1/auth/webauthn/register'
   if (phase === 'get') get.mockReturnValue(browser.promise)
   else if (phase === 'create') create.mockReturnValue(browser.promise)
   else overrides.set(path, () => network.promise)
@@ -340,14 +333,9 @@ function hold(phase: Phase) {
 async function reach(phase: Phase) {
   const barrier = hold(phase)
   enrolled = !barrier.register
-  pivPresented = phase === 'piv'
   const view = mount()
   const user = await openAdd()
-  await user.click(
-    phase === 'piv'
-      ? await screen.findByRole('button', { name: /PIV\/CAC/i })
-      : authenticate(),
-  )
+  await user.click(authenticate())
   if (barrier.register) {
     await user.type(
       await screen.findByRole('textbox', { name: /passkey name/i }),
@@ -360,8 +348,7 @@ async function reach(phase: Phase) {
   await waitFor(() => expect(barrier.reached()).toBe(true))
   return { ...barrier, view, user }
 }
-const ceremonyCalls = () =>
-  calls.filter((c) => /webauthn|whoami|piv\/elevate/.test(c))
+const ceremonyCalls = () => calls.filter((c) => /webauthn|whoami/.test(c))
 
 describe('each await belongs to a still-live Add intent', () => {
   for (const phase of phases) {
@@ -427,7 +414,7 @@ describe('each await belongs to a still-live Add intent', () => {
 })
 
 describe('fresh post-elevation whoami is required', () => {
-  for (const method of ['webauthn', 'piv'] as const) {
+  for (const method of ['webauthn'] as const) {
     for (const response of [
       'absent',
       '500',
@@ -438,7 +425,6 @@ describe('fresh post-elevation whoami is required', () => {
     ] as const) {
       it(`${method} success plus ${response} whoami cannot consume a Save demand`, async () => {
         enrolled = true
-        pivPresented = true
         whoamiResult = () =>
           response === 'absent'
             ? new Response(null, { status: 204 })
@@ -451,11 +437,7 @@ describe('fresh post-elevation whoami is required', () => {
                     response === '401' ? 'unauthenticated' : 'refused',
                   )
         const { user, request } = await rejectedSave()
-        await user.click(
-          method === 'webauthn'
-            ? authenticate()
-            : await screen.findByRole('button', { name: /PIV\/CAC/i }),
-        )
+        await user.click(authenticate())
         await waitFor(() =>
           expect(calls.filter((c) => c === 'GET /v1/auth/whoami')).toHaveLength(
             1,
@@ -570,9 +552,8 @@ async function rejectedSave() {
 }
 
 describe('owned Save demands and captured host callbacks', () => {
-  for (const method of ['webauthn', 'piv'] as const) {
+  for (const method of ['webauthn'] as const) {
     it(`unenrolled permanently drops the captured retry, including after ${method}`, async () => {
-      pivPresented = true
       const { user, request, callback } = await rejectedSave()
       const retry = request.retry!
       await user.click(authenticate())
@@ -588,11 +569,7 @@ describe('owned Save demands and captured host callbacks', () => {
         )
         await screen.findByText(/passkey registered/i)
       }
-      await user.click(
-        method === 'webauthn'
-          ? authenticate()
-          : screen.getByRole('button', { name: /PIV\/CAC/i }),
-      )
+      await user.click(authenticate())
       const name = await screen.findByRole('textbox', { name: /^name/i })
       await act(async () => {
         retry()
@@ -665,19 +642,13 @@ describe('owned Save demands and captured host callbacks', () => {
     'auth options',
     'get',
     'authenticate',
-    'piv',
     'whoami',
-  ] as const) {
+  ] as readonly Phase[]) {
     it(`a replacement demand during ${phase} survives the old response and callbacks`, async () => {
       enrolled = true
-      pivPresented = phase === 'piv'
       const { user, request, callback } = await rejectedSave()
       const barrier = hold(phase)
-      await user.click(
-        phase === 'piv'
-          ? await screen.findByRole('button', { name: /PIV\/CAC/i })
-          : authenticate(),
-      )
+      await user.click(authenticate())
       await waitFor(() => expect(barrier.reached()).toBe(true))
       const before = ceremonyCalls()
       await user.keyboard('{Escape}')
@@ -801,7 +772,7 @@ describe('registration outcomes and independent factors', () => {
       expect(qc.getQueryData<Whoami>(queryKeys.whoami)?.aal).toBe(1)
     },
   )
-  for (const method of ['webauthn', 'piv'] as const) {
+  for (const method of ['webauthn'] as const) {
     for (const failure of [
       '401',
       'verification refusal',
@@ -809,11 +780,7 @@ describe('registration outcomes and independent factors', () => {
     ] as const) {
       it(`${method} final ${failure} does not verify, resume or resend`, async () => {
         enrolled = true
-        pivPresented = true
-        const path =
-          method === 'webauthn'
-            ? 'POST /v1/auth/webauthn/authenticate'
-            : 'POST /v1/auth/piv/elevate'
+        const path = 'POST /v1/auth/webauthn/authenticate'
         const code =
           failure === '401' ? 401 : failure === 'not served' ? 501 : 403
         overrides.set(path, () =>
@@ -825,11 +792,7 @@ describe('registration outcomes and independent factors', () => {
           ),
         )
         const { user, request } = await rejectedSave()
-        await user.click(
-          method === 'webauthn'
-            ? authenticate()
-            : await screen.findByRole('button', { name: /PIV\/CAC/i }),
-        )
+        await user.click(authenticate())
         await waitFor(() => expect(calls).toContain(path))
         await settle()
         expect(calls.filter((c) => c === path)).toHaveLength(1)
@@ -841,9 +804,6 @@ describe('registration outcomes and independent factors', () => {
         expect(unauthorized).not.toHaveBeenCalled()
         if (failure === '401') {
           expect(authenticate()).toBeDisabled()
-          expect(
-            screen.getByRole('button', { name: /PIV\/CAC/i }),
-          ).toBeDisabled()
           expect(screen.getByText(/sign in again/i)).toBeVisible()
         }
         if (failure === 'not served')
@@ -874,34 +834,6 @@ describe('registration outcomes and independent factors', () => {
       screen.queryByRole('button', { name: /^register passkey$/i }),
     ).not.toBeInTheDocument()
     expect(calls.filter((c) => c.endsWith('/register'))).toHaveLength(1)
-  })
-  it('presented PIV works with WebAuthn unavailable', async () => {
-    pivPresented = true
-    vi.stubGlobal('PublicKeyCredential', undefined)
-    mount()
-    const user = await openAdd()
-    await user.click(authenticate())
-    await screen.findByText(/does not support WebAuthn/i)
-    await user.click(screen.getByRole('button', { name: /PIV\/CAC/i }))
-    expect(await screen.findByRole('textbox', { name: /^name/i })).toBeVisible()
-    expect(create).not.toHaveBeenCalled()
-    expect(get).not.toHaveBeenCalled()
-  })
-  it('missing create gives honest enrollment recovery and keeps presented PIV usable', async () => {
-    pivPresented = true
-    Object.defineProperty(navigator, 'credentials', {
-      configurable: true,
-      value: { get },
-    })
-    mount()
-    const user = await openAdd()
-    await user.click(authenticate())
-    await screen.findByText(/cannot register a passkey/i)
-    expect(
-      screen.queryByRole('button', { name: /^register passkey$/i }),
-    ).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: /PIV\/CAC/i }))
-    expect(await screen.findByRole('textbox', { name: /^name/i })).toBeVisible()
   })
   it('the shared console action name does not opt generic panels into enrollment', async () => {
     mount(<StepUpPanel action="console" minAal={3} currentAal={1} />)

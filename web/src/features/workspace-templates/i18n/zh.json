@@ -55,6 +55,8 @@
       "maxDuration": "最大会话时长（分钟）",
       "allowedTools": "允许的工具",
       "allowedToolsPlaceholder": "例如：Bash,Read,Edit",
+      "requireTruncateProtection": "只读会话必须具备文件截断保护",
+      "truncateProtectionHint": "此模板的只读会话不会在无法实施该保护的旧内核上启动。",
       "recordIo": "记录 I/O",
       "peersSameTemplate": "此模板的会话可以互相发消息"
     }

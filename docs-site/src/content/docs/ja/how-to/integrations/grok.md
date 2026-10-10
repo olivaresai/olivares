@@ -15,8 +15,8 @@ remote model を照会せず、provider secret も不要です。予防的な to
 プローブのレシートの記録、ガバナンス対象セッションの起動や停止には
 [Grok CLI をインストールする](/how-to/install-grok-cli/) を使います。運用経路は
 [プロバイダーセッションを運用する](/how-to/operate-provider-sessions/)
-です（`OLIVARES_SESSION_RUNTIME_GROK_BIN` または管理対象インストールのレシートと、
-プロバイダープロファイル）。認証済み公式 Grok アカウントとの互換性はそこで
+です（`OLIVARES_SESSION_RUNTIME_GROK_BIN` による明示的な選択、未設定なら最新の検証済み管理インストール、
+次にエンジンの `PATH` 上の `grok`、およびプロバイダープロファイル）。認証済み公式 Grok アカウントとの互換性はそこで
 主張しません。
 
 ## Grok Build を追加する
@@ -29,7 +29,8 @@ remote model を照会せず、provider secret も不要です。予防的な to
 - Olivares service account が `~/.grok/config.toml`、`/etc/grok/requirements.toml`、
   `~/.grok/disabled-hooks`、および設定した場合は互換性のある `managed-settings.json` を
   読み取る権限。
-- コンソールから source を作成する場合、AAL3 elevation を持つ superadmin account。
+- コンソールから source を作成する場合、superadmin account。管理操作の書き込みは
+  追加認証ポリシー（`admin_step_up`、デフォルトは `none`）に従います。
 
 この source に xAI key を入力しないでください。secret field はなく、inference API call も行いません。
 

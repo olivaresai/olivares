@@ -213,30 +213,65 @@ func agentRefsByWorkspace(ctx context.Context, sc store.Scope, workspaceID model
 
 // agentRefsByGroup lists external ids of the agents in an agent-group, resolving member
 // agent ids to their external ids.
+//
+// CUTS A4 (2026-10-02): the member rows are listed (paged, as before) and the
+// agents read in batched IN queries of idChunk ids each — AU2-06 measured 1,001
+// queries for one group; now it is the member list plus one bounded query per
+// chunk, with the member-order output and the maxProjectedAgents cap unchanged.
+// The chunk bound is PostgreSQL's 65,535-parameter limit (SR5C round 2): one
+// IN for the whole group would exceed it long before maxProjectedAgents.
 func agentRefsByGroup(ctx context.Context, sc store.Scope, groupID model.ID) ([]string, bool, error) {
-	out := make([]string, 0, 16)
+	var members []model.AgentGroupMember
 	q := model.Query{Filters: []model.Filter{eq("group_id", groupID.String())}, Limit: listCap}
 	for {
-		members, page, err := sc.AgentGroupMembers().List(ctx, q)
+		page, pg, err := sc.AgentGroupMembers().List(ctx, q)
 		if err != nil {
 			return nil, false, err
 		}
-		for _, mem := range members {
-			a, err := sc.Agents().Get(ctx, mem.AgentID)
-			if err != nil {
-				continue // an orphan membership (agent gone) projects nothing
-			}
-			if a.ExternalID == "" {
-				continue
-			}
-			out = append(out, a.ExternalID)
-			if len(out) >= maxProjectedAgents {
-				return out, true, nil
-			}
+		members = append(members, page...)
+		if !pg.HasMore || pg.Cursor == "" {
+			break
 		}
-		if !page.HasMore || page.Cursor == "" {
-			return out, false, nil
-		}
-		q.Cursor = page.Cursor
+		q.Cursor = pg.Cursor
 	}
+	ids := make([]model.ID, 0, len(members))
+	seen := make(map[model.ID]bool, len(members))
+	for _, mem := range members {
+		if !seen[mem.AgentID] {
+			seen[mem.AgentID] = true
+			ids = append(ids, mem.AgentID)
+		}
+	}
+	agents := make(map[model.ID]string, len(ids))
+	// One List per chunk: a chunk never exceeds the page cap, and no single
+	// query binds more than idChunk parameters. The projection below iterates
+	// members, so chunking never touches the membership order.
+	for start := 0; start < len(ids); start += idChunk {
+		end := start + idChunk
+		if end > len(ids) {
+			end = len(ids)
+		}
+		rows, _, err := sc.Agents().List(ctx, model.Query{
+			Filters: []model.Filter{{Column: model.ColID, Op: model.OpIn, Value: ids[start:end]}},
+			Limit:   idChunk,
+		})
+		if err != nil {
+			return nil, false, err
+		}
+		for _, a := range rows {
+			agents[a.ID] = a.ExternalID
+		}
+	}
+	out := make([]string, 0, 16)
+	for _, mem := range members {
+		external, ok := agents[mem.AgentID]
+		if !ok || external == "" {
+			continue // an orphan membership (agent gone) projects nothing; so does an id with no external form
+		}
+		out = append(out, external)
+		if len(out) >= maxProjectedAgents {
+			return out, true, nil
+		}
+	}
+	return out, false, nil
 }

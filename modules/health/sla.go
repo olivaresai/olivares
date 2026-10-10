@@ -108,6 +108,38 @@ func reliabilityFromEvents(events []model.Record, windowStart, now time.Time) re
 	return r
 }
 
+// slaEventsWindow reads the events a trailing-window fold actually needs (CUTS
+// A2, 2026-10-02): the events inside the window — paged, never truncated — plus
+// ONE anchor, the latest event before it, which establishes the state AT the
+// window's start. The lifetime read this replaces loaded every event the
+// subject ever had and sorted them in Go (O(H log H), measured AU2-04).
+// reliabilityFromEvents sorts and folds the merged set, so the answer is
+// identical to the lifetime read's.
+func slaEventsWindow(ctx context.Context, evRepo store.GenericRepo, subjectKind, subjectRef string, windowStart time.Time) ([]model.Record, error) {
+	window := model.NewTimestamp(windowStart).String()
+	events, err := listAll(ctx, evRepo,
+		eq(colEvSubjectKind, subjectKind), eq(colEvSubjectRef, subjectRef),
+		model.Filter{Column: colEvOccurredAt, Op: model.OpGte, Value: window})
+	if err != nil {
+		return nil, err
+	}
+	anchor, _, err := evRepo.List(ctx, model.Query{
+		Filters: []model.Filter{
+			eq(colEvSubjectKind, subjectKind), eq(colEvSubjectRef, subjectRef),
+			{Column: colEvOccurredAt, Op: model.OpLt, Value: window},
+		},
+		// SR5C: the anchor is THE latest event before the window, and "latest"
+		// breaks occurred_at ties by id DESC — the same winner the lifetime
+		// fold reaches (it walks id-ascending and last write wins).
+		Sort:  []model.Sort{{Column: colEvOccurredAt, Desc: true}, {Column: model.ColID, Desc: true}},
+		Limit: 1,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return append(anchor, events...), nil
+}
+
 // handleSLA reports the reliability of a subject over a trailing window
 // (?subject_kind=&subject_ref=&window_seconds=). It reads the subject's check (for
 // the SLA target and the current state) and reconstructs reliability from the
@@ -142,7 +174,7 @@ func (m *Module) handleSLA(w http.ResponseWriter, r *http.Request, mc api.Module
 		if err != nil {
 			return err
 		}
-		events, err := listAll(r.Context(), evRepo, eq(colEvSubjectKind, subjectKind), eq(colEvSubjectRef, subjectRef))
+		events, err := slaEventsWindow(r.Context(), evRepo, subjectKind, subjectRef, windowStart)
 		if err != nil {
 			return err
 		}
@@ -174,7 +206,7 @@ func (m *Module) evaluateSLATx(ctx context.Context, sc store.Scope, check model.
 	if err != nil {
 		return false, nil, err
 	}
-	events, err := listAll(ctx, evRepo, eq(colEvSubjectKind, subjectKind), eq(colEvSubjectRef, subjectRef))
+	events, err := slaEventsWindow(ctx, evRepo, subjectKind, subjectRef, now.Add(-m.slaWindow))
 	if err != nil {
 		return false, nil, err
 	}

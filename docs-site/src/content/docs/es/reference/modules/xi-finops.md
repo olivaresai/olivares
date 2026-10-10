@@ -7,6 +7,9 @@ description: >-
   puede leer el libro mayor. Qué hace, y sus límites.
 ---
 
+Los presupuestos y el análisis de gasto de FinOps son funciones de **[Business](https://olivares.ai/pricing)**. Community conserva el seguimiento de costes por sesión y la exportación de datos. Los presupuestos guardados antes de 0.1 se pueden consultar y eliminar, y se aplican mientras el módulo FinOps esté activo; Community no puede crearlos ni modificarlos. Las evaluaciones y los entornos de prueba siguen en Community.
+
+
 El módulo XI es la capa de **coste / FinOps** para IA: contabiliza lo que reportan
 los conectores de modelo y proveedor, te deja segmentar el gasto por cualquier
 dimensión de atribución, prevé el período actual, y convierte un presupuesto en
@@ -84,9 +87,9 @@ audita. Ver [Gobernar y aprobar](/es/how-to/govern-and-approve/).
   deniega: se rechazan el fire de orquestación, el open de voz, la ruta de modelo, la
   ejecución de la puerta de evals y la tarea MCP durable, y el proxy de inferencia responde
   **HTTP 503**. El lanzamiento de sesión aplica su propia postura de disponibilidad
-  (`OLIVARES_SESSION_BUDGET_AVAILABILITY`): sin definir, la sesión se lanza en la edición
-  Community y se rechaza con **HTTP 503** en la edición Enterprise, y en ambos casos el
-  fallo queda registrado. El finding de tope-de-presupuesto emitido en la ingesta sigue
+  (`OLIVARES_SESSION_BUDGET_AVAILABILITY`): sin definir, la sesión se rechaza con
+  **HTTP 503** en todas las ediciones; con `fail-open`, se lanza. En ambos casos el fallo
+  queda registrado. El finding de tope-de-presupuesto emitido en la ingesta sigue
   registrando el gasto que llegó a un tope.
 - **El router solo aplica los scopes que conoce pre-ejecución** (global / provider /
   model); los scopes más finos (agent, session, team, project) se aplican en las

@@ -145,8 +145,7 @@ type decisionDeadlineNormalized struct {
 	authority decisionDeadlineAuthority
 }
 
-// RespondDecisionRequest is the future handler-facing boundary. K3 remains
-// deny-closed until the aggregate readiness conjunction becomes effective.
+// RespondDecisionRequest checks current authority and requires effective communication readiness.
 func (m *Module) RespondDecisionRequest(
 	ctx context.Context,
 	scope DirectoryScopeRef,
@@ -730,7 +729,7 @@ func (m *Module) prepareDecisionDeadlineContent(
 		policy := protectedPayloadPolicyFrom(request.Request)
 		schema, _ := PayloadSlotDecisionResponse.schema()
 		response, err := PrepareProtectedPayload(
-			ctx, m.communicationSealer, PayloadSlotDecisionResponse, policy,
+			ctx, m.CommunicationSealer, PayloadSlotDecisionResponse, policy,
 			ContentAAD{
 				TenantID:    normalized.scope.TenantID,
 				WorkspaceID: normalized.scope.WorkspaceID,
@@ -801,7 +800,7 @@ func (m *Module) prepareDecisionResponseContent(
 	normalized decisionResponseNormalizedCommand,
 	responseID model.ID,
 ) (decisionResponsePreparedContent, error) {
-	raw, err := OpenProtectedPayload(ctx, m.communicationSealer, authorized.requestOpenPlan)
+	raw, err := OpenProtectedPayload(ctx, m.CommunicationSealer, authorized.requestOpenPlan)
 	if err != nil {
 		return decisionResponsePreparedContent{}, err
 	}
@@ -833,7 +832,7 @@ func (m *Module) prepareDecisionResponseContent(
 	schema, _ := PayloadSlotDecisionResponse.schema()
 	policy := protectedPayloadPolicyFrom(authorized.request.Request)
 	response, err := PrepareProtectedPayload(
-		ctx, m.communicationSealer, PayloadSlotDecisionResponse, policy,
+		ctx, m.CommunicationSealer, PayloadSlotDecisionResponse, policy,
 		ContentAAD{
 			TenantID: normalized.scope.TenantID, WorkspaceID: normalized.scope.WorkspaceID,
 			ChannelID: authorized.message.ChannelID, EntityKind: decisionResponseKind,

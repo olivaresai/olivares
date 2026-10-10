@@ -258,10 +258,11 @@ func (m *Module) workflowCommunicationScope(
 			return err
 		}
 		if channel.TenantID != tenant || channel.WorkspaceID != workspaceID ||
-			channel.State != ChannelActive || channel.ContentProtection != ContentProtectionStorage {
+			channel.State != ChannelActive ||
+			!oneOf(channel.ContentProtection, ContentProtectionStorage, ContentProtectionApplicationSealed) {
 			return communicationError(
 				ErrInvalidCommunicationTransition,
-				"workflow WorkItem and Channel do not share one active storage-protected workspace",
+				"workflow WorkItem and Channel do not share one active protected workspace",
 			)
 		}
 		result = workflowCommunicationScope{
@@ -307,10 +308,11 @@ func (m *Module) workflowCommunicationChannelScope(
 			return err
 		}
 		if channel.TenantID != tenant || channel.WorkspaceID != workspaceID ||
-			channel.State != ChannelActive || channel.ContentProtection != ContentProtectionStorage {
+			channel.State != ChannelActive ||
+			!oneOf(channel.ContentProtection, ContentProtectionStorage, ContentProtectionApplicationSealed) {
 			return communicationError(
 				ErrInvalidCommunicationTransition,
-				"workflow WorkItem and Channel do not share one active storage-protected workspace",
+				"workflow WorkItem and Channel do not share one active protected workspace",
 			)
 		}
 		result = workflowCommunicationScope{
@@ -525,7 +527,7 @@ func (m *Module) prepareWorkflowCommunicationPublishTarget(
 	if err := ValidatePublicationAudienceRequest(audienceRequest); err != nil {
 		return workflowCommunicationPreflight{}, err
 	}
-	if !communicationPortBound(m.communicationAudienceAttestor) {
+	if !communicationPortBound(m.CommunicationAudienceAttestor) {
 		return workflowCommunicationPreflight{}, communicationError(
 			ErrCommunicationEvidenceUnknown, "workflow communication audience attestor is unavailable",
 		)

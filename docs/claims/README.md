@@ -9,10 +9,28 @@ SPDX-License-Identifier: AGPL-3.0-only
 public and under which conditions. The public storefront does not author claim state: it
 synchronizes this manifest, validates it, and derives every visible label from it.
 
-Written from the adversarial public-claims truth-matrix audit of 2026-08-09 (report
-digest sha256 `505b6ef5…`, retained internally and pinned by
-`measurement.auditReportSha256`). **Every field in the manifest traces to a line of that report.**
-Nothing in it was widened by eye.
+The current source review is dated **2026-10-07**. Its dated `AUDIT.md` and
+`INDEX.json` record the measured source, consumer identity, blob anchors and
+limits. The previous September 12 manifest is preserved byte for byte under
+`history/`; the August audit below describes the original contract, not the
+current measurement.
+
+The manifest is editorial source review, not automatically inferred product
+behavior. Review each cited control, then pin its blob at the measured source.
+`measurement.refs.hub` is that source H; producer P is the later commit that
+stores the manifest, audit and index. P must resolve in this repository and
+contain H in its ancestry. There is no self-referential producer field.
+
+```sh
+python3 scripts/check-public-claims.py --producer <exact-commit>
+PYTHONDONTWRITEBYTECODE=1 python3 scripts/test-public-claims.py
+```
+
+The read-only check uses committed Git objects, refuses missing producer or
+source commits, and verifies source anchors, component-test paths and the audit
+digest. Exit 0 is verified, 1 is a mismatch, and 2 means source unavailable or
+malformed. Neither nonzero result is a pass. It does not fetch or confer
+capability acceptance or website publication admission.
 
 ## Why this exists
 
@@ -117,16 +135,28 @@ pretend to run them.
 The storefront extends its existing hub-sync boundary — it does not open a second source
 of truth:
 
-1. `scripts/sync-hub.mjs` reads this manifest from an explicitly named product checkout (`HUB_DIR`).
-2. `scripts/claims-contract.mjs` validates it and derives the public view.
-3. The view is written to `src/data/hub/public-claims.json` and recorded in
-   `src/data/hub/provenance.json` with its SHA-256 and both repository SHAs.
-4. `src/data/claim-bindings.ts` maps `route + locale key → claim ID`, validated in **both**
-   directions: no orphan binding, no declared surface without a binding.
-5. `npm run check:claims` fails closed. `0` = LIMPIO, `1` = ROTO (a violation was found), `2` =
-   NO HE PODIDO MIRAR (missing, unreadable, unparseable, unknown schema version, a digest that no
-   longer matches, or a `HUB_DIR` that names a checkout with no manifest). **CI fails on both 1
-   and 2.**
+1. Ordinary `HUB_DIR=<product checkout> npm run sync:hub` refreshes product
+   snapshots and preserves the separately captured claims and their original provenance.
+2. `scripts/sync-claims.mjs --producer <P> --admission <receipt>` reads the
+   committed manifest, dated audit and index selected by an independently
+   reviewed producer admission. It refuses a missing commit or a dirty producer
+   checkout before writing anything.
+3. `scripts/claims-contract.mjs` validates the manifest and derives the public
+   view. The delivery records input blobs and digests in private build inputs
+   and the existing snapshot provenance. An envelope that validates without
+   source objects is not source qualification.
+4. `check:claims` validates the delivered artifact; `check:claims:source`
+   separately requires the actual producer and named measurement stores.
+
+Ordinary hub sync preserves the previously admitted claims; its success does
+not select or re-derive the current measurement. The current source review
+requires a new independent producer admission and an explicit `sync:claims`
+capture before the storefront's source check can qualify that delivery. Passing
+the product source and public-view checks alone does not demonstrate that handoff.
+
+The sections below record earlier contract audits and their measured failures.
+Their original dates and test inventories are historical, not evidence that
+those tests or source qualifications ran for the current measurement.
 
 ### The source comparison is strict by default
 
@@ -150,8 +180,8 @@ check out the private product", and that it was safe because it was *declared* i
 a reviewer could see it. **A declared exemption is still an exemption**, and the re-audit measured
 what it bought: with it set, the two re-deriving tests become SKIPs — `70 tests, 68 pass, 2 skipped,
 exit 0` — and a product claim promoted from `implemented_unaccepted` to **`accepted` with no
-evidence at all** survived CI *and* deploy with the run green. Two `SKIP`s are NO HE PODIDO MIRAR,
-never evidence.
+evidence at all** survived CI *and* deploy with the run green. Two `SKIP`s mean the checks did
+not run and provide no evidence.
 
 So the topology is now:
 
@@ -232,7 +262,7 @@ under a private root anywhere in the manifest or the projection, and refuses the
 field by name.
 
 **Handoff, because this manifest was one carrier out of twenty-seven.** The other 26 are
-pre-existing files under `core/`, `connectors/`, `modules/`, `operator/`, the build scripts, the
+pre-existing files under `core/`, `connectors/`, `modules/`, Business operator source, the build scripts, the
 task file, the hooks and the CI workflows — none touched by this work, all outside the paths this
 contract may edit. The systemic fix belongs in the export curation itself, which is the maintainer's
 surface. To reproduce: run the public export into a scratch directory and grep the result for the
@@ -369,28 +399,13 @@ disagrees — in either direction, so a rule change that nobody wrote down here 
 number typed wrong. The qualitative half (composition-exclusion letters refused, no shipped label
 affected) is a test in the battery, so it runs on every gate rather than on demand.
 
-## Handoff — the product-side gate belongs to the maintainer
+## Product source check
 
-This contract does **not** wire the product gate, because `Taskfile.yml`, `.githooks/pre-push` and
-`.github/workflows/` are the maintainer's surface and a mixed PR would collide. The contract and
-its anchors, so it can be cabled without re-deriving anything:
+`task lint:public-claims` runs the committed-object provenance check above.
+`task lint:public-claims:selftest` runs its refusal and re-derivation probes.
+The website's existing claims validator owns manifest and public-view schema
+validation; the source check adds source-object qualification without copying
+that validator into the product.
 
-- **Task name:** `lint:public-claims`, read-only. It never modifies content.
-- **Exit codes:** `0` LIMPIO · `1` ROTO · `2` NO HE PODIDO MIRAR. **CI must fail on 1 and 2.**
-  Missing roots, unreadable files, parser crashes, absent canonical claim data or unavailable exact
-  refs are `2` — "I could not look" is not "it is clean".
-- **Anchors to cable:**
-  - `Taskfile.yml` — add `lint:public-claims` beside the other `lint:*` tasks.
-  - `.githooks/pre-push` — add it to the fast-lint set, so it runs on feature branches too
-    (a claims defect is cheap to catch and expensive to land).
-  - `.github/workflows/mainline-ci.yml` — add it to the lint job.
-- **What it must check, product-side:** this manifest parses; `schemaVersion` is known; claim IDs
-  are unique; every `acceptance.job` exists in `jobs[]`; every `components[]` entry resolves;
-  no claim is `accepted` while a component is not; no claim is `accepted` with `evidence: null`,
-  `mutation: null` or missing refs; `controlRoutes` entries point at files that exist.
-- **The forbidden-language corpus is a separate, later job.** The audit measured **245 lines in
-  176 files**, of which only **79 are positive absolutes**. It needs a real parser that separates
-  rendered copy from code, comments, test fixtures and non-promotional error strings, plus a
-  manifest of exact hashed exceptions. **Do not run a global replacement** — 166 of those lines are
-  honest negations, French UI error text, citations or frozen snapshots, and deleting them would
-  make the product *less* honest. Only the copy directly bound to these claims was corrected.
+The forbidden-language corpus remains a separate concern. Source qualification
+does not prove every published sentence in the product or website is correct.

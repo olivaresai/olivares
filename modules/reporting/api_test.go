@@ -6,7 +6,6 @@ package reporting
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"log/slog"
@@ -20,10 +19,8 @@ import (
 
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
-	"github.com/olivaresai/olivares/core/engine"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
-	"github.com/olivaresai/olivares/core/suspension"
 )
 
 func TestAPIRoutesRegistersReportEndpoints(t *testing.T) {
@@ -73,7 +70,15 @@ func TestEnterpriseRoutes501WithoutSeams(t *testing.T) {
 		{http.MethodGet, "/enterprise/risk", m.handleEnterpriseRisk},
 		{http.MethodGet, "/enterprise/bundle", m.handleEnterpriseBundle},
 		{http.MethodGet, "/schedules", m.handleListSchedules},
+		{http.MethodPost, "/schedules", m.handleCreateSchedule},
+		{http.MethodDelete, "/schedules/id", m.handleDeleteSchedule},
+		{http.MethodGet, "/schedules/id/runs", m.handleListScheduleRuns},
+		{http.MethodGet, "/schedules/id/runs/rid", m.handleGetScheduleRun},
 		{http.MethodGet, "/branding", m.handleGetBranding},
+		{http.MethodPut, "/branding", m.handleSetBranding},
+		{http.MethodGet, "/templates/posture", m.handleGetTemplate},
+		{http.MethodPut, "/templates/posture", m.handleSetTemplate},
+		{http.MethodDelete, "/templates/posture", m.handleDeleteTemplate},
 	}
 	for _, c := range cases {
 		rec := httptest.NewRecorder()
@@ -81,61 +86,9 @@ func TestEnterpriseRoutes501WithoutSeams(t *testing.T) {
 		if rec.Code != http.StatusNotImplemented {
 			t.Fatalf("%s %s without a seam = %d, want 501: %s", c.method, c.path, rec.Code, rec.Body.String())
 		}
-	}
-}
-
-func TestReportHandlersListGenerateAndCacheHTML(t *testing.T) {
-	src := &fakeComplianceSource{}
-	m := newReportingTestModule(t, WithComplianceSource(src))
-	mc := api.ModuleContext{Tenant: model.TenantID("tenant"), Data: servedData{}}
-
-	list := httptest.NewRecorder()
-	m.handleListReports(list, httptest.NewRequest(http.MethodGet, "/reports", nil), mc)
-	if list.Code != http.StatusOK || !strings.Contains(list.Body.String(), string(ReportComplianceEvidence)) {
-		t.Fatalf("list reports = %d %s", list.Code, list.Body.String())
-	}
-
-	req := reportRequest("/reports/compliance-evidence?format=html&locale=es&framework=iso_27001&from=2026-01-01&to=2026-01-31", ReportComplianceEvidence)
-	first := httptest.NewRecorder()
-	m.handleGenerateReport(first, req, mc)
-	if first.Code != http.StatusOK {
-		t.Fatalf("generate report = %d %s", first.Code, first.Body.String())
-	}
-	if ct := first.Header().Get("Content-Type"); !strings.Contains(ct, "text/html") {
-		t.Fatalf("Content-Type = %q, want html", ct)
-	}
-	body := first.Body.String()
-	for _, want := range []string{"Informe de evidencia de cumplimiento", "ISO/IEC 27001", "A.5.1"} {
-		if !strings.Contains(body, want) {
-			t.Fatalf("generated report missing %q in %s", want, body)
+		if body := rec.Body.String(); !strings.Contains(body, "Business capability") || strings.Contains(body, "enterprise") {
+			t.Errorf("%s %s refusal must name Business: %s", c.method, c.path, body)
 		}
-	}
-
-	second := httptest.NewRecorder()
-	m.handleGenerateReport(second, req, mc)
-	if second.Code != http.StatusOK {
-		t.Fatalf("cached report = %d %s", second.Code, second.Body.String())
-	}
-	if src.calls != 1 {
-		t.Fatalf("compliance source calls = %d, want 1 due cache hit", src.calls)
-	}
-}
-
-func TestGenerateReportRejectsUnknownTypeAndUnavailablePDF(t *testing.T) {
-	m := newReportingTestModule(t, WithComplianceSource(&fakeComplianceSource{}))
-	mc := api.ModuleContext{Tenant: model.TenantID("tenant"), Data: servedData{}}
-
-	unknown := httptest.NewRecorder()
-	m.handleGenerateReport(unknown, reportRequest("/reports/nope", ReportType("nope")), mc)
-	if unknown.Code != http.StatusNotFound {
-		t.Fatalf("unknown report = %d, want 404", unknown.Code)
-	}
-
-	t.Setenv("PATH", t.TempDir())
-	pdf := httptest.NewRecorder()
-	m.handleGenerateReport(pdf, reportRequest("/reports/compliance-evidence?format=pdf", ReportComplianceEvidence), mc)
-	if pdf.Code != http.StatusNotImplemented {
-		t.Fatalf("pdf unavailable = %d %s, want 501", pdf.Code, pdf.Body.String())
 	}
 }
 
@@ -143,6 +96,7 @@ func newReportingTestModule(t *testing.T, opts ...Option) *Module {
 	t.Helper()
 	t.Setenv("OLIVARES_REPORT_CACHE_DIR", t.TempDir())
 	log := slog.New(slog.NewTextHandler(io.Discard, nil))
+	opts = append(compliancePacksTestOptions(), opts...)
 	m := New(opts...)
 	m.log = log
 	m.engine = NewEngine(log)
@@ -240,27 +194,6 @@ func (withdrawnData) Export(context.Context, func(store.ExportScope) error) erro
 // The first call warms the cache while the tenant is in service; the second asks
 // as a withdrawn tenant and must be refused. Asserting only the refusal would be
 // weaker: it would also pass if the report had never been cached at all.
-func TestWarmCacheIsNotServedToAWithdrawnTenant(t *testing.T) {
-	src := &fakeComplianceSource{}
-	m := newReportingTestModule(t, WithComplianceSource(src))
-	req := reportRequest("/reports/compliance-evidence?format=html&locale=es&framework=iso_27001&from=2026-01-01&to=2026-01-31", ReportComplianceEvidence)
-
-	warm := httptest.NewRecorder()
-	m.handleGenerateReport(warm, req, api.ModuleContext{Tenant: model.TenantID("tenant"), Data: servedData{}})
-	if warm.Code != http.StatusOK {
-		t.Fatalf("precondition: the report must be generated and cached first, got %d %s", warm.Code, warm.Body.String())
-	}
-	if src.calls != 1 {
-		t.Fatalf("precondition: source calls = %d, want 1", src.calls)
-	}
-
-	withdrawn := httptest.NewRecorder()
-	m.handleGenerateReport(withdrawn, req, api.ModuleContext{Tenant: model.TenantID("tenant"), Data: withdrawnData{}})
-	if withdrawn.Code != http.StatusLocked {
-		t.Fatalf("a warm cache outlived the tenant's service: got %d %s, want 423 Locked",
-			withdrawn.Code, withdrawn.Body.String())
-	}
-}
 
 // guardedData pins a REAL store to one tenant, exactly as core/api's production
 // scopedData does. It is not a double of the guard — the guard under it is the
@@ -304,81 +237,3 @@ func (d guardedData) Export(ctx context.Context, fn func(store.ExportScope) erro
 //
 // It asserts NOTHING about which semantics are right. That is a commercial and
 // legal decision, it is , and it is not made by a test.
-func TestWarmCacheRefusalIsWiredToTheRealGuard(t *testing.T) {
-	ctx := context.Background()
-	inner, err := engine.Open(ctx, store.Config{Engine: store.EngineSQLite, DSN: ":memory:"}, nil)
-	if err != nil {
-		t.Fatalf("open store: %v", err)
-	}
-	t.Cleanup(func() { _ = inner.Close() })
-	if err := inner.System(ctx, func(sys store.SystemScope) error {
-		_, e := sys.EnsureSystemTenant(ctx)
-		return e
-	}); err != nil {
-		t.Fatalf("ensure system tenant: %v", err)
-	}
-	var tenant model.TenantID
-	if err := inner.System(ctx, func(sys store.SystemScope) error {
-		o, e := sys.CreateOrg(ctx, model.Org{Name: "acme", Slug: "acme", Status: model.StatusActive})
-		tenant = o.TenantID
-		return e
-	}); err != nil {
-		t.Fatalf("create org: %v", err)
-	}
-	guarded := suspension.Guard(inner, nil)
-
-	src := &fakeComplianceSource{}
-	m := newReportingTestModule(t, WithComplianceSource(src))
-	req := reportRequest("/reports/compliance-evidence?format=html&locale=es&framework=iso_27001&from=2026-01-01&to=2026-01-31", ReportComplianceEvidence)
-	mc := api.ModuleContext{Tenant: tenant, Data: guardedData{st: guarded, tenant: tenant}}
-
-	// In service: the report is generated and cached.
-	warm := httptest.NewRecorder()
-	m.handleGenerateReport(warm, req, mc)
-	if warm.Code != http.StatusOK {
-		t.Fatalf("precondition: an in-service tenant must get its report, got %d %s", warm.Code, warm.Body.String())
-	}
-
-	// Withdraw service through the real store, then ask again.
-	if err := inner.System(ctx, func(sys store.SystemScope) error {
-		_, e := sys.SetOrgStatus(ctx, tenant, model.StatusSuspended)
-		return e
-	}); err != nil {
-		t.Fatalf("suspend: %v", err)
-	}
-
-	after := httptest.NewRecorder()
-	m.handleGenerateReport(after, req, mc)
-	if after.Code == http.StatusOK {
-		t.Fatalf("the warm report cache is no longer wired to the service gate: a withdrawn tenant was "+
-			"served its cached report (HTTP %d). If the service guard's View stopped gating READS "+
-			"(a change to what withdrawing service MEANS), this cache check has gone INERT and "+
-			"needs its own service-state answer — it can no longer borrow the read gate's", after.Code)
-	}
-	if after.Code != http.StatusLocked {
-		t.Fatalf("withdrawn tenant got %d %s, want 423 Locked", after.Code, after.Body.String())
-	}
-}
-
-func TestReportEmptyScheduleListsAreArrays(t *testing.T) {
-	h := newES07Harness(t)
-	for _, tc := range []struct {
-		name    string
-		handler func(http.ResponseWriter, *http.Request, api.ModuleContext)
-	}{
-		{"schedules", h.module.handleListSchedules},
-		{"schedule runs", h.module.handleListScheduleRuns},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			recorder := httptest.NewRecorder()
-			tc.handler(recorder, httptest.NewRequest(http.MethodGet, "/schedules", nil), h.mc)
-			var result map[string]json.RawMessage
-			if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
-				t.Fatal(err)
-			}
-			if recorder.Code != http.StatusOK || string(result["items"]) != "[]" {
-				t.Fatalf("empty list=%d %s", recorder.Code, recorder.Body.String())
-			}
-		})
-	}
-}

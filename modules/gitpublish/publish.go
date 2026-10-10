@@ -30,6 +30,11 @@ type PushInput struct {
 	ExpectedOld       string
 	Commit, Tree      string
 	AcknowledgeIntent model.ID
+	// SessionRun, when set, names the session run whose folder holds Commit:
+	// the commit is fetched from it into the server repository first. It is
+	// transport, not request semantics: it is not in the digest or the intent.
+	SessionRun string
+	Proposal   Proposal
 }
 
 // PullRequestInput opens one pull request. The host binds branches, not SHAs.
@@ -40,6 +45,26 @@ type PullRequestInput struct {
 	Commit, Title, Body string
 	Draft               bool
 	AcknowledgeIntent   model.ID
+	Proposal            Proposal
+}
+
+// Proposal is a session's publish request that a person approved. The
+// composition root sets it in process, after it spent that approval, and the
+// caller is the session's launcher; no request body carries it. The target
+// must be in the session's workspace, and the intent records the run and the
+// approval.
+type Proposal struct {
+	SessionRun string
+	Workspace  model.ID
+	Approval   string
+}
+
+func (p Proposal) valid() bool {
+	if p == (Proposal{}) {
+		return true
+	}
+	id, err := model.ParseID(p.SessionRun)
+	return err == nil && id.String() == p.SessionRun && !p.Workspace.IsZero() && opRe.MatchString(p.Approval)
 }
 
 // MergeInput merges one pull request with the reviewed source head as its
@@ -70,46 +95,85 @@ var (
 
 // spec is one effect request, normalized.
 type spec struct {
-	effect   string
-	perm     auth.Permission
-	action   auth.CedarAction
-	aal      int
-	host     gp.Effect
-	target   model.ID
-	op       string
-	ack      model.ID
-	req      Requested
-	body     string
-	draft    bool
-	scope    string
-	branch   string // push: the ref's branch name
-	hostKind string // the credential binding's host: github or gitlab
+	effect       string
+	perm         auth.Permission
+	action       auth.CedarAction
+	aal          int
+	host         gp.Effect
+	target       model.ID
+	op           string
+	ack          model.ID
+	req          Requested
+	body         string
+	draft        bool
+	scope        string
+	branch       string                // push: the ref's branch name
+	capabilities gp.TargetCapabilities // facts of the credential binding's kind
+	session      string                // push: the session run whose folder feeds the server repository
+	proposal     Proposal
+}
+
+// Validate reports the push's own shape refusal, or nil: the checks Push
+// makes before any target or authority is read.
+func (in PushInput) Validate() error {
+	if e := in.check(); e != nil {
+		return e
+	}
+	return nil
+}
+
+func (in PushInput) check() *Error {
+	if !strings.HasPrefix(in.Ref, "refs/heads/") || !validBranch(strings.TrimPrefix(in.Ref, "refs/heads/")) {
+		return refuse("ref_not_allowed", http.StatusUnprocessableEntity)
+	}
+	if !shaRe.MatchString(in.Commit) || !shaRe.MatchString(in.Tree) || (in.ExpectedOld != "" && !shaRe.MatchString(in.ExpectedOld)) {
+		return errInvalid
+	}
+	if in.SessionRun != "" {
+		if id, err := model.ParseID(in.SessionRun); err != nil || id.String() != in.SessionRun {
+			return errInvalid
+		}
+	}
+	return nil
 }
 
 // Push publishes an exact commit to a named ref with a lease.
 func (m *Module) Push(ctx context.Context, c Caller, in PushInput) (Receipt, error) {
-	if !strings.HasPrefix(in.Ref, "refs/heads/") || !validBranch(strings.TrimPrefix(in.Ref, "refs/heads/")) {
-		return Receipt{}, refuse("ref_not_allowed", http.StatusUnprocessableEntity)
-	}
-	if !shaRe.MatchString(in.Commit) || !shaRe.MatchString(in.Tree) || (in.ExpectedOld != "" && !shaRe.MatchString(in.ExpectedOld)) {
-		return Receipt{}, errInvalid
+	if e := in.check(); e != nil {
+		return Receipt{}, e
 	}
 	s := spec{effect: effectPush, perm: permPush, action: actionPush, host: gp.EffectPush, target: in.Target, op: in.OperationID, ack: in.AcknowledgeIntent,
-		req: Requested{Ref: in.Ref, ExpectedOld: in.ExpectedOld, Commit: in.Commit, Tree: in.Tree}, branch: strings.TrimPrefix(in.Ref, "refs/heads/")}
+		req: Requested{Ref: in.Ref, ExpectedOld: in.ExpectedOld, Commit: in.Commit, Tree: in.Tree}, branch: strings.TrimPrefix(in.Ref, "refs/heads/"), session: in.SessionRun, proposal: in.Proposal}
 	s.scope = "push:" + in.Ref
 	return m.publish(ctx, c, s)
 }
 
-// OpenPullRequest opens a pull request from head_ref into base.
-func (m *Module) OpenPullRequest(ctx context.Context, c Caller, in PullRequestInput) (Receipt, error) {
+// Validate reports the pull request's own shape refusal, or nil: the checks
+// OpenPullRequest makes before any target or authority is read.
+func (in PullRequestInput) Validate() error {
+	if e := in.check(); e != nil {
+		return e
+	}
+	return nil
+}
+
+func (in PullRequestInput) check() *Error {
 	if !validBranch(in.HeadRef) {
-		return Receipt{}, refuse("ref_not_allowed", http.StatusUnprocessableEntity)
+		return refuse("ref_not_allowed", http.StatusUnprocessableEntity)
 	}
 	if !validBranch(in.Base) || !shaRe.MatchString(in.Commit) || in.Title == "" || len(in.Title) > 256 || len(in.Body) > 65536 {
-		return Receipt{}, errInvalid
+		return errInvalid
+	}
+	return nil
+}
+
+// OpenPullRequest opens a pull request from head_ref into base.
+func (m *Module) OpenPullRequest(ctx context.Context, c Caller, in PullRequestInput) (Receipt, error) {
+	if e := in.check(); e != nil {
+		return Receipt{}, e
 	}
 	s := spec{effect: effectPullRequest, perm: permPullRequest, action: actionPullRequest, host: gp.EffectPullRequest, target: in.Target, op: in.OperationID,
-		ack: in.AcknowledgeIntent, req: Requested{HeadRef: in.HeadRef, Base: in.Base, Commit: in.Commit, Title: in.Title}, body: in.Body, draft: in.Draft}
+		ack: in.AcknowledgeIntent, req: Requested{HeadRef: in.HeadRef, Base: in.Base, Commit: in.Commit, Title: in.Title}, body: in.Body, draft: in.Draft, proposal: in.Proposal}
 	s.scope = "pull_request:" + in.HeadRef + "\x00" + in.Base
 	return m.publish(ctx, c, s)
 }
@@ -178,7 +242,7 @@ func (r *releaser) release(ctx context.Context) string {
 		return ""
 	}
 	r.done = true
-	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 15*time.Second)
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseTimeout)
 	defer cancel()
 	if err := r.host.Release(rctx, r.tok); err != nil {
 		return hostCode(err)
@@ -191,6 +255,7 @@ type preflight struct {
 	adopt    bool
 	observed Observed
 	number   int
+	head     string // merge: the change's source branch, as the host reports it
 }
 
 func (m *Module) publish(ctx context.Context, c Caller, s spec) (Receipt, error) {
@@ -200,7 +265,7 @@ func (m *Module) publish(ctx context.Context, c Caller, s spec) (Receipt, error)
 	if c.Principal.SessionIdentity != "" || c.Principal.SessionRunRef != "" {
 		return Receipt{}, errRuntimeCredential
 	}
-	if !opRe.MatchString(s.op) || s.target.IsZero() {
+	if !opRe.MatchString(s.op) || s.target.IsZero() || !s.proposal.valid() {
 		return Receipt{}, errInvalid
 	}
 	actx, cancel := m.admissionContext(ctx)
@@ -214,6 +279,11 @@ func (m *Module) publish(ctx context.Context, c Caller, s spec) (Receipt, error)
 		return err
 	}); err != nil {
 		return Receipt{}, storeError(err)
+	}
+	if s.proposal != (Proposal{}) && tg.Workspace != s.proposal.Workspace {
+		// A session publishes only in its own workspace, as its launcher's
+		// denial on another workspace would read.
+		return Receipt{}, errNotFound
 	}
 	// A1: the exact caller, the stored target and its workspace.
 	adm, err := m.opts.Authority.Admit(actx, c.Principal, c.Tenant, Question{Permission: s.perm, Action: s.action, MinimumAAL: s.aal, Target: tg.ID, Workspace: tg.Workspace})
@@ -232,9 +302,8 @@ func (m *Module) publish(ctx context.Context, c Caller, s spec) (Receipt, error)
 	if e != nil {
 		return Receipt{}, e
 	}
-	s.hostKind = cb.Host
-	if s.effect == effectMerge && s.hostKind == "gitlab" && s.req.Method == "rebase" {
-		// The GitLab merge call cannot express a rebase; never merge instead.
+	s.capabilities = gp.TargetCapabilitiesFor(cb.Host)
+	if !s.capabilities.Supports(s.host, s.req.Method) {
 		return Receipt{}, errUnsupported
 	}
 	if e := targetRules(tg, s); e != nil {
@@ -283,6 +352,9 @@ func (m *Module) publish(ctx context.Context, c Caller, s spec) (Receipt, error)
 	}
 
 	// A3: local content, then the narrowed capability and the host preflight.
+	if e := m.feed(actx, c, tg, rb, s); e != nil {
+		return Receipt{}, e
+	}
 	if s.effect != effectMerge {
 		tree, err := m.opts.Git.CommitTree(actx, rb.LocalPath, s.req.Commit)
 		if err != nil || (s.req.Tree != "" && tree != s.req.Tree) {
@@ -311,13 +383,26 @@ func (m *Module) publish(ctx context.Context, c Caller, s spec) (Receipt, error)
 	if e != nil {
 		return Receipt{}, e
 	}
+	if s.effect == effectMerge {
+		var authored bool
+		if err := view(actx, func(sc store.Scope) error {
+			var err error
+			authored, err = sessionAuthored(actx, sc, rb.RepoID, s.req, pre.head, sub)
+			return err
+		}); err != nil {
+			return Receipt{}, storeError(err)
+		}
+		if authored {
+			return Receipt{}, errSeparationOfDuty
+		}
+	}
 
 	in := Intent{
 		Target: tg.ID, Workspace: tg.Workspace, TargetVersion: tg.Version,
 		CredentialBinding: cb.ID, CredentialVersion: cb.Version, RepositoryBinding: rb.ID, RepositoryVersion: rb.Version, RepoID: rb.RepoID,
 		Effect: s.effect, OperationID: s.op, ScopeKey: s.scope, Digest: digest,
 		SubjectActor: sub.Actor, SubjectActorKind: sub.ActorKind, AgentIdentity: sub.AgentIdentity,
-		Attempt: 1, State: StateDispatching, Receipt: ReceiptNone, Requested: s.req, AcknowledgeIntent: s.ack.String(),
+		Attempt: 1, State: StateDispatching, Receipt: ReceiptNone, Requested: s.req, AcknowledgeIntent: s.ack.String(), Proposal: s.proposal,
 	}
 	if !sub.UserID.IsZero() {
 		in.SubjectUser = sub.UserID.String()
@@ -409,14 +494,44 @@ func openOnly(list []gp.Change) []gp.Change {
 	return out
 }
 
-// ciPaths is the CI configuration a publication may not change, per host:
-// .github/workflows on GitHub, .gitlab-ci.yml on GitLab (a project that sets
-// a custom CI configuration path is not covered).
-func ciPaths(hostKind string) []string {
-	if hostKind == "gitlab" {
-		return []string{".gitlab-ci.yml"}
+// feed fetches the pushed commit from the named session run's folder into the
+// server repository, after A1 admitted the caller on the target's workspace.
+// The run is read in that workspace only, and any run there may be named: the
+// authority to publish is the workspace's, as for every other push. A push that
+// names no run is unchanged.
+//
+// ponytail: the fetch runs inside the admission window (AdmissionTimeout, 30s by
+// default), so a first fetch of a very large history answers
+// session_source_unavailable; a repository that hits it is the trigger for a
+// feed step of its own.
+func (m *Module) feed(ctx context.Context, c Caller, tg Target, rb RepositoryBinding, s spec) *Error {
+	if s.session == "" {
+		return nil
 	}
-	return []string{".github/workflows"}
+	if m.opts.Sessions == nil {
+		return refuse("session_source_unavailable", http.StatusServiceUnavailable)
+	}
+	dir, err := m.opts.Sessions.ReadRunWorkspacePath(ctx, c.Tenant, tg.Workspace, s.session)
+	if errors.Is(err, store.ErrNotFound) {
+		return refuse("session_source_refused", http.StatusUnprocessableEntity)
+	}
+	if err != nil {
+		return refuse("session_source_unavailable", http.StatusServiceUnavailable)
+	}
+	switch err := m.opts.Git.Fetch(ctx, rb.LocalPath, dir, s.req.Commit); {
+	case err == nil:
+		return nil
+	case ctx.Err() != nil:
+		return refuse("session_source_unavailable", http.StatusServiceUnavailable)
+	case errors.Is(err, gp.ErrSource):
+		return refuse("session_source_refused", http.StatusUnprocessableEntity)
+	case errors.Is(err, gp.ErrContent):
+		return refuse("content_mismatch", http.StatusUnprocessableEntity)
+	case errors.Is(err, gp.ErrRepositoryConfig):
+		return refuse("repository_config_refused", http.StatusUnprocessableEntity)
+	default:
+		return refuse("session_source_unavailable", http.StatusServiceUnavailable)
+	}
 }
 
 // targetRules applies the target's ref and base rules.
@@ -440,12 +555,35 @@ func targetRules(tg Target, s spec) *Error {
 	return nil
 }
 
+// sessionAuthored reports whether the merging subject launched a session
+// whose approved proposal, on this repository, opened a pull request from the
+// change's head branch or pushed its head commit. That launcher is its author,
+// and a second person merges it: the host rule of approval by someone other
+// than the last pusher. head is the change's branch as the host reports it, so
+// a pull request whose number was never observed still matches.
+func sessionAuthored(ctx context.Context, sc store.Scope, repoID string, req Requested, head string, sub Subject) (bool, error) {
+	recs, err := listAll(ctx, sc, kindIntent, eq("repo_id", repoID))
+	if err != nil {
+		return false, err
+	}
+	for _, rec := range recs {
+		in := intentFrom(rec)
+		if in.Proposal.SessionRun == "" || !sameSubject(in, sub) {
+			continue
+		}
+		if in.Requested.Commit == req.ExpectedHead || (in.Effect == effectPullRequest && in.Requested.HeadRef == head) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
 // preflight is A3's host part: adoption, staleness, head binding and
 // workflow files, all before any repository mutation.
 func (m *Module) preflight(ctx context.Context, host gp.Host, tok gp.Token, tg Target, rb RepositoryBinding, s spec) (preflight, *Error) {
 	refused := func(code string, status int) (preflight, *Error) { return preflight{}, refuse(code, status) }
 	workflows := func(from, to string) *Error {
-		changed, err := m.opts.Git.PathsChanged(ctx, rb.LocalPath, from, to, ciPaths(s.hostKind))
+		changed, err := m.opts.Git.PathsChanged(ctx, rb.LocalPath, from, to, s.capabilities.CIPaths)
 		if err != nil {
 			return refuse("content_mismatch", http.StatusUnprocessableEntity)
 		}
@@ -531,7 +669,7 @@ func (m *Module) preflight(ctx context.Context, host gp.Host, tok gp.Token, tg T
 		}
 		if !ch.Open {
 			if ch.Merged && ch.HeadSHA == s.req.ExpectedHead {
-				return preflight{adopt: true, observed: Observed{Present: true, Merged: true, HeadSHA: ch.HeadSHA, Number: ch.Number, MergeCommitSHA: ch.MergeCommitSHA, Source: "preflight", At: now}}, nil
+				return preflight{adopt: true, head: ch.HeadRef, observed: Observed{Present: true, Merged: true, HeadSHA: ch.HeadSHA, Number: ch.Number, MergeCommitSHA: ch.MergeCommitSHA, Source: "preflight", At: now}}, nil
 			}
 			return refused("not_mergeable", http.StatusConflict)
 		}
@@ -548,6 +686,7 @@ func (m *Module) preflight(ctx context.Context, host gp.Host, tok gp.Token, tg T
 		if e := workflows(sha, s.req.ExpectedHead); e != nil {
 			return preflight{}, e
 		}
+		return preflight{head: ch.HeadRef}, nil
 	}
 	return preflight{}, nil
 }
@@ -749,7 +888,13 @@ func (m *Module) dispatch(ctx context.Context, host gp.Host, tok gp.Token, rb Re
 	switch in.Effect {
 	case effectPush:
 		u, scheme, hdr := host.PushTarget(tok)
-		res, err := m.opts.Git.Push(ctx, gp.PushRequest{RepoPath: rb.LocalPath, URL: u, Scheme: scheme, Header: hdr, Ref: in.Requested.Ref, ExpectedOld: in.Requested.ExpectedOld, Commit: in.Requested.Commit})
+		req := gp.PushRequest{RepoPath: rb.LocalPath, URL: u, Scheme: scheme, Header: hdr, Ref: in.Requested.Ref, ExpectedOld: in.Requested.ExpectedOld, Commit: in.Requested.Commit}
+		if scheme == "ssh" {
+			// The ssh transport authenticates with the binding's own key,
+			// which the minted token carries.
+			req.Key = tok.Value()
+		}
+		res, err := m.opts.Git.Push(ctx, req)
 		return outcome{res: res, local: err}
 	case effectPullRequest:
 		ch, res := host.CreateChange(ctx, tok, gp.ChangeSpec{Head: in.Requested.HeadRef, Base: in.Requested.Base, Title: in.Requested.Title, Body: s.body, Draft: s.draft})
@@ -762,7 +907,7 @@ func (m *Module) dispatch(ctx context.Context, host gp.Host, tok gp.Token, rb Re
 
 // settle reads the host evidence and writes W2. It never re-arms.
 func (m *Module) settle(ctx context.Context, c Caller, host gp.Host, tok gp.Token, in Intent, out outcome) Intent {
-	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), 30*time.Second)
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), settleTimeout)
 	defer cancel()
 	now := m.now()
 	next := in
@@ -770,7 +915,7 @@ func (m *Module) settle(ctx context.Context, c Caller, host gp.Host, tok gp.Toke
 	case out.local != nil:
 		reason := "repository_config_refused"
 		switch {
-		case errors.Is(out.local, gp.ErrDestination):
+		case errors.Is(out.local, gp.ErrDestination), errors.Is(out.local, gp.ErrTransportStart):
 			reason = "destination_refused"
 		case errors.Is(out.local, gp.ErrContent):
 			reason = "content_mismatch"

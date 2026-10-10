@@ -12,6 +12,7 @@
     "close": "Schließen",
     "push": "Pushen",
     "pull_request": "Pull-Request öffnen",
+    "draftPullRequest": "Pull-Request als Entwurf öffnen",
     "merge": "Mergen",
     "reconcile": "Abgleichen",
     "abandon": "Aufgeben"
@@ -70,7 +71,7 @@
   },
   "authority": {
     "requires": "Erfordert {{permission}}",
-    "requiresAal3": "Erfordert {{permission}} und eine Höherstufung auf AAL3"
+    "requiresStepUp": "Erfordert {{permission}} und die zusätzliche Prüfung für administrative Aktionen"
   },
   "publish": {
     "push": {
@@ -89,6 +90,12 @@
       "submit": "Merge anfordern"
     }
   },
+  "session": {
+    "title": "Veröffentlichen",
+    "hint": "Den Commit dieser Sitzung über das Veröffentlichungsziel ihres Arbeitsbereichs pushen. Die Engine holt den Commit aus dem Ordner der Sitzung.",
+    "publish": "Veröffentlichen",
+    "publishTo": "In {{prefix}} veröffentlichen"
+  },
   "fields": {
     "ref": "Branch-Ref",
     "refHint": "Eine vollständige Ref unter dem Push-Präfix, zum Beispiel refs/heads/{{prefix}}change.",
@@ -97,6 +104,9 @@
     "commit": "Commit",
     "tree": "Tree",
     "treeHint": "Die Tree-ID des Commits. Die Engine lehnt den Push ab, wenn das verwaltete Repository einen anderen Tree enthält.",
+    "sessionRun": "Sitzungslauf",
+    "sessionRunHint": "Optional. Der Sitzungslauf, dessen Ordner den Commit enthält. Die Engine holt den Commit zuerst daraus in das verwaltete Repository.",
+    "sessionRunFixedHint": "Die Sitzung, aus der dieser Push kommt. Die Engine holt den Commit zuerst aus ihrem Ordner in das verwaltete Repository.",
     "headRef": "Head-Branch",
     "headRefHint": "Ein Branch unter {{prefix}}.",
     "base": "Basis-Branch",
@@ -108,7 +118,7 @@
     "expectedHeadHint": "Der Merge erfolgt nur, solange der Head des Pull-Requests dieser Commit ist.",
     "method": "Merge-Methode",
     "acknowledgeIntent": "Aufgegebene Absicht anerkennen",
-    "acknowledgeIntentHint": "Optional. Die ID einer aufgegebenen Absicht, die diesen Geltungsbereich hält. Sie anzugeben erfordert Zielverwaltung mit AAL3.",
+    "acknowledgeIntentHint": "Optional. Die ID einer aufgegebenen Absicht, die diesen Geltungsbereich hält. Sie anzugeben erfordert Zielverwaltung.",
     "operationId": "Vorgangs-ID",
     "operationIdHint": "Wird dieselbe Anfrage mit dieser ID erneut gesendet, wird die aufgezeichnete Absicht zurückgegeben. Es erfolgt kein zweites Absenden."
   },
@@ -175,11 +185,15 @@
     "protected_branch_refused": "Der Branch ist auf dem Host geschützt; das Veröffentlichen darauf wird abgelehnt.",
     "push_prefix_overlaps_base": "Mit diesem Push-Präfix könnte ein Push auf einer Merge-Basis landen.",
     "ref_not_allowed": "Der Branch liegt nicht unter dem Push-Präfix dieses Ziels.",
+    "repository_config_refused": "Die Konfiguration des verwalteten Repositorys ist nicht die von der Engine verwaltete. Es wurde nichts gepusht.",
     "repository_outside_binding": "Das Repository liegt außerhalb der Eigentümer, die die Anmeldedaten-Bindung zulässt.",
     "runtime_credential_refused": "Mit den Runtime-Anmeldedaten einer Sitzung kann nicht veröffentlicht werden. Handeln Sie mit Ihren eigenen Anmeldedaten.",
     "scoped_grant_required": "Diese Aktion erfordert eine bereichsbezogene Berechtigung für dieses Ziel.",
+    "separation_of_duty": "Sie haben die Sitzung gestartet, die diese Änderung erstellt hat. Bitten Sie eine andere Person, sie zu prüfen und zu mergen.",
+    "session_source_refused": "Der Sitzungslauf liegt nicht im Arbeitsbereich dieses Ziels, oder sein Ordner ist kein Repository, aus dem die Engine holen kann.",
+    "session_source_unavailable": "Der Ordner der Sitzung konnte nicht rechtzeitig gelesen werden. Es wurde nichts gepusht.",
     "stale_lease": "Der Branch steht nicht mehr auf dem erwarteten aktuellen Commit.",
-    "step_up_required": "Diese Aktion erfordert eine Höherstufung auf AAL3. Schließen Sie die Höherstufung ab, wenn Sie dazu aufgefordert werden.",
+    "step_up_required": "Diese Aktion erfordert die zusätzliche Prüfung für administrative Aktionen, die diese Bereitstellung verlangt. Schließen Sie sie ab, wenn Sie dazu aufgefordert werden.",
     "subject_mismatch": "Diese Vorgangs-ID gehört zu einer Anfrage eines anderen Subjekts.",
     "target_changed": "Das Ziel hat sich geändert, nachdem die Anfrage zugelassen wurde. Es wurde nichts abgesendet.",
     "target_in_use": "Eine Absicht, die gerade abgesendet wird, ungewiss oder aufgegeben ist, hält dieses Ziel noch.",

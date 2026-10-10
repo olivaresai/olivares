@@ -47,6 +47,8 @@ go through your own `java.net.http.HttpClient` via
 as `Map`/`List`/scalars by the dependency-free `Json` codec; raw request bytes keep
 their declared media type.
 
+If you supply your own HttpClient with redirects enabled, its redirect policy applies; the SDK refuses a response from a different origin.
+
 Versioning: `ApiMetadata.API_VERSION` is the API contract major this client was
 generated from; `ClientCore.VERSION` is the SDK's own semantic version, whose
 MAJOR tracks the API major from GA on. Governing policy:

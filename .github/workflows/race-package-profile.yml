@@ -154,8 +154,8 @@ jobs:
             fi
           done
           for c in "${HOME:-}" /var/tmp /dev/shm /run/user/"$(id -u)"; do
-            if [ -z "$c" ]; then echo "  candidato <vacio>: variable sin definir"; continue; fi
-            if [ ! -d "$c" ]; then echo "  candidato $c: NO EXISTE"; continue; fi
+            if [ -z "$c" ]; then echo "  candidate <empty>: variable is unset"; continue; fi
+            if [ ! -d "$c" ]; then echo "  candidate $c: DOES NOT EXIST"; continue; fi
             # ⛔ `|| true` AL FINAL, y es una correccion MEDIDA: F3 de la revision independiente del
             # 2026-09-16. El bloque corre bajo `bash --noprofile --norc -eo pipefail` (asi ejecuta
             # GitHub un `run:` con `defaults.run.shell: bash`), asi que un `df` que falle sobre un
@@ -163,28 +163,28 @@ jobs:
             # `exec-workdir.sh` de abajo, que es lo que convierte esto en degradacion suave.
             # Reproducido con esa misma shell: la tuberia aborta el bucle, no imprime nada y el
             # texto posterior al bucle no se alcanza (rc 1). Una MEDIDA no decide el paso.
-            df -Pk "$c" 2>/dev/null | awk -v c="$c" 'NR==2{printf "  candidato %s: %d MiB libres de %d en %s\n", c, $4/1024, $2/1024, $1}' || true
+            df -Pk "$c" 2>/dev/null | awk -v c="$c" 'NR==2{printf "  candidate %s: %d MiB free of %d on %s\n", c, $4/1024, $2/1024, $1}' || true
             d="$c/olv$$"
-            if ! mkdir -p "$d" 2>/dev/null; then echo "  candidato $c: no puedo crear dentro"; continue; fi
-            if ! printf '#!/bin/sh\nexit 7\n' >"$d/.p" 2>/dev/null; then echo "  candidato $c: no puedo escribir"; rm -rf "$d"; continue; fi
-            chmod +x "$d/.p" 2>/dev/null || { echo "  candidato $c: chmod falla"; rm -rf "$d"; continue; }
+            if ! mkdir -p "$d" 2>/dev/null; then echo "  candidate $c: cannot create a directory inside"; continue; fi
+            if ! printf '#!/bin/sh\nexit 7\n' >"$d/.p" 2>/dev/null; then echo "  candidate $c: cannot write"; rm -rf "$d"; continue; fi
+            chmod +x "$d/.p" 2>/dev/null || { echo "  candidate $c: chmod failed"; rm -rf "$d"; continue; }
             rc=0; "$d/.p" 2>/dev/null || rc=$?
             rm -f "$d/.p"
-            if [ "$rc" -ne 7 ]; then echo "  candidato $c: NO EJECUTA (rc=$rc; 126 = noexec o sin permiso)"; rm -rf "$d"; continue; fi
-            if [ "${#d}" -gt 24 ]; then echo "  candidato $c: ejecuta pero la ruta mide ${#d} (>24)"; rm -rf "$d"; continue; fi
+            if [ "$rc" -ne 7 ]; then echo "  candidate $c: CANNOT EXECUTE (rc=$rc; 126 = noexec or permission denied)"; rm -rf "$d"; continue; fi
+            if [ "${#d}" -gt 24 ]; then echo "  candidate $c: executable path has ${#d} characters (>24)"; rm -rf "$d"; continue; fi
             corto="$d"; break
           done
           if [ -n "$corto" ]; then
             echo "TMPDIR=$corto" >> "$GITHUB_ENV"
-            echo "TMPDIR corto y ejecutable: $corto (${#corto} caracteres)"
+            echo "Short executable TMPDIR: $corto (${#corto} characters)"
           else
             . scripts/lib/exec-workdir.sh
             d="$(olivares_pick_exec_workdir o)" || {
-              echo "::error::ningun directorio permite ejecutar un binario"
+              echo "::error::no directory allows a binary to execute"
               exit 1
             }
             echo "TMPDIR=$d" >> "$GITHUB_ENV"
-            echo "::warning::sin candidato CORTO; uso $d (${#d} caracteres): un socket unix puede pasarse de 108"
+            echo "::warning::no SHORT candidate; using $d (${#d} characters): a Unix socket path may exceed 108 characters"
           fi
       - name: resolve the ephemeral Postgres port into the test DSNs
         id: pg-port
@@ -249,15 +249,23 @@ jobs:
             exit 3
           fi
           python3 scripts/ci-race-package-profile.py summarize --out "$OUT" --require-complete
+      - name: Preserve evidence on the runner
+        if: always() && steps.allocate.outcome == 'success'
+        continue-on-error: true
+        uses: ./.github/actions/ci-evidence
+        with:
+          name: race-package-profile-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.artifact }}
+          path: ${{ env.OUT }}
       - name: upload package profile
         id: upload
         if: always() && steps.allocate.outcome == 'success'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: race-package-profile-${{ github.sha }}-${{ github.run_id }}-${{ github.run_attempt }}-${{ matrix.artifact }}
           path: ${{ env.OUT }}
           if-no-files-found: error
-          retention-days: 7
+          retention-days: 1
       - name: remove this assignment's scratch
         if: ${{ !cancelled() && steps.upload.outcome == 'success' && steps.upload.outputs.artifact-id != '' }}
         run: |

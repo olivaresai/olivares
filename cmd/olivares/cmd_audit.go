@@ -13,12 +13,11 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spf13/cobra"
-
 	"github.com/olivaresai/olivares/cmd/olivares/exitcode"
 	"github.com/olivaresai/olivares/core/audit"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/spf13/cobra"
 )
 
 // newAuditCmd offers offline operations on the evidence ledger: verify the chain
@@ -30,7 +29,8 @@ func newAuditCmd() *cobra.Command {
 		Short: "See recent events; verify, checkpoint and export the audit ledger",
 		Long: "audit is how the evidence ledger is proved, anchored and handed over: verify a\n" +
 			"tenant's hash chain against its signed checkpoints, write a new checkpoint,\n" +
-			"export the ledger to a SIEM format or to a verifiable offline archive, record a\n" +
+			"publish a C2SP Merkle checkpoint and verify it offline, export the ledger to a SIEM\n" +
+			"format or to a verifiable offline archive, record a\n" +
 			"signing-key epoch boundary, and — after a corruption — seal the bad tail and\n" +
 			"open a governed recovery epoch.\n\n" +
 			"Reading the ledger is read-only and never mints keys or writes to the data dir.",
@@ -39,7 +39,7 @@ func newAuditCmd() *cobra.Command {
 			"  olivares audit checkpoint --tenant t_abc123\n" +
 			"  olivares audit export --tenant t_abc123 --format cef",
 	}
-	root.AddCommand(auditListCmd(), auditVerifyCmd(), auditRecoverCmd(), auditKeyTransitionCmd(), auditCheckpointCmd(), auditExportCmd(), auditArchiveCmd(), auditObserveReportCmd())
+	root.AddCommand(auditListCmd(), auditVerifyCmd(), auditRecoverCmd(), auditKeyTransitionCmd(), auditCheckpointCmd(), auditTreeCmd(), auditExportCmd(), auditArchiveCmd(), auditObserveReportCmd())
 	return root
 }
 
@@ -83,24 +83,8 @@ func auditBootRO(cmd *cobra.Command, dataDir, engine, dsn string) (*engine, erro
 	})
 }
 
-// rosterReadBoot is auditBootRO for a command that only reads the SOURCE ROSTER
-// (`sources plan`/`validate`/`test`, and anything later that previews).
-//
-// It adds NoIngest, and the difference is not a detail. auditBootRO's read-only
-// stance stops the boot MANUFACTURING an installation; it does not stop the rest
-// of the boot, and the rest of the boot starts the runtime and reconciles the
-// roster — which PREPARES, OPENS and WIRES every enabled connector. A command
-// whose whole promise is "this changes nothing" cannot dial a dozen third-party
-// systems on the way to printing a diff.
-//
-// What this still does NOT do, stated because the alternative is a comforting
-// half-truth: the store still opens and migrates, leadership still bootstraps,
-// and absent sealer keys are still created. Those writes belong to boot() itself
-// and are the same for every read-only CLI verb in this binary; closing them
-// needs a genuinely minimal read path, not another flag. It is written up as a
-// named, reproduced defect in the session record rather than left for
-// somebody to rediscover.
-func rosterReadBoot(cmd *cobra.Command, dataDir, engine, dsn string) (*engine, error) {
+// sourceProbeBoot prepares only the explicitly requested source probe.
+func sourceProbeBoot(cmd *cobra.Command, dataDir, engine, dsn string) (*engine, error) {
 	return boot(cmd.Context(), bootConfig{
 		DataDir: dataDir, Engine: engine, DSN: dsn, Version: version, Logger: cliBootLogger(slog.LevelError),
 		ReadOnly: true, NoIngest: true,
@@ -517,7 +501,7 @@ func auditExportCmd() *cobra.Command {
 			"ArcSight CEF, IBM QRadar LEEF 2.0, RFC 5424 syslog, a complete OTLP/HTTP export request " +
 			"(otlp; otlp_envelope is an exact alias), the bare OTLP LogRecord projection " +
 			"(otlp_log_record, one LogRecord JSON per line, not postable) or OCSF JSON. Every format " +
-			"carries the chain-integrity fields verbatim, so the copy re-verifies offline.",
+			"carries the chain-integrity fields verbatim, so the copy re-verifies offline. Requires Business.",
 		Example: `  # Export as CEF (ArcSight-compatible) to stdout
   olivares audit export --tenant t_abc123 --format cef
 
@@ -537,34 +521,7 @@ func auditExportCmd() *cobra.Command {
   olivares audit export --tenant t_abc123 --format ocsf --engine postgres --dsn "env:DATABASE_URL"`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			resolvedTenant, err := resolveTenant(tenant)
-			if err != nil {
-				return err
-			}
-			t, err := model.ParseTenantID(resolvedTenant)
-			if err != nil {
-				return fmt.Errorf("--tenant: %w", err)
-			}
-			f := audit.Format(format)
-			if !audit.ValidFormat(f) {
-				return fmt.Errorf("unknown --format %q (%s)", format, audit.FormatList())
-			}
-			eng, err := auditBootRO(cmd, dataDir, engine, dsn)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = eng.Close() }()
-			out := cmd.OutOrStdout()
-			return eng.store.Custody(cmd.Context(), t, func(sc store.CustodyScope) error {
-				return sc.Audit().Walk(cmd.Context(), 1, func(ev model.AuditEvent) error {
-					line, ferr := audit.FormatEvent(ev, f)
-					if ferr != nil {
-						return ferr
-					}
-					_, werr := fmt.Fprintln(out, line)
-					return werr
-				})
-			})
+			return runAuditExport(cmd, dataDir, engine, dsn, tenant, format)
 		},
 	}
 	addStoreFlags(cmd, &dataDir, &engine, &dsn)
@@ -601,10 +558,8 @@ func auditArchiveCmd() *cobra.Command {
 			"  olivares audit archive verify --dir /mnt/worm/audit/t_abc123 --strict",
 	}
 	root.AddCommand(auditArchiveExportCmd(), auditArchiveVerifyCmd())
-	// enterprise-only archive subcommands (the examiner-grade `bundle`). The default
-	// (AGPL) build adds none (enterpriseArchiveCommands returns nil in wire_noenterprise.go),
-	// so the open export/verify subcommands are unchanged — no rug-pull.
-	root.AddCommand(enterpriseArchiveCommands()...)
+	// The private edition adds further archive commands through the existing port.
+	root.AddCommand(thisEdition.archiveCommands.get()...)
 	return root
 }
 
@@ -616,73 +571,11 @@ func auditArchiveExportCmd() *cobra.Command {
 		Use:   "export",
 		Short: "Export a tenant's ledger as verifiable archive segments to a directory",
 		Long: "export writes immutable JSONL audit segments, manifests and advisory verification keys\n" +
-			"to a directory suitable for external WORM storage. Use --from-seq to resume an export.",
+			"to a directory suitable for external WORM storage. Use --from-seq to resume an export. Requires Business.",
 		Example: "  olivares audit archive export --tenant t_abc123 --out /mnt/worm/audit/t_abc123",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			resolvedTenant, err := resolveTenant(tenant)
-			if err != nil {
-				return err
-			}
-			t, err := model.ParseTenantID(resolvedTenant)
-			if err != nil {
-				return fmt.Errorf("--tenant: %w", err)
-			}
-			eng, err := auditBootRO(cmd, dataDir, engine, dsn)
-			if err != nil {
-				return err
-			}
-			defer func() { _ = eng.Close() }()
-			sink, err := audit.NewDirSink(out)
-			if err != nil {
-				return err
-			}
-			// The operator/air-gap export path: read-only against the ledger. The
-			// in-chain audit.archive.segment anchors are the engine archival LOOP's
-			// job, which mutates the chain it drains; an offline export
-			// must not.
-			rep, err := audit.ExportSegments(cmd.Context(), eng.store, t, sink,
-				audit.ExportOptions{FromSeq: fromSeq, SegmentEvents: segmentEvents}, nil)
-			if err != nil {
-				return err
-			}
-			// Advisory keys.json: the engine's own public keys so a casual verify
-			// works out of the box. Verifier pins REPLACE these (an archive written
-			// by a compromised host carries the attacker's keys, docs/SECURITY-HARDENING.md) — so a
-			// write failure is a WARNING, never a failed export (the §8.5 loop's
-			// writeKeysOnce posture): on a re-export into an existing --out the
-			// WORM dir sink refuses keys.json (its created_at differs) while the
-			// re-put segments, being byte-identical, are absorbed.
-			eventKeys := []string{base64.StdEncoding.EncodeToString(eng.signer.PublicKey())}
-			for _, p := range eng.auditPriors {
-				eventKeys = append(eventKeys, base64.StdEncoding.EncodeToString(p))
-			}
-			checkpointKeys := append([]string(nil), eventKeys...) // on-box signs checkpoints too
-			if ck := eng.signer.CheckpointKey(); ck != nil {
-				raw, kerr := ck.PublicKey(cmd.Context())
-				if kerr != nil {
-					return fmt.Errorf("off-box checkpoint public key: %w", kerr)
-				}
-				spec := base64.StdEncoding.EncodeToString(raw)
-				if ck.Algorithm() != audit.AlgEd25519 {
-					spec = string(ck.Algorithm()) + ":" + spec
-				}
-				checkpointKeys = append(checkpointKeys, spec)
-			}
-			keysWritten := true
-			if _, err := audit.WriteArchiveKeys(cmd.Context(), sink, audit.ArchiveKeys{
-				EventPubKeys: eventKeys, CheckpointKeys: checkpointKeys,
-				CreatedAt: model.SystemClock{}.Now().String(),
-			}); err != nil {
-				keysWritten = false
-				fmt.Fprintf(cmd.ErrOrStderr(), "warning: advisory %s not written (the export itself succeeded; verifier pins replace it anyway): %v\n", audit.ArchiveKeysName, err)
-			}
-			// E2: honor -o instead of always printing JSON.
-			return renderReportOut(cmd, map[string]any{
-				"export": rep,
-				"out":    sink.Root(),
-				"keys":   map[string]any{"file": audit.ArchiveKeysName, "advisory_only": true, "written": keysWritten},
-			})
+			return runAuditArchiveExport(cmd, dataDir, engine, dsn, tenant, out, fromSeq, segmentEvents)
 		},
 	}
 	addStoreFlags(cmd, &dataDir, &engine, &dsn)
@@ -702,43 +595,14 @@ func auditArchiveVerifyCmd() *cobra.Command {
 		Use:   "verify",
 		Short: "Verify an exported archive directory offline (no store, no network)",
 		Long: "verify checks an exported archive's segment hashes, chain continuity and signatures without\n" +
-			"opening a store or using the network. Pin trusted keys and use --strict for an automation gate.",
+			"opening a store or using the network. Pin trusted keys and use --strict for an automation gate. Requires Business.",
 		Example: "  olivares audit archive verify --dir /mnt/worm/audit/t_abc123 --strict",
 		Args:    cobra.NoArgs,
 		// As in `audit verify`: the JSON report always prints; suppress the cobra
 		// usage dump on a --strict integrity failure.
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			opts, pinned, err := archiveVerifyOptions(dir, pubAlg, pubSpecs, eventPubB64s)
-			if err != nil {
-				return err
-			}
-			rep, err := audit.VerifyArchiveDir(cmd.Context(), dir, opts)
-			if err != nil {
-				return err
-			}
-			// E2 (sol-max contrast): this sibling of `archive export` was
-			// still marshaling directly, so `-o text` did nothing here.
-			if rerr := renderReportOut(cmd, map[string]any{
-				"archive": rep,
-				"event_keys": map[string]any{
-					"candidates": len(opts.EventKeys), "pinned": pinned,
-					"advisory_only": !pinned && len(opts.EventKeys) > 0,
-					"checked":       len(opts.EventKeys) > 0,
-				},
-				"checkpoint_keys": map[string]any{
-					"pinned": pinned, "advisory_only": !pinned && opts.Checkpoints != nil,
-					"checked": opts.Checkpoints != nil,
-				},
-			}); rerr != nil {
-				return rerr
-			}
-			// Same exit-code contract as `audit verify`: default exits 0 (status is
-			// in the JSON); --strict gates $? for cron/CI.
-			if strict && !rep.OK {
-				return fmt.Errorf("archive integrity check FAILED (--strict): reason=%s segment=%s seq=%d — see the JSON report above", rep.Reason, rep.BreakSegment, rep.BreakAt)
-			}
-			return nil
+			return runAuditArchiveVerify(cmd, dir, pubAlg, pubSpecs, eventPubB64s, strict)
 		},
 	}
 	cmd.Flags().StringVar(&dir, "dir", "", "archive directory to verify (the export's --out)")
@@ -751,76 +615,6 @@ func auditArchiveVerifyCmd() *cobra.Command {
 	cmd.Flags().StringArrayVar(&eventPubB64s, "event-pubkey", nil, "per-event Ed25519 public key pin, repeatable (raw base64), optionally epoch-FENCED as \"<base64>@<last_seq>\" (retired generation, valid only up to that sequence) or \"<base64>@<lo>:<hi>\" (explicit window); a bare key is the current generation. Pins REPLACE the archive's advisory keys.json — pin EVERY generation with its boundary (the audit.key.rotation marker's prior_last_seq) for the attacker-resistant fenced check; without a boundary a retired key is trusted for every sequence")
 	_ = cmd.MarkFlagRequired("dir")
 	return cmd
-}
-
-// archiveVerifyOptions resolves the pinned (or, absent pins, the archive's advisory keys.json)
-// verification keys into ArchiveVerifyOptions. It is the SINGLE source of truth for the
-// security-critical key-pinning logic shared by `audit archive verify` and the enterprise
-// `audit archive bundle` command. pinned reports whether the caller pinned keys (vs the
-// advisory keys.json fallback). Pins REPLACE the archive's keys.json — a keys file that rode
-// with the archive proves nothing against whoever wrote it (docs/SECURITY-HARDENING.md).
-func archiveVerifyOptions(dir, pubAlg string, pubSpecs, eventPubB64s []string) (audit.ArchiveVerifyOptions, bool, error) {
-	var opts audit.ArchiveVerifyOptions
-	pinned := len(pubSpecs) > 0 || len(eventPubB64s) > 0
-	// Event pins without a checkpoint pin would leave every checkpoint line unverifiable
-	// (the verifier fails them, "checkpoint-unverifiable"): an attacker who re-derives a
-	// forged chain could dress events as checkpoints to dodge the per-event check. Refuse up
-	// front with the fix. Pinning NO keys remains the advisory chain-structure-only mode.
-	if len(eventPubB64s) > 0 && len(pubSpecs) == 0 {
-		return opts, pinned, fmt.Errorf("--event-pubkey without --pubkey: checkpoint lines would be unverifiable (a forged archive could dress events as checkpoints); pin BOTH the event key(s) and the checkpoint key(s), or pin none for the structural advisory mode")
-	}
-	eventPinsGiven := len(eventPubB64s) > 0
-	cpSpecs, evSpecs := pubSpecs, eventPubB64s
-	if !pinned {
-		if keys, ok, kerr := audit.LoadArchiveKeys(dir); kerr != nil {
-			return opts, pinned, kerr
-		} else if ok {
-			cpSpecs, evSpecs = keys.CheckpointKeys, keys.EventPubKeys
-			pubAlg = "" // spec form only in keys.json
-		}
-	}
-	// Per-event keys are epoch-FENCED (F-07): --event-pubkey accepts the SAME
-	// grammar as the live `audit verify` path — key · key@last · key@lo:hi — so an
-	// operator can fence a retired generation to the sequence it last legitimately
-	// signed (parseEventPubKeySpec, reused, is the single parser). The archive's
-	// keys.json entries are bare keys, which parse to UNBOUNDED FencedKeys: that
-	// reproduces the pre-fix single-generation behavior and keeps the advisory
-	// verify honestly advisory (the boundaries an archive cannot self-authenticate
-	// must be supplied by the operator's out-of-band pins, not by the keys.json
-	// that rode with the archive — docs/SECURITY-HARDENING.md).
-	for _, s := range evSpecs {
-		fk, perr := parseEventPubKeySpec(s)
-		if perr != nil {
-			return opts, pinned, perr
-		}
-		opts.EventKeys = append(opts.EventKeys, fk)
-	}
-	if len(cpSpecs) > 0 {
-		v := audit.NewCheckpointVerifier()
-		for _, spec := range cpSpecs {
-			alg, raw, perr := parsePubKeySpec(spec, pubAlg, len(cpSpecs))
-			if perr != nil {
-				return opts, pinned, perr
-			}
-			if alg == audit.AlgEd25519 {
-				if aerr := v.AddEd25519Raw(raw); aerr != nil {
-					return opts, pinned, fmt.Errorf("--pubkey: %w", aerr)
-				}
-				// A pinned Ed25519 checkpoint key also covers events — but fold it in as
-				// an UNBOUNDED event key ONLY when the caller PINNED it AND gave no
-				// explicit --event-pubkey pins. Folding it when fenced pins exist would
-				// silently re-widen a retired key the pins just fenced to its epoch (F-07);
-				// in advisory mode the keys.json already lists its event keys separately.
-				if pinned && !eventPinsGiven {
-					opts.EventKeys = append(opts.EventKeys, audit.FencedKey{Key: ed25519.PublicKey(raw)})
-				}
-			} else if aerr := v.AddPublicKey(alg, raw); aerr != nil {
-				return opts, pinned, fmt.Errorf("--pubkey: %w", aerr)
-			}
-		}
-		opts.Checkpoints = v
-	}
-	return opts, pinned, nil
 }
 
 // addStoreFlags adds the shared store-location flags to an audit subcommand.

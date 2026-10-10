@@ -5,6 +5,12 @@ description: >-
   1.8.0、SARIF 2.1.0 ——，规则所依据的严重性映射、各传输方式对应的接收端上限，以及
   两处「投影并非完整信封」的说明。
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
+
+:::note[Business]
+审计导出（`GET /v1/audit/export`、`olivares audit export`）、目录归档和外部归档验证需要 Business。Community 保留签名账本、`olivares audit verify` 和 `olivares dr backup`；导出返回 HTTP 501 或退出码 9。审计转发和携带审计段的 DDIL 传输也需要 Business。
+:::
 
 本页是**出口契约**：什么内容离开控制平面、以何种方言、经由何种传输，以及接收端会如何
 处理它。它写给那些必须一次就让 ArcSight 规则、QRadar DSM、Sentinel DCR 或 code
@@ -48,13 +54,13 @@ scanning 上传跑通的人。
 |---|---|---|
 | 账本导出（`GET /v1/audit/export?format=…`） | `cef\|leef\|syslog\|otlp\|otlp_envelope\|otlp_log_record\|ocsf` | `cef` |
 | 事件推送 sink（push 订阅的 `sink_format`） | `ocsf\|cef\|leef\|syslog\|otlp\|otlp_envelope\|json` | `ocsf` |
-| 通知连接器（`filelog`、`splunkhec`、`s3archive`、`siem`） | `json\|cef\|leef\|syslog\|otlp\|otlp_envelope\|ocsf\|asim` | `json` |
+| 通知连接器（`filelog`、`splunkhec`、`s3archive` (Business: Regulated Operations)、`siem`） | `json\|cef\|leef\|syslog\|otlp\|otlp_envelope\|ocsf\|asim` | `json` |
 | syslog 连接器 | `syslog\|cef\|leef` | `syslog` |
 
 账本导出没有原始 JSON 直通——它的 JSON 形态正是上面的 OTLP 形态。`json` 在不同位置意味着
 两种不同的投递：事件推送 sink 发布捕获到的原始事件信封（结构化直通，不做方言转换），而
 通知连接器只渲染一个最小的通知投影——可展示的字段，而非原始载荷。`asim` 被包括
-`s3archive` 在内的全部四个通知连接器接受。超出所在位置列表的格式会被拒绝：编写或配置时
+`s3archive` (Business: Regulated Operations) 在内的全部四个通知连接器接受。超出所在位置列表的格式会被拒绝：编写或配置时
 打错的令牌会得到一个点名该位置所接受令牌的错误，而损坏的存储值则在编码时被拒绝（只点名
 损坏的拼写，不列出清单）；不会静默回退到 JSON。
 

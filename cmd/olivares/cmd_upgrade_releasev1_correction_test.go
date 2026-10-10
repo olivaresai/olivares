@@ -244,7 +244,7 @@ func requireStubs(t *testing.T) ([]byte, []byte) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go toolchain not available to build stub binaries")
 	}
-	return buildStub(t, "26.7.0"), buildStub(t, "26.8.0")
+	return buildStub(t, "26.700"), buildStub(t, "26.800")
 }
 
 func assertTargetRuns(t *testing.T, target, version string) {
@@ -330,17 +330,17 @@ func TestReleaseV1TupleIsValidatedAndCorroborated(t *testing.T) {
 	t.Run("a declared version that disagrees with the signed manifest is refused before any decision", func(t *testing.T) {
 		old, desired := requireStubs(t)
 		g := newV1Gateway(t, "biz")
-		g.rel = g.release("26.8.0", "", tarGzBinary(t, desired))
-		// A gateway that is INTERNALLY coherent about its lie: every step declares 26.9.0, so the
+		g.rel = g.release("26.800", "", tarGzBinary(t, desired))
+		// A gateway that is INTERNALLY coherent about its lie: every step declares 26.900, so the
 		// only thing that can catch it is the comparison against the version the signature covers.
-		lie := func(h http.Header) { h.Set(hdrReleaseVersion, "26.9.0") }
+		lie := func(h http.Header) { h.Set(hdrReleaseVersion, "26.900") }
 		g.mutateResolution, g.mutateSig, g.mutateArtifact = lie, lie, lie
 		target := writeTarget(t, old)
 		_, err := runV1Upgrade(t, g, target)
-		if err == nil || !strings.Contains(err.Error(), "declared version \"26.9.0\"") || !strings.Contains(err.Error(), "26.8.0") {
+		if err == nil || !strings.Contains(err.Error(), "declared version \"26.900\"") || !strings.Contains(err.Error(), "26.800") {
 			t.Fatalf("want a version corroboration refusal, got %v", err)
 		}
-		assertTargetRuns(t, target, "26.7.0")
+		assertTargetRuns(t, target, "26.700")
 		if g.count("artifact") != 0 {
 			t.Fatalf("an artifact was requested despite the incoherent tuple")
 		}
@@ -358,7 +358,7 @@ func TestReleaseV1TupleIsValidatedAndCorroborated(t *testing.T) {
 		}
 		for name, mutate := range cases {
 			g := newV1Gateway(t, "biz")
-			g.rel = g.release("26.8.0", "", []byte("unused"))
+			g.rel = g.release("26.800", "", []byte("unused"))
 			g.mutateResolution = mutate
 			_, _, err := unitSource(g).fetchManifest(ctx)
 			if err == nil || !strings.Contains(err.Error(), "release-v1 resolution") {
@@ -374,14 +374,14 @@ func TestReleaseV1TupleIsValidatedAndCorroborated(t *testing.T) {
 		// HTTP transports trim header values, so this shape cannot arrive over the wire; the
 		// parser still refuses it, because the exact-claim rule is the parser's, not the wire's.
 		h := http.Header{}
-		h.Set(hdrReleaseVersion, "26.8.0")
+		h.Set(hdrReleaseVersion, "26.800")
 		h.Set(hdrReleaseSet, "biz")
 		h.Set(hdrManifestSHA256, g0Digest)
 		h.Set(hdrSignatureSHA256, g0Digest)
 		if _, err := parseV1Tuple(h); err != nil {
 			t.Fatalf("control: %v", err)
 		}
-		h[hdrReleaseVersion] = []string{" 26.8.0"}
+		h[hdrReleaseVersion] = []string{" 26.800"}
 		if _, err := parseV1Tuple(h); err == nil || !strings.Contains(err.Error(), "whitespace") {
 			t.Fatalf("want a whitespace refusal, got %v", err)
 		}
@@ -389,7 +389,7 @@ func TestReleaseV1TupleIsValidatedAndCorroborated(t *testing.T) {
 
 	t.Run("a signature response naming another tuple is refused", func(t *testing.T) {
 		g := newV1Gateway(t, "biz")
-		g.rel = g.release("26.8.0", "", []byte("unused"))
+		g.rel = g.release("26.800", "", []byte("unused"))
 		g.mutateSig = func(h http.Header) { h.Set(hdrReleaseSet, "ent") }
 		_, _, err := unitSource(g).fetchManifest(ctx)
 		if err == nil || !strings.Contains(err.Error(), "names another tuple") {
@@ -400,30 +400,30 @@ func TestReleaseV1TupleIsValidatedAndCorroborated(t *testing.T) {
 	t.Run("an artifact response naming another version or digest leaves the target intact", func(t *testing.T) {
 		old, desired := requireStubs(t)
 		for name, mutate := range map[string]func(http.Header){
-			"other version":         func(h http.Header) { h.Set(hdrReleaseVersion, "26.9.0") },
+			"other version":         func(h http.Header) { h.Set(hdrReleaseVersion, "26.900") },
 			"other artifact digest": func(h http.Header) { h.Set(hdrArtifactSHA256, strings.Repeat("0", 64)) },
 		} {
 			g := newV1Gateway(t, "biz")
-			g.rel = g.release("26.8.0", "", tarGzBinary(t, desired))
+			g.rel = g.release("26.800", "", tarGzBinary(t, desired))
 			g.mutateArtifact = mutate
 			target := writeTarget(t, old)
 			_, err := runV1Upgrade(t, g, target)
 			if err == nil || !strings.Contains(err.Error(), "release-v1 artifact response") {
 				t.Fatalf("%s: want an artifact corroboration refusal, got %v", name, err)
 			}
-			assertTargetRuns(t, target, "26.7.0")
+			assertTargetRuns(t, target, "26.700")
 		}
 	})
 
 	t.Run("a coherent tuple still installs (control)", func(t *testing.T) {
 		old, desired := requireStubs(t)
 		g := newV1Gateway(t, "biz+reg")
-		g.rel = g.release("26.8.0", "", tarGzBinary(t, desired))
+		g.rel = g.release("26.800", "", tarGzBinary(t, desired))
 		target := writeTarget(t, old)
 		if _, err := runV1Upgrade(t, g, target); err != nil {
 			t.Fatalf("control: %v", err)
 		}
-		assertTargetRuns(t, target, "26.8.0")
+		assertTargetRuns(t, target, "26.800")
 		if g.count("manifest") != 1 || g.count("manifest.sig") != 1 || g.count("artifact") != 1 {
 			t.Fatalf("control made %d/%d/%d requests, want 1/1/1", g.count("manifest"), g.count("manifest.sig"), g.count("artifact"))
 		}
@@ -442,13 +442,13 @@ func TestReleaseV1BoundedReresolution(t *testing.T) {
 	t.Run("one same-version conflict on the signature restarts the whole resolution once, then installs", func(t *testing.T) {
 		old, desired := requireStubs(t)
 		g := newV1Gateway(t, "biz")
-		g.rel = g.release("26.8.0", "", tarGzBinary(t, desired))
+		g.rel = g.release("26.800", "", tarGzBinary(t, desired))
 		g.sigConflicts = 1
 		target := writeTarget(t, old)
 		if _, err := runV1Upgrade(t, g, target); err != nil {
 			t.Fatalf("expected the bounded re-resolution to recover: %v", err)
 		}
-		assertTargetRuns(t, target, "26.8.0")
+		assertTargetRuns(t, target, "26.800")
 		if g.count("manifest") != 2 || g.count("manifest.sig") != 2 || g.count("artifact") != 1 {
 			t.Fatalf("requests manifest=%d sig=%d artifact=%d, want 2/2/1 (a full restart, once)", g.count("manifest"), g.count("manifest.sig"), g.count("artifact"))
 		}
@@ -456,7 +456,7 @@ func TestReleaseV1BoundedReresolution(t *testing.T) {
 
 	t.Run("a repeated conflict terminates without a third resolution", func(t *testing.T) {
 		g := newV1Gateway(t, "biz")
-		g.rel = g.release("26.8.0", "", []byte("unused"))
+		g.rel = g.release("26.800", "", []byte("unused"))
 		g.sigConflicts = 2
 		_, _, err := unitSource(g).fetchManifest(ctx)
 		if err == nil || !strings.Contains(err.Error(), "changed AGAIN") || !strings.Contains(err.Error(), v1ErrMetadataChanged) {
@@ -469,7 +469,7 @@ func TestReleaseV1BoundedReresolution(t *testing.T) {
 
 	t.Run("a version conflict is never retried", func(t *testing.T) {
 		g := newV1Gateway(t, "biz")
-		g.rel = g.release("26.8.0", "", []byte("unused"))
+		g.rel = g.release("26.800", "", []byte("unused"))
 		g.sigConflicts = 1
 		g.conflictCode = v1ErrTokenVersionStale
 		_, _, err := unitSource(g).fetchManifest(ctx)
@@ -484,14 +484,14 @@ func TestReleaseV1BoundedReresolution(t *testing.T) {
 	t.Run("a set conflict on the artifact re-resolves once and installs when the release is unchanged", func(t *testing.T) {
 		old, desired := requireStubs(t)
 		g := newV1Gateway(t, "biz")
-		g.rel = g.release("26.8.0", "", tarGzBinary(t, desired))
+		g.rel = g.release("26.800", "", tarGzBinary(t, desired))
 		g.artConflicts = 1
 		g.conflictCode = v1ErrSetChanged
 		target := writeTarget(t, old)
 		if _, err := runV1Upgrade(t, g, target); err != nil {
 			t.Fatalf("expected recovery through one fresh resolution: %v", err)
 		}
-		assertTargetRuns(t, target, "26.8.0")
+		assertTargetRuns(t, target, "26.800")
 		if g.count("manifest") != 2 || g.count("manifest.sig") != 2 || g.count("artifact") != 2 {
 			t.Fatalf("requests manifest=%d sig=%d artifact=%d, want 2/2/2", g.count("manifest"), g.count("manifest.sig"), g.count("artifact"))
 		}
@@ -501,14 +501,14 @@ func TestReleaseV1BoundedReresolution(t *testing.T) {
 		old, desired := requireStubs(t)
 		g := newV1Gateway(t, "biz")
 		art := tarGzBinary(t, desired)
-		g.rel = g.release("26.8.0", "first notes", art)
+		g.rel = g.release("26.800", "first notes", art)
 		g.artConflicts = 1
-		g.onConflict = func() { g.rel = g.release("26.8.0", "notes changed, same binary", art) }
+		g.onConflict = func() { g.rel = g.release("26.800", "notes changed, same binary", art) }
 		target := writeTarget(t, old)
 		if _, err := runV1Upgrade(t, g, target); err != nil {
 			t.Fatalf("expected recovery: %v", err)
 		}
-		assertTargetRuns(t, target, "26.8.0")
+		assertTargetRuns(t, target, "26.800")
 		if g.count("artifact") != 2 || g.count("manifest") != 2 {
 			t.Fatalf("requests manifest=%d artifact=%d, want 2/2", g.count("manifest"), g.count("artifact"))
 		}
@@ -517,15 +517,15 @@ func TestReleaseV1BoundedReresolution(t *testing.T) {
 	t.Run("a same-version change that alters the artifact descriptor terminates, target intact", func(t *testing.T) {
 		old, desired := requireStubs(t)
 		g := newV1Gateway(t, "biz")
-		g.rel = g.release("26.8.0", "", tarGzBinary(t, desired))
+		g.rel = g.release("26.800", "", tarGzBinary(t, desired))
 		g.artConflicts = 1
-		g.onConflict = func() { g.rel = g.release("26.8.0", "", append(tarGzBinary(t, desired), 0)) }
+		g.onConflict = func() { g.rel = g.release("26.800", "", append(tarGzBinary(t, desired), 0)) }
 		target := writeTarget(t, old)
 		_, err := runV1Upgrade(t, g, target)
 		if err == nil || !strings.Contains(err.Error(), "artifact descriptor") {
 			t.Fatalf("want a descriptor-changed refusal, got %v", err)
 		}
-		assertTargetRuns(t, target, "26.7.0")
+		assertTargetRuns(t, target, "26.700")
 		if g.count("artifact") != 1 {
 			t.Fatalf("a potentially different artifact was requested (%d artifact requests)", g.count("artifact"))
 		}
@@ -534,15 +534,15 @@ func TestReleaseV1BoundedReresolution(t *testing.T) {
 	t.Run("a fresh resolution that publishes another version is a new authorization, not a retry", func(t *testing.T) {
 		old, desired := requireStubs(t)
 		g := newV1Gateway(t, "biz")
-		g.rel = g.release("26.8.0", "", tarGzBinary(t, desired))
+		g.rel = g.release("26.800", "", tarGzBinary(t, desired))
 		g.artConflicts = 1
-		g.onConflict = func() { g.rel = g.release("26.9.0", "", tarGzBinary(t, desired)) }
+		g.onConflict = func() { g.rel = g.release("26.900", "", tarGzBinary(t, desired)) }
 		target := writeTarget(t, old)
 		_, err := runV1Upgrade(t, g, target)
 		if err == nil || !strings.Contains(err.Error(), "new authorization") {
 			t.Fatalf("want a new-version refusal, got %v", err)
 		}
-		assertTargetRuns(t, target, "26.7.0")
+		assertTargetRuns(t, target, "26.700")
 		if g.count("artifact") != 1 {
 			t.Fatalf("bytes of another version were requested (%d artifact requests)", g.count("artifact"))
 		}
@@ -550,7 +550,7 @@ func TestReleaseV1BoundedReresolution(t *testing.T) {
 
 	t.Run("a conflict re-resolved once on the signature is not re-resolved again on the artifact", func(t *testing.T) {
 		g := newV1Gateway(t, "biz")
-		g.rel = g.release("26.8.0", "", []byte("unused"))
+		g.rel = g.release("26.800", "", []byte("unused"))
 		g.sigConflicts = 1
 		g.artConflicts = 1
 		src := unitSource(g)
@@ -659,23 +659,23 @@ func TestUpgradeTimerPreservesTheSelectedDownloadProtocol(t *testing.T) {
 
 // Independent discriminator: a real newly signed minimum-version policy on the same bytes.
 func TestRootSameVersionReresolutionPreservesMinimumVersionPolicy(t *testing.T) {
-	old := buildStub(t, "26.7.0")
-	desired := buildStub(t, "26.8.0")
+	old := buildStub(t, "26.700")
+	desired := buildStub(t, "26.800")
 	g := newV1Gateway(t, "biz")
-	g.rel = g.release("26.8.0", "initial", desired)
+	g.rel = g.release("26.800", "initial", desired)
 	g.artConflicts = 1
 	g.onConflict = func() {
 		g.replaceSignedManifest(func(m *release.Manifest) {
 			m.Notes = "new minimum"
-			m.MinVersion = "26.7.9"
+			m.MinVersion = "26.709"
 		})
 	}
 	target := writeTarget(t, old)
 	_, err := runV1Upgrade(t, g, target)
 	if err == nil {
-		t.Errorf("new signed min_version26.7.9 must refuse installed26.7.0; actual command installed %q", runsVersion(t, target))
+		t.Errorf("new signed min_version26.709 must refuse installed26.700; actual command installed %q", runsVersion(t, target))
 	}
-	if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+	if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 		t.Errorf("target changed despite fresh signed minimum-version policy: %q", got)
 	}
 	if err != nil && !strings.Contains(err.Error(), "minimum current version") {
@@ -691,10 +691,10 @@ func TestReleaseV1ReresolutionAppliesFreshSignedPolicy(t *testing.T) {
 
 	t.Run("the artifact-step retry surfaces the newly verified manifest instead of installing against the old plan", func(t *testing.T) {
 		g := newV1Gateway(t, "biz")
-		g.rel = g.release("26.8.0", "initial", []byte("owned-artifact"))
+		g.rel = g.release("26.800", "initial", []byte("owned-artifact"))
 		g.artConflicts = 1
 		g.onConflict = func() {
-			g.replaceSignedManifest(func(m *release.Manifest) { m.MinVersion = "26.7.9" })
+			g.replaceSignedManifest(func(m *release.Manifest) { m.MinVersion = "26.709" })
 		}
 		pub, err := base64.StdEncoding.DecodeString(g.pubB64)
 		if err != nil {
@@ -718,8 +718,8 @@ func TestReleaseV1ReresolutionAppliesFreshSignedPolicy(t *testing.T) {
 		if !ok {
 			t.Fatal("the retry stored no verified manifest")
 		}
-		if fresh.MinVersion != "26.7.9" {
-			t.Fatalf("stored manifest min_version = %q, want 26.7.9", fresh.MinVersion)
+		if fresh.MinVersion != "26.709" {
+			t.Fatalf("stored manifest min_version = %q, want 26.709", fresh.MinVersion)
 		}
 		if g.count("artifact") != 1 {
 			t.Fatalf("bytes were fetched before the caller re-applied policy (artifact=%d)", g.count("artifact"))
@@ -730,7 +730,7 @@ func TestReleaseV1ReresolutionAppliesFreshSignedPolicy(t *testing.T) {
 		old, desired := requireStubs(t)
 		g := newV1Gateway(t, "biz")
 		art := tarGzBinary(t, desired)
-		g.rel = g.release("26.8.0", "in cohort", art)
+		g.rel = g.release("26.800", "in cohort", art)
 		g.artConflicts = 1
 		g.onConflict = func() {
 			g.replaceSignedManifest(func(m *release.Manifest) {
@@ -747,7 +747,7 @@ func TestReleaseV1ReresolutionAppliesFreshSignedPolicy(t *testing.T) {
 		if !strings.Contains(out, "not in the staged-rollout cohort") {
 			t.Fatalf("want the productive --if-eligible skip, got:\n%s", out)
 		}
-		assertTargetRuns(t, target, "26.7.0")
+		assertTargetRuns(t, target, "26.700")
 		if g.count("artifact") != 1 {
 			t.Fatalf("ineligible policy still fetched artifact bytes after re-planning (artifact=%d)", g.count("artifact"))
 		}
@@ -757,7 +757,7 @@ func TestReleaseV1ReresolutionAppliesFreshSignedPolicy(t *testing.T) {
 		old, desired := requireStubs(t)
 		g := newV1Gateway(t, "biz")
 		art := tarGzBinary(t, desired)
-		g.rel = g.release("26.8.0", "in cohort", art)
+		g.rel = g.release("26.800", "in cohort", art)
 		g.artConflicts = 1
 		g.onConflict = func() {
 			g.replaceSignedManifest(func(m *release.Manifest) {
@@ -769,14 +769,14 @@ func TestReleaseV1ReresolutionAppliesFreshSignedPolicy(t *testing.T) {
 		if _, err := runV1Upgrade(t, g, target); err != nil {
 			t.Fatalf("without --if-eligible, paused rollout is not a new refusal: %v", err)
 		}
-		assertTargetRuns(t, target, "26.8.0")
+		assertTargetRuns(t, target, "26.800")
 	})
 
 	t.Run("a newly signed CRL and notes are observed from the fresh manifest, then the unchanged artifact installs", func(t *testing.T) {
 		old, desired := requireStubs(t)
 		g := newV1Gateway(t, "biz")
 		art := tarGzBinary(t, desired)
-		g.rel = g.release("26.8.0", "initial notes", art)
+		g.rel = g.release("26.800", "initial notes", art)
 		g.artConflicts = 1
 		g.onConflict = func() {
 			g.replaceSignedManifest(func(m *release.Manifest) {
@@ -789,7 +789,7 @@ func TestReleaseV1ReresolutionAppliesFreshSignedPolicy(t *testing.T) {
 		if err != nil {
 			t.Fatalf("CRL/notes on the same bytes must still install: %v", err)
 		}
-		assertTargetRuns(t, target, "26.8.0")
+		assertTargetRuns(t, target, "26.800")
 		if !strings.Contains(out, "crl republish") {
 			t.Fatalf("the result must report the freshly signed notes, got:\n%s", out)
 		}
@@ -812,13 +812,13 @@ func TestReleaseV1ReresolutionAppliesFreshSignedPolicy(t *testing.T) {
 	t.Run("unchanged-policy conflict recovery still installs", func(t *testing.T) {
 		old, desired := requireStubs(t)
 		g := newV1Gateway(t, "biz")
-		g.rel = g.release("26.8.0", "stable policy", tarGzBinary(t, desired))
+		g.rel = g.release("26.800", "stable policy", tarGzBinary(t, desired))
 		g.artConflicts = 1
 		target := writeTarget(t, old)
 		if _, err := runV1Upgrade(t, g, target); err != nil {
 			t.Fatalf("expected recovery through one fresh resolution: %v", err)
 		}
-		assertTargetRuns(t, target, "26.8.0")
+		assertTargetRuns(t, target, "26.800")
 		if g.count("manifest") != 2 || g.count("manifest.sig") != 2 || g.count("artifact") != 2 {
 			t.Fatalf("requests manifest=%d sig=%d artifact=%d, want 2/2/2", g.count("manifest"), g.count("manifest.sig"), g.count("artifact"))
 		}
@@ -833,13 +833,13 @@ func TestReleaseV1ReresolutionRequiresCompleteArtifactDescriptor(t *testing.T) {
 	t.Run("unchanged complete descriptor installs", func(t *testing.T) {
 		old, desired := requireStubs(t)
 		g := newV1Gateway(t, "biz")
-		g.rel = g.release("26.8.0", "unchanged", tarGzBinary(t, desired))
+		g.rel = g.release("26.800", "unchanged", tarGzBinary(t, desired))
 		g.artConflicts = 1
 		target := writeTarget(t, old)
 		if _, err := runV1Upgrade(t, g, target); err != nil {
 			t.Fatalf("unchanged descriptor control must recover: %v", err)
 		}
-		assertTargetRuns(t, target, "26.8.0")
+		assertTargetRuns(t, target, "26.800")
 		if g.count("manifest") != 2 || g.count("manifest.sig") != 2 || g.count("artifact") != 2 {
 			t.Fatalf("control requests manifest=%d signature=%d artifact=%d, want 2/2/2", g.count("manifest"), g.count("manifest.sig"), g.count("artifact"))
 		}
@@ -849,7 +849,7 @@ func TestReleaseV1ReresolutionRequiresCompleteArtifactDescriptor(t *testing.T) {
 		old, desired := requireStubs(t)
 		g := newV1Gateway(t, "biz")
 		art := tarGzBinary(t, desired)
-		g.rel = g.release("26.8.0", "lowercase digest", art)
+		g.rel = g.release("26.800", "lowercase digest", art)
 		g.artConflicts = 1
 		g.onConflict = func() {
 			g.replaceSignedManifest(func(m *release.Manifest) {
@@ -860,7 +860,7 @@ func TestReleaseV1ReresolutionRequiresCompleteArtifactDescriptor(t *testing.T) {
 		if _, err := runV1Upgrade(t, g, target); err != nil {
 			t.Fatalf("SHA256 case is normalized by ParseManifest, want install, got %v", err)
 		}
-		assertTargetRuns(t, target, "26.8.0")
+		assertTargetRuns(t, target, "26.800")
 	})
 
 	for _, tc := range []struct {
@@ -876,7 +876,7 @@ func TestReleaseV1ReresolutionRequiresCompleteArtifactDescriptor(t *testing.T) {
 		{
 			name: "signed cosign reference changed",
 			mutate: func(a *release.Artifact) {
-				a.Cosign = "olivares_26.8.0_linux_amd64.tar.gz.sigstore.json"
+				a.Cosign = "olivares_26.800_linux_amd64.tar.gz.sigstore.json"
 			},
 		},
 		{
@@ -890,7 +890,7 @@ func TestReleaseV1ReresolutionRequiresCompleteArtifactDescriptor(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			old, desired := requireStubs(t)
 			g := newV1Gateway(t, "biz")
-			g.rel = g.release("26.8.0", "initial", tarGzBinary(t, desired))
+			g.rel = g.release("26.800", "initial", tarGzBinary(t, desired))
 			g.artConflicts = 1
 			g.onConflict = func() {
 				g.replaceSignedManifest(func(m *release.Manifest) { tc.mutate(&m.Artifacts[0]) })
@@ -900,7 +900,7 @@ func TestReleaseV1ReresolutionRequiresCompleteArtifactDescriptor(t *testing.T) {
 			if err == nil || !strings.Contains(err.Error(), "artifact descriptor") {
 				t.Fatalf("want a complete-descriptor refusal after %s, got %v", tc.name, err)
 			}
-			assertTargetRuns(t, target, "26.7.0")
+			assertTargetRuns(t, target, "26.700")
 			if g.count("artifact") != 1 {
 				t.Fatalf("%s fetched a second artifact (%d)", tc.name, g.count("artifact"))
 			}

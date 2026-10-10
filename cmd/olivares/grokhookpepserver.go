@@ -9,11 +9,11 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
 	"github.com/olivaresai/olivares/connectors/grok/session"
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/sdk/event"
@@ -51,18 +51,16 @@ const grokSignalSource = "grok-hook-pep"
 // agente.
 const grokPublishTimeout = 2 * time.Second
 
-// grokHookPEPConfig es el aprovisionamiento del operador. Deliberadamente NO declara política
-// propia: el veredicto sale del PDP ya cableado bajo la capacidad de Grok, de modo que la política
-// vive en un sitio y no en dos que puedan discrepar.
+// grokHookPEPConfig supplies operator provisioning without declaring its own policy:
+// the verdict comes from the composed PDP under Grok's capability, keeping policy in
+// one place rather than two that could disagree.
 //
-// ⛔ Y NO LLEVA `require_firm`, a diferencia del hermano, porque medido el 2026-08-19 esa perilla
-//
-//	allí NO HACE NADA: `codexhookpep.go:141` la guarda, `codexhookpepserver.go:101` la cablea y
-//	`:116` la escribe en el log, pero ninguna condición la lee — su `Decide` deniega siempre que
-//	el tier no es firme, sin consultarla. (En Claude sí manda: `claudehookpep.go:575`.) Copiarla
-//	aquí habría añadido una segunda perilla que miente: un operador que pusiera `false` creería
-//	tener una elección que no tiene. Este punto exige identidad firme SIEMPRE y lo dice en vez de
-//	ofrecer un interruptor inerte.
+// It has no `require_firm` switch. On 2026-08-19, Codex's then-existing switch was
+// measured to be unused: it was stored, wired and logged, but `Decide` denied every
+// non-firm identity without reading it. Claude's `RequireFirm` does govern behavior
+// in `modules/sessions/hookpep/claudehookpep.go`. Copying the unused Codex switch here
+// would falsely imply that setting it to false disables the requirement. This PEP
+// always requires a firm identity and offers no inert switch.
 type grokHookPEPConfig struct {
 	Listen string `json:"listen"`
 	// Tenant es el ÚNICO tenant que gobierna este punto. Un socket, un tenant: así la pista
@@ -74,7 +72,7 @@ type grokHookPEPConfig struct {
 // una configuración vacía (no se monta nada); una ruta dada tiene que ser legible y válida o el
 // arranque falla cerrado.
 func loadGrokHookPEPConfig() (grokHookPEPConfig, error) {
-	path := os.Getenv("OLIVARES_GROK_HOOK_PEP_CONFIG")
+	path := osGetenv("OLIVARES_GROK_HOOK_PEP_CONFIG")
 	if path == "" {
 		return grokHookPEPConfig{}, nil
 	}
@@ -114,9 +112,9 @@ func buildGrokHookPEPServer(eng *engine, sess *sessions.Module, log *slog.Logger
 		clock:    time.Now,
 		log:      log,
 	}
-	// El PEP recibe `os.Getenv` como segunda vía del evento: un cuerpo truncado no parsea, y sin
-	// el evento la negativa se emitiría en la forma más estricta por no saber cuál es.
-	pep := session.NewPEP(dec, grokObserver(eng, tid, log), time.Now, os.Getenv)
+	// envconfig.Get supplies the event when a truncated body cannot be parsed. Without
+	// that fallback, an unknown event would receive the strictest denial response.
+	pep := session.NewPEP(dec, grokObserver(eng, tid, log), time.Now, envconfig.Get)
 	pep.OnEmitPanic(func(hookEvent string, cause any) {
 		log.Error("grok-hook: the observation for a governed decision was LOST to a panic; the verdict stood but the evidence has a gap",
 			"event", hookEvent, "cause", fmt.Sprint(cause))

@@ -1,12 +1,5 @@
 {
   "search": "Rechercher…",
-  "hubs": {
-    "operate": "Exploiter",
-    "automate": "Automatiser",
-    "connect": "Connecter",
-    "govern": "Gouverner",
-    "prove": "Prouver"
-  },
   "nouns": {
     "sessions": "Sessions",
     "agents": "Agents",
@@ -30,13 +23,15 @@
     "empty": "Aucune vue ne correspond à « {{query}} »"
   },
   "items": {
+    "estate": "Environnement",
     "home": "Accueil",
     "onboarding": "Assistant de configuration",
     "inventory": "Inventaire",
-    "sessions": "Observer les sessions",
+    "sessions": "Sessions",
     "accessMap": "Carte des accès",
     "health": "Santé et SLA",
     "capabilities": "MCP et compétences",
+    "skills": "Catalogue de skills",
     "protocolBindings": "Liaisons de protocole",
     "communications": "Communications",
     "communicationsInbox": "Boîte de réception des communications",
@@ -55,20 +50,17 @@
     "catalog": "Catalogue",
     "killswitch": "Coupe-circuit",
     "work": "Travail",
-    "agentops": "Opérer les sessions",
+    "agentops": "Sessions",
     "agentArtifacts": "Agent Artifacts",
     "models": "Modèles",
     "modelOps": "Opérations sur les modèles",
-    "finops": "Coût et FinOps",
     "adoption": "Adoption de Claude Code",
     "evals": "Évaluations",
     "security": "Sécurité",
     "recordings": "Enregistrements",
     "compliance": "Conformité",
-    "orchestration": "Orchestration",
     "voice": "Voix",
     "sandbox": "Bac à sable",
-    "redteam": "Équipe rouge",
     "dashboards": "Tableaux de bord",
     "observability": "Observabilité",
     "platforms": "Plateformes",
@@ -81,23 +73,20 @@
     "workspace-templates": "Modèles de workspace",
     "eventing": "Webhooks et événements",
     "session-viewer": "Visionneuse de sessions",
-    "team-costs": "Coûts par équipe",
     "backups": "Sauvegardes",
     "logs": "Journaux",
     "residency": "Résidence des données",
     "tenants": "Locataires",
     "inferenceProxy": "Proxy d'inférence",
     "alerting": "Alertes",
-    "reporting": "Rapports",
-    "postureExport": "Export de posture",
-    "automations": "Automatisations",
     "agentcoreExport": "Export AgentCore",
     "providers": "Fournisseurs",
     "providerProfiles": "Profils de fournisseur",
     "providerBindings": "Liaisons de sources",
     "providerAccounts": "Comptes de fournisseur",
-    "agent-tools": "Outils des agents",
-    "mcpServers": "Serveurs MCP"
+    "agent-tools": "Outils d’IA",
+    "mcpServers": "Serveurs MCP",
+    "storedBudgets": "Budgets"
   },
   "workspace": {
     "open": "Ouvrir {{workspace}}",
@@ -110,13 +99,15 @@
     "truncated": "La liste est incomplète — il existe plus de workspaces que ceux chargés"
   },
   "descriptions": {
+    "estate": "Consultez les ressources configurées et leurs relations, y compris les dépendances des éléments de travail.",
     "home": "Vue d’ensemble du parc et état de santé en un coup d’œil",
     "onboarding": "Configuration du déploiement étape par étape",
     "inventory": "Découvrez et cataloguez les agents, serveurs MCP et modèles que les connecteurs ont observés.",
-    "sessions": "Observer les sessions en direct et découvertes avec leurs chronologies ; partage son écran avec « Opérer les sessions »",
+    "sessions": "Lancer des sessions et suivre ce que fait chacune, y compris celles qu’Olivares trouve",
     "accessMap": "Ce que chaque agent lit et écrit (R/RW)",
     "health": "Disponibilité et SLA des agents et des MCP",
     "capabilities": "Gouvernez les serveurs MCP, les compétences et les outils",
+    "skills": "Parcourir les paquets de skills et les attribuer aux départements, groupes d’agents et agents",
     "protocolBindings": "Composer et réconcilier les liaisons A2A et MCP gouvernées",
     "communications": "Canaux, avis directs et boîte de réception personnelle de l’espace de travail sélectionné",
     "communicationsInbox": "Votre boîte exacte : les remises qui vous sont adressées, lues à neuf et accusées explicitement",
@@ -133,7 +124,7 @@
     "catalog": "Agents et capacités curés et approuvés",
     "killswitch": "Arrêt d’urgence, reprise en double contrôle et confinement par gardien",
     "work": "Travail partagé : unités, dépendances, acceptation et décisions",
-    "agentops": "Créer, rejoindre et gouverner des sessions Claude Code — sans SSH ; partage son écran avec « Observer les sessions »",
+    "agentops": "Lancer des sessions et suivre ce que fait chacune, y compris celles qu’Olivares trouve",
     "agentArtifacts": "Skills, extensions MCP et fichiers d'instructions — registre, posture et BOM de chaîne d'approvisionnement",
     "models": "Modèles, routage et clés de fournisseur",
     "modelOps": "Modèles détenus, admission et déploiements",
@@ -143,7 +134,6 @@
     "security": "Garde-fous, investigation et anomalies",
     "recordings": "Enregistrement et relecture des sessions privilégiées",
     "compliance": "Référentiels, contrôles et preuves",
-    "orchestration": "Coordination d’agent à agent et planifications",
     "voice": "Sessions vocales et en temps réel",
     "sandbox": "Test isolé des agents et relecture",
     "redteam": "Test adverse de vos agents",
@@ -162,7 +152,6 @@
     "alerting": "Acheminez les constats vers des destinations et inspectez les livraisons",
     "reporting": "Générez et téléchargez des rapports de gouvernance",
     "postureExport": "Exportez la posture réelle pour une tour de contrôle",
-    "automations": "Les trois rails d'automatisation et leur catalogue de déclencheurs",
     "providers": "Enregistrez les clés d'API et les points de terminaison avec lesquels les sessions démarrent ; testez-les, changez-les et révoquez-les",
     "providerProfiles": "Enregistrer et administrer les répertoires de fournisseur sous lesquels les sessions se lancent, et lire leur configuration à la demande",
     "providerBindings": "Dédier des sources configurées, à la révision appliquée par ce nœud, à des profils de fournisseur",
@@ -176,7 +165,8 @@
     "logs": "Le flux de journaux du moteur en direct, avec filtres par niveau et module, recherche et pause",
     "sourceDiff": "Comparez une révision de base et une révision head d'un dépôt Git connecté, fichier par fichier",
     "agent-tools": "Détectez, installez et mettez à jour les outils des agents sur cet hôte et suivez chaque installation ; réservé aux administrateurs du déploiement",
-    "mcpServers": "Connectez des serveurs MCP distants à cette organisation, testez-les et choisissez les outils que les sessions peuvent utiliser"
+    "mcpServers": "Connectez des serveurs MCP distants à cette organisation, testez-les et choisissez les outils que les sessions peuvent utiliser",
+    "storedBudgets": "Consommation par rapport à chaque limite enregistrée. La capacité réservée compte dans la limite."
   },
   "commandActions": {
     "eventing": {
@@ -196,8 +186,8 @@
     }
   },
   "aliases": {
-    "sessions": "Sessions",
-    "agentops": "Claude Code · agentops",
+    "sessions": "Sessions · Observer les sessions · Opérer les sessions · Claude Code · agentops",
+    "agentops": "Opérer les sessions · Claude Code · agentops",
     "console": "Console de contrôle · Administration du tenant"
   },
   "areas": {
@@ -224,16 +214,14 @@
       "question": "Quelles connaissances, capacités et quels artefacts est-ce que je connecte ou réutilise ?",
       "sections": {
         "capabilities": "Capacités",
-        "knowledge": "Connaissances",
-        "artifacts": "Artefacts"
+        "knowledge": "Connaissances et artefacts"
       }
     },
     "work-communications": {
       "label": "Travail & communications",
       "question": "Quel travail est-ce que je coordonne, et comment communique-t-il ?",
       "sections": {
-        "work": "Travail",
-        "communications": "Communications"
+        "work": "Travail et communications"
       }
     },
     "automation": {
@@ -249,9 +237,8 @@
       "question": "Qui a accès, selon quelles règles, et comment est-ce que je protège l’environnement ?",
       "sections": {
         "access": "Identité et accès",
-        "policy": "Politiques",
-        "defense": "Protection et réponse",
-        "boundaries": "Frontières de gouvernance"
+        "policy": "Politiques et frontières de gouvernance",
+        "defense": "Protection et réponse"
       }
     },
     "deployment": {
@@ -267,8 +254,7 @@
       "sections": {
         "operations": "État et activité",
         "cost-adoption": "Coûts et adoption",
-        "audit-recordings": "Audit et enregistrements",
-        "evaluation-evidence": "Évaluation et preuves"
+        "audit-recordings": "Audit, évaluation et preuves"
       }
     },
     "system": {
@@ -292,7 +278,8 @@
     "empty": "Aucune entrée de ce domaine ne vous est accessible",
     "emptyHint": "Les entrées apparaissent ici lorsque votre rôle dans l’organisation actuelle donne accès à un module de ce domaine.",
     "backHome": "Aller à l’accueil",
-    "area": "Domaine"
+    "area": "Domaine",
+    "off": "Désactivé"
   },
   "personal": {
     "favorites": "Favoris",
@@ -343,42 +330,23 @@
     "send": "Envoyer",
     "turnPlaceholder": "Envoyer une phrase…",
     "turnAria": "Tour de session",
-    "attachedRunning": "En cours",
     "attachedWaiting": "En attente de vous",
-    "attachedSettled": "Terminée",
     "advanced": "Avancé",
     "advancedHint": "Envoyer une ligne NDJSON sur stdin. Le champ de phrase est la valeur par défaut.",
     "wirePlaceholder": "Envoyer une ligne NDJSON sur stdin…",
     "wireAria": "Ligne d’entrée de session",
     "turnFailed": "La session n’a pas pu accepter ce tour.",
-    "sendBackgroundHint": "Ctrl+Entrée envoie et laisse le brouillon prêt pour la phrase suivante."
+    "sendBackgroundHint": "Ctrl+Entrée envoie et laisse le brouillon prêt pour la phrase suivante.",
+    "messagePlaceholder": "Message à {{title}}…"
   },
   "shell": {
     "journeysLabel": "Parcours",
     "journeys": {
       "home": "Accueil",
       "sessions": "Sessions",
-      "workspaceDashboard": "Espaces de travail",
-      "providers": "Outils d’IA",
-      "deploy": "Déploiement",
-      "work": "Travail",
       "approvals": "Approbations",
-      "inventory": "Inventaire",
-      "finops": "Coût et FinOps",
-      "accessMap": "Carte des accès",
-      "mcpServers": "Serveurs MCP",
-      "knowledge": "Connaissances",
-      "identity": "Identité et NHI",
-      "claudePolicy": "Gouvernance de Claude Code",
-      "audit": "Registre d’audit",
-      "killswitch": "Coupe-circuit",
+      "storedBudgets": "Budgets",
       "agent-tools": "Outils d’IA"
-    },
-    "groups": {
-      "work": "Travail",
-      "manage": "Gérer",
-      "integrate": "Intégrer",
-      "secure": "Sécuriser"
     },
     "phoneBarLabel": "Principal",
     "newSession": "Nouvelle session",
@@ -398,9 +366,7 @@
         "earlier": "Plus tôt"
       },
       "empty": {
-        "needsYou": "Rien ne vous attend.",
-        "working": "Rien n’est en cours.",
-        "earlier": "Aucune session antérieure."
+        "needsYou": "Rien ne vous attend."
       },
       "state": {
         "need": "Vous attend",

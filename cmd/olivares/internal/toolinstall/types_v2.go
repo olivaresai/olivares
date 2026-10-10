@@ -223,7 +223,7 @@ func (s *SelectionV2) validate() error {
 	if s == nil {
 		return refuse(KindInvalidRequest, "v2 selection is missing")
 	}
-	if err := closedToken(s.Driver, "driver", DriverCodex, DriverGrok, DriverOpenCode, DriverOllama); err != nil {
+	if err := closedToken(s.Driver, "driver", DriverCodex, DriverGrok, DriverOpenCode, DriverOllama, DriverGemini); err != nil {
 		return err
 	}
 	if err := closedToken(s.Channel, "channel", ChannelExact, ChannelLatest, ChannelStable); err != nil {
@@ -313,7 +313,7 @@ func (p PlatformV2) validate(driver string) error {
 		if p.Libc != "glibc" && p.Libc != "musl" {
 			return refuse(KindInvalidRequest, "opencode platform libc must be glibc or musl, got %q", p.Libc)
 		}
-	case DriverGrok, DriverOllama:
+	case DriverGrok, DriverOllama, DriverGemini:
 		if p.Libc != "" {
 			return refuse(KindInvalidRequest, "grok platform libc must be empty, got %q", p.Libc)
 		}
@@ -634,7 +634,7 @@ func (c *CosignProfileV2) validate() error {
 }
 
 func (s SelectionV2) validateClosedCombination() error {
-	if s.Driver == DriverOpenCode || s.Driver == DriverOllama ||
+	if s.Driver == DriverOpenCode || s.Driver == DriverOllama || s.Driver == DriverGemini ||
 		(s.Driver == DriverCodex && s.PackagePolicyID == PackagePolicyReleaseArchiveV1) {
 		return s.validateReleaseArchiveSelection()
 	}
@@ -722,8 +722,9 @@ func (s SelectionV2) bindSubjectsToLayoutAndProofs() error {
 
 // presentFetchURLs lists each URL the plan fetches once. A release archive
 // selected by its exact version has one document for both roles: the release's
-// own tag metadata is its pointer and its checksums (release_archive_policy.go
-// accepts exactly that), fetched once, so it is listed once. Any other repeated
+// checksum document (its tag metadata or its own checksum file) is its pointer and
+// its checksums (release_archive_policy.go accepts exactly that), fetched once, so
+// it is listed once. Any other repeated
 // URL is still refused by originsCover.
 func (s SelectionV2) presentFetchURLs() []string {
 	var out []string

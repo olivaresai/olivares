@@ -552,9 +552,8 @@ export function RequestPanel({ endpoint }: RequestPanelProps) {
                 />
                 {!isAuto && (
                   <Button
-                    size="icon"
+                    size="icon-sm"
                     variant="ghost"
-                    className="h-7 w-7"
                     onClick={() => removeHeader(key)}
                     aria-label={t('request.removeHeaderAria', {
                       header: key,
@@ -581,9 +580,8 @@ export function RequestPanel({ endpoint }: RequestPanelProps) {
               onKeyDown={(e) => e.key === 'Enter' && addCustomHeader()}
             />
             <Button
-              size="icon"
+              size="icon-sm"
               variant="ghost"
-              className="h-7 w-7"
               onClick={addCustomHeader}
               aria-label={t('request.addHeaderAria')}
             >

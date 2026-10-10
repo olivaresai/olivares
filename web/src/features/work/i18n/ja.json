@@ -95,7 +95,12 @@
         "hint": "この行為の根拠となる決定。名前がなければエンジンは受け付けない。",
         "placeholder": "決定の ID"
       }
-    }
+    },
+    "details": "詳細",
+    "readyTitle": "「{{title}}」を準備完了にする",
+    "actionTitle": "{{action}}: {{title}}",
+    "waitsFor": "「{{title}}」は「{{dependency}}」の完了を待っています。",
+    "dependencyWaiting": "この項目は依存項目の完了を待っています。"
   },
   "checks": {
     "evidence": "証跡 {{ref}}"
@@ -103,6 +108,19 @@
   "common": {
     "refresh": "更新",
     "loadMore": "さらに読み込む"
+  },
+  "create": {
+    "action": "新しい項目",
+    "title": "新しい作業項目",
+    "description": "自分が担当する作業項目を記録します。書き込みの前に計画が表示されます。作成後は引き継ぎとして提案できます。",
+    "workspace": "ワークスペース",
+    "workspaceNone": "ここで使えるワークスペースがありません。ワークスペース切り替えで選ぶか、管理者に依頼してください。",
+    "workspaceError": "ワークスペースの一覧を読み込めませんでした。閉じてからもう一度お試しください。",
+    "itemTitle": "タイトル",
+    "brief": "概要",
+    "briefHint": "何を、なぜ行うか。",
+    "doneWhen": "完了条件",
+    "doneWhenHint": "項目が完了したことを示す受け入れ基準。"
   },
   "decisions": {
     "title": "決定",

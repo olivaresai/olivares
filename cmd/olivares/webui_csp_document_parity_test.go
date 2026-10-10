@@ -6,6 +6,7 @@ package main
 
 import (
 	"io/fs"
+	"os"
 	"regexp"
 	"strings"
 	"testing"
@@ -40,6 +41,9 @@ import (
 func TestCSPCoversEveryFetchTheShippedDocumentLinks(t *testing.T) {
 	raw, err := fs.ReadFile(webui.FS(), "index.html")
 	if err != nil {
+		if os.Getenv("OLIVARES_REQUIRE_WEB_BUNDLE") == "1" {
+			t.Fatalf("required console bundle is missing; build or download it before running the CSP check: %v", err)
+		}
 		t.Skipf("NO HE PODIDO MIRAR: the embedded bundle has no index.html (%v); "+
 			"this test has no subject in a build without the console", err)
 	}

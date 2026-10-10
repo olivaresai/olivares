@@ -46,13 +46,13 @@ def entero(nombre, defecto):
         n = int(v)
     except ValueError:
         print(
-            "check-disk-residue: NO PUDE MIRAR - %s=%r no es un entero." % (nombre, v),
+            "check-disk-residue: COULD NOT CHECK - %s=%r is not an integer." % (nombre, v),
             file=sys.stderr,
         )
         sys.exit(2)
     if n < 1:
         print(
-            "check-disk-residue: NO PUDE MIRAR - %s=%d tiene que ser >= 1." % (nombre, n),
+            "check-disk-residue: COULD NOT CHECK - %s=%d must be >= 1." % (nombre, n),
             file=sys.stderr,
         )
         sys.exit(2)
@@ -184,7 +184,7 @@ def productor(f):
     """(donde, None) si se puede atribuir; (None, motivo) si no. AMBIGUA si hay varias."""
     pref = re.split(r"[._-]XXXXXX", f)[0]
     if f.startswith("tmpXXXXXX") or len(pref) < 4:
-        return None, "sin plantilla: `mktemp` a secas no deja rastro en el nombre"
+        return None, "no template: plain `mktemp` leaves no identifying name"
     # ⛔ NO se comprueba `isdir(RAIZ/.git)`: EN UN WORKTREE `.git` ES UN FICHERO, no un
     # directorio, y esa guarda dejaba sin atribuir todo lo que corriera desde un worktree -que es
     # donde corre cada carril-. Se pregunta a git, que es quien lo sabe.
@@ -194,18 +194,18 @@ def productor(f):
             capture_output=True, text=True, timeout=30,
         )
     except Exception as e:
-        return None, "NO PUDE MIRAR: no pude preguntar a git (%s)" % type(e).__name__
+        return None, "COULD NOT CHECK: could not query git (%s)" % type(e).__name__
     if chk.returncode != 0:
-        return None, "NO PUDE MIRAR: %s no es un arbol de trabajo git" % RAIZ
+        return None, "COULD NOT CHECK: %s is not a Git worktree" % RAIZ
     try:
         r = subprocess.run(
             ["git", "-C", RAIZ, "grep", "-n", "--", "mktemp.*" + re.escape(pref)],
             capture_output=True, text=True, timeout=60,
         )
     except Exception as e:
-        return None, "NO PUDE MIRAR: git grep no pudo ejecutarse (%s)" % type(e).__name__
+        return None, "COULD NOT CHECK: git grep could not run (%s)" % type(e).__name__
     if r.returncode not in (0, 1):
-        return None, "NO PUDE MIRAR: git grep salio %d" % r.returncode
+        return None, "COULD NOT CHECK: git grep exited %d" % r.returncode
     hits = []
     for ln in r.stdout.splitlines():
         partes = ln.split(":", 2)
@@ -213,9 +213,9 @@ def productor(f):
             if re.search(re.escape(pref) + r"[._-]?X{4,}", partes[2]):   # la plantilla ENTERA
                 hits.append(partes[0] + ":" + partes[1])
     if not hits:
-        return None, "ningun guion del arbol crea esa plantilla: el productor esta FUERA del arbol"
+        return None, "no script in the tree creates this template: its producer is outside the tree"
     if len(hits) > 1:
-        return "AMBIGUA: " + ", ".join(hits[:4]), None
+        return "AMBIGUOUS: " + ", ".join(hits[:4]), None
     return hits[0], None
 
 
@@ -226,11 +226,11 @@ for (raiz, f), (n, sz, viv) in fam.items():
         sospechas.append((n, mib, f, raiz, viv))
 sospechas.sort(key=lambda x: (-x[0], -x[1]))
 
-cabecera = "check-disk-residue: %d familia(s) . umbrales: %d x %d MiB, o %d por recuento" % (
+cabecera = "check-disk-residue: %d family/families . thresholds: %d x %d MiB, or %d by count" % (
     len(fam), N_MIN, MIB_MIN, N_SOLO,
 )
 if cob.ilegibles or cob.desaparecidas:
-    cabecera += " . COBERTURA PARCIAL: %d ilegible(s), %d desaparecida(s) entre censo y decision" % (
+    cabecera += " . PARTIAL COVERAGE: %d unreadable, %d disappeared between scan and decision" % (
         cob.ilegibles, cob.desaparecidas,
     )
 print(cabecera)
@@ -238,24 +238,24 @@ print(cabecera)
 if not sospechas:
     if cob.ilegibles:
         print(
-            "check-disk-residue: NO PUDE MIRAR - %d entrada(s) ilegible(s): un CLEAN sobre una "
-            "lectura parcial seria un verde a ciegas." % cob.ilegibles,
+            "check-disk-residue: COULD NOT CHECK - %d unreadable entry/entries: a CLEAN result from a "
+            "partial read would be an unverified pass." % cob.ilegibles,
             file=sys.stderr,
         )
         sys.exit(2)
-    print("check-disk-residue: CLEAN - ninguna familia pasa los umbrales sobre lo que SE PUDO leer.")
+    print("check-disk-residue: CLEAN - no family exceeds the thresholds among the entries that could be read.")
     sys.exit(0)
 
-print("check-disk-residue: SOSPECHA - familias que merecen que su duenio las mire:", file=sys.stderr)
+print("check-disk-residue: SUSPECTED LEAK - families their owners should inspect:", file=sys.stderr)
 for n, mib, f, raiz, viv in sospechas:
     loc, motivo = productor(f)
-    quien = loc if loc else "SIN ATRIBUIR (%s)" % motivo
-    extra = " [%d entrada(s) viva(s) excluida(s)]" % viv if viv else ""
-    print("    %5d x %-34s %8.1f MiB  en %s%s   %s" % (n, f, mib, raiz, extra, quien), file=sys.stderr)
+    quien = loc if loc else "UNATTRIBUTED (%s)" % motivo
+    extra = " [%d live entry/entries excluded]" % viv if viv else ""
+    print("    %5d x %-34s %8.1f MiB  in %s%s   %s" % (n, f, mib, raiz, extra, quien), file=sys.stderr)
 print(
-    "  SOSPECHA, no fuga demostrada: esto es cardinalidad y tamano en UNA ventana. No mide\n"
-    "  reapariciones en el tiempo ni conoce al creador; un productor que cierra entre fases\n"
-    "  parece muerto mientras trabaja. Lo categorico exige registro de actividad o antiguedad.",
+    "  SUSPECTED, not a proven leak: this measures count and size in one snapshot. It does not track\n"
+    "  recurrence over time or identify the creator; a producer that closes handles between phases\n"
+    "  appears inactive while working. A definitive result requires activity records or entry ages.",
     file=sys.stderr,
 )
 sys.exit(1)

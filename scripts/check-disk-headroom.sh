@@ -87,21 +87,21 @@ if [ "${1:-}" = "--selftest" ]; then
 	# /tmp manda a arreglar la maquina equivocada.
 	out="$(OLIVARES_TMP_FLOOR_MB=99999999 OLIVARES_DISK_FLOOR_GB=0 OLIVARES_DISK_WARN_GB=0 bash "$0" 2>&1)" && rc=0 || rc=$?
 	if [ "$rc" = "1" ] && grep -q 'BROKEN' <<<"$out" && grep -q "${TMPDIR:-/tmp}" <<<"$out"; then
-		echo "  ok    un suelo imposible en el tmpfs es BROKEN, y nombra ESE punto de montaje"
+		echo "  ok    an impossible tmpfs minimum is BROKEN and names that mount point"
 	else
-		echo "  FAIL  el suelo del tmpfs no se puso rojo o senalo al disco equivocado (rc=$rc)"; fail=1
+		echo "  FAIL  the tmpfs minimum did not fail or named the wrong disk (rc=$rc)"; fail=1
 	fi
 	out="$(OLIVARES_TMP_TARGET=/nonexistent-tmp-for-selftest OLIVARES_DISK_FLOOR_GB=0 OLIVARES_DISK_WARN_GB=0 bash "$0" 2>&1)" && rc=0 || rc=$?
 	if [ "$rc" = "2" ] && grep -q 'UNVERIFIED' <<<"$out"; then
-		echo "  ok    un tmpfs ilegible es UNVERIFIED, no CLEAN"
+		echo "  ok    an unreadable tmpfs is UNVERIFIED, not CLEAN"
 	else
-		echo "  FAIL  un tmpfs ilegible no respondio UNVERIFIED (rc=$rc)"; fail=1
+		echo "  FAIL  an unreadable tmpfs did not return UNVERIFIED (rc=$rc)"; fail=1
 	fi
 	out="$(OLIVARES_TMP_FLOOR_MB=0 OLIVARES_TMP_WARN_MB=0 OLIVARES_DISK_FLOOR_GB=0 OLIVARES_DISK_WARN_GB=0 bash "$0" 2>&1)" && rc=0 || rc=$?
 	if [ "$rc" = "0" ] && grep -q '^check-disk-headroom: CLEAN' <<<"$out"; then
-		echo "  ok    un suelo de cero en el tmpfs sigue verde (la direccion que no dispara)"
+		echo "  ok    a zero tmpfs minimum passes (negative control)"
 	else
-		echo "  FAIL  el suelo de cero del tmpfs no se quedo verde (rc=$rc)"; fail=1
+		echo "  FAIL  a zero tmpfs minimum did not pass (rc=$rc)"; fail=1
 	fi
 	# Las dos del censo acotado. La PRIMERA prueba que el corte se anuncia; la SEGUNDA, que
 	# el corte no toca el veredicto — que es lo unico que hace aceptable acotar un diagnostico.
@@ -133,11 +133,11 @@ if [ "${1:-}" = "--selftest" ]; then
 	if [ -z "$FIXROOT" ]; then
 		# NO se cuenta como aprobado ni como fallo: se dice. Un caso que no puede montarse y se
 		# escribe igual que un `ok` es un pase silencioso, y este guion ya pago ese precio una vez.
-		echo "  skip  el corte del censo: NO MEDIBLE, no hay ninguna raiz donde ejecutar el shim"
+		echo "  skip  scan timeout: UNMEASURABLE, no directory can execute the shim"
 		skipped=$((skipped + 1))
 		FIX=""
 	else
-	FIX="$(mktemp -d "$FIXROOT/hogsfix.XXXXXX")" || { echo "  FAIL  no pude crear el fixture"; fail=1; }
+	FIX="$(mktemp -d "$FIXROOT/hogsfix.XXXXXX")" || { echo "  FAIL  could not create the fixture"; fail=1; }
 	trap 'rm -rf "${FIX:-}"' EXIT
 	mkdir -p "$FIX/gocache-selftest" "$FIX/otro" "$FIX/bin"
 	# ⛔ NO SE FUERZA EL CORTE CON TAMANO: eso es una CARRERA. Mi primera version llenaba el
@@ -154,15 +154,15 @@ if [ "${1:-}" = "--selftest" ]; then
 	# seis minutos— dejaba la prueba en VERDE, porque el barato seguia cortandose y la
 	# satisfacia el solo. Un mutante lo enseño. Con dos guardas capaces de disparar la misma
 	# asercion, mides la que salta primero y no la que te importa.
-	if grep -q 'gocache: censo CORTADO' <<<"$out" && grep -q 'tmp entries: censo CORTADO' <<<"$out"; then
-		echo "  ok    LOS DOS censos anuncian su corte, cada uno con su nombre"
+	if grep -q 'gocache: scan stopped after' <<<"$out" && grep -q 'tmp entries: scan stopped after' <<<"$out"; then
+		echo "  ok    both scans report their timeout, each by name"
 	else
-		echo "  FAIL  algun censo se corto en silencio, o no se corto (rc=$rc)"; fail=1
+		echo "  FAIL  a scan stopped silently, or did not stop (rc=$rc)"; fail=1
 	fi
 	if [ "$rc" = "1" ] && grep -q '^check-disk-headroom: BROKEN' <<<"$out"; then
-		echo "  ok    y el veredicto sigue siendo BROKEN: el censo es diagnostico, no decision"
+		echo "  ok    the verdict stays BROKEN: the scan supplies diagnostics, not the verdict"
 	else
-		echo "  FAIL  cortar el censo cambio el veredicto (rc=$rc)"; fail=1
+		echo "  FAIL  stopping the scan changed the verdict (rc=$rc)"; fail=1
 	fi
 	fi
 	# LA COTA NO SE PUEDE DESACTIVAR CON UN VALOR HOSTIL. `timeout 0` en GNU coreutils significa
@@ -171,11 +171,11 @@ if [ "${1:-}" = "--selftest" ]; then
 	# los tres porque fallan de TRES maneras distintas: sin cota, con datos falsos, y sin censo.
 	for hostil in 0 --version abc; do
 		out="$(OLIVARES_HOGS_TIMEOUT_S="$hostil" OLIVARES_DISK_FLOOR_GB=999999 bash "$0" /workspace 2>&1)" && rc=0 || rc=$?
-		if grep -q 'no es un numero de segundos' <<<"$out" &&
+		if grep -q 'must be a number of seconds' <<<"$out" &&
 			! grep -qi 'GNU coreutils\|Free Software Foundation' <<<"$out"; then
-			echo "  ok    OLIVARES_HOGS_TIMEOUT_S=$hostil: se rechaza y se DICE, sin fabricar salida"
+			echo "  ok    OLIVARES_HOGS_TIMEOUT_S=$hostil: rejected and reported without fabricated output"
 		else
-			echo "  FAIL  OLIVARES_HOGS_TIMEOUT_S=$hostil paso sin aviso o colo texto ajeno (rc=$rc)"; fail=1
+			echo "  FAIL  OLIVARES_HOGS_TIMEOUT_S=$hostil passed without a warning or injected unrelated text (rc=$rc)"; fail=1
 		fi
 	done
 
@@ -183,23 +183,23 @@ if [ "${1:-}" = "--selftest" ]; then
 	# disparar el aviso. Sin este caso, un validador que rechazara SIEMPRE los pasaria todos y
 	# dejaria la cota fija en 5s ignorando lo que pida quien la configura.
 	out="$(OLIVARES_HOGS_TIMEOUT_S=0.001 OLIVARES_DISK_FLOOR_GB=999999 bash "$0" /workspace 2>&1)" && rc=0 || rc=$?
-	if grep -q 'no es un numero de segundos' <<<"$out"; then
-		echo "  FAIL  un valor VALIDO (0.001) disparo el aviso: el validador rechaza de mas"; fail=1
+	if grep -q 'must be a number of seconds' <<<"$out"; then
+		echo "  FAIL  a valid value (0.001) triggered the warning: validation is too strict"; fail=1
 	else
-		echo "  ok    un valor valido NO dispara el aviso (control inerte)"
+		echo "  ok    a valid value does not trigger the warning (negative control)"
 	fi
 
 	# LA RUTA DE PRODUCCION NO SE REDIRIGE EN SILENCIO. La raiz es configurable para que el caso
 	# del corte pueda construir su entrada; el precio es que alguien podria cambiar el DEFECTO y
 	# dejar el censo mirando otro sitio sin que nada chille. Se fija aqui, por forma.
 	if grep -q 'HOGS_ROOT="${OLIVARES_HOGS_ROOT:-/workspace/.olivares-tmptest}"' "$0"; then
-		echo "  ok    la raiz por defecto sigue siendo la de produccion"
+		echo "  ok    the default root remains the production root"
 	else
-		echo "  FAIL  el censo por defecto ya no apunta a /workspace/.olivares-tmptest" >&2; fail=1
+		echo "  FAIL  the default scan no longer targets /workspace/.olivares-tmptest" >&2; fail=1
 	fi
 	# El recuento nombra los saltados. Un caso que no pudo montarse y desaparece del total se lee
 	# como uno que paso, y esa es la forma mas barata de una bateria que miente hacia arriba.
-	[ "$fail" = "0" ] && { echo "check-disk-headroom selftest: $((13 - skipped)) passed, 0 failed, $skipped no medible(s) en esta caja"; exit 0; }
+	[ "$fail" = "0" ] && { echo "check-disk-headroom selftest: $((13 - skipped)) passed, 0 failed, $skipped unmeasurable on this host"; exit 0; }
 	echo "check-disk-headroom selftest: FAILED"; exit 1
 fi
 
@@ -264,8 +264,8 @@ hogs_presupuesto() {
 		printf '%s' "$crudo"
 		return 0
 	fi
-	printf 'check-disk-headroom: OLIVARES_HOGS_TIMEOUT_S=%s no es un numero de segundos entre 0 y 600;\n' "$crudo" >&2
-	printf '  uso 5s. Un valor invalido NO desactiva la cota en silencio.\n' >&2
+	printf 'check-disk-headroom: OLIVARES_HOGS_TIMEOUT_S=%s must be a number of seconds between 0 and 600;\n' "$crudo" >&2
+	printf '  using 5s. An invalid value does not silently disable the limit.\n' >&2
 	printf '5'
 }
 
@@ -298,13 +298,13 @@ hogs() {
 	# funcion antes de llegar al `if`. La forma de abajo es la que ya usa el --selftest.
 	crudo="$(timeout "$t" du -shx "$HOGS_ROOT"/gocache-* 2>/dev/null)" && rc=0 || rc=$?
 	if [ "$rc" -eq 124 ]; then
-		echo "gocache: censo CORTADO a los ${t}s — no medido"
+		echo "gocache: scan stopped after ${t}s — not measured"
 	elif [ "$rc" -ne 0 ]; then
 		# NI limpio NI cortado: NO PUDE MIRAR. Antes caia en el `elif [ -n "$crudo" ]` de abajo
 		# y, con la salida vacia, no se imprimia NADA — indistinguible de «no hay consumidores».
 		# `timeout` sale 125 si su primer argumento no le vale, 126/127 si no puede ejecutar `du`,
 		# y 128+N si murio por señal.
-		echo "gocache: censo NO EJECUTADO (rc=${rc}) — no medido, y esto NO es «no hay nada»"
+		echo "gocache: scan did not run (rc=${rc}) — not measured; this does not mean there are no entries"
 	elif [ -n "$crudo" ]; then
 		# awk como consumidor final, no `head`: cerrar la tuberia pronto manda SIGPIPE a
 		# `sort` y bajo `pipefail` la funcion saldria 141 habiendo funcionado. Es la misma
@@ -314,11 +314,11 @@ hogs() {
 	crudo="$(timeout "$t" du -shx "$HOGS_ROOT"/*/ 2>/dev/null)" && rc=0 || rc=$?
 	if [ "$rc" -eq 124 ]; then
 		n="$(find "$HOGS_ROOT" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | wc -l)"
-		echo "tmp entries: censo CORTADO a los ${t}s sobre ${n} directorios — no medido."
-		echo "  Ese numero ES el diagnostico: con tantas entradas el reparto por tamaño no cabe"
-		echo "  en el carril rapido, y el consumidor casi seguro es la CANTIDAD, no una grande."
+		echo "tmp entries: scan stopped after ${t}s across ${n} directories — not measured."
+		echo "  With this many entries, measuring each one's size exceeds the quick check's budget."
+		echo "  The likely space consumer is the number of entries, not a single large entry."
 	elif [ "$rc" -ne 0 ]; then
-		echo "tmp entries: censo NO EJECUTADO (rc=${rc}) — no medido, y esto NO es «no hay nada»"
+		echo "tmp entries: scan did not run (rc=${rc}) — not measured; this does not mean there are no entries"
 	elif [ -n "$crudo" ]; then
 		sort -rh <<<"$crudo" | awk 'NR <= 5'
 	fi
@@ -345,8 +345,8 @@ fi
 if [ "$CHECK_TMP" = "1" ]; then
 	tmp_avail_mb="$(df -BM --output=avail "$TMP_TARGET" 2>/dev/null | tail -1 | tr -dc '0-9')" || true
 	if [ -z "${tmp_avail_mb:-}" ]; then
-		echo "check-disk-headroom: UNVERIFIED — df no pudo leer ${TMP_TARGET}; el sistema de" >&2
-		echo "  ficheros temporal NO se ha medido, y eso no es lo mismo que estar sano." >&2
+		echo "check-disk-headroom: UNVERIFIED — df could not read ${TMP_TARGET}; the temporary" >&2
+		echo "  filesystem was not measured and cannot be reported as healthy." >&2
 		exit 2
 	fi
 	tmp_size_mb="$(df -BM --output=size "$TMP_TARGET" 2>/dev/null | tail -1 | tr -dc '0-9')"
@@ -376,8 +376,8 @@ if [ "$CHECK_TMP" = "1" ]; then
 		listado="$(find "$TMP_TARGET" -maxdepth 1 -mindepth 1 -print0 2>/dev/null |
 			xargs -0 -r du -sk 2>/dev/null | sort -rn -k1,1 || true)"
 		if [ -z "$listado" ]; then
-			echo "NO HE PODIDO MIRAR: ni find ni du enumeraron ${TMP_TARGET}. La cifra de df es"
-			echo "buena; el reparto por consumidor NO — no lo leas como «no hay consumidores»."
+			echo "COULD NOT CHECK: neither find nor du enumerated ${TMP_TARGET}. The df total is"
+			echo "valid; the per-consumer breakdown is not. This does not mean there are no consumers."
 			return 0
 		fi
 		# Todo en UN awk: ni `head` ni `sed` detras, porque cerrar la tuberia manda SIGPIPE al
@@ -386,7 +386,7 @@ if [ "$CHECK_TMP" = "1" ]; then
 			{ if ($2 ~ /\/tmp\.[^\/]*$/) { resto += $1; n++ }
 			  if (NR <= 5) { top[NR] = $0 } ; ultima = NR }
 			END {
-				if (n > 0) printf "%d directorios tipo mktemp sin recoger: %.1fG de los %.1fG ocupados\n", n, resto/1048576, usado/1024
+				if (n > 0) printf "%d uncollected mktemp-style directories: %.1fG of the %.1fG used\n", n, resto/1048576, usado/1024
 				for (i = 1; i <= 5 && i <= ultima; i++) {
 					split(top[i], c, "\t")
 					printf "%.0fM\t%s\n", c[1]/1024, c[2]
@@ -396,18 +396,18 @@ if [ "$CHECK_TMP" = "1" ]; then
 
 
 	if [ "$tmp_avail_mb" -lt "$TMP_FLOOR_MB" ]; then
-		echo "check-disk-headroom: BROKEN — ${tmp_avail_mb}M libres en ${TMP_TARGET} (${tmp_fs}, ${tmp_size_mb}M, ${tmp_pct}% usado),"
-		echo "  suelo ${TMP_FLOOR_MB}M. NO es el mismo disco que ${TARGET}, que esta bien."
-		echo "  Ahi caen 'mktemp -d', el scratch de Go y de Node y los sockets unix. Quedarse sin"
-		echo "  sitio ahi NO dice 'disco lleno': dice error de compilador, test roto o"
-		echo "  'bind: invalid argument'. Consumidores:"
+		echo "check-disk-headroom: BROKEN — ${tmp_avail_mb}M free on ${TMP_TARGET} (${tmp_fs}, ${tmp_size_mb}M, ${tmp_pct}% used),"
+		echo "  minimum ${TMP_FLOOR_MB}M. This is a different filesystem from ${TARGET}, which has enough space."
+		echo "  It holds 'mktemp -d' directories, Go and Node scratch files, and Unix sockets. Exhausting"
+		echo "  its space may appear as a compiler error, a test failure, or"
+		echo "  'bind: invalid argument'. Consumers:"
 		tmp_hogs | sed 's/^/    /'
-		echo "  Si es tmpfs, ademas es RAM: lo que se acumule ahi se lo quita al gate."
+		echo "  A tmpfs also consumes RAM: accumulated files leave less memory for the check."
 		exit 1
 	fi
 	if [ "$tmp_avail_mb" -lt "$TMP_WARN_MB" ]; then
-		echo "check-disk-headroom: CLEAN — ${tmp_avail_mb}M libres en ${TMP_TARGET} (${tmp_fs}, ${tmp_pct}% usado),"
-		echo "  por encima del suelo de ${TMP_FLOOR_MB}M pero dentro de la banda de aviso. Consumidores:"
+		echo "check-disk-headroom: CLEAN — ${tmp_avail_mb}M free on ${TMP_TARGET} (${tmp_fs}, ${tmp_pct}% used),"
+		echo "  above the ${TMP_FLOOR_MB}M minimum but within the warning band. Consumers:"
 		tmp_hogs | sed 's/^/    /'
 	fi
 fi

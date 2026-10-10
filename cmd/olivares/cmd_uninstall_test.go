@@ -92,7 +92,7 @@ func writeUninstallFixture(t *testing.T, root string) string {
 // the same offline filesystem view.
 func TestUninstallMigrationRoundTrip(t *testing.T) {
 	previous := version
-	version = "26.9.0"
+	version = "26.900"
 	t.Cleanup(func() { version = previous })
 	t.Setenv("OLIVARES_LICENSE", "")
 	t.Setenv("OLIVARES_LICENSE_PATH", "")
@@ -239,6 +239,92 @@ func TestUninstallPlanIsMutationFreeAndComplete(t *testing.T) {
 	after, _ := os.ReadFile(filepath.Join(root, "var/lib/olivares/demo.db"))
 	if string(after) != string(before) {
 		t.Fatal("--plan mutated seeded data")
+	}
+}
+
+// TestUninstallWithoutManifestExplainsLocalRemoval is the #490 regression.
+// A quickstart, serve or source-build installation writes no
+// install-manifest.json, and `uninstall --plan` answered with the raw open
+// error ("read local install manifest: open …: no such file or directory")
+// and no next step, while doctor classifies the same state install_shape=local
+// with a sentence about who writes a manifest. The refusal must keep exit 2
+// and reuse that classification, then say what removing the installation
+// means: stop the engine, remove the binary, delete the data directory.
+//
+// The other halves of the classification all fail closed and must never read
+// as a local installation: an offline --root inspects a staged copy, an
+// explicitly selected --manifest is an operator's claim about a service
+// record, and a record that exists but cannot be parsed is exactly that.
+func TestUninstallWithoutManifestExplainsLocalRemoval(t *testing.T) {
+	dataDir := t.TempDir()
+	sentinel := filepath.Join(dataDir, "operator.db")
+	if err := os.WriteFile(sentinel, []byte("data"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := runCLI(t, "uninstall", "--plan", "--data-dir", dataDir)
+	if exitcode.From(err) != exitcode.Usage {
+		t.Fatalf("missing manifest exit = %d, want %d: %v", exitcode.From(err), exitcode.Usage, err)
+	}
+	for _, want := range []string{
+		"no ownership manifest",
+		"pinned service installer",
+		"stop the engine",
+		"delete the data directory " + dataDir,
+		filepath.Join(dataDir, "install-manifest.json"),
+	} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("missing-manifest guidance omits %q: %v", want, err)
+		}
+	}
+	if got, readErr := os.ReadFile(sentinel); readErr != nil || string(got) != "data" {
+		t.Fatalf("the refusal mutated the data directory: %q, %v", got, readErr)
+	}
+
+	// An offline --root inspects a staged copy; what the copy shows must not
+	// teach deleting the host data directory.
+	stage := t.TempDir()
+	_, err = runCLI(t, "uninstall", "--plan", "--data-dir", dataDir, "--root", stage)
+	if exitcode.From(err) != exitcode.Usage {
+		t.Fatalf("offline missing manifest exit = %d, want %d: %v", exitcode.From(err), exitcode.Usage, err)
+	}
+	if !strings.Contains(err.Error(), "no ownership manifest") {
+		t.Errorf("an offline look lost the classification: %v", err)
+	}
+	if !strings.Contains(err.Error(), filepath.Join(stage, dataDir[1:], "install-manifest.json")) {
+		t.Errorf("the offline look did not name the staged manifest it tried: %v", err)
+	}
+	if strings.Contains(err.Error(), "stop the engine") {
+		t.Errorf("an offline --root taught host removal from a staged copy: %v", err)
+	}
+
+	// An explicitly selected --manifest is a claim about a service record: one
+	// missing there is a wrong argument, not an install shape, and it keeps the
+	// fail-closed library error instead of local-removal guidance.
+	_, err = runCLI(t, "uninstall", "--plan", "--data-dir", dataDir,
+		"--manifest", filepath.Join(t.TempDir(), "absent-manifest.json"))
+	if exitcode.From(err) != exitcode.Usage {
+		t.Fatalf("explicit missing manifest exit = %d, want %d: %v", exitcode.From(err), exitcode.Usage, err)
+	}
+	if !strings.Contains(err.Error(), "read local install manifest") {
+		t.Errorf("an explicit missing --manifest lost the fail-closed error: %v", err)
+	}
+	if strings.Contains(err.Error(), "stop the engine") {
+		t.Errorf("a wrong --manifest argument read as a local installation: %v", err)
+	}
+
+	brokenDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(brokenDir, "install-manifest.json"), []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err = runCLI(t, "uninstall", "--plan", "--data-dir", brokenDir)
+	if exitcode.From(err) != exitcode.Usage {
+		t.Fatalf("unparseable manifest exit = %d, want %d: %v", exitcode.From(err), exitcode.Usage, err)
+	}
+	if !strings.Contains(err.Error(), "parse local install manifest") {
+		t.Errorf("an unparseable record lost its fail-closed error: %v", err)
+	}
+	if strings.Contains(err.Error(), "stop the engine") {
+		t.Errorf("a broken service record read as a local installation: %v", err)
 	}
 }
 

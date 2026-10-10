@@ -7,6 +7,7 @@ import {
   ANONYMOUS_FEATURE_EXTENSIONS,
   EXTENSION_ROUTES,
   FEATURE_EXTENSIONS,
+  PANEL_EXTENSIONS,
 } from './extensions'
 
 describe('default console extensions', () => {
@@ -15,6 +16,24 @@ describe('default console extensions', () => {
     expect(EXTENSION_ROUTES).toEqual([])
     expect(Object.isFrozen(FEATURE_EXTENSIONS)).toBe(true)
     expect(Object.isFrozen(EXTENSION_ROUTES)).toBe(true)
+  })
+
+  it('contains no panel inside a public page', () => {
+    expect(PANEL_EXTENSIONS).toEqual({
+      identityLoginCards: [],
+      identityStepUpMethods: [],
+      sessionPanels: [],
+      governanceTabs: [],
+      capabilitiesTabs: [],
+      complianceTabs: [],
+      reportingCards: [],
+      licenseCards: [],
+      scopesCards: [],
+    })
+    expect(Object.isFrozen(PANEL_EXTENSIONS)).toBe(true)
+    for (const panels of Object.values(PANEL_EXTENSIONS)) {
+      expect(Object.isFrozen(panels)).toBe(true)
+    }
   })
 
   it('contains no anonymous route or login choice', () => {

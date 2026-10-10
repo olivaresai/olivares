@@ -31,6 +31,13 @@ vi.mock('./extensions', async () => {
     'Acceder con ejemplo',
   )
   return {
+    PANEL_EXTENSIONS: {
+      capabilitiesTabs: [],
+      complianceTabs: [],
+      reportingCards: [],
+      licenseCards: [],
+      scopesCards: [],
+    },
     FEATURE_EXTENSIONS: [],
     EXTENSION_ROUTES: [],
     ANONYMOUS_FEATURE_EXTENSIONS: [

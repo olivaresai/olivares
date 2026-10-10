@@ -30,15 +30,14 @@
       "insecureTitle": "This page is not a secure context.",
       "insecureBody": "Browsers run the passkey API only in a secure context, so no passkey can be registered or used here. Reach this console over HTTPS, or on the local host.",
       "unsupportedTitle": "This browser has no passkey support.",
-      "unsupportedBody": "This browser exposes no WebAuthn API, so a passkey cannot be registered or used here. Use a browser with passkey support, or a presented PIV/CAC card.",
+      "unsupportedBody": "This browser exposes no WebAuthn API, so a passkey cannot be registered or used here. Use a browser with passkey support.",
       "sameDevice": "On this device the same console also answers at:"
     },
     "stepUpTitle": "Step-up authentication required",
     "stepUpBody": "{{action}} requires {{required}}. Your session is {{current}}. Use a passkey on your device or a security key to continue.",
     "authenticate": "Authenticate with passkey",
-    "authenticatePiv": "Authenticate with PIV/CAC card",
     "authenticating": "Waiting for your authenticator…",
-    "seamWhat": "The privileged-login ceremony (WebAuthn step-up)",
+    "seamWhat": "Privileged sign-in with WebAuthn step-up",
     "unsupported": "This browser does not support WebAuthn. A platform that supports phishing-resistant authenticators is required for privileged actions.",
     "failed": "Step-up did not complete. The action stays denied.",
     "relyingPartyUnusable": "Passkeys are not available on this deployment: the engine has no usable relying party for the address the console is served at. An operator has to configure a valid relying-party domain — a dotted host name, or localhost where that is appropriate — reach the console at that declared secure origin, and restart the engine after the change. Retrying at a different address alone will not repair it.",
@@ -60,10 +59,10 @@
       "aal3": "AAL3 (phishing-resistant)"
     },
     "unenrolled": "No passkey is registered for your account yet. Register a passkey on your device or a security key in the Privileged login tab, then authenticate.",
-    "unenrolledInline": "No passkey is registered for your account yet. Register one below, or use a presented PIV/CAC card.",
+    "unenrolledInline": "No passkey is registered for your account yet. Register one below.",
     "enrollHint": "Register your first passkey on this device or on a security key. Registration alone does not authenticate your session or complete the pending action.",
     "passkeyName": "Passkey name",
-    "enrollUnsupported": "This browser cannot register a passkey. Use a browser with passkey support, or a presented PIV/CAC card.",
+    "enrollUnsupported": "This browser cannot register a passkey. Use a browser with passkey support.",
     "registered": "Passkey registered. Authenticate to verify this session, then review and complete the pending action.",
     "registrationUnknown": "Registration could not be confirmed. The passkey may have been saved. Select Authenticate to check; registration will not be sent again automatically.",
     "authenticationUnknown": "Authentication could not be confirmed. Your session may already be elevated. Check the session before trying again.",
@@ -90,7 +89,6 @@
       "pkce": "PKCE (RFC 7636)",
       "oauthSecurityBcp": "OAuth 2.0 Security BCP (RFC 9700)",
       "webauthn": "NIST SP 800-63B-4 (authenticator assurance)",
-      "piv": "FIPS 201-3 (PIV)",
       "certManager": "cert-manager (CNCF)",
       "pqc": "NIST SP 800-57 Part 1 r6 (key management)",
       "wifReference": "Anthropic WIF reference",
@@ -296,9 +294,9 @@
       "title": "Lifecycle actions",
       "reason": "Reason",
       "critical": {
-        "twoAccountsAal3": "This CRITICAL action requires approval from two different user accounts before it can run. The engine enforces different ACCOUNTS: it cannot prove that two accounts are two different people. This follows the live risk tier, which an approval policy can lower.",
-        "breakGlassPossible": "Nothing runs until two different user accounts approve it. An active emergency break-glass grant can authorize it instead — that use is recorded and reviewed afterwards. This follows the live risk tier, which an approval policy can lower.",
-        "noBreakGlass": "Nothing runs until two different user accounts approve it. Break-glass cannot authorize this one: there is no emergency path around the second approver. This follows the live risk tier, which an approval policy can lower."
+        "twoAccountsAal3": "This CRITICAL action requires approval from two different user accounts before it can run. The engine enforces different ACCOUNTS: it cannot prove that two accounts are two different people. Lowering the live risk tier by policy is available in Business; Community keeps its default floor.",
+        "breakGlassPossible": "Nothing runs until two different user accounts approve it. An active emergency break-glass grant can authorize it instead — that use is recorded and reviewed afterwards. Lowering the live risk tier by policy is available in Business; Community keeps its default floor.",
+        "noBreakGlass": "Nothing runs until two different user accounts approve it. Break-glass cannot authorize this one: there is no emergency path around the second approver. Lowering the live risk tier by policy is available in Business; Community keeps its default floor."
       },
       "ownership": {
         "button": "Assign ownership",
@@ -349,7 +347,7 @@
         "button": "Finalize",
         "title": "Finalize offboarding",
         "description": "Permanently revoke a previously soft-deleted NHI.",
-        "irreversible": "Finalization is irreversible. Break-glass does not apply here; the second distinct user account and AAL3 requirements cannot be bypassed.",
+        "irreversible": "Finalization is irreversible. Break-glass does not apply here; the second distinct user account requirement cannot be bypassed.",
         "confirm": "Finalize permanently"
       },
       "restore": {
@@ -425,7 +423,7 @@
     "noPassthrough": "Token passthrough is prohibited by design: the panel observes and introspects, it never forwards or replays an MCP token."
   },
   "wif": {
-    "gatedNote": "The Workload Identity Federation graph is a privileged, audited view; it requires hardware step-up.",
+    "gatedNote": "The Workload Identity Federation graph is a privileged, audited view.",
     "consoleOnly": "Workload identity federation objects (issuers, rules, service accounts) are managed only in the Anthropic Console. This panel visualises and lints them — it never creates or edits them.",
     "openConsole": "Open in Anthropic Console",
     "graphTitle": "WIF object graph",
@@ -542,17 +540,6 @@
     "registered": "Passkey registered.",
     "unsupported": "This browser does not support WebAuthn.",
     "registerFailed": "Registration did not complete.",
-    "pivTitle": "PIV / CAC (smartcard)",
-    "pivDescription": "X.509 client-certificate login with cert-to-role mapping and OCSP revocation, read from the mTLS connection.",
-    "pivSeamWhat": "The PIV/CAC client-certificate status",
-    "pivPresented": "Client certificate",
-    "pivAbsent": "Not presented",
-    "pivSubject": "Subject",
-    "pivRole": "Mapped role",
-    "pivOcsp": "OCSP",
-    "pivNote": "Chain and OCSP verification are performed by the backend; the panel reflects the result.",
-    "pivNotConfigured": "PIV/CAC smartcard sign-in is not configured on this deployment, so no card can be used here. An administrator has to configure it on the engine before it becomes available.",
-    "pivSetupGuide": "Operator guide: configure PIV/CAC sign-in",
     "ocsp": {
       "good": "Good",
       "revoked": "Revoked",
@@ -568,9 +555,9 @@
       "namePlaceholder": "e.g. YubiKey 5C, MacBook Touch ID",
       "defaultName": "Passkey on {{device}}",
       "defaultNameNoDevice": "Passkey",
-      "registering": "Completing ceremony…",
+      "registering": "Registering passkey…",
       "registered": "Passkey registered.",
-      "registerFailed": "Registration failed. Your browser may not support WebAuthn or the ceremony was cancelled.",
+      "registerFailed": "Passkey registration failed. Your browser may not support WebAuthn, or registration was canceled.",
       "unsupported": "This browser does not support WebAuthn/FIDO2.",
       "none": "No passkeys registered",
       "noneHint": "Register a passkey to enable phishing-resistant hardware-bound login (AAL3).",
@@ -586,8 +573,7 @@
       "deleteTitle": "Delete passkey",
       "deleteBody": "Delete the passkey \"{{name}}\"? This is permanent. You will need another registered passkey to maintain AAL3 access.",
       "deleted": "Passkey deleted.",
-      "lastCredential": "Cannot delete your only passkey. Register another one first.",
-      "stepUpRequired": "Deleting a passkey requires a fresh AAL3 session. Complete a step-up authentication first."
+      "lastCredential": "Cannot delete your only passkey. Register another one first."
     }
   },
   "empty": {
@@ -602,7 +588,7 @@
   },
   "totp": {
     "title": "TOTP second factor",
-    "description": "A time-based one-time password (RFC 6238) as an additional factor on your local account. It adds to — never replaces — your passkeys and PIV.",
+    "description": "A time-based one-time password (RFC 6238) as an additional factor on your local account. It adds to — never replaces — your passkeys.",
     "state": "Factor",
     "enrolled": "Enrolled",
     "notEnrolled": "Not enrolled",
@@ -622,7 +608,7 @@
     "codeLabel": "Code from your app",
     "recoveryWarning": "These recovery codes are shown only once. Store them now — each can be used a single time if you lose your device.",
     "savedCodes": "I saved the codes",
-    "stepUpRequired": "This action needs a fresh AAL3 session. Complete a passkey or PIV step-up first.",
+    "stepUpRequired": "This action needs the extra check for administrative actions this deployment requires. Complete it first.",
     "sealerUnavailable": "The TOTP seed sealer is not available on this deployment; enrollment is disabled until an operator fixes it.",
     "loadFailed": "The factor status could not be loaded.",
     "policyTitle": "Require TOTP for administrators",
@@ -645,7 +631,7 @@
     },
     "saved": "Saved.",
     "loadFailed": "This setting could not be read. Refresh the page to try again.",
-    "note": "To require a passkey, sign in with your passkey here first. To require an authenticator code, sign in with your code first. You can always turn it off. A change takes effect within a few seconds on every server.",
+    "note": "To require a passkey, sign in with your passkey here first. To require an authenticator code, sign in with your code first. To turn it off or lower it, pass the current check first. A change takes effect within a few seconds on every server.",
     "refused": {
       "passkey_not_enrolled": "Add a passkey to your account first (Identity > Passkeys), then turn this on.",
       "totp_sign_in_required": "Set up an authenticator app and sign in with its code first, then turn this on."

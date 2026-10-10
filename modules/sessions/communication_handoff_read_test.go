@@ -36,7 +36,7 @@ func newIncomingHandoffFixtureWithDurableAckDelay(
 	t.Helper()
 	base := newHandoffServiceFixtureWithDurableAckDelay(t, durableAckDelay)
 	ring := newChannelCatalogNavigationKeyring(t, "k3handoffread")
-	base.m.communicationCursorKeyring = ring
+	base.m.CursorKeyring = ring
 	return incomingHandoffFixture{handoffServiceFixture: base, ring: ring}
 }
 
@@ -595,7 +595,7 @@ func incomingHandoffEffectDigest(t *testing.T, fixture incomingHandoffFixture) s
 		out.Write(raw)
 	}
 	var audits int
-	if err := fixture.m.data.View(
+	if err := fixture.m.Data.View(
 		context.Background(), fixture.tenant, func(sc store.Scope) error {
 			return sc.Audit().Walk(context.Background(), 1, func(model.AuditEvent) error {
 				audits++

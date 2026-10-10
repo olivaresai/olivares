@@ -31,7 +31,7 @@ grep -F -q 'Unique leftover unique vs `check-c03-03-addon-ids.sh`' "$DOC" \
 grep -q 'regulated ai-runtime-security' "$DOC" \
   || fail "prepare doc lost the four fused-canon ids"
 if grep -qiE 'addongate reads Features|FIRMA A claimed' "$DOC"; then
-  fail "prepare doc claims a close this lote does not have"
+  fail "prepare doc claims a close this batch does not have"
 fi
 grep -q 'catalog-v8' "$CANON" || fail "canon lost catalog-v8"
 grep -q 'sales_lane:' "$CANON" || fail "canon lost sales_lane"

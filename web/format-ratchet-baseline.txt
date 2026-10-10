@@ -27,12 +27,10 @@ src/features/identity/identity-deeplink.test.tsx
 src/features/identity/wif/wif-lint.test.ts
 src/features/identity/wif/wif-lint.ts
 src/features/killswitch/types.ts
-src/features/observability/observability.test.tsx
 src/features/observability/types.ts
 src/features/onboarding/onboarding-dismissed.test.tsx
 src/features/platforms/fixtures.ts
 src/features/platforms/platforms.test.tsx
-src/features/posture-export/posture-export-view.test.tsx
 src/features/recordings/recordings.test.tsx
 src/features/redteam/types.ts
 src/features/route-census.test.ts

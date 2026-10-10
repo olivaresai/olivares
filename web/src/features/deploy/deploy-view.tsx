@@ -9,7 +9,10 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { PageHeader } from '@/components/ui/page-header'
-import { PagePrimaryAction } from '@/components/ui/page-actions'
+import {
+  PagePrimaryAction,
+  PageSecondaryActions,
+} from '@/components/ui/page-actions'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { EmptyState } from '@/components/ui/empty-state'
 import { DataTable, type TableColumn } from '@/components/data/data-table'
@@ -18,6 +21,7 @@ import { useAuth } from '@/lib/auth/context'
 import { deployApi, deployKeys } from './api'
 import { DefinitionDetailSheet } from './definition-detail'
 import { DefinitionEditorDialog } from './definition-editor'
+import { NoExecutorNotice } from './executor-notice'
 import { OperationsTable } from './operations-table'
 import { WiringsTable } from './wirings-table'
 import './i18n'
@@ -25,6 +29,10 @@ import type { DefinitionDTO } from './types'
 import { ListTruncationBadge } from '@/features/_intel'
 
 type TabKey = 'definitions' | 'wirings' | 'operations'
+
+/** How an administrator connects a runtime executor, on the module's own docs page. */
+const EXECUTOR_GUIDE =
+  'https://docs.olivares.ai/reference/modules/vii-deploy/#connect-an-executor'
 
 export default function DeployView() {
   const { t } = useTranslation(['deploy', 'common'])
@@ -44,6 +52,24 @@ export default function DeployView() {
     enabled: tab === 'definitions',
     refetchInterval: tab === 'definitions' ? 30_000 : false,
   })
+  // Whether Plan and Apply can reach infrastructure at all. Only the engine's explicit
+  // "no" changes the screen: a read that failed claims nothing either way.
+  const executor = useQuery({
+    queryKey: deployKeys.executor(activeTenant),
+    queryFn: () => deployApi.executor(),
+  })
+  const noExecutor = executor.data?.configured === false
+
+  const declare = (
+    <Button
+      variant={noExecutor ? 'secondary' : 'primary'}
+      size="sm"
+      onClick={() => setEditorOpen(true)}
+    >
+      <Plus />
+      {t('definitions.declare')}
+    </Button>
+  )
 
   function refresh() {
     void queryClient.invalidateQueries({
@@ -64,7 +90,11 @@ export default function DeployView() {
       header: t('definitions.subject'),
       cell: ({ row }) => (
         <span className="flex items-center gap-1.5">
-          <Badge variant="outline">{row.original.subject_kind}</Badge>
+          <Badge variant="outline">
+            {t(`editor.subjectKinds.${row.original.subject_kind}`, {
+              defaultValue: row.original.subject_kind,
+            })}
+          </Badge>
           <span className="font-mono text-caption text-muted-foreground">
             {row.original.subject_ref}
           </span>
@@ -135,17 +165,18 @@ export default function DeployView() {
         </TabsList>
 
         <TabsContent value="definitions">
-          {canWrite && (
-            <PagePrimaryAction>
-              <Button
-                variant="primary"
-                size="sm"
-                onClick={() => setEditorOpen(true)}
-              >
-                <Plus />
-                {t('definitions.declare')}
-              </Button>
-            </PagePrimaryAction>
+          {/* Without an executor the form is not the first thing offered: declaring
+              desired state stays possible, as a quieter action. The verb waits for the
+              answer so it is placed once. */}
+          {canWrite &&
+            !executor.isLoading &&
+            (noExecutor ? (
+              <PageSecondaryActions>{declare}</PageSecondaryActions>
+            ) : (
+              <PagePrimaryAction>{declare}</PagePrimaryAction>
+            ))}
+          {noExecutor && (definitions.data?.items?.length ?? 0) > 0 && (
+            <NoExecutorNotice />
           )}
           {/* Si el motor recortó, la tabla es una PARTE y no lo diría: una definición que no
               sale se lee como una definición que no existe. */}
@@ -159,7 +190,12 @@ export default function DeployView() {
           <DataTable
             columns={columns}
             data={definitions.data?.items ?? []}
-            isLoading={definitions.isLoading}
+            // An empty list waits for the executor answer, so its empty state is said
+            // once and right; rows never wait for it.
+            isLoading={
+              definitions.isLoading ||
+              (executor.isLoading && !definitions.data?.items?.length)
+            }
             error={definitions.error}
             onRetry={() => definitions.refetch()}
             searchable
@@ -171,30 +207,36 @@ export default function DeployView() {
             }}
             empty={
               <EmptyState
-                title={t('empty.deploy.title')}
-                description={t('empty.deploy.description')}
-                // The screen's own verb is the primary action — the same button the tab
-                // offers above the table, on the same right. The way to a LAUNCHED
-                // session is the quieter one: this screen lists definitions, and
-                // someone who launched a session from a profile is looking for it
-                // somewhere else.
-                action={
-                  canWrite ? (
-                    <Button
-                      variant="primary"
-                      size="sm"
-                      onClick={() => setEditorOpen(true)}
-                    >
-                      <Plus />
-                      {t('definitions.declare')}
-                    </Button>
-                  ) : undefined
+                title={
+                  noExecutor ? t('noExecutor.title') : t('empty.deploy.title')
                 }
+                description={
+                  noExecutor
+                    ? t('noExecutor.description')
+                    : t('empty.deploy.description')
+                }
+                // The screen's own verb is the primary action — the same button the tab
+                // offers above the table, on the same right — once an executor can
+                // carry it out. The way to a LAUNCHED session is the quieter one: this
+                // screen lists definitions, and someone who launched a session from a
+                // profile is looking for it somewhere else.
+                // Without an executor the way forward is the guide to connecting one.
+                action={canWrite && !noExecutor ? declare : undefined}
                 secondaryAction={
                   <Button asChild variant="link" size="sm">
-                    <Link to={'/agentops' as never}>
-                      {t('empty.deploy.sessions')}
-                    </Link>
+                    {noExecutor ? (
+                      <a
+                        href={EXECUTOR_GUIDE}
+                        rel="noopener noreferrer"
+                        target="_blank"
+                      >
+                        {t('noExecutor.guide')}
+                      </a>
+                    ) : (
+                      <Link to={'/agentops' as never}>
+                        {t('empty.deploy.sessions')}
+                      </Link>
+                    )}
                   </Button>
                 }
               />
@@ -209,7 +251,7 @@ export default function DeployView() {
         )}
 
         <TabsContent value="operations">
-          <OperationsTable />
+          <OperationsTable noExecutor={noExecutor} />
         </TabsContent>
       </Tabs>
 
@@ -217,6 +259,7 @@ export default function DeployView() {
         definitionId={selected}
         open={detailOpen}
         onOpenChange={setDetailOpen}
+        noExecutor={noExecutor}
       />
 
       {/* Declare a new definition. */}

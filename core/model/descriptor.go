@@ -257,6 +257,13 @@ type EntityDescriptor struct {
 	// declared": the entity stays fully usable for the engine and for a
 	// tenant-wide principal, and is refused to a workspace-confined one.
 	WorkspaceLineage WorkspaceLineageSpec
+	// Internal marks bookkeeping rows a module keeps for itself (a guard's
+	// counter, epoch or replay token), not objects a user created. The rows are
+	// stored and confined like any other kind; only the workspace contents read
+	// leaves the kind out, so no client lists a table name as what a workspace
+	// holds. Registry validation requires a declared WorkspaceLineage, the only
+	// thing the contents read looks at.
+	Internal bool
 	// WorkspaceInheritedRead declares an append-only child's read relationship
 	// to a directly workspace-bound parent registered before it. It does not
 	// make Scope.Ext writable or readable under confinement; only the store's

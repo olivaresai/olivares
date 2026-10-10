@@ -19,6 +19,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/inferencepep"
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
 	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/core/auth"
@@ -29,6 +30,7 @@ import (
 	"github.com/olivaresai/olivares/modules/inferenceproxy"
 	"github.com/olivaresai/olivares/modules/knowledge"
 	"github.com/olivaresai/olivares/modules/models"
+	"github.com/olivaresai/olivares/modules/sessions"
 	"github.com/olivaresai/olivares/sdk"
 	"github.com/olivaresai/olivares/sdk/event"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
@@ -118,10 +120,11 @@ const (
 // root late-binds before HTTP serving; none is constructed here and none is optional in the
 // sense of "silently absent" — ready() states exactly which ones must exist.
 type modelsChatExecutor struct {
+	providers     *sessions.Module
 	registry      *modelGatewayProfileRegistry
 	store         store.Store
-	policy        proxyPolicySource
-	contextPolicy contextPolicyResolver
+	policy        inferencepep.PolicySource
+	contextPolicy inferencepep.ContextPolicyResolver
 	residency     *residency.Registry
 	secrets       *secret.Resolver
 	// inspector is the OPTIONAL enterprise content firewall. It is wired INDEPENDENTLY of
@@ -129,7 +132,7 @@ type modelsChatExecutor struct {
 	// configured inspector is never silently absent because this path exists.
 	inspector      contentInspector
 	approvals      *approvalBridge
-	bus            observationSink
+	bus            inferencepep.ObservationSink
 	circuitBreaker circuitBreakerEngine
 	// httpClient is a COMPOSITION dependency for enterprise TLS/proxy behavior, handed to
 	// C1 unchanged. It is not an alternate executor: C1 copies it, disables redirects and
@@ -329,7 +332,7 @@ func (x *modelsChatExecutor) validateEntry(ctx context.Context, plan *chatPlan) 
 	p := in.Profile
 	if p.Tenant != in.Tenant || p.Action != models.ExecutionActionTextGenerate ||
 		p.Protocol != models.ExecutionProtocolChatTextV1 ||
-		p.AdapterID != models.ExecutionAdapterModelProviderChat ||
+		(p.AdapterID != models.ExecutionAdapterModelProviderChat && p.AdapterID != models.ExecutionAdapterDeepSeekText) ||
 		p.AdapterVersion != models.ExecutionAdapterVersion1 ||
 		p.Ref == "" || p.Revision == "" || p.ProviderRef == "" || p.ModelRef == "" ||
 		p.Endpoint == "" || p.Surface == "" || p.InferenceGeo == "" ||
@@ -388,7 +391,11 @@ func (r *modelGatewayProfileRegistry) entry(tenant model.TenantID, ref, revision
 // (a required rewrite is an explicit deny, not a silent edit), there is no legitimate
 // post-guard re-marshal and the prepared bytes at C1 are these bytes.
 func (x *modelsChatExecutor) prepare(plan *chatPlan) error {
-	prepared, err := modelprovider.PrepareChatTextRequest(modelprovider.ChatTextRequest{
+	prepare := modelprovider.PrepareChatTextRequest
+	if plan.in.Profile.AdapterID == models.ExecutionAdapterDeepSeekText {
+		prepare = modelprovider.PrepareDeepSeekTextRequest
+	}
+	prepared, err := prepare(modelprovider.ChatTextRequest{
 		Model: plan.in.Profile.ModelRef, Input: plan.in.Input, MaxCompletionTokens: plan.in.MaxTokens,
 	})
 	if err != nil || prepared.IsZero() {
@@ -401,7 +408,7 @@ func (x *modelsChatExecutor) prepare(plan *chatPlan) error {
 	// Server-minted and unrelated to any caller input: not the body, not session_ref, not
 	// an idempotency header. A client cannot choose the identity its own effect is
 	// recorded under.
-	plan.requestRef, plan.attemptRef = newRequestRef(), newRequestRef()
+	plan.requestRef, plan.attemptRef = inferencepep.NewRequestRef(), inferencepep.NewRequestRef()
 	return nil
 }
 
@@ -418,7 +425,7 @@ func (x *modelsChatExecutor) applyPosture(ctx context.Context, plan *chatPlan) e
 	// identity — the key the engine actually writes state under. Deriving it from the
 	// attribution session_ref would ask about a key nothing ever wrote, so a tripped
 	// breaker would be invisible while looking checked.
-	if denied, reason := circuitBreakerGateCheck(ctx, x.circuitBreaker, in.Tenant, strings.TrimSpace(in.Principal.AgentIdentity)); denied {
+	if denied, reason := inferencepep.CircuitBreakerGateCheck(ctx, x.circuitBreaker, in.Tenant, strings.TrimSpace(in.Principal.AgentIdentity)); denied {
 		x.info("models-chat: denied by the circuit breaker", "reason", reason)
 		return models.NewChatExecutionError(models.ChatErrCircuitOpen)
 	}
@@ -540,9 +547,9 @@ func (x *modelsChatExecutor) inspectInput(ctx context.Context, plan *chatPlan) e
 		Texts:    []string{in.Input},
 	}
 	if pol.GateDLPRequest && pol.DLPEnabled() {
-		denied := pol.DLPDecide(classifyText(content.Texts))
+		denied := pol.DLPDecide(inferencepep.ClassifyText(content.Texts))
 		if content.Unscanned && pol.DLPUnscannedDenied() {
-			denied = append(denied, dlpUnscannedClass)
+			denied = append(denied, inferencepep.DLPUnscannedClass)
 		}
 		if len(denied) > 0 {
 			x.publishFinding(ctx, in.Tenant, sdkmodel.FindingReport{
@@ -569,8 +576,8 @@ func (x *modelsChatExecutor) inspectInput(ctx context.Context, plan *chatPlan) e
 
 // subject names what this path's published observations are ABOUT: its own execution kind
 // and the PROFILE's provider and surface, never Anthropic's.
-func (x *modelsChatExecutor) subject(p models.ExecutionProfile) inspectionSubject {
-	return inspectionSubject{
+func (x *modelsChatExecutor) subject(p models.ExecutionProfile) inferencepep.InspectionSubject {
+	return inferencepep.InspectionSubject{
 		Kind: string(chatExecutionKind), ProviderRef: p.ProviderRef,
 		Surface: sdkmodel.Gateway(p.Surface),
 	}
@@ -578,10 +585,10 @@ func (x *modelsChatExecutor) subject(p models.ExecutionProfile) inspectionSubjec
 
 // inspection binds the shared service. The approval callback targets THIS subject kind, so
 // a held detection here never opens an approval that looks like a Messages one.
-func (x *modelsChatExecutor) inspection() contentInspectionService {
-	return contentInspectionService{
-		inspector: x.inspector, publish: x.publish, approve: x.openChatInspectionApproval,
-		clock: x.clock,
+func (x *modelsChatExecutor) inspection() inferencepep.ContentInspectionService {
+	return inferencepep.ContentInspectionService{
+		Inspector: x.inspector, Publish: x.publish, Approve: x.openChatInspectionApproval,
+		Clock: x.clock,
 	}
 }
 
@@ -594,7 +601,7 @@ func (x *modelsChatExecutor) openChatInspectionApproval(ctx context.Context, ten
 		return
 	}
 	requestedBy := firstNonEmpty(actor, model.ActorSystem)
-	if _, _, _, err := x.approvals.gateOnce(ctx, tenant, intent.Action, string(chatExecutionKind), intent.Subject, intent.PlanHash, intent.Reason, requestedBy); err != nil {
+	if _, _, _, err := x.approvals.GateOnce(ctx, tenant, intent.Action, string(chatExecutionKind), intent.Subject, intent.PlanHash, intent.Reason, requestedBy); err != nil {
 		x.warn("models-chat: content-inspection approval intent could not be opened (verdict stands)", "err", err, "direction", direction)
 	}
 }
@@ -652,7 +659,7 @@ func (x *modelsChatExecutor) admit(ctx context.Context, plan *chatPlan, budget m
 // tenant's explicit best-effort posture, the other the operator's declared degrade winning
 // over a default nobody chose. Both proceed with a NAMED gap.
 func (x *modelsChatExecutor) anchorChatIntent(ctx context.Context, plan *chatPlan) (string, error) {
-	receipt, err := inferenceEvidenceWriter{store: x.store}.Append(ctx, plan.in.Tenant, plan.binding, model.AuditDraft{
+	receipt, err := inferencepep.EvidenceWriter{Store: x.store}.Append(ctx, plan.in.Tenant, plan.binding, model.AuditDraft{
 		Actor:     firstNonEmpty(plan.in.Principal.Actor(), model.ActorSystem),
 		ActorKind: firstNonEmpty(plan.in.Principal.ActorKind(), model.ActorSystem),
 		Action:    chatIntentAction, TargetKind: chatExecutionKind, TargetID: model.ID(plan.attemptRef),
@@ -662,13 +669,13 @@ func (x *modelsChatExecutor) anchorChatIntent(ctx context.Context, plan *chatPla
 	if receipt.AnchoredFor(plan.binding) {
 		return models.ChatIntentAnchored, nil
 	}
-	refusal := errEvidenceRefused{fault: receipt.Fault}
+	refusal := inferencepep.EvidenceRefusedError{Fault: receipt.Fault}
 	switch {
 	case !plan.pol.RecordMandatory:
 		x.warn("models-chat: intent evidence not anchored and recording is best-effort for this tenant; proceeding with a recorded gap",
 			"attempt_ref", plan.attemptRef, "fault", string(receipt.Fault), "err", err)
 		return models.ChatIntentExplicitBestEffort, nil
-	case defaultMandatoryYieldsTo(plan.pol, refusal):
+	case inferencepep.DefaultMandatoryYieldsTo(plan.pol, refusal):
 		x.warn("models-chat: the audit spool DEGRADED this attempt's evidence and this tenant never configured a recording posture, so the operator's declared degrade wins over the default: proceeding with a recorded evidence GAP",
 			"attempt_ref", plan.attemptRef, "err", err)
 		return models.ChatIntentOperatorDegradeGap, nil
@@ -698,6 +705,18 @@ func (x *modelsChatExecutor) resolveCredential(ctx context.Context, plan *chatPl
 	}
 	if plan.in.Profile.AuthScheme != "bearer" {
 		return "", nil
+	}
+	if plan.in.Profile.AdapterID == models.ExecutionAdapterDeepSeekText {
+		ref, version, ok := sessions.ParseProviderCredentialReference(entry.CredentialRef)
+		if !ok || x.providers == nil || ref != entry.ProviderRef {
+			return "", models.NewChatExecutionError(models.ChatErrCredentialUnavailable)
+		}
+		key, err := x.providers.ResolveProviderCredential(ctx, plan.in.Tenant, ref, version, modelprovider.ServiceDeepSeek, entry.Endpoint)
+		if err != nil || len(key) == 0 {
+			return "", models.NewChatExecutionError(models.ChatErrCredentialUnavailable)
+		}
+		defer clear(key)
+		return string(key), nil
 	}
 	if x.secrets == nil {
 		return "", models.NewChatExecutionError(models.ChatErrCredentialUnavailable)
@@ -870,7 +889,7 @@ func (x *modelsChatExecutor) outputWithheld(ctx context.Context, plan *chatPlan,
 
 	withheld := false
 	if pol.GateDLPResponse && pol.ResponseDLPMode != inferenceproxy.ResponseDLPOff && pol.DLPEnabled() {
-		if denied := pol.DLPDecide(classifyText(content.Texts)); len(denied) > 0 {
+		if denied := pol.DLPDecide(inferencepep.ClassifyText(content.Texts)); len(denied) > 0 {
 			x.publishFinding(ctx, plan.in.Tenant, sdkmodel.FindingReport{
 				Kind: "models_chat_dlp_blocked", Severity: sdkmodel.SeverityHigh,
 				SubjectKind: string(chatExecutionKind), SubjectRef: plan.in.Profile.ModelRef,
@@ -903,14 +922,14 @@ func (x *modelsChatExecutor) outputWithheld(ctx context.Context, plan *chatPlan,
 func (x *modelsChatExecutor) recordChatOutcome(ctx context.Context, plan *chatPlan, res *models.ChatExecutionResult, observation *chatObservation) {
 	octx, cancel := context.WithTimeout(context.WithoutCancel(ctx), chatOutcomeBound)
 	defer cancel()
-	receipt, err := inferenceEvidenceWriter{store: x.store}.Append(octx, plan.in.Tenant, plan.binding, model.AuditDraft{
+	receipt, err := inferencepep.EvidenceWriter{Store: x.store}.Append(octx, plan.in.Tenant, plan.binding, model.AuditDraft{
 		Actor:     firstNonEmpty(plan.in.Principal.Actor(), model.ActorSystem),
 		ActorKind: firstNonEmpty(plan.in.Principal.ActorKind(), model.ActorSystem),
 		Action:    chatOutcomeAction, TargetKind: chatExecutionKind, TargetID: model.ID(plan.attemptRef),
 		PayloadHash: chatOutcomeHash(plan, res, observation),
 		Meta:        chatOutcomeMeta(plan, res, observation),
 	})
-	if evidenceAppendDropped(receipt, err) {
+	if inferencepep.EvidenceAppendDropped(receipt, err) {
 		x.log_(slog.LevelError, "models-chat: outcome evidence dropped by the degrade spool policy (evidence gap)", "attempt_ref", plan.attemptRef)
 	}
 	if err != nil {
@@ -1462,7 +1481,7 @@ func newModelsChatExecutor(mode string, registry *modelGatewayProfileRegistry, g
 	if mode != modelGatewayChatDevelopmentPrecheck || registry == nil {
 		return nil
 	}
-	inspector := newContentInspector(getenv, log)
+	inspector := thisEdition.contentInspector.get(getenv, log)
 	if log != nil {
 		log.Warn("models: the governed Chat execution path is ACTIVE in development_precheck mode — admission is the existing NON-ATOMIC, FAIL-OPEN routing precheck, not a hard monetary budget; do not run this profile where a hard cap must be enforced",
 			"mode", mode, "content_inspector", inspector != nil)
@@ -1474,13 +1493,14 @@ func newModelsChatExecutor(mode string, registry *modelGatewayProfileRegistry, g
 // binding is ATOMIC in the only sense that matters here: a caller cannot bind four of them,
 // serve a request, and bind the rest afterwards.
 type chatExecutorDeps struct {
+	Providers      *sessions.Module
 	Store          store.Store
-	Policy         proxyPolicySource
-	ContextPolicy  contextPolicyResolver
+	Policy         inferencepep.PolicySource
+	ContextPolicy  inferencepep.ContextPolicyResolver
 	Residency      *residency.Registry
 	Secrets        *secret.Resolver
 	Approvals      *approvalBridge
-	Bus            observationSink
+	Bus            inferencepep.ObservationSink
 	CircuitBreaker circuitBreakerEngine
 	HTTPClient     *http.Client
 }
@@ -1493,6 +1513,7 @@ func (x *modelsChatExecutor) bind(deps chatExecutorDeps) bool {
 		return false
 	}
 	x.store, x.policy, x.contextPolicy = deps.Store, deps.Policy, deps.ContextPolicy
+	x.providers = deps.Providers
 	x.residency, x.secrets, x.approvals = deps.Residency, deps.Secrets, deps.Approvals
 	x.bus, x.circuitBreaker, x.httpClient = deps.Bus, deps.CircuitBreaker, deps.HTTPClient
 	return x.ready()

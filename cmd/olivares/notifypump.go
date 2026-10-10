@@ -33,8 +33,8 @@ const (
 	notifyPumpJobName = "notify-dispatch"
 	// notifyPumpIntervalEnv configures the cadence: a Go duration (default 5s — a
 	// notification is human-facing, so first-attempt latency is kept short); "0"
-	// disables the loop with a loud warning (only fresh events would deliver — and the
-	// event handler no longer delivers inline, so 0 means nothing delivers).
+	// disables the loop with a loud warning (fresh events still deliver on the
+	// module's nudge worker; what stops is the periodic retry/backoff/DLQ pass).
 	notifyPumpIntervalEnv     = "OLIVARES_NOTIFY_DISPATCH_INTERVAL"
 	defaultNotifyPumpInterval = 5 * time.Second
 )
@@ -49,8 +49,8 @@ type notifyPump struct {
 
 // newNotifyPump builds the pump from the environment. nil when the module is unwired
 // or the operator explicitly disabled it (interval 0) — the disable warns loudly
-// because, with delivery now out of band of the bus handler, a disabled pump means NO
-// notification is ever delivered.
+// because without the periodic pass a failed first attempt is retried only when the
+// same tenant enqueues again; fresh deliveries themselves keep working on nudge.
 func newNotifyPump(getenv func(string) string, st store.Store, nm *notify.Module, log *slog.Logger) *notifyPump {
 	if nm == nil {
 		return nil
@@ -76,7 +76,12 @@ func notifyPumpInterval(raw string, log *slog.Logger) (time.Duration, bool) {
 		return defaultNotifyPumpInterval, true
 	}
 	if d == 0 {
-		log.Warn("notify-dispatch: pump DISABLED (" + notifyPumpIntervalEnv + "=0): NO notification will be delivered — routing now enqueues to the durable outbox, which only this pump drains")
+		// A6 (CUTS, 2026-10-02): the old warning claimed NO notification would be
+		// delivered, and that was false when it shipped: the module's nudge
+		// worker delivers fresh events as they are enqueued (notify.go
+		// nudgeWorker). What stops with the pump is the PERIODIC pass — retries,
+		// backoff and the DLQ re-drive. Say exactly that.
+		log.Warn("notify-dispatch: pump DISABLED (" + notifyPumpIntervalEnv + "=0): no periodic retry pass — fresh events still deliver on nudge, but a failed first attempt is retried only when the same tenant enqueues again; retries, backoff and DLQ are off until the interval is restored")
 		return 0, false
 	}
 	return d, true

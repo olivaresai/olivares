@@ -48,8 +48,7 @@ Recording（`modules/recording`）は **特権セッション記録** プレー�
 - **アクティブ** なセッションでは、最後の周期的アンカー以降のフレームは、次のアンカーまたは
   seal までチェーンの先端のみによって束ねられる。`verify` は `anchored_through` を報告する
   ため、その境界は明示的であり、決して暗黙には示されない。
-- これは **purge も legal hold も実装しない** —— 削除は retention/legal-hold が所有する。
-  台帳アンカーはいかなる purge も生き残る。
+- コンプライアンスは `privileged-session-recording` の保持スケジュールとクラス単位の法的保全をサポートします。フレームは追記専用の証跡なので、**パージは利用できません**。記録の `retention_days` は参考値であり、`retention_enforced` は false のままです。自動削除は保証されません。
 - これは **agentops governance パネル** がセッションごとの I/O 記録に使用する記録サブ
   システムである。すなわち、ブリッジされた各 Claude Code フレームは、同じ hash-chained で
   ledger-anchored なパターンに畳み込まれる。

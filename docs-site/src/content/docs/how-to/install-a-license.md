@@ -17,12 +17,7 @@ not turn functionality off, and no license caps user accounts — self-hosted us
 unlimited in every tier. It is a signed statement of what you are entitled to, not a key
 that unlocks code already on your disk.
 
-**What it does gate is ACCESS TO ARTIFACTS**, and that distinction is the whole model: a
-live license is required to download the commercial build and to install from a local
-bundle (`olivares upgrade --bundle`), checked offline against the key embedded in your
-binary. That is why the commercial build is a different binary you fetch with a token
-rather than a flag flipped in the one you have — and why "it gates nothing" would be the
-wrong thing to tell you.
+**A live license grants access to commercial artifacts.** Offline bundle installation (`olivares upgrade --bundle`) requires the Enterprise binary. Enterprise installs a signed Community bundle without a license; a commercial bundle requires a live license, verified offline. Community and Business support `--bundle --check` without reading a license or installing the bundle.
 :::
 
 ## What you received
@@ -30,7 +25,7 @@ wrong thing to tell you.
 | You bought | What arrives | What you do with it |
 |---|---|---|
 | Community | nothing to install | already running — nothing on this page applies |
-| Business / Enterprise, self-hosted | a **license file** and a **download token** | install the license, then swap to the enterprise binary |
+| Business / Enterprise, self-hosted | a **license file** and a **download token** | install the license, then swap to the commercial binary |
 | Cloud | credentials for a hosted tenant | nothing to install on a host of yours |
 
 The license is a single signed blob. Save it as a file — `customer.license`, any name — and
@@ -138,6 +133,8 @@ Restart the service, and then turn the modules on:
 olivares enterprise enable <preset>     # starter | regulated | full
 ```
 
+The command and the preset names are what the commercial binary accepts. The presets are
+not editions and do not map one to one to the four Business capability families.
 Activation is governed and audited: it shows you a diff first, and stages any module that
 needs a secret or a review rather than half-enabling it. `olivares enterprise status` reports
 what is active. These commands exist **only in the commercial binary** — if

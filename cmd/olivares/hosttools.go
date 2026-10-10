@@ -23,7 +23,7 @@ import (
 //
 // ⛔ IT IS NOT toolInstallEngine. That engine wires a GPG verifier, and Detect
 // calls List, which re-verifies retained signed material — so Probe=false alone
-// would still let a console read run gpg. This observer builds the same Claude
+// would still let a console read run gpg. This observer builds the same tool
 // catalog with an explicitly UNAVAILABLE verifier and an HTTP client that refuses
 // every request: nothing here constructs or invokes gpg, a detected CLI, a shell
 // or a network connection. A managed release whose signature is not re-verified
@@ -115,22 +115,10 @@ func newHostToolObserverAt(root string, rootErr error, home, pathEnv string) *ho
 	// cli-transport-exempt: refusedNetwork is this client's only transport and its RoundTrip
 	// refuses every request, so host-tool observation never reaches the network through it.
 	client := &http.Client{Transport: network}
-	claude := toolinstall.NewClaude(toolinstall.ClaudeOptions{
-		Verifier: toolinstall.UnavailableVerifier{},
-		Client:   client,
-	})
-	codex := toolinstall.NewCodexRelease(toolinstall.ReleaseArchiveOptions{Client: client})
-	grok := toolinstall.NewGrok(toolinstall.GrokOptions{Client: client})
-	cat, err := toolinstall.NewCapabilityCatalog(toolinstall.NewCatalog(claude), codex, grok)
-	var engine *toolinstall.Engine
-	// The process's verified releases (cmd_agent_tool.go): a release the full check
-	// verified is not re-hashed here while it is unchanged.
+	cat := toolinstall.NewOfficialCatalog(client, toolinstall.UnavailableVerifier{})
+	// A release already fully verified is not re-hashed while unchanged.
 	opts := toolinstall.EngineOptions{InstallerVersion: version, Verified: verifiedToolReleases}
-	if err != nil {
-		engine = toolinstall.NewEngine(toolinstall.NewCatalog(claude), opts)
-	} else {
-		engine = toolinstall.NewEngineWithCapabilities(cat, opts)
-	}
+	engine := toolinstall.NewEngineWithCapabilities(cat, opts)
 	return &hostToolObserver{
 		engine:  engine,
 		root:    root,

@@ -4,7 +4,6 @@
   "tabs": {
     "servers": "Serveurs",
     "tools": "Outils",
-    "toolPins": "Épingles d’outils",
     "skills": "Compétences",
     "wiring": "Câblage",
     "configs": "Configurations gérées"
@@ -44,7 +43,7 @@
     "consumers": "Câblé à",
     "consumersHint": "Sessions et agents connectés à ce serveur.",
     "noConfig": "Aucune configuration gérée",
-    "noConfigHint": "Ce serveur fonctionne avec ses paramètres découverts. Ajoutez une configuration gérée pour gouverner son transport et ses références de secret.",
+    "noConfigHint": "Ajoutez une définition enregistrée pour documenter le transport et les références aux secrets de ce serveur.",
     "manageConfig": "Gérer la configuration",
     "editConfig": "Modifier la configuration",
     "deleteConfig": "Supprimer la configuration",
@@ -64,46 +63,9 @@
     "schemaHash": "Hachage du schéma",
     "readOnly": "Lecture seule",
     "destructive": "Destructif",
-    "untrustedNote": "Les annotations sont auto-déclarées par le serveur MCP et NE SONT PAS vérifiées. Elles sont affichées uniquement à titre de signaux — le plan de contrôle ne les applique jamais.",
+    "untrustedNote": "Les annotations MCP sont des déclarations non vérifiées du serveur. Olivares AI les affiche comme des signaux et ne les applique pas.",
     "empty": "Aucun outil découvert",
     "truncated": "{{n}} outils chargés ; il y en a d'autres"
-  },
-  "toolPins": {
-    "title": "Épingles actuelles",
-    "description": "Empreintes approuvées des outils MCP qui constituent la référence d’autorisation actuelle.",
-    "search": "Rechercher des épingles d’outils…",
-    "tool": "Outil",
-    "fingerprint": "Empreinte",
-    "pinnedAt": "Épinglée",
-    "pinCount": "Nombre d’épinglages",
-    "actions": "Actions",
-    "empty": "Aucune épingle d’outil",
-    "emptyHint": "Aucune empreinte d’outil MCP n’est épinglée pour ce tenant.",
-    "enterprise": "L’épinglage d’outils est une fonctionnalité Enterprise. Aucun vérificateur Enterprise n’est encore relié à ce build.",
-    "driftsTitle": "Dérives en attente",
-    "driftsHint": "Ces empreintes observées diffèrent de la référence d’autorisation approuvée. Examinez chaque changement avant de l’approuver.",
-    "pinnedFingerprint": "Empreinte épinglée",
-    "driftFingerprint": "Empreinte ayant dérivé",
-    "driftObserved": "Observée",
-    "approve": "Approuver la dérive",
-    "approveAria": "Approuver la dérive de {{tool}}",
-    "approveTitle": "Approuver la dérive de « {{tool}} » ?",
-    "approveBody": "Cette action remplace l’empreinte épinglée par l’empreinte actuellement en dérive et modifie la référence d’autorisation de l’outil.",
-    "approveConfirm": "Approuver la dérive",
-    "approveDone": "Dérive de l’outil approuvée",
-    "unpin": "Désépingler",
-    "unpinAria": "Désépingler {{tool}}",
-    "unpinTitle": "Désépingler « {{tool}} » ?",
-    "unpinBody": "Cette action supprime la référence d’autorisation épinglée de l’outil. Toute utilisation future exigera une nouvelle épingle approuvée.",
-    "unpinConfirm": "Désépingler",
-    "unpinDone": "Outil désépinglé",
-    "conflictTitle": "« {{tool}} » a changé pendant votre examen",
-    "conflictBody": "Le moteur a refusé la modification : l’état de l’épinglage a bougé entre votre lecture et votre écriture. Rien n’a été appliqué. Comparez ce que vous avez examiné avec l’état actuel, puis décidez à nouveau.",
-    "conflictReviewed": "Ce que vous avez examiné (version de base {{version}})",
-    "conflictCurrent": "Actuel (version de base {{version}})",
-    "conflictGone": "Cet outil n’a plus d’épinglage. Quelqu’un l’a révoqué pendant votre examen.",
-    "conflictDismiss": "Fermer",
-    "conflictReloading": "Relecture de l’état actuel…"
   },
   "skills": {
     "search": "Rechercher des compétences…",
@@ -152,14 +114,15 @@
     "secretsCount_other": "{{count}} références",
     "newConfig": "Nouvelle configuration",
     "empty": "Aucune configuration gérée",
-    "emptyHint": "Créez une configuration gérée pour gouverner le transport, le périmètre et les références de secret d’un serveur MCP.",
-    "truncated": "{{n}} configurations chargées ; il y en a d'autres"
+    "emptyHint": "Enregistrez une définition du transport, du périmètre et des références aux secrets d’un serveur MCP pour l’observation et l’historique des versions.",
+    "truncated": "{{n}} configurations chargées ; il y en a d'autres",
+    "observationNotice": "Les définitions enregistrées sont des métadonnées d’observation. Enregistrer, activer ou supprimer une définition ne modifie ni la passerelle MCP ni un serveur en cours d’exécution."
   },
   "editor": {
     "createTitle": "Nouvelle configuration gérée",
     "editTitle": "Modifier la configuration gérée",
     "serverRef": "Référence du serveur",
-    "serverRefHint": "Le nom du serveur MCP gouverné par cette configuration. Immuable après la création.",
+    "serverRefHint": "Le nom du serveur MCP décrit par cette définition. Immuable après sa création.",
     "transport": "Transport",
     "endpoint": "Point de terminaison",
     "endpointHint": "Une référence uniquement — n’intégrez jamais d’identifiants dans le point de terminaison.",
@@ -221,7 +184,7 @@
   "empty": {
     "config": {
       "title": "Aucune configuration gérée créée",
-      "description": "Créez une configuration gérée pour gouverner le transport, le périmètre et les références de secret d’un serveur MCP."
+      "description": "Enregistrez une définition du transport, du périmètre et des références aux secrets d’un serveur MCP pour l’observation et l’historique des versions."
     },
     "server": {
       "title": "Aucun serveur MCP découvert",

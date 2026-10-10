@@ -42,13 +42,6 @@ type ProtocolLocalResourceResolver interface {
 	) (ProtocolLocalResourceProjection, error)
 }
 
-// UseProtocolLocalResourceResolver late-binds the read-only composition seam.
-func (m *Module) UseProtocolLocalResourceResolver(resolver ProtocolLocalResourceResolver) {
-	m.mu.Lock()
-	m.protocolLocalResourceResolver = resolver
-	m.mu.Unlock()
-}
-
 func protocolLocalResourceID(input ProtocolBindingSpecInput) (model.ID, error) {
 	if input.LocalKind == BindingLocalWorkItem {
 		return model.ID(""), nil
@@ -93,7 +86,7 @@ func (m *Module) validateProtocolLocalResourcePreview(
 		return &ProtocolBindingValidation{Verdict: ProtocolObservationBroken, Code: "local_resource_selector_invalid"}
 	}
 	m.mu.Lock()
-	resolver := m.protocolLocalResourceResolver
+	resolver := m.ProtocolLocalResourceResolver
 	m.mu.Unlock()
 	if resolver == nil {
 		return &ProtocolBindingValidation{Verdict: ProtocolObservationUnknown, Code: "local_resource_resolver_unwired"}

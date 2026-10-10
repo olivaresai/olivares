@@ -188,6 +188,14 @@ func TestDRDestinationUnrelatedCluster(t *testing.T) {
 	}
 	a := isolatedPG(t)
 	t.Setenv(pgtest.EnvSuperuserDSN, other)
+	// pgtest caches the primary-major verdict per process. Corroborate the
+	// unrelated cluster independently before provisioning on another server.
+	if otherMajor := os.Getenv("OLIVARES_TEST_POSTGRES_OTHER_EXPECT_MAJOR"); otherMajor != "" {
+		actual := drMeasuredMajor(t, drOpenSuper(t, other))
+		if otherMajor != fmt.Sprint(actual) {
+			t.Fatalf("unrelated cluster declares PostgreSQL %s, connected PostgreSQL %d", otherMajor, actual)
+		}
+	}
 	b := isolatedPG(t)
 	as, bs := drOpenSuper(t, a.Superuser), drOpenSuper(t, b.Superuser)
 	var aid, bid string
@@ -317,7 +325,9 @@ func TestDRDestinationHolderLossCannotCommit(t *testing.T) {
  AND objsubid=1 AND mode='ExclusiveLock'`)
 			t.Logf("%s: actual exclusive holder=%d DDL/migration waiter=%d", phase, holder, waiter)
 			var terminated bool
-			if err := super.QueryRowContext(ctx, `SELECT pg_catalog.pg_terminate_backend($1)`, holder).Scan(&terminated); err != nil || !terminated {
+			// A zero timeout only confirms signal delivery. Wait for backend exit
+			// before asserting that its transaction and advisory locks are gone.
+			if err := super.QueryRowContext(ctx, `SELECT pg_catalog.pg_terminate_backend($1, 5000)`, holder).Scan(&terminated); err != nil || !terminated {
 				t.Fatalf("terminate exact owned restore backend: %t %v", terminated, err)
 			}
 			if _, err := barrier.ExecContext(ctx, `SELECT pg_catalog.pg_advisory_unlock_all()`); err != nil {

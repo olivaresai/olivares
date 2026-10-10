@@ -37,6 +37,19 @@ const { api, authState } = vi.hoisted(() => ({
   },
 }))
 
+const panels = vi.hoisted(() => ({ scopesCards: [] as PanelExtension[] }))
+vi.mock('@/features/extensions', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/features/extensions')>()
+  return {
+    ...actual,
+    PANEL_EXTENSIONS: {
+      ...actual.PANEL_EXTENSIONS,
+      get scopesCards() {
+        return panels.scopesCards
+      },
+    },
+  }
+})
 vi.mock('@/lib/auth/context', () => ({ useAuth: () => authState }))
 vi.mock('@/lib/hooks/use-workspace-filter', () => ({
   useWorkspaceFilter: () => ({ workspaceId: undefined, queryKey: '__all__' }),
@@ -50,6 +63,7 @@ vi.mock('./api', async (importOriginal) => {
   return { ...actual, consoleApi: api }
 })
 
+import type { PanelExtension } from '@/features/panels'
 import { ScopesTab } from './scopes-tab'
 
 const emptyList = { items: [], has_more: false }
@@ -153,12 +167,68 @@ describe('ScopesTab agent-groups', () => {
     )
   })
 
+  it('creates a workspace with the slug derived from its name', async () => {
+    api.createWorkspace.mockResolvedValue(workspace)
+    const user = userEvent.setup()
+    wrap(<ScopesTab />)
+
+    await user.click(
+      await screen.findByRole('button', { name: /new workspace/i }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    await user.type(within(dialog).getByLabelText(/^name/i), 'Platform Team')
+
+    expect(within(dialog).getByLabelText(/^slug/i)).toHaveValue('platform-team')
+    const submit = within(dialog).getByRole('button', {
+      name: /new workspace/i,
+    })
+    expect(submit).toBeEnabled()
+    await user.click(submit)
+    await waitFor(() =>
+      expect(api.createWorkspace).toHaveBeenCalledWith({
+        name: 'Platform Team',
+        slug: 'platform-team',
+      }),
+    )
+  })
+
+  it('keeps a hand-edited workspace slug when the name changes', async () => {
+    api.createWorkspace.mockResolvedValue(workspace)
+    const user = userEvent.setup()
+    wrap(<ScopesTab />)
+
+    await user.click(
+      await screen.findByRole('button', { name: /new workspace/i }),
+    )
+    const dialog = await screen.findByRole('dialog')
+    const slug = within(dialog).getByLabelText(/^slug/i)
+    const submit = within(dialog).getByRole('button', {
+      name: /new workspace/i,
+    })
+    await user.type(within(dialog).getByLabelText(/^name/i), 'Platform Team')
+    await user.clear(slug)
+    expect(submit).toBeDisabled()
+    await user.type(slug, 'platform')
+    await user.type(within(dialog).getByLabelText(/^name/i), ' EU')
+    expect(slug).toHaveValue('platform')
+
+    await user.click(submit)
+    await waitFor(() =>
+      expect(api.createWorkspace).toHaveBeenCalledWith({
+        name: 'Platform Team EU',
+        slug: 'platform',
+      }),
+    )
+  })
+
   it('renames a workspace with PATCH', async () => {
     api.updateWorkspace.mockResolvedValue({ ...workspace, name: 'Platform' })
     const user = userEvent.setup()
     wrap(<ScopesTab />)
 
-    const row = (await screen.findByText('Engineering')).closest('tr')!
+    const row = (
+      await screen.findByRole('cell', { name: /^Engineering/ })
+    ).closest('tr')!
     await user.click(within(row).getByRole('button', { name: /rename/i }))
     const dialog = await screen.findByRole('dialog', {
       name: /rename workspace/i,
@@ -180,7 +250,9 @@ describe('ScopesTab agent-groups', () => {
     const user = userEvent.setup()
     wrap(<ScopesTab />)
 
-    const row = (await screen.findByText('Build agents')).closest('tr')!
+    const row = (
+      await screen.findByRole('cell', { name: 'Build agents' })
+    ).closest('tr')!
     await user.click(within(row).getByRole('button', { name: /^edit$/i }))
     const dialog = await screen.findByRole('dialog')
     await user.clear(within(dialog).getByLabelText(/^name/i))
@@ -217,7 +289,9 @@ describe('ScopesTab agent-groups', () => {
     const user = userEvent.setup()
     wrap(<ScopesTab />)
 
-    const row = (await screen.findByText('Build agents')).closest('tr')!
+    const row = (
+      await screen.findByRole('cell', { name: 'Build agents' })
+    ).closest('tr')!
     await user.click(within(row).getByRole('button', { name: /members/i }))
     const dialog = await screen.findByRole('dialog')
     expect(await within(dialog).findByText('Build bot')).toBeInTheDocument()
@@ -241,6 +315,53 @@ describe('ScopesTab agent-groups', () => {
   })
 })
 
+describe('ScopesTab organization tree', () => {
+  const child = {
+    ...workspace,
+    id: 'ws2',
+    name: 'Platform',
+    slug: 'platform',
+    is_default: false,
+    parent_id: 'ws1',
+  }
+
+  // Departments are Business: the default console draws no organization tree,
+  // even over a stored one, and offers no move.
+  it('draws no organization tree in the default console', async () => {
+    panels.scopesCards = []
+    api.listWorkspaces.mockResolvedValue({
+      items: [workspace, child],
+      has_more: false,
+    })
+    wrap(<ScopesTab />)
+    await screen.findByRole('cell', { name: /^Platform/ })
+    expect(
+      screen.queryByRole('list', { name: /organization tree/i }),
+    ).not.toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /^move /i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('mounts extension cards below the workspaces, each only with its permission', async () => {
+    authState.can = (p) => p !== 'fixture:hidden'
+    panels.scopesCards = [
+      { id: 'shown', Component: () => <p>Fixture card</p> },
+      {
+        id: 'hidden',
+        permission: 'fixture:hidden',
+        Component: () => <p>Hidden card</p>,
+      },
+    ]
+    api.listWorkspaces.mockResolvedValue({ items: [workspace], has_more: false })
+    wrap(<ScopesTab />)
+    expect(await screen.findByText('Fixture card')).toBeInTheDocument()
+    expect(screen.queryByText('Hidden card')).not.toBeInTheDocument()
+    panels.scopesCards = []
+    authState.can = () => true
+  })
+})
+
 /**
  * ⛔ EL SEXTO AVISO, con su testigo. El contraste (F-02) midio que el trinquete acepta un
  *    aviso cualquiera POR FEATURE, asi que ninguno de los seis estaba realmente cubierto: quitar
@@ -250,7 +371,7 @@ describe('ScopesTab — la lista de workspaces declara su recorte', () => {
   it('con has_more sale UN aviso, y sin el ninguno', async () => {
     api.listWorkspaces.mockResolvedValue({ items: [workspace], has_more: true })
     wrap(<ScopesTab />)
-    await screen.findByText(workspace.name)
+    await screen.findByRole('cell', { name: /^Engineering/ })
     expect(screen.getAllByText(/there are more/i)).toHaveLength(1)
 
     cleanup()
@@ -259,7 +380,7 @@ describe('ScopesTab — la lista de workspaces declara su recorte', () => {
       has_more: false,
     })
     wrap(<ScopesTab />)
-    await screen.findByText(workspace.name)
+    await screen.findByRole('cell', { name: /^Engineering/ })
     expect(screen.queryByText(/there are more/i)).not.toBeInTheDocument()
   })
 })

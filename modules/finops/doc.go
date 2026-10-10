@@ -31,6 +31,12 @@
 //     this period, it RECORDS the alert (finops.budget_alert) and EMITS a
 //     FindingReport on the bus. It emits the signal only — delivery to
 //     Slack/SIEM/PagerDuty is the output connectors' / job.
+//     A workspace budget keyed by a stored department's slug or ID covers its
+//     descendants in the same reference form, through store.WorkspaceLineage.
+//     Matching, admission holds, spend totals, status and alerts use that subtree.
+//     A flat or external workspace reference retains exact matching. Moving a
+//     department changes future evaluations; persisted alerts and prepared attempts
+//     keep their committed scope. Reservation applicability is checked in the write.
 //     Preventive per-group ceilings are approximate by design: user_group budget
 //     keys are UserGroup.ID values (as carried by auth.Principal.GroupsIn) and
 //     agent_group budget keys are AgentGroup.Slug values. The cost read-model has

@@ -5,6 +5,7 @@
 // Evidence-pack download helpers (kept out of components.tsx so that file stays
 // component-only for fast refresh).
 import type { EvidencePack } from './types'
+import { downloadBlob } from '@/lib/api/download'
 
 /** Evidence-pack filename for one stop. */
 export function evidenceFilename(id: string): string {
@@ -18,12 +19,5 @@ export function downloadEvidencePack(id: string, pack: EvidencePack): void {
   const blob = new Blob([JSON.stringify(pack, null, 2)], {
     type: 'application/json',
   })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = evidenceFilename(id)
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
-  URL.revokeObjectURL(url)
+  downloadBlob(blob, evidenceFilename(id))
 }

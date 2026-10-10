@@ -25,12 +25,12 @@ Die Posture ist konstruktionsbedingt ehrlich:
   jeden geheimnisführenden Flow-Wert serverseitig — den CSRF-State, die
   OIDC-Nonce, den PKCE-Verifier (nur die S256-*Challenge* geht an den
   Provider). Authorization Code + **PKCE ist immer aktiv**.
-- **OIDC/SAML-Anmeldung mit einem IdP ist in Community und Enterprise verfügbar.**
+- **OIDC/SAML-Anmeldung mit einem IdP ist in jeder Edition verfügbar, Community eingeschlossen.**
   Konfigurieren Sie sie über die verwalteten SSO-Einstellungen der Konsole.
   Ohne verwaltete Konfiguration verwendet die Engine die Startumgebung
   (`OLIVARES_SSO_PROTOCOL`, `OLIVARES_OIDC_*` oder `OLIVARES_SAML_*`). Ohne
   konfigurierten Provider gibt `NoFederation` den Status `501 sso_not_configured`
-  zurück: Es fehlt die Konfiguration; das Protokoll ist nicht Enterprise vorbehalten.
+  zurück: Es fehlt die Konfiguration; das Protokoll ist nicht den kommerziellen Editionen vorbehalten.
 - Die Redirect-/ACS-URI, die Ihr IdP führen muss, ist **exakt**
   (`…/v1/auth/federation/callback` auf Ihrem Konsolen-Origin — RFC-9700-Exact-Matching,
   keine Präfix-Tricks).
@@ -58,7 +58,7 @@ Die Control Plane ist ein standardkonformer SCIM-2.0-Service-Provider (RFC
   SCIM-Integration — dasselbe Opaque-Token-Modell wie der Rest der API, kein
   separater SCIM-Geheimnistyp. Der Endpunkt ist immer vorhanden (nicht
   feature-gated).
-- **Users** provisioniert und deprovisioniert Identitäten in Community und Enterprise.
+- **Users** provisioniert und deprovisioniert Identitäten in jeder Edition, Community eingeschlossen.
   Änderungen setzen die Zustellung und erfolgreiche Verarbeitung der SCIM-Anfrage
   voraus. Prüfen Sie die Antwort und die betroffenen Zugriffsrechte; ein HR-Ereignis
   allein belegt keinen abgeschlossenen Entzug. SCIM entfernt keine Betriebssystemkonten.

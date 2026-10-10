@@ -694,7 +694,7 @@ func exerciseWorkAuthorityJoinedReplay(t *testing.T, backing communicationHTTPTe
 	resolver := &countingWorkIdentityResolver{workIdentityResolver: workIdentityResolver{
 		st: e.eng.store, sessions: e.eng.sessionsMod, agentLifecycle: lifecycle,
 	}}
-	e.eng.sessionsMod.UseWorkIdentityResolver(resolver)
+	sessions.WithWorkIdentityResolver(resolver)(e.eng.sessionsMod)
 	sm := e.eng.sessionsMod
 	operator := sessions.WorkPrincipal{
 		ActorKind: model.ActorSystem, ActorRef: "wla-operator", Actor: "system:wla-operator", Admin: true,
@@ -857,7 +857,7 @@ func exerciseWorkAuthorityConcurrentChange(t *testing.T, backing communicationHT
 	barrier := &barrierWorkIdentityResolver{workIdentityResolver: workIdentityResolver{
 		st: e.eng.store, sessions: e.eng.sessionsMod, agentLifecycle: lifecycle,
 	}}
-	e.eng.sessionsMod.UseWorkIdentityResolver(barrier)
+	sessions.WithWorkIdentityResolver(barrier)(e.eng.sessionsMod)
 	sm := e.eng.sessionsMod
 	ctx := context.Background()
 	operator := sessions.WorkPrincipal{

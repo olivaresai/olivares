@@ -353,25 +353,42 @@ describe('SessionViewerPage', () => {
     ).toBeInTheDocument()
   })
 
-  it('confirms seal and renders an honest 409 already-sealed state', async () => {
-    api.seal.mockRejectedValue(
-      new ApiError(409, 'conflict', 'session is already sealed'),
-    )
-    wrap(<SessionViewerPage />)
+  it.each([false, true])(
+    'reports already-sealed=%s with the matching toast intent',
+    async (alreadySealed) => {
+      if (alreadySealed) {
+        api.seal.mockRejectedValue(
+          new ApiError(409, 'conflict', 'session is already sealed'),
+        )
+      } else {
+        api.seal.mockResolvedValue(undefined)
+      }
+      wrap(<SessionViewerPage />)
 
-    await userEvent.click(
-      await screen.findByRole('button', { name: 'Seal session' }),
-    )
-    const dialog = await screen.findByRole('dialog')
-    await userEvent.click(
-      within(dialog).getByRole('button', { name: 'Seal session' }),
-    )
+      await userEvent.click(
+        await screen.findByRole('button', { name: 'Seal session' }),
+      )
+      const dialog = await screen.findByRole('dialog')
+      await userEvent.click(
+        within(dialog).getByRole('button', { name: 'Seal session' }),
+      )
 
-    await waitFor(() => expect(api.seal).toHaveBeenCalledWith('sess-1'))
-    expect(
-      await screen.findByText('This session is already sealed.'),
-    ).toBeInTheDocument()
-  })
+      await waitFor(() => expect(api.seal).toHaveBeenCalledWith('sess-1'))
+      expect(
+        await screen.findByText(
+          alreadySealed ? 'This session is already sealed.' : 'Session sealed',
+        ),
+      ).toBeInTheDocument()
+      await waitFor(() =>
+        expect(
+          alreadySealed ? toast.warning : toast.success,
+        ).toHaveBeenCalledTimes(1),
+      )
+      expect(
+        alreadySealed ? toast.success : toast.warning,
+      ).not.toHaveBeenCalled()
+    },
+  )
 
   it.each([
     [

@@ -190,7 +190,7 @@ func (p *grokPeer) answerHandshake(sessionID string, methods []any) (DriverHands
 		done <- outcome{hs, err}
 	}()
 	id, method, _ := p.nextRequest()
-	if method != grokMethodInitialize {
+	if method != acpMethodInitialize {
 		p.t.Fatalf("first request = %q, want initialize", method)
 	}
 	p.reply(id, grokInitializeResult(methods))
@@ -200,7 +200,7 @@ func (p *grokPeer) answerHandshake(sessionID string, methods []any) (DriverHands
 		case grokMethodAuthenticate:
 			p.reply(id, map[string]any{})
 			continue
-		case grokMethodSessionNew:
+		case acpMethodSessionNew:
 			p.reply(id, map[string]any{"sessionId": sessionID})
 		default:
 			p.t.Fatalf("unexpected handshake request %q", method)
@@ -249,7 +249,7 @@ func TestGrokWireCarriesTheJSONRPCMemberAndAdvertisesNoUnimplementedCapability(t
 	if err := json.Unmarshal(lines[0], &init); err != nil {
 		t.Fatalf("initialize is not readable: %s", lines[0])
 	}
-	if init.Params.ProtocolVersion != grokProtocolVersion {
+	if init.Params.ProtocolVersion != acpProtocolVersion {
 		t.Fatalf("initialize declared protocolVersion %d", init.Params.ProtocolVersion)
 	}
 	caps := init.Params.ClientCapabilities
@@ -311,7 +311,7 @@ func TestGrokRefusesAProtocolVersionItDoesNotImplement(t *testing.T) {
 		{"missing", ``, false},
 		{"an object", `{"major":1}`, false},
 	} {
-		if got := grokProtocolVersionMatches(json.RawMessage(tc.raw)); got != tc.want {
+		if got := acpProtocolVersionMatches(json.RawMessage(tc.raw)); got != tc.want {
 			t.Fatalf("%s: match = %t, want %t", tc.name, got, tc.want)
 		}
 	}
@@ -324,7 +324,7 @@ func TestGrokRefusesAProtocolVersionItDoesNotImplement(t *testing.T) {
 		done <- err
 	}()
 	id, method, _ := peer.nextRequest()
-	if method != grokMethodInitialize {
+	if method != acpMethodInitialize {
 		t.Fatalf("first request = %q", method)
 	}
 	peer.reply(id, map[string]any{"protocolVersion": 99, "authMethods": []any{}})
@@ -461,7 +461,7 @@ func TestGrokInputReturnsOnDispatchAndTheTurnEndsOnItsOwnResponse(t *testing.T) 
 		t.Fatalf("Input waited %s for the turn to finish; it must return on the dispatch", elapsed)
 	}
 	id, method, params := peer.nextRequest()
-	if method != grokMethodSessionPrompt {
+	if method != acpMethodSessionPrompt {
 		t.Fatalf("request = %q, want session/prompt", method)
 	}
 	if params["sessionId"] != "sess-turn" {
@@ -511,11 +511,11 @@ func TestGrokNotificationsNeitherNominateNorFinishATurn(t *testing.T) {
 	turn := peer.session.ActiveTurn()
 
 	session := peer.session.(*grokSession)
-	peer.notify(grokNotifySessionUpdate, map[string]any{
+	peer.notify(acpNotifySessionUpdate, map[string]any{
 		"sessionId": "sess-note",
 		"update":    map[string]any{"sessionUpdate": "agent_message_chunk"},
 	})
-	peer.notify(grokNotifySessionUpdate, map[string]any{
+	peer.notify(acpNotifySessionUpdate, map[string]any{
 		"sessionId": "someone-elses-conversation",
 		"update":    map[string]any{"sessionUpdate": "agent_message_chunk"},
 	})
@@ -613,7 +613,7 @@ func TestGrokResumeConfirmsTheStoredIDWithoutRequiringItBack(t *testing.T) {
 				done <- outcome{hs, err}
 			}()
 			id, method, _ := peer.nextRequest()
-			if method != grokMethodInitialize {
+			if method != acpMethodInitialize {
 				t.Fatalf("first request = %q", method)
 			}
 			peer.reply(id, grokInitializeResult(grokAllAuthMethods()))
@@ -622,7 +622,7 @@ func TestGrokResumeConfirmsTheStoredIDWithoutRequiringItBack(t *testing.T) {
 				peer.reply(id, map[string]any{})
 				id, method, _ = peer.nextRequest()
 			}
-			if method != grokMethodSessionResume {
+			if method != acpMethodSessionResume {
 				t.Fatalf("resume used %q; the advertised resume capability is preferred", method)
 			}
 			peer.reply(id, tc.result)
@@ -662,7 +662,7 @@ func TestGrokAFailedResumeNeverStartsANewConversation(t *testing.T) {
 		peer.reply(id, map[string]any{})
 		id, method, _ = peer.nextRequest()
 	}
-	if method != grokMethodSessionResume {
+	if method != acpMethodSessionResume {
 		t.Fatalf("request = %q", method)
 	}
 	peer.replyError(id, -32000, "conversation unavailable")
@@ -673,9 +673,9 @@ func TestGrokAFailedResumeNeverStartsANewConversation(t *testing.T) {
 		var frame map[string]any
 		_ = json.Unmarshal(line, &frame)
 		switch frame["method"] {
-		case grokMethodSessionNew:
+		case acpMethodSessionNew:
 			t.Fatalf("a refused resume fell back to session/new: %s", line)
-		case grokMethodSessionLoad:
+		case acpMethodSessionLoad:
 			t.Fatalf("a refused resume fell back to session/load: %s", line)
 		}
 	}
@@ -701,7 +701,7 @@ func TestGrokResumeSelectsTheAdvertisedCapabilityOnce(t *testing.T) {
 			peer.reply(id, map[string]any{})
 			id, method, params = peer.nextRequest()
 		}
-		if method != grokMethodSessionLoad {
+		if method != acpMethodSessionLoad {
 			t.Fatalf("request = %q, want session/load", method)
 		}
 		if params["sessionId"] != "stored-3" {
@@ -732,7 +732,7 @@ func TestGrokResumeSelectsTheAdvertisedCapabilityOnce(t *testing.T) {
 		for _, line := range peer.sentLines() {
 			var frame map[string]any
 			_ = json.Unmarshal(line, &frame)
-			if frame["method"] == grokMethodSessionNew {
+			if frame["method"] == acpMethodSessionNew {
 				t.Fatalf("a refused resume started a new conversation: %s", line)
 			}
 		}
@@ -746,7 +746,7 @@ func TestGrokResumeSelectsTheAdvertisedCapabilityOnce(t *testing.T) {
 // authorized.
 func TestGrokPermissionRequestValidation(t *testing.T) {
 	t.Parallel()
-	ok := []grokPermissionOption{{OptionID: "a", Kind: grokPermissionAllowOnce}}
+	ok := []acpPermissionOption{{OptionID: "a", Kind: acpPermissionAllowOnce}}
 	for _, tc := range []struct {
 		name   string
 		params grokRequestPermissionParams
@@ -757,23 +757,23 @@ func TestGrokPermissionRequestValidation(t *testing.T) {
 		{"no options", grokRequestPermissionParams{SessionID: "s"}, false},
 		{
 			"an option with no id",
-			grokRequestPermissionParams{SessionID: "s", Options: []grokPermissionOption{{Kind: grokPermissionAllowOnce}}},
+			grokRequestPermissionParams{SessionID: "s", Options: []acpPermissionOption{{Kind: acpPermissionAllowOnce}}},
 			false,
 		},
 		{
 			"two options with one id",
-			grokRequestPermissionParams{SessionID: "s", Options: []grokPermissionOption{
-				{OptionID: "a", Kind: grokPermissionAllowOnce}, {OptionID: "a", Kind: grokPermissionRejectOnce},
+			grokRequestPermissionParams{SessionID: "s", Options: []acpPermissionOption{
+				{OptionID: "a", Kind: acpPermissionAllowOnce}, {OptionID: "a", Kind: acpPermissionRejectOnce},
 			}},
 			false,
 		},
 		{
 			"no kind this client understands",
-			grokRequestPermissionParams{SessionID: "s", Options: []grokPermissionOption{{OptionID: "a", Kind: "teleport"}}},
+			grokRequestPermissionParams{SessionID: "s", Options: []acpPermissionOption{{OptionID: "a", Kind: "teleport"}}},
 			false,
 		},
 	} {
-		why, valid := grokValidPermissionRequest(tc.params)
+		why, valid := acpValidPermissionRequest(tc.params.SessionID, tc.params.Options, grokKnownPermissionKind)
 		if valid != tc.valid {
 			t.Fatalf("%s: valid = %t (%s), want %t", tc.name, valid, why, tc.valid)
 		}
@@ -787,15 +787,15 @@ func TestGrokPermissionRequestValidation(t *testing.T) {
 // a matching authority decision.
 func TestGrokSelectionNeverWidensWhatWasOfferedOrAuthorized(t *testing.T) {
 	t.Parallel()
-	offered := []grokPermissionOption{
-		{OptionID: "allow-once", Kind: grokPermissionAllowOnce},
-		{OptionID: "allow-always", Kind: grokPermissionAllowAlways},
-		{OptionID: "reject-once", Kind: grokPermissionRejectOnce},
-		{OptionID: "reject-always", Kind: grokPermissionRejectAlways},
+	offered := []acpPermissionOption{
+		{OptionID: "allow-once", Kind: acpPermissionAllowOnce},
+		{OptionID: "allow-always", Kind: acpPermissionAllowAlways},
+		{OptionID: "reject-once", Kind: acpPermissionRejectOnce},
+		{OptionID: "reject-always", Kind: acpPermissionRejectAlways},
 	}
 	for _, tc := range []struct {
 		name    string
-		options []grokPermissionOption
+		options []acpPermissionOption
 		dec     ProviderApprovalDecision
 		want    string
 		ok      bool
@@ -832,7 +832,7 @@ func TestGrokSelectionNeverWidensWhatWasOfferedOrAuthorized(t *testing.T) {
 		},
 		{
 			"only persistent options are offered and the decision is turn-scoped",
-			[]grokPermissionOption{{OptionID: "allow-always", Kind: grokPermissionAllowAlways}},
+			[]acpPermissionOption{{OptionID: "allow-always", Kind: acpPermissionAllowAlways}},
 			ProviderApprovalDecision{Allow: true, Granted: []string{"allow-always"}},
 			"", false,
 		},
@@ -845,11 +845,11 @@ func TestGrokSelectionNeverWidensWhatWasOfferedOrAuthorized(t *testing.T) {
 
 	// And the refusal side: only the ONE-SHOT rejection is selected. A standing
 	// "never allow" is a persistent decision this driver does not take on its own.
-	if got, ok := grokSelectRefusal(offered); !ok || got != "reject-once" {
+	if got, ok := acpSelectRefusal(offered); !ok || got != "reject-once" {
 		t.Fatalf("refusal = %q,%t", got, ok)
 	}
-	onlyPersistent := []grokPermissionOption{{OptionID: "reject-always", Kind: grokPermissionRejectAlways}}
-	if _, ok := grokSelectRefusal(onlyPersistent); ok {
+	onlyPersistent := []acpPermissionOption{{OptionID: "reject-always", Kind: acpPermissionRejectAlways}}
+	if _, ok := acpSelectRefusal(onlyPersistent); ok {
 		t.Fatal("a persistent rejection must not be selected for a turn-scoped refusal")
 	}
 }
@@ -866,16 +866,16 @@ func TestGrokUnwiredAuthorityRefusesWithAnOfferedRejection(t *testing.T) {
 		t.Fatalf("input: %v", err)
 	}
 	promptID, _, _ := peer.nextRequest()
-	peer.requestFromServer("srv-1", grokReqRequestPermission, map[string]any{
+	peer.requestFromServer("srv-1", acpReqRequestPermission, map[string]any{
 		"sessionId": "sess-perm",
 		"toolCall":  map[string]any{"toolCallId": "call-1", "kind": "execute"},
 		"options": []any{
-			map[string]any{"optionId": "allow-once", "kind": grokPermissionAllowOnce},
-			map[string]any{"optionId": "reject-once", "kind": grokPermissionRejectOnce},
+			map[string]any{"optionId": "allow-once", "kind": acpPermissionAllowOnce},
+			map[string]any{"optionId": "reject-once", "kind": acpPermissionRejectOnce},
 		},
 	})
 	reply := peer.nextResponse()
-	if got := reply.Outcome.Outcome; got != grokOutcomeSelected {
+	if got := reply.Outcome.Outcome; got != acpOutcomeSelected {
 		t.Fatalf("outcome = %q, want a selected rejection", got)
 	}
 	if reply.Outcome.OptionID != "reject-once" {
@@ -891,15 +891,15 @@ func TestGrokPermissionWithNoActiveTurnIsCancelled(t *testing.T) {
 	if _, err := peer.answerHandshake("sess-idle", grokAllAuthMethods()); err != nil {
 		t.Fatalf("handshake: %v", err)
 	}
-	peer.requestFromServer("srv-2", grokReqRequestPermission, map[string]any{
+	peer.requestFromServer("srv-2", acpReqRequestPermission, map[string]any{
 		"sessionId": "sess-idle",
 		"toolCall":  map[string]any{"toolCallId": "call-1", "kind": "execute"},
 		"options": []any{
-			map[string]any{"optionId": "allow-once", "kind": grokPermissionAllowOnce},
-			map[string]any{"optionId": "reject-once", "kind": grokPermissionRejectOnce},
+			map[string]any{"optionId": "allow-once", "kind": acpPermissionAllowOnce},
+			map[string]any{"optionId": "reject-once", "kind": acpPermissionRejectOnce},
 		},
 	})
-	if got := peer.nextResponse().Outcome.Outcome; got != grokOutcomeCancelled {
+	if got := peer.nextResponse().Outcome.Outcome; got != acpOutcomeCancelled {
 		t.Fatalf("outcome = %q, want cancelled", got)
 	}
 }
@@ -919,12 +919,12 @@ func TestGrokPermissionForAForeignConversationIsCancelled(t *testing.T) {
 		t.Fatalf("input: %v", err)
 	}
 	promptID, _, _ := peer.nextRequest()
-	peer.requestFromServer("srv-3", grokReqRequestPermission, map[string]any{
+	peer.requestFromServer("srv-3", acpReqRequestPermission, map[string]any{
 		"sessionId": "sess-somebody-else",
 		"toolCall":  map[string]any{"toolCallId": "call-1", "kind": "execute"},
-		"options":   []any{map[string]any{"optionId": "allow-once", "kind": grokPermissionAllowOnce}},
+		"options":   []any{map[string]any{"optionId": "allow-once", "kind": acpPermissionAllowOnce}},
 	})
-	if got := peer.nextResponse().Outcome.Outcome; got != grokOutcomeCancelled {
+	if got := peer.nextResponse().Outcome.Outcome; got != acpOutcomeCancelled {
 		t.Fatalf("outcome = %q, want cancelled", got)
 	}
 	peer.reply(promptID, map[string]any{"stopReason": "end_turn"})
@@ -966,8 +966,8 @@ func TestGrokPermissionAfterAnInterruptCannotBeGranted(t *testing.T) {
 		t.Fatalf("input: %v", err)
 	}
 	promptID, method, _ := peer.nextRequest()
-	if method != grokMethodSessionPrompt {
-		t.Fatalf("request = %q, want %q", method, grokMethodSessionPrompt)
+	if method != acpMethodSessionPrompt {
+		t.Fatalf("request = %q, want %q", method, acpMethodSessionPrompt)
 	}
 	if attempted, err := peer.session.Interrupt(context.Background()); err != nil || !attempted {
 		t.Fatalf("interrupt = attempted %t, err %v", attempted, err)
@@ -981,20 +981,20 @@ func TestGrokPermissionAfterAnInterruptCannotBeGranted(t *testing.T) {
 		t.Fatal("a second concurrent turn opened while the first was winding down")
 	}
 
-	peer.requestFromServer("srv-after-cancel", grokReqRequestPermission, map[string]any{
+	peer.requestFromServer("srv-after-cancel", acpReqRequestPermission, map[string]any{
 		"sessionId": "sess-cancelling",
 		"toolCall":  map[string]any{"toolCallId": "call-after-cancel", "kind": "execute"},
 		"options": []any{
-			map[string]any{"optionId": "allow-once", "kind": grokPermissionAllowOnce},
-			map[string]any{"optionId": "allow-always", "kind": grokPermissionAllowAlways},
-			map[string]any{"optionId": "reject-once", "kind": grokPermissionRejectOnce},
+			map[string]any{"optionId": "allow-once", "kind": acpPermissionAllowOnce},
+			map[string]any{"optionId": "allow-always", "kind": acpPermissionAllowAlways},
+			map[string]any{"optionId": "reject-once", "kind": acpPermissionRejectOnce},
 		},
 	})
 	reply := peer.nextResponse()
 	if reply.Outcome.OptionID == "allow-once" || reply.Outcome.OptionID == "allow-always" {
 		t.Fatalf("a cancelling turn granted a permission: %+v", reply.Outcome)
 	}
-	if reply.Outcome.Outcome != grokOutcomeSelected || reply.Outcome.OptionID != "reject-once" {
+	if reply.Outcome.Outcome != acpOutcomeSelected || reply.Outcome.OptionID != "reject-once" {
 		t.Fatalf("outcome = %+v, want the offered one-shot rejection", reply.Outcome)
 	}
 	// The count is read AFTER the answer is on the wire, which is the point at
@@ -1051,12 +1051,12 @@ func TestGrokAnApprovalGateEnteredBeforeTheCancelAndReturningAfterItCannotGrant(
 	}
 	promptID, _, _ := peer.nextRequest()
 	// BEFORE the cancel, on a live turn.
-	peer.requestFromServer("srv-held", grokReqRequestPermission, map[string]any{
+	peer.requestFromServer("srv-held", acpReqRequestPermission, map[string]any{
 		"sessionId": "sess-held",
 		"toolCall":  map[string]any{"toolCallId": "call-held", "kind": "execute"},
 		"options": []any{
-			map[string]any{"optionId": "allow-once", "kind": grokPermissionAllowOnce},
-			map[string]any{"optionId": "reject-once", "kind": grokPermissionRejectOnce},
+			map[string]any{"optionId": "allow-once", "kind": acpPermissionAllowOnce},
+			map[string]any{"optionId": "reject-once", "kind": acpPermissionRejectOnce},
 		},
 	})
 	// Waiting for the gate to be ENTERED is what makes the ordering a fact rather
@@ -1074,7 +1074,7 @@ func TestGrokAnApprovalGateEnteredBeforeTheCancelAndReturningAfterItCannotGrant(
 	// The interrupt answered the request it found pending, and it answered it
 	// while the authority had still said nothing at all.
 	reply := peer.nextResponse()
-	if reply.Outcome.Outcome != grokOutcomeCancelled {
+	if reply.Outcome.Outcome != acpOutcomeCancelled {
 		t.Fatalf("outcome = %+v, want the protocol's cancellation written by the interrupt", reply.Outcome)
 	}
 
@@ -1118,22 +1118,22 @@ func TestGrokPermissionDuringShutdownCannotBeGranted(t *testing.T) {
 	// Shutdown cancels the turn and then asks for the advertised session/close. It
 	// is waiting for that answer, which is what holds the window open here.
 	closeID, method, _ := peer.nextRequest()
-	if method != grokMethodSessionClose {
-		t.Fatalf("request = %q, want %q", method, grokMethodSessionClose)
+	if method != acpMethodSessionClose {
+		t.Fatalf("request = %q, want %q", method, acpMethodSessionClose)
 	}
-	peer.requestFromServer("srv-shutdown", grokReqRequestPermission, map[string]any{
+	peer.requestFromServer("srv-shutdown", acpReqRequestPermission, map[string]any{
 		"sessionId": "sess-shutdown",
 		"toolCall":  map[string]any{"toolCallId": "call-shutdown", "kind": "execute"},
 		"options": []any{
-			map[string]any{"optionId": "allow-once", "kind": grokPermissionAllowOnce},
-			map[string]any{"optionId": "reject-once", "kind": grokPermissionRejectOnce},
+			map[string]any{"optionId": "allow-once", "kind": acpPermissionAllowOnce},
+			map[string]any{"optionId": "reject-once", "kind": acpPermissionRejectOnce},
 		},
 	})
 	reply := peer.nextResponse()
 	if reply.Outcome.OptionID == "allow-once" {
 		t.Fatalf("a session being shut down granted a permission: %+v", reply.Outcome)
 	}
-	if reply.Outcome.Outcome != grokOutcomeSelected || reply.Outcome.OptionID != "reject-once" {
+	if reply.Outcome.Outcome != acpOutcomeSelected || reply.Outcome.OptionID != "reject-once" {
 		t.Fatalf("outcome = %+v, want the offered one-shot rejection", reply.Outcome)
 	}
 	// Shutdown marks the same cancellation, so it admits the same way: a request
@@ -1205,8 +1205,8 @@ func TestGrokTheArrivalCancellationFactOutlivesTheTurnItNames(t *testing.T) {
 		"sessionId": "sess-outlives",
 		"toolCall":  map[string]any{"toolCallId": "call-outlives", "kind": "execute"},
 		"options": []any{
-			map[string]any{"optionId": "allow-once", "kind": grokPermissionAllowOnce},
-			map[string]any{"optionId": "reject-once", "kind": grokPermissionRejectOnce},
+			map[string]any{"optionId": "allow-once", "kind": acpPermissionAllowOnce},
+			map[string]any{"optionId": "reject-once", "kind": acpPermissionRejectOnce},
 		},
 	})
 	if err != nil {
@@ -1214,12 +1214,12 @@ func TestGrokTheArrivalCancellationFactOutlivesTheTurnItNames(t *testing.T) {
 	}
 	id := json.RawMessage(`"srv-outlives"`)
 	sess.resolveServerRequest(
-		&grokServerRequest{id: id, method: grokReqRequestPermission},
+		&acpServerRequest{id: id, method: acpReqRequestPermission},
 		string(id), raw, "sess-outlives", turn, true,
 	)
 
 	reply := peer.nextResponse()
-	if reply.Outcome.Outcome != grokOutcomeSelected || reply.Outcome.OptionID != "reject-once" {
+	if reply.Outcome.Outcome != acpOutcomeSelected || reply.Outcome.OptionID != "reject-once" {
 		t.Fatalf("outcome = %+v, want the offered one-shot rejection", reply.Outcome)
 	}
 	if n := consults.Load(); n != 0 {
@@ -1257,19 +1257,19 @@ func TestGrokTheTurnAfterACancelledResultIsAuthorizedNormally(t *testing.T) {
 		t.Fatalf("the conversation refused a turn after a cancelled one completed: %v", err)
 	}
 	second, method, _ := peer.nextRequest()
-	if method != grokMethodSessionPrompt {
-		t.Fatalf("request = %q, want %q", method, grokMethodSessionPrompt)
+	if method != acpMethodSessionPrompt {
+		t.Fatalf("request = %q, want %q", method, acpMethodSessionPrompt)
 	}
-	peer.requestFromServer("srv-again", grokReqRequestPermission, map[string]any{
+	peer.requestFromServer("srv-again", acpReqRequestPermission, map[string]any{
 		"sessionId": "sess-again",
 		"toolCall":  map[string]any{"toolCallId": "call-again", "kind": "execute"},
 		"options": []any{
-			map[string]any{"optionId": "allow-once", "kind": grokPermissionAllowOnce},
-			map[string]any{"optionId": "reject-once", "kind": grokPermissionRejectOnce},
+			map[string]any{"optionId": "allow-once", "kind": acpPermissionAllowOnce},
+			map[string]any{"optionId": "reject-once", "kind": acpPermissionRejectOnce},
 		},
 	})
 	reply := peer.nextResponse()
-	if reply.Outcome.Outcome != grokOutcomeSelected || reply.Outcome.OptionID != "allow-once" {
+	if reply.Outcome.Outcome != acpOutcomeSelected || reply.Outcome.OptionID != "allow-once" {
 		t.Fatalf("outcome = %+v, want the authorized one-shot grant", reply.Outcome)
 	}
 	peer.reply(second, map[string]any{"stopReason": "end_turn"})
@@ -1285,9 +1285,9 @@ func grokPermissionParams(conversation, call string) map[string]any {
 		"sessionId": conversation,
 		"toolCall":  map[string]any{"toolCallId": call, "kind": "execute"},
 		"options": []any{
-			map[string]any{"optionId": "allow-once", "kind": grokPermissionAllowOnce},
-			map[string]any{"optionId": "allow-always", "kind": grokPermissionAllowAlways},
-			map[string]any{"optionId": "reject-once", "kind": grokPermissionRejectOnce},
+			map[string]any{"optionId": "allow-once", "kind": acpPermissionAllowOnce},
+			map[string]any{"optionId": "allow-always", "kind": acpPermissionAllowAlways},
+			map[string]any{"optionId": "reject-once", "kind": acpPermissionRejectOnce},
 		},
 	}
 }
@@ -1303,8 +1303,8 @@ func grokOpenTurn(t *testing.T, peer *grokPeer, conversation string) int64 {
 		t.Fatalf("input: %v", err)
 	}
 	promptID, method, _ := peer.nextRequest()
-	if method != grokMethodSessionPrompt {
-		t.Fatalf("request = %q, want %q", method, grokMethodSessionPrompt)
+	if method != acpMethodSessionPrompt {
+		t.Fatalf("request = %q, want %q", method, acpMethodSessionPrompt)
 	}
 	if peer.session.ActiveTurn() == "" {
 		t.Fatal("the dispatched prompt opened no turn")
@@ -1386,7 +1386,7 @@ func TestGrokAPermissionAlreadyAnsweredByTheCancellationIsNeverAdmitted(t *testi
 		t.Fatal("the turn was already cancelling; this row needs a live one")
 	}
 	id := json.RawMessage(`"srv-answered"`)
-	req := &grokServerRequest{id: id, method: grokReqRequestPermission}
+	req := &acpServerRequest{id: id, method: acpReqRequestPermission}
 	sess.mu.Lock()
 	sess.pending[string(id)] = req
 	sess.mu.Unlock()
@@ -1401,7 +1401,7 @@ func TestGrokAPermissionAlreadyAnsweredByTheCancellationIsNeverAdmitted(t *testi
 		t.Fatalf("interrupt = attempted %t, err %v", attempted, err)
 	}
 	reply := peer.nextResponse()
-	if reply.Outcome.Outcome != grokOutcomeCancelled {
+	if reply.Outcome.Outcome != acpOutcomeCancelled {
 		t.Fatalf("outcome = %+v, want the protocol's cancellation written by the interrupt", reply.Outcome)
 	}
 
@@ -1471,7 +1471,7 @@ func TestGrokAPermissionAdmittedBeforeTheCancellationStillFinishesAndCannotGrant
 		}
 	})
 	promptID := grokOpenTurn(t, peer, "sess-admitted")
-	peer.requestFromServer("srv-admitted", grokReqRequestPermission,
+	peer.requestFromServer("srv-admitted", acpReqRequestPermission,
 		grokPermissionParams("sess-admitted", "call-admitted"))
 	select {
 	case <-entered:
@@ -1483,7 +1483,7 @@ func TestGrokAPermissionAdmittedBeforeTheCancellationStillFinishesAndCannotGrant
 		t.Fatalf("interrupt = attempted %t, err %v", attempted, err)
 	}
 	reply := peer.nextResponse()
-	if reply.Outcome.Outcome != grokOutcomeCancelled {
+	if reply.Outcome.Outcome != acpOutcomeCancelled {
 		t.Fatalf("outcome = %+v, want the protocol's cancellation written by the interrupt", reply.Outcome)
 	}
 
@@ -1523,14 +1523,14 @@ func TestGrokTheTurnAfterAnAnsweredRefusalIsAuthorizedNormally(t *testing.T) {
 	turn := peer.session.ActiveTurn()
 
 	id := json.RawMessage(`"srv-first"`)
-	req := &grokServerRequest{id: id, method: grokReqRequestPermission}
+	req := &acpServerRequest{id: id, method: acpReqRequestPermission}
 	sess.mu.Lock()
 	sess.pending[string(id)] = req
 	sess.mu.Unlock()
 	if attempted, err := peer.session.Interrupt(context.Background()); err != nil || !attempted {
 		t.Fatalf("interrupt = attempted %t, err %v", attempted, err)
 	}
-	if got := peer.nextResponse().Outcome.Outcome; got != grokOutcomeCancelled {
+	if got := peer.nextResponse().Outcome.Outcome; got != acpOutcomeCancelled {
 		t.Fatalf("outcome = %q, want the interrupt's cancellation", got)
 	}
 	raw, err := json.Marshal(grokPermissionParams("sess-after-answered", "call-first"))
@@ -1550,10 +1550,10 @@ func TestGrokTheTurnAfterAnAnsweredRefusalIsAuthorizedNormally(t *testing.T) {
 		t.Fatalf("the conversation refused a turn after a cancelled one completed: %v", err)
 	}
 	second, _, _ := peer.nextRequest()
-	peer.requestFromServer("srv-second", grokReqRequestPermission,
+	peer.requestFromServer("srv-second", acpReqRequestPermission,
 		grokPermissionParams("sess-after-answered", "call-second"))
 	reply := peer.nextResponse()
-	if reply.Outcome.Outcome != grokOutcomeSelected || reply.Outcome.OptionID != "allow-once" {
+	if reply.Outcome.Outcome != acpOutcomeSelected || reply.Outcome.OptionID != "allow-once" {
 		t.Fatalf("outcome = %+v, want the authorized one-shot grant on the next turn", reply.Outcome)
 	}
 	if n := consults.Load(); n != 1 {
@@ -1612,7 +1612,7 @@ func TestGrokTheCancellationsClaimIsRecordedBeforeItsReplyIsWritten(t *testing.T
 	turn := peer.session.ActiveTurn()
 
 	id := json.RawMessage(`"srv-blocked"`)
-	req := &grokServerRequest{id: id, method: grokReqRequestPermission}
+	req := &acpServerRequest{id: id, method: acpReqRequestPermission}
 	sess.mu.Lock()
 	sess.pending[string(id)] = req
 	sess.mu.Unlock()
@@ -1664,7 +1664,7 @@ func TestGrokTheCancellationsClaimIsRecordedBeforeItsReplyIsWritten(t *testing.T
 	if n := grokAnswersTo(peer, "srv-blocked"); n != 1 {
 		t.Fatalf("the driver wrote %d answers to srv-blocked, want exactly the cancellation", n)
 	}
-	if got := peer.nextResponse().Outcome.Outcome; got != grokOutcomeCancelled {
+	if got := peer.nextResponse().Outcome.Outcome; got != acpOutcomeCancelled {
 		t.Fatalf("outcome = %q, want the interrupt's cancellation", got)
 	}
 	peer.reply(promptID, map[string]any{"stopReason": "cancelled"})
@@ -1723,7 +1723,7 @@ func TestGrokConcurrentCancellationAnswersEachPermissionOnceAndGrantsNone(t *tes
 		})
 		promptID := grokOpenTurn(t, peer, "sess-probe")
 		turn := peer.session.ActiveTurn()
-		peer.requestFromServer("srv-probe", grokReqRequestPermission,
+		peer.requestFromServer("srv-probe", acpReqRequestPermission,
 			grokPermissionParams("sess-probe", "call-probe"))
 
 		// OBSERVATIONS, not classifications: which ordering this iteration happened to
@@ -1746,12 +1746,12 @@ func TestGrokConcurrentCancellationAnswersEachPermissionOnceAndGrantsNone(t *tes
 		// The one answer, whichever path wrote it. It is never a grant, and it is one
 		// of the two answers a stopped turn may receive.
 		reply := peer.nextResponse()
-		if reply.Outcome.Outcome == grokOutcomeSelected &&
+		if reply.Outcome.Outcome == acpOutcomeSelected &&
 			(reply.Outcome.OptionID == "allow-once" || reply.Outcome.OptionID == "allow-always") {
 			t.Fatalf("iteration %d: a cancelled turn granted a permission: %+v", i, reply.Outcome)
 		}
-		cancelled := reply.Outcome.Outcome == grokOutcomeCancelled
-		refusedOnce := reply.Outcome.Outcome == grokOutcomeSelected && reply.Outcome.OptionID == "reject-once"
+		cancelled := reply.Outcome.Outcome == acpOutcomeCancelled
+		refusedOnce := reply.Outcome.Outcome == acpOutcomeSelected && reply.Outcome.OptionID == "reject-once"
 		if !cancelled && !refusedOnce {
 			t.Fatalf("iteration %d: outcome = %+v, want the protocol's cancellation or the offered one-shot rejection", i, reply.Outcome)
 		}
@@ -1813,7 +1813,7 @@ func TestGrokUnimplementedServerRequestsAnswerAProtocolError(t *testing.T) {
 		if err := json.Unmarshal(line, &frame); err != nil {
 			t.Fatalf("answer to %s is not JSON: %s", method, line)
 		}
-		if frame.Error == nil || frame.Error.Code != grokErrMethodNotSupported {
+		if frame.Error == nil || frame.Error.Code != acpErrMethodNotSupported {
 			t.Fatalf("%s was not refused with a protocol error: %s", method, line)
 		}
 		if len(frame.Result) > 0 && string(frame.Result) != "null" {
@@ -1824,10 +1824,10 @@ func TestGrokUnimplementedServerRequestsAnswerAProtocolError(t *testing.T) {
 
 // nextResponse reads the next frame the driver wrote that answers a SERVER
 // request, decoded as a permission outcome.
-func (p *grokPeer) nextResponse() grokRequestPermissionResponse {
+func (p *grokPeer) nextResponse() acpRequestPermissionResponse {
 	p.t.Helper()
 	var out struct {
-		Result grokRequestPermissionResponse `json:"result"`
+		Result acpRequestPermissionResponse `json:"result"`
 	}
 	if err := json.Unmarshal(p.nextResponseLine(), &out); err != nil {
 		p.t.Fatalf("the driver's answer is not a permission response: %v", err)

@@ -96,6 +96,11 @@ func TestOpenDispatched(t *testing.T) {
 	if r.code != http.StatusOK || r.body["op_status"] != opStatusDispatched || r.body["dispatch_ref"] != "rt-7" {
 		t.Fatalf("approved+dispatcher must dispatch, got %d %s", r.code, r.raw)
 	}
+	ledger := h.do("GET", "/v1/m/voice/sessions/s1/decisions", tok, nil, tenantHdr(tenant))
+	items, ok := ledger.body["items"].([]any)
+	if ledger.code != http.StatusOK || !ok || len(items) != 1 || items[0].(map[string]any)["dispatch_ref"] != "rt-7" {
+		t.Fatal("the ledger must preserve a plain provider handle")
+	}
 }
 
 // TestOpenPlanHashMismatch proves an approval bound to a different plan cannot

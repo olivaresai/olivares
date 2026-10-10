@@ -34,6 +34,7 @@ import { railGroups } from './session-rail-model'
 import { SessionRailView } from './session-rail'
 
 const NOW = Date.parse('2026-09-27T10:00:00Z')
+const READY = { loading: false, error: false }
 
 function live(over: Partial<LiveDTO>): LiveDTO {
   return {
@@ -138,7 +139,7 @@ describe('railGroups', () => {
 describe('SessionRailView', () => {
   it('shows the handoff in Needs you, with its sender and a Review link to the handoff', () => {
     const groups = railGroups({ live: [], handoffs: [HANDOFF] }, NOW)
-    render(<SessionRailView groups={groups} status="ready" />)
+    render(<SessionRailView groups={groups} status={READY} />)
     const needs = screen.getByRole('group', { name: 'Needs you' })
     const row = within(needs).getByRole('link', {
       name: /Handoff to you · from codex-1/,
@@ -164,11 +165,11 @@ describe('SessionRailView', () => {
             goal: 'Review dome-control changes',
           }),
         ],
-        handoffs: [],
+        handoffs: [HANDOFF],
       },
       NOW,
     )
-    render(<SessionRailView groups={groups} status="ready" />)
+    render(<SessionRailView groups={groups} status={READY} />)
     const names = screen
       .getAllByRole('group')
       .map((g) => g.getAttribute('aria-label'))
@@ -179,6 +180,49 @@ describe('SessionRailView', () => {
     expect(
       screen.getByRole('link', { name: /Ended.*Review dome-control changes/ }),
     ).toBeInTheDocument()
+  })
+})
+
+describe('SessionRailView when groups are empty', () => {
+  const names = () =>
+    screen.queryAllByRole('group').map((g) => g.getAttribute('aria-label'))
+
+  it('draws Needs you with its all-clear and no empty Working or Earlier on a fresh install', () => {
+    render(
+      <SessionRailView
+        groups={railGroups({ live: [], handoffs: [] }, NOW)}
+        status={READY}
+      />,
+    )
+    expect(names()).toEqual(['Needs you'])
+    expect(screen.getByText('Nothing waits for you.')).toBeInTheDocument()
+  })
+
+  it('keeps Needs you at the top and draws the other groups only when they hold rows', () => {
+    const groups = railGroups(
+      {
+        live: [live({ session_ref: 'a', goal: 'Nightly sky-survey report' })],
+        handoffs: [],
+      },
+      NOW,
+    )
+    render(<SessionRailView groups={groups} status={READY} />)
+    expect(names()).toEqual(['Needs you', 'Working'])
+    expect(screen.getByText('Nothing waits for you.')).toBeInTheDocument()
+  })
+
+  it.each([
+    { loading: true, error: false },
+    { loading: false, error: true },
+  ])('claims no empty group while the sessions are not read (%o)', (status) => {
+    render(
+      <SessionRailView
+        groups={railGroups({ live: [], handoffs: [] }, NOW)}
+        status={status}
+      />,
+    )
+    expect(names()).toEqual([])
+    expect(screen.queryByText('Nothing waits for you.')).toBeNull()
   })
 })
 
@@ -203,13 +247,13 @@ describe('SessionRailView from a keyboard', () => {
     Array.from(document.querySelectorAll<HTMLElement>('[data-rail-row]'))
 
   it('is ONE tab stop: the first row, and the rest wait for the arrows', () => {
-    render(<SessionRailView groups={groups()} status="ready" />)
+    render(<SessionRailView groups={groups()} status={READY} />)
     expect(rows()).toHaveLength(4)
     expect(rows().filter((r) => r.tabIndex === 0)).toEqual([rows()[0]])
   })
 
   it("moves focus and the tab stop with the arrows, Home and End (the table's rail keys)", () => {
-    render(<SessionRailView groups={groups()} status="ready" />)
+    render(<SessionRailView groups={groups()} status={READY} />)
     rows()[0].focus()
     fireEvent.keyDown(rows()[0], { key: 'ArrowDown' })
     expect(rows()[1]).toHaveFocus()
@@ -235,7 +279,7 @@ describe('identifiers in the rail', () => {
       },
       NOW,
     )
-    render(<SessionRailView groups={groups} status="ready" />)
+    render(<SessionRailView groups={groups} status={READY} />)
     const ids = Array.from(document.querySelectorAll('[data-rail-id]')).map(
       (el) => [el.textContent, el.className.includes('font-mono')],
     )

@@ -7,6 +7,8 @@ description: >-
   de cursor gobernado por líder y entrega al menos una vez. Renderiza y reenvía;
   nunca vuelve a derivar la integridad.
 ---
+SIEM and ITSM push, OTLP downloads, external trace and metric delivery, and posture export require Business. Community keeps local observability, trace-context propagation, saved settings and `olivares dr backup`. Generic chat, email and webhook notifications remain available in Community.
+
 
 El reenviador SIEM/ITSM (`modules/siemforward`) toma la evidencia que el
 motor ya sella y la lleva a la torre que tu SOC ya opera. Está **LIVE**. No
@@ -53,8 +55,10 @@ ni credenciales, así que una sola instancia sirve a cada tenant y sink.
 
 ## Contexto acotado, dicho con claridad
 
-- **Reenvía**, no almacena. Un tenant sin suscripción de sink es un no-op: no se
-  encola nada, el cursor sigue avanzando, no se pierde nada.
+- Almacena el cursor por tenant; eventing almacena los eventos capturados y las entregas.
+  Sin suscripción de sink no se encola nada, pero la bomba activada sigue avanzando el cursor.
+  Un sink nuevo no reenvía registros ya pasados por ese cursor;
+  el ledger original sigue disponible mediante pull export.
 - El reenvío corre desde el recorrido del cursor, **fuera de la transacción de
   sellado del ledger** — una escritura de red nunca queda en la ruta de sellado.
 - Esto es un **push hacia tu torre**, distinto del pull de solo lectura del

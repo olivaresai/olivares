@@ -288,3 +288,9 @@ export interface RollbackInput {
   to_version: number
   note?: string
 }
+
+/** GET /v1/m/deploy/executor: whether a runtime executor is configured. Without one,
+ * plan, verify, apply and retire cannot reach infrastructure. */
+export interface ExecutorDTO {
+  configured: boolean
+}

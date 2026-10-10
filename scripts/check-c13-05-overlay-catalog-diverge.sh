@@ -35,7 +35,7 @@ grep -q 'HOLD' "$DOC" || fail "$DOC lost the HOLD history"
 grep -q 'El lado que iba por detrás era el hub' "$DOC" \
 	|| fail "$DOC lost the sentence naming which side was behind"
 if grep -qiE 'FIRMA A claimed' "$DOC"; then
-	fail "$DOC claims a signature this lote does not have"
+	fail "$DOC claims a signature this batch does not have"
 fi
 
 python3 - "$JSON" <<'PY' || fail "JSON flags drifted"
@@ -45,7 +45,7 @@ data = json.load(open(sys.argv[1], encoding="utf-8"))
 if data.get("schema") != "c13-05-overlay-catalog-diverge/v2":
     raise SystemExit("unknown schema %r (v1 pinned the divergence and is retired)" % data.get("schema"))
 if data.get("overlay_matches_sold") is not True:
-    raise SystemExit("overlay_matches_sold must be true: this lote cured the divergence, and a "
+    raise SystemExit("overlay_matches_sold must be true: this batch cured the divergence, and a "
                      "record that still says false describes a tree that no longer exists")
 if data.get("hub_tier_card_is_not_overlay") is not True:
     raise SystemExit("hub_tier_card_is_not_overlay must stay true")

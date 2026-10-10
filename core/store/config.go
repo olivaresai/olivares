@@ -10,7 +10,7 @@ import "github.com/olivaresai/olivares/core/model"
 type Engine string
 
 // AuditSpoolMode controls the audit writer's response when the declared spool
-// budget is exhausted (ADR-0024 Q2).
+// budget is exhausted.
 type AuditSpoolMode string
 
 // AuditBlindingMode selects which metadata-commitment rule NEW appends seal
@@ -46,7 +46,7 @@ const (
 // success.
 func SupportedEngines() []Engine { return []Engine{EngineSQLite, EnginePostgres} }
 
-// The supported audit spool exhaustion modes (ADR-0024 Q2).
+// The supported audit spool exhaustion modes.
 const (
 	// AuditSpoolBlock refuses governed writes before their evidence is lost.
 	AuditSpoolBlock AuditSpoolMode = "block"
@@ -94,16 +94,21 @@ type Config struct {
 	// Clock is the time source; nil uses the system UTC clock. Tests inject a
 	// deterministic clock.
 	Clock model.Clock
+	// InitializeDirectoryWriter, when non-nil, requests SYSTEM and writer
+	// initialization on a proven fresh installation. The callback preserves
+	// caller bootstrap state before genesis commits; an error aborts initialization.
+	// Existing estates retain their explicit writer-upgrade and drain requirements.
+	InitializeDirectoryWriter func() error
 	// SignEvent, when set, signs every appended audit event (see AuditEventSigner).
 	// The composition root injects the core/audit signer here so the ledger is
 	// tamper-evident per event, not only at the periodic checkpoints. nil disables
 	// per-event signing.
 	SignEvent AuditEventSigner
-	// AuditSpoolMaxBytes is the declared logical audit spool budget from ADR-0024
-	// Q2. It measures the exact stored event values, not database pages or file
+	// AuditSpoolMaxBytes is the declared logical audit spool budget.
+	// It measures stored event values, not database pages or file
 	// size. Zero disables the budget and leaves the guard and accounting inert.
 	AuditSpoolMaxBytes int64
-	// AuditSpoolOnFull selects the ADR-0024 Q2 exhaustion policy. Empty is the
+	// AuditSpoolOnFull selects the audit spool exhaustion policy. Empty is the
 	// deny-closed default (block); the other accepted values are block and degrade.
 	AuditSpoolOnFull AuditSpoolMode
 	// AuditMetaBlinding selects the metadata-commitment rule NEW appends seal

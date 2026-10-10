@@ -113,9 +113,9 @@ note "running: $BIN quickstart --quiet --data-dir $DATA --listen 127.0.0.1:$PORT
   --grpc-listen "127.0.0.1:$GRPC_PORT" >"$LOG" 2>&1 &
 PID=$!
 
-# The setup token is the LAST thing the panel prints, so waiting for it is waiting for the whole
-# first-run path: header, boot, engine up, announce. Its shape is the one core/secure/setup.go
-# mints (olst_ + unpadded base32 over 32 bytes = 52 characters).
+# The panel prints the setup token in the same write as its other lines, so waiting for it is
+# waiting for the whole first-run path: boot, engine up, announce. Its shape is the one
+# core/secure/setup.go mints (olst_ + unpadded base32 over 32 bytes = 52 characters).
 TOKEN_RE='olst_[A-Z2-7]{52}'
 deadline=$(( $(date +%s) + 420 ))
 token=""
@@ -134,11 +134,11 @@ if [ -z "$token" ]; then
 fi
 
 # What a first-time operator must actually see, each assertion a distinct way this rots.
-command grep -qF '=== OLIVARES AI — FIRST RUN ===' "$LOG" || {
-  cat "$LOG" >&2; fail "the first-run header is missing"
-}
-command grep -qF '=== WELCOME TO OLIVARES AI ===' "$LOG" || {
-  cat "$LOG" >&2; fail "the welcome panel is missing"
+# The panel is state-aware (announceQuickstart): a fresh data directory gets this next step and
+# the token, with no banner. TestQuickstartWelcomePointsToConsoleFlow fails when a fixed string
+# below is no longer in that panel, so a reword is caught where it is made.
+command grep -qF 'Next: Open the console; it guides setup, sign-in and your first session.' "$LOG" || {
+  cat "$LOG" >&2; fail "the panel does not give a fresh install its first step"
 }
 command grep -qF "https://127.0.0.1:$PORT" "$LOG" || {
   cat "$LOG" >&2; fail "the panel does not point at the loopback HTTPS console it started"
@@ -162,7 +162,7 @@ done
   fail "the console did not answer /healthz over HTTPS (last status: ${health:-none})"
 }
 
-say "quickstart-argv-smoke: CLEAN — olivares quickstart started, printed its header and welcome"
-say "  panel, minted a setup token (${token:0:9}..., stored in $DATA/setup.token) and served"
+say "quickstart-argv-smoke: CLEAN — olivares quickstart started, printed its first step and"
+say "  console URL, minted a setup token (${token:0:9}..., stored in $DATA/setup.token) and served"
 say "  https://127.0.0.1:$PORT/healthz with 200."
 exit 0

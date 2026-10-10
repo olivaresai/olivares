@@ -17,12 +17,23 @@ import {
   StatGrid,
 } from '@/features/_intel'
 import { consoleApi, consoleKeys } from '@/features/console/api'
+import { useViewAccess } from '@/features/navigation/authorization'
+import { viewById } from '@/features/navigation/model'
 import { useAuth } from '@/lib/auth/context'
 import { formatInt } from '@/lib/format'
 import { useWorkspaceStore } from '@/stores/workspace'
 import { cuentaConSuelo } from './count-floor'
 import { workspaceDashboardApi, workspaceDashboardKeys } from './api'
+import { WorkspaceContents } from './workspace-contents'
 import './i18n'
+
+/** Inventory is offered only where it opens: its module runs and the principal may read it. */
+const INVENTORY_VIEW = viewById('inventory')
+
+function useInventoryOffered(): boolean {
+  const { navigable } = useViewAccess()
+  return INVENTORY_VIEW !== undefined && navigable(INVENTORY_VIEW)
+}
 
 export function WorkspaceDashboardView() {
   const { t } = useTranslation(['workspaceDashboard', 'nav', 'common'])
@@ -51,6 +62,7 @@ function WorkspaceSelection({
   t: ReturnType<typeof useTranslation>['t']
 }) {
   const { setActiveWorkspace } = useWorkspaceStore()
+  const inventoryOffered = useInventoryOffered()
   const { data } = useQuery({
     queryKey: consoleKeys.workspaces(tenant, { limit: 1000 }),
     queryFn: () => consoleApi.listWorkspaces({ limit: 1000 }),
@@ -59,19 +71,34 @@ function WorkspaceSelection({
   })
   const only = data?.items.length === 1 ? data.items[0] : undefined
   const selectable = only?.status === 'active' ? only : undefined
-  const inventoryAction = (
+  if (tenant && selectable && data?.has_more === false) {
+    return (
+      <WorkspaceDashboard
+        workspaceId={selectable.id}
+        workspaceName={selectable.name}
+        tenant={tenant}
+        t={t}
+      />
+    )
+  }
+
+  const inventoryAction = inventoryOffered ? (
     <Button asChild size="sm" variant={selectable ? 'secondary' : 'primary'}>
       <Link to={'/inventory' as never}>
         {t('workspaceDashboard:viewInventory')}
       </Link>
     </Button>
-  )
+  ) : undefined
 
   return (
     <IntelPage icon={Layers} title={t('workspaceDashboard:title')}>
       <EmptyState
         title={t('workspaceDashboard:selectTitle')}
-        description={t('workspaceDashboard:selectPrompt')}
+        description={t(
+          inventoryOffered
+            ? 'workspaceDashboard:selectPrompt'
+            : 'workspaceDashboard:selectPromptWorkspaceOnly',
+        )}
         action={
           selectable ? (
             <Button
@@ -101,6 +128,8 @@ function WorkspaceDashboard({
   tenant: string | null
   t: ReturnType<typeof useTranslation>['t']
 }) {
+  const auth = useAuth()
+  const inventoryOffered = useInventoryOffered()
   const summaryQ = useQuery({
     queryKey: workspaceDashboardKeys.summary(tenant, workspaceId),
     queryFn: () => workspaceDashboardApi.summary(workspaceId),
@@ -188,24 +217,34 @@ function WorkspaceDashboard({
         />
       </StatGrid>
 
+      {tenant && auth.can('tenant:admin') && (
+        <WorkspaceContents tenant={tenant} workspaceId={workspaceId} />
+      )}
+
       <section className="flex flex-col gap-2">
         <div className="flex min-h-8 items-center justify-between gap-2">
           <h2 className="text-overline text-muted-foreground uppercase">
             {t('workspaceDashboard:recentAgents')}
           </h2>
-          <Button variant="ghost" size="sm" asChild>
-            <Link to={'/inventory' as never}>
-              {t('workspaceDashboard:viewAll')}{' '}
-              <ArrowRight className="ml-1 size-3.5" />
-            </Link>
-          </Button>
+          {inventoryOffered && (
+            <Button variant="ghost" size="sm" asChild>
+              <Link to={'/inventory' as never}>
+                {t('workspaceDashboard:viewAll')}{' '}
+                <ArrowRight className="ml-1 size-3.5" />
+              </Link>
+            </Button>
+          )}
         </div>
         <ListTruncationBadge
           query={agentsQ}
           label={t('workspaceDashboard:truncation.label', {
             n: agentsQ.data?.items?.length,
           })}
-          hint={t('workspaceDashboard:truncation.hint')}
+          hint={t(
+            inventoryOffered
+              ? 'workspaceDashboard:truncation.hint'
+              : 'workspaceDashboard:truncation.hintCapped',
+          )}
           className="px-0 pt-0 pb-1"
         />
         {agentsQ.data?.items.length === 0 ? (
@@ -213,11 +252,13 @@ function WorkspaceDashboard({
             title={t('workspaceDashboard:noAgents')}
             description={t('workspaceDashboard:noAgentsHint')}
             action={
-              <Button asChild size="sm" variant="secondary">
-                <Link to={'/inventory' as never}>
-                  {t('workspaceDashboard:viewInventory')}
-                </Link>
-              </Button>
+              inventoryOffered ? (
+                <Button asChild size="sm" variant="secondary">
+                  <Link to={'/inventory' as never}>
+                    {t('workspaceDashboard:viewInventory')}
+                  </Link>
+                </Button>
+              ) : undefined
             }
           />
         ) : (

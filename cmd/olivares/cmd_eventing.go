@@ -13,11 +13,11 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/cmd/olivares/internal/termrender"
@@ -370,7 +370,7 @@ func eventingSubCreateCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			sealer, err := newEventingSealer(sealerDir, os.Getenv)
+			sealer, err := newEventingSealer(sealerDir, envconfig.Get)
 			if err != nil {
 				return fmt.Errorf("secret sealer: %w", err)
 			}
@@ -808,7 +808,7 @@ func eventingSubRotateSecretCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			sealer, err := newEventingSealer(sealerDir, os.Getenv)
+			sealer, err := newEventingSealer(sealerDir, envconfig.Get)
 			if err != nil {
 				return fmt.Errorf("secret sealer: %w", err)
 			}
@@ -972,7 +972,7 @@ func eventingSubTestCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			sealer, err := newEventingSealer(sealerDir, os.Getenv)
+			sealer, err := newEventingSealer(sealerDir, envconfig.Get)
 			if err != nil {
 				return fmt.Errorf("secret sealer: %w", err)
 			}

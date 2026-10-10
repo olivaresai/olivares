@@ -17,7 +17,7 @@ func TestFilterFragmentLikeUsesExplicitEscape(t *testing.T) {
 	repo := genericRepo{desc: model.EntityDescriptor{
 		Fields: []model.FieldSpec{{Name: "subject", Kind: model.KindText}},
 	}}
-	fragment, value, err := repo.filterFragment(model.Filter{
+	fragment, values, err := repo.filterFragment(model.Filter{
 		Column: "subject",
 		Op:     model.OpLike,
 		Value:  pattern,
@@ -28,7 +28,10 @@ func TestFilterFragmentLikeUsesExplicitEscape(t *testing.T) {
 	if want := `subject LIKE ? ESCAPE '\'`; fragment != want {
 		t.Fatalf("%s: fragment = %q, want %q", contract, fragment, want)
 	}
-	if got, ok := value.(string); !ok || got != pattern {
-		t.Fatalf("%s: bound value = %#v, want unchanged %q", contract, value, pattern)
+	if len(values) != 1 {
+		t.Fatalf("%s: bound values = %#v, want exactly one", contract, values)
+	}
+	if got, ok := values[0].(string); !ok || got != pattern {
+		t.Fatalf("%s: bound value = %#v, want unchanged %q", contract, values[0], pattern)
 	}
 }

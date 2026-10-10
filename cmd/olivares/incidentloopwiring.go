@@ -16,18 +16,17 @@ import (
 // commercial ITSM/ChatOps governance close-loop (enterprise/incidentloop). It
 // defines the seams the default build keeps INERT and the enterprise build fills:
 //
-//   - enterpriseOutputConnector(kind) — lets buildOutputConnector resolve the
+//   - the outputConnector edition port — lets buildOutputConnector resolve the
 //     "teamsbot" destination kind (the registered-bot Action.Execute Teams
 //     connector) under -tags enterprise; the default build returns (nil,false) so
 //     "teamsbot" is simply an unknown kind (no rug-pull — the Apache connectors/teams
 //     Workflows destination is unchanged).
-//   - newIncidentCloseLoop(...) — builds the governance→incident close-loop
+//   - the incidentCloseLoop edition port — builds the governance→incident close-loop
 //     subscriber from OLIVARES_INCIDENTLOOP_CONFIG under -tags enterprise; the default
 //     build returns nil.
 //
-// Both constructors are declared in wire_enterprise.go (real) and
-// wire_noenterprise.go (nil), so the default artifact never references the closed
-// module. This file holds only the build-independent seam: the interface the
+// Both ports are filled only by the enterprise overlay (edition_ports.go), so the
+// default artifact never references the closed module. This file holds only the build-independent seam: the interface the
 // composition root depends on, and the bus subscription that binds it.
 
 // incidentCloseLoop is the narrow seam the composition root subscribes to the bus.
@@ -45,7 +44,10 @@ type incidentCloseLoop interface {
 // inactive — never a boot failure — and the governance finding still stands on the
 // bus for the passive notify sinks.
 func subscribeIncidentCloseLoop(ctx context.Context, getenv func(string) string, bus eventbus.Bus, log *slog.Logger) {
-	cl := newIncidentCloseLoop(ctx, getenv, log)
+	if thisEdition.incidentCloseLoop == nil {
+		return
+	}
+	cl := thisEdition.incidentCloseLoop(ctx, getenv, log)
 	if cl == nil {
 		return
 	}

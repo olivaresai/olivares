@@ -89,7 +89,7 @@ for fig in ledger.get("figures") or []:
 for uid in ("refund_fee_adder", "dispute_fee_adder"):
     fig = by_id.get(uid) or {}
     if fig.get("value") not in (None, "") or fig.get("status") != "UNKNOWN":
-        fail("%s filled without this lote" % uid)
+        fail("%s filled without this batch" % uid)
 conflict = by_id.get("public_refund_fee_usd") or {}
 if conflict.get("status") != "sourced_conflicts":
     fail("public $1 refund fee is not marked sourced_conflicts")

@@ -16,7 +16,7 @@ set -euo pipefail
 root="${OLIVARES_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
 for tool in bash grep python3; do
 	command -v "$tool" >/dev/null 2>&1 || {
-		printf 'compose-ready contract: NO HE PODIDO MIRAR — missing %s\n' "$tool" >&2
+		printf 'compose-ready contract: COULD NOT CHECK — missing %s\n' "$tool" >&2
 		exit 2
 	}
 done
@@ -66,7 +66,7 @@ def refuse(label, problems):
 
 
 def cannot_look(label, why):
-    print(f"compose-ready {label}: NO HE PODIDO MIRAR — {why}", file=sys.stderr)
+    print(f"compose-ready {label}: COULD NOT CHECK — {why}", file=sys.stderr)
     sys.exit(2)
 
 
@@ -100,6 +100,7 @@ if mode == "effective-config":
     if not isinstance(config, dict):
         cannot_look("effective config", f"{path} is not a JSON object")
     problems = []
+    checkout = pathlib.Path(os.path.realpath(root))
     project_match = next((m for m in (p.fullmatch(project) for p in PROJECTS.values()) if m), None)
     image_match = IMAGE.fullmatch(image)
     if not project_match or not image_match or project_match.group(1) != image_match.group(1):
@@ -117,6 +118,22 @@ if mode == "effective-config":
             problems.append(f"service {name} fixes container_name {service['container_name']!r}")
         if name in ENGINE_SERVICES and service.get("image") != image:
             problems.append(f"service {name} runs image {service.get('image')!r}, want {image!r}")
+        # Sessions run in the engine: a bind of, inside or above the checkout gives them
+        # deploy/compose/dr-pass and .env, which Compose users keep there.
+        mounts = service.get("volumes", []) if name in ENGINE_SERVICES else []
+        if not isinstance(mounts, list) or not all(isinstance(mount, dict) for mount in mounts):
+            cannot_look("effective config", f"service {name} volumes are not a list of mounts")
+        for mount in mounts:
+            if mount.get("type") != "bind":
+                continue
+            if not isinstance(mount.get("source"), str) or not mount["source"] or "\0" in mount["source"]:
+                cannot_look("effective config", f"service {name} binds {mount.get('source')!r}")
+            source = pathlib.Path(os.path.realpath(mount["source"]))
+            if checkout.is_relative_to(source) or source.is_relative_to(checkout):
+                problems.append(
+                    f"service {name} mounts the Olivares checkout ({mount['source']}) at "
+                    f"{mount.get('target')}: set OLIVARES_PROJECT_DIR to your project folder"
+                )
     for kind in ("volumes", "networks"):
         resources = config.get(kind) if isinstance(config.get(kind), dict) else {}
         for key, resource in sorted(resources.items()):
@@ -140,7 +157,6 @@ compose = read("deploy/compose/docker-compose.yml")
 standby = read("deploy/compose/docker-compose.standby-not-ready.ci.yml")
 workflow = read(".github/workflows/compose-ready.yml")
 taskfile = read("Taskfile.yml")
-hook = read(".githooks/pre-push")
 mainline = read(".github/workflows/mainline-ci.yml")
 battery = read("scripts/test-compose-ready.sh")
 goreleaser = read(".goreleaser.yaml")
@@ -174,20 +190,96 @@ health = (
     "        - --timeout=3s"
 )
 assert health in compose
-for token in ('user: "65532:65532"', "read_only: true", "cpus: \"1.0\"", "memory: 1G"):
+for token in ('user: "65532:65532"', "read_only: true", "memory: 2G"):
     assert token in compose
+
+
+# A Docker daemon refuses to create a container whose CPU limit exceeds the daemon's CPU count, so
+# a `cpus` above 1 is a minimum of that many CPUs: `up` fails on a 1-CPU host. A shipped Compose
+# file therefore carries no `cpus` above 1, whether it sits under
+# deploy.resources.limits, at service level, in flow style, with a quoted key or in an anchored
+# x- block; the host's CPUs bound the engine, and an operator who wants a lower ceiling adds it
+# in a Compose override. The scan is textual because the checker has no YAML parser.
+CPUS_KEY = re.compile(r"""(?<![\w.-])["']?cpus["']?\s*:\s*["']?(\$\{[^}]*\}|[^\s,"'}]+)""")
+compose_files = sorted((root / "deploy/compose").glob("*compose*.y*ml"))
+assert compose_files, "deploy/compose holds no compose file"
+for compose_file in compose_files:
+    text = "\n".join(re.sub(r"(^|\s)#.*", "", line) for line in compose_file.read_text(encoding="utf-8").splitlines())
+    for value in CPUS_KEY.findall(text):
+        assert re.fullmatch(r"[0-9]+(\.[0-9]*)?|\.[0-9]+", value) and float(value) <= 1, (
+            f"{compose_file.name} sets cpus {value!r}: a Docker daemon refuses a CPU limit above "
+            "its CPU count, so a shipped limit above 1 stops `up` on a 1-CPU host; drop it or use 1.0 or less"
+        )
+# The README container reaches one host project folder: the base file mounts
+# OLIVARES_PROJECT_DIR at /project, or the empty olivares-project volume when it is unset,
+# never PWD (the documented commands run from the checkout, whose deploy/compose/ holds the
+# DR passphrase and .env), and every README that sends the reader to Compose names the
+# mount and its variable.
+project_mount = '      - "${OLIVARES_PROJECT_DIR:-olivares-project}:/project"\n'
+base_service, top_volumes = compose.split("\nservices:\n", 1)[1].split("\nvolumes:\n", 1)
+assert project_mount in base_service and "\n  olivares-project:\n" in f"\n{top_volumes}", (
+    "deploy/compose/docker-compose.yml must mount the host project folder at /project: "
+    "source OLIVARES_PROJECT_DIR, defaulting to the declared olivares-project volume, "
+    "never PWD or a relative path"
+)
+for readme in ("README.md", "README.de.md", "README.es.md", "README.fr.md", "README.ja.md",
+               "README.ru.md", "README.zh.md", "deploy/compose/README.md"):
+    text = read(readme)
+    assert "`OLIVARES_PROJECT_DIR`" in text and "`/project`" in text, (
+        f"{readme} must document the project mount (`/project`, `OLIVARES_PROJECT_DIR`)"
+    )
+# The install block must not run from the Olivares clone: there PWD is the clone, and the
+# container would get the product's own source as its session folder.
+for readme in ("README.md", "README.de.md", "README.es.md", "README.fr.md", "README.ja.md",
+               "README.ru.md", "README.zh.md"):
+    block = read(readme).split("```sh\n", 1)[1].split("```", 1)[0]
+    up = block.index("up --wait")
+    assert 'export OLIVARES_PROJECT_DIR="$PWD"' in block[:up] and "&& cd olivares" not in block, (
+        f"{readme} install block must set OLIVARES_PROJECT_DIR to the user's project folder "
+        "before `up` and must not cd into the clone"
+    )
+assert 'export OLIVARES_PROJECT_DIR=' in read("INSTALL.md").split("### Docker Compose", 1)[1].split("```", 2)[1], (
+    "INSTALL.md Docker Compose block must set OLIVARES_PROJECT_DIR before `up`"
+)
+assert "## Work on a host project folder" in read("deploy/compose/README.md"), (
+    "deploy/compose/README.md must keep the 'Work on a host project folder' section the READMEs link to"
+)
+# The real namespace probe covers kernel enforcement. This guard keeps its host
+# preparation reachable from every documented quick install, before Compose starts.
+assert "apparmor=${OLIVARES_APPARMOR_PROFILE:-docker-default}" in compose
+assert "  userns," in read("deploy/apparmor/olivares-sessions.conf")
+for doc in [*root.glob("README*.md"), root / "INSTALL.md"]:
+    text = doc.read_text(encoding="utf-8")
+    section = text.split("### Docker Compose", 1)[1] if doc.name == "INSTALL.md" else text
+    block = section.split("```", 2)[1]
+    up = block.index(" up --wait")
+    for token in ("set -e\n", "userns_create", "deploy/apparmor/olivares-sessions.conf",
+                  "sudo apparmor_parser -r /etc/apparmor.d/olivares-sessions",
+                  "export OLIVARES_APPARMOR_PROFILE=olivares-sessions"):
+        assert token in block[:up], f"{doc.name} must prepare AppArmor before Compose up: {token}"
 assert standby.count("condition: service_healthy") == 2
 assert health in standby
 for token in ("--engine=postgres", "olivares-standby-data", "read_only: true"):
     assert token in standby
 
-guard = "if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'"
+guard = (
+    "vars.OLIVARES_DEV_CI == 'true' ||\n      (github.event_name != 'schedule' &&\n"
+    "      (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'))"
+)
+assert 'push:\n    tags: ["[0-9]*.[0-9]*"]' in workflow, (
+    "compose-ready.yml must qualify bare MAJOR.MINOR release tags"
+)
 for token in (
-    "workflow_dispatch:", guard, "permissions:\n  contents: read",
+    "workflow_dispatch:", "schedule:\n    - cron:", guard, "permissions:\n  contents: read",
     "docker build", "up --wait --wait-timeout 120", "up --wait --wait-timeout 90",
     'if [ "$rc" -ne 1 ]', "{{.State.Running}}", "HTTP 503",
 ):
     assert token in workflow
+# After the positive `up` from the checkout root, /project exists and is not the checkout.
+assert re.search(r"(?m)^          docker exec \"\$cid\" test -d /project -a ! -e "
+                 r"/project/deploy/compose/docker-compose\.yml$", workflow), (
+    "compose-ready.yml must check that /project in the running container is not the checkout"
+)
 for forbidden in ("docker push", "build-push-action", "docker/login-action", "push: true"):
     assert forbidden not in workflow
 
@@ -469,10 +561,11 @@ for token in (
 ):
     assert token in removal, f"the image cleanup step lacks {token!r}"
 
-for dockerfile in ("Dockerfile", "Dockerfile.release", "Dockerfile.fips", "Dockerfile.stig"):
+dockerfiles = ["Dockerfile", "Dockerfile.release"] + [p for p in ("Dockerfile.fips", "Dockerfile.stig") if (root / p).is_file()]
+for dockerfile in dockerfiles:
     text = read(dockerfile)
     assert "--chown=65532:65532 --chmod=0700 packaging/container/data-dir/ /var/lib/olivares/" in text
-assert goreleaser.count("- packaging/container/data-dir") == 4
+assert goreleaser.count("- packaging/container/data-dir") == len(dockerfiles)
 
 # Every named volume that a shipped service running the engine image mounts must be seeded
 # in each runtime image, for that image's non-root user. Docker gives a fresh named volume
@@ -499,7 +592,7 @@ def engine_volume_targets(text):
 
 engine_targets = engine_volume_targets(compose) | engine_volume_targets(backup)
 assert "/var/lib/olivares" in engine_targets and len(engine_targets) >= 2, engine_targets
-for dockerfile in ("Dockerfile", "Dockerfile.release", "Dockerfile.fips", "Dockerfile.stig"):
+for dockerfile in dockerfiles:
     text = read(dockerfile)
     assert "USER 65532:65532" in text, dockerfile
     for target in sorted(engine_targets):
@@ -508,7 +601,6 @@ for dockerfile in ("Dockerfile", "Dockerfile.release", "Dockerfile.fips", "Docke
 
 for target in ("lint:compose-ready", "lint:compose-ready:selftest"):
     assert f"  {target}:" in taskfile
-    assert f"task {target}" in hook
     assert f"run: task {target}" in mainline
 assert "sed 's/if response.StatusCode == http.StatusOK {/if true {/'" in battery
 assert "TestCheckRejectsReadyzDown" in battery
@@ -517,7 +609,7 @@ docs = "\n".join(read(p) for p in (
     "INSTALL.md", "deploy/compose/README.md",
     "docs-site/src/content/docs/tutorials/getting-started/docker-compose.mdx",
 ))
-assert docs.count("DIST-24-12 current tree contract") == 3
+assert docs.count("Compose readiness contract") == 3
 assert len(re.findall(
     r"Docker qualification\s+remains unmeasured until the\s+dispatch workflow succeeds",
     docs,
@@ -532,7 +624,7 @@ owner | compose-version | effective-config)
 	;;
 '') ;;
 *)
-	printf 'compose-ready contract: NO HE PODIDO MIRAR — unknown mode %s\n' "$1" >&2
+	printf 'compose-ready contract: COULD NOT CHECK — unknown mode %s\n' "$1" >&2
 	exit 2
 	;;
 esac

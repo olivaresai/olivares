@@ -88,7 +88,7 @@ func TestValidateCoreEntityRefAcceptsAWellFormedRoute(t *testing.T) {
 func TestCoreKindValidIsClosed(t *testing.T) {
 	// Workspace is an explicitly registered stored core entity. It carries its
 	// own ID as workspace lineage; the facts surface stays unchanged.
-	valid := map[CoreKind]bool{CoreKindSession: true, CoreKindWorkspace: true}
+	valid := map[CoreKind]bool{CoreKindSession: true, CoreKindWorkspace: true, CoreKindAgentGroup: true, CoreKindAgent: true}
 	for k := CoreKind(0); k < 32; k++ {
 		if got, want := k.valid(), valid[k]; got != want {
 			t.Errorf("CoreKind(%d).valid() = %v, want %v — if a kind was added, add it to this map "+
@@ -249,5 +249,28 @@ func TestDenialReadPermissionRequiresConcealedStoredEntity(t *testing.T) {
 		DeniedReadPermission: "sessions:run:read",
 	}, nil); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestValidateCoreEntityRefRoleOnlyDisclosure(t *testing.T) {
+	read := EntityRef{Kind: "test.thing", BodyIDField: "target_id", ConcealDeniedAsNotFound: true, DeniedReadPermission: "test:thing:read"}
+	for _, tc := range []struct {
+		name  string
+		ref   EntityRef
+		valid bool
+	}{
+		{"single kind opt in", EntityRef{Kind: "test.thing", IDParam: "id", ConcealDeniedAsNotFound: true, DeniedReadPermission: "test:thing:read", DeniedReadRoleOnly: true}, true},
+		{"body kind opt in", EntityRef{BodyKindField: "target_kind", BodyKinds: map[string]EntityRef{"thing": read}, ConcealDeniedAsNotFound: true, DeniedReadRoleOnly: true}, true},
+		{"missing concealment", EntityRef{Kind: "test.thing", IDParam: "id", DeniedReadRoleOnly: true}, false},
+		{"missing single kind read", EntityRef{Kind: "test.thing", IDParam: "id", ConcealDeniedAsNotFound: true, DeniedReadRoleOnly: true}, false},
+		{"missing selected read", EntityRef{BodyKindField: "target_kind", BodyKinds: map[string]EntityRef{"thing": {Kind: "test.thing", BodyIDField: "target_id", ConcealDeniedAsNotFound: true}}, ConcealDeniedAsNotFound: true, DeniedReadRoleOnly: true}, false},
+		{"selected flag is ignored", EntityRef{BodyKindField: "target_kind", BodyKinds: map[string]EntityRef{"thing": {Kind: "test.thing", BodyIDField: "target_id", ConcealDeniedAsNotFound: true, DeniedReadPermission: "test:thing:read", DeniedReadRoleOnly: true}}, ConcealDeniedAsNotFound: true}, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateCoreEntityRef(tc.ref, nil)
+			if (err == nil) != tc.valid {
+				t.Fatalf("mount validation = %v, valid=%t", err, tc.valid)
+			}
+		})
 	}
 }

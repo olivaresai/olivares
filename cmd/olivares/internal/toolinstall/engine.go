@@ -331,8 +331,11 @@ func (e *Engine) Install(ctx context.Context, req Request, approved *Plan, progr
 	if err != nil {
 		return nil, plan, refuse(KindDestinationNotWritable, "create %s: %v", part, err)
 	}
-	got, ferr := p.FetchArtifact(ctx, plan, f)
+	// Observed like InstallV2's download, so the terminal and the console see it move.
+	counted := newFetchProgress(f, progress, plan.Artifact.Size)
+	got, ferr := p.FetchArtifact(ctx, plan, counted)
 	if ferr == nil {
+		counted.done()
 		ferr = f.Sync()
 		if ferr != nil {
 			ferr = refuse(KindDestinationNotWritable, "fsync artifact: %v", ferr)

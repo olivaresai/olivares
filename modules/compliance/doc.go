@@ -2,6 +2,11 @@
 // SPDX-License-Identifier: AGPL-3.0-only
 // Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 
+// Edition boundary: Business Compliance Packs owns catalogs, assessments, the
+// regulatory calendar, DORA/HIPAA views, evidence sealing and OSCAL rendering.
+// Community preserves risk, residency, records management and JSON/CSV exports
+// of stored evidence. Paid routes refuse with 501; the schema remains shared.
+//
 // Package compliance is module XIII — compliance and regulatory: it OPENS
 // enterprise doors by MAPPING what the control plane already observes and audits
 // onto regulatory frameworks, and by producing auditor-consumable EVIDENCE derived
@@ -114,7 +119,9 @@
 // # Ports, fail-closed
 //
 // The seams XIII declares are its own (ports.go): an AutonomySource for an agent's
-// scheduling/autonomy signal (module IV), a LineageSource for perimeter-egress
+// declared scheduling intent (module IV), kept separately from observed activity
+// in risk signals. Missing, historical, partial and unavailable declarations are
+// evidence limits, not proof of safe or non-autonomous behavior. A LineageSource for perimeter-egress
 // signals (module VIII), the ApprovalGate for the two dangerous verbs
 // (enabling a purge disposition; releasing a legal hold — both DENY-closed until
 // the composition root wires the bridge, and neither admits break-glass) and

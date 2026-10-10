@@ -74,7 +74,7 @@ func TestLoadCommunicationCursorKeyringRetainsRotatedKeysWithinTheWindow(t *test
 		t.Fatalf("status = %+v", status)
 	}
 	m := sessions.New()
-	m.UseCommunicationCursorTokenKeyring(keyring)
+	m.CursorKeyring = (keyring).Snapshot()
 	if !m.CommunicationCursorTokenKeyringBound() {
 		t.Fatal("loaded keyring did not bind")
 	}

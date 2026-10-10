@@ -71,8 +71,8 @@ cp "$FIXTURE/${url##*/}" "$dest"
 	writePort(t, filepath.Join(fakebin, "systemctl"), "#!/bin/sh\nprintf '%s\\n' \"$*\" >> \"$COMMAND_LOG\"\nexit 0\n")
 	commandLog := filepath.Join(base, "service-requests.log")
 
-	rendered := filepath.Join(base, "olivares-install-26.9.0.sh")
-	runTool(t, base, nil, "bash", filepath.Join(repo, "scripts/render-release-installer.sh"), "26.9.0", rendered)
+	rendered := filepath.Join(base, "olivares-install-26.900.sh")
+	runTool(t, base, nil, "bash", filepath.Join(repo, "scripts/render-release-installer.sh"), "26.900", rendered)
 
 	installerEnv := []string{
 		"HOME=" + home,
@@ -86,7 +86,7 @@ cp "$FIXTURE/${url##*/}" "$dest"
 	install := func() string {
 		t.Helper()
 		return runTool(t, base, installerEnv, "/bin/sh", rendered,
-			"--version", "v26.9.0", "--bindir", filepath.Join(home, ".local/bin"),
+			"--version", "26.900", "--bindir", filepath.Join(home, ".local/bin"),
 			"--user", "--init", "systemd", "--data-dir", data)
 	}
 	install()
@@ -268,7 +268,7 @@ func stageReleaseFixture(t *testing.T, repo, fixture string) {
 	if err := gz.Close(); err != nil {
 		t.Fatal(err)
 	}
-	archive := "olivares_26.9.0_linux_amd64.tar.gz"
+	archive := "olivares_26.900_linux_amd64.tar.gz"
 	writeFile(t, filepath.Join(fixture, archive), buf.String(), 0o644)
 	sum := sha256.Sum256(buf.Bytes())
 	writeFile(t, filepath.Join(fixture, "checksums.txt"), hex.EncodeToString(sum[:])+"  "+archive+"\n", 0o644)

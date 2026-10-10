@@ -29,10 +29,11 @@ type attribution struct {
 	Team        string
 	Project     string
 
-	ProviderID model.ID
-	ModelID    model.ID
-	SessionID  model.ID
-	AgentID    model.ID
+	ProviderID     model.ID
+	ModelID        model.ID
+	SessionID      model.ID
+	ManagedSession bool
+	AgentID        model.ID
 
 	InputTokens  int64
 	OutputTokens int64
@@ -148,7 +149,7 @@ type costIngestEffects struct {
 // CostRecord ledger entry are updated together. BILLED samples are reconciliation
 // data and are NOT written to the canonical CostRecord ledger, so the ledger stays
 // single-provenance (estimated) and its consumers never mix streams.
-func (m *Module) ingestCostInTx(ctx context.Context, sc store.Scope, cost sdkmodel.CostSample, audit auditHook) (costIngestEffects, error) {
+func (m *Module) ingestCostInTx(ctx context.Context, sc store.Scope, cost sdkmodel.CostSample, audit auditHook, sessionLink *model.ID) (costIngestEffects, error) {
 	if cost.ProviderRef == "" && cost.ModelRef == "" {
 		return costIngestEffects{}, nil
 	}
@@ -183,7 +184,8 @@ func (m *Module) ingestCostInTx(ctx context.Context, sc store.Scope, cost sdkmod
 	}
 	attr := attribution{
 		ProviderRef: cost.ProviderRef, ModelRef: cost.ModelRef, SessionRef: cost.SessionRef,
-		InputTokens: cost.InputTokens, OutputTokens: cost.OutputTokens,
+		ManagedSession: sessionLink != nil,
+		InputTokens:    cost.InputTokens, OutputTokens: cost.OutputTokens,
 		CostMicroUSD: cost.CostMicroUSD, OccurredAt: at,
 		Provenance:            provenanceOf(cost.Provenance),
 		WorkspaceRef:          cost.WorkspaceRef,
@@ -204,7 +206,7 @@ func (m *Module) ingestCostInTx(ctx context.Context, sc store.Scope, cost sdkmod
 		Project: cost.Labels["project"],
 		Labels:  cost.Labels,
 	}
-	if err := resolveSession(ctx, sc, &attr); err != nil {
+	if err := resolveSession(ctx, sc, &attr, sessionLink); err != nil {
 		return costIngestEffects{}, err
 	}
 	// Resolve the FIRM roster identity the spend is attributed to, so a
@@ -343,7 +345,7 @@ func (m *Module) publishCostIngestEffects(ctx context.Context, tenant model.Tena
 // that transaction, so an ingestion's period never depends on how long it waited for
 // the store to admit it. That boundary is part of this function's contract with the
 // bus and HTTP callers, not an implementation detail of the helper.
-func (m *Module) onCost(ctx context.Context, tenant model.TenantID, cost sdkmodel.CostSample, audit auditHook) error {
+func (m *Module) onCost(ctx context.Context, tenant model.TenantID, cost sdkmodel.CostSample, audit auditHook, sessionLink *model.ID) error {
 	if cost.ProviderRef == "" && cost.ModelRef == "" {
 		return nil // nothing to ingest: do not open a transaction for it
 	}
@@ -369,7 +371,7 @@ func (m *Module) onCost(ctx context.Context, tenant model.TenantID, cost sdkmode
 		var err error
 		// Assigned, never appended: if the store ever re-ran this callback, the
 		// signals of the attempt that did not commit must not be published.
-		effects, err = m.ingestCostInTx(ctx, sc, cost, audit)
+		effects, err = m.ingestCostInTx(ctx, sc, cost, audit, sessionLink)
 		return err
 	}); err != nil {
 		return err
@@ -458,13 +460,24 @@ func updateCostRecord(ctx context.Context, sc store.Scope, id model.ID, attr att
 // model/provider cost stream carries no session ref, so this attribution is
 // usually empty here; it is populated when a connector that attributes cost to a
 // session is wired.
-func resolveSession(ctx context.Context, sc store.Scope, attr *attribution) error {
-	if attr.SessionRef == "" {
+func resolveSession(ctx context.Context, sc store.Scope, attr *attribution, link *model.ID) error {
+	if link != nil && link.IsZero() || link == nil && attr.SessionRef == "" {
 		return nil
 	}
-	s, ok, err := findOne(ctx, sc.Sessions(), eq("external_id", attr.SessionRef))
-	if err != nil || !ok {
-		return err
+	var s model.Session
+	if link != nil {
+		var err error
+		s, err = sc.Sessions().Get(ctx, *link)
+		if err != nil {
+			return err
+		}
+	} else {
+		var ok bool
+		var err error
+		s, ok, err = findOne(ctx, sc.Sessions(), eq("external_id", attr.SessionRef))
+		if err != nil || !ok {
+			return err
+		}
 	}
 	attr.SessionID = s.ID
 	if s.AgentID.IsZero() {
@@ -690,6 +703,11 @@ func naturalKey(attr attribution) string {
 		attr.OccurredAt.UTC().Format(time.RFC3339Nano),
 		attr.Provenance, attr.WorkspaceRef, attr.APIKeyRef, attr.Actor, attr.ServiceTier,
 		attr.ContextWindow, attr.InferenceGeo, attr.Gateway, attr.CostType,
+	}
+	// A resume is a different attempt even when its reported SID and instant match.
+	// Legacy samples keep their original dedup key byte for byte.
+	if attr.ManagedSession && !attr.SessionID.IsZero() {
+		parts = append(parts, attr.SessionID.String())
 	}
 	sum := sha256.Sum256([]byte(strings.Join(parts, "|")))
 	return hex.EncodeToString(sum[:])

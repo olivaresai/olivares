@@ -101,6 +101,78 @@ func TestE2E_Notify_FindingToWebhookDelivery(t *testing.T) {
 	}
 }
 
+// Empty operator configuration still permits authoring routes in advance, but a
+// successful API request must never be confused with a delivered notification.
+func TestE2E_Notify_EmptyDestinationAndAuthority(t *testing.T) {
+	t.Setenv("OLIVARES_NOTIFY_CONFIG", "")
+	h := newHarness(t)
+	dests := h.getJSON(h.adminToken, h.tenantA, "/v1/m/notify/destinations")
+	if names, ok := dests["destinations"].([]any); !ok || len(names) != 0 {
+		t.Fatalf("empty dispatcher destinations = %v, want []", dests)
+	}
+	var route struct {
+		ID string `json:"id"`
+	}
+	if code := h.reqInto("POST", "/v1/m/notify/routes", h.adminToken, h.tenantA,
+		map[string]any{"name": "not-yet-provisioned", "destination": "oncall"}, &route); code != http.StatusCreated || route.ID == "" {
+		t.Fatalf("authoring before provisioning = %d, want 201 and a route id", code)
+	}
+
+	if code, raw := h.req("POST", "/v1/users", h.adminToken, "", map[string]any{
+		"email": "notify-viewer@e2e.test", "password": "supersecret-e2e",
+		"tenant": h.tenantA, "role": "viewer",
+	}); code != http.StatusCreated {
+		t.Fatalf("create viewer = %d: %s", code, raw)
+	}
+	var login struct {
+		Token string `json:"token"`
+	}
+	if code := h.reqInto("POST", "/v1/auth/login", "", "", map[string]any{
+		"email": "notify-viewer@e2e.test", "password": "supersecret-e2e",
+	}, &login); code != http.StatusOK || login.Token == "" {
+		t.Fatalf("viewer login = %d", code)
+	}
+	path := "/v1/m/notify/routes/" + route.ID + "/test"
+	for _, tc := range []struct {
+		name, method, path, token, tenant string
+		want                              int
+	}{
+		{"anonymous", "GET", "/v1/m/notify/destinations", "", h.tenantA, http.StatusUnauthorized},
+		{"viewer test", "POST", path, login.Token, h.tenantA, http.StatusForbidden},
+		{"foreign tenant", "GET", "/v1/m/notify/routes", login.Token, h.tenantB, http.StatusForbidden},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if code, raw := h.req(tc.method, tc.path, tc.token, tc.tenant, nil); code != tc.want {
+				t.Fatalf("refusal = %d: %s, want %d", code, raw, tc.want)
+			}
+		})
+	}
+	if got := items(h.getJSON(h.adminToken, h.tenantA, "/v1/m/notify/deliveries")); len(got) != 0 {
+		t.Fatalf("refused requests recorded a delivery attempt: %v", got)
+	}
+	var result struct {
+		Status string `json:"status"`
+		Detail string `json:"detail"`
+	}
+	if code := h.reqInto("POST", path, h.adminToken, h.tenantA, nil, &result); code != http.StatusOK {
+		t.Fatalf("route test = %d, want 200 with its delivery outcome", code)
+	}
+	if result.Status != "unknown_destination" || result.Detail != "destination not provisioned" {
+		t.Fatalf("empty dispatcher test = %+v, want explicit unknown_destination", result)
+	}
+	rows := items(h.getJSON(h.adminToken, h.tenantA, "/v1/m/notify/deliveries"))
+	if len(rows) != 2 {
+		t.Fatalf("want claim and failure outcome, got %v", rows)
+	}
+	statuses := map[string]bool{}
+	for _, row := range rows {
+		statuses[row["status"].(string)] = true
+	}
+	if !statuses["claimed"] || !statuses["unknown_destination"] || statuses["delivered"] {
+		t.Fatalf("empty destination ledger = %v", rows)
+	}
+}
+
 var errDeliveriesEmpty = errStr("no delivered security finding yet")
 
 type errStr string

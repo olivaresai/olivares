@@ -47,6 +47,8 @@ const (
 	// CoreKindWorkspace is core/model.Workspace. Its workspace lineage is the
 	// stored row's own ID, so a route can authorize within that exact workspace.
 	CoreKindWorkspace
+	CoreKindAgentGroup
+	CoreKindAgent
 )
 
 // String renders the kind for errors and evidence.
@@ -56,6 +58,10 @@ func (k CoreKind) String() string {
 		return "core.session"
 	case CoreKindWorkspace:
 		return "core.workspace"
+	case CoreKindAgentGroup:
+		return "core.agent_group"
+	case CoreKindAgent:
+		return "core.agent"
 	default:
 		return "core.unknown"
 	}
@@ -63,7 +69,9 @@ func (k CoreKind) String() string {
 
 // valid reports whether k is a registered kind. CoreKindNone is NOT valid here: it
 // means "no core entity declared", which callers check separately.
-func (k CoreKind) valid() bool { return k == CoreKindSession || k == CoreKindWorkspace }
+func (k CoreKind) valid() bool {
+	return k == CoreKindSession || k == CoreKindWorkspace || k == CoreKindAgentGroup || k == CoreKindAgent
+}
 
 // CoreEntityFacts is EVERYTHING the resolver returns about a core row.
 //
@@ -109,6 +117,31 @@ type CoreEntityAuthorizationResolver interface {
 // failed in flight would serve requests until somebody touched that path — which is
 // the same as not checking.
 func validateCoreEntityRef(ref EntityRef, resolver CoreEntityAuthorizationResolver) error {
+	if ref.DeniedReadRoleOnly && !ref.ConcealDeniedAsNotFound {
+		return fmt.Errorf("api: role-only denial disclosure requires concealment")
+	}
+	if ref.BodyKindField != "" || len(ref.BodyKinds) != 0 {
+		if ref.BodyKindField == "" || len(ref.BodyKinds) == 0 || ref.Kind != "" || ref.CoreKind != CoreKindNone || ref.IDParam != "" || ref.BodyIDField != "" || ref.LookupColumn != "" || ref.WorkspaceColumn != "" || ref.ResourceKind != "" || ref.DeniedReadPermission != "" {
+			return fmt.Errorf("api: a body kind selector requires only a closed entity reference map")
+		}
+		hasDenialRead := false
+		for kind, selected := range ref.BodyKinds {
+			if kind == "" || selected.BodyKindField != "" || len(selected.BodyKinds) != 0 || selected.BodyIDField == "" || selected.IDParam != "" || selected.DeniedReadRoleOnly || selected.ConcealDeniedAsNotFound != ref.ConcealDeniedAsNotFound || (selected.Kind == "" && selected.CoreKind == CoreKindNone) {
+				return fmt.Errorf("api: invalid entity reference for body kind %q", kind)
+			}
+			hasDenialRead = hasDenialRead || selected.DeniedReadPermission != ""
+			if err := validateCoreEntityRef(selected, resolver); err != nil {
+				return err
+			}
+		}
+		if ref.DeniedReadRoleOnly && !hasDenialRead {
+			return fmt.Errorf("api: role-only denial disclosure requires a selected read permission")
+		}
+		return nil
+	}
+	if ref.DeniedReadRoleOnly && ref.DeniedReadPermission == "" {
+		return fmt.Errorf("api: role-only denial disclosure requires a read permission")
+	}
 	if ref.DeniedReadPermission != "" {
 		if !ref.ConcealDeniedAsNotFound || (ref.Kind == "" && ref.CoreKind == CoreKindNone) {
 			return fmt.Errorf("api: a denial read permission requires a concealed stored entity")
@@ -159,9 +192,9 @@ func validateCoreEntityRef(ref EntityRef, resolver CoreEntityAuthorizationResolv
 }
 
 // coreEntityResource resolves the authorization resource for a route that declared a
-// CoreKind. Its five return values match entityResource's contract exactly:
+// CoreKind. Its six return values match entityResource's contract exactly:
 //
-//	(resource, tenant, found, locatorError, lineageError)
+//	(resource, tenant, found, deniedRead, locatorError, lineageError)
 //
 // The two error slots are NOT interchangeable, and keeping them apart is the whole
 // honesty of this path: a locator error is the caller's malformed input, a lineage
@@ -171,20 +204,20 @@ func (cr chiRegistrar) coreEntityResource(
 	res auth.ResourceAttrs,
 	ref EntityRef,
 	id model.ID,
-) (auth.ResourceAttrs, model.TenantID, bool, error, error) {
+) (auth.ResourceAttrs, model.TenantID, bool, auth.Permission, error, error) {
 	// The resolver is verified present when the route mounts, so nil here would mean
 	// the server was mutated after boot. Deny-closed rather than dereference.
 	if cr.s.coreEntityResolver == nil {
-		return res, "", false, nil, fmt.Errorf(
+		return res, "", false, ref.DeniedReadPermission, nil, fmt.Errorf(
 			"api: no core-entity resolver for a route declaring CoreKind %s", ref.CoreKind)
 	}
 	p, ok := principalFrom(r.Context())
 	if !ok {
-		return res, "", false, nil, nil // the shared authz path writes the 401
+		return res, "", false, ref.DeniedReadPermission, nil, nil // the shared authz path writes the 401
 	}
 	tenant, err := cr.s.resolveTenant(r, p)
 	if err != nil {
-		return res, "", false, nil, nil // likewise: let the shared path map the error
+		return res, "", false, ref.DeniedReadPermission, nil, nil // likewise: let the shared path map the error
 	}
 	facts, err := cr.s.coreEntityResolver.ResolveCoreEntity(r.Context(), tenant, ref.CoreKind, id)
 	if err != nil {
@@ -192,12 +225,12 @@ func (cr chiRegistrar) coreEntityResource(
 		// concealing route answer 404 — "there is no such session" — on the strength of
 		// a store that would not answer, which is the exact substitution
 		// EntityRef.ConcealDeniedAsNotFound forbids in its own doc.
-		return res, tenant, false, nil, err
+		return res, tenant, false, ref.DeniedReadPermission, nil, err
 	}
 	if !facts.Exists {
 		// No row: stay at collection level and let the handler answer 404, which is
 		// what the external-entity path does for store.ErrNotFound.
-		return res, tenant, false, nil, nil
+		return res, tenant, false, ref.DeniedReadPermission, nil, nil
 	}
 
 	// ⛔ THE ECHO IS COMPARED, AND IT WAS NOT. CoreEntityFacts documents ID as an echo of the
@@ -213,7 +246,7 @@ func (cr chiRegistrar) coreEntityResource(
 	// 404 here would let a concealing route say "there is no such session" on the strength of a
 	// resolver that had just proved it cannot be trusted to say which session it read.
 	if facts.ID != id || facts.Tenant != tenant {
-		return res, tenant, false, nil, fmt.Errorf(
+		return res, tenant, false, ref.DeniedReadPermission, nil, fmt.Errorf(
 			"api: the core-entity resolver answered about a different row for CoreKind %s; "+
 				"refusing to use its lineage", ref.CoreKind)
 	}
@@ -229,5 +262,5 @@ func (cr chiRegistrar) coreEntityResource(
 		}
 		res.Extra["agent"] = facts.AgentID.String()
 	}
-	return res, tenant, true, nil, nil
+	return res, tenant, true, ref.DeniedReadPermission, nil, nil
 }

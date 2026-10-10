@@ -27,7 +27,9 @@ will reference it as `store:<name>`, never inline.
 olivares secrets put \
   --data-dir /var/lib/olivares \
   --name s3/prod-runbooks-read \
-  --value-file /run/secrets/s3-prod-runbooks-read
+  --value-file /run/secrets/s3-prod-runbooks-read \
+  --actor platform-operator \
+  --reason governed-rag-source-credential
 ```
 
 For Google Drive, store the OAuth bearer/refresh material your deployment uses
@@ -73,8 +75,16 @@ OLIVARES_AGENT_GATEWAY_CONFIG=/var/lib/olivares/quickstart/governed-rag/agent-ga
 olivares quickstart --data-dir /var/lib/olivares
 ```
 
-Finish the first-run console setup if this is a fresh install. Then run the
-bootstrap script with an admin token:
+Finish the first-run console setup if this is a fresh install.
+
+On a fresh install, `knowledge` and `sourcescope` are off. As an administrator, turn them on in
+**Settings > Edition & modules**, keeping the other selected modules on.
+For the CLI, sign in to this engine as an administrator with `olivares login`,
+then run `olivares modules on knowledge` and `olivares modules on sourcescope`. Wait for each engine restart before continuing;
+running sessions stop and can be resumed. Otherwise these API calls return
+`404 module_not_enabled`.
+
+Then run the bootstrap script with an admin token:
 
 ```sh
 OLIVARES_TOKEN=<admin-token> \

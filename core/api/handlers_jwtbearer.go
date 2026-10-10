@@ -25,7 +25,7 @@ import (
 //   - assertion MUST be present (the ID-JAG JWT)
 //   - resource MUST be present (the target MCP server URI, RFC 8707)
 //   - client authentication MUST succeed (HTTP Basic required)
-func (s *Server) handleJWTBearerGrant(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleJWTBearerGrant(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
 	if err := r.ParseForm(); err != nil {
 		writeOAuthError(w, http.StatusBadRequest, "invalid_request", "malformed form body")

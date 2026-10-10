@@ -75,7 +75,7 @@ func NewRunnerForTransport(transport cliruntime.Transport) (Runner, error) {
 //
 // ⛔ IT REFUSES A DISAGREEMENT INSTEAD OF RESOLVING ONE, and that is the whole
 // reason it takes the kinds rather than one transport. This module holds ONE
-// Runner for every kind it launches (runtime.go: m.rt.runner), so if the
+// Runner for every kind it launches (runtime.go: m.rt.Runner), so if the
 // declaration ever says stdio for one official CLI and terminal for another,
 // there is no answer that serves both — and the failure mode of guessing is the
 // one already measured: a `--print` child that exits 1 on stderr without a
@@ -120,10 +120,10 @@ func NewOfficialRunner(kinds ...string) (Runner, error) {
 // agrees with the declaration, which the module's batteries cannot notice
 // because they inject their own runner.
 func (m *Module) RunnerTransport() cliruntime.Transport {
-	if _, unwired := m.rt.runner.(unwiredRunner); unwired {
+	if _, unwired := m.rt.Runner.(unwiredRunner); unwired {
 		return ""
 	}
-	reporter, ok := m.rt.runner.(RunnerTransportReporter)
+	reporter, ok := m.rt.Runner.(RunnerTransportReporter)
 	if !ok {
 		return ""
 	}

@@ -100,10 +100,49 @@
     "this": "this",
     "sig": "Event signature",
     "checkpoint": "sig",
-    "chainHint": "Each event's hash chains to the previous one. There is no payload behind a fingerprint — the hash is the evidence (minimal-data by design)."
+    "chainHint": "Each event's hash chains to the previous one. There is no payload behind a fingerprint — the hash is the evidence (minimal-data by design).",
+    "details": "Details",
+    "actorMember": "A member"
   },
   "empty": {
     "title": "No evidence yet",
     "description": "The ledger is empty for this scope. Governed operations append tamper-evident events as they happen."
+  },
+  "actions": {
+    "governance_approval_create": "Approval requested",
+    "governance_approval_decision": "Approval decision recorded",
+    "governance_approval_cancel": "Approval canceled",
+    "sessions_run_launched": "Session started",
+    "sessions_run_stopping": "Session stop requested",
+    "sessions_work_item_create": "Work item created",
+    "sessions_work_item_ready": "Work item marked ready",
+    "sessions_work_item_complete": "Work item completed",
+    "authorization_decision_record": "Authorization decision recorded",
+    "policy_artifact_record": "Policy evidence recorded",
+    "governance_policy_create": "Policy created",
+    "governance_policy_update": "Policy updated",
+    "governance_policy_delete": "Policy deleted",
+    "auth_login": "Signed in",
+    "auth_logout": "Signed out",
+    "auth_login_failed": "Sign-in failed",
+    "auth_webauthn_register": "Passkey added",
+    "auth_webauthn_unregister": "Passkey removed",
+    "user_set_password": "Password changed",
+    "user_create": "Person added",
+    "membership_grant": "Role given",
+    "membership_update": "Role changed",
+    "membership_offboard": "Person removed",
+    "token_issue": "API token created",
+    "token_revoke": "API token revoked",
+    "secret_delete": "Secret deleted"
+  },
+  "targets": {
+    "core_policy": "Policy"
+  },
+  "internal": {
+    "hidden": "Internal records hidden: {{count}}",
+    "show": "Show internal records",
+    "hide": "Hide internal records",
+    "allHidden": "Everything loaded so far is an internal record."
   }
 }

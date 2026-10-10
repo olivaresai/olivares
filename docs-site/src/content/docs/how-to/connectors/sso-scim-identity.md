@@ -25,13 +25,13 @@ posture is honest by construction:
   secret-bearing flow value server-side — the CSRF state, the OIDC nonce,
   the PKCE verifier (only the S256 *challenge* goes to the provider).
   Authorization Code + **PKCE is always on**.
-- **Single-IdP OIDC/SAML login is available in Community and Enterprise.**
+- **Single-IdP OIDC/SAML login is available in every edition, Community included.**
   Configure it through the console's managed SSO settings. When no managed
   configuration exists, the engine uses the boot environment
   (`OLIVARES_SSO_PROTOCOL`, `OLIVARES_OIDC_*` or `OLIVARES_SAML_*`). Without a
   configured provider, the existing `NoFederation` fallback returns
-  `501 sso_not_configured`; this indicates missing configuration, not an
-  Enterprise-only protocol.
+  `501 sso_not_configured`; this indicates missing configuration, not a
+  protocol reserved for the commercial editions.
 - The redirect/ACS URI your IdP must carry is **exact**
   (`…/v1/auth/federation/callback` on your console origin — RFC 9700 exact
   matching, no prefix tricks).
@@ -58,7 +58,7 @@ The control plane is a standard SCIM 2.0 (RFC 7644) service provider at:
   integration — the same opaque-token model as the rest of the API, no
   separate SCIM secret type. The endpoint is always present (not
   feature-gated).
-- **Users** provisions and deprovisions principals in Community and Enterprise.
+- **Users** provisions and deprovisions principals in every edition, Community included.
   Changes depend on delivery and successful processing of the SCIM request;
   check its response and the affected access rather than treating an HR event
   as proof of completed revocation. SCIM does not remove operating-system accounts.

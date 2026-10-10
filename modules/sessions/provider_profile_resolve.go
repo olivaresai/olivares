@@ -8,9 +8,12 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"runtime/debug"
 	"sort"
 	"strings"
+	"sync"
 
+	"github.com/olivaresai/olivares/core/driverfacts"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
 )
@@ -33,12 +36,15 @@ import (
 // the server's own homes and no tool list: the engine's default surface applies
 // (effectiveTools), so no profile stores a policy nobody chose. The lookup and the
 // create run in ONE transaction under the per-tenant account-home lock, so two
-// concurrent resolves leave one profile.
+// concurrent resolves leave one profile. Finding a profile that exists reads
+// first and takes no lock.
 
 // Why a profile was resolved.
 const (
 	ResolveOwnLogin = "own_login"
 	ResolveAPIKey   = "api_key"
+	// ResolveAccount: the caller named the account, so the rule did not choose.
+	ResolveAccount = "account"
 )
 
 // ToolLoginStatus reports, for this node, whether a driver's tool is installed and
@@ -46,12 +52,9 @@ const (
 // module), late-bound by the composition.
 type ToolLoginStatus func(ctx context.Context, tenant model.TenantID, driver string) (installed, signedIn bool, err error)
 
-// UseToolLoginStatus wires the tool sign-in status the resolve rule reads.
-func (m *Module) UseToolLoginStatus(f ToolLoginStatus) {
-	if f != nil {
-		m.toolLogin = f
-	}
-}
+// ProfileLoginStatus asks the native tool about the selected profile's own home.
+// An empty profile reference has the same meaning as ToolLoginStatus.
+type ProfileLoginStatus func(ctx context.Context, tenant model.TenantID, driver, profileRef string) (installed, signedIn bool, err error)
 
 // ResolvedProfile is the profile a new session uses, and why.
 type ResolvedProfile struct {
@@ -67,21 +70,20 @@ type resolveTool struct {
 	ownKind   string // the vendor's provider kind ("" when the tool has none)
 	keyPhrase string // what to add in Providers
 	signsIn   bool   // whether the tool has its own login the engine relays
+	bindable  bool   // whether a provider from Providers can be bound to the tool
 }
 
-var resolveTools = map[string]resolveTool{
-	providerDriverClaude:   {name: "Claude Code", ownKind: ProviderKindAnthropic, keyPhrase: "an Anthropic key", signsIn: true},
-	providerDriverCodex:    {name: "Codex", ownKind: ProviderKindOpenAI, keyPhrase: "an OpenAI key", signsIn: true},
-	"grok":                 {name: "Grok Build", ownKind: ProviderKindXAI, keyPhrase: "an xAI key", signsIn: true},
-	providerDriverOpenCode: {name: "OpenCode"},
+func resolveToolFor(driver string) (resolveTool, bool) {
+	facts, ok := driverfacts.Lookup(driver)
+	return resolveTool{name: facts.Name, ownKind: facts.OwnKind, keyPhrase: facts.KeyPhrase, signsIn: facts.SignIn != "", bindable: len(facts.Bindings) > 0}, ok && facts.Session
 }
 
-// The stable codes of the rule's two refusals, beside their sentences: a page or the
-// CLI (-o json) tells "nothing to run on yet" from any other conflict without
-// reading the words, which stay the tool's own.
+// Stable readiness codes distinguish an unusable tool from an operational
+// refusal, without reading the tool's sentence.
 const (
 	resolveCodeToolNotInstalled = "tool_not_installed"
 	resolveCodeNothingToRunOn   = "nothing_to_run_on"
+	resolveCodeSignInUnreadable = "tool_signin_unreadable"
 )
 
 // codedRunErr is a runErr with the stable code its route declares for it. It
@@ -94,6 +96,12 @@ type codedRunErr struct {
 func (e *codedRunErr) Unwrap() error { return e.runErr }
 
 func (tool resolveTool) nothingToRunOn() error {
+	if !tool.bindable {
+		// No key or model from Providers can reach this tool: it runs on the key or
+		// login its own profile holds, and the profile is named.
+		return &codedRunErr{conflictErr(tool.name + " has nothing to run on from here: no provider from Providers can be bound to it. " +
+			"Create a profile for it and start the session with --profile."), resolveCodeNothingToRunOn}
+	}
 	if !tool.signsIn {
 		return &codedRunErr{conflictErr(tool.name + " has nothing to run on yet. Add a key or a local model (Ollama) in Providers."),
 			resolveCodeNothingToRunOn}
@@ -105,7 +113,7 @@ func (tool resolveTool) nothingToRunOn() error {
 // resolveSkips is a record the rule never picks by itself for a tool, though a profile
 // may still name it: a local Ollama for Codex. Codex 0.160 sends additional_tools, which
 // the Ollama the product installs (0.35) rejects, so every turn failed while the
-// console said "Codex is ready" (HU2-04). OpenCode is the local default; Codex is
+// console said "Codex is ready". OpenCode is the local default; Codex is
 // refused with its sign-in or OpenAI-key sentence.
 func resolveSkips(driver, kind string) bool {
 	return driver == providerDriverCodex && kind == ProviderKindOllama
@@ -155,28 +163,39 @@ type resolveChoice struct {
 	out       ResolvedProfile
 }
 
+// resolveDriver is the opening every resolve shares: the driver as typed, made a
+// key, and the tool it names. The tools a session can run are the driver facts'.
+func resolveDriver(driverIn string) (string, resolveTool, error) {
+	driver := strings.ToLower(strings.TrimSpace(driverIn))
+	tool, ok := resolveToolFor(driver)
+	if !ok {
+		return "", resolveTool{}, badRequest("driver must be " + driverfacts.JoinList(driverfacts.SessionKeys(), "or"))
+	}
+	return driver, tool, nil
+}
+
 // chooseProfileSource applies steps 1-4 of the rule. It reads the tool's sign-in
 // status and the active records and writes nothing, so a page can show the answer
 // (PreviewProfile) without making a profile by being viewed.
 func (m *Module) chooseProfileSource(ctx context.Context, tenant model.TenantID, driverIn string) (resolveChoice, error) {
-	driver := strings.ToLower(strings.TrimSpace(driverIn))
-	tool, ok := resolveTools[driver]
-	if !ok {
-		return resolveChoice{}, badRequest("driver must be claude, codex, grok or opencode")
-	}
-	if m.toolLogin == nil {
-		return resolveChoice{}, &runErr{http.StatusServiceUnavailable,
-			"this node cannot tell whether " + tool.name + " is signed in, so it cannot choose a profile for it"}
-	}
-	installed, signedIn, err := m.toolLogin(ctx, tenant, driver)
+	driver, tool, err := resolveDriver(driverIn)
 	if err != nil {
-		return resolveChoice{}, &runErr{http.StatusServiceUnavailable, "the sign-in status of " + tool.name + " could not be read on this node"}
+		return resolveChoice{}, err
+	}
+	if m.ToolLogin == nil {
+		return resolveChoice{}, &codedRunErr{&runErr{http.StatusServiceUnavailable,
+			"this node cannot tell whether " + tool.name + " is signed in, so it cannot choose a profile for it"}, resolveCodeSignInUnreadable}
+	}
+	installed, signedIn, err := m.ToolLogin(ctx, tenant, driver)
+	if err != nil {
+		return resolveChoice{}, &codedRunErr{&runErr{http.StatusServiceUnavailable,
+			"the sign-in status of " + tool.name + " could not be read on this node"}, resolveCodeSignInUnreadable}
 	}
 	if !installed {
 		return resolveChoice{}, &codedRunErr{conflictErr("Install " + tool.name + " first, under AI tools."), resolveCodeToolNotInstalled}
 	}
 	if driver == providerDriverGrok && grokSandboxUnavailable(PresetAsk) {
-		// A new session starts on the ask preset, which runs Grok's sandbox (HU2-34).
+		// A new session starts on the ask preset, which runs Grok's sandbox.
 		return resolveChoice{}, &codedRunErr{conflictErr(grokSandboxMissing + "."), resolveCodeToolNotInstalled}
 	}
 	c := resolveChoice{driver: driver, tool: tool, source: AuthSourceAccountHome, out: ResolvedProfile{Reason: ResolveOwnLogin}}
@@ -190,6 +209,10 @@ func (m *Module) chooseProfileSource(ctx context.Context, tenant model.TenantID,
 	}
 	rec := pickRecord(driver, tool, records)
 	if rec == nil {
+		if driver == providerDriverOpenCode && len(records) > 0 {
+			facts, _ := driverfacts.Lookup(driver)
+			return resolveChoice{}, &codedRunErr{conflictErr(facts.BindingDescription + "."), resolveCodeNothingToRunOn}
+		}
 		return resolveChoice{}, tool.nothingToRunOn()
 	}
 	c.source, c.recordRef = AuthSourceManagedInjection, rec.Ref
@@ -201,7 +224,7 @@ func (m *Module) chooseProfileSource(ctx context.Context, tenant model.TenantID,
 // record. Profile is empty and Created false; a refusal is the one ResolveProfile
 // would give. It is what a page shows before the person starts a session.
 func (m *Module) PreviewProfile(ctx context.Context, tenant model.TenantID, driver string) (ResolvedProfile, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ResolvedProfile{}, errNoData
 	}
 	c, err := m.chooseProfileSource(ctx, tenant, driver)
@@ -211,10 +234,161 @@ func (m *Module) PreviewProfile(ctx context.Context, tenant model.TenantID, driv
 	return c.out, nil
 }
 
+// resolveCodeKeyRefused: the rule's only answer is a key its provider refused at the
+// last connection test (pickRecord puts such a key after every other option).
+const resolveCodeKeyRefused = "key_refused"
+
+// ToolReadiness is one tool's answer to "can a new session start on it now": what it
+// would run on (the preview), or the code and the one sentence that say why not.
+type ToolReadiness struct {
+	Driver        string
+	Ready         bool
+	Reason        string          // ResolveOwnLogin or ResolveAPIKey; "" when nothing was found
+	Provider      *ProviderRecord // the key or local model, also when it was refused
+	ModelRequired bool            // the tool cannot start on that key without a model
+	Code          string          // set when not ready
+	Message       string          // set when not ready
+}
+
+// ToolsReadiness answers, for every tool a session can run, whether a new session can
+// start on it now and, when not, why in one sentence (HU 043, HU2-17): the preview's
+// rule plus the verdict of the key it picked. The console and the CLI render this one
+// answer; a refusal is part of the answer, not an error. The tools are asked at once:
+// each asks its own program for its sign-in.
+func (m *Module) ToolsReadiness(ctx context.Context, tenant model.TenantID) ([]ToolReadiness, error) {
+	var drivers []string
+	for _, f := range driverfacts.All() {
+		if f.Session {
+			drivers = append(drivers, f.Key)
+		}
+	}
+	out := make([]ToolReadiness, len(drivers))
+	errs := make([]error, len(drivers))
+	var wg sync.WaitGroup
+	for i, driver := range drivers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			// A panic here is outside the request's own recovery: it fails this read, and
+			// the log says which tool and where.
+			defer func() {
+				if p := recover(); p != nil {
+					if m.log != nil {
+						m.log.Error("sessions: tool readiness panicked", "driver", driver, "panic", p, "stack", string(debug.Stack()))
+					}
+					errs[i] = errors.New("the readiness of " + driver + " could not be read")
+				}
+			}()
+			out[i], errs[i] = m.toolReadiness(ctx, tenant, driver)
+		}()
+	}
+	wg.Wait()
+	for _, err := range errs {
+		if err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
+}
+
+func (m *Module) toolReadiness(ctx context.Context, tenant model.TenantID, driver string) (ToolReadiness, error) {
+	out := ToolReadiness{Driver: driver}
+	got, err := m.PreviewProfile(ctx, tenant, driver)
+	var coded *codedRunErr
+	if errors.As(err, &coded) {
+		out.Code, out.Message = coded.code, coded.msg
+		return out, nil
+	}
+	if err != nil {
+		return out, err
+	}
+	terms, _ := m.LaunchTermsFor(driver)
+	out.Reason, out.Provider = got.Reason, got.Provider
+	out.ModelRequired = got.Provider != nil && terms.BoundModelRequired
+	if got.Provider != nil && got.Provider.ProbeState == ProbeRefused {
+		tool, _ := resolveToolFor(driver)
+		label := got.Provider.DisplayName
+		if label == "" {
+			label = got.Provider.Kind
+		}
+		out.Code = resolveCodeKeyRefused
+		out.Message = tool.name + " would run on the API key " + label +
+			", which its provider refused at the last test. Replace it in Providers, or add another key."
+		return out, nil
+	}
+	out.Ready = true
+	return out, nil
+}
+
+// DefaultToolLoginHome keeps OpenCode's native XDG login with the profile that
+// automatic resolution reuses. Earlier profiles may have a separate immutable
+// user home; signing in does not move that identity or copy its credentials.
+func (m *Module) DefaultToolLoginHome(ctx context.Context, tenant model.TenantID, driver string) (home, configDir string, err error) {
+	home, configDir, ok := ToolLoginHome(m.toolLoginsRoot, tenant, driver)
+	if !ok {
+		return "", "", badRequest("this tool has no login home on this node")
+	}
+	if driver != providerDriverOpenCode {
+		return home, configDir, nil
+	}
+	if m.Data == nil {
+		return "", "", errNoData
+	}
+	env, err := m.localEnvironment()
+	if err != nil {
+		return "", "", err
+	}
+	configDir, err = m.ownLoginConfigHome(tenant, driver)
+	if err != nil {
+		return "", "", err
+	}
+	if configDir, err = canonicalHome("config_home", configDir); err != nil {
+		return "", "", err
+	}
+	err = m.Data.View(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(providerProfileKind)
+		if err != nil {
+			return err
+		}
+		row, err := findResolvedProfile(ctx, repo, resolveChoice{driver: driver, source: AuthSourceAccountHome}, env, configDir)
+		if err != nil || row == nil {
+			return err
+		}
+		snap, err := m.snapshotForLaunch(tenant, profileFromRecord(row), env)
+		if err != nil {
+			return err
+		}
+		home, configDir = snap.UserHome, snap.ConfigHome
+		return nil
+	})
+	return home, configDir, err
+}
+
+// Both default native login and automatic resolution select the same oldest
+// active profile on this environment and authentication source.
+func findResolvedProfile(ctx context.Context, repo store.GenericRepo, c resolveChoice, env, loginHome string) (model.Record, error) {
+	rows, _, err := repo.List(ctx, model.Query{
+		Filters: []model.Filter{eq(colPPDriver, c.driver), eq(colPPState, ProfileActive), eq(colPPEnvRef, env), eq(colPPAuthSource, c.source)},
+		Sort:    []model.Sort{{Column: model.ColCreatedAt}},
+		Limit:   200,
+	})
+	if err != nil {
+		return nil, err
+	}
+	for _, row := range rows {
+		// An own-login profile carrying a key is never the answer.
+		if row.String(colPPProviderRecordRef) == c.recordRef &&
+			(loginHome == "" || row.String(colPPConfigHome) == loginHome) {
+			return row, nil
+		}
+	}
+	return nil, nil
+}
+
 // ResolveProfile answers which profile a new session of this driver uses on this
 // node, reusing or creating it (see the rule above).
 func (m *Module) ResolveProfile(ctx context.Context, tenant model.TenantID, driverIn string) (ResolvedProfile, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return ResolvedProfile{}, errNoData
 	}
 	c, err := m.chooseProfileSource(ctx, tenant, driverIn)
@@ -239,27 +413,37 @@ func (m *Module) ResolveProfile(ctx context.Context, tenant model.TenantID, driv
 			return ResolvedProfile{}, err
 		}
 	}
-	err = m.data.Mutate(ctx, tenant, func(sc store.Scope) error {
+	// The profile that already exists is the usual answer: find it in a read
+	// transaction, and take the write lock below only to create one.
+	var found model.Record
+	err = m.Data.View(ctx, tenant, func(sc store.Scope) error {
+		repo, err := sc.Ext(providerProfileKind)
+		if err != nil {
+			return err
+		}
+		found, err = findResolvedProfile(ctx, repo, c, env, loginHome)
+		return err
+	})
+	if err != nil {
+		return ResolvedProfile{}, err
+	}
+	if found != nil {
+		out.Profile = profileFromRecord(found)
+		return out, nil
+	}
+	err = m.Data.Mutate(ctx, tenant, func(sc store.Scope) error {
 		repo, _, err := accountHomeAdmission(ctx, sc, tenant) // the per-tenant lock
 		if err != nil {
 			return err
 		}
-		rows, _, err := repo.List(ctx, model.Query{
-			Filters: []model.Filter{eq(colPPDriver, driver), eq(colPPState, ProfileActive), eq(colPPEnvRef, env), eq(colPPAuthSource, source)},
-			Sort:    []model.Sort{{Column: model.ColCreatedAt}},
-			Limit:   200,
-		})
+		// Looked up again under the lock: a concurrent resolve may have made it.
+		existing, err := findResolvedProfile(ctx, repo, c, env, loginHome)
 		if err != nil {
 			return err
 		}
-		for _, row := range rows {
-			// An own-login profile that still carries a key is the incoherent shape
-			// the create/patch refusal now prevents; it is never the answer.
-			if row.String(colPPProviderRecordRef) == recordRef &&
-				(loginHome == "" || row.String(colPPConfigHome) == loginHome) {
-				out.Profile = profileFromRecord(row)
-				return nil
-			}
+		if existing != nil {
+			out.Profile = profileFromRecord(existing)
+			return nil
 		}
 		name := tool.name
 		if out.Provider != nil {
@@ -292,6 +476,64 @@ func (m *Module) ResolveProfile(ctx context.Context, tenant model.TenantID, driv
 		return ResolvedProfile{}, err
 	}
 	return out, nil
+}
+
+// ResolveAccountProfile answers a request that names its account (a name, or a
+// profile reference): that account's profile, and nothing else. The rule above
+// does not run: the caller chose, so there is no fallback to another profile,
+// nothing is created, and the tool's sign-in is not read. The account must be of
+// the driver asked for, on this node, and active; the launch checks the rest.
+func (m *Module) ResolveAccountProfile(ctx context.Context, tenant model.TenantID, driverIn, account string) (ResolvedProfile, error) {
+	if m.Data == nil {
+		return ResolvedProfile{}, errNoData
+	}
+	driver, tool, err := resolveDriver(driverIn)
+	if err != nil {
+		return ResolvedProfile{}, err
+	}
+	env, err := m.localEnvironment()
+	if err != nil {
+		return ResolvedProfile{}, err
+	}
+	var rec model.Record
+	err = m.Data.View(ctx, tenant, func(sc store.Scope) error {
+		if validProfileRef(account) {
+			found, err := findProfileRec(ctx, sc, account)
+			rec = found
+			if errors.Is(err, ErrProfileNotFound) {
+				return ErrAccountNotFound
+			}
+			return err
+		}
+		repo, err := sc.Ext(providerProfileKind)
+		if err != nil {
+			return err
+		}
+		recs, _, err := repo.List(ctx, model.Query{Filters: []model.Filter{eq(colPPEnvRef, env), eq(colPPAccountName, account)}, Limit: 1})
+		if err != nil {
+			return err
+		}
+		if len(recs) == 0 {
+			return ErrAccountNotFound
+		}
+		rec = recs[0]
+		return nil
+	})
+	if err != nil {
+		return ResolvedProfile{}, err
+	}
+	profile := profileFromRecord(rec)
+	switch {
+	case profile.Driver != driver:
+		return ResolvedProfile{}, conflictErr("this account is a " + profile.Driver + " account, not a " + tool.name + " one")
+	case profile.EnvironmentRef != env:
+		return ResolvedProfile{}, ErrProfileForeignEnvironment
+	case profile.State == ProfileRetired:
+		return ResolvedProfile{}, ErrProfileRetired
+	case profile.State == ProfileDisabled:
+		return ResolvedProfile{}, ErrProfileDisabled
+	}
+	return ResolvedProfile{Profile: profile, Reason: ResolveAccount}, nil
 }
 
 // serverHomedProfileRow is a new profile row whose homes the server makes: the

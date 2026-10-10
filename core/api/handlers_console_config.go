@@ -17,10 +17,7 @@ const effectiveConfigRedactedValue = "<redacted>"
 // handleEffectiveConfig returns the live, redacted composition-root projection
 // of the production config registry. It is a secretless operational read, so it
 // needs system:admin but not AAL3.
-func (s *Server) handleEffectiveConfig(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleEffectiveConfig(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	writeJSON(w, http.StatusOK, s.effectiveConfigProjection())
 }
 
@@ -99,10 +96,7 @@ func sortedUniqueStrings(values []string) []string {
 
 // handleUpdateCheck runs an explicit check-now against the configured signed
 // update channel. Air-gapped/unconfigured deployments return an honest 501.
-func (s *Server) handleUpdateCheck(w http.ResponseWriter, r *http.Request) {
-	if _, ok := s.authzSystem(w, r, "system:admin"); !ok {
-		return
-	}
+func (s *Server) handleUpdateCheck(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	if s.updateRefresh == nil {
 		writeJSON(w, http.StatusNotImplemented, map[string]string{
 			"error": "update checking not configured",

@@ -35,7 +35,7 @@ export LC_ALL
 
 RAIZ="$(git rev-parse --show-toplevel 2>/dev/null || true)"
 [ -n "$RAIZ" ] || {
-	echo "check-lane-preflight: ⛔ NO HE PODIDO MIRAR: no estoy dentro de un repositorio git" >&2
+	echo "check-lane-preflight: ⛔ COULD NOT CHECK: outside a Git repository" >&2
 	exit 2
 }
 cd "$RAIZ" || exit 2
@@ -45,34 +45,34 @@ rc=0
 # ── 1 · TMPDIR: ni dentro del repositorio, ni noexec ──────────────────────────────────────────
 T="${TMPDIR:-/tmp}"
 [ -d "$T" ] || {
-	echo "check-lane-preflight: ⛔ NO HE PODIDO MIRAR: TMPDIR=$T no existe" >&2
+	echo "check-lane-preflight: ⛔ COULD NOT CHECK: TMPDIR=$T is missing" >&2
 	exit 2
 }
 
 DENTRO="$(git -C "$T" rev-parse --show-toplevel 2>/dev/null || true)"
 if [ -n "$DENTRO" ]; then
 	cat >&2 <<AVISO
-check-lane-preflight: ⛔ TMPDIR está DENTRO de un repositorio ($DENTRO).
-    Toda batería cuyo sujeto sea «estar o no dentro de un repositorio» falla con esto, y el
-    fallo NO se lee como del entorno: el 2026-09-02 tumbó lint:mid-operation con 14/1 mientras
-    el árbol estaba impecable.
-    Arréglalo:  export TMPDIR=/workspace/.olivares-tmptest
+check-lane-preflight: ⛔ TMPDIR is INSIDE a repository ($DENTRO).
+    Tests that check whether a path is inside a repository fail with this configuration, and the
+    failure appears to implicate the code: on 2026-09-02, lint:mid-operation failed 14/1 while
+    the tree was clean.
+    repair: export TMPDIR=/workspace/.olivares-tmptest
 AVISO
 	rc=1
 fi
 
 # EJECUTAR, no suponer: `/tmp` es noexec en esta caja y el motor extrae ahí sus plugins.
 SONDA="$(mktemp "$T/preflight.XXXXXX" 2>/dev/null)" || {
-	echo "check-lane-preflight: ⛔ NO HE PODIDO MIRAR: mktemp falló en $T" >&2
+	echo "check-lane-preflight: ⛔ COULD NOT CHECK: mktemp failed in $T" >&2
 	exit 2
 }
 printf '#!/bin/sh\nexit 0\n' >"$SONDA"
 chmod +x "$SONDA" 2>/dev/null
 if ! "$SONDA" 2>/dev/null; then
 	cat >&2 <<AVISO
-check-lane-preflight: ⛔ TMPDIR=$T NO EJECUTA binarios (noexec, o sin permiso).
-    Un guion extraído ahí sale 126 y el rojo lo cobra una pata que no tiene nada que ver.
-    Arréglalo:  export TMPDIR=/workspace/.olivares-tmptest
+check-lane-preflight: ⛔ TMPDIR=$T cannot EXECUTE binaries (noexec or missing permission).
+    A script extracted there exits 126, causing an unrelated test leg to fail.
+    repair: export TMPDIR=/workspace/.olivares-tmptest
 AVISO
 	rc=1
 fi
@@ -88,7 +88,7 @@ rm -f "$SONDA"
 #    privada con dependencias npm, esta lista la recoge sola.
 HOOK="$RAIZ/.githooks/pre-push"
 [ -r "$HOOK" ] || {
-	echo "check-lane-preflight: ⛔ NO HE PODIDO MIRAR: no puedo leer $HOOK" >&2
+	echo "check-lane-preflight: ⛔ COULD NOT CHECK: cannot read $HOOK" >&2
 	exit 2
 }
 
@@ -120,34 +120,30 @@ $(sed -n '/running the FULL gate locally/,$p' "$HOOK" | grep -oE '^[[:space:]]*(
 LISTA
 
 if [ -n "$faltan" ]; then
-	echo "check-lane-preflight: ⛔ una pata PESADA necesita dependencias que este worktree no tiene:" >&2
+	echo "check-lane-preflight: ⛔ a heavy check requires dependencies missing from this worktree:" >&2
 	printf '%s' "$faltan" | sed 's/^/    /' >&2
 	cat >&2 <<'AVISO'
-    Esa pata contestará 3 (CANNOT LOOK) — un no-veredicto, no un rojo — y lo hará DESPUÉS del
-    carril rápido entero. El 2026-09-02 costó 45 minutos y la cura fueron tres segundos.
-    `node_modules` es POR WORKTREE, no por contenedor.
-    Arréglalo, por cada uno:  npm --prefix <directorio> ci
+    That leg returns 3 (CANNOT LOOK), indicating no verdict, after the entire fast lane has run.
+    On 2026-09-02, this cost 45 minutes; the repair took three seconds.
+    `node_modules` belongs to each WORKTREE.
+    repair, for each directory: npm --prefix <directory> ci
 AVISO
 	rc=1
 fi
 
-# ── 3 · POSTGRES: si el clúster está ahí, su plantilla tiene que ser UTF8 ────────────────────
-# WHY, medido el 2026-09-03 (a repository gate). Un push a `main` corrió CUATRO HORAS y murió en
-# `modules/sessions` con «current database\'s encoding is not supported with this provider»
-# (SQLSTATE 0A000). Causa: el clúster de esta caja se inicializó SQL_ASCII, y DOS tests crean
-# colaciones `provider = icu`, que EXIGEN UTF8. Coste: 240 minutos para un hecho que se ve en uno.
+# 3 · Postgres: a reachable cluster needs a UTF8 template for the test suite.
+# Measured 2026-09-03 (a repository gate): a main push ran for four hours before modules/sessions
+# failed with “current database's encoding is not supported with this provider”
+# (SQLSTATE 0A000). The cluster used SQL_ASCII; two tests create ICU collations that
+# require UTF8. Check that one-minute fact before spending 240 minutes.
 #
-# ⚠ Y EL SUJETO ES EL BANCO, NO EL PRODUCTO — censado antes de escribir esto, porque la primera
-#   lectura fue que un cliente con SQL_ASCII se rompía y ES FALSA. El esquema de producción usa
-#   SÓLO colaciones built-in (`pg_catalog."C"` en Postgres, `COLLATE BINARY` en SQLite), que son
-#   independientes del encoding; `provider = icu` aparece en DOS ficheros y los dos son `_test.go`.
-#   Por eso esto NO fuerza el encoding en `dbsetup.go`: forzarlo le quitaría al cliente una
-#   libertad que su esquema no necesita. Lo que falta no es una cura de producto: es que la
-#   precondición del BANCO no estaba declarada en ninguna parte (censo: 0 menciones en README,
-#   CONTRIBUTING, runbooks, `.sql` y comentarios de `sqlstore`).
-#
-# NO SOBRE-BLOQUEA: sin servidor alcanzable los tests se auto-saltan y esto calla. Sólo habla
-# cuando el clúster ESTÁ y su plantilla no sirve, que es el único caso que cuesta las cuatro horas.
+# This is a test-suite precondition, not a product requirement. Production uses only
+# built-in collations (Postgres pg_catalog."C", SQLite COLLATE BINARY), independent
+# of encoding. Both `provider = icu` occurrences are in _test.go files. Do not force
+# encoding in dbsetup.go and restrict customer schemas unnecessarily. This test
+# precondition had zero mentions in README, CONTRIBUTING, runbooks, SQL or sqlstore
+# comments. An unreachable server does not block: speak only when a reachable
+# cluster has an unsuitable template.
 PG_DSN="${OLIVARES_TEST_POSTGRES_SUPERUSER_DSN:-postgres://postgres:postgres@127.0.0.1:5432/postgres?sslmode=disable}"
 if command -v psql >/dev/null 2>&1; then
 	# `template1` es la plantilla que hereda un `CREATE DATABASE` sin TEMPLATE explícita, que es
@@ -158,22 +154,16 @@ if command -v psql >/dev/null 2>&1; then
 	# único inyectado es A QUIÉN se le pregunta. Sin ella, el único caso rojo exigiría re-inicializar
 	# el clúster de la caja, y una guarda que sólo se puede probar en verde no está probada.
 	PG_TPL="${OLIVARES_PREFLIGHT_TEMPLATE_DB:-template1}"
-	# ⛔ LA SONDA VA ACOTADA POR TRES SITIOS, Y NO ES CELO: ESTE GATE PROMETE CONTESTAR EN EL
-	# SEGUNDO 1 Y SIN COTAS PUEDE COLGAR EL PUSH ENTERO ANTES DE DECIR NADA. Sin `-w`, psql pide
-	# la contrasena por /dev/tty —no por stderr, asi que el `2>/dev/null` NO la tapa— y un pre-push
-	# desatendido se queda ahi indefinidamente. Sin `connect_timeout`, libpq no impone limite y una
-	# ruta que descarta paquetes espera para siempre. Y ninguna de las dos cubre una sesion que
-	# conecta y deja de contestar: eso lo acota timeout(1). `-X` ignora `.psqlrc`, que puede cambiar
-	# el formato y romper el `-tA` del que depende la comparacion.
+	# Bound the probe three ways to keep this gate's one-second response contract.
+	# Without -w, psql prompts on /dev/tty, beyond stderr suppression, and unattended
+	# pushes can hang. connect_timeout bounds libpq's connection wait; timeout(1) also
+	# bounds a connected server that stops responding. -X ignores .psqlrc changes to
+	# the format required by -tA. `--` keeps a leading-dash duration from becoming an
+	# option: timeout --help can otherwise return 0 without ever running psql.
 	#
-	# El `--` cuesta un falso verde: sin el, una duracion que empiece por guion se parsea como
-	# opcion y `timeout --help` sale 0 SIN correr psql — servidor inalcanzable reportado como sano.
-	#
-	# ⓘ PROCEDENCIA: esto es de (`lane-preflight-bounded-probe-0904` = f6d5fdd51), compuesto
-	#   aqui en vez de elegido. Mi cadena tenia la sonda de protocolo y la correccion del «auto-
-	#   saltan»; la suya tenia las cotas y la lectura del rc de psql. Ninguna era superconjunto de
-	#   la otra, asi que se componen y se retira la tercera (b2bc4be1c), cuya unica propiedad —el
-	#   DSN por nombre— esta en las dos.
+	# Provenance: (`lane-preflight-bounded-probe-0904`, f6d5fdd51), composed with
+	# the protocol probe and skip correction. Neither version subsumed the other;
+	# b2bc4be1c was retired because its DSN-by-name property existed in both.
 	PG_SQL="select pg_encoding_to_char(encoding) from pg_database where datname='$PG_TPL'"
 	if command -v timeout >/dev/null 2>&1; then
 		PG_OUT="$(PGCONNECT_TIMEOUT=3 timeout -- 10 psql -X -q -w -tA \
@@ -184,11 +174,10 @@ if command -v psql >/dev/null 2>&1; then
 	fi
 	PG_RC=$?
 	PG_ENC="$(printf '%s' "$PG_OUT" | tr -d '[:space:]')"
-	# ⛔ «NO HAY SERVIDOR» Y «NO PUDE MIRAR» se publicaban con la MISMA frase, y son respuestas
-	# distintas: la primera es benigna y esperada, la segunda es una guarda que se quedo ciega y lo
-	# estaba diciendo como si hubiera mirado. psql distingue la benigna con su propio codigo —2 es
-	# «no pude conectar»—, asi que se lee ESE y no la ausencia de salida, que tambien la produce un
-	# timeout, un `.psqlrc` hostil o una plantilla que no existe. (De misma procedencia.)
+	# Distinguish an absent server from an unperformed check. psql's rc 2 means it
+	# could not connect, a benign expected case. Read that code, not empty output:
+	# timeout, hostile .psqlrc or a missing template can also produce silence.
+	# From with the same provenance above.
 	if [ "$PG_RC" -eq 2 ]; then
 		PG_MIRADO=no
 		if [ -n "${OLIVARES_TEST_POSTGRES_SUPERUSER_DSN:-}" ]; then
@@ -197,37 +186,37 @@ if command -v psql >/dev/null 2>&1; then
 			#    `superDSN != ""` — no comprueba que nadie conteste. Decir «se auto-saltan» aqui
 			#    afirma lo contrario de lo que hace el codigo, y de esa frase colgaba una asercion
 			#    en verde de la bateria.
-			echo "check-lane-preflight: sin PostgreSQL alcanzable pero HAY un DSN de superusuario:" \
-				"los tests NO se auto-saltan (pgtest.classify decide por la PRESENCIA del DSN," \
+			echo "check-lane-preflight: PostgreSQL is unreachable, but a superuser DSN is set:" \
+				"tests will not skip automatically (pgtest.classify decides based on the presence of the DSN," \
 				"core/internal/pgtest/pgtest.go:289-298)."
 		else
-			echo "check-lane-preflight: sin PostgreSQL alcanzable y sin DSN de superusuario — los tests que lo usan se auto-saltan."
+			echo "check-lane-preflight: PostgreSQL is unreachable and no superuser DSN is set; tests requiring it skip automatically."
 		fi
 	elif [ "$PG_RC" -ne 0 ]; then
 		PG_MIRADO=no
-		echo "check-lane-preflight: ⚠ no pude mirar la plantilla de PostgreSQL (psql salio $PG_RC$([ "$PG_RC" -eq 124 ] && printf '%s' ", que es el deadline de timeout(1): el servidor conecta y no contesta")). El cluster puede estar y esta precondicion queda SIN comprobar." >&2
+		echo "check-lane-preflight: ⚠ could not check the PostgreSQL template (psql exited $PG_RC$([ "$PG_RC" -eq 124 ] && printf '%s' ", the timeout(1) deadline: the server accepts connections but does not respond")). The cluster may exist; this prerequisite remains unverified." >&2
 	elif [ -z "$PG_ENC" ]; then
 		PG_MIRADO=no
-		echo "check-lane-preflight: ⚠ PostgreSQL contesto pero no hay fila para la plantilla '$PG_TPL': la precondicion queda SIN comprobar." >&2
+		echo "check-lane-preflight: ⚠ PostgreSQL responded, but template '$PG_TPL' has no row: this prerequisite remains unverified." >&2
 	elif [ "$PG_ENC" != "UTF8" ]; then
 		cat >&2 <<AVISO
-check-lane-preflight: ⛔ la plantilla de PostgreSQL ($PG_TPL) es $PG_ENC, y el banco necesita UTF8.
-    Dos tests crean colaciones \`provider = icu\`, que sólo existen en bases UTF8. Con esta
-    plantilla mueren con SQLSTATE 0A000 — y lo hacen DENTRO del gate pesado: el 2026-09-03
-    costó 240 minutos para un hecho que se ve aquí en un segundo.
-    Arréglalo sin re-inicializar el clúster ni perder sus bases. `TEMPLATE template0` es
-    PORTANTE, no adorno: medido por KERNEL el 2026-09-03 sobre el clúster SQL_ASCII conservado,
-    `ENCODING 'UTF8'` sin él muere con «new encoding (UTF8) is incompatible with the encoding of
-    the template database». `LC_COLLATE`/`LC_CTYPE` van explícitos por defensa —la locale de
-    template0 puede ser incompatible con UTF8— pero que HAGAN FALTA no está medido: esta caja
-    tiene template0 en C/C.utf8, que es compatible con cualquier encoding.
+check-lane-preflight: ⛔ PostgreSQL template $PG_TPL uses $PG_ENC; the test suite requires UTF8.
+    Two tests create \`provider = icu\` collations, which require UTF8 databases. This template
+    causes SQLSTATE 0A000 failures inside the heavy gate. On 2026-09-03, discovering this
+    took 240 minutes; this check can detect it in one second.
+    Repair it without reinitializing the cluster or losing its databases. `TEMPLATE template0` is
+    required: KERNEL measured this on 2026-09-03 with the preserved SQL_ASCII cluster.
+    Without it, `ENCODING 'UTF8'` fails with "new encoding (UTF8) is incompatible with the encoding of
+    the template database". `LC_COLLATE` and `LC_CTYPE` are explicit as a precaution: the template0
+    locale might be incompatible with UTF8. Their necessity has not been measured here: this machine
+    uses C/C.utf8 for template0, which is compatible with every encoding.
         psql "\$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -c "UPDATE pg_database SET datistemplate=false WHERE datname='template1'"
         psql "\$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -c "DROP DATABASE template1"
         psql "\$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -c "CREATE DATABASE template1 TEMPLATE template0 ENCODING 'UTF8' LC_COLLATE 'C' LC_CTYPE 'C'"
         psql "\$OLIVARES_TEST_POSTGRES_SUPERUSER_DSN" -c "UPDATE pg_database SET datistemplate=true WHERE datname='template1'"
-    (el DSN va por NOMBRE y no por valor a proposito: este heredoc NO esta entrecomillado, asi que
-    imprimir \$PG_DSN metia la contrasena del superusuario en el log de cada push cuya template1
-    no fuera UTF8. Si no tienes esa variable puesta, el gate uso su valor por defecto de 127.0.0.1.)
+    (The DSN is shown by NAME intentionally: this heredoc expands variables, so printing
+    \$PG_DSN would expose the superuser password in every push log where template1 is not UTF8.
+    If that variable is unset, the gate used its 127.0.0.1 default.)
 AVISO
 		rc=1
 	fi
@@ -265,32 +254,32 @@ else
 	if [ -z "${OLIVARES_TEST_POSTGRES_SUPERUSER_DSN:-}" ] &&
 		{ [ -n "${OLIVARES_TEST_POSTGRES_DSN:-}" ] || [ -n "${OLIVARES_TEST_POSTGRES_ADMIN_DSN:-}" ]; }; then
 		cat >&2 <<'AVISO'
-check-lane-preflight: ⛔ hay un DSN de aplicacion o de admin PERO NO el de superusuario. Eso no es
-una postura desconocida: `pgtest.classify` (core/internal/pgtest/pgtest.go:289-298) devuelve
-`gateMisconfigured` de forma determinista y el banco lo mata con `tb.Fatal`. Las patas de Postgres
-NO se saltan: fallan.
-Arreglalo de una de las dos formas:
-    exporta OLIVARES_TEST_POSTGRES_SUPERUSER_DSN
-    o desconfigura las otras dos si no querias correr esa pata
+check-lane-preflight: ⛔ An application or admin DSN is configured, but no superuser DSN.
+This is a known misconfiguration: `pgtest.classify` (core/internal/pgtest/pgtest.go:289-298) returns
+`gateMisconfigured` deterministically, and the tests terminate with `tb.Fatal`. The PostgreSQL legs
+will fail rather than skip.
+Repair it using either option:
+    export OLIVARES_TEST_POSTGRES_SUPERUSER_DSN
+    or unset the other two DSNs if you did not intend to run that leg
 AVISO
 		PG_MIRADO=no
 		exit 1
 	fi
 	if [ -n "${OLIVARES_TEST_POSTGRES_SUPERUSER_DSN:-}" ]; then
 		cat >&2 <<'AVISO'
-check-lane-preflight: ⛔ NO HE PODIDO MIRAR: hay un DSN de PostgreSQL configurado y no hay `psql`
-    en esta caja, así que los tests de Postgres VAN A CORRER contra un servidor cuya plantilla no
-    he podido comprobar. Si es SQL_ASCII, mueren con SQLSTATE 0A000 dentro del gate pesado: el
-    2026-09-03 costó 240 minutos.
-    Arréglalo de una de las dos formas:
-        instala el cliente   (apt-get install -y postgresql-client)
-        o desconfigura el DSN si no querías correr esa pata
+check-lane-preflight: ⛔ COULD NOT CHECK: a PostgreSQL DSN is configured but `psql` is unavailable
+    on this machine. PostgreSQL tests will run against a server whose template could not be
+    checked. If it uses SQL_ASCII, they fail with SQLSTATE 0A000 inside the heavy gate:
+    on 2026-09-03, this cost 240 minutes.
+    Repair it using either option:
+        install the client (apt-get install -y postgresql-client)
+        or unset the DSN if you did not intend to run that leg
 AVISO
 		PG_MIRADO=no
 		exit 2
 	fi
-	echo "check-lane-preflight: sin \`psql\` y sin DSN — la pata de PostgreSQL no va a correr" \
-		"(pgtest.classify devuelve gateSkip), así que no hay plantilla que mirar."
+	echo "check-lane-preflight: neither \`psql\` nor a DSN is available; PostgreSQL tests will not run" \
+		"(pgtest.classify returns gateSkip), so there is no template to inspect."
 	PG_MIRADO=no
 fi
 
@@ -362,18 +351,18 @@ if [ -n "$PATAS_PG" ]; then
 		printf "%s" "${OLIVARES_TEST_POSTGRES_SUPERUSER_DSN:-}"' _ "$RAIZ")" || PG_HELPER_RC=$?
 	if [ "$PG_HELPER_RC" -ne 0 ]; then
 		cat >&2 <<AVISO
-check-lane-preflight: ⛔ NO HE PODIDO MIRAR: \`scripts/pg-test-env.sh\` fallo con rc $PG_HELPER_RC, asi
-que no se de que Postgres hablan las patas pesadas:$PATAS_PG
-No es «no hacia falta comprobarlo»: es que no pude. El gancho, ante este mismo fallo, se niega a
-correr el gate (\`.githooks/pre-push:2169-2172\`), y aprobar aqui lo que alli se rechaza deja pasar
-una postura desconocida hasta el minuto 45.
+check-lane-preflight: ⛔ COULD NOT CHECK: \`scripts/pg-test-env.sh\` exited $PG_HELPER_RC, so
+the PostgreSQL server used by these heavy test legs is unknown:$PATAS_PG
+The check could not complete. For the same failure, the hook refuses to run the gate
+(\`.githooks/pre-push:2169-2172\`). Allowing it here would leave this configuration unchecked
+until minute 45.
 AVISO
 		PG_MIRADO=no
 		exit 2
 	fi
 	PG_HP="$(printf '%s' "$PG_DSN_EFEC" | sed -E 's#^[a-z]+://[^@]*@##; s#[/?].*##')"
 	if [ -z "$PG_HP" ]; then
-		echo "check-lane-preflight: no he podido derivar el host de PostgreSQL del gancho — no lo compruebo."
+		echo "check-lane-preflight: could not derive the PostgreSQL host from the hook; not checked."
 	# ⛔ UN `connect` NO PRUEBA QUE SEA POSTGRES, y la primera version aceptaba cualquier listener.
 	#    Un tunel SSH, un contenedor rancio o cualquier proceso con el 5432 abierto satisfacian este
 	#    gate; y `classify` (pgtest.go:289-298) hace correr la pata por la sola PRESENCIA del DSN.
@@ -436,26 +425,26 @@ finally:
 		:
 	elif [ $? -eq 2 ]; then
 		cat >&2 <<AVISO
-check-lane-preflight: ⛔ algo escucha en $PG_HP y NO habla PostgreSQL (no contesta al SSLRequest).
-    El gate pesado llama a patas que EXIGEN PostgreSQL:$PATAS_PG
-    NO se van a saltar: \`pgtest.classify\` decide por la PRESENCIA del DSN
-    (core/internal/pgtest/pgtest.go:289-298), no por que el servidor conteste, asi que van a
-    correr contra eso y a morir DENTRO del gate pesado.
-    Arreglalo de una de las dos formas:
-        arranca un PostgreSQL de verdad en $PG_HP (lo que hay ahi ahora no lo es)
-        o exporta OLIVARES_TEST_POSTGRES_SUPERUSER_DSN apuntando a uno que exista
+check-lane-preflight: ⛔ A listener on $PG_HP does not speak PostgreSQL (no SSLRequest response).
+    The heavy gate invokes legs that REQUIRE PostgreSQL:$PATAS_PG
+    They will not skip: \`pgtest.classify\` uses the presence of a DSN
+    (core/internal/pgtest/pgtest.go:289-298), regardless of server availability. They will
+    run against this listener and fail inside the heavy gate.
+    Repair it using either option:
+        start a PostgreSQL server at $PG_HP (the current listener is not PostgreSQL)
+        or point OLIVARES_TEST_POSTGRES_SUPERUSER_DSN to an existing server
 AVISO
 		rc=1
 	else
 		cat >&2 <<AVISO
-check-lane-preflight: ⛔ nadie escucha en $PG_HP y el gate pesado llama a patas que EXIGEN
+check-lane-preflight: ⛔ No listener on $PG_HP; the heavy gate invokes legs that REQUIRE
     PostgreSQL:$PATAS_PG
-    NO se van a saltar: \`with-pg-env.sh\` rehusa correr con una postura desconocida y sale 1, asi
-    que mueren en 0 s DESPUES del carril rapido entero. El 2026-09-04 costo un gate completo en la
-    caja 3 (tres rojas, 13/16) para saber esto.
-    Arreglalo de una de las dos formas:
-        arranca un PostgreSQL en $PG_HP
-        o exporta OLIVARES_TEST_POSTGRES_SUPERUSER_DSN apuntando a uno que exista
+    They will not skip: \`with-pg-env.sh\` refuses an unknown configuration and exits 1.
+    They fail immediately after the entire fast lane. On 2026-09-04, discovering this cost
+    a complete gate run on machine 3 (three failures, 13/16).
+    Repair it using either option:
+        start a PostgreSQL server at $PG_HP
+        or point OLIVARES_TEST_POSTGRES_SUPERUSER_DSN to an existing server
 AVISO
 		rc=1
 	fi
@@ -489,23 +478,23 @@ if [ "$rc" -eq 0 ]; then
 	#    `PATAS_PG`; con DSN puesto algo va a correr aunque no haya pata envuelta.
 	if [ "${PG_MIRADO:-si}" = "no" ] && { [ -n "${PG_DSN_EFEC:-}" ] || [ -n "${OLIVARES_TEST_POSTGRES_SUPERUSER_DSN:-}" ]; }; then
 		cat >&2 <<AVISO
-check-lane-preflight: ⛔ NO HE PODIDO MIRAR la postura de PostgreSQL y el gate pesado SI llama a
-patas que la necesitan:${PATAS_PG:- (ninguna envuelta, pero hay DSN)}
-Que algo escuche no es que la sesion sirva: un listener contesta igual con la base inexistente, el
-rol sin login o la contrasena mala (\`scripts/pg-test-env.sh:169-172\`), y una \`template1\` SQL_ASCII
-detras de un listener sano mata las suites con SQLSTATE 0A000 a los 240 minutos.
-Arreglalo de una de las dos formas:
-    instala el cliente para que pueda comprobarlo   (apt-get install -y postgresql-client)
-    o quita del gancho las patas que exigen Postgres si no querias correrlas
+check-lane-preflight: ⛔ COULD NOT CHECK the PostgreSQL configuration; the heavy gate invokes
+legs that require it:${PATAS_PG:- (none wrapped, but a DSN is configured)}
+An active listener does not establish a usable session: nonexistent databases, roles without login,
+or incorrect passwords also accept connections (\`scripts/pg-test-env.sh:169-172\`). A SQL_ASCII
+\`template1\` behind a healthy listener can terminate suites with SQLSTATE 0A000 after 240 minutes.
+Repair it using either option:
+    install the client to allow verification (apt-get install -y postgresql-client)
+    or remove PostgreSQL legs from the hook if you did not intend to run them
 AVISO
 		exit 2
 	fi
 	if [ "${PG_MIRADO:-si}" = "no" ]; then
-		echo "check-lane-preflight: OK en lo que pude mirar — TMPDIR fuera del repositorio y" \
-			"ejecutable, sin dependencias ausentes. La plantilla de PostgreSQL NO se comprobó." \
-			"Ninguna pata pesada la necesita, asi que no va a correr nada contra ella."
+		echo "check-lane-preflight: OK for the checks completed — TMPDIR is outside the repository and" \
+			"supports execution; no dependencies are missing. The PostgreSQL template was not checked." \
+			"No heavy check needs it, so nothing will run against it."
 	else
-		echo "check-lane-preflight: OK — TMPDIR fuera del repositorio y ejecutable; sin dependencias ausentes."
+		echo "check-lane-preflight: OK — TMPDIR is outside the repository and supports execution; no dependencies missing."
 	fi
 fi
 exit "$rc"

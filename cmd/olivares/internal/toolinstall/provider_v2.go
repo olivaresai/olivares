@@ -37,6 +37,13 @@ type releaseRoutes interface {
 	routePointer(sel SelectionV2, channel string) string
 }
 
+// releaseChecksumRoutes is implemented by a v2 adapter whose release is stated by
+// more than one official checksum document (release_archive.go: the API metadata and
+// the release's own checksum file); revalidation tries each of them.
+type releaseChecksumRoutes interface {
+	otherChecksums(sel SelectionV2) []URLRef
+}
+
 // PayloadAccess is the confined view VerifyPayload uses to inspect placed
 // members. Lstat and OpenFile take paths relative to the owning *os.Root.
 type PayloadAccess interface {

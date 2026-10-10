@@ -23,8 +23,7 @@ func TestALaunchNamingNoProfileRunsOnTheEnginesChoice(t *testing.T) {
 	m.UseProfileHomesRoot(t.TempDir())
 	m.UseToolLoginsRoot(t.TempDir())
 	stub := &loginStub{installed: map[string]bool{"claude": true}, signedIn: map[string]bool{"claude": true}}
-	m.UseToolLoginStatus(stub.status)
-	m.EnableProfiledLaunches()
+	m.ToolLogin = stub.status
 	h := newHarness(t, m)
 	admin := h.adminLogin()
 	tenant := h.createOrg(admin, "acme")

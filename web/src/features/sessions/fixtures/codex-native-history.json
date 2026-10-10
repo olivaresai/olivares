@@ -1,0 +1,72 @@
+{
+  "type": "olivares_conversation",
+  "thread_id": "01a12535-2371-77d1-87f3-ed209ec0a03b",
+  "turns": [
+    {
+      "id": "01a12535-238c-7411-be94-512396e51f9c",
+      "rootTurnId": "01a12535-238c-7411-be94-512396e51f9c",
+      "items": [
+        {
+          "type": "userMessage",
+          "id": "01a12535-239f-7873-a8fe-2bb934af9b0e",
+          "clientId": null,
+          "content": [
+            {
+              "type": "text",
+              "text": "initial CLI prompt",
+              "text_elements": []
+            }
+          ]
+        },
+        {
+          "type": "agentMessage",
+          "id": "msg_fixture",
+          "text": "fixture answer",
+          "phase": null,
+          "memoryCitation": null,
+          "delivery": null,
+          "questions": null
+        }
+      ],
+      "itemsView": "full",
+      "status": "completed",
+      "error": null,
+      "startedAt": 1791625601,
+      "completedAt": 1791625601,
+      "durationMs": 39
+    },
+    {
+      "id": "01a12535-23ba-7ac1-ac26-f3d3f41bca13",
+      "rootTurnId": "01a12535-23ba-7ac1-ac26-f3d3f41bca13",
+      "items": [
+        {
+          "type": "userMessage",
+          "id": "01a12535-23c0-7372-93e1-8b809dddc4cb",
+          "clientId": null,
+          "content": [
+            {
+              "type": "text",
+              "text": "earlier console prompt",
+              "text_elements": []
+            }
+          ]
+        },
+        {
+          "type": "agentMessage",
+          "id": "msg_fixture",
+          "text": "fixture answer",
+          "phase": null,
+          "memoryCitation": null,
+          "delivery": null,
+          "questions": null
+        }
+      ],
+      "itemsView": "full",
+      "status": "completed",
+      "error": null,
+      "startedAt": 1791625601,
+      "completedAt": 1791625602,
+      "durationMs": 23
+    }
+  ]
+}

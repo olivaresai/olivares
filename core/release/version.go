@@ -10,34 +10,10 @@ import (
 	"strings"
 )
 
-// version.go is a small, dependency-free semantic-version comparator for the OTA
-// updater. It is on the anti-rollback trust path — "is this manifest newer
-// than the binary I am running?" decides whether an upgrade is a legitimate
-// forward step or a downgrade that must be an explicit, audited --force-rollback —
-// so it is deliberately self-contained (no x/mod/semver): fewer moving parts on a
-// security-relevant decision, and it accepts the exact shape our releases produce.
-//
-// Accepted forms: "MAJOR.MINOR" (monthly) or "MAJOR.MINOR.PATCH" (patch or
-// historical), with an optional leading "v" and an optional
-// "-prerelease" suffix (e.g. "26.7.0", "v26.7.1", "26.8.0-rc.1"). Build metadata
-// ("+meta") is ignored for ordering, per SemVer. A version WITH a prerelease sorts
-// BEFORE the same version without one (26.8.0-rc.1 < 26.8.0).
-//
-// UNSTAMPED BUILDS ARE NOT ORDERABLE. "" and "dev" still parse to the zero
-// Version so nothing panics, but that zero is NOT a position in the ordering and no
-// guard may read it as one. This paragraph used to say the opposite — "any real
-// release is newer than a dev binary, so a dev build can always take a signed
-// upgrade" — and that sentence was the SEED of a real defect, not a victim of it:
-// it reasoned about anti-rollback (where zero does mean "everything is forward")
-// and forgot that min_version reads the SAME datum, where zero means the exact
-// opposite. MinTooOld is Compare(current, min) < 0, so a zero current is BELOW every
-// minimum: the build the comment promised could "always upgrade" was in fact the one
-// build that could never take any release declaring a min_version. One datum feeding
-// two guards of opposite intent is how a fail-open and a fail-closed bug ship
-// together. Callers on the upgrade path therefore ask IsUnstamped FIRST and refuse
-// with a named cause and a named way out (--current-version), rather than compare.
-// Released artifacts are unaffected: goreleaser stamps -X main.version
-// (.goreleaser.yaml:102 and :151), so only a build from source is unstamped.
+// Release versions are bare MAJOR.MINOR. Numeric comparison keeps 1.10 newer
+// than 1.9; patch numbers, prefixes and suffixes are not release identities.
+// Unstamped builds remain unknown on the upgrade path: callers must establish
+// IsUnstamped before ordering or evaluating a minimum version.
 
 // Version is a parsed semantic version. Zero value is the lowest possible version.
 type Version struct {
@@ -64,42 +40,25 @@ func IsUnstamped(s string) bool {
 // ParseVersion parses a semantic version. "dev" (or empty) is the zero Version —
 // which is a PARSE result, not an ordering claim: see IsUnstamped and the header.
 func ParseVersion(s string) (Version, error) {
-	raw := strings.TrimSpace(s)
-	v := Version{Raw: raw}
-	t := strings.TrimPrefix(raw, "v")
-	if t == "" || t == "dev" {
-		// The zero Version, so callers that only display or store it keep working. It is
-		// NOT a position in the ordering — ask IsUnstamped before comparing.
-		return Version{Raw: raw}, nil
+	if IsUnstamped(s) {
+		return Version{Raw: s}, nil
 	}
-	// Drop build metadata (+...) which does not affect ordering.
-	if i := strings.IndexByte(t, '+'); i >= 0 {
-		t = t[:i]
+	parts := strings.Split(s, ".")
+	if len(parts) != 2 {
+		return Version{}, fmt.Errorf("release: version %q must be MAJOR.MINOR", s)
 	}
-	// Split off the prerelease (-...).
-	core := t
-	if i := strings.IndexByte(t, '-'); i >= 0 {
-		core = t[:i]
-		pre := t[i+1:]
-		if pre == "" {
-			return Version{}, fmt.Errorf("release: version %q has an empty prerelease", raw)
+	nums := [2]int{}
+	for i, part := range parts {
+		if part == "" || strings.IndexFunc(part, func(r rune) bool { return r < '0' || r > '9' }) >= 0 {
+			return Version{}, fmt.Errorf("release: version %q has a non-numeric component %q", s, part)
 		}
-		v.Pre = strings.Split(pre, ".")
-	}
-	parts := strings.Split(core, ".")
-	if len(parts) != 2 && len(parts) != 3 {
-		return Version{}, fmt.Errorf("release: version %q is not MAJOR.MINOR or MAJOR.MINOR.PATCH", raw)
-	}
-	nums := [3]int{}
-	for i, p := range parts {
-		n, err := strconv.Atoi(p)
-		if err != nil || n < 0 {
-			return Version{}, fmt.Errorf("release: version %q has a non-numeric component %q", raw, p)
+		n, err := strconv.Atoi(part)
+		if err != nil {
+			return Version{}, fmt.Errorf("release: version %q: %w", s, err)
 		}
 		nums[i] = n
 	}
-	v.Major, v.Minor, v.Patch = nums[0], nums[1], nums[2]
-	return v, nil
+	return Version{Major: nums[0], Minor: nums[1], Raw: s}, nil
 }
 
 // Compare returns -1 if a<b, 0 if equal (in precedence), +1 if a>b. It follows

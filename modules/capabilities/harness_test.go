@@ -104,7 +104,7 @@ func newHarness(t *testing.T, opts ...capabilities.Option) *harness {
 }
 
 // newHarnessWithConfig is newHarness with an explicit store.Config, so a test can
-// exercise the audit-spool degrade/block policies (ADR-0024 Q2) that drive the
+// exercise the audit-spool degrade/block policies that drive the
 // evidence-or-refuse path.
 func newHarnessWithConfig(t *testing.T, cfg store.Config, opts ...capabilities.Option) *harness {
 	t.Helper()

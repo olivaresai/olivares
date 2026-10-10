@@ -30,7 +30,8 @@
       "active": "Active",
       "available": "Available",
       "opt_in_off": "Opt-in off",
-      "blocked": "Blocked"
+      "blocked": "Blocked",
+      "unavailable": "Requires Business"
     },
     "optInOff": "Convention in Development — off by default; enable via the connector gate.",
     "gate": "Gate",
@@ -128,7 +129,8 @@
       "ok": "OK",
       "error": "Error",
       "unset": "Unset"
-    }
+    },
+    "exportFailed": "Trace export failed"
   },
   "empty": {
     "ingestionHealth": {
@@ -147,5 +149,10 @@
       "title": "No span timings recorded for this trace",
       "description": "Ledger events must carry engine span IDs before this view can show each span's start offset, duration, actor and status."
     }
+  },
+  "inferenceCoverage": {
+    "inference_metadata_only": "Only inference metadata is retained. The provider's working context cannot be reconstructed.",
+    "provider_context_may_change": "Compaction or context edits were requested. Retained metadata cannot reconstruct the provider's working context.",
+    "provider_context_unknown": "Provider context editing is unknown for this inference. Retained metadata cannot reconstruct the provider's working context."
   }
 }

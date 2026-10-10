@@ -5,6 +5,7 @@
 package governance_test
 
 import (
+	"context"
 	"net/http"
 	"testing"
 
@@ -95,28 +96,6 @@ func TestPolicyThresholdCannotLowerCriticalFloor(t *testing.T) {
 	}
 }
 
-// An EXPLICIT policy tier is the operator's audited word and reclassifies in
-// both directions (the CRITICAL set is configurable by policy).
-func TestPolicyExplicitTierReclassifies(t *testing.T) {
-	h := newHarness(t)
-	admin := h.adminLogin()
-	tenant := h.createOrg(admin, "acme")
-
-	// Downgrade: deploy.apply explicitly high → single approval suffices.
-	h.createApprovalPolicy(admin, tenant, "downgrade", map[string]any{"risk_tier": "high", "required_approvals": 1, "match": map[string]any{"action": "deploy.apply"}})
-	r := h.createApproval(admin, tenant, map[string]any{"action": "deploy.apply", "subject_kind": "deployment", "subject_ref": "prod-1"})
-	if r.code != http.StatusCreated || r.body["required_approvals"] != float64(1) || r.body["risk_tier"] != "high" {
-		t.Fatalf("explicit downgrade: %d %s required=%v tier=%v", r.code, r.raw, r.body["required_approvals"], r.body["risk_tier"])
-	}
-
-	// Upgrade: claude.tool.use explicitly critical → floored at 2.
-	h.createApprovalPolicy(admin, tenant, "upgrade", map[string]any{"risk_tier": "critical", "match": map[string]any{"action": "claude.tool.use"}})
-	r = h.createApproval(admin, tenant, map[string]any{"action": "claude.tool.use", "subject_kind": "claude.tool", "subject_ref": "Bash"})
-	if r.code != http.StatusCreated || r.body["required_approvals"] != float64(2) || r.body["risk_tier"] != "critical" {
-		t.Fatalf("explicit upgrade: %d %s required=%v tier=%v", r.code, r.raw, r.body["required_approvals"], r.body["risk_tier"])
-	}
-}
-
 // Authoring guard: a policy cannot declare an action critical AND set a
 // sub-floor threshold — the contradiction is rejected at authoring time.
 func TestCriticalPolicyAuthoringGuard(t *testing.T) {
@@ -169,5 +148,40 @@ func TestDecideTimeFloorTracksLivePolicy(t *testing.T) {
 	}
 	if rr = h.decide(a2, tenant, id, "approve"); rr.code != http.StatusOK || rr.body["status"] != "approved" {
 		t.Fatalf("second distinct approver crosses: %d %s status=%v", rr.code, rr.raw, rr.body["status"])
+	}
+}
+
+// Community accepts an explicit tier that raises the default; Business also lowers it.
+func TestPolicyExplicitTierRaises(t *testing.T) {
+	h := newHarness(t)
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+
+	// Upgrade: claude.tool.use explicitly critical → floored at 2.
+	h.createApprovalPolicy(admin, tenant, "upgrade", map[string]any{"risk_tier": "critical", "match": map[string]any{"action": "claude.tool.use"}})
+	r := h.createApproval(admin, tenant, map[string]any{"action": "claude.tool.use", "subject_kind": "claude.tool", "subject_ref": "Bash"})
+	if r.code != http.StatusCreated || r.body["required_approvals"] != float64(2) || r.body["risk_tier"] != "critical" {
+		t.Fatalf("explicit upgrade: %d %s required=%v tier=%v", r.code, r.raw, r.body["required_approvals"], r.body["risk_tier"])
+	}
+}
+
+// A session launch keeps the quorum the deployment's humans can meet, even when
+// a policy raises it to critical: one available approver must still launch.
+func TestRaisedCriticalSessionLaunchKeepsDeploymentQuorum(t *testing.T) {
+	h := newHarness(t)
+	h.gov.UseApprovalCapacity(func(context.Context, model.TenantID) (int64, error) { return 1, nil })
+	admin := h.adminLogin()
+	tenant := h.createOrg(admin, "acme")
+	_, reviewer := h.roleUser(admin, tenant, "launch-reviewer@x.io", "admin")
+	h.stepUp(reviewer)
+	h.createApprovalPolicy(admin, tenant, "critical launch", map[string]any{
+		"risk_tier": "critical", "match": map[string]any{"action": "sessions.run.launch"},
+	})
+	r := h.createApproval(admin, tenant, map[string]any{"action": "sessions.run.launch", "subject_kind": "session", "subject_ref": "s-1"})
+	if r.code != http.StatusCreated || r.body["risk_tier"] != "critical" || r.body["required_approvals"] != float64(1) {
+		t.Fatalf("critical launch create = %d %s, want the deployment quorum of one", r.code, r.raw)
+	}
+	if d := h.decide(reviewer, tenant, r.body["id"].(string), "approve"); d.code != http.StatusOK || d.body["status"] != "approved" {
+		t.Fatalf("single available approver = %d %s, want approved", d.code, d.raw)
 	}
 }

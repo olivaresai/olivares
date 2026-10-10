@@ -23,13 +23,11 @@ RUN npm install -g corepack@0.34.6 && corepack enable pnpm
 COPY web/package.json web/pnpm-lock.yaml ./web/
 RUN cd web && pnpm install --frozen-lockfile
 COPY web/ ./web/
-# Vite's build.outDir is core/internal/webui/dist — it must exist before tsc/vite
-# run so the Go embed has files. The build writes there.
-COPY core/internal/webui/dist/index.html ./core/internal/webui/dist/index.html
+# Vite creates core/internal/webui/dist from source, including its parent directories.
 RUN cd web && pnpm run build
 
 # ---- go stage: compile the single static binary with the UI embedded ----------
-FROM golang:1.26.8-bookworm AS build
+FROM golang:1.27.0-bookworm AS build
 WORKDIR /src
 ENV CGO_ENABLED=0 GOFLAGS=-mod=readonly
 # The full source comes in BEFORE `go mod download`. The go command reads go.work
@@ -42,7 +40,7 @@ COPY . .
 RUN go mod download
 # Then the freshly built web bundle from the web stage, over the copied placeholder.
 COPY --from=web /src/core/internal/webui/dist/ ./core/internal/webui/dist/
-ARG VERSION=dev
+ARG VERSION
 ARG COMMIT=none
 # SOURCE_DATE_EPOCH (seconds since epoch) makes the embedded build date — and thus
 # the binary — reproducible for a given commit. Defaults to 0 (1970) when unset.
@@ -53,18 +51,21 @@ ARG SOURCE_DATE_EPOCH=0
 # embedded in this build" for every plugin source, the claude source included).
 # Host platform == image platform here (no cross-build in this Dockerfile).
 RUN bash scripts/build-connectors.sh
-RUN BUILD_DATE="$(date -u -d "@${SOURCE_DATE_EPOCH}" +%Y-%m-%dT%H:%M:%SZ 2>/dev/null || echo unknown)" && \
+RUN VERSION_LDFLAGS="$(sh scripts/build-ldflags.sh "${VERSION}" "${COMMIT}")" && \
     go build -trimpath \
-      -ldflags "-s -w -buildid= -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.date=${BUILD_DATE}" \
+      -ldflags "-s -w -buildid= ${VERSION_LDFLAGS}" \
       -o /out/olivares ./cmd/olivares
 
 # ---- final stage: non-root agent runtime ----------------------------------
 # Runtime support only; agent CLIs are installed by Olivares into the data volume.
 # Node 24 is LTS; this official image uses Debian 13 (trixie) and includes npm/npx.
-FROM node:24-trixie-slim@sha256:8ec5d7557396cfe32d21c3f9c13072355ceab22b584578ca4bb28af31120cffe
+FROM node:25-trixie-slim@sha256:aabbe39553d15ede8a97cc60c9e1a97034ff772afcf696ea42b94e7f5f2ec71b
 # hadolint ignore=DL3008
 RUN apt-get update \
+    && apt-get upgrade -y \
     && apt-get install -y --no-install-recommends ca-certificates git python3 python3-venv \
+    && npm install --global --ignore-scripts npm@11.21.0 \
+    && npm cache clean --force \
     && rm -rf /var/lib/apt/lists/* /usr/local/include/node \
     && groupadd --gid 65532 nonroot \
     && useradd --uid 65532 --gid 65532 --home-dir /var/lib/olivares/home --no-create-home nonroot \
@@ -74,6 +75,8 @@ COPY packaging/container/uv-LICENSE-MIT.txt /usr/share/doc/uv/LICENSE-MIT
 # A writable home is required for npm/npx and uvx on Compose's read-only rootfs.
 # Per-account homes are set by the product when launching subscription tools.
 ENV HOME=/var/lib/olivares/home
+# The directory the CMD serves, so a bare `olivares first-boot` (or any data-dir default) finds it.
+ENV OLIVARES_DATA_DIR=/var/lib/olivares
 WORKDIR /var/lib/olivares
 # OCI labels for provenance (cosign/SBOM tooling and registries read these).
 LABEL org.opencontainers.image.title="olivares" \
@@ -99,8 +102,7 @@ COPY LICENSE NOTICE LICENSING.md DISCLAIMER.md /usr/share/doc/olivares/
 COPY LICENSES /usr/share/doc/olivares/LICENSES
 # The seeded volume and engine use the same non-root uid/gid.
 USER 65532:65532
-# Documented surface only — the engine binds 127.0.0.1 by DEFAULT (docs/SECURITY-HARDENING.md); a
-# container operator must opt into 0.0.0.0 explicitly. EXPOSE is a hint, not a bind.
+# EXPOSE documents the ports; serve owns the dual-stack listener defaults.
 EXPOSE 8443 8444
 ENTRYPOINT ["/usr/local/bin/olivares"]
-CMD ["serve", "--listen", "0.0.0.0:8443", "--grpc-listen", "0.0.0.0:8444", "--data-dir", "/var/lib/olivares"]
+CMD ["serve", "--data-dir", "/var/lib/olivares"]

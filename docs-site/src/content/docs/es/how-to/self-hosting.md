@@ -9,6 +9,13 @@ description: >-
   hasta las salidas SIEM/webhook que conectas.
 ---
 
+> Los paquetes de despliegue se suministran por el canal Business; su publicación no está verificada aquí. Verifica el paquete del chart y su editor con las instrucciones del canal antes de usar el chart local. El ejemplo de manifiesto usa un archivo Business llamado `business-install.yaml`. La instalación aislada requiere Enterprise.
+
+
+> Helm, Kubernetes operators, Terraform, appliance and FIPS/STIG images are Business deployment artifacts. The source paths below are in the Business distribution. Air-gapped installation requires Enterprise.
+
+La próxima release es <!-- release -->`0.1`<!-- /release -->; todavía no está publicada en GitHub. Los comandos siguientes describen los artefactos previstos. Compila desde el código fuente hasta su publicación y verifica cada artefacto antes de usarlo. El estado observado está en <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->.
+
 Olivares AI es **autoalojable por diseño**. Todo el producto es un único binario estático con la
 interfaz web embebida, así que el despliegue más sencillo es un solo fichero; existen rutas con
 Compose y Kubernetes para multinodo y producción. Todas las rutas comparten los mismos valores
@@ -29,6 +36,8 @@ criptográficamente primero, consulta [Verifica lo que has descargado](/how-to/v
 para sitios desconectados, consulta
 [Instala en un entorno aislado de red](/how-to/air-gap-install/).
 
+**Entrega de eventos NATS:** El puente Core NATS y NATS JetStream requieren Business Identity & Scale. Community entrega los eventos dentro del proceso.
+
 ## Valores por defecto seguros (todas las rutas)
 
 | Valor por defecto | Comportamiento |
@@ -36,7 +45,7 @@ para sitios desconectados, consulta
 | **Credenciales** | ninguna. El primer arranque imprime un **token de configuración de un solo uso** (`olst_…`); con él creas el primer administrador. |
 | **TLS** | activado por defecto. `--insecure` (texto plano) es solo para desarrollo en localhost. |
 | **Bind** | **todas las interfaces** (`:8443`, `:8444`) por defecto: esto es un servidor. Usa `--listen 127.0.0.1:8443 --grpc-listen 127.0.0.1:8444` para restringirlo a este host. |
-| **Licencia** | En el binario abierto (AGPL), la licencia se valida **offline** (Ed25519) y solo sirve como atestación — nunca restringe ni degrada el producto abierto, y eso no cambia. Los add-ons comerciales son un derecho por término pagado, entregado como **acceso por suscripción a los repositorios enterprise** (el modelo SUSE/Novell): para obtenerlos y recibir sus actualizaciones — incluidas las actualizaciones de seguridad — se requiere ese derecho. Los entornos aislados de red se atienden igual que en SUSE, mediante un reflejo local que sigue sujeto a ese derecho. |
+| **Licencia** | En el binario abierto (AGPL), la licencia se valida **offline** (Ed25519) y solo sirve como atestación — nunca restringe ni degrada el producto abierto, y eso no cambia. Business incluye Regulated Operations, AI Runtime Security, Compliance Packs e Identity & Scale en una sola suscripción. Los clientes pueden activar o desactivar cada familia. Business y Enterprise se entregan como binarios; el código fuente de pago permanece privado. |
 | **Telemetría-home** | desactivada. El motor no hace llamadas salientes obligatorias en el arranque. |
 
 ## Opción 1 — binario único
@@ -83,11 +92,11 @@ Organization"). The reply carries the new organization's tenant_id.
 Crea el primer administrador y luego inicia sesión:
 
 ```bash
-curl -fsS -X POST https://localhost:8443/v1/setup \
+curl --cacert /var/lib/olivares/tls.crt -fsS -X POST https://localhost:8443/v1/setup \
   -H 'Content-Type: application/json' \
   -d '{"token":"<olst_ token>","email":"you@example.com","password":"<strong-password>"}'
 
-curl -fsS -X POST https://localhost:8443/v1/auth/login \
+curl --cacert /var/lib/olivares/tls.crt -fsS -X POST https://localhost:8443/v1/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"email":"you@example.com","password":"<strong-password>"}'
 ```
@@ -115,19 +124,17 @@ operador posee el padre. Estas son las cadenas de rechazo del propio adaptador
 | Any path component is a symbolic link | `path component is a symbolic link ($prefix -> …); pass the resolved path instead of provisioning through a link: $1` |
 | Parent of a new custom directory does not exist | `parent of the custom data directory does not exist; create it with the intended owner first: $(dirname -- "$data_target")` |
 | Existing system directory mode is not 0700 or 0750 | `existing system data directory mode is $data_mode; require 0700 or 0750` |
-| Path is under `/dev`, `/proc` or `/sys` | `data directory $data_dir is under an API file system (/dev, /proc, /sys): those hold kernel and device interfaces rather than durable state…; choose a real directory` |
-| Path under `/tmp` or `/var/tmp` on systemd older than 235 | `data directory $data_dir is under /tmp or /var/tmp and this host runs systemd $running: creating a BindPaths= destination inside the private /tmp needs systemd 235 or later…` |
-| A BindPaths= path contains `:` | `$2 $1 contains ':' and this location can only be reached with BindPaths=, whose value uses ':' to separate source from destination; choose a path without it` |
+| Path is under `/dev`, `/proc` or `/sys` | `data directory $data_dir is under an API file system (/dev, /proc, /sys): choose a real directory` |
 
 `install-agentops.sh` usa la misma regla de dos niveles para `OLIVARES_DATA_DIR`:
 `OLIVARES_DATA_DIR must name a dedicated directory at least two levels deep
 (for example /srv/olivares), not a top-level directory`. Honra `OLIVARES_DATA_DIR` y un `OLIVARES_WORKSPACE_DIR`
 seleccionado de forma explícita.
 
-Una ruta bajo `/home`, `/root` o `/run/user` se renderiza con
-`ProtectHome=tmpfs` y `BindPaths=` solo para ese directorio. Una bajo `/tmp` o
-`/var/tmp` conserva `PrivateTmp=true` y recibe `BindPaths=` para ese directorio
-solo (`sandbox_access` en `scripts/install-service.sh`).
+La unidad representa el directorio como `ReadWritePaths=<data-dir>`. Fija
+`ProtectHome=false` y `PrivateTmp=false`, así que un directorio bajo `/home`, `/root`,
+`/run/user`, `/tmp` o `/var/tmp` no necesita ningún montaje adicional. El instalador
+avisa de que `/tmp` y `/var/tmp` pueden vaciarse al arrancar o con un temporizador.
 
 `olivares uninstall` admite ese directorio personalizado solo cuando la unidad
 en su ruta indexada ejecuta el motor con él, o cuando un preserve ya dejó un
@@ -169,32 +176,14 @@ datos, los puertos y el flujo de primer arranque queden cableados correctamente.
 
 ## Opción 3 — Kubernetes (Helm)
 
-El chart de Helm en `deploy/helm/olivares` despliega el control plane como un **StatefulSet del núcleo**
-(escritor único; su directorio de datos contiene la clave de firma de auditoría y el material TLS) y,
-para la topología distribuida, un **DaemonSet de colectores** que empuja observaciones al núcleo
-sobre **gRPC + mTLS**. La release 26.10.1 del motor no publica el chart en un registro OCI:
-ninguna etiqueta independiente `chart-v*` ha ejecutado todavía ese workflow. Instala el
-chart revisado desde un checkout y fija la imagen publicada por digest.
+Los paquetes de despliegue se suministran por el canal Business; su publicación no está verificada aquí. Verifica el paquete del chart y su editor con las instrucciones del canal antes de usar el chart local. El ejemplo de manifiesto usa un archivo Business llamado `business-install.yaml`. La instalación aislada requiere Enterprise.
 
 ```bash
-helm install olivares \
-  deploy/helm/olivares \
-  --set image.repository=docker.io/olivaresai/olivares \
-  --set image.digest=<sha256-digest>
+# Set these inputs from the authenticated Business channel after verification.
+helm upgrade --install olivares "$BUSINESS_CHART_PACKAGE" \
+  --set image.repository="$BUSINESS_IMAGE_REPOSITORY" \
+  --set image.digest="$BUSINESS_IMAGE_DIGEST"
 ```
-
-> Cuando se publique un chart, `release-chart.yml` firmará su manifiesto OCI con cosign y no
-> emitirá una capa GPG `.prov`. Ese futuro artefacto se verificará por digest; esta instalación
-> desde fuente no se presenta como una descarga OCI firmada. Véase `deploy/helm/README.md`.
-
-El chart descarga la imagen del contenedor desde Docker Hub (`docker.io/olivaresai/olivares`); la
-misma imagen está también en `ghcr.io/olivaresai/olivares`, idéntica por digest; apunta
-`image.repository` allí si te estorba el límite de descargas **anónimas** de Docker Hub
-(ghcr.io no lo aplica a imágenes públicas). El chart sale de `deploy/helm/olivares`
-hasta que tenga su propia publicación.
-
-Despliega siempre **por digest**, nunca una etiqueta mutable. Para un clúster totalmente desconectado,
-replica el bundle primero — consulta [instalación aislada de red](/how-to/air-gap-install/).
 
 ## Elegir una topología
 

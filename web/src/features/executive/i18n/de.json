@@ -20,7 +20,7 @@
     "tenant": "Organisation",
     "allOrgs": "Alle Organisationen",
     "range": "Kostenzeitraum",
-    "footer": "Olivares AI Control Plane — ausschließlich aggregierte KPIs; keine Nutzdaten oder Geheimnisse."
+    "footer": "Olivares AI — ausschließlich aggregierte KPIs; keine Nutzdaten oder Geheimnisse."
   },
   "empty": {
     "title": "Keine Führungs-KPIs verfügbar",
@@ -95,7 +95,8 @@
     "driftUnused": "Ungenutzte Gewährungen",
     "coverageNote": "Einige Zugriffe werden mit teilweiser Abdeckung beobachtet (annähernde oder undurchsichtige Erfassung); die Abweichungswerte sind eine Untergrenze.",
     "noFindings": "Keine offenen Befunde.",
-    "noRuns": "Noch keine Red-Team-Läufe."
+    "noRuns": "Noch keine Red-Team-Läufe.",
+    "sharedDescription": "Offene Sicherheitsbefunde und Abweichungen bei Zugriffsrechten."
   },
   "compliance": {
     "title": "Compliance",

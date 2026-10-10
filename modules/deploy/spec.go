@@ -6,6 +6,7 @@ package deploy
 
 import (
 	"encoding/json"
+	"regexp"
 	"strings"
 
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
@@ -67,6 +68,8 @@ type identitySpec struct {
 	Mint bool `json:"mint,omitempty"`
 }
 
+var imageDigestSuffix = regexp.MustCompile(`@sha256:[a-f0-9]{64}$`)
+
 // validate checks the spec is well-formed and carries no inline credential,
 // returning a non-empty message on the first problem. It is the structural
 // guarantee (with the typed shape) that no cleartext secret is ever persisted.
@@ -74,7 +77,7 @@ func (s *deploySpec) validate() string {
 	if len(s.Image) > maxSpecStrLen || len(s.Command) > maxSpecStrLen {
 		return "image/command too long"
 	}
-	if containsInlineCredential(s.Image) || containsInlineCredential(s.Command) {
+	if containsInlineCredential(imageDigestSuffix.ReplaceAllString(s.Image, "")) || containsInlineCredential(s.Command) {
 		return "image/command must not contain a credential"
 	}
 	if s.Replicas < 0 || s.Replicas > 10000 {

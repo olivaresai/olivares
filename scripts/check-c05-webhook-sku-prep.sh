@@ -80,15 +80,15 @@ grep -F -q 'OnboardFirstOwner not landed.' "$DOC" \
 grep -F -q 'Does not copy `#895`' "$DOC" \
   || fail "prepare doc lost stale-branch HOLD"
 if grep -qiE 'FIRMA A claimed|remainder applied on origin/main|OnboardFirstOwner landed' "$DOC"; then
-  fail "prepare doc claims an application this lote does not have"
+  fail "prepare doc claims an application this batch does not have"
 fi
 
 check_boot_fallback
 if grep -q 'OnboardFirstOwner' "$ENG"; then
-  fail "OnboardFirstOwner landed — this HOLD lote does not apply #895"
+  fail "OnboardFirstOwner landed — this HOLD batch does not apply #895"
 fi
 if [ -e "$CFGMAP" ]; then
-  fail "config/dodo-cloud-product-map.json landed — this HOLD lote does not apply #895"
+  fail "config/dodo-cloud-product-map.json landed — this HOLD batch does not apply #895"
 fi
 
 python3 - "$JSON" <<'PY' || exit $?

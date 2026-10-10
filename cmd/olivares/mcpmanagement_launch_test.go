@@ -55,6 +55,37 @@ func TestManagedMCPLaunchReusesPEPEdgeAndEnvironment(t *testing.T) {
 	}
 }
 
+// A native OpenCode session never saw olivares_peer_send: its launches got no MCP server.
+// The connection reaches the ACP launch; the credential remains in the environment
+// until sent to the owned child, without a second inline configuration mechanism.
+func TestManagedMCPLaunchGivesOpenCodeTheSessionServer(t *testing.T) {
+	m, f, p := mcpManagementFixture(t)
+	if _, err := m.store.SetSessionTools(t.Context(), p, f.tenant, 0, true); err != nil {
+		t.Fatal(err)
+	}
+	m.eng.dataDir = t.TempDir()
+	m.UseSessionCredentials(auth.NewSessionCredentials(nil, nil))
+	spec := sessions.LaunchSpec{Env: []sessions.EnvVar{{Name: envHookPEPURL, Value: "http://127.0.0.1:19710/"}, {Name: envHookPEPToken, Value: "fixture-session-secret"}}, Confinement: &confine.Policy{ReadWrite: []string{t.TempDir()}}}
+	if _, err := m.ConfigureSessionMCP(t.Context(), f.tenant, "fixture-run", "opencode", &spec); err != nil {
+		t.Fatal(err)
+	}
+	if spec.SessionMCPURL != "http://127.0.0.1:19710/session/mcp" || spec.SessionMCPTokenEnv != envHookPEPToken {
+		t.Fatal("OpenCode did not receive the governed session connection")
+	}
+	for _, item := range spec.Env {
+		if item.Name == "OPENCODE_CONFIG_CONTENT" {
+			t.Fatal("MCP was injected through a second mechanism")
+		}
+	}
+	if len(spec.Args) != 0 || len(spec.Confinement.ReadOnly) != 0 {
+		t.Fatal("MCP configuration escaped ACP")
+	}
+	spec.Env = nil
+	if _, err := m.ConfigureSessionMCP(t.Context(), f.tenant, "other-run", "opencode", &spec); err == nil {
+		t.Fatal("missing session credential did not refuse configuration")
+	}
+}
+
 func TestManagedMCPLocalPolicyKeepsSessionBoundary(t *testing.T) {
 	folder, home, protected, foreign := t.TempDir(), t.TempDir(), t.TempDir(), t.TempDir()
 	m := &mcpManagement{eng: &engine{sessionsMod: sessions.New(sessions.WithConfinement([]string{protected}, false))}}

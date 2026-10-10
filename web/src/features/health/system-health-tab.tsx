@@ -206,7 +206,11 @@ export function SystemHealthTab() {
         <TLSCard notAfter={data.tls_not_after} daysLeft={data.tls_days_left} />
       ) : null}
 
-      <UpdateCard update={data?.update} />
+      <UpdateCard
+        update={data?.update}
+        loaded={Boolean(data)}
+        loading={isLoading}
+      />
 
       <KeysCard
         data={keysQuery.data}
@@ -705,28 +709,57 @@ function BridgeStatus({
   )
 }
 
-function UpdateCard({ update }: { update?: UpdateStatusDTO }) {
+function UpdateCard({
+  update,
+  loaded,
+  loading,
+}: {
+  update?: UpdateStatusDTO
+  loaded: boolean
+  loading: boolean
+}) {
   const { t } = useTranslation('health')
   const queryClient = useQueryClient()
   const mutation = useMutation({
     mutationFn: () => consoleApi.updateCheck(),
-    onSuccess: (result) => {
+    onSuccess: async (result) => {
+      await queryClient.cancelQueries({
+        queryKey: consoleKeys.healthSummary(),
+      })
       queryClient.setQueryData<HealthSummaryDTO>(
         consoleKeys.healthSummary(),
         (current) => (current ? { ...current, update: result } : current),
       )
       toast.success(t('update.checked'))
     },
+    onError: async (error) => {
+      if (isUpdateCheckingUnavailable(error)) {
+        await queryClient.cancelQueries({
+          queryKey: consoleKeys.healthSummary(),
+        })
+        queryClient.setQueryData<HealthSummaryDTO>(
+          consoleKeys.healthSummary(),
+          (current) => (current ? { ...current, update: undefined } : current),
+        )
+      }
+    },
   })
-  const current = mutation.data ?? update
-  const unavailable = isUpdateCheckingUnavailable(mutation.error)
+  const current = loaded ? update : mutation.data
+  const checkError =
+    isUpdateCheckingUnavailable(mutation.error) && current?.enabled
+      ? null
+      : mutation.error
+  const unavailable =
+    isUpdateCheckingUnavailable(checkError) || (loaded && !current?.enabled)
 
   return (
     <Card className="p-5">
       <CardTitle icon={<RefreshCw />} title={t('update.title')} />
       <div className="space-y-3">
         <div className="flex flex-wrap items-center gap-1.5">
-          {current?.error ? (
+          {unavailable ? (
+            <Badge variant="neutral">{t('update.unavailable')}</Badge>
+          ) : current?.error ? (
             <Badge variant="danger">{t('update.failed')}</Badge>
           ) : current?.available ? (
             <>
@@ -775,13 +808,17 @@ function UpdateCard({ update }: { update?: UpdateStatusDTO }) {
         ) : null}
 
         {unavailable ? (
-          <p role="status" className="text-body text-muted-foreground">
+          <p
+            id="update-check-unavailable"
+            role="status"
+            className="text-body text-muted-foreground"
+          >
             {t('update.unconfigured')}
           </p>
-        ) : mutation.error ? (
+        ) : checkError ? (
           <p role="alert" className="text-body text-danger">
-            {mutation.error instanceof Error
-              ? mutation.error.message
+            {checkError instanceof Error
+              ? checkError.message
               : t('update.failed')}
           </p>
         ) : current?.error ? (
@@ -794,8 +831,11 @@ function UpdateCard({ update }: { update?: UpdateStatusDTO }) {
           type="button"
           size="sm"
           onClick={() => mutation.mutate()}
-          disabled={mutation.isPending}
+          disabled={loading || mutation.isPending || unavailable}
           aria-label={t('update.checkNow')}
+          aria-describedby={
+            unavailable ? 'update-check-unavailable' : undefined
+          }
         >
           {mutation.isPending ? (
             <Spinner size="sm" aria-hidden />
@@ -804,6 +844,17 @@ function UpdateCard({ update }: { update?: UpdateStatusDTO }) {
           )}
           {t('update.checkNow')}
         </Button>
+        {unavailable ? (
+          <details className="text-body text-muted-foreground">
+            <summary className="cursor-pointer rounded-sm text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus">
+              {t('update.instructions')}
+            </summary>
+            <div className="mt-2 space-y-2">
+              <p>{t('update.configure')}</p>
+              <p>{t('update.manual')}</p>
+            </div>
+          </details>
+        ) : null}
       </div>
     </Card>
   )

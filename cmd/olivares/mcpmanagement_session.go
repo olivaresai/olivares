@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/mcpgateway"
 	mcpc "github.com/olivaresai/olivares/connectors/mcp"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -160,7 +161,7 @@ func (m *mcpManagement) cachedSessionServer(ctx context.Context, tenant model.Te
 		spec := companion.LaunchSpec
 		spec.Program, spec.Args = row.Command, row.Args
 		spec.Env = env
-		if err := m.confineLocalServer(&spec); err != nil {
+		if err := m.confineLocalServer(&spec, row.EgressHosts...); err != nil {
 			return nil, newManagedStdioFailure("process_start", err, patterns)
 		}
 		client, err := launchManagedStdio(lifetime, companion.Runner, spec, patterns)
@@ -176,12 +177,12 @@ func (m *mcpManagement) cachedSessionServer(ctx context.Context, tenant model.Te
 		if err != nil {
 			return nil, err
 		}
-		up := &mcpUpstreamForwarder{
-			url: row.URL, client: client,
-			credProv:        tenantMCPCredentialProvider{store: m.secrets, tenant: tenant, ref: row.CredentialRef, target: row.URL},
-			sessionIdentity: &mcpc.SessionToolIdentity{Subject: p.SessionIdentity, ClientID: companion.LaunchID.String(), Scopes: []string{"tools:call"}},
+		up := &mcpgateway.UpstreamForwarder{
+			URL: row.URL, Client: client,
+			CredProv:        tenantMCPCredentialProvider{store: m.secrets, tenant: tenant, ref: row.CredentialRef, target: row.URL},
+			SessionIdentity: &mcpc.SessionToolIdentity{Subject: p.SessionIdentity, ClientID: companion.LaunchID.String(), Scopes: []string{"tools:call"}},
 		}
-		enableManagedMCPForwarding(up)
+		mcpgateway.EnableManagedForwarding(up)
 		if _, err := up.Forward(setup, mcpc.UpstreamRequest{Method: "initialize", Params: []byte(`{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"olivares-session","version":"1"}}`)}); err != nil {
 			return nil, err
 		}
@@ -236,7 +237,7 @@ func (m *mcpManagement) cachedSessionServer(ctx context.Context, tenant model.Te
 	}
 	input, _ := json.Marshal(row.MCPGatewayServerInput)
 	digest := sha256.Sum256(input)
-	server, err := mcpc.NewSessionToolServer(mcpc.SessionToolServerConfig{Tenant: tenant.String(), ServerID: row.ID, Descriptor: "managed-session:" + hex.EncodeToString(digest[:]), Toolset: toolset, Upstream: guarded, Gate: gate, Auditor: mcpGateAuditor{log: m.eng.log, store: m.eng.store, tenant: tenant}})
+	server, err := mcpc.NewSessionToolServer(mcpc.SessionToolServerConfig{Tenant: tenant.String(), ServerID: row.ID, Descriptor: "managed-session:" + hex.EncodeToString(digest[:]), Toolset: toolset, Upstream: guarded, Gate: gate, Auditor: mcpgateway.GateAuditor{Log: m.eng.log, Store: m.eng.store, Tenant: tenant}})
 	if err != nil {
 		return nil, err
 	}

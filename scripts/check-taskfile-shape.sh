@@ -29,27 +29,27 @@ ROOT="${OLIVARES_ROOT:-$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." &&
 TF="${OLIVARES_TASKFILE:-$ROOT/Taskfile.yml}"
 REP="$ROOT/scripts/taskfile-shape.py"
 
-[ -r "$TF" ]  || { echo "check-taskfile-shape: NO HE PODIDO MIRAR — no puedo leer $TF" >&2; exit 2; }
-[ -r "$REP" ] || { echo "check-taskfile-shape: NO HE PODIDO MIRAR — falta $REP" >&2; exit 2; }
+[ -r "$TF" ]  || { echo "check-taskfile-shape: COULD NOT CHECK — cannot read $TF" >&2; exit 2; }
+[ -r "$REP" ] || { echo "check-taskfile-shape: COULD NOT CHECK — missing $REP" >&2; exit 2; }
 
 # ⛔ El reportero EXIGE la ruta como argv[1]. Llamarlo sin ella revienta con IndexError, y con el
 #    stderr silenciado eso se lee como «cero hallazgos»: medido, y por eso la ruta va explicita.
 salida="$(python3 "$REP" "$TF" 2>&1)"; rc=$?
 if [ "$rc" -ne 0 ]; then
-	echo "check-taskfile-shape: NO HE PODIDO MIRAR — el lector fallo (rc=$rc):" >&2
+	echo "check-taskfile-shape: COULD NOT CHECK — reader failed (rc=$rc):" >&2
 	printf '%s\n' "$salida" | tail -3 >&2
 	exit 2
 fi
 if printf '%s\n' "$salida" | command grep -q '^NOPUEDO'; then
-	echo "check-taskfile-shape: NO HE PODIDO MIRAR — el lector no supo leer la forma del fichero:" >&2
+	echo "check-taskfile-shape: COULD NOT CHECK — reader cannot parse the file structure:" >&2
 	printf '%s\n' "$salida" | command grep '^NOPUEDO' >&2
 	exit 2
 fi
 n="$(printf '%s' "$salida" | command grep -c . || true)"
 if [ "$n" -ne 0 ]; then
-	echo "check-taskfile-shape: FAIL — ${n} tarea(s) con la forma rota:" >&2
+	echo "check-taskfile-shape: FAIL — ${n} task(s) with invalid structure:" >&2
 	printf '%s\n' "$salida" | sed 's/^/  /' >&2
 	exit 1
 fi
-echo "check-taskfile-shape: CLEAN — $(command grep -cE '^  [A-Za-z0-9:_-]+:$' "$TF") tarea(s), ninguna con la forma rota."
+echo "check-taskfile-shape: CLEAN — $(command grep -cE '^  [A-Za-z0-9:_-]+:$' "$TF") task(s), none with invalid structure."
 exit 0

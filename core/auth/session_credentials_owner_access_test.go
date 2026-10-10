@@ -7,6 +7,7 @@ package auth_test
 import (
 	"context"
 	"errors"
+	"reflect"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -130,8 +131,15 @@ func TestSessionOwnerAccessCheckRetainsExpiredBindingAfterMintCleanup(t *testing
 	if _, _, err = issuer.ResolveRun(t.Context(), f.tenants[0], "run"); !errors.Is(err, auth.ErrUnauthenticated) {
 		t.Fatalf("expired run granted in-process authority: %v", err)
 	}
-	if _, _, err = issuer.CheckOwnerAccess(t.Context(), f.tenants[0], "run"); err != nil {
-		t.Fatalf("expired bearer cleanup lost the live owner: %v", err)
+	scope, user, err := issuer.CheckOwnerAccess(t.Context(), f.tenants[0], "run")
+	if !errors.Is(err, auth.ErrSessionCredentialExpired) || !reflect.DeepEqual(scope, f.scopes[0]) || user != f.user.DisplayName {
+		t.Fatalf("expired bearer cleanup lost typed deadline attribution: scope=%+v user=%q err=%v", scope, user, err)
+	}
+	// Expiry requests teardown, but revoking bearer authority must retain the
+	// exact owner binding even when a later mint prunes expired credentials.
+	current, err = issuer.Mint(t.Context(), launcher, f.scopes[1])
+	if err != nil {
+		t.Fatal(err)
 	}
 	if err = f.st.AuthMutate(t.Context(), func(as store.AuthScope) error {
 		_, err := f.a.OffboardFromTenant(t.Context(), as, f.admin, f.user.ID, f.tenants[0], "expired-owner-withdrawal")
@@ -139,9 +147,9 @@ func TestSessionOwnerAccessCheckRetainsExpiredBindingAfterMintCleanup(t *testing
 	}); err != nil {
 		t.Fatal(err)
 	}
-	scope, _, err := issuer.CheckOwnerAccess(t.Context(), f.tenants[0], "run")
-	if !errors.Is(err, auth.ErrSessionAccessEnded) || scope.TenantID != f.tenants[0] || scope.Fence != f.scopes[0].Fence {
-		t.Fatalf("expired live generation lost withdrawal attribution: scope=%+v err=%v", scope, err)
+	scope, user, err = issuer.CheckOwnerAccess(t.Context(), f.tenants[0], "run")
+	if !errors.Is(err, auth.ErrSessionAccessEnded) || !reflect.DeepEqual(scope, f.scopes[0]) || user != f.user.DisplayName {
+		t.Fatalf("expired live generation lost withdrawal attribution: scope=%+v user=%q err=%v", scope, user, err)
 	}
 	if _, _, err = issuer.Resolve(t.Context(), current); err != nil {
 		t.Fatalf("withdrawal affected another tenant's current bearer: %v", err)

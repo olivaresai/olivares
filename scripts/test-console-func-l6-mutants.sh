@@ -16,8 +16,11 @@ lot6_files=(
 	modules/sessions/communication_binding_spec_api.go
 	web/src/features/eventing/eventing-view.tsx
 	modules/deploy/lifecycle.go
-	web/src/features/orchestration/orchestration-view.tsx
 )
+
+if [ -d "$lot6_root/enterprise" ]; then
+ lot6_files+=(web/src/features/orchestration/orchestration-view.tsx)
+fi
 
 mkdir -p "$lot6_scratch" || exit 2
 lot6_restore() {
@@ -40,7 +43,7 @@ mkdir -p "$lot6_scratch/snapshot" || exit 2
 lot6_index=0
 for lot6_file in "${lot6_files[@]}"; do
 	[ -r "$lot6_root/$lot6_file" ] || {
-		echo "console-func-l6-mutants: NO PUDE MIRAR — falta $lot6_file" >&2
+		echo "console-func-l6-mutants: CANNOT INSPECT — missing $lot6_file" >&2
 		exit 2
 	}
 	cp -p -- "$lot6_root/$lot6_file" "$lot6_scratch/snapshot/$lot6_index" || exit 2
@@ -53,11 +56,11 @@ done
 
 lot6_oracle="$lot6_root/scripts/check-console-func-l6.sh"
 TMPDIR="$lot6_scratch" bash "$lot6_oracle" >"$lot6_scratch/control.log" 2>&1 || {
-	echo "console-func-l6-mutants: control ROTO" >&2
+	echo "console-func-l6-mutants: control BROKEN" >&2
 	sed -n '1,160p' "$lot6_scratch/control.log" >&2
 	exit 1
 }
-echo "console-func-l6-mutants: control FUNCIONA"
+echo "console-func-l6-mutants: control PASS"
 
 lot6_mutant() {
 	local lot6_name="$1"
@@ -73,19 +76,19 @@ lot6_mutant() {
 		"$lot6_root/$lot6_file" || exit 2
 	TMPDIR="$lot6_scratch" bash "$lot6_oracle" >"$lot6_scratch/$lot6_name.log" 2>&1
 	lot6_rc=$?
-	lot6_hits="$(rg -F -c -- "console-func-l6: ROTO — $lot6_expected" "$lot6_scratch/$lot6_name.log" 2>/dev/null)"
+	lot6_hits="$(rg -F -c -- "console-func-l6: FAIL — $lot6_expected" "$lot6_scratch/$lot6_name.log" 2>/dev/null)"
 	if [ "$lot6_rc" -ne 1 ] || [ "${lot6_hits:-0}" -lt 1 ]; then
-		echo "console-func-l6-mutants: mutante $lot6_name no discrimino (rc=$lot6_rc)" >&2
+		echo "console-func-l6-mutants: mutant $lot6_name did not distinguish behavior (rc=$lot6_rc)" >&2
 		sed -n '1,120p' "$lot6_scratch/$lot6_name.log" >&2
 		exit 1
 	fi
-	echo "console-func-l6-mutants: mutante $lot6_name ROTO — $lot6_expected"
+	echo "console-func-l6-mutants: mutant $lot6_name BROKEN — $lot6_expected"
 	lot6_restore
 	(
 		cd "$lot6_root" || exit 2
 		sha256sum -c "$lot6_scratch/original.sha256"
 	) >"$lot6_scratch/$lot6_name.restore.log" 2>&1 || {
-		echo "console-func-l6-mutants: restauracion no byte-exacta tras $lot6_name" >&2
+		echo "console-func-l6-mutants: restoration was not byte-for-byte after $lot6_name" >&2
 		exit 1
 	}
 }
@@ -102,22 +105,24 @@ lot6_mutant deploy-plan-array modules/deploy/lifecycle.go \
 	'if changes == nil {' 'if false {' DEPLOY_PLAN_ARRAY
 lot6_mutant deploy-verify-array modules/deploy/lifecycle.go \
 	'if result.Changes == nil {' 'if false {' DEPLOY_VERIFY_ARRAY
+if [ -d "$lot6_root/enterprise" ]; then
 lot6_mutant orchestration-fire-outcome web/src/features/orchestration/orchestration-view.tsx \
 	"'declared_not_fired'," "'dispatched'," ORCHESTRATION_DECLARED_NOT_FIRED
+fi
 
 lot6_restore
 CONSOLE_FUNC_L6_FORCE_UNAVAILABLE=1 TMPDIR="$lot6_scratch" \
 	bash "$lot6_oracle" >"$lot6_scratch/unavailable.log" 2>&1
 lot6_rc=$?
-lot6_hits="$(rg -F -c -- 'console-func-l6: NO PUDE MIRAR' "$lot6_scratch/unavailable.log" 2>/dev/null)"
+lot6_hits="$(rg -F -c -- 'console-func-l6: COULD NOT CHECK' "$lot6_scratch/unavailable.log" 2>/dev/null)"
 if [ "$lot6_rc" -ne 2 ] || [ "${lot6_hits:-0}" -lt 1 ]; then
-	echo "console-func-l6-mutants: la tercera respuesta no discrimino (rc=$lot6_rc)" >&2
+	echo "console-func-l6-mutants: the third response did not distinguish behavior (rc=$lot6_rc)" >&2
 	exit 1
 fi
-echo "console-func-l6-mutants: control NO PUDE MIRAR = rc 2"
+echo "console-func-l6-mutants: control CANNOT INSPECT = rc 2"
 
 TMPDIR="$lot6_scratch" bash "$lot6_oracle" >"$lot6_scratch/final.log" 2>&1 || {
-	echo "console-func-l6-mutants: final ROTO" >&2
+	echo "console-func-l6-mutants: final BROKEN" >&2
 	exit 1
 }
 (
@@ -128,4 +133,4 @@ cmp -s "$lot6_scratch/original.sha256" "$lot6_scratch/final.sha256" || {
 	echo "console-func-l6-mutants: manifest original != final" >&2
 	exit 1
 }
-echo "console-func-l6-mutants: manifest original=snapshot=final; 7/7 mutantes discriminados"
+echo "console-func-l6-mutants: manifest original=snapshot=final; common and linked edition mutants distinguished"

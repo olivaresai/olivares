@@ -214,7 +214,7 @@ func runAlertEvidenceUpgrade(t *testing.T, cfg store.Config) {
 	m.UseData(finopsTestData{ModuleData: api.NewModuleData(reopened), st: reopened})
 	before := len(alertRows(t, reopened, tenant))
 	if err := m.onCost(context.Background(), tenant,
-		mkCost("openai", "gpt-x", "s-2", 1, 1, oneUSD, baseTime.Add(time.Minute)), nil); err != nil {
+		mkCost("openai", "gpt-x", "s-2", 1, 1, oneUSD, baseTime.Add(time.Minute)), nil, nil); err != nil {
 		t.Fatalf("a second distinct ingestion was lost to the deduplicated alert: %v", err)
 	}
 	if after := len(alertRows(t, reopened, tenant)); after != before {

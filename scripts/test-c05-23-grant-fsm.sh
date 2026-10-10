@@ -107,11 +107,10 @@ else
 	bad "missing doc should be 2 ($(cat "$TMP/rc") $(cat "$TMP/err"))"
 fi
 
-# ⛔ EL CASO QUE DA SENTIDO AL GATE DESDE 2026-08-31. El check dejó de prohibir la palabra
-# «scheduled» —que era un proxy, y se rompió el día que una decisión de aterrizó la purga de
-# retención— y pasó a prohibir la PROPIEDAD: que un cron mueva grants. Sin este caso, esa
-# generalización no la probaría nadie, y ya nos ha pasado hoy: escribir una generalización no es
-# cubrirla — hay que mutar exactamente lo que añade.
+# Since 2026-08-31 the gate protects the grant property rather than banning scheduled
+# handlers. The old proxy failed when retention-purge decision landed.
+# Mutate a cron that moves grants to test exactly what that generalization forbids;
+# writing the generalized rule alone does not cover its new cases.
 stage
 python3 - "$TMP/tree/commercial/license-worker/src/index.ts" <<'PY2'
 from pathlib import Path
@@ -120,7 +119,7 @@ p = Path(sys.argv[1])
 t = p.read_text()
 # Dentro del ÚNICO handler scheduled, una línea que toca grants.
 needle = "const out = await purgeExpiredCustodyBodies(env, new Date());"
-assert t.count(needle) == 1, "ancla del handler de purga no única"
+assert t.count(needle) == 1, "purge-handler anchor is not unique"
 p.write_text(t.replace(needle, needle + '\n    await env.DB.prepare("UPDATE grants SET paid_through = ?").bind(1).run();'))
 PY2
 run

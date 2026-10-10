@@ -15,6 +15,7 @@ type workspaceDTO struct {
 	MountMode       string   `json:"mount_mode"`
 	ContainerTarget string   `json:"container_target,omitempty"`
 	AllowSubpaths   []string `json:"allow_subpaths,omitempty"`
+	ReadOnlyFolders []string `json:"read_only_folders"`
 	MaxReadBytes    int64    `json:"max_read_bytes"`
 	DLPMode         string   `json:"dlp_mode"`
 	State           string   `json:"state"`
@@ -27,6 +28,10 @@ func toWorkspaceDTO(rec model.Record) (workspaceDTO, error) {
 	if err != nil {
 		return workspaceDTO{}, err
 	}
+	folders, err := decodeWorkspaceReadOnlyFolders(rec)
+	if err != nil {
+		return workspaceDTO{}, err
+	}
 	return workspaceDTO{
 		WorkspaceRef:    rec.String(colWsRef),
 		Name:            rec.String(colWsName),
@@ -34,6 +39,7 @@ func toWorkspaceDTO(rec model.Record) (workspaceDTO, error) {
 		MountMode:       rec.String(colWsMountMode),
 		ContainerTarget: rec.String(colWsContainerTgt),
 		AllowSubpaths:   subpaths,
+		ReadOnlyFolders: folders,
 		MaxReadBytes:    workspaceMaxRead(rec),
 		DLPMode:         rec.String(colWsDLPMode),
 		State:           rec.String(colWsState),
@@ -60,6 +66,7 @@ type createWorkspaceRequest struct {
 	MountMode       string   `json:"mount_mode"`
 	ContainerTarget string   `json:"container_target"`
 	AllowSubpaths   []string `json:"allow_subpaths"`
+	ReadOnlyFolders []string `json:"read_only_folders"`
 	MaxReadBytes    int64    `json:"max_read_bytes"`
 	DLPMode         string   `json:"dlp_mode"`
 }

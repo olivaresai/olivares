@@ -49,17 +49,16 @@ DATA="$(mktemp -d)"
 （`cmd/olivares/binddefaults.go`）；传入 `--listen 127.0.0.1:8443` 可将其限制在
 本机。2026-09-17 在本机测得：`quickstart --quiet` 在 **3 秒**内打印令牌。
 
-欢迎面板打印：
+原生快速启动根据设置状态显示以下提示中的一条。
+仅在新签发令牌时显示令牌：
 
 ```text
-     (HTTPS with a self-signed certificate on first boot — your browser will
-      warn once; that is expected for a local install.)
-  2. Complete setup with this one-time token (shown once, single-use):
-
-         olst_…
+Next: Open the console; it guides setup, sign-in and your first session.
+Next: Open the console and sign in to continue your work.
+Next: Open the console to finish setup with the one-time token issued earlier.
 ```
 
-对于默认的通配绑定，横幅会打印 `https://localhost:8443`，并在令牌下方列出这台
+对于默认的通配绑定，横幅会打印 `https://localhost:8443`，并列出这台
 主机应答的其他所有地址——它们用于从另一台机器访问控制台。如果横幅已经滚出屏幕，
 `olivares first-boot` 会再次打印控制台地址和首次设置的状态。登记通行密钥前，请
 打开 `https://localhost:PORT`：浏览器会拒绝将 IP 地址用作 WebAuthn 依赖方，产品
@@ -157,6 +156,8 @@ printf '%s\n' '{"session_id":"sess-first-hour","hook_event_name":"PreToolUse","t
 
 ### 5. 阅读证据
 
+每个受治理决策向租户账本追加 `hook.tool.allow` 或 `hook.tool.deny`（`modules/sessions/hookpep/claudehookpep.go`）。冒烟测试断言两种记录均存在。
+
 ```bash
 curl -sf "$BASE/v1/audit?action=hook.tool.allow&limit=100" \
   -H "Authorization: Bearer $TOKEN" -H "X-Olivares-Tenant: $TENANT"
@@ -193,7 +194,7 @@ docker compose -f deploy/compose/docker-compose.yml \
 租户隔离和审计仍然适用；API 令牌不能满足此认证要求。
 
 要为这些操作要求新鲜的 AAL3，请在 `https://localhost:PORT` 注册 passkey，
-并在该控制台地址完成新的 passkey/PIV 额外认证。在 **Settings → Sign-in →
+并在该控制台地址完成新的 passkey 额外认证。在 **Settings → Sign-in →
 Extra check for administrative actions** 中选择 **Passkey**。对应的 API 是
 `PUT /v1/auth/step-up-policy`，请求体为 `{"admin_step_up":"passkey"}`。
 管理员证明所选认证方式可用之前，引擎会拒绝提高策略要求。`POST /v1/agents`
@@ -208,11 +209,16 @@ Extra check for administrative actions** 中选择 **Passkey**。对应的 API �
 session runtime: no inference credential source configured; stream-json launches are deny-closed
 ```
 
-（`cmd/olivares/sessionruntime.go`）。设置
+对于未指定提供方的 `managed_injection` Claude 配置档案，
 `OLIVARES_SESSION_RUNTIME_WIF` 或 `OLIVARES_SESSION_RUNTIME_TOKEN_FILE`
-中的 **一个**。自 26.10 起，这已不再是唯一路径：在控制台注册凭据并把它绑定到配置
-档案。见 [添加提供方并启动代理](/zh/how-to/add-a-provider/) 和
-[运营提供商会话](/how-to/operate-provider-sessions/)。
+提供主机的推理凭据。绑定提供方的配置档案使用该提供方的凭据；若无法读取，
+则拒绝启动，不回退到主机凭据。`provider_account_home` 配置档案使用获授权的
+工具登录，不需要这两个变量。参见
+[添加提供方](/zh/how-to/add-a-provider/)。
+
+## OpenCode 状态检查
+
+如果设置期间 OpenCode 的登录状态检查超时或失败，引擎会报告无法读取状态。请重试检查；检查失败不代表工具已退出登录。同一组织和账户的并发检查共享一个原生命令。成功结果最多复用 30 秒，并在登录文件或已安装可执行文件发生变化时刷新。
 
 ## 相关页面
 

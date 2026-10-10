@@ -1,50 +1,6 @@
 # SPDX-FileCopyrightText: 2026 Olivares.AI
 # SPDX-License-Identifier: AGPL-3.0-only
-#
-# pr-ci — THE PULL-REQUEST REGIME OF THE PUBLIC REPOSITORY, and of nothing else.
-#
-# ⛔ WHY IT EXISTS. Measured 2026-08-27: no workflow in this tree had a `pull_request`
-# trigger that a change to core/, modules/, cmd/ or web/ would fire — the only three that
-# carry one are path-filtered to deploy/aws, the operator and the terraform provider. At the
-# same time scripts/apply-branch-protection.sh's `public` profile requires TEN contexts
-# (classify, control-plane, race-hot, web, examples, fips, secrets, sast, fuzz, helm-render)
-# plus one approval. Those are `mainline-ci` job ids, and `mainline-ci` runs on
-# `workflow_dispatch` and on `push` to main — never on a pull request, and `workflow_dispatch`
-# cannot run against a fork ref at all. So on the day the repository opens, the FIRST external
-# contribution would be born with no checks and permanently unmergeable, with the merge button
-# saying "Expected — waiting for status to be reported" about jobs that can never report.
-#
-# ⛔ WHY IT IS A SEPARATE WORKFLOW AND NOT `pull_request` ADDED TO mainline-ci. Because that
-# would WEAKEN branch protection instead of equipping the public repository. Branch
-# protection requires four mainline-ci contexts (classify, control-plane, race-hot, web). They
-# never report on a PR, so they cannot be satisfied by accident. Give mainline-ci a
-# `pull_request` trigger and those four jobs would report on a PR as SKIPPED — and a job
-# skipped by a job-level `if:` does NOT block a required check (measured 2026-08-01
-# and written into apply-branch-protection.sh). The whole required set would evaporate into
-# green. A regime for the public repository must not weaken that gate.
-#
-# ⛔ AND WHY EVERY JOB CARRIES A REPOSITORY GUARD. Automatic CI on every pull request is not
-# wanted at the volume of changes this project carries, so the guard keeps the jobs inert
-# outside the public repository. With the
-# guard, a pull request elsewhere creates a run in which every job is skipped: no runner is
-# occupied, no minute is billed, nothing is superseded. In the public repository the guard is
-# true and the jobs run. The guard is not free of hazard — a rename would silently disable the
-# whole regime — so it is not left to vigilance: scripts/check-pr-ci-regime.sh pins that every
-# job carries it, that it names the same repository the export targets, and that the public
-# branch-protection profile requires exactly these job ids and no others.
-#
-# ⛔ HOSTED RUNNERS, DELIBERATELY. A `pull_request` from a fork runs UNTRUSTED code. It must
-# never reach the self-hosted runners, which share a host with this project's own builds — so
-# no job here reads `vars.CI_RUNNER`. The event is `pull_request` and not
-# `pull_request_target`, so the workflow runs from the PR's own tree with a read-only token and
-# no access to secrets; that is the correct trade and the reason the heavy legs are not here.
-#
-# WHAT THIS DOES NOT COVER, said plainly rather than implied: the race detector, fuzzing, FIPS,
-# the SAST and secret sweeps, the examples matrix and the Helm render stay in `mainline-ci`,
-# which a maintainer dispatches on the merge candidate. The public profile's required contexts
-# were lowered to what CAN report on a pull request — the alternative was leaving a list that
-# is impossible to satisfy, and an impossible gate is answered with an admin override, which is
-# not a gate. docs/RELEASE-GO-LIVE-RUNBOOK.md §4 carries the maintainer step.
+# Pull-request checks for the public repository.
 
 name: pr-ci
 
@@ -66,34 +22,73 @@ defaults:
     shell: bash
 
 env:
-  # The one place the public repository is named in this file — y esto NO lo lee el guard.
-  # Un `if:` de job no puede leer el contexto `env`, asi que los cuatro guards llevan el literal
-  # y quien lo compara contra este valor es `scripts/check-pr-ci-regime.sh`. El comentario
-  # anterior decia que el guard lo leia; era falso desde que existe, y se corrige aqui.
-  #
-  # ⛔ Y LA SEGUNDA RAMA DEL GUARD NO NOMBRA NINGUN REPOSITORIO, a proposito: este fichero viaja
-  # al arbol publico. `vars.OLIVARES_RELEASE_PROFILE` solo existe EN el repositorio que declara ese perfil,
-  # asi que en el publico esa rama no puede alcanzarse.
+  # Job conditions cannot read env, so they repeat the public repository literal.
+  # scripts/check-pr-ci-regime.sh checks those literals against this value.
+  # The release-profile condition names no private repository because this workflow
+  # is exported. Only a repository that declares the profile can select that condition.
   PUBLIC_REPO: olivaresai/olivares
 
 jobs:
   pr-lint:
-    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
-    runs-on: ubuntu-latest
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod' || vars.OLIVARES_DEV_CI == 'true'
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0
+      - name: DCO required and attribution trailers refused
+        env:
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          bash scripts/check-commit-trailers.sh --range "$PR_BASE..$PR_HEAD"
+          bash scripts/test-commit-trailers.sh
+      - name: source text uses US English
+        env:
+          SOURCE_LANGUAGE_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/test-source-language.py
+          python3 scripts/check-source-language.py --base "$SOURCE_LANGUAGE_BASE"
+          python3 scripts/check-source-language.py --public-tooling .
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}   # self-hosted runners keep the Go caches on local disk
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
         uses: ./.github/actions/olivares-tool-cache
-      - name: licence headers and the AGPL boundary
-        run: task lint:spdx lint:boundary
+      - name: Third-party license gate
+        run: |
+          go install github.com/google/go-licenses/v2@v2.0.1
+          python3 scripts/test-license-gates.py
+          python3 scripts/test-license-gate-integration.py
+          python3 scripts/license-gate.py --tags release
+      - name: licence headers, the AGPL boundary and PR job guards
+        run: task lint:spdx lint:boundary lint:pr-ci-regime lint:pr-ci-regime:selftest
+      - name: migration history is immutable on the PR head
+        env:
+          OLIVARES_MIGRATION_BASE: ${{ github.event.pull_request.base.sha }}
+        run: |
+          bash scripts/check-migrations.sh
+          python3 scripts/test-migration-immutability.py
+          bash scripts/test-migrations-coverage.sh
+      - name: mainline failure reporter regression tests
+        run: python3 scripts/test-mainline-ci-report.py
+      - name: the pre-push hook checks what a push changes
+        run: bash scripts/test-pre-push.sh
+      - name: the end-of-work ratchet tells its verdicts apart
+        run: bash scripts/test-kept-checks.sh
+      - name: Cosign installers do not share a writable bootstrap
+        run: python3 scripts/test-cosign-install-isolation.py
+      - name: native packaging uses the candidate checkout
+        run: python3 -m unittest discover -s scripts/userspace -p test_package_setup.py -v
+      - name: browser setup works without sudo on self-hosted runners
+        run: python3 -m unittest discover -s scripts/userspace -p test_browser_setup.py -v
+      - name: published worktree setup survives runner reuse
+        run: python3 -m unittest discover -s scripts/userspace -p test_worktree_setup.py -v
 
       # ⛔ THE SHARD GATE RUNS HERE, AND UNTIL NOW IT RAN NOWHERE A PULL REQUEST COULD MEET
       # IT. It was a leg of the local pre-push hook only, so a fork, a web edit or any push
@@ -165,34 +160,72 @@ jobs:
             echo "::error::generated SDKs differ from their committed snapshots; inspect the generation artifact"
             exit 1
           fi
-      - name: retain generation evidence, including a stale-output patch
+      - name: Preserve evidence on the runner
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        continue-on-error: true
+        uses: ./.github/actions/ci-evidence
         with:
           name: sdk-generation-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/sdk-generation/
-          retention-days: 7
+      - name: retain generation evidence, including a stale-output patch
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sdk-generation-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/sdk-generation/
+          retention-days: 1
           if-no-files-found: error
 
   pr-build:
-    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
-    runs-on: ubuntu-latest
+    needs: pr-web
+    if: always() && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod' || vars.OLIVARES_DEV_CI == 'true')
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 45
     steps:
+      - name: require the console producer to succeed
+        run: test '${{ needs.pr-web.result }}' = success
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+      - name: download the console built by pr-web
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.pr-web.outputs.bundle-artifact }}
+          path: ${{ runner.temp }}/web-generation-artifact
+      - name: embed the verified console output
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PR_HEAD"
+          cd "$RUNNER_TEMP/web-generation-artifact"
+          sha256sum -c SHA256SUMS
+          jq -e --arg head "$PR_HEAD" --arg repository "$GITHUB_REPOSITORY" \
+            --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" '
+            .schema == "olivares.web-generation/v1" and
+            .checkout_sha == $head and .pr_head_sha == $head and
+            .repository == $repository and .run_id == $run and .run_attempt == $attempt
+          ' manifest.json > /dev/null
+          tar -xzf dist.tar.gz -C "$GITHUB_WORKSPACE/core/internal/webui"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}   # self-hosted runners keep the Go caches on local disk
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
         uses: ./.github/actions/olivares-tool-cache
-      - name: every workspace module compiles
-        run: task build:go
       - name: build the development CLI with its first-party connectors
         run: task build:bin
+      # build:bin compiles with CGO_ENABLED=0 -trimpath (scripts/lib/build-bin.sh). The same
+      # flags here reuse every package the binary already compiled, so Go is compiled once;
+      # with default flags this step recompiled all of it (hosted medians 6.5 + 3.4 min).
+      - name: every other workspace module compiles
+        env:
+          CGO_ENABLED: "0"
+          GOFLAGS: -trimpath
+        run: task build:go
       - name: the core session journey works on this build
         run: bash scripts/session-journey-smoke.sh --binary bin/olivares --label pr-build
       - name: verify and package the development CLI
@@ -204,11 +237,14 @@ jobs:
           mkdir -p "$bundle"
           checkout_sha="$(git rev-parse HEAD)"
           expected_commit="$(git rev-parse --short HEAD)"
-          if [[ "$checkout_sha" != "$GITHUB_SHA" || ! "$PR_HEAD" =~ ^[0-9a-f]{40}$ ]]; then
+          if [[ "$checkout_sha" != "$PR_HEAD" || ! "$PR_HEAD" =~ ^[0-9a-f]{40}$ ]]; then
             echo "::error::the checkout or PR identity is not the expected Actions candidate"
             exit 1
           fi
-          git diff --exit-code --quiet HEAD --
+          if ! git diff --exit-code --name-only HEAD --; then
+            echo "::error::the build changed tracked inputs; commit the generated changes before packaging"
+            exit 1
+          fi
           test -s bin/olivares
           test -x bin/olivares
           install -m 0755 bin/olivares "$bundle/olivares"
@@ -249,58 +285,46 @@ jobs:
           tar -czf "$RUNNER_TEMP/cli-development-verification.tar.gz" -C "$bundle" \
             olivares manifest.json version.json toolchain.txt buildinfo.txt SHA256SUMS
       - name: retain the verified development CLI
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cli-development-verification
           path: ${{ runner.temp }}/cli-development-verification.tar.gz
-          retention-days: 7
+          retention-days: 1
           compression-level: 0
           if-no-files-found: error
       # Use this job's already-built candidate and the release's canonical payload.
       # Container package matrices stub systemd; this hosted runner starts the real unit.
       - name: package the candidate for the native service journey
         timeout-minutes: 5
-        run: |
-          set -euo pipefail
-          nfpm="$(bash scripts/ensure-nfpm.sh --dest "$RUNNER_TEMP/package-tools")"
-          mkdir -p "$RUNNER_TEMP/package-service/logs"
-          /usr/bin/python3 - <<'PY'
-          import json, os
-          from pathlib import Path
-          source = next(p for p in json.loads(Path('packaging/nfpm/packages.json').read_text())['nfpms']
-                        if p['id'] == 'olivares-nfpm')
-          config = {key: source[key] for key in ('vendor', 'homepage', 'maintainer', 'description',
-                    'license', 'section', 'priority', 'scripts')}
-          config.update(name=source['package_name'], arch='amd64', platform='linux',
-                        version='26.10.1~ci.' + os.environ['GITHUB_RUN_ID'], version_schema='none')
-          config['contents'] = [{k: v for k, v in entry.items() if k != 'packager'}
-                                for entry in source['contents'] if entry.get('packager', 'deb') == 'deb']
-          config['contents'].append({'src': 'bin/olivares', 'dst': '/usr/bin/olivares',
-                                     'file_info': {'mode': 0o755}})
-          Path(os.environ['RUNNER_TEMP'], 'package-service/nfpm.json').write_text(json.dumps(config))
-          PY
-          "$nfpm" package --config "$RUNNER_TEMP/package-service/nfpm.json" \
-            --packager deb --target "$RUNNER_TEMP/package-service/candidate.deb"
+        run: bash scripts/package-service-candidate.sh
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
         timeout-minutes: 3
         with:
           cosign-release: 'v2.6.4'
+          # Concurrent self-hosted runners may share HOME, but not runner.temp.
+          install-dir: ${{ runner.temp }}/cosign
       - name: assert reviewed release verifier bytes
         run: bash scripts/assert-cosign-binary.sh --isolate
-      - name: install, start, upgrade and uninstall the native package
-        timeout-minutes: 6
+      - name: install, start, upgrade and uninstall DEB and RPM packages
+        # needs a disposable runner (sudo dpkg, a global service); shared self-hosted runners skip it
+        if: runner.environment == 'github-hosted'
+        timeout-minutes: 10
         run: |
           set -euo pipefail
+          # Both native package managers run on this disposable systemd host.
+          # RPM is exercised here on Ubuntu; Fedora qualification remains separate.
+          sudo apt-get update -qq
+          sudo apt-get install -y rpm
           proof="$RUNNER_TEMP/package-service"
           [[ "$(ps -p 1 -o comm=)" == systemd ]]
           trap 'sudo systemctl stop olivares.service 2>/dev/null || true' EXIT
           ready() {
-            sudo systemctl restart olivares.service
-            for _ in {1..40}; do
+            # Never restart here: an upgrade must start the new binary itself.
+            for _ in {1..60}; do
               if [[ "$(sudo curl -sS --max-time 2 --cacert /var/lib/olivares/tls.crt \
-                --output "$proof/logs/$1-readyz.json" --write-out '%{http_code}' \
+                --output "$proof/logs/$fmt-$1-readyz.json" --write-out '%{http_code}' \
                 https://127.0.0.1:8443/readyz 2>/dev/null || true)" == 200 ]]; then
-                echo "$1: packaged service /readyz 200"
+                echo "$fmt $1: packaged service /readyz 200"
                 return 0
               fi
               sleep 1
@@ -309,59 +333,159 @@ jobs:
               sed -E 's/olst_[A-Z2-7]{52}/[setup token redacted]/g'
             return 1
           }
+          install_package() {
+            case "$fmt" in
+              # A kept operator edit of a conffile never waits for an answer.
+              deb) sudo dpkg --force-confold -i "$1" ;;
+              # Ubuntu's OS providers are tracked by dpkg, not the RPM database.
+              rpm) sudo rpm -Uvh --nodeps "$1" ;;
+            esac
+          }
           remove_package() {
-            sudo dpkg --purge olivares
-            if sudo systemctl is-active --quiet olivares.service; then
-              return 1
+            case "$fmt" in
+              deb) sudo dpkg --purge olivares ;;
+              rpm) sudo rpm -e olivares ;;
+            esac
+            # Assert on the exact ActiveState, not an inverted exit code: `! cmd` never
+            # aborted (errexit skips inversions, shellcheck SC2251), and is-active's
+            # non-zero exits fold inactive, failed and could-not-check into one answer.
+            # A purged unit shows ActiveState=inactive (systemd reports ghost units for
+            # not-loaded units); anything else — active, failed, unreadable — is named
+            # and fails the job.
+            state="$(sudo systemctl show --property ActiveState --value olivares.service)" || {
+              echo "pr-ci: could not read olivares.service ActiveState after $fmt removal" >&2
+              exit 1
+            }
+            if [ "$state" != inactive ]; then
+              echo "pr-ci: olivares.service ActiveState='$state' after $fmt removal (want inactive)" >&2
+              exit 1
             fi
             [[ ! -e /usr/bin/olivares ]]
           }
-          sudo dpkg -i "$proof/candidate.deb"
-          cmp bin/olivares /usr/bin/olivares
-          ready fresh
-          pid="$(sudo systemctl show --property MainPID --value olivares.service)"
-          sudo cmp bin/olivares "/proc/$pid/exe"
-          remove_package
-          # Reset only this disposable runner's product fixture before the old install.
-          sudo rm -rf /var/lib/olivares
-          base=https://github.com/olivaresai/olivares/releases/download/26.10.0
-          old=olivares_26.10.0_linux_amd64.deb
-          for asset in "$old" checksums.txt checksums.txt.sig checksums.txt.pem; do
-            curl -fSL --retry 2 --max-time 90 "$base/$asset" -o "$proof/$asset"
+          candidate_version="$(sh scripts/build-ldflags.sh --version)"
+          python3 scripts/userspace/resolve_baseline.py --candidate-version "$candidate_version" > "$proof/baseline.json"
+          baseline="$(jq -r '.tag_name // empty' "$proof/baseline.json")"
+          if [[ -n "$baseline" ]]; then
+            base="https://github.com/olivaresai/olivares/releases/download/$baseline"
+            for asset in checksums.txt checksums.txt.sig checksums.txt.pem; do
+              curl -fSL --retry 2 --max-time 90 "$base/$asset" -o "$proof/$asset"
+            done
+            "$OLIVARES_COSIGN_BIN" verify-blob --certificate "$proof/checksums.txt.pem" \
+              --signature "$proof/checksums.txt.sig" \
+              --certificate-identity "https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/$baseline" \
+              --certificate-oidc-issuer https://token.actions.githubusercontent.com "$proof/checksums.txt"
+          fi
+          for fmt in deb rpm; do
+            # Reset only this disposable runner's product fixture between formats.
+            sudo rm -rf /var/lib/olivares /etc/systemd/system/olivares.service.d
+            install_package "$proof/candidate.$fmt"
+            # Same assertion as remove_package, exact ActiveState instead of the inert
+            # `!` one-liner: the package must not auto-start, so inactive is the only
+            # passing state — a unit that auto-started and crashed to failed fails here
+            # instead of folding into is-active's non-zero.
+            state="$(sudo systemctl show --property ActiveState --value olivares.service)" || {
+              echo "pr-ci: could not read olivares.service ActiveState after $fmt install" >&2
+              exit 1
+            }
+            if [ "$state" != inactive ]; then
+              echo "pr-ci: olivares.service ActiveState='$state' after $fmt install (want inactive: the package must not auto-start)" >&2
+              exit 1
+            fi
+            # The env file carries listen, TLS and DSN flags: root:olivares 0640, as doctor requires.
+            [[ "$(stat -c '%a %U:%G' /etc/olivares/olivares.env)" == '640 root:olivares' ]]
+            sudo systemctl start olivares.service
+            ready fresh
+            doctor_rc=0
+            sudo /usr/bin/olivares doctor --data-dir /var/lib/olivares --output json | \
+              tee "$proof/logs/$fmt-doctor-fresh.json" > /dev/null || doctor_rc=$?
+            [[ "$doctor_rc" -le 1 ]]
+            jq -e '[.checks[] | select(.name == "configuration" and .status == "pass")] | length == 1' \
+              "$proof/logs/$fmt-doctor-fresh.json" > /dev/null
+            # The package unit lives in /usr/lib/systemd/system; doctor must measure it, not report the shell installer's path.
+            jq -e '([.checks[] | select(.name == "service-unit" and .status == "pass" and (.detail | startswith("/usr/lib/systemd/system/olivares.service")))] | length == 1)
+              and ([.checks[] | select(.name == "install-manifest" and .status == "pass")] | length == 1)
+              and ([.checks[] | select(.name == "ownership" and .status == "pass")] | length == 1)' \
+              "$proof/logs/$fmt-doctor-fresh.json" > /dev/null
+            pid="$(sudo systemctl show --property MainPID --value olivares.service)"
+            sudo cmp bin/olivares "/proc/$pid/exe"
+            remove_package
+            sudo rm -rf /var/lib/olivares
+            if [[ -z "$baseline" ]]; then
+              echo "PASS: $fmt first stable fresh service and uninstall; no predecessor upgrade applies"
+              continue
+            fi
+            old="olivares_${baseline}_linux_amd64.$fmt"
+            curl -fSL --retry 2 --max-time 90 "$base/$old" -o "$proof/$old"
+            awk -v name="$old" '$2 == name {print; count++} END {if (count != 1) exit 1}' \
+              "$proof/checksums.txt" > "$proof/old-checksum.txt"
+            (cd "$proof" && sha256sum --check old-checksum.txt)
+            install_package "$proof/$old"
+            sudo systemctl start olivares.service
+            ready previous
+            old_pid="$(sudo systemctl show --property MainPID --value olivares.service)"
+            sudo env PACKAGE_BASELINE="$baseline" python3 - <<'PY'
+          import os, sqlite3
+          with sqlite3.connect('/var/lib/olivares/olivares.db') as db:
+              db.execute('CREATE TABLE package_upgrade_witness (version TEXT)')
+              db.execute("INSERT INTO package_upgrade_witness VALUES (?)", (os.environ["PACKAGE_BASELINE"],))
+          PY
+            sudo mkdir -p /etc/systemd/system/olivares.service.d
+            printf '[Service]\nProtectHome=tmpfs\n# operator edit: retain my policy\n' | \
+              tee "$proof/edited-dropin.conf" | \
+              sudo tee /etc/systemd/system/olivares.service.d/agentops.conf > /dev/null
+            # Preserve an operator edit of the baseline package environment.
+            printf '# operator edit: retain my flags\n' | sudo tee -a /etc/olivares/olivares.env > /dev/null
+            install_package "$proof/candidate.$fmt"
+            cmp "$proof/edited-dropin.conf" /etc/systemd/system/olivares.service.d/agentops.conf
+            ready upgrade
+            pid="$(sudo systemctl show --property MainPID --value olivares.service)"
+            [[ "$pid" != "$old_pid" ]]
+            sudo cmp bin/olivares "/proc/$pid/exe"
+            sudo env PACKAGE_BASELINE="$baseline" python3 - <<'PY' | tee "$proof/logs/$fmt-snapshot.txt"
+          import hashlib, os, pathlib, sqlite3
+          snapshots = list(pathlib.Path('/var/lib/olivares/backups/pre-upgrade').glob('*/olivares.db'))
+          assert len(snapshots) == 1, snapshots
+          snapshot = snapshots[0]
+          assert snapshot.stat().st_mode & 0o777 == 0o600
+          with sqlite3.connect(f'file:{snapshot}?mode=ro', uri=True) as db:
+              assert db.execute('PRAGMA integrity_check').fetchone() == ('ok',)
+              assert db.execute('SELECT version FROM package_upgrade_witness').fetchone() == (os.environ["PACKAGE_BASELINE"],)
+          print('PASS: published', os.environ['PACKAGE_BASELINE'], 'data in snapshot', snapshot.name, hashlib.file_digest(snapshot.open('rb'), 'sha256').hexdigest())
+          PY
+            doctor_rc=0
+            sudo /usr/bin/olivares doctor --data-dir /var/lib/olivares --output json | \
+              tee "$proof/logs/$fmt-doctor.json" > /dev/null || doctor_rc=$?
+            [[ "$doctor_rc" -le 1 ]]
+            grep -Fq 'overrides the base service unit' "$proof/logs/$fmt-doctor.json"
+            # The upgrade keeps the edited env file and closes it.
+            sudo grep -qx '# operator edit: retain my flags' /etc/olivares/olivares.env
+            [[ "$(stat -c '%a %U:%G' /etc/olivares/olivares.env)" == '640 root:olivares' ]]
+            jq -e '[.checks[] | select(.name == "configuration" and .status == "pass")] | length == 1' \
+              "$proof/logs/$fmt-doctor.json" > /dev/null
+            # The package unit lives in /usr/lib/systemd/system; doctor must measure it, not report the shell installer's path.
+            jq -e '([.checks[] | select(.name == "service-unit" and .status == "pass" and (.detail | startswith("/usr/lib/systemd/system/olivares.service")))] | length == 1)
+              and ([.checks[] | select(.name == "install-manifest" and .status == "pass")] | length == 1)
+              and ([.checks[] | select(.name == "ownership" and .status == "pass")] | length == 1)' \
+              "$proof/logs/$fmt-doctor.json" > /dev/null
+            sha256sum "$proof/candidate.$fmt" "$proof/$old" | tee "$proof/logs/$fmt-artifacts.sha256"
+            remove_package
+            echo "PASS: $fmt fresh service, automatic $baseline upgrade restart and snapshot, edited drop-in retained, uninstall stops service"
           done
-          "$OLIVARES_COSIGN_BIN" verify-blob --certificate "$proof/checksums.txt.pem" \
-            --signature "$proof/checksums.txt.sig" \
-            --certificate-identity 'https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/26.10.0' \
-            --certificate-oidc-issuer https://token.actions.githubusercontent.com "$proof/checksums.txt"
-          awk -v name="$old" '$2 == name {print; count++} END {if (count != 1) exit 1}' \
-            "$proof/checksums.txt" > "$proof/old-checksum.txt"
-          (cd "$proof" && sha256sum --check old-checksum.txt)
-          sudo dpkg -i "$proof/$old"
-          ready previous
-          sudo mkdir -p /etc/systemd/system/olivares.service.d
-          printf '[Service]\nProtectHome=tmpfs\n# operator edit: retain my policy\n' | \
-            tee "$proof/edited-dropin.conf" | \
-            sudo tee /etc/systemd/system/olivares.service.d/agentops.conf > /dev/null
-          sudo dpkg -i "$proof/candidate.deb"
-          cmp "$proof/edited-dropin.conf" /etc/systemd/system/olivares.service.d/agentops.conf
-          cmp bin/olivares /usr/bin/olivares
-          ready upgrade
-          pid="$(sudo systemctl show --property MainPID --value olivares.service)"
-          sudo cmp bin/olivares "/proc/$pid/exe"
-          doctor_rc=0
-          sudo /usr/bin/olivares doctor --data-dir /var/lib/olivares --output json | \
-            tee "$proof/logs/doctor.json" > /dev/null || doctor_rc=$?
-          [[ "$doctor_rc" -le 1 ]]
-          grep -Fq 'overrides the base service unit' "$proof/logs/doctor.json"
-          remove_package
-          echo 'PASS: fresh .deb service, 26.10.0 upgrade preserves edited drop-in, doctor warns, uninstall stops service'
-      - name: retain native package journey output
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - name: Preserve evidence on the runner
+        if: always() && runner.environment == 'github-hosted'
+        continue-on-error: true
+        uses: ./.github/actions/ci-evidence
         with:
           name: package-service-journey
           path: ${{ runner.temp }}/package-service/logs/
-          retention-days: 7
+      - name: retain native package journey output
+        if: always() && runner.environment == 'github-hosted'
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-service-journey
+          path: ${{ runner.temp }}/package-service/logs/
+          retention-days: 1
           if-no-files-found: error
 
   # ⛔ THE SUITE IS SPLIT BY A DECLARED LIST, AND THAT IS THE WHOLE CHANGE. Measured on
@@ -391,6 +515,7 @@ jobs:
   # A package or a test that belongs to no shard would otherwise be SILENT: every shard
   # green, the required check green, and nothing testing it.
   pr-test-shard:
+    needs: pr-web
     if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
     strategy:
       # `fail-fast: false`: a red shard must not cancel its siblings. A cancelled
@@ -399,7 +524,7 @@ jobs:
       fail-fast: false
       matrix:
         shard: [root-a, root-b, root-c, root-d, root-e, root-f, root-g, root-h, root-rest, root-core, store-a, store-b, store-rest, sessions, modules]
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     # The gate pins these ceilings to ci/pr-suite-shards.txt. Hosted root-rest
     # exhausted 35m twice; allow the measured 1.8x variation over its 19.8m cmd group
     # plus whole packages: 45m per Go binary, 55m per step, 65m per job.
@@ -411,6 +536,8 @@ jobs:
     # functional job: two servers on ephemeral host ports (the failover test needs a second,
     # distinct one). Each shard gets its OWN pair, so the shards do not share a database and
     # the contention that a single job had between its packages is gone.
+    env:
+      OLIVARES_REQUIRE_WEB_BUNDLE: "1"
     services:
       postgres:
         image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
@@ -439,11 +566,32 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
+      - name: download the console built by pr-web
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: ${{ needs.pr-web.outputs.bundle-artifact }}
+          path: ${{ runner.temp }}/web-generation-artifact
+      - name: embed the verified console output
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PR_HEAD"
+          cd "$RUNNER_TEMP/web-generation-artifact"
+          sha256sum -c SHA256SUMS
+          jq -e --arg head "$PR_HEAD" --arg repository "$GITHUB_REPOSITORY" \
+            --arg run "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" '
+            .schema == "olivares.web-generation/v1" and
+            .checkout_sha == $head and .pr_head_sha == $head and
+            .repository == $repository and .run_id == $run and .run_attempt == $attempt
+          ' manifest.json > /dev/null
+          tar -xzf dist.tar.gz -C "$GITHUB_WORKSPACE/core/internal/webui"
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}   # self-hosted runners keep the Go caches on local disk
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
         uses: ./.github/actions/olivares-tool-cache
@@ -513,7 +661,7 @@ jobs:
   pr-test:
     needs: [pr-test-shard]
     if: always() && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod')
-    runs-on: ubuntu-latest
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 5
     steps:
       - name: every shard of the functional suite must have succeeded
@@ -544,16 +692,19 @@ jobs:
           esac
 
   pr-web:
-    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod'
-    runs-on: ubuntu-latest
+    outputs:
+      bundle-artifact: web-generation-${{ github.run_id }}-${{ github.run_attempt }}
+    if: github.repository == 'olivaresai/olivares' || vars.OLIVARES_RELEASE_PROFILE == 'preprod' || vars.OLIVARES_DEV_CI == 'true'
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
     # 30 + the two generated-reference gates below (their step ceilings, 15 + 10).
     timeout-minutes: 55
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           persist-credentials: false
       # NODE FIRST: pnpm/action-setup installs pnpm THROUGH npm, so it needs a node on PATH.
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .node-version
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
@@ -563,14 +714,17 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: go.work
-          cache: true
+          cache: ${{ runner.environment == 'github-hosted' }}   # self-hosted runners keep the Go caches on local disk
           cache-dependency-path: go.work.sum
       - name: install go-task (pinned)
         uses: ./.github/actions/olivares-tool-cache
-      # Retain generation before the existing freshness check can reject a stale
-      # committed bundle. Generation is development evidence, not acceptance.
+      # Build once from this checkout and retain that complete output.
+      # Product acceptance still requires a journey on the release binary.
       - name: verify the capture helper with isolated fake build fixtures
-        run: timeout 60s python3 scripts/test-capture-web-generation.py
+        run: |
+          timeout 60s python3 scripts/test-web-build.py
+          timeout 60s python3 scripts/test-capture-web-generation.py
+          timeout 60s bash scripts/test-check-web-bundle-freshness.sh
       - name: generate and capture the complete console bundle
         id: web-generation
         env:
@@ -578,17 +732,17 @@ jobs:
         run: python3 scripts/capture-web-generation.py
       - name: retain the generated console bundle
         if: success() && steps.web-generation.outcome == 'success'
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: web-generation-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ runner.temp }}/web-generation-artifact/
-          retention-days: 7
+          retention-days: 1
           compression-level: 0
           if-no-files-found: error
       - name: formatting debt does not grow
         run: task lint:format-ratchet
-      - name: the console checks, and the embedded bundle matches its sources
-        run: task check:web web:check
+      - name: the console checks (the bundle was already built and verified)
+        run: task check:web
       # The generated CLI reference (seven locale pages) and the console/gRPC/upgrade guides are
       # otherwise checked only after merge, in mainline-ci control-plane; public-generation writes
       # them but is dispatched. Each gate runs its own red battery first, then the check.
@@ -600,3 +754,132 @@ jobs:
       - name: the console/gRPC references and the upgrade guide match the tree
         timeout-minutes: 10
         run: task lint:guide-docs
+
+  userspace-compat:
+    needs: pr-build
+    if: always() && (github.repository == 'olivaresai/olivares' || vars.OLIVARES_DEV_CI == 'true')
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 120
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16@sha256:a36250871de0833b8757561c72f2477ef1ddd1101afa4e617fb552e0de514c6b
+        env:
+          POSTGRES_PASSWORD: userspace-test-only
+        ports: ['5432/tcp']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    steps:
+      - name: require the existing PR build to succeed
+        run: test '${{ needs.pr-build.result }}' = success
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        timeout-minutes: 5
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        timeout-minutes: 5
+        with:
+          name: cli-development-verification
+          path: ${{ runner.temp }}/userspace-input
+      - name: bind the existing binary to this candidate
+        timeout-minutes: 2
+        env:
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$PR_HEAD"
+          out="$RUNNER_TEMP/userspace"
+          mkdir -m 700 "$out"
+          echo "USERSPACE_OUT=$out" >> "$GITHUB_ENV"
+          python3 scripts/userspace/extract_build.py \
+            "$RUNNER_TEMP/userspace-input/cli-development-verification.tar.gz" "$out/candidate-bin"
+          cp "$out/candidate-bin/manifest.json" "$out/identity.json"
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        timeout-minutes: 5
+        with:
+          go-version-file: go.work
+          cache: ${{ runner.environment == 'github-hosted' }}   # self-hosted runners keep the Go caches on local disk
+          cache-dependency-path: go.work.sum
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        timeout-minutes: 5
+        with:
+          node-version-file: .node-version
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        timeout-minutes: 5
+        with:
+          dest: ${{ runner.temp }}/setup-pnpm
+          standalone: true
+      - name: install the existing browser test tools
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          pnpm --dir web install --frozen-lockfile
+          # Self-hosted images must supply system libraries; the runner has no sudo.
+          deps=()
+          if [[ "$RUNNER_ENVIRONMENT" == github-hosted ]]; then
+            deps=(--with-deps)
+          fi
+          # The upgrade fixture changes HOME; installation and launch must share a cache.
+          export PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/userspace-browsers"
+          pnpm --dir web exec playwright install "${deps[@]}" chromium
+          echo "PLAYWRIGHT_BROWSERS_PATH=$PLAYWRIGHT_BROWSERS_PATH" >> "$GITHUB_ENV"
+          echo "NODE_PATH=$PWD/web/node_modules" >> "$GITHUB_ENV"
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+        timeout-minutes: 5
+        with:
+          cosign-release: v2.6.4
+          install-dir: ${{ runner.temp }}/cosign
+      - name: authenticate the verifier
+        timeout-minutes: 2
+        run: bash scripts/assert-cosign-binary.sh --isolate
+      - name: preserve published contracts and upgrade both stores
+        timeout-minutes: 40
+        env:
+          USERSPACE_POSTGRES_DSN: postgres://postgres:userspace-test-only@127.0.0.1:${{ job.services.postgres.ports['5432'] }}/postgres?sslmode=disable
+        run: bash scripts/userspace/compat.sh "$USERSPACE_OUT/candidate-bin/olivares"
+      - name: remove the published source worktree
+        if: always() && env.USERSPACE_OUT != ''
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          registered="$(git worktree list --porcelain)"
+          if grep -Fx "worktree $USERSPACE_OUT/published-source" <<< "$registered"; then
+            git worktree remove --force "$USERSPACE_OUT/published-source"
+          fi
+      - name: Preserve evidence on the runner
+        if: always() && env.USERSPACE_OUT != ''
+        continue-on-error: true
+        uses: ./.github/actions/ci-evidence
+        with:
+          name: userspace-compat-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.USERSPACE_OUT }}/identity.json
+            ${{ env.USERSPACE_OUT }}/baseline.json
+            ${{ env.USERSPACE_OUT }}/published.json
+            ${{ env.USERSPACE_OUT }}/candidate.json
+            ${{ env.USERSPACE_OUT }}/findings.json
+            ${{ env.USERSPACE_OUT }}/sqlite/result.json
+            ${{ env.USERSPACE_OUT }}/sqlite/*.log
+            ${{ env.USERSPACE_OUT }}/postgres/result.json
+            ${{ env.USERSPACE_OUT }}/postgres/*.log
+      - name: retain contract findings and redacted upgrade results
+        if: always() && env.USERSPACE_OUT != ''
+        timeout-minutes: 5
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: userspace-compat-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 1
+          if-no-files-found: error
+          path: |
+            ${{ env.USERSPACE_OUT }}/identity.json
+            ${{ env.USERSPACE_OUT }}/baseline.json
+            ${{ env.USERSPACE_OUT }}/published.json
+            ${{ env.USERSPACE_OUT }}/candidate.json
+            ${{ env.USERSPACE_OUT }}/findings.json
+            ${{ env.USERSPACE_OUT }}/sqlite/result.json
+            ${{ env.USERSPACE_OUT }}/sqlite/*.log
+            ${{ env.USERSPACE_OUT }}/postgres/result.json
+            ${{ env.USERSPACE_OUT }}/postgres/*.log

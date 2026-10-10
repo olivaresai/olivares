@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/olivaresai/olivares/cmd/olivares/internal/inferencepep"
 	claudeapi "github.com/olivaresai/olivares/connectors/claude-api"
 	"github.com/olivaresai/olivares/connectors/modelprovider"
 	"github.com/olivaresai/olivares/connectors/modelrouter"
@@ -2339,7 +2340,7 @@ func TestChatLedgerKeepsUnlabeledLegacyRecordsOpaqueBesideV2Records(t *testing.T
 	opaque := sha256.Sum256([]byte("legacy opaque payload: its preimage was never stored and is not recoverable"))
 	legacyMeta := legacyShapedIntentMeta(hex.EncodeToString(opaque[:]))
 	binding := chatBindingFor("legacy-attempt", hex.EncodeToString(opaque[:]))
-	receipt, err := inferenceEvidenceWriter{store: f.store}.Append(ctx, f.tenant, binding, model.AuditDraft{
+	receipt, err := inferencepep.EvidenceWriter{Store: f.store}.Append(ctx, f.tenant, binding, model.AuditDraft{
 		Actor: "user:legacy", ActorKind: model.ActorUser, Action: chatIntentAction,
 		TargetKind: chatExecutionKind, TargetID: model.ID("legacy-attempt"),
 		PayloadHash: opaque[:], Meta: legacyMeta,

@@ -42,13 +42,13 @@ re-implement them:
 
 - **Run it** — single-node and real-Postgres Docker Compose stacks in
   [`deploy/compose/`](../deploy/compose/); Helm chart in
-  [`deploy/helm/olivares/`](../deploy/helm/olivares/);
+  Business deployment documentation;
   flat `kubectl apply` manifest at
-  [`deploy/manifests/install.yaml`](../deploy/manifests/install.yaml).
+  Business deployment documentation.
 - **Manage as code** — the Terraform/OpenTofu provider, with its own standard
   `examples/{provider,resources,data-sources}` layout, lives in
-  [`terraform-provider-olivares/`](../terraform-provider-olivares/); GitOps
-  (ArgoCD/Flux) reconciliation in [`deploy/gitops/`](../deploy/gitops/).
+  Business deployment source and documentation; GitOps
+  (ArgoCD/Flux) reconciliation in Business deployment documentation.
 - **Author policy** — managed-settings, hooks and Cedar/ABAC policy authoring are
   documented under the [docs site how-to guides](../docs-site/src/content/docs/how-to/).
 

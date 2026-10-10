@@ -41,7 +41,7 @@ mkdir -p "$lot9_scratch/snapshot" || exit 2
 lot9_index=0
 for lot9_file in "${lot9_files[@]}"; do
 	[ -r "$lot9_root/$lot9_file" ] || {
-		echo "console-func-l9-mutants: NO PUDE MIRAR — falta $lot9_file" >&2
+		echo "console-func-l9-mutants: CANNOT INSPECT — missing $lot9_file" >&2
 		exit 2
 	}
 	cp -p -- "$lot9_root/$lot9_file" "$lot9_scratch/snapshot/$lot9_index" || exit 2
@@ -54,11 +54,11 @@ done
 
 lot9_oracle="$lot9_root/scripts/check-console-func-l9.sh"
 TMPDIR="$lot9_scratch" bash "$lot9_oracle" >"$lot9_scratch/control.log" 2>&1 || {
-	echo "console-func-l9-mutants: control ROTO" >&2
+	echo "console-func-l9-mutants: control BROKEN" >&2
 	sed -n '1,220p' "$lot9_scratch/control.log" >&2
 	exit 1
 }
-echo "console-func-l9-mutants: control FUNCIONA"
+echo "console-func-l9-mutants: control PASS"
 
 lot9_mutant() {
 	local lot9_name="$1"
@@ -74,19 +74,19 @@ lot9_mutant() {
 		"$lot9_root/$lot9_file" || exit 2
 	TMPDIR="$lot9_scratch" bash "$lot9_oracle" >"$lot9_scratch/$lot9_name.log" 2>&1
 	lot9_rc=$?
-	lot9_hits="$(rg -F -c -- "console-func-l9: ROTO — $lot9_expected" "$lot9_scratch/$lot9_name.log" 2>/dev/null)"
+	lot9_hits="$(rg -F -c -- "console-func-l9: FAIL — $lot9_expected" "$lot9_scratch/$lot9_name.log" 2>/dev/null)"
 	if [ "$lot9_rc" -ne 1 ] || [ "${lot9_hits:-0}" -lt 1 ]; then
-		echo "console-func-l9-mutants: mutante $lot9_name no discrimino (rc=$lot9_rc)" >&2
+		echo "console-func-l9-mutants: mutant $lot9_name did not distinguish behavior (rc=$lot9_rc)" >&2
 		sed -n '1,160p' "$lot9_scratch/$lot9_name.log" >&2
 		exit 1
 	fi
-	echo "console-func-l9-mutants: mutante $lot9_name ROTO — $lot9_expected"
+	echo "console-func-l9-mutants: mutant $lot9_name BROKEN — $lot9_expected"
 	lot9_restore
 	(
 		cd "$lot9_root" || exit 2
 		sha256sum -c "$lot9_scratch/original.sha256"
 	) >"$lot9_scratch/$lot9_name.restore.log" 2>&1 || {
-		echo "console-func-l9-mutants: restauracion no byte-exacta tras $lot9_name" >&2
+		echo "console-func-l9-mutants: restoration was not byte-for-byte after $lot9_name" >&2
 		exit 1
 	}
 }
@@ -114,22 +114,22 @@ lot9_mutant capabilities-server-refetch \
 	'onElevated={() => void query.refetch()}' \
 	'onElevated={() => undefined}' CAPABILITIES_SERVER_REENTRY
 lot9_mutant toolpins-deny-closed modules/capabilities/toolpins.go \
-	'tool pinning is an enterprise add-on (no verifier wired)' \
+	'tool pinning is a Business capability (no verifier wired)' \
 	'tool pinning unavailable' TOOLPINS_COMMUNITY_DENY_CLOSED
 
 lot9_restore
 CONSOLE_FUNC_L9_FORCE_UNAVAILABLE=1 TMPDIR="$lot9_scratch" \
 	bash "$lot9_oracle" >"$lot9_scratch/unavailable.log" 2>&1
 lot9_rc=$?
-lot9_hits="$(rg -F -c -- 'console-func-l9: NO PUDE MIRAR' "$lot9_scratch/unavailable.log" 2>/dev/null)"
+lot9_hits="$(rg -F -c -- 'console-func-l9: COULD NOT CHECK' "$lot9_scratch/unavailable.log" 2>/dev/null)"
 if [ "$lot9_rc" -ne 2 ] || [ "${lot9_hits:-0}" -lt 1 ]; then
-	echo "console-func-l9-mutants: la tercera respuesta no discrimino (rc=$lot9_rc)" >&2
+	echo "console-func-l9-mutants: the third response did not distinguish behavior (rc=$lot9_rc)" >&2
 	exit 1
 fi
-echo "console-func-l9-mutants: control NO PUDE MIRAR = rc 2"
+echo "console-func-l9-mutants: control CANNOT INSPECT = rc 2"
 
 TMPDIR="$lot9_scratch" bash "$lot9_oracle" >"$lot9_scratch/final.log" 2>&1 || {
-	echo "console-func-l9-mutants: final ROTO" >&2
+	echo "console-func-l9-mutants: final BROKEN" >&2
 	exit 1
 }
 (
@@ -140,4 +140,4 @@ cmp -s "$lot9_scratch/original.sha256" "$lot9_scratch/final.sha256" || {
 	echo "console-func-l9-mutants: manifest original != final" >&2
 	exit 1
 }
-echo "console-func-l9-mutants: manifest original=snapshot=final; 9/9 mutantes discriminados"
+echo "console-func-l9-mutants: manifest original=snapshot=final; 9/9 mutants distinguished"

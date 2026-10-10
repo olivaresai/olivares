@@ -22,13 +22,14 @@
     "edition": "Édition et modules",
     "about": "À propos",
     "sections": "Sections des réglages",
-    "signing": "Signature des rapports"
+    "signing": "Signature des rapports",
+    "tracing": "Traces"
   },
   "general": {
     "title": "Général",
     "scope": "Vos préférences. Elles vous suivent dans chaque espace de travail de cette installation.",
     "theme": "Thème",
-    "themeHint": "Sombre, sauf si vous choisissez clair ou de suivre le système.",
+    "themeHint": "Suit le système, sauf si vous choisissez clair ou sombre.",
     "density": "Densité",
     "densityHint": "Compact affiche plus de lignes ; confortable se lit plus facilement.",
     "language": "Langue",
@@ -46,8 +47,7 @@
   },
   "unavailable": {
     "notifications": "Les préférences de notification ne sont pas encore enregistrées sur cette installation.",
-    "sessionDefaults": "Les valeurs de session ne sont pas encore enregistrées sur cette installation.",
-    "signIn": "La politique de connexion ne s’édite pas encore sur cet écran."
+    "sessionDefaults": "Les valeurs de session ne sont pas encore enregistrées sur cette installation."
   },
   "keyboard": {
     "title": "Clavier",
@@ -55,37 +55,38 @@
   },
   "edition": {
     "title": "Édition et modules",
-    "scope": "L'édition de ce build, les modules qu'il exécute et ce qu'ajoute un build Business.",
+    "scope": "L'édition de ce build, les modules qu'il exécute et ce qu'ajoute Business.",
     "label": "Édition",
     "unknown": "Non indiquée par ce moteur",
     "editions": {
       "community": "Community",
       "enterprise": "Business"
     },
-    "businessAdds": "Un build Business ajoute",
+    "businessAdds": "Business ajoute",
     "adds": {
       "loginEnforcement": "Application de la connexion : exiger le SSO et une liste de réseaux autorisés",
       "identityProviders": "Plusieurs fournisseurs d'identité, par organisation et routés par domaine de messagerie",
       "groupMapping": "Groupes d'annuaire associés à des rôles à la connexion",
       "regulatory": "Opérations réglementaires : registres DORA, classification des incidents NIS 2, profils OSCAL, packs américains et sectoriels, et surveillance continue des contrôles",
-      "reports": "Rapports d'entreprise et rapports planifiés",
+      "reports": "Rapports Business et rapports planifiés",
       "toolPins": "Épinglage d'outils"
     }
   },
   "about": {
     "title": "À propos",
-    "scope": "Cette installation et le principal connecté.",
+    "scope": "Cette installation et la personne connectée.",
     "version": "Version",
     "engine": "Moteur de stockage",
     "edition": "Édition",
-    "community": "Édition Community (gratuite)",
+    "community": "Édition Community — aucune licence nécessaire",
     "license": "État de la licence",
     "licensee": "Concédée à",
     "none": "Aucun",
     "displayName": "Nom affiché",
-    "actor": "Principal",
+    "actor": "Identifiant",
     "role": "Rôle dans cette organisation",
-    "memberships": "Organisations"
+    "memberships": "Organisations",
+    "email": "E-mail"
   },
   "stopConfirm": {
     "title": "Arrêter cette session ?",
@@ -94,12 +95,20 @@
   },
   "modules": {
     "title": "Modules",
-    "description": "Activez ou désactivez les parties d'Olivares que cette installation exécute. Appliquer redémarre le moteur une fois pour prendre le changement.",
+    "description": "Activez ou désactivez les parties d'Olivares que cette installation exécute. Appliquer redémarre le moteur une fois pour prendre le changement, et le redémarrage arrête les sessions en cours.",
     "apply_one": "Appliquer {{count}} changement",
     "apply_many": "Appliquer {{count}} changements",
     "apply_other": "Appliquer {{count}} changements",
     "applied": "Sélection des modules enregistrée.",
     "restarting": "Redémarrage du moteur…",
+    "restartWarning": {
+      "title": "Redémarrer le moteur ?",
+      "stop_one": "{{count}} session en cours s'arrête. Elle pourra être reprise après le redémarrage.",
+      "stop_many": "{{count}} sessions en cours s'arrêtent. Chacune pourra être reprise après le redémarrage.",
+      "stop_other": "{{count}} sessions en cours s'arrêtent. Chacune pourra être reprise après le redémarrage.",
+      "unknown": "Toutes les sessions en cours s'arrêtent. Chacune pourra être reprise après le redémarrage.",
+      "confirm": "Redémarrer et appliquer"
+    },
     "pending_one": "{{count}} changement attend Appliquer.",
     "pending_many": "{{count}} changements attendent Appliquer.",
     "pending_other": "{{count}} changements attendent Appliquer.",
@@ -188,6 +197,8 @@
       "sourcescope": "Quelles sources les agents peuvent lire.",
       "voice": "Agents vocaux et appels."
     },
+    "noChanges": "Aucune modification à appliquer. Activez ou désactivez d’abord un module.",
+    "saving": "Enregistrement de la sélection des modules…",
     "applyNone": "Appliquer",
     "whenOffDefault": "Ses données sont conservées, mais rien ne les utilise tant que le module est désactivé.",
     "whenOff": {
@@ -207,7 +218,13 @@
       "claude-policy": "Les réglages Claude Code gérés ne sont plus vérifiés."
     },
     "turnOn": "Activer {{name}}",
-    "activatedBy": "Activé par {{addons}}. Il reste actif tant que ce module complémentaire est actif."
+    "activatedBy": "Activé par {{addons}}. Il reste actif tant que ce module complémentaire est actif.",
+    "turnOnPlain": "Activer",
+    "alsoTurnsOn": "L’activer active aussi {{names}} et redémarre le moteur.",
+    "openEdition": "Ouvrir Édition et modules",
+    "askAdmin": "Demandez à un administrateur de l’activer.",
+    "notSetUp": "Il n’est pas encore configuré sur cette installation.",
+    "stillRestarting": "Redémarrage toujours en cours. Rechargez la page."
   },
   "signing": {
     "title": "Signature des rapports",
@@ -236,5 +253,38 @@
     "turnOn": "Activer la signature",
     "turnOff": "Désactiver la signature",
     "offKeepsKey": "La désactiver conserve la clé : les paquets signés auparavant restent vérifiables."
+  },
+  "tracing": {
+    "description": "Exportez les traces et métriques vers votre collecteur. Les changements sont appliqués sans redémarrage.",
+    "enabled": "Activer les traces",
+    "endpoint": "Adresse du collecteur",
+    "protocol": "Protocole",
+    "insecure": "Autoriser le texte en clair sur un réseau de confiance",
+    "sampleRatio": "Taux d’échantillonnage (0–1)",
+    "serviceName": "Nom du service",
+    "compat": "Inclure les anciens attributs GenAI",
+    "overrides": "Variables d’environnement prioritaires : {{names}}",
+    "active": "Les traces sont activées.",
+    "inactive": "Les traces sont désactivées.",
+    "apply": "Appliquer",
+    "saved": "Paramètres des traces enregistrés.",
+    "businessRequired": "L’envoi SIEM et l’export externe de télémétrie nécessitent Business. Les paramètres sont conservés ; Community n’envoie pas les données."
+  },
+  "signIn": {
+    "methods": "Méthodes de connexion",
+    "password": "Mot de passe",
+    "sso": "Authentification unique : {{providers}}",
+    "noSso": "Aucun fournisseur d’authentification unique n’est disponible sur la page de connexion.",
+    "manageSso": "Gérer les fournisseurs d’identité",
+    "session": "Durée de session",
+    "sessionHint": "Le moteur fixe cette durée à la connexion et la renouvelle lors de l’actualisation de la session. Elle n’est pas configurable.",
+    "passwordAvailable": "La connexion locale par mot de passe est disponible.",
+    "passwordBlocked": "L’authentification unique est obligatoire. La connexion locale par mot de passe est bloquée.",
+    "ssoNotEnforced": "L’authentification unique est demandée, mais cette version n’applique pas cette politique. Vérifiez les paramètres du fournisseur d’identité avant de vous déconnecter.",
+    "passwordManaged": "L’administrateur de votre organisation gère la connexion par mot de passe.",
+    "hours_one": "{{count}} heure",
+    "hours_many": "{{count}} heures",
+    "hours_other": "{{count}} heures",
+    "ssoInactive": "L’authentification unique est demandée, mais son fournisseur d’identité est inactif. Cette exigence ne bloque pas la connexion par mot de passe."
   }
 }

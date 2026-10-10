@@ -69,16 +69,18 @@ Docker API (привилегия, которую движок намеренно
 
 Закрепите движок по digest и сначала проверьте его:
 
+<!-- release -->
 ```sh
 # verify the engine image you run (it is cosign-signed)
-cosign verify docker.io/olivaresai/olivares:26.10.1 \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+cosign verify docker.io/olivaresai/olivares:0.1 \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 
 export OLIVARES_IMAGE=docker.io/olivaresai/olivares@sha256:<digest>
 export OLIVARES_BIND=127.0.0.1
 docker compose -f deploy/compose/docker-compose.yml up -d
 ```
+<!-- /release -->
 
 ### Установка и вход в Claude Code
 
@@ -99,11 +101,37 @@ olivares tool login claude
 Движок и `claude` на хосте; systemd запускает движок, который дирижирует `claude`. Рабочая
 область располагается в `/var/lib/olivares/workspaces`.
 
-### Одна команда
+### Скачать, проверить, затем запустить
 
+Не передавайте установщик в оболочку через конвейер. Проверьте подписанный список
+контрольных сумм релиза, извлеките ровно тот коммит, который в нём указан, и запустите
+установщик из этой копии. Тогда `install.sh` и файлы упаковки берутся из копии, а не из
+ветки. Блок выполняется в подоболочке с `set -eu`: он останавливается на первом неудачном
+шаге и не запускает установщик после неудачной проверки.
+
+<!-- release -->
 ```sh
-curl -fsSL https://raw.githubusercontent.com/olivaresai/olivares/main/scripts/install-agentops.sh | sh
+(
+set -eu
+cd "$(mktemp -d)"
+ver=0.1
+base=https://github.com/olivaresai/olivares/releases/download/$ver
+curl -fsSLO $base/checksums.txt
+curl -fsSLO $base/checksums.txt.sig
+curl -fsSLO $base/checksums.txt.pem
+curl -fsSLO $base/release-commit.txt
+cosign verify-blob \
+  --certificate checksums.txt.pem --signature checksums.txt.sig \
+  --certificate-identity "https://github.com/olivaresai/olivares/.github/workflows/release.yml@refs/tags/$ver" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  checksums.txt
+grep ' release-commit.txt$' checksums.txt | sha256sum --check
+git clone https://github.com/olivaresai/olivares.git
+cd olivares && git checkout --detach "$(cat ../release-commit.txt)"
+OLIVARES_TOPOLOGY=native OLIVARES_VERSION=$ver sh scripts/install-agentops.sh
+)
 ```
+<!-- /release -->
 
 Скрипт автоматически определяет нативную топологию, устанавливает **проверенный** бинарник движка
 (защищённый cosign `install.sh`), устанавливает `claude` из подписанного репозитория apt/dnf/apk (с
@@ -115,11 +143,13 @@ systemd + пример env. Он **не** запускает автоматич�
 ### Что настраивает установщик (и почему)
 
 - `packaging/systemd/olivares.service.d/agentops.conf` — drop-in, который даёт дирижируемому
-  `claude` записываемый `HOME` для `~/.claude` (держится под `/var/lib/olivares`,
-  так что `ProtectHome=true` всё ещё защищает реальных пользователей), гарантирует существование
-  каталога рабочей области и снимает ровно **одно** свойство песочницы:
-  `MemoryDenyWriteExecute` (среда выполнения `claude` JIT-компилирует и нуждается в памяти W→X).
-  Каждая другая директива укрепления из базового юнита остаётся в силе.
+  `claude` записываемый `HOME` для `~/.claude` (держится под `/var/lib/olivares`), гарантирует
+  существование каталога рабочей области и повторяет политику файловой системы базового юнита:
+  `ProtectSystem=full`, `ProtectHome=false`, `PrivateTmp=false` и
+  `MemoryDenyWriteExecute=false` (среда выполнения `claude` JIT-компилирует и нуждается в памяти W→X).
+  Домашние каталоги и `/tmp` остаются видимыми для движка, чтобы выбранные папки были доступны;
+  `claude` каждой сессии и его stdio-серверы MCP вместо этого работают под изоляцией Landlock
+  продукта на уровне папки. Каждая другая директива укрепления из базового юнита остаётся в силе.
 - `/etc/olivares/agentops.env` — конфигурация среды выполнения сессий (файл токена, TTL,
   опциональный базовый URL шлюза, опциональный путь к собственному `claude`).
 
@@ -229,8 +259,9 @@ olivares agent session stop   <run-ref>
   публикация портов хоста определяет доступность. Нативные/systemd слушатели тоже
   по умолчанию используют все интерфейсы; настройте их адреса для ограничения доступа.
 - **Не от root, минимальные привилегии.** uid/gid 65532, корневая ФС только для чтения, `cap_drop:
-  ALL`, `no-new-privileges` (Docker) / полный набор `Protect*`/`Restrict*` минус единственное
-  документированное послабление W^X (systemd).
+  ALL`, `no-new-privileges` (Docker) / директивы ядра и пространств имён `Protect*`/`Restrict*`;
+  домашние каталоги и `/tmp` остаются видимыми, W^X разрешён, а каждая сессия изолирована в
+  своей папке через Landlock (systemd).
 - **Минимум данных, env с allowlist.** Дочерний `claude` наследует только явный
   allowlist (PATH, HOME, локаль…) плюс токен вывода в памяти — **никаких** ключей подписи `OLIVARES_*`,
   **никаких** окружающих `ANTHROPIC_*`/`CLAUDE_CODE_*`, которые могли бы затенить созданный

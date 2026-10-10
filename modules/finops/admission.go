@@ -124,7 +124,7 @@ type AdmissionRequest struct {
 	// Groups are directory group ids for spend-limit resolution.
 	Groups []string
 	// EstimateMicroUSD is the amount to hold. Zero HOLDS NOTHING: every enforcing
-	// target is still evaluated, and a cap already past its limit still refuses, but no
+	// target is still evaluated, and a cap spent to or past its limit refuses, but no
 	// ledger row is inserted and no handle is issued, so an admission of zero is
 	// evaluated afresh on every call instead of being replayed.
 	EstimateMicroUSD int64
@@ -277,7 +277,7 @@ func (m *Module) reserveOnce(ctx context.Context, tenant model.TenantID, req Adm
 	// check reads them; the create evaluates them all under the writer lock at one
 	// instant, so both components of the hold expire together.
 	now := m.clock.Now().Time()
-	budgets, truncated, err := m.budgetTargets(ctx, tenant, req.Dims, now)
+	budgets, truncated, err := m.budgetTargets(ctx, tenant, req.Dims, req.ActorRef, now)
 	if err != nil {
 		return m.giveUp(ctx, tenant, req, tok, h, err)
 	}

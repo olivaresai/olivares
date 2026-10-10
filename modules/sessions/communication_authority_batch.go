@@ -145,9 +145,8 @@ func (m *Module) bindCurrentCommunicationIdentity(
 			communicationIdentityDeadlineMissing,
 		)
 	}
-	sources := m.communicationAuthoritySources
-	if sources == nil || !communicationPortBound(sources.resolver) ||
-		!communicationPortBound(sources.source) {
+	sources := m.CommunicationAuthority
+	if !sources.bound() {
 		return communicationIdentityBinding{}, newCommunicationIdentityError(
 			communicationIdentitySourcesUnavailable,
 		)

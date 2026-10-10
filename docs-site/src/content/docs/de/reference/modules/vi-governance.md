@@ -116,3 +116,7 @@ eine typisierte Principal-Referenz, niemals eine E-Mail.
   auf die dieses Modul aufkomponiert.
 - [Ehrlichkeit & Grenzen](/de/start/honesty-and-limits/) — die Deny-closed-, Detective-
   by-default-Haltung.
+
+## Editionen und Genehmigungen (0.1)
+
+Community behält die Genehmigungsengine, mindestens zwei verschiedene Personen für CRITICAL-Aktionen, die doppelte Kontrolle des Kill-Switch und Richtlinien, die eine Prüfung verlangen oder Risikostufe beziehungsweise Quorum erhöhen. Richtlinien zur Senkung der Risikostufe und der Notfallzugriff per Break-glass gehören zur Business-Basis. Gespeicherte Daten bleiben lesbar und exportierbar, dürfen aber weder Community-Standardwerte senken noch Notfallzugriffe erlauben.

@@ -10,9 +10,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -53,20 +55,33 @@ func (m *Module) runtimeRoutes(reg api.RouteRegistrar) {
 	// What the session changed in its folder (run_changes.go): read-only, nothing executed.
 	reg.HandleEntity("GET", "/runs/{ref}/changes", permRunRead, runEntity, m.handleRunChanges)
 	reg.HandleEntity("GET", "/runs/{ref}/changes/file", permRunRead, runEntity, m.handleRunChangedFile)
-	// A caller who can read this run may learn that an action is forbidden.
-	// Other workspaces and absent runs retain the same concealed 404.
+	reg.HandleEntity("GET", "/runs/{ref}/git", permRunRead, runEntity, m.handleRunGit)
+	// What the branch of the session's own worktree holds against where it began
+	// (run_worktree_diff.go): committed objects only, plumbing git, read-only.
+	reg.HandleEntity("GET", "/runs/{ref}/diff", permRunRead, runEntity, m.handleRunWorktreeDiff)
+	reg.HandleEntity("GET", "/runs/{ref}/diff/file", permRunRead, runEntity, m.handleRunWorktreeDiffFile)
+	// The ports the session's own processes listen on (preview.go).
+	reg.HandleEntity("GET", "/runs/{ref}/preview", permRunRead, runEntity, m.handleRunPreviewPorts)
+	// Readers may learn a denied action as 403. Foreign, unreadable and absent
+	// runs retain the same concealed 404.
 	runEntity.DeniedReadPermission = permRunRead
+	reg.HandleEntity("POST", "/runs/{ref}/git/stage", permRunWrite, runEntity, m.handleRunGit)
+	reg.HandleEntity("POST", "/runs/{ref}/git/unstage", permRunWrite, runEntity, m.handleRunGit)
+	reg.HandleEntity("POST", "/runs/{ref}/git/commit", permRunWrite, runEntity, m.handleRunGit)
+	reg.HandleEntity("POST", "/runs/{ref}/git/branch", permRunWrite, runEntity, m.handleRunGit)
 	reg.HandleEntity("POST", "/runs/{ref}/input", permRunWrite, runEntity, m.handleRunInput)
 	reg.HandleEntity("POST", "/runs/{ref}/interrupt", permRunWrite, runEntity, m.handleInterruptRun)
 	reg.HandleEntity("POST", "/runs/{ref}/stop", permRunWrite, runEntity, m.handleStopRun)
 	reg.HandleEntity("POST", "/runs/{ref}/resume", permRunWrite, runEntity, m.handleResumeRun)
 	reg.HandleEntity("PUT", "/runs/{ref}/peers", permRunWrite, runEntity, m.handleSetRunPeers)
+	// A browser preview sends the person's requests into the session's app.
+	reg.HandleEntity("POST", "/runs/{ref}/preview", permRunWrite, runEntity, m.handleOpenRunPreview)
 	reg.HandleEntity("POST", "/runs/{ref}/cleanup", permRunAdmin, runEntity, m.handleCleanupRun)
 	reg.HandleEntity("DELETE", "/runs/{ref}", permRunAdmin, runEntity, m.handleDeleteRun)
 }
 
 func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	if m.data == nil {
+	if m.Data == nil {
 		writeJSON(w, http.StatusServiceUnavailable, errorBody("runtime not available"))
 		return
 	}
@@ -74,13 +89,10 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 	if !decodeJSONBody(w, r, &body) {
 		return
 	}
-	// B1: the productive endpoint refuses a profiled launch until B2 has closed every
-	// read surface (list/detail/timeline/SSE/export) over profile-scoped rows. A
-	// backend switch, deliberately — not a hidden option and not a frontend flag —
-	// because a session launched under a profile that some reader still resolves by
-	// bare external id would be a session the plane cannot describe truthfully.
-	if body.ProviderProfileRef != "" && !m.rt.profiledLaunchesEnabled {
-		writeJSON(w, http.StatusUnprocessableEntity, errorBody("provider_profile_ref is not accepted on this deployment: profiled launches are not enabled until every session reader understands profile-scoped rows"))
+	// Refuse a known runner mismatch before resolving (and possibly creating) the
+	// default profile. In-process launches repeat this check in createRunInternal.
+	if err := m.refuseUnsupportedIsolation(r.Context(), Isolation(body.Isolation)); err != nil {
+		writeRunErr(w, err)
 		return
 	}
 	// "The default works" (NEXT-COMMON): a launch that names no profile runs under the
@@ -88,7 +100,7 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 	// start` and the console's first session do (provider_profile_resolve.go). Resolving
 	// may create that profile, so it needs the caller's profile write; without it the
 	// refusal below stands.
-	if body.ProviderProfileRef == "" && m.rt.profiledLaunchesEnabled && m.mayWriteProfiles(r.Context(), mc) {
+	if body.ProviderProfileRef == "" && m.mayWriteProfiles(r.Context(), mc) {
 		got, err := m.ResolveProfile(r.Context(), mc.Tenant, providerDriverClaude)
 		if err != nil {
 			writeRunErr(w, err)
@@ -105,10 +117,13 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 		Effort:           body.Effort,
 		Model:            body.Model,
 		WorkspaceRef:     body.WorkspaceRef,
+		Worktree:         body.Worktree,
+		WorktreeFrom:     body.WorktreeFrom,
 		TemplateID:       body.TemplateID,
 		Isolation:        Isolation(body.Isolation),
 		EnvAllow:         body.EnvAllow,
 		SecretEnv:        body.SecretEnv,
+		GitRead:          body.GitRead,
 		// The profile is a REFERENCE; its homes are resolved and validated on the
 		// server. The DTO has no field for a home, an environment or a snapshot.
 		ProviderProfileRef: body.ProviderProfileRef,
@@ -116,9 +131,9 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 		ActorKind:          mc.Principal.ActorKind(),
 		// Server-set from the AUTHENTICATED identity, never from the body: the DTO
 		// has no agent_ref field and must not grow one (confused-deputy).
-		AgentRef:           mc.Principal.AgentIdentity,
-		MayRunUnrestricted: m.mayRunUnrestricted(r.Context(), mc),
-		MayUseSecretEnv:    m.mayUseSecretEnv(r.Context(), mc),
+		AgentRef: mc.Principal.AgentIdentity,
+		// Asked after the template merge, only if the effective terms need them.
+		asks: m.callerQuestions(r.Context(), mc),
 	})
 	if err != nil {
 		writeRunErr(w, err)
@@ -135,38 +150,42 @@ func (m *Module) handleCreateRun(w http.ResponseWriter, r *http.Request, mc api.
 // mayWriteProfiles reports whether the authenticated caller may create provider
 // profiles in this tenant. No authorizer wired is a no.
 func (m *Module) mayWriteProfiles(ctx context.Context, mc api.ModuleContext) bool {
-	if m.workAuthz == nil {
+	if m.WorkAuthorizer == nil {
 		return false
 	}
-	return m.workAuthz.Authorize(ctx, auth.Request{
+	return m.WorkAuthorizer.Authorize(ctx, auth.Request{
 		Principal: mc.Principal, Tenant: mc.Tenant,
 		Permission: permProfileWrite, Resource: auth.ResourceFor(permProfileWrite),
 	}).Allow
 }
 
-// mayRunUnrestricted reports whether the authenticated caller administers runs
-// in this tenant: the one who may choose the "full" preset. No authorizer wired
-// is a no.
-func (m *Module) mayRunUnrestricted(ctx context.Context, mc api.ModuleContext) bool {
-	if m.workAuthz == nil {
-		return false
+// callerQuestions are the authenticated caller's two launch questions, each asked
+// at most once, and only when a launch or resume asks it (CreateRunParams.asks).
+func (m *Module) callerQuestions(ctx context.Context, mc api.ModuleContext) callerAsks {
+	return callerAsks{
+		runUnrestricted: sync.OnceValue(func() bool { return m.mayRunUnrestricted(ctx, mc) }),
+		secretEnv:       sync.OnceValue(func() bool { return m.mayUseSecretEnv(ctx, mc) }),
 	}
-	return m.workAuthz.Authorize(ctx, auth.Request{
-		Principal: mc.Principal, Tenant: mc.Tenant,
-		Permission: permRunAdmin, Resource: auth.ResourceFor(permRunAdmin),
-	}).Allow
 }
 
-// principalMayRunUnrestricted asks a restored queued launcher, as it is now, for
-// run administration, and not confined to one workspace (Root on FH 048).
+// mayRunUnrestricted reports whether the authenticated caller may choose the
+// "full" preset: run administration in this tenant, and not confined to one
+// workspace. No authorizer wired is a no.
+func (m *Module) mayRunUnrestricted(ctx context.Context, mc api.ModuleContext) bool {
+	return m.principalMayRunUnrestricted(ctx, mc.Tenant, mc.Principal)
+}
+
+// principalMayRunUnrestricted is that one question for any principal: the caller of
+// a launch or resume, or the launcher of a queued launch as it is restored, CURRENT,
+// when its approval arrives (Root on FH 048).
 func (m *Module) principalMayRunUnrestricted(ctx context.Context, tenant model.TenantID, p auth.Principal) bool {
-	if m.workAuthz == nil {
+	if m.WorkAuthorizer == nil {
 		return false
 	}
 	if _, confined := p.ConfinedWorkspaceIn(tenant); confined {
 		return false
 	}
-	return m.workAuthz.Authorize(ctx, auth.Request{
+	return m.WorkAuthorizer.Authorize(ctx, auth.Request{
 		Principal: p, Tenant: tenant,
 		Permission: permRunAdmin, Resource: auth.ResourceFor(permRunAdmin),
 	}).Allow
@@ -184,14 +203,14 @@ func (m *Module) mayUseSecretEnv(ctx context.Context, mc api.ModuleContext) bool
 // launch or resume, or the launcher of a queued launch as it is restored, CURRENT,
 // when its approval arrives (SR2 on 834b0c8c).
 func (m *Module) principalMayUseSecretEnv(ctx context.Context, tenant model.TenantID, p auth.Principal) bool {
-	if m.workAuthz == nil {
+	if m.WorkAuthorizer == nil {
 		return false
 	}
 	if _, confined := p.ConfinedWorkspaceIn(tenant); confined {
 		return false
 	}
 	const tenantAdmin = auth.Permission("tenant:admin")
-	return m.workAuthz.Authorize(ctx, auth.Request{
+	return m.WorkAuthorizer.Authorize(ctx, auth.Request{
 		Principal: p, Tenant: tenant,
 		Permission: tenantAdmin, Resource: auth.ResourceFor(tenantAdmin),
 	}).Allow
@@ -199,8 +218,10 @@ func (m *Module) principalMayUseSecretEnv(ctx context.Context, tenant model.Tena
 
 func (m *Module) handleListRuns(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	q := listQuery(r)
-	q.Cursor = ""
-	q.Sort = []model.Sort{{Column: model.ColCreatedAt, Desc: true}}
+	if r.URL.Query().Get("pagination") != "cursor" {
+		q.Cursor = ""
+		q.Sort = []model.Sort{{Column: model.ColCreatedAt, Desc: true}}
+	}
 	stateFilter := r.URL.Query().Get("state")
 	// which runs DRIVE a given observed session — the answer to "did we launch
 	// this, or did we only find it?". The join key is the provider's session id: a
@@ -282,6 +303,7 @@ func (m *Module) handleListRuns(w http.ResponseWriter, r *http.Request, mc api.M
 			out.Items = append(out.Items, dto)
 		}
 		out.HasMore = page.HasMore
+		out.Cursor = page.Cursor
 		return nil
 	})
 	if err != nil {
@@ -488,15 +510,17 @@ func (m *Module) handleStopRun(w http.ResponseWriter, r *http.Request, mc api.Mo
 
 func (m *Module) handleResumeRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	ref := chi.URLParam(r, "ref")
-	// A "full" session is resumed only by a run administrator, as it is started.
-	if rec, err := m.loadRun(r.Context(), mc.Tenant, ref); err == nil {
-		if err := refuseUnrestrictedFor(rec.String(colPermissionMode), m.mayRunUnrestricted(r.Context(), mc)); err != nil {
+	asks := m.callerQuestions(r.Context(), mc)
+	// A "full" session is resumed only by a run administrator, as it is started: refused
+	// here, before any side effect of the resume, when its stored mode is full. The
+	// resume judges the effective mode again after today's template.
+	if rec, err := m.loadRun(r.Context(), mc.Tenant, ref); err == nil && strings.TrimSpace(rec.String(colPermissionMode)) == permModeBypass {
+		if err := refuseUnrestrictedFor(permModeBypass, asks.runUnrestricted()); err != nil {
 			writeRunErr(w, err)
 			return
 		}
 	}
-	dto, err := m.resumeRunAsCaller(r.Context(), mc.Tenant, ref, mc.Principal.Actor(), mc.Principal.ActorKind(), mc.Principal.AgentIdentity,
-		m.mayRunUnrestricted(r.Context(), mc), m.mayUseSecretEnv(r.Context(), mc))
+	dto, err := m.resumeRunAsCaller(r.Context(), mc.Tenant, ref, mc.Principal.Actor(), mc.Principal.ActorKind(), mc.Principal.AgentIdentity, asks)
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -505,7 +529,16 @@ func (m *Module) handleResumeRun(w http.ResponseWriter, r *http.Request, mc api.
 }
 
 func (m *Module) handleCleanupRun(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
-	dto, err := m.cleanupRun(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), mc.Principal.Actor(), mc.Principal.ActorKind())
+	// The body is optional and as forgiving as the endpoint always was: the route has
+	// taken any body and ignored it, so a body that does not parse, or carries other
+	// fields, is simply no confirmation. Only an explicit discard_worktree: true is one.
+	var body cleanupRunRequest
+	if r.Body != nil && r.ContentLength != 0 {
+		raw, _ := io.ReadAll(io.LimitReader(r.Body, 1<<20))
+		_ = json.Unmarshal(raw, &body)
+	}
+	dto, err := m.cleanupRunWith(r.Context(), mc.Tenant, chi.URLParam(r, "ref"), mc.Principal.Actor(), mc.Principal.ActorKind(),
+		cleanupOptions{DiscardWorktree: body.DiscardWorktree})
 	if err != nil {
 		writeRunErr(w, err)
 		return
@@ -522,7 +555,9 @@ func (m *Module) handleDeleteRun(w http.ResponseWriter, r *http.Request, mc api.
 }
 
 // handleAttachRun streams a live session's bridged I/O as server-sent events,
-// replaying from an optional ?from=<seq> cursor. It reuses the observe overlay's
+// replaying from an optional ?from=<seq> cursor. Native stored conversation
+// retrieval is opt-in (?history=1 at cursor zero), so legacy clients receive
+// ring replay immediately. It reuses the observe overlay's
 // SSE plumbing (per-frame write deadline + heartbeat) but reads from the
 // sequenced ring (lossless within retention, with an explicit gap marker) — NOT
 // the lossy observe broker.
@@ -549,6 +584,17 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 		return
 	}
 
+	cursor := parseFromSeq(r)
+	if cursor == 0 && r.URL.Query().Get("history") == "1" {
+		line, historyErr := m.conversationHistory(r.Context(), mc.Tenant, rec)
+		if historyErr != nil {
+			lineBytes, _ := json.Marshal(map[string]string{"type": "olivares_notice", "message": historyErr.Error()})
+			line = string(lineBytes)
+		}
+		if line != "" && writeSSE(rc, w, "history", map[string]string{"line": line}) != nil {
+			return
+		}
+	}
 	lr, live := m.rt.getLive(mc.Tenant, ref)
 	if !live {
 		_ = writeSSE(rc, w, "notice", attachNotice{
@@ -569,7 +615,6 @@ func (m *Module) handleAttachRun(w http.ResponseWriter, r *http.Request, mc api.
 		return
 	}
 
-	cursor := parseFromSeq(r)
 	ticker := time.NewTicker(heartbeatInterval)
 	defer ticker.Stop()
 	ctx := r.Context()

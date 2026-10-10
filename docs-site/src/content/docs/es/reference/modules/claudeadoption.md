@@ -7,7 +7,7 @@ description: >-
   Frontera solo Claude API; nunca transporta coste.
 ---
 
-La adopción de Claude Code (`modules/claudeadoption`) es uno de los 31 módulos. Es un
+La adopción de Claude Code (`modules/claudeadoption`) es uno de los 32 módulos. Es un
 **read-model puro de cuánto se usa Claude Code y cuánto de lo que propone conservan
 los desarrolladores** — la pregunta de adopción/ROI que se hace un estate centrado en
 Claude, servida junto a la superficie de coste de [FinOps](/es/reference/modules/xi-finops/)
@@ -74,5 +74,5 @@ organización puede acotarlo aún más mediante roles a medida.
   autoritativa junto a la que se sitúa este módulo.
 - [Referencia de eventos](/es/reference/events/) — la señal `metric.sampled` que
   consume.
-- [Catálogo de módulos](/es/reference/modules/overview/) — los 31 módulos y su
+- [Catálogo de módulos](/es/reference/modules/overview/) — los 32 módulos y su
   madurez honesta.

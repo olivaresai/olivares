@@ -256,7 +256,12 @@ describe('TenantGate — zero organizations', () => {
             }
           : { items: [], has_more: false }
       },
-      '/v1/m/finops/spend/summary': { total_micro_usd: 0, truncated: false },
+      '/v1/m/inventory/summary': {
+        by_kind: {},
+        by_source: {},
+        total: 0,
+        truncated: false,
+      },
     })
 
     renderShell()
@@ -283,9 +288,7 @@ describe('TenantGate — zero organizations', () => {
       expect(useTenantStore.getState().activeTenant).toBe(TENANT_ID),
     )
     await waitFor(() =>
-      expect(wire.tenantHeader.get('/v1/m/finops/spend/summary')).toBe(
-        TENANT_ID,
-      ),
+      expect(wire.tenantHeader.get('/v1/m/inventory/summary')).toBe(TENANT_ID),
     )
   })
 
@@ -349,7 +352,12 @@ describe('TenantGate — an organization exists', () => {
     const wire = stubWire({
       '/v1/auth/whoami': superadminNoGrants,
       '/v1/system/orgs': { items: [orgFixture()], has_more: false },
-      '/v1/m/finops/spend/summary': { total_micro_usd: 0, truncated: false },
+      '/v1/m/inventory/summary': {
+        by_kind: {},
+        by_source: {},
+        total: 0,
+        truncated: false,
+      },
     })
 
     renderShell()
@@ -357,9 +365,7 @@ describe('TenantGate — an organization exists', () => {
     // NEGATIVE CONTROL: the front door's reads DO happen once a tenant exists —
     // the gate holds requests back, it does not delete them.
     await waitFor(() =>
-      expect(wire.tenantHeader.get('/v1/m/finops/spend/summary')).toBe(
-        TENANT_ID,
-      ),
+      expect(wire.tenantHeader.get('/v1/m/inventory/summary')).toBe(TENANT_ID),
     )
     expect(useTenantStore.getState().activeTenant).toBe(TENANT_ID)
   })
@@ -381,7 +387,12 @@ describe('TenantGate — an organization exists', () => {
         ],
         has_more: false,
       },
-      '/v1/m/finops/spend/summary': { total_micro_usd: 0, truncated: false },
+      '/v1/m/inventory/summary': {
+        by_kind: {},
+        by_source: {},
+        total: 0,
+        truncated: false,
+      },
     })
 
     renderShell()
@@ -401,7 +412,7 @@ describe('TenantGate — an organization exists', () => {
     await user.click(screen.getByRole('button', { name: /globex/i }))
 
     await waitFor(() =>
-      expect(wire.tenantHeader.get('/v1/m/finops/spend/summary')).toBe(second),
+      expect(wire.tenantHeader.get('/v1/m/inventory/summary')).toBe(second),
     )
   })
 })

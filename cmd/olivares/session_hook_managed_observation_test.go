@@ -19,7 +19,9 @@ import (
 	"github.com/olivaresai/olivares/core/eventbus"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/runtime"
+	"github.com/olivaresai/olivares/core/store"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 	"github.com/olivaresai/olivares/sdk/event"
 	sdkmodel "github.com/olivaresai/olivares/sdk/model"
 )
@@ -39,16 +41,15 @@ func TestSessionClaudeHookUpdatesOnlyManagedLiveRow(t *testing.T) {
 	h := newHarness(t)
 	m := h.set.sessions
 	sessions.WithRunner(approvalProjectionRunner{})(m)
-	m.EnableProfiledLaunches()
 	m.UseExecutionEnvironmentRef("managed-observation-test")
 	credentials := newSessionHookCredentials(h.authr, h.st, m, h.set.gov)
 	var token, folder string
-	m.UseLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
+	sessions.WithLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, intent sessions.LaunchIntent) (sessions.LaunchDecision, error) {
 		var err error
 		folder = intent.FolderPath
 		token, err = credentials.mint(ctx, tenant, intent)
 		return sessions.LaunchDecision{Allowed: err == nil}, err
-	}))
+	}))(m)
 	var profile struct {
 		Ref string `json:"profile_ref"`
 	}
@@ -75,7 +76,7 @@ func TestSessionClaudeHookUpdatesOnlyManagedLiveRow(t *testing.T) {
 			time.Sleep(time.Millisecond * 10)
 		}
 	}
-	d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow"}, authr: credentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), store: h.st, clock: time.Now, log: discardLog(), bus: hookProjectionBus{rt: h.rt}, sessionObservation: m.RecordSessionObservation}
+	d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Store: h.st, Clock: time.Now, Log: discardLog(), Bus: hookProjectionBus{rt: h.rt}, SessionObservation: m.RecordSessionObservation})
 	body, _ := json.Marshal(map[string]any{"hook_event_name": "PreToolUse", "tool_name": "Read", "tool_input": map[string]any{"file_path": filepath.Join(folder, "source.txt")}})
 	req := httptest.NewRequest(http.MethodPost, "/", bytes.NewReader(body))
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -111,7 +112,7 @@ func TestSessionClaudeHookUpdatesOnlyManagedLiveRow(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cost := sdkmodel.CostSample{SessionRef: run.Ref, ProviderRef: "anthropic", ModelRef: "managed-projection-test", InputTokens: 7, OutputTokens: 3, CostMicroUSD: 17, Gateway: sdkmodel.GatewayDirect, Provenance: sdkmodel.ProvenanceEstimated, OccurredAt: time.Now().UTC()}
+	cost := sdkmodel.CostSample{Labels: map[string]string{"olivares.core_session_id": model.NewID().String()}, SessionRef: run.Ref, ProviderRef: "anthropic", ModelRef: "managed-projection-test", InputTokens: 7, OutputTokens: 3, CostMicroUSD: 17, Gateway: sdkmodel.GatewayDirect, Provenance: sdkmodel.ProvenanceEstimated, OccurredAt: time.Now().UTC()}
 	if err := m.RecordSessionObservation(t.Context(), principal, cost); err != nil {
 		t.Fatal(err)
 	}
@@ -178,6 +179,50 @@ func TestSessionClaudeHookUpdatesOnlyManagedLiveRow(t *testing.T) {
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
+	assertAttemptCost := func(wantRows int) string {
+		t.Helper()
+		var dto struct {
+			CoreSessionID string `json:"core_session_id"`
+		}
+		if code := h.reqInto(http.MethodGet, "/v1/m/sessions/runs/"+run.Ref, h.adminToken, h.tenantA, nil, &dto); code != http.StatusOK || dto.CoreSessionID == "" {
+			t.Fatalf("managed core session: code=%d id=%q", code, dto.CoreSessionID)
+		}
+		deadline := time.Now().Add(3 * time.Second)
+		for {
+			var costs []model.CostRecord
+			err := h.st.View(t.Context(), model.TenantID(h.tenantA), func(sc store.Scope) error {
+				var err error
+				costs, _, err = sc.Costs().List(t.Context(), model.Query{Limit: 100})
+				return err
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			matching := 0
+			for _, row := range costs {
+				if row.InputTokens == 7 && row.OutputTokens == 3 && row.CostMicroUSD == 17 {
+					matching++
+					if row.SessionID.IsZero() {
+						t.Fatal("managed cost has no core Session attribution")
+					}
+				}
+			}
+			current := 0
+			for _, row := range costs {
+				if row.SessionID.String() == dto.CoreSessionID && row.CostMicroUSD == 17 {
+					current++
+				}
+			}
+			if matching == wantRows && current == 1 {
+				return dto.CoreSessionID
+			}
+			if time.Now().After(deadline) {
+				t.Fatalf("attempt ledger rows=%d want%d; current=%d", matching, wantRows, current)
+			}
+			time.Sleep(10 * time.Millisecond)
+		}
+	}
+	firstCore := assertAttemptCost(1)
 	human, err := h.authr.Authenticate(t.Context(), h.adminToken)
 	if err != nil {
 		t.Fatal(err)
@@ -215,5 +260,8 @@ func TestSessionClaudeHookUpdatesOnlyManagedLiveRow(t *testing.T) {
 		t.Fatal(err)
 	}
 	assertManaged(34, 3)
+	if second := assertAttemptCost(2); second == firstCore {
+		t.Fatal("resume reused its predecessor core Session")
+	}
 
 }

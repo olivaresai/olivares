@@ -17,7 +17,7 @@ import (
 // Dispatcher). The composition root injects real adapters; each seam defaults to a
 // SAFE, honest behavior so an un-wired deployment can execute a portable, isolated
 // run but can NEVER reach a real resource, silently score a pass, fabricate a
-// replay, or generate synthetic data (docs/contracts/§3.3).
+// replay (docs/contracts/§3.3). Synthetic generation is local template expansion.
 
 // ----------------------------------------------------------------------------
 // Runner — the ISOLATED, ephemeral execution backend.
@@ -207,38 +207,33 @@ func (coreHistorySource) Timeline(context.Context, model.TenantID, string) ([]Re
 }
 
 // ----------------------------------------------------------------------------
-// SyntheticDataGenerator — POST-v1 EXTENSION POINT, NOT IMPLEMENTED.
+// SyntheticDataGenerator — local, reproducible scenario inputs.
 // ----------------------------------------------------------------------------
 
-// GenSpec describes a synthetic-data generation request. It is part of the POST-v1
-// extension surface (README.md §2bis · §6); v1 ships no generator.
+// GenSpec describes synthetic input generation. The stock generator expands
+// {{index}} (one-based) and {{subject_kind}} in Seed without evaluating code.
 type GenSpec struct {
 	SubjectKind string
 	Count       int
 	Seed        string
 }
 
-// GenSample is one synthetic data sample. POST-v1.
+// GenSample is one synthetic data sample.
 type GenSample struct {
 	Key   string
 	Input string
 }
 
-// SyntheticDataGenerator is a POST-v1 EXTENSION POINT (README.md §2bis · §6): synthetic
-// / test-data generation is deliberately NOT implemented in v1. The interface is
-// declared so a future backend can be wired, but the module ships NO real generator,
-// there is NO WithSyntheticData option, and NO route generates data. The default
-// produces ZERO samples and an explicit error — verified by a test asserting the
-// absence.
+// SyntheticDataGenerator produces samples for the existing scenario step format.
+// The stock implementation is local template expansion, not model inference.
 type SyntheticDataGenerator interface {
 	Generate(ctx context.Context, tenant model.TenantID, spec GenSpec) ([]GenSample, error)
 }
 
-// errSyntheticDataPostV1 is the explicit refusal of the default generator.
+// errSyntheticDataPostV1 is the retained explicit refusal sentinel.
 var errSyntheticDataPostV1 = errors.New("synthetic-data generation is POST-v1 and not wired")
 
-// noSyntheticData is the default (and only) SyntheticDataGenerator: it generates
-// ZERO samples and returns errSyntheticDataPostV1. It is not wired into any flow.
+// noSyntheticData retains the explicit refusal for callers without a generator.
 type noSyntheticData struct{}
 
 func (noSyntheticData) Generate(context.Context, model.TenantID, GenSpec) ([]GenSample, error) {

@@ -40,21 +40,17 @@ func TestRuntimeRunReportsMCPGovernanceByDriver(t *testing.T) {
 			}
 			m := New(append(opts, WithSessionWorkspaceRoot(t.TempDir()))...)
 			m.UseExecutionEnvironmentRef(testEnvRef)
-			// The unprofiled fixture exercises the existing legacy runtime mode.
-			// Current profiled deployments correctly require a selected profile.
-			if driver != "" {
-				m.EnableProfiledLaunches()
-			}
 			h := newHarness(t, m)
 			admin := h.adminLogin()
 			tenant := h.createOrg(admin, "mcp-warning")
-			var prof ProviderProfile
-			if driver != "" {
-				prof = mustCreateProfile(t, m, tenant, CreateProfileInput{
-					Driver: driver, ConfigHome: t.TempDir(), UserHome: t.TempDir(),
-					DisplayName: driver + "-warning", AuthSource: AuthSourceAccountHome,
-				})
+			launchDriver := driver
+			if launchDriver == "" {
+				launchDriver = providerDriverClaude
 			}
+			prof := mustCreateProfile(t, m, tenant, CreateProfileInput{
+				Driver: launchDriver, ConfigHome: t.TempDir(), UserHome: t.TempDir(),
+				DisplayName: launchDriver + "-warning", AuthSource: AuthSourceAccountHome,
+			})
 			switch driver {
 			case providerDriverGrok:
 				setGrokFixture(t, prof, grokFixture{SessionID: "warning-grok"})
@@ -72,6 +68,17 @@ func TestRuntimeRunReportsMCPGovernanceByDriver(t *testing.T) {
 				t.Fatalf("driver launch = %d %s; must remain usable", created.code, created.raw)
 			}
 			t.Cleanup(func() { _, _ = m.stopRun(context.Background(), tenant, runRef, "user:u1", model.ActorUser) })
+			if driver == "" {
+				waitFor(t, "legacy fixture init", func() bool {
+					run, err := m.getRun(context.Background(), tenant, runRef)
+					return err == nil && run.ClaudeSessionID != ""
+				})
+				persistLegacyRunWithoutProfile(t, m, tenant, runRef)
+				created = h.do(http.MethodGet, "/v1/m/sessions/runs/"+runRef, admin, tenantHdr(tenant))
+				if created.code != http.StatusOK {
+					t.Fatalf("legacy fixture read = %d %s", created.code, created.raw)
+				}
+			}
 			assertWarning := func(body map[string]any) {
 				t.Helper()
 				if driver == providerDriverGrok || driver == providerDriverOpenCode {
@@ -104,6 +111,12 @@ func TestRuntimeRunReportsMCPGovernanceByDriver(t *testing.T) {
 				t.Fatalf("Stop = %d %s", stopped.code, stopped.raw)
 			}
 			resumed := h.do(http.MethodPost, runPath+"/resume", admin, tenantHdr(tenant))
+			if driver == "" {
+				if resumed.code != http.StatusConflict || launchCount(m.rt.Runner.(*fakeRunner)) != 1 {
+					t.Fatalf("unproven legacy resume = %d %s", resumed.code, resumed.raw)
+				}
+				return
+			}
 			if resumed.code != http.StatusOK {
 				t.Fatalf("resume = %d %s", resumed.code, resumed.raw)
 			}

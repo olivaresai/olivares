@@ -143,7 +143,7 @@ func TestEveryGovernedWriteIsClassified(t *testing.T) {
 				t.Errorf(`%s: %s writes governed kind(s) %s (via %s) but is not a declared classified writer.
 
 A row of these kinds decides who may reach a source, so a write that relaxes it is never one
-actor's call (ADR-0022 §5). Either route this write through a classifier and add it to
+actor's call. Either route this write through a classifier and add it to
 classifiedWriters, or — if it genuinely cannot relax enforcement — say so there with the
 reason, the way wsConnectorKind is excluded above.`,
 					shortPath(path), name, strings.Join(govKinds, ", "), strings.Join(writes, "/"))

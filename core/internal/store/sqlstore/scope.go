@@ -556,8 +556,8 @@ func (sc *tenantScope) Deployments() store.Repository[model.Deployment] {
 	return newTypedRepo(sc.repo(deploymentDescriptor), deploymentCodec)
 }
 
-func (sc *tenantScope) Workspaces() store.Repository[model.Workspace] {
-	inner := newTypedRepo(sc.repo(workspaceDescriptor), workspaceCodec)
+func (sc *tenantScope) Workspaces() store.WorkspaceRepo {
+	inner := newWorkspaceRepo(sc.repo(workspaceDescriptor))
 	return newStableWorkspaceRepo(inner, sc.directoryWriter, sc.readOnly, sc.initializeWorkspace)
 }
 func (sc *tenantScope) AgentGroups() store.Repository[model.AgentGroup] {

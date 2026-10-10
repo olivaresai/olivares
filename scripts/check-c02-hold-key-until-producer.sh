@@ -26,7 +26,7 @@ grep -q 'Overlay producer not on overlay main' "$DOC" \
 	|| fail "$DOC lost overlay-producer HOLD"
 grep -q 'half-stitch' "$DOC" || fail "$DOC lost half-stitch"
 if grep -qiE 'producer on overlay main|FIRMA A claimed|bytes are real' "$DOC"; then
-	fail "$DOC claims a close this lote does not have"
+	fail "$DOC claims a close this batch does not have"
 fi
 grep -q 'export function artifactKey(version: string, os: string, arch: string, set: string)' "$ART" \
 	|| fail "hub origin lost the four-argument set-keyed artifactKey"
@@ -54,13 +54,11 @@ if data.get("overlay_pr") != 75:
     raise SystemExit("overlay_pr must stay 75")
 if data.get("hub_pr") != 1125:
     raise SystemExit("hub_pr must stay 1125")
-# a repository gate / decisión r4 2026-08-29: la distancia se compara con LO MEDIDO EN EL ACTO, no con 0.
-# Pinear 0 codificaba «esta PR está al nivel de overlay main», cierto al escribirlo y falso en
-# cuanto el overlay avanza: los merges ent#126/#132/#133 lo movieron 36 commits y dejaron esta
-# aserción estática peleada con la comprobación VIVA de más abajo — ningún valor satisfacía a
-# las dos, así que el registro no se podía re-medir. La viva sigue siendo la que manda; aquí
-# sólo se exige que el campo EXISTA y sea un entero no negativo, y se re-mide en el mismo acto
-# que mueve el overlay (runbook §6-bis.7). `do_not_restack` se respeta: las PRs no se rebasan.
+# a repository gate / r4 decision, 2026-08-29: compare distance with the value measured during the act.
+# Pinning zero assumed this PR was level with overlay main; ent#126/#132/#133 moved it
+# 36 commits, contradicting the live check below and preventing remeasurement. The live
+# check remains authoritative. Require a present nonnegative integer here, then remeasure
+# when the overlay moves (runbook §6-bis.7). Honor `do_not_restack`: do not rebase the PRs.
 _behind = data.get("pr75_behind_overlay_main")
 if not isinstance(_behind, int) or isinstance(_behind, bool) or _behind < 0:
     raise SystemExit("PR 75 behind overlay main must be a non-negative integer, re-measured in the act")

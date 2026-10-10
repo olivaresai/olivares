@@ -112,8 +112,8 @@ func newOrchestrationFixtureInWorkspace(t *testing.T, capabilities []string, non
 		t.Fatal(err)
 	}
 	source := &orchestrationTestCredentials{m: m, a: auth.NewAuthenticator(h.st, nil), actor: actor}
-	m.UseWorkSessionCredentialSource(source)
-	m.UseOrchestrationWorkScopeSource(orchestrationTestScope{h})
+	m.WorkSessionCreds = source
+	m.OrchestrationScopes = orchestrationTestScope{h}
 	created := h.doJSON(http.MethodPost, "/v1/m/sessions/provider-profiles", admin, map[string]any{"driver": "claude", "config_home": t.TempDir(), "user_home": t.TempDir(), "session_work_grant": map[string]any{"role": "orchestrator", "workspace_id": workspace, "capabilities": capabilities}}, tenantHdr(tenant))
 	if created.code != http.StatusCreated {
 		t.Fatalf("profile = %d %s", created.code, created.raw)
@@ -172,7 +172,7 @@ func TestOrchestrationWorkDenyDefaultCapabilitiesRevocationAndFence(t *testing.T
 					t.Fatal(err)
 				}
 			case "missing composition":
-				f.h.m.UseOrchestrationWorkScopeSource(nil)
+				f.h.m.OrchestrationScopes = nil
 			}
 			r := f.h.do(http.MethodGet, "/v1/m/sessions/work-items", f.token, tenantHdr(f.tenant))
 			if r.code != http.StatusForbidden && r.code != http.StatusUnauthorized {

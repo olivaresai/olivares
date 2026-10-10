@@ -238,14 +238,14 @@ func TestCommunicationReadinessRequiresEveryConjunct(t *testing.T) {
 }
 
 func wireCommunicationReadiness(m *Module, stub *communicationReadinessStub, includePump bool) {
-	m.UseCommunicationSessionCredentialSource(stub)
-	m.UseCommunicationContentSealer(stub)
-	m.UseCommunicationDirectorySnapshotResolver(stub)
-	m.UseCommunicationPublicationAudienceAttestor(stub)
-	m.UseCommunicationChannelGrantSubjectClosureResolver(stub)
-	m.UseCommunicationCoreEntityReadAuthorizer(stub)
-	m.UseCommunicationCoreEntityOperationAuthorizer(stub)
-	m.UseCommunicationStoreReadinessWitness(stub)
+	m.CommunicationSessionCreds = stub
+	func() { m.CommunicationSealer = stub; m.normalize() }()
+	m.CommunicationDirectoryResolver = stub
+	m.CommunicationAudienceAttestor = stub
+	m.CommunicationGrantClosure = stub
+	m.CommunicationReadAuthorizer = stub
+	m.CommunicationOperationAuthorizer = stub
+	m.CommunicationStoreReadiness = stub
 	// PermissionsReady is the direct binder since 2026-08-26; without this every
 	// readiness test using this helper would fail for the wrong reason.
 	m.useCommunicationRequestAuthoritySources(
@@ -253,7 +253,7 @@ func wireCommunicationReadiness(m *Module, stub *communicationReadinessStub, inc
 		&communicationAuthoritySourceRecorder{},
 	)
 	if includePump {
-		m.UseCommunicationPumpReadinessWitness(stub)
+		m.CommunicationPumpReadiness = stub
 	}
 }
 
@@ -271,14 +271,14 @@ func TestCommunicationReadinessBindingStaysOffUntilWP3AndNeverEnablesCredentials
 	issuerOnly := &communicationReadinessStub{
 		storeReady: true, sealerReady: true, pumpReady: true,
 	}
-	module.UseCommunicationSessionCredentialSource(issuerOnly)
+	module.CommunicationSessionCreds = issuerOnly
 	got, err := module.EvaluateCommunicationReadiness(ctx)
 	if err != nil || got.Effective || !got.Components.IssuerReady || got.StoreReady {
 		t.Fatalf("issuer-only readiness = %+v, err %v", got, err)
 	}
 
 	storeOnly := New()
-	storeOnly.UseCommunicationStoreReadinessWitness(issuerOnly)
+	storeOnly.CommunicationStoreReadiness = issuerOnly
 	got, err = storeOnly.EvaluateCommunicationReadiness(ctx)
 	if err != nil || got.Effective || !got.StoreReady || got.CompositionReady {
 		t.Fatalf("store-only readiness = %+v, err %v", got, err)
@@ -295,7 +295,7 @@ func TestCommunicationReadinessBindingStaysOffUntilWP3AndNeverEnablesCredentials
 		t.Fatal("WP-2 readiness binding enabled communication-session credentials")
 	}
 
-	wp2.UseCommunicationPumpReadinessWitness(issuerOnly)
+	wp2.CommunicationPumpReadiness = issuerOnly
 	got, err = wp2.EvaluateCommunicationReadiness(ctx)
 	if err != nil || !got.Effective || got.Verdict != VerdictClean {
 		t.Fatalf("complete readiness = %+v, err %v", got, err)
@@ -305,7 +305,7 @@ func TestCommunicationReadinessBindingStaysOffUntilWP3AndNeverEnablesCredentials
 	}
 
 	var typedNil *communicationReadinessStub
-	wp2.UseCommunicationContentSealer(typedNil)
+	func() { wp2.CommunicationSealer = typedNil; wp2.normalize() }()
 	got, err = wp2.EvaluateCommunicationReadiness(ctx)
 	if err != nil || got.Effective || got.Components.SealerReady {
 		t.Fatalf("typed-nil sealer readiness = %+v, err %v", got, err)
@@ -322,23 +322,23 @@ func TestCommunicationReadinessGroupsRequiredPortsUnderCanonicalTerms(t *testing
 	}{
 		{
 			name: "issuer", missing: CommunicationReadinessIssuer,
-			remove: func(m *Module) { m.rt.communicationSessionCreds = typedNil },
+			remove: func(m *Module) { m.rt.CommunicationSessionCreds = typedNil },
 		},
 		{
 			name: "sealer", missing: CommunicationReadinessSealer,
-			remove: func(m *Module) { m.communicationSealer = typedNil },
+			remove: func(m *Module) { m.CommunicationSealer = typedNil },
 		},
 		{
 			name: "directory resolver", missing: CommunicationReadinessResolver,
-			remove: func(m *Module) { m.communicationDirectoryResolver = typedNil },
+			remove: func(m *Module) { m.CommunicationDirectoryResolver = typedNil },
 		},
 		{
 			name: "audience attestor", missing: CommunicationReadinessResolver,
-			remove: func(m *Module) { m.communicationAudienceAttestor = typedNil },
+			remove: func(m *Module) { m.CommunicationAudienceAttestor = typedNil },
 		},
 		{
 			name: "grant closure", missing: CommunicationReadinessResolver,
-			remove: func(m *Module) { m.communicationGrantClosure = typedNil },
+			remove: func(m *Module) { m.CommunicationGrantClosure = typedNil },
 		},
 		{
 			// The two CoreEntity* ports left this table on 2026-08-26: they are an
@@ -346,15 +346,15 @@ func TestCommunicationReadinessGroupsRequiredPortsUnderCanonicalTerms(t *testing
 			// adding this one would leave the term with NO coverage at all -- a
 			// control that goes silent instead of failing.
 			name: "request authority bundle", missing: CommunicationReadinessPermissions,
-			remove: func(m *Module) { m.communicationAuthoritySources = nil },
+			remove: func(m *Module) { m.CommunicationAuthority = nil },
 		},
 		{
 			name: "store witness", missing: CommunicationReadinessStore,
-			remove: func(m *Module) { m.communicationStoreReadiness = typedNil },
+			remove: func(m *Module) { m.CommunicationStoreReadiness = typedNil },
 		},
 		{
 			name: "pump witness", missing: CommunicationReadinessPump,
-			remove: func(m *Module) { m.communicationPumpReadiness = typedNil },
+			remove: func(m *Module) { m.CommunicationPumpReadiness = typedNil },
 		},
 	}
 	for _, test := range tests {
@@ -550,8 +550,8 @@ func TestCommunicationReadinessRequiresWitnessFromBoundSealer(t *testing.T) {
 	module := New()
 	wireCommunicationReadiness(module, stub, true)
 	portOnly := &communicationSealerPortOnly{}
-	module.UseCommunicationContentSealer(portOnly)
-	if module.communicationSealer != portOnly {
+	func() { module.CommunicationSealer = portOnly; module.normalize() }()
+	if module.CommunicationSealer != portOnly {
 		t.Fatal("port-only sealer was not retained as the content port")
 	}
 
@@ -580,7 +580,7 @@ func TestCommunicationContentSealerRebindAndClearDropsPriorWitness(t *testing.T)
 	}
 
 	notReady := &communicationReadinessStub{}
-	module.UseCommunicationContentSealer(notReady)
+	func() { module.CommunicationSealer = notReady; module.normalize() }()
 	got, err = module.EvaluateCommunicationReadiness(context.Background())
 	if err != nil || got.Effective || got.Components.SealerReady ||
 		ready.sealerCalls != 1 || notReady.sealerCalls != 1 {
@@ -589,7 +589,7 @@ func TestCommunicationContentSealerRebindAndClearDropsPriorWitness(t *testing.T)
 	}
 
 	portOnly := &communicationSealerPortOnly{}
-	module.UseCommunicationContentSealer(portOnly)
+	func() { module.CommunicationSealer = portOnly; module.normalize() }()
 	got, err = module.EvaluateCommunicationReadiness(context.Background())
 	if err != nil || got.Effective || got.Components.SealerReady || portOnly.cryptoCalls != 0 ||
 		notReady.sealerCalls != 1 {
@@ -597,13 +597,13 @@ func TestCommunicationContentSealerRebindAndClearDropsPriorWitness(t *testing.T)
 			got, portOnly.cryptoCalls, notReady.sealerCalls, err)
 	}
 
-	module.UseCommunicationContentSealer(nil)
-	if module.communicationSealer != nil {
+	func() { module.CommunicationSealer = nil; module.normalize() }()
+	if module.CommunicationSealer != nil {
 		t.Fatal("nil did not clear the bound sealer")
 	}
 	var typedNil *communicationReadinessStub
-	module.UseCommunicationContentSealer(typedNil)
-	if module.communicationSealer != nil {
+	func() { module.CommunicationSealer = typedNil; module.normalize() }()
+	if module.CommunicationSealer != nil {
 		t.Fatal("typed nil did not canonicalize to an unbound sealer")
 	}
 	got, err = module.EvaluateCommunicationReadiness(context.Background())
@@ -706,8 +706,8 @@ func TestCommunicationPermissionsTermWatchesTheBinderAndNotTheTwoPorts(t *testin
 	t.Run("binder bound and both ports absent is ready", func(t *testing.T) {
 		t.Parallel()
 		m := newWired()
-		m.communicationReadAuthorizer = nil
-		m.communicationOperationAuthorizer = nil
+		m.CommunicationReadAuthorizer = nil
+		m.CommunicationOperationAuthorizer = nil
 		got, err := m.EvaluateCommunicationReadiness(ctx)
 		if err != nil {
 			t.Fatalf("NO HE PODIDO MIRAR: %v", err)
@@ -724,7 +724,7 @@ func TestCommunicationPermissionsTermWatchesTheBinderAndNotTheTwoPorts(t *testin
 	t.Run("both ports bound but binder absent is not ready", func(t *testing.T) {
 		t.Parallel()
 		m := newWired()
-		m.communicationAuthoritySources = nil
+		m.CommunicationAuthority = nil
 		got, err := m.EvaluateCommunicationReadiness(ctx)
 		if err != nil {
 			t.Fatalf("NO HE PODIDO MIRAR: %v", err)

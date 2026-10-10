@@ -219,7 +219,7 @@ func newBoundedRevocationFixture(t *testing.T, cfg store.Config, bound time.Dura
 	)
 	t.Cleanup(runner.finishAll)
 	src := newAuthWorkCredentialSource(f.authr)
-	f.m.UseWorkSessionCredentialSource(src)
+	f.m.WorkSessionCreds = src
 	return f, runner, src
 }
 
@@ -340,7 +340,7 @@ func newTT2Setup(t *testing.T, cfg store.Config, name string, admission time.Dur
 	t.Helper()
 	f, runner := newRealChildStopFixture(t, cfg, admission)
 	s := tt2Setup{f: f, runner: runner, src: newAuthWorkCredentialSource(f.authr)}
-	f.m.UseWorkSessionCredentialSource(s.src)
+	f.m.WorkSessionCreds = s.src
 	s.logs = captureManagedStopStages(f.m)
 	op := f.operator(name+"@w2.test", auth.RoleEditor, true, 2*time.Minute)
 	s.dto, s.lr = f.launch("thread-" + name)

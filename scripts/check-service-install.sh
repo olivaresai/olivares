@@ -163,6 +163,83 @@ grep -Fq 'command_user="olivares:olivares"' "$root/packaging/service/openrc.sh" 
 grep -Fq '<key>UserName</key>' "$root/scripts/install-service.sh" ||
   fail "launchd system adapter lost its service-account binding"
 
+# Every unit directive the install docs name must hold the value the shipped unit
+# sets: `Key=value` must match it, and a bare `Key` claims the directive is on.
+# Each page, in every locale, is read against the unit it describes: the docs
+# once kept the 26.10.0 strict/ProtectHome/PrivateTmp policy after the unit
+# changed. Fenced blocks are skipped: they show operator drop-ins, not the
+# shipped unit. A history sentence names old values in prose, not in code.
+docs_rc=0
+python3 -I - "$root" <<'PY' || docs_rc=$?
+import pathlib
+import re
+import sys
+
+root = pathlib.Path(sys.argv[1])
+package = ["packaging/systemd/olivares.service"]
+agentops = package + ["packaging/systemd/olivares.service.d/agentops.conf"]
+template = ["packaging/service/systemd.service"]
+# Drop-ins append to these keys; every other key is replaced by the last file.
+lists = {"Environment", "EnvironmentFile", "ExecStartPre", "ReadWritePaths", "SystemCallFilter"}
+key_re = r"[A-Z][a-z]+[A-Za-z]*"
+# The hardening directives the pages may state; the list-valued ones are named
+# without a value as often as with one, so a bare name of those claims nothing.
+hardening_re = r"(Protect|Private|Restrict|Memory|Capability|Ambient|SystemCall|Bind|ReadWrite|NoNew|Lock)[A-Za-z]*"
+named_only = {"AmbientCapabilities", "BindPaths", "CapabilityBoundingSet", "ReadWritePaths", "SystemCallFilter"}
+
+def effective(paths):
+    values = {}
+    for path in paths:
+        seen = {}
+        for line in (root / path).read_text(encoding="utf-8").splitlines():
+            m = re.fullmatch(rf"({key_re})=(.*)", line)
+            if m:
+                key, value = m.groups()
+                seen.setdefault(key, []).append(value.replace("@DATA_DIR@", "<data-dir>"))
+        for key, vals in seen.items():
+            values[key] = values.get(key, []) + vals if key in lists else vals
+    return values
+
+try:
+    docs = root / "docs-site/src/content/docs"
+    locales = [docs] + sorted(p for p in docs.iterdir() if re.fullmatch(r"[a-z]{2}", p.name))
+    pages = [(root / "docs/RELEASE-INSTALLER.md", template), (root / "INSTALL.md", agentops)]
+    for name, unit in (("install-from-packages.md", package),
+                       ("run-claude-code-with-olivares.md", agentops),
+                       ("self-hosting.md", template)):
+        pages += [(base / "how-to" / name, unit) for base in locales]
+    checked = {page: (effective(unit), page.read_text(encoding="utf-8")) for page, unit in pages}
+except (OSError, UnicodeError) as e:
+    print(f"UNVERIFIED: {e}", file=sys.stderr)
+    sys.exit(2)
+
+bad = []
+for page, (values, text) in checked.items():
+    text = re.sub(r"^ *(```|~~~).*?^ *\1", "", text, flags=re.M | re.S)
+    claims = 0
+    for span in re.findall(r"`([^`]+)`", text):
+        span = re.sub(r"\s*=\s*", "=", " ".join(span.split()), count=1)
+        m = re.fullmatch(rf"({key_re})=(.+)", span)
+        if m and re.fullmatch(hardening_re, m.group(1)):
+            claims += 1
+            if m.group(2) not in values.get(m.group(1), []):
+                bad.append(f"{page.relative_to(root)}: `{span}`, unit sets {values.get(m.group(1), 'nothing')}")
+        if re.fullmatch(hardening_re, span) and span not in named_only:
+            claims += 1
+            if values.get(span) != ["true"]:
+                bad.append(f"{page.relative_to(root)}: bare `{span}` reads as on, unit sets {values.get(span, 'nothing')}")
+    if claims == 0:
+        bad.append(f"{page.relative_to(root)}: names no unit directive, so nothing was checked")
+for line in bad:
+    print(f"FAIL: {line}", file=sys.stderr)
+sys.exit(1 if bad else 0)
+PY
+case "$docs_rc" in
+  0) ;;
+  1) fail "install docs name unit hardening the shipped unit does not set" ;;
+  *) blind "could not compare the install docs with the shipped unit: python rc=$docs_rc" ;;
+esac
+
 grep -Fq 'olivares doctor' "$root/docs/RELEASE-INSTALLER.md" ||
   fail "installer guide does not document the local diagnostic"
 grep -Fq 'measured defect, and 2 unmeasurable' "$root/docs/RELEASE-INSTALLER.md" ||

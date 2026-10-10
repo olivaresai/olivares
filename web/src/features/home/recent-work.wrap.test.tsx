@@ -67,13 +67,7 @@ function row(): LiveDTO {
 
 describe('a recent-session row grows instead of cutting', () => {
   it('the sentence is whole and wraps; the row keeps the list-row height as its least height', () => {
-    renderIntel(
-      <RecentWork
-        sessions={asSessions([row()])}
-        state="ready"
-        canStartSession
-      />,
-    )
+    renderIntel(<RecentWork sessions={asSessions([row()])} state="ready" />)
     const rowEl = screen.getByTestId('home-recent-row')
     expect(rowEl.querySelectorAll('.truncate')).toHaveLength(0)
     expect(classes(rowEl)).toContain('min-h-[var(--console-list-row-height)]')
@@ -89,13 +83,7 @@ describe('a recent-session row grows instead of cutting', () => {
   })
 
   it('the state badge and the time stay whole', () => {
-    renderIntel(
-      <RecentWork
-        sessions={asSessions([row()])}
-        state="ready"
-        canStartSession
-      />,
-    )
+    renderIntel(<RecentWork sessions={asSessions([row()])} state="ready" />)
     const rowEl = screen.getByTestId('home-recent-row')
     const badge = screen.getByText('Active').closest('span') as HTMLElement
     const time = rowEl.querySelector('time') as HTMLElement
@@ -108,13 +96,7 @@ describe('a recent-session row grows instead of cutting', () => {
   })
 
   it('the row stays a link in a list: no cell role on it, inside it or around it', () => {
-    renderIntel(
-      <RecentWork
-        sessions={asSessions([row()])}
-        state="ready"
-        canStartSession
-      />,
-    )
+    renderIntel(<RecentWork sessions={asSessions([row()])} state="ready" />)
     const rowEl = screen.getByTestId('home-recent-row')
     expect(rowEl.tagName).toBe('A')
     expect(rowEl.closest(CELL)).toBeNull()

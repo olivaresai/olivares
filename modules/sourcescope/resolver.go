@@ -7,6 +7,7 @@ package sourcescope
 import (
 	"context"
 	"errors"
+	"slices"
 	"sort"
 
 	"github.com/olivaresai/olivares/core/auth"
@@ -119,7 +120,7 @@ func (r *Resolver) ResolveForAgent(ctx context.Context, tenant model.TenantID, p
 }
 
 // ResolveActorScope returns the scope of the session named by sessionRef: its
-// workspace slug and the slugs of the agent-groups it belongs to. It is the actor-scope
+// workspace slug and the slugs of its agent's groups in that workspace. It is the actor-scope
 // half of resolve(), exposed (WITHOUT the source-binding/credential logic) for the
 // model-access decision, which needs the acting agent's workspace and groups to match
 // grants. The reference is a route-gated, caller-declared actor assertion; the VALUES are
@@ -190,10 +191,16 @@ type actorRef struct {
 // (no session/agent row) and matches NO containment binding (deny-closed).
 type actorScope struct {
 	workspaceSlug string
-	groups        []string
+	// workspaceAbove are the slugs of the workspaces above the actor's, root first: a
+	// workspace binding contains the actor when it names its workspace or one of these.
+	workspaceAbove []string
+	groups         []string
+	// allGroups is every agent-group the agent belongs to, in any workspace. Forbid rows
+	// match against it (a forbid is absolute); allow rows match against groups.
+	allGroups []string
 	// sessionRef is the acting session's external id — set only on the session-aware path
 	// (ResolveForSession); empty on the agent-only path, so a session binding never matches
-	// there (ADR-0022 §4). agentExternalID is the acting agent's external id (both paths).
+	// there. agentExternalID is the acting agent's external id (both paths).
 	sessionRef      string
 	agentExternalID string
 }
@@ -206,6 +213,8 @@ type binding struct {
 	workspaceID model.ID
 	effect      string // effectAllow (default) | effectForbid
 	cred        *CredRef
+	// Set by scoped resolution, separately for each binding.
+	inheritanceFiltered bool
 }
 
 // isForbid reports whether this binding subtracts access. An empty/legacy effect
@@ -218,7 +227,7 @@ func (b binding) isForbid() bool { return b.effect == effectForbid }
 // (the same reason the knowledge guard and grants.go resolve grants outside the
 // caller's transaction).
 //
-// The decision algebra (ADR-0022 §2): forbid is ABSOLUTE (any matching forbid —
+// The decision algebra: forbid is ABSOLUTE (any matching forbid —
 // row-level effect=forbid on a matched scope, or an EffectForbid — denies, overriding
 // containment, cross-scope grant and tenant RBAC). A source is CONFINED iff it has ≥1
 // enabled ALLOW binding; a confined source allows only an actor that matches an allow
@@ -272,7 +281,9 @@ func (r *Resolver) resolve(ctx context.Context, tenant model.TenantID, principal
 	role, _ := principal.RoleIn(tenant)
 	identity := actorIdentity{
 		workspaceSlug:   actor.workspaceSlug,
+		workspaceAbove:  actor.workspaceAbove,
 		groups:          actor.groups,
+		allGroups:       actor.allGroups,
 		sessionRef:      actor.sessionRef,
 		agentExternalID: actor.agentExternalID,
 		userID:          principal.UserID.String(),
@@ -286,6 +297,8 @@ func (r *Resolver) resolve(ctx context.Context, tenant model.TenantID, principal
 	// forbid must be detected even when a later binding would allow, so the decision is two
 	// logical passes over the precomputed state, not a short-circuiting loop.
 	effects := make([]auth.Effect, len(bindings))
+	// An inheritance filter removes RBAC for its binding only. Unfiltered bindings remain
+	// independent routes to the source, including their own credential selection.
 	for i := range bindings {
 		if r.m.scoped != nil && resourceAnchored(bindings[i].scopeTree) {
 			sd, err := r.m.scoped.Scoped(ctx, scopeRequest(principal, tenant, sourceType, bindings[i]))
@@ -294,19 +307,24 @@ func (r *Resolver) resolve(ctx context.Context, tenant model.TenantID, principal
 				return Decision{Allowed: false, Reason: "scope grant evaluation failed (fail closed)", Bound: true}, err
 			}
 			effects[i] = sd.Effect
+			bindings[i].inheritanceFiltered = sd.InheritanceFiltered
 		}
 	}
 
 	// Pass over bindings (pre-sorted most-specific-first): detect any ABSOLUTE forbid
-	// (forbid-overrides-allow, ADR-0022 §2), determine confinement (≥1 allow binding), and
-	// capture the most-specific matching ALLOW (its credential wins).
-	forbidHit, confined := false, false
+	// (forbid-overrides-allow), determine confinement (≥1 allow binding), and
+	// capture the most-specific matching ALLOW (its credential wins). Within workspace
+	// bindings, the actor's nearest ancestor wins over a more distant department.
+	forbidHit, confined, rbacAvailable := false, false, false
 	var winner *binding
 	winnerViaGrant := false
 	for i := range bindings {
 		b := &bindings[i]
 		if !b.isForbid() {
 			confined = true
+			if !b.inheritanceFiltered {
+				rbacAvailable = true
+			}
 		}
 		contain := containsActor(identity, *b)
 		// A row-level forbid bites where it MATCHES the actor (containment / identity); a
@@ -315,7 +333,11 @@ func (r *Resolver) resolve(ctx context.Context, tenant model.TenantID, principal
 		if (b.isForbid() && contain) || effects[i] == auth.EffectForbid {
 			forbidHit = true
 		}
-		if !b.isForbid() && winner == nil && (contain || effects[i] == auth.EffectGrant) {
+		moreSpecific := winner == nil
+		if winner != nil && b.scopeTree == scopeWorkspace && winner.scopeTree == scopeWorkspace {
+			moreSpecific = identity.workspaceDepth(b.scopeRef) > identity.workspaceDepth(winner.scopeRef)
+		}
+		if !b.isForbid() && moreSpecific && (contain || effects[i] == auth.EffectGrant) {
 			winner = b
 			winnerViaGrant = !contain && effects[i] == auth.EffectGrant
 		}
@@ -341,7 +363,7 @@ func (r *Resolver) resolve(ctx context.Context, tenant model.TenantID, principal
 	if winner != nil {
 		return Decision{Allowed: true, Reason: containReason(*winner, winnerViaGrant), Bound: true, Cred: winner.cred}, nil
 	}
-	if rbac {
+	if rbac && rbacAvailable {
 		return Decision{Allowed: true, Reason: "tenant-wide rbac", Bound: true, Cred: mostSpecificAllowCred(bindings)}, nil
 	}
 	return Decision{Allowed: false, Reason: "actor is out of the source's scope (deny-closed)", Bound: true}, nil
@@ -357,12 +379,12 @@ func hasAllowBinding(bs []binding) bool {
 	return false
 }
 
-// mostSpecificAllowCred returns the credential of the most-specific ALLOW binding (bs is
-// pre-sorted most-specific-first), or nil — the credential of record for a tenant-wide
-// RBAC operator on a confined source.
+// mostSpecificAllowCred returns the credential of the most-specific unfiltered ALLOW
+// binding (bs is pre-sorted most-specific-first), or nil — the credential of record for
+// a tenant-wide RBAC operator on a confined source.
 func mostSpecificAllowCred(bs []binding) *CredRef {
 	for i := range bs {
-		if !bs[i].isForbid() {
+		if !bs[i].isForbid() && !bs[i].inheritanceFiltered {
 			return bs[i].cred
 		}
 	}
@@ -376,7 +398,9 @@ func mostSpecificAllowCred(bs []binding) *CredRef {
 // containsActor.
 type actorIdentity struct {
 	workspaceSlug   string
-	groups          []string // agent-group slugs
+	workspaceAbove  []string // workspaces above workspaceSlug, root first
+	groups          []string // agent-group slugs that can ALLOW (a session: its workspace's only)
+	allGroups       []string // every agent-group slug; a forbid row matches these
 	sessionRef      string   // acting session external id ("" on the agent-only path)
 	agentExternalID string   // acting agent external id
 	userID          string   // principal.UserID
@@ -384,13 +408,28 @@ type actorIdentity struct {
 	role            string   // principal.RoleIn
 }
 
+// workspaceDepth ranks the actor's workspace after its root-first ancestors. A
+// workspace outside that lineage (including an unresolved actor) has depth -1.
+func (id actorIdentity) workspaceDepth(ref string) int {
+	if id.workspaceSlug == "" {
+		return -1
+	}
+	if ref == "" {
+		ref = model.DefaultWorkspaceSlug
+	}
+	if ref == id.workspaceSlug {
+		return len(id.workspaceAbove)
+	}
+	return slices.Index(id.workspaceAbove, ref)
+}
+
 // resourceAnchored reports whether a tree rides the Cedar cross-scope grant/forbid
 // (workspace, agent_group, folder). The subject trees do not — they are decided by
-// containment + row effect only (ADR-0022 §2).
+// containment + row effect only.
 func resourceAnchored(tree string) bool { return !subjectTrees[tree] }
 
 // specificityRank orders trees most-specific → least, for CREDENTIAL selection among
-// matching allow bindings (forbid already decides allow/deny). ADR-0022 §3.
+// matching allow bindings (forbid already decides allow/deny).
 func specificityRank(tree string) int {
 	switch tree {
 	case scopeSession:
@@ -426,7 +465,9 @@ func containReason(b binding, viaGrant bool) string {
 }
 
 // containsActor reports whether binding b's scope contains the actor. For the containment
-// trees it is the same workspace or an agent-group the actor belongs to; for the
+// trees it is the actor's workspace or one above it in the organization tree (a binding on
+// a department contains its sub-departments, a forbid included), or an agent-group the
+// actor belongs to; for the
 // subject trees it is identity equality (session/agent/user/role) or directory-group
 // membership (user_group, matched against principal.GroupsIn — S256). An unresolved actor
 // is contained by nothing. A FOLDER binding has NO containment dimension — an actor is not
@@ -435,13 +476,13 @@ func containReason(b binding, viaGrant bool) string {
 func containsActor(id actorIdentity, b binding) bool {
 	switch b.scopeTree {
 	case scopeWorkspace:
-		ref := b.scopeRef
-		if ref == "" {
-			ref = model.DefaultWorkspaceSlug
-		}
-		return id.workspaceSlug != "" && id.workspaceSlug == ref
+		return id.workspaceDepth(b.scopeRef) >= 0
 	case scopeAgentGroup:
-		for _, g := range id.groups {
+		groups := id.groups
+		if b.isForbid() {
+			groups = id.allGroups
+		}
+		for _, g := range groups {
 			if g == b.scopeRef {
 				return true
 			}
@@ -516,9 +557,12 @@ func scopeableKindFor(sourceType string) string {
 
 // rbacAllows reports whether the principal's tenant-wide RBAC (or superadmin) already
 // grants <kind>:read — the soft-isolation rule that a tenant-wide operator sees every
-// workspace's sources. A CONFINED principal (no tenant role) returns false, so the
-// binding's containment is what governs it.
+// workspace's sources. A principal confined in this tenant returns false even if
+// its membership carries a role, so the binding's containment or grant governs it.
 func rbacAllows(principal auth.Principal, tenant model.TenantID, sourceType string) bool {
+	if _, confined := principal.ConfinedWorkspaceIn(tenant); confined {
+		return false
+	}
 	if principal.Superadmin {
 		return true
 	}
@@ -553,8 +597,8 @@ func loadEnabledBindings(ctx context.Context, sc store.Scope, sourceType, source
 		}
 		out = append(out, b)
 	}
-	// Deterministic order, MOST-SPECIFIC first (ADR-0022 §3), so the chosen binding (and
-	// thus the credential) is stable and the first matching allow is the most specific.
+	// Deterministic tree precedence and lexical ties. resolve also compares workspace
+	// depth in the actor's lineage; grant-only and RBAC ties keep this order.
 	sort.Slice(out, func(i, j int) bool {
 		if ri, rj := specificityRank(out[i].scopeTree), specificityRank(out[j].scopeTree); ri != rj {
 			return ri < rj
@@ -571,13 +615,15 @@ func loadEnabledBindings(ctx context.Context, sc store.Scope, sourceType, source
 // row named by the caller's reference (external id). The caller chooses the reference
 // (route-gated, control-plane assertion); the workspace/group values are the store's,
 // not the caller's. An unknown ref yields the empty scope (matches no binding). The
-// agent's group slugs are the "fold by agent_id".
+// workspace and the agent's group slugs come from the lineage module (store.Ancestors).
 func resolveActorScope(ctx context.Context, sc store.Scope, who actorRef) (actorScope, error) {
 	if who.ref == "" {
 		return actorScope{}, nil
 	}
 	var (
-		wsID, agentID   model.ID
+		kind            string
+		id              model.ID
+		opts            store.AncestryOptions
 		sessionRef      string
 		agentExternalID string
 	)
@@ -590,11 +636,14 @@ func resolveActorScope(ctx context.Context, sc store.Scope, who actorRef) (actor
 		if len(sessions) == 0 {
 			return actorScope{}, nil
 		}
-		wsID, agentID = sessions[0].WorkspaceID, sessions[0].AgentID
-		sessionRef = who.ref
+		kind, id, sessionRef = "session", sessions[0].ID, who.ref
+		// A session ALLOWS through its agent's groups in the session's own workspace only
+		// (COCKPIT-02 §6, as the engine's session walk does): membership lets an agent in A
+		// join a group in B. A forbid still matches every group of the agent (AgentGroups).
+		opts = store.AncestryOptions{SessionAgentGroups: true, AllAgentGroups: true}
 		// the acting agent's external id, for the `agent` subject axis. Best-effort —
 		// an orphan session (agent row gone) simply has no agent axis (deny-closed for it).
-		if !agentID.IsZero() {
+		if agentID := sessions[0].AgentID; !agentID.IsZero() {
 			a, gerr := sc.Agents().Get(ctx, agentID)
 			if gerr == nil {
 				agentExternalID = a.ExternalID
@@ -610,19 +659,28 @@ func resolveActorScope(ctx context.Context, sc store.Scope, who actorRef) (actor
 		if len(agents) == 0 {
 			return actorScope{}, nil
 		}
-		wsID, agentID = agents[0].WorkspaceID, agents[0].ID
-		agentExternalID = agents[0].ExternalID
+		kind, id, agentExternalID = "agent", agents[0].ID, agents[0].ExternalID
 	}
 
-	slug, err := workspaceSlug(ctx, sc, wsID)
-	if err != nil {
+	anc, found, err := store.Ancestors(ctx, sc, kind, id, opts)
+	if err != nil || !found {
 		return actorScope{}, err
 	}
-	groups, err := agentGroupSlugs(ctx, sc, agentID)
-	if err != nil {
-		return actorScope{}, err
+	groups := groupSlugs(anc.Groups)
+	allGroups := groups // an agent's groups are all of its groups
+	if who.kind == actorSession {
+		allGroups = groupSlugs(anc.AgentGroups)
 	}
-	return actorScope{workspaceSlug: slug, groups: groups, sessionRef: sessionRef, agentExternalID: agentExternalID}, nil
+	return actorScope{workspaceSlug: anc.Workspace, workspaceAbove: anc.WorkspaceAncestors, groups: groups, allGroups: allGroups, sessionRef: sessionRef, agentExternalID: agentExternalID}, nil
+}
+
+// groupSlugs lists the slugs of the groups of an Ancestry, in order.
+func groupSlugs(groups []store.AncestorGroup) []string {
+	var out []string
+	for _, g := range groups {
+		out = append(out, g.Slug)
+	}
+	return out
 }
 
 // workspaceSlug resolves a workspace id to its slug (zero ⇒ the reserved default slug,
@@ -643,33 +701,39 @@ func workspaceSlug(ctx context.Context, sc store.Scope, wsID model.ID) (string, 
 }
 
 // agentGroupSlugs resolves the agent's group memberships to group slugs (the fold
-// by agent_id). Orphan memberships (group row gone) are skipped. Pages to completion.
-func agentGroupSlugs(ctx context.Context, sc store.Scope, agentID model.ID) ([]string, error) {
+// by agent_id): the groups in workspace ws (zero ws is the default workspace and matches
+// groups with a zero workspace) and every group in any workspace. Orphan memberships
+// (group row gone) are skipped. Pages to completion.
+func agentGroupSlugs(ctx context.Context, sc store.Scope, agentID, ws model.ID) (inWorkspace, all []string, err error) {
 	if agentID.IsZero() {
-		return nil, nil
+		return nil, nil, nil
 	}
 	members, err := drainAgentGroupMembers(ctx, sc, agentID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if len(members) == 0 {
-		return nil, nil
+		return nil, nil, nil
 	}
 	groups, err := drainAgentGroups(ctx, sc)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	bySlug := make(map[model.ID]string, len(groups))
+	byID := make(map[model.ID]model.AgentGroup, len(groups))
 	for _, g := range groups {
-		bySlug[g.ID] = g.Slug
+		byID[g.ID] = g
 	}
-	var out []string
 	for _, mem := range members {
-		if slug, ok := bySlug[mem.GroupID]; ok {
-			out = append(out, slug)
+		g, ok := byID[mem.GroupID]
+		if !ok {
+			continue
+		}
+		all = append(all, g.Slug)
+		if g.WorkspaceID == ws {
+			inWorkspace = append(inWorkspace, g.Slug)
 		}
 	}
-	return out, nil
+	return inWorkspace, all, nil
 }
 
 // drainAgentGroupMembers pages an agent's group memberships to completion.

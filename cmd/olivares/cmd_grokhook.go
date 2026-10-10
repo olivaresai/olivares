@@ -8,6 +8,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 
 	"github.com/olivaresai/olivares/connectors/grok/session"
@@ -25,7 +26,7 @@ import (
 //     `rename_all = "snake_case"` mientras las CLAVES del sobre son camelCase. Un comando que
 //     comparase contra los nombres de la página pública no reconocería ni uno.
 //   - **Hay una segunda vía para el evento: el entorno.** Grok pone `GROK_HOOK_EVENT` además del
-//     cuerpo, y por eso este comando pasa `os.Getenv` al cliente. Sin ella, un stdin cortado
+//     cuerpo, y por eso este comando pasa `envconfig.Get` al cliente. Sin ella, un stdin cortado
 //     —la malformación más probable de todas— dejaría la negativa sin saber en qué forma emitirse.
 //   - **El veto sólo existe en `pre_tool_use`.** En el resto, un deny se REGISTRA y no impide; el
 //     cliente lo saca por stderr diciéndolo, porque callarlo convertiría «no pude impedirlo» en
@@ -93,7 +94,7 @@ func newGrokHookCmd() *cobra.Command {
 				Timeout:  timeout,
 				// La segunda vía del evento. Se inyecta aquí y no dentro del paquete para que el
 				// conector siga siendo probable sin ensuciar el proceso.
-				Env: os.Getenv,
+				Env: envconfig.Get,
 			}
 			res := session.RunClient(cmd.Context(), cmd.InOrStdin(), cfg)
 			// stdout lleva el veredicto y se escribe SIEMPRE y primero: un hook que no escribe

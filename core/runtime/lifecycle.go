@@ -23,8 +23,18 @@ var ErrStopped = errors.New("runtime: stopped")
 
 // maxRepollBackoff caps the exponential backoff between failed Gather passes of a
 // polling source, so a persistently-unreachable sampling source retries forever
-// without hammering the target.
+// without hammering the target. It also caps the delay between plugin restarts.
 const maxRepollBackoff = 5 * time.Minute
+
+// pluginRestartBackoff is the first delay before a dead source plugin is started
+// again. It doubles with every further restart up to maxRepollBackoff, and drops
+// back once the plugin has run for maxRepollBackoff, so a plugin that dies right
+// after each start is not relaunched every second.
+const pluginRestartBackoff = time.Second
+
+// pluginPingTimeout bounds the health check of a plugin whose Gather failed; a
+// plugin that does not answer in time is wedged and is treated as dead.
+const pluginPingTimeout = 5 * time.Second
 
 // jitterRepollBackoff keeps polling-source retry timing consistent with the
 // ±20% jitter policy used by the event-delivery retry loop. It is a variable so
@@ -119,6 +129,7 @@ func (r *Runtime) startModules(ctx context.Context) {
 			dormant: m.dormant,
 		}
 		if err := safe(func() error { return m.mod.Init(ctx, m.host) }); err != nil {
+			m.host.unsubscribeAll()
 			r.fail(&m.status, &m.err, "module", m.name, "init", err)
 			continue
 		}
@@ -182,7 +193,9 @@ func (r *Runtime) sinkFor(tenant, source string, registration *event.SourceRegis
 // canceled on Stop — marks it stopped. A polling source (poll>0) re-runs Gather
 // every interval until Stop, staying Running with its last error recorded and
 // retrying failed passes with exponential backoff (base = interval, capped). Every
-// pass is panic-isolated so a faulty Gather never unwinds the engine.
+// pass is panic-isolated so a faulty Gather never unwinds the engine. On either
+// schedule, a failed pass of a plugin source whose process died starts the plugin
+// again (restartDeadPlugin) and runs Gather at once.
 func (r *Runtime) gatherLoop(s *sourceReg) {
 	defer r.wg.Done()
 	// Signal THIS source's drain so a live remove/rotate can wait for
@@ -191,13 +204,18 @@ func (r *Runtime) gatherLoop(s *sourceReg) {
 	sink := r.sinkFor(s.tenant, s.name, s.registration)
 
 	if s.poll <= 0 {
-		r.runGatherOnce(s, sink, false)
+		// Gather runs once, and again only after a dead plugin process was restarted.
+		for !r.runGatherOnce(s, sink, false) && r.restartDeadPlugin(s) {
+		}
 		return
 	}
 
 	backoff := s.poll
 	for {
 		ok := r.runGatherOnce(s, sink, true)
+		if !ok && r.restartDeadPlugin(s) {
+			continue
+		}
 		if s.ctx.Err() != nil {
 			r.setStopped(&s.status, &s.err)
 			return
@@ -207,7 +225,7 @@ func (r *Runtime) gatherLoop(s *sourceReg) {
 			backoff = s.poll
 		} else {
 			wait = jitterRepollBackoff(backoff)
-			backoff = minDuration(backoff*2, maxRepollBackoff)
+			backoff = min(backoff*2, maxRepollBackoff)
 		}
 		if !r.sleep(s.ctx, wait) {
 			r.setStopped(&s.status, &s.err)
@@ -246,7 +264,11 @@ func (r *Runtime) runGatherOnce(s *sourceReg, sink sdk.Sink, keepRunning bool) b
 			r.log.Warn("runtime: source gather failed; will retry", "source", s.name, "component", s.component, "error", err)
 			r.recordErr(&s.err, err)
 		} else {
-			r.log.Warn("runtime: source gather failed; left down", "source", s.name, "component", s.component, "error", err)
+			msg := "runtime: source gather failed; left down"
+			if s.client != nil {
+				msg = "runtime: source gather failed; left down unless its plugin process exited"
+			}
+			r.log.Warn(msg, "source", s.name, "component", s.component, "error", err)
 			r.set(&s.status, &s.err, StatusFailed, err)
 		}
 		return false
@@ -258,6 +280,117 @@ func (r *Runtime) runGatherOnce(s *sourceReg, sink sdk.Sink, keepRunning bool) b
 		}
 		return true
 	}
+}
+
+// restartDeadPlugin supervises a plugin source after a failed Gather pass. When the
+// plugin process has died, it reaps it and starts the same binary again (same path,
+// the pinned checksum checked again, fresh confinement), Opens it with the source's
+// settings and swaps it in, retrying with backoff until it succeeds or the source is
+// stopped. It reports whether Gather should run again: false for an in-process
+// source, for a plugin that is still alive (the failure was the connector's own) and
+// for a source stopped while waiting.
+func (r *Runtime) restartDeadPlugin(s *sourceReg) bool {
+	if s.client == nil || s.ctx.Err() != nil || !pluginDead(s.ctx, s.client) {
+		return false
+	}
+	r.log.Warn("runtime: source plugin process exited; restarting it", "source", s.name, "component", s.component)
+	// A polling source stays Running through a failed pass; with its plugin dead and a
+	// restart waiting, it is not.
+	r.set(&s.status, &s.err, StatusFailed, errPluginExited)
+	r.reapPlugin(s.client)
+	if s.restartWait == 0 || time.Since(s.restartedAt) > maxRepollBackoff {
+		s.restartWait = pluginRestartBackoff
+	}
+	for {
+		if !r.sleep(s.ctx, jitterRepollBackoff(s.restartWait)) {
+			r.setStopped(&s.status, &s.err)
+			return false
+		}
+		s.restartWait = min(s.restartWait*2, maxRepollBackoff)
+		err := r.relaunchPlugin(s)
+		if err == nil {
+			s.restartedAt = time.Now()
+			r.log.Info("runtime: source plugin restarted", "source", s.name, "component", s.component)
+			return true
+		}
+		r.mu.Lock()
+		stopping := r.stopped // Stop marks the runtime before it cancels the sources
+		r.mu.Unlock()
+		if stopping || s.ctx.Err() != nil {
+			r.setStopped(&s.status, &s.err)
+			return false
+		}
+		r.log.Warn("runtime: source plugin restart failed; will retry", "source", s.name, "component", s.component, "error", err, "retry_in", s.restartWait)
+		r.set(&s.status, &s.err, StatusFailed, fmt.Errorf("restart: %w", err))
+	}
+}
+
+// errPluginExited is the status error of a source whose plugin process died and
+// waits to be restarted.
+var errPluginExited = errors.New("runtime: plugin process exited")
+
+// pluginDead reports whether a plugin's process is gone or wedged: go-plugin saw it
+// exit, or its gRPC health check fails or does not answer within pluginPingTimeout.
+// A canceled ctx reports false: the source is stopping, not restarting.
+func pluginDead(ctx context.Context, c *goplugin.Client) bool {
+	if c.Exited() {
+		return true
+	}
+	rpc, err := c.Client()
+	if err != nil {
+		return true
+	}
+	answer := make(chan error, 1) // go-plugin's Ping has no deadline of its own
+	go func() { answer <- rpc.Ping() }()
+	select {
+	case err := <-answer:
+		return err != nil
+	case <-time.After(pluginPingTimeout):
+		return true
+	case <-ctx.Done():
+		return false
+	}
+}
+
+// relaunchPlugin starts s's plugin binary again and swaps the new process in. The new
+// process must name the same component and Open with the source's settings, exactly
+// as at registration; otherwise it is reaped and nothing is swapped.
+func (r *Runtime) relaunchPlugin(s *sourceReg) error {
+	conn, client, err := r.launchSource(s.plugin)
+	if err != nil {
+		return err
+	}
+	if got := conn.Descriptor().Name; got != s.component {
+		r.reapPlugin(client)
+		return fmt.Errorf("runtime: plugin %q now names itself %q, not %q", s.plugin.path, got, s.component)
+	}
+	// Open sends the resolved settings to the new process: not to one a stopped
+	// runtime or a removed source no longer wants.
+	r.mu.Lock()
+	gone := r.stopped || s.ctx.Err() != nil
+	r.mu.Unlock()
+	if gone {
+		r.reapPlugin(client)
+		return ErrStopped
+	}
+	if oerr := safe(func() error { return conn.Open(s.ctx, s.cfg) }); oerr != nil {
+		r.reapPlugin(client)
+		// Open ran on the RESOLVED settings, so its text may carry a secret: only the
+		// debug log sees it, as the reconciler does (cmd/olivares reconcile.go).
+		r.log.Debug("runtime: restarted source plugin refused its settings", "source", s.name, "error", oerr)
+		return ErrSourceOpenFailed
+	}
+	r.mu.Lock()
+	if r.stopped || s.ctx.Err() != nil {
+		r.mu.Unlock()
+		r.reapPlugin(client)
+		return ErrStopped
+	}
+	s.conn, s.client = conn, client
+	s.status, s.err = StatusRunning, nil
+	r.clients = append(r.clients, client)
+	r.mu.Unlock()
+	return nil
 }
 
 // startJobs launches each registered periodic job on its own goroutine, tracked
@@ -318,14 +451,6 @@ func (r *Runtime) sleep(ctx context.Context, d time.Duration) bool {
 	}
 }
 
-// minDuration returns the smaller of two durations.
-func minDuration(a, b time.Duration) time.Duration {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 // Stop tears the runtime down in reverse: it cancels source Gather goroutines and
 // waits for them (bounded by ctx), closes sources, stops modules, unsubscribes
 // and closes outputs, kills out-of-process plugins, and closes the bus if it owns
@@ -370,7 +495,10 @@ func (r *Runtime) Stop(ctx context.Context) error {
 	}
 
 	for _, s := range sources {
-		if err := safe(func() error { return s.conn.Close(ctx) }); err != nil {
+		r.mu.Lock()
+		conn := s.conn // a plugin restart swaps it under r.mu; Stop may arrive before it drained
+		r.mu.Unlock()
+		if err := safe(func() error { return conn.Close(ctx) }); err != nil {
 			r.log.Warn("runtime: source close failed", "source", s.name, "component", s.component, "error", err)
 		}
 		r.markStoppedUnlessFailed(&s.status, &s.err)

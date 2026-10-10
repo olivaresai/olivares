@@ -14,12 +14,12 @@ import { knowledgeApi } from './api'
 import { EVIDENCE_PAGE } from '@/features/models/api'
 import type { RequestOptions } from '@/lib/api/client'
 
-// ⛔ LOS ESPERADOS SON EL LITERAL '1000', NO `String(EVIDENCE_PAGE)`, y esto lo encontro el
-//    contraste `the model` del 2026-08-26 en MI diseno. Derivando el esperado de la misma
-//    constante que se vigila, el testigo se mueve CON el defecto: bajar `EVIDENCE_PAGE` de 1000 a
-//    999 dejaba estas tres pruebas **3/3 en verde** mientras la pantalla pedia 999. Un oraculo que
-//    sale de su sujeto no es un oraculo: es un espejo.
-//    La forma buena ya estaba escrita al lado, en `models/tenant-list-options.test.ts:81-103`.
+// Expected values are the literal '1000', not `String(EVIDENCE_PAGE)`. The the model
+// review on 2026-08-26 found that deriving expectations from the tested constant let
+// the oracle move with the defect: reducing `EVIDENCE_PAGE` from 1000 to 999 left all
+// three tests passing while the screen requested 999. An independent oracle must not
+// derive its answer from its subject. `models/tenant-list-options.test.ts:81-103` already
+// demonstrated the correct pattern.
 let peticiones: { url: string; init: RequestInit | undefined }[] = []
 
 function capturaFetch(): void {

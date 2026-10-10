@@ -11,6 +11,7 @@ import (
 	"slices"
 
 	"github.com/go-chi/chi/v5"
+
 	"github.com/olivaresai/olivares/core/api"
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
@@ -55,6 +56,46 @@ func (m *Module) handleSetRunPeers(w http.ResponseWriter, r *http.Request, mc ap
 		return
 	}
 	defer release()
+	// Authorize after releasing the read transaction: the scoped-grant engine
+	// may read the same store, and SQLite has only one connection. Keep the run
+	// operation lock and revalidate the authorized peer's identity before writing.
+	selected := make(map[string]model.Record, len(peers))
+	if len(peers) > 0 {
+		err = mc.Data.View(r.Context(), func(sc store.Scope) error {
+			repo, err := sc.Ext(runKind)
+			if err != nil {
+				return err
+			}
+			rec, err := findRunRec(r.Context(), repo, ref)
+			if err != nil {
+				return err
+			}
+			if rec.String(colRunWorkspacePath) == "" || rec.String(colRunAuthzWorkspaceID) == "" {
+				return &runErr{http.StatusUnprocessableEntity, "run folder is not recorded"}
+			}
+			for _, sid := range peers {
+				peer, err := m.findSessionPeer(r.Context(), mc.Tenant, repo, rec, sid)
+				if err != nil {
+					return err
+				}
+				if peer == nil || sid == rec.String(colRunClaimSID) {
+					return &runErr{http.StatusUnprocessableEntity, "peer must be another readable live session in this authorization workspace"}
+				}
+				selected[sid] = peer
+			}
+			return nil
+		})
+		if err != nil {
+			writeRunErr(w, err)
+			return
+		}
+		for _, sid := range peers {
+			if !m.sessionPeerReadable(r.Context(), mc.Tenant, mc.Principal, selected[sid]) {
+				writeRunErr(w, &runErr{http.StatusUnprocessableEntity, "peer must be another readable live session in this authorization workspace"})
+				return
+			}
+		}
+	}
 	var dto runDTO
 	err = mc.Data.Mutate(r.Context(), func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
@@ -76,7 +117,12 @@ func (m *Module) handleSetRunPeers(w http.ResponseWriter, r *http.Request, mc ap
 			if err != nil {
 				return err
 			}
-			if peer == nil || sid == rec.String(colRunClaimSID) || !m.sessionPeerReadable(r.Context(), mc.Tenant, mc.Principal, peer) {
+			before := selected[sid]
+			if peer == nil || sid == rec.String(colRunClaimSID) ||
+				peer.String(model.ColID) != before.String(model.ColID) ||
+				peer.String(colRunAuthzWorkspaceID) != before.String(colRunAuthzWorkspaceID) ||
+				peer.String(colRunWorkspacePath) != before.String(colRunWorkspacePath) ||
+				peer.Int(colClaimFence) != before.Int(colClaimFence) {
 				return &runErr{http.StatusUnprocessableEntity, "peer must be another readable live session in this authorization workspace"}
 			}
 		}
@@ -132,9 +178,6 @@ func runPeers(rec model.Record) []string {
 	return peers
 }
 
-// findSessionPeer keeps peers in the sender's tenant and authorization workspace.
-// Each peer keeps its own folder and live generation; messages convey no file access.
-// The caller separately authorizes the recipient at selection and again at send.
 func (m *Module) findSessionPeer(ctx context.Context, tenant model.TenantID, repo store.GenericRepo, sender model.Record, sid string) (model.Record, error) {
 	if !validCanonicalSID(sid) || sender.String(colRunWorkspacePath) == "" || sender.String(colRunAuthzWorkspaceID) == "" {
 		return nil, nil
@@ -146,7 +189,7 @@ func (m *Module) findSessionPeer(ctx context.Context, tenant model.TenantID, rep
 		return nil, err
 	}
 	peer := recs[0]
-	if m.workAuthz == nil || peer.String(colRunWorkspacePath) == "" || !m.runPeerLive(tenant, peer) {
+	if m.WorkAuthorizer == nil || peer.String(colRunWorkspacePath) == "" || !m.runPeerLive(tenant, peer) {
 		return nil, nil
 	}
 	return peer, nil
@@ -159,7 +202,7 @@ func (m *Module) sessionPeerReadable(ctx context.Context, tenant model.TenantID,
 	}
 	resource := auth.ResourceFor(permRunRead)
 	resource.Kind, resource.ID, resource.WorkspaceID = string(runKind), peer.String(model.ColID), workspace
-	return m.workAuthz.Authorize(ctx, auth.Request{Principal: p, Tenant: tenant, Permission: permRunRead, Resource: resource}).Allow
+	return m.WorkAuthorizer.Authorize(ctx, auth.Request{Principal: p, Tenant: tenant, Permission: permRunRead, Resource: resource}).Allow
 }
 
 func (m *Module) runPeerLive(tenant model.TenantID, rec model.Record) bool {
@@ -174,12 +217,11 @@ func (m *Module) runPeerLive(tenant model.TenantID, rec model.Record) bool {
 		live.companion.Dir == rec.String(colRunWorkspacePath)
 }
 
-// The caller holds the existing run operation lock through the work mutation,
-// so a completed peer revocation cannot race with a later send.
+// The caller holds the run operation lock through the work mutation to exclude revocation.
 func (m *Module) sessionPeerAllowed(ctx context.Context, tenant model.TenantID, p auth.Principal, companion RuntimeCompanion, sid string) (bool, error) {
 	allowed := false
 	var peer model.Record
-	err := m.data.View(ctx, tenant, func(sc store.Scope) error {
+	err := m.Data.View(ctx, tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
 			return err
@@ -205,9 +247,7 @@ func (m *Module) sessionPeerAllowed(ctx context.Context, tenant model.TenantID, 
 		allowed = slices.Contains(peers, sid) || (rule == sameTemplatePeerRule && sender.String(colTemplateID) != "" && sender.String(colTemplateID) == peer.String(colTemplateID) && sid != p.SessionIdentity)
 		return nil
 	})
-	// The composed authorizer resolves persisted workspace/policy facts in its
-	// own View. Release this snapshot first: SQLite has a single connection.
-	// The caller still holds the sender's run exclusion through the mutation.
+	// Authorize outside this View: SQLite's single connection cannot serve a nested View.
 	if err == nil && peer != nil {
 		allowed = m.sessionPeerReadable(ctx, tenant, p, peer) && allowed
 	}

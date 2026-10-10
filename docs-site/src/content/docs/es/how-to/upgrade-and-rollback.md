@@ -13,10 +13,11 @@ aplica por sí mismo las nuevas migraciones de esquema al arrancar. Esta página
 operador desde «¿debo instalar esta release?» hasta «necesito recuperar la anterior».
 
 :::caution[Haz primero una copia de seguridad]
-Haz una copia antes de cada actualización, también de las que parezcan rutinarias. Tanto la
-pantalla **Backups** de la consola (`/backups`) como [Copias de seguridad y
-restauración](/es/how-to/backup-and-restore/) lo hacen. Nada de esta página depende de que
-tengas una copia, pero la querrás cuando algo te sorprenda.
+Antes de cada actualización, crea una copia DR con `dr backup` de la versión instalada.
+La pantalla **Backups** (`/backups`) y [Copias de seguridad y restauración](/es/how-to/backup-and-restore/)
+describen el procedimiento. **Tras avanzar el esquema, necesitas la copia anterior a la
+actualización y su frase de paso privada o KEK para volver a la versión anterior.**
+`olivares upgrade` conserva el ejecutable; no crea una copia de la base de datos.
 :::
 
 ## Qué vía de actualización te corresponde
@@ -48,9 +49,11 @@ de versión mínima afirman algo *sobre* esa versión instalada, por lo que ning
 El comando se niega a adivinar. Declara la versión que sabes que está instalada y las
 protecciones seguirán activas:
 
+<!-- release -->
 ```sh
-olivares upgrade --check --current-version 26.10.1
+olivares upgrade --check --current-version 0.1
 ```
+<!-- /release -->
 
 ## Canales de release
 
@@ -117,6 +120,9 @@ Esto es lo que hace el comando, en orden, y el motivo de cada paso:
 Añade `--yes` cuando lo ejecutes desde un script y no haya nadie para responder a la
 confirmación.
 
+La reversión automática del paso 4 prueba `version`, no el arranque del servicio ni la
+compatibilidad de la base de datos. No recupera un almacén migrado al reiniciar.
+
 :::note[No hay parcheo en caliente]
 Un binario Go no se parchea in-process. «Cero tiempo de inactividad» significa aquí un drenado
 y relevo ordenados o un rolling restart, nunca un parche dentro del proceso. Lo que sí se
@@ -130,28 +136,12 @@ Un despliegue air-gap nunca contacta con un host de actualizaciones. Introduce e
 medio que ya consideres fiable e instálalo desde el archivo local: la verificación es idéntica,
 porque la red nunca fue aquello en lo que se confiaba.
 
-**Instalar desde un bundle requiere una licencia vigente en la máquina.** Se comprueba sin
-conexión frente a la clave de licencia integrada en el binario: no se realiza ninguna llamada,
-por lo que funciona detrás del air gap. Si aún no has instalado la licencia en la máquina,
-[Instalar una licencia y pasar a enterprise](/es/how-to/install-a-license/) es la página que
-explica cómo hacerlo.
-`--check` no está sujeto a esa condición, así que puedes
-verificar un bundle antes de preparar nada:
+La instalación sin conexión requiere Enterprise. Community verifica un bundle con `--bundle --check`, sin leer una licencia ni instalarlo.
 
 ```sh
-olivares upgrade --bundle ./olivares-release.tar.gz --check   # verify only; no license read
-olivares upgrade --bundle ./olivares-release.tar.gz --yes     # install; needs a live license
+olivares upgrade --bundle ./olivares-release.tar.gz --check
 ```
 
-Si tu compilación no incluye una clave de release o replicas las releases bajo tu propia clave
-de firma, indica al comando la clave frente a la que verificas:
-
-```sh
-olivares upgrade --bundle ./olivares-release.tar.gz --pubkey @/etc/olivares/release.pub
-```
-
-Consulta [Instalar en air-gap](/es/how-to/air-gap-install/) para saber cómo se produce y
-transporta el bundle.
 
 ## Despliegue gradual y comprobaciones desatendidas
 
@@ -191,24 +181,49 @@ descrito en [Monitorizar con Prometheus](/es/how-to/monitor-with-prometheus/).
 
 ## Revertir
 
-El binario anterior se conserva junto al que lo reemplazó y el comando imprime su ruta cuando
-realiza el cambio. Revertir consiste en restaurar ese archivo y reiniciar el servicio.
+El ejecutable anterior se conserva junto al nuevo y el comando imprime su ruta. Esa copia
+no es un punto de recuperación de los datos.
 
-La reversión es segura por diseño, no por suerte: cada cambio de esquema entrega primero una
-expansión aditiva y deja su contrato destructivo para una release posterior, de modo que el
-binario de la release anterior sigue funcionando con el esquema actualizado. Por eso revertir
-significa «volver a colocar el binario antiguo», no «revertir la base de datos».
+**Un binario antiguo rechaza una versión del esquema core superior a la que admite**,
+incluso después de migraciones aditivas. Reinstalar el binario o la imagen anterior no deshace
+el avance del esquema. No edites el historial de migraciones ni evites el rechazo.
 
-Si necesitas instalar una release más antigua en vez de restaurar la copia conservada, la
-protección antirretroceso lo bloquea hasta que lo indiques expresamente:
+1. Detén todos los motores que usan el almacén. Conserva los datos actualizados, la configuración
+   del servicio, el material TLS y las claves externas de sellado.
+2. Usa el **binario de la versión anterior** para restaurar el bundle DR tomado **antes** de
+   actualizar: [Copias de seguridad y restauración](/es/how-to/backup-and-restore/). SQLite:
+   directorio nuevo o `dr restore --in-place` con `--operator` y `--reason`; conserva los archivos
+   preservados hasta confirmar la recuperación. PostgreSQL: destino vacío con `olivares db init`,
+   sus `--dsn`, `--owner-dsn` y `--admin-dsn`, y un directorio nuevo para la clave de firma restaurada.
+3. Exige que la verificación del ledger y la clave de auditoría termine correctamente. Apunta
+   el directorio de datos, los volúmenes y los DSN PostgreSQL del servicio al almacén restaurado
+   y a sus claves de firma correspondientes antes de arrancar la versión anterior.
+4. Inicia sesión y comprueba los datos recuperados y la salud del servicio.
 
-```sh
-olivares upgrade --force-rollback --yes
-```
+La recuperación vuelve al punto guardado. Las escrituras posteriores a la copia no están en
+el almacén restaurado; conserva el actualizado para reconciliarlas. Sin el bundle y su frase
+de paso o KEK, sustituir el ejecutable no permite esta recuperación.
 
-La anulación queda registrada en el audit log. El requisito de versión mínima **no** puede
-anularse con esta opción: si un manifiesto declara un mínimo superior a tu versión instalada,
-pasa por una release intermedia en lugar de intentar saltarlo.
+`--force-rollback` permite instalar un ejecutable anterior y registra la anulación en el audit log.
+No evita la comprobación del esquema core ni el requisito de versión mínima y no restaura datos.
+Si la versión instalada está por debajo del mínimo, pasa por una versión intermedia.
+
+### Prueba la recuperación antes de actualizar producción
+
+Arranca la versión anterior verificada con un directorio SQLite temporal, completa el setup,
+inicia sesión y detenla. Crea y verifica un bundle con sus `dr backup` y `dr verify`. Arranca
+el candidato sobre el mismo almacén, inicia sesión y detenlo. Si el esquema ha superado el límite
+de la versión anterior, esta debe fallar con `core schema version newer than this binary supports`.
+Restaura el bundle en un directorio nuevo con el `dr restore` anterior. Exige código de salida
+cero y verificación correcta del ledger; arranca allí la versión anterior y comprueba el acceso,
+la clave pública de auditoría original y los datos guardados. Un fallo de restauración o de
+inicio de sesión significa que la prueba de recuperación ha fallado.
+
+Comprobación SQLite medida (2026-10-08): la versión oficial 26.10.1<!-- release-fixed --> creó el esquema core 18
+y un candidato posterior lo avanzó a 27. El binario antiguo rechazó el almacén con código 1
+(`database=27 binary=18`). Sus `dr backup`, `dr verify` y `dr restore` terminaron con código 0.
+Tras restaurar la copia anterior a la actualización en un directorio nuevo, funcionaron
+la cuenta original y la clave pública de auditoría original.
 
 ## Cuando algo sale mal
 
@@ -216,7 +231,8 @@ pasa por una release intermedia en lugar de intentar saltarlo.
 |---|---|---|
 | `--check` imprime `UNKNOWN` | No se pudo medir la versión instalada, así que no puede afirmarse ningún orden | Pasa a `--current-version` la versión que sabes que está instalada |
 | `min_ver` dice que tu versión es demasiado antigua | La release se niega a instalarse directamente sobre la tuya | Actualiza primero a la release intermedia indicada |
-| El binario nuevo no arranca | Falló el sondeo posterior al cambio | Ya se ha vuelto a la copia; revisa los logs e informa sobre la release |
+| El ejecutable instalado falla la prueba `version` tras el cambio | Falló la comprobación del ejecutable | El comando restaura el ejecutable guardado; revisa los logs |
+| El servicio falla al reiniciar o el binario antiguo detecta un esquema core más nuevo | La prueba del ejecutable no cubre el servicio ni el almacén | Detén el servicio y restaura el bundle DR anterior a la actualización según Revertir |
 | `--install-timer` se activa pero no ocurre nada | El nodo no pertenece a la cohorte de despliegue gradual | Es lo esperado con `--if-eligible`; la cohorte se amplía conforme avanza el despliegue |
 | "another olivares upgrade is already installing", exit **5** | Solo puede actualizar un proceso cada binario. El bloqueo se mantiene durante toda la secuencia de descarga y sustitución | Espera al que está en curso y vuelve a ejecutar el comando. Si no hay ninguno, el kernel ya ha liberado el bloqueo: ejecútalo de nuevo |
 | "it CHANGED while this upgrade was downloading" | Otro proceso sustituyó el binario después de preparar el plan: un gestor de paquetes, un despliegue de imagen o una ejecución de gestión de configuración | Vuelve a ejecutarlo: las protecciones se reevalúan frente a lo que realmente está instalado. Si persiste, dos sistemas están gestionando el mismo binario |

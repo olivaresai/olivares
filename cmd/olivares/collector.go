@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/olivaresai/olivares/core/envconfig"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -101,7 +102,7 @@ func newCollectorCmd() *cobra.Command {
 			// a storeless resolver — env/file and the external secret backends
 			// (vault + cloud secret managers) resolve; a `store:` reference fails closed
 			// (the collector holds no local secret store, which lives in the core).
-			collectorResolver := newSecretResolver(nil, os.Getenv, log)
+			collectorResolver := newSecretResolver(nil, envconfig.Get, log)
 			wireSources(ctx, rt, srcCfg, connectorDir, collectorResolver, log) // warns honestly if no sources are configured
 
 			if err := rt.Start(ctx); err != nil {
@@ -140,7 +141,7 @@ func newCollectorCmd() *cobra.Command {
 // token leaves the push anonymous and the core's ingest authorize will deny it.
 func readToken(path string) (string, error) {
 	if path == "" {
-		return strings.TrimSpace(os.Getenv("OLIVARES_INGEST_TOKEN")), nil
+		return strings.TrimSpace(envconfig.Get("OLIVARES_INGEST_TOKEN")), nil
 	}
 	b, err := os.ReadFile(path)
 	if err != nil {

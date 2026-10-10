@@ -2,7 +2,9 @@
   "tools": {
     "claude": "Claude Code",
     "codex": "Codex",
-    "grok": "Grok Build"
+    "grok": "Grok Build",
+    "opencode": "OpenCode",
+    "gemini-cli": "Gemini CLI"
   },
   "status": {
     "installed": "已安装",
@@ -13,7 +15,7 @@
     "usesKey": "使用你的 API 密钥：{{name}}",
     "usesLocal": "使用本地模型服务器：{{name}}",
     "keyRefused": "API 密钥 {{name}} 被拒绝。请在“提供方”中替换它。",
-    "keyUnchecked": "无法检查 {{name}} 密钥。请在“提供方”中测试它。"
+    "noSignIn": "此工具没有可在此运行的官方登录。请使用“其他方式”下的终端命令。"
   },
   "actions": {
     "install": "安装",
@@ -23,7 +25,9 @@
     "signInClaude": "使用 Claude 登录",
     "signInChatGPT": "使用 ChatGPT 登录",
     "useApiKey": "改用 API 密钥",
-    "signInGrok": "使用你的 xAI 账户登录"
+    "signInGrok": "使用你的 xAI 账户登录",
+    "signInGoogle": "使用 Google 登录",
+    "signIn": "登录"
   },
   "signIn": {
     "openLink": "打开登录页面",
@@ -32,7 +36,11 @@
     "continue": "继续",
     "enterCode": "在登录页面上输入此代码：",
     "waiting": "正在等待你在登录页面上完成操作…",
-    "expires": "代码在 15 分钟内有效。取消会停止此服务器上的登录。"
+    "expires": "代码在 15 分钟内有效。取消会停止此服务器上的登录。",
+    "copy": "复制",
+    "copied": "已复制",
+    "starting": "正在启动登录…",
+    "lostTouch": "与服务器失去联系。登录可能仍在进行。"
   },
   "errors": {
     "status": "无法读取该工具的状态。",
@@ -44,7 +52,10 @@
   "steps": {
     "install": {
       "title": "安装一个智能体工具",
-      "body": "Olivares 在此服务器上运行官方的 Claude Code 或 Codex。一个就够了。"
+      "body": "Olivares 在此服务器上运行官方的 Claude Code 或 Codex。一个就够了。",
+      "orUse": "或者改用 API 密钥或本地模型：",
+      "addKey": "添加 API 密钥",
+      "addLocal": "添加本地模型"
     },
     "signIn": {
       "title": "登录工具",
@@ -53,7 +64,7 @@
     },
     "start": {
       "title": "启动会话",
-      "body": "选择一个文件夹，如果愿意，可以说明先做什么。"
+      "body": "选择一个工具，如果愿意，可以说明先做什么。"
     },
     "progress": "已完成 {{done}}/3"
   },
@@ -62,6 +73,9 @@
     "notReady": "{{tool}} 尚无法启动。",
     "folder": "文件夹",
     "folderHint": "此服务器上的一个文件夹。留空则在新文件夹中开始。",
+    "folderNew": "为此会话新建的文件夹",
+    "folderChange": "更改文件夹",
+    "readingFolder": "正在读取上次会话的文件夹…",
     "prompt": "第一条消息（可选）",
     "promptPlaceholder": "它应该先做什么？",
     "more": "更多选项",
@@ -70,7 +84,7 @@
     "starting": "正在启动…",
     "needTool": "请先安装并登录一个工具。",
     "dialogTitle": "新建会话",
-    "dialogDescription": "选择一个文件夹并说明要做什么。",
+    "dialogDescription": "选择一个工具并说明要做什么。",
     "advanced": "高级启动选项",
     "secrets": "作为环境变量的密钥",
     "secretsHint": "会话从你指定的变量中读取所选的保管库密钥。该值不会被显示、记录或写入文件夹。",
@@ -78,7 +92,23 @@
     "secretUse": "将 {{name}} 提供给此会话",
     "secretVariable": "{{name}} 的变量",
     "secretsManage": "管理会话密钥",
-    "openTools": "打开 AI 工具"
+    "openTools": "打开 AI 工具",
+    "model": "模型",
+    "providerDefault": "默认（{{model}}）",
+    "nativeDefault": "{{tool}} 默认",
+    "modelChoice": "通过此密钥上次连接测试的模型。",
+    "chooseModel": "请选择一个模型：此密钥没有默认模型。",
+    "noTestedModel": "此密钥的模型尚未通过连接测试：请在“提供方”中测试该密钥。",
+    "openProviders": "打开提供方",
+    "profile": "配置文件",
+    "profileNotSignedIn": "未登录",
+    "profileNeedsKey": "需要密钥"
+  },
+  "lists": {
+    "runsTruncated": "最近会话：已加载 {{count}} 个；还有更多。",
+    "runsHint": "较早的会话未包含在此列表中。",
+    "foldersTruncated": "已注册文件夹：已加载 {{count}} 个；还有更多。",
+    "foldersHint": "部分已注册文件夹未包含在此列表中。"
   },
   "permission": {
     "editsOnly": "仅编辑文件",

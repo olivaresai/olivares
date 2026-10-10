@@ -111,11 +111,11 @@ fail() { echo "security-txt: FAIL — $1" >&2; exit 1; }
 # live host was measured on 2026-08-13 serving `text/plain` with no charset parameter at all,
 # which the offline header check cannot see because the file it reads governs a different host.
 if [ "${1:-}" = "--probe" ]; then
-  # ⛔ TERCERA RESPUESTA: sin `curl` no se sondeó NADA. `fail` sale 1, que en este guion
-  #    significa «el security.txt está mal» — y no lo está: es que no se pudo mirar el host. Un
-  #    punto ciego con el nombre de un defecto manda a alguien a editar un fichero correcto.
+  # Third answer: without curl the host was not probed. Returning fail's rc 1
+  # would wrongly accuse security.txt and prompt edits to a correct file; report the
+  # unperformed check instead.
   if ! command -v curl >/dev/null 2>&1; then
-    echo "security-txt: ⛔ NO HE PODIDO MIRAR — '--probe' necesita curl y no está en este host. No se sondeó ningún canónico, así que esto NO dice nada sobre el fichero servido." >&2
+    echo "--probe requires curl; the endpoint could not be checked" >&2
     exit 2
   fi
   today="$(date -u +%F)"

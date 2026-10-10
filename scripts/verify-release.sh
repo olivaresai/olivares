@@ -15,6 +15,9 @@
 #
 # Steps 3–5 are skipped with a clear note when their files (or the verifier tool)
 # are absent, so this works on a minimal release AND fully verifies a complete one.
+# From 0.1 a release carries ONE SBOM and ONE OpenVEX, attested to the image by digest,
+# and no per-archive bundle: steps 3–4 verify the per-archive bundles that releases up to
+# 26.10.1 carry, and the signed checksums of step 2 cover every 0.1 archive.
 #
 # ⛔ …AND THAT CONSUMER BEHAVIOUR IS EXACTLY WRONG FOR A PUBLISHER, which is what
 # --strict-publication is for. A person who downloaded three files wants to know that those
@@ -38,7 +41,7 @@
 #   verify-release.sh                      # keyless / Sigstore (default; network for Rekor)
 #   verify-release.sh --key cosign.pub     # key-based
 #   verify-release.sh --key cosign.pub --offline   # key-based, transparency log ignored
-#   verify-release.sh --source-tag v1.2.3  # pin the SLSA provenance source tag
+#   verify-release.sh --source-tag MAJOR.MINOR  # pin the SLSA provenance source tag
 #   verify-release.sh --provenance FILE    # name the SLSA provenance explicitly (required
 #                                          # when several *.intoto.jsonl files are present:
 #                                          # an ambiguous selection FAILS, it never guesses)
@@ -123,10 +126,8 @@ STRICT=0
 # '^https://github.com/olivaresai/olivares' also accepted `.../olivares-anything/...`
 # and any workflow file on any branch -- i.e. far more identities than the one that
 # actually signs a release.
-# `v?` — releases before the 2026-09-29 tag-name correction carry the v prefix (v26.9.0);
-# current release tags are bare CalVer (26.10.0). The default's claim is 'this repository's
-# release workflow on a release tag', both shapes of it; pin one release with --source-tag.
-DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$'
+# Signatures must name this repository's workflow at a bare MAJOR.MINOR tag.
+DEFAULT_CERT_IDENTITY='^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$'
 DEFAULT_CERT_OIDC_ISSUER='https://token.actions.githubusercontent.com'
 CERT_IDENTITY_REGEXP="${OLIVARES_CERT_IDENTITY:-$DEFAULT_CERT_IDENTITY}"
 CERT_OIDC_ISSUER="${OLIVARES_CERT_OIDC_ISSUER:-$DEFAULT_CERT_OIDC_ISSUER}"
@@ -336,11 +337,6 @@ for a in $archives; do
   sbom_checked=$((sbom_checked + 1))
 done
 [ "$sbom_checked" -gt 0 ] || echo "    (skipped: no *.sbom.sigstore.json present)"
-if [ "$STRICT" -eq 1 ]; then
-  for a in $archives; do
-    [ -f "$a.sbom.sigstore.json" ] || strict_fail "no SBOM attestation for $a. An unattested archive is not a publishable artifact."
-  done
-fi
 
 # --- 4/5 OpenVEX attestations (SCP-04) ------------------------------------------
 echo "==> 4/5 verifying OpenVEX attestations"
@@ -354,11 +350,6 @@ for a in $archives; do
   vex_checked=$((vex_checked + 1))
 done
 [ "$vex_checked" -gt 0 ] || echo "    (skipped: no *.vex.sigstore.json present)"
-if [ "$STRICT" -eq 1 ]; then
-  for a in $archives; do
-    [ -f "$a.vex.sigstore.json" ] || strict_fail "no OpenVEX attestation for $a."
-  done
-fi
 
 # --- 5/5 SLSA build provenance (SCP-01) -----------------------------------------
 echo "==> 5/5 verifying SLSA build provenance"

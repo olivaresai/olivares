@@ -19,7 +19,7 @@ import (
 	"github.com/olivaresai/olivares/core/model"
 )
 
-// VAULT SECRETS AS A SESSION'S ENVIRONMENT (2026-10-01; design FH 016).
+// VAULT SECRETS AS A SESSION'S ENVIRONMENT.
 //
 // A launch (or its template) names secrets of the tenant vault by NAME, each with
 // the environment variable the child reads it from. The values are opened at
@@ -42,31 +42,13 @@ const secretEnvPrefix = "env/"
 const minSecretValue = 8
 
 // maxSecretEnv bounds one launch; the child's whole explicit environment is
-// bounded at 128 values (procrunner.go validateExplicitEnv).
+// bounded at 128 values (child_env.go validateExplicitEnv).
 const maxSecretEnv = 32
 
 // SecretEnvRef names one vault secret a session receives as an environment variable.
 type SecretEnvRef struct {
 	Env    string `json:"env"`
 	Secret string `json:"secret"`
-}
-
-// reservedSecretEnvName is every variable the runtime, a provider or the host base
-// owns. A secret may never replace one: it would re-point a home, impersonate a
-// provider credential or a control-plane token, or change how the child loads code.
-func reservedSecretEnvName(name string) bool {
-	for _, base := range baseEnvAllow {
-		if name == base {
-			return true
-		}
-	}
-	return forbiddenInheritedEnvName(name) ||
-		providerHomeEnvName(name) ||
-		openCodeReservedEnvName(name) ||
-		strings.HasPrefix(name, "CLAUDE_") ||
-		strings.HasPrefix(name, "XDG_") ||
-		strings.HasPrefix(name, "LD_") ||
-		strings.HasPrefix(name, "DYLD_")
 }
 
 // validateSecretEnv checks the names (and only the names) of a launch's secrets.
@@ -109,23 +91,29 @@ func refuseSecretEnvFor(refs []SecretEnvRef, mayUse bool) error {
 	return nil
 }
 
+// secretEnvWayOut ends each refusal of a named secret, at launch and on resume.
+// Session secrets live in the tenant's store, which the console opens from the
+// start form (the deployment-wide Secrets page is another store), and a stopped
+// session's secrets cannot be changed, so the other way out is a new session.
+const secretEnvWayOut = " in New session > More options > Manage session secrets, or start a new session without it"
+
 // resolveSecretEnv opens every named secret for ONE launch. The values are held by
 // the caller for the spawn and never persisted, logged or returned.
 func (m *Module) resolveSecretEnv(ctx context.Context, tenant model.TenantID, refs []SecretEnvRef) ([]EnvVar, error) {
 	if len(refs) == 0 {
 		return nil, nil
 	}
-	if m.rt.providerVault == nil {
+	if m.rt.ProviderVault == nil {
 		return nil, &runErr{http.StatusServiceUnavailable,
 			"this session names vault secrets, and no sealed vault is wired on this node to open them (the launch is denied)"}
 	}
 	out := make([]EnvVar, 0, len(refs))
 	for _, ref := range refs {
-		value, err := m.rt.providerVault.Open(ctx, tenant, ref.Secret)
+		value, err := m.rt.ProviderVault.Open(ctx, tenant, ref.Secret)
 		switch {
 		case errors.Is(err, auth.ErrSecretNotFound):
 			return nil, conflictErr(fmt.Sprintf(
-				"the vault has no secret named %s; add it under Secrets or remove it from this session", ref.Secret))
+				"the vault has no session secret named %s; add it"+secretEnvWayOut, ref.Secret))
 		case err != nil:
 			return nil, errors.Join(&runErr{http.StatusServiceUnavailable, fmt.Sprintf(
 				"the vault could not open %s on this node; the launch is denied", ref.Secret)}, err)
@@ -133,14 +121,14 @@ func (m *Module) resolveSecretEnv(ctx context.Context, tenant model.TenantID, re
 		if len(value) < minSecretValue {
 			return nil, conflictErr(fmt.Sprintf(
 				"%s is shorter than %d characters, too short to withhold from the session output; "+
-					"store a longer value or remove it from this session", ref.Secret, minSecretValue))
+					"store a longer value"+secretEnvWayOut, ref.Secret, minSecretValue))
 		}
 		if strings.ContainsAny(string(value), "\r\n") {
 			lines := secretLines(string(value))
 			if len(lines) == 0 || slices.ContainsFunc(lines, func(l string) bool { return len(l) < minSecretValue }) {
 				return nil, conflictErr(fmt.Sprintf(
 					"a line of the value of %s is shorter than %d characters; the session output is split into lines, "+
-						"so it could not be withheld there; store it without line breaks or remove it from this session",
+						"so it could not be withheld there; store it without line breaks"+secretEnvWayOut,
 					ref.Env, minSecretValue))
 			}
 		}
@@ -149,12 +137,12 @@ func (m *Module) resolveSecretEnv(ctx context.Context, tenant model.TenantID, re
 	if env, ok := markerCollision(refs, out); ok {
 		return nil, conflictErr(fmt.Sprintf(
 			"the value of %s shares text with the mark that replaces a secret in the session output, "+
-				"so it could not be withheld there; store a different value or remove it from this session", env))
+				"so it could not be withheld there; store a different value"+secretEnvWayOut, env))
 	}
 	if env, ok := cutMarkCollision(out); ok {
 		return nil, conflictErr(fmt.Sprintf(
 			"the value of %s shares text with the note that ends a cut line in the session output, "+
-				"so it could not be withheld there; store a different value or remove it from this session", env))
+				"so it could not be withheld there; store a different value"+secretEnvWayOut, env))
 	}
 	return out, nil
 }
@@ -177,8 +165,8 @@ func secretForms(value string) []string {
 }
 
 // secretLines is a value with a line break as the output framer delivers it: line
-// by line, each without its trailing CR (procrunner.go pump and pumpDiagnostics,
-// SR2 46ff P1). Empty lines are not forms. A value without CR or LF has none.
+// by line, each without its trailing CR (procrunner.go pump and pumpDiagnostics).
+// Empty lines are not forms. A value without CR or LF has none.
 func secretLines(value string) []string {
 	if !strings.ContainsAny(value, "\r\n") {
 		return nil
@@ -248,8 +236,7 @@ func markerCollision(refs []SecretEnvRef, values []EnvVar) (string, bool) {
 
 // cutMarkCollision names the first variable whose value, in any form, shares text
 // with the note the framer appends to a cut line (diagnosticTruncatedMark): that
-// note is the engine's own text, so it must never complete or carry a value (SR2
-// report192).
+// note is the engine's own text, so it must never complete or carry a value.
 func cutMarkCollision(values []EnvVar) (string, bool) {
 	for _, v := range values {
 		if v.Value == "" {
@@ -397,9 +384,8 @@ func (r *secretRedactor) applyWithSpans(data []byte) ([]byte, []SecretMaskSpan) 
 	if r.withholdAll {
 		return []byte{}, nil
 	}
-	// A stderr line cut at the cap may end with the beginning of a value (SR2 46ff
-	// P1). The cut is read on the ORIGINAL bytes, before any replacement (SR2
-	// report192): masking first could rewrite the mark or hide the cut's context.
+	// A stderr line cut at the cap may end with the beginning of a value. The cut is
+	// read on the ORIGINAL bytes, before any replacement: masking first could rewrite the mark or hide the cut's context.
 	body, cut := data, bytes.HasSuffix(data, []byte(diagnosticTruncatedMark))
 	clipAt, clipWhich := len(data), -1
 	if cut {

@@ -8,9 +8,8 @@ import (
 	"crypto/ed25519"
 	"crypto/rand"
 	"encoding/json"
-	"testing"
-
 	jose "github.com/go-jose/go-jose/v4"
+	"testing"
 )
 
 // cardIssuerKeys mints a dedicated Ed25519 card-issuance keypair and returns the private

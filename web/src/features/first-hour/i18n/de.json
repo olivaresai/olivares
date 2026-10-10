@@ -2,7 +2,9 @@
   "tools": {
     "claude": "Claude Code",
     "codex": "Codex",
-    "grok": "Grok Build"
+    "grok": "Grok Build",
+    "opencode": "OpenCode",
+    "gemini-cli": "Gemini CLI"
   },
   "status": {
     "installed": "Installiert",
@@ -13,7 +15,7 @@
     "usesKey": "Verwendet Ihren API-Schlüssel: {{name}}",
     "usesLocal": "Verwendet den lokalen Modellserver: {{name}}",
     "keyRefused": "Der API-Schlüssel {{name}} wurde abgelehnt. Ersetzen Sie ihn unter Anbieter.",
-    "keyUnchecked": "Der Schlüssel {{name}} konnte nicht geprüft werden. Testen Sie ihn unter Anbieter."
+    "noSignIn": "Dieses Tool hat hier keine offizielle Anmeldung zum Ausführen. Nutze den Terminalbefehl unter Andere Wege."
   },
   "actions": {
     "install": "Installieren",
@@ -23,7 +25,9 @@
     "signInClaude": "Mit Claude anmelden",
     "signInChatGPT": "Mit ChatGPT anmelden",
     "useApiKey": "Stattdessen einen API-Schlüssel verwenden",
-    "signInGrok": "Mit Ihrem xAI-Konto anmelden"
+    "signInGrok": "Mit Ihrem xAI-Konto anmelden",
+    "signInGoogle": "Mit Google anmelden",
+    "signIn": "Anmelden"
   },
   "signIn": {
     "openLink": "Anmeldeseite öffnen",
@@ -32,7 +36,11 @@
     "continue": "Weiter",
     "enterCode": "Geben Sie auf der Anmeldeseite diesen Code ein:",
     "waiting": "Es wird gewartet, bis Sie auf der Anmeldeseite fertig sind…",
-    "expires": "Der Code gilt 15 Minuten. „Abbrechen“ beendet die Anmeldung auf diesem Server."
+    "expires": "Der Code gilt 15 Minuten. „Abbrechen“ beendet die Anmeldung auf diesem Server.",
+    "copy": "Kopieren",
+    "copied": "Kopiert",
+    "starting": "Anmeldung wird gestartet …",
+    "lostTouch": "Verbindung zum Server verloren. Die Anmeldung läuft möglicherweise noch."
   },
   "errors": {
     "status": "Der Status des Werkzeugs konnte nicht gelesen werden.",
@@ -44,7 +52,10 @@
   "steps": {
     "install": {
       "title": "Ein Agentenwerkzeug installieren",
-      "body": "Olivares führt das offizielle Claude Code oder Codex auf diesem Server aus. Eines genügt."
+      "body": "Olivares führt das offizielle Claude Code oder Codex auf diesem Server aus. Eines genügt.",
+      "orUse": "Oder verwenden Sie stattdessen einen API-Schlüssel oder ein lokales Modell:",
+      "addKey": "API-Schlüssel hinzufügen",
+      "addLocal": "Lokales Modell hinzufügen"
     },
     "signIn": {
       "title": "Anmelden",
@@ -53,7 +64,7 @@
     },
     "start": {
       "title": "Eine Sitzung starten",
-      "body": "Wählen Sie einen Ordner und sagen Sie, wenn Sie möchten, was zuerst zu tun ist."
+      "body": "Wählen Sie ein Tool und sagen Sie, wenn Sie möchten, was zuerst zu tun ist."
     },
     "progress": "{{done}} von 3 erledigt"
   },
@@ -62,6 +73,9 @@
     "notReady": "{{tool}} kann noch nicht starten.",
     "folder": "Ordner",
     "folderHint": "Ein Ordner auf diesem Server. Leer lassen, um in einem neuen Ordner zu beginnen.",
+    "folderNew": "Ein neuer Ordner für diese Sitzung",
+    "folderChange": "Ordner ändern",
+    "readingFolder": "Der Ordner der letzten Sitzung wird gelesen…",
     "prompt": "Erste Nachricht (optional)",
     "promptPlaceholder": "Was soll es zuerst tun?",
     "more": "Weitere Optionen",
@@ -70,7 +84,7 @@
     "starting": "Wird gestartet…",
     "needTool": "Installieren Sie zuerst ein Werkzeug und melden Sie es an.",
     "dialogTitle": "Neue Sitzung",
-    "dialogDescription": "Wählen Sie einen Ordner und sagen Sie, was zu tun ist.",
+    "dialogDescription": "Wählen Sie ein Tool und sagen Sie, was zu tun ist.",
     "advanced": "Erweiterte Startoptionen",
     "secrets": "Geheimnisse als Umgebungsvariablen",
     "secretsHint": "Die Sitzung liest jedes gewählte Tresor-Geheimnis aus der Variablen, die Sie angeben. Der Wert wird nie angezeigt, protokolliert oder in den Ordner geschrieben.",
@@ -78,7 +92,23 @@
     "secretUse": "{{name}} an diese Sitzung geben",
     "secretVariable": "Variable für {{name}}",
     "secretsManage": "Sitzungsgeheimnisse verwalten",
-    "openTools": "KI-Werkzeuge öffnen"
+    "openTools": "KI-Werkzeuge öffnen",
+    "model": "Modell",
+    "providerDefault": "Standard ({{model}})",
+    "nativeDefault": "Standard von {{tool}}",
+    "modelChoice": "Modelle, die den letzten Verbindungstest dieses Schlüssels bestanden haben.",
+    "chooseModel": "Wählen Sie ein Modell: Dieser Schlüssel hat kein Standardmodell.",
+    "noTestedModel": "Noch kein Modell dieses Schlüssels hat seinen Verbindungstest bestanden: Testen Sie den Schlüssel unter Anbieter.",
+    "openProviders": "Anbieter öffnen",
+    "profile": "Profil",
+    "profileNotSignedIn": "Nicht angemeldet",
+    "profileNeedsKey": "Schlüssel fehlt"
+  },
+  "lists": {
+    "runsTruncated": "Letzte Sitzungen: {{count}} geladen; es gibt weitere.",
+    "runsHint": "Ältere Sitzungen sind nicht in dieser Liste enthalten.",
+    "foldersTruncated": "Registrierte Ordner: {{count}} geladen; es gibt weitere.",
+    "foldersHint": "Einige registrierte Ordner sind nicht in dieser Liste enthalten."
   },
   "permission": {
     "editsOnly": "Nur Dateien bearbeiten",

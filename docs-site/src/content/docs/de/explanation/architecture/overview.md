@@ -34,7 +34,7 @@ Die Engine (der Core, „Layer 0“) ist die Menge gemeinsamer Subsysteme, an de
 |---|---|---|
 | **Ingest + Event Bus** | Empfängt OTLP- und Konnektor-Eingaben, normalisiert sie und verteilt Events an Module | Module reagieren auf Events, ohne aneinander gekoppelt zu sein |
 | **Connector SDK** | Eine stabile Input/Output-Konnektor-Schnittstelle — das Rückgrat der Breite | Dritte erweitern die Plattform, ohne den Core zu forken |
-| **Module Runtime** | Lädt und führt Module aus: in-process kompiliert plus Out-of-Process-Plugins | Fügt ein Modul hinzu, ohne den Core neu zu architektieren oder neu zu kompilieren |
+| **Module Runtime** | Lädt und führt in-process kompilierte Module aus; hostet Out-of-Process-Connector-Plugins | Fügt ein Modul hinzu, ohne den Core neu zu architektieren |
 | **Allgemeines Datenmodell** | Mandantenfähige Entitäten und Relationen, die den gesamten Katalog bedienen | Ein Schema, das alle Module teilen und erweitern |
 | **API (REST/gRPC) + Manage-as-Code** | Alle Funktionalität über eine API, plus ein Terraform-Provider | Die CLI und das Web sprechen dieselbe API; das Panel ist GitOps-fähig |
 | **AuthN/Z + Mandantenfähigkeit** | RBAC/ABAC, Orgs und Mandanten, Isolation | Berechtigungen und Mandantenfähigkeit nachzurüsten ist ruinös teuer — daher von Tag eins an |
@@ -43,7 +43,7 @@ Die Engine (der Core, „Layer 0“) ist die Menge gemeinsamer Subsysteme, an de
 
 Einige Details, die hervorzuheben sind:
 
-- **Module Runtime.** Core-Module sind in das Binary kompiliert; Out-of-Process-Module und Konnektoren laufen als Plugins über gRPC mit `hashicorp/go-plugin`. Das ergibt Fehlerisolation und erlaubt, ein Modul hinzuzufügen, ohne den Core neu zu kompilieren.
+- **Module Runtime.** Core-Module sind in das Binary kompiliert; Out-of-Process-Konnektoren laufen als Plugins über gRPC mit `hashicorp/go-plugin`. Das ergibt Fehlerisolation und erlaubt, einen Konnektor hinzuzufügen, ohne den Core neu zu kompilieren. Module laufen ausschließlich in-process — der Out-of-Process-Modul-Transport ist deprecated und wurde nie verdrahtet.
 - **Event Bus.** Standardmäßig in-process (Go-Channels). Die verteilte Anbindung über **NATS ist optional**, nicht erforderlich — Single-Node-Deployments berühren sie nie.
 - **Manage-as-Code.** Die API ist der maßgebliche Vertrag; die Manage-as-Code-Oberfläche fügt einen Terraform-Provider hinzu, sodass die Control Plane selbst deklariert und versionskontrolliert werden kann.
 - **Audit + Integrität.** Das Ledger ist **append-only und hash-chained**, mit **Ed25519-signierten Checkpoints**. Einträge tragen eine Sequenznummer, den vorherigen Hash, den aktuellen Hash und eine Signatur — und tragen nie PII. Das Ledger verlässt die Box auf zwei Wegen: Ein **Pull**-Export-Endpunkt gibt CEF, LEEF, syslog, OTLP (ein vollständiger, POST-fähiger Export-Request; `otlp_envelope` ist ein exaktes Alias, und die reine LogRecord-Projektion ist das separate Token `otlp_log_record`) oder OCSF aus, und ein **Push** — real, sobald ein `audit.recorded`-Eventing-Abonnement konfiguriert ist — stellt jeden versiegelten Datensatz mindestens einmal über den dauerhaften Transport zu. Siehe [So leiten Sie Audit an Splunk weiter](/de/how-to/forward-audit-to-splunk/).
@@ -90,7 +90,7 @@ Natives Audit ordnet Aktivität einer Credential oder Rolle zu, nicht einem Agen
 
 ### Zugriff auf die Map
 
-Den Zugriffsgraphen anzusehen, ist eine **privilegierte Aktion**: mandantengebunden, verfügbar für die Editor-Rolle und höher (nie die niedrigste Viewer-Rolle), und **jeder Lesezugriff wird auditiert**. Die Routen der Map — der Graph und das Drift-Ergebnis — gehören nicht zum stabilen Core-Vertrag; sie werden in der separaten **Beta**-[Modulrouten-Referenz](/reference/api-beta/) veröffentlicht (ausgeliefert unter `/openapi.beta.json`), wobei ihre feldgenauen Formen in typisierten Go- und TypeScript-Schnittstellen liegen. Das Permitted-vs-Observed-Ergebnis wird an der `drift`-Route der Engine (`/v1/m/accessmap/drift`) exponiert; es gibt keinen separaten `diff`-Endpunkt. Die stabile Core-REST-Oberfläche — 54 Pfade, gerendert aus dem eigenen OpenAPI-3.1-Vertrag des Produkts — ist in der [API-Referenz](/reference/api/) dokumentiert. Für die vollständige Modulliste siehe den [Modulkatalog](/de/reference/modules/overview/).
+Den Zugriffsgraphen anzusehen, ist eine **privilegierte Aktion**: mandantengebunden, verfügbar für die Editor-Rolle und höher (nie die niedrigste Viewer-Rolle), und **jeder Lesezugriff wird auditiert**. Die Routen der Map — der Graph und das Drift-Ergebnis — gehören nicht zum stabilen Core-Vertrag; sie werden in der separaten **Beta**-[Modulrouten-Referenz](/reference/api-beta/) veröffentlicht (ausgeliefert unter `/openapi.beta.json`), wobei ihre feldgenauen Formen in typisierten Go- und TypeScript-Schnittstellen liegen. Das Permitted-vs-Observed-Ergebnis wird an der `drift`-Route der Engine (`/v1/m/accessmap/drift`) exponiert; es gibt keinen separaten `diff`-Endpunkt. Die stabile Core-REST-Oberfläche — 128 Core-Paths, gerendert aus dem eigenen OpenAPI-3.1-Vertrag des Produkts — ist in der [API-Referenz](/reference/api/) dokumentiert. Für die vollständige Modulliste siehe den [Modulkatalog](/de/reference/modules/overview/).
 
 ## Deployment-Topologie
 
@@ -121,7 +121,7 @@ Die Control Plane (die Engine) kann als ein Binary selbst gehostet oder künftig
 Über die Laufzeit-Topologie hinaus prägen zwei Grenzen die Architektur:
 
 - **Die Konnektor-Grenze.** Ein Konnektor **importiert niemals aus dem Core** — er hängt nur vom SDK ab. Das verhindert, dass Drittanbieter-Konnektoren den Core kontaminieren, und hält die Lizenzgrenze sauber.
-- **Die Lizenzgrenze.** Der Core, die Module und das Web sind **AGPL-3.0-only**; das SDK und die Konnektoren sind **Apache-2.0**; die Enterprise-Stufe ist kommerziell. Die obige Konnektor-Grenze ist das, was die Apache/AGPL-Trennung im Code durchsetzbar macht. Siehe [Open Core und Lizenzierung](/de/explanation/open-core-and-licensing/).
+- **Die Lizenzgrenze.** Der Core, die Module und das Web sind **AGPL-3.0-only**; das SDK und die Konnektoren sind **Apache-2.0**; die Editionen Business und Enterprise sind kommerziell. Die obige Konnektor-Grenze ist das, was die Apache/AGPL-Trennung im Code durchsetzbar macht. Siehe [Open Core und Lizenzierung](/de/explanation/open-core-and-licensing/).
 
 ## Sicherheitslage, kurz gefasst
 

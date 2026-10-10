@@ -3,59 +3,42 @@
 # SPDX-License-Identifier: AGPL-3.0-only
 # Additional terms under AGPL-3.0-only section 7(a) disclaim warranty and limit liability: see DISCLAIMER.md at the repository root.
 #
-# check-c05-37-closure.sh — C05-37 no se declara verde sin una traza NOMBRADA que lleve el HOST.
+# check-c05-37-closure.sh — C05-37 needs a named trace that includes the host before closure.
 #
-# ⛔ QUÉ AFIRMA ESTE GATE, Y QUÉ NO. Es un guardián de CIERRE, no un monitor de salud. Un `0`
-# significa «el contrato no se contradice con la evidencia que él mismo nombra», NUNCA «la
-# cadena de entrega está funcionando ahora mismo». Con los dos booleanos en `false` sale `0` sin
-# mirar ninguna traza, que es lo correcto para un guardián de cierre y sería un verde falso si
-# alguien lo presentara como salud. Lo escribo aquí porque el contraste `sol max` señaló que la
-# distinción no estaba dicha en ningún sitio (an internal design note (not shipped)).
+# This is a closure guard, not a health monitor: 0 means the contract does not contradict
+# its named evidence, not that delivery works now. Both booleans false return 0 without
+# reading a trace. The distinction was missing in the `sol max` review
+# (an internal design note (not shipped)).
 #
-# ⛔ POR QUE ESTE GATE NO ES EL QUE PEDIA EL BRIEF, Y LA DIFERENCIA ES UNA MEDIDA.
+# The brief requested a SELECT proving host licenses.olivares.ai, but `webhook_events.endpoint`
+# stores only the route `/webhooks/dodo`, from `DODO_WEBHOOK_SOURCE.endpoint` in
+# `commercial/license-worker/src/store/db.ts`. There is no host column, so a database
+# row cannot prove the entry hostname. Worker traces (`wrangler tail --format json`) can.
 #
-# El brief C05-37 pedia «un probe que falle si el runbook declara verde sin SELECT con host
-# licenses.olivares.ai». Ese probe NO SE PUEDE ESCRIBIR: `webhook_events.endpoint` guarda la
-# RUTA (`/webhooks/dodo`), no el host — lo escribe la constante `DODO_WEBHOOK_SOURCE.endpoint`
-# en `commercial/license-worker/src/store/db.ts`, y no hay ninguna columna de host. Una fila de
-# esa tabla NO SABE por que hostname entro. Un gate escrito contra ese criterio saldria verde
-# mirando una columna que no puede contestar la pregunta.
+# The trace proves a request with these headers, host and route was accepted with 202
+# (review P-02). It cannot prove Svix sent it: a self-probe can supply `webhook-id` and
+# `user-agent`. External provenance, such as a provider delivery log tied to the id,
+# would establish that; Dodo's `/webhooks/{id}/attempts` API returned 403 HTML instead.
 #
-# La evidencia que SI lleva el host es la traza del Worker (`wrangler tail --format json`).
+# On 2026-08-27, self-probes falsely cleared a delivery chain broken for 100 minutes:
+# the local path worked while the sender's path did not. Require the real sender's
+# webhook-id and user-agent, while retaining the provenance limit above.
+# Arrival alone also fails: on 2026-08-28T17:06Z the fixed edge delivered requests, but
+# the Worker rejected them with 401 because the endpoint secret did not match.
 #
-# ⛔ QUE ACREDITA EXACTAMENTE, dicho tras la segunda pasada del contraste (P-02): *«una peticion
-# con estas cabeceras, a este host y esta ruta, que el Worker ACEPTO con 202»*. **No acredita que
-# la enviara Svix**: el `webhook-id` y el `user-agent` viven en una traza que produce quien
-# declara el verde, asi que una sonda propia bien vestida pasaria. Eso no se arregla dentro del
-# artefacto; lo cerraria una procedencia externa —un delivery log del proveedor ligado al id—, y
-# hoy no la hay (`/webhooks/{id}/attempts` no existe en la API de Dodo: 403 con HTML). Se rebaja
-# el claim en vez de fingir que se cierra.
-#
-# ⛔ UNA SONDA PROPIA NO ES EL REMITENTE. El 2026-08-27 una verificacion con peticiones propias
-# dio por buena una cadena que llevaba 100 minutos rota, porque desde esta caja el camino SI
-# funciona: lo que no entra es el remitente. Por eso se exige el `webhook-id` del emisor real Y
-# su user-agent: un identificador a solas es un campo que quien fabrica la traza controla.
-#
-# ⛔ Y LLEGAR NO ES SER ACEPTADO. El 2026-08-28T17:06Z, con la regla del borde ya arreglada, las
-# entregas SI llegaban y el Worker las contestaba 401 porque el secreto del endpoint no era el
-# suyo. Un gate que solo mirase la llegada habria declarado verde una cadena que no entrega nada.
-#
-# ⛔ Y UN VERDE NOMBRA SU EVIDENCIA. Antes bastaba con que ALGUNA traza del directorio tuviera
-# una llegada buena, asi que un verde podia cabalgar para siempre sobre una medida historica —
-# incluida una tomada en una ventana transitoria que despues se deshizo. Ahora el contrato
-# nombra `trace` y `webhook_id`, y mover el verde obliga a nombrar la medida nueva.
-#
-# Salidas: 0 limpio · 1 hallazgo · 2 NO HE PODIDO MIRAR.
+# The contract names `trace` and `webhook_id`; a new green declaration must name new
+# evidence instead of reusing any historical successful trace, including a transient one.
+# Exit: 0 clean · 1 finding · 2 could not check.
 set -uo pipefail
 
 RAIZ="${OLIVARES_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo "")}"
-[ -n "$RAIZ" ] || { echo "check-c05-37-closure: ⛔ NO HE PODIDO MIRAR — no estoy en un repositorio y no me han dado OLIVARES_ROOT" >&2; exit 2; }
-cd "$RAIZ" || { echo "check-c05-37-closure: ⛔ NO HE PODIDO MIRAR — no puedo entrar en $RAIZ" >&2; exit 2; }
+[ -n "$RAIZ" ] || { echo "check-c05-37-closure: ⛔ COULD NOT CHECK — outside a repository and OLIVARES_ROOT is not set" >&2; exit 2; }
+cd "$RAIZ" || { echo "check-c05-37-closure: ⛔ COULD NOT CHECK — cannot enter $RAIZ" >&2; exit 2; }
 
-command -v python3 >/dev/null 2>&1 || { echo "check-c05-37-closure: ⛔ NO HE PODIDO MIRAR — no hay python3 en el PATH" >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "check-c05-37-closure: ⛔ COULD NOT CHECK — python3 is not in PATH" >&2; exit 2; }
 
 JSON="${OLIVARES_C0537_JSON:-design/c05-37-closure.json}"
-[ -r "$JSON" ] || { echo "check-c05-37-closure: ⛔ NO HE PODIDO MIRAR — no puedo leer $JSON" >&2; exit 2; }
+[ -r "$JSON" ] || { echo "check-c05-37-closure: ⛔ COULD NOT CHECK — cannot read $JSON" >&2; exit 2; }
 
 python3 - "$JSON" <<'PY'
 import json, pathlib, sys
@@ -63,11 +46,11 @@ import json, pathlib, sys
 N = "check-c05-37-closure"
 
 def cannot(m):
-    print("%s: ⛔ NO HE PODIDO MIRAR — %s" % (N, m), file=sys.stderr)
+    print("%s: ⛔ COULD NOT CHECK — %s" % (N, m), file=sys.stderr)
     raise SystemExit(2)
 
 def fail(m):
-    print("%s: ⛔ HALLAZGO — %s" % (N, m), file=sys.stderr)
+    print("%s: ⛔ FINDING — %s" % (N, m), file=sys.stderr)
     raise SystemExit(1)
 
 # ⛔ Toda forma inesperada de la traza sale por `cannot`, NUNCA por una excepcion de Python.
@@ -75,39 +58,39 @@ def fail(m):
 # confundir «no he podido mirar» con «roto» cuesta tanto como confundirlo con «limpio».
 def need(v, tipo, donde):
     if not isinstance(v, tipo):
-        cannot("%s no es %s sino %r" % (donde, getattr(tipo, "__name__", tipo), type(v).__name__))
+        cannot("%s must be %s, got %r" % (donde, getattr(tipo, "__name__", tipo), type(v).__name__))
     return v
 
 try:
     d = json.load(open(sys.argv[1], encoding="utf-8"))
 except Exception as e:
-    cannot("%s no es JSON legible: %s" % (sys.argv[1], e))
-need(d, dict, "el contrato")
+    cannot("%s is not readable JSON: %s" % (sys.argv[1], e))
+need(d, dict, "the contract")
 
 if d.get("schema") != "c05-37-closure/v1":
-    cannot("esquema desconocido %r" % d.get("schema"))
+    cannot("unknown schema %r" % d.get("schema"))
 for k in ("sandbox_green", "production_green"):
     if not isinstance(d.get(k), bool):
-        cannot("%s tiene que ser booleano, es %r" % (k, d.get(k)))
+        cannot("%s must be boolean, got %r" % (k, d.get(k)))
 
 runbook = pathlib.Path(str(d.get("runbook", "")))
 if not runbook.is_file():
-    cannot("no encuentro el runbook %s" % runbook)
+    cannot("cannot find runbook %s" % runbook)
 try:
     doc = runbook.read_text(encoding="utf-8")
 except Exception as e:
-    cannot("no puedo leer %s: %s" % (runbook, e))
+    cannot("cannot read %s: %s" % (runbook, e))
 
 # 1 · La PROSA no puede ir por delante de la medida, y se comprueba POR CADA booleano abierto.
 #     Antes solo miraba cuando los DOS estaban en false: con sandbox ya cerrado, una frase que
 #     diera por cerrado lo de produccion habria pasado sin que nada la viera.
 claims = need(d.get("doc_must_not_claim_while_false") or [], list, "doc_must_not_claim_while_false")
 if not claims:
-    cannot("doc_must_not_claim_while_false esta vacio: sin formas prohibidas el gate no mira nada")
+    cannot("doc_must_not_claim_while_false is empty: without prohibited patterns this check verifies nothing")
 if not (d["sandbox_green"] and d["production_green"]):
     for c in claims:
         if str(c).lower() in doc.lower():
-            fail("%s afirma %r con el contrato todavia abierto (sandbox=%s, produccion=%s)"
+            fail("%s claims %r while the contract remains open (sandbox=%s, production=%s)"
                  % (runbook, c, d["sandbox_green"], d["production_green"]))
 
 # ⛔ TIPOS DEL CONTRATO. Sin esto, un `host` o un `status` que fuesen listas u objetos podian
@@ -117,9 +100,9 @@ for k, t in (("required_host_sandbox", str), ("required_host_production", str),
              ("required_user_agent_substring", str), ("sender_webhook_id_prefix", str),
              ("trace_dir", str)):
     if k in d and not isinstance(d[k], t) or isinstance(d.get(k), bool):
-        cannot("%s tiene que ser %s, es %r" % (k, t.__name__, type(d.get(k)).__name__))
+        cannot("%s must be %s, got %r" % (k, t.__name__, type(d.get(k)).__name__))
 if not isinstance(d.get("required_status"), int):
-    cannot("required_status es obligatorio y entero: sin el, una llegada RECHAZADA contaria como verde")
+    cannot("required_status must be an integer: without it, a rejected delivery would pass")
 
 prefix = str(d.get("sender_webhook_id_prefix") or "msg_")
 own = str(d.get("own_probe_webhook_id_marker") or "replay")
@@ -128,7 +111,7 @@ method_req = d.get("required_method")
 status_req = d.get("required_status")
 ua_req = str(d.get("required_user_agent_substring") or "")
 if not path_req or not method_req:
-    cannot("el contrato no declara required_path/required_method")
+    cannot("the contract does not declare required_path/required_method")
 
 def leer_traza(rel):
     f = pathlib.Path(str(rel))
@@ -137,18 +120,18 @@ def leer_traza(rel):
     # donde se busca la evidencia.
     tdir = str(d.get("trace_dir") or "")
     if not tdir:
-        cannot("el contrato no declara trace_dir")
+        cannot("the contract does not declare trace_dir")
     try:
         f.relative_to(tdir)
     except ValueError:
-        cannot("la traza nombrada (%s) no vive bajo trace_dir (%s)" % (f, tdir))
+        cannot("the named trace (%s) is not under trace_dir (%s)" % (f, tdir))
     if not f.is_file():
-        cannot("la traza nombrada por el contrato no existe: %s" % f)
+        cannot("the trace named by the contract is missing: %s" % f)
     try:
         data = json.loads(f.read_text(encoding="utf-8"))
     except Exception as e:
-        cannot("la traza %s no es JSON legible: %s" % (f, e))
-    need(data, list, "la traza %s" % f)
+        cannot("trace %s is not readable JSON: %s" % (f, e))
+    need(data, list, "trace %s" % f)
     return f, data
 
 def revisar_forma(data, f):
@@ -156,15 +139,15 @@ def revisar_forma(data, f):
     salia 0 y `[[], bueno]` salia 2: el mismo defecto perdonado o no segun el ORDEN."""
     for ev in data:
         if not isinstance(ev, dict):
-            cannot("la traza %s trae un evento que no es un objeto: %r" % (f, type(ev).__name__))
+            cannot("trace %s contains a non-object event: %r" % (f, type(ev).__name__))
         h = ev.get("headers")
         if h is not None and not isinstance(h, dict):
-            cannot("un evento de %s trae headers que no son un objeto: %r" % (f, type(h).__name__))
+            cannot("an event in %s has non-object headers: %r" % (f, type(h).__name__))
         u = ev.get("url")
         if u is not None and not isinstance(u, str):
-            cannot("un evento de %s trae url que no es cadena: %r" % (f, type(u).__name__))
+            cannot("an event in %s has a non-string URL: %r" % (f, type(u).__name__))
         if isinstance(h, dict) and h.get("webhook-id") is not None and not isinstance(h.get("webhook-id"), str):
-            cannot("un evento de %s trae webhook-id que no es cadena" % f)
+            cannot("an event in %s has a non-string webhook-id" % f)
 
 def es_llegada_aceptada(ev, host, wid_req):
     """Todas las condiciones, y cada una existe por un defecto medido."""
@@ -204,7 +187,7 @@ def es_llegada_aceptada(ev, host, wid_req):
     # Un evento por lo demas valido y SIN `status` es una traza incompleta, no un rechazo: sale
     # por «no he podido mirar». Un status distinto (401, 500) si es un rechazo y es hallazgo.
     if "status" not in ev:
-        cannot("un evento por lo demas valido no trae `status`: la traza esta incompleta")
+        cannot("an otherwise valid event has no `status`: the trace is incomplete")
     if ev.get("status") != status_req:
         return False
     if wid_req is not None and wid != wid_req:
@@ -219,16 +202,16 @@ for flag, hostkey, evkey, quien in (
         continue
     host = d.get(hostkey)
     if not host:
-        cannot("%s es true pero %s no esta declarado" % (flag, hostkey))
+        cannot("%s is true, but %s is not declared" % (flag, hostkey))
     ev_decl = d.get(evkey)
     if not isinstance(ev_decl, dict):
         # ⛔ Un verde SIN evidencia nombrada es «no he podido mirar», no un hallazgo: lo que
         # falta es el puntero, y sin el no se sabe si la cadena esta bien o mal.
-        cannot("%s es true y el contrato no NOMBRA su evidencia en %s "
-               "(hace falta {trace, webhook_id})" % (flag, evkey))
+        cannot("%s is true, but the contract does not name its evidence in %s "
+               "(requires {trace, webhook_id})" % (flag, evkey))
     wid_req = ev_decl.get("webhook_id")
     if not isinstance(wid_req, str) or not wid_req:
-        cannot("%s no declara un webhook_id" % evkey)
+        cannot("%s declares no webhook_id" % evkey)
     f, data = leer_traza(ev_decl.get("trace"))
     revisar_forma(data, f)
     encontrado = None
@@ -238,19 +221,19 @@ for flag, hostkey, evkey, quien in (
             break
     if encontrado is None:
         problemas.append(
-            "%s=true y la traza que el contrato nombra (%s) NO contiene la llegada aceptada que "
-            "declara: %s %s a %s, user-agent %r, webhook-id %s, status %s"
+            "%s=true, but the trace named by the contract (%s) does not contain the accepted delivery it "
+            "declares: %s %s to %s, user-agent %r, webhook-id %s, status %s"
             % (flag, f, method_req, path_req, host, ua_req, wid_req, status_req))
     else:
-        print("%s: %s VERDE — %s %s%s %s status=%s @ %s (%s)"
+        print("%s: %s PASS — %s %s%s %s status=%s @ %s (%s)"
               % (N, quien, encontrado.get("method"), host, path_req, wid_req,
                  encontrado.get("status"), encontrado.get("ts_utc", "?"), f))
 
 if problemas:
     fail("; ".join(problemas))
 
-print("%s: OK — sandbox_green=%s production_green=%s, y cada verde NOMBRA la traza que lo sostiene. "
-      "Esto es un guardian de CIERRE: no afirma que la cadena funcione ahora."
+print("%s: OK — sandbox_green=%s production_green=%s, and each pass names its supporting trace. "
+      "This check verifies recorded completion; it does not claim the chain works now."
       % (N, d["sandbox_green"], d["production_green"]))
 PY
 exit $?

@@ -29,7 +29,7 @@ func TestRuntimeCompanionUsesExactSessionAndCancellation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if companion.Dir != rec.String(colRunWorkspacePath) || companion.Runner != f.h.m.rt.runner || companion.Isolation != IsolationNative || companion.LaunchID != live.launchID {
+	if companion.Dir != rec.String(colRunWorkspacePath) || companion.Runner != f.h.m.rt.Runner || companion.Isolation != IsolationNative || companion.LaunchID != live.launchID {
 		t.Fatal("companion did not inherit its agent's runner, folder and generation")
 	}
 	for _, alter := range []func(*auth.Principal){func(p *auth.Principal) { p.SessionFence++ }, func(p *auth.Principal) { p.SessionRunRef = model.NewID().String() }, func(p *auth.Principal) { p.CredID = model.NewID() }} {

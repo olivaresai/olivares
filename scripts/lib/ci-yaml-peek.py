@@ -18,8 +18,11 @@ ausencia.
 Salidas: 0 imprime lo pedido · 2 no he podido mirar (fichero ilegible o forma inesperada)
          3 missing or ambiguous; equal values in distinct jobs are accepted.
 """
+import json
 import re
 import sys
+
+_FIELD = re.compile(r"[A-Za-z_][A-Za-z0-9_-]*:(?:\s|$)")
 
 
 def _lineas(ruta):
@@ -52,7 +55,7 @@ def _region(lineas, cabecera, sangria):
     return lineas[ini:]
 
 
-def _bloques(region, marca):
+def _bloques(region, marca, mappings=False):
     """Parte una region de lista en sus elementos, cada uno empezando por `marca`.
 
     La primera linea se NORMALIZA: en YAML la primera clave de un elemento viaja en la propia
@@ -63,15 +66,49 @@ def _bloques(region, marca):
     """
     out, act = [], None
     for ln in region:
+        if not ln.strip() or ln.lstrip().startswith("#"):
+            if act is not None:
+                act.append(ln)
+            continue
         if ln.startswith(marca):
+            if mappings and _FIELD.match(ln[len(marca):]) is None:
+                raise SystemExit(2)  # Quoted keys and flow steps are outside this reader's layout.
             if act is not None:
                 out.append(act)
             act = [marca[:-2] + "  " + ln[len(marca):]]
-        elif act is not None:
+        elif act is not None and len(ln) - len(ln.lstrip(" ")) >= len(marca):
             act.append(ln)
+        else:
+            raise SystemExit(2)
     if act is not None:
         out.append(act)
+    if mappings:
+        for block in out:
+            for ln in block:
+                if not ln.strip() or ln.lstrip().startswith("#"):
+                    continue
+                if len(ln) - len(ln.lstrip(" ")) == len(marca):
+                    if _FIELD.match(ln[len(marca):]) is None:
+                        raise SystemExit(2)
     return out
+
+
+def _scalar(text: str) -> str:
+    """Decode single-line YAML quotes; double quotes support JSON escapes only."""
+    if text.startswith("'"):
+        match = re.fullmatch(r"'((?:[^']|'')*)'(?:\s+#.*)?", text)
+        if match is None:
+            raise SystemExit(2)
+        return match[1].replace("''", "'")
+    if text.startswith('"'):
+        try:
+            value, end = json.JSONDecoder().raw_decode(text)
+        except json.JSONDecodeError:
+            raise SystemExit(2) from None
+        if re.fullmatch(r"(?:\s+#.*)?", text[end:]) is None:
+            raise SystemExit(2)
+        return value
+    return text
 
 
 def _valor(bloque, clave, sangria):
@@ -83,8 +120,19 @@ def _valor(bloque, clave, sangria):
         if not ln.startswith(pref):
             continue
         resto = ln[len(pref):].strip()
-        if resto not in ("|", "|-", ">"):
-            return resto
+        if re.fullmatch(r"[|>][+-]?(?:\s+#.*)?", resto) is None:
+            if resto.startswith(("|", ">")):
+                raise SystemExit(2)  # Do not mistake an unsupported block header for its body.
+            if clave in ("run", "cmd"):
+                if not resto or resto.startswith(("&", "*", "!", "{", "[")):
+                    raise SystemExit(2)
+                for sig in bloque[i + 1:]:
+                    if not sig.strip() or sig.lstrip().startswith("#"):
+                        continue
+                    if len(sig) - len(sig.lstrip(" ")) <= sangria:
+                        break
+                    raise SystemExit(2)  # Multiline inline commands require a supported block header.
+            return _scalar(resto)
         cuerpo = []
         hueco = None
         for sig in bloque[i + 1:]:
@@ -92,6 +140,8 @@ def _valor(bloque, clave, sangria):
                 cuerpo.append("")
                 continue
             h = len(sig) - len(sig.lstrip(" "))
+            if h <= sangria:
+                break
             if hueco is None:
                 hueco = h
             if h < hueco:
@@ -107,7 +157,7 @@ def _pasos(ruta, job):
     lineas = _lineas(ruta)
     reg = _region(lineas, f"  {job}:", 2)
     sub = _region(reg, "    steps:", 4)
-    return _bloques(sub, "      - ")
+    return _bloques(sub, "      - ", mappings=True)
 
 
 def _jobs(lineas):
@@ -145,7 +195,7 @@ def _pasos_de(lineas, job):
         if _valor(region, "uses", 4) is not None:
             return []
         raise SystemExit(2)
-    blocks = _bloques(steps, "      - ")
+    blocks = _bloques(steps, "      - ", mappings=True)
     if not blocks:
         raise SystemExit(2)
     ids = set()
@@ -181,7 +231,7 @@ def _un_valor(found, field):
 
 def main(argv):
     if len(argv) < 2:
-        sys.stderr.write("uso: ci-yaml-peek.py <orden> ...\n")
+        sys.stderr.write("usage: ci-yaml-peek.py <command> ...\n")
         return 2
     orden = argv[1]
 
@@ -249,7 +299,7 @@ def main(argv):
         sys.stdout.write(hall[0])
         return 0
 
-    sys.stderr.write(f"orden desconocida: {orden}\n")
+    sys.stderr.write(f"unknown command: {orden}\n")
     return 2
 
 

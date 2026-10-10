@@ -480,12 +480,12 @@ func (s *messageDerivedService) normalizeDerived(
 	if err := ValidatePublicationAudienceRequest(audienceRequest); err != nil {
 		return messageDerivedNormalized{}, err
 	}
-	if s.module.communicationAudienceAttestor == nil {
+	if s.module.CommunicationAudienceAttestor == nil {
 		return messageDerivedNormalized{}, communicationError(
 			ErrCommunicationEvidenceUnknown, "derived Message audience attestor is unavailable",
 		)
 	}
-	snapshot, attestation, err := s.module.communicationAudienceAttestor.AttestPublicationAudience(
+	snapshot, attestation, err := s.module.CommunicationAudienceAttestor.AttestPublicationAudience(
 		ctx, cloneDirectNoticePublicationAudienceRequest(audienceRequest),
 	)
 	if err != nil {

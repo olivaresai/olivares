@@ -70,7 +70,7 @@ func StoreErrorStatus(err error) (status int, message string, ok bool) {
 // core/api. ok is StoreErrorStatus's.
 func StoreErrorBody(err error) (status int, body map[string]any, ok bool) {
 	status, code, message, ok := storeErrorAnswer(err)
-	return status, map[string]any{"error": map[string]string{"code": code, "message": message}}, ok
+	return status, ErrorBody(code, message), ok
 }
 
 // storeErrorAnswer is the one decision behind StoreErrorStatus and StoreErrorBody.
@@ -142,14 +142,15 @@ func storeErrorAnswer(err error) (status int, code, message string, ok bool) {
 // reaches this function with one of those would be moved from its current 500 to
 // a 400 reading "invalid query", which is neither asked for nor true.
 var moduleErrorMessage = map[string]string{
-	"not_found":             "not found",
-	"conflict":              "conflict",
-	"workspace_confined":    "workspace confined",
-	"residency_violation":   "residency violation",
-	"tenant_suspended":      "tenant suspended",
-	"tenant_not_in_service": "tenant not in service",
-	"not_leader":            "not leader",
-	"audit_spool_full":      "audit spool full",
+	"audit_export_unavailable": honestSeamMessage["audit_export_unavailable"],
+	"not_found":                "not found",
+	"conflict":                 "conflict",
+	"workspace_confined":       "workspace confined",
+	"residency_violation":      "residency violation",
+	"tenant_suspended":         "tenant suspended",
+	"tenant_not_in_service":    "tenant not in service",
+	"not_leader":               "not leader",
+	"audit_spool_full":         "audit spool full",
 }
 
 // AddonRefusalMessage is the client-facing sentence for an add-on entitlement
@@ -165,7 +166,7 @@ var moduleErrorMessage = map[string]string{
 // least able to check.
 //
 // INERT IN THIS BUILD, and that is not a reason to leave it out. Nothing in the
-// open tree constructs the error: license.AddonRequired (core/license/entitlement.go:61)
+// open tree constructs the error: license.AddonRequired (core/license/entitlement.go:65)
 // has no caller outside its own file and tests, because the addonGate that builds
 // it lives in the closed enterprise overlay. The arm is here for the same reason
 // statusFor keeps user_cap_requires_enterprise mapped after B10 made it

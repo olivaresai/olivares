@@ -28,12 +28,12 @@ export LC_ALL
 RAIZ="$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd -P)"
 GATE="$RAIZ/scripts/check-cosign-contract.sh"
 [ -r "$GATE" ] || {
-	echo "test-cosign-contract-verdicts: ⛔ NO HE PODIDO MIRAR: no existe $GATE" >&2
+	echo "test-cosign-contract-verdicts: ⛔ COULD NOT LOOK: $GATE does not exist" >&2
 	exit 2
 }
 
 BANCO="$(mktemp -d "$RAIZ/.cosign-verdicts-XXXXXX")" || {
-	echo "test-cosign-contract-verdicts: ⛔ NO HE PODIDO MIRAR: no se pudo crear el banco" >&2
+	echo "test-cosign-contract-verdicts: ⛔ COULD NOT LOOK: could not create the test directory" >&2
 	exit 2
 }
 trap 'rm -rf "$BANCO"' EXIT
@@ -48,12 +48,12 @@ for h in dirname awk sed mktemp cat rm grep printf env sh bash; do
 	ln -sf "$ruta" "$SIN/$h" 2>/dev/null || true
 done
 if [ -n "$(command -v cosign 2>/dev/null)" ] && [ -e "$SIN/cosign" ]; then
-	echo "test-cosign-contract-verdicts: ⛔ NO HE PODIDO MIRAR: el PATH señuelo trajo cosign" >&2
+	echo "test-cosign-contract-verdicts: ⛔ COULD NOT LOOK: decoy PATH included cosign" >&2
 	exit 2
 fi
 
-pasan=0
-fallan=0
+pass_count=0
+fail_count=0
 
 comprobar() {
 	etiqueta="$1"
@@ -61,22 +61,22 @@ comprobar() {
 	obtenido="$3"
 	if [ "$obtenido" -eq "$esperado" ]; then
 		printf '  ok    %-58s rc=%s\n' "$etiqueta" "$obtenido"
-		pasan=$((pasan + 1))
+		pass_count=$((pass_count + 1))
 	else
-		printf '  FALLA %-58s rc=%s (quiere %s)\n' "$etiqueta" "$obtenido" "$esperado"
-		fallan=$((fallan + 1))
+		printf '  FAIL  %-58s rc=%s (expected %s)\n' "$etiqueta" "$obtenido" "$esperado"
+		fail_count=$((fail_count + 1))
 	fi
 }
 
 # ── 1 · Sin binario que probar ⇒ NO HE PODIDO MIRAR (2), nunca «roto» ni «limpio» ─────────
 PATH="$SIN" bash "$GATE" >"$BANCO/1.log" 2>&1
-comprobar "cosign ausente del PATH es NO HE PODIDO MIRAR" 2 "$?"
+comprobar "cosign absent from PATH is COULD NOT LOOK" 2 "$?"
 
 # ── 2 · OLIVARES_COSIGN_BIN apuntando a algo no ejecutable ⇒ tampoco se pudo mirar ────────
 printf 'no soy ejecutable\n' >"$BANCO/no-exec"
 chmod -x "$BANCO/no-exec"
 OLIVARES_COSIGN_BIN="$BANCO/no-exec" bash "$GATE" >"$BANCO/2.log" 2>&1
-comprobar "OLIVARES_COSIGN_BIN no ejecutable es NO HE PODIDO MIRAR" 2 "$?"
+comprobar "nonexecutable OLIVARES_COSIGN_BIN is COULD NOT LOOK" 2 "$?"
 
 # ── 3 · Un cosign que SÍ está y da otra versión ⇒ eso sí es un hallazgo (1) ───────────────
 # ⛔ LA DIRECCIÓN QUE HACE VÁLIDAS A LAS DOS DE ARRIBA. Sin ella, un gate que devolviera 2
@@ -89,7 +89,7 @@ exit 0
 EOF
 chmod +x "$BANCO/otra-version/cosign"
 PATH="$BANCO/otra-version:$SIN" bash "$GATE" >"$BANCO/3.log" 2>&1
-comprobar "cosign presente con versión divergente es un HALLAZGO" 1 "$?"
+comprobar "cosign present with a different version is a FINDING" 1 "$?"
 
 # ── 4 · Un cosign que resuelve y no arranca ⇒ hallazgo (1), no ausencia ───────────────────
 # Es el caso medido el 2026-07-25: un shim de contención sin binario detrás. Está PRESENTE, así
@@ -102,26 +102,26 @@ exit 127
 EOF
 chmod +x "$BANCO/roto/cosign"
 PATH="$BANCO/roto:$SIN" bash "$GATE" >"$BANCO/4.log" 2>&1
-comprobar "cosign presente pero inutilizable es un HALLAZGO" 1 "$?"
+comprobar "cosign present but unusable is a FINDING" 1 "$?"
 
 # ── 5 · El mensaje NOMBRA la respuesta, o el operador no puede actuar sobre ella ──────────
 if grep -q "UNVERIFIED" "$BANCO/1.log" 2>/dev/null; then
-	printf '  ok    %-58s\n' "el 2 se explica con UNVERIFIED en el mensaje"
-	pasan=$((pasan + 1))
+	printf '  ok    %-58s\n' "exit 2 is explained by UNVERIFIED in the message"
+	pass_count=$((pass_count + 1))
 else
-	printf '  FALLA %-58s\n' "el 2 salió sin decir que NO se pudo probar"
-	fallan=$((fallan + 1))
+	printf '  FAIL  %-58s\n' "exit 2 did not state that verification was impossible"
+	fail_count=$((fail_count + 1))
 fi
 # Y no puede leerse como un pase: un rc distinto de cero con un mensaje que suene a «skip» es
 # exactamente lo que esta separación vino a evitar.
 if grep -qiE "\bskipp?(ed|ing)\b" "$BANCO/1.log" 2>/dev/null; then
-	printf '  FALLA %-58s\n' "el mensaje del 2 se lee como un SKIP"
-	fallan=$((fallan + 1))
+	printf '  FAIL  %-58s\n' "exit 2 message reads as a SKIP"
+	fail_count=$((fail_count + 1))
 else
-	printf '  ok    %-58s\n' "el mensaje del 2 no se lee como un skip"
-	pasan=$((pasan + 1))
+	printf '  ok    %-58s\n' "exit 2 message does not read as a skip"
+	pass_count=$((pass_count + 1))
 fi
 
-echo "test-cosign-contract-verdicts: $pasan pasan, $fallan fallan"
-[ "$fallan" -eq 0 ] || exit 1
+echo "test-cosign-contract-verdicts: $pass_count passed, $fail_count failed"
+[ "$fail_count" -eq 0 ] || exit 1
 exit 0

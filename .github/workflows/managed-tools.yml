@@ -1,0 +1,89 @@
+# SPDX-FileCopyrightText: 2026 Olivares.AI
+# SPDX-License-Identifier: AGPL-3.0-only
+name: managed-tools
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/managed-tools.yml'
+      - 'Dockerfile*'
+      - 'deploy/compose/**'
+      - 'packaging/container/**'
+      - 'cmd/olivares/internal/toolinstall/**'
+      - 'cmd/olivares/internal/agenttoolsapi/**'
+      - 'cmd/olivares/boot.go'
+      - 'scripts/*managed-tools*'
+      - 'scripts/assemble-runtime-context.sh'
+      - 'scripts/check-compose-ready.sh'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  runtime-install:
+    # Shared Docker runners execute only repository branches, never fork PRs.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ${{ vars.CI_RUNNER || 'ubuntu-latest' }}
+    timeout-minutes: 55
+    env:
+      READY_POSITIVE_PROJECT: olivares-ready-${{ github.repository_id }}-${{ github.run_id }}-${{ github.run_attempt }}-positive
+      READY_NEGATIVE_PROJECT: olivares-ready-${{ github.repository_id }}-${{ github.run_id }}-${{ github.run_attempt }}-negative
+      OLIVARES_IMAGE: olivares-compose-ready:${{ github.repository_id }}-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: journey failure checks and Compose contract
+        run: |
+          python3 scripts/test-managed-tools-journey.py
+          bash scripts/check-compose-ready.sh
+      - name: build the release runtime around this checkout's binary
+        timeout-minutes: 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/check-compose-ready.sh owner
+          context=$(mktemp -d "$RUNNER_TEMP/managed-runtime.XXXXXX")
+          extractor="olivares-managed-${GITHUB_REPOSITORY_ID}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          cleanup() {
+            rc=$?
+            trap - EXIT
+            if ! existing=$(docker container ls -aq --filter "name=^/${extractor}$"); then
+              rc=1
+            elif [[ -n "$existing" ]]; then
+              docker rm "$extractor" || rc=1
+            fi
+            rm -rf "$context"
+            exit "$rc"
+          }
+          trap cleanup EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          docker build --target build --tag "$OLIVARES_IMAGE-source" \
+            --build-arg VERSION="$(sh scripts/build-ldflags.sh --version)-managed-tools-ci" \
+            --build-arg "COMMIT=$(git rev-parse HEAD)" \
+            --build-arg "SOURCE_DATE_EPOCH=$(git show -s --format=%ct HEAD)" .
+          docker create --name "$extractor" "$OLIVARES_IMAGE-source" /bin/true
+          docker cp "$extractor:/out/olivares" "$context/olivares"
+          cp Dockerfile.release "$context/Dockerfile"
+          # A test image, never published: the project NOTICE stands in for the
+          # third-party notice that only the GoReleaser license hook generates.
+          bash scripts/assemble-runtime-context.sh "$context" NOTICE
+          docker build --tag "$OLIVARES_IMAGE" "$context"
+      - name: fresh setup, runtime install, cold status and persistent tools
+        timeout-minutes: 15
+        run: bash scripts/qualify-managed-tools.sh
+      - name: remove only this run's image tags
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/check-compose-ready.sh owner
+          for image in "$OLIVARES_IMAGE" "$OLIVARES_IMAGE-source"; do
+            listed=$(docker image ls --filter "reference=$image" --format '{{.Repository}}:{{.Tag}}')
+            if grep -qxF -- "$image" <<< "$listed"; then
+              docker image rm "$image"
+            fi
+          done

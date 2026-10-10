@@ -28,7 +28,7 @@ func buildTestBundle(t *testing.T) (bundlePath string, cipher *dr.KeyCipher) {
 	return buildTestBundleWithPassphrase(t, "correct horse battery staple")
 }
 
-func buildTestBundleWithPassphrase(t *testing.T, passphrase string) (bundlePath string, cipher *dr.KeyCipher) {
+func buildTestBundleWithPassphrase(t *testing.T, passphrase string, extraKeys ...string) (bundlePath string, cipher *dr.KeyCipher) {
 	t.Helper()
 	ctx := context.Background()
 	dir := t.TempDir()
@@ -87,7 +87,7 @@ func buildTestBundleWithPassphrase(t *testing.T, passphrase string) (bundlePath 
 		t.Fatal(err)
 	}
 	m, err := dr.BuildManifest(ctx, st, signer.PublicKey(), cpv, dr.BuildOptions{
-		EngineKind: "sqlite", Version: "26.9.0",
+		EngineKind: "sqlite", Version: "26.900",
 		Store:    dr.StoreSnapshot{Method: dr.MethodVacuumInto, File: "store/olivares.db", SizeBytes: size, SHA256: sum},
 		Keys:     []dr.KeyRef{{File: "keys/audit-signing.key.enc", Name: "audit-signing.key", Role: dr.RoleAudit, PubSHA256: dr.PubFingerprint(signer.PublicKey())}},
 		TipMatch: dr.TipExact, Now: time.Now(), Notes: "test",
@@ -106,6 +106,15 @@ func buildTestBundleWithPassphrase(t *testing.T, passphrase string) (bundlePath 
 	if err != nil {
 		t.Fatal(err)
 	}
+	sealedKeys := map[string][]byte{"keys/audit-signing.key.enc": sealed}
+	for _, name := range extraKeys {
+		path := "keys/" + name + ".enc"
+		sealedKeys[path], err = cipher.Seal([]byte("synthetic restored key"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		m.Keys = append(m.Keys, dr.KeyRef{File: path, Name: name, Role: dr.RoleOther})
+	}
 	bundlePath = filepath.Join(dir, "test.drbundle")
 	bf, err := os.Create(bundlePath)
 	if err != nil {
@@ -113,7 +122,7 @@ func buildTestBundleWithPassphrase(t *testing.T, passphrase string) (bundlePath 
 	}
 	if err := dr.WriteAuthenticatedBundle(bf, dr.BundleInput{
 		Manifest: m, KEK: cipher.Params(), SnapshotPath: snap,
-		SealedKeys: map[string][]byte{"keys/audit-signing.key.enc": sealed},
+		SealedKeys: sealedKeys,
 	}, cipher); err != nil {
 		t.Fatal(err)
 	}
@@ -142,7 +151,7 @@ func TestVerifyBundleScratchLegacyShortPassphrase(t *testing.T) {
 	if err != nil {
 		t.Fatalf("open legacy bundle cipher: %v", err)
 	}
-	rep, err := verifyBundleScratch(ctx, tmp, m, cipher)
+	rep, err := verifyBundleScratch(ctx, tmp, m, cipher, nil)
 	if err != nil {
 		t.Fatalf("verify legacy bundle: %v", err)
 	}
@@ -165,7 +174,7 @@ func TestVerifyBundleScratchOK(t *testing.T) {
 	if err != nil {
 		t.Fatalf("extract: %v", err)
 	}
-	rep, err := verifyBundleScratch(ctx, tmp, m, cipher)
+	rep, err := verifyBundleScratch(ctx, tmp, m, cipher, nil)
 	if err != nil {
 		t.Fatalf("verifyBundleScratch: %v", err)
 	}
@@ -191,7 +200,7 @@ func TestVerifyBundleScratchWrongPassphrase(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := verifyBundleScratch(ctx, tmp, m, wrong); err == nil {
+	if _, err := verifyBundleScratch(ctx, tmp, m, wrong, nil); err == nil {
 		t.Fatal("a wrong passphrase must fail the scratch verify")
 	}
 }

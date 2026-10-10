@@ -6,11 +6,7 @@
 // generation from the system's compliance, audit and FinOps data. An auditor
 // downloads a single document instead of copy-pasting JSON.
 //
-// Open-core scope: on-demand HTML and PDF (when chromium is available) for five
-// built-in report types (compliance-evidence, audit-summary, finops-report,
-// access-review, executive-summary), served via GET /v1/m/reporting/reports.
-//
-// Enterprise add-on (enterprise/reporting, build-tag gated): scheduled report
-// generation (cron), custom branding (logo + corporate colors), and operator-
-// uploaded HTML templates.
+// Business Compliance Packs owns on-demand HTML/PDF rendering and its report catalog.
+// Community retains the API, schema and provider contracts; paid routes return 501.
+// Scheduled reporting, branding and custom templates use the same private renderer.
 package reporting

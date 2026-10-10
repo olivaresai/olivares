@@ -101,6 +101,7 @@
     "valueText": "{{consumed}} consommé, {{projected}} prévu"
   },
   "disclaimers": {
+    "aimsPack": "Projet de dossier de préparation à la certification ISO/IEC 42001:2023 fondé sur l'évaluation actuelle d'Olivares AI et le contexte fourni par l'opérateur. Tous les documents sont des projets ; une personne compétente doit les examiner avant leur soumission à un organisme de certification, un auditeur ou un acheteur. Ce dossier ne fournit ni certification, ni assurance de conformité, ni conseil juridique. La certification nécessite un organisme accrédité (ISO/IEC 42006:2025). L'état des contrôles reflète les éléments probants actuels du tenant ; les lacunes restent non comblées.",
     "report": "Correspondance technique de l'état des contrôles, dérivée des preuves observées sur la plateforme. Il ne s'agit PAS d'une certification NI d'un avis juridique."
   },
   "gate": {

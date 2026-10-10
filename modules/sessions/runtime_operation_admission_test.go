@@ -83,7 +83,7 @@ func recvErr(t *testing.T, what string, ch <-chan error) error {
 
 func TestOperationAdmission_RefusesBeforeAllocatingAnEntry(t *testing.T) {
 	t.Parallel()
-	rt := newRuntimeState()
+	rt := newRuntimeState(nil)
 	const key = "t|run-refusals"
 
 	t.Run("nil context", func(t *testing.T) {
@@ -131,7 +131,7 @@ func TestOperationAdmission_RefusesBeforeAllocatingAnEntry(t *testing.T) {
 
 func TestOperationAdmission_HeldKeyBlocksWaiterUntilCancellation(t *testing.T) {
 	t.Parallel()
-	rt := newRuntimeState()
+	rt := newRuntimeState(nil)
 	const key = "t|run-held"
 
 	release, err := rt.lockRunContext(context.Background(), key)
@@ -186,7 +186,7 @@ func TestOperationAdmission_HeldKeyBlocksWaiterUntilCancellation(t *testing.T) {
 
 func TestOperationAdmission_QueuedWaiterReportsItsOwnDeadline(t *testing.T) {
 	t.Parallel()
-	rt := newRuntimeState()
+	rt := newRuntimeState(nil)
 	const key = "t|run-deadline"
 
 	release, err := rt.lockRunContext(context.Background(), key)
@@ -234,7 +234,7 @@ func TestOperationAdmission_QueuedWaiterReportsItsOwnDeadline(t *testing.T) {
 
 func TestOperationAdmission_DifferentKeysAreIndependent(t *testing.T) {
 	t.Parallel()
-	rt := newRuntimeState()
+	rt := newRuntimeState(nil)
 
 	held, err := rt.lockRunContext(context.Background(), "t|run-a")
 	if err != nil {
@@ -255,7 +255,7 @@ func TestOperationAdmission_CompatibilityAndContextualOwnersExcludeEachOther(t *
 	t.Parallel()
 
 	t.Run("compatibility holder blocks a contextual waiter", func(t *testing.T) {
-		rt := newRuntimeState()
+		rt := newRuntimeState(nil)
 		const key = "t|run-compat-first"
 		release := rt.lockRun(key) // the kill-switch entrypoint
 		ctx, cancel := context.WithCancel(context.Background())
@@ -280,7 +280,7 @@ func TestOperationAdmission_CompatibilityAndContextualOwnersExcludeEachOther(t *
 	})
 
 	t.Run("contextual holder blocks the compatibility entrypoint", func(t *testing.T) {
-		rt := newRuntimeState()
+		rt := newRuntimeState(nil)
 		const key = "t|run-ctx-first"
 		release, err := rt.lockRunContext(context.Background(), key)
 		if err != nil {
@@ -325,7 +325,7 @@ func TestOperationAdmission_CancellationReleaseRaceKeepsOneOwnerAndNoOrphan(t *t
 	for i := range 100 {
 		func() {
 			key := fmt.Sprintf("t|run-race-%d", i)
-			rt := newRuntimeState()
+			rt := newRuntimeState(nil)
 			release, err := rt.lockRunContext(context.Background(), key)
 			if err != nil {
 				t.Fatalf("holder admission refused: %v", err) // no worker exists yet
@@ -419,7 +419,7 @@ func TestOperationAdmission_CancellationReleaseRaceKeepsOneOwnerAndNoOrphan(t *t
 
 func TestOperationAdmission_RepeatedReleaseIsIdempotentUnderConcurrency(t *testing.T) {
 	t.Parallel()
-	rt := newRuntimeState()
+	rt := newRuntimeState(nil)
 	const key = "t|run-release"
 
 	release, err := rt.lockRunContext(context.Background(), key)
@@ -478,7 +478,7 @@ func TestOperationAdmission_RepeatedReleaseIsIdempotentUnderConcurrency(t *testi
 
 func TestOperationAdmission_AllEntriesReclaimAfterMixedTraffic(t *testing.T) {
 	t.Parallel()
-	rt := newRuntimeState()
+	rt := newRuntimeState(nil)
 
 	var wg sync.WaitGroup
 	for i := range 16 {
@@ -529,8 +529,8 @@ func admissionEntrypointHarness(t *testing.T) (*Module, model.TenantID, *admissi
 		return Credential{ID: "cred-1", Token: "tok-secret", Scheme: "mock", NotAfter: farFuture}, nil
 	})
 	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(fr), WithCredentialSource(creds))
-	counted := &admissionCountingData{inner: m.data}
-	m.data = counted
+	counted := &admissionCountingData{inner: m.Data}
+	m.Data = counted
 	return m, tenant, counted, fr, &credCalls
 }
 

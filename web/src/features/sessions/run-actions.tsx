@@ -13,14 +13,54 @@ import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { toast } from '@/components/ui/toaster'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
+import { DiscardWorktreeOption } from '@/features/agentops/discard-worktree-option'
 import { useTurnInterrupt } from '@/features/agentops/turn-interrupt'
 import type { RunDTO } from '@/features/agentops/types'
 import { currentControlFence } from '@/features/agentops/work-fence'
+import { useClientSettings } from '@/features/settings/preferences'
 import { ApiError } from '@/lib/api/errors'
 import { useAuth } from '@/lib/auth/context'
 import { sessionsKeys } from './api'
 import { startsAgain, type Capability } from './provenance'
+import { DisabledTip, IconTip } from './icon-tip'
 import './i18n'
+
+/**
+ * Interrupt, as an icon. A disabled one keeps its reason reachable by keyboard: the
+ * button cannot take focus, so a focusable span around it carries the tooltip.
+ */
+function InterruptIcon({
+  label,
+  hint,
+  fenceUnavailable,
+  disabled,
+  onClick,
+}: {
+  label: string
+  hint: string
+  fenceUnavailable: string | null
+  disabled: boolean
+  onClick: () => void
+}) {
+  const button = (
+    <Button
+      variant="ghost"
+      size="icon"
+      aria-label={label}
+      onClick={onClick}
+      disabled={disabled}
+    >
+      <CirclePause />
+    </Button>
+  )
+  if (disabled)
+    return (
+      <DisabledTip reason={`${label}. ${fenceUnavailable ?? hint}`}>
+        {button}
+      </DisabledTip>
+    )
+  return <IconTip label={`${label}. ${hint}`}>{button}</IconTip>
+}
 
 /** The real lifecycle controls, driven by the SAME capability model shown above, so a
  * button can never appear that the block just said was unavailable. */
@@ -29,19 +69,37 @@ export function RunActions({
   caps,
   onClose,
   only,
+  compact = false,
 }: {
   run?: RunDTO
   caps: Capability[]
   onClose: () => void
   /** Limit to these actions (the session header shows Interrupt, Stop and Resume). */
   only?: readonly Capability['id'][]
+  /**
+   * The thread header's form: Interrupt and Stop as icon buttons (a name and a hover each,
+   * Stop in the danger tone, asking first when the person's Stop setting says so), Resume
+   * as the one labelled button. The session card keeps the labelled buttons.
+   */
+  compact?: boolean
 }) {
   const { t } = useTranslation('sessions')
   const { t: tOps } = useTranslation('agentops')
   const { activeTenant } = useAuth()
   const turn = useTurnInterrupt(run)
   const qc = useQueryClient()
-  const [confirm, setConfirm] = useState<null | 'cleanup' | 'delete'>(null)
+  const { t: tSettings } = useTranslation('settings')
+  const confirmStop = useClientSettings((s) => s.confirmStop)
+  const [confirm, setConfirm] = useState<null | 'cleanup' | 'delete' | 'stop'>(
+    null,
+  )
+  // The person's confirmation to discard the session's git worktree and branch with
+  // unmerged or uncommitted work; asked only of a session that has one.
+  const [discardWorktree, setDiscardWorktree] = useState(false)
+  const closeConfirm = () => {
+    setConfirm(null)
+    setDiscardWorktree(false)
+  }
 
   const invalidate = () => {
     void qc.invalidateQueries({ queryKey: agentOpsKeys.all(activeTenant) })
@@ -56,7 +114,10 @@ export function RunActions({
         run?.run_ref as string,
         run ? await currentControlFence(run) : undefined,
       ),
-    onSuccess: invalidate,
+    onSuccess: () => {
+      setConfirm(null)
+      invalidate()
+    },
     onError: onErr,
   })
   const resume = useMutation({
@@ -65,9 +126,10 @@ export function RunActions({
     onError: onErr,
   })
   const cleanup = useMutation({
-    mutationFn: () => agentOpsApi.cleanup(run?.run_ref as string),
+    mutationFn: () =>
+      agentOpsApi.cleanup(run?.run_ref as string, discardWorktree),
     onSuccess: () => {
-      setConfirm(null)
+      closeConfirm()
       invalidate()
     },
     onError: onErr,
@@ -77,11 +139,12 @@ export function RunActions({
     // cleaned record, and "Delete" is one action for the person asking.
     mutationFn: async () => {
       const ref = run?.run_ref as string
-      if (run?.state !== 'cleaned') await agentOpsApi.cleanup(ref)
+      if (run?.state !== 'cleaned')
+        await agentOpsApi.cleanup(ref, discardWorktree)
       return agentOpsApi.deleteRun(ref)
     },
     onSuccess: () => {
-      setConfirm(null)
+      closeConfirm()
       invalidate()
       onClose()
     },
@@ -99,6 +162,63 @@ export function RunActions({
     !allow('delete')
   )
     return null
+
+  if (compact)
+    return (
+      <div className="flex items-center gap-0.5" data-slot="thread-actions">
+        {allow('interrupt') && turn.offered && (
+          <InterruptIcon
+            label={tOps('live.interrupt')}
+            hint={tOps('live.interruptHint')}
+            fenceUnavailable={
+              turn.fenceUnavailable
+                ? tOps('live.interruptFenceUnavailable')
+                : null
+            }
+            disabled={!turn.allowed || turn.pending}
+            onClick={turn.interrupt}
+          />
+        )}
+        {allow('stop') && (
+          <IconTip label={t('card.actions.stop')}>
+            {/* STOP IS QUIET UNTIL IT IS MEANT: a ghost icon whose glyph is the danger
+                tone, tinted on hover. The loud, filled version belongs to the confirm. */}
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t('card.actions.stop')}
+              className="text-bad hover:bg-bad-soft hover:text-bad"
+              onClick={() => (confirmStop ? setConfirm('stop') : stop.mutate())}
+              disabled={stop.isPending}
+            >
+              <Square />
+            </Button>
+          </IconTip>
+        )}
+        {allow('resume') && (
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => resume.mutate()}
+            disabled={resume.isPending}
+          >
+            <Play />
+            {startsAgain(run)
+              ? t('card.actions.startAgain')
+              : t('card.actions.resume')}
+          </Button>
+        )}
+        <ConfirmDialog
+          open={confirm === 'stop'}
+          onOpenChange={(o) => !o && setConfirm(null)}
+          title={tSettings('stopConfirm.title')}
+          description={tSettings('stopConfirm.description')}
+          confirmLabel={tSettings('stopConfirm.confirm')}
+          pending={stop.isPending}
+          onConfirm={() => stop.mutate()}
+        />
+      </div>
+    )
 
   return (
     <div className="flex flex-wrap items-center gap-2">
@@ -164,23 +284,39 @@ export function RunActions({
       )}
       <ConfirmDialog
         open={confirm === 'cleanup'}
-        onOpenChange={(o) => !o && setConfirm(null)}
+        onOpenChange={(o) => !o && closeConfirm()}
         title={t('card.actions.cleanup')}
         description={t('card.actions.cleanupHint')}
         confirmLabel={t('card.actions.cleanup')}
         pending={cleanup.isPending}
         onConfirm={() => cleanup.mutate()}
-      />
+      >
+        {run.worktree_branch && run.state !== 'cleaned' && (
+          <DiscardWorktreeOption
+            branch={run.worktree_branch}
+            checked={discardWorktree}
+            onCheckedChange={setDiscardWorktree}
+          />
+        )}
+      </ConfirmDialog>
       <ConfirmDialog
         open={confirm === 'delete'}
-        onOpenChange={(o) => !o && setConfirm(null)}
+        onOpenChange={(o) => !o && closeConfirm()}
         tone="danger"
         title={t('card.actions.delete')}
         description={t('card.actions.deleteHint')}
         confirmLabel={t('card.actions.delete')}
         pending={del.isPending}
         onConfirm={() => del.mutate()}
-      />
+      >
+        {run.worktree_branch && run.state !== 'cleaned' && (
+          <DiscardWorktreeOption
+            branch={run.worktree_branch}
+            checked={discardWorktree}
+            onCheckedChange={setDiscardWorktree}
+          />
+        )}
+      </ConfirmDialog>
     </div>
   )
 }

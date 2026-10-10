@@ -9,36 +9,81 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/core/store"
 	"testing"
 	"time"
+
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 )
 
 func TestLineageConcurrentDifferentRelationsPostgres(t *testing.T) {
+	testLineageConcurrentDifferentRelationsPostgres(t, 0)
+}
+
+func TestLineageConcurrentDifferentRelationsSlowSetupPostgres(t *testing.T) {
+	// Preparation of the held writer can outlast the handoff's behavior budget.
+	// The second tenant must still get its full independent-writer check afterward.
+	testLineageConcurrentDifferentRelationsPostgres(t, 11*time.Second)
+}
+
+func testLineageConcurrentDifferentRelationsPostgres(t *testing.T, firstSetupDelay time.Duration) {
+	t.Helper()
 	st := openLineagePG(t)
-	// Two tenant provisions and two fact snapshots are FIXTURE, not behaviour. Charged to
-	// the 10 s budget they leave the handoff below with whatever is left of it, and under
-	// -race on a contended runner that is how a passing contract reports `context deadline
-	// exceeded` (01f81b8e81 / 4859cc43f3 / 346bce0c8a: same class, same remedy).
 	a := provisionTenant(t, st, "concurrent-a")
 	b := provisionTenant(t, st, "concurrent-b")
 	ba := lineageTestFacts(t, st, a)
 	bb := lineageTestFacts(t, st, b)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	wrote := make(chan struct{})
+	// Establish the held source write before timing the interleaving. A remains
+	// uncommitted until B finishes; failed setup must never signal a held writer.
+	setupCtx, cancelSetup := context.WithCancel(t.Context())
+	defer cancelSetup()
+	// One finite fixture budget applies equally with and without injected delay.
+	const setupTimeout = 30 * time.Second
+	setupDeadline := time.AfterFunc(setupTimeout, cancelSetup)
+	defer setupDeadline.Stop()
+	wrote := make(chan error, 1)
 	release := make(chan struct{})
 	done := make(chan error, 1)
 	go func() {
-		done <- st.Mutate(ctx, a, func(sc store.Scope) error {
-			_, e := sc.Sessions().Create(ctx, model.Session{ExternalID: "concurrent"})
-			close(wrote)
-			<-release
-			return e
+		done <- st.Mutate(setupCtx, a, func(sc store.Scope) error {
+			var e error
+			if firstSetupDelay > 0 {
+				_, e = sc.(*tenantScope).tx.ExecContext(setupCtx, "SELECT pg_catalog.pg_sleep($1)", firstSetupDelay.Seconds())
+			}
+			if e == nil {
+				_, e = sc.Sessions().Create(setupCtx, model.Session{ExternalID: "concurrent"})
+			}
+			wrote <- e
+			if e != nil {
+				return e
+			}
+			select {
+			case <-release:
+				return nil
+			case <-setupCtx.Done():
+				return setupCtx.Err()
+			}
 		})
 	}()
-	<-wrote
+	select {
+	case e := <-wrote:
+		if e != nil {
+			first := <-done
+			t.Fatalf("held writer setup failed: %v / %v", e, first)
+		}
+	case e := <-done:
+		t.Fatalf("held writer returned before a successful source write: %v", e)
+	}
+	if !setupDeadline.Stop() {
+		cancelSetup()
+		first := <-done
+		t.Fatalf("held writer setup deadline exceeded: %v", first)
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	// The interleaving deadline also cancels A's transaction and release wait.
+	stopSetup := context.AfterFunc(ctx, cancelSetup)
+	defer stopSetup()
 	fast, stop := context.WithTimeout(ctx, 500*time.Millisecond)
 	err := st.Mutate(fast, b, func(sc store.Scope) error {
 		_, e := sc.Resources().Create(fast, model.Resource{Name: "concurrent", Kind: "folder"})

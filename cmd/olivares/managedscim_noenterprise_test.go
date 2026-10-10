@@ -10,7 +10,7 @@ import "testing"
 
 func TestNewManagedSCIMIsNil(t *testing.T) {
 	t.Parallel()
-	if got := newManagedSCIM(); got != nil {
-		t.Fatalf("community managed-SCIM seam must stay nil, got %T", got)
+	if got := thisEdition.managedSCIM.get(); got != nil {
+		t.Fatalf("community managed-SCIM port must stay nil, got %T", got)
 	}
 }

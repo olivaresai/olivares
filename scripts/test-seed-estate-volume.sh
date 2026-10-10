@@ -17,8 +17,16 @@
 #    aparte: `verify-seed-payloads.py` los ejercio uno a uno (18 declarados / 18 ejercidos).
 set -u -o pipefail
 
+_olivares_git_env="$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)/lib/git-env.sh"
+# shellcheck source=/dev/null
+. "$_olivares_git_env" || {
+	echo "FATAL: cannot source $_olivares_git_env (git-env isolation)" >&2
+	exit 2
+}
+unset _olivares_git_env
+
 if ! command -v python3 >/dev/null 2>&1; then
-	printf 'test-seed-estate-volume: NO HE PODIDO MIRAR: no hay python3\n' >&2
+	printf 'test-seed-estate-volume: COULD NOT CHECK: python3 is unavailable\n' >&2
 	exit 2
 fi
 
@@ -39,8 +47,8 @@ ok=0
 fail=0
 paso() { printf 'ok   %s\n' "$1"; ok=$((ok + 1)); }
 malo() { printf 'FAIL %s\n' "$1"; fail=$((fail + 1)); }
-SALIDA="$T/salida.txt"
-casa() { command grep -qE "$1" "$SALIDA"; }
+OUTPUT="$T/output.txt"
+casa() { command grep -qE "$1" "$OUTPUT"; }
 
 # ── El doble ──────────────────────────────────────────────────────────────────────────────────
 cat > "$T/doble.py" <<'PY'
@@ -106,7 +114,7 @@ base = f"http://127.0.0.1:{srv.server_port}"
 veces = int(sys.argv[4]) if len(sys.argv) > 4 and sys.argv[4] else 1
 rc = 0
 for v in range(veces):
-    print(f"===== corrida {v + 1} de {veces} =====")
+    print(f"===== run {v + 1} of {veces} =====")
     p = subprocess.run([sys.executable, sys.argv[1], base, "tok", "ten", "--objetivos", sys.argv[2]],
                        capture_output=True, text=True)
     rc = p.returncode
@@ -114,16 +122,16 @@ for v in range(veces):
 srv.shutdown()
 sys.exit(rc)
 PY
-corre() { python3 "$T/doble.py" "$1" "$2" "${3:-}" "${4:-}" >"$SALIDA" 2>&1; printf '%s' "$?"; }
+corre() { python3 "$T/doble.py" "$1" "$2" "${3:-}" "${4:-}" >"$OUTPUT" 2>&1; printf '%s' "$?"; }
 
 # ── 1 · CAMINO LIMPIO contra el doble: todas llegan a su objetivo ─────────────────────────────
 r="$(corre "$GUION" "$OBJETIVOS")"
-if [ "$r" = "0" ] && casa 'todas las superficies declaradas llegan a su objetivo'; then
-	paso "contra el doble, las 13 superficies declaradas llegan a su objetivo (rc 0)"
+if [ "$r" = "0" ] && casa 'all declared surfaces meet their targets'; then
+	paso "against the test double, all 13 declared surfaces meet their targets (rc 0)"
 elif [ "$r" = "0" ]; then
-	malo "salio 0 sin la linea de veredicto: un cero mudo no dice que midio"
+	malo "exited 0 without a verdict line: a silent zero does not establish what was measured"
 else
-	malo "el camino limpio salio $r (mira $SALIDA)"
+	malo "the clean path exited $r (see $OUTPUT)"
 fi
 
 # ── 2 · IDEMPOTENCIA: la segunda corrida crea CERO ────────────────────────────────────────────
@@ -131,10 +139,10 @@ fi
 #    verde en rc y estaria acumulando una fila por captura, que es el defecto A-01 que este carril
 #    ya midio en `seed-demo-work.py` (+51 decisiones y +5 work items POR CORRIDA).
 r="$(corre "$GUION" "$OBJETIVOS" "" 2)"
-if [ "$r" = "0" ] && [ "$(command grep -c '^  0 filas creadas en esta corrida' "$SALIDA")" = "1" ]; then
-	paso "la 2.a corrida contra el mismo almacen crea CERO filas (idempotente, medido)"
+if [ "$r" = "0" ] && [ "$(command grep -c '^  0 rows created in this run' "$OUTPUT")" = "1" ]; then
+	paso "the second run against the same store creates ZERO rows (measured idempotence)"
 else
-	malo "la 2.a corrida no creo cero: $(command grep -c 'filas creadas' "$SALIDA") lineas de creacion (rc $r)"
+	malo "the second run did not create zero: $(command grep -c 'rows created' "$OUTPUT") creation lines (rc $r)"
 fi
 
 # ── 3 · UNA SUPERFICIE POR DEBAJO => rc 1 nombrandola A ELLA y a su objetivo ───────────────────
@@ -149,12 +157,12 @@ for s in d["superficies"]:
 json.dump(d, open(sys.argv[2], "w"))
 PY
 r="$(corre "$GUION" "$T/imposible.json")"
-if [ "$r" = "1" ] && casa 'killswitch. se queda en [0-9]+ de 99' && casa 'sujeto UNICO'; then
-	paso "una superficie por debajo sale rc 1 nombrandola, su objetivo y por que no pudo subir"
+if [ "$r" = "1" ] && casa 'killswitch. remains at [0-9]+ of 99' && casa 'UNIQUE subject'; then
+	paso "a surface below target exits 1 and names the surface, target, and reason it could not increase"
 elif [ "$r" = "1" ]; then
-	malo "salio 1 sin nombrar la superficie y su objetivo: el rojo no dice donde mirar"
+	malo "exited 1 without naming the surface and target: the failure gives no place to inspect"
 else
-	malo "una superficie por debajo deberia salir 1 y salio $r"
+	malo "a surface below target should exit 1; got $r"
 fi
 
 # ── 4 · DECLARADA SIN GENERADOR => rc 2 (fail-closed, direccion 1) ─────────────────────────────
@@ -166,54 +174,54 @@ d["superficies"].append({"id": "superficie-inventada", "objetivo": 3,
 json.dump(d, open(sys.argv[2], "w"))
 PY
 r="$(corre "$GUION" "$T/sobra.json")"
-if [ "$r" = "2" ] && casa 'SIN generador' && casa 'superficie-inventada'; then
-	paso "una superficie declarada sin generador sale 2 y la NOMBRA (no la siembra en silencio)"
+if [ "$r" = "2" ] && casa 'NO generator' && casa 'superficie-inventada'; then
+	paso "a declared surface without a generator exits 2 and names it"
 else
-	malo "declarada-sin-generador deberia salir 2 nombrandola y salio $r"
+	malo "a declared surface without a generator should exit 2 and name it; got $r"
 fi
 
 # ── 5 · GENERADOR SIN DECLARAR => rc 2 (fail-closed, direccion 2) ──────────────────────────────
 # ⛔ ES LA DIRECCION QUE UN MUTANTE ROMPE SIN QUE SE NOTE. Un generador sin fila en el JSON
 #    sembraria filas SIN objetivo y SIN aparecer en el reparto: trabajo invisible que nadie puede
 #    auditar, y el guion saldria en verde.
-python3 - "$OBJETIVOS" "$T/falta.json" <<'PY'
+python3 - "$OBJETIVOS" "$T/missing_items.json" <<'PY'
 import json, sys
 d = json.load(open(sys.argv[1]))
 d["superficies"] = [s for s in d["superficies"] if s["id"] != "knowledge"]
 json.dump(d, open(sys.argv[2], "w"))
 PY
-r="$(corre "$GUION" "$T/falta.json")"
-if [ "$r" = "2" ] && casa 'SIN declarar' && casa 'knowledge'; then
-	paso "un generador sin declarar sale 2 y lo NOMBRA (no siembra fuera del reparto)"
+r="$(corre "$GUION" "$T/missing_items.json")"
+if [ "$r" = "2" ] && casa 'NOT declared' && casa 'knowledge'; then
+	paso "an undeclared generator exits 2 and names it instead of seeding outside the allocation"
 else
-	malo "generador-sin-declarar deberia salir 2 nombrandolo y salio $r"
+	malo "an undeclared generator should exit 2 and name it; got $r"
 fi
 
 # ── 6 · SIN FICHERO DE OBJETIVOS => 2, y JSON roto => 2 ────────────────────────────────────────
-python3 "$GUION" http://127.0.0.1:1 t t --objetivos "$T/no-existe.json" >"$SALIDA" 2>&1
+python3 "$GUION" http://127.0.0.1:1 t t --objetivos "$T/no-existe.json" >"$OUTPUT" 2>&1
 r=$?
-if [ "$r" = "2" ] && casa 'NO HE PODIDO MIRAR' && casa 'no encuentro el fichero de objetivos'; then
-	paso "sin fichero de objetivos => rc 2 diciendo cual falta (no un 0 con cero superficies)"
+if [ "$r" = "2" ] && casa 'COULD NOT LOOK' && casa 'cannot find target file'; then
+	paso "a missing target file exits 2 and identifies the missing file"
 else
-	malo "sin fichero de objetivos deberia salir 2 y salio $r"
+	malo "a missing target file should exit 2; got $r"
 fi
 printf '{ esto no es json\n' >"$T/roto.json"
-python3 "$GUION" http://127.0.0.1:1 t t --objetivos "$T/roto.json" >"$SALIDA" 2>&1
+python3 "$GUION" http://127.0.0.1:1 t t --objetivos "$T/roto.json" >"$OUTPUT" 2>&1
 r=$?
-if [ "$r" = "2" ] && casa 'no es JSON valido'; then
-	paso "un fichero de objetivos ilegible => rc 2, no un verde sin superficies"
+if [ "$r" = "2" ] && casa 'is not valid JSON'; then
+	paso "an unreadable target file exits 2 instead of passing with no surfaces"
 else
-	malo "objetivos ilegibles deberia salir 2 y salio $r"
+	malo "unreadable targets should exit 2; got $r"
 fi
 
 # ── 7 · UNA LISTA QUE NO SE PUEDE LEER NO ES UNA LISTA VACIA ───────────────────────────────────
 # ⛔ ES LA REGLA 5, Y ES EL DEFECTO MAS CARO DE ESTA CASA. Si el GET de una superficie da 500 y el
 #    guion lo contara como «0 filas», sembraria el objetivo entero encima de lo que ya hubiera.
 r="$(corre "$GUION" "$OBJETIVOS" "500:/v1/m/knowledge/kbs")"
-if [ "$r" = "2" ] && casa 'NO HE PODIDO MIRAR' && casa 'knowledge'; then
-	paso "una lista que devuelve 500 => rc 2 nombrando la superficie, no cero filas"
+if [ "$r" = "2" ] && casa 'COULD NOT LOOK' && casa 'knowledge'; then
+	paso "a list returning 500 exits 2 and names the surface instead of assuming zero rows"
 else
-	malo "un 500 al listar deberia salir 2 nombrando la superficie y salio $r"
+	malo "a 500 while listing should exit 2 and name the surface; got $r"
 fi
 
 # ── 8 · UN 409 PERMANENTE NO PUEDE QUEDARSE CALLADO ────────────────────────────────────────────
@@ -221,12 +229,12 @@ fi
 #    creando CERO filas y sin UNA SOLA LINEA que dijera por que, porque el bucle trataba el 409
 #    como «ya estaba» y seguia girando. Un 409 repetido no es exito: es un sujeto agotado.
 r="$(corre "$GUION" "$OBJETIVOS" "409:/v1/m/notify/routes")"
-if [ "$r" = "1" ] && casa 'conflictos 409' && casa 'alerting'; then
-	paso "un 409 permanente sale rc 1 CONTANDO los conflictos y nombrando la superficie"
+if [ "$r" = "1" ] && casa 'HTTP 409 conflicts' && casa 'alerting'; then
+	paso "a persistent 409 exits 1, counts the conflicts, and names the surface"
 elif [ "$r" = "1" ]; then
-	malo "salio 1 pero sin decir que fueron conflictos 409: se queda corto en silencio"
+	malo "exited 1 without reporting the 409 conflicts: silently below target"
 else
-	malo "un 409 permanente deberia salir 1 y salio $r"
+	malo "a persistent 409 should exit 1; got $r"
 fi
 
 # ── 9 · EL GUARDIAN DE SECRETOS ABORTA ANTES DE ENVIAR ─────────────────────────────────────────
@@ -242,14 +250,14 @@ nuevo = '''            "secret_refs": [{"name": f"MCP_TOKEN_{i}", "ref_kind": "e
                              "ref": f"MCP_TOKEN_{i}", "hint": "provisioned by the platform"}],
             "token": "ghp_0123456789abcdefghijklmnopqrstuvwxyz",  # MUTANTE: un VALOR, no un localizador'''
 mut = src.replace(viejo, nuevo, 1)
-assert mut != src, "el mutante del secreto NO se aplico"
+assert mut != src, "the secret mutant was not applied"
 open(sys.argv[2], "w").write(mut)
 PY
 r="$(corre "$mS" "$OBJETIVOS")"
-if [ "$r" = "2" ] && casa 'guardian de secretos' && casa 'github-token|lleva un VALOR'; then
-	paso "un generador que emite un VALOR secreto aborta con 2 nombrando la forma que lo corto"
+if [ "$r" = "2" ] && casa 'secret guard' && casa 'github-token|contains a VALUE'; then
+	paso "a generator emitting a secret VALUE aborts with 2 and names the blocked format"
 else
-	malo "el guardian de secretos no corto el mutante (rc $r): un valor saldria por el cable"
+	malo "the secret guard did not stop the mutant (rc $r): a value would be transmitted"
 fi
 
 # ── 10-14 · LOS MUTANTES, uno por dimension, cada uno con su apply-assert ──────────────────────
@@ -267,7 +275,7 @@ exige_mutante() { # $1 = fichero del mutante, $2 = nombre para el mensaje; rc 0 
 	if [ -s "$1" ] && ! cmp -s "$GUION" "$1"; then
 		return 0
 	fi
-	malo "NO se pudo construir el mutante $2: su ancla no esta en el sujeto — sin artefacto no hay juicio"
+	malo "could not build mutant $2: its anchor is absent from the subject; no artifact means no verdict"
 	return 1
 }
 muta_de() { # $1 = fuente, $2 = destino, $3 = viejo, $4 = nuevo
@@ -275,24 +283,24 @@ muta_de() { # $1 = fuente, $2 = destino, $3 = viejo, $4 = nuevo
 import sys
 src = open(sys.argv[1]).read()
 mut = src.replace(sys.argv[3], sys.argv[4], 1)
-assert mut != src, f"el mutante NO se aplico: no encuentro {sys.argv[3][:60]!r}"
+assert mut != src, f"mutant was not applied: cannot find {sys.argv[3][:60]!r}"
 open(sys.argv[2], "w").write(mut)
 PY
 }
 
-muta "$T/m1.py" '    faltan = max(0, objetivo - antes)' '    faltan = objetivo  # MUTANTE: siembra el objetivo entero cada vez'
+muta "$T/m1.py" '    missing_inputs = max(0, objetivo - antes)' '    missing_inputs = objetivo  # MUTANTE: siembra el objetivo entero cada vez'
 if exige_mutante "$T/m1.py" m1; then
 r="$(corre "$T/m1.py" "$OBJETIVOS" "" 2)"
-if [ "$(command grep -c '^  0 filas creadas en esta corrida' "$SALIDA")" = "0" ]; then
-	paso "el mutante que siembra el objetivo entero cada vez MUERE en el caso 2 (idempotencia)"
+if [ "$(command grep -c '^  0 rows created in this run' "$OUTPUT")" = "0" ]; then
+	paso "the mutant that seeds the entire target on every run is KILLED by case 2 (idempotence)"
 else
-	malo "el mutante de la idempotencia SOBREVIVIO: el caso 2 no cubre nada"
+	malo "the idempotence mutant SURVIVED: case 2 provides no coverage"
 fi
 fi
 
-muta "$T/m2.py" '    faltan_decl = sorted(set(GENERADORES) - set(decl))' '    faltan_decl = []  # MUTANTE: no se mira la segunda direccion'
+muta "$T/m2.py" '    missing_declarations = sorted(set(GENERADORES) - set(decl))' '    missing_declarations = []  # MUTANTE: no se mira la segunda direccion'
 if exige_mutante "$T/m2.py" m2; then
-r="$(corre "$T/m2.py" "$T/falta.json")"
+r="$(corre "$T/m2.py" "$T/missing_items.json")"
 # ⛔ SE EXIGE EL DIAGNOSTICO, NO UN rc CUALQUIERA (A-04). Esta comprobacion decia `rc != 2 ||
 #    mensaje ausente`, un OR que pasaba en cuanto el rc cambiara — y sin la guarda el guion moria
 #    en `KeyError` con rc 1, asi que el banco acreditaba un CRASH como si fuera la deteccion.
@@ -305,21 +313,21 @@ r="$(corre "$T/m2.py" "$T/falta.json")"
 #    Medido: sustituyendo este mutante por uno que revienta con `NameError`, la bateria salia 34/0
 #    contando el crash como muerte. La comprobacion de reventon va SIEMPRE la primera.
 if casa 'Traceback'; then
-	malo "el mutante murio con una EXCEPCION, no con el defecto: eso acredita un crash, no la guarda"
-elif [ "$r" != "2" ] && ! casa 'SIN declarar' && ! casa '^  knowledge '; then
-	paso "sin la guarda, knowledge se siembra FUERA del reparto y nadie lo dice (rc $r): el caso 5 lo caza"
+	malo "the mutant died from an EXCEPTION instead of the defect: this proves a crash, not the guard"
+elif [ "$r" != "2" ] && ! casa 'NOT declared' && ! casa '^  knowledge '; then
+	paso "without the guard, knowledge is silently seeded outside the allocation (rc $r): case 5 detects it"
 else
-	malo "el mutante de la direccion 2 no produjo el defecto esperado (rc $r): mira $SALIDA"
+	malo "the second-direction mutant did not produce the expected defect (rc $r): see $OUTPUT"
 fi
 fi
 
-muta "$T/m3.py" '    faltan_gen = sorted(set(decl) - set(GENERADORES))' '    faltan_gen = []  # MUTANTE: no se mira la primera direccion'
+muta "$T/m3.py" '    missing_generators = sorted(set(decl) - set(GENERADORES))' '    missing_generators = []  # MUTANTE: no se mira la primera direccion'
 if exige_mutante "$T/m3.py" m3; then
 r="$(corre "$T/m3.py" "$T/sobra.json")"
-if [ "$r" != "2" ] || ! casa 'SIN generador'; then
-	paso "el mutante que deja de mirar declarada-sin-generador MUERE en el caso 4 (rc $r)"
+if [ "$r" != "2" ] || ! casa 'NO generator'; then
+	paso "the mutant that ignores declared surfaces without generators is KILLED by case 4 (rc $r)"
 else
-	malo "el mutante de la direccion 1 SOBREVIVIO: el caso 4 no acredita esa direccion"
+	malo "the first-direction mutant SURVIVED: case 4 does not verify that direction"
 fi
 fi
 
@@ -330,11 +338,11 @@ r="$(corre "$T/m4.py" "$OBJETIVOS" "409:/v1/m/notify/routes")"
 #    forma tiene la clase de nacimiento: un mutante que revienta tampoco lo dice. Medido igual que
 #    el de arriba: con un mutante que revienta, salia `paso`. La guarda va delante.
 if casa 'Traceback'; then
-	malo "el mutante del 409 murio con una EXCEPCION, no con el defecto: eso acredita un crash"
-elif ! casa 'conflictos 409'; then
-	paso "el mutante que se traga los 409 MUERE en el caso 8: el rojo deja de decir por que"
+	malo "the 409 mutant died from an EXCEPTION instead of the defect: this proves a crash"
+elif ! casa 'HTTP 409 conflicts'; then
+	paso "the mutant that hides 409 conflicts is KILLED by case 8: the failure stops reporting its cause"
 else
-	malo "el mutante del 409 SOBREVIVIO: el caso 8 no protege el mensaje"
+	malo "the 409 mutant SURVIVED: case 8 does not protect the diagnostic"
 fi
 fi
 
@@ -342,9 +350,9 @@ muta "$T/m5.py" '            return None, f"GET {ruta} -> {st} {cuerpo[:120]}"' 
 if exige_mutante "$T/m5.py" m5; then
 r="$(corre "$T/m5.py" "$OBJETIVOS" "500:/v1/m/knowledge/kbs")"
 if [ "$r" != "2" ]; then
-	paso "el mutante que confunde ceguera con lista vacia MUERE en el caso 7 (rc $r, ya no es 2)"
+	paso "the mutant that treats an unreadable list as empty is KILLED by case 7 (rc $r, no longer 2)"
 else
-	malo "el mutante de la ceguera SOBREVIVIO: el caso 7 no distingue 2 de 0"
+	malo "the unreadable-list mutant SURVIVED: case 7 does not distinguish 2 from 0"
 fi
 fi
 
@@ -354,24 +362,24 @@ fi
 #    caso y no tenian mutante: el mensaje de rc 1 —que es la condicion cabecera de este entregable,
 #    «nombra la superficie y su objetivo»— y el diagnostico del fichero de objetivos ausente. Un
 #    caso sin mutante mide que HOY pasa, no que manana siga pasando.
-muta "$T/m6.py" '        return salir(RC_POR_DEBAJO, "; ".join(f"`{s}` se queda en {d} de {o}" for s, d, o in debajo))' '        return salir(RC_POR_DEBAJO, "alguna superficie se quedo corta")  # MUTANTE: sin nombres'
+muta "$T/m6.py" '        return salir(RC_POR_DEBAJO, "; ".join(f"`{s}` remains at {d} of {o}" for s, d, o in debajo))' '        return salir(RC_POR_DEBAJO, "some surface fell short")  # MUTANTE: sin nombres'
 if exige_mutante "$T/m6.py" m6; then
 r="$(corre "$T/m6.py" "$T/imposible.json")"
-if [ "$r" = "1" ] && ! casa 'killswitch. se queda en [0-9]+ de 99'; then
-	paso "el mutante que borra los nombres del rc 1 MUERE en el caso 3: el rojo deja de decir cual"
+if [ "$r" = "1" ] && ! casa 'killswitch. remains at [0-9]+ of 99'; then
+	paso "the mutant that removes names from the rc 1 diagnostic is KILLED by case 3"
 else
-	malo "el mutante del mensaje de rc 1 SOBREVIVIO (rc $r): la condicion cabecera no esta atada"
+	malo "the rc 1 diagnostic mutant SURVIVED (rc $r): the header condition is unverified"
 fi
 fi
 
-muta "$T/m7.py" '        return None, None, f"no encuentro el fichero de objetivos `{ruta}`"' '        return None, None, "error"  # MUTANTE: el diagnostico ya no dice que falta'
+muta "$T/m7.py" '        return None, None, f"cannot find target file `{ruta}`"' '        return None, None, "error"  # MUTANT: diagnostic no longer names the missing target'
 if exige_mutante "$T/m7.py" m7; then
-python3 "$T/m7.py" http://127.0.0.1:1 t t --objetivos "$T/no-existe.json" >"$SALIDA" 2>&1
+python3 "$T/m7.py" http://127.0.0.1:1 t t --objetivos "$T/no-existe.json" >"$OUTPUT" 2>&1
 r=$?
-if [ "$r" = "2" ] && ! casa 'no encuentro el fichero de objetivos'; then
-	paso "el mutante que borra el diagnostico del fichero ausente MUERE en el caso 6"
+if [ "$r" = "2" ] && ! casa 'cannot find target file'; then
+	paso "the mutant that removes the missing-file diagnostic is KILLED by case 6"
 else
-	malo "el mutante del diagnostico de objetivos SOBREVIVIO (rc $r)"
+	malo "the target diagnostic mutant SURVIVED (rc $r)"
 fi
 fi
 
@@ -386,12 +394,12 @@ fi
 muta "$T/m8.py" '    return {"name": marca, "destination": "siem", "min_severity": SEVERIDADES[i % 3]}' '    return {"name": "fijo-" + str(i), "destination": "siem", "min_severity": SEVERIDADES[i % 3]}  # MUTANTE: la marca ya no va al campo'
 if exige_mutante "$T/m8.py" m8; then
 r="$(corre "$T/m8.py" "$OBJETIVOS")"
-if [ "$r" = "2" ] && casa 'modo de marcador' && casa 'alerting'; then
-	paso "un generador que deja de poner la marca en su campo sale 2, nombrando la superficie"
+if [ "$r" = "2" ] && casa 'marker mode' && casa 'alerting'; then
+	paso "a generator missing its field marker exits 2 and names the surface"
 elif [ "$r" = "2" ]; then
-	malo "salio 2 sin nombrar la superficie ni el modo: la guarda no dice cual se rompio"
+	malo "exited 2 without naming the surface or mode: the guard does not identify the broken one"
 else
-	malo "el generador incoherente deberia salir 2 y salio $r: la comprobacion de idempotencia quedaria muerta"
+	malo "an inconsistent generator should exit 2; got $r: the idempotence check would be ineffective"
 fi
 fi
 
@@ -408,9 +416,9 @@ muta_de "$T/m8.py" "$T/m9.py" '    malas = comprueba_marcadores()' '    malas = 
 if exige_mutante "$T/m9.py" m9; then
 r="$(corre "$T/m9.py" "$OBJETIVOS")"
 if [ "$r" != "2" ]; then
-	paso "sin la guarda, el generador roto de m8 pasa desapercibido (rc $r): la guarda es la que caza"
+	paso "without the guard, the broken m8 generator goes unnoticed (rc $r): the guard detects it"
 else
-	malo "el mutante de la guarda SOBREVIVIO: el caso 17 estaria saliendo 2 por otra razon"
+	malo "the guard mutant SURVIVED: case 17 may be exiting 2 for a different reason"
 fi
 fi
 
@@ -463,17 +471,17 @@ PY2
 }
 
 if refleja_auth "$GUION"; then
-	paso "un receptor que REFLEJA la cabecera Authorization no consigue sacar el token"
+	paso "a receiver that reflects the Authorization header cannot expose the token"
 else
-	malo "el token sale por alguna salida cuando el receptor lo refleja: no hay redaccion de frontera"
+	malo "the token is exposed when the receiver reflects it: boundary redaction is absent"
 fi
 
 muta "$T/m10.py" '        redacta.recuerda(token, tenant)' '        pass  # MUTANTE: el token ya no se declara sensible'
 if exige_mutante "$T/m10.py" m10; then
 if ! refleja_auth "$T/m10.py"; then
-	paso "el mutante que deja de declarar el token FUGA: el caso 19 lo caza"
+	paso "the mutant that stops declaring the token LEAKS: case 19 detects it"
 else
-	malo "no declarar el token no produce fuga: el caso 19 no ejercita lo que dice"
+	malo "not declaring the token causes no leak: case 19 does not exercise its stated condition"
 fi
 fi
 
@@ -499,9 +507,9 @@ url_malformada() { # $1 = guion sujeto; rc 0 = sin fuga
 }
 
 if url_malformada "$GUION"; then
-	paso "una URL malformada con credencial arbitraria no fuga por el traceback, y sale rc != 0"
+	paso "a malformed URL with an arbitrary credential does not leak through traceback and exits nonzero"
 else
-	malo "la credencial sale por una excepcion no capturada, o una URL ilegible dio rc 0"
+	malo "the credential escapes through an uncaught exception, or an unreadable URL exits 0"
 fi
 
 # ⛔ EL MUTANTE RETIRA LAS DOS MITADES, Y ESO NO ES PEREZA: ES LO MEDIDO. Probe a matar cada una
@@ -533,17 +541,17 @@ nuevo_try = """        pet = urllib.request.Request(self.base + ruta, data=datos
         try:
 """
 mut = src.replace(viejo_try, nuevo_try, 1)
-assert mut != src, "el mutante NO movio el Request"
+assert mut != src, "the mutant did not move Request"
 viejo_hook = '    instala_excepthook(redacta, "seed-estate-volume")'
 mut2 = mut.replace(viejo_hook, "    pass  # MUTANTE: sin frontera para excepciones no capturadas", 1)
-assert mut2 != mut, "el mutante NO retiro el excepthook"
+assert mut2 != mut, "the mutant did not remove the excepthook"
 compile(mut2, "m11", "exec")  # un mutante que no compila no acredita nada
 open(sys.argv[2], "w").write(mut2)
 PY2
 if ! url_malformada "$T/m11.py"; then
-	paso "el mutante que retira LAS DOS mitades FUGA por el traceback: el caso 21 caza el par"
+	paso "the mutant that removes BOTH protections LEAKS through traceback: case 21 detects the pair"
 else
-	malo "retirar las dos mitades no produce fuga: el caso 21 no ejercita lo que dice"
+	malo "removing both protections causes no leak: case 21 does not exercise its stated condition"
 fi
 
 # ── O · LA CIFRA VIAJA DENTRO DE LA CITA, Y LA DIFERENCIA SE DECLARA ──────────────────────────
@@ -564,7 +572,7 @@ exige_mutante_dato() { # $1 = fichero mutado, $2 = nombre; rc 0 si existe y no e
 	#    los dos mutantes SIN juzgar, y el banco anunciando «26 pasan, 0 fallan». Un caso que no
 	#    llega a correr no es un caso que pasa. Se redefine aqui, junto a quien la usa.
 	[ -s "$1" ] && return 0
-	malo "NO se pudo construir el mutante de dato $2: sin artefacto no hay juicio"
+	malo "could not build data mutant $2: no artifact means no verdict"
 	return 1
 }
 juzga_objetivos() { # $1 = fichero de objetivos; imprime «id<TAB>veredicto» por superficie
@@ -605,23 +613,29 @@ for s in json.load(open(os.environ["OBJ"], encoding="utf8"))["superficies"]:
 '
 }
 BLOB="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["plan_blob"])' "$OBJETIVOS" 2>/dev/null || true)"
+# A readable local object is not enough: full clones only carry reachable history.
+if [ -n "$BLOB" ] && git -C "$RAIZ" merge-base --is-ancestor "${BLOB%%:*}" HEAD 2>/dev/null; then
+	paso "the plan source is reachable from HEAD and survives a fresh full clone"
+else
+	malo "the plan source is not reachable from HEAD ($BLOB)"
+fi
 if [ -z "$BLOB" ]; then
-	malo "NO HE PODIDO MIRAR: el fichero de objetivos no declara plan_blob"
+	malo "COULD NOT CHECK: the target file declares no plan_blob"
 elif ! git -C "$RAIZ" show "$BLOB" 2>/dev/null \
      | python3 -c 'import sys;print(sys.stdin.read().replace(chr(92)+chr(110),chr(10)))' >"$T/plan.txt" \
      || [ ! -s "$T/plan.txt" ]; then
-	malo "NO HE PODIDO MIRAR: no puedo leer el blob del plan ($BLOB) — sin fuente no hay juicio"
+	malo "COULD NOT CHECK: cannot read the plan blob ($BLOB); no source means no verdict"
 else
 	juzga_objetivos "$OBJETIVOS" >"$T/juicio.txt" 2>"$T/juicio.err" || true
 	if [ ! -s "$T/juicio.txt" ]; then
-		malo "NO HE PODIDO MIRAR: el juicio de objetivos salio vacio (mira $T/juicio.err)"
+		malo "COULD NOT CHECK: the target check returned no output (see $T/juicio.err)"
 	else
 		ntot=$(wc -l <"$T/juicio.txt")
 		command awk -F'\t' '$2 != "ok" && $2 != "SIN-CITA-CON-RAZON"' "$T/juicio.txt" >"$T/juicio-malas.txt" || true
 		if [ ! -s "$T/juicio-malas.txt" ]; then
-			paso "las $ntot superficies citan un literal unico, con su cifra DENTRO, y declaran toda diferencia"
+			paso "all $ntot surfaces cite a unique literal containing its number and declare every discrepancy"
 		else
-			malo "superficies cuya procedencia no se sostiene: $(command awk -F'\t' '{printf "%s=%s ", $1, $2}' "$T/juicio-malas.txt")"
+			malo "surfaces with unsupported provenance: $(command awk -F'\t' '{printf "%s=%s ", $1, $2}' "$T/juicio-malas.txt")"
 		fi
 	fi
 fi
@@ -650,7 +664,7 @@ else:
 json.dump(d, open(sys.argv[2], "w", encoding="utf8"), ensure_ascii=False, indent=2)
 PYC
 	if [ ! -s "$T/cifra-$SUP.json" ]; then
-		malas_cifra="$malas_cifra $SUP(no-construido)"
+		malas_cifra="$malas_cifra $SUP(not-built)"
 		continue
 	fi
 	juzga_objetivos "$T/cifra-$SUP.json" >"$T/j-$SUP.txt" 2>&1 || true
@@ -659,9 +673,9 @@ PYC
 	[ -s "$T/j-$SUP-malas.txt" ] || malas_cifra="$malas_cifra $SUP"
 done
 if [ -z "$malas_cifra" ]; then
-	paso "subir en 1 el objetivo de CUALQUIERA de las superficies pone su fila en rojo: el juez mira el VALOR"
+	paso "increasing any surface target by 1 fails its row: the check verifies the VALUE"
 else
-	malo "superficies cuyo objetivo se puede cambiar sin que nadie se entere:$malas_cifra"
+	malo "surface targets that can change undetected:$malas_cifra"
 fi
 
 # Y el mutante de la tilde sigue: una cita rota tiene que seguir cazandose.
@@ -672,15 +686,15 @@ tocado = 0
 for s in d["superficies"]:
     if s.get("cita") and "á" in s["cita"]:
         s["cita"] = s["cita"].replace("á", "a"); tocado += 1
-assert tocado, "el mutante de la tilde NO se aplico: ninguna cita lleva tilde"
+assert tocado, "the accent mutant was not applied: no citation contains an accented character"
 json.dump(d, open(sys.argv[2], "w", encoding="utf8"), ensure_ascii=False, indent=2)
 PYT
 if exige_mutante_dato "$T/objetivos-sin-tilde.json" "objetivos sin tilde"; then
 	juzga_objetivos "$T/objetivos-sin-tilde.json" >"$T/juicio-tilde.txt" 2>&1 || true
 	if command grep -q 'CITA-0x' "$T/juicio-tilde.txt"; then
-		paso "quitar la tilde a una cita la deja sin coincidencia: el caso O distingue viva de muerta"
+		paso "removing a citation accent breaks the match: case O distinguishes valid and invalid citations"
 	else
-		malo "el mutante de la tilde SOBREVIVIO: el caso O no distingue una cita viva de una muerta"
+		malo "the accent mutant SURVIVED: case O does not distinguish valid and invalid citations"
 	fi
 fi
 
@@ -704,22 +718,22 @@ if exige_mutante "$T/m12.py" m12 && [ -s "$T/lib12/redaccion.py" ] \
 	#    ese fallo hizo «sobrevivir» a un mutante que nunca se aplico.
 	export OLIVARES_LIB_DIR="$T/lib12"
 	if ! url_malformada "$T/m12.py"; then
-		paso "un excepthook instalado que imprime SIN redactar FUGA: la redaccion del hook tiene mutante propio"
+		paso "an installed excepthook that prints without redaction LEAKS: hook redaction has its own mutant"
 	else
-		malo "el hook sin redaccion no fuga: el caso 21 cubre la instalacion, no la redaccion"
+		malo "the hook without redaction does not leak: case 21 covers installation, not redaction"
 	fi
 	unset OLIVARES_LIB_DIR
 else
-	malo "NO se pudo construir el par m12 + libreria mutada: sin artefacto no hay juicio"
+	malo "could not build the m12 mutant and mutated library: no artifact means no verdict"
 fi
 
 # ── N · LOS MENSAJES DE ESTE BANCO NO LLEVAN BACKTICKS SIN ESCAPAR ─────────────────────────────
 # ⛔ Generador, no cuidado: los backticks dentro de comillas dobles los EJECUTA la shell, y este
 #    carril lo hizo cuatro veces en cuatro ficheros el mismo dia.
 if command grep -nE '^[[:space:]]*(paso|malo) "[^"]*`' "${BASH_SOURCE[0]:-$0}" >"$T/backticks.txt"; then
-	malo "hay mensajes con backtick sin escapar dentro de comillas dobles (mira $T/backticks.txt)"
+	malo "messages contain unescaped backticks inside double quotes (see $T/backticks.txt)"
 else
-	paso "ningun mensaje del banco lleva un backtick sin escapar dentro de comillas dobles"
+	paso "no test message contains an unescaped backtick inside double quotes"
 fi
 
 # ── Q · UNA REDIRECCION NO SE LLEVA EL TOKEN A OTRO ORIGEN ────────────────────────────────────
@@ -773,9 +787,9 @@ print("FUGA" if recibidas.get("auth") else "TAPADO")
 PYQ
 }
 if [ "$(fuga_por_redireccion "$RAIZ/scripts/lib")" = "TAPADO" ]; then
-	paso "una redireccion a OTRO origen no se lleva la cabecera Authorization: la frontera de transporte corta"
+	paso "a redirect to another origin does not transmit Authorization: the transport boundary blocks it"
 else
-	malo "el token viaja a otro origen al seguir un 30x: la funcion abre no rehusa la redireccion"
+	malo "the token follows a 30x to another origin: abre does not reject the redirect"
 fi
 
 # Su mutante: si `abre` vuelve a ser `urlopen` a secas, la fuga reaparece.
@@ -785,12 +799,12 @@ if muta_de "$RAIZ/scripts/lib/redaccion.py" "$T/lib-redir/redaccion.py" \
 	'    return __import__("urllib.request", fromlist=["x"]).urlopen(pet, timeout=timeout)  # MUTANTE
     global _ABRIDOR'; then
 	if [ "$(fuga_por_redireccion "$T/lib-redir")" = "FUGA" ]; then
-		paso "con el abridor por defecto el token SI viaja a otro origen: el caso Q acredita la guarda"
+		paso "the default opener transmits the token to another origin: case Q verifies the guard"
 	else
-		malo "el mutante que vuelve a urlopen no produce fuga: el caso Q no acredita nada"
+		malo "the urlopen mutant causes no leak: case Q verifies nothing"
 	fi
 else
-	malo "NO se pudo construir el mutante del abridor: sin artefacto no hay juicio"
+	malo "could not build the opener mutant: no artifact means no verdict"
 fi
 
 # ── Q-bis · UNA REDIRECCION DEL MISMO ORIGEN SI SE SIGUE ──────────────────────────────────────
@@ -831,16 +845,16 @@ pet = urllib.request.Request("http://127.0.0.1:%d/v1/x" % srv.server_port)
 pet.add_header("Authorization", "Bearer TOKEN-DEL-MISMO-ORIGEN")
 try:
     r = red.abre(pet, timeout=10)
-    print("OK %d" % r.getcode() if VISTO.get("auth") else "FALLO llego sin la cabecera")
+    print("OK %d" % r.getcode() if VISTO.get("auth") else "FAIL arrived without the header")
 except Exception as e:
-    print("FALLO %s: %s" % (type(e).__name__, str(e)[:80]))
+    print("FAIL %s: %s" % (type(e).__name__, str(e)[:80]))
 PYQ2
 }
 res="$(sigue_mismo_origen "$RAIZ/scripts/lib")"
 if [ "${res%% *}" = "OK" ]; then
-	paso "una redireccion RELATIVA del mismo origen se sigue y alcanza el destino ($res): no hay regresion"
+	paso "a RELATIVE redirect within the same origin reaches its destination ($res): no regression"
 else
-	malo "una redireccion legitima del mismo origen ya no llega: $res"
+	malo "a valid redirect within the same origin no longer reaches its destination: $res"
 fi
 
 # Su mutante: si se vuelve a rechazar TODO 30x, este caso positivo muere.
@@ -849,13 +863,13 @@ if muta_de "$RAIZ/scripts/lib/redaccion.py" "$T/lib-todos/redaccion.py" \
 	'                if _origen(destino) == _origen(req.full_url):' \
 	'                if False:  # MUTANTE: se rechaza TODO 30x, tambien el del mismo origen'; then
 	resm="$(sigue_mismo_origen "$T/lib-todos")"
-	if [ "${resm%% *}" = "FALLO" ]; then
-		paso "rechazando TODO 30x el salto legitimo se rompe: el caso Q-bis acredita la distincion de origen"
+	if [ "${resm%% *}" = "FAIL" ]; then
+		paso "rejecting every 30x breaks a valid redirect: case Q-bis verifies origin discrimination"
 	else
-		malo "rechazar todo 30x no rompe el caso positivo: Q-bis no acredita nada ($resm)"
+		malo "rejecting every 30x leaves the positive case intact: Q-bis verifies nothing ($resm)"
 	fi
 else
-	malo "NO se pudo construir el mutante de rechazo total: sin artefacto no hay juicio"
+	malo "could not build the reject-all mutant: no artifact means no verdict"
 fi
 
 # ── R · NINGUNA PIEZA DE RED LLAMA A `urlopen` DIRECTAMENTE ───────────────────────────────────
@@ -871,9 +885,9 @@ for g in "$RAIZ"/scripts/seed-adoption-otlp.py "$RAIZ"/scripts/seed-demo-work.py
 	fi
 done
 if [ -z "$sueltos" ]; then
-	paso "los cuatro guiones que mandan Authorization pasan por la frontera, ninguno llama a urlopen suelto"
+	paso "all four scripts that send Authorization use the boundary; none calls urlopen directly"
 else
-	malo "guiones que siguen llamando a urlopen directamente y fugarian en un 30x:$sueltos"
+	malo "scripts still calling urlopen directly would leak through a 30x:$sueltos"
 fi
 
 # ── T · EL SECRETO EN LA RUTA: LIMITE DECLARADO Y COBERTURA EXPLICITA ─────────────────────────
@@ -906,11 +920,11 @@ PYT
 por_defecto="$(ruta_tapada "$RAIZ/scripts/lib" 0)"
 con_ruta="$(ruta_tapada "$RAIZ/scripts/lib" 1)"
 if [ "$por_defecto" = "FUGA" ] && [ "$con_ruta" = "TAPADO" ]; then
-	paso "la ruta no se tapa por defecto (limite declarado, cierto) y SI con con_ruta=True"
+	paso "the path stays visible by default (the declared limit) and is redacted with con_ruta=True"
 elif [ "$con_ruta" != "TAPADO" ]; then
-	malo "con con_ruta=True la ruta sigue fugando: la cobertura explicita no funciona"
+	malo "con_ruta=True still leaks the path: explicit coverage does not work"
 else
-	malo "la ruta se tapa por defecto: el limite declarado en la docstring ya NO es cierto, o se tapa de mas"
+	malo "the path is redacted by default: the docstring limit is false, or redaction is too broad"
 fi
 
 # ── S · UNA CREDENCIAL PERCENT-ENCODED SE TAPA EN LAS DOS FORMAS ──────────────────────────────
@@ -938,9 +952,9 @@ PYS
 }
 res="$(tapa_ambas_formas "$RAIZ/scripts/lib")"
 if [ "$res" = "cod=tapado dec=tapado" ]; then
-	paso "una credencial percent-encoded se tapa tanto en su forma codificada como en la decodificada"
+	paso "a percent-encoded credential is redacted in both its encoded and decoded forms"
 else
-	malo "la credencial percent-encoded no se tapa en las dos formas: $res"
+	malo "the percent-encoded credential is not redacted in both forms: $res"
 fi
 
 # Su mutante: si solo se recuerda lo que devuelve el parser, la forma decodificada fuga.
@@ -950,14 +964,14 @@ if muta_de "$RAIZ/scripts/lib/redaccion.py" "$T/lib-pct/redaccion.py" \
 	'                if False:  # MUTANTE: solo se recuerda la forma codificada'; then
 	resm="$(tapa_ambas_formas "$T/lib-pct")"
 	if [ "$resm" = "cod=tapado dec=FUGA" ]; then
-		paso "recordando solo la forma codificada, la decodificada FUGA: el caso S acredita las dos"
+		paso "remembering only the encoded form LEAKS the decoded form: case S verifies both"
 	else
-		malo "el mutante de la forma decodificada no reprodujo la fuga ($resm): el caso S no acredita nada"
+		malo "the decoded-form mutant did not reproduce the leak ($resm): case S verifies nothing"
 	fi
 else
-	malo "NO se pudo construir el mutante de la forma decodificada: sin artefacto no hay juicio"
+	malo "could not build the decoded-form mutant: no artifact means no verdict"
 fi
 
-printf '\ntest-seed-estate-volume: %d pasan, %d fallan\n' "$ok" "$fail"
+printf '\ntest-seed-estate-volume: %d passed, %d failed\n' "$ok" "$fail"
 [ "$fail" -eq 0 ] || exit 1
 exit 0

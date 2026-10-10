@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/base64"
+	"fmt"
 	"net/http"
 	"net/url"
 	"strings"
@@ -163,9 +164,17 @@ func (s *Server) resolveLoginCallback(r *http.Request, scope model.TenantID, ali
 	return s.fed, auth.ResolvedIdP{Scope: auth.GlobalFederationScope, Alias: model.DefaultFederationAlias}
 }
 
-// handleSAMLMetadata publishes only the active SP's public onboarding document.
-func (s *Server) handleSAMLMetadata(w http.ResponseWriter, r *http.Request) {
+// handleSAMLMetadata publishes only the active SP's public onboarding document. A SAML
+// IdP (or one whose protocol the failed lookup could not tell) that cannot be resolved,
+// or whose metadata cannot be produced, answers sso_provider_unavailable with its cause
+// logged, never "not configured".
+func (s *Server) handleSAMLMetadata(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	fed, _ := s.resolveLoginStart(r, ssoSelection(r))
+	if absent, ok := fed.(auth.NoFederation); ok && absent.Cause != nil &&
+		(absent.ConfiguredProtocol == "" || absent.ConfiguredProtocol == auth.ProtocolSAML) {
+		s.writeError(w, r, fmt.Errorf("%w: %w", auth.ErrSSOProviderUnavailable, absent.Cause))
+		return
+	}
 	metadata, ok := fed.(interface{ SAMLMetadata() ([]byte, error) })
 	if !ok || fed.Protocol() != auth.ProtocolSAML {
 		s.writeError(w, r, auth.ErrSSONotConfigured)
@@ -173,7 +182,7 @@ func (s *Server) handleSAMLMetadata(w http.ResponseWriter, r *http.Request) {
 	}
 	document, err := metadata.SAMLMetadata()
 	if err != nil {
-		s.writeError(w, r, auth.ErrSSONotConfigured)
+		s.writeError(w, r, fmt.Errorf("%w: %w", auth.ErrSSOProviderUnavailable, err))
 		return
 	}
 	w.Header().Set("Content-Type", "application/samlmetadata+xml; charset=utf-8")
@@ -208,7 +217,7 @@ func (s *Server) loginProviders(r *http.Request) []loginProviderDTO {
 // handleSSOStart begins an SSO login: it generates the single-use flow secrets,
 // asks the provider for the IdP redirect, persists the flow under a cookie, and
 // 302-redirects the browser to the IdP.
-func (s *Server) handleSSOStart(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSSOStart(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	flowID := randToken(16)
 	state := randToken(16)
 	nonce := randToken(16)
@@ -253,7 +262,7 @@ func (s *Server) handleSSOStart(w http.ResponseWriter, r *http.Request) {
 // handleSSOCallback completes an SSO login: it loads the persisted flow, validates
 // the assertion through the provider, find/provisions the local user, and mints
 // an opaque session (returned like /auth/login).
-func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleSSOCallback(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	// Load the in-progress flow first: it carries the multi-IdP tenant hint, so the
 	// SAME IdP the start leg used resolves here (including a deployment whose only
 	// IdPs are per-tenant, with no global config — the global pre-check this

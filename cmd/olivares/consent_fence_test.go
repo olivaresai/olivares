@@ -10,6 +10,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	coreengine "github.com/olivaresai/olivares/core/engine"
+	"github.com/olivaresai/olivares/core/model"
+	"github.com/olivaresai/olivares/core/store"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,12 +20,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	_ "github.com/jackc/pgx/v5/stdlib" // database/sql driver "pgx" for the admission observer
-
-	coreengine "github.com/olivaresai/olivares/core/engine"
-	"github.com/olivaresai/olivares/core/model"
-	"github.com/olivaresai/olivares/core/store"
 )
 
 // workCreateSteps is a workflow graph of one work-create step whose owner is
@@ -182,7 +179,7 @@ func fenceWriters(collector string) []fenceWriter {
 			return func() consentResp { return e.do(method, path, s.token, e.tT, body(s)) }
 		}
 	}
-	return []fenceWriter{
+	writers := []fenceWriter{
 		{name: "a user-subject grant", kind: "governance.scoped_grant", column: "subject_ref",
 			prepare: admin("POST", "/v1/m/governance/rbac/grants", func(s fenceSubject) map[string]any {
 				return map[string]any{"subject_kind": "user", "subject_ref": s.id.String(), "role": "editor", "scope_tree": "tenant"}
@@ -213,18 +210,6 @@ func fenceWriters(collector string) []fenceWriter {
 					"target_ref": "fence-" + s.id.String(), "effect": "allow",
 				}
 			})},
-		{name: "a workflow whose step names the account", kind: "orchestration.workflow", column: "steps",
-			prepare: func(e *consentEstate, s fenceSubject) func() consentResp {
-				var steps []map[string]any
-				if err := json.Unmarshal([]byte(workCreateSteps(e.t, s.id)), &steps); err != nil {
-					e.t.Fatal(err)
-				}
-				return func() consentResp {
-					return e.do("POST", "/v1/m/orchestration/workflows", e.admin, e.tT, map[string]any{
-						"name": "fence-" + s.id.String(), "steps": steps,
-					})
-				}
-			}},
 		{name: "a subscription the account creates and owns", kind: "eventing.subscription", column: "owner_actor",
 			prepare: own("POST", "/v1/m/eventing/subscriptions", func(s fenceSubject) map[string]any {
 				return map[string]any{
@@ -232,23 +217,15 @@ func fenceWriters(collector string) []fenceWriter {
 					"event_types": []string{"finding.reported"}, "role": "viewer",
 				}
 			})},
-		{name: "a schedule the account declares and owns", kind: "orchestration.schedule", column: "owner_actor",
-			prepare: own("POST", "/v1/m/orchestration/schedules", func(s fenceSubject) map[string]any {
-				return map[string]any{
-					"name": "fence-" + s.id.String(), "subject_kind": "agent", "subject_ref": "agent-fence",
-					"trigger_kind": "manual",
-				}
-			})},
 		{name: "an agent the account sponsors", kind: "governance.nhi_lifecycle", column: "sponsor_ref",
 			prepare: admin("POST", "/v1/m/governance/agents", func(s fenceSubject) map[string]any {
 				return map[string]any{"identity_ref": "fence-agent-" + s.id.String(), "sponsor_ref": s.externalID}
 			})},
-		{name: "a spend cap on the account", kind: "core.policy", column: "spec",
-			prepare: func(e *consentEstate, s fenceSubject) func() consentResp {
-				gateway := e.spendLimitGateway()
-				return func() consentResp { return e.putSpendCap(gateway, s.id) }
-			}},
 	}
+	if editionPortsForBuild().name == "community" {
+		writers = writers[2:]
+	}
+	return append(writers, append(editionOrchestrationFenceWriters(), businessSpendCapFenceWriters()...)...)
 }
 
 // fenceMember provisions the account a fenced writer names on the consent
@@ -288,31 +265,9 @@ func (e *consentEstate) fenceSubjectFor(w fenceWriter, label string) fenceSubjec
 
 // spendLimitGateway is the apps gateway's spend-limit administration over the
 // composition's own finops module, answering for T.
-func (e *consentEstate) spendLimitGateway() http.Handler {
-	e.t.Helper()
-	spend, ok := e.eng.finops.(spendLimitAdmin)
-	if !ok {
-		e.t.Fatal("the composition's finops module administers no spend limits")
-	}
-	mux := http.NewServeMux()
-	mountAppsGatewayHandlers(mux, newAppsGatewayHandler(inferenceProxyConfig{}, e.tT, e.eng.authr, nil, spend, nil, time.Now, "test"))
-	return mux
-}
 
 // putSpendCap sets a monthly spend cap on user through the gateway, as the
 // deployment's administrator.
-func (e *consentEstate) putSpendCap(gateway http.Handler, user model.ID) consentResp {
-	e.t.Helper()
-	body := `{"scope":{"type":"user","user_id":"user:` + user.String() + `"},"amount":"100","period":"monthly"}`
-	req := httptest.NewRequest(http.MethodPost, appsGatewaySpendLimitPath, strings.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+e.admin)
-	req.Header.Set("Content-Type", "application/json")
-	rec := httptest.NewRecorder()
-	gateway.ServeHTTP(rec, req)
-	out := consentResp{code: rec.Code, raw: rec.Body.String()}
-	_ = json.Unmarshal(rec.Body.Bytes(), &out.body)
-	return out
-}
 
 // admissionLock is the statement that takes the deployment's directory
 // admission, as the directory writer takes it.

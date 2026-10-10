@@ -15,17 +15,16 @@ OLIVARES_ADMIN_DSN	no		Privileged connection string the Kubernetes operator uses
 OLIVARES_AGENTCORE_EXPORT_CONFIG	no		Path to the JSON configuration of the AgentCore usage export.
 OLIVARES_AGENT_GATEWAY_CONFIG	no		Path to the JSON configuration of the MCP agent gateway.
 OLIVARES_ALLOW_CLEARTEXT	no		Dangerous opt-in: lets a request carrying a credential reach a NON-loopback host over plain HTTP, for surfaces with no --allow-cleartext flag of their own.
-OLIVARES_API_TOKEN	no		API token the Terraform provider authenticates with, when the provider block does not set one.
 OLIVARES_APPROVAL_BRIDGE_CONFIG	no		Path to the JSON configuration of the bridge that routes approvals to an external system.
 OLIVARES_AUDIT_ARCHIVE_	no		Family prefix for the audit archive settings listed above.
-OLIVARES_AUDIT_ARCHIVE_CONFIG	no		Path to the JSON settings for the `s3archive` sink. Secret-bearing, so it is a file rather than a value.
+OLIVARES_AUDIT_ARCHIVE_CONFIG	no		Path to the JSON settings for the Business Regulated Operations `s3archive` sink. Secret-bearing, so it is a file rather than a value.
 OLIVARES_AUDIT_ARCHIVE_DIR	no		Root directory for the `dir` archive sink.
 OLIVARES_AUDIT_ARCHIVE_INTERVAL	no	24h	How often sealed audit segments are archived, as a Go duration.
 OLIVARES_AUDIT_ARCHIVE_RETAIN_DAYS	no	2555	How long archived audit segments are retained, in days.
 OLIVARES_AUDIT_ARCHIVE_SEGMENT_EVENTS	no		How many events a sealed archive segment holds before the next one is started.
-OLIVARES_AUDIT_ARCHIVE_SINK	no		Where sealed audit segments are archived: unset for off, `dir` for a local directory, `s3archive` for object storage.
+OLIVARES_AUDIT_ARCHIVE_SINK	no		Where sealed audit segments are archived: unset for off, `dir` for a local directory, `s3archive` for object storage in Business Regulated Operations.
 OLIVARES_AUDIT_LEGALHOLD_INTERVAL	no		How often the long-horizon legal-hold sweep runs, as a Go duration.
-OLIVARES_AUDIT_LEGALHOLD_RECONCILE	no		Boolean switch, not a file path, for the long-horizon legal-hold reconciler that places object-lock legal holds on the archived audit segments of tenants under an active legal hold. Read only by builds compiled with the `enterprise` and `addon_reg` tags, when the engine starts; a change takes effect after a restart. Only a value `strconv.ParseBool` accepts as true, such as `true` or `1`, turns it on; unset, false and unparsable values leave it off without an error. It also stays off unless the audit archive is configured on a sink that can place object-lock legal holds.
+OLIVARES_AUDIT_LEGALHOLD_RECONCILE	no		Boolean switch, not a file path, for the long-horizon legal-hold reconciler that places object-lock legal holds on the archived audit segments of tenants under an active legal hold. Read only by the Business edition (Regulated Operations), when the engine starts; a change takes effect after a restart. Only a value `strconv.ParseBool` accepts as true, such as `true` or `1`, turns it on; unset, false and unparsable values leave it off without an error. It also stays off unless the audit archive is configured on a sink that can place object-lock legal holds.
 OLIVARES_AUDIT_META_BLINDING	no		Whether audit metadata commitments are written blinded, and how strictly that is required.
 OLIVARES_AUDIT_SIGNING_KEY	no		Audit checkpoint signing key, inline. Prefer the file form so the key never sits in a process environment.
 OLIVARES_AUDIT_SIGNING_KEY_FILE	no		Path to the audit checkpoint signing key. This is the operator-held form.
@@ -36,13 +35,13 @@ OLIVARES_AUTHZEN_ALLOWED_CIDRS	no		Comma-separated CIDR ranges allowed to reach 
 OLIVARES_AUTHZEN_DISABLED	no		Set to a true value to turn the AuthZEN decision endpoint off.
 OLIVARES_AUTHZEN_EXPORT_DISABLED	no		Set to a true value to turn the AuthZEN export endpoint off.
 OLIVARES_AUTHZEN_SEARCH_DISABLED	no		Set to a true value to turn the AuthZEN search endpoints off while leaving decisions on.
-OLIVARES_BASE_URL	no		Public base URL of this control plane, used where an absolute link back to it has to be produced.
+OLIVARES_BASE_URL	no		Public base URL of this engine, used where an absolute link back to it has to be produced.
 OLIVARES_BUS_CONFIG	no		Path to the JSON configuration of the message bus the engine publishes on.
 OLIVARES_CAEP_TRANSMITTER_CONFIG	no		Path to the JSON configuration of the CAEP transmitter that pushes shared-signal events.
 OLIVARES_CATALOG_SIGNING_KEY	no		Catalog signing key, inline. Prefer the file form.
 OLIVARES_CATALOG_SIGNING_KEY_FILE	no		Path to the catalog signing key.
 OLIVARES_CATALOG_SIGNING_KEY_WRAPPED_FILE	no		Path to the catalog signing key wrapped by a key management service.
-OLIVARES_CIRCUIT_BREAKER_CONFIG	no		Boolean switch, not a file path despite the `_CONFIG` suffix, for the runtime circuit breaker; its per-tenant rules are not set here. Read only by builds compiled with the `enterprise` and `addon_airs` tags, when the engine starts; a change takes effect after a restart. Unset or a `strconv.ParseBool` false value leaves the breaker off. A value that is not a boolean is logged as an error and also leaves it off. A true value turns it on when module data is available; otherwise a warning is logged and it stays off.
+OLIVARES_CIRCUIT_BREAKER_CONFIG	no		Boolean switch, not a file path despite the `_CONFIG` suffix, for the runtime circuit breaker; its per-tenant rules are not set here. Read only by the Business edition (AI Runtime Security), when the engine starts; a change takes effect after a restart. Unset or a `strconv.ParseBool` false value leaves the breaker off. A value that is not a boolean is logged as an error and also leaves it off. A true value turns it on when module data is available; otherwise a warning is logged and it stays off.
 OLIVARES_CLAUDE_ADMIN_ACTUATOR_CONFIG	no		Path to the JSON configuration of the administrative actuator that applies changes at the model provider.
 OLIVARES_CLAUDE_ADMIN_KEY	no		Administrative API key used to read identity posture from the model provider.
 OLIVARES_CLAUDE_ERASER_CONFIG	no		Path to the JSON configuration of the erasure actuator that carries out deletion requests.
@@ -63,12 +62,12 @@ OLIVARES_COMMUNICATION_ACTIVATION	no		REQUESTED K3 communication activation (`on
 OLIVARES_COMMUNICATION_CONTENT_KEYRING_FILE	yes		Path to the JSON keyring the communication content sealer loads at boot (cmd/olivares/boot.go). Secret-bearing, so it is a file rather than a value: sealed message bodies are verified against the keys it carries, and an engine started without it cannot open content sealed by a peer that had one.
 OLIVARES_COMMUNICATION_CURSOR_KEYRING_FILE	yes		Path to the JSON keyring (`olivares.communication-cursor-keyring.v1`) that signs and verifies inbox cursor navigation tokens, loaded at boot through the same custody mechanism as the content keyring (cmd/olivares/communicationcursorkeyring.go). Secret-bearing, so it is a file rather than a value; a rotated-out key marked `retired_at` keeps verifying for the token retention window and is dropped afterwards, and a restart never mints a fresh key.
 OLIVARES_COMMUNICATION_TOKEN	yes		The session's own communication credential, injected by the session launcher and read by message commands. Reserved on the launch path; operators must not supply it. Its value is always redacted.
-OLIVARES_COMPUTER_USE_CONFIG	no		Path to the JSON policy file of the computer-use gate. Read only by builds compiled with the `enterprise` and `addon_airs` tags. Unset leaves the gate off; a file that cannot be read or parsed makes it deny all computer use until the file is fixed and the engine is restarted.
+OLIVARES_COMPUTER_USE_CONFIG	no		Path to the JSON policy file of the computer-use gate. Read only by the Business edition (AI Runtime Security). Unset leaves the gate off; a file that cannot be read or parsed makes it deny all computer use until the file is fixed and the engine is restarted.
 OLIVARES_CONFIG_STRICT	no		Set to `1` to make `olivares config effective` and `config validate` reject any unrecognized `OLIVARES_*` key.
-OLIVARES_CONTENT_FIREWALL_CONFIG	no		Path to the JSON policy file of the content firewall that inspects inference traffic in the inline proxy. Read only by builds compiled with the `enterprise` and `addon_airs` tags. Unset leaves that inspection off; a file that cannot be read or parsed makes the firewall deny every request it inspects until the file is fixed and the engine is restarted.
+OLIVARES_CONTENT_FIREWALL_CONFIG	no		Path to the JSON policy file of the content firewall that inspects inference traffic in the inline proxy. Read only by the Business edition (AI Runtime Security). Unset leaves that inspection off; a file that cannot be read or parsed makes the firewall deny every request it inspects until the file is fixed and the engine is restarted.
 OLIVARES_CONTEXT_MAX_TOKENS	no		Upper bound on the context a governed session may assemble, in tokens.
 OLIVARES_CONTEXT_STRATEGY	no		Which strategy assembles a governed session's context when the bound is reached.
-OLIVARES_CREDENTIAL_MINTER_CONFIG	no		Path to the JSON configuration of the per-server upstream credential minter (RFC 8693 token exchange) of the MCP gateway. Secret-bearing, so it is a file rather than a value. Read by builds compiled with the `enterprise` tag when the engine starts and builds the gateway for an upstream URL. Unset keeps the static upstream credential; a file that cannot be read or parsed denies every upstream credential until the file is fixed and the engine is restarted.
+OLIVARES_CREDENTIAL_MINTER_CONFIG	no		Path to the JSON configuration of the per-server upstream credential minter (RFC 8693 token exchange) of the MCP gateway. Secret-bearing, so it is a file rather than a value. Read by the Enterprise edition when the engine starts and builds the gateway for an upstream URL. Unset keeps the static upstream credential; a file that cannot be read or parsed denies every upstream credential until the file is fixed and the engine is restarted.
 OLIVARES_DATA_DIR	no		Data directory used when `--data-dir` is not given: audit signing key, TLS material and, for SQLite, the store file.
 OLIVARES_DB_MAX_CONNS	no		Upper bound on pooled database connections. Unset leaves the driver default.
 OLIVARES_DEPLOY_EXECUTOR_CONFIG	no		Path to the JSON configuration of the executor that applies deployment changes.
@@ -85,7 +84,7 @@ OLIVARES_DR_PASSPHRASE_FILE	no		Path to the backup passphrase file, from which t
 OLIVARES_DR_SCHEDULE_INTERVAL	no		How often the scheduled backup runs, as a Go duration.
 OLIVARES_DSN	no		Store connection string injected by the Kubernetes operator into the engine it manages.
 OLIVARES_DURABLE_BUS_CONFIG	no		Path to the JSON configuration of the durable bus, for at-least-once delivery across replicas.
-OLIVARES_ELICITATION_MEDIATOR_CONFIG	no		Path to the JSON policy file of the MCP elicitation mediator. Read only by builds compiled with the `enterprise` and `addon_airs` tags. Unset leaves mediation off; a file that cannot be read or parsed makes the mediator deny every elicitation until the file is fixed and the engine is restarted.
+OLIVARES_ELICITATION_MEDIATOR_CONFIG	no		Path to the JSON policy file of the MCP elicitation mediator. Read only by the Business edition (AI Runtime Security). Unset leaves mediation off; a file that cannot be read or parsed makes the mediator deny every elicitation until the file is fixed and the engine is restarted.
 OLIVARES_EMBEDDINGS	no		Family stem for the unprefixed embeddings settings, which configure the OpenAI-compatible provider.
 OLIVARES_EMBEDDINGS_	no		Family prefix from which the per-provider embeddings keys are built, by appending the provider name and then the setting.
 OLIVARES_EMBEDDINGS_BASE_URL	no		Endpoint the openai-compatible embeddings provider is called at.
@@ -115,8 +114,6 @@ OLIVARES_EMBEDDINGS_VOYAGE_DIM	no		Vector dimension the voyage provider returns,
 OLIVARES_EMBEDDINGS_VOYAGE_GEO	no		Region or data-residency hint sent to the voyage provider.
 OLIVARES_EMBEDDINGS_VOYAGE_KEY	no		Api key for the voyage embeddings provider.
 OLIVARES_EMBEDDINGS_VOYAGE_MODEL	no		Embedding model requested from the voyage provider.
-OLIVARES_ENDPOINT	no		Control-plane base URL the Terraform provider talks to, when the provider block does not set one.
-OLIVARES_ENGINE	no		Store engine the Kubernetes operator selects for the engine it manages: `sqlite` or `postgres`.
 OLIVARES_EVALS_MONITOR_WINDOW	no		Time window the evaluation monitor scores, as a Go duration.
 OLIVARES_EVENTING_ALLOW_LOOPBACK	no		Set to a true value to allow loopback destinations. Single-box development only, because the default refusal is what blocks server-side request forgery.
 OLIVARES_EVENTING_DISPATCH_INTERVAL	no	15s	How often queued events are dispatched, as a Go duration. `0` disables the pump.
@@ -148,7 +145,7 @@ OLIVARES_HOOK_PEP_ORG	no		Organization the Claude Code hook client reports.
 OLIVARES_HOOK_PEP_TENANT	no		Tenant the Claude Code hook client reports.
 OLIVARES_HOOK_PEP_TOKEN	no		Token the Claude Code hook client presents to the enforcement point.
 OLIVARES_HOOK_PEP_URL	no		Base URL of the enforcement point the Claude Code hook client calls.
-OLIVARES_INCIDENTLOOP_CONFIG	no		Path to the JSON configuration of the incident close-the-loop subscriber. Read by builds compiled with the `enterprise` tag.
+OLIVARES_INCIDENTLOOP_CONFIG	no		Path to the JSON configuration of the incident close-the-loop subscriber. Read by the Business edition.
 OLIVARES_INFERENCE_PROXY_CONFIG	no		Path to the JSON configuration of the governed inference proxy.
 OLIVARES_INGEST_TOKEN	no		Bearer token the collector ingest endpoint requires from telemetry senders.
 OLIVARES_INSECURE	no		Set to `1` to let the CLI talk to a plaintext or untrusted-TLS endpoint. Local development only.
@@ -192,15 +189,15 @@ OLIVARES_METRICS_TOKEN	no		Bearer token the metrics endpoint requires. Unset lea
 OLIVARES_MODEL_GATEWAY_CHAT_MODE	no	disabled	Activation mode for synchronous governed Chat dispatch. Unset or `disabled` keeps it off; `development_precheck` opts into the existing non-atomic, fail-open routing precheck, not a hard monetary budget. Any other value stops startup.
 OLIVARES_MODEL_GATEWAY_PROFILES_CONFIG	no		Path to the local JSON file of immutable model-gateway execution profiles. Unset loads no profiles; an unreadable or invalid file stops startup.
 OLIVARES_NHI_ACTUATORS_CONFIG	no		Path to the JSON configuration of the actuators that act on non-human identities.
-OLIVARES_NIS2INCIDENT_CONFIG	no		Path to the JSON configuration of NIS2 incident reporting. Read by builds compiled with the `enterprise` tag.
+OLIVARES_NIS2INCIDENT_CONFIG	no		Path to the JSON configuration of NIS2 incident reporting. Read by the Business edition.
 OLIVARES_NOTIFY_CONFIG	no		Path to the JSON list of notification destinations. Secret-bearing, so it stays out of the store.
 OLIVARES_NOTIFY_DISPATCH_INTERVAL	no		How often queued notifications are dispatched, as a Go duration. `0` disables the pump.
 OLIVARES_OIDC_	no		Family prefix for the OIDC federation settings listed above.
-OLIVARES_OIDC_CLIENT_ID	yes		OIDC client id for this control plane. Required when the protocol is `oidc`.
-OLIVARES_OIDC_CLIENT_SECRET	yes		OIDC client secret for this control plane. Required when the protocol is `oidc`.
+OLIVARES_OIDC_CLIENT_ID	yes		OIDC client id for this engine. Required when the protocol is `oidc`.
+OLIVARES_OIDC_CLIENT_SECRET	yes		OIDC client secret for this engine. Required when the protocol is `oidc`.
 OLIVARES_OIDC_GROUPS_CLAIM	no		ID-token or UserInfo claim carrying group membership. Unset leaves group mapping off.
 OLIVARES_OIDC_ISSUER	yes		OIDC issuer URL. Required when the protocol is `oidc`.
-OLIVARES_ONBOARDING_CONFIG	no		Path to the JSON configuration of the onboarding readiness assessor. Read by builds compiled with the `enterprise` tag each time `olivares enterprise readiness` runs, not when the engine starts. `{}` selects the standard profile. Unset, or a file that cannot be read or parsed, makes that command report that onboarding readiness is not configured.
+OLIVARES_ONBOARDING_CONFIG	no		Path to the JSON configuration of the onboarding readiness assessor. Read by the Business edition each time `olivares enterprise readiness` runs, not when the engine starts. `{}` selects the standard profile. Unset, or a file that cannot be read or parsed, makes that command report that onboarding readiness is not configured.
 OLIVARES_ORCH_CADENCE_INTERVAL	no		How often the orchestration cadence loop runs, as a Go duration. `0` disables it.
 OLIVARES_ORCH_DISPATCH_CONFIG	no		Path to the JSON configuration for orchestration dispatch targets.
 OLIVARES_ORCH_WORKFLOW_INTERVAL	no	15s	How often the orchestration workflow loop advances waiting runs, as a Go duration.
@@ -222,24 +219,23 @@ OLIVARES_PDP_ENGINE	no		External policy decision point to add on top of the nati
 OLIVARES_PDP_OPA_PATH	no		Decision path queried under the Open Policy Agent endpoint.
 OLIVARES_PDP_OPA_TOKEN	no		Bearer token for the Open Policy Agent endpoint.
 OLIVARES_PDP_OPA_URL	no		Base URL of the Open Policy Agent endpoint, for the `opa` decision point.
-OLIVARES_PIV_CONFIG	no		Path to the JSON configuration for smart-card privileged login.
+OLIVARES_PIV_CONFIG	no		Path to the JSON configuration for Business Identity & Scale smart-card privileged login. Community refuses serving with this setting; data backup remains available.
 OLIVARES_PLUGIN	no		Handshake cookie an out-of-process connector plugin must present. Set by the engine when it launches the plugin, not by the operator.
 OLIVARES_POLICY_MAX_STALENESS	no		How stale a cached policy decision may be before it is refused, as a Go duration.
 OLIVARES_POLICY_SIGNING_KEY	no		Policy bundle signing key, inline. Prefer the file form.
 OLIVARES_POLICY_SIGNING_KEY_FILE	no		Path to the policy bundle signing key.
 OLIVARES_POLICY_SIGNING_KEY_WRAPPED_FILE	no		Path to the policy signing key wrapped by a key management service.
-OLIVARES_PORTAL_TLS_DIRECTORY	no		Directory in which the operator keeps the Appliance Console's TLS certificate and key; the service unit names it and passes the pair to the console as credentials.
-OLIVARES_PQC_POSTURE_CONFIG	no		Path to the JSON configuration of the post-quantum posture assessor. Read by builds compiled with the `enterprise` tag each time `olivares enterprise pqc-posture` runs, not when the engine starts. `{}` selects CNSA 2.0 with a 2033 target year. Unset, or a file that cannot be read or parsed, makes that command report that PQC posture is not configured.
+OLIVARES_PQC_POSTURE_CONFIG	no		Path to the JSON configuration of the post-quantum posture assessor. Read by the Business edition each time `olivares enterprise pqc-posture` runs, not when the engine starts. `{}` selects CNSA 2.0 with a 2033 target year. Unset, or a file that cannot be read or parsed, makes that command report that PQC posture is not configured.
 OLIVARES_PUBLIC_URL	no		The address a browser reaches this console at, as scheme://host[:port]. It is what the startup panel prints and what the WebAuthn relying party is derived from, and it is independent of the listen address. The --public-url flag wins over this variable, and passing that flag empty clears it. Read at start-up only: a change takes a restart. Refused values are reported by field and failure class and are never echoed, and support bundles keep this value redacted.
 OLIVARES_RATELIMIT_CONFIG	no		Path to the JSON rate-limit policy the engine applies to its own endpoints.
 OLIVARES_RATELIMIT_STORE	no		Where rate-limit counters live, which decides whether limits are per replica or shared.
-OLIVARES_RENDER_INSPECTOR_CONFIG	no		Path to the JSON policy file of the inspector for rendered MCP App content. Read only by builds compiled with the `enterprise` and `addon_airs` tags. Unset leaves that inspection off; a file that cannot be read or parsed makes the inspector deny all rendered content until the file is fixed and the engine is restarted.
-OLIVARES_REPORTING_CONFIG	no		Path to the JSON configuration of the reporting add-on. Read by builds compiled with the `enterprise` tag.
+OLIVARES_RENDER_INSPECTOR_CONFIG	no		Path to the JSON policy file of the inspector for rendered MCP App content. Read only by the Business edition (AI Runtime Security). Unset leaves that inspection off; a file that cannot be read or parsed makes the inspector deny all rendered content until the file is fixed and the engine is restarted.
+OLIVARES_REPORTING_CONFIG	no		Path to the JSON configuration of the reporting add-on. Read by the Business edition.
 OLIVARES_REPORTING_SCHEDULE_INTERVAL	no		How often scheduled reports are generated, as a Go duration.
 OLIVARES_REPORT_CACHE_DIR	no		Directory where generated report artifacts are cached.
-OLIVARES_RETENTION_GOVERNOR_CONFIG	no		Path to the JSON configuration of the regulatory retention-floor governor. Read only by builds compiled with the `enterprise` and `addon_reg` tags, when the engine starts. Unset enforces no retention floor; a file that cannot be read or parsed floors every retention class at 100 years until the file is fixed and the engine is restarted.
+OLIVARES_RETENTION_GOVERNOR_CONFIG	no		Path to the JSON configuration of the regulatory retention-floor governor. Read only by the Business edition (Regulated Operations), when the engine starts. Unset enforces no retention floor; a file that cannot be read or parsed floors every retention class at 100 years until the file is fixed and the engine is restarted.
 OLIVARES_RETENTION_SWEEP_INTERVAL	no		How often the retention sweep deletes data past its retention window, as a Go duration.
-OLIVARES_RTBF_DEPTH_CONFIG	no		Path to the JSON configuration of the RTBF crypto-shred coordinator. Read only by builds compiled with the `enterprise` and `addon_reg` tags, when the engine starts. Unset leaves open-core crypto-shredding unchanged; a file that cannot be read or parsed blocks every shred until the file is fixed and the engine is restarted.
+OLIVARES_RTBF_DEPTH_CONFIG	no		Path to the JSON configuration of the RTBF crypto-shred coordinator. Read only by the Business edition (Regulated Operations), when the engine starts. Unset leaves open-core crypto-shredding unchanged; a file that cannot be read or parsed blocks every shred until the file is fixed and the engine is restarted.
 OLIVARES_SAML_	no		Family prefix for the SAML federation settings listed above.
 OLIVARES_SAML_ACS_URL	yes		Assertion consumer service URL of this service provider, where the identity provider posts the assertion.
 OLIVARES_SAML_EMAIL_ATTRIBUTE	no		Assertion attribute carrying the user's email. Unset tries the common attribute names.
@@ -247,11 +243,12 @@ OLIVARES_SAML_GROUPS_ATTRIBUTE	no		Multi-valued assertion attribute carrying gro
 OLIVARES_SAML_IDP_METADATA_URL	no		Identity-provider metadata URL, from which the SAML endpoints and certificate are read.
 OLIVARES_SAML_IDP_SSO_URL	no		Identity-provider single sign-on URL, for the path where metadata is not fetched.
 OLIVARES_SAML_SP_CERT_PEM	no		Service-provider encryption certificate in PEM, published as the encryption key descriptor.
-OLIVARES_SAML_SP_ENTITY_ID	yes		Entity id this control plane presents as the SAML service provider. Required when the protocol is `saml`.
+OLIVARES_SAML_SP_ENTITY_ID	yes		Entity id this engine presents as the SAML service provider. Required when the protocol is `saml`.
 OLIVARES_SAML_SP_KEY_PEM	no		Service-provider encryption private key in PEM, which decrypts encrypted assertions.
 OLIVARES_SAML_SP_SIGN_CERT_PEM	no		Service-provider signing certificate in PEM, published as the signing key descriptor.
 OLIVARES_SAML_SP_SIGN_KEY_PEM	no		Service-provider signing private key in PEM, which signs authentication requests.
 OLIVARES_SANDBOX_RUNTIME_CONFIG	no		Path to the JSON configuration of the sandbox runtime that isolates agent execution.
+OLIVARES_SECRETREF_	no		Family of settings for external secret-reference backends, including token-file references.
 OLIVARES_SECRETREF_AWS_REGION	no		Region used for AWS Secrets Manager references. Falls back to `AWS_REGION` and `AWS_DEFAULT_REGION`.
 OLIVARES_SECRETREF_AZURE_API_VERSION	no		Azure Key Vault API version requested.
 OLIVARES_SECRETREF_AZURE_TOKEN	no		Token used against Azure Key Vault.
@@ -270,8 +267,8 @@ OLIVARES_SECRETREF_VAULT_ADDR	no		Address of the HashiCorp Vault server secret r
 OLIVARES_SECRETREF_VAULT_NAMESPACE	no		Vault namespace secret references resolve in. Falls back to `VAULT_NAMESPACE`.
 OLIVARES_SECRETREF_VAULT_TOKEN	no		Token used against HashiCorp Vault.
 OLIVARES_SECRET_STORE_KEY	no		Key that encrypts operator secrets held in the store.
-OLIVARES_SERVERTOOL_EGRESS_CONFIG	no		Path to the JSON grants file of the egress gate for provider server tools (web search, web fetch, code execution) in the inline proxy. Read only by builds compiled with the `enterprise` and `addon_airs` tags. Unset keeps those tools observe-only; a file that cannot be read or parsed denies every recognized egress server tool until the file is fixed and the engine is restarted.
-OLIVARES_SERVER_URL	no		Base URL of the control plane the CLI talks to, when `--server` is not given.
+OLIVARES_SERVERTOOL_EGRESS_CONFIG	no		Path to the JSON grants file of the egress gate for provider server tools (web search, web fetch, code execution) in the inline proxy. Read only by the Business edition (AI Runtime Security). Unset keeps those tools observe-only; a file that cannot be read or parsed denies every recognized egress server tool until the file is fixed and the engine is restarted.
+OLIVARES_SERVER_URL	no		Base URL of the engine the CLI talks to, when `--server` is not given.
 OLIVARES_SESSIONS_AGENT_LINK_LISTEN	no		Listen address of the agent link, as `host:port`: the mutual-TLS endpoint an edition built on this tree serves for its node agents. Read at startup; empty, the default, means no listener. The Community build does not read it.
 OLIVARES_SESSIONS_MANAGED_STOP_ADMISSION_TIMEOUT	no	10s	Maximum time to admit a managed Stop request, as a positive Go duration with units. Read at startup; invalid or nonpositive values prevent startup. This does not bound process teardown.
 OLIVARES_SESSION_BUDGET_AVAILABILITY	no		Whether session budget enforcement is required, and what happens when the budget service cannot answer.
@@ -282,13 +279,16 @@ OLIVARES_SESSION_PEP_URL	no		Base URL of the policy enforcement point a governed
 OLIVARES_SESSION_RUNTIME_	no		Family prefix for the session runtime settings listed above.
 OLIVARES_SESSION_RUNTIME_BASE_URL	no		Base URL the launched session runtime calls back to.
 OLIVARES_SESSION_RUNTIME_CLAUDE_BIN	no	claude	Executable the session runtime launches.
-OLIVARES_SESSION_RUNTIME_CODEX_BIN	no		Pinned official Codex executable the session runtime may operate. Setting it REGISTERS that driver on this node; unset, codex profiles stay observable and not launchable.
-OLIVARES_SESSION_RUNTIME_GROK_BIN	no		Pinned official Grok executable the session runtime may operate. Setting it REGISTERS that driver on this node; unset, grok profiles stay observable and not launchable.
-OLIVARES_SESSION_RUNTIME_OPENCODE_BIN	no		Pinned official OpenCode executable the session runtime may operate. Setting it registers the OpenCode ACP driver on this node; unset, OpenCode profiles remain observable but cannot be launched. Other provider drivers are unchanged.
+OLIVARES_SESSION_RUNTIME_CODEX_BIN	no		Explicit override selecting the official Codex executable instead of the newest verified managed install or `codex` on the engine's `PATH`. The driver is registered at boot even when unset; launch is refused if no executable resolves.
+OLIVARES_SESSION_RUNTIME_GEMINI_BIN	no		Pinned official Gemini CLI executable the session runtime may operate; unset, the Gemini CLI installed on this node is found when a session launches.
+OLIVARES_SESSION_RUNTIME_GROK_BIN	no		Explicit override selecting the official Grok executable instead of the newest verified managed install or `grok` on the engine's `PATH`. The driver is registered at boot even when unset; launch is refused if no executable resolves.
+OLIVARES_SESSION_RUNTIME_OPENCODE_BIN	no		Explicit override selecting the official OpenCode executable instead of the newest verified managed install or `opencode` on the engine's `PATH`. The driver is registered at boot even when unset; launch is refused if no executable resolves.
 OLIVARES_SESSION_RUNTIME_TOKEN_FILE	no		Path to the file holding the session runtime's credential, refreshed by rotation.
 OLIVARES_SESSION_RUNTIME_TOKEN_TTL	no	15m	Lifetime of a minted session runtime credential, as a Go duration.
 OLIVARES_SESSION_RUNTIME_WIF	no		Whether the session runtime takes its credential from workload identity federation instead of a token file.
 OLIVARES_SESSION_RUNTIME_WIF_RULE	no		Which federation rule the session runtime exchanges its workload identity under.
+OLIVARES_SESSION_WORKTREE_BRANCH_PREFIX	no	olivares/	Prefix of the branch a session gets when it is started with a new git worktree; git checks the resulting branch name.
+OLIVARES_SESSION_WORKTREE_DIR	no		Directory that holds the git worktrees of sessions started with a new worktree; the default is session-worktrees in the data directory.
 OLIVARES_SIEM_FORWARD_INTERVAL	no		How often signed ledger records are forwarded to the configured SIEM, as a Go duration.
 OLIVARES_SOURCES_CONFIG	no		Path to the JSON file that wires real observation sources and identity roster providers before the engine starts.
 OLIVARES_SSO_PROTOCOL	no		Single sign-on protocol to wire: `oidc` or `saml`. Unset means no federation, and the endpoints report it rather than half-wiring one.
@@ -296,10 +296,10 @@ OLIVARES_SSO_SECRET_KEY	no		Key that encrypts the federation client secret and s
 OLIVARES_TARGET_BINDING_KEY	no		Key that binds an orchestration target to this deployment, inline. Prefer the file form.
 OLIVARES_TARGET_BINDING_KEY_FILE	no		Path to the orchestration target binding key.
 OLIVARES_TENANT	no		Default tenant for CLI commands, when `--tenant` is not given.
-OLIVARES_THREATINTEL_CONFIG	no		Path to the JSON configuration of threat-intelligence ingest. Read by builds compiled with the `enterprise` tag.
+OLIVARES_THREATINTEL_CONFIG	no		Path to the JSON configuration of threat-intelligence ingest. Read by the Business edition.
 OLIVARES_THREATINTEL_SIGNING_KEY	no		Signing key for threat-intelligence bundles the engine publishes.
-OLIVARES_TOKEN	no		API token the CLI authenticates with, when `--token` is not given.
-OLIVARES_TOOL_PIN_CONFIG	no		Path to the optional JSON configuration (`require_pin_approval`) of the MCP tool-pin store, which builds compiled with the `enterprise` tag run whether or not this is set. Read when the engine starts. Unset keeps trust on first use; a file that cannot be read or parsed requires operator approval for unknown tools until the file is fixed and the engine is restarted.
+OLIVARES_TOKEN	no		API token the CLI authenticates with, when no token flag such as `--token-file` is given.
+OLIVARES_TOOL_PIN_CONFIG	no		Path to the optional JSON configuration (`require_pin_approval`) of the MCP tool-pin store, which the Business edition runs whether or not this is set. Read when the engine starts. Unset keeps trust on first use; a file that cannot be read or parsed requires operator approval for unknown tools until the file is fixed and the engine is restarted.
 OLIVARES_TOTP_SEED_KEY	no		Base64-encoded 32-byte key that seals TOTP seeds at rest. Set the same key on HA nodes; when unset, the engine creates a private totp-seed.key in its data directory.
 OLIVARES_UPDATE_CHANNEL	no		Release channel the update check asks for, such as `stable`.
 OLIVARES_UPDATE_ENDPOINT	no		Base URL the update check queries. Unset leaves the update check off.
@@ -321,8 +321,6 @@ OLIVARES_WIF_BASE_URL	no		Endpoint the workload identity exchange is performed a
 OLIVARES_WIF_REFRESH_SLACK	no	60s	How long before expiry a federated credential is refreshed, as a Go duration.
 OLIVARES_WIF_SPIFFE_SOCKET	no		Path to the SPIFFE workload API socket the engine fetches its identity from.
 OLIVARES_WIF_TRUST_DOMAIN	no		SPIFFE trust domain accepted for workload identity.
-OLIVARES_WORK_	no		Family prefix for the per-run values the engine passes into a launched work session.
+OLIVARES_WORK_	no		Family prefix for the per-run values the engine passes into a launched work session, including `OLIVARES_WORK_RUN_REF` (run reference) and `OLIVARES_WORK_SESSION_ID` (session reference). Set by the engine per run, not by the operator.
 OLIVARES_WORK_OUTBOX_INTERVAL	no		How often the work-kernel outbox is drained, as a Go duration. `0` disables the pump.
-OLIVARES_WORK_RUN_REF	no		Run reference the engine passes to a launched work session. Set by the engine per run, not by the operator.
-OLIVARES_WORK_SESSION_ID	no		Session reference the engine passes to a launched work session. Set by the engine per run, not by the operator.
 OLIVARES_WORK_TOKEN	no		The session's own scoped work credential, injected by the session launcher and read by work commands. Operators must not supply it. Its value is always redacted.

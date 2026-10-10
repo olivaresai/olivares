@@ -29,6 +29,12 @@
 // not started and a read that is paused are two more honest states beside "—", and
 // neither is an outage or a refusal. A discreet live region, one per view, announces
 // availability and coverage changes of the two usage sources to assistive technology.
+import {
+  tileState,
+  pendingReason,
+  type PendingReason,
+  type SourceQuery,
+} from './view-state'
 import { useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from '@tanstack/react-router'
@@ -37,7 +43,6 @@ import {
   ArrowRight,
   BarChart3,
   Boxes,
-  Coins,
   HeartPulse,
   LayoutDashboard,
   OctagonAlert,
@@ -48,22 +53,18 @@ import { useTranslation } from 'react-i18next'
 import { useAuth } from '@/lib/auth/context'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
-import { IntelPage, StatGrid, TruncatedNotice } from '@/features/_intel'
-import {
-  ComplianceMixBar,
-  DeltaCaption,
-  SeverityRow,
-} from '@/features/executive/components'
-import { Sparkline, useChartTheme } from '@/components/charts'
+import { IntelPage, StatGrid } from '@/features/_intel'
+import { ComplianceMixBar, SeverityRow } from '@/features/executive/components'
+
 import {
   currentAnswer,
   deriveCompliance,
-  deriveCost,
   deriveHealth,
   deriveRisk,
   deriveUsage,
 } from '@/features/executive/derive'
-import { finopsApi, finopsKeys } from '@/features/finops/api'
+import { PANEL_EXTENSIONS } from '@/features/extensions'
+
 import { inventoryApi, inventoryKeys } from '@/features/inventory/api'
 import { sessionsApi, sessionsKeys } from '@/features/sessions/api'
 import { agentOpsApi, agentOpsKeys } from '@/features/agentops/api'
@@ -76,8 +77,8 @@ import type { LiveDTO } from '@/features/sessions/types'
 import { securityApi, securityKeys } from '@/features/security/api'
 import { complianceApi, complianceKeys } from '@/features/compliance/api'
 import { healthApi, healthKeys } from '@/features/health/api'
-import { formatInt, formatMicroUsd, formatPercent } from '@/lib/format'
-import { EstateTile, type TileState } from './components'
+import { formatInt, formatPercent } from '@/lib/format'
+import { EstateTile } from './components'
 import { NextStep } from './next-step'
 import { NowQueue } from './now-queue'
 import { BUDGET_READ } from './budget-verdict'
@@ -104,22 +105,9 @@ function since30dISO(): string {
  *  otherwise read as a fabricated 0), and `unavailable` if ANY errored. A single-source
  *  tile just passes its one query. Disabled queries never reach here — their tile is
  *  not mounted. */
-function tileState(
-  ...queries: { isLoading: boolean; isError: boolean }[]
-): TileState {
-  if (queries.some((q) => q.isError)) return 'unavailable'
-  if (queries.some((q) => q.isLoading)) return 'loading'
-  return 'ready'
-}
 
 /** The shape of a TanStack query this file reads to name a source's availability: the
  *  status pair the observer already exposes, nothing derived from elsewhere. */
-type SourceQuery = {
-  isPending: boolean
-  isLoading: boolean
-  isError: boolean
-  fetchStatus: 'fetching' | 'paused' | 'idle'
-}
 
 /**
  * WHY A PERMITTED SOURCE HAS NO CURRENT ANSWER while it is neither fetching nor failed.
@@ -138,14 +126,6 @@ type SourceQuery = {
  * is the skeleton, unchanged) or that already has a success or an error. A successful
  * answer whose REFETCH is paused is not pending: it keeps its figure and its markers.
  */
-type PendingReason = 'pendingIdle' | 'pendingPaused' | null
-
-function pendingReason(query: SourceQuery): PendingReason {
-  if (!query.isPending || query.isError) return null
-  if (query.fetchStatus === 'paused') return 'pendingPaused'
-  if (query.fetchStatus === 'idle') return 'pendingIdle'
-  return null
-}
 
 /**
  * THE ONE STATEMENT THE LIVE REGION MAKES ABOUT A SOURCE — availability first, then
@@ -181,6 +161,8 @@ const HOME_RUN_PARAMS = { limit: 30 } as const
  * launched session is active only while its run is (a stopped run's row keeps its
  * last "active" signal).
  */
+const useDashboardCost = PANEL_EXTENSIONS.useDashboardCost ?? (() => null)
+
 export function liveForTiles<T extends { items: LiveDTO[] }>(
   answer: T | undefined,
   sessions: UnifiedSession[] | undefined,
@@ -206,7 +188,6 @@ export function liveForTiles<T extends { items: LiveDTO[] }>(
 export function HomeView() {
   const { t } = useTranslation(['home', 'nav', 'common'])
   const { activeTenant, can } = useAuth()
-  const theme = useChartTheme()
   const queryClient = useQueryClient()
 
   // RBAC: gate every tile by the same read permission its nav item uses (docs/SECURITY-HARDENING.md).
@@ -214,12 +195,12 @@ export function HomeView() {
   // enabled shows no tile and is never asked, so Home shows no error for it.
   const on = useModuleEnabled()
   const may = (permission: string) => can(permission) && on(permission)
-  const canFinops = may('finops:spend:read')
   const canBudgets = may(BUDGET_READ)
   const canInventory = may('inventory:catalog:read')
   const canSessions = can('sessions:live:read')
   const canSecurity = may('security:finding:read')
-  const canCompliance = may('compliance:framework:read')
+  const canCompliance =
+    Boolean(PANEL_EXTENSIONS.complianceView) && may('compliance:framework:read')
   const canHealth = may('health:status:read')
   const complianceOpened = useComplianceOpened()
 
@@ -228,44 +209,13 @@ export function HomeView() {
   const params = useMemo(() => ({ since: since30dISO() }), [])
 
   // --- queries (only the permitted ones run) ---------------------------------
-  const costSummaryQ = useQuery({
-    queryKey: finopsKeys.summary(activeTenant, params),
-    queryFn: () => finopsApi.summary(params),
-    enabled: canFinops,
-  })
-  const costTrendQ = useQuery({
-    queryKey: finopsKeys.trend(activeTenant, params),
-    queryFn: () => finopsApi.trend(params),
-    enabled: canFinops,
-  })
-  const forecastQ = useQuery({
-    queryKey: finopsKeys.forecast(activeTenant, 'monthly'),
-    queryFn: () => finopsApi.forecast('monthly'),
-    enabled: canFinops,
-  })
-  // ⛔ THE INVENTORY READ IS TENANT-WIDE, AND ITS TILE SAYS SO. `GET /v1/m/inventory/summary`
-  //    reads no request filter and the catalog carries no workspace lineage
-  //    (modules/inventory/api.go:123, schema.go:67; ratified 2026-09-08 in
-  //    an internal design note (not shipped)). Until today this query still
-  //    sent `workspace_id` and keyed on the topbar selection, so a W1→W2 switch re-fetched the
-  //    SAME tenant-wide summary and presented it as the new workspace's estate — beside a
-  //    Sessions tile that already said it was tenant-wide. Keyed by tenant only now (the very
-  //    cache entry InventoryView reads), still gated by `inventory:catalog:read`; the label
-  //    under the tile describes SCOPE — not a grant, not completeness (a truncated summary is
-  //    still a floor). The topbar selector itself is untouched: other views do filter by it.
+  // Inventory is tenant-wide (modules/inventory/api.go:123 takes no workspace filter): keyed by tenant, and the tile says so.
   const inventoryQ = useQuery({
     queryKey: inventoryKeys.summary(activeTenant),
     queryFn: () => inventoryApi.summary(),
     enabled: canInventory,
   })
-  // ⛔ THE LIVE-SESSIONS READ IS TENANT-WIDE, AND THIS TILE SAYS SO. `GET /v1/m/sessions/live`
-  //    takes no core-workspace selector and neither DTO carries one (the ratified contract of
-  //    2026-09-08, an internal design note (not shipped)). Until 2026-09-08
-  //    this query still sent `workspace_id` and keyed on the selection, so a workspace switch
-  //    re-fetched the SAME tenant-wide page and presented it as the new workspace's figure.
-  //    Only that ignored filter went: the read is still pinned to the tenant, still gated by
-  //    `sessions:live:read`, and the label under the tile describes SCOPE — not a grant, not
-  //    completeness. The inventory read above now follows the same rule.
+  // Live sessions are tenant-wide (GET /v1/m/sessions/live takes no workspace selector): keyed by tenant, and the tile says so.
   // Pending approvals for "Needs you": the approval queue's own read (shared cache).
   const pendingApprovals = usePendingApprovals()
   const killSwitch = useKillSwitchState()
@@ -347,7 +297,12 @@ export function HomeView() {
   }, [canInventory, activeTenant, queryClient])
 
   // --- rollups (aggregate only; the modules own the math, ARCHITECTURE.md) ---------
-  const cost = deriveCost(costSummaryQ.data, costTrendQ.data, forecastQ.data)
+  const costPanels = useDashboardCost(params)
+  // The executive report rolls up what the agents did in the period. On an empty install
+  // it has nothing to say, so Now offers it once Recent work holds a session or the period
+  // has usage (spend, or tokens a local model ran for $0); the report stays one search away.
+  const hasActivity =
+    (recentSessions?.length ?? 0) > 0 || !!costPanels?.hasActivity
   // Each usage half is handed in only as its CURRENT, permitted, successful answer:
   // a denied, pending or failed half is `undefined` and comes back `null`, never as an
   // empty page counted to 0, and data a role may no longer read is not reused. The
@@ -406,13 +361,6 @@ export function HomeView() {
     canCompliance &&
     complianceOpened &&
     !answeredEmpty([complianceQ], true, !compliance || compliance.total === 0)
-  const showSpend =
-    canFinops &&
-    !answeredEmpty(
-      [costSummaryQ, costTrendQ, forecastQ],
-      !cost?.truncated,
-      !cost || cost.totalMicroUsd === 0,
-    )
   const showHealth =
     canHealth &&
     !answeredEmpty(
@@ -440,9 +388,6 @@ export function HomeView() {
     queries.map(pendingReason).find((r) => r !== null) ?? null
   const securityPending = canSecurity ? pendingOf(findingsQ) : null
   const compliancePending = canCompliance ? pendingOf(complianceQ) : null
-  const spendPending = canFinops
-    ? pendingOf(costSummaryQ, costTrendQ, forecastQ)
-    : null
   const healthPending = canHealth ? pendingOf(healthStatusQ, incidentsQ) : null
   const killSwitchPending = killSwitch.permitted
     ? pendingOf(killSwitch.query)
@@ -492,7 +437,7 @@ export function HomeView() {
     .join(' ')
 
   const anyPermitted =
-    canFinops ||
+    costPanels?.permitted ||
     canInventory ||
     canSessions ||
     canSecurity ||
@@ -531,15 +476,17 @@ export function HomeView() {
          The TRUNCATION notice below stays: it reports a measurement limit, which is
          the canon's own requirement and not a restatement of purpose. */
       actions={
-        <Button asChild variant="outline" size="sm" className="h-6">
-          {/* The feature registry IS the route table, so this path is valid at runtime
+        hasActivity ? (
+          <Button asChild variant="outline" size="sm" className="h-6">
+            {/* The feature registry IS the route table, so this path is valid at runtime
               even though the generated route types don't list it (as `DrillLink` does). */}
-          <Link to={'/dashboards' as never}>
-            <BarChart3 />
-            {t('openReport')}
-            <ArrowRight />
-          </Link>
-        </Button>
+            <Link to={'/dashboards' as never}>
+              <BarChart3 />
+              {t('openReport')}
+              <ArrowRight />
+            </Link>
+          </Button>
+        ) : undefined
       }
     >
       {/* THE LIVE REGION, once per view and OUTSIDE every tile link and disclosure:
@@ -592,7 +539,6 @@ export function HomeView() {
               titled
               sessions={recentSessions}
               state={tileState(canRuns ? runsQ : sessionsQ)}
-              canStartSession={can('sessions:run:write')}
             />
           ) : null}
         </div>
@@ -822,66 +768,7 @@ export function HomeView() {
               />
             ) : null}
 
-            {showSpend ? (
-              <EstateTile
-                compact
-                to="/finops"
-                icon={<Coins />}
-                label={t('tiles.spend.label')}
-                state={tileState(costSummaryQ, costTrendQ, forecastQ)}
-                value={
-                  spendPending
-                    ? '—'
-                    : formatMicroUsd(cost?.totalMicroUsd ?? 0, {
-                        compact: true,
-                      })
-                }
-                tone={
-                  !spendPending && cost?.projectedOver ? 'warning' : undefined
-                }
-                /* ⛔ THE STATE IS IN THE WORDS, NOT ONLY IN THE TOKEN (WCAG 2.1 AA 1.4.1).
-                 The tone above tints this caption and nothing else changed: the same
-                 estate at 90 % and at 140 % of its run-rate printed the SAME sentence,
-                 so a reader who does not see the amber — a monochrome display, a
-                 colour-blind reader, a screen reader — read one tile for two states.
-                 The health tile next door already differs in words (`2/3 healthy`
-                 against `3/3`); this one did not. `projectedOver` is
-                 `trend_projected_micro_usd > spend_micro_usd` (executive/derive.ts),
-                 so the second caption says exactly that and not "over budget", which
-                 is a different fact this screen does not read. */
-                caption={
-                  spendPending
-                    ? pendingText(spendPending)
-                    : cost && cost.projectedMicroUsd !== null
-                      ? t(
-                          cost.projectedOver
-                            ? 'tiles.spend.projectedOver'
-                            : 'tiles.spend.projected',
-                          {
-                            amount: formatMicroUsd(cost.projectedMicroUsd, {
-                              compact: true,
-                            }),
-                          },
-                        )
-                      : t('tiles.spend.caption', { range: t('range') })
-                }
-                trend={
-                  cost && cost.trend.length > 1 ? (
-                    <div className="flex items-center justify-between gap-2">
-                      <Sparkline
-                        data={cost.trend}
-                        dataKey="cost"
-                        color={theme.accent}
-                        className="max-w-[60%]"
-                      />
-                      <DeltaCaption pct={cost.deltaPct} />
-                    </div>
-                  ) : cost ? (
-                    <DeltaCaption pct={cost.deltaPct} />
-                  ) : undefined
-                }
-              />
-            ) : null}
+            {costPanels?.homeTile}
 
             {/* SPEND AGAINST BUDGETS (CONCEPT-IA): which budget is PROVEN over its limit,
                 read from the canonical amount under the Cost page's own keys
@@ -958,7 +845,7 @@ export function HomeView() {
           </StatGrid>
 
           {/* Keep the cost figure's honesty: a truncated aggregate is a floor, never hidden. */}
-          {canFinops && cost?.truncated ? <TruncatedNotice /> : null}
+          {costPanels?.floor}
         </aside>
       </div>
     </IntelPage>

@@ -99,6 +99,9 @@ type IDJAGIssuerConfig struct {
 // IDJAGIssuer mints signed ID-JAGs. It is constructed with a signing key and
 // the AS issuer identifier. Deny-closed: a zero-value issuer rejects everything.
 // Safe for concurrent use after construction.
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 type IDJAGIssuer struct {
 	signer      jose.Signer
 	pubKey      ed25519.PublicKey
@@ -112,6 +115,9 @@ type IDJAGIssuer struct {
 // NewIDJAGIssuer constructs an ID-JAG issuer. Returns an error if the signing
 // key is missing or invalid. A nil checker means agent-OBO validation is
 // unavailable (deny-closed).
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 func NewIDJAGIssuer(cfg IDJAGIssuerConfig) (*IDJAGIssuer, error) {
 	if len(cfg.SigningKey) == 0 {
 		return nil, fmt.Errorf("%w: no signing key provided", ErrIDJAGUnavailable)
@@ -155,6 +161,9 @@ func NewIDJAGIssuer(cfg IDJAGIssuerConfig) (*IDJAGIssuer, error) {
 
 // PublicKey returns the Ed25519 public key for the issuer's signing key, suitable
 // for publishing as a JWKS so receiving ASes can verify the ID-JAG signature.
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 func (iss *IDJAGIssuer) PublicKey() ed25519.PublicKey {
 	if iss == nil {
 		return nil
@@ -163,6 +172,9 @@ func (iss *IDJAGIssuer) PublicKey() ed25519.PublicKey {
 }
 
 // Issue mints a signed ID-JAG JWT. Deny-closed on every validation failure.
+//
+// Deprecated: Olivares does not use this API. It keeps working in this release series;
+// its removal will be announced in the release notes beforehand.
 func (iss *IDJAGIssuer) Issue(ctx context.Context, req IDJAGRequest) (string, error) {
 	if iss == nil {
 		return "", ErrIDJAGUnavailable

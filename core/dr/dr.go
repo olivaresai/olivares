@@ -110,6 +110,10 @@ type Manifest struct {
 	// Keys is the signing-key material in the bundle, by fingerprint (the key
 	// bytes are encrypted; this records only what is needed to detect a wrong key).
 	Keys []KeyRef `json:"keys"`
+	// SealerProbes has one entry per data-dir sealer key, carried or not, so a
+	// restore can check the key serve will open with against the source's. Bundles
+	// from 26.10.1 and earlier have none.
+	SealerProbes []SealerProbe `json:"sealer_probes,omitempty"`
 	// TipMatch is TipExact or TipAdvisory (see the constants).
 	TipMatch string `json:"tip_match"`
 	// Notes is free-form operator context (no secrets).
@@ -189,6 +193,16 @@ type KeyRef struct {
 	// derived from this signing key. It is the fingerprint RestoreVerify checks the
 	// restored key against. Empty for a non-Ed25519 key.
 	PubSHA256 string `json:"pub_sha256,omitempty"`
+}
+
+// SealerProbe checks one sealer key: an HMAC-SHA-256 under that key, which
+// matches under it only and carries no key material.
+type SealerProbe struct {
+	// Name is the key file name in the data dir (e.g. "secret-store.key").
+	Name string `json:"name"`
+	// Probe is the lowercase-hex HMAC, or "" when dr backup had no valid key for
+	// it: a restore then names that key, as nothing vouches for it.
+	Probe string `json:"probe"`
 }
 
 // auditTip returns the manifest's tip for tenant, or (zero, false).

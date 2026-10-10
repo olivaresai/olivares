@@ -4,7 +4,6 @@
   "tabs": {
     "servers": "Servidores",
     "tools": "Herramientas",
-    "toolPins": "Pins de herramientas",
     "skills": "Skills",
     "wiring": "Conexiones",
     "configs": "Configs gestionadas"
@@ -44,7 +43,7 @@
     "consumers": "Conectado con",
     "consumersHint": "Sesiones y agentes conectados a este servidor.",
     "noConfig": "Sin configuración gestionada",
-    "noConfigHint": "Este servidor funciona con sus ajustes descubiertos. Añade una configuración gestionada para gobernar su transporte y referencias a secretos.",
+    "noConfigHint": "Añade una definición guardada para documentar el transporte y las referencias a secretos de este servidor.",
     "manageConfig": "Gestionar config",
     "editConfig": "Editar config",
     "deleteConfig": "Eliminar config",
@@ -64,46 +63,9 @@
     "schemaHash": "Hash de esquema",
     "readOnly": "Solo lectura",
     "destructive": "Destructiva",
-    "untrustedNote": "Las anotaciones las declara el propio servidor MCP y NO están verificadas. Se muestran solo como señales — el control plane nunca las aplica.",
+    "untrustedNote": "Las anotaciones MCP son declaraciones no verificadas del servidor. Olivares AI las muestra como señales y no las aplica.",
     "empty": "No se han descubierto herramientas",
     "truncated": "Cargadas {{n}} herramientas; hay más"
-  },
-  "toolPins": {
-    "title": "Pins vigentes",
-    "description": "Huellas aprobadas de herramientas MCP que forman la línea base de autorización vigente.",
-    "search": "Buscar pins de herramientas…",
-    "tool": "Herramienta",
-    "fingerprint": "Huella",
-    "pinnedAt": "Fijada",
-    "pinCount": "Número de pins",
-    "actions": "Acciones",
-    "empty": "Sin pins de herramientas",
-    "emptyHint": "No hay huellas de herramientas MCP fijadas para este tenant.",
-    "enterprise": "Los pins de herramientas son una capacidad Enterprise. Este build todavía no tiene conectado el verificador Enterprise.",
-    "driftsTitle": "Drifts pendientes",
-    "driftsHint": "Estas huellas observadas difieren de la línea base de autorización aprobada. Revisa cada cambio antes de aprobarlo.",
-    "pinnedFingerprint": "Huella fijada",
-    "driftFingerprint": "Huella con drift",
-    "driftObserved": "Observado",
-    "approve": "Aprobar drift",
-    "approveAria": "Aprobar drift de {{tool}}",
-    "approveTitle": "¿Aprobar el drift de «{{tool}}»?",
-    "approveBody": "Esto sustituye la huella fijada por la huella con drift vigente y cambia la línea base de autorización de la herramienta.",
-    "approveConfirm": "Aprobar drift",
-    "approveDone": "Drift de la herramienta aprobado",
-    "unpin": "Quitar pin",
-    "unpinAria": "Quitar el pin de {{tool}}",
-    "unpinTitle": "¿Quitar el pin de «{{tool}}»?",
-    "unpinBody": "Esto elimina la línea base de autorización fijada de la herramienta. Su uso futuro requerirá un nuevo pin aprobado.",
-    "unpinConfirm": "Quitar pin",
-    "unpinDone": "Pin de la herramienta eliminado",
-    "conflictTitle": "«{{tool}}» cambió mientras lo revisabas",
-    "conflictBody": "El motor rechazó el cambio: el estado del anclaje se movió entre tu lectura y tu escritura. No se aplicó nada. Compara lo que revisaste con lo que hay ahora y vuelve a decidir.",
-    "conflictReviewed": "Lo que revisaste (versión base {{version}})",
-    "conflictCurrent": "Actual (versión base {{version}})",
-    "conflictGone": "Esta herramienta ya no tiene anclaje. Alguien lo revocó mientras la revisabas.",
-    "conflictDismiss": "Descartar",
-    "conflictReloading": "Releyendo el estado actual…"
   },
   "skills": {
     "search": "Buscar skills…",
@@ -152,14 +114,15 @@
     "secretsCount_other": "{{count}} referencias",
     "newConfig": "Nueva config",
     "empty": "Sin configuraciones gestionadas",
-    "emptyHint": "Crea una configuración gestionada para gobernar el transporte, ámbito y referencias a secretos de un servidor MCP.",
-    "truncated": "Cargadas {{n}} configuraciones; hay más"
+    "emptyHint": "Guarda una definición del transporte, ámbito y referencias a secretos de un servidor MCP para observación e historial de versiones.",
+    "truncated": "Cargadas {{n}} configuraciones; hay más",
+    "observationNotice": "Las definiciones guardadas son metadatos de observación. Guardar, activar o eliminar una no cambia la pasarela MCP ni un servidor en ejecución."
   },
   "editor": {
     "createTitle": "Nueva config gestionada",
     "editTitle": "Editar config gestionada",
     "serverRef": "Referencia del servidor",
-    "serverRefHint": "El nombre del servidor MCP que gobierna esta config. Inmutable tras crearla.",
+    "serverRefHint": "El nombre del servidor MCP que describe esta definición. Inmutable tras crearla.",
     "transport": "Transporte",
     "endpoint": "Endpoint",
     "endpointHint": "Solo una referencia — nunca incrustes una credencial en el endpoint.",
@@ -221,7 +184,7 @@
   "empty": {
     "config": {
       "title": "Aún no se han creado configs gestionadas",
-      "description": "Crea una config gestionada para gobernar el transporte, el ámbito y las referencias a secretos de un servidor MCP."
+      "description": "Guarda una definición del transporte, ámbito y referencias a secretos de un servidor MCP para observación e historial de versiones."
     },
     "server": {
       "title": "Aún no se han descubierto servidores MCP",

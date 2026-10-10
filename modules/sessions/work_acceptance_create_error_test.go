@@ -126,7 +126,7 @@ func TestWorkAcceptanceAddCreateErrorContract(t *testing.T) {
 	created := applyCreate(t, f, "acceptance create error")
 	before := readAcceptanceCreateDurableState(t, f, created.ResultID)
 
-	fault := &acceptanceCreateErrorData{inner: f.m.data}
+	fault := &acceptanceCreateErrorData{inner: f.m.Data}
 	fault.failures.Store(1)
 	f.m.UseData(fault)
 	cmd := WorkCommand{

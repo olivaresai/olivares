@@ -7,12 +7,14 @@ package federation
 import (
 	"sync"
 	"time"
-
-	"github.com/crewjam/saml"
 )
 
+// replayFloor is the shortest time a consumed assertion id is remembered, so a tiny
+// NotOnOrAfter cannot disable replay protection.
+const replayFloor = 10 * time.Minute
+
 // replayStore tracks consumed SAML assertion IDs until their bearer
-// SubjectConfirmationData NotOnOrAfter passes, which crewjam/saml does NOT do
+// SubjectConfirmationData NotOnOrAfter passes, which gosaml2 does NOT do
 // (SAML 2.0 §4.1.4.5). Without it a captured POST body can be replayed within the
 // assertion validity window. Single-node in-memory is sufficient: assertions are
 // short-lived and a restart only narrows the window.
@@ -28,11 +30,12 @@ func newReplayStore() *replayStore {
 	return &replayStore{seen: map[string]time.Time{}, now: time.Now}
 }
 
-// admit records an assertion as consumed and reports whether it is fresh (true) or
-// a replay (false). An assertion with no usable NotOnOrAfter is admitted once and
-// retained for a conservative default window.
-func (r *replayStore) admit(a *saml.Assertion) bool {
-	if a == nil || a.ID == "" {
+// admit records an assertion id as consumed and reports whether it is fresh (true) or
+// a replay (false). The id is retained until notOnOrAfter, but at least replayFloor
+// (a zero notOnOrAfter uses the floor alone). An empty id cannot be deduplicated and is
+// refused.
+func (r *replayStore) admit(id string, notOnOrAfter time.Time) bool {
+	if id == "" {
 		return false
 	}
 	r.mu.Lock()
@@ -40,30 +43,22 @@ func (r *replayStore) admit(a *saml.Assertion) bool {
 
 	now := r.now()
 	// Sweep expired entries.
-	for id, exp := range r.seen {
+	for seen, exp := range r.seen {
 		if now.After(exp) {
-			delete(r.seen, id)
+			delete(r.seen, seen)
 		}
 	}
-	if _, ok := r.seen[a.ID]; ok {
+	if _, ok := r.seen[id]; ok {
 		return false // already consumed within its validity window
 	}
-	r.seen[a.ID] = assertionExpiry(a, now)
+	r.seen[id] = assertionExpiry(notOnOrAfter, now)
 	return true
 }
 
-// assertionExpiry returns the latest bearer SubjectConfirmationData NotOnOrAfter,
-// or a conservative default when none is present.
-func assertionExpiry(a *saml.Assertion, now time.Time) time.Time {
-	exp := now.Add(10 * time.Minute) // conservative default
-	if a.Subject != nil {
-		for _, sc := range a.Subject.SubjectConfirmations {
-			if sc.SubjectConfirmationData != nil && !sc.SubjectConfirmationData.NotOnOrAfter.IsZero() {
-				if t := sc.SubjectConfirmationData.NotOnOrAfter; t.After(exp) {
-					exp = t
-				}
-			}
-		}
+// assertionExpiry returns the later of the bearer NotOnOrAfter and now+replayFloor.
+func assertionExpiry(notOnOrAfter, now time.Time) time.Time {
+	if floor := now.Add(replayFloor); notOnOrAfter.Before(floor) {
+		return floor
 	}
-	return exp
+	return notOnOrAfter
 }

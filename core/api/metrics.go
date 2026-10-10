@@ -101,10 +101,7 @@ func (s *Server) recordRequest(method string, status int, dur time.Duration) {
 // in-flight, ingest throughput, Go runtime, store reachability — never tenant data,
 // tokens, or any value useful for recon (OBS-06; docs/SECURITY-HARDENING.md,§3). In production bind
 // it to a trusted scrape network (packaging documents the scrape config).
-func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
-	if !s.allowMetrics(w, r) {
-		return
-	}
+func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	w.Header().Set("Content-Type", metrics.ContentType)
 	w.WriteHeader(http.StatusOK)
 	s.metrics.WritePrometheus(w)
@@ -113,7 +110,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, r *http.Request) {
 // handleLivez is the liveness probe: if the process can answer, it is alive. It runs
 // NO dependency check on purpose — a failing dependency must not trigger a liveness
 // restart loop; that is what readiness is for.
-func (s *Server) handleLivez(w http.ResponseWriter, _ *http.Request) {
+func (s *Server) handleLivez(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
@@ -135,7 +132,7 @@ func (s *Server) handleLivez(w http.ResponseWriter, _ *http.Request) {
 // The store ping is the same 2s-bounded check /readyz runs first: a pod whose
 // store is unreachable is NOT healthy — it leaves the endpoints (that is what
 // readiness is for) but is not restarted (that is /livez's job).
-func (s *Server) handlePodReadyz(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handlePodReadyz(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 	if err := s.st.Ping(ctx); err != nil {
@@ -161,7 +158,7 @@ const readinessSetupStateCode = "setup_state_unavailable"
 // All reads share one two-second budget. A standby drains from writer routing;
 // pod health is reported separately. Readiness does not authorize setup, mutate
 // installation state, or cache a capability result. POST /v1/setup repeats its checks.
-func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
+func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request, mc ModuleContext) {
 	ctx, cancel := context.WithTimeout(r.Context(), 2*time.Second)
 	defer cancel()
 	if err := s.st.Ping(ctx); err != nil {

@@ -64,14 +64,14 @@ for n in 001 002 003; do : > "$repo/m/${n}_x.up.sql"; done
 
 corre() { ( cd "$repo" && env OLIVARES_MIGRATION_DIRS=m "$@" bash "$GATE" ) >"$WORK/out" 2>"$WORK/err"; rc=$?; }
 
-echo "check-migration-contiguity — el árbol versionado, no el directorio"
+echo "check-migration-contiguity — tracked tree, not the directory"
 
 corre
-[ "$rc" -eq 0 ] && grep -q 'CONTIGUO' "$WORK/out"
-check "tres migraciones contiguas y rastreadas: CONTIGUO" "exit 0" $?
+[ "$rc" -eq 0 ] && grep -q 'CONTIGUOUS' "$WORK/out"
+check "three contiguous tracked migrations: CONTIGUOUS" "exit 0" $?
 
-grep -q 'árbol versionado' "$WORK/out"
-check "la pata DICE de dónde leyó (sin repliegue silencioso)" "modo declarado" $?
+grep -q 'tracked tree' "$WORK/out"
+check "the check SAYS where it read from (no silent fallback)" "declared mode" $?
 
 # GitHub pide el árbol que disparó el job, aunque HEAD haya avanzado en el checkout persistente.
 # Se prueban ambas respuestas y la tercera: limpio histórico, hueco en HEAD y ref irresoluble.
@@ -80,29 +80,29 @@ clean_short="$(printf '%.12s' "$clean_sha")"
 ( cd "$repo" && git rm -q m/002_x.up.sql && git commit -qm gap )
 gap_sha="$(git -C "$repo" rev-parse HEAD)"
 corre GITHUB_SHA="$clean_sha"
-[ "$rc" -eq 0 ] && grep -q "árbol solicitado ${clean_short}" "$WORK/out"
-check "GITHUB_SHA limpio gana a un HEAD posterior con hueco" "árbol solicitado" $?
+[ "$rc" -eq 0 ] && grep -q "requested tree ${clean_short}" "$WORK/out"
+check "clean GITHUB_SHA overrides a later HEAD with a gap" "requested tree" $?
 
 corre GITHUB_SHA="$gap_sha"
-[ "$rc" -eq 1 ] && grep -q 'HUECOS: 002' "$WORK/err"
-check "un hueco en el GITHUB_SHA solicitado sigue saliendo rojo" "002 ausente" $?
+[ "$rc" -eq 1 ] && grep -q 'has gaps: 002' "$WORK/err"
+check "a gap in requested GITHUB_SHA still returns red" "missing 002" $?
 
 corre GITHUB_SHA=ffffffffffffffffffffffffffffffffffffffff
-[ "$rc" -eq 2 ] && grep -q 'NO HE PODIDO MIRAR: no resuelvo' "$WORK/err"
-check "un GITHUB_SHA irresoluble da 2, no un verde" "tercera respuesta" $?
+[ "$rc" -eq 2 ] && grep -q 'COULD NOT CHECK: cannot resolve' "$WORK/err"
+check "an unresolvable GITHUB_SHA returns 2, not a pass" "third response" $?
 
 # Mutante ejecutable: ignora el input y vuelve a HEAD. El SHA histórico limpio debe matarlo contra
 # el HEAD gappy; así la celda no puede pasar porque ambos árboles fueran casualmente iguales.
 mutant="$repo/scripts/check-migration-contiguity.head-mutant.sh"
 sed 's/^TREE_REF="${GITHUB_SHA:-HEAD}"$/TREE_REF=HEAD/' "$SCRIPT" > "$mutant"
 if cmp -s "$SCRIPT" "$mutant" || ! bash -n "$mutant"; then
-	echo "check-migration-contiguity: mutación TREE_REF no aplicada o sintaxis rota" >&2
+	echo "check-migration-contiguity: TREE_REF mutation not applied or syntax broken" >&2
 	exit 2
 fi
 ( cd "$repo" && env OLIVARES_MIGRATION_DIRS=m GITHUB_SHA="$clean_sha" \
 	bash "scripts/$(basename "$mutant")" ) >"$WORK/out" 2>"$WORK/err"; rc=$?
-[ "$rc" -eq 1 ] && grep -q 'HUECOS: 002' "$WORK/err"
-check "el mutante TREE_REF=HEAD muere contra el SHA histórico" "mutante rojo" $?
+[ "$rc" -eq 1 ] && grep -q 'has gaps: 002' "$WORK/err"
+check "TREE_REF=HEAD mutant dies against the historical SHA" "red mutant" $?
 
 git -C "$repo" checkout -q "$clean_sha"
 
@@ -110,14 +110,14 @@ git -C "$repo" checkout -q "$clean_sha"
 : > "$repo/m/009_dejado_por_la_corrida_anterior.up.sql"
 corre
 [ "$rc" -eq 0 ] && grep -q '001..003' "$WORK/out"
-check "una .up.sql SIN RASTREAR no cuenta (basura del runner anterior)" "ls-files, no ls" $?
+check "an UNTRACKED .up.sql does not count (previous runner residue)" "ls-files, not ls" $?
 
 # y el control que prueba que el caso anterior no pasa por no mirar: la MISMA basura, rastreada,
 # sí abre un hueco y el gate lo acusa.
 ( cd "$repo" && git add m/009_dejado_por_la_corrida_anterior.up.sql >/dev/null 2>&1 )
 corre
 [ "$rc" -ne 0 ] && grep -q '004' "$WORK/err" 2>/dev/null || grep -q '004' "$WORK/out"
-check "la MISMA migración, ya rastreada, SÍ acusa el hueco 004..008" "control positivo" $?
+check "the SAME migration, now tracked, DOES flag gap 004..008" "positive control" $?
 ( cd "$repo" && git rm -q --cached m/009_dejado_por_la_corrida_anterior.up.sql >/dev/null 2>&1; rm -f m/009_dejado_por_la_corrida_anterior.up.sql )
 
 # una migración recién añadida al índice —el caso de quien la está escribiendo— SÍ cuenta.
@@ -125,7 +125,7 @@ check "la MISMA migración, ya rastreada, SÍ acusa el hueco 004..008" "control 
 ( cd "$repo" && git add m/004_la_que_estoy_escribiendo.up.sql >/dev/null 2>&1 )
 corre
 [ "$rc" -eq 0 ] && grep -q '001..004' "$WORK/out"
-check "una migración en el ÍNDICE cuenta (ls-tree HEAD la habría perdido)" "indexada" $?
+check "a migration in the INDEX counts (ls-tree HEAD would miss it)" "indexed" $?
 ( cd "$repo" && git rm -q --cached m/004_la_que_estoy_escribiendo.up.sql >/dev/null 2>&1; rm -f m/004_la_que_estoy_escribiendo.up.sql )
 
 # hueco real, rastreado: rojo
@@ -133,7 +133,7 @@ check "una migración en el ÍNDICE cuenta (ls-tree HEAD la habría perdido)" "i
 ( cd "$repo" && git add -A >/dev/null 2>&1 )
 corre
 [ "$rc" -ne 0 ]
-check "un hueco REAL sigue saliendo rojo" "004..005 ausentes" $?
+check "a REAL gap still returns red" "missing 004..005" $?
 ( cd "$repo" && git rm -q --cached m/006_x.up.sql >/dev/null 2>&1; rm -f m/006_x.up.sql )
 
 # Fuera de un repositorio: repliegue a disco, DECLARADO. GITHUB_SHA se deja puesto a propósito:
@@ -143,13 +143,13 @@ for n in 001 002; do : > "$plano/m/${n}_x.up.sql"; done
 ( mkdir -p "$plano/scripts" && cp "$SCRIPT" "$plano/scripts/" && cd "$plano" \
 	&& env OLIVARES_MIGRATION_DIRS=m GITHUB_SHA=ffffffffffffffffffffffffffffffffffffffff \
 	bash "$GATE" ) >"$WORK/out" 2>&1; rc=$?
-[ "$rc" -eq 0 ] && grep -q 'directorio en disco' "$WORK/out"
-check "sin repo + GITHUB_SHA: repliegue a disco y lo DICE" "export sin git" $?
+[ "$rc" -eq 0 ] && grep -q 'directory on disk' "$WORK/out"
+check "no repository + GITHUB_SHA: disk fallback is DECLARED" "export without git" $?
 
 # un directorio que no existe es NO_HE_PODIDO_MIRAR, no un verde
 ( cd "$repo" && env OLIVARES_MIGRATION_DIRS=no-existe bash "$GATE" ) >"$WORK/out" 2>"$WORK/err"; rc=$?
-[ "$rc" -eq 2 ] && grep -q 'NO HE PODIDO MIRAR' "$WORK/err"
-check "un directorio ausente da 2, no 0" "tercera respuesta" $?
+[ "$rc" -eq 2 ] && grep -q 'COULD NOT CHECK' "$WORK/err"
+check "a missing directory returns 2, not 0" "third response" $?
 
 # ⛔ LA TERCERA RESPUESTA, Y SUS DOS MITADES. En el export publicado el modulo entero se
 # cura fuera, asi que la pata no tiene sujeto y NUNCA lo tendra: rc=2 alli es ruido y tumba
@@ -164,14 +164,14 @@ cp "$SCRIPT" "$publico/scripts/check-migration-contiguity.sh"
 
 ( cd "$publico" && bash scripts/check-migration-contiguity.sh ) >"$WORK/out" 2>"$WORK/err"; rc=$?
 [ "$rc" -eq 0 ] && grep -q 'SCOPED' "$WORK/out"
-check "export publico sin el modulo: SCOPED rc 0, no un 2 que tumba el job" "tercera respuesta" $?
+check "public export without the module: SCOPED rc 0, not 2 that fails the job" "third response" $?
 
 # MUTANTE: el MISMO arbol deja de ser publico en cuanto aparece un camino hub-only. Si el
 # rc siguiera siendo 0 aqui, la excepcion seria un comodin y no una respuesta acotada.
 mkdir -p "$publico/design"
 ( cd "$publico" && bash scripts/check-migration-contiguity.sh ) >"$WORK/out" 2>"$WORK/err"; rc=$?
-[ "$rc" -eq 2 ] && grep -q 'NO HE PODIDO MIRAR' "$WORK/err"
-check "mutante clasificador->hub: vuelve el 2" "tercera respuesta" $?
+[ "$rc" -eq 2 ] && grep -q 'COULD NOT CHECK' "$WORK/err"
+check "classifier->hub mutant: returns 2 again" "third response" $?
 rmdir "$publico/design"
 
 # Y la excepcion es SOLO para el sujeto POR DEFECTO: apuntar la pata a otro sitio en el
@@ -179,7 +179,7 @@ rmdir "$publico/design"
 ( cd "$publico" && env OLIVARES_MIGRATION_DIRS=no-existe bash scripts/check-migration-contiguity.sh ) \
 	>"$WORK/out" 2>"$WORK/err"; rc=$?
 [ "$rc" -eq 2 ]
-check "en el export, un sujeto NO por defecto sigue dando 2" "tercera respuesta" $?
+check "in the export, a NONDEFAULT subject still returns 2" "third response" $?
 
 # A partial, failed Git read must preserve diagnostics and refuse classification.
 falso_git="$WORK/bin"
@@ -201,19 +201,19 @@ OLIVARES_REAL_GIT="$(command -v git)"
 export OLIVARES_REAL_GIT
 
 ( cd "$repo" && env OLIVARES_MIGRATION_DIRS=m GITHUB_SHA="$(cd "$repo" && command git rev-parse HEAD)" 	PATH="$falso_git:$PATH" bash "$GATE" ) >"$WORK/out" 2>"$WORK/err"; rc=$?
-[ "$rc" -eq 2 ] && grep -q 'NO HE PODIDO MIRAR' "$WORK/err" && grep -q 'ls-tree' "$WORK/err" \
+[ "$rc" -eq 2 ] && grep -q 'COULD NOT CHECK' "$WORK/err" && grep -q 'ls-tree' "$WORK/err" \
 	&& grep -q 'synthetic tree read failure' "$WORK/err"
-check "ls-tree parcial y con error: rc 2 NO HE PODIDO MIRAR" "lectura parcial" $?
+check "partial failed ls-tree: rc 2 COULD NOT LOOK" "partial read" $?
 
 # A read failure must not recommend renumbering a migration.
-! grep -q 'HUECOS' "$WORK/out" && ! grep -q 'HUECOS' "$WORK/err" \
+! grep -q 'has gaps' "$WORK/out" && ! grep -q 'has gaps' "$WORK/err" \
 	&& ! grep -qi 'renumera' "$WORK/out" && ! grep -qi 'renumera' "$WORK/err"
-check "una lectura parcial NUNCA imprime HUECOS ni manda renumerar" "lectura parcial" $?
+check "a partial read NEVER reports GAPS or recommends renumbering" "partial read" $?
 
 # The complete listing of the same tree still passes.
 ( cd "$repo" && env OLIVARES_MIGRATION_DIRS=m GITHUB_SHA="$(cd "$repo" && command git rev-parse HEAD)" 	bash "$GATE" ) >"$WORK/out" 2>"$WORK/err"; rc=$?
-[ "$rc" -eq 0 ] && grep -q 'CONTIGUO' "$WORK/out"
-check "lectura completa del mismo arbol: sigue CONTIGUO rc 0" "lectura parcial" $?
+[ "$rc" -eq 0 ] && grep -q 'CONTIGUOUS' "$WORK/out"
+check "complete read of the same tree: still CONTIGUOUS rc 0" "partial read" $?
 
 echo ""
 echo "check-migration-contiguity battery: $pass passed, $fail failed"

@@ -24,7 +24,7 @@ import { useAuth } from '@/lib/auth/context'
 import { ApiError } from '@/lib/api/errors'
 import { usePrivilegedMutation } from '@/lib/hooks/use-privileged-mutation'
 import { gitpublishApi, gitpublishKeys } from './api'
-import { actionAuthority, outcomeOf } from './model'
+import { actionAuthority, hasChangeAPI, outcomeOf } from './model'
 import { AuthorityNote, IntentStateBadge, OutcomePanel } from './parts'
 import { PublishDialog } from './publish-dialog'
 import { TargetFormDialog } from './target-form'
@@ -127,7 +127,9 @@ export function TargetSheet({
                     {t('target.actions')}
                   </h3>
                   <ul className="space-y-2">
-                    {EFFECTS.map((effect) => (
+                    {EFFECTS.filter(
+                      (effect) => effect === 'push' || hasChangeAPI(tg),
+                    ).map((effect) => (
                       <li
                         key={effect}
                         className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border p-2"

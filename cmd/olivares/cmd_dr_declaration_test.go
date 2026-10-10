@@ -236,7 +236,7 @@ func TestDRRestoreWithoutInPlacePreservesWhatItOverwrites(t *testing.T) {
 	// ordenable. Se sella el senuelo, no se ablanda la guarda. Explicacion completa en
 	// cmd_dr_test.go, TestDRBackupVerifyRestoreCLI.
 	prevVersion := version
-	version = "26.9.0"
+	version = "26.900"
 	t.Cleanup(func() { version = prevVersion })
 	src, bundle, pf := drDeclarationFixture(t)
 
@@ -308,7 +308,7 @@ func TestDRRestoreOverALiveEstateRecordsTheDeclaration(t *testing.T) {
 	// ordenable. Se sella el senuelo, no se ablanda la guarda. Explicacion completa en
 	// cmd_dr_test.go, TestDRBackupVerifyRestoreCLI.
 	prevVersion := version
-	version = "26.9.0"
+	version = "26.900"
 	t.Cleanup(func() { version = prevVersion })
 	src, bundle, pf := drDeclarationFixture(t)
 
@@ -366,7 +366,7 @@ func TestDRRestoreDeclarationReasonReachesTheStoredRow(t *testing.T) {
 	// ordenable. Se sella el senuelo, no se ablanda la guarda. Explicacion completa en
 	// cmd_dr_test.go, TestDRBackupVerifyRestoreCLI.
 	prevVersion := version
-	version = "26.9.0"
+	version = "26.900"
 	t.Cleanup(func() { version = prevVersion })
 	src, bundle, pf := drDeclarationFixture(t)
 	const reason = "INC-42 ransomware recovery"
@@ -427,7 +427,7 @@ func TestDRRestoreIntoAnEmptyTargetNeedsNoDeclaration(t *testing.T) {
 	// ordenable. Se sella el senuelo, no se ablanda la guarda. Explicacion completa en
 	// cmd_dr_test.go, TestDRBackupVerifyRestoreCLI.
 	prevVersion := version
-	version = "26.9.0"
+	version = "26.900"
 	t.Cleanup(func() { version = prevVersion })
 	_, bundle, pf := drDeclarationFixture(t)
 	dst := t.TempDir()
@@ -451,7 +451,7 @@ func TestDRRestoreInPlaceRequiresAndRecordsTheDeclaration(t *testing.T) {
 	// ordenable. Se sella el senuelo, no se ablanda la guarda. Explicacion completa en
 	// cmd_dr_test.go, TestDRBackupVerifyRestoreCLI.
 	prevVersion := version
-	version = "26.9.0"
+	version = "26.900"
 	t.Cleanup(func() { version = prevVersion })
 	src, bundle, pf := drDeclarationFixture(t)
 

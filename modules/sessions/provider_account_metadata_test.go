@@ -119,10 +119,10 @@ func TestProviderAccount_MetadataRollsBackWithItsAudit(t *testing.T) {
 				t.Fatal(r.raw)
 			}
 			before := acctRow(t, m, tenant, ref)
-			data := m.data
-			m.data = metadataRollbackData{data}
+			data := m.Data
+			m.Data = metadataRollbackData{data}
 			r := a.call(http.MethodPatch, "/provider-accounts/"+ref, map[string]any{"display_name": "must roll back", "accent": "blue"})
-			m.data = data
+			m.Data = data
 			if r.code < 500 {
 				t.Fatalf("failed transaction = %d %s", r.code, r.raw)
 			}
@@ -180,6 +180,7 @@ func TestProviderAccount_MetadataRequiresUnconfinedAccountWrite(t *testing.T) {
 }
 
 func TestProviderAccount_MetadataRefusesInvalidOrUnownedRows(t *testing.T) {
+	const nonASCIILetter = "é" // language-data: Unicode display-name length boundary
 	for _, be := range profileBackends(t) {
 		t.Run(be.name, func(t *testing.T) {
 			m, st := openProfileModule(t, be, nil)
@@ -193,7 +194,7 @@ func TestProviderAccount_MetadataRefusesInvalidOrUnownedRows(t *testing.T) {
 			}
 			path := "/provider-accounts/" + ref
 			before := acctRow(t, m, tenant, ref)
-			for _, body := range []any{nil, map[string]any{}, map[string]any{"display_name": nil}, map[string]any{"display_name": 7}, map[string]any{"display_name": "x", "name": "replace"}, map[string]any{"display_name": "a\x00b"}, map[string]any{"display_name": strings.Repeat("é", 101)}} {
+			for _, body := range []any{nil, map[string]any{}, map[string]any{"display_name": nil}, map[string]any{"display_name": 7}, map[string]any{"display_name": "x", "state": "retired"}, map[string]any{"display_name": "a\x00b"}, map[string]any{"display_name": strings.Repeat(nonASCIILetter, 101)}} {
 				if r := a.call(http.MethodPatch, path, body); r.code != http.StatusBadRequest {
 					t.Fatalf("invalid body %v = %d %s", body, r.code, r.raw)
 				}

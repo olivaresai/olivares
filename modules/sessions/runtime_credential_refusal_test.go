@@ -59,7 +59,7 @@ func TestWiredTokenFileRefusalAnswers503AndNamesItsVariable(t *testing.T) {
 				return Credential{}, tokenFileMintFailure()
 			})))
 
-	_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+	_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: "user",
 	})

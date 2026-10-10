@@ -29,7 +29,7 @@ import (
 // no Claim, no HITL, no PEP provisioning, no OpenSession, no execution of a
 // provider program — not even `--version` — and no reading of a login file
 // inside a profile's homes. Readiness never enables, repairs or activates the
-// K3 communication posture to complete itself; it samples what composition
+// communication posture to complete itself; it samples what composition
 // already bound and says so.
 //
 // ⛔ AND IT IS NOT A BOOLEAN. `operable` on the profile DTO is preserved exactly
@@ -174,6 +174,7 @@ const (
 	protocolCodexAppServer      = "codex_app_server"
 	protocolGrokACP             = "grok_acp"
 	protocolOpenCodeACP         = "opencode_acp"
+	protocolGeminiACP           = "gemini_acp"
 	protocolUnknown             = "unknown"
 
 	ioBidirectional = "bidirectional"
@@ -345,8 +346,7 @@ type SessionLaunchReadiness struct {
 	RemainingChecks         []string                    `json:"remaining_checks"`
 }
 
-// codeProfileChanged is the ratified stable identifier of this route's 409
-// (contract §4). It is a CODE and not a sentence: a console that has to detect
+// codeProfileChanged is the stable identifier of this route's 409. It is a CODE and not a sentence: a console that has to detect
 // the conflict by matching prose is a console that breaks when the prose is
 // improved or translated, and the measured defect was exactly that — the body
 // carried only `error.message`, so the agreed identifier never reached the
@@ -396,7 +396,7 @@ var errReadinessUnavailable = &runErr{
 // composition root and the acceptance batteries drive the same code the route
 // does.
 //
-// The order is load-bearing (§5.7): the profile is read and its version fixed,
+// The order is load-bearing: the profile is read and its version fixed,
 // the environment identity is resolved, the filesystem is examined WITHOUT a
 // database transaction held open, and the profile is read AGAIN. A version that
 // moved in between means the checks straddle two profiles, and a straddled
@@ -407,7 +407,7 @@ func (m *Module) EvaluateLaunchReadiness(
 	ref string,
 	sel LaunchReadinessSelection,
 ) (SessionLaunchReadiness, error) {
-	if m.data == nil {
+	if m.Data == nil {
 		return SessionLaunchReadiness{}, errReadinessUnavailable
 	}
 	before, err := m.GetProfile(ctx, tenant, ref)
@@ -483,7 +483,7 @@ func verdict(check ReadinessCheck, state ReadinessState, code, remediation strin
 	return LaunchReadinessCheck{Check: check, State: state, Code: code, Remediation: remediation}
 }
 
-// aggregateReadiness is the EXPLICIT precedence of §4: a known unsupported
+// aggregateReadiness is the EXPLICIT precedence: a known unsupported
 // combination first, then a known missing configuration, then uncertainty, and
 // ready only when every applicable requirement is ready. not_applicable is
 // neutral — it is the absence of a requirement, not the satisfaction of one.
@@ -588,7 +588,7 @@ func (m *Module) runnerAndProgramChecks(
 	if !examinable {
 		return notChecked()
 	}
-	if _, unwired := m.rt.runner.(unwiredRunner); unwired {
+	if _, unwired := m.rt.Runner.(unwiredRunner); unwired {
 		runner.State, runner.Code = ReadinessNotConfigured, codeRunnerNotConfigured
 		runner.Remediation = remediationConfigureRunner
 		// No Runner means nobody resolves a program: saying "missing" would blame
@@ -596,7 +596,7 @@ func (m *Module) runnerAndProgramChecks(
 		program.State, program.Code = ReadinessUnknown, codeNotCheckedInThisEnvironment
 		return runner, program
 	}
-	inspector, ok := m.rt.runner.(RunnerInspector)
+	inspector, ok := m.rt.Runner.(RunnerInspector)
 	if !ok {
 		runner.State, runner.Code = ReadinessUnknown, codeRunnerInspectionUnavailable
 		runner.Remediation = remediationRetryInspection
@@ -646,7 +646,7 @@ func (m *Module) runnerAndProgramChecks(
 }
 
 // readinessProgram is the EFFECTIVE executable of a launch under this driver,
-// taken from the same two places buildLaunchSpec takes it from: m.rt.program for
+// taken from the same two places childSpec takes it from: m.rt.program for
 // the historical Claude path, driverProgram for a registered driver. It is never
 // re-read from an environment variable — after boot those are the operator's
 // remedy, not an independent source of truth — and never from a console catalog.
@@ -780,7 +780,7 @@ func (m *Module) credentialSourceCheck(
 	}
 	if prof.AuthSource == AuthSourceAccountHome {
 		// Nothing is injected: the authorized account home IS the credential, and
-		// demanding a global WIF on top of it is the conflation §5.1 forbids.
+		// demanding a global WIF on top of it would conflate two credentials.
 		return verdict(CheckCredentialSource, ReadinessNotApplicable, codeCredentialSourceNotInjected, "")
 	}
 	if strings.TrimSpace(prof.ProviderRecordRef) != "" {
@@ -800,7 +800,7 @@ func (m *Module) credentialSourceCheck(
 		if !examinable {
 			return verdict(CheckCredentialSource, ReadinessUnknown, codeNotCheckedInThisEnvironment, "")
 		}
-		if _, deny := m.rt.creds.(denyCredentialSource); deny {
+		if _, deny := m.rt.Creds.(denyCredentialSource); deny {
 			return verdict(CheckCredentialSource, ReadinessNotConfigured, codeClaudeCredentialSourceNotConfigured, remediationConfigureClaudeCredential)
 		}
 		return verdict(CheckCredentialSource, ReadinessReady, codeClaudeCredentialSourceConfigured, "")
@@ -814,7 +814,7 @@ func (m *Module) credentialSourceCheck(
 	return verdict(CheckCredentialSource, ReadinessReady, codeProviderCredentialAdapterConfigured, "")
 }
 
-// runtimeCredentialsCheck reports the EFFECTIVE work/K3 dependency, which can
+// runtimeCredentialsCheck reports the EFFECTIVE work/communication dependency, which can
 // deny a launch on its own even when the inference credential exists
 // (ensureRuntimeCredentialWiring / ensureRuntimeCredentialReadiness). Two
 // issuers are required, not one flag.
@@ -832,7 +832,7 @@ func (m *Module) runtimeCredentialsCheck(ctx context.Context, examinable bool) L
 	if !examinable {
 		return verdict(CheckRuntimeCredentials, ReadinessUnknown, codeNotCheckedInThisEnvironment, "")
 	}
-	if !m.rt.communicationCredentialsEnabled {
+	if !m.rt.CommunicationCredentialsEnabled {
 		return verdict(CheckRuntimeCredentials, ReadinessNotApplicable, codeRuntimeCredentialsNotRequested, "")
 	}
 	if err := m.ensureRuntimeCredentialWiring(); err != nil {
@@ -898,7 +898,7 @@ func (m *Module) transportCapabilities(driver, transport string) LaunchTransport
 func normalizeTransportProfile(p DriverTransportProfile) LaunchTransportCapabilities {
 	out := LaunchTransportCapabilities{Protocol: protocolUnknown, IO: ioUnknown, Input: inputUnknown}
 	switch p.Protocol {
-	case protocolClaudeStreamJSON, protocolClaudeRemoteControl, protocolCodexAppServer, protocolGrokACP, protocolOpenCodeACP:
+	case protocolClaudeStreamJSON, protocolClaudeRemoteControl, protocolCodexAppServer, protocolGrokACP, protocolOpenCodeACP, protocolGeminiACP:
 		out.Protocol = p.Protocol
 	}
 	switch p.IO {

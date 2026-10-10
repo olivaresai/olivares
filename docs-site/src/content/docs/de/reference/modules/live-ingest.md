@@ -1,7 +1,7 @@
 ---
 title: "Live-Ingest — der In-Process-Observe-Produzent"
 description: >-
-  Eines der 31 Module: der „Live-Tap“-Produzent, der die Detektiv-Events
+  Eines der 32 Module: der „Live-Tap“-Produzent, der die Detektiv-Events
   publiziert, die ein Out-of-Process-Connector nicht emittieren kann. Deny-closed
   und minimal-data: er bewegt keinen Rohinhalt, und jede Observe-Hälfte, die er
   besitzt, ist ehrlich leer statt vorgetäuscht. Teilweise — er ist opt-in und
@@ -97,7 +97,7 @@ Telemetrie, bis ein Backend sie speist.
 - [Modul II — Live-Betrieb & Sessions](/de/reference/modules/ii-sessions/) — leitet
   sein eigenes `goal` / `agent_ref` / `summary` direkt aus Signalen ab, die es
   bereits konsumiert, statt über ein Live-Ingest-Event.
-- [Modulkatalog](/de/reference/modules/overview/) — die 31 Module und der ehrliche
+- [Modulkatalog](/de/reference/modules/overview/) — die 32 Module und der ehrliche
   Govern/Observe-vs-Actuate-Split, den dieser In-Process-Produzent stützt.
 - [Architekturüberblick](/de/explanation/architecture/overview/) — wo
   In-Process-Module und Out-of-Process-Connectoren sitzen.

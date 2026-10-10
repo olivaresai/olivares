@@ -17,7 +17,7 @@ qué lo financia.
 
 ## Qué financia el trabajo hoy
 
-La **suscripción comercial** de la línea aditiva `enterprise/`. Si tu organización
+La **suscripción comercial** (Business y Enterprise) de la línea aditiva `enterprise/`. Si tu organización
 necesita esos módulos, comprarlos es lo que financia el núcleo AGPL que todos los
 demás ejecutan gratis, incluidas las personas que no pagan nunca nada.
 

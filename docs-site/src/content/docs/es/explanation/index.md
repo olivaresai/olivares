@@ -1,6 +1,6 @@
 ---
 title: "Explicación"
-description: "Visión general orientada a la comprensión de Olivares AI: cómo integra, gestiona y asegura la IA empresarial de forma un único ground truth: Claude Code al nivel más profundo, Codex y Grok Build a su lado — su arquitectura modular a lo largo de 31 módulos, el access map read-first y el modelo open-core."
+description: "Visión general orientada a la comprensión de Olivares AI: cómo integra, gestiona y asegura la IA empresarial de forma un único ground truth: Claude Code al nivel más profundo, Codex y Grok Build a su lado — su arquitectura modular a lo largo de 32 módulos, el access map read-first y el modelo open-core."
 ---
 
 Esta sección está orientada a la comprensión. Explica *por qué* Olivares AI tiene la forma
@@ -27,7 +27,7 @@ embebida y servida desde el mismo origen que la API. La arquitectura es una
 plataforma, no una sola herramienta: un **motor central** proporciona los subsistemas compartidos —
 ingesta y un bus de eventos in-process, el SDK de conectores, el runtime de módulos, un
 modelo de datos multitenant, la API REST/gRPC, autenticación y autorización, y
-el audit ledger append-only — y cada capacidad es uno de **31 módulos** que
+el audit ledger append-only — y cada capacidad es uno de **32 módulos** que
 cuelga de esos subsistemas sin re-arquitecturar el núcleo. Los **conectores** alimentan
 el motor desde fuera a través de un SDK estable; un conector nunca importa del
 núcleo, lo que mantiene limpia la frontera de licencia.
@@ -35,7 +35,7 @@ núcleo, lo que mantiene limpia la frontera de licencia.
 El store predeterminado es SQLite (pure-Go) para uso de un solo nodo y air-gapped, pasando
 a Postgres con row-level security para multitenancy y escala. El bus de eventos es
 in-process por defecto; NATS es un binding distribuido opcional, no un
-requisito. La plataforma entrega hoy **31 módulos**, cada uno con su propia madurez honesta
+requisito. La plataforma entrega hoy **32 módulos**, cada uno con su propia madurez honesta
 — la mayoría en vivo y cableados de extremo a extremo, algunos parciales u opt-in — a lo largo de nueve
 áreas de capacidad; el registro de modelos propios y el fine-tuning es una **capacidad planificada**,
 no un módulo entregado.
@@ -86,19 +86,14 @@ air-gapped con cero egress y una licencia offline; una opción gestionada es tra
 futuro.
 
 La licencia es open-core. El núcleo del motor, los módulos y la UI web son
-AGPL-3.0-only; el SDK y los conectores son Apache-2.0; un tier enterprise es
-comercial. Esta división es lo que permite a terceros construir conectores sin que la
+AGPL-3.0-only; el SDK y los conectores son Apache-2.0; las ediciones Business y Enterprise son
+comerciales. Esta división es lo que permite a terceros construir conectores sin que la
 frontera copyleft alcance su código.
 
 → Lee [Open core y licencia](/es/explanation/open-core-and-licensing/) para el
 mapa de licencias por directorio y lo que significa en la práctica.
 
 ## Decisiones de arquitectura
-
-El razonamiento detrás de las decisiones de carga — tokens bearer opacos en lugar de
-JWTs, el PDP de autorización enchufable detrás de una única juntura, SQLite-a-Postgres,
-el audit ledger hash-chained y firmado — está registrado como Architecture Decision
-Records.
 
 ## Regulación, posicionamiento y encaje
 

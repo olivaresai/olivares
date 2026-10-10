@@ -31,7 +31,7 @@ func TestSR2ProviderFullRequiresCurrentRunAdministratorAuthorization(t *testing.
 			if err != nil || scope.Preset != sessions.PresetFull {
 				t.Fatalf("full launch binding absent: %+v %v", scope, err)
 			}
-			policy := sessionProviderPolicy{credentials: credentials.SessionCredentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: h.set.gov.EngineApprovals(), store: h.st}
+			policy := sessionProviderPolicy{credentials: credentials.SessionCredentials, eval: h.set.gov.Evaluator(), authz: harnessAuthz(h), scoped: h.set.gov.ScopedGrants(), approvals: h.set.gov.EngineApprovals(), store: h.st}
 			req := sessions.ProviderApprovalRequest{Driver: driver, RunRef: intent.RunRef, SessionRef: scope.SessionRef, Principal: principal, TurnID: "full-turn", Kind: "tool_call_permission", Method: "session/request_permission", Requested: []string{"allow-once"}}
 			if driver == "codex" {
 				req.Kind, req.Method = "command_execution", "item/commandExecution/requestApproval"

@@ -6,18 +6,14 @@
 # check-module-bridge.sh — the VOCABULARIO table does not CONTRADICT the canon-derived map.
 # Three answers: 0 clean · 1 contradiction · 2 could not look.
 #
-# ⛔ HASTA EL 2026-09-03 ESTE GATE EXIGÍA IGUALDAD EXACTA CON `an internal design note (not shipped)`,
-# y eso hacía de un documento FECHADO la fuente del puente. El canon vende 30 módulos; esa tabla mide
-# 27 —y su propia lista de pendientes, fila 4, dice «Dar `modules:` a `self_hosted.enterprise`», o
-# sea que ya sabía que le faltaba el lado Enterprise—. Con igualdad exacta, añadir un módulo al canon
-# ponía este gate ROJO hasta que alguien editara a mano una medida de otro día.
-#
-# Lo que se comprueba desde hoy es NO CONTRADICCIÓN, que es lo que esa tabla puede sostener:
-#   · todo slug que ambas nombran debe apuntar al MISMO paquete;
-#   · ningún slug de la tabla puede faltar en el mapa (eso sí sería una regresión: el canon habría
-#     dejado de vender algo que se midió vendido);
-#   · los que el mapa tiene de más se IMPRIMEN, con su nombre, y no deciden nada.
-# La completitud la garantiza la derivación (`commerce-lint -module-catalog`), no un espejo a mano.
+# Until 2026-09-03 this gate required exact equality with the dated
+# `an internal design note (not shipped)` table. The canon offered 30 modules but
+# that table measured 27; pending row 4 already acknowledged missing Enterprise
+# modules for self_hosted.enterprise. Every new canonical module forced a manual
+# rewrite of an older measurement.
+# Check noncontradiction: shared slugs map to the same package; no table slug may
+# vanish from the derived map. Print additional map slugs without changing the verdict.
+# `commerce-lint -module-catalog` derivation guarantees completeness, not a manual mirror.
 
 set -euo pipefail
 
@@ -48,7 +44,7 @@ command -v python3 >/dev/null || cannot "no python3"
 ERR="$(mktemp "${TMPDIR:-/tmp}/modbridge.XXXXXX")" || cannot "cannot create a scratch file"
 trap 'rm -f "$ERR" "$ERR.out"' EXIT
 set +e
-[ -r "$ROOT/scripts/module-catalog-go.sh" ] || cannot "falta scripts/module-catalog-go.sh: sin el envoltorio del derivador no hay con qué comparar (un 127 no es un veredicto)"
+[ -r "$ROOT/scripts/module-catalog-go.sh" ] || cannot "missing scripts/module-catalog-go.sh: the derivation wrapper is required for comparison (exit 127 is not a result)"
 bash "$ROOT/scripts/module-catalog-go.sh" check >"$ERR.out" 2>"$ERR"
 rcd=$?
 set -e
@@ -59,7 +55,7 @@ set -e
 case "$rcd" in
 0 | 1 | 2) ;;
 *)
-	say "check-module-bridge: COULD NOT LOOK — la derivación salió con un código que su contrato no define ($rcd):" >&2
+	say "check-module-bridge: COULD NOT LOOK — derivation returned an exit code its contract does not define ($rcd):" >&2
 	cat "$ERR" >&2 || true
 	exit 2
 	;;

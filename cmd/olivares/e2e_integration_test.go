@@ -94,7 +94,15 @@ func TestE2E_FinOps_CostStreamAndModelCatalog(t *testing.T) {
 }
 
 func TestE2E_Orchestration_DelegationRelation(t *testing.T) {
+	editionOrchestrationTestLicense(t)
 	h := newHarness(t)
+	if !editionOrchestrationAvailable {
+		code, body := h.req("GET", "/v1/m/orchestration/graph", h.adminToken, h.tenantA, nil)
+		if code != 501 {
+			t.Fatalf("Community graph=%d: %s", code, body)
+		}
+		return
+	}
 	// The session→agent.task(Task) edge derives a supervisor→worker delegation.
 	g := h.getJSON(h.adminToken, h.tenantA, "/v1/m/orchestration/graph")
 	edges := items2(g, "edges")

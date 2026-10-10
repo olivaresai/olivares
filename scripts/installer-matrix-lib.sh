@@ -15,7 +15,7 @@ fail() {
 }
 
 blind() {
-	printf 'installer-matrix: NO HE PODIDO MIRAR — %s\n' "$*" >&2
+	printf 'installer-matrix: COULD NOT LOOK — %s\n' "$*" >&2
 	exit 2
 }
 

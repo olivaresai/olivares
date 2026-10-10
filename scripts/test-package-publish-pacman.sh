@@ -19,7 +19,7 @@ LC_ALL=C
 export LC_ALL
 
 could_not_look() {
-	printf 'test-package-publish-pacman: NO HE PODIDO MIRAR — %s\n' "$*" >&2
+	printf 'test-package-publish-pacman: COULD NOT CHECK — %s\n' "$*" >&2
 	exit 2
 }
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -41,7 +41,7 @@ keys="$(mktemp -d "$tmp_root/ppk.XXXXXX")" || could_not_look 'cannot allocate ke
 trap cleanup EXIT INT TERM
 chmod 0700 "$scratch" "$keys"
 publisher="$root/scripts/publish-package-repositories.sh"
-version=26.10.0
+version=26.1000
 pkg_name="olivares_${version}_linux_amd64.pkg.tar.zst"
 pacman_key_rel=keys/olivares-pacman-repository.gpg
 epoch=1790000000

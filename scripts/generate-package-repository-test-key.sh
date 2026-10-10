@@ -11,7 +11,7 @@ LC_ALL=C
 export LC_ALL
 
 if [[ "${OLIVARES_PACKAGE_REPO_TEST_ONLY:-}" != 1 ]]; then
-	printf '%s\n' 'generate-package-repository-test-key: HALLAZGO — requires OLIVARES_PACKAGE_REPO_TEST_ONLY=1' >&2
+	printf '%s\n' 'generate-package-repository-test-key: FINDING — requires OLIVARES_PACKAGE_REPO_TEST_ONLY=1' >&2
 	exit 1
 fi
 if [[ "$#" -ne 1 || "$1" != /* ]]; then
@@ -20,12 +20,12 @@ if [[ "$#" -ne 1 || "$1" != /* ]]; then
 fi
 out="$1"
 if [[ -e "$out" ]]; then
-	printf 'generate-package-repository-test-key: HALLAZGO — output already exists: %s\n' "$out" >&2
+	printf 'generate-package-repository-test-key: FINDING — output already exists: %s\n' "$out" >&2
 	exit 1
 fi
 for tool in gpg openssl jq sha256sum awk chmod mkdir; do
 	command -v "$tool" >/dev/null 2>&1 || {
-		printf 'generate-package-repository-test-key: NO HE PODIDO MIRAR — missing %s\n' "$tool" >&2
+		printf 'generate-package-repository-test-key: COULD NOT LOOK — missing %s\n' "$tool" >&2
 		exit 2
 	}
 done
@@ -34,7 +34,7 @@ chmod 0700 "$out" "$out/gnupg"
 export GNUPGHOME="$out/gnupg"
 key_epoch="${OLIVARES_PACKAGE_REPO_TEST_KEY_EPOCH:-1704067200}"
 [[ "$key_epoch" =~ ^[0-9]+$ ]] || {
-	printf '%s\n' 'generate-package-repository-test-key: NO HE PODIDO MIRAR — test key epoch is not numeric' >&2
+	printf '%s\n' 'generate-package-repository-test-key: COULD NOT LOOK — test key epoch is not numeric' >&2
 	exit 2
 }
 gpg --batch --yes --pinentry-mode loopback --passphrase '' \
@@ -43,7 +43,7 @@ gpg --batch --yes --pinentry-mode loopback --passphrase '' \
 	>/dev/null 2>&1
 fingerprint="$(gpg --batch --with-colons --list-secret-keys 2>/dev/null | awk -F: '$1=="fpr"{print $10; exit}')"
 [[ "$fingerprint" =~ ^[0-9A-F]{40}$ ]] || {
-	printf '%s\n' 'generate-package-repository-test-key: NO HE PODIDO MIRAR — GPG emitted no primary fingerprint' >&2
+	printf '%s\n' 'generate-package-repository-test-key: COULD NOT LOOK — GPG emitted no primary fingerprint' >&2
 	exit 2
 }
 gpg --batch --yes --pinentry-mode loopback --passphrase '' --armor \

@@ -17,17 +17,17 @@
 # is always the file beside this script; it is not selected by environment.
 set -u
 SELF="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)" || {
-	echo "check-classify-paths-parity: NO HE PODIDO MIRAR: cannot resolve scripts/." >&2
+	echo "check-classify-paths-parity: COULD NOT CHECK: cannot resolve scripts/." >&2
 	exit 2
 }
 HELPER="$SELF/lib/ci-trigger-coverage.py"
 RAIZ="${OLIVARES_ROOT:-$(git rev-parse --show-toplevel 2>/dev/null || echo "")}"
-[ -n "$RAIZ" ] || { echo "check-classify-paths-parity: NO HE PODIDO MIRAR: no estoy en un repositorio." >&2; exit 2; }
+[ -n "$RAIZ" ] || { echo "check-classify-paths-parity: COULD NOT CHECK: outside a repository." >&2; exit 2; }
 F="${OLIVARES_CI_FILE:-$RAIZ/.github/workflows/mainline-ci.yml}"
-[ -r "$F" ] || { echo "check-classify-paths-parity: NO HE PODIDO MIRAR: no leo $F." >&2; exit 2; }
-[ -r "$HELPER" ] || { echo "check-classify-paths-parity: NO HE PODIDO MIRAR: no leo $HELPER." >&2; exit 2; }
+[ -r "$F" ] || { echo "check-classify-paths-parity: COULD NOT CHECK: cannot read $F." >&2; exit 2; }
+[ -r "$HELPER" ] || { echo "check-classify-paths-parity: COULD NOT CHECK: cannot read $HELPER." >&2; exit 2; }
 command -v python3 >/dev/null 2>&1 || {
-	echo "check-classify-paths-parity: NO HE PODIDO MIRAR: sin python3." >&2
+	echo "check-classify-paths-parity: COULD NOT CHECK: python3 is not installed." >&2
 	exit 2
 }
 python3 "$HELPER" check "$F"

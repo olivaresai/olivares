@@ -65,16 +65,18 @@ lectura/escritura, el modo es `unknown` — el producto nunca fabrica una clasif
 
 El mapa de acceso es una capacidad entre muchas. El producto es una **plataforma modular**
 (en el espíritu de Grafana o Backstage): un motor más módulos más conectores, diseñada para
-que cualquier módulo se acople sin rearquitecturar el resto. Incluye **31 módulos** —
+que cualquier módulo se acople sin rearquitecturar el resto. Incluye **32 módulos** —
 inventario y sesiones en vivo, el mapa L/RW, orquestación de agentes (A2A, en desarrollo), gestión de MCP y
 de skills, identidad e identidad no humana, despliegue, conocimiento y contexto, seguridad y
 guardrails, gestión de modelos y proveedores, coste/FinOps, evals y un sandbox de pruebas,
 red-teaming, cumplimiento y evidencia, un catálogo interno, integraciones de salida y push a
 SIEM, voz/tiempo real, y salud/SLA — más capacidades de plataforma no contadas entre los
 30 (su propia API y manage-as-code, multi-tenancy, cuadros de mando ejecutivos) — a
-través de **159 integraciones** (un recuento medido
+través de **136 integraciones** (un recuento medido
 desde el código por `scripts/check-public-counts.sh`). Unas pocas capacidades son pre-v1 o seams
 deny-closed hasta que se aprovisionan; los docs son explícitos sobre cuáles.
+
+Community conserva la observabilidad local, los ajustes guardados y la exportación de copias de seguridad. El envío SIEM/ITSM, la telemetría externa y la exportación de postura se incluyen en la edición base de Business.
 
 Consulta el [catálogo de módulos](/es/reference/modules/overview/) para la lista completa, y el
 [resumen de arquitectura](/es/explanation/architecture/overview/) para ver cómo encajan el motor
@@ -82,12 +84,20 @@ y los módulos.
 
 ## Cómo observa: lectura primero, datos mínimos
 
-Olivares AI es de **lectura primero**: el motor observa a través de logs, OpenTelemetry y
-eBPF; **no** se sitúa en la ruta de datos del agente, así que un fallo del colector nunca
-rompe tu tráfico de producción. Y es de **datos mínimos por diseño**: el grafo de
-acceso almacena **relaciones** — origen → recurso, lectura/escritura, fuente, confianza,
-marca de tiempo — **nunca payloads, cuerpos de SQL, secretos ni PII**. Lo que no se
-almacena no puede filtrarse.
+El access map observa logs, OpenTelemetry y eBPF fuera de banda. El fallo de un
+colector de observación crea un hueco de visibilidad; no condiciona el tráfico
+del agente. El grafo de acceso guarda relaciones — origen → recurso,
+lectura/escritura, fuente, confianza y marca de tiempo — nunca payloads, cuerpos
+SQL, secretos ni PII.
+
+Los puntos de enforcement son inline y deny-closed. Las sesiones gestionadas de
+Claude Code instalan hooks de llamadas a herramientas que llaman al punto de
+enforcement de política (PEP) del motor. El motor monta este PEP de hooks por
+defecto. Si resulta inaccesible durante una caída o un reinicio del motor, se
+deniega toda llamada gobernada a herramientas. Planifica la disponibilidad del
+motor en consecuencia. El proxy de inferencia inline y los gates MCP tools/call
+y de delegación A2A aplican sus controles al tráfico encaminado por ellos; las
+llamadas al modelo no pasan por el proxy de inferencia por defecto.
 
 Esta es también la razón por la que es autoalojable y compatible con air-gap: no hay
 telemetría obligatoria ni egreso del plano de control de forma predeterminada. Solo cruza

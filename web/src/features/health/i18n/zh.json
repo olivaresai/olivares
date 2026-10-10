@@ -272,7 +272,7 @@
     }
   },
   "statusPage": {
-    "title": "Olivares Control Plane — 状态",
+    "title": "Olivares AI — 状态",
     "subtitle": "所有组件的当前运行状态。",
     "unavailable": "状态信息当前不可用。",
     "lastUpdated": "最后更新: {{time}}",
@@ -308,7 +308,11 @@
     "checked": "更新检查已完成",
     "advisories": "已修复的安全公告",
     "checkNow": "立即检查",
-    "unconfigured": "未配置更新检查。对于隔离（air-gapped）部署而言，这是预期情况。"
+    "unconfigured": "未配置更新检查。尚未检查任何更新；网络检查保持关闭。",
+    "unavailable": "检查不可用",
+    "instructions": "更新说明",
+    "configure": "要启用检查，请使用内置验证密钥的官方发布版本。在服务配置中将 OLIVARES_UPDATE_ENDPOINT 设置为获准使用的签名渠道，然后重启 Olivares。若要保持网络检查关闭，请不要设置此项。",
+    "manual": "要手动更新，请备份数据，验证新软件包或镜像，然后按原安装方式升级。保留相同的数据目录。没有验证密钥的开发构建无法检查签名渠道。"
   },
   "system": {
     "title": "系统健康状况",
@@ -471,10 +475,9 @@
     "download": "下载支持包",
     "generate": "生成并下载",
     "confirmTitle": "生成支持包？",
-    "confirmDescription": "此 AAL3 特权操作会记录在审计账本中。",
+    "confirmDescription": "此特权操作会记录在审计账本中。",
     "contents": "该包包含经脱敏的生效配置、运行状态与日志。分享前请先审阅。",
     "downloaded": "支持包已下载",
-    "needsAal3": "生成支持包需要基于硬件的 AAL3 升级验证。",
     "failed": "支持包生成失败。"
   }
 }

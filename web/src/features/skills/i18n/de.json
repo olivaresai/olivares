@@ -1,0 +1,52 @@
+{
+  "title": "Skill-Katalog",
+  "subtitle": "Für diese Organisation installierte Skill-Pakete. Öffne ein Paket, um seine Skills und die Abteilungen, Gruppen und Agenten zu sehen, denen es zugewiesen ist.",
+  "packs": {
+    "name": "Paket",
+    "state": "Status",
+    "revision": "Revision",
+    "updated": "Aktualisiert",
+    "enabled": "Aktiv",
+    "retired": "Zurückgezogen",
+    "search": "Pakete suchen",
+    "emptyTitle": "Keine Skill-Pakete installiert",
+    "emptyDescription": "Installiere ein Paket mit olivares skills install; danach erscheint es hier zum Zuweisen.",
+    "truncated": "Die ersten {{n}} Pakete werden angezeigt",
+    "truncatedHint": "Mit olivares skills ls --cursor listest du den Rest."
+  },
+  "detail": {
+    "skills": "Skills in diesem Paket",
+    "revisions": "Revisionen",
+    "revision": "Revision {{n}}",
+    "revisionLine": "Revision {{n}} aus {{source}}"
+  },
+  "kind": {
+    "workspace": "Abteilung",
+    "agent_group": "Agentengruppe",
+    "agent": "Agent",
+    "template": "Vorlage",
+    "session": "Sitzung"
+  },
+  "uses": {
+    "title": "Zugewiesen an",
+    "none": "Dieses Paket ist keiner Abteilung, Gruppe und keinem Agenten zugewiesen, die du sehen kannst.",
+    "unassign": "Zuweisung aufheben",
+    "unassigned": "Zuweisung des Skill-Pakets aufgehoben",
+    "confirmTitle": "Zuweisung dieses Skill-Pakets aufheben?",
+    "confirmDescription": "Neue Sitzungen von {{target}} erhalten diese Skills nicht mehr. Aufgezeichnete Unterhaltungen behalten ihren Stand.",
+    "truncated": "Die ersten {{n}} Zuweisungen werden angezeigt",
+    "truncatedHint": "Mit olivares skills assignments --pack und --cursor listest du den Rest.",
+    "unassignFrom": "Zuweisung an {{target}} aufheben"
+  },
+  "assign": {
+    "title": "Zuweisen",
+    "kind": "Zuweisen an",
+    "target": "Ziel",
+    "choose": "Ziel auswählen",
+    "revision": "Revision",
+    "noTargets": "Keine Ziele dieser Art, die du lesen kannst.",
+    "submit": "Zuweisen",
+    "done": "Skill-Paket zugewiesen",
+    "directoryFailed": "Die Ziele konnten nicht geladen werden. Schließe das Paket und öffne es erneut, um es noch einmal zu versuchen."
+  }
+}

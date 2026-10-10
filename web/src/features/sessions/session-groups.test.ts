@@ -72,6 +72,14 @@ describe('groupOf — membership is a field the engine sent', () => {
       'a tool call waits on an approval (HU-R12)',
       row(undefined, { state: 'running', pending_approval_ref: 'apr_1' }),
     ],
+    // The sidebar files this launch under Needs you; Sessions said Settled (binary 12).
+    [
+      'its launch waits for an approval',
+      row(undefined, {
+        state: 'waiting_approval',
+        pending_approval_ref: 'apr_2',
+      }),
+    ],
   ])('puts it under Waiting for you when %s', (_why, s) => {
     expect(groupOf(s)).toBe('attention')
   })
@@ -134,9 +142,10 @@ describe('groupSessions — the rail in reading order', () => {
   })
 
   it('keeps the three sections and their order', () => {
+    // Needs you, Working, Idle: what asks for the person comes first.
     expect(groupSessions([done, working, asking]).map((g) => g.id)).toEqual([
-      'active',
       'attention',
+      'active',
       'settled',
     ])
   })
@@ -155,7 +164,7 @@ describe('groupSessions — the rail in reading order', () => {
     const order = railOrder(
       groupSessions([working, asking, done, alsoDone], new Set([alsoDone.key])),
     )
-    expect(order.map((s) => s.sessionRef)).toEqual(['a', 'b', 'd', 'c'])
+    expect(order.map((s) => s.sessionRef)).toEqual(['b', 'a', 'd', 'c'])
   })
 
   it('preserves the incoming order inside a section (the join sorted it)', () => {

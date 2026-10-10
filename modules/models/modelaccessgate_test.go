@@ -253,7 +253,7 @@ func TestModelAccessUngovernedIsNoop(t *testing.T) {
 	m, _, tenant := newModelAccessModule(t, fakeActorScope{})
 	dec := chainOf("claude-opus-4-8", "claude-sonnet-4-6")
 	r := httptest.NewRequest("POST", "/x", nil)
-	if status, denied := m.modelAccessDeniesRoute(r, mcFor(tenant, adminRole(tenant)), &dec, "sess-1", ""); denied || status != 0 {
+	if status, denied := m.modelAccessDeniesRoute(r.Context(), mcFor(tenant, adminRole(tenant)), &dec, "sess-1", ""); denied || status != 0 {
 		t.Fatalf("ungoverned tenant: want (0,false), got (%d,%v)", status, denied)
 	}
 	if len(dec.Chain) != 2 {
@@ -269,7 +269,7 @@ func TestModelAccessSuperadminBypass(t *testing.T) {
 	})
 	dec := chainOf("claude-opus-4-8")
 	r := httptest.NewRequest("POST", "/x", nil)
-	if status, denied := m.modelAccessDeniesRoute(r, mcFor(tenant, auth.Principal{Superadmin: true}), &dec, "sess-1", ""); denied || status != 0 {
+	if status, denied := m.modelAccessDeniesRoute(r.Context(), mcFor(tenant, auth.Principal{Superadmin: true}), &dec, "sess-1", ""); denied || status != 0 {
 		t.Fatalf("superadmin must bypass: want (0,false), got (%d,%v)", status, denied)
 	}
 }
@@ -283,7 +283,7 @@ func TestModelAccessDeniesUngrantedModel(t *testing.T) {
 	})
 	dec := chainOf("claude-opus-4-8")
 	r := httptest.NewRequest("POST", "/x", nil)
-	status, denied := m.modelAccessDeniesRoute(r, mcFor(tenant, adminRole(tenant)), &dec, "sess-1", "")
+	status, denied := m.modelAccessDeniesRoute(r.Context(), mcFor(tenant, adminRole(tenant)), &dec, "sess-1", "")
 	if !denied || status != 403 {
 		t.Fatalf("ungranted model: want (403,true), got (%d,%v)", status, denied)
 	}
@@ -301,7 +301,7 @@ func TestModelAccessDropsAndPromotes(t *testing.T) {
 	})
 	dec := chainOf("claude-opus-4-8", "claude-sonnet-4-6")
 	r := httptest.NewRequest("POST", "/x", nil)
-	if status, denied := m.modelAccessDeniesRoute(r, mcFor(tenant, adminRole(tenant)), &dec, "sess-1", ""); denied || status != 0 {
+	if status, denied := m.modelAccessDeniesRoute(r.Context(), mcFor(tenant, adminRole(tenant)), &dec, "sess-1", ""); denied || status != 0 {
 		t.Fatalf("partial filter: want (0,false), got (%d,%v)", status, denied)
 	}
 	if dec.Primary == nil || dec.Primary.ModelRef != "claude-sonnet-4-6" || len(dec.Chain) != 1 {
@@ -319,7 +319,7 @@ func TestModelAccessModelGroupGrants(t *testing.T) {
 	r := httptest.NewRequest("POST", "/x", nil)
 	// opus (explicit member) and sonnet (family selector) are both in the group.
 	dec := chainOf("claude-opus-4-8", "claude-sonnet-4-6")
-	if status, denied := m.modelAccessDeniesRoute(r, mcFor(tenant, adminRole(tenant)), &dec, "sess-1", ""); denied || status != 0 {
+	if status, denied := m.modelAccessDeniesRoute(r.Context(), mcFor(tenant, adminRole(tenant)), &dec, "sess-1", ""); denied || status != 0 {
 		t.Fatalf("group members must be granted: want (0,false), got (%d,%v)", status, denied)
 	}
 	if len(dec.Chain) != 2 {
@@ -327,7 +327,7 @@ func TestModelAccessModelGroupGrants(t *testing.T) {
 	}
 	// haiku is not in the group ⇒ denied.
 	dec = chainOf("claude-haiku-4-5")
-	if status, _ := m.modelAccessDeniesRoute(r, mcFor(tenant, adminRole(tenant)), &dec, "sess-1", ""); status != 403 {
+	if status, _ := m.modelAccessDeniesRoute(r.Context(), mcFor(tenant, adminRole(tenant)), &dec, "sess-1", ""); status != 403 {
 		t.Errorf("a model outside the group must be denied, got status %d", status)
 	}
 }
@@ -350,7 +350,7 @@ func TestModelAccessSurfaceConstraint(t *testing.T) {
 		{"", false}, // unknown at selection → deferred to the in-band proxy
 	} {
 		dec := chainOf("claude-opus-4-8")
-		status, denied := m.modelAccessDeniesRoute(r, mcFor(tenant, adminRole(tenant)), &dec, "sess-1", tc.surface)
+		status, denied := m.modelAccessDeniesRoute(r.Context(), mcFor(tenant, adminRole(tenant)), &dec, "sess-1", tc.surface)
 		if denied != tc.denied {
 			t.Errorf("surface %q: denied=%v, want %v (status %d)", tc.surface, denied, tc.denied, status)
 		}
@@ -378,7 +378,7 @@ func TestModelAccessWorkspaceAndAgentGroup(t *testing.T) {
 	)
 	r := httptest.NewRequest("POST", "/x", nil)
 	dec := chainOf("claude-opus-4-8", "claude-sonnet-4-6")
-	if status, denied := m.modelAccessDeniesRoute(r, mcFor(tenant, boundAgent(tenant, "acting-agent")), &dec, "sess-1", ""); denied || status != 0 {
+	if status, denied := m.modelAccessDeniesRoute(r.Context(), mcFor(tenant, boundAgent(tenant, "acting-agent")), &dec, "sess-1", ""); denied || status != 0 {
 		t.Fatalf("in-workspace + in-group grants must allow: got (%d,%v)", status, denied)
 	}
 	if len(dec.Chain) != 2 {
@@ -391,7 +391,7 @@ func TestModelAccessWorkspaceAndAgentGroup(t *testing.T) {
 		SubjectKind: subjectRole, SubjectRef: "admin", TargetKind: targetModel, TargetRef: "claude-opus-4-8", WorkspaceRef: "payments",
 	})
 	dec2 := chainOf("claude-opus-4-8")
-	if status, _ := m2.modelAccessDeniesRoute(r, mcFor(tenant2, adminRole(tenant2)), &dec2, "sess-1", ""); status != 403 {
+	if status, _ := m2.modelAccessDeniesRoute(r.Context(), mcFor(tenant2, adminRole(tenant2)), &dec2, "sess-1", ""); status != 403 {
 		t.Errorf("a workspace-scoped grant must not authorize from another workspace, status %d", status)
 	}
 }
@@ -405,7 +405,7 @@ func TestModelAccessDenyClosedOnActorError(t *testing.T) {
 	})
 	dec := chainOf("claude-opus-4-8")
 	r := httptest.NewRequest("POST", "/x", nil)
-	status, denied := m.modelAccessDeniesRoute(r, mcFor(tenant, adminRole(tenant)), &dec, "sess-1", "")
+	status, denied := m.modelAccessDeniesRoute(r.Context(), mcFor(tenant, adminRole(tenant)), &dec, "sess-1", "")
 	if !denied || status != 403 {
 		t.Fatalf("actor-scope error must be deny-closed (403,true), got (%d,%v)", status, denied)
 	}
@@ -448,7 +448,7 @@ func TestModelAccessAgentGroupUnresolvedDenyClosed(t *testing.T) {
 	m, st, tenant := newModelAccessModule(t, fakeActorScope{}) // unresolved: empty workspace
 	seedModelAccess(t, st, tenant, grant)
 	dec := chainOf("claude-opus-4-8")
-	if status, denied := m.modelAccessDeniesRoute(r, mcFor(tenant, boundAgent(tenant, "acting-agent")), &dec, "sess-unknown", ""); !denied || status != 403 {
+	if status, denied := m.modelAccessDeniesRoute(r.Context(), mcFor(tenant, boundAgent(tenant, "acting-agent")), &dec, "sess-unknown", ""); !denied || status != 403 {
 		t.Fatalf("asserted-but-unresolved bound actor + agent-group grant: want (403,true), got (%d,%v)", status, denied)
 	}
 
@@ -457,7 +457,7 @@ func TestModelAccessAgentGroupUnresolvedDenyClosed(t *testing.T) {
 	dec = chainOf("claude-opus-4-8")
 	human := adminRole(tenant)
 	human.Kind = auth.KindUser
-	if status, denied := m.modelAccessDeniesRoute(r, mcFor(tenant, human), &dec, "", ""); denied || status != 0 {
+	if status, denied := m.modelAccessDeniesRoute(r.Context(), mcFor(tenant, human), &dec, "", ""); denied || status != 0 {
 		t.Fatalf("no session asserted: want (0,false) (not governed by agent-group), got (%d,%v)", status, denied)
 	}
 
@@ -466,7 +466,7 @@ func TestModelAccessAgentGroupUnresolvedDenyClosed(t *testing.T) {
 	m2, st2, tenant2 := newModelAccessModule(t, fakeActorScope{workspace: "payments", groups: []string{"other"}})
 	seedModelAccess(t, st2, tenant2, grant)
 	dec = chainOf("claude-opus-4-8")
-	if status, denied := m2.modelAccessDeniesRoute(r, mcFor(tenant2, boundAgent(tenant2, "acting-agent")), &dec, "sess-1", ""); denied || status != 0 {
+	if status, denied := m2.modelAccessDeniesRoute(r.Context(), mcFor(tenant2, boundAgent(tenant2, "acting-agent")), &dec, "sess-1", ""); denied || status != 0 {
 		t.Fatalf("resolved bound actor outside the group: want (0,false) (unrestricted), got (%d,%v)", status, denied)
 	}
 }

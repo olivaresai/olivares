@@ -9,6 +9,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
@@ -27,7 +28,7 @@ var protocolReplayPublishes = map[string]bool{
 // prepared form. A plain ApplyProtocolReplay may publish only when it is
 // nested inside a prepared replay's mutation, which declares its claim.
 func TestEveryPublishingReplayOpenerIsPrepared(t *testing.T) {
-	unprepared, _ := protocolReplayOpenerCensus(t)
+	unprepared, _, _ := protocolReplayOpenerCensus(t, ".")
 	if len(unprepared) != 0 {
 		t.Fatalf("replay openers that publish without preparing their evidence: %s", strings.Join(unprepared, ", "))
 	}
@@ -38,7 +39,7 @@ func TestEveryPublishingReplayOpenerIsPrepared(t *testing.T) {
 // through a module port inside itself. A plain ApplyProtocolReplay appears only
 // nested inside a prepared replay's mutation, which declares its claim.
 func TestEveryReplayOpenerIsPreparedOrNested(t *testing.T) {
-	_, plain := protocolReplayOpenerCensus(t)
+	_, plain, _ := protocolReplayOpenerCensus(t, ".")
 	if len(plain) != 0 {
 		t.Fatalf("plain replay openers outside a prepared replay: %s", strings.Join(plain, ", "))
 	}
@@ -48,10 +49,10 @@ func TestEveryReplayOpenerIsPreparedOrNested(t *testing.T) {
 // returns, by position, the plain replay openers outside a prepared replay
 // whose mutation reaches a publish, and every plain replay opener outside a
 // prepared replay.
-func protocolReplayOpenerCensus(t *testing.T) (unprepared, plain []string) {
+func protocolReplayOpenerCensus(t *testing.T, dir string) (unprepared, plain []string, openers int) {
 	t.Helper()
 	fset := token.NewFileSet()
-	entries, err := os.ReadDir(".")
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		t.Fatalf("read the package directory: %v", err)
 	}
@@ -61,7 +62,7 @@ func protocolReplayOpenerCensus(t *testing.T) (unprepared, plain []string) {
 		if entry.IsDir() || !strings.HasSuffix(name, ".go") || strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		file, err := parser.ParseFile(fset, name, nil, parser.SkipObjectResolution)
+		file, err := parser.ParseFile(fset, filepath.Join(dir, name), nil, parser.SkipObjectResolution)
 		if err != nil {
 			t.Fatalf("parse %s: %v", name, err)
 		}
@@ -112,7 +113,6 @@ func protocolReplayOpenerCensus(t *testing.T) (unprepared, plain []string) {
 		return false
 	}
 
-	openers := 0
 	for _, file := range files {
 		var visit func(node ast.Node, insidePrepared bool)
 		visit = func(node ast.Node, insidePrepared bool) {
@@ -149,12 +149,12 @@ func protocolReplayOpenerCensus(t *testing.T) (unprepared, plain []string) {
 		}
 		visit(file, false)
 	}
-	if openers == 0 {
+	if openers == 0 && orchestrationReadersLinked() {
 		t.Fatal("the census found no replay opener: it no longer sees the adapters")
 	}
 	sort.Strings(unprepared)
 	sort.Strings(plain)
-	return unprepared, plain
+	return unprepared, plain, openers
 }
 
 // calledName is the name a call expression invokes: the selector's name for a
@@ -180,4 +180,35 @@ func calledNames(node ast.Node) map[string]bool {
 		return true
 	})
 	return names
+}
+
+// Fixture controls ensure that an empty Community population cannot hide a broken scanner.
+func TestProtocolReplayOpenerCensusControls(t *testing.T) {
+	for _, tc := range []struct {
+		name, source               string
+		unprepared, plain, openers int
+	}{
+		{"plain publishing", `func adapter() { s.ApplyProtocolReplay(ctx, claim, func() { s.ProjectProtocolReply() }) }`, 1, 1, 1},
+		{"transitive publishing", `func publish() { s.ProjectProtocolReply() }; func adapter() { s.ApplyProtocolReplay(ctx, claim, func() { publish() }) }`, 1, 1, 1},
+		{"plain nonpublishing", `func adapter() { s.ApplyProtocolReplay(ctx, claim, func() { read() }) }`, 0, 1, 1},
+		{"prepared", `func adapter() { s.ApplyPreparedProtocolReplay(ctx, claim, func() { s.ProjectProtocolReply() }) }`, 0, 0, 1},
+		{"nested", `func adapter() { s.ApplyPreparedProtocolReplay(ctx, claim, func() { s.ApplyProtocolReplay(ctx, claim, func() { s.ProjectProtocolReply() }) }) }`, 0, 0, 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "adapter.go"), []byte("package fixture\n"+tc.source), 0600); err != nil {
+				t.Fatal(err)
+			}
+			unprepared, plain, openers := protocolReplayOpenerCensus(t, dir)
+			if len(unprepared) != tc.unprepared || len(plain) != tc.plain || openers != tc.openers {
+				t.Fatalf("census = %v / %v / %d; want %d / %d / %d", unprepared, plain, openers, tc.unprepared, tc.plain, tc.openers)
+			}
+		})
+	}
+}
+
+// The existing edition seam returns a refusal leaf when Identity & Scale is
+// absent, and the real command tree when its orchestration readers are linked.
+func orchestrationReadersLinked() bool {
+	return newOrchestrationCmd().HasSubCommands()
 }

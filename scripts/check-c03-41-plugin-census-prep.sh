@@ -44,7 +44,7 @@ grep -q 'NOT EXECUTED' "$DOC" || fail "prepare doc lost NOT EXECUTED"
 grep -q 'firstparty is source-connectors' "$DOC" \
   || fail "prepare doc lost source-connectors pin"
 if grep -qiE 'moved add-ons out of process|firstparty embeds enterprise|FIRMA A claimed' "$DOC"; then
-  fail "prepare doc claims a close this lote does not have"
+  fail "prepare doc claims a close this batch does not have"
 fi
 grep -q 'C03-41' "$BACKLOG" || fail "backlog lost the C03-41 row"
 grep -q 'SOURCE-connector' "$EMBED" \

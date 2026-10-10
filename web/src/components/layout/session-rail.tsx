@@ -34,7 +34,10 @@ import {
   type RailState,
 } from './session-rail-model'
 
-export type RailStatus = 'loading' | 'ready' | 'error'
+export interface RailStatus {
+  loading: boolean
+  error: boolean
+}
 
 /** The glyph of a state, with its word as the accessible name. Colour never carries the
  * state alone: the word is always there for a screen reader, and the shape differs. */
@@ -202,9 +205,11 @@ function useRailRoving(ref: RefObject<HTMLDivElement | null>) {
 export function SessionRailView({
   groups,
   status,
+  allTo = '/sessions',
 }: {
   groups: readonly RailGroup[]
   status: RailStatus
+  allTo?: '/sessions' | '/agentops' | '/communications/handoffs'
 }) {
   const { t } = useTranslation('nav')
   const headingId = useId()
@@ -213,7 +218,7 @@ export function SessionRailView({
   return (
     <section
       aria-labelledby={headingId}
-      aria-busy={status === 'loading' || undefined}
+      aria-busy={status.loading || undefined}
       // A floor and a clip: when the journeys above are long, the rail keeps room for its
       // heading and a row, and nothing it holds is drawn under All areas below it (SC 03b).
       className="flex min-h-[5.5rem] flex-1 flex-col overflow-hidden"
@@ -223,7 +228,7 @@ export function SessionRailView({
           {t('shell.rail.title')}
         </h2>
         <Link
-          to={'/sessions' as never}
+          to={allTo as never}
           className="inline-flex min-h-6 items-center gap-0.5 rounded-ctl px-1 text-caption text-text-3 outline-none hover:text-text focus-visible:ring-2 focus-visible:ring-focus"
         >
           {t('shell.rail.all')}
@@ -236,16 +241,26 @@ export function SessionRailView({
         data-slot="session-rail"
         className="flex min-h-0 flex-1 flex-col gap-px overflow-y-auto [mask-image:linear-gradient(to_bottom,#000_calc(100%-24px),transparent)] pb-6"
       >
-        {status === 'error' ? (
-          <p className="px-2.5 py-2 text-caption text-text-3">
+        {status.error && (
+          <p role="status" className="px-2.5 py-2 text-caption text-text-3">
             {t('shell.rail.error')}
           </p>
-        ) : status === 'loading' ? (
-          <p className="px-2.5 py-2 text-caption text-text-3">
+        )}
+        {status.loading && (
+          <p role="status" className="px-2.5 py-2 text-caption text-text-3">
             {t('shell.rail.loading')}
           </p>
-        ) : (
-          groups.map((group) => (
+        )}
+        {/* Needs you is drawn once the sessions are read, so it keeps its place at the top
+            and says when nothing waits; Working and Earlier are drawn when they hold rows.
+            Their empty sentences sat at the bottom, under the rail's scroll edge. */}
+        {groups
+          .filter(
+            (group) =>
+              group.rows.length > 0 ||
+              (group.id === 'needsYou' && !status.loading && !status.error),
+          )
+          .map((group) => (
             <div
               key={group.id}
               role="group"
@@ -261,14 +276,13 @@ export function SessionRailView({
               </p>
               {group.rows.length === 0 ? (
                 <p className="px-2.5 pb-1 text-caption text-text-3">
-                  {t(`shell.rail.empty.${group.id}`)}
+                  {t('shell.rail.empty.needsYou')}
                 </p>
               ) : (
                 group.rows.map((row) => <RailRowLink key={row.key} row={row} />)
               )}
             </div>
-          ))
-        )}
+          ))}
       </div>
     </section>
   )

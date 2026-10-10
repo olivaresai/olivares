@@ -5,7 +5,14 @@ description: >-
   shell。
 ---
 
-控制平面（control plane）是一款安全产品，因此你拿到一个发布后首先应做的，就是 **证明它确实是项目所发布的那一个**。Olivares AI 的发布会随附你做加密验证所需的一切：对校验和的签名、一份 SLSA 来源证明、一份 SBOM（SPDX + CycloneDX），以及一份 OpenVEX 证明 — 全部 **按 digest 引用，绝不按标签**。
+> 部署包通过 Business 渠道提供；此处未验证其发布状态。使用本地 chart 前，请按渠道说明验证包及其发布者。清单示例使用 Business 提供的 `business-install.yaml`。隔离环境安装需要 Enterprise。
+
+
+> Helm, Kubernetes operators, Terraform, appliance and FIPS/STIG images are Business deployment artifacts. The source paths below are in the Business distribution. Air-gapped installation requires Enterprise.
+
+下一个版本是 <!-- release -->`0.1`<!-- /release -->，其 GitHub 发行尚未发布。以下命令描述计划中的产物。发布前请从源码构建，发布后也应在使用前验证每个产物。观测到的发布状态记录在 <!-- release -->`docs/releases/0.1-install-surfaces.json`<!-- /release -->。
+
+控制平面（control plane）是一款安全产品，因此你拿到一个发布后首先应做的，就是 **证明它确实是项目所发布的那一个**。Olivares AI 的发布会随附你做加密验证所需的一切：对校验和的签名、一份 SLSA 来源证明，以及各一份对容器镜像做了证明的 SBOM（SPDX）和 OpenVEX 文档 — 全部 **按 digest 引用，绝不按标签**。
 
 :::danger[绝不要 `curl | bash`]
 不要把安装脚本管道送入 shell。先下载产物，**验证它们**，然后才运行。下面的步骤就是做法。
@@ -15,33 +22,41 @@ description: >-
 
 | 产物 | 它是什么 |
 |---|---|
-| `checksums.txt`（+ `.sig`、`.pem`） | 每个产物的 SHA-256，附带 cosign 签名和证书 |
+| `checksums.txt`（+ `.sig`、`.pem`） | 归档文件、软件包、安装脚本、`release-commit.txt` 和 `release-build-context.json` 的 SHA-256，附带 cosign 签名和证书 |
 | `*_<os>_<arch>.tar.gz` | 发布归档文件 |
-| `*.sbom.sigstore.json` | 作为已签名 in-toto 证明的 SBOM（SPDX） |
-| `*.vex.sigstore.json` | 作为已签名 in-toto 证明的 OpenVEX |
+| `olivares.spdx.sbom.json` | 发布的 SBOM（SPDX），从容器镜像生成，并按 digest 对该镜像做证明 |
+| `olivares.vex.openvex.json` | 发布的 OpenVEX，按 digest 对容器镜像做证明 |
 | `*.intoto.jsonl` | SLSA Build L3 来源证明 |
 | 容器镜像 | 发布到 GHCR 和 Docker Hub，按 digest 验证并固定 |
-| Helm chart 源码 | 从 `deploy/helm/olivares` 安装；其 OCI 发布未经验证（`publication-unverified`：从未从本仓库发布） |
+| Helm chart 源码 | 从 `./business-chart` 安装；其 OCI 发布未经验证（`publication-unverified`：从未从本仓库发布） |
+
+26.10.1<!-- release-fixed --> 及更早的发布改为随附每个归档文件的 SBOM 和 OpenVEX bundle（`*.sbom.sigstore.json`、`*.vex.sigstore.json`）；之后的发布不再随附。
 
 ## 单命令路径
 
-仓库提供了 `scripts/verify-release.sh`，它会运行完整链条：验证对 `checksums.txt` 的签名，重新计算每个产物的 SHA-256，然后验证 SBOM、OpenVEX 和 SLSA 证明。
+仓库提供了 `scripts/verify-release.sh`，它会运行完整链条：验证对 `checksums.txt` 的签名，重新计算每个产物的 SHA-256，然后验证 26.10.1<!-- release-fixed --> 及更早发布中每个归档文件的 SBOM 和 OpenVEX bundle（之后的发布会将这两步报告为已跳过），以及 SLSA 来源证明。
 
+<!-- release -->
 ```bash
+# The verifier is in a source checkout of the release tag, not a release asset; running it
+# trusts the checkout. Without one, INSTALL.md shows the cosign + sha256sum commands.
+# Run it from the directory that holds the downloaded files.
+
 # Default: keyless (Sigstore). Needs Rekor and Sigstore trusted-root material.
-scripts/verify-release.sh
+/path/to/olivares/scripts/verify-release.sh
 
 # Pin the SLSA provenance to a specific source tag.
-scripts/verify-release.sh --source-tag 26.10.1
+/path/to/olivares/scripts/verify-release.sh --source-tag 0.1
 
 # Key-based: only for files signed with a private key you control.
 # Releases are signed keyless and do not publish a public key.
-scripts/verify-release.sh --key /path/to/your-cosign.pub
+/path/to/olivares/scripts/verify-release.sh --key /path/to/your-cosign.pub
 ```
+<!-- /release -->
 
 `--key` 使用公钥而不是发布工作流的身份来验证签名，并忽略透明日志。它证明文件是用对应的私钥签名的，但不能证明这些文件由项目发布。请通过与待验证文件分离的渠道，从密钥所有者处获取该公钥。
 
-`--offline` 只从 cosign 调用中去掉 Rekor 查询，并不会让验证无需网络。无密钥验证仍然需要 Sigstore 信任根材料，尚未缓存时由 cosign 获取；而且脚本没有 `--trusted-root` 选项。即使使用 `--key`，验证 SBOM 和 OpenVEX bundle 也需要信任根；SLSA 步骤运行 `slsa-verifier` 时不带任何离线选项。
+`--offline` 只从 cosign 调用中去掉 Rekor 查询，并不会让验证无需网络。无密钥验证仍然需要 Sigstore 信任根材料，尚未缓存时由 cosign 获取；而且脚本没有 `--trusted-root` 选项。即使使用 `--key`，验证每个归档文件的 SBOM 和 OpenVEX bundle（26.10.1<!-- release-fixed --> 及更早的发布）也需要信任根；SLSA 步骤运行 `slsa-verifier` 时不带任何离线选项。
 
 ## 它逐步检查什么
 
@@ -54,7 +69,7 @@ scripts/verify-release.sh --key /path/to/your-cosign.pub
    cosign verify-blob \
      --certificate checksums.txt.pem \
      --signature checksums.txt.sig \
-     --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+     --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
      --certificate-oidc-issuer https://token.actions.githubusercontent.com \
      checksums.txt
    ```
@@ -62,10 +77,13 @@ scripts/verify-release.sh --key /path/to/your-cosign.pub
 2. **产物完整性** — 每个下载的产物都必须与 `checksums.txt` 匹配：
 
    ```bash
-   sha256sum --check checksums.txt
+   # checksums.txt lists all release artifacts; skip files you did not download.
+   # Before use, ensure each downloaded artifact is listed and reports OK.
+   # GNU sha256sum fails if no listed file is present or a checksum mismatches.
+   sha256sum --check --ignore-missing checksums.txt
    ```
 
-3. **SBOM（SPDX）证明：**
+3. **SBOM（SPDX）证明** — 每个归档文件的 bundle，仅限 26.10.1<!-- release-fixed --> 及更早的发布。之后的发布随附一份对容器镜像做了证明的 SBOM；参见下文“验证容器镜像”。
 
    ```bash
    cosign verify-blob-attestation --type spdxjson \
@@ -73,7 +91,7 @@ scripts/verify-release.sh --key /path/to/your-cosign.pub
      --check-claims <artifact>
    ```
 
-4. **OpenVEX 证明**（项目基于可达性的漏洞声明）：
+4. **OpenVEX 证明**（项目基于可达性的漏洞声明）— 每个归档文件的 bundle，仅限 26.10.1<!-- release-fixed --> 及更早的发布。之后的发布随附一份对容器镜像做了证明的 OpenVEX；参见下文“验证容器镜像”。
 
    ```bash
    cosign verify-blob-attestation --type openvex \
@@ -91,7 +109,7 @@ scripts/verify-release.sh --key /path/to/your-cosign.pub
 
 ## 验证容器镜像
 
-对于已发布的镜像，解析其 digest 并对照 GitHub Actions 身份进行验证（此路径无密钥且需要网络）：
+对于已发布的镜像，解析其 digest 并对照 GitHub Actions 身份进行验证（此路径无密钥且需要网络）。`spdxjson` 和 `openvex` 证明即发布的 SBOM（`olivares.spdx.sbom.json`）和 OpenVEX（`olivares.vex.openvex.json`），按 digest 对镜像做了证明：
 
 ```bash
 IMAGE=docker.io/olivaresai/olivares
@@ -99,13 +117,13 @@ DIGEST="$(crane digest "$IMAGE:<version>")"
 REF="$IMAGE@$DIGEST"
 
 cosign verify "$REF" \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type spdxjson \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 cosign verify-attestation "$REF" --type openvex \
-  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/v?[0-9]+\.[0-9]+(\.[0-9]+)?$' \
+  --certificate-identity-regexp '^https://github\.com/olivaresai/olivares/\.github/workflows/release\.yml@refs/tags/[0-9]+\.[0-9]+$' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 slsa-verifier verify-image "$REF" \
   --source-uri github.com/olivaresai/olivares --source-tag <version>

@@ -6,11 +6,17 @@
 // (rule; ARCH C1). The engine keeps the selection in the deployment settings and
 // applies it by restarting itself, so this screen chooses, applies, waits for the engine
 // to come back and reads the result. One dense list, no tabs or cards.
-import { useEffect, useMemo, useState } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useId, useMemo, useRef, useState } from 'react'
+import {
+  useQuery,
+  useQueryClient,
+  type QueryClient,
+} from '@tanstack/react-query'
+import { Link } from '@tanstack/react-router'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Spinner } from '@/components/ui/spinner'
 import { Switch } from '@/components/ui/switch'
 import { waitForEngineRestart } from '@/features/console/engine-restart'
@@ -39,6 +45,8 @@ export interface ModuleState {
 export interface ModuleSelection {
   modules: ModuleState[]
   restarting?: boolean
+  /** Sessions the engine runs now; the restart that applies a change stops them. */
+  running_sessions?: number
 }
 
 export const modulesApi = {
@@ -48,6 +56,45 @@ export const modulesApi = {
 }
 
 const modulesKey = ['settings', 'modules'] as const
+
+const restartWaits = new WeakMap<QueryClient, Promise<boolean>>()
+/**
+ * Waits for the engine after a change that restarted it, then makes the navigation and the
+ * module list read again. It is not tied to the page that asked: leaving the page during
+ * the restart (which can take minutes) must not leave the console reading the old list, so
+ * the wait runs to its end and the re-read happens whether or not anyone is still looking.
+ * One wait per client; it resolves false when the wait gives up, and the re-read is made
+ * anyway.
+ */
+function waitForRestart(queryClient: QueryClient): Promise<boolean> {
+  const running = restartWaits.get(queryClient)
+  if (running) return running
+  const wait = waitForEngineRestart()
+    .then((ready) => {
+      void queryClient.invalidateQueries({ queryKey: modulesKey })
+      void queryClient.invalidateQueries({ queryKey: queryKeys.serverInfo })
+      return ready
+    })
+    .finally(() => restartWaits.delete(queryClient))
+  restartWaits.set(queryClient, wait)
+  return wait
+}
+
+type RestartPhase = 'idle' | 'waiting' | 'stuck'
+
+/** The page's view of that wait: waiting, back (`onBack`), or given up ("stuck"). */
+function useRestartWait(onBack?: () => void) {
+  const queryClient = useQueryClient()
+  const [phase, setPhase] = useState<RestartPhase>('idle')
+  const start = () => {
+    setPhase('waiting')
+    void waitForRestart(queryClient).then((ready) => {
+      setPhase(ready ? 'idle' : 'stuck')
+      if (ready) onBack?.()
+    })
+  }
+  return { phase, start }
+}
 
 export type ModuleRowState =
   'alwaysOn' | 'addOn' | 'keptOn' | 'on' | 'off' | 'needsRestart'
@@ -82,6 +129,78 @@ const TONE: Record<RowState, 'success' | 'neutral' | 'warning' | 'accent'> = {
   willTurnOff: 'warning',
 }
 
+/**
+ * The restart that applies a module change stops every running session (#507). Apply
+ * reads how many run now: with none it applies at once; otherwise it asks first and says
+ * how many stop. A count it cannot read, or one the reply leaves out, still warns, without
+ * a number. Only the engine knows whether a change restarts it, so Apply always asks.
+ */
+function useRestartWarning(apply: () => void) {
+  const [warning, setWarning] = useState<{ count?: number } | null>(null)
+  const [reading, setReading] = useState(false)
+  // The dialog opens from code, not from a trigger, so focus goes back to the button
+  // that asked; a second click while the count is read reads nothing more.
+  const opener = useRef<HTMLElement | null>(null)
+  const request = (event: React.MouseEvent<HTMLElement>) => {
+    opener.current = event.currentTarget
+    if (reading) return
+    setReading(true)
+    modulesApi
+      .get()
+      .then((now) => {
+        const count = now.running_sessions
+        if (count === 0) apply()
+        else setWarning({ count })
+      })
+      .catch(() => setWarning({}))
+      .finally(() => setReading(false))
+  }
+  const dialog = (
+    <RestartWarning
+      warning={warning}
+      close={() => setWarning(null)}
+      apply={apply}
+      restoreFocus={(event) => {
+        event.preventDefault()
+        opener.current?.focus()
+      }}
+    />
+  )
+  return { request, reading, dialog }
+}
+
+function RestartWarning({
+  warning,
+  close,
+  apply,
+  restoreFocus,
+}: {
+  warning: { count?: number } | null
+  close: () => void
+  apply: () => void
+  restoreFocus: (event: Event) => void
+}) {
+  const { t } = useTranslation('settings')
+  return (
+    <ConfirmDialog
+      open={warning != null}
+      onOpenChange={(open) => !open && close()}
+      title={t('modules.restartWarning.title')}
+      description={
+        warning?.count == null
+          ? t('modules.restartWarning.unknown')
+          : t('modules.restartWarning.stop', { count: warning.count })
+      }
+      confirmLabel={t('modules.restartWarning.confirm')}
+      onCloseAutoFocus={restoreFocus}
+      onConfirm={() => {
+        close()
+        apply()
+      }}
+    />
+  )
+}
+
 /** Mounted for a system administrator only (Settings > Edition & modules); the engine
  * checks system:admin and the step-up itself. */
 export function ModulesSettings() {
@@ -93,7 +212,9 @@ export function ModulesSettings() {
     retry: false,
   })
   const [draft, setDraft] = useState<Set<string> | null>(null)
-  const [restarting, setRestarting] = useState(false)
+  const restart = useRestartWait(() => setDraft(null))
+  const restarting = restart.phase === 'waiting'
+  const applyReasonId = useId()
   // An add-on is named by its title from the activation catalog (Business), read only when a
   // module says an add-on runs it; a key the catalog does not name is shown as it is.
   const addOnRun = (query.data?.modules ?? []).some(byAddOn)
@@ -124,20 +245,6 @@ export function ModulesSettings() {
     return n
   }, [query.data, choice])
 
-  useEffect(() => {
-    if (!restarting) return
-    const ctl = new AbortController()
-    void waitForEngineRestart({ signal: ctl.signal }).then(() => {
-      if (ctl.signal.aborted) return
-      setRestarting(false)
-      setDraft(null)
-      void queryClient.invalidateQueries({ queryKey: modulesKey })
-      // The navigation and Home follow server-info modules_not_enabled.
-      void queryClient.invalidateQueries({ queryKey: queryKeys.serverInfo })
-    })
-    return () => ctl.abort()
-  }, [restarting, queryClient])
-
   const apply = usePrivilegedMutation<void, ModuleSelection>({
     mutationFn: () =>
       modulesApi.select(
@@ -151,11 +258,31 @@ export function ModulesSettings() {
       // Show what the engine answered; a read now could reach the stopping process.
       queryClient.setQueryData(modulesKey, { ...status, restarting: false })
       setDraft(null)
-      if (status.restarting) setRestarting(true)
+      if (status.restarting) restart.start()
       else
         void queryClient.invalidateQueries({ queryKey: queryKeys.serverInfo })
     },
   })
+
+  const warning = useRestartWarning(() => apply.mutate())
+
+  const applyReason = restarting
+    ? t('modules.restarting')
+    : restart.phase === 'stuck'
+      ? t('modules.stillRestarting')
+      : apply.isPending
+        ? t('modules.saving')
+        : query.isLoading
+          ? t('common:states.loading')
+          : query.isError
+            ? t(
+                isOpenCoreSeam(query.error)
+                  ? 'modules.unavailable'
+                  : 'modules.loadFailed',
+              )
+            : changes === 0
+              ? t('modules.noChanges')
+              : undefined
 
   return (
     <section
@@ -173,36 +300,34 @@ export function ModulesSettings() {
         <Button
           variant="primary"
           size="sm"
-          disabled={changes === 0 || apply.isPending || restarting}
-          onClick={() => apply.mutate()}
+          disabled={!!applyReason}
+          aria-describedby={applyReason ? applyReasonId : undefined}
+          onClick={warning.request}
         >
-          {apply.isPending ? <Spinner size="sm" aria-hidden /> : null}
+          {apply.isPending || warning.reading ? (
+            <Spinner size="sm" aria-hidden />
+          ) : null}
           {changes === 0
             ? t('modules.applyNone')
             : t('modules.apply', { count: changes })}
         </Button>
       </div>
-      {restarting ? (
+      {applyReason ? (
         <p
+          id={applyReasonId}
           role="status"
           className="flex items-center gap-2 text-caption text-text-2"
-          data-slot="engine-restarting"
+          data-slot={restarting ? 'engine-restarting' : undefined}
         >
-          <Spinner size="sm" aria-hidden />
-          {t('modules.restarting')}
+          {restarting ? <Spinner size="sm" aria-hidden /> : null}
+          {applyReason}
         </p>
       ) : null}
       {query.isLoading ? (
         <div className="flex justify-center py-6">
           <Spinner />
         </div>
-      ) : query.isError ? (
-        <p className="text-body text-text-2" role="status">
-          {isOpenCoreSeam(query.error)
-            ? t('modules.unavailable')
-            : t('modules.loadFailed')}
-        </p>
-      ) : (
+      ) : query.isError ? null : (
         <ul className="divide-y divide-line" data-slot="modules-list">
           {(query.data?.modules ?? []).map((m) => {
             // Always on, or run by an active add-on: the switch is locked on.
@@ -293,6 +418,7 @@ export function ModulesSettings() {
           {t('modules.pending', { count: changes })}
         </p>
       ) : null}
+      {warning.dialog}
     </section>
   )
 }
@@ -302,21 +428,18 @@ export function ModulesSettings() {
  * to the selection with the same PUT, wait for the restart, then read server-info so the
  * page and the navigation come back.
  */
-export function TurnOnModule({ module }: { module: string }) {
+export function TurnOnModule({
+  module,
+  plain = false,
+}: {
+  module: string
+  /** On the module's own page the view is already named: the button says "Turn on" at the
+   * default size. In a panel's one-line notice it names the module, small. */
+  plain?: boolean
+}) {
   const { t } = useTranslation('settings')
   const queryClient = useQueryClient()
-  const [restarting, setRestarting] = useState(false)
-  useEffect(() => {
-    if (!restarting) return
-    const ctl = new AbortController()
-    void waitForEngineRestart({ signal: ctl.signal }).then(() => {
-      if (ctl.signal.aborted) return
-      setRestarting(false)
-      void queryClient.invalidateQueries({ queryKey: modulesKey })
-      void queryClient.invalidateQueries({ queryKey: queryKeys.serverInfo })
-    })
-    return () => ctl.abort()
-  }, [restarting, queryClient])
+  const restart = useRestartWait()
   const turnOn = usePrivilegedMutation<void, ModuleSelection>({
     mutationFn: async () => {
       const current = await modulesApi.get()
@@ -328,13 +451,14 @@ export function TurnOnModule({ module }: { module: string }) {
     successMessage: t('modules.applied'),
     stepUpAction: 'modules',
     onDone: (status) => {
-      if (status.restarting) setRestarting(true)
+      if (status.restarting) restart.start()
       else
         void queryClient.invalidateQueries({ queryKey: queryKeys.serverInfo })
     },
   })
+  const warning = useRestartWarning(() => turnOn.mutate())
   const name = t(`modules.names.${module}`, { defaultValue: readable(module) })
-  if (restarting)
+  if (restart.phase === 'waiting')
     return (
       <p
         role="status"
@@ -344,15 +468,63 @@ export function TurnOnModule({ module }: { module: string }) {
         {t('modules.restarting')}
       </p>
     )
+  if (restart.phase === 'stuck')
+    return (
+      <p role="status" className="text-caption text-text-2">
+        {t('modules.stillRestarting')}
+      </p>
+    )
   return (
-    <Button
-      variant="primary"
-      size="sm"
-      disabled={turnOn.isPending}
-      onClick={() => turnOn.mutate()}
-    >
-      {turnOn.isPending ? <Spinner size="sm" aria-hidden /> : null}
-      {t('modules.turnOn', { name })}
-    </Button>
+    <>
+      <Button
+        variant="primary"
+        size={plain ? 'base' : 'sm'}
+        disabled={turnOn.isPending}
+        onClick={warning.request}
+      >
+        {turnOn.isPending || warning.reading ? (
+          <Spinner size="sm" aria-hidden />
+        ) : null}
+        {plain ? t('modules.turnOnPlain') : t('modules.turnOn', { name })}
+      </Button>
+      {warning.dialog}
+    </>
+  )
+}
+
+/**
+ * The one action of a view's page when its module is off. It turns the module on exactly as
+ * Settings does, unless that takes more than this one module: the engine runs a module with
+ * the modules it needs, so the page then says which ones come with it and links to
+ * Settings instead of acting. A read that fails leaves the choice to the engine, which
+ * answers the turn-on itself.
+ */
+export function TurnOnPage({ module }: { module: string }) {
+  const { t } = useTranslation('settings')
+  const query = useQuery({
+    queryKey: modulesKey,
+    queryFn: () => modulesApi.get(),
+    retry: false,
+  })
+  if (query.isLoading) return <Spinner size="sm" />
+  const modules = query.data?.modules ?? []
+  const also = (modules.find((m) => m.name === module)?.requires ?? []).filter(
+    (r) => !modules.find((m) => m.name === r)?.running,
+  )
+  if (also.length === 0) return <TurnOnModule module={module} plain />
+  const names = also
+    .map((r) => t(`modules.names.${r}`, { defaultValue: readable(r) }))
+    .join(', ')
+  return (
+    <p className="text-body text-text-2">
+      {t('modules.alsoTurnsOn', { names })}{' '}
+      <Link
+        to="/settings"
+        search={{ section: 'edition' } as never}
+        className="underline underline-offset-[3px] hover:text-text"
+      >
+        {t('modules.openEdition')}
+      </Link>
+    </p>
   )
 }

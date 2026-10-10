@@ -63,7 +63,7 @@ ROOT="${OLIVARES_CENSUS_ROOT:-$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)}"
 . "$ROOT/scripts/lib/exec-workdir.sh" || {
 	# Sin la lib el guion esta CIEGO, y eso es 2 — no el error crudo del shell. La bateria
 	# lo comprueba copiando este fichero solo a un arbol vacio.
-	echo "census-blind-verdict: NO HE PODIDO MIRAR: falta scripts/lib/exec-workdir.sh" >&2
+	echo "census-blind-verdict: COULD NOT LOOK: missing scripts/lib/exec-workdir.sh" >&2
 	exit 2
 }
 # ⛔ EL SUJETO EXTERNO SE DESCUBRE, NO SE ENUMERA. Antes esta línea era
@@ -93,10 +93,10 @@ clasificar() { # <rc> <salida>
 # como si fuera una fila más (50 líneas para 49 gates). Un informe que mete su error entre los datos
 # es peor que uno que falla.
 base=""
-censo() {
+census() {
 	local d rc out clase marca
 	base="$(olivares_pick_exec_workdir censo)" || {
-		echo "census: NO HE PODIDO MIRAR: no puedo crear el árbol señuelo" >&2
+		echo "census: COULD NOT LOOK: could not create the fixture tree" >&2
 		exit 2
 	}
 	trap 'rm -rf "$base"' EXIT HUP INT TERM
@@ -105,7 +105,7 @@ censo() {
 		local b; b="$(basename "$f")"
 		d="$base/$b.d"
 		mkdir -p "$d/scripts"
-		cp "$f" "$d/scripts/" && chmod +x "$d/scripts/$b" || { printf '%-34s COPIA\n' "$b"; continue; }
+		cp "$f" "$d/scripts/" && chmod +x "$d/scripts/$b" || { printf '%-34s COPY\n' "$b"; continue; }
 		# ⛔ LA LIBRERÍA VIAJA CON EL SEÑUELO, o el censo se mide a sí mismo. Sin esto, los gates que
 		#    sourcean `lib/git-env.sh` morían con «FATAL: cannot source …» y yo los clasificaba CRUDO:
 		#    seis filas que no hablaban de su sujeto sino de MI árbol incompleto. Medido el 2026-08-15,
@@ -116,32 +116,32 @@ censo() {
 		rm -rf "$d"
 		clase="$(clasificar "$rc" "$out")"
 		marca=""
-		if grep -qF "$SUBJECT_MARK" "$f"; then marca="  [sujeto-externo declarado: pasar sin sujeto es correcto]"; fi
+		if grep -qF "$SUBJECT_MARK" "$f"; then marca="  [external subject declared: passing without a subject is valid]"; fi
 		printf '%-34s %-12s %s%s\n' "$b" "$clase" "$(printf '%s' "$out" | tail -1 | cut -c1-46)" "$marca"
 	done
 }
 
 self_test() {
 	# ⛔ Controles FABRICADOS, porque un censo que no distingue sus propias clases no mide nada.
-	local t ok=0 ko=0 salida
+	local t ok=0 ko=0 output
 	t="$(olivares_pick_exec_workdir censo)"
 	mkdir -p "$t/scripts"
 	printf '#!/usr/bin/env bash\nset -euo pipefail\nexit 0\n'                              > "$t/scripts/check-a-pasa.sh"
-	printf '#!/usr/bin/env bash\nset -euo pipefail\necho "UNVERIFIED: nada" >&2\nexit 2\n' > "$t/scripts/check-b-dos.sh"
-	printf '#!/usr/bin/env bash\nset -euo pipefail\necho "FAIL — falta x" >&2\nexit 1\n'   > "$t/scripts/check-c-uno.sh"
+	printf '#!/usr/bin/env bash\nset -euo pipefail\necho "UNVERIFIED: nothing" >&2\nexit 2\n' > "$t/scripts/check-b-dos.sh"
+	printf '#!/usr/bin/env bash\nset -euo pipefail\necho "FAIL — missing x" >&2\nexit 1\n'   > "$t/scripts/check-c-uno.sh"
 	printf '#!/usr/bin/env bash\nset -euo pipefail\ncd /no/existe\n'                       > "$t/scripts/check-d-crudo.sh"
 	# ⛔ Y LA DECLARACIÓN DE SUJETO SE PRUEBA EN LAS DOS DIRECCIONES. Con marca, el censo debe
 	#    DECIRLO —para que un verde sin sujeto no se lea como hallazgo—; sin marca, NO debe
 	#    inventársela. Sin el segundo caso, «marca los externos» se cumpliría marcándolos todos.
 	printf '#!/usr/bin/env bash\n# CENSUS-SUBJECT: external\nset -euo pipefail\nexit 0\n'      > "$t/scripts/check-e-externo.sh"
 	( cd "$t" && git init -q -b main . && git add -A ) >/dev/null 2>&1
-	salida="$(OLIVARES_CENSUS_ROOT="$t" bash "$0" --run 2>&1)"
+	output="$(OLIVARES_CENSUS_ROOT="$t" bash "$0" --run 2>&1)"
 	espera() { # <fichero> <clase esperada>
-		if printf '%s' "$salida" | grep -qE "^$1 +$2"; then
+		if printf '%s' "$output" | grep -qE "^$1 +$2"; then
 			ok=$((ok + 1)); printf '  ok    %-40s %s\n' "$1" "$2"
 		else
-			ko=$((ko + 1)); printf '  FALLO %-40s esperaba %s · dijo: %s\n' "$1" "$2" \
-				"$(printf '%s' "$salida" | grep -E "^$1" | head -1)"
+			ko=$((ko + 1)); printf '  FAIL  %-40s expected %s · got: %s\n' "$1" "$2" \
+				"$(printf '%s' "$output" | grep -E "^$1" | head -1)"
 		fi
 	}
 	echo "census-blind-verdict self-test"
@@ -149,25 +149,25 @@ self_test() {
 	espera check-b-dos.sh    RECHAZA-2
 	espera check-c-uno.sh    RECHAZA-1
 	espera check-d-crudo.sh  CRUDO-1
-	if printf '%s' "$salida" | grep -qE '^check-e-externo\.sh +PASA-CIEGO.*sujeto-externo declarado'; then
-		ok=$((ok + 1)); printf '  ok    %-40s %s\n' 'check-e-externo.sh' 'PASA-CIEGO + marca declarada'
+	if printf '%s' "$output" | grep -qE '^check-e-externo\.sh +PASA-CIEGO.*external subject declared'; then
+		ok=$((ok + 1)); printf '  ok    %-40s %s\n' 'check-e-externo.sh' 'PASA-CIEGO + declared marker'
 	else
-		ko=$((ko + 1)); printf '  FALLO %-40s sin la marca: %s\n' 'check-e-externo.sh' \
-			"$(printf '%s' "$salida" | grep -E '^check-e-externo' | head -1)"
+		ko=$((ko + 1)); printf '  FAIL  %-40s missing the marker: %s\n' 'check-e-externo.sh' \
+			"$(printf '%s' "$output" | grep -E '^check-e-externo' | head -1)"
 	fi
 	# ⛔ CONTROL NEGATIVO: el que NO la declara no puede recibirla.
-	if printf '%s' "$salida" | grep -E '^check-a-pasa\.sh' | grep -q 'sujeto-externo'; then
-		ko=$((ko + 1)); printf '  FALLO %-40s recibió una marca que no declara\n' 'check-a-pasa.sh'
+	if printf '%s' "$output" | grep -E '^check-a-pasa\.sh' | grep -q 'external subject'; then
+		ko=$((ko + 1)); printf '  FAIL  %-40s received a marker it does not declare\n' 'check-a-pasa.sh'
 	else
-		ok=$((ok + 1)); printf '  ok    %-40s %s\n' 'check-a-pasa.sh' 'sin declararla, no la recibe'
+		ok=$((ok + 1)); printf '  ok    %-40s %s\n' 'check-a-pasa.sh' 'without declaring it, it does not receive it'
 	fi
 	rm -rf "$t"
-	printf 'census-blind-verdict self-test: %d pasan, %d fallan\n' "$ok" "$ko"
+	printf 'census-blind-verdict self-test: %d passed, %d failed\n' "$ok" "$ko"
 	[ "$ko" -eq 0 ]
 }
 
 case "${1:-}" in
 --selftest) self_test ;;
---run | '') censo ;;
-*) echo "uso: $0 [--run|--selftest]" >&2; exit 2 ;;
+--run | '') census ;;
+*) echo "usage: $0 [--run|--selftest]" >&2; exit 2 ;;
 esac

@@ -68,7 +68,7 @@ t = open(p, encoding="utf-8").read()
 # Un mutante no aplicado se lee identico a un superviviente, asi que se comprueba.
 import re
 t2, n = re.subn(r"(measured-og-png: \d+)", r"\1\nmeasured-og-per-page: 14", t, count=1)
-assert n == 1, "el mutante NO se pudo aplicar: no hay linea measured-og-png"
+assert n == 1, "the mutant could NOT be applied: no measured-og-png line"
 t = t2
 open(p, "w", encoding="utf-8").write(t)
 PY

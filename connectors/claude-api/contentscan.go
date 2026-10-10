@@ -932,9 +932,10 @@ func textVariants(text string, charge func(int) bool) (variants []string, unsafe
 		}
 		if decoded, isText := decodeBase64(candidate); isText {
 			add(string(decoded))
-		} else if strings.ContainsAny(candidate, "=+/_") {
-			// Padded/alternate-alphabet candidates are explicit enough to treat a failed or
-			// binary decode as opaque. Pure alphanumeric prose remains ordinary text.
+		} else if strings.ContainsAny(candidate, "=+") {
+			// Padding and '+' are explicit enough to treat a failed or binary decode as
+			// opaque. '/', '_' and '-' are also path, URL and identifier separators, so a
+			// candidate carrying only those, like pure alphanumeric prose, remains text.
 			unsafe = true
 		}
 		return true

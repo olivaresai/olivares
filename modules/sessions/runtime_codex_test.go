@@ -21,6 +21,8 @@ import (
 
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/core/store"
+	"github.com/olivaresai/olivares/modules/sessions/confine"
+	"github.com/olivaresai/olivares/modules/skills"
 )
 
 // The first-slice ACCEPTANCE, through the ACTUAL sessions runtime.
@@ -76,7 +78,7 @@ func codexHarness(t *testing.T, authSource string, opts ...Option) (*Module, sto
 
 func codexLaunch(t *testing.T, m *Module, tenant model.TenantID, prof ProviderProfile) (runDTO, error) {
 	t.Helper()
-	return m.createRun(context.Background(), tenant, CreateRunParams{
+	return createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser,
 		ProviderProfileRef: prof.Ref,
@@ -380,7 +382,7 @@ func TestCodexRuntimeRefusesHomeOverridesFromEveryDirection(t *testing.T) {
 	// From the caller's env_allow — every provider's home, not only this driver's.
 	for _, name := range []string{"HOME", envCodexHome, envClaudeConfigDir, envGrokHome} {
 		m, _, tenant, prof := codexHarness(t, AuthSourceAccountHome)
-		_, err := m.createRun(context.Background(), tenant, CreateRunParams{
+		_, err := createProfiledTestRun(t, m, context.Background(), tenant, CreateRunParams{
 			Transport: TransportStreamJSON, Isolation: IsolationNative,
 			Actor: "user:u1", ActorKind: model.ActorUser,
 			ProviderProfileRef: prof.Ref, EnvAllow: []string{name},
@@ -854,7 +856,7 @@ func TestCodexRuntimePassesAProviderAdvertisedEffortThroughUntouched(t *testing.
 	m, _, tenant, prof := codexHarness(t, AuthSourceAccountHome)
 	record := setCodexFixture(t, prof, codexFixture{ThreadID: "thread-effort", Account: "apikey"})
 	ctx := context.Background()
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser,
 		ProviderProfileRef: prof.Ref, Effort: "ultra",
@@ -881,7 +883,7 @@ func TestCodexRuntimePassesAProviderAdvertisedEffortThroughUntouched(t *testing.
 		Driver: providerDriverClaude, ConfigHome: claudeConfig, UserHome: claudeHome,
 		DisplayName: "claude-effort",
 	})
-	if _, err := m.createRun(ctx, tenant, CreateRunParams{
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser,
 		ProviderProfileRef: claudeProfile.Ref, Effort: "ultra",
@@ -957,7 +959,7 @@ func TestCodexRuntimeAgainstTheOfficialEmptyHomeSubprocess(t *testing.T) {
 		DisplayName: "official-empty-home", AuthSource: AuthSourceAccountHome,
 	})
 	ctx := context.Background()
-	dto, err := m.createRun(ctx, tenant, CreateRunParams{
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, CreateRunParams{
 		Transport: TransportStreamJSON, Isolation: IsolationNative,
 		Actor: "user:u1", ActorKind: model.ActorUser, ProviderProfileRef: prof.Ref,
 	})
@@ -987,6 +989,64 @@ func TestCodexRuntimeAgainstTheOfficialEmptyHomeSubprocess(t *testing.T) {
 		t.Fatalf("state after stop = %q", stopped.State)
 	}
 	waitFor(t, "the official child is gone", func() bool { return !processRunning(int(*dto.PID)) })
+}
+
+func TestRuntimeSkillsOfficialCodexListsDeliveredSkill(t *testing.T) {
+	if state := confine.Probe(); state.Mode != confine.ModeLandlock || state.ABI < 3 {
+		t.Skip("truncate-protected Landlock required")
+	}
+	bin, err := exec.LookPath("codex")
+	if err != nil {
+		t.Skip("official Codex is not installed")
+	}
+	m, _, tenant, _ := newRuntimeHarness(t, WithRunner(NewProcRunner()), WithProviderDriver(NewCodexDriver()), WithDriverProgram(providerDriverCodex, bin), WithProductVersion("test"), WithConfinement([]string{t.TempDir()}, true), WithDriverTimeouts(60*time.Second, 5*time.Second))
+	m.UseExecutionEnvironmentRef(testEnvRef)
+	profile := mustCreateProfile(t, m, tenant, CreateProfileInput{Driver: providerDriverCodex, ConfigHome: t.TempDir(), UserHome: t.TempDir(), DisplayName: "native skills", AuthSource: AuthSourceAccountHome})
+	body := []byte("---\nname: research\ndescription: Review primary sources.\n---\nRead support.md.\n")
+	if err := m.UseSessionSkills(sessionSkillsFixture{selection: skills.Selection{Digest: "fixture", Members: []skills.SelectedMember{{Name: "research"}}}, files: []skills.DeliveryFile{{Path: "research/SKILL.md", Bytes: body, Mode: 0444}, {Path: "research/support.md", Bytes: []byte("reviewed support"), Mode: 0444}}}, t.TempDir()); err != nil {
+		t.Fatal(err)
+	}
+	run, err := createProfiledTestRun(t, m, t.Context(), tenant, CreateRunParams{Transport: TransportStreamJSON, Isolation: IsolationNative, ProviderProfileRef: profile.Ref, Actor: "user:u1", ActorKind: model.ActorUser})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = m.stopRun(context.Background(), tenant, run.RunRef, "user:u1", model.ActorUser) })
+	live, found := m.rt.getLive(tenant, run.RunRef)
+	if !found {
+		t.Fatal("native runtime not live")
+	}
+	native := live.session.(*codexSession)
+	raw, err := native.conn.call(t.Context(), "skills/list", map[string]any{"cwds": []string{run.WorkspacePath}, "forceReload": true}, 20*time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var result struct {
+		Data []struct {
+			Skills []struct {
+				Name string `json:"name"`
+				Path string `json:"path"`
+			} `json:"skills"`
+			Errors []json.RawMessage `json:"errors"`
+		} `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range result.Data {
+		if len(item.Errors) != 0 {
+			t.Fatalf("native skill errors: %s", raw)
+		}
+		for _, skill := range item.Skills {
+			if skill.Name == "research" {
+				got, err := os.ReadFile(skill.Path)
+				if err != nil || !bytes.Equal(got, body) || pathsOverlap(skill.Path, run.WorkspacePath) {
+					t.Fatalf("native discovered file: %q %v", skill.Path, err)
+				}
+				return
+			}
+		}
+	}
+	t.Fatalf("official Codex did not list the delivered skill: %s", raw)
 }
 
 func containsAll(haystack []string, needles ...string) bool {

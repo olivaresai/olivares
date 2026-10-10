@@ -21,16 +21,15 @@ import (
 
 // These exercise the role stage against a REAL PostgreSQL, under a real executor
 // identity, because the property the repair exists for is not a property of the text
-// it renders: it is which statements a 16.15 server accepts from a maintenance role
+// it renders: it is which statements the measured server accepts from a maintenance role
 // that is not a superuser. The planning half is provisionrole_attributes_test.go and
 // runs without a server; neither file stands in for the other.
 //
 // Scope, stated because the surrounding command is much larger than this: nothing here
 // runs ProvisionPostgres, ensureDatabase, any grant stage or any boot path. The helper
 // is driven through the transaction interface production hands it, so what is measured
-// is the ROLE STAGE and nothing downstream. No claim is made about PostgreSQL 15, 17 or
-// 18 or about any managed provider — the arrangements were executed on the version this
-// run reports and on no other.
+// is the ROLE STAGE and nothing downstream. Assertions follow the measured major's
+// native membership and CREATEROLE rules; no managed-provider claim is made.
 //
 // Every role is created fresh with a unique name and dropped again. Passwords are
 // synthetic values derived from that name; they are never printed, and no credential
@@ -433,9 +432,14 @@ func (l *roleLab) wantConverged(name string, bypassRLS bool) {
 // member of what, granted by whom, and the three options 16 stores per membership.
 func (l *roleLab) memberships() string {
 	l.t.Helper()
+	options := "m.admin_option, m.inherit_option, m.set_option"
+	if drMeasuredMajor(l.t, l.super) < 16 {
+		// PG15 inheritance belongs to the member role; SET is always allowed.
+		options = "m.admin_option, me.rolinherit, TRUE"
+	}
 	rows, err := l.super.QueryContext(l.ctx(),
 		`SELECT ro.rolname::pg_catalog.text, me.rolname::pg_catalog.text, gr.rolname::pg_catalog.text,
-		        m.admin_option, m.inherit_option, m.set_option
+		        `+options+`
 		   FROM pg_catalog.pg_auth_members AS m
 		   JOIN pg_catalog.pg_roles AS ro ON ro.oid = m.roleid
 		   JOIN pg_catalog.pg_roles AS me ON me.oid = m.member
@@ -659,11 +663,19 @@ func TestPostgresRoleStageRerunNeedsAdminAuthorityEvenWithZeroDrift(t *testing.T
 		watch.inner = tx
 		return upsertRole(ctx, watch, target, attrsUnprivileged, "")
 	})
-	if err == nil {
-		t.Fatal("a zero-drift rerun was accepted from an executor with no ADMIN option on the target")
-	}
-	if !strings.Contains(err.Error(), roleStageAttributes) || !strings.Contains(err.Error(), "SQLSTATE 42501") {
-		t.Errorf("the refusal does not name the stage and the SQLSTATE: %v", err)
+	if drMeasuredMajor(t, lab.super) < 16 {
+		// PG15 grants CREATEROLE this authority without ADMIN OPTION. Measure
+		// the server's native contract instead of imposing PG16's permission rule.
+		if err != nil {
+			t.Fatalf("PG15 CREATEROLE convergence: %v", err)
+		}
+	} else {
+		if err == nil {
+			t.Fatal("a zero-drift rerun was accepted from an executor with no ADMIN option on the target")
+		}
+		if !strings.Contains(err.Error(), roleStageAttributes) || !strings.Contains(err.Error(), "SQLSTATE 42501") {
+			t.Errorf("the refusal does not name the stage and the SQLSTATE: %v", err)
+		}
 	}
 	if !watch.issued("ALTER ROLE " + target + " WITH LOGIN") {
 		t.Errorf("no role administration was attempted at all; the statements were %q", watch.stmts)

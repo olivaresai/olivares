@@ -5,11 +5,12 @@ import { useTranslation } from 'react-i18next'
 import { ErrorState } from '@/components/ui/error-state'
 
 /** Root errorComponent — catches a render/loader error anywhere in the tree (a 500
- * equivalent for the SPA). Offers a reset so the operator isn't stuck. */
+ * equivalent for the SPA). Offers a reset so the operator isn't stuck. The router
+ * passes the caught value as `unknown`; this page does not read it. */
 export function RouteErrorPage({
   reset,
 }: {
-  error: Error
+  error: unknown
   reset?: () => void
 }) {
   const { t } = useTranslation('errors')

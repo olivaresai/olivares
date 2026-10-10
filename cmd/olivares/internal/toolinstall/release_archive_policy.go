@@ -13,11 +13,14 @@ import (
 const (
 	DriverOpenCode                  = "opencode"
 	DriverOllama                    = "ollama"
+	DriverGemini                    = "gemini-cli"
+	LayoutIDGeminiBundleV1          = "gemini-bundle-v1"
 	VerificationGitHubReleaseSHA256 = "github-release-sha256"
 	PackagePolicyReleaseArchiveV1   = "github-release-archive-v1"
 	LayoutIDOpenCodeArchiveV1       = "opencode-archive-v1"
 	LayoutIDOllamaArchiveV1         = "ollama-runtime-archive-v1"
 	LayoutIDCodexArchiveV1          = "codex-archive-v1"
+	LayoutIDCodexReleasePackageV1   = "codex-release-package-v1"
 	maxReleaseArchiveBytes          = int64(2 << 30)
 	maxOllamaExpandedBytes          = int64(8 << 30)
 )
@@ -30,6 +33,20 @@ func releaseRepository(driver string) string {
 		return "ollama/ollama"
 	case DriverCodex:
 		return "openai/codex"
+	case DriverGemini:
+		return "google-gemini/gemini-cli"
+	}
+	return ""
+}
+
+// releaseChecksumFile is the sha256sum-format file the repository attaches to every
+// release, or "" when it attaches none (OpenCode's digests are only in its API metadata).
+func releaseChecksumFile(driver string) string {
+	switch driver {
+	case DriverCodex:
+		return "codex-package_SHA256SUMS"
+	case DriverOllama:
+		return "sha256sum.txt"
 	}
 	return ""
 }
@@ -43,8 +60,11 @@ func releaseTagPrefix(driver string) string {
 	return "v"
 }
 func releaseAssetName(driver, vendor string) string {
+	if driver == DriverGemini {
+		return "gemini-cli-bundle.zip"
+	}
 	if driver == DriverCodex {
-		return "codex-" + vendor + ".tar.gz"
+		return "codex-package-" + vendor + ".tar.gz"
 	}
 	if driver == DriverOpenCode {
 		return "opencode-" + vendor + ".tar.gz"
@@ -56,26 +76,54 @@ func releaseArchiveLayout(driver string) ExpectedLayout {
 		{Path: "bin", Kind: MemberKindDirectory, Role: MemberRoleArchiveOnly, FinalMode: v2ModeExec},
 		{Path: "bin/" + driver, Kind: MemberKindRegular, Role: MemberRoleArchiveOnly, FinalMode: v2ModeExec}}, Limits: ExtractionLimits{MaxCompressedBytes: 128 << 20, MaxExpandedBytes: 512 << 20, MaxMembers: 2, MaxMemberBytes: 512 << 20}}
 	if driver == DriverCodex {
-		// One static binary per platform (about 290 MB expanded), placed as bin/codex.
-		layout.ID = LayoutIDCodexArchiveV1
-		layout.Limits = ExtractionLimits{MaxCompressedBytes: 256 << 20, MaxExpandedBytes: 1 << 30, MaxMembers: 2, MaxMemberBytes: 1 << 30}
+		// Codex needs codex-code-mode-host beside it; the release package carries both.
+		layout.ID = LayoutIDCodexReleasePackageV1
+		layout.Members = append(layout.Members, ExpectedMember{Path: "bin/codex-code-mode-host", Kind: MemberKindRegular, Role: MemberRoleArchiveOnly, FinalMode: v2ModeExec})
+		layout.Limits = ExtractionLimits{MaxCompressedBytes: 256 << 20, MaxExpandedBytes: 1 << 30, MaxMembers: 128, MaxMemberBytes: 1 << 30}
 	}
 	if driver == DriverOllama {
 		layout.ID = LayoutIDOllamaArchiveV1
 		layout.Members = append(layout.Members, ExpectedMember{Path: "lib", Kind: MemberKindDirectory, Role: MemberRoleArchiveOnly, FinalMode: v2ModeExec}, ExpectedMember{Path: "lib/ollama", Kind: MemberKindDirectory, Role: MemberRoleArchiveOnly, FinalMode: v2ModeExec})
 		layout.Limits = ExtractionLimits{MaxCompressedBytes: maxReleaseArchiveBytes, MaxExpandedBytes: maxOllamaExpandedBytes, MaxMembers: 512, MaxMemberBytes: 2 << 30}
 	}
+	if driver == DriverGemini {
+		layout.ID, layout.EntryPoint = LayoutIDGeminiBundleV1, "bin/gemini"
+		layout.Members = []ExpectedMember{
+			{Path: "bin", Kind: MemberKindDirectory, Role: MemberRoleArchiveOnly, FinalMode: v2ModeExec},
+			{Path: "bin/gemini", Kind: MemberKindRegular, Role: MemberRoleArchiveOnly, FinalMode: v2ModeExec},
+			{Path: "lib", Kind: MemberKindDirectory, Role: MemberRoleArchiveOnly, FinalMode: v2ModeExec},
+			{Path: "lib/gemini", Kind: MemberKindDirectory, Role: MemberRoleArchiveOnly, FinalMode: v2ModeExec},
+			{Path: "lib/gemini/gemini.js", Kind: MemberKindRegular, Role: MemberRoleArchiveOnly, FinalMode: v2ModeFile},
+		}
+		layout.Limits = ExtractionLimits{MaxCompressedBytes: 128 << 20, MaxExpandedBytes: 512 << 20, MaxMembers: 1024, MaxMemberBytes: 128 << 20}
+	}
 	return layout
 }
 func releaseArchiveLayoutID(id string) bool {
-	return id == LayoutIDOpenCodeArchiveV1 || id == LayoutIDOllamaArchiveV1 || id == LayoutIDCodexArchiveV1
+	return id == LayoutIDGeminiBundleV1 || id == LayoutIDOpenCodeArchiveV1 || id == LayoutIDOllamaArchiveV1 || id == LayoutIDCodexArchiveV1 || id == LayoutIDCodexReleasePackageV1
+}
+
+// codexArchiveV1 is the earlier Codex plan: the single-binary archive. Installs made
+// with it keep their receipts valid; new plans use the release package.
+func codexArchiveV1(vendor string) (ExpectedLayout, string) {
+	layout := ExpectedLayout{ID: LayoutIDCodexArchiveV1, Variant: DriverCodex, EntryPoint: "bin/codex", Members: []ExpectedMember{
+		{Path: "bin", Kind: MemberKindDirectory, Role: MemberRoleArchiveOnly, FinalMode: v2ModeExec},
+		{Path: "bin/codex", Kind: MemberKindRegular, Role: MemberRoleArchiveOnly, FinalMode: v2ModeExec}}, Limits: ExtractionLimits{MaxCompressedBytes: 256 << 20, MaxExpandedBytes: 1 << 30, MaxMembers: 2, MaxMemberBytes: 1 << 30}}
+	return layout, "codex-" + vendor + ".tar.gz"
 }
 func validateReleaseArchiveLayout(layout ExpectedLayout) error {
 	driver := DriverOpenCode
 	switch layout.ID {
+	case LayoutIDGeminiBundleV1:
+		driver = DriverGemini
 	case LayoutIDOllamaArchiveV1:
 		driver = DriverOllama
 	case LayoutIDCodexArchiveV1:
+		if v1, _ := codexArchiveV1(""); reflect.DeepEqual(layout, v1) {
+			return nil
+		}
+		return refuse(KindInvalidRequest, "release archive layout must match its fixed bounded policy")
+	case LayoutIDCodexReleasePackageV1:
 		driver = DriverCodex
 	}
 	if !reflect.DeepEqual(layout, releaseArchiveLayout(driver)) {
@@ -104,19 +152,28 @@ func (s SelectionV2) validateReleaseArchiveSelection() error {
 	if s.FetchedObject.DigestState != DigestStateExact || s.FetchedObject.SizeState != SizeStateExact || s.FetchedObject.MaxSize != s.Layout.Limits.MaxCompressedBytes {
 		return refuse(KindInvalidRequest, "release archive checksum and size must be exact and bounded")
 	}
-	if !reflect.DeepEqual(s.Layout, releaseArchiveLayout(s.Driver)) {
+	asset := releaseAssetName(s.Driver, vendor)
+	if v1, v1Asset := codexArchiveV1(vendor); s.Driver == DriverCodex && reflect.DeepEqual(s.Layout, v1) {
+		asset = v1Asset
+	} else if !reflect.DeepEqual(s.Layout, releaseArchiveLayout(s.Driver)) {
 		return refuse(KindInvalidRequest, "release archive layout does not match its driver")
 	}
 	api := "https://api.github.com/repos/" + repo + "/releases/"
 	tag := releaseTagPrefix(s.Driver) + s.Version
-	metadata := api + "tags/" + tag
-	if s.Source.Checksums != (URLRef{State: URLStatePresent, URL: metadata}) {
-		return refuse(KindInvalidRequest, "checksum metadata must use the pinned official repository API")
+	download := "https://github.com/" + repo + "/releases/download/" + tag + "/"
+	// The checksums are the tag's API metadata or the release's own checksum file;
+	// the latest pointer is of the same origin, and an exact version's is the
+	// checksum document itself.
+	latest := api + "latest"
+	if file := releaseChecksumFile(s.Driver); file != "" && s.Source.Checksums.URL == download+file {
+		latest = "https://github.com/" + repo + "/releases/latest"
+	} else if s.Source.Checksums.URL != api+"tags/"+tag {
+		return refuse(KindInvalidRequest, "checksums must be the release's metadata on the pinned official repository API or its own checksum file")
 	}
-	if s.Source.Pointer.State != URLStatePresent || (s.Source.Pointer.URL != api+"latest" && s.Source.Pointer.URL != metadata) {
-		return refuse(KindInvalidRequest, "release pointer is outside the pinned official repository API")
+	if s.Source.Checksums.State != URLStatePresent || s.Source.Pointer.State != URLStatePresent || (s.Source.Pointer.URL != latest && s.Source.Pointer.URL != s.Source.Checksums.URL) {
+		return refuse(KindInvalidRequest, "release pointer is outside the pinned official repository")
 	}
-	pkg := "https://github.com/" + repo + "/releases/download/" + tag + "/" + releaseAssetName(s.Driver, vendor)
+	pkg := download + asset
 	if s.Source.Package != (URLRef{State: URLStatePresent, URL: pkg}) {
 		return refuse(KindInvalidRequest, "archive URL is outside the selected official release")
 	}
@@ -145,11 +202,14 @@ func releaseArchivePath(raw string) (string, error) {
 	return raw, nil
 }
 func releaseArchiveMember(driver, name string) bool {
+	if driver == DriverGemini {
+		return name == "bin" || name == "bin/gemini" || name == "lib" || name == "lib/gemini" || strings.HasPrefix(name, "lib/gemini/")
+	}
 	if driver == DriverOpenCode {
 		return name == "bin" || name == "bin/opencode"
 	}
 	if driver == DriverCodex {
-		return name == "bin" || name == "bin/codex"
+		return name == "bin" || name == "bin/codex" || name == "bin/codex-code-mode-host"
 	}
 	return name == "bin" || name == "bin/ollama" || name == "lib" || name == "lib/ollama" || strings.HasPrefix(name, "lib/ollama/")
 }

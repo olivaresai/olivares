@@ -34,13 +34,13 @@ func TestUpgradeRefusesAManifestSignedForAnotherChannel(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go toolchain not available to build stub binaries")
 	}
-	v1 := buildStub(t, "26.7.0")
-	v2 := buildStub(t, "26.8.0")
+	v1 := buildStub(t, "26.700")
+	v2 := buildStub(t, "26.800")
 
 	dataDir := t.TempDir()
 	installDevLicense(t, dataDir)
 	// The fixture signs and serves a STABLE manifest; the gate route ignores `channel`.
-	f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
+	f := newUpdFixture(t, "26.800", "26.600", v2)
 	target := writeTarget(t, v1)
 
 	out, err := runUpgradeCmd(t, "--enterprise", "--download-protocol", "legacy", "--token", "tkn", "--endpoint", f.server.URL,
@@ -62,7 +62,7 @@ func TestUpgradeRefusesAManifestSignedForAnotherChannel(t *testing.T) {
 	}
 	// AND THE BINARY MUST NOT HAVE MOVED. A refusal that still swapped the file would be the
 	// worst outcome of the three, and only this assertion can tell the difference.
-	if got := runsVersion(t, target); !strings.Contains(got, "26.7.0") {
+	if got := runsVersion(t, target); !strings.Contains(got, "26.700") {
 		t.Fatalf("the target was replaced despite the refusal: %q", got)
 	}
 }
@@ -73,12 +73,12 @@ func TestUpgradeStillAcceptsTheDefaultStableChannel(t *testing.T) {
 	if _, err := exec.LookPath("go"); err != nil {
 		t.Skip("go toolchain not available to build stub binaries")
 	}
-	v1 := buildStub(t, "26.7.0")
-	v2 := buildStub(t, "26.8.0")
+	v1 := buildStub(t, "26.700")
+	v2 := buildStub(t, "26.800")
 
 	dataDir := t.TempDir()
 	installDevLicense(t, dataDir)
-	f := newUpdFixture(t, "26.8.0", "26.6.0", v2)
+	f := newUpdFixture(t, "26.800", "26.600", v2)
 	target := writeTarget(t, v1)
 
 	// No --channel at all: the default is stable and the fixture serves stable.
@@ -87,7 +87,7 @@ func TestUpgradeStillAcceptsTheDefaultStableChannel(t *testing.T) {
 		"--os", "linux", "--arch", "amd64", "--yes"); err != nil {
 		t.Fatalf("the default channel was refused by the new binding: %v", err)
 	}
-	if got := runsVersion(t, target); !strings.Contains(got, "26.8.0") {
+	if got := runsVersion(t, target); !strings.Contains(got, "26.800") {
 		t.Fatalf("target not upgraded: %q", got)
 	}
 }

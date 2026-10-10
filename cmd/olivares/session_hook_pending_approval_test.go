@@ -18,6 +18,7 @@ import (
 	"github.com/olivaresai/olivares/core/auth"
 	"github.com/olivaresai/olivares/core/model"
 	"github.com/olivaresai/olivares/modules/sessions"
+	"github.com/olivaresai/olivares/modules/sessions/hookpep"
 )
 
 type approvalProjectionProcess struct {
@@ -60,15 +61,14 @@ func TestSessionToolApprovalAppearsAndClearsOnTerminalWait(t *testing.T) {
 				tenant := model.TenantID(h.tenantA)
 				m := h.set.sessions
 				sessions.WithRunner(approvalProjectionRunner{})(m)
-				m.EnableProfiledLaunches()
 				m.UseExecutionEnvironmentRef("pending-approval-test")
 				credentials := newSessionHookCredentials(h.authr, h.st, m, h.set.gov)
 				var token string
-				m.UseLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, in sessions.LaunchIntent) (sessions.LaunchDecision, error) {
+				sessions.WithLaunchGate(approvalProjectionLaunchGate(func(ctx context.Context, tenant model.TenantID, in sessions.LaunchIntent) (sessions.LaunchDecision, error) {
 					var err error
 					token, err = credentials.mint(ctx, tenant, in)
 					return sessions.LaunchDecision{Allowed: err == nil}, err
-				}))
+				}))(m)
 				var profile struct {
 					Ref string `json:"profile_ref"`
 				}
@@ -85,7 +85,7 @@ func TestSessionToolApprovalAppearsAndClearsOnTerminalWait(t *testing.T) {
 				service := h.set.gov.EngineApprovals()
 				h.set.gov.UseApprovalCapacity(h.authr.ApprovalCapacity)
 				h.set.gov.UseApprovalAuthority(h.authr, auth.NewAuthorizer(h.set.gov.RequestEvaluator(), auth.WithScopedGrants(h.set.gov.ScopedGrants())))
-				d := &claudeHookDecider{defaultPolicy: &hookPolicyDoc{Default: "allow"}, authr: credentials, eval: h.set.gov.Evaluator(), scoped: h.set.gov.ScopedGrants(), approvals: service, approvalWait: m.BeginApprovalWait, store: h.st, clock: time.Now, log: discardLog()}
+				d := newClaudeHookDecider(&hookpep.Decider{DefaultPolicy: &hookpep.PolicyDoc{Default: "allow"}, Authr: credentials, Eval: h.set.gov.Evaluator(), Authz: harnessAuthz(h), Scoped: h.set.gov.ScopedGrants(), Approvals: service, ApprovalWait: m.BeginApprovalWait, Store: h.st, Clock: time.Now, Log: discardLog()})
 				ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
 				defer cancel()
 				req := httptest.NewRequest(http.MethodPost, "/", bytes.NewBufferString(`{"hook_event_name":"PreToolUse","tool_name":"Bash","tool_input":{"command":"printf pending-projection"}}`)).WithContext(ctx)
@@ -106,7 +106,7 @@ func TestSessionToolApprovalAppearsAndClearsOnTerminalWait(t *testing.T) {
 						return
 					}
 					b := newApprovalBridge(approvalBridgeConfig{}, discardLog())
-					b.localProposer = service
+					b.LocalProposer = service
 					providerAnswer, providerErr = (providerApprovalAdapter{bridge: b, approvalWait: m.BeginApprovalWait}).Approve(ctx, tenant, sessions.ProviderApprovalRequest{
 						Driver: "codex", RunRef: run.Ref, SessionRef: scope.SessionRef, Principal: p,
 						TurnID: "turn-wait", Method: "item/commandExecution/requestApproval", Kind: "command_execution",
@@ -185,26 +185,41 @@ func TestSessionToolApprovalAppearsAndClearsOnTerminalWait(t *testing.T) {
 					t.Fatal("terminal wait did not finish")
 				}
 				assertViews("")
+				if outcome == "approve" {
+					// The approved call spent the approval once: another consumer is a replay.
+					again, err := service.Consume(t.Context(), tenant, ref, "another-consumer", "")
+					if err != nil || again.Granted || !again.Replay {
+						t.Fatalf("the approved call did not spend its approval: %+v %v", again, err)
+					}
+				}
 				if family == "provider" {
 					if providerAnswer.Allow != (outcome == "approve") || providerErr != nil && outcome != "cancel" {
 						t.Fatalf("provider answer=%+v err=%v outcome=%s", providerAnswer, providerErr, outcome)
+					}
+					if outcome == "reject" && providerAnswer.Reason != "human review rejected" {
+						t.Fatalf("provider refusal reason=%q", providerAnswer.Reason)
 					}
 					return
 				}
 				var reply struct {
 					HookSpecificOutput struct {
 						Decision string `json:"permissionDecision"`
+						Reason   string `json:"permissionDecisionReason"`
 					} `json:"hookSpecificOutput"`
 				}
 				if err := json.Unmarshal(rec.Body.Bytes(), &reply); err != nil {
 					t.Fatal(err)
 				}
-				want := "deny"
+				want, reason := "deny", map[string]string{
+					"approve": "approved by human review (" + ref + ")",
+					"reject":  "human review did not approve this tool-call (rejected)",
+					"cancel":  "tool-call interrupted while waiting for human approval",
+				}[outcome]
 				if outcome == "approve" {
 					want = "allow"
 				}
-				if reply.HookSpecificOutput.Decision != want {
-					t.Fatalf("decision=%s, want=%s", reply.HookSpecificOutput.Decision, want)
+				if reply.HookSpecificOutput.Decision != want || reply.HookSpecificOutput.Reason != reason {
+					t.Fatalf("decision=%s %q, want=%s %q", reply.HookSpecificOutput.Decision, reply.HookSpecificOutput.Reason, want, reason)
 				}
 			})
 		}

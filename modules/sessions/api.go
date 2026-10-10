@@ -168,11 +168,12 @@ func (m *Module) APIRoutes(reg api.RouteRegistrar) {
 // Claude Code state is derived per row at read time.
 func (m *Module) handleListLive(w http.ResponseWriter, r *http.Request, mc api.ModuleContext) {
 	q := listQuery(r)
-	// Recency order is a custom sort, which the store forbids combining with a
-	// keyset cursor; this endpoint paginates by raising the limit, so a
-	// client-supplied cursor is ignored rather than rejected.
-	q.Cursor = ""
-	q.Sort = []model.Sort{{Column: colLastEventAt, Desc: true}}
+	// Default recency order cannot combine with a keyset cursor, so it ignores
+	// a client-supplied cursor. Complete reads opt into the store's stable ID order.
+	if r.URL.Query().Get("pagination") != "cursor" {
+		q.Cursor = ""
+		q.Sort = []model.Sort{{Column: colLastEventAt, Desc: true}}
+	}
 	// cc_state is derived at read time (not a stored column), so an optional
 	// cc_state filter is applied in-memory over the returned page.
 	ccFilter := r.URL.Query().Get("cc_state")
@@ -204,6 +205,7 @@ func (m *Module) handleListLive(w http.ResponseWriter, r *http.Request, mc api.M
 			out.Items = append(out.Items, dto)
 		}
 		out.HasMore = page.HasMore
+		out.Cursor = page.Cursor
 		return nil
 	})
 	if err != nil {

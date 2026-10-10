@@ -10,20 +10,20 @@ set -u -o pipefail
 
 NAME='test-s993-salvage-mutants'
 cannot() {
-	printf '%s: NO PUDE MIRAR — %s\n' "$NAME" "$*" >&2
+	printf '%s: CANNOT INSPECT — %s\n' "$NAME" "$*" >&2
 	exit 2
 }
 
 HERE=$(cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd) ||
-	cannot 'no resuelvo el directorio de la batería'
-. "$HERE/lib/git-env.sh" || cannot 'no cargo el aislamiento git-env'
-. "$HERE/lib/exec-workdir.sh" || cannot 'no cargo el selector de scratch ejecutable'
+	cannot 'cannot resolve the test directory'
+. "$HERE/lib/git-env.sh" || cannot 'cannot load git-env isolation'
+. "$HERE/lib/exec-workdir.sh" || cannot 'cannot load the executable scratch selector'
 
 for command_name in git bash perl cp cmp tail mkdir rmdir; do
-	command -v "$command_name" >/dev/null 2>&1 || cannot "$command_name no está disponible"
+	command -v "$command_name" >/dev/null 2>&1 || cannot "$command_name is unavailable"
 done
 
-ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || cannot 'no resuelvo la raíz del repositorio'
+ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || cannot 'cannot resolve the repository root'
 ORACLE="$ROOT/scripts/check-s993-salvage.sh"
 CONFIRM="$ROOT/web/src/components/ui/confirm-dialog.tsx"
 OWNERSHIP="$ROOT/web/src/features/identity/nhi-actions.tsx"
@@ -33,13 +33,13 @@ LIKE="$ROOT/modules/recording/handlers.go"
 SQL="$ROOT/core/internal/store/sqlstore/generic.go"
 
 for required in "$ORACLE" "$CONFIRM" "$OWNERSHIP" "$ROSTER" "$SEARCH" "$LIKE" "$SQL"; do
-	[ -r "$required" ] || cannot "no leo $required"
+	[ -r "$required" ] || cannot "cannot read $required"
 done
 
 TMP=$(olivares_pick_exec_workdir s993-salvage-mutants) ||
-	cannot 'no encuentro scratch ejecutable'
-[ -d "$TMP" ] || cannot 'el selector de scratch no devolvió un directorio'
-touch "$TMP/.s993-salvage-mutants-scratch" || cannot 'no marco el scratch para limpieza segura'
+	cannot 'cannot find executable scratch space'
+[ -d "$TMP" ] || cannot 'scratch selector did not return a directory'
+touch "$TMP/.s993-salvage-mutants-scratch" || cannot 'cannot mark scratch space for safe cleanup'
 SNAPSHOTS_READY=0
 ACTIVE_FILE=''
 ACTIVE_MUTATED=''
@@ -83,22 +83,22 @@ cleanup_on_exit() {
 	trap - EXIT HUP INT TERM
 	if [ "$SNAPSHOTS_READY" -eq 1 ] &&
 		{ ! restore_all || ! assert_restored; }; then
-		printf '%s: NO PUDE MIRAR — estado concurrente desconocido; no se sobrescribe; snapshots en %s\n' \
+		printf '%s: CANNOT INSPECT — unknown concurrent state; will not overwrite; snapshots in %s\n' \
 			"$NAME" "$TMP" >&2
 		cleanup_failed=1
 	fi
 	if [ "$LOCK_HELD" -eq 1 ] && ! rmdir "$LOCK_DIR"; then
-		printf '%s: NO PUDE MIRAR — no libero el lock propio %s\n' "$NAME" "$LOCK_DIR" >&2
+		printf '%s: CANNOT INSPECT — cannot release owned lock %s\n' "$NAME" "$LOCK_DIR" >&2
 		cleanup_failed=1
 	fi
 	[ "$cleanup_failed" -eq 0 ] || exit 2
 	if [ ! -f "$TMP/.s993-salvage-mutants-scratch" ]; then
-		printf '%s: NO PUDE MIRAR — scratch sin marcador de propiedad: %s\n' \
+		printf '%s: CANNOT INSPECT — scratch space without ownership marker: %s\n' \
 			"$NAME" "$TMP" >&2
 		exit 2
 	fi
 	if ! rm -rf -- "$TMP"; then
-		printf '%s: NO PUDE MIRAR — no retiro el scratch validado %s\n' \
+		printf '%s: CANNOT INSPECT — cannot remove validated scratch space %s\n' \
 			"$NAME" "$TMP" >&2
 		exit 2
 	fi
@@ -107,12 +107,12 @@ cleanup_on_exit() {
 trap cleanup_on_exit EXIT HUP INT TERM
 
 GIT_ADMIN=$(git rev-parse --absolute-git-dir 2>/dev/null) ||
-	cannot 'no resuelvo el directorio administrativo del worktree'
+	cannot 'cannot resolve the worktree administrative directory'
 LOCK_DIR="$GIT_ADMIN/s993-salvage-mutants.lock"
 if mkdir "$LOCK_DIR" 2>/dev/null; then
 	LOCK_HELD=1
 else
-	cannot "otra batería ya posee $LOCK_DIR"
+	cannot "another test already owns $LOCK_DIR"
 fi
 
 cp "$CONFIRM" "$TMP/confirm-dialog.tsx" &&
@@ -120,7 +120,7 @@ cp "$CONFIRM" "$TMP/confirm-dialog.tsx" &&
 	cp "$ROSTER" "$TMP/nhi-roster.tsx" &&
 	cp "$SEARCH" "$TMP/recordings-view.tsx" &&
 	cp "$LIKE" "$TMP/handlers.go" &&
-	cp "$SQL" "$TMP/generic.go" || cannot 'no creo el snapshot completo antes de mutar'
+	cp "$SQL" "$TMP/generic.go" || cannot 'cannot create the complete snapshot before mutation'
 SNAPSHOTS_READY=1
 
 replace_once() {
@@ -143,34 +143,34 @@ run_oracle() {
 
 run_mutant() {
 	local label=$1 file=$2 old=$3 new=$4 message=$5 rc expected actual candidate
-	restore_all || cannot "no restauro antes del mutante $label"
+	restore_all || cannot "cannot restore before mutant $label"
 	ACTIVE_FILE=''
 	ACTIVE_MUTATED=''
-	assert_restored || cannot "estado base divergente antes del mutante $label"
+	assert_restored || cannot "divergent baseline before mutant $label"
 	candidate="$TMP/$label.mutated"
-	cp "$file" "$candidate" || cannot "no preparo el mutante $label"
+	cp "$file" "$candidate" || cannot "cannot prepare mutant $label"
 	if ! replace_once "$candidate" "$old" "$new"; then
-		cannot "el mutante $label no aplicó exactamente una vez"
+		cannot "mutant $label was not applied exactly once"
 	fi
 	ACTIVE_FILE=$file
 	ACTIVE_MUTATED=$candidate
-	assert_restored || cannot "el árbol cambió antes de instalar el mutante $label"
-	cp "$candidate" "$file" || cannot "no instalo el mutante $label"
-	cmp -s "$candidate" "$file" || cannot "el mutante $label no quedó byte-exacto"
+	assert_restored || cannot "the tree changed before installing mutant $label"
+	cp "$candidate" "$file" || cannot "cannot install mutant $label"
+	cmp -s "$candidate" "$file" || cannot "mutant $label does not match byte for byte"
 	if run_oracle "$TMP/$label.log"; then rc=0; else rc=$?; fi
-	expected="s993-salvage: ROTO — $message"
+	expected="s993-salvage: FAIL — $message"
 	actual=$(tail -n 1 "$TMP/$label.log")
 	if [ "$rc" -ne 1 ] || [ "$actual" != "$expected" ]; then
-		printf '%s: NO PUDE MIRAR — mutante %s: rc=%s, mensaje inesperado\n' \
+		printf '%s: CANNOT INSPECT — mutant %s: rc=%s, unexpected message\n' \
 			"$NAME" "$label" "$rc" >&2
 		cat "$TMP/$label.log" >&2
 		exit 2
 	fi
-	restore_all || cannot "no restauro después del mutante $label"
+	restore_all || cannot "cannot restore after mutant $label"
 	ACTIVE_FILE=''
 	ACTIVE_MUTATED=''
-	assert_restored || cannot "el mutante $label no restauró bytes exactos"
-	printf '%s: MUERDE %s — %s\n' "$NAME" "$label" "$message"
+	assert_restored || cannot "mutant $label did not restore exact bytes"
+	printf '%s: DETECTED %s — %s\n' "$NAME" "$label" "$message"
 }
 
 CONFIRM_MSG='CONFIRM_DIALOG_DISABLED_CONTRACT: caller-disabled confirm must not fire'
@@ -274,15 +274,15 @@ run_mutant search-url "$SEARCH" \
 	'if (value.subject_contains && value.grant) {' \
 	'if (false && value.subject_contains && value.grant) {' \
 	"$SEARCH_URL_MSG"
-restore_all || cannot 'no restauro antes del control final'
+restore_all || cannot 'cannot restore before the final control'
 if ! run_oracle "$TMP/final-green.log"; then
-	printf '%s: NO PUDE MIRAR — el control final limpio no quedó verde\n' "$NAME" >&2
+	printf '%s: CANNOT INSPECT — the clean final control did not pass\n' "$NAME" >&2
 	cat "$TMP/final-green.log" >&2
 	exit 2
 fi
-expected_green='s993-salvage: FUNCIONA — 4 web suites/79 tests and 3 Go contracts'
+expected_green='s993-salvage: PASS — 4 web suites/79 tests and 3 Go contracts'
 [ "$(tail -n 1 "$TMP/final-green.log")" = "$expected_green" ] ||
-	cannot 'mensaje final verde inesperado'
+	cannot 'unexpected final passing message'
 
 MISSING="$TMP/no-web"
 if OLIVARES_S993_WEB_DIR="$MISSING" bash "$ORACLE" >"$TMP/cannot.log" 2>&1; then
@@ -290,14 +290,14 @@ if OLIVARES_S993_WEB_DIR="$MISSING" bash "$ORACLE" >"$TMP/cannot.log" 2>&1; then
 else
 	rc=$?
 fi
-expected_cannot="s993-salvage: NO PUDE MIRAR — no leo $MISSING/package.json"
+expected_cannot="s993-salvage: COULD NOT CHECK — cannot read $MISSING/package.json"
 if [ "$rc" -ne 2 ] || [ "$(tail -n 1 "$TMP/cannot.log")" != "$expected_cannot" ]; then
-	printf '%s: NO PUDE MIRAR — el control rc2 no conservó código y mensaje exactos\n' \
+	printf '%s: CANNOT INSPECT — the rc2 control did not preserve the exact code and message\n' \
 		"$NAME" >&2
 	cat "$TMP/cannot.log" >&2
 	exit 2
 fi
 
-assert_restored || cannot 'la batería terminó con bytes distintos'
-printf '%s: FUNCIONA — 21/21 mutantes mordieron, rc0/rc1/rc2 y restauración byte-exacta\n' \
+assert_restored || cannot 'the test ended with different bytes'
+printf '%s: PASS — 21/21 mutants detected, rc0/rc1/rc2 and byte-for-byte restoration\n' \
 	"$NAME"

@@ -49,18 +49,18 @@ correr() {                      # correr <raiz> [baseline] -> imprime rc y deja 
 CULPABLE='#!/usr/bin/env bash
 set -euo pipefail
 idle="$(grep -E "x" "$F" | head -1)"
-[ -n "$idle" ] || fail "no pude leer x"
+[ -n "$idle" ] || fail "could not read x"
 '
 CURADO='#!/usr/bin/env bash
 set -euo pipefail
 idle="$( { grep -E "x" "$F" || true; } | head -1)"
-[ -n "$idle" ] || fail "no pude leer x"
+[ -n "$idle" ] || fail "could not read x"
 '
 PROTEGIDO='#!/usr/bin/env bash
 set -euo pipefail
 H="$(grep -E "x" "$F" | head -1)" \
-  || cannot "no pude derivarlo"
-[ -n "$H" ] || cannot "vacio"
+  || cannot "could not derive it"
+[ -n "$H" ] || cannot "empty"
 '
 
 # ── 1 · un incumplidor NUEVO se nombra y sale 1 ────────────────────────────────
@@ -68,16 +68,16 @@ R="$(arbol nuevo)"; sembrar "$R" a.sh "$CULPABLE"
 printf '# vacia\n' > "$R/ci/mute-pipefail-baseline.txt"
 rc="$(correr "$R")"
 if [ "$rc" = "1" ] && command grep -q 'scripts/a.sh' "$T/err" && command grep -q 'idle' "$T/err"; then
-	paso "un incumplidor nuevo sale 1 y se nombra con fichero y variable"
+	paso "a new violation returns 1 and names the file and variable"
 else
-	malo "incumplidor nuevo: rc=$rc (esperado 1) — err: $(head -c 200 "$T/err")"
+	malo "new violation: rc=$rc (expected 1) — err: $(head -c 200 "$T/err")"
 fi
 
 # ── 2 · el mismo, DECLARADO en la linea base, no falla ─────────────────────────
 printf 'scripts/a.sh\tidle\n' > "$R/ci/mute-pipefail-baseline.txt"
 rc="$(correr "$R")"
-[ "$rc" = "0" ] && paso "un incumplidor declarado en la linea base no falla" \
-	|| malo "declarado: rc=$rc (esperado 0) — $(head -c 200 "$T/err")"
+[ "$rc" = "0" ] && paso "a violation declared in the baseline does not fail" \
+	|| malo "declared violation: rc=$rc (expected 0) — $(head -c 200 "$T/err")"
 
 # ── 3 · SUSTITUCION: uno curado y otro nuevo, el TOTAL no se mueve ─────────────
 # ⛔ ES EL CASO QUE JUSTIFICA LA LISTA. Con un contador, 1 -> 1 y el gate calla.
@@ -85,9 +85,9 @@ R3="$(arbol sust)"; sembrar "$R3" a.sh "$CURADO"; sembrar "$R3" b.sh "$CULPABLE"
 printf 'scripts/a.sh\tidle\n' > "$R3/ci/mute-pipefail-baseline.txt"
 rc="$(correr "$R3")"
 if [ "$rc" = "1" ] && command grep -q 'scripts/b.sh' "$T/err"; then
-	paso "SUSTITUCION: cura uno y rompe otro, el total no se mueve y el gate CORTA por el nuevo"
+	paso "REPLACEMENT: fixing one and breaking another keeps the total stable but the check REJECTS the new violation"
 else
-	malo "sustitucion: rc=$rc (esperado 1, nombrando b.sh) — $(head -c 200 "$T/err")"
+	malo "replacement: rc=$rc (expected 1, naming b.sh) — $(head -c 200 "$T/err")"
 fi
 
 # ── 4 · una forma PROTEGIDA (|| cannot pegado) NO se reporta ───────────────────
@@ -95,34 +95,34 @@ fi
 R4="$(arbol prot)"; sembrar "$R4" a.sh "$PROTEGIDO"
 printf '# vacia\n' > "$R4/ci/mute-pipefail-baseline.txt"
 rc="$(correr "$R4")"
-[ "$rc" = "0" ] && paso "una asignacion con su propio || cannot NO se reporta" \
-	|| malo "protegida: rc=$rc (esperado 0) — $(head -c 200 "$T/err")"
+[ "$rc" = "0" ] && paso "an assignment with its own || cannot is NOT reported" \
+	|| malo "protected assignment: rc=$rc (expected 0) — $(head -c 200 "$T/err")"
 
 # ── 5 · la deuda que PUEDE BAJAR se dice, y no falla ───────────────────────────
 R5="$(arbol baja)"; sembrar "$R5" a.sh "$CURADO"
 printf 'scripts/a.sh\tidle\n' > "$R5/ci/mute-pipefail-baseline.txt"
 rc="$(correr "$R5")"
-if [ "$rc" = "0" ] && command grep -q 'PUEDE BAJAR' "$T/err"; then
-	paso "un curado que sigue en la linea base se anuncia como deuda que puede bajar"
+if [ "$rc" = "0" ] && command grep -q 'can shrink' "$T/err"; then
+	paso "a fixed case remaining in the baseline is reported as removable debt"
 else
-	malo "puede bajar: rc=$rc — $(head -c 200 "$T/err")"
+	malo "removable debt: rc=$rc — $(head -c 200 "$T/err")"
 fi
 
 # ── 6 · sin linea base es NO HE PODIDO MIRAR (2), nunca un verde ───────────────
 rc="$(correr "$R5" "$T/no-existe.txt")"
-if [ "$rc" = "2" ] && command grep -q 'NO HE PODIDO MIRAR' "$T/err"; then
-	paso "sin linea base sale 2 y lo dice"
+if [ "$rc" = "2" ] && command grep -q 'COULD NOT CHECK' "$T/err"; then
+	paso "a missing baseline returns 2 with a diagnostic"
 else
-	malo "sin linea base: rc=$rc (esperado 2)"
+	malo "missing baseline: rc=$rc (expected 2)"
 fi
 
 # ── 7 · --gate RECHAZA las anulaciones que la bateria si usa ───────────────────
 rc=0
 MUTE_PIPEFAIL_ROOT="$R5" bash "$SUT" --gate >/dev/null 2>"$T/err" || rc=$?
-if [ "$rc" = "2" ] && command grep -q 'no admite anulaciones' "$T/err"; then
-	paso "--gate rechaza MUTE_PIPEFAIL_ROOT y sale 2"
+if [ "$rc" = "2" ] && command grep -q 'does not allow overrides' "$T/err"; then
+	paso "--gate rejects MUTE_PIPEFAIL_ROOT and returns 2"
 else
-	malo "--gate: rc=$rc (esperado 2) — $(head -c 200 "$T/err")"
+	malo "--gate: rc=$rc (expected 2) — $(head -c 200 "$T/err")"
 fi
 
 # ── 8 · MUTANTE DEL PROPIO GATE: si deja de mirar el `|| true`, el curado se delata ──
@@ -130,7 +130,7 @@ fi
 M="$T/sut-mutante.sh"
 sed 's/|| true|| true/XX/; s/true|:|cannot|fail|malo|die/NUNCA_CASA/' "$SUT" > "$M"
 if cmp -s "$SUT" "$M"; then
-	malo "NO se pudo construir el mutante del gate: sin artefacto no hay juicio"
+	malo "could not build the check mutant: there is no artifact to judge"
 else
 	# ⛔ CON LINEA BASE VACIA, no con la de R5: alli el fichero YA esta declarado, asi que el
 	#    mutante lo destaparia y el gate lo taparia igual — el caso saldria verde sin medir nada.
@@ -142,9 +142,9 @@ else
 	rc=0
 	MUTE_PIPEFAIL_ROOT="$R5" MUTE_PIPEFAIL_BASELINE="$VACIA" bash "$M" >/dev/null 2>"$T/err" || rc=$?
 	if [ "$rc_sano" = "0" ] && [ "$rc" = "1" ] && command grep -q 'scripts/a.sh' "$T/err"; then
-		paso "mutante: el gate sano NO ve al curado (0) y el mutado SI lo delata (1) — mira la cura de verdad"
+		paso "mutant: the original check accepts the fixed case (0) and the mutant detects it (1)"
 	else
-		malo "mutante del gate: sano=$rc_sano (esp. 0) mutado=$rc (esp. 1) — $(head -c 160 "$T/err")"
+		malo "check mutant: original=$rc_sano (expected 0) mutated=$rc (expected 1) — $(head -c 160 "$T/err")"
 	fi
 fi
 
@@ -164,9 +164,9 @@ MUTE_PIPEFAIL_ROOT="$R9" MUTE_PIPEFAIL_BASELINE="$T/vacia9.txt" \
 	bash "$R9/scripts/check-renamed.sh" >/dev/null 2>"$T/err" || rc=$?
 if [ "$rc" = "1" ] && command grep -q 'test-otra-cosa.sh' "$T/err" \
 	&& ! command grep -q 'test-check-renamed.sh' "$T/err"; then
-	paso "renombrado el gate, la exclusion LO SIGUE: excluye test-check-renamed.sh y acusa al otro"
+	paso "renaming the check preserves its exclusion: excludes test-check-renamed.sh and reports the other file"
 else
-	malo "derivacion: rc=$rc — deberia acusar test-otra-cosa.sh y NO test-check-renamed.sh: $(head -c 220 "$T/err")"
+	malo "derivation: rc=$rc; should report test-otra-cosa.sh and exclude test-check-renamed.sh: $(head -c 220 "$T/err")"
 fi
 
 # ── 10 · LA RUTA POR DEFECTO DE LA LINEA BASE RESUELVE ────────────────────────
@@ -178,9 +178,9 @@ fi
 rc=0
 bash "$SUT" >/dev/null 2>"$T/err" || rc=$?
 if [ "$rc" != "2" ]; then
-	paso "la ruta por defecto de la linea base resuelve sobre el repositorio real (rc=$rc, no 2)"
+	paso "the default baseline resolves against the actual repository (rc=$rc)"
 else
-	malo "la linea base por defecto NO resuelve: $(head -c 160 "$T/err")"
+	malo "the default baseline does NOT resolve: $(head -c 160 "$T/err")"
 fi
 
 # ── 11 · ESTADO GUARDADO: `|| _rc=$?` no es un incumplidor ────────────────────
@@ -196,8 +196,8 @@ act="$(printf "%s\n" "$comm_nm" | grep -c "enterprise/activation\.")" || _grc=$?
 R11="$(arbol guardado)"; sembrar "$R11" a.sh "$GUARDADO"
 printf '# vacia\n' > "$R11/ci/mute-pipefail-baseline.txt"
 rc="$(correr "$R11")"
-[ "$rc" = "0" ] && paso "una asignacion con su rc GUARDADO (|| _rc=\$?) NO se reporta" \
-	|| malo "rc guardado: rc=$rc (esperado 0) — $(head -c 200 "$T/err")"
+[ "$rc" = "0" ] && paso "an assignment SAVING its rc (|| _rc=\$?) is NOT reported" \
+	|| malo "saved rc: rc=$rc (expected 0) — $(head -c 200 "$T/err")"
 
 # ── 12 · LA MISMA LINEA SIN EL `|| _rc=$?` SI se reporta ──────────────────────
 # El control del caso 11: lo unico que cambia es el discriminante, asi que si esto no sale 1
@@ -213,9 +213,9 @@ R12="$(arbol desnudo)"; sembrar "$R12" a.sh "$DESNUDO"
 printf '# vacia\n' > "$R12/ci/mute-pipefail-baseline.txt"
 rc="$(correr "$R12")"
 if [ "$rc" = "1" ] && command grep -q 'scripts/a.sh' "$T/err" && command grep -q 'act' "$T/err"; then
-	paso "la misma asignacion SIN guardar el rc sigue siendo incumplidora (1, variable act)"
+	paso "the same assignment WITHOUT saving rc remains a violation (1, variable act)"
 else
-	malo "desnudo: rc=$rc (esperado 1 nombrando act) — $(head -c 200 "$T/err")"
+	malo "unguarded assignment: rc=$rc (expected 1 naming act) — $(head -c 200 "$T/err")"
 fi
 
 # ── 13 · FORMAS VALIDAS DEL SUFIJO: continuacion `\` y cuerpo multilinea ─────────
@@ -227,7 +227,7 @@ _rc=0
 H="$(grep -E "x" "$F" | head -1)" \
   || _rc=$?
 [ "$_rc" -le 1 ] || cannot "the reader failed ($_rc)"
-[ -n "$H" ] || fail "no pude leer x"
+[ -n "$H" ] || fail "could not read x"
 '
 CUERPO_MULTI='#!/usr/bin/env bash
 set -euo pipefail
@@ -241,8 +241,8 @@ matches="$(
 R13="$(arbol formas)"; sembrar "$R13" a.sh "$CONTINUACION"; sembrar "$R13" b.sh "$CUERPO_MULTI"
 printf '# vacia\n' > "$R13/ci/mute-pipefail-baseline.txt"
 rc="$(correr "$R13")"
-[ "$rc" = "0" ] && paso "el sufijo tras una continuacion \\ y el sufijo en la linea del cierre )\" se aceptan" \
-	|| malo "formas validas: rc=$rc (esperado 0) — $(head -c 200 "$T/err")"
+[ "$rc" = "0" ] && paso "the suffix after a \\ continuation and the suffix on the closing )\" line are accepted" \
+	|| malo "valid forms: rc=$rc (expected 0) — $(head -c 200 "$T/err")"
 
 # ── 15 · EL SEÑUELO DE LA REVISION: la grafia en un COMENTARIO dentro de la sustitucion ──
 # Fixture literal de la revision independiente (repro-mute-comment-bypass.sh): con un `grep -c`
@@ -263,17 +263,17 @@ R15="$(arbol comentario)"; sembrar "$R15" comment-bypass.sh "$COMENTARIO"
 printf '# vacia\n' > "$R15/ci/mute-pipefail-baseline.txt"
 rc="$(correr "$R15")"
 if [ "$rc" = "1" ] && command grep -q 'scripts/comment-bypass.sh' "$T/err" && command grep -q 'matches' "$T/err"; then
-	paso "la grafia en un comentario DENTRO de la sustitucion no protege: se acusa (1, variable matches)"
+	paso "the spelling in a comment INSIDE the substitution provides no protection: reported (1, variable matches)"
 else
-	malo "señuelo de comentario: rc=$rc (esperado 1 nombrando matches) — $(head -c 200 "$T/err")"
+	malo "comment decoy: rc=$rc (expected 1 naming matches) — $(head -c 200 "$T/err")"
 fi
 # Y el guion del fixture muere DE VERDAD asi: 1, sin una linea en stdout ni stderr.
 : > "$T/vacio.txt"; rc=0
 bash "$R15/scripts/comment-bypass.sh" "$T/vacio.txt" >"$T/rt.out" 2>"$T/rt.err" || rc=$?
 if [ "$rc" = "1" ] && [ ! -s "$T/rt.out" ] && [ ! -s "$T/rt.err" ]; then
-	paso "y ese fixture muere mudo de verdad: rc 1 con stdout y stderr vacios (la clase del gate)"
+	paso "the fixture exits silently: rc 1 with empty stdout and stderr (the class measured by the check)"
 else
-	malo "el fixture del señuelo no muere mudo: rc=$rc out=$(wc -c <"$T/rt.out") err=$(wc -c <"$T/rt.err")"
+	malo "the decoy fixture does not exit silently: rc=$rc out=$(wc -c <"$T/rt.out") err=$(wc -c <"$T/rt.err")"
 fi
 
 # ── 16 · MAS SEÑUELOS: comentario al final de linea, cadenas citadas, anidado, `|| echo` ──
@@ -294,12 +294,12 @@ e="$(grep -c x "$f")" || echo "count failed"
 R16="$(arbol senuelos)"; sembrar "$R16" a.sh "$SENUELOS"
 printf '# vacia\n' > "$R16/ci/mute-pipefail-baseline.txt"
 rc="$(correr "$R16")"
-faltan=""
-for v in a b c d e; do command grep -q "variable \`$v\`" "$T/err" || faltan="$faltan $v"; done
-if [ "$rc" = "1" ] && [ -z "$faltan" ]; then
-	paso "comentario inline, cadena simple, cadena doble, sufijo anidado y || echo: los cinco acusados"
+missing_inputs=""
+for v in a b c d e; do command grep -q "variable \`$v\`" "$T/err" || missing_inputs="$missing_inputs $v"; done
+if [ "$rc" = "1" ] && [ -z "$missing_inputs" ]; then
+	paso "inline comment, single-quoted string, double-quoted string, nested suffix and || echo: all five reported"
 else
-	malo "señuelos: rc=$rc (esperado 1) faltan:[$faltan] — $(head -c 300 "$T/err")"
+	malo "decoys: rc=$rc (expected 1) missing:[$missing_inputs] — $(head -c 300 "$T/err")"
 fi
 
 # ── 17 · EL CASO REAL que motivo la excepcion sigue aceptado ─────────────────────
@@ -315,10 +315,10 @@ if [ -f "$_ver01" ]; then
 		R17="$(arbol ver01)"; sembrar "$R17" a.sh "$VER01"
 		printf '# vacia\n' > "$R17/ci/mute-pipefail-baseline.txt"
 		rc="$(correr "$R17")"
-		[ "$rc" = "0" ] && paso "el bloque real de check-ver-01-build-tree.sh (act, || _grc=\$?) sigue aceptado" \
-			|| malo "ver01 real: rc=$rc (esperado 0) — $(head -c 200 "$T/err")"
+		[ "$rc" = "0" ] && paso "the actual check-ver-01-build-tree.sh block (act, || _grc=\$?) remains accepted" \
+			|| malo "actual ver01: rc=$rc (expected 0) — $(head -c 200 "$T/err")"
 	else
-		malo "no encontre el bloque real de check-ver-01-build-tree.sh (act / || _grc=\$?): el caso no puede montarse"
+		malo "cannot find the actual check-ver-01-build-tree.sh block (act / || _grc=\$?): the case cannot be built"
 	fi
 else
 	_cls=""
@@ -328,7 +328,7 @@ else
 	if [ "$_cls" = "public" ]; then
 		paso "SCOPED — specimen scripts/check-ver-01-build-tree.sh is hub-only; case 17 has no subject in the public tree"
 	else
-		malo "no encontre el bloque real de check-ver-01-build-tree.sh (act / || _grc=\$?): el caso no puede montarse"
+		malo "cannot find the actual check-ver-01-build-tree.sh block (act / || _grc=\$?): the case cannot be built"
 	fi
 fi
 
@@ -346,12 +346,12 @@ if v not in s:
 open(sys.argv[2], "w", encoding="utf-8").write(s.replace(v, r"""re.search(r'\|\|\s*[A-Za-z_]\w*=\$\?', cuerpo)""", 1))
 MUT
 if [ ! -s "$M18" ] || cmp -s "$SUT" "$M18"; then
-	malo "NO se pudo construir el mutante del regex anterior: sin artefacto no hay juicio"
+	malo "could not build the previous-regex mutant: there is no artifact to judge"
 else
 	rc=0
 	MUTE_PIPEFAIL_ROOT="$R15" MUTE_PIPEFAIL_BASELINE="$R15/ci/mute-pipefail-baseline.txt" bash "$M18" >/dev/null 2>"$T/err" || rc=$?
-	[ "$rc" = "0" ] && paso "discriminador: el regex anterior sobre texto crudo deja pasar el comentario (0); el gate real lo acusa (1)" \
-		|| malo "el mutante del regex anterior no reproduce la burla: rc=$rc (esperado 0) — $(head -c 160 "$T/err")"
+	[ "$rc" = "0" ] && paso "discriminator: the previous regex accepts the raw-text comment (0); the actual check reports it (1)" \
+		|| malo "the previous-regex mutant does not reproduce the bypass: rc=$rc (expected 0) — $(head -c 160 "$T/err")"
 fi
 
 # ── 19 · MUTANTE SIN EXCEPCION: el caso 11 se acusa solo porque la excepcion esta viva ──
@@ -365,14 +365,14 @@ if v not in s:
 open(sys.argv[2], "w", encoding="utf-8").write(s.replace(v, "False", 1))
 MUT
 if [ ! -s "$M19" ] || cmp -s "$SUT" "$M19"; then
-	malo "NO se pudo construir el mutante sin excepcion: sin artefacto no hay juicio"
+	malo "could not build the mutant without the exception: there is no artifact to judge"
 else
 	rc=0
 	MUTE_PIPEFAIL_ROOT="$R11" MUTE_PIPEFAIL_BASELINE="$R11/ci/mute-pipefail-baseline.txt" bash "$M19" >/dev/null 2>"$T/err" || rc=$?
 	if [ "$rc" = "1" ] && command grep -q 'scripts/a.sh' "$T/err"; then
-		paso "mutante: sin la excepcion, el gate mutado acusa al caso 11 (1): la excepcion es lo que decide"
+		paso "mutant: removing the exception reports case 11 (1): the exception determines the result"
 	else
-		malo "mutante sin excepcion: rc=$rc (esperado 1 acusando a.sh) — $(head -c 160 "$T/err")"
+		malo "mutant without the exception: rc=$rc (expected 1 reporting a.sh) — $(head -c 160 "$T/err")"
 	fi
 fi
 
@@ -381,7 +381,7 @@ fi
 # `$'…'` cierra en la PRIMERA comilla sin escapar y `\'` es una comilla escapada, asi que la cadena
 # entera es un argumento de printf; el `)` que lleva dentro cortaba el cuerpo antes del `grep` y
 # el gate decia 0 mientras el guion moria con 1 y sin mensaje. Se acusa, nombrando `matches`.
-ANSI_SENUELO='#!/usr/bin/env bash
+ANSI_DECOY='#!/usr/bin/env bash
 set -euo pipefail
 fail() { echo "OWN GUARD: $*" >&2; exit 1; }
 input="$1"
@@ -393,38 +393,38 @@ matches="$(
 [ "${matches:-0}" = "0" ] || fail "no match count"
 echo SCRIPT_REACHED_END
 '
-R20="$(arbol ansi)"; sembrar "$R20" probe.sh "$ANSI_SENUELO"
+R20="$(arbol ansi)"; sembrar "$R20" probe.sh "$ANSI_DECOY"
 printf '# vacia\n' > "$R20/ci/mute-pipefail-baseline.txt"
 bash -n "$R20/scripts/probe.sh" 2>/dev/null && d=ok || d=NO
-[ "$d" = "ok" ] && paso "el fixture ANSI-C es bash valido (bash -n)" || malo "el fixture ANSI-C no es bash valido: el caso mediria otra cosa"
+[ "$d" = "ok" ] && paso "the ANSI-C fixture is valid Bash (bash -n)" || malo "the ANSI-C fixture is not valid Bash: the case would measure something else"
 rc="$(correr "$R20")"
 if [ "$rc" = "1" ] && command grep -q 'scripts/probe.sh' "$T/err" && command grep -q 'matches' "$T/err"; then
-	paso "ANSI-C: la comilla escapada no cierra la cadena, el cuerpo llega al grep y se acusa (1, matches)"
+	paso "ANSI-C: an escaped quote does not close the string; the body reaches grep and is reported (1, matches)"
 else
-	malo "ANSI-C señuelo: rc=$rc (esperado 1 nombrando matches) — $(head -c 200 "$T/err")"
+	malo "ANSI-C decoy: rc=$rc (expected 1 naming matches) — $(head -c 200 "$T/err")"
 fi
 : > "$T/vacio20.txt"; rc=0
 bash "$R20/scripts/probe.sh" "$T/vacio20.txt" >"$T/rt20.out" 2>"$T/rt20.err" || rc=$?
 if [ "$rc" = "1" ] && [ ! -s "$T/rt20.out" ] && [ ! -s "$T/rt20.err" ]; then
-	paso "y ese fixture muere mudo de verdad: rc 1 con stdout y stderr vacios"
+	paso "the fixture exits silently: rc 1 with empty stdout and stderr"
 else
-	malo "el fixture ANSI-C no muere mudo: rc=$rc out=$(wc -c <"$T/rt20.out") err=$(wc -c <"$T/rt20.err")"
+	malo "the ANSI-C fixture does not exit silently: rc=$rc out=$(wc -c <"$T/rt20.out") err=$(wc -c <"$T/rt20.err")"
 fi
 
 # ── 21 · ANSI-C, variante en la que un sufijo mal leido SI casaria ────────────────────
 # Con un espacio antes de la comilla final, el texto que queda tras una comilla escapada mal
 # cerrada seria exactamente `)" || read_rc=$? ` — un sufijo con su delimitador. Sigue siendo
 # cadena, y sigue acusandose.
-ANSI_SENUELO2="$(printf '%s\n' "$ANSI_SENUELO" | sed 's/read_rc=\$?'"'"'$/read_rc=$? '"'"'/')"
+ANSI_DECOY2="$(printf '%s\n' "$ANSI_DECOY" | sed 's/read_rc=\$?'"'"'$/read_rc=$? '"'"'/')"
 # Es una guarda ejecutable del banco, no texto del fixture: conserva el patron sin tuberia.
-command grep -q 'read_rc=\$? '"'"'$' <<<"$ANSI_SENUELO2" || malo "no pude construir la variante ANSI-C con espacio final"
-R21="$(arbol ansi2)"; sembrar "$R21" probe.sh "$ANSI_SENUELO2"
+command grep -q 'read_rc=\$? '"'"'$' <<<"$ANSI_DECOY2" || malo "could not build the ANSI-C variant with a trailing space"
+R21="$(arbol ansi2)"; sembrar "$R21" probe.sh "$ANSI_DECOY2"
 printf '# vacia\n' > "$R21/ci/mute-pipefail-baseline.txt"
 rc="$(correr "$R21")"
 if [ "$rc" = "1" ] && command grep -q 'matches' "$T/err"; then
-	paso "ANSI-C con espacio final (el sufijo falso llevaria delimitador): tambien se acusa"
+	paso "ANSI-C with trailing space (the fake suffix would have a delimiter) is also reported"
 else
-	malo "ANSI-C variante: rc=$rc (esperado 1) — $(head -c 200 "$T/err")"
+	malo "ANSI-C variant: rc=$rc (expected 1) — $(head -c 200 "$T/err")"
 fi
 
 # ── 22 · ANSI-C y `${…}` en POSITIVO: la forma valida con esas cadenas dentro se acepta ──
@@ -442,10 +442,10 @@ y="$(grep -c "${f//)/}" "$f")" || rc=$?
 '
 R22="$(arbol ansipos)"; sembrar "$R22" a.sh "$ANSI_POSITIVO"
 printf '# vacia\n' > "$R22/ci/mute-pipefail-baseline.txt"
-bash -n "$R22/scripts/a.sh" 2>/dev/null || malo "el positivo ANSI-C no es bash valido"
+bash -n "$R22/scripts/a.sh" 2>/dev/null || malo "the ANSI-C positive control is not valid Bash"
 rc="$(correr "$R22")"
-[ "$rc" = "0" ] && paso "positivos: sufijo real con \$'…' escapado dentro y con \${…} que lleva un ) se aceptan" \
-	|| malo "positivo ANSI-C/llaves: rc=$rc (esperado 0) — $(head -c 200 "$T/err")"
+[ "$rc" = "0" ] && paso "positive controls: a real suffix with escaped \$'…' inside and with \${…} containing a ) are accepted" \
+	|| malo "ANSI-C/braces positive control: rc=$rc (expected 0) — $(head -c 200 "$T/err")"
 
 # ── 23 · FORMAS QUE EL LEXICO NO ESTABLECE: no hay excepcion, y se dice ───────────────
 # Un backtick o un heredoc dentro de la sustitucion devuelven «no se»; «no se» no concede,
@@ -466,9 +466,9 @@ R23="$(arbol desconocido)"; sembrar "$R23" a.sh "$DESCONOCIDO"
 printf '# vacia\n' > "$R23/ci/mute-pipefail-baseline.txt"
 rc="$(correr "$R23")"
 if [ "$rc" = "1" ] && command grep -q 'variable `p`' "$T/err" && command grep -q 'variable `q`' "$T/err"; then
-	paso "backtick y heredoc dentro de la sustitucion: forma no establecida, sin excepcion (p y q acusadas)"
+	paso "backtick and heredoc inside substitution: unsupported form, no exception (p and q reported)"
 else
-	malo "formas no establecidas: rc=$rc (esperado 1 acusando p y q) — $(head -c 200 "$T/err")"
+	malo "unsupported forms: rc=$rc (expected 1 reporting p and q) — $(head -c 200 "$T/err")"
 fi
 
 # ── 24 · MUTANTE DEL LEXICO ANTERIOR: sin ANSI-C, la burla de la raiz vuelve a pasar ──
@@ -487,12 +487,12 @@ open(sys.argv[2], "w", encoding="utf-8").write(s.replace(v, """        if False:
             j = _cierre_ansi(s, i + 2)"""))
 MUT
 if [ ! -s "$M24" ] || cmp -s "$SUT" "$M24"; then
-	malo "NO se pudo construir el mutante sin ANSI-C: sin artefacto no hay juicio"
+	malo "could not build the mutant without ANSI-C: there is no artifact to judge"
 else
 	rc=0
 	MUTE_PIPEFAIL_ROOT="$R20" MUTE_PIPEFAIL_BASELINE="$R20/ci/mute-pipefail-baseline.txt" bash "$M24" >/dev/null 2>"$T/err" || rc=$?
-	[ "$rc" = "0" ] && paso "mutante sin ANSI-C: la burla de la raiz vuelve a pasar (0); el gate real la acusa (1)" \
-		|| malo "el mutante sin ANSI-C no reproduce la burla: rc=$rc (esperado 0) — $(head -c 160 "$T/err")"
+	[ "$rc" = "0" ] && paso "mutant without ANSI-C: the root-review bypass is accepted again (0); the actual check reports it (1)" \
+		|| malo "the mutant without ANSI-C does not reproduce the bypass: rc=$rc (expected 0) — $(head -c 160 "$T/err")"
 fi
 
 # ── 25 · MUTANTE DEL CUERPO: con la cuenta de parentesis de siempre, la burla tambien pasa ──
@@ -508,12 +508,12 @@ if v not in s:
 open(sys.argv[2], "w", encoding="utf-8").write(s.replace(v, "        _k = None", 1))
 MUT
 if [ ! -s "$M25" ] || cmp -s "$SUT" "$M25"; then
-	malo "NO se pudo construir el mutante de la cuenta de parentesis: sin artefacto no hay juicio"
+	malo "could not build the parenthesis-count mutant: there is no artifact to judge"
 else
 	rc=0
 	MUTE_PIPEFAIL_ROOT="$R20" MUTE_PIPEFAIL_BASELINE="$R20/ci/mute-pipefail-baseline.txt" bash "$M25" >/dev/null 2>"$T/err" || rc=$?
-	[ "$rc" = "0" ] && paso "mutante con la cuenta de parentesis: el cuerpo se corta antes del grep y la burla pasa (0)" \
-		|| malo "el mutante de la cuenta no reproduce la burla: rc=$rc (esperado 0) — $(head -c 160 "$T/err")"
+	[ "$rc" = "0" ] && paso "parenthesis-count mutant: the body stops before grep and the bypass is accepted (0)" \
+		|| malo "the counting mutant does not reproduce the bypass: rc=$rc (expected 0) — $(head -c 160 "$T/err")"
 fi
 
 # A quoted status expansion preserves the same value as the existing raw form.
@@ -603,13 +603,13 @@ if [ -n "$LOC" ]; then
 	rc=0
 	LC_ALL="$LOC" MUTE_PIPEFAIL_ROOT="$R11" MUTE_PIPEFAIL_BASELINE="$R11/ci/mute-pipefail-baseline.txt" bash "$SUT" >/dev/null 2>"$T/err" || rc=$?
 	if [ "$rc" = "0" ] && ! command grep -q 'not in sorted order' "$T/err"; then
-		paso "bajo LC_ALL=$LOC el gate compara igual que en C: sin avisos de orden y rc 0"
+		paso "under LC_ALL=$LOC the check compares as in C: no sorting warning and rc 0"
 	else
 		malo "locale $LOC: rc=$rc — $(head -c 200 "$T/err")"
 	fi
 else
 	OMITIDO=1
-	echo "SKIP no hay un locale distinto de C instalado: el caso de colacion NO se ha ejercido"
+	echo "SKIP no non-C locale is installed: the collation case was NOT exercised"
 fi
 
 echo "check-mute-pipefail selftest: $OK passed, $MAL failed${OMITIDO:+, 1 skipped (locale)}"

@@ -67,7 +67,7 @@ func specEnvValue(spec LaunchSpec, name string) (string, bool) {
 func runEventDetails(t *testing.T, m *Module, tenant model.TenantID, runRef string) []string {
 	t.Helper()
 	var details []string
-	if err := m.data.View(context.Background(), tenant, func(sc store.Scope) error {
+	if err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runEventKind)
 		if err != nil {
 			return err
@@ -90,7 +90,7 @@ func TestSecretEnv_TheValueReachesOnlyTheChildEnvironment(t *testing.T) {
 	ctx := context.Background()
 	m, tenant, fr, _, gate := secretEnvHarness(t)
 
-	dto, err := m.createRun(ctx, tenant, secretEnvParams(githubSecretEnv, true))
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, secretEnvParams(githubSecretEnv, true))
 	if err != nil {
 		t.Fatalf("create with a vault secret: %v", err)
 	}
@@ -138,7 +138,7 @@ func TestSecretEnv_OutputNeverCarriesTheValue(t *testing.T) {
 	ctx := context.Background()
 	m, tenant, fr, _, _ := secretEnvHarness(t)
 	refs := []SecretEnvRef{{Env: "GITHUB_TOKEN", Secret: "env/github"}, {Env: "DB_PASSWORD", Secret: "env/quoted"}}
-	dto, err := m.createRun(ctx, tenant, secretEnvParams(refs, true))
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, secretEnvParams(refs, true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,7 +182,7 @@ func TestSecretEnv_OnlyATenantAdministratorMayGiveSecrets(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	m, tenant, fr, _, gate := secretEnvHarness(t)
-	_, err := m.createRun(ctx, tenant, secretEnvParams(githubSecretEnv, false))
+	_, err := createProfiledTestRun(t, m, ctx, tenant, secretEnvParams(githubSecretEnv, false))
 	if statusOf(err) != http.StatusForbidden {
 		t.Fatalf("secret_env without tenant administration = %v, want 403", err)
 	}
@@ -193,7 +193,7 @@ func TestSecretEnv_OnlyATenantAdministratorMayGiveSecrets(t *testing.T) {
 		t.Fatal("a refused secret launch reached the gate or the runner")
 	}
 	// A launch that names no secret is unaffected.
-	if _, err := m.createRun(ctx, tenant, secretEnvParams(nil, false)); err != nil {
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, secretEnvParams(nil, false)); err != nil {
 		t.Fatalf("a launch without secrets: %v", err)
 	}
 }
@@ -218,14 +218,14 @@ func TestSecretEnv_RefusesReservedAndMalformedNames(t *testing.T) {
 		{{Env: "GITHUB_TOKEN", Secret: "env/"}},
 		{{Env: "GITHUB_TOKEN", Secret: "env/github"}, {Env: "GITHUB_TOKEN", Secret: "env/quoted"}},
 	} {
-		_, err := m.createRun(ctx, tenant, secretEnvParams(refs, true))
+		_, err := createProfiledTestRun(t, m, ctx, tenant, secretEnvParams(refs, true))
 		if statusOf(err) != http.StatusBadRequest {
 			t.Errorf("secret_env %+v = %v, want 400", refs, err)
 		}
 	}
 	p := secretEnvParams(githubSecretEnv, true)
 	p.EnvAllow = []string{"GITHUB_TOKEN"}
-	if _, err := m.createRun(ctx, tenant, p); statusOf(err) != http.StatusBadRequest {
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, p); statusOf(err) != http.StatusBadRequest {
 		t.Errorf("a name in both env_allow and secret_env = %v, want 400", err)
 	}
 	fr.mu.Lock()
@@ -239,19 +239,20 @@ func TestSecretEnv_AMissingSecretRefusesTheLaunchByName(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	m, tenant, fr, vault, _ := secretEnvHarness(t)
-	_, err := m.createRun(ctx, tenant, secretEnvParams([]SecretEnvRef{{Env: "AWS_SECRET_ACCESS_KEY", Secret: "env/aws"}}, true))
-	if statusOf(err) != http.StatusConflict || !strings.Contains(err.Error(), "env/aws") {
-		t.Fatalf("a missing secret = %v, want 409 naming env/aws", err)
+	_, err := createProfiledTestRun(t, m, ctx, tenant, secretEnvParams([]SecretEnvRef{{Env: "AWS_SECRET_ACCESS_KEY", Secret: "env/aws"}}, true))
+	if statusOf(err) != http.StatusConflict || !strings.Contains(err.Error(), "env/aws") ||
+		!strings.Contains(err.Error(), secretEnvPlace) {
+		t.Fatalf("a missing secret = %v, want 409 naming env/aws and %s", err, secretEnvPlace)
 	}
 	vault.mu.Lock()
 	vault.values[tenant.String()+"|env/pin"] = "1234"
 	vault.mu.Unlock()
-	_, err = m.createRun(ctx, tenant, secretEnvParams([]SecretEnvRef{{Env: "PIN", Secret: "env/pin"}}, true))
+	_, err = createProfiledTestRun(t, m, ctx, tenant, secretEnvParams([]SecretEnvRef{{Env: "PIN", Secret: "env/pin"}}, true))
 	if statusOf(err) != http.StatusConflict || !strings.Contains(err.Error(), "env/pin") {
 		t.Fatalf("a value too short to withhold = %v, want 409 naming env/pin", err)
 	}
 	vault.openErr = fmt.Errorf("sealer offline")
-	_, err = m.createRun(ctx, tenant, secretEnvParams(githubSecretEnv, true))
+	_, err = createProfiledTestRun(t, m, ctx, tenant, secretEnvParams(githubSecretEnv, true))
 	if statusOf(err) != http.StatusServiceUnavailable {
 		t.Fatalf("an unreadable vault = %v, want 503", err)
 	}
@@ -269,7 +270,7 @@ func TestSecretEnv_ResumeUsesTheStoredNamesAndTheCurrentValue(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
 	m, tenant, fr, vault, gate := secretEnvHarness(t)
-	dto, err := m.createRun(ctx, tenant, secretEnvParams(githubSecretEnv, true))
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, secretEnvParams(githubSecretEnv, true))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -295,6 +296,71 @@ func TestSecretEnv_ResumeUsesTheStoredNamesAndTheCurrentValue(t *testing.T) {
 	}
 }
 
+// secretEnvPlace is where the console keeps session secrets (web/src/features/
+// first-hour: the start form's More options, then Manage session secrets).
+const secretEnvPlace = "New session > More options > Manage session secrets"
+
+// A stopped session's secrets cannot be edited, and session secrets live in the
+// tenant's store behind the start form's "Manage session secrets", not the
+// deployment-wide Secrets page (#511). Every refusal of a stored secret on resume
+// names that place and the other way out, a new session, and none offers to
+// remove the secret from this session.
+func TestSecretEnv_AResumeRefusalNamesAWayOutThatExists(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	m, tenant, fr, vault, _ := secretEnvHarness(t)
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, secretEnvParams(githubSecretEnv, true))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := m.stopRun(ctx, tenant, dto.RunRef, actorU, actorKindU); err != nil {
+		t.Fatal(err)
+	}
+	fr.mu.Lock()
+	before := len(fr.specs)
+	fr.mu.Unlock()
+	key := tenant.String() + "|env/github"
+	for _, tc := range []struct {
+		name  string
+		value string // "" deletes the secret
+		want  string // the refusal this value reaches
+	}{
+		{"deleted", "", "no session secret named env/github"},
+		{"too short", "1234", "shorter than"},
+		{"a short line", "long enough line\nq7", "a line of the value"},
+		{"shares the marker", "x[secret env/github]x", "the mark that replaces"},
+		{"shares the cut note", "abcdefgh" + diagnosticTruncatedMark, "the note that ends"},
+	} {
+		vault.mu.Lock()
+		if tc.value == "" {
+			delete(vault.values, key)
+		} else {
+			vault.values[key] = tc.value
+		}
+		vault.mu.Unlock()
+		_, err := m.resumeRunAs(ctx, tenant, dto.RunRef, actorU, actorKindU, "", true)
+		if statusOf(err) != http.StatusConflict || !strings.Contains(err.Error(), tc.want) {
+			t.Errorf("%s: resume = %v, want 409 saying %q", tc.name, err, tc.want)
+			continue
+		}
+		msg := err.Error()
+		if !strings.Contains(msg, secretEnvPlace) || !strings.Contains(msg, "start a new session") ||
+			strings.Contains(msg, "remove it from this session") {
+			t.Errorf("%s: resume refusal %q, want it to name %s and a new session, and no removal", tc.name, msg, secretEnvPlace)
+		}
+		for _, part := range append(secretLines(tc.value), tc.value) {
+			if part != "" && strings.Contains(msg, part) {
+				t.Errorf("%s: resume refusal carries the value", tc.name)
+			}
+		}
+	}
+	fr.mu.Lock()
+	defer fr.mu.Unlock()
+	if len(fr.specs) != before {
+		t.Fatal("a refused resume reached the runner")
+	}
+}
+
 // A template names secrets the same way; the launcher still has to be allowed to
 // use them, and the template's name for a variable wins over the request's.
 func TestSecretEnv_ATemplateNamesSecretsForTheLaunchItGoverns(t *testing.T) {
@@ -307,13 +373,13 @@ func TestSecretEnv_ATemplateNamesSecretsForTheLaunchItGoverns(t *testing.T) {
 
 	p := secretEnvParams(nil, false)
 	p.TemplateID = tplID
-	if _, err := m.createRun(ctx, tenant, p); statusOf(err) != http.StatusForbidden {
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, p); statusOf(err) != http.StatusForbidden {
 		t.Fatalf("a template's secrets for a launcher who may not use them = %v, want 403", err)
 	}
 
 	p = secretEnvParams([]SecretEnvRef{{Env: "GITHUB_TOKEN", Secret: "env/quoted"}}, true)
 	p.TemplateID = tplID
-	if _, err := m.createRun(ctx, tenant, p); err != nil {
+	if _, err := createProfiledTestRun(t, m, ctx, tenant, p); err != nil {
 		t.Fatalf("launch from the template: %v", err)
 	}
 	if got, _ := specEnvValue(fr.lastSpec(), "GITHUB_TOKEN"); got != secretCanary {
@@ -329,7 +395,7 @@ func TestSecretEnv_TheHookPathCanWithholdTheRunsValues(t *testing.T) {
 	ctx := context.Background()
 	m, tenant, _, _, _ := secretEnvHarness(t)
 	refs := append([]SecretEnvRef{{Env: "QUOTED", Secret: "env/quoted"}}, githubSecretEnv...)
-	dto, err := m.createRun(ctx, tenant, secretEnvParams(refs, true))
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, secretEnvParams(refs, true))
 	if err != nil {
 		t.Fatalf("create with vault secrets: %v", err)
 	}
@@ -351,7 +417,7 @@ func TestSecretEnv_TheHookPathCanWithholdTheRunsValues(t *testing.T) {
 		t.Fatalf("an unknown run = (%q, %v), want the input back and ok false", same, ok)
 	}
 	// A run with no secrets passes its data through, vouched.
-	plain, err := m.createRun(ctx, tenant, secretEnvParams(nil, false))
+	plain, err := createProfiledTestRun(t, m, ctx, tenant, secretEnvParams(nil, false))
 	if err != nil {
 		t.Fatalf("create without secrets: %v", err)
 	}
@@ -378,11 +444,11 @@ func TestSecretEnv_AQueuedLaunchKeepsSecretsWhileItsLauncherIsStillAnAdministrat
 	login := h.doJSON("POST", "/v1/auth/login", "", map[string]any{"email": "queued-admin@fh.invalid", "password": "synthetic-password1"}, nil)
 	token, _ := login.body["token"].(string)
 	issuer := auth.NewAuthenticator(h.st, nil)
-	m.UseQueuedCredentialCapture(issuer.BindQueuedCredential)
-	m.UseQueuedLaunchAuthorization(func(ctx context.Context, tenant model.TenantID, credential auth.QueuedCredential, runID string, workspace model.ID) (auth.Principal, error) {
+	m.QueuedCredentialCapture = issuer.BindQueuedCredential
+	m.QueuedLaunchAuthorization = func(ctx context.Context, tenant model.TenantID, credential auth.QueuedCredential, runID string, workspace model.ID) (auth.Principal, error) {
 		return issuer.RevalidateQueuedCredential(ctx, credential)
-	})
-	queued := h.doJSON("POST", "/v1/m/sessions/runs", token, map[string]any{"name": "queued secret launch", "secret_env": githubSecretEnv}, tenantHdr(tenant))
+	}
+	queued := h.doJSON("POST", "/v1/m/sessions/runs", token, map[string]any{"provider_profile_ref": ensureRuntimeTestProfileRef(t, h.m, tenant), "name": "queued secret launch", "secret_env": githubSecretEnv}, tenantHdr(tenant))
 	if queued.code != http.StatusAccepted || launchCount(runner) != 0 {
 		t.Fatalf("queued = %d %s", queued.code, queued.raw)
 	}
@@ -462,7 +528,7 @@ func TestSecretEnv_SpansAreTheMarkersTheRedactorWrote(t *testing.T) {
 func TestSecretEnv_TheHookPortReturnsTheMarkerSpans(t *testing.T) {
 	t.Parallel()
 	m, tenant, _, _, _ := secretEnvHarness(t)
-	dto, err := m.createRun(context.Background(), tenant, secretEnvParams(githubSecretEnv, true))
+	dto, err := createProfiledTestRun(t, m, context.Background(), tenant, secretEnvParams(githubSecretEnv, true))
 	if err != nil {
 		t.Fatalf("create with a vault secret: %v", err)
 	}
@@ -506,7 +572,7 @@ func TestSecretEnv_AValueAMarkerCouldCompleteRefusesTheLaunchBeforeSpawn(t *test
 			vault.mu.Lock()
 			vault.values[tenant.String()+"|env/second"] = c.value
 			vault.mu.Unlock()
-			_, err := m.createRun(ctx, tenant, secretEnvParams(refs, true))
+			_, err := createProfiledTestRun(t, m, ctx, tenant, secretEnvParams(refs, true))
 			if statusOf(err) != http.StatusConflict || !strings.Contains(err.Error(), "SECOND") {
 				t.Fatalf("launch = %v, want 409 naming the variable SECOND", err)
 			}
@@ -533,7 +599,7 @@ func TestSecretEnv_AValueAMarkerCouldCompleteRefusesTheLaunchBeforeSpawn(t *test
 	vault.mu.Lock()
 	vault.values[tenant.String()+"|env/second"] = "a[b]c-0123456789"
 	vault.mu.Unlock()
-	dto, err := m.createRun(ctx, tenant, secretEnvParams(refs, true))
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, secretEnvParams(refs, true))
 	if err != nil {
 		t.Fatalf("a safe binding (brackets away from the edges) = %v, want a launch", err)
 	}
@@ -629,7 +695,7 @@ func TestSecretEnv_AValueEscapedTheWayTheToolsWriteJSONIsWithheld(t *testing.T) 
 func tenantRunCount(t *testing.T, m *Module, tenant model.TenantID) int {
 	t.Helper()
 	var n int
-	if err := m.data.View(context.Background(), tenant, func(sc store.Scope) error {
+	if err := m.Data.View(context.Background(), tenant, func(sc store.Scope) error {
 		repo, err := sc.Ext(runKind)
 		if err != nil {
 			return err
@@ -654,7 +720,7 @@ func TestSecretEnv_ResumeKeepsTheStoredBindingWhenTheTemplateRebindsItsVariable(
 	tpl := seedTemplate(t, m, tenant, "fh-secret-rebind", tplBody{Settings: &tplSettings{SecretEnv: githubSecretEnv}})
 	params := secretEnvParams(nil, true)
 	params.TemplateID = tpl
-	dto, err := m.createRun(ctx, tenant, params)
+	dto, err := createProfiledTestRun(t, m, ctx, tenant, params)
 	if err != nil {
 		t.Fatal(err)
 	}

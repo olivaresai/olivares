@@ -31,7 +31,7 @@ class UnmeasurableError(Exception):
 
 SAFE_NAME = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+-]*$")
 ASSET_NAME = re.compile(
-    r"^olivares_(?P<version>[0-9]+\.[0-9]+(\.[0-9]+)?)_linux_"
+    r"^olivares_(?P<version>[0-9]+\.[0-9]+)_linux_"
     r"(?P<asset_arch>amd64|arm64)\.(?P<format>deb|rpm|apk)$"
 )
 SHA256 = re.compile(r"^[0-9a-f]{64}$")
@@ -386,8 +386,8 @@ def _base_version(package: Package) -> str:
 
 
 def load_release_packages(checksums: Path, artifact_dir: Path, version: str) -> list[Package]:
-    if not re.fullmatch(r"[0-9]+\.[0-9]+(\.[0-9]+)?", version):
-        raise UnmeasurableError("version must be YY.M or YY.M.N")
+    if not re.fullmatch(r"[0-9]+\.[0-9]+", version):
+        raise UnmeasurableError("version must be MAJOR.MINOR")
     if not artifact_dir.is_dir():
         raise UnmeasurableError(f"artifact directory is missing: {artifact_dir}")
     rows = read_checksum_rows(checksums)

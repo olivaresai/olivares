@@ -63,7 +63,7 @@ export function renderIntel(
  */
 export const DEFAULT_AUTH = {
   status: 'authenticated' as const,
-  principal: { superadmin: true } as unknown,
+  principal: { superadmin: true, grants: [] } as unknown,
   grants: [] as unknown[],
   activeTenant: 'demo',
   activeRole: 'owner',

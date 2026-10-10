@@ -121,6 +121,28 @@ func (sqliteDialect) AuditTableStmts() []string {
 	return stmts
 }
 
+// AuditTreeStmts: one row per stored tree hash (leaf and interior), keyed by the
+// tlog storage index. leaf is the record number whose append wrote the row and
+// seq that record's audit sequence, so a proof can be asked for by sequence even
+// where an audit.gap marker leaves a hole in the numbering.
+func (sqliteDialect) AuditTreeStmts() []string {
+	t := AuditTreeTable
+	return []string{
+		`CREATE TABLE ` + t + ` (
+  tenant_id TEXT NOT NULL,
+  idx INTEGER NOT NULL,
+  leaf INTEGER NOT NULL,
+  seq INTEGER NOT NULL,
+  hash BLOB NOT NULL CHECK (length(hash) = 32),
+  PRIMARY KEY (tenant_id, idx)
+)`,
+		"CREATE INDEX " + t + "_seq_idx ON " + t + "(tenant_id, seq)",
+		sqliteScopeTriggers(t, true)[0],
+		sqliteAppendOnlyTriggers(t)[0],
+		sqliteAppendOnlyTriggers(t)[1],
+	}
+}
+
 func (sqliteDialect) AuditSpoolStmts() []string {
 	// audit_spool_usage is global mutable bookkeeping, not tenant data and not
 	// evidence. It deliberately has neither scope tripwires nor append-only

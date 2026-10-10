@@ -12,6 +12,7 @@
     "close": "Fermer",
     "push": "Pousser",
     "pull_request": "Ouvrir une pull request",
+    "draftPullRequest": "Ouvrir une pull request en brouillon",
     "merge": "Fusionner",
     "reconcile": "Réconcilier",
     "abandon": "Abandonner"
@@ -70,7 +71,7 @@
   },
   "authority": {
     "requires": "Requiert {{permission}}",
-    "requiresAal3": "Requiert {{permission}} et une élévation à AAL3"
+    "requiresStepUp": "Requiert {{permission}} et la vérification supplémentaire pour les actions d’administration"
   },
   "publish": {
     "push": {
@@ -89,6 +90,12 @@
       "submit": "Demander la fusion"
     }
   },
+  "session": {
+    "title": "Publier",
+    "hint": "Pousser le commit de cette session via la cible de publication de son espace de travail. Le moteur récupère le commit dans le dossier de la session.",
+    "publish": "Publier",
+    "publishTo": "Publier dans {{prefix}}"
+  },
   "fields": {
     "ref": "Réf. de branche",
     "refHint": "Une réf. complète sous le préfixe de push, par exemple refs/heads/{{prefix}}change.",
@@ -97,6 +104,9 @@
     "commit": "Commit",
     "tree": "Arbre",
     "treeHint": "L’ID de l’arbre du commit. Le moteur refuse le push si le dépôt géré contient un arbre différent.",
+    "sessionRun": "Exécution de session",
+    "sessionRunHint": "Facultatif. L’exécution de session dont le dossier contient le commit. Le moteur y récupère d’abord le commit dans le dépôt géré.",
+    "sessionRunFixedHint": "La session dont vient ce push. Le moteur récupère d’abord le commit depuis son dossier dans le dépôt géré.",
     "headRef": "Branche head",
     "headRefHint": "Une branche sous {{prefix}}.",
     "base": "Branche de base",
@@ -108,7 +118,7 @@
     "expectedHeadHint": "La fusion n’a lieu que tant que le head de la pull request est ce commit.",
     "method": "Méthode de fusion",
     "acknowledgeIntent": "Prendre acte d’une intention abandonnée",
-    "acknowledgeIntentHint": "Facultatif. L’ID d’une intention abandonnée qui détient cette portée. L’indiquer requiert l’administration de la cible avec AAL3.",
+    "acknowledgeIntentHint": "Facultatif. L’ID d’une intention abandonnée qui détient cette portée. L’indiquer requiert l’administration de la cible.",
     "operationId": "ID d’opération",
     "operationIdHint": "Soumettre à nouveau cette même demande avec cet ID retourne l’intention enregistrée. Aucun second envoi n’a lieu."
   },
@@ -175,11 +185,15 @@
     "protected_branch_refused": "La branche est protégée sur l’hôte, et la publication vers celle-ci est refusée.",
     "push_prefix_overlaps_base": "Le préfixe de push permettrait à un push d’atteindre une base de fusion.",
     "ref_not_allowed": "La branche n’est pas sous le préfixe de push de cette cible.",
+    "repository_config_refused": "La configuration du dépôt géré n’est pas celle que gère le moteur. Rien n’a été poussé.",
     "repository_outside_binding": "Le dépôt n’appartient pas aux propriétaires qu’autorise la liaison d’identifiant.",
     "runtime_credential_refused": "L’identifiant de runtime d’une session ne peut pas publier. Agissez avec votre propre identifiant.",
     "scoped_grant_required": "Cette action nécessite un octroi à portée limitée sur cette cible.",
+    "separation_of_duty": "Vous avez lancé la session à l’origine de cette modification. Demandez à une autre personne de la vérifier et de la fusionner.",
+    "session_source_refused": "L’exécution de session n’est pas dans l’espace de travail de cette cible, ou son dossier n’est pas un dépôt dont le moteur peut récupérer le commit.",
+    "session_source_unavailable": "Le dossier de la session n’a pas pu être lu à temps. Rien n’a été poussé.",
     "stale_lease": "La branche n’est plus sur le commit actuel attendu.",
-    "step_up_required": "Cette action nécessite une élévation à AAL3. Effectuez l’élévation lorsqu’elle vous est demandée.",
+    "step_up_required": "Cette action nécessite la vérification supplémentaire pour les actions d’administration que ce déploiement exige. Effectuez-la lorsqu’elle vous est demandée.",
     "subject_mismatch": "Cet ID d’opération appartient à une demande faite par un autre sujet.",
     "target_changed": "La cible a changé après l’admission de la demande. Rien n’a été envoyé.",
     "target_in_use": "Une intention en cours d’envoi, incertaine ou abandonnée détient encore cette cible.",

@@ -495,8 +495,8 @@ func TestDirectNoticeCursorServiceCreatesV1AndReplaysBeforeExpiry(t *testing.T) 
 		t, service, fixture, "", 0, 0, 1, published[0].DeliveryID,
 	)
 	cmd := directNoticeCursorCommand(fixture, token, 0, model.NewID())
-	observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-	fixture.m.data = observer
+	observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+	fixture.m.Data = observer
 
 	result, err := service.Advance(context.Background(), fixture.scope, fixture.principal, cmd)
 	if err != nil {
@@ -733,8 +733,8 @@ func TestDirectNoticeCursorServiceAuditFailureRollsBackCursorBarrierAndReceipt(t
 		t, fixture.directNoticeFixture, communicationCommandKind,
 	))
 	failure := errors.New("cursor audit append fault")
-	fixture.m.data = directNoticeCursorAuditFailureData{
-		inner: fixture.m.data, failure: failure,
+	fixture.m.Data = directNoticeCursorAuditFailureData{
+		inner: fixture.m.Data, failure: failure,
 	}
 	_, err := service.Advance(
 		context.Background(), fixture.scope, fixture.principal,
@@ -773,8 +773,8 @@ func TestDirectNoticeCursorServiceReceiptFailureRollsBackEffectsAndAudit(t *test
 	))
 	beforeHead, beforeHeadPresent := directNoticeCursorAuditHead(t, fixture)
 	failure := errors.New("cursor receipt append fault")
-	fixture.m.data = directNoticeCursorReceiptFailureData{
-		inner: fixture.m.data, failure: failure,
+	fixture.m.Data = directNoticeCursorReceiptFailureData{
+		inner: fixture.m.Data, failure: failure,
 	}
 	_, err := service.Advance(
 		context.Background(), fixture.scope, fixture.principal,
@@ -818,8 +818,8 @@ func TestDirectNoticeCursorServiceFreshMACMissStopsBeforeDynamicObservers(t *tes
 		replacement = 'B'
 	}
 	corrupt := token[:len(token)-1] + string(replacement)
-	observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-	fixture.m.data = observer
+	observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+	fixture.m.Data = observer
 	_, err := service.Advance(
 		context.Background(), fixture.scope, fixture.principal,
 		directNoticeCursorCommand(fixture, corrupt, 0, model.NewID()),
@@ -843,8 +843,8 @@ func TestDirectNoticeCursorServiceBoundStopsBeforeMutation(t *testing.T) {
 	token := mintDirectNoticeCursorTestToken(
 		t, service, fixture, "", 0, 0, 2, published[1].DeliveryID,
 	)
-	observer := &directNoticeMutateObserverData{inner: fixture.m.data}
-	fixture.m.data = observer
+	observer := &directNoticeMutateObserverData{inner: fixture.m.Data}
+	fixture.m.Data = observer
 	_, err := service.Advance(
 		context.Background(), fixture.scope, fixture.principal,
 		directNoticeCursorCommand(fixture, token, 0, model.NewID()),
@@ -861,9 +861,9 @@ func TestDirectNoticeCursorServiceUsesOneAuthorityLock(t *testing.T) {
 
 	fixture, published, service := newDirectNoticeCursorTestService(t, 1)
 	fault := &directNoticeAuthorityFaultData{
-		inner: fixture.m.data, failAt: 2, err: errors.New("second authority lock"),
+		inner: fixture.m.Data, failAt: 2, err: errors.New("second authority lock"),
 	}
-	fixture.m.data = fault
+	fixture.m.Data = fault
 	token := mintDirectNoticeCursorTestToken(
 		t, service, fixture, "", 0, 0, 1, published[0].DeliveryID,
 	)
@@ -972,10 +972,10 @@ func TestDirectNoticeCursorServiceInTransactionReplayRequiresOuterVerifiedAnchor
 	corrupt := event
 	corrupt.Hash = bytes.Repeat([]byte{0x5a}, sha256.Size)
 	replayViews := &directNoticeCursorReplayViewData{
-		inner: fixture.m.data,
+		inner: fixture.m.Data,
 		audit: directNoticeReplayAuditLog{events: []model.AuditEvent{corrupt}, meta: meta},
 	}
-	fixture.m.data = replayViews
+	fixture.m.Data = replayViews
 
 	if replay, replayErr := service.Advance(
 		context.Background(), fixture.scope, fixture.principal, cmd,
@@ -1007,8 +1007,8 @@ func TestDirectNoticeCursorServiceInTransactionReplayReturnsVerifiedControl(t *t
 	if err != nil {
 		t.Fatalf("seed cursor replay control: %v", err)
 	}
-	replayViews := &directNoticeCursorReplayViewData{inner: fixture.m.data}
-	fixture.m.data = replayViews
+	replayViews := &directNoticeCursorReplayViewData{inner: fixture.m.Data}
+	fixture.m.Data = replayViews
 	replayed, err := service.Advance(context.Background(), fixture.scope, fixture.principal, cmd)
 	if err != nil || !replayed.Replayed || replayed.CommandID != original.CommandID ||
 		replayed.CursorID != original.CursorID || replayed.Version != original.Version ||

@@ -43,7 +43,13 @@ export function NextStep({ stacked = false }: { stacked?: boolean } = {}) {
   const offered = NEXT_STEPS.map((step) => ({
     step,
     view: stepView(step.viewId),
-  })).filter((row) => row.view !== undefined && can(row.step.permission))
+  })).filter(
+    ({ step, view }) =>
+      view !== undefined &&
+      can(step.permission) &&
+      // And the page it opens: a write without that page's read lands on a 403.
+      (!view.permission || can(view.permission)),
+  )
 
   if (offered.length === 0) return null
 

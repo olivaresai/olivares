@@ -12,7 +12,7 @@ export LC_ALL
 root="${OLIVARES_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)}"
 failures=0
 fail() { printf 'package repository contract: FAIL — %s\n' "$*" >&2; failures=$((failures + 1)); }
-blind() { printf 'package repository contract: NO HE PODIDO MIRAR — %s\n' "$*" >&2; exit 2; }
+blind() { printf 'package repository contract: COULD NOT CHECK — %s\n' "$*" >&2; exit 2; }
 
 for tool in bash grep python3; do
 	command -v "$tool" >/dev/null 2>&1 || blind "required tool is unavailable: $tool"
@@ -64,7 +64,6 @@ client = (root / "scripts/package-repository-client-ci.sh").read_text(encoding="
 battery = (root / "scripts/test-package-repositories.sh").read_text(encoding="utf-8")
 workflow = (root / ".github/workflows/package-repositories.yml").read_text(encoding="utf-8")
 taskfile = (root / "Taskfile.yml").read_text(encoding="utf-8")
-hook = (root / ".githooks/pre-push").read_text(encoding="utf-8")
 mainline = (root / ".github/workflows/mainline-ci.yml").read_text(encoding="utf-8")
 
 for token in (
@@ -78,7 +77,7 @@ for token in (
     "OLIVARES_PACKAGE_REPO_OPENPGP_SECRET_KEY_FILE",
     "OLIVARES_PACKAGE_REPO_APK_PRIVATE_KEY_FILE",
     "OLIVARES_PACKAGE_REPO_TEST_ONLY",
-    "NO PUEDO FIRMAR",
+    "CANNOT SIGN",
 ):
     assert token in renderer, token
 assert "exit 2" in keygen and "TEST ONLY" in keygen
@@ -115,7 +114,6 @@ for forbidden in ("wrangler ", "aws s3", "rclone ", "gh release upload", "pages 
 
 for target in ("lint:package-repos", "lint:package-repos:selftest"):
     assert f"  {target}:" in taskfile
-    assert f"task {target}" in hook
     assert f"run: task {target}" in mainline
 
 docs = [
@@ -124,7 +122,7 @@ docs = [
     (root / "docs-site/src/content/docs/how-to/install-from-packages.md").read_text(encoding="utf-8"),
 ]
 for document in docs:
-    assert "DIST-24-06 proposed repositories" in document
+    assert "Proposed package repositories" in document
     assert "No package-repository URL is live" in document
 PY
 

@@ -247,11 +247,16 @@ func (m *Module) materializeAccountHome(tenant model.TenantID, op model.Record) 
 			return homes, err
 		}
 	}
+	if op.String(colHODriver) == providerDriverGemini {
+		if err := ensureAccountDir(root, filepath.Join(final, accounthome.ConfigDir, ".gemini"), 0700); err != nil {
+			return homes, err
+		}
+	}
 	// Capture the actual published leaves before any interruption callback.
 	// Re-resolving two pathnames later would only prove that both now name the
 	// same replacement, not that the published inode survived.
 	var published [2]fs.FileInfo
-	for i, leaf := range []string{accounthome.ConfigDir, accounthome.UserDir} {
+	for i, leaf := range []string{accountConfigLeaf(op.String(colHODriver)), accounthome.UserDir} {
 		published[i], err = root.Lstat(filepath.Join(final, leaf))
 		if err != nil || !published[i].IsDir() {
 			return homes, errAccountHomeOccupied
@@ -269,7 +274,7 @@ func (m *Module) materializeAccountHome(tenant model.TenantID, op model.Record) 
 	if err := verifyAccountRoot(root, m.accountsRoot, canonical); err != nil {
 		return homes, err
 	}
-	for i, leaf := range []string{accounthome.ConfigDir, accounthome.UserDir} {
+	for i, leaf := range []string{accountConfigLeaf(op.String(colHODriver)), accounthome.UserDir} {
 		relative := filepath.Join(final, leaf)
 		if err := accountDirectory(root, relative); err != nil {
 			return homes, err
@@ -285,4 +290,12 @@ func (m *Module) materializeAccountHome(tenant model.TenantID, op model.Record) 
 		}
 	}
 	return homes, nil
+}
+
+// Account custody keeps its config leaf; Gemini selects the native directory inside it.
+func accountConfigLeaf(driver string) string {
+	if driver == providerDriverGemini {
+		return filepath.Join(accounthome.ConfigDir, ".gemini")
+	}
+	return accounthome.ConfigDir
 }

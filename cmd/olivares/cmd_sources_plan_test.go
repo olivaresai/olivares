@@ -89,21 +89,8 @@ func readRoster(t *testing.T, dir string) []model.SourceDef {
 	return rows
 }
 
-// TestSourcesPlanDoesNotWireTheRoster measures what the COMMAND does, not what
-// the boot flag can do.
-//
-// ReadOnly never covered this: it stops the boot MANUFACTURING an installation,
-// and then rt.Start and the initial reconcile run as usual and PREPARE, OPEN and
-// WIRE every enabled connector. So a preview verb dialed a deployment's sources
-// to print a diff. The sol-max contrast caught a `sources plan` logging
-// `rejected=1` from a real apply attempt.
-//
-// The first version of this test called boot() directly with NoIngest set, and a
-// mutant that took NoIngest OUT of rosterReadBoot left it green — it was proving
-// the flag worked, never that the commands used it. It now runs the real argv and
-// watches the reconcile's own log line, with `sources ls` as the other direction:
-// ls still takes the old boot, so it MUST wire, which is what makes the silence
-// under `plan` mean something.
+// A preview must not wire the roster. A serving boot is the positive control
+// for the reconciler's log witness.
 func TestSourcesPlanDoesNotWireTheRoster(t *testing.T) {
 	dir := initialisedDataDir(t)
 	seedRoster(t, dir, model.SourceDef{
@@ -120,15 +107,22 @@ func TestSourcesPlanDoesNotWireTheRoster(t *testing.T) {
 		prev := slog.Default()
 		slog.SetDefault(slog.New(slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})))
 		t.Cleanup(func() { slog.SetDefault(prev) })
-		if _, err := runCLI(t, argv...); err != nil {
+		if len(argv) == 0 {
+			eng, err := boot(t.Context(), bootConfig{DataDir: dir, Version: "test", Logger: slog.Default()})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := eng.Close(); err != nil {
+				t.Fatal(err)
+			}
+		} else if _, err := runCLI(t, argv...); err != nil {
 			t.Fatalf("%v: %v", argv, err)
 		}
 		return buf.String()
 	}
 
-	// `sources ls` still boots the old way, so it wires. Without this the assertion
-	// below could pass because the log line was renamed or never emitted at all.
-	if out := logged(t, "sources", "ls", "--data-dir", dir); !strings.Contains(out, wiredLine) {
+	// A serving boot still wires, so silence under the preview is meaningful.
+	if out := logged(t); !strings.Contains(out, wiredLine) {
 		t.Fatalf("the control did not wire the roster, so the check below measures nothing:\n%s", out)
 	}
 	if out := logged(t, "sources", "plan", "--data-dir", dir, "--name", "cfg-scan", "--enabled=false"); strings.Contains(out, wiredLine) {

@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -102,7 +103,12 @@ func (v *GPGVerifier) Verify(ctx context.Context, key []byte, wantFingerprint st
 	if len(want) != 40 {
 		return SignatureReport{}, refuse(KindVerificationUnavailable, "pinned fingerprint %q is not a 40-hex-digit OpenPGP v4 fingerprint", wantFingerprint)
 	}
-	home, err := os.MkdirTemp("", "olivares-gpg-")
+	// GPG's Unix sockets need a short path, independent of the engine's TMPDIR.
+	tempDir := "/tmp"
+	if runtime.GOOS == "windows" {
+		tempDir = ""
+	}
+	home, err := os.MkdirTemp(tempDir, "olivares-gpg-")
 	if err != nil {
 		return SignatureReport{}, refuse(KindVerificationUnavailable, "create isolated keyring: %v", err)
 	}

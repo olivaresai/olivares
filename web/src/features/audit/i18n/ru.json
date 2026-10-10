@@ -100,10 +100,49 @@
     "this": "этот",
     "sig": "Подпись события",
     "checkpoint": "подпись",
-    "chainHint": "Хеш каждого события связан с предыдущим. За отпечатком нет полезной нагрузки — хеш и есть доказательство (минимум данных по дизайну)."
+    "chainHint": "Хеш каждого события связан с предыдущим. За отпечатком нет полезной нагрузки — хеш и есть доказательство (минимум данных по дизайну).",
+    "details": "Подробности",
+    "actorMember": "Участник"
   },
   "empty": {
     "title": "Доказательств пока нет",
     "description": "Реестр для этой области пуст. Управляемые операции добавляют защищённые от подделки события по мере их появления."
+  },
+  "actions": {
+    "governance_approval_create": "Запрошено одобрение",
+    "governance_approval_decision": "Решение об одобрении записано",
+    "governance_approval_cancel": "Запрос одобрения отменён",
+    "sessions_run_launched": "Сессия запущена",
+    "sessions_run_stopping": "Запрошена остановка сессии",
+    "sessions_work_item_create": "Рабочий элемент создан",
+    "sessions_work_item_ready": "Рабочий элемент помечен как готовый",
+    "sessions_work_item_complete": "Рабочий элемент завершён",
+    "authorization_decision_record": "Решение авторизации записано",
+    "policy_artifact_record": "Свидетельство политики записано",
+    "governance_policy_create": "Политика создана",
+    "governance_policy_update": "Политика обновлена",
+    "governance_policy_delete": "Политика удалена",
+    "auth_login": "Вход в систему",
+    "auth_logout": "Выход из системы",
+    "auth_login_failed": "Неудачная попытка входа",
+    "auth_webauthn_register": "Ключ доступа добавлен",
+    "auth_webauthn_unregister": "Ключ доступа удалён",
+    "user_set_password": "Пароль изменён",
+    "user_create": "Участник добавлен",
+    "membership_grant": "Роль назначена",
+    "membership_update": "Роль изменена",
+    "membership_offboard": "Участник удалён",
+    "token_issue": "API-токен создан",
+    "token_revoke": "API-токен отозван",
+    "secret_delete": "Секрет удалён"
+  },
+  "targets": {
+    "core_policy": "Политика"
+  },
+  "internal": {
+    "hidden": "Скрыто внутренних записей: {{count}}",
+    "show": "Показать внутренние записи",
+    "hide": "Скрыть внутренние записи",
+    "allHidden": "Всё загруженное до сих пор — внутренние записи."
   }
 }

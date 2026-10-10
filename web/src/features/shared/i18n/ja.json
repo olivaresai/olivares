@@ -44,5 +44,14 @@
     "untitledSession": "無題のセッション",
     "unknownUser": "不明なユーザー",
     "unknownWorkspace": "不明なワークスペース"
+  },
+  "headDiff": {
+    "file": "ファイル",
+    "changes": "HEAD からの変更",
+    "committed": "HEAD（コミット済み）",
+    "current": "現在",
+    "same": "HEAD との差分はありません。",
+    "view": "表示",
+    "unavailable": "HEAD と比較できませんでした。"
   }
 }

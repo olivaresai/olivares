@@ -19,14 +19,16 @@ l'agent.
 Le module couvre trois responsabilités délimitées :
 
 - **Garde-fous** — une chaîne de détecteurs déterministes et explicables inspecte le texte
-  des agents sur les surfaces `input`, `output` et `tool_args` à la recherche de
+  des agents sur les surfaces `input`, `output`, `tool_args` et `tool_result` à la recherche de
   secrets/PII, d'injection de prompt, de jailbreak, de contenu interdit, de violations de
   schéma de sortie et du OWASP Agentic Top 10. Les détections portent des références de
   cadre (OWASP LLM Top 10 2025, OWASP Agentic Top 10 2026, MITRE ATLAS) reprises
-  textuellement de sources primaires, jamais inventées. Un classifieur optionnel et
-  enfichable (un garde-fou-LLM hébergé) s'exécute *derrière* les détecteurs déterministes :
-  il ne peut qu'**ajouter** des détections, jamais en supprimer une, et son échec est
-  journalisé puis ignoré.
+  textuellement de sources primaires, jamais inventées.
+  Le binaire standard ne configure aucun classifieur de modèle ; la sélection
+  du fournisseur ou du compte n’est pas raccordée à ce port. L’interface Go
+  optionnelle reste prise en charge : les classifieurs injectés
+  peuvent ajouter des détections, jamais supprimer les résultats déterministes, et
+  leurs erreurs sont journalisées puis ignorées.
 - **Détection d'anomalies** — il corrèle le drift Permis-vs-Observé que calcule le
   [module III](/fr/reference/modules/iii-access-map/) avec les findings de gravité élevée,
   et joint les signaux anti-évasion côté noyau et côté coopératif : un agent qui réduit au

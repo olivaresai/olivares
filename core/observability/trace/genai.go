@@ -9,11 +9,14 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 	"time"
 
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/codes"
 	"go.opentelemetry.io/otel/metric"
@@ -40,6 +43,15 @@ const (
 	attrGenAICacheRead     = "gen_ai.usage.cache_read.input_tokens"
 	attrGenAICacheCreation = "gen_ai.usage.cache_creation.input_tokens"
 	attrGenAITokenType     = "gen_ai.token.type"
+	// attrGenAICacheWrite and attrGenAITokenModality belong to the pending
+	// latest-experimental form (#440 renames cache_creation → cache_write; the
+	// #374 counters require gen_ai.token.modality), emitted only behind
+	// OTEL_SEMCONV_STABILITY_OPT_IN containing gen_ai_latest_experimental.
+	attrGenAICacheWrite    = "gen_ai.usage.cache_write.input_tokens"
+	attrGenAITokenModality = "gen_ai.token.modality"
+	// modalityText is the gen_ai.token.modality value for the Messages token
+	// buckets this transport meters (plain text in and out).
+	modalityText = "text"
 	// Product keys live under the reserved reverse-DNS namespace ai.olivares.*
 	// (freeze); the gen_ai.* keys above are OTel semconv, not ours to move.
 	attrOlivaresRequestSHA  = "ai.olivares.inference.request.body_sha256"
@@ -67,6 +79,18 @@ const (
 const (
 	metricTokenUsage = "gen_ai.client.token.usage"
 	metricOpDuration = "gen_ai.client.operation.duration"
+
+	// The pending latest-experimental token metrics (#374, verified against
+	// open-telemetry/semantic-conventions-genai docs/gen-ai/gen-ai-token-metrics.md
+	// at main, 2026-10-05): per-tier usage COUNTERS replace the token.usage
+	// histogram and its gen_ai.token.type attribute. Emitted only behind
+	// OTEL_SEMCONV_STABILITY_OPT_IN containing gen_ai_latest_experimental; the
+	// input counter includes cached tokens and the cache counters are subsets of it.
+	metricUsagePrefix     = "gen_ai.client.inference.usage."
+	metricUsageInput      = metricUsagePrefix + "input_tokens"
+	metricUsageOutput     = metricUsagePrefix + "output_tokens"
+	metricUsageCacheRead  = metricUsagePrefix + "cache_read.input_tokens"
+	metricUsageCacheWrite = metricUsagePrefix + "cache_write.input_tokens"
 )
 
 var (
@@ -82,10 +106,26 @@ var (
 // never holds an unbounded body in memory.
 const maxGenAIBody = 4 << 20 // 4 MiB
 
-// genAIInstruments are the two OTel GenAI client metrics.
+// genAIInstruments are the OTel GenAI client metrics. Both forms are created on
+// the ONE meter the provider owns (a single metrics pipeline); which one is
+// recorded is the opt-in's choice, so no second pipeline exists for the pending
+// conventions.
 type genAIInstruments struct {
 	tokenUsage metric.Int64Histogram
 	duration   metric.Float64Histogram
+	// latestUsage holds the #374 per-tier counters; nil when the meter refused
+	// to create one of them — an OPT-IN-ONLY instrument must not fail the whole
+	// telemetry provider, so recording then degrades to the default form (the
+	// transport's nil guard) after one otel.Handle diagnostic.
+	latestUsage *genAILatestUsage
+}
+
+// genAILatestUsage are the pending-form per-tier token counters (#374).
+type genAILatestUsage struct {
+	input      metric.Int64Counter
+	output     metric.Int64Counter
+	cacheRead  metric.Int64Counter
+	cacheWrite metric.Int64Counter
 }
 
 func newGenAIInstruments(m metric.Meter) (*genAIInstruments, error) {
@@ -105,7 +145,25 @@ func newGenAIInstruments(m metric.Meter) (*genAIInstruments, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &genAIInstruments{tokenUsage: tu, duration: d}, nil
+	counter := func(name, desc string) (metric.Int64Counter, error) {
+		return m.Int64Counter(name, metric.WithUnit("{token}"), metric.WithDescription(desc))
+	}
+	// The counters serve the opt-in form only: a creation failure degrades that
+	// form (one diagnostic, nil set) instead of failing the provider the DEFAULT
+	// telemetry also rides on — a tracing fault never breaks the engine.
+	in, inErr := counter(metricUsageInput, "Number of input tokens used, including cached tokens.")
+	out, outErr := counter(metricUsageOutput, "Number of output tokens used, including reasoning tokens.")
+	cr, crErr := counter(metricUsageCacheRead, "Number of cache-read input tokens; a subset of input tokens.")
+	cw, cwErr := counter(metricUsageCacheWrite, "Number of cache-write input tokens; a subset of input tokens.")
+	if err := errors.Join(inErr, outErr, crErr, cwErr); err != nil {
+		otel.Handle(fmt.Errorf("trace: gen_ai latest-form counters unavailable; keeping the default form (%w)", err))
+		return &genAIInstruments{tokenUsage: tu, duration: d}, nil
+	}
+	return &genAIInstruments{
+		tokenUsage:  tu,
+		duration:    d,
+		latestUsage: &genAILatestUsage{input: in, output: out, cacheRead: cr, cacheWrite: cw},
+	}, nil
 }
 
 // AnthropicUsage is the raw token accounting from an Anthropic Messages response —
@@ -153,6 +211,9 @@ type genAITransport struct {
 }
 
 func (t *genAITransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	snapshot := *t
+	snapshot.p = t.p.active()
+	t = &snapshot
 	// Body inspection and propagation must not replace caller-owned request fields.
 	req = req.Clone(req.Context())
 	// Non-Messages request (e.g. the WIF /v1/oauth/token exchange, or any other
@@ -175,6 +236,13 @@ func (t *genAITransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	)
 	if t.p.genAICompat {
 		span.SetAttributes(attribute.String(attrGenAICompatSystem, providerAnthropic))
+	}
+	// A model call routed through the inference proxy for a live session carries
+	// that session's trace context (ContextWithSessionTrace); its span then joins
+	// the session's trace and names the conversation. Calls without a session
+	// link (judge, embeddings) keep today's attribute set unchanged.
+	if id, ok := conversationIDFrom(ctx); ok {
+		span.SetAttributes(attribute.String(attrGenAIConversationID, id))
 	}
 	if reqModel != "" {
 		span.SetAttributes(attribute.String(attrGenAIRequestModel, reqModel))
@@ -243,22 +311,46 @@ func (t *genAITransport) RoundTrip(req *http.Request) (*http.Response, error) {
 			span.SetAttributes(attribute.Int64(attrGenAICacheRead, parsed.usage.CacheReadInputTokens))
 		}
 		if parsed.usage.CacheCreationInputTokens > 0 {
-			span.SetAttributes(attribute.Int64(attrGenAICacheCreation, parsed.usage.CacheCreationInputTokens))
+			// #440: the pending form renames cache_creation to cache_write; the
+			// opt-in picks the spelling, never both.
+			cacheAttr := attrGenAICacheCreation
+			if t.p.genAILatest {
+				cacheAttr = attrGenAICacheWrite
+			}
+			span.SetAttributes(attribute.Int64(cacheAttr, parsed.usage.CacheCreationInputTokens))
 		}
-		// Metrics intentionally stay current-only: no deprecated instrument names or
-		// legacy attributes are emitted because duplicate metric streams add
-		// cardinality/cost with no consumer demand while GenAI remains Development.
-		// token.usage histogram is recorded once per token type (semconv). Each call
-		// builds a FRESH attribute slice (never appends onto the shared metricAttrs
-		// backing array) so the two records can never alias each other's token.type.
-		recordTokens := func(tokType string, n int64) {
-			attrs := make([]attribute.KeyValue, 0, len(metricAttrs)+1)
-			attrs = append(attrs, metricAttrs...)
-			attrs = append(attrs, attribute.String(attrGenAITokenType, tokType))
-			t.p.genai.tokenUsage.Record(ctx, n, metric.WithAttributes(attrs...))
+		// With the opt-in OFF, metrics stay current-only: no deprecated
+		// instrument names or legacy attributes are emitted, because duplicate
+		// metric streams add cardinality/cost with no consumer demand while
+		// GenAI remains Development. The opt-in switches to the pending
+		// #374/#440 form instead of adding a second stream: the four per-tier
+		// usage counters replace the token.usage histogram and its
+		// gen_ai.token.type attribute, on the same meter.
+		if t.p.genAILatest && t.p.genai.latestUsage != nil {
+			latestAttrs := append([]attribute.KeyValue(nil), metricAttrs...)
+			latestAttrs = append(latestAttrs, attribute.String(attrGenAITokenModality, modalityText))
+			u := t.p.genai.latestUsage
+			u.input.Add(ctx, otelInput, metric.WithAttributes(latestAttrs...))
+			u.output.Add(ctx, parsed.usage.OutputTokens, metric.WithAttributes(latestAttrs...))
+			if parsed.usage.CacheReadInputTokens > 0 {
+				u.cacheRead.Add(ctx, parsed.usage.CacheReadInputTokens, metric.WithAttributes(latestAttrs...))
+			}
+			if parsed.usage.CacheCreationInputTokens > 0 {
+				u.cacheWrite.Add(ctx, parsed.usage.CacheCreationInputTokens, metric.WithAttributes(latestAttrs...))
+			}
+		} else {
+			// token.usage histogram is recorded once per token type (semconv). Each call
+			// builds a FRESH attribute slice (never appends onto the shared metricAttrs
+			// backing array) so the two records can never alias each other's token.type.
+			recordTokens := func(tokType string, n int64) {
+				attrs := make([]attribute.KeyValue, 0, len(metricAttrs)+1)
+				attrs = append(attrs, metricAttrs...)
+				attrs = append(attrs, attribute.String(attrGenAITokenType, tokType))
+				t.p.genai.tokenUsage.Record(ctx, n, metric.WithAttributes(attrs...))
+			}
+			recordTokens("input", otelInput)
+			recordTokens("output", parsed.usage.OutputTokens)
 		}
-		recordTokens("input", otelInput)
-		recordTokens("output", parsed.usage.OutputTokens)
 	}
 	t.p.genai.duration.Record(ctx, elapsed, metric.WithAttributes(metricAttrs...))
 	return resp, nil

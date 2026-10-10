@@ -44,6 +44,9 @@ type fakeSessionEngine struct {
 	// launchRefusal, when set, answers a new run with 422 and this sentence, as the
 	// engine does for a permission preset the tool cannot honour.
 	launchRefusal string
+	// cleanupRefusal, when set, answers a release (POST …/cleanup) with 409 and this
+	// sentence, as the engine does for a worktree it will not remove unconfirmed.
+	cleanupRefusal string
 	// resolved is what POST provider-profiles/resolve answers (FH 026); resolveRefusal,
 	// when set, is its 409 sentence. Unset: the first active own-login profile of the
 	// driver, else a new one, like the engine.
@@ -52,13 +55,22 @@ type fakeSessionEngine struct {
 	// resolveStatus is the refusal's status (default 409; 503 when the node cannot read
 	// the tool's sign-in status).
 	resolveStatus int
+	// resolveFails are the drivers POST provider-profiles/resolve refuses with this
+	// status (409: the login folder is taken; 503: the sign-in cannot be read), before
+	// ready is read.
+	resolveFails map[string]int
+	// resolveCodes supplies a stable code for an injected per-tool resolve refusal.
+	resolveCodes map[string]string
 	// templatesStatus, when set, answers the built-in template list with this status and
 	// the sentence "template lookup unavailable"; noTemplates answers it with no items.
 	templatesStatus int
 	noTemplates     bool
-	// ready are the tools GET provider-profiles/resolve (the preview) answers 200 for;
-	// the others are refused with 409. Nil: the preview is not served (404).
+	// ready are the tools GET and POST provider-profiles/resolve answer 200 for; the
+	// others are refused with 409. Nil: the preview is not served (404) and POST resolves any tool.
 	ready map[string]bool
+	// refused are ready tools whose only key its provider refused at the last test:
+	// the readiness answer says key_refused while their resolve still answers.
+	refused map[string]bool
 }
 
 func newFakeSessionEngine(t *testing.T) *fakeSessionEngine {
@@ -79,7 +91,7 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(v)
 	}
 	var body map[string]any
-	if r.Method == http.MethodPost {
+	if r.Method == http.MethodPost || r.Method == http.MethodPut {
 		raw, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(raw, &body)
 		f.mu.Lock()
@@ -106,6 +118,14 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 		writeJSON(200, map[string]any{"items": f.profiles})
 	case r.Method == "POST" && path == profilesPath:
 		writeJSON(201, map[string]any{"profile_ref": "ppf-new", "driver": body["driver"]})
+	case r.Method == "GET" && path == profilesPath+"/readiness" && f.ready != nil:
+		answer := fakeReadiness(f.ready)
+		for _, tool := range answer["tools"].([]map[string]any) {
+			if f.refused[tool["driver"].(string)] {
+				tool["ready"], tool["code"], tool["message"] = false, "key_refused", refusedKeySentence(tool["driver"].(string))
+			}
+		}
+		writeJSON(200, answer)
 	case r.Method == "GET" && path == profilesPath+"/resolve" && f.ready != nil:
 		if f.ready[r.URL.Query().Get("driver")] {
 			writeJSON(200, map[string]any{"reason": "api_key"})
@@ -114,6 +134,16 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 		}
 	case r.Method == "POST" && path == profilesPath+"/resolve":
 		switch {
+		case f.resolveCodes[str(body, "driver")] != "":
+			code := f.resolveCodes[str(body, "driver")]
+			writeJSON(f.resolveFails[str(body, "driver")], map[string]any{"error": map[string]any{"code": code, "message": "resolve refused: " + code}})
+		case f.resolveFails[str(body, "driver")] == 409:
+			// A tool that could run, whose profile cannot be made: no readiness code.
+			writeJSON(409, map[string]any{"error": map[string]any{"message": "an active or disabled profile already owns this home on this environment"}})
+		case f.resolveFails[str(body, "driver")] == 503:
+			writeJSON(503, map[string]any{"error": map[string]any{"code": "tool_signin_unreadable", "message": "the sign-in status of the tool could not be read on this node"}})
+		case f.ready != nil && !f.ready[str(body, "driver")]:
+			writeJSON(409, map[string]any{"error": map[string]any{"code": "nothing_to_run_on", "message": "not ready: " + str(body, "driver")}})
 		case f.resolveRefusal != "":
 			status := f.resolveStatus
 			if status == 0 {
@@ -123,7 +153,7 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 		case f.resolved != nil:
 			writeJSON(200, f.resolved)
 		default:
-			profile := map[string]any{"profile_ref": "ppf-new", "driver": body["driver"], "display_name": "Claude Code",
+			profile := map[string]any{"profile_ref": "ppf-new-" + str(body, "driver"), "driver": body["driver"], "display_name": "Claude Code",
 				"auth_source": "provider_account_home"}
 			created := true
 			for _, p := range f.profiles {
@@ -150,6 +180,8 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 			"run_ref": "01a0f6dc-0000-7000-8000-000000000009", "name": body["name"], "state": "running",
 			"provider_driver": "claude", "transport": "stream-json", "workspace_path": "/srv/demo",
 		})
+	case r.Method == "POST" && strings.HasSuffix(path, "/cleanup") && f.cleanupRefusal != "":
+		writeJSON(409, map[string]any{"error": map[string]any{"code": "conflict", "message": f.cleanupRefusal}})
 	case strings.HasSuffix(path, "/attach"):
 		f.attach(w, r)
 	case strings.HasSuffix(path, "/input"):
@@ -191,6 +223,16 @@ func (f *fakeSessionEngine) serve(w http.ResponseWriter, r *http.Request) {
 					writeJSON(409, map[string]any{"error": map[string]any{"code": "conflict",
 						"message": "there is no active provider turn to interrupt"}})
 					return
+				case strings.HasSuffix(path, "/peers") && r.Method == http.MethodPut:
+					// The engine keeps one choice: a peers list or the same-template rule.
+					delete(run, "peers_rule")
+					run["peers"] = []any{}
+					if rule, ok := body["peers_rule"]; ok {
+						run["peers_rule"] = rule
+					} else {
+						run["peers"] = body["peers"]
+					}
+					out["peers"], out["peers_rule"] = run["peers"], run["peers_rule"]
 				case strings.HasSuffix(path, "/stop"):
 					out["state"] = "stopped"
 				case strings.HasSuffix(path, "/cleanup"):
@@ -448,7 +490,7 @@ func TestSessionViewTellsTheTurnOnce(t *testing.T) {
 	}
 }
 
-// HU2 025 / SR2C 067: a refusal of a credential the engine supplies (a key from Providers, a
+// A refusal of a credential the engine supplies (a key from Providers, a
 // workload identity, an adapter) is said honestly in one sentence; telling the person to sign the
 // tool in would send them the wrong way.
 func TestSessionViewNamesAnEngineSuppliedCredentialHonestly(t *testing.T) {
@@ -583,7 +625,7 @@ func TestSessionViewDropsTerminalControls(t *testing.T) {
 // CLI refuses before it registers the folder or posts the start, and keeps the engine's
 // sentence.
 func TestSessionStartRefusesWhenTheEditsAndCommandsTemplateCannotBeResolved(t *testing.T) {
-	for _, tool := range []string{"claude", "codex", "grok", "opencode"} {
+	for _, tool := range []string{"claude", "codex", "grok", "opencode", "gemini-cli"} {
 		for _, tc := range []struct {
 			name     string
 			set      func(*fakeSessionEngine)
